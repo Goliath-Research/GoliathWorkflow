@@ -37,11 +37,14 @@ MethylPipeline is a multi-package Python monorepo for methylation analysis workf
 1. `methyl-validation --stability`
    - Monte Carlo centroid+detector iterations
    - Stability aggregation and stable panel generation
+   - Optional adaptive early stop via `stability_early_stop_*` convergence settings
 2. `methyl-validation --freeze`
    - All-sample rerun with fixed panel
    - Mapper, Enricher, optional DiseaseProgression
+   - Mapper annotation cache for observed-hybrid mapped-family model bundles
 3. `methyl-validation --model` (or model-MC selection flow)
    - Final model build and predictor validation artifacts
+   - Includes aggregated ECDF OvR mode for observed-hybrid `ecdf` backends
 
 Recommended biological gate before final model promotion:
 

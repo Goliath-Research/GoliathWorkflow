@@ -54,6 +54,8 @@ methyl-validation aggregate-results --config /work/experiments/my_mc_config.json
 # add --stability to run the same DMP/gene stability pass as monolithic methyl-validation --stability
 ```
 
+If adaptive stop settings are enabled for monolithic stability runs, remember queue workers do not coordinate global early termination on their own. Keep `stability_early_stop_enabled=false` for queue-first executions unless your scheduler supports coordinator-side cancellation logic.
+
 **Legacy:** a single process may still run `methyl-validation --stability` without subcommands; behavior is unchanged.
 
 ## Example paths (`/work` pattern)

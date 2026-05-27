@@ -328,6 +328,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>stability_dmp_freq</code></li>
 <li><code>stability_min_balanced_accuracy</code></li>
 <li><code>stability_gene_freq</code></li>
+<li>optional adaptive stop controls:
+<ul>
+<li><code>stability_early_stop_enabled</code></li>
+<li><code>stability_min_iterations</code></li>
+<li><code>stability_convergence_window</code></li>
+<li><code>stability_convergence_jaccard</code></li>
+<li><code>stability_convergence_max_size_delta</code></li>
+<li><code>stability_convergence_patience</code></li>
+</ul></li>
 <li>optional FeatureCuts controls:
 <ul>
 <li><code>stability_featurecuts_enabled</code></li>
@@ -357,6 +366,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>stable_dmps_production.csv</code> exists and is non-empty.</li>
 <li><code>all_metrics.csv</code> has successful rows near expected run count.</li>
 <li><code>stability_summary.json</code> reports configured thresholds.</li>
+<li>if adaptive stop is enabled, <code>stability_summary.json</code> includes <code>early_stopping</code> diagnostics (<code>triggered</code>, checkpoint history, and stop iteration when applicable).</li>
 </ul>
 </section>
 <section id="do-not-do-this" class="level2" data-number="5.7">

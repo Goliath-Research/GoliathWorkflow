@@ -146,6 +146,7 @@ Workflow 1 should be run and reviewed in three explicit stages:
    - If MC execution is interrupted, use `--resume` to continue from existing `run_XXXX` directories; `--resume` (no number) repeats the last run and continues, and `--resume N` restarts from run `N`.
    - To couple stability with detector discrimination, use `--stability-featurecuts` (optionally `--stability-target-ba` and `--stability-min-selected-dmps`) so stability uses per-run classifier-panel DMP exports rather than broad discovery exports.
    - To retune detector hyperparameters without recomputing centroids, use `--skip-centroid` so each run reuses existing centroids and executes detector-only on the same per-run project/splits.
+   - Optional adaptive stop (`stability_early_stop_enabled`) can terminate the loop before `n_iterations` when stable-panel convergence (Jaccard + size-delta + patience) is satisfied.
 2. **Freeze/analysis (`--freeze`)**: lock the panel into `production/project.json`, then review production detector outputs together with mapper/enricher summaries. This stage runs `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, with optional `methyl-disease-progression`.
 3. **Model-selection MC (`--model-mc`)**: run full retrain+test Monte Carlo loops per backend (centroid -> detector -> backend train/predict) with isolated backend outputs.
 4. **Final model (`--select-best-model`)**: rank backend summaries and train the selected backend on all production data.
@@ -310,6 +311,8 @@ Backend selection is driven by `step_config.validation.backend_profiles`. Enable
 `--post-model-validation` supports all model backends (`ecdf`, `tabular_sklearn`, `generative_hybrid`) and is an optional descriptive stage after final model build.
 Legacy flat backend keys are rejected; migrate old project files with `methyl-validation-migrate-backend-config <project.json> --in-place`.
 
+For `ecdf` backends, observed-hybrid mapped-family runs (`feature_mode=observed_hybrid`, `feature_family_set!=dmp`) use aggregated ECDF OvR package training/prediction; in this mode second-stage ECDF refinement is skipped.
+
 ### Recommended backend-selection defaults (PCa)
 
 For prostate cancer stage workflows similar to `Healthy_vs_PCa1-4-CG`, use:
@@ -348,7 +351,7 @@ Example:
       "enabled": true,
       "params": {
         "model_weight_column": "effect_size",
-        "tabular_max_dmps": 5000,
+        "tabular_max_dmps": null,
         "generative_latent_dim": 16,
         "generative_density_type": "diag_gaussian",
         "generative_epochs": 50,
@@ -364,7 +367,7 @@ Example:
 
 | Backend | Best used when | Main strengths | Main risks / caveats |
 |---|---|---|---|
-| `ecdf` | You want continuity with historical MethylPipeline behavior and detector-classifier semantics | Native pipeline path, direct compatibility with existing classifier/predictor tooling, easiest interpretation relative to prior studies | Can underperform when class boundaries need stronger discriminative reshaping or additional covariates |
+| `ecdf` | You want continuity with historical MethylPipeline behavior and detector-classifier semantics, including aggregated observed-hybrid OvR mode | Native pipeline path, direct compatibility with existing classifier/predictor tooling, easiest interpretation relative to prior studies | Can underperform when class boundaries need stronger discriminative reshaping or additional covariates |
 | `tabular_sklearn` | You want fast supervised baselines or covariate-aware tabular modeling from fixed DMP bundles | Simple deployment, mature sklearn ecosystem, often strong baseline performance with moderate tuning | Less directly tied to ECDF likelihood semantics; performance may depend strongly on feature cap (`tabular_max_dmps`) and model choice |
 | `generative_hybrid` | You want likelihood-based latent modeling with posterior probabilities while preserving detector-driven weighting | Hybrid latent-density scoring, consistent DMP bundle contract, supports binary and multiclass posterior inference | More modeling complexity; requires careful reporting of latent/density settings and calibration choices for reproducibility |
 

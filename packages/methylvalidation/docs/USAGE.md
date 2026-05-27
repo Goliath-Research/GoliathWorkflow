@@ -147,9 +147,9 @@ When to change defaults:
 | Monte Carlo loop (`methyl-validation` default, optional `--stability`) | Per iteration: `methyl-centroid` + `methyl-detector` |
 | `--stability` | Uses the same Monte Carlo loop above, then runs stability aggregation over discovery DMP outputs (`run_stability_analysis`) |
 | `--freeze` | `methyl-centroid` + `methyl-detector` (fixed panel) + `methyl-mapper` + `methyl-enricher` + optional `methyl-disease-progression` |
-| `--model` (`backend_profiles.ecdf.enabled=true`) | `methyl-classifier` + `methyl-predictor` on frozen `production/project.json` |
+| `--model` (`backend_profiles.ecdf.enabled=true`) | `methyl-classifier` + `methyl-predictor` on frozen `production/project.json`. For aggregated observed-hybrid ECDF, runs `ecdf-aggregated-train` + `ecdf-aggregated-predictor` and skips `ecdf-second-stage`. |
 | `--model` (`backend_profiles.tabular_sklearn/generative_hybrid enabled`) | In-process backend flow: model bundle -> train -> predict (consumes freeze outputs; does not re-run `methyl-detector`) |
-| `--model-mc` | Full MC retraining per split: centroid -> detector -> backend train/predict; writes isolated results under `model_mc/<backend>/`. With `--model-mc-all`, centroid+detector runs are built once and reused by all backends. |
+| `--model-mc` | Full MC retraining per split: centroid -> detector -> backend train/predict; writes isolated results under `model_mc/<backend>/`. With `--model-mc-all`, centroid+detector runs are built once and reused by all backends; reusable runs are linked into shared/backend roots. |
 | `--post-model-validation` | MC holdout evaluation on frozen production artifacts (no retraining): `ecdf` uses predictor-only runs, tabular/generative use frozen model inference |
 | `--predictor-only` | Monte Carlo iterations where each iteration runs only `methyl-predictor` with frozen artifacts |
 
@@ -258,6 +258,8 @@ Common fields for production staging:
 - `stability_default_freeze_tier`: which tier aliases root `stable_dmps_production.csv` for `--freeze` (default `extended`).
 - `freeze_stable_dmp_csv`: optional override for freeze input panel path (default: `monte_carlo_runs/stability/stable_dmps_production.csv`).
 - `production_output_dir`: optional freeze/model output root (default: `monte_carlo_runs/production`).
+- `ecdf_aggregated_enabled`: optional override for aggregated ECDF OvR mode. `null` uses auto behavior.
+- `ecdf_aggregated_n_bins`: histogram bin count for aggregated ECDF OvR package training (default `100`).
 
 `--freeze` fails fast if the stable panel path is missing, so run `--stability` first or set `freeze_stable_dmp_csv`.
 
@@ -317,22 +319,35 @@ Example (`step_config.validation`) using all covariate types:
 
 ### Disease-feature controls for `observed_hybrid`
 
-When `step_config.validation.backend_profiles.<backend>.params.feature_mode` is `observed_hybrid`, you can explicitly control which disease-aware feature families are included:
+When `step_config.validation.backend_profiles.<backend>.params.feature_mode` is `observed_hybrid`, feature schema is controlled by:
 
-- `observed_feature_include_dmp` (default `true`): DMP-derived global/quantile and disease-comparison summaries
-- `observed_feature_include_dmr` (default `true`): DMR/region aggregates
-- `observed_feature_include_gene` (default `true`): gene-level aggregates
-- `observed_feature_include_chromosome` (default `true`): chromosome-level summaries
-- `observed_feature_dmr_window_bp` (default `100000`): fallback region window size when explicit DMR labels are absent
-- `observed_feature_max_dmrs` / `observed_feature_max_genes` (default `32`): cap the number of top-weighted regions/genes retained in schema
+- `feature_family_set`:
+  - `dmp`: fixed DMP-family observed metrics (legacy behavior)
+  - `gene`: one feature per mapped gene (`gene::<GENE>`)
+  - `structural`: one feature per mapped gene-annotation key (`struct::<GENE>::<FEATURE>`)
+  - `dmp+gene`, `dmp+structural`, `hybrid-all`: deterministic concatenation of families
 
-These options are used by all three model backends in model-build flows:
+For `gene`/`structural` families, per-sample mapped features are computed as signed weighted centered methylation over observed loci:
 
-- `ecdf` second-stage refinement (`ecdf-second-stage`)
-- `tabular_sklearn`
-- `generative_hybrid`
+- `sum(sign(effect_size) * abs(effect_size) * (beta - 0.5)) / sum(abs(effect_size))`
 
-`methyl-validation` enforces train/predict schema parity via stored feature names + fill values in backend metadata.
+Operational notes:
+
+- For non-`dmp` families, model build requires mapper annotations from freeze (`mapper_annotation_csv`); this is enforced in trainer flows.
+- Feature keys are bundle-observed only (no synthetic expansion beyond mapped stable loci).
+- Train/predict schema parity is enforced via stored feature names/fingerprints and fill metadata.
+- Legacy `observed_feature_include_*` toggles are no longer the canonical feature-family contract.
+
+### ECDF aggregated observed-hybrid mode
+
+When `model_backend=ecdf` and `feature_mode=observed_hybrid` with `feature_family_set != dmp`, methylvalidation runs aggregated ECDF OvR by default:
+
+- package artifacts:
+  - `production/classifiers/ecdf_aggregated_ovr.pkl`
+  - `production/classifiers/ecdf_aggregated_ovr.meta.json`
+- predictor outputs include `evidence_class*` diagnostics (pre-softmax OvR evidence, not p-values)
+- second-stage ECDF refinement is intentionally skipped in this mode
+- set `ecdf_aggregated_enabled` to explicitly force on/off
 
 ### Tabular method configs (`tabular_sklearn`)
 
@@ -349,6 +364,11 @@ Method selection controls:
 - `tabular_method_selection_stat` (default `mean`, stored as ranking metadata label)
 - training-time method selection evaluation runs only when `tabular_methods` has 2+ entries
 - single-method runs skip training-time `selection_eval` and are evaluated in the `tabular-predictor` step
+
+Bundle-size control shared by tabular and generative backends:
+
+- `tabular_max_dmps`: `null` or `0` keeps all stable DMP loci from the bundle index
+- positive values apply an effect-size-ranked cap
 
 Canonical nested JSON example:
 
@@ -447,7 +467,10 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `stability/dmp_frequency_chr_<chrom>.html` | Per-chromosome Plotly chart files, each showing `all` vs `selected` DMP count distributions over frequency (%). |
 | `stability/stability_summary.json` | Stability run summary for DMP/gene frequency plus detector parameter extraction. Includes `detector_parameters.per_run` and `detector_parameters.aggregates` built from `detections/**/results-*.json` (minimal fields: exported/statistical/biological DMP totals, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`), plus `early_stopping` diagnostics (`triggered`, stop iteration, per-checkpoint history). |
 | `production/project.json` | Frozen production project with `fixed_dmp_panel` in `step_config.detection`. |
+| `production/model_bundle/mapper_dmp_annotations.csv` | Mapper-derived DMP annotation cache used by non-`dmp` observed-hybrid feature families. |
+| `production/production_summary.json` | Production freeze summary including `mapper_annotation_cache` metadata when mapper annotations are prepared for model bundle flows. |
 | `model_mc/shared/run_000N/` | Shared per-iteration artifacts (split projects + centroid/detector outputs) reused by all backends in `--model-mc --model-mc-all`. |
+| `model_mc/shared/run_000N/centroids`, `model_mc/shared/run_000N/detections` | When runs are reused from primary MC artifacts, these are linked from the source run to avoid detector recompute. |
 | `model_mc/<backend>/run_000N/` | Per-iteration backend model outputs (predictor/model artifacts and logs) produced from shared runs. |
 | `model_mc/<backend>/all_metrics.csv` | One row per successful model-MC iteration for that backend. |
 | `model_mc/<backend>/metrics_summary.json` | Per-backend empirical distribution summary. |

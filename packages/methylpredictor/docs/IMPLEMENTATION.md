@@ -6,6 +6,7 @@ This document describes how MethylPredictor is implemented: it uses **MethylClas
 
 - **MethylPredictor** does not train or implement a classifier. It loads a **MethylClassifier**, runs it on labeled cohorts (control + disease, multiclass groups, or CLI lists) or on **blind** paths only, then writes **prediction_report.json** with **`mode": "labeled"`** or **`"blind"`**.
 - **MethylClassifier** (and its dependency MethylUtils) handles model loading and posterior scoring. For classic ECDF/tabular flows prediction is DMP-loader based; for `classifier_type: ecdf_aggregated_one_vs_rest`, Predictor builds observed-hybrid aggregated features before scoring.
+- Aggregated observed-hybrid feature construction is shared with methylvalidation (`methyl_validation.observed_feature_builder`) to keep training/inference feature parity for `feature_family_set` contracts.
 
 ```mermaid
 flowchart LR
@@ -54,6 +55,7 @@ MethylPredictor does not call MethylUtils for metrics; it uses **sklearn.metrics
 - **predictions.csv**: One row per scored sample; **`expected_class`** only when labels were passed to the classifier helper.
 - **prediction_report.json**: **`mode": "labeled"`** or **`"blind"`**; blind branch includes **`blind_summary`** and rich per-sample probability fields under **`blind.groups[].samples`**.
 - Aggregated ECDF runs also include `evidence_class*` columns in `predictions.csv` for interpretability diagnostics.
+- `evidence_class*` values are pre-softmax OvR evidence diagnostics and are not calibrated probabilities or p-values.
 
 ## Accuracy Metrics (Summary)
 

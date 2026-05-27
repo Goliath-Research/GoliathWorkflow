@@ -339,7 +339,7 @@
     "href": "04-stage-stability.html#required-config-keys",
     "title": "5  Stage: Stability",
     "section": "5.3 Required config keys",
-    "text": "5.3 Required config keys\nUnder step_config.validation:\n\nn_iterations, train_fraction, seed\nrun_stability\nstability_dmp_freq\nstability_min_balanced_accuracy\nstability_gene_freq\noptional FeatureCuts controls:\n\nstability_featurecuts_enabled\nstability_target_balanced_accuracy\nstability_min_selected_dmps",
+    "text": "5.3 Required config keys\nUnder step_config.validation:\n\nn_iterations, train_fraction, seed\nrun_stability\nstability_dmp_freq\nstability_min_balanced_accuracy\nstability_gene_freq\noptional adaptive stop controls:\n\nstability_early_stop_enabled\nstability_min_iterations\nstability_convergence_window\nstability_convergence_jaccard\nstability_convergence_max_size_delta\nstability_convergence_patience\n\noptional FeatureCuts controls:\n\nstability_featurecuts_enabled\nstability_target_balanced_accuracy\nstability_min_selected_dmps",
     "crumbs": [
       "Part II: Staged Solution Workflow",
       "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
@@ -372,7 +372,7 @@
     "href": "04-stage-stability.html#success-checks",
     "title": "5  Stage: Stability",
     "section": "5.6 Success checks",
-    "text": "5.6 Success checks\n\nstable_dmps_production.csv exists and is non-empty.\nall_metrics.csv has successful rows near expected run count.\nstability_summary.json reports configured thresholds.",
+    "text": "5.6 Success checks\n\nstable_dmps_production.csv exists and is non-empty.\nall_metrics.csv has successful rows near expected run count.\nstability_summary.json reports configured thresholds.\nif adaptive stop is enabled, stability_summary.json includes early_stopping diagnostics (triggered, checkpoint history, and stop iteration when applicable).",
     "crumbs": [
       "Part II: Staged Solution Workflow",
       "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
@@ -460,7 +460,7 @@
     "href": "05-stage-freeze.html#expected-outputs",
     "title": "6  Stage: Freeze",
     "section": "6.5 Expected outputs",
-    "text": "6.5 Expected outputs\n\n&lt;mc_root&gt;/production/project.json\n&lt;mc_root&gt;/production/production_summary.json\nmapper outputs under production/mapper/...\nenricher outputs under production/enricher/...\noptional progression outputs under production/progression/...",
+    "text": "6.5 Expected outputs\n\n&lt;mc_root&gt;/production/project.json\n&lt;mc_root&gt;/production/production_summary.json\n&lt;mc_root&gt;/production/model_bundle/mapper_dmp_annotations.csv (when mapped-family feature bundles are prepared)\nmapper outputs under production/mapper/...\nenricher outputs under production/enricher/...\noptional progression outputs under production/progression/...",
     "crumbs": [
       "Part II: Staged Solution Workflow",
       "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
@@ -471,7 +471,7 @@
     "href": "05-stage-freeze.html#success-checks",
     "title": "6  Stage: Freeze",
     "section": "6.6 Success checks",
-    "text": "6.6 Success checks\n\nproduction/project.json exists and includes fixed panel usage for detector.\nexpected mapper and enricher files are present.\nstage-specific logs show successful return codes.",
+    "text": "6.6 Success checks\n\nproduction/project.json exists and includes fixed panel usage for detector.\nexpected mapper and enricher files are present.\nstage-specific logs show successful return codes.\nfor non-dmp observed-hybrid families, production_summary.json includes mapper_annotation_cache metadata.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
       "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
@@ -548,7 +548,7 @@
     "href": "06-stage-model.html#backend-behavior",
     "title": "7  Stage: Model",
     "section": "7.3 Backend behavior",
-    "text": "7.3 Backend behavior\n\necdf: methyl-classifier -&gt; methyl-predictor\ntabular_sklearn: in-process bundle -&gt; train -&gt; predict\ngenerative_hybrid: in-process bundle -&gt; train -&gt; predict\n\nConfigured by step_config.validation.backend_profiles (plus optional CLI backend override).",
+    "text": "7.3 Backend behavior\n\necdf: methyl-classifier -&gt; methyl-predictor\ntabular_sklearn: in-process bundle -&gt; train -&gt; predict\ngenerative_hybrid: in-process bundle -&gt; train -&gt; predict\n\nFor ecdf + observed-hybrid mapped families (feature_mode=observed_hybrid, feature_family_set!=dmp), the runtime path is aggregated ECDF OvR package train/predict and skips ECDF second-stage refinement.\nConfigured by step_config.validation.backend_profiles (plus optional CLI backend override).",
     "crumbs": [
       "Part II: Staged Solution Workflow",
       "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
@@ -570,7 +570,7 @@
     "href": "06-stage-model.html#required-config-keys",
     "title": "7  Stage: Model",
     "section": "7.5 Required config keys",
-    "text": "7.5 Required config keys\n\nbackend_profiles\nbackend-specific params under each profile (for example feature_mode, ecdf_second_stage_enabled, tabular_methods, generative_latent_dim)\ntabular controls:\n\ntabular_methods\ntabular_method_selection_metric\n\ngenerative controls:\n\ngenerative_latent_dim, generative_epochs, and related keys\n\noptional gate:\n\nrequire_biological_review_for_model\nbiological_review_confirmed\n\n\nLegacy flat backend keys are rejected. Migrate older configs with:\nmethyl-validation-migrate-backend-config /path/to/project.json --in-place",
+    "text": "7.5 Required config keys\n\nbackend_profiles\nbackend-specific params under each profile (for example feature_mode, ecdf_second_stage_enabled, tabular_methods, generative_latent_dim)\nobserved-hybrid family contract (when used):\n\nfeature_family_set\nmapper annotation cache from freeze (production/model_bundle/mapper_dmp_annotations.csv)\n\ntabular controls:\n\ntabular_methods\ntabular_method_selection_metric\noptional tabular_max_dmps (null/0 keeps all stable loci)\n\ngenerative controls:\n\ngenerative_latent_dim, generative_epochs, and related keys\n\noptional gate:\n\nrequire_biological_review_for_model\nbiological_review_confirmed\n\n\nLegacy flat backend keys are rejected. Migrate older configs with:\nmethyl-validation-migrate-backend-config /path/to/project.json --in-place",
     "crumbs": [
       "Part II: Staged Solution Workflow",
       "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
@@ -581,7 +581,7 @@
     "href": "06-stage-model.html#expected-outputs",
     "title": "7  Stage: Model",
     "section": "7.6 Expected outputs",
-    "text": "7.6 Expected outputs\n\n&lt;mc_root&gt;/production/classifiers/...\n&lt;mc_root&gt;/production/predictors/...\nif model-MC:\n\n&lt;mc_root&gt;/model_mc/shared/run_XXXX/...\n&lt;mc_root&gt;/model_mc/&lt;backend&gt;/all_metrics.csv\n&lt;mc_root&gt;/model_mc/backend_ranking.csv\n&lt;mc_root&gt;/production/selected_backend.json (after selection)",
+    "text": "7.6 Expected outputs\n\n&lt;mc_root&gt;/production/classifiers/...\n&lt;mc_root&gt;/production/predictors/...\naggregated ECDF mode writes:\n\n&lt;mc_root&gt;/production/classifiers/ecdf_aggregated_ovr.pkl\n&lt;mc_root&gt;/production/classifiers/ecdf_aggregated_ovr.meta.json\n\nif model-MC:\n\n&lt;mc_root&gt;/model_mc/shared/run_XXXX/...\n&lt;mc_root&gt;/model_mc/&lt;backend&gt;/all_metrics.csv\n&lt;mc_root&gt;/model_mc/backend_ranking.csv\n&lt;mc_root&gt;/production/selected_backend.json (after selection)\n\n\nWhen model-MC reuses primary split artifacts, shared/backend run roots may link centroid/detector directories instead of recomputing them.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
       "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
@@ -1120,7 +1120,7 @@
     "href": "12-distributed-methyl-validation.html#command-sequence",
     "title": "13  Distributed MethylValidation on shared storage",
     "section": "13.4 Command sequence",
-    "text": "13.4 Command sequence\n1) Plan (one process; creates run dirs and task JSON, no heavy steps):\nsource .venv/bin/activate\nmethyl-validation plan-runs --config /work/experiments/my_mc_config.json --overwrite\n# or:  methyl-validation plan-runs --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --overwrite\n--overwrite only replaces queue/tasks/ and regenerates the plan; it does not remove existing run_#### output directories. To delete all run_#### trees before planning, add --wipe-runs (irreversible). Without --overwrite, completed runs (see queue_task_status.json + per-run task under queue/tasks/) are not written over; you can add iterations and only the new run_#### work is planned. run-task skips pipeline work for runs already marked completed unless you pass --force.\n2) Export (optional; for a central queue broker):\nmethyl-validation export-queue --config /work/experiments/my_mc_config.json\n3) Workers (one job per task; repeat until the queue is empty):\nmethyl-validation run-task --task /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/queue/tasks/run_0001.json\n4) Aggregate (after successful tasks, or to refresh from a partial set):\nmethyl-validation aggregate-results --config /work/experiments/my_mc_config.json\n# add --stability to run the same DMP/gene stability pass as monolithic methyl-validation --stability\nLegacy: a single process may still run methyl-validation --stability without subcommands; behavior is unchanged.",
+    "text": "13.4 Command sequence\n1) Plan (one process; creates run dirs and task JSON, no heavy steps):\nsource .venv/bin/activate\nmethyl-validation plan-runs --config /work/experiments/my_mc_config.json --overwrite\n# or:  methyl-validation plan-runs --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --overwrite\n--overwrite only replaces queue/tasks/ and regenerates the plan; it does not remove existing run_#### output directories. To delete all run_#### trees before planning, add --wipe-runs (irreversible). Without --overwrite, completed runs (see queue_task_status.json + per-run task under queue/tasks/) are not written over; you can add iterations and only the new run_#### work is planned. run-task skips pipeline work for runs already marked completed unless you pass --force.\n2) Export (optional; for a central queue broker):\nmethyl-validation export-queue --config /work/experiments/my_mc_config.json\n3) Workers (one job per task; repeat until the queue is empty):\nmethyl-validation run-task --task /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/queue/tasks/run_0001.json\n4) Aggregate (after successful tasks, or to refresh from a partial set):\nmethyl-validation aggregate-results --config /work/experiments/my_mc_config.json\n# add --stability to run the same DMP/gene stability pass as monolithic methyl-validation --stability\nIf adaptive stop settings are enabled for monolithic stability runs, remember queue workers do not coordinate global early termination on their own. Keep stability_early_stop_enabled=false for queue-first executions unless your scheduler supports coordinator-side cancellation logic.\nLegacy: a single process may still run methyl-validation --stability without subcommands; behavior is unchanged.",
     "crumbs": [
       "Part III: Operations and Reliability",
       "<span class='chapter-number'>13</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"

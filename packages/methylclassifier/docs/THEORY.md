@@ -38,6 +38,8 @@ Multiclass and multi-chromosome behavior remain an engineered ensemble on top of
 - per-feature transform parameters (fill + min/max clip to `[0,1]` for ECDF histograms),
 - one binary ECDF head per class.
 
+The observed-hybrid family contract is controlled by `feature_family_set` (`dmp`, `gene`, `structural`, `dmp+gene`, `dmp+structural`, `hybrid-all`) and is expected to match model-bundle training metadata at inference.
+
 Inference returns posterior `prob_class*` values after OvR fusion and optional `evidence_class*` diagnostics. `evidence_class*` values are pre-softmax OvR log-evidence and are **not** p-values.
 
 ## Key Code Paths

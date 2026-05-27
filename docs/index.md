@@ -28,12 +28,14 @@ This page maps the documentation system for the monorepo and identifies canonica
 
 - `methyl-validation --stability`
   - Per-iteration MC path: `methyl-centroid` -> `methyl-detector`
-  - Followed by stability aggregation.
+  - Followed by stability aggregation (optional adaptive stop via `stability_early_stop_*`).
 - `methyl-validation --freeze`
   - Production path: `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`
   - Optional `methyl-disease-progression` if enabled in project config.
+  - Freeze may also prepare mapper annotation cache artifacts for observed-hybrid mapped-family model builds.
 - `methyl-validation --model` / model-selection flow
   - Final model build/selection after freeze artifacts are ready.
+  - `ecdf` backend includes aggregated observed-hybrid OvR mode when configured (`ecdf_aggregated_*` + `feature_family_set`).
 
 Biological gate (recommended before final model promotion):
 

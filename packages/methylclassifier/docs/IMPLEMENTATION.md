@@ -42,7 +42,7 @@ The classifier objects inside the pickle use **ECDF-based prediction** (MethylUt
 | Component | Use in MethylClassifier |
 |-----------|--------------------------|
 | **Classifier (in pickle)** | ECDF-based; stored by MethylDetector. MethylClassifier loads and calls `.predict_proba()`, `.predict()`, `.predict_proba_calibrated()`, `.predict_with_threshold()`. |
-| **MethylSample / load_from_h5** | DataLoader uses these to load sample HDF5 files and extract methylation at DMP positions. |
+| **MethylSample / load_from_h5 / lookup_at_positions** | DataLoader uses these to load sample HDF5 files and extract methylation at DMP positions using unified indexed lookup paths. |
 | **Multi-class builder** | The native multiclass builder merges per-comparison DMP CSVs into one feature table, preserves comparison-specific effect sizes, aligns centroid histograms for every class on that union, and packages a single-file multiclass histogram classifier (`multiclass-classifier.pkl`). |
 | **load_project** | Used when resolving config from a pipeline project (e.g. CLI `--project`). |
 
@@ -69,9 +69,11 @@ This ensures that inference uses the same contexts as training.
    - Direct `MethylClassifier.predict_proba()` in multi-chromosome mode now expects a concatenated feature matrix in sorted chromosome order and slices it back into chromosome-specific blocks internally.
 6. **Output**: Predictions and probabilities written to CSV (and optional validation report if centroid validation paths are provided). For multi-chromosome runs, `dmps_used` / `dmps_total` reflect the full concatenated DMP set across all chromosomes.
 
-## Sample Skips And Validation Labels
+## Sample Skips, Missing Loci, and Validation Labels
 
 `DataLoader.load_samples_from_list()` can skip invalid samples (missing chromosomes, empty merged samples, unreadable input). The classifier CLI now keeps the original input indices for successfully loaded samples and realigns `expected_classes` to that filtered set before writing `predictions.csv`. This prevents downstream metrics from drifting when one or more inputs are skipped.
+
+For unmatched DMP loci during indexed HDF5 lookup, loader paths now propagate explicit missingness (NaN with availability mask semantics) rather than treating all unmatched loci as observed mid-point values. This aligns classifier inference coverage accounting with shared methylutils lookup contracts.
 
 ## Summary
 

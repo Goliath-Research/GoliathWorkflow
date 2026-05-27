@@ -34,3 +34,10 @@ The public `methyl_utils` package now exports:
 - `optimize_lambda_var()`
 
 These functions are the intended shared entry points for detector/explorer style analyses.
+
+## Aggregated ECDF OvR package support
+
+`methyl_utils.ecdf_aggregated_ovr` provides shared training/inference utilities for
+observed-hybrid ECDF OvR bundles used by methylvalidation/methylclassifier flows.
+It defines the package type contract (`ecdf_aggregated_one_vs_rest`), per-feature
+weight handling, and OvR evidence-to-probability fusion helpers.

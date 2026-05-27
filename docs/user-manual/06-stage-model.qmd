@@ -29,6 +29,8 @@ methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa
 - `tabular_sklearn`: in-process bundle -> train -> predict
 - `generative_hybrid`: in-process bundle -> train -> predict
 
+For `ecdf` + observed-hybrid mapped families (`feature_mode=observed_hybrid`, `feature_family_set!=dmp`), the runtime path is aggregated ECDF OvR package train/predict and skips ECDF second-stage refinement.
+
 Configured by `step_config.validation.backend_profiles` (plus optional CLI backend override).
 
 ## Process model
@@ -66,9 +68,13 @@ Configured by `step_config.validation.backend_profiles` (plus optional CLI backe
 
 - `backend_profiles`
 - backend-specific `params` under each profile (for example `feature_mode`, `ecdf_second_stage_enabled`, `tabular_methods`, `generative_latent_dim`)
+- observed-hybrid family contract (when used):
+  - `feature_family_set`
+  - mapper annotation cache from freeze (`production/model_bundle/mapper_dmp_annotations.csv`)
 - tabular controls:
   - `tabular_methods`
   - `tabular_method_selection_metric`
+  - optional `tabular_max_dmps` (null/0 keeps all stable loci)
 - generative controls:
   - `generative_latent_dim`, `generative_epochs`, and related keys
 - optional gate:
@@ -83,11 +89,16 @@ Legacy flat backend keys are rejected. Migrate older configs with:
 
 - `<mc_root>/production/classifiers/...`
 - `<mc_root>/production/predictors/...`
+- aggregated ECDF mode writes:
+  - `<mc_root>/production/classifiers/ecdf_aggregated_ovr.pkl`
+  - `<mc_root>/production/classifiers/ecdf_aggregated_ovr.meta.json`
 - if model-MC:
   - `<mc_root>/model_mc/shared/run_XXXX/...`
   - `<mc_root>/model_mc/<backend>/all_metrics.csv`
   - `<mc_root>/model_mc/backend_ranking.csv`
   - `<mc_root>/production/selected_backend.json` (after selection)
+
+When model-MC reuses primary split artifacts, shared/backend run roots may link centroid/detector directories instead of recomputing them.
 
 ## Success checks
 

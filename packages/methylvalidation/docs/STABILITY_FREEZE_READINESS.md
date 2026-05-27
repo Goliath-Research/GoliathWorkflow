@@ -1,6 +1,6 @@
 # Stability and freeze readiness (pre-model)
 
-After Monte Carlo **stability** and production **freeze**, review artifacts before **`--model`** so the frozen DMP panel and progression summaries support the intended disease narrative.
+After Monte Carlo **stability** and production **freeze**, review artifacts before **`--model`** so the frozen DMP panel, mapped-feature cache, and progression summaries support the intended disease narrative.
 
 ## What this checks
 
@@ -8,13 +8,14 @@ After Monte Carlo **stability** and production **freeze**, review artifacts befo
 |------|--------|--------|
 | **Enricher** | `production/enricher/enricher_completeness.json`, per-comparison `enrich_*.csv` | All libraries from preset; warn or no_go if incomplete |
 | **Stability** | `monte_carlo_runs/stability/stability_summary.json`, `stable_dmps_production.csv`, `dmp_frequency.csv` | Run counts, recurrence threshold, panel non-empty |
-| **Freeze** | `monte_carlo_runs/production/production_summary.json`, `project.json`, `stable_dmps_genomewide.csv` | Step RCs, `fixed_dmp_panel`, legacy detector keys |
+| **Freeze** | `monte_carlo_runs/production/production_summary.json`, `project.json`, `stable_dmps_genomewide.csv` | Step RCs, `fixed_dmp_panel`, legacy detector keys, mapper annotation cache metadata |
 | **Progression** | `monte_carlo_runs/production/progression/summary.json`, `modules_long.csv`, `entities_progression_labels.csv` | Stage order, missing inputs, module score vs stage trend |
 | **Balance** | Stable panel or frequency CSV | Chromosome concentration warnings |
 
 Set `step_config.validation.require_complete_enricher: true` to treat incomplete Enrichr as **no_go** (default: warning only).
 
 **Important:** MC **stability** does not run disease progression; progression is produced during **freeze** (and downstream mapper/enricher) when `step_config.progression.enabled` is true. See [`USAGE.md`](USAGE.md).
+For observed-hybrid mapped-family model builds (`feature_family_set != dmp`), freeze should also emit mapper annotation cache metadata (`production_summary.json -> mapper_annotation_cache`) and a cache CSV under `production/model_bundle/`.
 
 ## CLI
 

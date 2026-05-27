@@ -56,3 +56,16 @@ Use these keys in new/updated `project_*.json` files:
 - `step_config.detection.ecdf_grid_size` (not legacy grid aliases)
 - `step_config.progression.ordered_comparison_labels` (prefer over `ordered_disease_groups`)
 
+## Recent validation/runtime deltas (2026-05)
+
+These are the highest-impact keys and behavioral contracts added or changed in recent mono-repo updates.
+
+| Key / behavior | Status | Current contract |
+|---|---|---|
+| `stability_early_stop_enabled` + `stability_min_iterations` + `stability_convergence_*` | declared + consumed | Optional adaptive stop during `--stability`; convergence is checked on stable panel overlap/size drift with patience and still bounded by `n_iterations`. |
+| `ecdf_aggregated_enabled` + `ecdf_aggregated_n_bins` | declared + consumed | Aggregated ECDF OvR backend controls for `model_backend=ecdf`; auto-enabled when `feature_mode=observed_hybrid` and `feature_family_set != dmp` unless explicitly overridden. |
+| `feature_family_set` | declared + consumed | Governs observed-hybrid feature schema: `dmp`, `gene`, `structural`, `dmp+gene`, `dmp+structural`, `hybrid-all`. Non-`dmp` families require mapper-derived annotations during model build. |
+| `tabular_max_dmps` | declared + consumed | `null`/`0` keeps all stable DMP loci from bundle index; positive values cap by descending effect size. Older docs/examples that imply default `5000` are stale. |
+| model-MC shared reuse (`--model-mc --model-mc-all`) | consumed runtime behavior | When split source is reused, centroid/detector artifacts are symlinked from primary MC runs into `model_mc/shared/run_XXXX` instead of recomputation. |
+| freeze mapper annotation cache | consumed runtime behavior | Freeze builds `production/model_bundle/mapper_dmp_annotations.csv`, wires `step_config.model_bundle.mapper_annotation_csv`, and records `mapper_annotation_cache` in `production_summary.json`. |
+

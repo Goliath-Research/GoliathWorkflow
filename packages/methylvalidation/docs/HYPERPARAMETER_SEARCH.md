@@ -33,7 +33,7 @@ Let \(\theta\) denote tunable parameters (merged into `MonteCarloConfig` and/or 
 
 | Tier | Scope | Examples |
 |------|--------|----------|
-| **A** | `MonteCarloConfig` / `step_config.validation` | `train_fraction`, `n_iterations`, `stability_dmp_freq`, `stability_gene_freq`, `stability_min_balanced_accuracy`, FeatureCuts: `stability_featurecuts_enabled`, `stability_target_balanced_accuracy`, `stability_min_selected_dmps` |
+| **A** | `MonteCarloConfig` / `step_config.validation` | `train_fraction`, `n_iterations`, `stability_dmp_freq`, `stability_gene_freq`, `stability_min_balanced_accuracy`, adaptive stop (`stability_early_stop_enabled`, `stability_min_iterations`, `stability_convergence_*`), FeatureCuts: `stability_featurecuts_enabled`, `stability_target_balanced_accuracy`, `stability_min_selected_dmps` |
 | **B** | Project `step_config` for detector/classifier | Thresholds, k for DMPs, options exposed in JSON |
 | **C** | Model backend | `model_backend`, `tabular_methods`, `generative_*` — use **nested** search after Tier A, often on a **fixed** frozen panel |
 
@@ -97,6 +97,7 @@ Set `output_base` in the base config (or per-trial under `--work-dir`) to shared
 - **Discovery vs calibration:** Best stability settings may not align with best NLL/ECE; prefer a two-stage search or strong constraints on rollout metrics.
 - **`n_iterations`:** Treat as **compute budget** to reduce variance of the median, not as a free hyperparameter to grid-search widely.
 - **Baseline for constraints:** The baseline `metrics_summary.json` must use the same metric schema (predictor vs detector-only) as candidates.
+- **`tabular_max_dmps` semantics:** `null`/`0` keeps all stable loci; positive values apply an effect-size-ranked cap. Keep this explicit in search grids to avoid accidental old-default assumptions.
 
 ## 7. References
 

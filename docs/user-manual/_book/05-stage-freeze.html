@@ -336,6 +336,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li><code>&lt;mc_root&gt;/production/project.json</code></li>
 <li><code>&lt;mc_root&gt;/production/production_summary.json</code></li>
+<li><code>&lt;mc_root&gt;/production/model_bundle/mapper_dmp_annotations.csv</code> (when mapped-family feature bundles are prepared)</li>
 <li>mapper outputs under <code>production/mapper/...</code></li>
 <li>enricher outputs under <code>production/enricher/...</code></li>
 <li>optional progression outputs under <code>production/progression/...</code></li>
@@ -347,6 +348,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>production/project.json</code> exists and includes fixed panel usage for detector.</li>
 <li>expected mapper and enricher files are present.</li>
 <li>stage-specific logs show successful return codes.</li>
+<li>for non-<code>dmp</code> observed-hybrid families, <code>production_summary.json</code> includes <code>mapper_annotation_cache</code> metadata.</li>
 </ul>
 </section>
 <section id="recommended-post-freeze-gate" class="level2" data-number="6.7">

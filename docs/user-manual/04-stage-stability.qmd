@@ -28,6 +28,13 @@ Under `step_config.validation`:
 - `stability_dmp_freq`
 - `stability_min_balanced_accuracy`
 - `stability_gene_freq`
+- optional adaptive stop controls:
+  - `stability_early_stop_enabled`
+  - `stability_min_iterations`
+  - `stability_convergence_window`
+  - `stability_convergence_jaccard`
+  - `stability_convergence_max_size_delta`
+  - `stability_convergence_patience`
 - optional FeatureCuts controls:
   - `stability_featurecuts_enabled`
   - `stability_target_balanced_accuracy`
@@ -79,6 +86,7 @@ Where `<mc_root>` is:
 - `stable_dmps_production.csv` exists and is non-empty.
 - `all_metrics.csv` has successful rows near expected run count.
 - `stability_summary.json` reports configured thresholds.
+- if adaptive stop is enabled, `stability_summary.json` includes `early_stopping` diagnostics (`triggered`, checkpoint history, and stop iteration when applicable).
 
 ## Do not do this
 

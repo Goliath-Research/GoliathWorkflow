@@ -372,6 +372,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><strong>4) Aggregate</strong> (after successful tasks, or to refresh from a partial set):</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> aggregate-results <span class="at">--config</span> /work/experiments/my_mc_config.json</span>
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="co"># add --stability to run the same DMP/gene stability pass as monolithic methyl-validation --stability</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>If adaptive stop settings are enabled for monolithic stability runs, remember queue workers do not coordinate global early termination on their own. Keep <code>stability_early_stop_enabled=false</code> for queue-first executions unless your scheduler supports coordinator-side cancellation logic.</p>
 <p><strong>Legacy:</strong> a single process may still run <code>methyl-validation --stability</code> without subcommands; behavior is unchanged.</p>
 </section>
 <section id="example-paths-work-pattern" class="level2" data-number="13.5">

@@ -41,10 +41,13 @@ This flow splits **discovery** Monte Carlo work into a **plan** phase (fast, met
 4. **Aggregate** (after all tasks succeed, or to refresh metrics from a partial set):
    ```bash
    methyl-validation aggregate-results --config mc.json
-   # add --stability to run the same DMP/gene stability pass as legacy --stability
+  # add --stability to run the same DMP/gene stability pass as legacy --stability
+  # adaptive early-stop metadata is recorded in stability_summary.json when enabled in config
    ```
 
 5. **Legacy path unchanged**: a single process can still run the monolithic `methyl-validation` without subcommands (sequential MC loop).
+
+When planning distributed stability runs, keep adaptive stop (`stability_early_stop_enabled`) disabled unless the scheduler contract allows coordinator-side early termination. Queue workers execute per-task descriptors and do not globally stop queued tasks on their own.
 
 ## Example: `/work` project (e.g. prostate)
 

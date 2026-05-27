@@ -271,6 +271,12 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `run_stability` | bool | `false` | — | Run stability analysis after the main loop. |
 | `stability_dmp_freq` | float | `0.7` | [0, 1] | Minimum recurrence frequency $\tau$ for a DMP to be declared stable. |
 | `stability_min_balanced_accuracy` | float \| null | `null` | [0, 1] or null | Only runs with `balanced_accuracy ≥` this value contribute to DMP frequency counts. |
+| `stability_early_stop_enabled` | bool | `false` | — | Enable adaptive early stopping for stability MC when stable-panel convergence conditions are met. |
+| `stability_min_iterations` | int | `20` | ≥ 1 | Minimum qualifying runs before convergence checks can terminate the loop. |
+| `stability_convergence_window` | int | `5` | ≥ 1 | Compare stable panel at run index $k$ versus $k-w$ (qualifying runs). |
+| `stability_convergence_jaccard` | float | `0.98` | [0, 1] | Required Jaccard overlap between current and lagged stable panels. |
+| `stability_convergence_max_size_delta` | float | `0.02` | [0, 1] | Maximum allowed relative panel-size change between checkpoints. |
+| `stability_convergence_patience` | int | `3` | ≥ 1 | Consecutive passing checkpoints required before early stop triggers. |
 | `stability_gene_freq` | float | `0.5` | [0, 1] | Minimum recurrence frequency for a gene (enricher output) to be declared stable. |
 | `run_mapper_and_enricher` | bool | `false` | — | Legacy field; MC iterations now run centroid+detector only. Mapper/enricher are part of `--freeze`. |
 | `skip_enricher` | bool | `false` | — | Skip the enricher step even when `run_mapper_and_enricher` is `true`. |
@@ -285,7 +291,10 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `model_bundle_dir` | str \| null | `null` | — | Optional output directory for model feature bundle artifacts. Default: `<production_output_dir>/model_bundle`. |
 | `model_weight_column` | str | `"effect_size"` | — | Legacy compatibility field. Tabular/generative model bundle weighting is canonicalized to detector `effect_size`. |
 | `tabular_model_type` | str | `"random_forest"` | `"random_forest"`, `"hist_gradient_boosting"`, `"logistic_regression"`, `"xgboost"` | Model type when `model_backend="tabular_sklearn"`. |
-| `tabular_max_dmps` | int | `5000` | ≥ 10 | Maximum number of DMP loci retained from bundle index for tabular/generative backend training. |
+| `tabular_max_dmps` | int \| null | `null` | null, `0`, or ≥ 10 | DMP cap for tabular/generative backend training. `null`/`0` keeps all stable loci from the bundle index; positive values keep top loci by descending effect size. |
+| `feature_family_set` | str | `"dmp"` | `dmp`, `gene`, `structural`, `dmp+gene`, `dmp+structural`, `hybrid-all` | Feature-family contract for observed-hybrid model bundles and predictors. |
+| `ecdf_aggregated_enabled` | bool \| null | `null` | — | Toggle aggregated ECDF OvR for `model_backend=ecdf`. `null` auto-enables when `feature_mode=observed_hybrid` and `feature_family_set!=dmp`. |
+| `ecdf_aggregated_n_bins` | int | `100` | [8, 512] | Histogram bin count for aggregated ECDF OvR package training. |
 | `covariates_path` | str \| null | `null` | — | Optional covariates sidecar (`.h5` preferred, `.csv` accepted) for tabular or generative backend. |
 | `covariate_id_column` | str | `"sample_id"` | — | Covariates column used to join rows with sample basenames. |
 | `covariate_numeric_columns` | list[str] \| null | `null` | no overlap with ordinal/categorical columns | Explicit numeric covariate columns. If omitted (and no explicit role lists are set), numeric roles are inferred. |

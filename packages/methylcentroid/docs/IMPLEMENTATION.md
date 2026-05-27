@@ -66,6 +66,10 @@ The GPU path uses CuPy through the same builder interface:
 The CPU and GPU paths intentionally share the same output contract so downstream
 consumers do not need separate code paths.
 
+Recent loader/indexing cleanup centralized position-index lookup in methylutils so
+centroid chunked workflows and downstream classifiers share the same indexed HDF5
+access semantics.
+
 ## Data Object
 
 The persisted centroid type is

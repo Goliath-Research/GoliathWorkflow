@@ -337,6 +337,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>tabular_sklearn</code>: in-process bundle -&gt; train -&gt; predict</li>
 <li><code>generative_hybrid</code>: in-process bundle -&gt; train -&gt; predict</li>
 </ul>
+<p>For <code>ecdf</code> + observed-hybrid mapped families (<code>feature_mode=observed_hybrid</code>, <code>feature_family_set!=dmp</code>), the runtime path is aggregated ECDF OvR package train/predict and skips ECDF second-stage refinement.</p>
 <p>Configured by <code>step_config.validation.backend_profiles</code> (plus optional CLI backend override).</p>
 </section>
 <section id="process-model" class="level2" data-number="7.4">
@@ -348,10 +349,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li><code>backend_profiles</code></li>
 <li>backend-specific <code>params</code> under each profile (for example <code>feature_mode</code>, <code>ecdf_second_stage_enabled</code>, <code>tabular_methods</code>, <code>generative_latent_dim</code>)</li>
+<li>observed-hybrid family contract (when used):
+<ul>
+<li><code>feature_family_set</code></li>
+<li>mapper annotation cache from freeze (<code>production/model_bundle/mapper_dmp_annotations.csv</code>)</li>
+</ul></li>
 <li>tabular controls:
 <ul>
 <li><code>tabular_methods</code></li>
 <li><code>tabular_method_selection_metric</code></li>
+<li>optional <code>tabular_max_dmps</code> (null/0 keeps all stable loci)</li>
 </ul></li>
 <li>generative controls:
 <ul>
@@ -371,6 +378,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li><code>&lt;mc_root&gt;/production/classifiers/...</code></li>
 <li><code>&lt;mc_root&gt;/production/predictors/...</code></li>
+<li>aggregated ECDF mode writes:
+<ul>
+<li><code>&lt;mc_root&gt;/production/classifiers/ecdf_aggregated_ovr.pkl</code></li>
+<li><code>&lt;mc_root&gt;/production/classifiers/ecdf_aggregated_ovr.meta.json</code></li>
+</ul></li>
 <li>if model-MC:
 <ul>
 <li><code>&lt;mc_root&gt;/model_mc/shared/run_XXXX/...</code></li>
@@ -379,6 +391,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>&lt;mc_root&gt;/production/selected_backend.json</code> (after selection)</li>
 </ul></li>
 </ul>
+<p>When model-MC reuses primary split artifacts, shared/backend run roots may link centroid/detector directories instead of recomputing them.</p>
 </section>
 <section id="success-checks" class="level2" data-number="7.7">
 <h2 data-number="7.7" class="anchored" data-anchor-id="success-checks"><span class="header-section-number">7.7</span> Success checks</h2>
