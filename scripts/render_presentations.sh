@@ -12,6 +12,21 @@ if ! command -v marp >/dev/null 2>&1; then
     exit 1
 fi
 
+NPM_ROOT="$(npm root -g)"
+MERMAID_BUNDLE="$NPM_ROOT/mermaid/dist/mermaid.min.js"
+if [ ! -f "$MERMAID_BUNDLE" ]; then
+    echo "Mermaid bundle not found in current npm global path."
+    echo "Attempting to install mermaid globally..."
+    npm install -g mermaid >/dev/null
+    NPM_ROOT="$(npm root -g)"
+    MERMAID_BUNDLE="$NPM_ROOT/mermaid/dist/mermaid.min.js"
+fi
+if [ ! -f "$MERMAID_BUNDLE" ]; then
+    echo "Error: Mermaid bundle not found at $MERMAID_BUNDLE"
+    echo "Install with: npm install -g mermaid"
+    exit 1
+fi
+
 echo "Rendering presentation decks with Marp..."
 for f in "$PRESENTATIONS_DIR"/*.md; do
     [ "$(basename "$f")" = "README.md" ] && continue
@@ -19,15 +34,19 @@ for f in "$PRESENTATIONS_DIR"/*.md; do
 done
 
 echo "Injecting Mermaid runtime into generated HTML..."
-ROOT_DIR="$ROOT_DIR" python3 - <<'PY'
+ROOT_DIR="$ROOT_DIR" MERMAID_BUNDLE="$MERMAID_BUNDLE" python3 - <<'PY'
 from pathlib import Path
 import os
 
 root = Path(os.environ["ROOT_DIR"])
 presentations = root / "docs" / "presentations"
+mermaid_bundle = Path(os.environ["MERMAID_BUNDLE"]).read_text(encoding="utf-8")
 
-inject = """<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<script>
+inject = (
+    "<script>\n"
+    + mermaid_bundle
+    + "\n</script>\n"
+    + """<script>
 (function () {
   if (!window.mermaid) return;
   mermaid.initialize({ startOnLoad: false, securityLevel: "loose" });
@@ -44,10 +63,11 @@ inject = """<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.mi
 })();
 </script>
 """
+)
 
 for html in presentations.glob("*.html"):
     raw = html.read_text(encoding="utf-8")
-    if "cdn.jsdelivr.net/npm/mermaid@" in raw:
+    if "mermaid.initialize({ startOnLoad: false, securityLevel: \"loose\" });" in raw:
         continue
     if "</body>" in raw:
         raw = raw.replace("</body>", f"{inject}\n</body>")

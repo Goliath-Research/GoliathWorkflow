@@ -134,8 +134,8 @@ if [ "$SKIP_MARP" -eq 1 ]; then
     echo "   • Skipping Marp installation (--skip-marp)"
 else
     if command -v npm >/dev/null 2>&1; then
-        echo "   • Installing @marp-team/marp-cli via npm (global)..."
-        npm install -g @marp-team/marp-cli
+        echo "   • Installing Marp + Mermaid via npm (global)..."
+        npm install -g @marp-team/marp-cli mermaid
         NPM_GLOBAL_BIN="$(npm config get prefix)/bin"
         if ! command -v marp >/dev/null 2>&1 && [ -x "$NPM_GLOBAL_BIN/marp" ]; then
             export PATH="$NPM_GLOBAL_BIN:$PATH"
