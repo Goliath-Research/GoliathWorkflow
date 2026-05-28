@@ -101,6 +101,30 @@ class BedtoolsMapper:
         "terminator": "hits_terminator",
     }
     _FEATURE_SCORE_ORDER = ("promoter", "exon", "intron", "gene_body", "terminator")
+    _PARENT_FEATURES = frozenset(_FEATURE_PRIORITY.keys())
+    _DETAILED_TO_PARENT = {
+        # Exonic-like detailed features
+        "cds": "exon",
+        "utr": "exon",
+        "five_prime_utr": "exon",
+        "three_prime_utr": "exon",
+        "5utr": "exon",
+        "3utr": "exon",
+        "start_codon": "exon",
+        "stop_codon": "exon",
+        # Intron-like detailed features
+        "retained_intron": "intron",
+        # Container-like annotation rows
+        "gene": "gene_body",
+        "transcript": "gene_body",
+        "mrna": "gene_body",
+        "lncrna": "gene_body",
+        "ncrna": "gene_body",
+        "rrna": "gene_body",
+        "snrna": "gene_body",
+        "snorna": "gene_body",
+        "pseudogene": "gene_body",
+    }
     
     def __init__(
         self,
@@ -230,6 +254,12 @@ class BedtoolsMapper:
         
         # None or [] = intersect all GTF feature types (no post-filter)
         self.feature_types = feature_types if feature_types else None
+        # Preserve explicitly configured detailed feature labels as first-class output identity.
+        # Parent-bucket rollup for scoring/hits can still operate independently.
+        configured = feature_types if feature_types else []
+        self._explicit_feature_labels = {
+            self._canonical_feature_token(v) for v in configured if str(v).strip()
+        }
         self.auxiliary_bed_paths = [Path(p).expanduser() for p in (auxiliary_bed_paths or []) if p]
         self.run_bedtools_closest = bool(run_bedtools_closest)
         self.closest_gene_bed = Path(closest_gene_bed).expanduser() if closest_gene_bed else None
@@ -1037,15 +1067,42 @@ class BedtoolsMapper:
         logger.info(f"Sorting DMPs by {rank_col} for optimization")
         return df
 
-    @staticmethod
-    def _normalize_feature_type(value: str) -> str:
+    @classmethod
+    def _canonical_feature_token(cls, value: str) -> str:
         raw = str(value).strip().lower()
+        raw = raw.replace("-", "_").replace(" ", "_")
+        raw = re.sub(r"_+", "_", raw)
+        raw = raw.strip("_")
         aliases = {
             "genebody": "gene_body",
             "gene-body": "gene_body",
             "body_gene": "gene_body",
         }
         return aliases.get(raw, raw)
+
+    @classmethod
+    def _parent_bucket_for_feature(cls, token: str) -> str:
+        canonical = cls._canonical_feature_token(token)
+        if canonical in cls._PARENT_FEATURES:
+            return canonical
+        mapped = cls._DETAILED_TO_PARENT.get(canonical)
+        if mapped in cls._PARENT_FEATURES:
+            return str(mapped)
+        # Conservative fallback: keep DMP contribution in-gene instead of dropping from parent summaries.
+        return "gene_body"
+
+    def _normalize_feature_type(self, value: str) -> str:
+        """
+        Resolve feature label for parent-bucket aggregation.
+
+        - If a detailed token is explicitly configured in feature_types, preserve it as-is.
+        - Otherwise roll up detailed annotations to parent buckets.
+        """
+        canonical = self._canonical_feature_token(value)
+        explicit = getattr(self, "_explicit_feature_labels", set()) or set()
+        if canonical and canonical in explicit and canonical not in self._PARENT_FEATURES:
+            return canonical
+        return self._parent_bucket_for_feature(canonical)
 
     def _compute_exclusive_feature_hits(self, intersect_df: pd.DataFrame, group_by: str) -> pd.DataFrame:
         """Per (DMP, gene) exclusive assignment by priority for stable hit counts."""

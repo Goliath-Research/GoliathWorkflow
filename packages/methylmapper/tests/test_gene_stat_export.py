@@ -190,3 +190,90 @@ def test_aggregate_by_feature_rejects_invalid_stability_frequency_values():
     with pytest.raises(ValueError, match="Invalid stability frequency values"):
         BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
 
+
+def test_aggregate_by_feature_rolls_up_non_exposed_detailed_features_to_parent_buckets():
+    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
+    mapper.storey_lambda = None
+    mapper._explicit_feature_labels = set()
+    mapper.w_promoter = 2.0
+    mapper.w_terminator = 0.5
+    mapper.w_gene_body = 1.0
+    mapper.w_exon = 1.5
+    mapper.w_intron = 0.7
+
+    intersect_df = pd.DataFrame(
+        {
+            "gene_name": ["G1", "G1"],
+            "dmp_name": ["d1", "d2"],
+            "feature_type": ["CDS", "five_prime_UTR"],
+            "feature_start": [10, 30],
+            "feature_end": [20, 40],
+            "weight": [1.0, 1.0],
+            "effect_size": [0.6, 0.2],
+            "frequency": [1.0, 1.0],
+            "region_weight": [1.5, 1.5],
+        }
+    )
+
+    grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
+    row = grouped.iloc[0]
+    assert row["hits_exon"] == 2
+    assert row["effect_size_exon"] == pytest.approx(0.8)
+    assert row["gene_score"] == pytest.approx((0.6 * 1.0 * 1.5) + (0.2 * 1.0 * 1.5))
+
+
+def test_aggregate_by_feature_rolls_up_transcript_to_gene_body_when_not_exposed():
+    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
+    mapper.storey_lambda = None
+    mapper._explicit_feature_labels = set()
+    mapper.w_promoter = 2.0
+    mapper.w_terminator = 0.5
+    mapper.w_gene_body = 1.0
+    mapper.w_exon = 1.5
+    mapper.w_intron = 0.7
+
+    intersect_df = pd.DataFrame(
+        {
+            "gene_name": ["G2"],
+            "dmp_name": ["d10"],
+            "feature_type": ["transcript"],
+            "weight": [1.0],
+            "effect_size": [0.4],
+            "frequency": [1.0],
+            "region_weight": [1.0],
+        }
+    )
+
+    grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
+    row = grouped.iloc[0]
+    assert row["hits_gene_body"] == 1
+    assert row["effect_size_gene_body"] == pytest.approx(0.4)
+
+
+def test_aggregate_by_feature_preserves_explicit_detailed_feature_label_for_identity():
+    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
+    mapper.storey_lambda = None
+    mapper._explicit_feature_labels = {"cds"}
+    mapper.w_promoter = 2.0
+    mapper.w_terminator = 0.5
+    mapper.w_gene_body = 1.0
+    mapper.w_exon = 1.5
+    mapper.w_intron = 0.7
+
+    # group_by=feature_type validates that explicit detailed labels stay visible as output identity.
+    intersect_df = pd.DataFrame(
+        {
+            "feature_type": ["CDS"],
+            "gene_name": ["G1"],
+            "dmp_name": ["d1"],
+            "weight": [1.0],
+            "effect_size": [0.6],
+            "frequency": [1.0],
+            "region_weight": [1.5],
+        }
+    )
+
+    grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="feature_type")
+    assert grouped.iloc[0]["feature_type"] == "CDS"
+    assert grouped.iloc[0]["gene_score"] == pytest.approx(0.6 * 1.0 * 1.5)
+
