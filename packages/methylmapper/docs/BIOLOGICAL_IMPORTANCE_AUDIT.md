@@ -104,7 +104,7 @@ Primary code reference: [`packages/methylmapper/methyl_mapper/bedtools_mapper.py
   - Keep weighted Stouffer path, but document dependence caveat and expose effective-contributor counts.
 
 - **Descriptive raw intersection metrics**:
-  - Keep existing row-based columns for backward compatibility, but label as intersection-density-sensitive.
+  - Keep row-based columns only when needed for diagnostics; do not use them as canonical biological-importance measures.
 
 ---
 
@@ -159,16 +159,9 @@ This must be separate from existing `gene_feature_importance`.
 
 ---
 
-## 6) Column design (backward-compatible)
+## 6) Column design (canonical replacement)
 
-Retain current columns unchanged:
-
-- `gene_score`
-- `gene_feature_importance`
-- `gene_importance`
-- `total_weight`, `mean_effect_size`, `hits_*`, `effect_size_*`, `gene_p_value`, `gene_q_value`
-
-Add new columns:
+Use compound-effect columns as canonical outputs for biological-importance ranking:
 
 - `gene_effect_abs_wmean`
 - `gene_effect_abs_wsum`
@@ -182,7 +175,11 @@ Optional convenience:
 
 - `gene_effect_compound_v1_rank`
 
-Do not overwrite `gene_importance` in phase 1. Add optional config switch later to choose ranking source (`gene_importance` vs `gene_effect_compound_v1`).
+Canonical ranking field:
+
+- `gene_importance := gene_effect_compound_v1`
+
+Legacy columns (`gene_score`, `gene_feature_importance`, row-density summaries) may remain available for traceability, but they are no longer canonical ranking fields.
 
 ---
 
@@ -216,7 +213,6 @@ Do not overwrite `gene_importance` in phase 1. Add optional config switch later 
 
 ## 8) Suggested adoption strategy
 
-1. Introduce `*_v1` columns only (no ranking behavior change).
+1. Promote `gene_effect_compound_v1` as the immediate canonical `gene_importance`.
 2. Validate against known stage markers/pathways and progression monotonicity.
-3. If validated, add a config option to rank/export by `gene_effect_compound_v1`.
-4. Keep legacy columns for comparability with historical runs.
+3. Keep legacy fields for diagnostics only, not for ranking semantics.

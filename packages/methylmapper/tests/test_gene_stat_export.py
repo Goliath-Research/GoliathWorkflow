@@ -83,7 +83,10 @@ def test_aggregate_by_feature_exports_feature_effect_sizes_and_weighted_gene_imp
     assert row_g1["direction_promoter"] == pytest.approx(1.0)
     # Weighted whole-gene canonical importance.
     assert row_g1["gene_feature_importance"] == pytest.approx((2.0 * 0.4) + (1.5 * 0.3))
-    assert row_g1["gene_importance"] == pytest.approx(row_g1["gene_feature_importance"])
+    assert row_g1["gene_effect_abs_wmean"] == pytest.approx(0.37)
+    assert row_g1["gene_direction_coherence"] == pytest.approx(1.25 / 1.85)
+    assert row_g1["gene_effect_compound_v1"] == pytest.approx(0.25)
+    assert row_g1["gene_importance"] == pytest.approx(row_g1["gene_effect_compound_v1"])
 
 
 def test_aggregate_by_feature_uses_exclusive_feature_priority_for_hits_and_score():
@@ -167,6 +170,43 @@ def test_aggregate_by_feature_sorts_by_canonical_gene_importance_desc():
     grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
     assert grouped.iloc[0]["gene_name"] == "G_high"
     assert grouped.iloc[0]["gene_importance"] > grouped.iloc[1]["gene_importance"]
+
+
+def test_aggregate_by_feature_exports_compound_v1_columns():
+    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
+    mapper.storey_lambda = None
+    mapper.w_promoter = 2.0
+    mapper.w_terminator = 0.5
+    mapper.w_gene_body = 1.0
+    mapper.w_exon = 1.5
+    mapper.w_intron = 0.7
+
+    intersect_df = pd.DataFrame(
+        {
+            "gene_name": ["G1", "G1", "G1"],
+            "dmp_name": ["d1", "d2", "d3"],
+            "feature_type": ["promoter", "exon", "intron"],
+            "feature_start": [1, 10, 30],
+            "feature_end": [5, 20, 40],
+            "weight": [1.0, 1.0, 1.0],
+            "effect_size": [0.6, 0.2, 0.1],
+            "delta_mean": [0.6, 0.2, 0.1],
+            "frequency": [1.0, 0.8, 0.9],
+            "region_weight": [2.0, 1.5, 0.7],
+        }
+    )
+
+    grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
+    row = grouped.iloc[0]
+    assert "gene_effect_abs_wmean" in grouped.columns
+    assert "gene_effect_abs_wsum" in grouped.columns
+    assert "gene_direction_coherence" in grouped.columns
+    assert "gene_support_n" in grouped.columns
+    assert "gene_support_freq" in grouped.columns
+    assert "gene_effect_compound_v1" in grouped.columns
+    assert "gene_feature_effect_compound_v1" in grouped.columns
+    assert row["gene_support_n"] == 3
+    assert row["gene_effect_compound_v1"] > 0.0
 
 
 def test_aggregate_by_feature_rejects_invalid_stability_frequency_values():

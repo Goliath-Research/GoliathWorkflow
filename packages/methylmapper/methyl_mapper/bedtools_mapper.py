@@ -1275,6 +1275,133 @@ class BedtoolsMapper:
                 out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
         return out
 
+    def _build_compound_effect_metrics(
+        self,
+        score_source_df: pd.DataFrame,
+        group_by: str,
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Build deduplicated DMP-like biological importance metrics.
+
+        Gene-level dedup key is (group_by, dmp_name) from score_source_df.
+        Feature-level dedup key is (group_by, feature_norm, dmp_name).
+        """
+        if score_source_df is None or score_source_df.empty or "effect_size" not in score_source_df.columns:
+            return pd.DataFrame(columns=[group_by]), pd.DataFrame(columns=[group_by])
+
+        cols = [c for c in (group_by, "dmp_name", "feature_norm", "effect_size", "delta_mean", "frequency", "region_weight") if c in score_source_df.columns]
+        work = score_source_df[cols].copy()
+        if group_by not in work.columns:
+            return pd.DataFrame(columns=[group_by]), pd.DataFrame(columns=[group_by])
+
+        work["effect_size"] = pd.to_numeric(work["effect_size"], errors="coerce")
+        work = work[np.isfinite(work["effect_size"])].copy()
+        if work.empty:
+            return pd.DataFrame(columns=[group_by]), pd.DataFrame(columns=[group_by])
+
+        if "frequency" in work.columns:
+            freq_raw = pd.to_numeric(work["frequency"], errors="coerce").fillna(1.0)
+            freq_weight = freq_raw.clip(lower=0.0)
+            freq_support = freq_raw.clip(lower=0.0, upper=1.0)
+        else:
+            freq_weight = pd.Series(1.0, index=work.index, dtype=float)
+            freq_support = pd.Series(1.0, index=work.index, dtype=float)
+        work["frequency_weight"] = freq_weight
+        work["frequency_support"] = freq_support
+
+        if "region_weight" in work.columns:
+            region_weight = pd.to_numeric(work["region_weight"], errors="coerce").fillna(1.0).clip(lower=0.0)
+        else:
+            region_weight = pd.Series(1.0, index=work.index, dtype=float)
+        work["region_weight_eff"] = region_weight
+
+        work["bio_weight"] = work["frequency_weight"] * work["region_weight_eff"]
+        work["abs_effect"] = np.abs(pd.to_numeric(work["effect_size"], errors="coerce").fillna(0.0))
+
+        if "delta_mean" in work.columns:
+            sign_vals = np.sign(pd.to_numeric(work["delta_mean"], errors="coerce").fillna(0.0).to_numpy(dtype=float))
+            eff_sign = np.sign(pd.to_numeric(work["effect_size"], errors="coerce").fillna(0.0).to_numpy(dtype=float))
+            sign_vals = np.where(sign_vals == 0.0, eff_sign, sign_vals)
+        else:
+            sign_vals = np.sign(pd.to_numeric(work["effect_size"], errors="coerce").fillna(0.0).to_numpy(dtype=float))
+        sign_vals = np.where(np.isfinite(sign_vals), sign_vals, 0.0)
+        work["effect_sign"] = sign_vals
+
+        work["abs_term"] = work["bio_weight"] * work["abs_effect"]
+        work["signed_term"] = work["abs_term"] * work["effect_sign"]
+
+        gene_grouped = work.groupby(group_by, dropna=False)
+        gene_metrics = gene_grouped.agg(
+            _sum_weight=("bio_weight", "sum"),
+            _sum_abs_term=("abs_term", "sum"),
+            _sum_signed_term=("signed_term", "sum"),
+            gene_support_freq=("frequency_support", "mean"),
+        ).reset_index()
+        if "dmp_name" in work.columns:
+            support_n = (
+                work[[group_by, "dmp_name"]]
+                .dropna(subset=[group_by])
+                .drop_duplicates(subset=[group_by, "dmp_name"])
+                .groupby(group_by, dropna=False)["dmp_name"]
+                .size()
+                .reset_index(name="gene_support_n")
+            )
+            gene_metrics = gene_metrics.merge(support_n, on=group_by, how="left")
+        else:
+            gene_metrics["gene_support_n"] = gene_grouped.size().to_numpy(dtype=int)
+        gene_metrics["gene_support_n"] = pd.to_numeric(gene_metrics["gene_support_n"], errors="coerce").fillna(0).astype(int)
+
+        gene_metrics["gene_effect_abs_wsum"] = pd.to_numeric(gene_metrics["_sum_abs_term"], errors="coerce").fillna(0.0)
+        sum_weight = pd.to_numeric(gene_metrics["_sum_weight"], errors="coerce").fillna(0.0)
+        sum_abs = pd.to_numeric(gene_metrics["_sum_abs_term"], errors="coerce").fillna(0.0)
+        sum_signed = pd.to_numeric(gene_metrics["_sum_signed_term"], errors="coerce").fillna(0.0)
+        gene_metrics["gene_effect_abs_wmean"] = np.where(sum_weight > 0.0, sum_abs / sum_weight, 0.0)
+        gene_metrics["gene_direction_coherence"] = np.where(sum_abs > 0.0, np.abs(sum_signed) / sum_abs, 0.0)
+        gene_metrics["gene_support_freq"] = pd.to_numeric(gene_metrics["gene_support_freq"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
+        gene_metrics["gene_effect_compound_v1"] = (
+            gene_metrics["gene_effect_abs_wmean"]
+            * gene_metrics["gene_direction_coherence"]
+            * np.sqrt(gene_metrics["gene_support_freq"])
+        )
+        gene_metrics = gene_metrics.drop(columns=["_sum_weight", "_sum_abs_term", "_sum_signed_term"], errors="ignore")
+
+        feature_cols = [group_by]
+        feature_metrics = pd.DataFrame(columns=feature_cols)
+        if "feature_norm" in work.columns:
+            wf = work.copy()
+            wf["feature_norm"] = wf["feature_norm"].astype(str)
+            wf = wf[wf["feature_norm"].isin(self._FEATURE_SCORE_ORDER)].copy()
+            if not wf.empty:
+                fgrp = wf.groupby([group_by, "feature_norm"], dropna=False).agg(
+                    _sum_weight=("bio_weight", "sum"),
+                    _sum_abs_term=("abs_term", "sum"),
+                    _sum_signed_term=("signed_term", "sum"),
+                    _support_freq=("frequency_support", "mean"),
+                ).reset_index()
+                f_sum_weight = pd.to_numeric(fgrp["_sum_weight"], errors="coerce").fillna(0.0)
+                f_sum_abs = pd.to_numeric(fgrp["_sum_abs_term"], errors="coerce").fillna(0.0)
+                f_sum_signed = pd.to_numeric(fgrp["_sum_signed_term"], errors="coerce").fillna(0.0)
+                f_support = pd.to_numeric(fgrp["_support_freq"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
+                fgrp["feature_effect_abs_wmean"] = np.where(f_sum_weight > 0.0, f_sum_abs / f_sum_weight, 0.0)
+                fgrp["feature_direction_coherence"] = np.where(f_sum_abs > 0.0, np.abs(f_sum_signed) / f_sum_abs, 0.0)
+                fgrp["feature_effect_compound_v1"] = (
+                    fgrp["feature_effect_abs_wmean"]
+                    * fgrp["feature_direction_coherence"]
+                    * np.sqrt(f_support)
+                )
+                pivot = fgrp.pivot(
+                    index=group_by,
+                    columns="feature_norm",
+                    values="feature_effect_compound_v1",
+                ).reset_index()
+                pivot.columns = [
+                    c if c == group_by else f"feature_effect_compound_v1_{c}"
+                    for c in pivot.columns
+                ]
+                feature_metrics = pivot
+
+        return gene_metrics, feature_metrics
+
     @staticmethod
     def _prune_gene_output_columns(df: pd.DataFrame) -> pd.DataFrame:
         keep_cols = [
@@ -1297,6 +1424,18 @@ class BedtoolsMapper:
             "direction_terminator",
             "gene_feature_importance",
             "gene_importance",
+            "gene_effect_abs_wmean",
+            "gene_effect_abs_wsum",
+            "gene_direction_coherence",
+            "gene_support_n",
+            "gene_support_freq",
+            "gene_effect_compound_v1",
+            "feature_effect_compound_v1_promoter",
+            "feature_effect_compound_v1_exon",
+            "feature_effect_compound_v1_intron",
+            "feature_effect_compound_v1_gene_body",
+            "feature_effect_compound_v1_terminator",
+            "gene_feature_effect_compound_v1",
             "gene_feature_score",
             "hits_promoter",
             "hits_exon",
@@ -1680,15 +1819,47 @@ class BedtoolsMapper:
             grouped = grouped.merge(gene_score, on=group_by, how='left')
             grouped['gene_score'] = pd.to_numeric(grouped['gene_score'], errors='coerce').fillna(0.0)
 
-        # Canonical importance now comes from feature-aware effect aggregation.
-        if "gene_feature_importance" in grouped.columns:
-            grouped["gene_importance"] = pd.to_numeric(grouped["gene_feature_importance"], errors="coerce").fillna(0.0)
-        elif "gene_score" in grouped.columns:
-            grouped["gene_importance"] = pd.to_numeric(grouped["gene_score"], errors="coerce").fillna(0.0)
-        elif "total_weight" in grouped.columns:
-            grouped["gene_importance"] = pd.to_numeric(grouped["total_weight"], errors="coerce").fillna(0.0)
-        else:
-            grouped["gene_importance"] = 0.0
+        # Compound DMP-like biological importance metrics (canonical path).
+        gene_compound_df, feature_compound_df = self._build_compound_effect_metrics(
+            score_source_df=score_source_df,
+            group_by=group_by,
+        )
+        if not gene_compound_df.empty:
+            grouped = grouped.merge(gene_compound_df, on=group_by, how="left")
+        if not feature_compound_df.empty:
+            grouped = grouped.merge(feature_compound_df, on=group_by, how="left")
+        for feature in self._FEATURE_SCORE_ORDER:
+            col = f"feature_effect_compound_v1_{feature}"
+            if col not in grouped.columns:
+                grouped[col] = 0.0
+            grouped[col] = pd.to_numeric(grouped[col], errors="coerce").fillna(0.0)
+        grouped["gene_feature_effect_compound_v1"] = (
+            grouped["feature_effect_compound_v1_promoter"] * float(getattr(self, "w_promoter", 2.0))
+            + grouped["feature_effect_compound_v1_exon"] * float(getattr(self, "w_exon", 1.5))
+            + grouped["feature_effect_compound_v1_intron"] * float(getattr(self, "w_intron", 0.7))
+            + grouped["feature_effect_compound_v1_gene_body"] * float(getattr(self, "w_gene_body", 1.0))
+            + grouped["feature_effect_compound_v1_terminator"] * float(getattr(self, "w_terminator", 0.5))
+        )
+        for col in (
+            "gene_effect_abs_wmean",
+            "gene_effect_abs_wsum",
+            "gene_direction_coherence",
+            "gene_support_freq",
+            "gene_effect_compound_v1",
+            "gene_feature_effect_compound_v1",
+        ):
+            if col not in grouped.columns:
+                grouped[col] = 0.0
+            grouped[col] = pd.to_numeric(grouped[col], errors="coerce").fillna(0.0)
+        if "gene_support_n" not in grouped.columns:
+            grouped["gene_support_n"] = 0
+        grouped["gene_support_n"] = pd.to_numeric(grouped["gene_support_n"], errors="coerce").fillna(0).astype(int)
+
+        # Canonical importance now uses compound v1 effect score directly.
+        grouped["gene_importance"] = pd.to_numeric(
+            grouped.get("gene_effect_compound_v1"),
+            errors="coerce",
+        ).fillna(0.0)
 
         # Sort by canonical importance first, then stable tie-breakers.
         sort_cols = ["gene_importance"]
