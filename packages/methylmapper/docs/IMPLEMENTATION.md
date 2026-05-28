@@ -16,8 +16,8 @@ For formulas, assumptions, and caveats, see [`docs/theory/chapters/07-methylmapp
 
 - **Bedtools** is the primary mapping path for new WGBS work; Azure SQL SP remains available for backfill or parity checks.
 - By default the GTF intersect keeps **every** `feature` type; restrict with `feature_types` / `--feature-types`.
-- Gene-level aggregation emits a slimmed schema for downstream enrichment (`gene_name`, `gene_id`, `dmp_count`, `unique_dmps`, `total_weight`, `mean_effect_size`, `gene_score`, `hits_*`, `gene_p_value`, `gene_q_value`, disease subset, links). Feature hits are built from **exclusive** per-(DMP,gene) assignment with priority `promoter > exon > intron > gene_body > terminator`.
-- Canonical biological-importance ranking now uses compound DMP-like metrics (`gene_effect_compound_v1`) and sets `gene_importance` from that compound score.
+- Gene-level aggregation emits a slimmed schema for downstream enrichment (`gene_name`, `gene_id`, `unique_dmps`, `mean_effect_size`, `gene_effect_size`, `gene_score`, `gene_effect_compound`, `gene_feature_effect_compound`, `hits_*`, `gene_p_value`, `gene_q_value`, disease subset, links). Feature hits are built from **exclusive** per-(DMP,gene) assignment with priority `promoter > exon > intron > gene_body > terminator`.
+- Canonical biological-importance ranking now uses compound DMP-like metrics (`gene_effect_compound`) and sets `gene_importance` from that compound score.
 - Stability/fixed-panel `gene_score` uses strict frequency validation (`frequency` required and bounded in `[0,1]`). Non-stability inputs retain neutral fallback `frequency=1.0`.
 - Disease enrichment: merged outputs use **Open Targets** for association evidence and scores; **Grok** supplies narrative annotation (`grok_annotation_summary`, `gene_basic_description`). Grok defaults to **single-threaded** synchronous `chat/completions` (batch size ≤ 20); xAI Batch API is opt-in.
 - Optional **auxiliary BED** files (e.g. enhancers, ChIP) add per-DMP overlap columns; **`--closest-gene`** adds nearest gene body distance from the GTF.

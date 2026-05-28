@@ -1358,7 +1358,12 @@ class BedtoolsMapper:
         gene_metrics["gene_effect_abs_wmean"] = np.where(sum_weight > 0.0, sum_abs / sum_weight, 0.0)
         gene_metrics["gene_direction_coherence"] = np.where(sum_abs > 0.0, np.abs(sum_signed) / sum_abs, 0.0)
         gene_metrics["gene_support_freq"] = pd.to_numeric(gene_metrics["gene_support_freq"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
-        gene_metrics["gene_effect_compound_v1"] = (
+        gene_metrics["gene_effect_size"] = np.where(
+            sum_weight > 0.0,
+            sum_signed / sum_weight,
+            0.0,
+        )
+        gene_metrics["gene_effect_compound"] = (
             gene_metrics["gene_effect_abs_wmean"]
             * gene_metrics["gene_direction_coherence"]
             * np.sqrt(gene_metrics["gene_support_freq"])
@@ -1384,7 +1389,7 @@ class BedtoolsMapper:
                 f_support = pd.to_numeric(fgrp["_support_freq"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
                 fgrp["feature_effect_abs_wmean"] = np.where(f_sum_weight > 0.0, f_sum_abs / f_sum_weight, 0.0)
                 fgrp["feature_direction_coherence"] = np.where(f_sum_abs > 0.0, np.abs(f_sum_signed) / f_sum_abs, 0.0)
-                fgrp["feature_effect_compound_v1"] = (
+                fgrp["feature_effect_compound"] = (
                     fgrp["feature_effect_abs_wmean"]
                     * fgrp["feature_direction_coherence"]
                     * np.sqrt(f_support)
@@ -1392,10 +1397,10 @@ class BedtoolsMapper:
                 pivot = fgrp.pivot(
                     index=group_by,
                     columns="feature_norm",
-                    values="feature_effect_compound_v1",
+                    values="feature_effect_compound",
                 ).reset_index()
                 pivot.columns = [
-                    c if c == group_by else f"feature_effect_compound_v1_{c}"
+                    c if c == group_by else f"feature_effect_compound_{c}"
                     for c in pivot.columns
                 ]
                 feature_metrics = pivot
@@ -1407,10 +1412,9 @@ class BedtoolsMapper:
         keep_cols = [
             "gene_name",
             "gene_id",
-            "dmp_count",
             "unique_dmps",
-            "total_weight",
             "mean_effect_size",
+            "gene_effect_size",
             "gene_score",
             "effect_size_promoter",
             "effect_size_exon",
@@ -1429,13 +1433,13 @@ class BedtoolsMapper:
             "gene_direction_coherence",
             "gene_support_n",
             "gene_support_freq",
-            "gene_effect_compound_v1",
-            "feature_effect_compound_v1_promoter",
-            "feature_effect_compound_v1_exon",
-            "feature_effect_compound_v1_intron",
-            "feature_effect_compound_v1_gene_body",
-            "feature_effect_compound_v1_terminator",
-            "gene_feature_effect_compound_v1",
+            "gene_effect_compound",
+            "feature_effect_compound_promoter",
+            "feature_effect_compound_exon",
+            "feature_effect_compound_intron",
+            "feature_effect_compound_gene_body",
+            "feature_effect_compound_terminator",
+            "gene_feature_effect_compound",
             "gene_feature_score",
             "hits_promoter",
             "hits_exon",
@@ -1829,24 +1833,25 @@ class BedtoolsMapper:
         if not feature_compound_df.empty:
             grouped = grouped.merge(feature_compound_df, on=group_by, how="left")
         for feature in self._FEATURE_SCORE_ORDER:
-            col = f"feature_effect_compound_v1_{feature}"
+            col = f"feature_effect_compound_{feature}"
             if col not in grouped.columns:
                 grouped[col] = 0.0
             grouped[col] = pd.to_numeric(grouped[col], errors="coerce").fillna(0.0)
-        grouped["gene_feature_effect_compound_v1"] = (
-            grouped["feature_effect_compound_v1_promoter"] * float(getattr(self, "w_promoter", 2.0))
-            + grouped["feature_effect_compound_v1_exon"] * float(getattr(self, "w_exon", 1.5))
-            + grouped["feature_effect_compound_v1_intron"] * float(getattr(self, "w_intron", 0.7))
-            + grouped["feature_effect_compound_v1_gene_body"] * float(getattr(self, "w_gene_body", 1.0))
-            + grouped["feature_effect_compound_v1_terminator"] * float(getattr(self, "w_terminator", 0.5))
+        grouped["gene_feature_effect_compound"] = (
+            grouped["feature_effect_compound_promoter"] * float(getattr(self, "w_promoter", 2.0))
+            + grouped["feature_effect_compound_exon"] * float(getattr(self, "w_exon", 1.5))
+            + grouped["feature_effect_compound_intron"] * float(getattr(self, "w_intron", 0.7))
+            + grouped["feature_effect_compound_gene_body"] * float(getattr(self, "w_gene_body", 1.0))
+            + grouped["feature_effect_compound_terminator"] * float(getattr(self, "w_terminator", 0.5))
         )
         for col in (
+            "gene_effect_size",
             "gene_effect_abs_wmean",
             "gene_effect_abs_wsum",
             "gene_direction_coherence",
             "gene_support_freq",
-            "gene_effect_compound_v1",
-            "gene_feature_effect_compound_v1",
+            "gene_effect_compound",
+            "gene_feature_effect_compound",
         ):
             if col not in grouped.columns:
                 grouped[col] = 0.0
@@ -1855,24 +1860,31 @@ class BedtoolsMapper:
             grouped["gene_support_n"] = 0
         grouped["gene_support_n"] = pd.to_numeric(grouped["gene_support_n"], errors="coerce").fillna(0).astype(int)
 
-        # Canonical importance now uses compound v1 effect score directly.
+        # Canonical importance now uses compound effect score directly.
         grouped["gene_importance"] = pd.to_numeric(
-            grouped.get("gene_effect_compound_v1"),
+            grouped.get("gene_effect_compound"),
             errors="coerce",
         ).fillna(0.0)
 
         # Sort by canonical importance first, then stable tie-breakers.
         sort_cols = ["gene_importance"]
-        if "dmp_count" in grouped.columns:
-            sort_cols.append("dmp_count")
-        if "total_weight" in grouped.columns:
-            sort_cols.append("total_weight")
+        if "unique_dmps" in grouped.columns:
+            sort_cols.append("unique_dmps")
+        if "gene_score" in grouped.columns:
+            sort_cols.append("gene_score")
         grouped = grouped.sort_values(sort_cols, ascending=False).reset_index(drop=True)
 
         # Warn when genes have DMPs but all key stats are missing (join likely failed for those rows)
         stat_check_cols = [c for c in ['min_p_value', 'mean_effect_size'] if c in grouped.columns]
-        if stat_check_cols and 'dmp_count' in grouped.columns:
-            has_dmps = grouped['dmp_count'].fillna(0) > 0
+        support_col = None
+        if "unique_dmps" in grouped.columns:
+            support_col = "unique_dmps"
+        elif "gene_support_n" in grouped.columns:
+            support_col = "gene_support_n"
+        elif "dmp_count" in grouped.columns:
+            support_col = "dmp_count"
+        if stat_check_cols and support_col is not None:
+            has_dmps = grouped[support_col].fillna(0) > 0
             all_stats_missing = pd.Series(True, index=grouped.index)
             for c in stat_check_cols:
                 all_stats_missing = all_stats_missing & grouped[c].isna()
@@ -2069,7 +2081,7 @@ class BedtoolsMapper:
         def _last_gene_strongly_associated(df: pd.DataFrame) -> bool:
             if df.empty or 'disease_associated' not in df.columns:
                 return False
-            sort_col = 'gene_importance' if 'gene_importance' in df.columns else 'total_weight'
+            sort_col = 'gene_importance' if 'gene_importance' in df.columns else 'gene_score'
             if sort_col not in df.columns:
                 return bool(df['disease_associated'].iloc[-1])
             last_row = df.sort_values(sort_col, ascending=True).iloc[0]

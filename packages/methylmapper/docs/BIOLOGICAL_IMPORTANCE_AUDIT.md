@@ -130,7 +130,7 @@ Recommended components:
 
 Use the following as primary biological-importance score:
 
-- `gene_effect_compound_v1 = gene_effect_abs_wmean * gene_direction_coherence * sqrt(gene_support_freq)`
+- `gene_effect_compound = gene_effect_abs_wmean * gene_direction_coherence * sqrt(gene_support_freq)`
 
 Why this one:
 
@@ -149,11 +149,11 @@ Apply the same pattern per parent feature bucket:
 
 - `feature_effect_abs_wmean_<bucket>`
 - `feature_direction_coherence_<bucket>`
-- `feature_effect_compound_v1_<bucket> = feature_effect_abs_wmean_<bucket> * feature_direction_coherence_<bucket> * sqrt(feature_support_freq_<bucket>)`
+- `feature_effect_compound_<bucket> = feature_effect_abs_wmean_<bucket> * feature_direction_coherence_<bucket> * sqrt(feature_support_freq_<bucket>)`
 
 For whole-gene composition from features, keep a separate weighted composite:
 
-- `gene_feature_effect_compound_v1 = w_promoter*feature_effect_compound_v1_promoter + ... + w_terminator*feature_effect_compound_v1_terminator`
+- `gene_feature_effect_compound = w_promoter*feature_effect_compound_promoter + ... + w_terminator*feature_effect_compound_terminator`
 
 This must be separate from existing `gene_feature_importance`.
 
@@ -168,16 +168,16 @@ Use compound-effect columns as canonical outputs for biological-importance ranki
 - `gene_direction_coherence`
 - `gene_support_n`
 - `gene_support_freq`
-- `gene_effect_compound_v1` (primary biological importance)
-- `gene_feature_effect_compound_v1` (feature-composed companion)
+- `gene_effect_compound` (primary biological importance)
+- `gene_feature_effect_compound` (feature-composed companion)
 
 Optional convenience:
 
-- `gene_effect_compound_v1_rank`
+- `gene_effect_compound_rank`
 
 Canonical ranking field:
 
-- `gene_importance := gene_effect_compound_v1`
+- `gene_importance := gene_effect_compound`
 
 Legacy columns (`gene_score`, `gene_feature_importance`, row-density summaries) may remain available for traceability, but they are no longer canonical ranking fields.
 
@@ -189,15 +189,15 @@ Legacy columns (`gene_score`, `gene_feature_importance`, row-density summaries) 
 
 - [`packages/methylmapper/methyl_mapper/bedtools_mapper.py`](../methyl_mapper/bedtools_mapper.py)
   - Add explicit deduped intermediate table for gene effect metrics.
-  - Compute new `*_v1` columns from deduped contributions.
+  - Compute canonical `*_compound` columns from deduped contributions.
   - Keep legacy columns untouched.
-  - Add comments marking legacy vs v1 biological importance.
+  - Add comments marking legacy vs canonical biological importance.
 
 ## Tests
 
 - [`packages/methylmapper/tests/test_gene_stat_export.py`](../tests/test_gene_stat_export.py)
   - Add tests for dedup policy (`(gene,dmp)` and `(gene,feature,dmp)` behavior).
-  - Add tests for `gene_effect_compound_v1` monotonic behavior with:
+  - Add tests for `gene_effect_compound` monotonic behavior with:
     - higher effect size,
     - higher coherence,
     - higher support.
@@ -207,12 +207,12 @@ Legacy columns (`gene_score`, `gene_feature_importance`, row-density summaries) 
 
 - [`packages/methylmapper/docs/IMPLEMENTATION.md`](IMPLEMENTATION.md)
   - Document new columns and formulas.
-  - Clarify which columns are legacy heuristic vs v1 biological-effect.
+  - Clarify which columns are legacy heuristic vs canonical biological-effect.
 
 ---
 
 ## 8) Suggested adoption strategy
 
-1. Promote `gene_effect_compound_v1` as the immediate canonical `gene_importance`.
+1. Promote `gene_effect_compound` as the immediate canonical `gene_importance`.
 2. Validate against known stage markers/pathways and progression monotonicity.
 3. Keep legacy fields for diagnostics only, not for ranking semantics.

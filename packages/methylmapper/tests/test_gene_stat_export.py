@@ -85,8 +85,8 @@ def test_aggregate_by_feature_exports_feature_effect_sizes_and_weighted_gene_imp
     assert row_g1["gene_feature_importance"] == pytest.approx((2.0 * 0.4) + (1.5 * 0.3))
     assert row_g1["gene_effect_abs_wmean"] == pytest.approx(0.37)
     assert row_g1["gene_direction_coherence"] == pytest.approx(1.25 / 1.85)
-    assert row_g1["gene_effect_compound_v1"] == pytest.approx(0.25)
-    assert row_g1["gene_importance"] == pytest.approx(row_g1["gene_effect_compound_v1"])
+    assert row_g1["gene_effect_compound"] == pytest.approx(0.25)
+    assert row_g1["gene_importance"] == pytest.approx(row_g1["gene_effect_compound"])
 
 
 def test_aggregate_by_feature_uses_exclusive_feature_priority_for_hits_and_score():
@@ -172,7 +172,7 @@ def test_aggregate_by_feature_sorts_by_canonical_gene_importance_desc():
     assert grouped.iloc[0]["gene_importance"] > grouped.iloc[1]["gene_importance"]
 
 
-def test_aggregate_by_feature_exports_compound_v1_columns():
+def test_aggregate_by_feature_exports_compound_columns():
     mapper = BedtoolsMapper.__new__(BedtoolsMapper)
     mapper.storey_lambda = None
     mapper.w_promoter = 2.0
@@ -203,10 +203,10 @@ def test_aggregate_by_feature_exports_compound_v1_columns():
     assert "gene_direction_coherence" in grouped.columns
     assert "gene_support_n" in grouped.columns
     assert "gene_support_freq" in grouped.columns
-    assert "gene_effect_compound_v1" in grouped.columns
-    assert "gene_feature_effect_compound_v1" in grouped.columns
+    assert "gene_effect_compound" in grouped.columns
+    assert "gene_feature_effect_compound" in grouped.columns
     assert row["gene_support_n"] == 3
-    assert row["gene_effect_compound_v1"] > 0.0
+    assert row["gene_effect_compound"] > 0.0
 
 
 def test_aggregate_by_feature_rejects_invalid_stability_frequency_values():
@@ -316,4 +316,22 @@ def test_aggregate_by_feature_preserves_explicit_detailed_feature_label_for_iden
     grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="feature_type")
     assert grouped.iloc[0]["feature_type"] == "CDS"
     assert grouped.iloc[0]["gene_score"] == pytest.approx(0.6 * 1.0 * 1.5)
+
+
+def test_pruned_gene_output_drops_total_weight_legacy_column():
+    df = pd.DataFrame(
+        {
+            "gene_name": ["G1"],
+            "unique_dmps": [2],
+            "total_weight": [3.0],
+            "mean_effect_size": [0.2],
+            "gene_effect_size": [0.1],
+            "gene_score": [0.4],
+            "gene_effect_compound": [0.3],
+        }
+    )
+    pruned = BedtoolsMapper._prune_gene_output_columns(df)
+    assert "total_weight" not in pruned.columns
+    assert "gene_effect_size" in pruned.columns
+    assert "gene_effect_compound" in pruned.columns
 
