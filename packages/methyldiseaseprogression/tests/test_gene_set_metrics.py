@@ -181,3 +181,27 @@ def test_inline_gene_set_profile_categories(tmp_path: Path) -> None:
     text = Path(summary["gene_set_fractions_csv"]).read_text(encoding="utf-8")
     assert "overlap" in text and "empty" in text
     assert summary["gene_set_fractions"]["rows"] == 6
+
+
+def test_gene_set_metrics_skips_stage_with_malformed_mapper_columns(tmp_path: Path) -> None:
+    profile_path = tmp_path / "sets.json"
+    profile_path.write_text(
+        json.dumps({"overlap": ["GENE_A"], "other": ["ZZZ"]}),
+        encoding="utf-8",
+    )
+    project_path = _write_project(
+        tmp_path,
+        progression_extra={
+            "gene_set_metrics_enabled": True,
+            "gene_sets_path": str(profile_path.resolve()),
+            "gene_set_denominator": "all_genes",
+        },
+    )
+    _write_stage_outputs(tmp_path)
+    bad_mapper = tmp_path / "out" / "prog" / "mapper" / "all" / "pca_pca2" / "all-gene_name-combined.csv"
+    bad_mapper.write_text("gene_name,total_weight\nGENE_A,1.2\n", encoding="utf-8")
+
+    summary = run_progression_report(project_path=project_path)
+    assert summary["gene_set_metrics"]["enabled"] is True
+    # Two categories, but only two valid stages remain => 4 rows.
+    assert summary["gene_set_metrics"]["rows"] == 4

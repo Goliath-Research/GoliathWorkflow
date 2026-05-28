@@ -783,4 +783,3 @@ def run_progression_report(
         summary["report_md"] = str(md_path)
 
     return summary
-

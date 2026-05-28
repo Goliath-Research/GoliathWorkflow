@@ -41,13 +41,16 @@ echo "Installing MethylPipeline Packages..."
 echo "============================================="
 echo ""
 
-# Determine the base directory
-if [ -d "/workspace/packages" ]; then
-    PACKAGES_DIR="/workspace/packages"
+# Determine the base directory (prefer this repository checkout)
+if [ -d "$PROJECT_ROOT/packages" ]; then
+    PACKAGES_DIR="$PROJECT_ROOT/packages"
 elif [ -d "./packages" ]; then
     PACKAGES_DIR="./packages"
+elif [ -d "/workspace/packages" ]; then
+    PACKAGES_DIR="/workspace/packages"
 else
     echo "Error: Cannot find packages directory"
+    echo "Checked: $PROJECT_ROOT/packages, ./packages, /workspace/packages"
     exit 1
 fi
 

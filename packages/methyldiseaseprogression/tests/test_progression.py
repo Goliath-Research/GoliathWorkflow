@@ -142,6 +142,19 @@ def test_progression_report_strict_missing_fails(tmp_path: Path):
         run_progression_report(project_path=project_path, strict_missing=True)
 
 
+def test_progression_report_skips_malformed_mapper_stage_when_not_strict(tmp_path: Path):
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    bad_mapper = tmp_path / "out" / "prog" / "mapper" / "all" / "pca_pca2" / "all-gene_name-combined.csv"
+    bad_mapper.write_text("gene_name,total_weight\nGENE_A,1.2\n", encoding="utf-8")
+
+    summary = run_progression_report(project_path=project_path, strict_missing=False)
+    missing = summary.get("missing_inputs") or []
+    assert any("pca_pca2" in msg and "mapper" in msg for msg in missing)
+    genes_df = pd.read_csv(summary["genes_long_csv"])
+    assert set(genes_df["comparison"].astype(str).unique()) == {"pca_pca1", "pca_pca3"}
+
+
 def test_progression_prefers_module_primary_for_long_table(tmp_path: Path):
     project_path = _write_project(tmp_path)
     _write_stage_outputs(tmp_path)

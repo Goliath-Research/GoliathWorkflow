@@ -285,12 +285,20 @@ def compute_gene_set_fractions(
 
     rows: List[Dict[str, Any]] = []
     for spec in stage_specs:
-        genes, _n_hint = _genes_for_stage_universe(
-            spec,
-            denominator=denom,
-            top_n=int(top_n) if top_n is not None else None,
-            weight_quantile=float(wq) if wq is not None else None,
-        )
+        try:
+            genes, _n_hint = _genes_for_stage_universe(
+                spec,
+                denominator=denom,
+                top_n=int(top_n) if top_n is not None else None,
+                weight_quantile=float(wq) if wq is not None else None,
+            )
+        except Exception as e:
+            logger.warning(
+                "Skipping gene set metrics for %s due to mapper schema/input error: %s",
+                spec.comparison_label,
+                e,
+            )
+            continue
         n_u = max(len(genes), 1)
         for cat_id, sym_set in sorted(profile.items()):
             overlap = genes & sym_set
