@@ -158,7 +158,7 @@ class EnrichmentAnalyzer:
         min_gene_importance: Optional[float] = None,
         feature_types: Optional[List[str]] = None,
     ) -> pd.DataFrame:
-        """Apply MethylMapper-style filters to a DataFrame. Only columns that exist are used."""
+        """Apply MethylMapper-style filters to a DataFrame with strict column checks."""
         out = df.copy()
         n_before = len(out)
         hits_cols = [c for c in ("hits_promoter", "hits_exon", "hits_intron", "hits_gene_body", "hits_terminator") if c in out.columns]
@@ -200,12 +200,21 @@ class EnrichmentAnalyzer:
             print(f"[INFO] Filter disease_score >= {min_disease_score}: {len(out)} genes (was {n_before})")
             n_before = len(out)
 
-        if min_dmp_count is not None and "dmp_count" in out.columns:
+        if min_dmp_count is not None:
+            if "dmp_count" not in out.columns:
+                raise ValueError(
+                    "Filter min_dmp_count requested, but mapper column 'dmp_count' is missing. "
+                    "Regenerate mapper outputs or remove min_dmp_count."
+                )
             out = out[pd.to_numeric(out["dmp_count"], errors="coerce").fillna(0) >= min_dmp_count]
             print(f"[INFO] Filter dmp_count >= {min_dmp_count}: {len(out)} genes (was {n_before})")
             n_before = len(out)
 
-        if min_unique_dmps is not None and "unique_dmps" in out.columns:
+        if min_unique_dmps is not None:
+            if "unique_dmps" not in out.columns:
+                raise ValueError(
+                    "Filter min_unique_dmps requested, but mapper column 'unique_dmps' is missing."
+                )
             out = out[pd.to_numeric(out["unique_dmps"], errors="coerce").fillna(0) >= min_unique_dmps]
             print(f"[INFO] Filter unique_dmps >= {min_unique_dmps}: {len(out)} genes (was {n_before})")
             n_before = len(out)
@@ -222,12 +231,13 @@ class EnrichmentAnalyzer:
                 print("[INFO] Skip gene_q_value filter: no finite gene_q_value values available.")
 
         if min_mean_effect_size is not None:
-            for col in ("mean_effect_size", "mean_weight", "total_weight"):
-                if col in out.columns:
-                    out = out[pd.to_numeric(out[col], errors="coerce").fillna(0) >= min_mean_effect_size]
-                    print(f"[INFO] Filter {col} >= {min_mean_effect_size}: {len(out)} genes (was {n_before})")
-                    n_before = len(out)
-                    break
+            if "mean_effect_size" not in out.columns:
+                raise ValueError(
+                    "Filter min_mean_effect_size requested, but mapper column 'mean_effect_size' is missing."
+                )
+            out = out[pd.to_numeric(out["mean_effect_size"], errors="coerce").fillna(0) >= min_mean_effect_size]
+            print(f"[INFO] Filter mean_effect_size >= {min_mean_effect_size}: {len(out)} genes (was {n_before})")
+            n_before = len(out)
 
         if min_gene_z is not None and "gene_z" in out.columns:
             z = pd.to_numeric(out["gene_z"], errors="coerce")
@@ -236,17 +246,27 @@ class EnrichmentAnalyzer:
             n_before = len(out)
 
         if min_gene_importance is not None:
-            for col in ("gene_importance", "total_importance", "total_weight"):
-                if col in out.columns:
-                    out = out[pd.to_numeric(out[col], errors="coerce").fillna(0) >= min_gene_importance]
-                    print(f"[INFO] Filter {col} >= {min_gene_importance}: {len(out)} genes (was {n_before})")
-                    n_before = len(out)
-                    break
+            if "gene_importance" not in out.columns:
+                raise ValueError(
+                    "Filter min_gene_importance requested, but mapper column 'gene_importance' is missing."
+                )
+            out = out[pd.to_numeric(out["gene_importance"], errors="coerce").fillna(0) >= min_gene_importance]
+            print(f"[INFO] Filter gene_importance >= {min_gene_importance}: {len(out)} genes (was {n_before})")
+            n_before = len(out)
 
         if feature_types:
             print("[WARN] Ignoring feature_types filter: feature_type-based filtering is removed; hits_* columns are used instead.")
 
         return out
+
+    @staticmethod
+    def _require_mapper_columns(df: pd.DataFrame, required: List[str], *, context: str) -> None:
+        missing = [c for c in required if c not in df.columns]
+        if missing:
+            raise ValueError(
+                f"{context}: missing required mapper columns {missing}. "
+                f"Columns found: {list(df.columns)}"
+            )
 
     def load_gene_list(
         self,
@@ -272,7 +292,8 @@ class EnrichmentAnalyzer:
         """
         Load gene list from a text file or MethylMapper combined CSV.
         
-        For CSV/TSV, optional filters (from MethylMapper output) can be applied:
+        For CSV/TSV, strict mapper contract is enforced. Optional filters
+        (from MethylMapper output) can be applied:
         disease_associated, disease_association_type, disease_evidence_level,
         disease_publications, disease_score, dmp_count, unique_dmps, gene_q_value,
         mean_effect_size, gene_z, gene_importance, feature_type.
@@ -286,27 +307,13 @@ class EnrichmentAnalyzer:
         if suffix in [".csv", ".tsv"]:
             sep = "," if suffix == ".csv" else "\t"
             df = pd.read_csv(input_path, sep=sep)
-
-            _gene_candidates = ["gene_name", "gene_id", "gene_symbol", "gene", "symbol"]
             if gene_column is None:
-                gene_column = next((c for c in _gene_candidates if c in df.columns), None)
-            elif gene_column not in df.columns:
-                # Config/CLI asked for a column that is missing (e.g. CSV is gene_id from mapper)
-                _fallback = next((c for c in _gene_candidates if c in df.columns), None)
-                if _fallback:
-                    print(f"[WARN] Column '{gene_column}' not in CSV; using '{_fallback}'. Columns: {list(df.columns)}")
-                    gene_column = _fallback
-                else:
-                    raise ValueError(
-                        f"Gene column '{gene_column}' not found. "
-                        f"Columns found: {list(df.columns)}"
-                    )
-
-            if gene_column is None:
-                raise ValueError(
-                    "Could not determine gene column. Provide --gene-column. "
-                    f"Columns found: {list(df.columns)}"
-                )
+                gene_column = "gene_name"
+            self._require_mapper_columns(
+                df,
+                [gene_column, "gene_importance", "gene_effect_compound", "mean_effect_size", "unique_dmps"],
+                context=f"Input mapper CSV {input_path}",
+            )
 
             df = self._apply_csv_filters(
                 df,
@@ -325,10 +332,10 @@ class EnrichmentAnalyzer:
                 feature_types=feature_types,
             )
 
-            if sort_by is None and "total_weight" in df.columns:
-                sort_by = "total_weight"
-                print("[INFO] Sorting genes by total_weight (auto)")
-            if sort_by is None and "gene_importance" in df.columns:
+            if sort_by is None and "gene_effect_compound" in df.columns:
+                sort_by = "gene_effect_compound"
+                print("[INFO] Sorting genes by gene_effect_compound (auto)")
+            elif sort_by is None and "gene_importance" in df.columns:
                 sort_by = "gene_importance"
                 print("[INFO] Sorting genes by gene_importance (auto)")
 
@@ -371,7 +378,15 @@ class EnrichmentAnalyzer:
 
     def _gene_weight_from_row(self, row: pd.Series) -> float:
         """Compute a single gene weight from a CSV row (gene-level or first feature row)."""
-        for col in ("gene_feature_score", "gene_score", "total_weight", "mean_effect_size"):
+        for col in (
+            "gene_effect_compound",
+            "gene_importance",
+            "gene_feature_effect_compound",
+            "gene_effect_size",
+            "gene_feature_score",
+            "gene_score",
+            "mean_effect_size",
+        ):
             if col in row.index and pd.notna(row.get(col)):
                 try:
                     return float(row[col])
@@ -402,7 +417,8 @@ class EnrichmentAnalyzer:
     ) -> Tuple[List[str], Dict[str, float]]:
         """
         Load gene list and per-gene weights for weighted enrichment and module scoring.
-        Returns (genes, weight_by_gene). Weights are from gene_importance/total_weight/mean_effect_size when available.
+        Returns (genes, weight_by_gene). Weights are prioritized from canonical
+        mapper biological-importance columns.
         """
         input_path = Path(input_path)
         if not input_path.exists():
@@ -429,14 +445,14 @@ class EnrichmentAnalyzer:
             return genes, {g: 1.0 for g in genes}
         sep = "," if suffix == ".csv" else "\t"
         df = pd.read_csv(input_path, sep=sep)
-        _gene_candidates = ["gene_name", "gene_id", "gene_symbol", "gene", "symbol"]
         gc = gene_column
         if gc is None:
-            gc = next((c for c in _gene_candidates if c in df.columns), None)
-        elif gc not in df.columns:
-            gc = next((c for c in _gene_candidates if c in df.columns), None)
-        if gc is None:
-            raise ValueError("Could not determine gene column. Provide gene_column.")
+            gc = "gene_name"
+        self._require_mapper_columns(
+            df,
+            [gc, "gene_importance", "gene_effect_compound", "mean_effect_size", "unique_dmps"],
+            context=f"Input mapper CSV {input_path}",
+        )
         df = self._apply_csv_filters(
             df,
             disease_only=disease_only,
@@ -459,9 +475,9 @@ class EnrichmentAnalyzer:
                 "--min-disease-evidence-level, --disease-only) or use an input generated with "
                 "disease enrichment (Grok/Open Targets) if you need disease-associated genes."
             )
-        if sort_by is None and "total_weight" in df.columns:
-            sort_by = "total_weight"
-        if sort_by is None and "gene_importance" in df.columns:
+        if sort_by is None and "gene_effect_compound" in df.columns:
+            sort_by = "gene_effect_compound"
+        elif sort_by is None and "gene_importance" in df.columns:
             sort_by = "gene_importance"
         if sort_by and sort_by in df.columns:
             df = df.sort_values(by=sort_by, ascending=sort_ascending)

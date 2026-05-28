@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from methyl_enricher.enricher import EnrichmentAnalyzer
 
@@ -39,3 +40,12 @@ def test_hits_filter_removes_rows_without_any_hits():
     )
     out = analyzer._apply_csv_filters(df)
     assert out["gene_name"].tolist() == ["G2"]
+
+
+def test_load_gene_list_requires_mapper_contract_columns(tmp_path):
+    analyzer = EnrichmentAnalyzer(libraries=["GO_Biological_Process_2023"])
+    csv_path = tmp_path / "mapper.csv"
+    csv_path.write_text("gene_name,total_weight\nG1,1.0\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="missing required mapper columns"):
+        analyzer.load_gene_list(csv_path, gene_column="gene_name")

@@ -127,7 +127,7 @@ For theory and package documentation, see:
         type=float,
         default=None,
         metavar='E',
-        help='Minimum mean_effect_size (or total_weight if present)'
+        help='Minimum mean_effect_size (requires mapper mean_effect_size column)'
     )
     io_group.add_argument(
         '--min-gene-z',
@@ -141,13 +141,13 @@ For theory and package documentation, see:
         type=float,
         default=None,
         metavar='I',
-        help='Minimum gene_importance (or total_weight)'
+        help='Minimum gene_importance (requires mapper gene_importance column)'
     )
     io_group.add_argument(
         '--sort-by',
         type=str,
         default=None,
-        help='Column to sort by when input is CSV/TSV (default: auto total_weight if present)'
+        help='Column to sort by when input is CSV/TSV (default: auto gene_effect_compound)'
     )
     io_group.add_argument(
         '--sort-ascending',
