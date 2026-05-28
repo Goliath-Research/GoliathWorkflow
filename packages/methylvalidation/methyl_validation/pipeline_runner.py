@@ -810,7 +810,9 @@ def run_pipeline_for_production(
     errors: List[str] = []
     step_timings: List[Dict[str, Any]] = []
     steps: List[Tuple[str, Callable[[], tuple[int, str, str]]]] = []
-    if not skip_centroid:
+    # Detector reuse implies centroid reuse as well for freeze runs.
+    effective_skip_centroid = bool(skip_centroid or skip_detection)
+    if not effective_skip_centroid:
         steps.append(("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None)))
     if not skip_detection:
         steps.append(

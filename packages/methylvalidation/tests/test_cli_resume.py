@@ -295,6 +295,7 @@ def test_skip_detection_allowed_for_freeze_and_forwarded(tmp_path: Path, monkeyp
     kwargs = calls["kwargs"]
     assert isinstance(kwargs, dict)
     assert kwargs["skip_detection"] is True
+    assert kwargs["skip_centroid"] is True
 
 
 def test_stability_early_stop_breaks_loop_and_writes_diagnostics(tmp_path: Path, monkeypatch):

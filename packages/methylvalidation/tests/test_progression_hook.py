@@ -110,6 +110,7 @@ def test_run_pipeline_for_production_supports_skip_detection(monkeypatch):
     )
     assert ok
     assert not errors
+    assert "methyl-centroid" not in calls
     assert "methyl-detector" not in calls
-    assert calls == ["methyl-centroid", "methyl-mapper", "methyl-enricher"]
+    assert calls == ["methyl-mapper", "methyl-enricher"]
     assert [t["step_name"] for t in timings] == calls

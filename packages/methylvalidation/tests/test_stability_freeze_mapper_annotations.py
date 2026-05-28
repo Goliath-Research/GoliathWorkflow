@@ -147,3 +147,4 @@ def test_freeze_production_model_forwards_skip_detection(tmp_path: Path, monkeyp
     kwargs = calls["kwargs"]
     assert isinstance(kwargs, dict)
     assert kwargs["skip_detection"] is True
+    assert kwargs["skip_centroid"] is True

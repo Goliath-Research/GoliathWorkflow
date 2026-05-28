@@ -1436,7 +1436,7 @@ def main() -> None:
         action="store_true",
         help=(
             "Reuse existing detector artifacts. Supported for stability recalculation "
-            "mode and --freeze."
+            "mode and --freeze. Implies --skip-centroid."
         ),
     )
     parser.add_argument(
@@ -1822,7 +1822,7 @@ def main() -> None:
             stable_dmp_csv=str(stable_path),
             monte_carlo_runs_root=monte_carlo_runs_root,
             production_output_dir=config.production_output_dir,
-            skip_centroid=bool(args.skip_centroid),
+            skip_centroid=bool(args.skip_centroid or args.skip_detection),
             skip_detection=bool(args.skip_detection),
             config=config,
         )

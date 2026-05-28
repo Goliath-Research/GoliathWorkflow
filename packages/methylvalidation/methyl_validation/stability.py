@@ -1621,7 +1621,7 @@ def freeze_production_model(
     success, errors, timings = run_pipeline_for_production(
         prod_project_path,
         logs_dir=prod_dir / "logs",
-        skip_centroid=bool(skip_centroid),
+        skip_centroid=bool(skip_centroid or skip_detection),
         skip_detection=bool(skip_detection),
         config=config,
     )
