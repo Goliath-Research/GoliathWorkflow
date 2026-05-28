@@ -35,10 +35,10 @@ colorlog = ">=6.7.0,<6.8.0"
 nvidia-ml-py = ">=12.535.0,<13.0.0"
 
 [tool.poetry.group.gpu.dependencies]
-cupy = ">=13.0.0"
-torch = ">=2.3.0,<3.0.0"
-torchvision = ">=0.18.0,<1.0.0"
-torchaudio = ">=2.3.0,<3.0.0"
+cupy-cuda12x = "==13.6.0"
+cudf-cu12 = ">=26.4.0,<27.0.0"
+pylibcudf-cu12 = ">=26.4.0,<27.0.0"
+rmm-cu12 = ">=26.4.0,<27.0.0"
 
 [tool.poetry.group.hdf5.dependencies]
 h5py = ">=3.10.0,<4.0.0"

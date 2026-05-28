@@ -15,7 +15,7 @@ methylutils = {path = "../methylutils", develop = true}
 [tool.poetry.scripts]
 methyl-disease-progression = "methyl_disease_progression.cli:main"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
 black = "^23.0.0"
 flake8 = "^6.0.0"

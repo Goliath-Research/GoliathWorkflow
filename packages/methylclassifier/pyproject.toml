@@ -22,7 +22,7 @@ tqdm = ">=4.66.0"
 methyl-classifier = "methyl_classifier.cli:main"
 methyl_classifier = "methyl_classifier.cli:main"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
 pytest-cov = "^4.0.0"
 black = "^23.0.0"

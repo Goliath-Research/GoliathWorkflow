@@ -10,7 +10,7 @@ Usage: scripts/setup_host.sh [options]
 
 Options:
   --system-deps     Install system packages (Ubuntu/Debian via apt)
-  --gpu             Install GPU requirements (CUDA 12.x or 13.x, auto-detected)
+  --gpu             Install GPU requirements (CUDA 12 profile)
   --no-gpu          Skip GPU requirements (override auto-detect)
   --venv PATH       Create/use a virtualenv at PATH (default: .venv)
   --no-venv         Do not create or activate a virtualenv
@@ -20,7 +20,7 @@ Options:
 Notes:
   - This script is intended for host installs (not inside Docker).
   - Most Python dependencies are installed from requirements-pipeline.txt.
-  - Use --gpu to install GPU packages from requirements-gpu*.txt (CuPy, cuDF, torch).
+  - Use --gpu to install GPU packages from requirements-gpu-cuda12.txt.
   - If Python headers/build tools are missing, hdbscan is installed only
     when a prebuilt wheel is available; otherwise it is skipped with a warning.
 
@@ -28,7 +28,7 @@ Libraries in use (for verification):
   - Base: requirements-pipeline.txt (scipy, h5py, hdf5plugin, pandas, numpy, networkx,
     python-louvain for MethylEnricher pathway-to-module, etc.).
   - Visualization: dash and dash-cytoscape (for optional Cytoscape-style interactive views).
-  - GPU: requirements-gpu-cuda12.txt or requirements-gpu.txt (cupy, cudf, torch).
+  - GPU: requirements-gpu-cuda12.txt (cupy-cuda12x, cudf-cu12, pylibcudf-cu12, rmm-cu12).
   - System (--system-deps): Python dev, build-essential, hdf5-tools, libhdf5-dev,
     libzstd-dev, ODBC, bedtools (for MethylMapper); with GPU, libnvrtc{N} for NVRTC.
 EOF
@@ -75,7 +75,7 @@ detect_gpu() {
   return 1
 }
 
-# Detect CUDA major version (12 or 13) from nvidia-smi or nvcc. Echoes version and returns 0, or echoes 12 and returns 1 if unclear.
+# Detect CUDA major version from nvidia-smi or nvcc. Echoes version and returns 0, or echoes 12 and returns 1 if unclear.
 detect_cuda_version() {
   local ver=""
   if command -v nvidia-smi >/dev/null 2>&1; then
@@ -344,13 +344,9 @@ PY
 }
 
 REQ_BASE="$PROJECT_ROOT/requirements-pipeline.txt"
-# GPU requirements file depends on detected CUDA major (12 vs 13)
+# GPU requirements file (project profile is CUDA12).
 if [ "$GPU_DEPS" -eq 1 ]; then
-  if [ "${CUDA_MAJOR:-12}" = "12" ]; then
-    REQ_GPU="$PROJECT_ROOT/requirements-gpu-cuda12.txt"
-  else
-    REQ_GPU="$PROJECT_ROOT/requirements-gpu.txt"
-  fi
+  REQ_GPU="$PROJECT_ROOT/requirements-gpu-cuda12.txt"
 else
   REQ_GPU="$PROJECT_ROOT/requirements-gpu.txt"
 fi
@@ -417,14 +413,10 @@ if [ "$GPU_DEPS" -eq 1 ]; then
     CONSTRAINT_FILE="$SCRIPT_DIR/constraints-cuda12.txt"
     if [ -f "$CONSTRAINT_FILE" ]; then
       PIP_GPU_EXTRA=(-c "$CONSTRAINT_FILE")
-      info "Using cuda-bindings constraint for torch compatibility (CUDA 12)."
+      info "Applying CUDA12 project constraints."
     fi
   fi
   "$PYTHON_BIN" -m pip install -r "$REQ_GPU" --extra-index-url https://pypi.nvidia.com "${PIP_GPU_EXTRA[@]}"
-  if [ "$CUDA_MAJOR" = "13" ]; then
-    warn "CUDA 13.x: torch (e.g. from methylutils) requires cuda-bindings==12.9.4 and may conflict."
-    warn "If you see a cuda-bindings conflict and need torch, use: pip install cuda-bindings==12.9.4"
-  fi
   if ! install_nvrtc_system_deps "$CUDA_MAJOR"; then
     warn "CUDA NVRTC library (libnvrtc.so.${CUDA_MAJOR}) not detected."
     warn "On ARM64 systems, pip GPU wheels may omit NVRTC."

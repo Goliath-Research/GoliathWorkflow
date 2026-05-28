@@ -10,23 +10,26 @@ Usage: scripts/install_all.sh [options]
 
 Options:
   --pipeline-reqs   Install pipeline-level Python requirements first
-  --gpu-reqs        Install GPU requirements (CUDA 13.x stack)
+  --gpu-reqs        Install GPU requirements (CUDA 12 stack)
+  --with-deps       Allow dependency resolution for local package installs
   --skip-marp       Skip Marp CLI installation
   -h, --help        Show this help
 
 Notes:
-  - requirements-pipeline.txt and requirements-gpu.txt are expected at repo root.
+  - requirements-pipeline.txt and requirements-gpu-cuda12.txt are expected at repo root.
 EOF
 }
 
 PIPELINE_REQS=0
 GPU_REQS=0
 SKIP_MARP=0
+WITH_DEPS=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --pipeline-reqs) PIPELINE_REQS=1; shift ;;
         --gpu-reqs) GPU_REQS=1; shift ;;
+        --with-deps) WITH_DEPS=1; shift ;;
         --skip-marp) SKIP_MARP=1; shift ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
@@ -57,29 +60,46 @@ fi
 echo "📦 Installing packages from: $PACKAGES_DIR"
 echo ""
 
+# Ensure we run in the project virtualenv when available.
+if [ -z "${VIRTUAL_ENV:-}" ] && [ -f "$PROJECT_ROOT/.venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source "$PROJECT_ROOT/.venv/bin/activate"
+    echo "🐍 Activated virtualenv: $PROJECT_ROOT/.venv"
+fi
+
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+if command -v python >/dev/null 2>&1; then
+    PYTHON_BIN="python"
+fi
+
 # Optional: install pipeline-level requirements
 if [ "$PIPELINE_REQS" -eq 1 ] || [ "$GPU_REQS" -eq 1 ]; then
     echo "🔧 Upgrading pip tooling..."
-    python3 -m pip install --upgrade pip setuptools wheel
+    "$PYTHON_BIN" -m pip install --upgrade pip setuptools wheel
 fi
 
 if [ "$PIPELINE_REQS" -eq 1 ]; then
     REQ_BASE="$PROJECT_ROOT/requirements-pipeline.txt"
     if [ -f "$REQ_BASE" ]; then
         echo "📦 Installing pipeline requirements..."
-        python3 -m pip install -r "$REQ_BASE"
+        "$PYTHON_BIN" -m pip install -r "$REQ_BASE"
     else
         echo "⚠ requirements-pipeline.txt not found at $REQ_BASE"
     fi
 fi
 
 if [ "$GPU_REQS" -eq 1 ]; then
-    REQ_GPU="$PROJECT_ROOT/requirements-gpu.txt"
+    REQ_GPU="$PROJECT_ROOT/requirements-gpu-cuda12.txt"
+    CONSTRAINT_GPU="$PROJECT_ROOT/scripts/constraints-cuda12.txt"
     if [ -f "$REQ_GPU" ]; then
-        echo "🚀 Installing GPU requirements..."
-        python3 -m pip install -r "$REQ_GPU" --extra-index-url https://pypi.nvidia.com
+        echo "🚀 Installing GPU requirements (CUDA12 profile)..."
+        if [ -f "$CONSTRAINT_GPU" ]; then
+            "$PYTHON_BIN" -m pip install -r "$REQ_GPU" -c "$CONSTRAINT_GPU" --extra-index-url https://pypi.nvidia.com
+        else
+            "$PYTHON_BIN" -m pip install -r "$REQ_GPU" --extra-index-url https://pypi.nvidia.com
+        fi
     else
-        echo "⚠ requirements-gpu.txt not found at $REQ_GPU"
+        echo "⚠ requirements-gpu-cuda12.txt not found at $REQ_GPU"
     fi
 fi
 
@@ -104,23 +124,10 @@ for pkg in "${PACKAGES[@]}"; do
     if [ -d "$PKG_PATH" ]; then
         if [ -f "$PKG_PATH/pyproject.toml" ]; then
             echo "📦 Installing $pkg..."
-            cd "$PKG_PATH"
-            if [ -n "${CONDA_DEFAULT_ENV:-}" ]; then
-                echo "   • Detected conda env (${CONDA_DEFAULT_ENV}), installing without dependency resolution"
-                python -m pip install -e . --no-deps --no-cache-dir 2>&1 | grep -v "WARNING"
+            if [ "$WITH_DEPS" -eq 1 ]; then
+                "$PYTHON_BIN" -m pip install -e "$PKG_PATH" --no-cache-dir 2>&1 | grep -v "WARNING"
             else
-                # Use poetry install for proper dependency management
-                # Use full path to poetry if not in PATH
-                if command -v poetry &> /dev/null; then
-                    poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
-                elif [ -f /root/.local/bin/poetry ]; then
-                    /root/.local/bin/poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
-                elif [ -f /usr/local/bin/poetry ]; then
-                    /usr/local/bin/poetry install --no-interaction --no-ansi 2>&1 | grep -v "Creating virtualenv"
-                else
-                    echo "   ⚠ Poetry not found, trying pip install as fallback..."
-                    python3 -m pip install -e . --no-cache-dir 2>&1 | grep -v "WARNING"
-                fi
+                "$PYTHON_BIN" -m pip install -e "$PKG_PATH" --no-deps --no-cache-dir 2>&1 | grep -v "WARNING"
             fi
             echo "   ✓ $pkg installed"
         else

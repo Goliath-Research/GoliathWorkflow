@@ -62,24 +62,44 @@ def storey_qvalues(
 
     # Check for GPU availability for stats functions
     gpu_available = is_gpu_available() and is_cupyx_scipy_stats_available()
+    calc = None
+    xp = np
+    p_work = np.asarray(p_array, dtype=np.float64)
+    lambdas_work = np.asarray(lambdas, dtype=np.float64) if lambdas is not None else None
 
     if gpu_available:
         try:
             calc = DistanceCalculator()
             xp = calc.cp
-            p_array = calc.cp.asarray(p_array, dtype=calc.cp.float32)
-            if lambdas is not None:
-                lambdas = calc.cp.asarray(lambdas, dtype=calc.cp.float32)
-        except ImportError:
+            p_work = calc.cp.asarray(p_work, dtype=calc.cp.float32)
+            if lambdas_work is not None:
+                lambdas_work = calc.cp.asarray(lambdas_work, dtype=calc.cp.float32)
+        except Exception as e:
+            logger.warning("storey_qvalues GPU setup failed; falling back to CPU: %s", e)
             gpu_available = False
+            calc = None
             xp = np
-    else:
-        xp = np
+            p_work = np.asarray(p_array, dtype=np.float64)
+            lambdas_work = np.asarray(lambdas, dtype=np.float64) if lambdas is not None else None
 
-    m = len(p_array)
-    lambdas = lambdas if lambdas is not None else xp.linspace(0.01, 0.95, 100)
-    pi0s = xp.asarray([(xp.sum(p_array > lambda_val) / ((1 - lambda_val) * m)) for lambda_val in lambdas])
-    pi0 = min(float(xp.median(pi0s)), 1.0)
+    try:
+        m = len(p_work)
+        lambdas_work = lambdas_work if lambdas_work is not None else xp.linspace(0.01, 0.95, 100)
+        pi0s = xp.asarray([(xp.sum(p_work > lambda_val) / ((1 - lambda_val) * m)) for lambda_val in lambdas_work])
+        pi0 = min(float(xp.median(pi0s)), 1.0)
+    except Exception as e:
+        if not gpu_available:
+            raise
+        logger.warning("storey_qvalues GPU execution failed; falling back to CPU: %s", e)
+        gpu_available = False
+        calc = None
+        xp = np
+        p_work = np.asarray(p_array, dtype=np.float64)
+        lambdas_work = np.asarray(lambdas, dtype=np.float64) if lambdas is not None else None
+        m = len(p_work)
+        lambdas_work = lambdas_work if lambdas_work is not None else np.linspace(0.01, 0.95, 100)
+        pi0s = np.asarray([(np.sum(p_work > lambda_val) / ((1 - lambda_val) * m)) for lambda_val in lambdas_work])
+        pi0 = min(float(np.median(pi0s)), 1.0)
 
     if plot_pi0 and PLOTLY_AVAILABLE:
         try:
@@ -93,8 +113,10 @@ def storey_qvalues(
             signal.alarm(10)  # 10 second timeout
 
             try:
-                lambdas_cpu = xp.asnumpy(lambdas) if gpu_available else lambdas
-                pi0s_cpu = xp.asnumpy(pi0s) if gpu_available else pi0s
+                lambdas_cpu = (
+                    calc.cp.asnumpy(lambdas_work) if (gpu_available and calc is not None) else np.asarray(lambdas_work)
+                )
+                pi0s_cpu = calc.cp.asnumpy(pi0s) if (gpu_available and calc is not None) else np.asarray(pi0s)
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=lambdas_cpu, y=pi0s_cpu, mode='lines+markers', name='pi0(lambda)'))
                 fig.add_hline(y=pi0, line=dict(color='red', dash='dash'), name='min pi0')
@@ -114,25 +136,23 @@ def storey_qvalues(
     elif plot_pi0 and not PLOTLY_AVAILABLE:
         logger.warning("Plotly not available for π₀ plotting")
 
-    p_sorted = xp.sort(p_array)
-    order = xp.argsort(p_array)
+    p_sorted = xp.sort(p_work)
+    order = xp.argsort(p_work)
     qvals = pi0 * m * p_sorted / (xp.arange(1, m + 1))
     # minimum.accumulate is not implemented in CuPy; use NumPy for this step
-    if gpu_available:
+    if gpu_available and calc is not None:
         qvals_np = calc.cp.asnumpy(qvals)
     else:
-        qvals_np = qvals
+        qvals_np = np.asarray(qvals)
     qvals = np.minimum.accumulate(qvals_np[::-1])[::-1]
-    if gpu_available:
+    if gpu_available and calc is not None:
         qvals = calc.cp.asarray(qvals, dtype=calc.cp.float32)
 
     q_final = xp.empty_like(qvals)
     q_final[order] = qvals
 
     # Ensure output is CPU array
-    if gpu_available:
-        from .metrics_core import DistanceCalculator
-        calc = DistanceCalculator()
+    if gpu_available and calc is not None:
         return calc.cp.asnumpy(q_final), pi0
     else:
         return q_final, pi0
@@ -947,60 +967,79 @@ def beta_mom_estimation(
     Returns:
         alpha, beta arrays
     """
-    from .gpu_detection import is_gpu_available, get_cupy
-    
+    from .gpu_detection import is_gpu_available
+
     use_gpu = is_gpu_available()
+    xp = np
+    n_np = np.asarray(n, dtype=np.float64)
+    sx_np = np.asarray(Sx, dtype=np.float64)
+    sx2_np = np.asarray(Sx2, dtype=np.float64)
+
     if use_gpu:
         try:
             import cupy as cp
-            xp = cp
-        except ImportError:
-            xp = np
-    else:
-        xp = np
-        
-    if use_gpu and xp is not np:
-        n = xp.asarray(n, dtype=xp.float64)
-        Sx = xp.asarray(Sx, dtype=xp.float64)
-        Sx2 = xp.asarray(Sx2, dtype=xp.float64)
-    else:
-        n = np.asarray(n, dtype=np.float64)
-        Sx = np.asarray(Sx, dtype=np.float64)
-        Sx2 = np.asarray(Sx2, dtype=np.float64)
 
-    n_safe = xp.maximum(n, 1.0)
-    mu = Sx / n_safe
-    
-    # Sample variance (unbiased)
-    denom = xp.maximum(n - 1.0, 1.0)
-    var = xp.maximum((Sx2 - (Sx**2) / n_safe) / denom, 1e-12)
-    
-    # Maximum possible theoretical variance for a variable in [0, 1] is mu*(1-mu)
-    max_var = mu * (1.0 - mu)
-    
-    # Cap variance to slightly below max_var to avoid non-positive parameters
-    var = xp.minimum(var, max_var - 1e-12)
-    
-    # Beta MOM formulas:
-    # term = alpha + beta = (mu * (1 - mu) / var) - 1
-    term = xp.maximum((mu * (1.0 - mu) / var) - 1.0, 1e-12)
-    
-    alpha = mu * term
-    beta = (1.0 - mu) * term
-    
-    # Ensure alpha and beta are not exactly zero
-    alpha = xp.maximum(alpha, 1e-6)
-    beta = xp.maximum(beta, 1e-6)
-    
-    if use_gpu and xp is not np:
+            xp = cp
+            n_work = xp.asarray(n_np, dtype=xp.float64)
+            sx_work = xp.asarray(sx_np, dtype=xp.float64)
+            sx2_work = xp.asarray(sx2_np, dtype=xp.float64)
+        except Exception as e:
+            logger.warning("beta_mom_estimation GPU setup failed; falling back to CPU: %s", e)
+            use_gpu = False
+            xp = np
+            n_work = n_np
+            sx_work = sx_np
+            sx2_work = sx2_np
+    else:
+        n_work = n_np
+        sx_work = sx_np
+        sx2_work = sx2_np
+
+    try:
+        n_safe = xp.maximum(n_work, 1.0)
+        mu = sx_work / n_safe
+
+        # Sample variance (unbiased)
+        denom = xp.maximum(n_work - 1.0, 1.0)
+        var = xp.maximum((sx2_work - (sx_work**2) / n_safe) / denom, 1e-12)
+
+        # Maximum possible theoretical variance for a variable in [0, 1] is mu*(1-mu)
+        max_var = mu * (1.0 - mu)
+
+        # Cap variance to slightly below max_var to avoid non-positive parameters
+        var = xp.minimum(var, max_var - 1e-12)
+
+        # Beta MOM formulas:
+        # term = alpha + beta = (mu * (1 - mu) / var) - 1
+        term = xp.maximum((mu * (1.0 - mu) / var) - 1.0, 1e-12)
+
+        alpha = xp.maximum(mu * term, 1e-6)
+        beta = xp.maximum((1.0 - mu) * term, 1e-6)
+    except Exception as e:
+        if not use_gpu:
+            raise
+        logger.warning("beta_mom_estimation GPU execution failed; falling back to CPU: %s", e)
+        use_gpu = False
+        n_safe = np.maximum(n_np, 1.0)
+        mu = sx_np / n_safe
+        denom = np.maximum(n_np - 1.0, 1.0)
+        var = np.maximum((sx2_np - (sx_np**2) / n_safe) / denom, 1e-12)
+        max_var = mu * (1.0 - mu)
+        var = np.minimum(var, max_var - 1e-12)
+        term = np.maximum((mu * (1.0 - mu) / var) - 1.0, 1e-12)
+        alpha = np.maximum(mu * term, 1e-6)
+        beta = np.maximum((1.0 - mu) * term, 1e-6)
+
+    if use_gpu:
         from .metrics_core import DistanceCalculator
+
         calc = DistanceCalculator()
         try:
             return calc.cp.asnumpy(alpha), calc.cp.asnumpy(beta)
         except Exception:
-            return xp.asnumpy(alpha), xp.asnumpy(beta)
-            
-    return alpha, beta
+            return np.asarray(alpha, dtype=np.float64), np.asarray(beta, dtype=np.float64)
+
+    return np.asarray(alpha, dtype=np.float64), np.asarray(beta, dtype=np.float64)
 
 
 __all__ = [

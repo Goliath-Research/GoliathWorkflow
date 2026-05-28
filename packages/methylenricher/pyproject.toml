@@ -21,7 +21,7 @@ methyl_enricher = "methyl_enricher.cli:main"
 methyl-enricher-network-discovery = "methyl_enricher.network_discovery_cli:main"
 methyl_enricher_network_discovery = "methyl_enricher.network_discovery_cli:main"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
 pytest-cov = "^4.0.0"
 black = "^23.0.0"

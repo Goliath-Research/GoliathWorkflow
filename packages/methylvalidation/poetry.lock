@@ -1224,7 +1224,7 @@ files = []
 develop = true
 
 [package.dependencies]
-click = ">=8.1.0,<9.0.0"
+click = ">=8.1.0,<9.0.0,!=8.2.2"
 h5py = ">=3.10.0,<4.0.0"
 hdf5plugin = ">=5.0.0,<7.0.0"
 matplotlib = ">=3.8.0,<4.0.0"
@@ -2882,4 +2882,4 @@ scikit-learn = ["scikit-learn"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.13"
-content-hash = "fb4881a839d93120a8dd2c88445921bbadaf0bed35779d19262e77626123454a"
+content-hash = "925f6df73a96443b372957c1656a34b28849f7f7e2609aceaa298dcfa1068d32"
