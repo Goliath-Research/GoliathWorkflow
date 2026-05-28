@@ -1548,6 +1548,7 @@ def freeze_production_model(
     monte_carlo_runs_root: Path,
     production_output_dir: Optional[str] = None,
     skip_centroid: bool = False,
+    skip_detection: bool = False,
     config: Optional["MonteCarloConfig"] = None,
 ) -> Dict[str, Any]:
     """
@@ -1621,6 +1622,7 @@ def freeze_production_model(
         prod_project_path,
         logs_dir=prod_dir / "logs",
         skip_centroid=bool(skip_centroid),
+        skip_detection=bool(skip_detection),
         config=config,
     )
     mapper_annotation_cache: Dict[str, Any] = {}

@@ -798,6 +798,7 @@ def run_pipeline_for_production(
     logs_dir: Optional[Path] = None,
     progress_callback: Optional[Callable[[int, str, Literal["start", "end"]], None]] = None,
     skip_centroid: bool = False,
+    skip_detection: bool = False,
     config: Optional["MonteCarloConfig"] = None,
 ) -> Tuple[bool, List[str], List[Dict[str, Any]]]:
     """
@@ -811,11 +812,12 @@ def run_pipeline_for_production(
     steps: List[Tuple[str, Callable[[], tuple[int, str, str]]]] = []
     if not skip_centroid:
         steps.append(("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None)))
-    steps.extend(
-        [
-            ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=False)),
-            ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=False)),
-        ]
+    if not skip_detection:
+        steps.append(
+            ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=False))
+        )
+    steps.append(
+        ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=False))
     )
     skip_enricher = config.skip_enricher if config is not None else False
     progression_cfg = _progression_settings(project_json)

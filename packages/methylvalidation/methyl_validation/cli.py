@@ -1435,8 +1435,8 @@ def main() -> None:
         "--skip-detection",
         action="store_true",
         help=(
-            "Reuse existing MC run detections and recompute only stability artifacts "
-            "(requires --stability)."
+            "Reuse existing detector artifacts. Supported for stability recalculation "
+            "mode and --freeze."
         ),
     )
     parser.add_argument(
@@ -1697,19 +1697,18 @@ def main() -> None:
     if args.skip_centroid and config.predictor_only:
         print("Error: --skip-centroid is incompatible with --predictor-only.", file=sys.stderr)
         sys.exit(1)
-    if args.skip_detection and not (args.stability or config.run_stability):
-        print("Error: --skip-detection requires --stability.", file=sys.stderr)
+    if args.skip_detection and not (args.freeze or args.stability or config.run_stability):
+        print("Error: --skip-detection requires --stability or --freeze.", file=sys.stderr)
         sys.exit(1)
     if args.skip_detection and (
-        args.freeze
-        or args.model
+        args.model
         or args.model_mc
         or args.post_model_validation
         or args.select_best_model
         or config.predictor_only
     ):
         print(
-            "Error: --skip-detection is only supported for stability recalculation mode.",
+            "Error: --skip-detection is only supported for stability recalculation mode or --freeze.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -1824,6 +1823,7 @@ def main() -> None:
             monte_carlo_runs_root=monte_carlo_runs_root,
             production_output_dir=config.production_output_dir,
             skip_centroid=bool(args.skip_centroid),
+            skip_detection=bool(args.skip_detection),
             config=config,
         )
         out = production_summary.get("output_dir", "unknown")

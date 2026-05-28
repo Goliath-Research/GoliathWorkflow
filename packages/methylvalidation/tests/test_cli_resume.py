@@ -255,6 +255,48 @@ def test_skip_detection_runs_stability_only(tmp_path: Path, monkeypatch):
     assert kwargs["monte_carlo_runs_root"] == out_dir / "x" / "monte_carlo_runs"
 
 
+def test_skip_detection_allowed_for_freeze_and_forwarded(tmp_path: Path, monkeypatch):
+    h = tmp_path / "healthy.csv"
+    d = tmp_path / "disease.csv"
+    h.write_text("sample\nH1\n", encoding="utf-8")
+    d.write_text("sample\nD1\n", encoding="utf-8")
+    out_dir = tmp_path / "out"
+    project = tmp_path / "project.json"
+    project.write_text(_valid_production_project_text(tmp_path, h, d, out_dir), encoding="utf-8")
+
+    mc_root = out_dir / "x" / "monte_carlo_runs"
+    stable_dir = mc_root / "stability"
+    stable_dir.mkdir(parents=True, exist_ok=True)
+    (stable_dir / "stable_dmps_production.csv").write_text(
+        "chromosome,position,context,effect_size\n1,100,CG,0.2\n",
+        encoding="utf-8",
+    )
+
+    calls: dict[str, object] = {}
+
+    def _fake_freeze(**kwargs):
+        calls["kwargs"] = kwargs
+        prod_dir = mc_root / "production"
+        prod_dir.mkdir(parents=True, exist_ok=True)
+        return {
+            "success": True,
+            "output_dir": str(prod_dir),
+            "errors": [],
+            "timings": [],
+        }
+
+    monkeypatch.setattr(cli, "freeze_production_model", _fake_freeze)
+    monkeypatch.setattr(
+        "sys.argv",
+        ["methyl-validation", "--project", str(project), "--freeze", "--skip-detection"],
+    )
+    cli.main()
+    assert "kwargs" in calls
+    kwargs = calls["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert kwargs["skip_detection"] is True
+
+
 def test_stability_early_stop_breaks_loop_and_writes_diagnostics(tmp_path: Path, monkeypatch):
     h = tmp_path / "healthy.csv"
     d = tmp_path / "disease.csv"

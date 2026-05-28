@@ -85,3 +85,31 @@ def test_run_pipeline_for_production_supports_skip_centroid(monkeypatch):
     assert "methyl-centroid" not in calls
     assert calls == ["methyl-detector", "methyl-mapper", "methyl-enricher"]
     assert [t["step_name"] for t in timings] == calls
+
+
+def test_run_pipeline_for_production_supports_skip_detection(monkeypatch):
+    calls = []
+
+    def _ok(name):
+        def _f(*args, **kwargs):
+            calls.append(name)
+            return 0, "ok", ""
+
+        return _f
+
+    monkeypatch.setattr(pipeline_runner, "run_centroid", _ok("methyl-centroid"))
+    monkeypatch.setattr(pipeline_runner, "run_detector", _ok("methyl-detector"))
+    monkeypatch.setattr(pipeline_runner, "run_mapper", _ok("methyl-mapper"))
+    monkeypatch.setattr(pipeline_runner, "run_enricher", _ok("methyl-enricher"))
+    monkeypatch.setattr(pipeline_runner, "_progression_settings", lambda _p: {"enabled": False})
+
+    ok, errors, timings = pipeline_runner.run_pipeline_for_production(
+        Path("/tmp/project.json"),
+        skip_detection=True,
+        config=SimpleNamespace(skip_enricher=False),
+    )
+    assert ok
+    assert not errors
+    assert "methyl-detector" not in calls
+    assert calls == ["methyl-centroid", "methyl-mapper", "methyl-enricher"]
+    assert [t["step_name"] for t in timings] == calls
