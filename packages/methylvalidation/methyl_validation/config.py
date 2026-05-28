@@ -89,6 +89,13 @@ TabularMethodConfig = Annotated[
     Field(discriminator="method"),
 ]
 
+DEFAULT_MAPPER_GENE_COLUMNS: List[str] = [
+    "gene_score",
+    "mean_effect_size",
+    "gene_effect_compound",
+    "gene_feature_effect_compound",
+]
+
 
 class BackendSharedParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -103,6 +110,7 @@ class BackendSharedParams(BaseModel):
 
     feature_mode: str = Field(default="raw_dmp")
     feature_family_set: str = Field(default="dmp")
+    mapper_gene_columns: List[str] = Field(default_factory=lambda: list(DEFAULT_MAPPER_GENE_COLUMNS))
     observed_feature_quantiles: List[float] = Field(default_factory=lambda: [0.10, 0.25, 0.50, 0.75, 0.90])
     observed_feature_min_coverage: int = Field(default=1, ge=1)
     observed_feature_min_obs_fraction: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -146,6 +154,21 @@ class BackendSharedParams(BaseModel):
         if normalized not in allowed:
             raise ValueError(f"feature_family_set must be one of {sorted(allowed)}")
         return normalized
+
+    @field_validator("mapper_gene_columns")
+    @classmethod
+    def _validate_mapper_gene_columns(cls, value: List[str]) -> List[str]:
+        cleaned: List[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            token = str(raw).strip()
+            if not token:
+                continue
+            if token in seen:
+                continue
+            seen.add(token)
+            cleaned.append(token)
+        return cleaned
 
     @field_validator("observed_feature_quantiles")
     @classmethod
@@ -679,6 +702,14 @@ class MonteCarloConfig(BaseModel):
             "dmp | gene | structural | dmp+gene | dmp+structural | hybrid-all."
         ),
     )
+    mapper_gene_columns: List[str] = Field(
+        default_factory=lambda: list(DEFAULT_MAPPER_GENE_COLUMNS),
+        description=(
+            "Per-gene columns to carry from mapper all-gene_name-combined.csv into "
+            "mapper_dmp_annotations.csv and model bundle mapped-locus rows. "
+            "Set [] to disable this join."
+        ),
+    )
     observed_feature_quantiles: List[float] = Field(
         default_factory=lambda: [0.10, 0.25, 0.50, 0.75, 0.90],
         description=(
@@ -920,6 +951,7 @@ class MonteCarloConfig(BaseModel):
             "tabular_test_dataset_path",
             "feature_mode",
             "feature_family_set",
+            "mapper_gene_columns",
             "observed_feature_quantiles",
             "observed_feature_min_coverage",
             "observed_feature_min_obs_fraction",
@@ -1042,6 +1074,7 @@ class MonteCarloConfig(BaseModel):
             "tabular_max_dmps",
             "feature_mode",
             "feature_family_set",
+            "mapper_gene_columns",
             "observed_feature_quantiles",
             "observed_feature_min_coverage",
             "observed_feature_min_obs_fraction",
@@ -1138,6 +1171,21 @@ class MonteCarloConfig(BaseModel):
         if normalized not in allowed:
             raise ValueError(f"feature_family_set must be one of {sorted(allowed)}")
         return normalized
+
+    @field_validator("mapper_gene_columns")
+    @classmethod
+    def _validate_mapper_gene_columns(cls, value: List[str]) -> List[str]:
+        cleaned: List[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            token = str(raw).strip()
+            if not token:
+                continue
+            if token in seen:
+                continue
+            seen.add(token)
+            cleaned.append(token)
+        return cleaned
 
     @field_validator("observed_feature_quantiles")
     @classmethod

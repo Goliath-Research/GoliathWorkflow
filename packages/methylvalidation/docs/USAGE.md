@@ -334,6 +334,7 @@ For `gene`/`structural` families, per-sample mapped features are computed as sig
 Operational notes:
 
 - For non-`dmp` families, model build requires mapper annotations from freeze (`mapper_annotation_csv`); this is enforced in trainer flows.
+- Freeze-time mapper cache can also carry per-gene mapper aggregates from `all-gene_name-combined.csv` through `step_config.model_bundle.mapper_gene_columns` (fallback `step_config.mapper.mapper_gene_columns`), defaulting to `["gene_score", "mean_effect_size", "gene_effect_compound", "gene_feature_effect_compound"]`; set `[]` to disable.
 - Feature keys are bundle-observed only (no synthetic expansion beyond mapped stable loci).
 - Train/predict schema parity is enforced via stored feature names/fingerprints and fill metadata.
 - Legacy `observed_feature_include_*` toggles are no longer the canonical feature-family contract.

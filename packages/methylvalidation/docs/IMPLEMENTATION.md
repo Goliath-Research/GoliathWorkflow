@@ -106,6 +106,7 @@ During stability MC runs, `stability_featurecuts_enabled` and related `stability
 
 The `--freeze` path uses `run_pipeline_for_production()` which runs: centroid → detector(with `fixed_dmp_panel`) → mapper → enricher; when `step_config.progression.enabled=true`, it then runs `methyl-disease-progression`.
 During freeze, model-bundle preparation can materialize mapper annotation cache files under `production/model_bundle/` and wire `step_config.model_bundle.mapper_annotation_csv` for mapped-family feature builds.
+Cache generation also supports configurable per-gene mapper attributes via `step_config.model_bundle.mapper_gene_columns` (or `step_config.mapper.mapper_gene_columns` fallback), defaulting to `["gene_score", "mean_effect_size", "gene_effect_compound", "gene_feature_effect_compound"]`; set `[]` to disable carrying extra per-gene columns.
 
 ```mermaid
 flowchart LR

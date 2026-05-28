@@ -27,6 +27,22 @@ BUNDLE_MANIFEST_NAME = "model_feature_bundle.json"
 BUNDLE_H5_NAME = "model_feature_bundle.h5"
 DETECTOR_POINTER_NAME = "detection_model_bundle.json"
 MAPPER_ANNOTATION_NAME = "mapper_dmp_annotations.csv"
+DEFAULT_MAPPER_GENE_COLUMNS: List[str] = [
+    "gene_score",
+    "mean_effect_size",
+    "gene_effect_compound",
+    "gene_feature_effect_compound",
+]
+CORE_MAPPER_ANNOTATION_COLUMNS: List[str] = [
+    "comparison_label",
+    "chromosome",
+    "position",
+    "context",
+    "gene_name",
+    "feature_type",
+    "region_weight",
+    "mapper_source_csv",
+]
 
 
 @contextmanager
@@ -261,14 +277,100 @@ def _normalize_mapper_intersections(
     return out
 
 
-def _collapse_mapper_annotations(annotations: pd.DataFrame) -> pd.DataFrame:
+def _resolve_mapper_gene_columns(project: "ProjectConfig") -> List[str]:
+    requested: Any = None
+    try:
+        mb_cfg = project.get_step_config("model_bundle") or {}
+    except Exception:
+        mb_cfg = {}
+    try:
+        mapper_cfg = project.get_step_config("mapper") or {}
+    except Exception:
+        mapper_cfg = {}
+    if isinstance(mb_cfg, dict) and "mapper_gene_columns" in mb_cfg:
+        requested = mb_cfg.get("mapper_gene_columns")
+    elif isinstance(mapper_cfg, dict) and "mapper_gene_columns" in mapper_cfg:
+        requested = mapper_cfg.get("mapper_gene_columns")
+    if requested is None:
+        requested = list(DEFAULT_MAPPER_GENE_COLUMNS)
+    if not isinstance(requested, (list, tuple)):
+        requested = list(DEFAULT_MAPPER_GENE_COLUMNS)
+    cleaned: List[str] = []
+    seen: set[str] = set()
+    for value in requested:
+        name = str(value).strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        cleaned.append(name)
+    return cleaned
+
+
+def _load_mapper_gene_attributes(
+    *,
+    mapper_dir: Path,
+    comparison_label: str,
+    requested_columns: List[str],
+) -> tuple[pd.DataFrame, List[str], Optional[str]]:
+    if not requested_columns:
+        return pd.DataFrame(), [], None
+    gene_csv = mapper_dir / "all-gene_name-combined.csv"
+    if not gene_csv.is_file():
+        return pd.DataFrame(), [], None
+    try:
+        gene_df = pd.read_csv(gene_csv)
+    except Exception:
+        return pd.DataFrame(), [], None
+    if gene_df.empty:
+        return pd.DataFrame(), [], str(gene_csv.absolute())
+
+    gene_col = None
+    for candidate in ("gene_name", "gene", "gene_symbol", "symbol"):
+        if candidate in gene_df.columns:
+            gene_col = candidate
+            break
+    if gene_col is None:
+        return pd.DataFrame(), [], str(gene_csv.absolute())
+
+    available = [c for c in requested_columns if c in gene_df.columns]
+    if not available:
+        return pd.DataFrame(), [], str(gene_csv.absolute())
+
+    attrs = gene_df[[gene_col] + available].copy()
+    attrs = attrs.rename(columns={gene_col: "gene_name"})
+    attrs["comparison_label"] = str(comparison_label)
+    attrs["gene_name"] = attrs["gene_name"].map(_safe_feature_text)
+    attrs = attrs.drop_duplicates(subset=["comparison_label", "gene_name"], keep="first")
+    return attrs[["comparison_label", "gene_name"] + available], available, str(gene_csv.absolute())
+
+
+def _collapse_mapper_annotations(
+    annotations: pd.DataFrame,
+    *,
+    include_columns: Optional[List[str]] = None,
+) -> pd.DataFrame:
     if annotations.empty:
         return annotations
     work = annotations.copy()
-    work["_priority_combined"] = pd.to_numeric(work["combined_weight"], errors="coerce").fillna(-1.0)
-    work["_priority_region"] = pd.to_numeric(work["region_weight"], errors="coerce").fillna(-1.0)
+    combined_series = (
+        pd.to_numeric(work["combined_weight"], errors="coerce")
+        if "combined_weight" in work.columns
+        else pd.Series(np.nan, index=work.index, dtype=float)
+    )
+    region_series = (
+        pd.to_numeric(work["region_weight"], errors="coerce")
+        if "region_weight" in work.columns
+        else pd.Series(np.nan, index=work.index, dtype=float)
+    )
+    effect_series = (
+        pd.to_numeric(work["effect_size"], errors="coerce")
+        if "effect_size" in work.columns
+        else pd.Series(np.nan, index=work.index, dtype=float)
+    )
+    work["_priority_combined"] = combined_series.fillna(-1.0)
+    work["_priority_region"] = region_series.fillna(-1.0)
     work["_priority_effect"] = (
-        np.abs(pd.to_numeric(work["effect_size"], errors="coerce").fillna(0.0))
+        np.abs(effect_series.fillna(0.0))
     )
     work = work.sort_values(
         [
@@ -289,18 +391,11 @@ def _collapse_mapper_annotations(annotations: pd.DataFrame) -> pd.DataFrame:
         subset=["comparison_label", "chromosome", "position", "context"],
         keep="first",
     ).reset_index(drop=True)
-    return work[
-        [
-            "comparison_label",
-            "chromosome",
-            "position",
-            "context",
-            "gene_name",
-            "feature_type",
-            "region_weight",
-            "mapper_source_csv",
-        ]
-    ].copy()
+    selected_columns = list(CORE_MAPPER_ANNOTATION_COLUMNS)
+    for col in include_columns or []:
+        if col in work.columns and col not in selected_columns:
+            selected_columns.append(col)
+    return work[selected_columns].copy()
 
 
 def _candidate_mapper_annotation_paths(
@@ -350,8 +445,12 @@ def build_mapper_annotation_cache(
         project: "ProjectConfig" = load_project(project_json_path)
 
     comparisons = project.get_comparisons()
+    mapper_gene_columns = _resolve_mapper_gene_columns(project)
     rows: List[pd.DataFrame] = []
     source_files: List[str] = []
+    gene_rows: List[pd.DataFrame] = []
+    mapper_gene_sources: List[str] = []
+    effective_mapper_gene_columns: List[str] = []
 
     for spec in comparisons:
         cmp_label = spec.comparison_label or spec.disease_group
@@ -360,6 +459,18 @@ def build_mapper_annotation_cache(
         )
         if not mapper_dir.is_dir():
             continue
+        attrs_df, available_cols, attrs_source = _load_mapper_gene_attributes(
+            mapper_dir=mapper_dir,
+            comparison_label=str(cmp_label),
+            requested_columns=mapper_gene_columns,
+        )
+        if attrs_source is not None:
+            mapper_gene_sources.append(attrs_source)
+        if not attrs_df.empty:
+            gene_rows.append(attrs_df)
+        for col in available_cols:
+            if col not in effective_mapper_gene_columns:
+                effective_mapper_gene_columns.append(col)
         csvs = sorted(mapper_dir.glob("*-intersections.csv"))
         for csv_path in csvs:
             try:
@@ -379,27 +490,37 @@ def build_mapper_annotation_cache(
         out_path = Path(output_csv).absolute()
         out_path.parent.mkdir(parents=True, exist_ok=True)
         pd.DataFrame(
-            columns=[
-                "comparison_label",
-                "chromosome",
-                "position",
-                "context",
-                "gene_name",
-                "feature_type",
-                "region_weight",
-                "mapper_source_csv",
-            ]
+            columns=list(CORE_MAPPER_ANNOTATION_COLUMNS) + list(effective_mapper_gene_columns)
         ).to_csv(out_path, index=False)
         return {
             "path": str(out_path),
             "rows": 0,
             "unique_loci": 0,
             "source_files": sorted(set(source_files)),
+            "mapper_gene_source_files": sorted(set(mapper_gene_sources)),
+            "mapper_gene_columns_requested": list(mapper_gene_columns),
+            "mapper_gene_columns_effective": list(effective_mapper_gene_columns),
             "comparisons": [str(spec.comparison_label or spec.disease_group) for spec in comparisons],
         }
 
     raw = pd.concat(rows, ignore_index=True)
     ann = _collapse_mapper_annotations(raw)
+    if mapper_gene_columns and gene_rows:
+        gene_attrs = pd.concat(gene_rows, ignore_index=True)
+        if not gene_attrs.empty:
+            gene_attrs = gene_attrs.drop_duplicates(
+                subset=["comparison_label", "gene_name"],
+                keep="first",
+            )
+            ann = ann.merge(
+                gene_attrs,
+                on=["comparison_label", "gene_name"],
+                how="left",
+            )
+            ann = _collapse_mapper_annotations(
+                ann,
+                include_columns=list(effective_mapper_gene_columns),
+            )
     out_path = Path(output_csv).absolute()
     out_path.parent.mkdir(parents=True, exist_ok=True)
     ann.to_csv(out_path, index=False)
@@ -408,6 +529,9 @@ def build_mapper_annotation_cache(
         "rows": int(len(ann)),
         "unique_loci": int(len(ann)),
         "source_files": sorted(set(source_files)),
+        "mapper_gene_source_files": sorted(set(mapper_gene_sources)),
+        "mapper_gene_columns_requested": list(mapper_gene_columns),
+        "mapper_gene_columns_effective": list(effective_mapper_gene_columns),
         "comparisons": sorted(set(ann["comparison_label"].astype(str).tolist())),
     }
 
@@ -416,16 +540,7 @@ def _load_mapper_annotation_table(path: Path) -> pd.DataFrame:
     df = pd.read_csv(path)
     if df.empty:
         return pd.DataFrame(
-            columns=[
-                "comparison_label",
-                "chromosome",
-                "position",
-                "context",
-                "gene_name",
-                "feature_type",
-                "region_weight",
-                "mapper_source_csv",
-            ]
+            columns=list(CORE_MAPPER_ANNOTATION_COLUMNS)
         )
     required = {"comparison_label", "chromosome", "position", "context"}
     missing = sorted(required - set(df.columns))
@@ -453,7 +568,12 @@ def _load_mapper_annotation_table(path: Path) -> pd.DataFrame:
     df["region_weight"] = (
         pd.to_numeric(df["region_weight"], errors="coerce").fillna(1.0).astype(float)
     )
-    return _collapse_mapper_annotations(df)
+    passthrough_columns = [
+        c
+        for c in df.columns
+        if c not in set(CORE_MAPPER_ANNOTATION_COLUMNS + ["combined_weight", "effect_size"])
+    ]
+    return _collapse_mapper_annotations(df, include_columns=passthrough_columns)
 
 
 def _merge_mapper_annotations(
@@ -612,6 +732,35 @@ def _write_bundle_h5(bundle_h5: Path, dmp_df: pd.DataFrame, class_names: List[st
             compression_opts=4,
         )
         _h5_write_str(g, "source_csv", dmp_df["source_csv"].astype(str).tolist())
+        base_cols = {
+            "comparison_label",
+            "chromosome",
+            "position",
+            "context",
+            "effect_size",
+            "weight",
+            "gene_name",
+            "dmr_region",
+            "feature_type",
+            "region_weight",
+            "source_csv",
+        }
+        for col in dmp_df.columns:
+            if col in base_cols:
+                continue
+            series = dmp_df[col]
+            numeric_series = pd.to_numeric(series, errors="coerce")
+            non_null = int(series.notna().sum())
+            numeric_non_null = int(numeric_series.notna().sum())
+            if non_null == 0 or numeric_non_null == non_null:
+                g.create_dataset(
+                    col,
+                    data=numeric_series.astype(np.float32).values,
+                    compression="gzip",
+                    compression_opts=4,
+                )
+            else:
+                _h5_write_str(g, col, series.fillna("").astype(str).tolist())
         _h5_write_str(f, "classes", [str(x) for x in class_names])
 
 
@@ -651,6 +800,15 @@ def load_bundle_dmp_index(bundle_h5: str | Path) -> pd.DataFrame:
                 "source_csv": _decode_bytes(np.asarray(g["source_csv"])).astype(str),
             }
         )
+        base_cols = set(df.columns)
+        for col in g.keys():
+            if col in base_cols:
+                continue
+            raw = np.asarray(g[col])
+            if raw.dtype.kind == "S":
+                df[col] = _decode_bytes(raw).astype(str)
+            else:
+                df[col] = raw
     return df
 
 
@@ -833,19 +991,7 @@ def build_model_feature_bundle(
         dmp_count=int(len(dmp_df)),
         classes=classes,
         comparisons=cmp_items,
-        dmp_columns=[
-            "comparison_label",
-            "chromosome",
-            "position",
-            "context",
-            "effect_size",
-            "weight",
-            "gene_name",
-            "dmr_region",
-            "feature_type",
-            "region_weight",
-            "source_csv",
-        ],
+        dmp_columns=[str(c) for c in dmp_df.columns.tolist()],
         metadata=bundle_metadata,
     )
     manifest_path = out_dir / BUNDLE_MANIFEST_NAME
