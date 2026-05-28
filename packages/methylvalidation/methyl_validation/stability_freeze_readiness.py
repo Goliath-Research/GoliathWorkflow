@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import os
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -1112,7 +1113,9 @@ def _normalize_project_root_arg(raw: Path) -> Tuple[Optional[Path], int]:
     Returns ``(resolved_directory, 0)`` or ``(None, 2)`` when the path exists and is a file
     (common mistake: passing ``.../MyProject.json`` instead of ``.../MyProject``).
     """
-    p = raw.expanduser().resolve()
+    # Preserve user-visible mount aliases (e.g. /work) instead of canonicalizing
+    # symlinks to host-specific prefixes (e.g. /lambda/...).
+    p = raw.expanduser().absolute()
     if p.exists() and p.is_file():
         lines = [
             "methyl-stability-freeze-readiness: first argument must be the PROJECT DIRECTORY "
@@ -1129,6 +1132,26 @@ def _normalize_project_root_arg(raw: Path) -> Tuple[Optional[Path], int]:
         print("\n".join(lines), file=sys.stderr)
         return None, 2
     return p, 0
+
+
+def _default_methyl_mapper_home_for_project(project_root: Path) -> Path:
+    """
+    Derive default MethylMapper home from the project mount root.
+
+    Examples:
+      - /work/prostate-cancer/MyProject -> /work/cache/methyl_mapper
+      - /tmp/Proj -> /tmp/cache/methyl_mapper
+
+    Falls back to ~/.methyl_mapper when mount-root inference is not possible.
+    """
+    p = project_root.expanduser().absolute()
+    parts = p.parts
+    if len(parts) >= 2 and parts[0] == os.sep:
+        return (Path(parts[0]) / parts[1] / "cache" / "methyl_mapper").absolute()
+    anchor = str(p.anchor or "").strip()
+    if anchor and anchor != os.sep:
+        return (Path(anchor) / "cache" / "methyl_mapper").absolute()
+    return (Path.home() / ".methyl_mapper").absolute()
 
 
 def _emit_grok_stderr_summary(ai_review: Dict[str, Any]) -> None:
@@ -1222,7 +1245,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--encrypted-file-path",
         type=Path,
         default=None,
-        help="Encrypted Grok credential file (same as methyl-mapper --encrypted-file-path; default ~/.methyl_mapper/credentials/grok_api_key.encrypted).",
+        help=(
+            "Encrypted Grok credential file (same as methyl-mapper --encrypted-file-path; "
+            "default is inferred from --methyl-mapper-home, or auto-derived from project mount root "
+            "as <root>/cache/methyl_mapper/credentials/grok_api_key.encrypted)."
+        ),
     )
     grok.add_argument("--azure-key-vault-url", type=str, default=None, help="Optional Azure Key Vault URL for Grok key.")
     grok.add_argument("--azure-secret-name", type=str, default=None, help="Optional Key Vault secret name (default grok-api-key).")
@@ -1230,7 +1257,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         "--methyl-mapper-home",
         type=Path,
         default=None,
-        help="Optional MethylMapper home for credential file resolution (~/.methyl_mapper by default).",
+        help=(
+            "Optional MethylMapper home for credential file resolution. "
+            "Default auto-derives from project mount root as <root>/cache/methyl_mapper "
+            "(for /work/... projects this resolves to /work/cache/methyl_mapper)."
+        ),
     )
     grok.add_argument(
         "--disease-context",
@@ -1269,6 +1300,11 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     ai_review: Optional[Dict[str, Any]] = None
     if getattr(args, "grok_review", True):
+        default_mapper_home = (
+            args.methyl_mapper_home.expanduser()
+            if args.methyl_mapper_home
+            else _default_methyl_mapper_home_for_project(args.project_root)
+        )
         disease = (args.disease_context or "").strip() or report.get("disease_context")
         payload = build_sanitized_ai_payload(
             report,
@@ -1279,7 +1315,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             explicit_key=args.grok_api_key,
             azure_key_vault_url=(args.azure_key_vault_url or "").strip() or None,
             azure_secret_name=(args.azure_secret_name or "").strip() or None,
-            methyl_mapper_home=args.methyl_mapper_home.expanduser() if args.methyl_mapper_home else None,
+            methyl_mapper_home=default_mapper_home,
             encrypted_file_path=args.encrypted_file_path.expanduser() if args.encrypted_file_path else None,
         )
         if not api_key:

@@ -14,6 +14,7 @@ from methyl_validation.grok_readiness import (
     resolve_grok_api_key,
 )
 from methyl_validation.stability_freeze_readiness import (
+    _default_methyl_mapper_home_for_project,
     _module_trajectory_summary,
     _resolve_report_output_path,
     analyze_project_root,
@@ -132,6 +133,15 @@ def test_resolve_report_output_absolute_unchanged(tmp_path: Path):
     proj.mkdir()
     abs_path = tmp_path / "elsewhere" / "out.json"
     assert _resolve_report_output_path(proj, abs_path, "readiness.json") == abs_path.resolve()
+
+
+def test_default_methyl_mapper_home_follows_project_mount_root():
+    assert _default_methyl_mapper_home_for_project(Path("/work/prostate-cancer/MyProject")) == Path(
+        "/work/cache/methyl_mapper"
+    )
+    assert _default_methyl_mapper_home_for_project(Path("/tmp/MyProject")) == Path(
+        "/tmp/cache/methyl_mapper"
+    )
 
 
 def test_analyze_and_render_go(tmp_path: Path):
