@@ -210,37 +210,26 @@ def _genes_for_stage_universe(
         return set(), 0
 
     df = pd.read_csv(stage.mapper_combined_csv)
-    gene_col = _first_existing_column(
-        df, ["gene_name", "gene_symbol", "gene", "symbol", "gene_id"]
-    )
-    if gene_col is None:
-        return set(), len(df)
-
-    score_col = _first_existing_column(
-        df,
-        [
-            "gene_effect_compound",
-            "gene_importance",
-            "gene_feature_effect_compound",
-            "gene_effect_size",
-            "gene_score",
-            "mean_effect_size",
-            "unique_dmps",
-            "total_weight",
-            "total_importance",
-            "mean_weight",
-        ],
-    )
+    required = ["gene_name", "gene_importance"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"{stage.comparison_label}: mapper combined CSV missing required columns {missing} "
+            f"at {stage.mapper_combined_csv}"
+        )
+    gene_col = "gene_name"
+    score_col = "gene_importance"
     work = df[[gene_col]].copy()
     work[gene_col] = work[gene_col].astype(str).str.strip()
     work = work[work[gene_col] != ""]
-    if score_col:
-        work["_w"] = pd.to_numeric(df.loc[work.index, score_col], errors="coerce").fillna(0.0)
-    else:
-        work["_w"] = 1.0
+    work["_w"] = pd.to_numeric(df.loc[work.index, score_col], errors="coerce").fillna(0.0)
 
-    agg = work.groupby(gene_col, as_index=False)["_w"].max()
-    agg = agg.sort_values("_w", ascending=False).reset_index(drop=True)
+    agg = (
+        work.groupby(gene_col, as_index=False)
+        .agg(_w=("_w", "max"))
+        .sort_values("_w", ascending=False)
+        .reset_index(drop=True)
+    )
 
     mode = (denominator or "all_genes").strip().lower()
     if mode == "all_genes":
@@ -360,12 +349,13 @@ def build_gene_set_fractions_json_payload(df: pd.DataFrame) -> Dict[str, Any]:
     for r in records:
         row: Dict[str, Any] = {}
         for k, v in r.items():
+            key = str(k)
             if k == "fraction":
-                row[k] = float(v)
+                row[key] = float(v)
             elif hasattr(v, "item"):
-                row[k] = v.item()
+                row[key] = v.item()
             else:
-                row[k] = v
+                row[key] = v
         clean.append(row)
     return {
         "rows": clean,

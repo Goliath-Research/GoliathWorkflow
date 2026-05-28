@@ -138,37 +138,26 @@ def _build_gene_rows(stage: StageSpec) -> pd.DataFrame:
     if not stage.mapper_combined_csv.exists():
         return pd.DataFrame()
     df = pd.read_csv(stage.mapper_combined_csv)
-    gene_col = _first_existing_column(df, ["gene_name", "gene_symbol", "gene", "symbol", "gene_id"])
-    if gene_col is None:
-        return pd.DataFrame()
-    score_col = _first_existing_column(
-        df,
-        [
-            "gene_effect_compound",
-            "gene_importance",
-            "gene_feature_effect_compound",
-            "gene_effect_size",
-            "gene_score",
-            "mean_effect_size",
-            "unique_dmps",
-            "total_weight",
-            "total_importance",
-            "mean_weight",
-        ],
-    )
-    work = df[[gene_col] + ([score_col] if score_col else [])].copy()
+    required = ["gene_name", "gene_importance"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"{stage.comparison_label}: mapper combined CSV missing required columns {missing} "
+            f"at {stage.mapper_combined_csv}"
+        )
+    gene_col = "gene_name"
+    score_col = "gene_importance"
+    work = df[[gene_col, score_col]].copy()
     work[gene_col] = work[gene_col].astype(str).str.strip()
     work = work[work[gene_col] != ""]
-    if score_col is not None:
-        work[score_col] = pd.to_numeric(work[score_col], errors="coerce").fillna(0.0)
-        agg = work.groupby(gene_col, as_index=False)[score_col].max()
-        agg = agg.sort_values(score_col, ascending=False).reset_index(drop=True)
-        agg["rank"] = agg.index + 1
-        agg["score"] = agg[score_col]
-    else:
-        agg = work.drop_duplicates(subset=[gene_col]).reset_index(drop=True)
-        agg["rank"] = agg.index + 1
-        agg["score"] = 1.0
+    work[score_col] = pd.to_numeric(work[score_col], errors="coerce").fillna(0.0)
+    agg = (
+        work.groupby(gene_col, as_index=False)
+        .agg(score=(score_col, "max"))
+        .sort_values("score", ascending=False)
+        .reset_index(drop=True)
+    )
+    agg["rank"] = agg.index + 1
     return pd.DataFrame(
         {
             "stage_index": stage.stage_index,

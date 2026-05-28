@@ -40,11 +40,11 @@ def test_modules_include_disease_columns_when_prior_exists(monkeypatch, tmp_path
     in_file = tmp_path / "mapper_with_disease.csv"
     in_file.write_text(
         (
-            "gene_name,total_weight,disease_associated,disease_score,disease_evidence_level\n"
-            "TP53,0.9,True,0.82,high\n"
-            "BRCA1,0.8,True,0.71,medium\n"
-            "EGFR,0.7,False,0.10,low\n"
-            "MTOR,0.6,False,0.05,low\n"
+            "gene_name,gene_importance,mean_effect_size,unique_dmps,disease_associated,disease_score,disease_evidence_level\n"
+            "TP53,0.9,0.9,3,True,0.82,high\n"
+            "BRCA1,0.8,0.8,2,True,0.71,medium\n"
+            "EGFR,0.7,0.7,2,False,0.10,low\n"
+            "MTOR,0.6,0.6,1,False,0.05,low\n"
         ),
         encoding="utf-8",
     )
@@ -67,11 +67,11 @@ def test_modules_omit_disease_columns_when_no_disease_metadata(monkeypatch, tmp_
     in_file = tmp_path / "mapper_without_disease.csv"
     in_file.write_text(
         (
-            "gene_name,total_weight\n"
-            "TP53,0.9\n"
-            "BRCA1,0.8\n"
-            "EGFR,0.7\n"
-            "MTOR,0.6\n"
+            "gene_name,gene_importance,mean_effect_size,unique_dmps\n"
+            "TP53,0.9,0.9,3\n"
+            "BRCA1,0.8,0.8,2\n"
+            "EGFR,0.7,0.7,2\n"
+            "MTOR,0.6,0.6,1\n"
         ),
         encoding="utf-8",
     )
@@ -93,11 +93,11 @@ def test_modules_omit_disease_columns_when_prior_filters_to_empty(monkeypatch, t
     in_file = tmp_path / "mapper_disease_empty_prior.csv"
     in_file.write_text(
         (
-            "gene_name,total_weight,disease_associated,disease_score,disease_evidence_level\n"
-            "TP53,0.9,True,0.12,low\n"
-            "BRCA1,0.8,True,0.11,low\n"
-            "EGFR,0.7,False,0.02,low\n"
-            "MTOR,0.6,False,0.01,low\n"
+            "gene_name,gene_importance,mean_effect_size,unique_dmps,disease_associated,disease_score,disease_evidence_level\n"
+            "TP53,0.9,0.9,3,True,0.12,low\n"
+            "BRCA1,0.8,0.8,2,True,0.11,low\n"
+            "EGFR,0.7,0.7,2,False,0.02,low\n"
+            "MTOR,0.6,0.6,1,False,0.01,low\n"
         ),
         encoding="utf-8",
     )

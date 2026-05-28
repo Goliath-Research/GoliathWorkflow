@@ -33,9 +33,9 @@ Examples:
     --min-disease-evidence-level medium --min-disease-score 0.2 \\
     --min-dmp-count 2 --max-gene-q-value 0.05 --top 150 --outdir enricher_pca
 
-  # Sort by total_weight before selecting top genes
+  # Sort by gene_importance before selecting top genes
   methyl_enricher --input all-gene_name-combined.csv --gene-column gene_name \\
-    --sort-by total_weight --top 200 --outdir results
+    --sort-by gene_importance --top 200 --outdir results
 
   # Use a config file (CLI overrides config)
   methyl_enricher --config enricher_config.json
@@ -147,7 +147,7 @@ For theory and package documentation, see:
         '--sort-by',
         type=str,
         default=None,
-        help='Column to sort by when input is CSV/TSV (default: auto gene_effect_compound)'
+        help='Column to sort by when input is CSV/TSV (default: auto gene_importance)'
     )
     io_group.add_argument(
         '--sort-ascending',

@@ -71,7 +71,7 @@ def _write_stage_outputs(tmp_path: Path) -> None:
         enricher_dir = root / "enricher" / "all" / stage
         mapper_dir.mkdir(parents=True, exist_ok=True)
         enricher_dir.mkdir(parents=True, exist_ok=True)
-        gene_rows = ["gene_name,total_weight"] + [f"{g},{w}" for g, w in stage_genes[stage]]
+        gene_rows = ["gene_name,gene_importance"] + [f"{g},{w}" for g, w in stage_genes[stage]]
         (mapper_dir / "all-gene_name-combined.csv").write_text("\n".join(gene_rows) + "\n", encoding="utf-8")
         p_rows = ["Term,Adjusted P-value,Combined Score"] + [f"{t},{q},{s}" for t, q, s in stage_paths[stage]]
         (enricher_dir / "enrichment_merged.csv").write_text("\n".join(p_rows) + "\n", encoding="utf-8")

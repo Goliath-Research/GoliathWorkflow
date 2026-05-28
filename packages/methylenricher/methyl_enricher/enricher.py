@@ -311,7 +311,7 @@ class EnrichmentAnalyzer:
                 gene_column = "gene_name"
             self._require_mapper_columns(
                 df,
-                [gene_column, "gene_importance", "gene_effect_compound", "mean_effect_size", "unique_dmps"],
+                [gene_column, "gene_importance", "mean_effect_size", "unique_dmps"],
                 context=f"Input mapper CSV {input_path}",
             )
 
@@ -332,10 +332,7 @@ class EnrichmentAnalyzer:
                 feature_types=feature_types,
             )
 
-            if sort_by is None and "gene_effect_compound" in df.columns:
-                sort_by = "gene_effect_compound"
-                print("[INFO] Sorting genes by gene_effect_compound (auto)")
-            elif sort_by is None and "gene_importance" in df.columns:
+            if sort_by is None and "gene_importance" in df.columns:
                 sort_by = "gene_importance"
                 print("[INFO] Sorting genes by gene_importance (auto)")
 
@@ -377,22 +374,13 @@ class EnrichmentAnalyzer:
         return genes
 
     def _gene_weight_from_row(self, row: pd.Series) -> float:
-        """Compute a single gene weight from a CSV row (gene-level or first feature row)."""
-        for col in (
-            "gene_effect_compound",
-            "gene_importance",
-            "gene_feature_effect_compound",
-            "gene_effect_size",
-            "gene_feature_score",
-            "gene_score",
-            "mean_effect_size",
-        ):
-            if col in row.index and pd.notna(row.get(col)):
-                try:
-                    return float(row[col])
-                except (TypeError, ValueError):
-                    pass
-        return 1.0
+        """Compute canonical per-gene weight from mapper gene_importance."""
+        if "gene_importance" not in row.index or pd.isna(row.get("gene_importance")):
+            raise ValueError("Mapper row is missing required 'gene_importance' for enrichment weighting.")
+        try:
+            return float(row["gene_importance"])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Invalid gene_importance value for enrichment weighting: {row.get('gene_importance')!r}") from exc
 
     def load_gene_list_with_weights(
         self,
@@ -450,7 +438,7 @@ class EnrichmentAnalyzer:
             gc = "gene_name"
         self._require_mapper_columns(
             df,
-            [gc, "gene_importance", "gene_effect_compound", "mean_effect_size", "unique_dmps"],
+            [gc, "gene_importance", "mean_effect_size", "unique_dmps"],
             context=f"Input mapper CSV {input_path}",
         )
         df = self._apply_csv_filters(
@@ -475,9 +463,7 @@ class EnrichmentAnalyzer:
                 "--min-disease-evidence-level, --disease-only) or use an input generated with "
                 "disease enrichment (Grok/Open Targets) if you need disease-associated genes."
             )
-        if sort_by is None and "gene_effect_compound" in df.columns:
-            sort_by = "gene_effect_compound"
-        elif sort_by is None and "gene_importance" in df.columns:
+        if sort_by is None and "gene_importance" in df.columns:
             sort_by = "gene_importance"
         if sort_by and sort_by in df.columns:
             df = df.sort_values(by=sort_by, ascending=sort_ascending)

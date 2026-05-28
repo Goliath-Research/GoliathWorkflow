@@ -65,7 +65,7 @@ def minimal_production_tree(tmp_path: Path) -> Path:
     mapper = prod / "mapper" / "all" / "PCa_PCa1"
     mapper.mkdir(parents=True)
     (mapper / "all-gene_name-combined.csv").write_text(
-        "gene_name,dmp_count\nBRCA1,2\n",
+        "gene_name,gene_importance,mean_effect_size,unique_dmps,dmp_count\nBRCA1,0.8,0.8,2,2\n",
         encoding="utf-8",
     )
     return prod / "project.json"
