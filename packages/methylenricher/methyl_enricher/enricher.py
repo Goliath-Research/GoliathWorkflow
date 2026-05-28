@@ -201,13 +201,24 @@ class EnrichmentAnalyzer:
             n_before = len(out)
 
         if min_dmp_count is not None:
-            if "dmp_count" not in out.columns:
-                raise ValueError(
-                    "Filter min_dmp_count requested, but mapper column 'dmp_count' is missing. "
-                    "Regenerate mapper outputs or remove min_dmp_count."
+            # Canonical mapper output now exposes unique_dmps; dmp_count is legacy.
+            if "dmp_count" in out.columns:
+                count_series = pd.to_numeric(out["dmp_count"], errors="coerce").fillna(0)
+                count_label = "dmp_count"
+            elif "unique_dmps" in out.columns:
+                count_series = pd.to_numeric(out["unique_dmps"], errors="coerce").fillna(0)
+                count_label = "unique_dmps"
+                print(
+                    "[WARN] min_dmp_count is deprecated against mapper canonical schema; "
+                    "applying threshold to unique_dmps."
                 )
-            out = out[pd.to_numeric(out["dmp_count"], errors="coerce").fillna(0) >= min_dmp_count]
-            print(f"[INFO] Filter dmp_count >= {min_dmp_count}: {len(out)} genes (was {n_before})")
+            else:
+                raise ValueError(
+                    "Filter min_dmp_count requested, but neither mapper column 'dmp_count' nor "
+                    "'unique_dmps' is available."
+                )
+            out = out[count_series >= min_dmp_count]
+            print(f"[INFO] Filter {count_label} >= {min_dmp_count}: {len(out)} genes (was {n_before})")
             n_before = len(out)
 
         if min_unique_dmps is not None:

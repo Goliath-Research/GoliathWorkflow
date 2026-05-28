@@ -42,3 +42,17 @@ def test_load_gene_list_requires_mapper_contract_columns(tmp_path):
 
     with pytest.raises(ValueError, match="missing required mapper columns"):
         analyzer.load_gene_list(csv_path, gene_column="gene_name")
+
+
+def test_min_dmp_count_falls_back_to_unique_dmps_when_dmp_count_missing():
+    analyzer = EnrichmentAnalyzer(libraries=["GO_Biological_Process_2023"])
+    df = pd.DataFrame(
+        {
+            "gene_name": ["G1", "G2", "G3"],
+            "unique_dmps": [1, 2, 3],
+            "gene_importance": [0.1, 0.2, 0.3],
+            "mean_effect_size": [0.1, 0.2, 0.3],
+        }
+    )
+    out = analyzer._apply_csv_filters(df, min_dmp_count=2)
+    assert out["gene_name"].tolist() == ["G2", "G3"]
