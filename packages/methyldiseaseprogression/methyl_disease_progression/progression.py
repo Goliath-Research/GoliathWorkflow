@@ -143,7 +143,18 @@ def _build_gene_rows(stage: StageSpec) -> pd.DataFrame:
         return pd.DataFrame()
     score_col = _first_existing_column(
         df,
-        ["total_weight", "gene_importance", "total_importance", "mean_effect_size", "mean_weight"],
+        [
+            "gene_effect_compound",
+            "gene_importance",
+            "gene_feature_effect_compound",
+            "gene_effect_size",
+            "gene_score",
+            "mean_effect_size",
+            "unique_dmps",
+            "total_weight",
+            "total_importance",
+            "mean_weight",
+        ],
     )
     work = df[[gene_col] + ([score_col] if score_col else [])].copy()
     work[gene_col] = work[gene_col].astype(str).str.strip()
