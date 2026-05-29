@@ -1,0 +1,512 @@
+---
+title: "MethylPipeline Comprehensive Analysis"
+subtitle: "Theory, architecture, implementation, and usage"
+author: "MethylPipeline Team"
+date: last-modified
+toc: true
+number-sections: true
+format:
+  html:
+    theme: cosmo
+    code-overflow: wrap
+    html-math-method: mathjax
+  pdf:
+    documentclass: scrartcl
+    pdf-engine: lualatex
+    colorlinks: true
+    geometry:
+      - margin=1in
+    include-in-header:
+      text: |
+        \usepackage{amsmath,amssymb,mathtools}
+        \usepackage{tikz}
+        \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc,shapes.geometric}
+execute:
+  enabled: false
+---
+
+# Executive Summary
+
+MethylPipeline is a monorepo for DNA methylation analysis that combines:
+
+1. empirical distribution modeling (ECDF/histogram centroids),
+2. differential methylation discovery with FDR control,
+3. stability-based feature selection via Monte Carlo,
+4. genomic interpretation (mapping + enrichment + progression synthesis), and
+5. model training/selection workflows.
+
+The scientific spine is:
+
+- `methyl-validation` (orchestration) -> `methyl-centroid` -> `methyl-detector` -> `methyl-mapper` -> `methyl-enricher` -> `methyl-disease-progression`.
+
+Supporting packages (`methylclassifier`, `methylpredictor`, `methylalignmentqc`, `methylcluster`) integrate around this core.
+
+# Scope and sources
+
+This analysis synthesizes repository docs and implementation modules, with emphasis on core scientific flow and data contracts.
+
+Primary references include:
+
+- `docs/MethylPipeline-overview.qmd`
+- `docs/theory/chapters/*.qmd`
+- `packages/*/docs/{THEORY,IMPLEMENTATION,USAGE}.md`
+- `packages/methylutils/methyl_utils/statistical_tests.py`
+- `packages/methylvalidation/methyl_validation/{cli.py,pipeline_runner.py,stability.py,model_bundle.py,config.py}`
+- `packages/methylmapper/methyl_mapper/bedtools_mapper.py`
+- `packages/methylenricher/methyl_enricher/{enricher.py,ensure_complete.py,config.py}`
+- `packages/methyldiseaseprogression/methyl_disease_progression/{progression.py,gene_set_coverage.py}`
+
+# Theory
+
+## Data representation: methylation values and centroid summaries
+
+At locus $i$ for sample $s$:
+
+$$
+x_{si} = \frac{m_{si}}{m_{si} + u_{si}},
+$$
+
+where $m$ and $u$ are methylated/unmethylated counts.
+
+Cohort sufficient statistics used throughout the pipeline:
+
+$$
+\hat\mu_i = \frac{S_{x,i}}{N_i}, \qquad
+\hat\sigma_i^2 = \max\!\left(
+\frac{S_{x^2,i} - S_{x,i}^2/N_i}{\max(N_i-1,1)}, \varepsilon
+\right).
+$$
+
+`methylcentroid` stores these plus binned histograms per locus/context/chromosome, enabling downstream distribution comparison without reloading raw read-level data.
+
+## ECDF reconstruction and nonparametric two-sample screening
+
+The ECDF at bin edges is reconstructed from centroid histograms and interpolated (PCHIP-style) in `methylutils`.
+
+Core screening includes:
+
+- Kolmogorov-Smirnov style distance on reconstructed ECDFs,
+- Mann-Whitney U approximation from bin counts,
+- Storey q-values for multiple testing control.
+
+Storey components (implemented in `storey_qvalues`):
+
+$$
+\hat\pi_0(\lambda) = \frac{\#\{p_j > \lambda\}}{(1-\lambda)m}, \qquad
+q_{(i)} = \min_{j \ge i} \frac{\hat\pi_0\, m\, p_{(j)}}{j}.
+$$
+
+## Canonical biological effect size
+
+MethylPipeline separates statistical significance from biological ranking. The canonical effect-size formulation in `effect_size_from_components` is:
+
+$$
+\mathrm{effect\_size}_i =
+|\Delta\mu_i|\,(1-\mathrm{overlap}_i)\,
+\exp\!\left(-\lambda_{\mathrm{var}}(\sqrt{\sigma_{1i}^2}+\sqrt{\sigma_{2i}^2})\right),
+$$
+
+optionally multiplied by a mean-level weighting factor.
+
+This is a prioritization score, not a p-value.
+
+## Stability selection (Monte Carlo)
+
+With repeated train/validation splits, recurrence of each discovered DMP is:
+
+$$
+\hat f(d) = \frac{1}{R^*}\sum_{r=1}^{R^*}\mathbf{1}[d \in \mathcal{D}_r].
+$$
+
+Stable panel construction in `stability.py` ranks by:
+
+$$
+\mathrm{combined\_score}(d) = \mathrm{effect\_size}(d)\sqrt{\hat f(d)},
+$$
+
+followed by thresholding and optional elbow trimming.
+
+## Gene-level importance theory
+
+In mapper aggregation, the canonical gene importance is tied to effect consistency and support:
+
+$$
+\mathrm{gene\_effect\_compound}
+=
+\mathrm{gene\_effect\_abs\_wmean}
+\times
+\mathrm{gene\_direction\_coherence}
+\times
+\sqrt{\mathrm{gene\_support\_freq}}.
+$$
+
+`gene_importance` is canonicalized to this compound metric in current implementation.
+
+## Disease progression synthesis theory
+
+`methyldiseaseprogression` is intentionally deterministic and file-driven:
+
+- input: per-stage mapper and enricher outputs,
+- output: ranked long tables and heuristic stage labels (e.g., `early_only`, `late_only`, `monotonic_up`, `stable_across_stages`).
+
+This is evidence synthesis over staged contrasts, not a latent-time probabilistic model.
+
+## Method taxonomy and caveats
+
+- Principled/statistical: FDR control, centroid sufficient statistics, asymptotic tests.
+- Approximate: histogram-derived MWU and ECDF grid approximations.
+- Heuristic: effect-size weighting, stability cutoffs, progression labels.
+- External dependencies: Enrichr services, optional STRING/PPI data.
+
+# Architecture
+
+## Package architecture
+
+The monorepo package graph centers on shared `methylutils` and orchestration via `methylvalidation`.
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  scale=0.86,
+  every node/.style={transform shape},
+  node distance=0.8cm and 0.55cm,
+  box/.style={draw, rounded corners=3pt, align=center, font=\footnotesize, minimum height=0.78cm, text width=2.7cm},
+  shared/.style={box, fill=blue!8},
+  core/.style={box, fill=green!10},
+  support/.style={box, fill=orange!12},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[shared] (utils) {methylutils\\shared stats, IO, config};
+
+\node[core, above left=1.2cm and 1.5cm of utils] (centroid) {methylcentroid\\cohort centroids};
+\node[core, above=1.35cm of utils] (detector) {methyldetector\\DMP discovery};
+\node[core, above right=1.2cm and 1.5cm of utils] (mapper) {methylmapper\\DMP-to-gene mapping};
+\node[core, right=2.6cm of mapper] (enricher) {methylenricher\\enrichment/modules};
+\node[core, right=2.6cm of detector] (validation) {methylvalidation\\MC/stability/freeze/model};
+\node[core, below right=1.2cm and 1.5cm of utils] (progression) {methyldiseaseprogression\\stage synthesis};
+
+\node[support, left=2.6cm of centroid] (cluster) {methylcluster\\optional pre-grouping};
+\node[support, below=1.3cm of utils] (classifier) {methylclassifier\\ECDF models};
+\node[support, below=1.3cm of classifier] (predictor) {methylpredictor\\evaluation};
+\node[support, below right=1.2cm and 1.5cm of predictor] (qc) {methylalignmentqc\\alignment QC};
+
+\draw[arr] (utils) -- (centroid);
+\draw[arr] (utils) -- (detector);
+\draw[arr] (utils) -- (mapper);
+\draw[arr] (utils) -- (classifier);
+\draw[arr] (utils) -- (validation);
+\draw[arr] (utils) -- (progression);
+\draw[arr] (cluster) -- (centroid);
+\draw[arr] (centroid) -- (detector);
+\draw[arr] (detector) -- (mapper);
+\draw[arr] (mapper) -- (enricher);
+\draw[arr] (detector) -- (classifier);
+\draw[arr] (classifier) -- (predictor);
+\draw[arr] (validation) to[out=180,in=15] (centroid);
+\draw[arr] (validation) to[out=200,in=15] (detector);
+\draw[arr] (validation) -- (mapper);
+\draw[arr] (validation) -- (enricher);
+\draw[arr] (validation) -- (progression);
+\draw[arr] (qc) to[out=110,in=-45] (validation);
+\end{tikzpicture}
+\caption{High-level package architecture and primary dependencies in MethylPipeline.}
+\end{figure}
+```
+:::
+
+## End-to-end data flow
+
+The data flow from samples to model/paper outputs is phase-based.
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=0.75cm and 0.65cm,
+  box/.style={draw, rounded corners=2pt, align=center, font=\footnotesize, minimum height=0.75cm, text width=2.6cm},
+  phase/.style={box, fill=gray!10, font=\footnotesize\bfseries},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box, fill=blue!8] (samples) {Sample HDF5\\(controls/diseases)};
+\node[box, fill=green!10, right=1.2cm of samples] (centroid) {methyl-centroid\\centroids/*.h5};
+\node[box, fill=green!10, right=1.2cm of centroid] (detector) {methyl-detector\\dmps-*-{discovery,classifier}.csv};
+\node[box, fill=green!10, right=1.2cm of detector] (stability) {methyl-validation --stability\\stable\_dmps\_production.csv};
+\node[box, fill=green!10, below=1.0cm of detector] (freeze) {methyl-validation --freeze\\production/project.json + fixed panel};
+\node[box, fill=orange!12, right=1.2cm of freeze] (mapper) {methyl-mapper\\all-gene\_name-combined.csv};
+\node[box, fill=orange!12, right=1.2cm of mapper] (enricher) {methyl-enricher\\enrichment\_merged.csv/modules};
+\node[box, fill=orange!12, below=1.0cm of enricher] (progression) {methyl-disease-progression\\progression/*.csv + labels};
+\node[box, fill=blue!8, below=1.0cm of mapper] (model) {--model / --model-mc\\classifiers, predictors, bundle};
+
+\draw[arr] (samples) -- (centroid);
+\draw[arr] (centroid) -- (detector);
+\draw[arr] (detector) -- (stability);
+\draw[arr] (stability) |- (freeze);
+\draw[arr] (freeze) -- (mapper);
+\draw[arr] (mapper) -- (enricher);
+\draw[arr] (enricher) -- (progression);
+\draw[arr] (freeze) -- (model);
+\end{tikzpicture}
+\caption{Operational data flow across stability, freeze, enrichment, progression, and model stages.}
+\end{figure}
+```
+:::
+
+## Core phase orchestration
+
+`methyl-validation` in `pipeline_runner.py` orchestrates:
+
+- Monte Carlo iterations (`centroid` -> `detector` only),
+- stability aggregation (`--stability`),
+- production freeze (`--freeze`):
+  - fixed DMP panel injection,
+  - production centroid/detector/mapper/enricher/progression pipeline,
+- model training/evaluation (`--model`, `--model-mc`, `--post-model-validation`).
+
+## Canonical data contracts
+
+Key contracts between stages:
+
+- detector exports DMP panels (`dmps-*.csv`),
+- mapper exports per-comparison `all-gene_name-combined.csv`,
+- enricher consumes mapper combined CSV and emits `enrichment_merged.csv` and module tables,
+- progression consumes mapper+enricher stage outputs,
+- model bundle uses detector DMP index plus optional mapper annotation cache.
+
+# Implementation
+
+## Mapper implementation highlights
+
+In `bedtools_mapper.py`:
+
+- explicit detailed-to-parent feature roll-up map (`_DETAILED_TO_PARENT`),
+- normalization path (`_normalize_feature_type`) preserving explicit features when configured,
+- exclusive (gene, DMP) hit assignment for feature-level counting,
+- combined p/q and weighted effect metrics,
+- canonical `gene_importance` assignment from `gene_effect_compound`,
+- curated output column pruning in `_prune_gene_output_columns`.
+
+## Validation configuration and model-bundle implementation
+
+In `methyl_validation/config.py`:
+
+- strict Pydantic models for MC + backend profiles,
+- `DEFAULT_MAPPER_GENE_COLUMNS` and configurable `mapper_gene_columns`.
+
+In `methyl_validation/model_bundle.py`:
+
+- `build_mapper_annotation_cache` composes per-locus mapper annotation rows,
+- optional join of configured per-gene mapper columns,
+- HDF5 writing/reading in bundle schema v2 with core and passthrough columns.
+
+## Enricher strict-contract behavior
+
+`methyl_enricher/enricher.py` enforces mapper contract fields and canonical score usage:
+
+- required columns include `gene_name`, `gene_importance`, `mean_effect_size`, `unique_dmps`,
+- strict filter checks fail with explicit `ValueError` when required columns are absent.
+
+Compatibility bridge implemented for legacy filter knob:
+
+- if `min_dmp_count` requested and `dmp_count` missing,
+- fallback applies threshold to `unique_dmps` with warning.
+
+## Progression robustness behavior
+
+`progression.py` and `gene_set_coverage.py` now support per-stage graceful degradation:
+
+- malformed/missing stage inputs are logged and skipped in stage loops,
+- global pipeline can continue in non-strict mode,
+- strict mode still fails fast when required by caller.
+
+## GPU and fallback implementation
+
+`methyl_utils/gpu_detection.py` centralizes GPU capability checks and state.
+
+`methyl_utils/statistical_tests.py` includes guarded GPU execution with CPU fallback in critical statistics paths (e.g., Storey q-values and Beta MOM estimation) so transient CUDA runtime issues do not crash full runs.
+
+## `gene_importance` contract across the pipeline
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=0.85cm and 0.7cm,
+  box/.style={draw, rounded corners=3pt, align=center, font=\footnotesize, minimum height=0.75cm, text width=3.1cm},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box, fill=green!10] (mapper) {Mapper\\gene\_effect\_compound\\$\Rightarrow$ gene\_importance};
+\node[box, fill=orange!12, right=1.5cm of mapper] (enricher) {Enricher\\weights/ranking on\\gene\_importance};
+\node[box, fill=orange!12, right=1.5cm of enricher] (progression) {Progression\\stage scores from\\gene\_importance};
+\node[box, fill=blue!8, below=1.1cm of enricher] (bundle) {Model bundle\\optional mapper columns\\include gene importance family};
+
+\draw[arr] (mapper) -- (enricher);
+\draw[arr] (enricher) -- (progression);
+\draw[arr] (mapper) -- (bundle);
+\draw[arr] (enricher) -- (bundle);
+\end{tikzpicture}
+\caption{Canonical gene\_importance contract from mapper to downstream components.}
+\end{figure}
+```
+:::
+
+# Usage
+
+## Environment and installation
+
+Preferred host setup from repo root:
+
+```bash
+cd /home/ubuntu/MethylPipeline
+bash scripts/setup_host.sh --system-deps --gpu
+source .venv/bin/activate
+```
+
+For explicit GPU profile alignment:
+
+```bash
+source .venv/bin/activate
+pip install -r requirements-gpu-cuda12.txt \
+  -c scripts/constraints-cuda12.txt \
+  --extra-index-url https://pypi.nvidia.com
+```
+
+## Project JSON configuration model
+
+Core structure:
+
+- top-level project metadata (`project_name`, `output_base`, `samples_base_path`, chromosome/context scope),
+- cohort hierarchy (`controls`, `diseases`, stage groups),
+- comparison strategy (`control_vs_each_disease`, `all_pairs`, or explicit list),
+- `step_config` blocks:
+  - `centroid`, `detection`, `mapper`, `enricher`, `progression`, `validation`, optional others.
+
+Reference docs:
+
+- `docs/theory/chapters/11-project-configuration.qmd`
+- `docs/theory/chapters/13-configuration-reference.qmd`
+
+## Staged operational workflow
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=0.65cm and 0.6cm,
+  box/.style={draw, rounded corners=3pt, align=center, font=\footnotesize, minimum height=0.75cm, text width=3.0cm},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box, fill=green!10] (install) {Install + activate\\`.venv`};
+\node[box, fill=green!10, right=0.9cm of install] (stability) {`methyl-validation --stability`\\MC + stable DMP panel};
+\node[box, fill=green!10, right=0.9cm of stability] (freeze) {`methyl-validation --freeze`\\production pipeline};
+\node[box, fill=orange!12, below=0.95cm of freeze] (readiness) {readiness gates\\(enricher complete + progression + freeze-readiness)};
+\node[box, fill=blue!8, left=0.9cm of readiness] (model) {`--model` / `--model-mc`\\train/select/evaluate};
+
+\draw[arr] (install) -- (stability);
+\draw[arr] (stability) -- (freeze);
+\draw[arr] (freeze) -- (readiness);
+\draw[arr] (readiness) -- (model);
+\end{tikzpicture}
+\caption{Recommended operational sequence for production-grade runs.}
+\end{figure}
+```
+:::
+
+Typical commands:
+
+```bash
+# 1) Stability
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability
+
+# 2) Freeze
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --freeze
+
+# 3) Model
+methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model
+```
+
+Important behavior:
+
+- `--skip-detection` is supported in `--stability` and `--freeze`,
+- `--skip-detection` implies `--skip-centroid`.
+
+## Freeze phase diagram
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=0.7cm and 0.62cm,
+  box/.style={draw, rounded corners=3pt, align=center, font=\footnotesize, minimum height=0.75cm, text width=2.7cm},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box, fill=green!10] (stable) {stable\\DMP panel CSV};
+\node[box, fill=green!10, right=0.9cm of stable] (prodproj) {production project.json\\with fixed\_dmp\_panel};
+\node[box, fill=green!10, right=0.9cm of prodproj] (run) {centroid -> detector\\(fixed) -> mapper -> enricher};
+\node[box, fill=orange!12, below=0.95cm of run] (prog) {optional progression\\if enabled};
+\node[box, fill=blue!8, below=0.95cm of prodproj] (cache) {mapper annotation cache\\for model bundle};
+
+\draw[arr] (stable) -- (prodproj);
+\draw[arr] (prodproj) -- (run);
+\draw[arr] (run) -- (prog);
+\draw[arr] (run) -- (cache);
+\end{tikzpicture}
+\caption{Freeze pipeline mechanics with fixed DMP panel and downstream artifacts.}
+\end{figure}
+```
+:::
+
+# Equations and score decomposition figure
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\begin{figure}[htbp]
+\centering
+\begin{tikzpicture}[
+  node distance=0.78cm and 0.78cm,
+  box/.style={draw, rounded corners=3pt, align=center, font=\footnotesize, minimum height=0.78cm, text width=2.85cm},
+  arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box, fill=blue!8] (delta) {$|\Delta\mu|$\\mean shift magnitude};
+\node[box, fill=blue!8, right=0.95cm of delta] (overlap) {$1-\mathrm{overlap}$\\distribution separation};
+\node[box, fill=blue!8, right=0.95cm of overlap] (rel) {$\exp(-\lambda(\sqrt{\sigma_1}+\sqrt{\sigma_2}))$\\variance reliability};
+\node[box, fill=green!10, below=1.0cm of overlap, text width=5.4cm] (effect) {$\mathrm{effect\_size}=|\Delta\mu|(1-\mathrm{overlap})\exp(-\lambda(\sqrt{\sigma_1}+\sqrt{\sigma_2}))$};
+
+\draw[arr] (delta) -- (effect);
+\draw[arr] (overlap) -- (effect);
+\draw[arr] (rel) -- (effect);
+\end{tikzpicture}
+\caption{Canonical effect-size decomposition used for biological ranking.}
+\end{figure}
+```
+:::
+
+# Limitations and operational caveats
+
+1. Monte Carlo stability improves internal robustness, but external cohort validation remains necessary.
+2. Some inferential components are approximations by design (histogram-derived tests, ECDF interpolation grids).
+3. Mapper/enricher/progression stages include heuristic ranking and synthesis layers in addition to strict statistical tests.
+4. Third-party services (e.g., Enrichr, optional network APIs) can affect reproducibility and runtime behavior.
+5. GPU acceleration should be treated as a performance path with fallback safety, not a substitute for explicit environment validation.
+
+# Rendering
+
+From repo root:
+
+```bash
+quarto render docs/MethylPipeline-analysis.qmd --to pdf
+```
+
+Optional HTML rendering:
+
+```bash
+quarto render docs/MethylPipeline-analysis.qmd --to html
+```
+
+This document uses TikZ figures authored as raw LaTeX blocks and rendered in the PDF target via `lualatex`.
+
