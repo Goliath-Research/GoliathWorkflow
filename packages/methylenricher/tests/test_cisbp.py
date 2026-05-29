@@ -121,6 +121,16 @@ def test_prebuilt_gmt_ora_and_merge(tmp_path):
     assert "TF_HIT" in set(merged["Term"])
 
 
+def test_load_gmt_preserves_first_gene_when_description_is_empty(tmp_path):
+    gmt_path = tmp_path / "empty_desc.gmt"
+    gmt_path.write_text(
+        "TF_EMPTY_DESC\t\tGENE_A\tGENE_B\tGENE_C\n",
+        encoding="utf-8",
+    )
+    parsed = gene_sets.load_gmt(gmt_path)
+    assert parsed["TF_EMPTY_DESC"] == ["GENE_A", "GENE_B", "GENE_C"]
+
+
 # --------------------------------------------------------------------------- #
 # Offline promoter-scan GMT build (synthetic bundle + FASTA + GTF)
 # --------------------------------------------------------------------------- #

@@ -44,11 +44,12 @@ def load_gmt(path: Path) -> Dict[str, List[str]]:
     gmt: Dict[str, List[str]] = {}
     with open(path, "r", encoding="utf-8") as fh:
         for line in fh:
-            parts = [p.strip() for p in line.rstrip("\n").split("\t") if p.strip()]
+            # Keep column positions intact (description may be intentionally empty in GMT).
+            parts = [p.strip() for p in line.rstrip("\n").split("\t")]
             if len(parts) < 3:
                 continue
             term = parts[0]
-            genes = parts[2:]
+            genes = [g for g in parts[2:] if g]
             if genes:
                 gmt[term] = genes
     return gmt
