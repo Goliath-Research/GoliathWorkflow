@@ -351,6 +351,118 @@ class BackendProfilesConfig(BaseModel):
     generative_hybrid: GenerativeBackendProfile = Field(default_factory=GenerativeBackendProfile)
 
 
+class ValidationPartitionContract(BaseModel):
+    """Named dataset partitions for lifecycle-stage evidence contracts."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    development_train: List[str] = Field(
+        default_factory=list,
+        description="Sample paths for model development/training partition.",
+    )
+    internal_validation: List[str] = Field(
+        default_factory=list,
+        description="Sample paths for internal model selection/validation partition.",
+    )
+    locked_test: List[str] = Field(
+        default_factory=list,
+        description="Sample paths reserved as locked test (never used for tuning).",
+    )
+    pivotal_validation: List[str] = Field(
+        default_factory=list,
+        description="Sample paths reserved for pivotal/clinical validation.",
+    )
+    post_market_monitoring: List[str] = Field(
+        default_factory=list,
+        description="Optional sample paths used for post-market monitoring analyses.",
+    )
+    independence_keys: List[str] = Field(
+        default_factory=lambda: ["sample_id"],
+        description=(
+            "Metadata keys that must remain independent across partitions when available "
+            "(e.g., sample_id, patient_id, site_id, batch)."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_no_cross_partition_overlap(self) -> "ValidationPartitionContract":
+        role_to_ids: Dict[str, set[str]] = {}
+        for role in (
+            "development_train",
+            "internal_validation",
+            "locked_test",
+            "pivotal_validation",
+            "post_market_monitoring",
+        ):
+            vals = getattr(self, role, []) or []
+            role_to_ids[role] = {str(Path(v).name) for v in vals if str(v).strip()}
+        overlaps: List[str] = []
+        roles = list(role_to_ids.keys())
+        for i in range(len(roles)):
+            for j in range(i + 1, len(roles)):
+                a, b = roles[i], roles[j]
+                inter = sorted(role_to_ids[a] & role_to_ids[b])
+                if inter:
+                    overlaps.append(f"{a}∩{b}={inter[:5]}")
+        if overlaps:
+            raise ValueError(
+                "validation_partitions contain overlapping sample IDs across named partitions: "
+                + "; ".join(overlaps)
+            )
+        return self
+
+
+class RegulatoryLifecycleConfig(BaseModel):
+    """Explicit product-lifecycle framing and claim boundary metadata."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    stage: str = Field(
+        default="feasibility",
+        description="Current product lifecycle stage for evidence framing.",
+    )
+    intended_use_summary: Optional[str] = Field(
+        default=None,
+        description="Short intended-use statement for reports.",
+    )
+    target_population: Optional[str] = Field(default=None)
+    sample_type: Optional[str] = Field(default=None)
+    reference_standard: Optional[str] = Field(default=None)
+    claim_boundary: Optional[str] = Field(
+        default=None,
+        description=(
+            "Explicit statement of allowed claims at this stage "
+            "(e.g. feasibility-only, no final clinical claims)."
+        ),
+    )
+    allow_clinical_performance_claims: bool = Field(
+        default=False,
+        description="Whether FDA-facing clinical performance claims are allowed at this stage.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_stage_claim_alignment(self) -> "RegulatoryLifecycleConfig":
+        allowed_stages = {
+            "feasibility",
+            "expanded_development",
+            "internal_validation",
+            "model_freeze",
+            "pivotal_validation",
+            "fda_submission",
+            "post_market",
+        }
+        stage = str(self.stage).strip().lower()
+        if stage not in allowed_stages:
+            raise ValueError(f"regulatory.stage must be one of {sorted(allowed_stages)}")
+        self.stage = stage
+        if stage in {"feasibility", "expanded_development", "internal_validation", "model_freeze"}:
+            if self.allow_clinical_performance_claims:
+                raise ValueError(
+                    "allow_clinical_performance_claims=true is not allowed before pivotal_validation stage."
+                )
+        return self
+
+
 class MonteCarloConfig(BaseModel):
     """Configuration for the Monte Carlo validation runner (binary K=2 or multiclass K>=2)."""
 
@@ -386,6 +498,33 @@ class MonteCarloConfig(BaseModel):
     seed: Optional[int] = Field(
         default=None,
         description="Optional RNG seed for reproducibility.",
+    )
+    regulatory: RegulatoryLifecycleConfig = Field(
+        default_factory=RegulatoryLifecycleConfig,
+        description="Lifecycle-stage framing and claim-boundary metadata for FDA-oriented reporting.",
+    )
+    validation_partitions: Optional[ValidationPartitionContract] = Field(
+        default=None,
+        description="Optional named partition contract (development/internal/locked/pivotal/post-market).",
+    )
+    subgroup_columns: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Optional metadata columns for subgroup reporting in clinical performance reports "
+            "(e.g., sex, age_bin, site_id, race_ethnicity)."
+        ),
+    )
+    min_sensitivity_lcb: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional minimum lower confidence bound acceptance criterion for sensitivity.",
+    )
+    min_specificity_lcb: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Optional minimum lower confidence bound acceptance criterion for specificity.",
     )
     base_project: str = Field(
         ...,
@@ -1333,6 +1472,21 @@ class MonteCarloConfig(BaseModel):
                     "stability_convergence_window must be smaller than stability_min_iterations when stability_early_stop_enabled=true."
                 )
         return self
+
+    @field_validator("subgroup_columns")
+    @classmethod
+    def _normalize_subgroup_columns(cls, value: List[str]) -> List[str]:
+        out: List[str] = []
+        seen: set[str] = set()
+        for raw in value:
+            token = str(raw).strip()
+            if not token:
+                continue
+            if token in seen:
+                continue
+            seen.add(token)
+            out.append(token)
+        return out
 
     @property
     def n_cohorts(self) -> int:

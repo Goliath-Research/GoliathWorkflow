@@ -37,6 +37,53 @@ def _estimate_eta(completed_step_seconds: List[float], remaining_steps: int) -> 
     return _format_duration(avg * remaining_steps)
 
 
+def _load_validation_metrics_from_output_dir(output_dir: Path) -> Optional[Dict[str, Any]]:
+    """
+    Load backend validation metrics from common output filenames.
+    """
+    candidates = (
+        output_dir / "validation_metrics.json",
+        output_dir / "metrics.json",
+        output_dir / "training_metrics.json",
+    )
+    for p in candidates:
+        if not p.is_file():
+            continue
+        try:
+            with open(p, encoding="utf-8") as f:
+                obj = json.load(f)
+            if isinstance(obj, dict) and obj:
+                return obj
+        except Exception:
+            continue
+    return None
+
+
+def _emit_clinical_performance_report(
+    *,
+    predictor_output_dir: Path,
+    config: Optional["MonteCarloConfig"],
+    source: str,
+) -> None:
+    if config is None:
+        return
+    metrics = _load_validation_metrics_from_output_dir(predictor_output_dir)
+    if not metrics:
+        return
+    try:
+        from .clinical_performance import write_clinical_performance_report
+
+        write_clinical_performance_report(
+            output_dir=predictor_output_dir,
+            metrics=metrics,
+            config=config,
+            source=source,
+        )
+    except Exception:
+        # Reporting should never break evaluation.
+        return
+
+
 def _find_cmd(name: str) -> Optional[str]:
     """Return path to CLI command if available."""
     return shutil.which(name)
@@ -677,6 +724,11 @@ def run_post_model_validation_binary(
             return False, errors, step_timings
     if logs_dir is not None:
         write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+    _emit_clinical_performance_report(
+        predictor_output_dir=predictor_output_dir,
+        config=config,
+        source="post_model_validation_binary",
+    )
     return True, [], step_timings
 
 
@@ -790,6 +842,11 @@ def run_post_model_validation_multiclass(
             return False, errors, step_timings
     if logs_dir is not None:
         write_step_timings_csv(step_timings, logs_dir.parent / "step_timings.csv")
+    _emit_clinical_performance_report(
+        predictor_output_dir=predictor_output_dir,
+        config=config,
+        source="post_model_validation_multiclass",
+    )
     return True, [], step_timings
 
 

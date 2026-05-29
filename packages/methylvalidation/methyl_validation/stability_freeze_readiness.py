@@ -283,6 +283,73 @@ def _load_enricher_completeness(production_dir: Path) -> Dict[str, Any]:
     }
 
 
+def _extract_regulatory_context(production_project: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extract lifecycle-stage and claim-boundary metadata from step_config.validation.
+    """
+    vcfg = ((production_project.get("step_config") or {}).get("validation")) or {}
+    reg = (vcfg.get("regulatory") or {}) if isinstance(vcfg, dict) else {}
+    stage = str(reg.get("stage") or "feasibility").strip().lower()
+    allowed = bool(reg.get("allow_clinical_performance_claims", False))
+    boundary = str(reg.get("claim_boundary") or "").strip()
+    if not boundary:
+        if stage in {"pivotal_validation", "fda_submission", "post_market"}:
+            boundary = (
+                "Clinical-performance claims may be considered only for pre-specified endpoints "
+                "with independent validation and confidence intervals."
+            )
+        else:
+            boundary = (
+                "Feasibility/development evidence only; not intended to support final clinical "
+                "performance claims."
+            )
+    return {
+        "stage": stage,
+        "allow_clinical_performance_claims": allowed,
+        "claim_boundary": boundary,
+        "intended_use_summary": reg.get("intended_use_summary"),
+        "target_population": reg.get("target_population"),
+        "sample_type": reg.get("sample_type"),
+        "reference_standard": reg.get("reference_standard"),
+        "raw": reg if isinstance(reg, dict) else {},
+    }
+
+
+def _extract_partition_contract(production_project: Dict[str, Any]) -> Dict[str, Any]:
+    vcfg = ((production_project.get("step_config") or {}).get("validation")) or {}
+    parts = (vcfg.get("validation_partitions") or {}) if isinstance(vcfg, dict) else {}
+    if not isinstance(parts, dict):
+        parts = {}
+    role_names = [
+        "development_train",
+        "internal_validation",
+        "locked_test",
+        "pivotal_validation",
+        "post_market_monitoring",
+    ]
+    role_counts: Dict[str, int] = {}
+    present: List[str] = []
+    missing: List[str] = []
+    for role in role_names:
+        vals = parts.get(role) or []
+        if not isinstance(vals, list):
+            vals = []
+        n = len([v for v in vals if str(v).strip()])
+        role_counts[role] = n
+        if n > 0:
+            present.append(role)
+        else:
+            missing.append(role)
+    return {
+        "configured": bool(parts),
+        "role_counts": role_counts,
+        "roles_present": present,
+        "roles_missing": missing,
+        "independence_keys": parts.get("independence_keys") or [],
+        "raw": parts,
+    }
+
+
 def analyze_project_root(
     project_root: Path,
     *,
@@ -378,10 +445,14 @@ def analyze_project_root(
         disease_context = disease_context.strip() or None
     else:
         disease_context = None
+    regulatory_context = _extract_regulatory_context(production_project)
+    partition_contract = _extract_partition_contract(production_project)
 
     report: Dict[str, Any] = {
         "project_root": str(root),
         "disease_context": disease_context,
+        "regulatory": regulatory_context,
+        "validation_partitions": partition_contract,
         "paths": {
             "stability_summary": str(stability_summary_path),
             "production_summary": str(production_summary_path),
@@ -453,6 +524,8 @@ def _compute_verdict(
     prog = report["progression"]
     enr = report.get("enricher") or {}
     balance = report["panel_balance"]
+    reg = report.get("regulatory") or {}
+    parts = report.get("validation_partitions") or {}
 
     enricher_status = "unknown"
     if not enr.get("manifest_present") and not enr.get("comparisons"):
@@ -560,6 +633,36 @@ def _compute_verdict(
         warnings.append(
             f"Chromosome imbalance: one chromosome holds ~{balance['max_chrom_share']*100:.1f}% of stable panel."
         )
+
+    stage = str(reg.get("stage") or "feasibility").strip().lower()
+    allow_claims = bool(reg.get("allow_clinical_performance_claims", False))
+    if stage in {"feasibility", "expanded_development", "internal_validation", "model_freeze"}:
+        if allow_claims:
+            reasons.append(
+                f"Regulatory mismatch: stage={stage!r} cannot allow final clinical performance claims."
+            )
+    if stage in {"pivotal_validation", "fda_submission"}:
+        if not (reg.get("reference_standard") or ""):
+            warnings.append(
+                "Pivotal/submission stage configured without reference_standard in step_config.validation.regulatory."
+            )
+        if not (reg.get("target_population") or ""):
+            warnings.append(
+                "Pivotal/submission stage configured without target_population in step_config.validation.regulatory."
+            )
+        if not parts.get("configured"):
+            warnings.append(
+                "Pivotal/submission stage configured without validation_partitions contract."
+            )
+        else:
+            missing = set(parts.get("roles_missing") or [])
+            needed = {"locked_test", "pivotal_validation"}
+            missing_needed = sorted(needed & missing)
+            if missing_needed:
+                reasons.append(
+                    "Pivotal/submission stage missing required partition roles: "
+                    + ", ".join(missing_needed)
+                )
 
     # Overall
     if stab_status == "fail" or freeze_status == "fail" or enricher_status == "fail":
@@ -785,6 +888,37 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             f"- **Stability**: {v.get('stability')}",
             f"- **Freeze**: {v.get('freeze')}",
             f"- **Progression**: {v.get('progression')}",
+            "",
+        ]
+    )
+    reg = src.get("regulatory") or {}
+    lines.extend(
+        [
+            "## Lifecycle framing",
+            "",
+            f"- **Lifecycle stage**: `{reg.get('stage', 'feasibility')}`",
+            f"- **Clinical performance claims allowed**: `{bool(reg.get('allow_clinical_performance_claims', False))}`",
+            f"- **Claim boundary**: {reg.get('claim_boundary', '')}",
+        ]
+    )
+    if reg.get("intended_use_summary"):
+        lines.append(f"- **Intended use summary**: {reg.get('intended_use_summary')}")
+    if reg.get("target_population"):
+        lines.append(f"- **Target population**: {reg.get('target_population')}")
+    if reg.get("sample_type"):
+        lines.append(f"- **Sample type**: {reg.get('sample_type')}")
+    if reg.get("reference_standard"):
+        lines.append(f"- **Reference standard**: {reg.get('reference_standard')}")
+    lines.append("")
+    vp = src.get("validation_partitions") or {}
+    lines.extend(
+        [
+            "## Validation partition contract",
+            "",
+            f"- **Configured**: `{bool(vp.get('configured', False))}`",
+            f"- **Roles present**: {vp.get('roles_present', [])}",
+            f"- **Roles missing**: {vp.get('roles_missing', [])}",
+            f"- **Independence keys**: {vp.get('independence_keys', [])}",
             "",
         ]
     )

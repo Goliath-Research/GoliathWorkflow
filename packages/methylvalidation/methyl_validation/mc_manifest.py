@@ -32,6 +32,23 @@ def write_baseline_manifest(
     cohort_paths_list: List[Tuple[str, List[str]]],
     split_reuse_source_root: Optional[Path] = None,
 ) -> Path:
+    reg = getattr(config, "regulatory", None)
+    vp = getattr(config, "validation_partitions", None)
+    roles_present = []
+    roles_missing = []
+    if vp is not None:
+        for role in (
+            "development_train",
+            "internal_validation",
+            "locked_test",
+            "pivotal_validation",
+            "post_market_monitoring",
+        ):
+            vals = list(getattr(vp, role, []) or [])
+            if vals:
+                roles_present.append(role)
+            else:
+                roles_missing.append(role)
     payload: Dict[str, Any] = {
         "manifest_version": "probabilistic_v2_baseline_v1",
         "mode": str(mode),
@@ -52,6 +69,23 @@ def write_baseline_manifest(
             for label, paths in cohort_paths_list
         ],
         "metrics_schema": metrics_schema_descriptor(),
+        "regulatory": {
+            "stage": getattr(reg, "stage", "feasibility"),
+            "allow_clinical_performance_claims": bool(
+                getattr(reg, "allow_clinical_performance_claims", False)
+            ),
+            "claim_boundary": getattr(reg, "claim_boundary", None),
+            "intended_use_summary": getattr(reg, "intended_use_summary", None),
+            "target_population": getattr(reg, "target_population", None),
+            "sample_type": getattr(reg, "sample_type", None),
+            "reference_standard": getattr(reg, "reference_standard", None),
+        },
+        "validation_partitions": {
+            "configured": vp is not None,
+            "roles_present": roles_present,
+            "roles_missing": roles_missing,
+            "independence_keys": list(getattr(vp, "independence_keys", []) or []),
+        },
     }
     if split_reuse_source_root is not None:
         payload["split_reuse"] = {

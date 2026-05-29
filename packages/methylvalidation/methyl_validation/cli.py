@@ -2076,6 +2076,32 @@ def main() -> None:
             selection_path = production_dir / "selected_backend.json"
             with open(selection_path, "w", encoding="utf-8") as f:
                 json.dump(selection_payload, f, indent=2)
+            try:
+                from .locked_model_spec import write_locked_model_spec
+
+                write_locked_model_spec(
+                    production_dir=production_dir,
+                    source_event="select_best_model",
+                    config=config.with_backend_selection(best_backend),
+                    extra={"selection_path": str(selection_path)},
+                )
+            except Exception as e:
+                print(f"Warning: could not write locked_model_spec: {e}", file=sys.stderr)
+            try:
+                from .regulatory_artifacts import write_pccp_draft, write_post_market_monitoring_scaffold
+
+                write_pccp_draft(
+                    production_dir=production_dir,
+                    config=config.with_backend_selection(best_backend),
+                    source_event="select_best_model",
+                )
+                write_post_market_monitoring_scaffold(
+                    production_dir=production_dir,
+                    config=config.with_backend_selection(best_backend),
+                    source_event="select_best_model",
+                )
+            except Exception as e:
+                print(f"Warning: could not write regulatory scaffold artifacts: {e}", file=sys.stderr)
             print(f"Wrote backend selection: {selection_path}")
             print(f"Production model build complete. See: {summary.get('output_dir', 'unknown')}")
             print("Done.")

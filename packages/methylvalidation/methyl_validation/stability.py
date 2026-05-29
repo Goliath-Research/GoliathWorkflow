@@ -1703,6 +1703,33 @@ def freeze_production_model(
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, default=str)
 
+    try:
+        from .locked_model_spec import write_locked_model_spec
+
+        write_locked_model_spec(
+            production_dir=prod_dir,
+            source_event="freeze",
+            config=config,
+            extra={"production_summary_path": str(summary_path)},
+        )
+    except Exception as e:
+        logger.warning("Could not write locked_model_spec after freeze: %s", e)
+    try:
+        from .regulatory_artifacts import write_pccp_draft, write_post_market_monitoring_scaffold
+
+        write_pccp_draft(
+            production_dir=prod_dir,
+            config=config,
+            source_event="freeze",
+        )
+        write_post_market_monitoring_scaffold(
+            production_dir=prod_dir,
+            config=config,
+            source_event="freeze",
+        )
+    except Exception as e:
+        logger.warning("Could not write regulatory scaffold artifacts after freeze: %s", e)
+
     logger.info(f"Production freeze complete: {summary_path}")
     return summary
 
