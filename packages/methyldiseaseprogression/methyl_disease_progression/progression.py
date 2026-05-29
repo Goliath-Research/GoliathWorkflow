@@ -136,7 +136,7 @@ def resolve_stage_specs(
         if isinstance(cfg_order, list):
             ordered_labels = [str(x) for x in cfg_order]
             ordering_strategy = "explicit_config"
-    ordering_mode = str(progression_cfg.get("ordering_mode") or "auto_gleason").strip().lower()
+    ordering_mode = str(progression_cfg.get("ordering_mode") or "").strip().lower()
     if not ordered_labels and ordering_mode == "auto_gleason":
         selected = sorted(comparisons, key=_comparison_order_key_auto_gleason)
         ordering_strategy = "auto_gleason"
@@ -615,11 +615,13 @@ def aggregate_stage_tables(
     gene_score_meta_by_stage: Dict[str, Any] = {}
 
     for spec in stage_specs:
+        gene_row_error = False
         try:
             g, g_meta = _build_gene_rows(spec, gene_score_mode=gene_score_mode)
         except Exception as exc:
             if strict_missing:
                 raise
+            gene_row_error = True
             g = pd.DataFrame()
             g_meta = {
                 "requested_mode": _resolve_gene_score_mode(gene_score_mode),
@@ -631,7 +633,7 @@ def aggregate_stage_tables(
         m = _build_module_rows(spec)
         mv = _build_module_variant_rows(spec)
         gene_score_meta_by_stage[spec.comparison_label] = g_meta
-        if g.empty:
+        if g.empty and not gene_row_error:
             missing.append(f"{spec.comparison_label}: mapper missing or no gene columns ({spec.mapper_combined_csv})")
         if p.empty:
             missing.append(f"{spec.comparison_label}: pathway table missing or invalid ({spec.pathway_csv})")
