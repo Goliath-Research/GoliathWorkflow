@@ -31,6 +31,8 @@ FROZEN_GENE_PANEL_NAME = "frozen_genes_production.csv"
 FROZEN_GENE_FEATURES_NAME = "frozen_gene_features.csv"
 DEFAULT_MAPPER_GENE_COLUMNS: List[str] = [
     "gene_importance",
+    "gene_effect_signed_wsum",
+    "gene_direction",
     "gene_effect_abs_wsum",
     "gene_support_n",
     "gene_score",

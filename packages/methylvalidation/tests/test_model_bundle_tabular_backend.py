@@ -190,6 +190,8 @@ def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_pat
         {
             "gene_name": ["GENE_A"],
             "gene_importance": [3.2],
+            "gene_effect_signed_wsum": [2.3],
+            "gene_direction": [1.0],
             "gene_effect_abs_wsum": [4.7],
             "gene_support_n": [3],
             "gene_score": [9.5],
@@ -212,6 +214,8 @@ def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_pat
 
     out_df = pd.read_csv(out_csv)
     assert "gene_importance" in out_df.columns
+    assert "gene_effect_signed_wsum" in out_df.columns
+    assert "gene_direction" in out_df.columns
     assert "gene_effect_abs_wsum" in out_df.columns
     assert "gene_support_n" in out_df.columns
     assert "gene_score" in out_df.columns
@@ -219,6 +223,8 @@ def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_pat
     assert "gene_effect_compound" in out_df.columns
     assert "gene_feature_effect_compound" in out_df.columns
     assert float(out_df.iloc[0]["gene_importance"]) == pytest.approx(3.2)
+    assert float(out_df.iloc[0]["gene_effect_signed_wsum"]) == pytest.approx(2.3)
+    assert float(out_df.iloc[0]["gene_direction"]) == pytest.approx(1.0)
     assert float(out_df.iloc[0]["gene_effect_abs_wsum"]) == pytest.approx(4.7)
     assert float(out_df.iloc[0]["gene_support_n"]) == pytest.approx(3.0)
     assert float(out_df.iloc[0]["gene_score"]) == pytest.approx(9.5)
@@ -227,6 +233,8 @@ def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_pat
     assert float(out_df.iloc[0]["gene_feature_effect_compound"]) == pytest.approx(1.2)
     assert cache_info["mapper_gene_columns_requested"] == [
         "gene_importance",
+        "gene_effect_signed_wsum",
+        "gene_direction",
         "gene_effect_abs_wsum",
         "gene_support_n",
         "gene_score",
@@ -236,6 +244,8 @@ def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_pat
     ]
     assert cache_info["mapper_gene_columns_effective"] == [
         "gene_importance",
+        "gene_effect_signed_wsum",
+        "gene_direction",
         "gene_effect_abs_wsum",
         "gene_support_n",
         "gene_score",

@@ -1355,6 +1355,8 @@ class BedtoolsMapper:
         sum_weight = pd.to_numeric(gene_metrics["_sum_weight"], errors="coerce").fillna(0.0)
         sum_abs = pd.to_numeric(gene_metrics["_sum_abs_term"], errors="coerce").fillna(0.0)
         sum_signed = pd.to_numeric(gene_metrics["_sum_signed_term"], errors="coerce").fillna(0.0)
+        gene_metrics["gene_effect_signed_wsum"] = sum_signed
+        gene_metrics["gene_direction"] = np.sign(sum_signed)
         gene_metrics["gene_effect_abs_wmean"] = np.where(sum_weight > 0.0, sum_abs / sum_weight, 0.0)
         gene_metrics["gene_direction_coherence"] = np.where(sum_abs > 0.0, np.abs(sum_signed) / sum_abs, 0.0)
         gene_metrics["gene_support_freq"] = pd.to_numeric(gene_metrics["gene_support_freq"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
@@ -1387,6 +1389,8 @@ class BedtoolsMapper:
                 f_sum_abs = pd.to_numeric(fgrp["_sum_abs_term"], errors="coerce").fillna(0.0)
                 f_sum_signed = pd.to_numeric(fgrp["_sum_signed_term"], errors="coerce").fillna(0.0)
                 f_support = pd.to_numeric(fgrp["_support_freq"], errors="coerce").fillna(0.0).clip(lower=0.0, upper=1.0)
+                fgrp["feature_effect_signed_wsum"] = f_sum_signed
+                fgrp["feature_direction"] = np.sign(f_sum_signed)
                 fgrp["feature_effect_abs_wmean"] = np.where(f_sum_weight > 0.0, f_sum_abs / f_sum_weight, 0.0)
                 fgrp["feature_direction_coherence"] = np.where(f_sum_abs > 0.0, np.abs(f_sum_signed) / f_sum_abs, 0.0)
                 fgrp["feature_effect_compound"] = (
@@ -1394,16 +1398,31 @@ class BedtoolsMapper:
                     * fgrp["feature_direction_coherence"]
                     * np.sqrt(f_support)
                 )
-                pivot = fgrp.pivot(
-                    index=group_by,
-                    columns="feature_norm",
-                    values="feature_effect_compound",
-                ).reset_index()
-                pivot.columns = [
-                    c if c == group_by else f"feature_effect_compound_{c}"
-                    for c in pivot.columns
-                ]
-                feature_metrics = pivot
+                fgrp["feature_importance"] = (
+                    f_sum_abs
+                    * fgrp["feature_direction_coherence"]
+                    * np.sqrt(f_support)
+                )
+                pivot_frames: List[pd.DataFrame] = []
+                for src_col, out_prefix in (
+                    ("feature_effect_compound", "feature_effect_compound"),
+                    ("feature_importance", "feature_importance"),
+                    ("feature_direction", "feature_direction"),
+                    ("feature_effect_signed_wsum", "feature_effect_signed_wsum"),
+                ):
+                    pivot = fgrp.pivot(
+                        index=group_by,
+                        columns="feature_norm",
+                        values=src_col,
+                    ).reset_index()
+                    pivot.columns = [
+                        c if c == group_by else f"{out_prefix}_{c}"
+                        for c in pivot.columns
+                    ]
+                    pivot_frames.append(pivot)
+                feature_metrics = pivot_frames[0]
+                for frame in pivot_frames[1:]:
+                    feature_metrics = feature_metrics.merge(frame, on=group_by, how="outer")
 
         return gene_metrics, feature_metrics
 
@@ -1415,7 +1434,9 @@ class BedtoolsMapper:
             "unique_dmps",
             "mean_effect_size",
             "gene_effect_size",
+            "gene_direction",
             "gene_score",
+            "gene_effect_signed_wsum",
             "effect_size_promoter",
             "effect_size_exon",
             "effect_size_intron",
@@ -1439,6 +1460,21 @@ class BedtoolsMapper:
             "feature_effect_compound_intron",
             "feature_effect_compound_gene_body",
             "feature_effect_compound_terminator",
+            "feature_importance_promoter",
+            "feature_importance_exon",
+            "feature_importance_intron",
+            "feature_importance_gene_body",
+            "feature_importance_terminator",
+            "feature_direction_promoter",
+            "feature_direction_exon",
+            "feature_direction_intron",
+            "feature_direction_gene_body",
+            "feature_direction_terminator",
+            "feature_effect_signed_wsum_promoter",
+            "feature_effect_signed_wsum_exon",
+            "feature_effect_signed_wsum_intron",
+            "feature_effect_signed_wsum_gene_body",
+            "feature_effect_signed_wsum_terminator",
             "gene_feature_effect_compound",
             "gene_feature_score",
             "hits_promoter",
@@ -1830,6 +1866,12 @@ class BedtoolsMapper:
         )
         if not gene_compound_df.empty:
             grouped = grouped.merge(gene_compound_df, on=group_by, how="left")
+            if "gene_direction_x" in grouped.columns or "gene_direction_y" in grouped.columns:
+                grouped["gene_direction"] = pd.to_numeric(
+                    grouped.get("gene_direction_y", grouped.get("gene_direction_x")),
+                    errors="coerce",
+                )
+                grouped = grouped.drop(columns=["gene_direction_x", "gene_direction_y"], errors="ignore")
         if not feature_compound_df.empty:
             grouped = grouped.merge(feature_compound_df, on=group_by, how="left")
         for feature in self._FEATURE_SCORE_ORDER:
@@ -1846,8 +1888,10 @@ class BedtoolsMapper:
         )
         for col in (
             "gene_effect_size",
+            "gene_direction",
             "gene_effect_abs_wmean",
             "gene_effect_abs_wsum",
+            "gene_effect_signed_wsum",
             "gene_direction_coherence",
             "gene_support_freq",
             "gene_effect_compound",
@@ -1856,6 +1900,15 @@ class BedtoolsMapper:
             if col not in grouped.columns:
                 grouped[col] = 0.0
             grouped[col] = pd.to_numeric(grouped[col], errors="coerce").fillna(0.0)
+        for feature in self._FEATURE_SCORE_ORDER:
+            for col in (
+                f"feature_importance_{feature}",
+                f"feature_direction_{feature}",
+                f"feature_effect_signed_wsum_{feature}",
+            ):
+                if col not in grouped.columns:
+                    grouped[col] = 0.0
+                grouped[col] = pd.to_numeric(grouped[col], errors="coerce").fillna(0.0)
         if "gene_support_n" not in grouped.columns:
             grouped["gene_support_n"] = 0
         grouped["gene_support_n"] = pd.to_numeric(grouped["gene_support_n"], errors="coerce").fillna(0).astype(int)

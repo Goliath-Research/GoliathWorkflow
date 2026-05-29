@@ -16,5 +16,13 @@ The public entry point is :func:`run_cisbp`, invoked by
 
 from .runner import run_cisbp, CisbpContext
 from .registry import available_modes, get_mode_handler
+from .context import effective_cisbp_config, resolve_cisbp_context
 
-__all__ = ["run_cisbp", "CisbpContext", "available_modes", "get_mode_handler"]
+__all__ = [
+    "run_cisbp",
+    "CisbpContext",
+    "available_modes",
+    "get_mode_handler",
+    "effective_cisbp_config",
+    "resolve_cisbp_context",
+]

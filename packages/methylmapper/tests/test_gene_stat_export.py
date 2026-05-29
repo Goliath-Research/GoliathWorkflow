@@ -86,9 +86,17 @@ def test_aggregate_by_feature_exports_feature_effect_sizes_and_weighted_gene_imp
     assert row_g1["gene_effect_abs_wmean"] == pytest.approx(0.37)
     assert row_g1["gene_direction_coherence"] == pytest.approx(1.25 / 1.85)
     assert row_g1["gene_effect_compound"] == pytest.approx(0.25)
+    assert row_g1["gene_effect_signed_wsum"] == pytest.approx(1.25)
+    assert row_g1["gene_direction"] == pytest.approx(1.0)
     assert row_g1["gene_importance"] == pytest.approx(
         row_g1["gene_effect_abs_wsum"] * row_g1["gene_direction_coherence"] * (row_g1["gene_support_freq"] ** 0.5)
     )
+    assert row_g1["feature_direction_promoter"] == pytest.approx(1.0)
+    assert row_g1["feature_direction_exon"] == pytest.approx(1.0)
+    assert row_g1["feature_effect_signed_wsum_promoter"] == pytest.approx(0.8)
+    assert row_g1["feature_effect_signed_wsum_exon"] == pytest.approx(0.45)
+    assert row_g1["feature_importance_promoter"] == pytest.approx(0.8)
+    assert row_g1["feature_importance_exon"] == pytest.approx(0.45)
 
 
 def test_aggregate_by_feature_uses_exclusive_feature_priority_for_hits_and_score():
@@ -197,7 +205,10 @@ def test_aggregate_by_feature_gene_importance_scales_with_unique_dmp_support():
     assert row_many["gene_support_n"] == 3
     assert row_one["gene_support_n"] == 1
     assert row_many["gene_effect_abs_wsum"] > row_one["gene_effect_abs_wsum"]
+    assert row_many["gene_effect_signed_wsum"] > row_one["gene_effect_signed_wsum"]
     assert row_many["gene_importance"] > row_one["gene_importance"]
+    assert row_many["gene_direction"] == pytest.approx(1.0)
+    assert row_one["gene_direction"] == pytest.approx(1.0)
 
 
 def test_aggregate_by_feature_exports_compound_columns():
@@ -228,13 +239,50 @@ def test_aggregate_by_feature_exports_compound_columns():
     row = grouped.iloc[0]
     assert "gene_effect_abs_wmean" in grouped.columns
     assert "gene_effect_abs_wsum" in grouped.columns
+    assert "gene_effect_signed_wsum" in grouped.columns
+    assert "gene_direction" in grouped.columns
     assert "gene_direction_coherence" in grouped.columns
     assert "gene_support_n" in grouped.columns
     assert "gene_support_freq" in grouped.columns
     assert "gene_effect_compound" in grouped.columns
     assert "gene_feature_effect_compound" in grouped.columns
+    assert "feature_importance_promoter" in grouped.columns
+    assert "feature_direction_promoter" in grouped.columns
+    assert "feature_effect_signed_wsum_promoter" in grouped.columns
     assert row["gene_support_n"] == 3
     assert row["gene_effect_compound"] > 0.0
+
+
+def test_aggregate_by_feature_exports_signed_directional_biomarker_columns():
+    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
+    mapper.storey_lambda = None
+
+    intersect_df = pd.DataFrame(
+        {
+            "gene_name": ["G_mixed", "G_mixed", "G_pos"],
+            "dmp_name": ["d1", "d2", "d3"],
+            "feature_type": ["promoter", "promoter", "intron"],
+            "effect_size": [0.5, -0.4, 0.3],
+            "delta_mean": [0.5, -0.4, 0.3],
+            "frequency": [1.0, 1.0, 1.0],
+            "region_weight": [1.0, 1.0, 1.0],
+            "weight": [1.0, 1.0, 1.0],
+        }
+    )
+
+    grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
+    row_mixed = grouped[grouped["gene_name"] == "G_mixed"].iloc[0]
+    row_pos = grouped[grouped["gene_name"] == "G_pos"].iloc[0]
+
+    assert row_mixed["gene_effect_signed_wsum"] == pytest.approx(0.1)
+    assert row_mixed["gene_direction"] == pytest.approx(1.0)
+    assert row_mixed["feature_effect_signed_wsum_promoter"] == pytest.approx(0.1)
+    assert row_mixed["feature_direction_promoter"] == pytest.approx(1.0)
+
+    assert row_pos["gene_effect_signed_wsum"] == pytest.approx(0.3)
+    assert row_pos["gene_direction"] == pytest.approx(1.0)
+    assert row_pos["feature_effect_signed_wsum_intron"] == pytest.approx(0.3)
+    assert row_pos["feature_direction_intron"] == pytest.approx(1.0)
 
 
 def test_aggregate_by_feature_rejects_invalid_stability_frequency_values():

@@ -122,6 +122,8 @@ Recommended components:
 
 - `gene_effect_abs_wmean = sum(w_i * |e_i|) / sum(w_i)`
 - `gene_effect_abs_wsum = sum(w_i * |e_i|)` (burden/size-sensitive)
+- `gene_effect_signed_wsum = sum(w_i * s_i * |e_i|)` (signed burden)
+- `gene_direction = sign(gene_effect_signed_wsum)` (hyper/hypo direction)
 - `gene_direction_coherence = |sum(w_i * s_i * |e_i|)| / sum(w_i * |e_i|)`
 - `gene_support_n = number of unique mapped DMPs`
 - `gene_support_freq = mean(frequency_i)` (or recurrence-derived support from panel)
@@ -149,6 +151,9 @@ Apply the same pattern per parent feature bucket:
 
 - `feature_effect_abs_wmean_<bucket>`
 - `feature_direction_coherence_<bucket>`
+- `feature_effect_signed_wsum_<bucket>`
+- `feature_direction_<bucket>`
+- `feature_importance_<bucket> = sum(w_i * |e_i|)_<bucket> * feature_direction_coherence_<bucket> * sqrt(feature_support_freq_<bucket>)`
 - `feature_effect_compound_<bucket> = feature_effect_abs_wmean_<bucket> * feature_direction_coherence_<bucket> * sqrt(feature_support_freq_<bucket>)`
 
 For whole-gene composition from features, keep a separate weighted composite:
@@ -165,12 +170,17 @@ Use compound-effect columns as canonical outputs for biological-importance ranki
 
 - `gene_effect_abs_wmean`
 - `gene_effect_abs_wsum`
+- `gene_effect_signed_wsum`
+- `gene_direction`
 - `gene_direction_coherence`
 - `gene_support_n`
 - `gene_support_freq`
 - `gene_importance` (primary biological importance; count-aware burden)
 - `gene_effect_compound` (secondary mean-normalized companion)
 - `gene_feature_effect_compound` (feature-composed companion)
+- `feature_importance_<bucket>`
+- `feature_direction_<bucket>`
+- `feature_effect_signed_wsum_<bucket>`
 
 Optional convenience:
 

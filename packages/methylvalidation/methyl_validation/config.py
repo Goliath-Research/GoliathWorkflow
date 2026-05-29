@@ -91,6 +91,8 @@ TabularMethodConfig = Annotated[
 
 DEFAULT_MAPPER_GENE_COLUMNS: List[str] = [
     "gene_importance",
+    "gene_effect_signed_wsum",
+    "gene_direction",
     "gene_effect_abs_wsum",
     "gene_support_n",
     "gene_score",
