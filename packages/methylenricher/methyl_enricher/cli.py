@@ -658,9 +658,17 @@ def _build_cisbp_context(args, cisbp_config, project, project_path):
     if not gtf:
         gtf = os.environ.get("GENE_GTF")
 
-    genome_fasta = getattr(cisbp_config, "genome_fasta", None) or os.environ.get(
-        "CISBP_GENOME_FASTA"
-    ) or os.environ.get("GENOME_FASTA")
+    # Genome FASTA defaults to the project's shared reference in
+    # step_config.alignment_qc.genome_fasta (cisbp.genome_fasta overrides it).
+    genome_fasta = getattr(cisbp_config, "genome_fasta", None)
+    if not genome_fasta and project is not None:
+        try:
+            aqc_cfg = project.get_step_config("alignment_qc") or {}
+            genome_fasta = aqc_cfg.get("genome_fasta")
+        except Exception:
+            genome_fasta = None
+    if not genome_fasta:
+        genome_fasta = os.environ.get("CISBP_GENOME_FASTA") or os.environ.get("GENOME_FASTA")
 
     gene_universe = None
     universe_file = getattr(cisbp_config, "gene_universe_file", None)

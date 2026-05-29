@@ -63,6 +63,9 @@ class CisbpConfig(BaseModel):
     # Gene-set construction (mode="gene_sets").
     gene_set_source: Optional[str] = "promoter_scan"  # promoter_scan | prebuilt_gmt
     gmt_path: Optional[str] = None  # used when gene_set_source="prebuilt_gmt"
+    # genome_fasta/gtf default to the project's shared properties
+    # (step_config.alignment_qc.genome_fasta and step_config.mapper.gtf); set
+    # these only to override the project defaults.
     genome_fasta: Optional[str] = None
     gtf: Optional[str] = None
     promoter_upstream: Optional[int] = 5000

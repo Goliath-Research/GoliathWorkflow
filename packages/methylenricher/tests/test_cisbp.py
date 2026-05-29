@@ -196,6 +196,32 @@ def test_promoter_scan_gmt_build(tmp_path):
     assert gmt2 == gmt
 
 
+def test_context_defaults_genome_fasta_and_gtf_from_project():
+    """genome_fasta defaults from step_config.alignment_qc; gtf from step_config.mapper."""
+    import types
+
+    from methyl_enricher.cli import _build_cisbp_context
+
+    class _FakeProject:
+        def get_step_config(self, name):
+            return {
+                "alignment_qc": {"genome_fasta": "/ref/hg38.fa"},
+                "mapper": {"gtf": "/ref/annotation.gtf"},
+            }.get(name, {})
+
+    args = types.SimpleNamespace(cutoff=0.05)
+    cfg = CisbpConfig(enabled=True, mode="gene_sets")  # no genome_fasta/gtf set
+    ctx = _build_cisbp_context(args, cfg, _FakeProject(), project_path=None)
+    assert ctx.genome_fasta == "/ref/hg38.fa"
+    assert ctx.gtf == "/ref/annotation.gtf"
+
+    # Explicit cisbp values override the project defaults.
+    cfg2 = CisbpConfig(enabled=True, genome_fasta="/custom.fa", gtf="/custom.gtf")
+    ctx2 = _build_cisbp_context(args, cfg2, _FakeProject(), project_path=None)
+    assert ctx2.genome_fasta == "/custom.fa"
+    assert ctx2.gtf == "/custom.gtf"
+
+
 def test_resolve_bundle_local_dir(tmp_path):
     bundle_root = tmp_path / "bundle"
     _make_synthetic_bundle(bundle_root)

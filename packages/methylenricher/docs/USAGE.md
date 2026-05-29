@@ -37,6 +37,76 @@ Library resolution is explicit and stable:
 
 Presets currently include `cancer-core` and `cancer-extended`.
 
+## CIS-BP transcription-factor motifs (optional)
+
+In addition to the Enrichr libraries, MethylEnricher can incorporate
+[CIS-BP](https://cisbp.ccbr.utoronto.ca) transcription-factor motifs. CIS-BP is a
+catalog of TFs and their DNA-binding motifs (PWMs) — it is **not** an Enrichr-style
+gene-set service, so the integration is pluggable via a `mode`:
+
+- `gene_sets` (default, **implemented**): derive TF → target-gene sets and run
+  over-representation analysis (ORA) on your gene list, emitting an
+  `enrich_CIS-BP.csv` that merges alongside the Enrichr libraries (categorized as a
+  `tf` library in the module pipeline).
+- `annotate` (planned): annotate TFs already surfaced by ChEA/ENCODE/TRRUST results
+  with CIS-BP motif metadata.
+- `motif_scan` (planned): scan DMP/DMR region sequences with CIS-BP PWMs for direct
+  motif enrichment.
+
+CIS-BP has no query API, so the per-species archive is **auto-downloaded** from the
+bulk-download endpoint on first use and cached (default cache:
+`step_config.enricher.methyl_enricher_home` or `~/.methyl_enricher`).
+
+For `mode=gene_sets` with the default `gene_set_source=promoter_scan`, TF → target
+sets are built by scanning gene **promoter** sequences with the CIS-BP PWMs, which
+needs a genome FASTA and a GTF. These default to the project's existing shared
+properties, so you do not repeat them in the CIS-BP block:
+
+- `genome_fasta` ← `step_config.alignment_qc.genome_fasta` (the project's reference genome),
+- `gtf` ← `step_config.mapper.gtf` (falling back to the `GENE_GTF` env var).
+
+Set `cisbp.genome_fasta` / `cisbp.gtf` only to override those project defaults. The
+built GMT is cached so subsequent runs are fast. You can also supply a prebuilt GMT
+directly via `gene_set_source=prebuilt_gmt` + `gmt_path`.
+
+Enable via CLI (`--cisbp`, optional `--cisbp-mode`) or, preferably, in the project
+config under `step_config.enricher.cisbp`:
+
+```json
+{
+  "step_config": {
+    "alignment_qc": {
+      "genome_fasta": "/path/to/hg38.fa"
+    },
+    "mapper": {
+      "gtf": "/path/to/annotation.gtf"
+    },
+    "enricher": {
+      "library_preset": "cancer-extended",
+      "cisbp": {
+        "enabled": true,
+        "mode": "gene_sets",
+        "species": "Homo_sapiens",
+        "motif_evidence": ["Direct", "Inferred"],
+        "gene_set_source": "promoter_scan",
+        "promoter_upstream": 5000,
+        "promoter_downstream": 200,
+        "motif_score_threshold": 0.85,
+        "min_targets_per_tf": 5
+      }
+    }
+  }
+}
+```
+
+Quick toggles `cisbp_enabled` / `cisbp_mode` are also accepted as flat keys. A CIS-BP
+failure (network, missing FASTA, a planned mode) is treated as a soft warning and
+never breaks the core Enrichr enrichment.
+
+For statistically cleaner ORA, point `gene_universe_file` at the full set of mapped
+genes (the promoter scan and ORA background are then defined over that universe);
+otherwise the foreground gene list is used with a default background size.
+
 ## Module + network outputs
 
 With `--modules`, MethylEnricher runs enrichment + pathway graph clustering and writes `modules_ranked.csv`.
