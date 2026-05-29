@@ -262,3 +262,137 @@ def test_progression_detailed_matches_similar_noncanonical_entities(tmp_path: Pa
     detailed = pd.read_csv(out_dir / "modules_long_detailed.csv")
     assert detailed["module"].nunique() == 1
     assert detailed["module"].iloc[0].endswith("family_001")
+
+
+def test_progression_gene_score_mode_effect_x_support(tmp_path: Path):
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    root = tmp_path / "out" / "prog"
+    project_data = json.loads(project_path.read_text(encoding="utf-8"))
+    project_data.setdefault("step_config", {}).setdefault("progression", {})["gene_score_mode"] = "effect_x_support"
+    project_path.write_text(json.dumps(project_data, indent=2), encoding="utf-8")
+
+    # Stage pca2: set high gene_importance for G2 but higher effect_x_support for G1.
+    mapper_p2 = root / "mapper" / "all" / "pca_pca2" / "all-gene_name-combined.csv"
+    mapper_p2.write_text(
+        "\n".join(
+            [
+                "gene_name,gene_importance,mean_effect_size,unique_dmps",
+                "G1,0.2,0.9,4",
+                "G2,5.0,0.1,2",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    summary = run_progression_report(project_path=project_path)
+    genes_df = pd.read_csv(summary["genes_long_csv"])
+    p2 = genes_df[genes_df["comparison"] == "pca_pca2"].sort_values("rank")
+    assert p2.iloc[0]["gene"] == "G1"
+    assert summary["gene_score_mode_requested"] == "effect_x_support"
+    assert summary["gene_score_mode_by_stage"]["pca_pca2"]["requested_mode"] == "effect_x_support"
+
+
+def test_progression_auto_gleason_ordering(tmp_path: Path):
+    list_dir = tmp_path / "lists"
+    list_dir.mkdir(parents=True, exist_ok=True)
+    for name in ("healthy.csv", "p1.csv", "p2.csv", "p3.csv"):
+        (list_dir / name).write_text("sample\ns1\n", encoding="utf-8")
+
+    project_path = tmp_path / "project.json"
+    project_path.write_text(
+        json.dumps(
+            {
+                "project_name": "prog_order",
+                "output_base": str((tmp_path / "out").resolve()),
+                "samples_base_path": str(tmp_path.resolve()),
+                "controls": {
+                    "label": "healthy",
+                    "groups": [{"label": "all", "sample_paths": [str((list_dir / "healthy.csv").resolve())]}],
+                },
+                "diseases": {
+                    "label": "cancer",
+                    "groups": [
+                        {
+                            "label": "pca",
+                            "stages": [
+                                {
+                                    "label": "pca3",
+                                    "description": "Gleason Score 4+3",
+                                    "sample_paths": [str((list_dir / "p3.csv").resolve())],
+                                },
+                                {
+                                    "label": "pca1",
+                                    "description": "Gleason Score 3+3",
+                                    "sample_paths": [str((list_dir / "p1.csv").resolve())],
+                                },
+                                {
+                                    "label": "pca2",
+                                    "description": "Gleason Score 3+4",
+                                    "sample_paths": [str((list_dir / "p2.csv").resolve())],
+                                },
+                            ],
+                        }
+                    ],
+                },
+                "comparisons": "control_vs_each_disease",
+                "step_config": {
+                    "enricher": {"combined_csv_name": "all-gene_name-combined.csv"},
+                    "progression": {"ordering_mode": "auto_gleason"},
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    root = tmp_path / "out" / "prog_order"
+    for stage in ("pca_pca1", "pca_pca2", "pca_pca3"):
+        mapper_dir = root / "mapper" / "all" / stage
+        enricher_dir = root / "enricher" / "all" / stage
+        mapper_dir.mkdir(parents=True, exist_ok=True)
+        enricher_dir.mkdir(parents=True, exist_ok=True)
+        (mapper_dir / "all-gene_name-combined.csv").write_text(
+            "gene_name,gene_importance,mean_effect_size,unique_dmps\nGENE_A,1.0,0.5,2\n",
+            encoding="utf-8",
+        )
+        (enricher_dir / "enrichment_merged.csv").write_text(
+            "Term,Adjusted P-value,Combined Score\nPathway One,0.01,3.0\n",
+            encoding="utf-8",
+        )
+        (enricher_dir / "modules_ranked.csv").write_text(
+            f"Module,Score\nModule_{stage},0.5\n",
+            encoding="utf-8",
+        )
+        (enricher_dir / "modules_ranked_detailed.csv").write_text(
+            f"Module,Score\nModule_{stage} (M1),0.5\n",
+            encoding="utf-8",
+        )
+    summary = run_progression_report(project_path=project_path)
+    assert summary["ordering_strategy"] == "auto_gleason"
+    assert summary["ordered_disease_groups"] == ["pca_pca1", "pca_pca2", "pca_pca3"]
+
+
+def test_progression_effect_x_support_fallback_to_gene_importance(tmp_path: Path):
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    root = tmp_path / "out" / "prog"
+    project_data = json.loads(project_path.read_text(encoding="utf-8"))
+    project_data.setdefault("step_config", {}).setdefault("progression", {})["gene_score_mode"] = "effect_x_support"
+    project_path.write_text(json.dumps(project_data, indent=2), encoding="utf-8")
+
+    mapper_p1 = root / "mapper" / "all" / "pca_pca1" / "all-gene_name-combined.csv"
+    mapper_p1.write_text(
+        "\n".join(
+            [
+                "gene_name,gene_importance",
+                "GENE_A,0.3",
+                "GENE_B,0.6",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    summary = run_progression_report(project_path=project_path)
+    stage_meta = summary["gene_score_mode_by_stage"]["pca_pca1"]
+    assert stage_meta["effective_mode"] == "gene_importance_fallback"

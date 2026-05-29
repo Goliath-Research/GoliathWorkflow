@@ -35,6 +35,73 @@ def _pick_existing_path(candidates: Sequence[Path]) -> Optional[Path]:
     return None
 
 
+def _normalized_label_for_ordering(comp: Any) -> str:
+    return str(getattr(comp, "comparison_label", None) or getattr(comp, "disease_group", None) or "").strip()
+
+
+def _comparison_text_fields(comp: Any) -> List[str]:
+    vals: List[str] = []
+    for attr in (
+        "comparison_label",
+        "disease_group",
+        "description",
+        "disease_description",
+        "stage_description",
+    ):
+        raw = getattr(comp, attr, None)
+        if raw is None:
+            continue
+        txt = str(raw).strip()
+        if txt:
+            vals.append(txt)
+    return vals
+
+
+def _parse_gleason_rank(text: str) -> Optional[Tuple[int, int, int]]:
+    pairs = re.findall(r"(\d)\s*\+\s*(\d)", str(text or ""))
+    if not pairs:
+        return None
+    ranks: List[Tuple[int, int, int]] = []
+    for a, b in pairs:
+        pa = int(a)
+        pb = int(b)
+        ranks.append((pa + pb, pa, pb))
+    return min(ranks)
+
+
+def _parse_stage_index_hint(text: str) -> Optional[int]:
+    txt = str(text or "").lower()
+    m = re.search(r"\bpca[_\- ]?(\d+)\b", txt)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"\bstage[_\- ]?(\d+)\b", txt)
+    if m:
+        return int(m.group(1))
+    return None
+
+
+def _comparison_order_key_auto_gleason(comp: Any) -> Tuple[Any, ...]:
+    texts = _comparison_text_fields(comp)
+    gleason_rank: Optional[Tuple[int, int, int]] = None
+    stage_hint: Optional[int] = None
+    for txt in texts:
+        if gleason_rank is None:
+            gleason_rank = _parse_gleason_rank(txt)
+        if stage_hint is None:
+            stage_hint = _parse_stage_index_hint(txt)
+    has_gleason = 0 if gleason_rank is not None else 1
+    total, primary, secondary = gleason_rank if gleason_rank is not None else (10**9, 10**9, 10**9)
+    hint = int(stage_hint) if stage_hint is not None else 10**9
+    return (
+        has_gleason,
+        total,
+        primary,
+        secondary,
+        hint,
+        _normalized_label_for_ordering(comp).lower(),
+    )
+
+
 def resolve_stage_specs(
     project_path: Path,
     ordered_comparison_labels: Optional[Sequence[str]] = None,
@@ -58,25 +125,34 @@ def resolve_stage_specs(
     }
 
     selected: List[Any] = []
+    ordering_strategy = "project_order"
     ordered_labels = list(ordered_comparison_labels or [])
+    if ordered_labels:
+        ordering_strategy = "explicit_cli"
     if not ordered_labels:
         cfg_order = progression_cfg.get("ordered_comparison_labels") or progression_cfg.get(
             "ordered_disease_groups"
         )
         if isinstance(cfg_order, list):
             ordered_labels = [str(x) for x in cfg_order]
+            ordering_strategy = "explicit_config"
+    ordering_mode = str(progression_cfg.get("ordering_mode") or "auto_gleason").strip().lower()
+    if not ordered_labels and ordering_mode == "auto_gleason":
+        selected = sorted(comparisons, key=_comparison_order_key_auto_gleason)
+        ordering_strategy = "auto_gleason"
     if not ordered_labels:
-        # Backward-compatible fallback: older methyl_utils ProjectConfig versions may not
-        # expose get_ordered_comparison_labels(), so use comparison iteration order.
-        get_ordered = getattr(project, "get_ordered_comparison_labels", None)
-        if callable(get_ordered):
-            resolved_order = get_ordered()
-            if isinstance(resolved_order, list):
-                ordered_labels = [str(x) for x in resolved_order]
-            elif isinstance(resolved_order, tuple):
-                ordered_labels = [str(x) for x in resolved_order]
-        else:
-            ordered_labels = [str(c.comparison_label or c.disease_group) for c in comparisons]
+        if not selected:
+            # Backward-compatible fallback: older methyl_utils ProjectConfig versions may not
+            # expose get_ordered_comparison_labels(), so use comparison iteration order.
+            get_ordered = getattr(project, "get_ordered_comparison_labels", None)
+            if callable(get_ordered):
+                resolved_order = get_ordered()
+                if isinstance(resolved_order, list):
+                    ordered_labels = [str(x) for x in resolved_order]
+                elif isinstance(resolved_order, tuple):
+                    ordered_labels = [str(x) for x in resolved_order]
+            else:
+                ordered_labels = [str(c.comparison_label or c.disease_group) for c in comparisons]
     if ordered_labels:
         for token in ordered_labels:
             c = by_disease_group.get(token) or by_label.get(token)
@@ -86,7 +162,7 @@ def resolve_stage_specs(
                     f"Unknown ordered comparison label {token!r}. Known labels/groups: {known}"
                 )
             selected.append(c)
-    else:
+    elif not selected:
         selected = comparisons
 
     enricher_cfg = project.get_step_config("enricher") or {}
@@ -122,6 +198,7 @@ def resolve_stage_specs(
         "project_root": project.get_project_root(),
         "ordered_comparison_labels": [s.comparison_label for s in specs],
         "ordered_disease_groups": [s.disease_group for s in specs],
+        "ordering_strategy": ordering_strategy,
         "progression_step_config": progression_cfg,
     }
     return specs, meta
@@ -134,31 +211,75 @@ def _first_existing_column(df: pd.DataFrame, candidates: Sequence[str]) -> Optio
     return None
 
 
-def _build_gene_rows(stage: StageSpec) -> pd.DataFrame:
+def _resolve_gene_score_mode(mode: Optional[str]) -> str:
+    normalized = str(mode or "effect_x_support").strip().lower()
+    allowed = {"gene_importance", "effect_x_support"}
+    if normalized not in allowed:
+        raise ValueError(f"Unsupported progression gene_score_mode={mode!r}; expected one of {sorted(allowed)}")
+    return normalized
+
+
+def _build_gene_rows(stage: StageSpec, *, gene_score_mode: str = "effect_x_support") -> Tuple[pd.DataFrame, Dict[str, Any]]:
     if not stage.mapper_combined_csv.exists():
-        return pd.DataFrame()
+        return pd.DataFrame(), {"requested_mode": gene_score_mode, "effective_mode": "missing_mapper_csv"}
     df = pd.read_csv(stage.mapper_combined_csv)
-    required = ["gene_name", "gene_importance"]
+    required = ["gene_name"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(
             f"{stage.comparison_label}: mapper combined CSV missing required columns {missing} "
             f"at {stage.mapper_combined_csv}"
         )
+    score_mode = _resolve_gene_score_mode(gene_score_mode)
     gene_col = "gene_name"
-    score_col = "gene_importance"
-    work = df[[gene_col, score_col]].copy()
+    effect_col = _first_existing_column(df, ["mean_effect_size", "gene_effect_size", "gene_effect_abs_wmean"])
+    support_col = _first_existing_column(df, ["unique_dmps", "gene_support_n", "dmp_count"])
+    importance_col = "gene_importance" if "gene_importance" in df.columns else None
+    if score_mode == "effect_x_support" and effect_col is None and support_col is None and importance_col is None:
+        raise ValueError(
+            f"{stage.comparison_label}: mapper combined CSV has no columns usable for effect_x_support "
+            f"(expected one of mean_effect_size/gene_effect_size/gene_effect_abs_wmean and/or "
+            f"unique_dmps/gene_support_n/dmp_count, fallback gene_importance)."
+        )
+    if score_mode == "gene_importance" and importance_col is None:
+        raise ValueError(
+            f"{stage.comparison_label}: mapper combined CSV missing required column 'gene_importance' for "
+            "gene_score_mode=gene_importance."
+        )
+    work = df[[gene_col]].copy()
     work[gene_col] = work[gene_col].astype(str).str.strip()
     work = work[work[gene_col] != ""]
-    work[score_col] = pd.to_numeric(work[score_col], errors="coerce").fillna(0.0)
+    effective_mode = score_mode
+    if score_mode == "gene_importance":
+        work["score"] = pd.to_numeric(df["gene_importance"], errors="coerce").fillna(0.0)
+    else:
+        if effect_col is not None:
+            effect_vals = pd.to_numeric(df[effect_col], errors="coerce").fillna(0.0).abs()
+        else:
+            effect_vals = None
+        if support_col is not None:
+            support_vals = pd.to_numeric(df[support_col], errors="coerce").fillna(0.0).clip(lower=0.0)
+        else:
+            support_vals = None
+        if effect_vals is not None and support_vals is not None:
+            work["score"] = effect_vals * support_vals
+        elif effect_vals is not None:
+            work["score"] = effect_vals
+            effective_mode = "effect_only_fallback"
+        elif support_vals is not None:
+            work["score"] = support_vals
+            effective_mode = "support_only_fallback"
+        else:
+            work["score"] = pd.to_numeric(df["gene_importance"], errors="coerce").fillna(0.0)
+            effective_mode = "gene_importance_fallback"
     agg = (
         work.groupby(gene_col, as_index=False)
-        .agg(score=(score_col, "max"))
+        .agg(score=("score", "max"))
         .sort_values("score", ascending=False)
         .reset_index(drop=True)
     )
     agg["rank"] = agg.index + 1
-    return pd.DataFrame(
+    out_df = pd.DataFrame(
         {
             "stage_index": stage.stage_index,
             "comparison": stage.comparison_label,
@@ -167,6 +288,14 @@ def _build_gene_rows(stage: StageSpec) -> pd.DataFrame:
             "gene": agg[gene_col].astype(str),
         }
     )
+    meta = {
+        "requested_mode": score_mode,
+        "effective_mode": effective_mode,
+        "effect_column": effect_col,
+        "support_column": support_col,
+        "fallback_importance_column": importance_col,
+    }
+    return out_df, meta
 
 
 def _build_pathway_rows(stage: StageSpec) -> pd.DataFrame:
@@ -474,6 +603,7 @@ def _enricher_completeness_missing(project_path: Path) -> List[str]:
 def aggregate_stage_tables(
     stage_specs: Sequence[StageSpec],
     *,
+    gene_score_mode: str = "effect_x_support",
     strict_missing: bool = False,
     extra_missing: Optional[Sequence[str]] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
@@ -482,12 +612,25 @@ def aggregate_stage_tables(
     modules: List[pd.DataFrame] = []
     module_variants: List[pd.DataFrame] = []
     missing: List[str] = []
+    gene_score_meta_by_stage: Dict[str, Any] = {}
 
     for spec in stage_specs:
-        g = _build_gene_rows(spec)
+        try:
+            g, g_meta = _build_gene_rows(spec, gene_score_mode=gene_score_mode)
+        except Exception as exc:
+            if strict_missing:
+                raise
+            g = pd.DataFrame()
+            g_meta = {
+                "requested_mode": _resolve_gene_score_mode(gene_score_mode),
+                "effective_mode": "error",
+                "error": str(exc),
+            }
+            missing.append(f"{spec.comparison_label}: mapper invalid for progression gene scoring ({exc})")
         p = _build_pathway_rows(spec)
         m = _build_module_rows(spec)
         mv = _build_module_variant_rows(spec)
+        gene_score_meta_by_stage[spec.comparison_label] = g_meta
         if g.empty:
             missing.append(f"{spec.comparison_label}: mapper missing or no gene columns ({spec.mapper_combined_csv})")
         if p.empty:
@@ -510,6 +653,8 @@ def aggregate_stage_tables(
         raise ValueError("Missing required progression inputs: " + "; ".join(missing))
     io_summary = {
         "missing_inputs": missing,
+        "gene_score_mode_requested": _resolve_gene_score_mode(gene_score_mode),
+        "gene_score_mode_by_stage": gene_score_meta_by_stage,
         "genes_rows": int(len(genes_df)),
         "pathways_rows": int(len(pathways_df)),
         "modules_rows": int(len(modules_df)),
@@ -618,6 +763,8 @@ def render_markdown_report(
         "",
         f"- Project: `{summary.get('project_name', 'unknown')}`",
         f"- Ordered stages: {', '.join(summary.get('ordered_comparison_labels', []))}",
+        f"- Ordering strategy: `{summary.get('ordering_strategy', 'project_order')}`",
+        f"- Gene score mode: `{summary.get('gene_score_mode_requested', 'effect_x_support')}`",
         f"- Genes rows: {summary.get('genes_rows', 0)}",
         f"- Pathways rows: {summary.get('pathways_rows', 0)}",
         f"- Modules rows: {summary.get('modules_rows', 0)}",
@@ -690,8 +837,12 @@ def run_progression_report(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     enricher_missing = _enricher_completeness_missing(project_path)
+    requested_score_mode = str(
+        (meta.get("progression_step_config") or {}).get("gene_score_mode") or "effect_x_support"
+    ).strip()
     genes_df, pathways_df, modules_df, modules_variant_df, modules_detailed_df, io_summary = aggregate_stage_tables(
         stage_specs,
+        gene_score_mode=requested_score_mode,
         strict_missing=strict_missing,
         extra_missing=enricher_missing,
     )
