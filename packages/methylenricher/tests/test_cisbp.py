@@ -196,6 +196,38 @@ def test_promoter_scan_gmt_build(tmp_path):
     assert gmt2 == gmt
 
 
+def test_ensure_complete_path_runs_cisbp(tmp_path):
+    """The freeze/ensure-complete path must also produce enrich_CIS-BP.csv + merge it."""
+    from methyl_enricher.ensure_complete import run_comparison_enrichment
+    from methyl_enricher.enricher_completeness import RetryPolicy
+
+    gmt_path = tmp_path / "t.gmt"
+    gene_sets.write_gmt({"TF_HIT": ["GENEA", "GENEB", "GENEC", "GENED"]}, gmt_path)
+    cfg = CisbpConfig(
+        enabled=True, mode="gene_sets", gene_set_source="prebuilt_gmt",
+        gmt_path=str(gmt_path), label="CIS-BP",
+    )
+    ctx = CisbpContext(cache_dir=tmp_path / "cache")
+    genes = ["GENEA", "GENEB", "GENEC", "GENED", "OTHER"]
+    inp = tmp_path / "genes.txt"
+    inp.write_text("\n".join(genes))
+    out = tmp_path / "out"
+
+    report, _ = run_comparison_enrichment(
+        inp, out, "lbl",
+        libraries=[],  # no Enrichr calls -> fully offline
+        organism="Human",
+        cutoff=0.05,
+        policy=RetryPolicy(max_retries=0),
+        load_genes_fn=lambda p: genes,
+        cisbp=cfg,
+        cisbp_context=ctx,
+    )
+    assert (out / "enrich_CIS-BP.csv").is_file()
+    merged = pd.read_csv(out / "enrichment_merged.csv")
+    assert "TF_HIT" in set(merged["Term"])
+
+
 def test_context_defaults_genome_fasta_and_gtf_from_project():
     """genome_fasta defaults from step_config.alignment_qc; gtf from step_config.mapper."""
     import types

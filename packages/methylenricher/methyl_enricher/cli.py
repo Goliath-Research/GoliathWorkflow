@@ -635,53 +635,12 @@ def _resolve_cisbp_config_with_cli(args):
 
 def _build_cisbp_context(args, cisbp_config, project, project_path):
     """Resolve cache dir, GTF, genome FASTA and gene universe for CIS-BP."""
-    from .cisbp import CisbpContext
+    from .cisbp import resolve_cisbp_context
 
-    cache_dir = getattr(cisbp_config, "cache_dir", None)
-    if not cache_dir and project_path is not None:
-        try:
-            from .project_resolver import resolve_methyl_enricher_home
-
-            cache_dir = resolve_methyl_enricher_home(project_path)
-        except Exception:
-            cache_dir = None
-    if not cache_dir:
-        cache_dir = str(Path.home() / ".methyl_enricher")
-
-    gtf = getattr(cisbp_config, "gtf", None)
-    if not gtf and project is not None:
-        try:
-            mapper_cfg = project.get_step_config("mapper") or {}
-            gtf = mapper_cfg.get("gtf")
-        except Exception:
-            gtf = None
-    if not gtf:
-        gtf = os.environ.get("GENE_GTF")
-
-    # Genome FASTA defaults to the project's shared reference in
-    # step_config.alignment_qc.genome_fasta (cisbp.genome_fasta overrides it).
-    genome_fasta = getattr(cisbp_config, "genome_fasta", None)
-    if not genome_fasta and project is not None:
-        try:
-            aqc_cfg = project.get_step_config("alignment_qc") or {}
-            genome_fasta = aqc_cfg.get("genome_fasta")
-        except Exception:
-            genome_fasta = None
-    if not genome_fasta:
-        genome_fasta = os.environ.get("CISBP_GENOME_FASTA") or os.environ.get("GENOME_FASTA")
-
-    gene_universe = None
-    universe_file = getattr(cisbp_config, "gene_universe_file", None)
-    if universe_file and Path(universe_file).is_file():
-        with open(universe_file, encoding="utf-8") as fh:
-            gene_universe = {ln.strip() for ln in fh if ln.strip()}
-
-    return CisbpContext(
-        cache_dir=cache_dir,
-        gtf=gtf,
-        genome_fasta=genome_fasta,
-        gene_universe=gene_universe,
-        background=getattr(cisbp_config, "background_size", None),
+    return resolve_cisbp_context(
+        cisbp_config,
+        project=project,
+        project_path=project_path,
         cutoff=getattr(args, "cutoff", 0.05),
     )
 

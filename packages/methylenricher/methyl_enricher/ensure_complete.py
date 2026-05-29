@@ -26,6 +26,37 @@ from .enricher_completeness import (
 from .module_pipeline import run_module_pipeline
 
 
+def _maybe_run_cisbp(
+    cisbp: Optional[Any],
+    cisbp_context: Optional[Any],
+    genes: List[str],
+    output_dir: Path,
+    cutoff: float,
+) -> Optional[str]:
+    """
+    Run the optional CIS-BP integration in the ensure-complete path and return
+    its library label (to include in the merge), or ``None``. Soft-fails so a
+    CIS-BP problem never breaks the core enrichment.
+    """
+    if cisbp is None or not getattr(cisbp, "enabled", False):
+        return None
+    try:
+        from .cisbp import run_cisbp, CisbpContext
+
+        context = cisbp_context or CisbpContext(cutoff=cutoff)
+        label = run_cisbp(cisbp, genes, output_dir, context=context)
+        if label:
+            print(f"[INFO] ✓ CIS-BP: results added as '{label}'")
+        else:
+            print("[WARN] CIS-BP produced no enrichment terms; skipping")
+        return label
+    except NotImplementedError as exc:
+        print(f"[WARN] CIS-BP skipped: {exc}")
+    except Exception as exc:  # noqa: BLE001 - never break core enrichment
+        print(f"[WARN] CIS-BP integration failed ({type(exc).__name__}): {exc}")
+    return None
+
+
 def _filter_comparison(
     per_group: List[Tuple[Any, str]], comparison: Optional[str]
 ) -> List[Tuple[Any, str]]:
@@ -53,6 +84,8 @@ def run_comparison_enrichment(
     modules_enabled: bool = False,
     load_genes_fn: Optional[Callable[..., List[str]]] = None,
     module_pipeline_kwargs: Optional[Dict[str, Any]] = None,
+    cisbp: Optional[Any] = None,
+    cisbp_context: Optional[Any] = None,
 ) -> Tuple[CompletenessReport, List[LibraryEnrichResult]]:
     """
     Ensure all libraries enriched for one comparison; optionally run modules.
@@ -105,7 +138,9 @@ def run_comparison_enrichment(
 
             time.sleep(policy.inter_library_delay_seconds)
 
-    merge_library_results(output_dir, libraries, cutoff=cutoff)
+    cisbp_label = _maybe_run_cisbp(cisbp, cisbp_context, genes, output_dir, cutoff)
+    merge_libraries = list(libraries) + ([cisbp_label] if cisbp_label else [])
+    merge_library_results(output_dir, merge_libraries, cutoff=cutoff)
 
     report = assess_completeness(output_dir, libraries, modules_required=False)
 
@@ -192,6 +227,23 @@ def run_project_ensure_complete(
     run_kwargs = run_kwargs or {}
     modules_enabled = bool(enricher_config.modules or run_kwargs.get("modules"))
 
+    # Optional CIS-BP TF-motif integration (config-driven via step_config.enricher.cisbp).
+    from .cisbp import effective_cisbp_config, resolve_cisbp_context
+
+    cisbp_config = effective_cisbp_config(enricher_config)
+    cisbp_context = None
+    if cisbp_config is not None and getattr(cisbp_config, "enabled", False):
+        cisbp_context = resolve_cisbp_context(
+            cisbp_config,
+            project=project,
+            project_path=project_path,
+            cutoff=float(enricher_config.cutoff or 0.05),
+        )
+        print(
+            f"[INFO] CIS-BP enabled (mode={cisbp_config.mode}, "
+            f"source={cisbp_config.gene_set_source}, species={cisbp_config.species})"
+        )
+
     analyzer = EnrichmentAnalyzer(
         libraries=libraries,
         library_preset=enricher_config.library_preset,
@@ -250,7 +302,15 @@ def run_project_ensure_complete(
             verify_only=verify_only,
             modules_enabled=modules_enabled,
             load_genes_fn=_load_genes,
-            module_pipeline_kwargs={**module_kwargs, "input_path": inp, "output_dir": Path(paths.output_dir)},
+            module_pipeline_kwargs={
+                **module_kwargs,
+                "input_path": inp,
+                "output_dir": Path(paths.output_dir),
+                "cisbp": cisbp_config,
+                "cisbp_context": cisbp_context,
+            },
+            cisbp=cisbp_config,
+            cisbp_context=cisbp_context,
         )
         reports[label] = report
         if report.complete:
