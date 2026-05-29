@@ -90,6 +90,9 @@ TabularMethodConfig = Annotated[
 ]
 
 DEFAULT_MAPPER_GENE_COLUMNS: List[str] = [
+    "gene_importance",
+    "gene_effect_abs_wsum",
+    "gene_support_n",
     "gene_score",
     "mean_effect_size",
     "gene_effect_compound",
@@ -110,6 +113,13 @@ class BackendSharedParams(BaseModel):
 
     feature_mode: str = Field(default="raw_dmp")
     feature_family_set: str = Field(default="dmp")
+    gene_feature_loading: str = Field(
+        default="frozen",
+        description=(
+            "For observed_hybrid gene-family features: "
+            "frozen (use only frozen DMP loci) or range (expand to all loci inside frozen gene-feature ranges)."
+        ),
+    )
     mapper_gene_columns: List[str] = Field(default_factory=lambda: list(DEFAULT_MAPPER_GENE_COLUMNS))
     observed_feature_quantiles: List[float] = Field(default_factory=lambda: [0.10, 0.25, 0.50, 0.75, 0.90])
     observed_feature_min_coverage: int = Field(default=1, ge=1)
@@ -153,6 +163,15 @@ class BackendSharedParams(BaseModel):
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"feature_family_set must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("gene_feature_loading")
+    @classmethod
+    def _validate_gene_feature_loading(cls, value: str) -> str:
+        allowed = {"frozen", "range"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"gene_feature_loading must be one of {sorted(allowed)}")
         return normalized
 
     @field_validator("mapper_gene_columns")
@@ -552,6 +571,28 @@ class MonteCarloConfig(BaseModel):
         default=None,
         description="Path to stable_dmps_production.csv for --freeze (default: monte_carlo_runs/stability/stable_dmps_production.csv).",
     )
+    freeze_min_dmps_per_feature: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Minimum number of unique frozen DMPs required for a gene-feature segment "
+            "to be included in freeze-time fixed_gene_features output."
+        ),
+    )
+    freeze_gene_importance_min: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Optional lower bound on gene_importance when building freeze-time fixed_gene_panel."
+        ),
+    )
+    freeze_top_genes: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Optional cap per comparison for top-ranked genes in freeze-time fixed_gene_panel."
+        ),
+    )
     production_output_dir: Optional[str] = Field(
         default=None,
         description="Output directory for the final production run (defaults to monte_carlo_runs/production).",
@@ -700,6 +741,13 @@ class MonteCarloConfig(BaseModel):
         description=(
             "For feature_mode=observed_hybrid, controls active feature families: "
             "dmp | gene | structural | dmp+gene | dmp+structural | hybrid-all."
+        ),
+    )
+    gene_feature_loading: str = Field(
+        default="frozen",
+        description=(
+            "For feature_mode=observed_hybrid with gene family features, controls locus loading: "
+            "frozen (exact frozen DMP loci) or range (all loci in frozen gene-feature ranges)."
         ),
     )
     mapper_gene_columns: List[str] = Field(
@@ -951,6 +999,7 @@ class MonteCarloConfig(BaseModel):
             "tabular_test_dataset_path",
             "feature_mode",
             "feature_family_set",
+            "gene_feature_loading",
             "mapper_gene_columns",
             "observed_feature_quantiles",
             "observed_feature_min_coverage",
@@ -1170,6 +1219,15 @@ class MonteCarloConfig(BaseModel):
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"feature_family_set must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("gene_feature_loading")
+    @classmethod
+    def _validate_gene_feature_loading(cls, value: str) -> str:
+        allowed = {"frozen", "range"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"gene_feature_loading must be one of {sorted(allowed)}")
         return normalized
 
     @field_validator("mapper_gene_columns")

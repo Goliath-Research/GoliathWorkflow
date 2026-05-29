@@ -196,6 +196,7 @@ def build_model_backend_steps(
                         config.observed_feature_max_genes if config is not None else 32
                     ),
                     feature_family_set=(config.feature_family_set if config is not None else "dmp"),
+                    gene_feature_loading=(config.gene_feature_loading if config is not None else "frozen"),
                     observed_hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
                     observed_hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
                     observed_hist_evidence_clip_cap=(
@@ -346,6 +347,7 @@ def build_model_backend_steps(
                         config.observed_feature_max_genes if config is not None else 32
                     ),
                     feature_family_set=(config.feature_family_set if config is not None else "dmp"),
+                    gene_feature_loading=(config.gene_feature_loading if config is not None else "frozen"),
                     observed_hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
                     observed_hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
                     observed_hist_evidence_clip_cap=(

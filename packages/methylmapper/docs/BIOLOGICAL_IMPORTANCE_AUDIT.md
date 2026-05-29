@@ -130,16 +130,16 @@ Recommended components:
 
 Use the following as primary biological-importance score:
 
-- `gene_effect_compound = gene_effect_abs_wmean * gene_direction_coherence * sqrt(gene_support_freq)`
+- `gene_importance = gene_effect_abs_wsum * gene_direction_coherence * sqrt(gene_support_freq)`
 
 Why this one:
 
 - Preserves DMP-scale biological effect (`|effect_size|`).
 - Penalizes directional inconsistency (mixed hyper/hypo signal).
-- Rewards reproducibility/support (frequency) without letting high recurrence dominate magnitude.
-- Less inflated by long genes than pure weighted sums.
+- Rewards reproducibility/support (frequency).
+- Explicitly scales with burden (more concordant DMP support -> larger importance).
 
-Keep `gene_effect_abs_wsum` as secondary diagnostic for burden-like interpretation.
+Keep `gene_effect_compound` as a secondary, mean-normalized diagnostic.
 
 ---
 
@@ -168,16 +168,17 @@ Use compound-effect columns as canonical outputs for biological-importance ranki
 - `gene_direction_coherence`
 - `gene_support_n`
 - `gene_support_freq`
-- `gene_effect_compound` (primary biological importance)
+- `gene_importance` (primary biological importance; count-aware burden)
+- `gene_effect_compound` (secondary mean-normalized companion)
 - `gene_feature_effect_compound` (feature-composed companion)
 
 Optional convenience:
 
-- `gene_effect_compound_rank`
+- `gene_importance_rank`
 
 Canonical ranking field:
 
-- `gene_importance := gene_effect_compound`
+- `gene_importance := gene_effect_abs_wsum * gene_direction_coherence * sqrt(gene_support_freq)`
 
 Legacy columns (`gene_score`, `gene_feature_importance`, row-density summaries) may remain available for traceability, but they are no longer canonical ranking fields.
 
@@ -213,6 +214,6 @@ Legacy columns (`gene_score`, `gene_feature_importance`, row-density summaries) 
 
 ## 8) Suggested adoption strategy
 
-1. Promote `gene_effect_compound` as the immediate canonical `gene_importance`.
+1. Promote count-aware `gene_importance` as the canonical ranking field.
 2. Validate against known stage markers/pathways and progression monotonicity.
 3. Keep legacy fields for diagnostics only, not for ranking semantics.

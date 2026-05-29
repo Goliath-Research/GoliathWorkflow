@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -53,6 +54,47 @@ def _dmp_df() -> pd.DataFrame:
             "effect_size": [1.0, 0.8, 0.7, 0.5],
         }
     )
+
+
+def test_range_loading_expands_loci_beyond_frozen_dmps(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder,
+        "_resolve_sample_context_h5",
+        lambda sample_path, chromosome, context: Path("/tmp/fake.h5"),
+    )
+    monkeypatch.setattr(
+        observed_feature_builder,
+        "load_from_h5",
+        lambda path: SimpleNamespace(df=pd.DataFrame({"pos": [95, 100, 110, 500]})),
+    )
+    base = pd.DataFrame(
+        {
+            "comparison_label": ["healthy_vs_pca1"],
+            "chromosome": ["1"],
+            "context": ["CG"],
+            "position": [100],
+            "effect_size": [0.4],
+            "gene_name": ["GENE_A"],
+            "feature_type": ["promoter"],
+        }
+    )
+    ranges = pd.DataFrame(
+        {
+            "comparison_label": ["healthy_vs_pca1"],
+            "gene_name": ["GENE_A"],
+            "chromosome": ["1"],
+            "feature_type": ["promoter"],
+            "feature_start": [90],
+            "feature_end": [120],
+            "feature_effect_compound": [0.8],
+        }
+    )
+    expanded = observed_feature_builder._expand_loci_df_from_gene_ranges(
+        sample_paths=["/tmp/S1"],
+        base_dmp_df=base,
+        gene_feature_ranges_df=ranges,
+    )
+    assert sorted(set(expanded["position"].astype(int).tolist())) == [95, 100, 110]
 
 
 def _derive_anchors(sample_paths, y, class_names, dmp_df):

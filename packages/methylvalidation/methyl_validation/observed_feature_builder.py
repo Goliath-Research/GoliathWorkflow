@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
+from methyl_utils.core.io import load_from_h5
 from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 from scipy.stats import entropy
 
@@ -225,6 +226,135 @@ def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool]:
     )
 
 
+def _resolve_sample_context_h5(sample_path: str | Path, chromosome: str, context: str) -> Optional[Path]:
+    p = Path(str(sample_path))
+    if p.suffix.lower() == ".h5" and p.is_file():
+        return p
+    if p.is_file():
+        return p
+    candidate = p / f"{chromosome}-{context}.h5"
+    if candidate.is_file():
+        return candidate
+    return None
+
+
+def _collect_positions_for_ranges(
+    sample_paths: Sequence[str],
+    chromosome: str,
+    context: str,
+    ranges: np.ndarray,
+) -> np.ndarray:
+    if ranges.size == 0:
+        return np.asarray([], dtype=np.uint32)
+    source_h5: Optional[Path] = None
+    for sp in sample_paths:
+        hit = _resolve_sample_context_h5(sp, chromosome, context)
+        if hit is not None:
+            source_h5 = hit
+            break
+    if source_h5 is None:
+        return np.asarray([], dtype=np.uint32)
+    frame = load_from_h5(source_h5)
+    pos_all = np.asarray(frame.df["pos"].values, dtype=np.uint32)
+    if pos_all.size == 0:
+        return np.asarray([], dtype=np.uint32)
+    mask = np.zeros((pos_all.size,), dtype=bool)
+    for start, end in ranges:
+        lo = int(min(start, end))
+        hi = int(max(start, end))
+        mask |= (pos_all >= lo) & (pos_all <= hi)
+    return np.unique(pos_all[mask]).astype(np.uint32)
+
+
+def _expand_loci_df_from_gene_ranges(
+    sample_paths: Sequence[str],
+    base_dmp_df: pd.DataFrame,
+    gene_feature_ranges_df: pd.DataFrame,
+) -> pd.DataFrame:
+    if base_dmp_df.empty or gene_feature_ranges_df is None or gene_feature_ranges_df.empty:
+        return base_dmp_df
+    required = {"gene_name", "chromosome", "feature_type", "feature_start", "feature_end"}
+    if not required.issubset(set(gene_feature_ranges_df.columns)):
+        return base_dmp_df
+    work = gene_feature_ranges_df.copy()
+    work["gene_name"] = work["gene_name"].apply(_normalize_feature_key)
+    work["chromosome"] = work["chromosome"].astype(str)
+    work["feature_type"] = work["feature_type"].apply(_normalize_structural_feature)
+    work["feature_start"] = pd.to_numeric(work["feature_start"], errors="coerce")
+    work["feature_end"] = pd.to_numeric(work["feature_end"], errors="coerce")
+    work = work[np.isfinite(work["feature_start"]) & np.isfinite(work["feature_end"])].copy()
+    if work.empty:
+        return base_dmp_df
+
+    base = base_dmp_df.copy()
+    if "comparison_label" not in base.columns:
+        base["comparison_label"] = "default"
+    if "context" not in base.columns:
+        base["context"] = "CG"
+    contexts = sorted(set(base["context"].astype(str).tolist())) or ["CG"]
+    comparisons = sorted(set(base["comparison_label"].astype(str).tolist())) or ["default"]
+
+    expanded_rows: List[Dict[str, Any]] = []
+    for cmp_label in comparisons:
+        cmp_ranges = work
+        if "comparison_label" in work.columns:
+            filt = work["comparison_label"].astype(str) == str(cmp_label)
+            if bool(filt.any()):
+                cmp_ranges = work[filt].copy()
+        if cmp_ranges.empty:
+            continue
+        for chrom, cdf in cmp_ranges.groupby("chromosome", sort=False):
+            range_pairs = cdf[["feature_start", "feature_end"]].to_numpy(dtype=np.int64)
+            for ctx in contexts:
+                in_range = _collect_positions_for_ranges(sample_paths, str(chrom), str(ctx), range_pairs)
+                if in_range.size == 0:
+                    continue
+                for _, r in cdf.iterrows():
+                    lo = int(min(r["feature_start"], r["feature_end"]))
+                    hi = int(max(r["feature_start"], r["feature_end"]))
+                    pos = in_range[(in_range >= lo) & (in_range <= hi)]
+                    if pos.size == 0:
+                        continue
+                    for p in pos.tolist():
+                        expanded_rows.append(
+                            {
+                                "comparison_label": str(cmp_label),
+                                "chromosome": str(chrom),
+                                "context": str(ctx),
+                                "position": int(p),
+                                "gene_name": str(r["gene_name"]),
+                                "feature_type": str(r["feature_type"]),
+                                "region_weight": float(pd.to_numeric(r.get("region_weight", 1.0), errors="coerce") or 1.0),
+                                "effect_size": float(
+                                    pd.to_numeric(r.get("feature_effect_compound", np.nan), errors="coerce")
+                                    if "feature_effect_compound" in r
+                                    else np.nan
+                                ),
+                                "dmr_region": "unknown",
+                                "source_csv": "gene_range_expansion",
+                            }
+                        )
+
+    if not expanded_rows:
+        return base_dmp_df
+    expanded = pd.DataFrame(expanded_rows)
+    expanded["effect_size"] = pd.to_numeric(expanded["effect_size"], errors="coerce").fillna(0.0).astype(float)
+    expanded["weight"] = expanded["effect_size"]
+    merged = pd.concat([base, expanded], ignore_index=True, sort=False)
+    merged["position"] = pd.to_numeric(merged["position"], errors="coerce").fillna(-1).astype(int)
+    merged = merged[merged["position"] >= 0].copy()
+    merged["priority"] = np.abs(pd.to_numeric(merged.get("effect_size"), errors="coerce").fillna(0.0))
+    merged = merged.sort_values(
+        ["comparison_label", "chromosome", "context", "position", "priority"],
+        ascending=[True, True, True, True, False],
+    ).drop_duplicates(
+        subset=["comparison_label", "chromosome", "context", "position"],
+        keep="first",
+    )
+    merged = merged.drop(columns=["priority"], errors="ignore")
+    return merged.reset_index(drop=True)
+
+
 def _build_reference_map(
     dmp_df: pd.DataFrame,
 ) -> Tuple[
@@ -396,8 +526,24 @@ def derive_observed_hybrid_anchors(
     dmp_df: pd.DataFrame,
     *,
     min_coverage: int = 1,
+    gene_feature_loading: str = "frozen",
+    fixed_gene_features_df: Optional[pd.DataFrame] = None,
 ) -> ObservedHybridAnchors:
-    refs, feature_order, _weights, _locus_df, _per_label_weights = _build_reference_map(dmp_df)
+    gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
+    if gene_feature_loading_norm not in {"frozen", "range"}:
+        raise ValueError("gene_feature_loading must be 'frozen' or 'range'")
+    work_dmp_df = dmp_df
+    if (
+        gene_feature_loading_norm == "range"
+        and fixed_gene_features_df is not None
+        and not fixed_gene_features_df.empty
+    ):
+        work_dmp_df = _expand_loci_df_from_gene_ranges(
+            sample_paths=sample_paths,
+            base_dmp_df=dmp_df,
+            gene_feature_ranges_df=fixed_gene_features_df,
+        )
+    refs, feature_order, _weights, _locus_df, _per_label_weights = _build_reference_map(work_dmp_df)
     X_raw = _extract_matrix_for_samples(
         sample_paths,
         refs,
@@ -746,13 +892,30 @@ def build_observed_hybrid_feature_table(
     hist_evidence_clip_cap: float = 5.0,
     hist_tail_agreement_threshold: float = 0.10,
     feature_family_set: str = "dmp",
+    gene_feature_loading: str = "frozen",
+    fixed_gene_features_df: Optional[pd.DataFrame] = None,
 ) -> ObservedFeatureArtifacts:
     del quantiles, dmr_window_bp, max_dmr_features, max_gene_features
     # The redesigned schema is fixed; these toggles are retained only for compatibility.
     del include_dmp_features, include_chromosome_features, include_dmr_features, include_gene_features
 
     include_dmp_family, include_gene_family, include_structural_family = _family_flags(feature_family_set)
-    refs, feature_order, weights, locus_df, per_label_weights = _build_reference_map(dmp_df)
+    gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
+    if gene_feature_loading_norm not in {"frozen", "range"}:
+        raise ValueError("gene_feature_loading must be 'frozen' or 'range'")
+    work_dmp_df = dmp_df
+    if (
+        gene_feature_loading_norm == "range"
+        and include_gene_family
+        and fixed_gene_features_df is not None
+        and not fixed_gene_features_df.empty
+    ):
+        work_dmp_df = _expand_loci_df_from_gene_ranges(
+            sample_paths=sample_paths,
+            base_dmp_df=dmp_df,
+            gene_feature_ranges_df=fixed_gene_features_df,
+        )
+    refs, feature_order, weights, locus_df, per_label_weights = _build_reference_map(work_dmp_df)
     X_raw = _extract_matrix_for_samples(
         sample_paths,
         refs,
@@ -1164,6 +1327,7 @@ def build_observed_hybrid_feature_table(
             "structural": bool(include_structural_family),
         },
         "feature_family_set": str(feature_family_set),
+        "gene_feature_loading": gene_feature_loading_norm,
         "healthy_class_label": str(healthy_class_label or "unknown"),
         "cancer_class_labels": [str(x) for x in cancer_labels_raw],
         "anchor_strategy": str(anchor_strategy or "unspecified"),

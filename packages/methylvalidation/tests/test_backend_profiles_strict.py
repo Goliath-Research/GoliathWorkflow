@@ -89,6 +89,19 @@ def test_update_backend_params_resyncs_runtime_fields():
     assert updated.covariates_path == "/tmp/covariates.csv"
 
 
+def test_gene_feature_loading_is_shared_and_migrated():
+    legacy = {
+        "model_backend": "tabular_sklearn",
+        "gene_feature_loading": "range",
+    }
+    migrated, _summary = _migrate_validation_section(legacy)
+    assert migrated["backend_profiles"]["ecdf"]["params"]["gene_feature_loading"] == "range"
+    assert migrated["backend_profiles"]["tabular_sklearn"]["params"]["gene_feature_loading"] == "range"
+    cfg = MonteCarloConfig.model_validate(_base_payload() | {"backend_profiles": migrated["backend_profiles"]})
+    switched = cfg.with_backend_selection("tabular_sklearn")
+    assert switched.gene_feature_loading == "range"
+
+
 def test_stability_early_stop_requires_min_iterations_within_budget():
     payload = _base_payload()
     payload["n_iterations"] = 5

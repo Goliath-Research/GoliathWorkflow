@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 import json
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -68,13 +69,24 @@ class _StubProjectWithMapper(_StubProject):
 
 
 class _StubProjectWithModelBundleConfig(_StubProject):
-    def __init__(self, detection_dir: Path, mapper_annotation_csv: Path):
+    def __init__(
+        self,
+        detection_dir: Path,
+        mapper_annotation_csv: Optional[Path] = None,
+        fixed_gene_features_csv: Optional[Path] = None,
+    ):
         super().__init__(detection_dir)
         self._mapper_annotation_csv = mapper_annotation_csv
+        self._fixed_gene_features_csv = fixed_gene_features_csv
 
     def get_step_config(self, step_name: str):
         if step_name == "model_bundle":
-            return {"mapper_annotation_csv": str(self._mapper_annotation_csv)}
+            out = {}
+            if self._mapper_annotation_csv is not None:
+                out["mapper_annotation_csv"] = str(self._mapper_annotation_csv)
+            if self._fixed_gene_features_csv is not None:
+                out["fixed_gene_features"] = str(self._fixed_gene_features_csv)
+            return out
         return {}
 
 
@@ -177,6 +189,9 @@ def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_pat
     pd.DataFrame(
         {
             "gene_name": ["GENE_A"],
+            "gene_importance": [3.2],
+            "gene_effect_abs_wsum": [4.7],
+            "gene_support_n": [3],
             "gene_score": [9.5],
             "mean_effect_size": [0.42],
             "gene_effect_compound": [1.7],
@@ -196,21 +211,33 @@ def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_pat
     )
 
     out_df = pd.read_csv(out_csv)
+    assert "gene_importance" in out_df.columns
+    assert "gene_effect_abs_wsum" in out_df.columns
+    assert "gene_support_n" in out_df.columns
     assert "gene_score" in out_df.columns
     assert "mean_effect_size" in out_df.columns
     assert "gene_effect_compound" in out_df.columns
     assert "gene_feature_effect_compound" in out_df.columns
+    assert float(out_df.iloc[0]["gene_importance"]) == pytest.approx(3.2)
+    assert float(out_df.iloc[0]["gene_effect_abs_wsum"]) == pytest.approx(4.7)
+    assert float(out_df.iloc[0]["gene_support_n"]) == pytest.approx(3.0)
     assert float(out_df.iloc[0]["gene_score"]) == pytest.approx(9.5)
     assert float(out_df.iloc[0]["mean_effect_size"]) == pytest.approx(0.42)
     assert float(out_df.iloc[0]["gene_effect_compound"]) == pytest.approx(1.7)
     assert float(out_df.iloc[0]["gene_feature_effect_compound"]) == pytest.approx(1.2)
     assert cache_info["mapper_gene_columns_requested"] == [
+        "gene_importance",
+        "gene_effect_abs_wsum",
+        "gene_support_n",
         "gene_score",
         "mean_effect_size",
         "gene_effect_compound",
         "gene_feature_effect_compound",
     ]
     assert cache_info["mapper_gene_columns_effective"] == [
+        "gene_importance",
+        "gene_effect_abs_wsum",
+        "gene_support_n",
         "gene_score",
         "mean_effect_size",
         "gene_effect_compound",
@@ -263,6 +290,60 @@ def test_build_mapper_annotation_cache_empty_mapper_gene_columns_disables_join(t
     assert "mean_effect_size" not in out_df.columns
     assert cache_info["mapper_gene_columns_requested"] == []
     assert cache_info["mapper_gene_columns_effective"] == []
+
+
+def test_build_frozen_gene_panel_writes_gene_and_feature_outputs(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    mapper = tmp_path / "mapper" / "healthy" / "pca1"
+    mapper.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "gene_name": ["GENE_A", "GENE_B"],
+            "gene_id": ["ENSGA", "ENSGB"],
+            "gene_importance": [3.0, 0.8],
+            "unique_dmps": [3, 1],
+            "gene_support_n": [3, 1],
+            "gene_effect_abs_wsum": [4.5, 0.9],
+            "mean_effect_size": [0.4, 0.3],
+            "hits_promoter": [2, 0],
+            "hits_exon": [1, 1],
+            "feature_effect_compound_promoter": [0.7, 0.1],
+            "feature_effect_compound_exon": [0.4, 0.2],
+        }
+    ).to_csv(mapper / "all-gene_name-combined.csv", index=False)
+    pd.DataFrame(
+        {
+            "dmp_name": ["1:100:CG:eff=0.20", "1:110:CG:eff=0.22", "1:300:CG:eff=0.10"],
+            "feature_chrom": ["chr1", "chr1", "chr1"],
+            "gene_name": ["GENE_A", "GENE_A", "GENE_B"],
+            "feature_type": ["promoter", "promoter", "exon"],
+            "feature_start": [90, 90, 290],
+            "feature_end": [130, 130, 330],
+        }
+    ).to_csv(mapper / "chr1-intersections.csv", index=False)
+
+    monkeypatch.setattr(
+        model_bundle,
+        "load_project",
+        lambda _p: _StubProjectWithMapper(det, mapper),
+    )
+
+    out = model_bundle.build_frozen_gene_panel(
+        project_json=tmp_path / "project.json",
+        output_dir=tmp_path / "bundle",
+        min_dmps_per_feature=2,
+        gene_importance_min=1.0,
+        top_genes=1,
+    )
+    genes_df = pd.read_csv(out["gene_panel_path"])
+    feats_df = pd.read_csv(out["gene_features_path"])
+    assert out["genes_rows"] == 1
+    assert out["features_rows"] == 1
+    assert genes_df.iloc[0]["gene_name"] == "GENE_A"
+    assert feats_df.iloc[0]["gene_name"] == "GENE_A"
+    assert feats_df.iloc[0]["feature_type"] == "promoter"
+    assert int(feats_df.iloc[0]["n_dmps_in_feature"]) == 2
 
 
 def test_normalize_mapper_intersections_uses_dmp_fallback_for_nan_keys(tmp_path: Path):
@@ -388,6 +469,52 @@ def test_build_model_feature_bundle_preserves_mapper_gene_columns(tmp_path: Path
     assert "gene_effect_compound" in out_df.columns
     assert "gene_feature_effect_compound" in out_df.columns
     assert float(out_df.iloc[0]["gene_score"]) == pytest.approx(8.8)
+
+
+def test_build_model_feature_bundle_persists_fixed_gene_feature_ranges(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1"],
+            "position": [100],
+            "context": ["CG"],
+            "effect_size": [0.5],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    fixed_features_csv = tmp_path / "frozen_gene_features.csv"
+    pd.DataFrame(
+        {
+            "comparison_label": ["healthy_vs_pca1"],
+            "gene_name": ["TP53"],
+            "chromosome": ["1"],
+            "feature_type": ["promoter"],
+            "feature_start": [90],
+            "feature_end": [150],
+            "n_dmps_in_feature": [2],
+            "feature_effect_compound": [0.8],
+            "gene_importance": [3.4],
+        }
+    ).to_csv(fixed_features_csv, index=False)
+
+    monkeypatch.setattr(
+        model_bundle,
+        "load_project",
+        lambda _p: _StubProjectWithModelBundleConfig(
+            det,
+            mapper_annotation_csv=None,
+            fixed_gene_features_csv=fixed_features_csv,
+        ),
+    )
+    model_bundle.build_model_feature_bundle(
+        project_json=tmp_path / "project.json",
+        output_dir=tmp_path / "bundle",
+    )
+    ranges_df = model_bundle.load_bundle_gene_feature_ranges(tmp_path / "bundle" / "model_feature_bundle.h5")
+    assert len(ranges_df) == 1
+    assert ranges_df.iloc[0]["gene_name"] == "TP53"
+    assert int(ranges_df.iloc[0]["feature_start"]) == 90
+    assert int(ranges_df.iloc[0]["feature_end"]) == 150
 
 
 def test_build_model_feature_bundle_uses_project_mapper_annotation_pointer(tmp_path: Path, monkeypatch):

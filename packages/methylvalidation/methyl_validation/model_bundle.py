@@ -27,7 +27,12 @@ BUNDLE_MANIFEST_NAME = "model_feature_bundle.json"
 BUNDLE_H5_NAME = "model_feature_bundle.h5"
 DETECTOR_POINTER_NAME = "detection_model_bundle.json"
 MAPPER_ANNOTATION_NAME = "mapper_dmp_annotations.csv"
+FROZEN_GENE_PANEL_NAME = "frozen_genes_production.csv"
+FROZEN_GENE_FEATURES_NAME = "frozen_gene_features.csv"
 DEFAULT_MAPPER_GENE_COLUMNS: List[str] = [
+    "gene_importance",
+    "gene_effect_abs_wsum",
+    "gene_support_n",
     "gene_score",
     "mean_effect_size",
     "gene_effect_compound",
@@ -43,6 +48,28 @@ CORE_MAPPER_ANNOTATION_COLUMNS: List[str] = [
     "region_weight",
     "mapper_source_csv",
 ]
+
+_FEATURE_ALIASES: Dict[str, str] = {
+    "promoter_region": "promoter",
+    "terminator_region": "terminator",
+    "genebody": "gene_body",
+    "body": "gene_body",
+    "utr": "exon",
+    "five_prime_utr": "exon",
+    "three_prime_utr": "exon",
+    "cds": "exon",
+    "start_codon": "exon",
+    "stop_codon": "exon",
+    "transcript": "gene_body",
+    "gene": "gene_body",
+}
+
+
+def _normalize_parent_feature(value: Any) -> str:
+    token = str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+    token = _FEATURE_ALIASES.get(token, token)
+    allowed = {"promoter", "exon", "intron", "gene_body", "terminator"}
+    return token if token in allowed else "unknown"
 
 
 @contextmanager
@@ -435,6 +462,86 @@ def _candidate_mapper_annotation_paths(
     return out
 
 
+def _candidate_fixed_gene_feature_paths(
+    *,
+    project_json: Path,
+    project: "ProjectConfig",
+    bundle_dir: Path,
+) -> List[Path]:
+    candidates: List[Path] = []
+    try:
+        mb_cfg = project.get_step_config("model_bundle") or {}
+    except Exception:
+        mb_cfg = {}
+    cfg_path = mb_cfg.get("fixed_gene_features")
+    if cfg_path:
+        p = Path(str(cfg_path))
+        if not p.is_absolute():
+            p = (project_json.parent / p).resolve()
+        candidates.append(p)
+    candidates.append(bundle_dir / FROZEN_GENE_FEATURES_NAME)
+    candidates.append(project_json.parent / "model_bundle" / FROZEN_GENE_FEATURES_NAME)
+    out: List[Path] = []
+    seen: set[str] = set()
+    for p in candidates:
+        key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
+def _load_fixed_gene_feature_ranges(path: Path) -> pd.DataFrame:
+    df = pd.read_csv(path)
+    if df.empty:
+        return pd.DataFrame()
+    required = {"gene_name", "chromosome", "feature_type", "feature_start", "feature_end"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"Fixed gene feature CSV missing required columns {missing}: {path}")
+    out = df.copy()
+    if "comparison_label" not in out.columns:
+        out["comparison_label"] = "default"
+    if "context" not in out.columns:
+        out["context"] = ""
+    if "n_dmps_in_feature" not in out.columns:
+        out["n_dmps_in_feature"] = 0
+    if "feature_effect_compound" not in out.columns:
+        out["feature_effect_compound"] = 0.0
+    if "gene_importance" not in out.columns:
+        out["gene_importance"] = 0.0
+    out["comparison_label"] = out["comparison_label"].astype(str)
+    out["gene_name"] = out["gene_name"].astype(str)
+    out["chromosome"] = out["chromosome"].map(_normalize_chromosome).astype(str)
+    out["feature_type"] = out["feature_type"].map(_normalize_parent_feature).astype(str)
+    out["context"] = out["context"].fillna("").map(_normalize_context).astype(str)
+    out["feature_start"] = pd.to_numeric(out["feature_start"], errors="coerce")
+    out["feature_end"] = pd.to_numeric(out["feature_end"], errors="coerce")
+    out = out[np.isfinite(out["feature_start"]) & np.isfinite(out["feature_end"])].copy()
+    out["feature_start"] = out["feature_start"].astype(np.int64)
+    out["feature_end"] = out["feature_end"].astype(np.int64)
+    out["n_dmps_in_feature"] = pd.to_numeric(out["n_dmps_in_feature"], errors="coerce").fillna(0).astype(np.int64)
+    out["feature_effect_compound"] = pd.to_numeric(
+        out["feature_effect_compound"], errors="coerce"
+    ).fillna(0.0).astype(float)
+    out["gene_importance"] = pd.to_numeric(out["gene_importance"], errors="coerce").fillna(0.0).astype(float)
+    return out[
+        [
+            "comparison_label",
+            "gene_name",
+            "chromosome",
+            "feature_type",
+            "context",
+            "feature_start",
+            "feature_end",
+            "n_dmps_in_feature",
+            "feature_effect_compound",
+            "gene_importance",
+        ]
+    ].copy()
+
+
 def build_mapper_annotation_cache(
     *,
     project_json: str | Path,
@@ -533,6 +640,238 @@ def build_mapper_annotation_cache(
         "mapper_gene_columns_requested": list(mapper_gene_columns),
         "mapper_gene_columns_effective": list(effective_mapper_gene_columns),
         "comparisons": sorted(set(ann["comparison_label"].astype(str).tolist())),
+    }
+
+
+def build_frozen_gene_panel(
+    *,
+    project_json: str | Path,
+    output_dir: str | Path,
+    min_dmps_per_feature: int = 1,
+    gene_importance_min: Optional[float] = None,
+    top_genes: Optional[int] = None,
+) -> Dict[str, Any]:
+    project_json_path = Path(project_json).absolute()
+    out_dir = Path(output_dir).absolute()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    genes_out = out_dir / FROZEN_GENE_PANEL_NAME
+    features_out = out_dir / FROZEN_GENE_FEATURES_NAME
+
+    with _project_cwd(project_json_path):
+        project: "ProjectConfig" = load_project(project_json_path)
+    comparisons = project.get_comparisons()
+
+    gene_tables: List[pd.DataFrame] = []
+    feature_rows: List[pd.DataFrame] = []
+    source_files: List[str] = []
+
+    for spec in comparisons:
+        cmp_label = str(spec.comparison_label or spec.disease_group)
+        mapper_dir = Path(project.get_mapper_output_dir(spec.control_group, spec.disease_group))
+        if not mapper_dir.is_dir():
+            continue
+        gene_csv = mapper_dir / "all-gene_name-combined.csv"
+        if gene_csv.is_file():
+            try:
+                gdf = pd.read_csv(gene_csv)
+            except Exception:
+                gdf = pd.DataFrame()
+            if not gdf.empty and "gene_name" in gdf.columns:
+                gdf = gdf.copy()
+                gdf["comparison_label"] = cmp_label
+                for col in ("gene_importance", "unique_dmps", "gene_support_n", "gene_effect_abs_wsum", "mean_effect_size"):
+                    if col not in gdf.columns:
+                        gdf[col] = np.nan
+                if "feature_chrom" in gdf.columns:
+                    gdf["chromosome"] = gdf["feature_chrom"].map(_normalize_chromosome).astype(str)
+                else:
+                    gdf["chromosome"] = "unknown"
+                gene_tables.append(gdf)
+                source_files.append(str(gene_csv.absolute()))
+
+        for detail_csv in sorted(mapper_dir.glob("*-intersections.csv")):
+            try:
+                idf = pd.read_csv(detail_csv)
+            except Exception:
+                continue
+            if idf.empty or "gene_name" not in idf.columns:
+                continue
+            source_files.append(str(detail_csv.absolute()))
+            fstart = pd.to_numeric(idf.get("feature_start"), errors="coerce")
+            fend = pd.to_numeric(idf.get("feature_end"), errors="coerce")
+            chrom_src = idf.get("feature_chrom")
+            if chrom_src is None:
+                chrom_src = idf.get("chromosome")
+            work = pd.DataFrame(
+                {
+                    "comparison_label": cmp_label,
+                    "gene_name": idf["gene_name"].astype(str),
+                    "chromosome": pd.Series(chrom_src).map(_normalize_chromosome).astype(str),
+                    "feature_type": idf.get("feature_type", pd.Series(["unknown"] * len(idf), index=idf.index))
+                    .apply(_normalize_parent_feature)
+                    .astype(str),
+                    "feature_start": fstart.astype("Int64"),
+                    "feature_end": fend.astype("Int64"),
+                    "dmp_name": (
+                        idf["dmp_name"].astype(str)
+                        if "dmp_name" in idf.columns
+                        else pd.Series([f"row_{i}" for i in range(len(idf))], index=idf.index)
+                    ),
+                }
+            )
+            work = work[work["gene_name"].str.strip() != ""].copy()
+            work = work[(work["feature_start"].notna()) & (work["feature_end"].notna())].copy()
+            work = work[work["feature_type"] != "unknown"].copy()
+            if work.empty:
+                continue
+            feature_rows.append(work)
+
+    if gene_tables:
+        genes_df = pd.concat(gene_tables, ignore_index=True)
+        keep_cols = [
+            "comparison_label",
+            "gene_name",
+            "gene_id",
+            "chromosome",
+            "gene_importance",
+            "unique_dmps",
+            "gene_support_n",
+            "gene_effect_abs_wsum",
+            "mean_effect_size",
+            "hits_promoter",
+            "hits_exon",
+            "hits_intron",
+            "hits_gene_body",
+            "hits_terminator",
+            "gene_effect_compound",
+            "gene_feature_effect_compound",
+        ]
+        genes_df = genes_df[[c for c in keep_cols if c in genes_df.columns]].copy()
+        genes_df["gene_name"] = genes_df["gene_name"].astype(str)
+        genes_df["comparison_label"] = genes_df["comparison_label"].astype(str)
+        genes_df["gene_importance"] = pd.to_numeric(genes_df.get("gene_importance"), errors="coerce").fillna(0.0)
+        genes_df["unique_dmps"] = pd.to_numeric(genes_df.get("unique_dmps"), errors="coerce").fillna(0).astype(int)
+        genes_df = genes_df.sort_values(
+            ["comparison_label", "gene_importance", "unique_dmps", "gene_name"],
+            ascending=[True, False, False, True],
+        ).reset_index(drop=True)
+        if gene_importance_min is not None:
+            genes_df = genes_df[genes_df["gene_importance"] >= float(gene_importance_min)].copy()
+        if top_genes is not None and int(top_genes) > 0:
+            genes_df = (
+                genes_df.sort_values(["comparison_label", "gene_importance"], ascending=[True, False])
+                .groupby("comparison_label", as_index=False, group_keys=False)
+                .head(int(top_genes))
+                .reset_index(drop=True)
+            )
+    else:
+        genes_df = pd.DataFrame(
+            columns=[
+                "comparison_label",
+                "gene_name",
+                "gene_id",
+                "chromosome",
+                "gene_importance",
+                "unique_dmps",
+                "gene_support_n",
+                "gene_effect_abs_wsum",
+                "mean_effect_size",
+            ]
+        )
+
+    feature_compound_map = pd.DataFrame(columns=["comparison_label", "gene_name", "feature_type", "feature_effect_compound"])
+    if not genes_df.empty:
+        feature_compound_cols = [c for c in genes_df.columns if c.startswith("feature_effect_compound_")]
+        if feature_compound_cols:
+            melted = genes_df[["comparison_label", "gene_name"] + feature_compound_cols].melt(
+                id_vars=["comparison_label", "gene_name"],
+                value_vars=feature_compound_cols,
+                var_name="feature_col",
+                value_name="feature_effect_compound",
+            )
+            melted["feature_type"] = (
+                melted["feature_col"]
+                .astype(str)
+                .str.replace("feature_effect_compound_", "", regex=False)
+                .map(_normalize_parent_feature)
+            )
+            melted["feature_effect_compound"] = pd.to_numeric(
+                melted["feature_effect_compound"], errors="coerce"
+            ).fillna(0.0)
+            feature_compound_map = melted[
+                ["comparison_label", "gene_name", "feature_type", "feature_effect_compound"]
+            ].copy()
+
+    if feature_rows:
+        fr = pd.concat(feature_rows, ignore_index=True)
+        grouped = (
+            fr.groupby(
+                ["comparison_label", "gene_name", "chromosome", "feature_type", "feature_start", "feature_end"],
+                dropna=False,
+            )["dmp_name"]
+            .nunique()
+            .reset_index(name="n_dmps_in_feature")
+        )
+        grouped["n_dmps_in_feature"] = pd.to_numeric(grouped["n_dmps_in_feature"], errors="coerce").fillna(0).astype(int)
+        grouped = grouped[grouped["n_dmps_in_feature"] >= int(max(1, min_dmps_per_feature))].copy()
+        if not genes_df.empty:
+            allowed = genes_df[["comparison_label", "gene_name"]].drop_duplicates()
+            grouped = grouped.merge(allowed, on=["comparison_label", "gene_name"], how="inner")
+        if not feature_compound_map.empty:
+            grouped = grouped.merge(
+                feature_compound_map,
+                on=["comparison_label", "gene_name", "feature_type"],
+                how="left",
+            )
+        if not genes_df.empty:
+            grouped = grouped.merge(
+                genes_df[["comparison_label", "gene_name", "gene_importance"]],
+                on=["comparison_label", "gene_name"],
+                how="left",
+            )
+        if "feature_effect_compound" not in grouped.columns:
+            grouped["feature_effect_compound"] = 0.0
+        grouped["feature_effect_compound"] = pd.to_numeric(
+            grouped["feature_effect_compound"], errors="coerce"
+        ).fillna(0.0)
+        if "gene_importance" not in grouped.columns:
+            grouped["gene_importance"] = 0.0
+        grouped["gene_importance"] = pd.to_numeric(grouped["gene_importance"], errors="coerce").fillna(0.0)
+        features_df = grouped.sort_values(
+            ["comparison_label", "gene_importance", "n_dmps_in_feature", "gene_name", "feature_start"],
+            ascending=[True, False, False, True, True],
+        ).reset_index(drop=True)
+    else:
+        features_df = pd.DataFrame(
+            columns=[
+                "comparison_label",
+                "gene_name",
+                "chromosome",
+                "feature_type",
+                "feature_start",
+                "feature_end",
+                "n_dmps_in_feature",
+                "feature_effect_compound",
+                "gene_importance",
+            ]
+        )
+
+    genes_df.to_csv(genes_out, index=False)
+    features_df.to_csv(features_out, index=False)
+    return {
+        "gene_panel_path": str(genes_out),
+        "gene_features_path": str(features_out),
+        "genes_rows": int(len(genes_df)),
+        "features_rows": int(len(features_df)),
+        "source_files": sorted(set(source_files)),
+        "min_dmps_per_feature": int(max(1, min_dmps_per_feature)),
+        "gene_importance_min": (
+            float(gene_importance_min) if gene_importance_min is not None else None
+        ),
+        "top_genes": (int(top_genes) if top_genes is not None else None),
+        "comparisons": sorted(set(genes_df["comparison_label"].astype(str).tolist()))
+        if not genes_df.empty
+        else [],
     }
 
 
@@ -695,7 +1034,13 @@ def _load_dmps_table(
     return out
 
 
-def _write_bundle_h5(bundle_h5: Path, dmp_df: pd.DataFrame, class_names: List[str]) -> None:
+def _write_bundle_h5(
+    bundle_h5: Path,
+    dmp_df: pd.DataFrame,
+    class_names: List[str],
+    *,
+    gene_feature_ranges_df: Optional[pd.DataFrame] = None,
+) -> None:
     h5py = _import_h5py_with_plugins()
     bundle_h5.parent.mkdir(parents=True, exist_ok=True)
     with h5py.File(bundle_h5, "w") as f:
@@ -761,6 +1106,37 @@ def _write_bundle_h5(bundle_h5: Path, dmp_df: pd.DataFrame, class_names: List[st
                 )
             else:
                 _h5_write_str(g, col, series.fillna("").astype(str).tolist())
+        if gene_feature_ranges_df is not None and not gene_feature_ranges_df.empty:
+            r = gene_feature_ranges_df.copy()
+            gr = f.create_group("gene_feature_ranges")
+            for col in (
+                "comparison_label",
+                "gene_name",
+                "chromosome",
+                "feature_type",
+                "context",
+            ):
+                if col not in r.columns:
+                    r[col] = ""
+                _h5_write_str(gr, col, r[col].fillna("").astype(str).tolist())
+            for col in ("feature_start", "feature_end", "n_dmps_in_feature"):
+                if col not in r.columns:
+                    r[col] = 0
+                gr.create_dataset(
+                    col,
+                    data=pd.to_numeric(r[col], errors="coerce").fillna(0).astype(np.int64).values,
+                    compression="gzip",
+                    compression_opts=4,
+                )
+            for col in ("feature_effect_compound", "gene_importance"):
+                if col not in r.columns:
+                    r[col] = 0.0
+                gr.create_dataset(
+                    col,
+                    data=pd.to_numeric(r[col], errors="coerce").fillna(0.0).astype(np.float32).values,
+                    compression="gzip",
+                    compression_opts=4,
+                )
         _h5_write_str(f, "classes", [str(x) for x in class_names])
 
 
@@ -809,6 +1185,43 @@ def load_bundle_dmp_index(bundle_h5: str | Path) -> pd.DataFrame:
                 df[col] = _decode_bytes(raw).astype(str)
             else:
                 df[col] = raw
+    return df
+
+
+def load_bundle_gene_feature_ranges(bundle_h5: str | Path) -> pd.DataFrame:
+    h5py = _import_h5py_with_plugins()
+    path = Path(bundle_h5)
+    with h5py.File(path, "r") as f:
+        if "gene_feature_ranges" not in f:
+            return pd.DataFrame(
+                columns=[
+                    "comparison_label",
+                    "gene_name",
+                    "chromosome",
+                    "feature_type",
+                    "context",
+                    "feature_start",
+                    "feature_end",
+                    "n_dmps_in_feature",
+                    "feature_effect_compound",
+                    "gene_importance",
+                ]
+            )
+        g = f["gene_feature_ranges"]
+        df = pd.DataFrame(
+            {
+                "comparison_label": _decode_bytes(np.asarray(g["comparison_label"])).astype(str),
+                "gene_name": _decode_bytes(np.asarray(g["gene_name"])).astype(str),
+                "chromosome": _decode_bytes(np.asarray(g["chromosome"])).astype(str),
+                "feature_type": _decode_bytes(np.asarray(g["feature_type"])).astype(str),
+                "context": _decode_bytes(np.asarray(g["context"])).astype(str),
+                "feature_start": np.asarray(g["feature_start"], dtype=np.int64),
+                "feature_end": np.asarray(g["feature_end"], dtype=np.int64),
+                "n_dmps_in_feature": np.asarray(g["n_dmps_in_feature"], dtype=np.int64),
+                "feature_effect_compound": np.asarray(g["feature_effect_compound"], dtype=np.float32),
+                "gene_importance": np.asarray(g["gene_importance"], dtype=np.float32),
+            }
+        )
     return df
 
 
@@ -912,6 +1325,19 @@ def build_model_feature_bundle(
             "Mapper annotation cache is required for non-dmp feature families but was not found. "
             f"Searched: {[str(p) for p in mapper_candidates]}"
         )
+    fixed_gene_features_path: Optional[Path] = None
+    fixed_gene_features_df = pd.DataFrame()
+    fixed_gene_candidates = _candidate_fixed_gene_feature_paths(
+        project_json=project_json,
+        project=project,
+        bundle_dir=out_dir,
+    )
+    for p in fixed_gene_candidates:
+        if p.is_file():
+            fixed_gene_features_path = p
+            break
+    if fixed_gene_features_path is not None:
+        fixed_gene_features_df = _load_fixed_gene_feature_ranges(fixed_gene_features_path)
 
     del weight_column
     dmp_df = pd.concat(rows, ignore_index=True)
@@ -943,7 +1369,12 @@ def build_model_feature_bundle(
             )
 
     bundle_h5 = out_dir / BUNDLE_H5_NAME
-    _write_bundle_h5(bundle_h5, dmp_df, classes)
+    _write_bundle_h5(
+        bundle_h5,
+        dmp_df,
+        classes,
+        gene_feature_ranges_df=fixed_gene_features_df,
+    )
 
     bundle_metadata: Dict[str, Any] = dict(extra_metadata or {})
     bundle_metadata.setdefault("feature_family_set", family_token)
@@ -982,6 +1413,13 @@ def build_model_feature_bundle(
                 "unknown",
             ],
             "effect_size_transform": "abs(effect_size) normalized",
+        },
+    )
+    bundle_metadata.setdefault(
+        "fixed_gene_features",
+        {
+            "path": str(fixed_gene_features_path) if fixed_gene_features_path is not None else None,
+            "n_rows": int(len(fixed_gene_features_df)),
         },
     )
     manifest = ModelFeatureBundleManifest(

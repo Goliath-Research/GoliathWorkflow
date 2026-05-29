@@ -27,6 +27,54 @@ class NetworkRefinementConfig(BaseModel):
     hub_w_closeness: Optional[float] = None
 
 
+class CisbpConfig(BaseModel):
+    """
+    Optional CIS-BP transcription-factor motif integration.
+
+    CIS-BP (https://cisbp.ccbr.utoronto.ca) ships TF motifs/PWMs, not ready-made
+    gene sets. The integration is pluggable via ``mode``:
+
+      * ``gene_sets`` (default, "1A"): derive TF -> target-gene sets (by scanning
+        gene promoter sequences with CIS-BP PWMs, or from a prebuilt GMT) and run
+        offline over-representation analysis, emitting an ``enrich_<label>.csv``
+        that merges with the Enrichr libraries.
+      * ``annotate`` ("1B", planned): annotate TFs already surfaced by ChEA/ENCODE/
+        TRRUST results with CIS-BP motif metadata.
+      * ``motif_scan`` ("1C", planned): scan DMP/DMR region sequences with CIS-BP
+        PWMs for direct motif enrichment.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: Optional[bool] = None
+    mode: Optional[str] = "gene_sets"  # gene_sets | annotate | motif_scan
+    label: Optional[str] = "CIS-BP"  # library name used in merged results
+
+    # Data acquisition (CIS-BP has no API; bulk per-species archive download).
+    species: Optional[str] = "Homo_sapiens"
+    motif_evidence: Optional[List[str]] = None  # subset of ["Direct","Inferred","None"]
+    auto_download: Optional[bool] = True
+    data_dir: Optional[str] = None  # pre-extracted bundle (TF_Information.txt + pwms_all_motifs/)
+    cache_dir: Optional[str] = None  # where downloads/built artifacts are cached
+    base_url: Optional[str] = "https://cisbp.ccbr.utoronto.ca"
+    build: Optional[str] = "3.10"
+    archive_url: Optional[str] = None  # explicit zip URL override
+
+    # Gene-set construction (mode="gene_sets").
+    gene_set_source: Optional[str] = "promoter_scan"  # promoter_scan | prebuilt_gmt
+    gmt_path: Optional[str] = None  # used when gene_set_source="prebuilt_gmt"
+    genome_fasta: Optional[str] = None
+    gtf: Optional[str] = None
+    promoter_upstream: Optional[int] = 5000
+    promoter_downstream: Optional[int] = 200
+    motif_score_threshold: Optional[float] = 0.85  # relative log-odds score in [0,1]
+    min_targets_per_tf: Optional[int] = 5
+    max_targets_per_tf: Optional[int] = 3000
+    gene_universe_file: Optional[str] = None  # gene list; default = all genes in GTF
+    background_size: Optional[int] = None  # ORA background size override
+    rebuild_gmt: Optional[bool] = None  # force-rebuild cached GMT
+
+
 class EnricherStepConfig(BaseModel):
     """
     Pydantic model for step_config.enricher in the pipeline project JSON (and --config).
@@ -86,6 +134,11 @@ class EnricherStepConfig(BaseModel):
     dash_host: Optional[str] = None
     dash_port: Optional[int] = None
     dash_open_browser: Optional[bool] = None
+
+    # Optional CIS-BP TF-motif integration (nested object + quick flat toggles)
+    cisbp: Optional[CisbpConfig] = None
+    cisbp_enabled: Optional[bool] = None
+    cisbp_mode: Optional[str] = None
 
     # Optional PPI/network refinement (nested and flat key support)
     network_refinement: Optional[NetworkRefinementConfig] = None

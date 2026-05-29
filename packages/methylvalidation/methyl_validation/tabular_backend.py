@@ -37,7 +37,7 @@ from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
-from .model_bundle import load_bundle_dmp_index
+from .model_bundle import load_bundle_dmp_index, load_bundle_gene_feature_ranges
 from .observed_feature_builder import (
     HYBRID_FEATURE_FAMILY_SETS,
     OBSERVED_HYBRID_SCHEMA_VERSION,
@@ -397,6 +397,7 @@ def train_tabular_model(
     observed_feature_max_dmrs: int = 32,
     observed_feature_max_genes: int = 32,
     feature_family_set: str = "dmp",
+    gene_feature_loading: str = "frozen",
     observed_hist_eps: float = 1e-6,
     observed_hist_alpha: float = 0.5,
     observed_hist_evidence_clip_cap: float = 5.0,
@@ -413,6 +414,7 @@ def train_tabular_model(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dmp_df = load_bundle_dmp_index(bundle_h5)
+    fixed_gene_features_df = load_bundle_gene_feature_ranges(bundle_h5)
     max_dmps_norm = int(max_dmps) if (max_dmps is not None and int(max_dmps) > 0) else 0
     if max_dmps_norm and len(dmp_df) > max_dmps_norm:
         dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
@@ -436,9 +438,14 @@ def train_tabular_model(
 
     feature_mode_norm = str(feature_mode or "raw_dmp").strip().lower()
     feature_family_set_norm = str(feature_family_set or "dmp").strip().lower()
+    gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
     if feature_family_set_norm not in HYBRID_FEATURE_FAMILY_SETS:
         raise ValueError(
             f"feature_family_set must be one of {list(HYBRID_FEATURE_FAMILY_SETS)}, got {feature_family_set!r}"
+        )
+    if gene_feature_loading_norm not in {"frozen", "range"}:
+        raise ValueError(
+            f"gene_feature_loading must be one of ['frozen', 'range'], got {gene_feature_loading!r}"
         )
     y_arr = np.asarray(y, dtype=np.int32)
     dmp_index_fingerprint = _dmp_index_fingerprint(dmp_df)
@@ -483,6 +490,7 @@ def train_tabular_model(
         "schema_version": 1,
         "feature_mode": feature_mode_norm,
         "feature_family_set": feature_family_set_norm,
+        "gene_feature_loading": gene_feature_loading_norm,
         "observed_hybrid_schema_version": (
             OBSERVED_HYBRID_SCHEMA_VERSION if feature_mode_norm == "observed_hybrid" else None
         ),
@@ -631,6 +639,8 @@ def train_tabular_model(
                 class_names,
                 dmp_df,
                 min_coverage=int(max(1, observed_feature_min_coverage)),
+                gene_feature_loading=gene_feature_loading_norm,
+                fixed_gene_features_df=fixed_gene_features_df,
             )
             feat = build_observed_hybrid_feature_table(
                 all_paths,
@@ -657,6 +667,8 @@ def train_tabular_model(
                 hist_evidence_clip_cap=float(observed_hist_evidence_clip_cap),
                 hist_tail_agreement_threshold=float(observed_hist_tail_agreement_threshold),
                 feature_family_set=feature_family_set_norm,
+                gene_feature_loading=gene_feature_loading_norm,
+                fixed_gene_features_df=fixed_gene_features_df,
             )
             X = np.asarray(feat.X, dtype=np.float32)
             feature_fill_values = fit_feature_fill_values(X)
@@ -830,6 +842,8 @@ def train_tabular_model(
                     hist_evidence_clip_cap=float(observed_hist_evidence_clip_cap),
                     hist_tail_agreement_threshold=float(observed_hist_tail_agreement_threshold),
                     feature_family_set=feature_family_set_norm,
+                    gene_feature_loading=gene_feature_loading_norm,
+                    fixed_gene_features_df=fixed_gene_features_df,
                 )
                 verify_feature_schema(
                     feat_eval.feature_names,
@@ -905,6 +919,7 @@ def train_tabular_model(
             "params": resolved_params,
             "feature_mode": feature_mode_norm,
             "feature_family_set": feature_family_set_norm,
+            "gene_feature_loading": gene_feature_loading_norm,
             "class_names": class_names,
             "project_json": str(Path(project_json).resolve()),
             "bundle_h5": str(Path(bundle_h5).resolve()),
@@ -1120,6 +1135,8 @@ def predict_tabular_model_from_project(
                 meta.get("observed_hist_tail_agreement_threshold", 0.10)
             ),
             feature_family_set=str(meta.get("feature_family_set", "dmp")),
+            gene_feature_loading=str(meta.get("gene_feature_loading", "frozen")),
+            fixed_gene_features_df=load_bundle_gene_feature_ranges(bundle_h5),
         )
         verify_feature_schema(
             feat.feature_names,
@@ -1171,6 +1188,7 @@ def predict_tabular_model_from_project(
         json.dump(metrics, f, indent=2)
     if feature_mode == "observed_hybrid":
         active_family_set = str(meta.get("feature_family_set", "dmp"))
+        active_gene_loading = str(meta.get("gene_feature_loading", "frozen"))
         cm = metrics.get("confusion_matrix") or []
         worst_group_ba = None
         if isinstance(cm, list) and cm:
@@ -1191,6 +1209,7 @@ def predict_tabular_model_from_project(
                 else None
             ),
             "active_feature_family_set": active_family_set,
+            "active_gene_feature_loading": active_gene_loading,
             "active_feature_families": {
                 "dmp": ("dmp" in active_family_set or active_family_set == "hybrid-all"),
                 "chromosome": bool(meta.get("observed_feature_include_chromosome", True)),

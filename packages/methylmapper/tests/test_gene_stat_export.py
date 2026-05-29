@@ -86,7 +86,9 @@ def test_aggregate_by_feature_exports_feature_effect_sizes_and_weighted_gene_imp
     assert row_g1["gene_effect_abs_wmean"] == pytest.approx(0.37)
     assert row_g1["gene_direction_coherence"] == pytest.approx(1.25 / 1.85)
     assert row_g1["gene_effect_compound"] == pytest.approx(0.25)
-    assert row_g1["gene_importance"] == pytest.approx(row_g1["gene_effect_compound"])
+    assert row_g1["gene_importance"] == pytest.approx(
+        row_g1["gene_effect_abs_wsum"] * row_g1["gene_direction_coherence"] * (row_g1["gene_support_freq"] ** 0.5)
+    )
 
 
 def test_aggregate_by_feature_uses_exclusive_feature_priority_for_hits_and_score():
@@ -170,6 +172,32 @@ def test_aggregate_by_feature_sorts_by_canonical_gene_importance_desc():
     grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
     assert grouped.iloc[0]["gene_name"] == "G_high"
     assert grouped.iloc[0]["gene_importance"] > grouped.iloc[1]["gene_importance"]
+
+
+def test_aggregate_by_feature_gene_importance_scales_with_unique_dmp_support():
+    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
+    mapper.storey_lambda = None
+
+    intersect_df = pd.DataFrame(
+        {
+            "gene_name": ["G_many", "G_many", "G_many", "G_one"],
+            "dmp_name": ["d1", "d2", "d3", "d4"],
+            "feature_type": ["promoter", "promoter", "promoter", "promoter"],
+            "effect_size": [0.2, 0.2, 0.2, 0.2],
+            "delta_mean": [0.2, 0.2, 0.2, 0.2],
+            "frequency": [1.0, 1.0, 1.0, 1.0],
+            "region_weight": [1.0, 1.0, 1.0, 1.0],
+        }
+    )
+
+    grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
+    row_many = grouped[grouped["gene_name"] == "G_many"].iloc[0]
+    row_one = grouped[grouped["gene_name"] == "G_one"].iloc[0]
+
+    assert row_many["gene_support_n"] == 3
+    assert row_one["gene_support_n"] == 1
+    assert row_many["gene_effect_abs_wsum"] > row_one["gene_effect_abs_wsum"]
+    assert row_many["gene_importance"] > row_one["gene_importance"]
 
 
 def test_aggregate_by_feature_exports_compound_columns():

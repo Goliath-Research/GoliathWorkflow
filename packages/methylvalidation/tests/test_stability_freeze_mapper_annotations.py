@@ -66,7 +66,28 @@ def test_freeze_production_model_writes_mapper_annotation_pointer(tmp_path: Path
             "comparisons": ["default"],
         }
 
+    def _fake_build_frozen_genes(*, project_json, output_dir, min_dmps_per_feature, gene_importance_min, top_genes):
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        genes = out_dir / "frozen_genes_production.csv"
+        feats = out_dir / "frozen_gene_features.csv"
+        genes.write_text("comparison_label,gene_name,gene_importance\n", encoding="utf-8")
+        feats.write_text(
+            "comparison_label,gene_name,chromosome,feature_type,feature_start,feature_end,n_dmps_in_feature\n",
+            encoding="utf-8",
+        )
+        return {
+            "gene_panel_path": str(genes.absolute()),
+            "gene_features_path": str(feats.absolute()),
+            "genes_rows": 0,
+            "features_rows": 0,
+            "min_dmps_per_feature": int(min_dmps_per_feature),
+            "gene_importance_min": gene_importance_min,
+            "top_genes": top_genes,
+        }
+
     monkeypatch.setattr(model_bundle, "build_mapper_annotation_cache", _fake_build_cache)
+    monkeypatch.setattr(model_bundle, "build_frozen_gene_panel", _fake_build_frozen_genes)
 
     summary = stability.freeze_production_model(
         base_project=base_project,
@@ -82,9 +103,12 @@ def test_freeze_production_model_writes_mapper_annotation_pointer(tmp_path: Path
     prod_project = json.loads((production_dir / "project.json").read_text(encoding="utf-8"))
     mb_cfg = prod_project["step_config"]["model_bundle"]
     assert mb_cfg["mapper_annotation_csv"] == summary["mapper_annotation_cache"]["path"]
+    assert mb_cfg["fixed_gene_panel"] == summary["frozen_gene_panel"]["gene_panel_path"]
+    assert mb_cfg["fixed_gene_features"] == summary["frozen_gene_panel"]["gene_features_path"]
 
     prod_summary = json.loads((production_dir / "production_summary.json").read_text(encoding="utf-8"))
     assert prod_summary["mapper_annotation_cache"]["rows"] == 1
+    assert "frozen_gene_panel" in prod_summary
 
 
 def test_freeze_production_model_forwards_skip_detection(tmp_path: Path, monkeypatch):
@@ -132,7 +156,28 @@ def test_freeze_production_model_forwards_skip_detection(tmp_path: Path, monkeyp
             "comparisons": ["default"],
         }
 
+    def _fake_build_frozen_genes(*, project_json, output_dir, min_dmps_per_feature, gene_importance_min, top_genes):
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        genes = out_dir / "frozen_genes_production.csv"
+        feats = out_dir / "frozen_gene_features.csv"
+        genes.write_text("comparison_label,gene_name,gene_importance\n", encoding="utf-8")
+        feats.write_text(
+            "comparison_label,gene_name,chromosome,feature_type,feature_start,feature_end,n_dmps_in_feature\n",
+            encoding="utf-8",
+        )
+        return {
+            "gene_panel_path": str(genes.absolute()),
+            "gene_features_path": str(feats.absolute()),
+            "genes_rows": 0,
+            "features_rows": 0,
+            "min_dmps_per_feature": int(min_dmps_per_feature),
+            "gene_importance_min": gene_importance_min,
+            "top_genes": top_genes,
+        }
+
     monkeypatch.setattr(model_bundle, "build_mapper_annotation_cache", _fake_build_cache)
+    monkeypatch.setattr(model_bundle, "build_frozen_gene_panel", _fake_build_frozen_genes)
 
     summary = stability.freeze_production_model(
         base_project=base_project,

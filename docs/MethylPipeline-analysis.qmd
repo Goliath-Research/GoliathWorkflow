@@ -140,7 +140,17 @@ $$
 \sqrt{\mathrm{gene\_support\_freq}}.
 $$
 
-`gene_importance` is canonicalized to this compound metric in current implementation.
+`gene_importance` is canonicalized as a count-aware burden in current implementation:
+
+$$
+\mathrm{gene\_importance}
+=
+\mathrm{gene\_effect\_abs\_wsum}
+\times
+\mathrm{gene\_direction\_coherence}
+\times
+\sqrt{\mathrm{gene\_support\_freq}}.
+$$
 
 ## Disease progression synthesis theory
 
@@ -285,7 +295,7 @@ In `bedtools_mapper.py`:
 - normalization path (`_normalize_feature_type`) preserving explicit features when configured,
 - exclusive (gene, DMP) hit assignment for feature-level counting,
 - combined p/q and weighted effect metrics,
-- canonical `gene_importance` assignment from `gene_effect_compound`,
+- canonical `gene_importance` assignment from count-aware burden (`gene_effect_abs_wsum`, coherence, support frequency),
 - curated output column pruning in `_prune_gene_output_columns`.
 
 ## Validation configuration and model-bundle implementation

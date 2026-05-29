@@ -7,7 +7,7 @@ filtering by disease columns and DMP/gene metrics to focus on important genes.
 
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 import pandas as pd
 
 
@@ -121,7 +121,9 @@ class EnrichmentAnalyzer:
         libraries: Optional[List[str]] = None,
         library_preset: Optional[str] = None,
         organism: str = "Human",
-        cutoff: float = 0.05
+        cutoff: float = 0.05,
+        cisbp: Optional[Any] = None,
+        cisbp_context: Optional[Any] = None,
     ):
         """
         Initialize the EnrichmentAnalyzer.
@@ -131,6 +133,8 @@ class EnrichmentAnalyzer:
             library_preset: Named preset when libraries are not provided
             organism: Organism name for Enrichr (default: "Human")
             cutoff: Adjusted p-value cutoff for filtering significant results
+            cisbp: Optional CisbpConfig enabling the CIS-BP TF-motif integration
+            cisbp_context: Optional CisbpContext (cache dir, GTF, genome FASTA, ...)
         """
         self.libraries = resolve_enrichr_libraries(
             libraries=libraries,
@@ -138,6 +142,8 @@ class EnrichmentAnalyzer:
         )
         self.organism = organism
         self.cutoff = cutoff
+        self.cisbp = cisbp
+        self.cisbp_context = cisbp_context
         self.results = {}
         
     def _apply_csv_filters(
@@ -545,6 +551,8 @@ class EnrichmentAnalyzer:
             ):
                 time.sleep(policy.inter_library_delay_seconds)
 
+        self._maybe_run_cisbp(genes, output_dir)
+
         merged = merge_library_results(output_dir, self.libraries, cutoff=self.cutoff)
         if merged.empty:
             print("\n[WARN] No enrichment results found across any library")
@@ -562,6 +570,31 @@ class EnrichmentAnalyzer:
         self.results = {"merged": merged, "significant": top_hits}
         self._print_summary(merged, top_hits)
         return merged
+
+    def _maybe_run_cisbp(self, genes: List[str], output_dir: Path) -> None:
+        """
+        Run the optional CIS-BP TF-motif integration and register its label so it
+        merges with the Enrichr libraries. Soft-fails (warns) so a CIS-BP problem
+        never breaks the core enrichment results.
+        """
+        if not self.cisbp or not getattr(self.cisbp, "enabled", False):
+            return
+        try:
+            from .cisbp import run_cisbp, CisbpContext
+
+            context = self.cisbp_context
+            if context is None:
+                context = CisbpContext(cutoff=self.cutoff)
+            label = run_cisbp(self.cisbp, genes, output_dir, context=context)
+            if label and label not in self.libraries:
+                self.libraries.append(label)
+                print(f"[INFO] ✓ CIS-BP: results added as '{label}'")
+            elif not label:
+                print("[WARN] CIS-BP produced no enrichment terms; skipping")
+        except NotImplementedError as exc:
+            print(f"[WARN] CIS-BP skipped: {exc}")
+        except Exception as exc:  # noqa: BLE001 - never break core enrichment
+            print(f"[WARN] CIS-BP integration failed ({type(exc).__name__}): {exc}")
 
     def _attach_weighted_overlap_metrics(
         self,
@@ -678,7 +711,9 @@ def run_enrichment(
     min_gene_importance: Optional[float] = None,
     feature_types: Optional[List[str]] = None,
     sort_by: Optional[str] = None,
-    sort_ascending: bool = False
+    sort_ascending: bool = False,
+    cisbp: Optional[Any] = None,
+    cisbp_context: Optional[Any] = None,
 ) -> pd.DataFrame:
     """
     Convenience function to run enrichment analysis in one call.
@@ -688,7 +723,9 @@ def run_enrichment(
         libraries=libraries,
         library_preset=library_preset,
         organism=organism,
-        cutoff=cutoff
+        cutoff=cutoff,
+        cisbp=cisbp,
+        cisbp_context=cisbp_context,
     )
     
     genes, gene_weights = analyzer.load_gene_list_with_weights(

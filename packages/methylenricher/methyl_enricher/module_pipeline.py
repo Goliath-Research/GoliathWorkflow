@@ -58,6 +58,8 @@ _TF_LIBRARY_TOKENS = (
     "trrust",
     "chip",
     "transcription_factor",
+    "cisbp",
+    "cis_bp",
 )
 
 
@@ -571,6 +573,8 @@ def run_module_pipeline(
     dash_host: str = "127.0.0.1",
     dash_port: int = 8050,
     dash_open_browser: bool = False,
+    cisbp: Optional[object] = None,
+    cisbp_context: Optional[object] = None,
 ) -> pd.DataFrame:
     """
     Run the full pathway-to-module pipeline (Steps A–E) and write modules_ranked.csv.

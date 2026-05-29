@@ -1629,7 +1629,10 @@ def freeze_production_model(
     if success:
         try:
             from .model_bundle import (
+                FROZEN_GENE_FEATURES_NAME,
+                FROZEN_GENE_PANEL_NAME,
                 MAPPER_ANNOTATION_NAME,
+                build_frozen_gene_panel,
                 build_mapper_annotation_cache,
             )
 
@@ -1639,6 +1642,28 @@ def freeze_production_model(
                 project_json=prod_project_path,
                 output_csv=bundle_dir / MAPPER_ANNOTATION_NAME,
             )
+            frozen_gene_panel = build_frozen_gene_panel(
+                project_json=prod_project_path,
+                output_dir=bundle_dir,
+                min_dmps_per_feature=max(
+                    1,
+                    int(
+                        getattr(config, "freeze_min_dmps_per_feature", 1)
+                        if config is not None
+                        else 1
+                    ),
+                ),
+                gene_importance_min=(
+                    float(getattr(config, "freeze_gene_importance_min"))
+                    if (config is not None and getattr(config, "freeze_gene_importance_min", None) is not None)
+                    else None
+                ),
+                top_genes=(
+                    int(getattr(config, "freeze_top_genes"))
+                    if (config is not None and getattr(config, "freeze_top_genes", None) is not None)
+                    else None
+                ),
+            )
             with open(prod_project_path, encoding="utf-8") as f:
                 prod_project_payload = json.load(f)
             step_cfg = prod_project_payload.setdefault("step_config", {})
@@ -1646,18 +1671,30 @@ def freeze_production_model(
             model_bundle_cfg["mapper_annotation_csv"] = str(
                 mapper_annotation_cache.get("path")
             )
+            model_bundle_cfg["fixed_gene_panel"] = str(
+                frozen_gene_panel.get("gene_panel_path")
+                or (bundle_dir / FROZEN_GENE_PANEL_NAME).absolute()
+            )
+            model_bundle_cfg["fixed_gene_features"] = str(
+                frozen_gene_panel.get("gene_features_path")
+                or (bundle_dir / FROZEN_GENE_FEATURES_NAME).absolute()
+            )
             with open(prod_project_path, "w", encoding="utf-8") as f:
                 json.dump(prod_project_payload, f, indent=2)
         except Exception as e:
             success = False
             errors = list(errors) + [f"Mapper annotation cache build failed: {e}"]
             mapper_annotation_cache = {}
+            frozen_gene_panel = {}
+    else:
+        frozen_gene_panel = {}
 
     summary = {
         "output_dir": str(prod_dir),
         "fixed_dmp_panel": str(merged_panel),
         "production_project": str(prod_project_path),
         "mapper_annotation_cache": mapper_annotation_cache,
+        "frozen_gene_panel": frozen_gene_panel,
         "success": success,
         "errors": errors,
         "timings": timings,

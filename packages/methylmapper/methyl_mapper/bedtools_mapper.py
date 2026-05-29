@@ -1860,11 +1860,13 @@ class BedtoolsMapper:
             grouped["gene_support_n"] = 0
         grouped["gene_support_n"] = pd.to_numeric(grouped["gene_support_n"], errors="coerce").fillna(0).astype(int)
 
-        # Canonical importance now uses compound effect score directly.
-        grouped["gene_importance"] = pd.to_numeric(
-            grouped.get("gene_effect_compound"),
-            errors="coerce",
-        ).fillna(0.0)
+        # Canonical importance is count-aware burden:
+        # sum(|effect| weighted by recurrence/region) * directional coherence * sqrt(mean recurrence).
+        grouped["gene_importance"] = (
+            pd.to_numeric(grouped.get("gene_effect_abs_wsum"), errors="coerce").fillna(0.0)
+            * pd.to_numeric(grouped.get("gene_direction_coherence"), errors="coerce").fillna(0.0)
+            * np.sqrt(pd.to_numeric(grouped.get("gene_support_freq"), errors="coerce").fillna(0.0).clip(lower=0.0))
+        )
 
         # Sort by canonical importance first, then stable tie-breakers.
         sort_cols = ["gene_importance"]
