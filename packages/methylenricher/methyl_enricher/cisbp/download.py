@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 import zipfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import List, Optional
+from typing import Iterator, List, Optional
 
 import pandas as pd
 
@@ -75,6 +77,47 @@ def _cache_root(cache_dir: Path, species: str, build: str) -> Path:
     return Path(cache_dir) / "cisbp" / f"{species}_{build}".replace(" ", "_")
 
 
+@contextmanager
+def _bundle_download_lock(
+    lock_path: Path,
+    *,
+    timeout_seconds: int = 1800,
+    poll_seconds: float = 0.5,
+) -> Iterator[None]:
+    """
+    Acquire an inter-process advisory lock for CIS-BP bundle materialization.
+
+    Uses ``fcntl.flock`` on Unix-like systems; if unavailable, falls back to a
+    no-op context (best effort for non-Unix platforms).
+    """
+    lock_path = Path(lock_path)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(lock_path, "a+", encoding="utf-8") as lock_file:
+        try:
+            import fcntl  # type: ignore
+        except Exception:
+            # Non-Unix environment; proceed without cross-process lock.
+            yield
+            return
+
+        start = time.monotonic()
+        while True:
+            try:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if (time.monotonic() - start) >= float(timeout_seconds):
+                    raise TimeoutError(
+                        f"Timed out waiting for CIS-BP cache lock: {lock_path}"
+                    )
+                time.sleep(float(poll_seconds))
+
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
 def resolve_bundle(
     *,
     species: str = "Homo_sapiens",
@@ -122,21 +165,28 @@ def resolve_bundle(
             f"Set cisbp.data_dir to a pre-extracted archive or enable auto_download."
         )
 
-    root.mkdir(parents=True, exist_ok=True)
-    zip_bytes = _download_species_zip(
-        species=species,
-        base_url=base_url,
-        archive_url=archive_url,
-        components=components or ["TF_Information", "PWMs"],
-    )
-    _extract_bundle(zip_bytes, root)
-    if not bundle.is_complete():
-        raise RuntimeError(
-            f"CIS-BP archive extracted to {root} but is missing {TF_INFO_FILENAME} "
-            f"or {PWM_DIRNAME}/."
+    lock_path = root.parent / f"{root.name}.download.lock"
+    with _bundle_download_lock(lock_path):
+        # Another worker may have completed the bundle while we waited for lock.
+        if bundle.is_complete():
+            logger.info("[CIS-BP] using cached bundle (post-lock): %s", root)
+            return bundle
+
+        root.mkdir(parents=True, exist_ok=True)
+        zip_bytes = _download_species_zip(
+            species=species,
+            base_url=base_url,
+            archive_url=archive_url,
+            components=components or ["TF_Information", "PWMs"],
         )
-    logger.info("[CIS-BP] downloaded + cached bundle: %s", root)
-    return bundle
+        _extract_bundle(zip_bytes, root)
+        if not bundle.is_complete():
+            raise RuntimeError(
+                f"CIS-BP archive extracted to {root} but is missing {TF_INFO_FILENAME} "
+                f"or {PWM_DIRNAME}/."
+            )
+        logger.info("[CIS-BP] downloaded + cached bundle: %s", root)
+        return bundle
 
 
 def _download_species_zip(

@@ -191,6 +191,19 @@ For theory and package documentation, see:
         help='Named Enrichr preset (used when --libraries is not provided)'
     )
     enrich_group.add_argument(
+        '--cisbp',
+        action='store_true',
+        default=False,
+        help='Enable the CIS-BP TF-motif integration (also configurable via step_config.enricher.cisbp)'
+    )
+    enrich_group.add_argument(
+        '--cisbp-mode',
+        type=str,
+        choices=['gene_sets', 'annotate', 'motif_scan'],
+        default=None,
+        help="CIS-BP mode (default: gene_sets). 'annotate'/'motif_scan' are planned."
+    )
+    enrich_group.add_argument(
         '--top', '-t',
         type=int,
         default=200,
@@ -545,6 +558,24 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
         None,
     )
 
+    # CIS-BP TF-motif integration: assemble a CisbpConfig from the nested object
+    # plus the flat quick-toggles, and stash it on args (it is not an argparse arg).
+    from .config import CisbpConfig
+
+    cisbp_cfg = config.cisbp
+    if cisbp_cfg is None and (config.cisbp_enabled is not None or config.cisbp_mode is not None):
+        cisbp_cfg = CisbpConfig()
+    if cisbp_cfg is not None:
+        updates = {}
+        if config.cisbp_enabled is not None:
+            updates["enabled"] = config.cisbp_enabled
+        if config.cisbp_mode is not None:
+            updates["mode"] = config.cisbp_mode
+        if updates:
+            cisbp_cfg = cisbp_cfg.model_copy(update=updates)
+    if getattr(args, "cisbp_config", None) is None:
+        args.cisbp_config = cisbp_cfg
+
     # Rest: set from config. For network_plot, only set when user did not pass --network-plot (args is None).
     config_values = config.model_dump(mode="python", exclude_none=True)
     for name in EnricherStepConfig.model_fields:
@@ -553,6 +584,9 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
             "input_file",
             "output_dir",
             "outdir",
+            "cisbp",
+            "cisbp_enabled",
+            "cisbp_mode",
             "network_refinement",
             "network_refinement_enabled",
             "network_refinement_source",
@@ -578,6 +612,70 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
             # CLI --network-plot wins over config
             continue
         setattr(args, name, val)
+
+
+def _resolve_cisbp_config_with_cli(args):
+    """Combine config-derived CisbpConfig with CLI --cisbp/--cisbp-mode overrides."""
+    cisbp_config = getattr(args, "cisbp_config", None)
+    cli_enable = bool(getattr(args, "cisbp", False))
+    cli_mode = getattr(args, "cisbp_mode", None)
+    if not cli_enable and not cli_mode:
+        return cisbp_config
+    from .config import CisbpConfig
+
+    if cisbp_config is None:
+        cisbp_config = CisbpConfig()
+    updates = {}
+    if cli_enable:
+        updates["enabled"] = True
+    if cli_mode:
+        updates["mode"] = cli_mode
+    return cisbp_config.model_copy(update=updates)
+
+
+def _build_cisbp_context(args, cisbp_config, project, project_path):
+    """Resolve cache dir, GTF, genome FASTA and gene universe for CIS-BP."""
+    from .cisbp import CisbpContext
+
+    cache_dir = getattr(cisbp_config, "cache_dir", None)
+    if not cache_dir and project_path is not None:
+        try:
+            from .project_resolver import resolve_methyl_enricher_home
+
+            cache_dir = resolve_methyl_enricher_home(project_path)
+        except Exception:
+            cache_dir = None
+    if not cache_dir:
+        cache_dir = str(Path.home() / ".methyl_enricher")
+
+    gtf = getattr(cisbp_config, "gtf", None)
+    if not gtf and project is not None:
+        try:
+            mapper_cfg = project.get_step_config("mapper") or {}
+            gtf = mapper_cfg.get("gtf")
+        except Exception:
+            gtf = None
+    if not gtf:
+        gtf = os.environ.get("GENE_GTF")
+
+    genome_fasta = getattr(cisbp_config, "genome_fasta", None) or os.environ.get(
+        "CISBP_GENOME_FASTA"
+    ) or os.environ.get("GENOME_FASTA")
+
+    gene_universe = None
+    universe_file = getattr(cisbp_config, "gene_universe_file", None)
+    if universe_file and Path(universe_file).is_file():
+        with open(universe_file, encoding="utf-8") as fh:
+            gene_universe = {ln.strip() for ln in fh if ln.strip()}
+
+    return CisbpContext(
+        cache_dir=cache_dir,
+        gtf=gtf,
+        genome_fasta=genome_fasta,
+        gene_universe=gene_universe,
+        background=getattr(cisbp_config, "background_size", None),
+        cutoff=getattr(args, "cutoff", 0.05),
+    )
 
 
 def list_available_libraries():
@@ -608,6 +706,11 @@ def main():
         sys.exit(main_queue(sys.argv[1:]))
 
     args = parse_args()
+    if not hasattr(args, "cisbp_config"):
+        args.cisbp_config = None
+
+    project = None
+    project_path = None
 
     # Resolve paths and apply step_config from --project if set
     if args.project:
@@ -773,6 +876,15 @@ def main():
             print(f"  hub_disease_boost={getattr(args, 'network_refinement_hub_disease_boost', 0.0)}")
     print("=" * 70)
     
+    cisbp_config = _resolve_cisbp_config_with_cli(args)
+    cisbp_context = None
+    if cisbp_config is not None and getattr(cisbp_config, "enabled", False):
+        cisbp_context = _build_cisbp_context(args, cisbp_config, project, project_path)
+        print(
+            f"CIS-BP: enabled (mode={cisbp_config.mode}, source={cisbp_config.gene_set_source}, "
+            f"species={cisbp_config.species})"
+        )
+
     def _run_one(in_file: Path, out_dir: str):
         if getattr(args, "modules", False):
             _np = getattr(args, "network_plot", None)
@@ -829,6 +941,8 @@ def main():
                 dash_host=getattr(args, "dash_host", "127.0.0.1"),
                 dash_port=getattr(args, "dash_port", 8050),
                 dash_open_browser=getattr(args, "dash_open_browser", False),
+                cisbp=cisbp_config,
+                cisbp_context=cisbp_context,
             )
         return run_enrichment(
             input_file=in_file,
@@ -850,7 +964,9 @@ def main():
             min_gene_z=args.min_gene_z,
             min_gene_importance=args.min_gene_importance,
             sort_by=args.sort_by,
-            sort_ascending=args.sort_ascending
+            sort_ascending=args.sort_ascending,
+            cisbp=cisbp_config,
+            cisbp_context=cisbp_context,
         )
 
     try:

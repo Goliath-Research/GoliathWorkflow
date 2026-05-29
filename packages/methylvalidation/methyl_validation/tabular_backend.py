@@ -639,6 +639,7 @@ def train_tabular_model(
                 class_names,
                 dmp_df,
                 min_coverage=int(max(1, observed_feature_min_coverage)),
+                feature_family_set=feature_family_set_norm,
                 gene_feature_loading=gene_feature_loading_norm,
                 fixed_gene_features_df=fixed_gene_features_df,
             )

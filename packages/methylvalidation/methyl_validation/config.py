@@ -1123,6 +1123,7 @@ class MonteCarloConfig(BaseModel):
             "tabular_max_dmps",
             "feature_mode",
             "feature_family_set",
+            "gene_feature_loading",
             "mapper_gene_columns",
             "observed_feature_quantiles",
             "observed_feature_min_coverage",

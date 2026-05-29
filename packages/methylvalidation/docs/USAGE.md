@@ -335,7 +335,12 @@ Operational notes:
 
 - For non-`dmp` families, model build requires mapper annotations from freeze (`mapper_annotation_csv`); this is enforced in trainer flows.
 - Freeze-time mapper cache can also carry per-gene mapper aggregates from `all-gene_name-combined.csv` through `step_config.model_bundle.mapper_gene_columns` (fallback `step_config.mapper.mapper_gene_columns`), defaulting to `["gene_importance", "gene_effect_abs_wsum", "gene_support_n", "gene_score", "mean_effect_size", "gene_effect_compound", "gene_feature_effect_compound"]`; set `[]` to disable.
-- Feature keys are bundle-observed only (no synthetic expansion beyond mapped stable loci).
+- Freeze now also writes and wires:
+  - `step_config.model_bundle.fixed_gene_panel` -> `production/model_bundle/frozen_genes_production.csv`
+  - `step_config.model_bundle.fixed_gene_features` -> `production/model_bundle/frozen_gene_features.csv`
+- `gene_feature_loading` controls gene-family locus selection in observed-hybrid mode:
+  - `frozen` (default): only frozen DMP loci are used.
+  - `range`: expand to all observed loci inside frozen gene-feature ranges from `fixed_gene_features`.
 - Train/predict schema parity is enforced via stored feature names/fingerprints and fill metadata.
 - Legacy `observed_feature_include_*` toggles are no longer the canonical feature-family contract.
 

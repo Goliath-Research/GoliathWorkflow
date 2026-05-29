@@ -587,7 +587,16 @@ def run_module_pipeline(
         valid = ", ".join(sorted(_VALID_MODULE_LABEL_MODES))
         raise ValueError(f"module_label_mode must be one of: {valid}")
 
-    analyzer = EnrichmentAnalyzer(libraries=libraries, organism=organism, cutoff=cutoff)
+    analyzer_kwargs = {}
+    if cisbp is not None:
+        analyzer_kwargs["cisbp"] = cisbp
+        analyzer_kwargs["cisbp_context"] = cisbp_context
+    analyzer = EnrichmentAnalyzer(
+        libraries=libraries,
+        organism=organism,
+        cutoff=cutoff,
+        **analyzer_kwargs,
+    )
     genes, gene_weights = analyzer.load_gene_list_with_weights(
         input_path,
         top_n=top_n,

@@ -97,6 +97,76 @@ def test_range_loading_expands_loci_beyond_frozen_dmps(monkeypatch):
     assert sorted(set(expanded["position"].astype(int).tolist())) == [95, 100, 110]
 
 
+def test_anchor_and_feature_table_do_not_diverge_for_dmp_family_with_range_loading(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder,
+        "_resolve_sample_context_h5",
+        lambda sample_path, chromosome, context: Path("/tmp/fake.h5"),
+    )
+    monkeypatch.setattr(
+        observed_feature_builder,
+        "load_from_h5",
+        lambda path: SimpleNamespace(df=pd.DataFrame({"pos": [95, 100, 110, 500]})),
+    )
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_complete,
+    )
+
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
+    y = [0, 0, 1, 1]
+    class_names = ["healthy", "cancer"]
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["healthy_vs_cancer"],
+            "chromosome": ["1"],
+            "context": ["CG"],
+            "position": [100],
+            "effect_size": [0.4],
+            "gene_name": ["GENE_A"],
+            "feature_type": ["promoter"],
+        }
+    )
+    fixed_gene_features_df = pd.DataFrame(
+        {
+            "comparison_label": ["healthy_vs_cancer"],
+            "gene_name": ["GENE_A"],
+            "chromosome": ["1"],
+            "feature_type": ["promoter"],
+            "feature_start": [90],
+            "feature_end": [120],
+            "feature_effect_compound": [0.8],
+        }
+    )
+
+    anchors = observed_feature_builder.derive_observed_hybrid_anchors(
+        sample_paths=sample_paths,
+        sample_class_indices=y,
+        class_names=class_names,
+        dmp_df=dmp_df,
+        min_coverage=1,
+        feature_family_set="dmp",
+        gene_feature_loading="range",
+        fixed_gene_features_df=fixed_gene_features_df,
+    )
+    # This should not raise due to reference length mismatch / fingerprint mismatch.
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        feature_family_set="dmp",
+        gene_feature_loading="range",
+        fixed_gene_features_df=fixed_gene_features_df,
+    )
+    assert feat.X.shape[0] == len(sample_paths)
+
+
 def _derive_anchors(sample_paths, y, class_names, dmp_df):
     return observed_feature_builder.derive_observed_hybrid_anchors(
         sample_paths=sample_paths,

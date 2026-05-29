@@ -105,8 +105,14 @@ The main components are:
 During stability MC runs, `stability_featurecuts_enabled` and related `stability_target_balanced_accuracy` / `stability_min_selected_dmps` settings are materialized per iteration as `detector_step_override.json` so detector selection policy is explicit and auditable in each `run_XXXX`.
 
 The `--freeze` path uses `run_pipeline_for_production()` which runs: centroid → detector(with `fixed_dmp_panel`) → mapper → enricher; when `step_config.progression.enabled=true`, it then runs `methyl-disease-progression`.
-During freeze, model-bundle preparation can materialize mapper annotation cache files under `production/model_bundle/` and wire `step_config.model_bundle.mapper_annotation_csv` for mapped-family feature builds.
+During freeze, model-bundle preparation materializes:
+
+- mapper annotation cache under `production/model_bundle/mapper_dmp_annotations.csv` and wires `step_config.model_bundle.mapper_annotation_csv`,
+- frozen gene ranking panel under `production/model_bundle/frozen_genes_production.csv` and wires `step_config.model_bundle.fixed_gene_panel`,
+- frozen gene-feature ranges under `production/model_bundle/frozen_gene_features.csv` and wires `step_config.model_bundle.fixed_gene_features`.
+
 Cache generation also supports configurable per-gene mapper attributes via `step_config.model_bundle.mapper_gene_columns` (or `step_config.mapper.mapper_gene_columns` fallback), defaulting to `["gene_importance", "gene_effect_abs_wsum", "gene_support_n", "gene_score", "mean_effect_size", "gene_effect_compound", "gene_feature_effect_compound"]`; set `[]` to disable carrying extra per-gene columns.
+For observed-hybrid gene families, `gene_feature_loading` determines whether training/prediction uses only frozen DMP loci (`frozen`) or expands to all loci observed inside the frozen gene-feature ranges (`range`).
 
 ```mermaid
 flowchart LR

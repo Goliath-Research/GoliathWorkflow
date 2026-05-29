@@ -526,15 +526,18 @@ def derive_observed_hybrid_anchors(
     dmp_df: pd.DataFrame,
     *,
     min_coverage: int = 1,
+    feature_family_set: str = "dmp",
     gene_feature_loading: str = "frozen",
     fixed_gene_features_df: Optional[pd.DataFrame] = None,
 ) -> ObservedHybridAnchors:
+    _include_dmp_family, include_gene_family, _include_structural_family = _family_flags(feature_family_set)
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
     if gene_feature_loading_norm not in {"frozen", "range"}:
         raise ValueError("gene_feature_loading must be 'frozen' or 'range'")
     work_dmp_df = dmp_df
     if (
         gene_feature_loading_norm == "range"
+        and include_gene_family
         and fixed_gene_features_df is not None
         and not fixed_gene_features_df.empty
     ):

@@ -284,6 +284,7 @@ Key contracts between stages:
 - enricher consumes mapper combined CSV and emits `enrichment_merged.csv` and module tables,
 - progression consumes mapper+enricher stage outputs,
 - model bundle uses detector DMP index plus optional mapper annotation cache.
+- freeze also materializes `frozen_genes_production.csv` and `frozen_gene_features.csv` for downstream gene-family feature loading.
 
 # Implementation
 
@@ -303,13 +304,15 @@ In `bedtools_mapper.py`:
 In `methyl_validation/config.py`:
 
 - strict Pydantic models for MC + backend profiles,
-- `DEFAULT_MAPPER_GENE_COLUMNS` and configurable `mapper_gene_columns`.
+- `DEFAULT_MAPPER_GENE_COLUMNS` and configurable `mapper_gene_columns`,
+- `gene_feature_loading` switch (`frozen` vs `range`) for observed-hybrid gene families.
 
 In `methyl_validation/model_bundle.py`:
 
 - `build_mapper_annotation_cache` composes per-locus mapper annotation rows,
 - optional join of configured per-gene mapper columns,
-- HDF5 writing/reading in bundle schema v2 with core and passthrough columns.
+- freeze-time `build_frozen_gene_panel` writes ranked genes and feature ranges (`fixed_gene_panel`, `fixed_gene_features`),
+- HDF5 writing/reading in bundle schema v2 with core/passthrough columns plus persisted `gene_feature_ranges`.
 
 ## Enricher strict-contract behavior
 
@@ -348,7 +351,7 @@ Compatibility bridge implemented for legacy filter knob:
   box/.style={draw, rounded corners=3pt, align=center, font=\footnotesize, minimum height=0.75cm, text width=3.1cm},
   arr/.style={-{Latex[length=2mm]}, thick}
 ]
-\node[box, fill=green!10] (mapper) {Mapper\\gene\_effect\_compound\\$\Rightarrow$ gene\_importance};
+\node[box, fill=green!10] (mapper) {Mapper\\gene\_effect\_abs\_wsum\\$\Rightarrow$ gene\_importance};
 \node[box, fill=orange!12, right=1.5cm of mapper] (enricher) {Enricher\\weights/ranking on\\gene\_importance};
 \node[box, fill=orange!12, right=1.5cm of enricher] (progression) {Progression\\stage scores from\\gene\_importance};
 \node[box, fill=blue!8, below=1.1cm of enricher] (bundle) {Model bundle\\optional mapper columns\\include gene importance family};
@@ -443,6 +446,10 @@ Important behavior:
 
 - `--skip-detection` is supported in `--stability` and `--freeze`,
 - `--skip-detection` implies `--skip-centroid`.
+- Freeze exports `fixed_gene_panel` and `fixed_gene_features` under `production/model_bundle/`.
+- Observed-hybrid gene-family model features can run in:
+  - `gene_feature_loading=frozen` (exact frozen loci),
+  - `gene_feature_loading=range` (all observed loci within frozen gene-feature ranges).
 
 ## Freeze phase diagram
 
