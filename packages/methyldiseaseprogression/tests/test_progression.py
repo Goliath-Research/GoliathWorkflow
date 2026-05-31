@@ -460,3 +460,31 @@ def test_progression_activity_sanitizes_non_finite_values(tmp_path: Path):
     assert all(math.isfinite(float(v)) for v in combined.tolist())
     report_text = Path(summary["report_md"]).read_text(encoding="utf-8")
     assert "combined_score: inf" not in report_text
+
+
+def test_progression_activity_preserves_nan_as_zero_and_negative_inf_as_zero(tmp_path: Path):
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    root = tmp_path / "out" / "prog"
+    for stage in ("pca_pca1", "pca_pca2", "pca_pca3"):
+        enricher_dir = root / "enricher" / "all" / stage
+        m_rows = [
+            (
+                "Module_variant_family,Module_primary,Score,Activity_combined_score_mean,"
+                "Activity_gene_effect_mean,Activity_log10q_mean,Activity_overlap_effect_mean"
+            ),
+            "Stable_Module_A,Primary_A,0.9,inf,0.25,2.4,0.11",
+            "Stable_Module_B,Primary_B,0.5,5.0,0.12,1.7,0.04",
+            "Stable_Module_C,Primary_C,0.4,bad_value,0.11,1.6,0.03",
+            "Stable_Module_D,Primary_D,0.3,-inf,0.10,1.5,0.02",
+        ]
+        (enricher_dir / "modules_ranked.csv").write_text("\n".join(m_rows) + "\n", encoding="utf-8")
+
+    summary = run_progression_report(project_path=project_path)
+    activity_df = pd.read_csv(summary["modules_activity_long_csv"])
+    combined = activity_df[activity_df["metric"] == "combined_score"][["module", "value"]].copy()
+    values = dict(zip(combined["module"].astype(str), combined["value"].astype(float)))
+    assert values["Stable_Module_A"] == 5.0  # +inf -> max finite value
+    assert values["Stable_Module_B"] == 5.0
+    assert values["Stable_Module_C"] == 0.0  # unparseable NaN remains bottom-ranked
+    assert values["Stable_Module_D"] == 0.0  # -inf treated as bottom-ranked
