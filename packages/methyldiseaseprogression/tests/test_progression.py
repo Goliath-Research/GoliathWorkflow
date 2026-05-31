@@ -1,5 +1,6 @@
 import csv
 import json
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -434,3 +435,28 @@ def test_progression_activity_columns_backward_compatible_when_absent(tmp_path: 
     assert "No module activity columns detected" in str(summary.get("modules_activity_note", ""))
     activity_df = pd.read_csv(summary["modules_activity_long_csv"])
     assert activity_df.empty
+
+
+def test_progression_activity_sanitizes_non_finite_values(tmp_path: Path):
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    root = tmp_path / "out" / "prog"
+    for stage in ("pca_pca1", "pca_pca2", "pca_pca3"):
+        enricher_dir = root / "enricher" / "all" / stage
+        m_rows = [
+            (
+                "Module_variant_family,Module_primary,Score,Activity_combined_score_mean,"
+                "Activity_gene_effect_mean,Activity_log10q_mean,Activity_overlap_effect_mean"
+            ),
+            "Stable_Module_A,Primary_A,0.9,inf,0.25,2.4,0.11",
+            "Stable_Module_B,Primary_B,0.5,3.2,0.12,1.7,0.04",
+        ]
+        (enricher_dir / "modules_ranked.csv").write_text("\n".join(m_rows) + "\n", encoding="utf-8")
+
+    summary = run_progression_report(project_path=project_path, report_md=True)
+    activity_df = pd.read_csv(summary["modules_activity_long_csv"])
+    combined = activity_df[activity_df["metric"] == "combined_score"]["value"]
+    assert combined.notna().all()
+    assert all(math.isfinite(float(v)) for v in combined.tolist())
+    report_text = Path(summary["report_md"]).read_text(encoding="utf-8")
+    assert "combined_score: inf" not in report_text

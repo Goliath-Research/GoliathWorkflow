@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
+import numpy as np
 import pandas as pd
 from methyl_utils import load_project
 
@@ -452,7 +453,10 @@ def _build_module_activity_rows(stage: StageSpec) -> pd.DataFrame:
     out_rows: List[Dict[str, Any]] = []
     for col in present:
         metric_df = work[[module_col, col]].copy()
-        metric_df[col] = pd.to_numeric(metric_df[col], errors="coerce").fillna(0.0)
+        values = pd.to_numeric(metric_df[col], errors="coerce")
+        finite = values[np.isfinite(values)]
+        replacement = float(finite.max()) if not finite.empty else 0.0
+        metric_df[col] = values.replace([np.inf, -np.inf], np.nan).fillna(replacement)
         metric_df = metric_df.sort_values(col, ascending=False).reset_index(drop=True)
         metric_df["rank"] = metric_df.index + 1
         metric_name = metric_map[col]

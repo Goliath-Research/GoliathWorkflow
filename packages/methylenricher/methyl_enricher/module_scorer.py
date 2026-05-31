@@ -18,6 +18,14 @@ def _normalize_score(x: float, low: float = 0.0, high: float = 1.0) -> float:
     return float(np.clip(x, low, high))
 
 
+def _finite_mean(values: pd.Series, *, default: float = 0.0) -> float:
+    """Mean over finite numeric values only."""
+    clean = pd.to_numeric(values, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+    if clean.empty:
+        return float(default)
+    return float(clean.mean())
+
+
 def compute_module_enrichment_score(
     module_pathways: List[str],
     merged_df: pd.DataFrame,
@@ -98,24 +106,26 @@ def compute_module_activity_components(
         q = pd.Series([1.0] * len(sub))
     out["activity_log10q_mean"] = float(np.mean(-np.log10(q.clip(lower=1e-10))))
     if "Combined Score" in sub.columns:
-        out["activity_combined_score_mean"] = float(
-            pd.to_numeric(sub["Combined Score"], errors="coerce").fillna(0.0).mean()
-        )
+        out["activity_combined_score_mean"] = _finite_mean(sub["Combined Score"], default=0.0)
     elif "Odds Ratio" in sub.columns:
-        out["activity_combined_score_mean"] = float(
-            pd.to_numeric(sub["Odds Ratio"], errors="coerce").fillna(0.0).mean()
-        )
+        out["activity_combined_score_mean"] = _finite_mean(sub["Odds Ratio"], default=0.0)
     if "overlap_weight_abs_mean" in sub.columns:
-        out["activity_overlap_effect_mean"] = float(
-            pd.to_numeric(sub["overlap_weight_abs_mean"], errors="coerce").fillna(0.0).mean()
-        )
+        out["activity_overlap_effect_mean"] = _finite_mean(sub["overlap_weight_abs_mean"], default=0.0)
     all_genes: Set[str] = set()
     for p in module_pathways:
         all_genes |= pathway_to_genes.get(p, set())
     if gene_effects and all_genes:
-        vals = [float(gene_effects.get(g.strip().upper(), 0.0)) for g in all_genes]
+        vals = []
+        for g in all_genes:
+            raw = gene_effects.get(g.strip().upper(), 0.0)
+            try:
+                num = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if np.isfinite(num):
+                vals.append(abs(num))
         if vals:
-            out["activity_gene_effect_mean"] = float(np.mean(np.abs(vals)))
+            out["activity_gene_effect_mean"] = float(np.mean(vals))
     return out
 
 
