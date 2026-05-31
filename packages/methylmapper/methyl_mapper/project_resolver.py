@@ -28,6 +28,30 @@ from methyl_utils import load_project
 DMP_CSV_PATTERN_BIOLOGICAL = "dmps-*-biological-sorted.csv"
 
 
+def _resolve_detection_dir_with_case_fallback(project, control_group: str, disease_group: str) -> Path:
+    """
+    Resolve detection directory with backward-compatible case-insensitive fallback.
+
+    Some existing runs were written with lower-cased comparison directories
+    (e.g. `pca_pca1`) while newer project labels may be mixed-case
+    (`PCa_PCa1`). Prefer the canonical path, but reuse an existing directory
+    with matching case-folded name when present.
+    """
+    canonical = Path(project.get_detection_output_dir(control_group, disease_group))
+    if canonical.exists():
+        return canonical
+    parent = canonical.parent
+    token = canonical.name.casefold()
+    if parent.exists():
+        for child in parent.iterdir():
+            if child.is_dir() and child.name.casefold() == token:
+                return child
+    lower = canonical.with_name(canonical.name.lower())
+    if lower.exists():
+        return lower
+    return canonical
+
+
 class MapperStepPaths(BaseModel):
     """Paths for the mapper step derived from a project (and optional overrides)."""
 
@@ -71,7 +95,11 @@ def resolve_mapper_paths_per_cancer_group(
         out: List[Tuple[MapperStepPaths, str]] = []
         for spec in project.get_comparisons():
             comp_label = spec.comparison_label or spec.disease_group
-            det_dir = project.get_detection_output_dir(spec.control_group, spec.disease_group)
+            det_dir = _resolve_detection_dir_with_case_fallback(
+                project,
+                control_group=spec.control_group,
+                disease_group=spec.disease_group,
+            )
             map_dir = project.get_mapper_output_dir(spec.control_group, spec.disease_group)
             group_csv = str(Path(det_dir) / pattern)
             out.append((MapperStepPaths(csv_pattern=group_csv, output_dir=map_dir), comp_label))

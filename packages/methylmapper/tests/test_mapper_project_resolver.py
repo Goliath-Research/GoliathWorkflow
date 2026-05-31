@@ -59,3 +59,36 @@ def test_resolve_mapper_paths_per_comparison_uses_canonical_layout(tmp_path):
         == "/work/output/MapperProject/detections/healthy/pca/dmps-*.csv"
     )
     assert paths.output_dir == "/work/output/MapperProject/mapper/healthy/pca"
+
+
+def test_resolve_mapper_paths_per_comparison_falls_back_to_existing_case_variant(tmp_path):
+    out_base = tmp_path / "out"
+    project_path = tmp_path / "project_case.json"
+    project_path.write_text(
+        json.dumps(
+            {
+                "project_name": "MapperCaseProject",
+                "output_base": str(out_base),
+                "controls": {
+                    "label": "controls",
+                    "groups": [{"label": "all", "sample_paths": ["c1"]}],
+                },
+                "diseases": {
+                    "label": "diseases",
+                    "groups": [{"label": "PCa_PCa1", "sample_paths": ["d1"]}],
+                },
+                "comparisons": [{"control_group": "all", "disease_group": "PCa_PCa1"}],
+                "step_config": {"mapper": {"csv_pattern": "dmps-*-discovery.csv"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    legacy_dir = out_base / "MapperCaseProject" / "detections" / "all" / "pca_pca1"
+    legacy_dir.mkdir(parents=True, exist_ok=True)
+
+    resolved = resolve_mapper_paths_per_cancer_group(project_path)
+
+    assert len(resolved) == 1
+    paths, label = resolved[0]
+    assert label == "PCa_PCa1"
+    assert paths.csv_pattern.endswith("/detections/all/pca_pca1/dmps-*-discovery.csv")
