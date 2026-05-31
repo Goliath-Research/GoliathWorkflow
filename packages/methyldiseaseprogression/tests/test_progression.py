@@ -396,3 +396,41 @@ def test_progression_effect_x_support_fallback_to_gene_importance(tmp_path: Path
     summary = run_progression_report(project_path=project_path)
     stage_meta = summary["gene_score_mode_by_stage"]["pca_pca1"]
     assert stage_meta["effective_mode"] == "gene_importance_fallback"
+
+
+def test_progression_writes_modules_activity_long_when_columns_present(tmp_path: Path):
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    root = tmp_path / "out" / "prog"
+    for idx, stage in enumerate(("pca_pca1", "pca_pca2", "pca_pca3"), start=1):
+        enricher_dir = root / "enricher" / "all" / stage
+        m_rows = [
+            (
+                "Module_variant_family,Module_primary,Score,Activity_combined_score_mean,"
+                "Activity_gene_effect_mean,Activity_log10q_mean,Activity_overlap_effect_mean"
+            ),
+            f"Stable_Module_A,Primary_A,0.9,{10+idx},{0.2*idx},{2+idx},{0.1*idx}",
+            f"Stable_Module_B,Primary_B,0.5,{4+idx},{0.05*idx},{1+idx},{0.03*idx}",
+        ]
+        (enricher_dir / "modules_ranked.csv").write_text("\n".join(m_rows) + "\n", encoding="utf-8")
+
+    summary = run_progression_report(project_path=project_path, report_md=True)
+    assert summary["modules_activity_rows"] > 0
+    assert "modules_activity_note" not in summary
+    activity_df = pd.read_csv(summary["modules_activity_long_csv"])
+    assert not activity_df.empty
+    assert {"stage_index", "comparison", "module", "metric", "value", "rank"} == set(activity_df.columns)
+    assert {"combined_score", "effect_size"}.issubset(set(activity_df["metric"].astype(str)))
+    report_text = Path(summary["report_md"]).read_text(encoding="utf-8")
+    assert "Module activity trajectories" in report_text
+
+
+def test_progression_activity_columns_backward_compatible_when_absent(tmp_path: Path):
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    summary = run_progression_report(project_path=project_path)
+
+    assert summary["modules_activity_rows"] == 0
+    assert "No module activity columns detected" in str(summary.get("modules_activity_note", ""))
+    activity_df = pd.read_csv(summary["modules_activity_long_csv"])
+    assert activity_df.empty

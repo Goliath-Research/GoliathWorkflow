@@ -167,6 +167,45 @@ def _derive_disease_prior_genes(
     return genes
 
 
+def _derive_mapper_gene_effects(
+    input_path: Path,
+    *,
+    gene_column: Optional[str] = None,
+) -> Dict[str, float]:
+    """
+    Build gene->effect lookup from mapper combined CSV for activity tracking.
+    """
+    path = Path(input_path)
+    if path.suffix.lower() not in {".csv", ".tsv"} or not path.exists():
+        return {}
+    sep = "," if path.suffix.lower() == ".csv" else "\t"
+    df = pd.read_csv(path, sep=sep)
+    gc = _resolve_gene_column(df, gene_column)
+    if gc is None:
+        return {}
+    effect_col = None
+    for cand in ("mean_effect_size", "gene_effect_size", "gene_effect_abs_wmean"):
+        if cand in df.columns:
+            effect_col = cand
+            break
+    if effect_col is None:
+        return {}
+    work = df[[gc, effect_col]].copy()
+    work[gc] = work[gc].astype(str).str.strip()
+    work = work[work[gc] != ""]
+    work[effect_col] = pd.to_numeric(work[effect_col], errors="coerce").fillna(0.0).abs()
+    agg = (
+        work.groupby(gc, as_index=False)[effect_col]
+        .max()
+        .sort_values(effect_col, ascending=False)
+    )
+    return {
+        str(row[gc]).strip().upper(): float(row[effect_col])
+        for _, row in agg.iterrows()
+        if str(row[gc]).strip()
+    }
+
+
 def _collapse_modules_by_theme(
     df: pd.DataFrame,
     *,
@@ -236,6 +275,14 @@ def _collapse_modules_by_theme(
             "n_pathways": int(pd.to_numeric(sub["n_pathways"], errors="coerce").fillna(0).sum()),
             "n_genes": int(pd.to_numeric(sub["n_genes"], errors="coerce").fillna(0).max()),
         }
+        for col in (
+            "Activity_combined_score_mean",
+            "Activity_log10q_mean",
+            "Activity_overlap_effect_mean",
+            "Activity_gene_effect_mean",
+        ):
+            if col in sub.columns:
+                row[col] = float(pd.to_numeric(sub[col], errors="coerce").dropna().mean())
         if include_disease_columns:
             disease_score = float(
                 pd.to_numeric(sub["Disease_relevance_score"], errors="coerce").dropna().max()
@@ -671,6 +718,12 @@ def run_module_pipeline(
         logger.info("Disease prior active for module scoring (%d genes).", len(disease_genes))
     else:
         logger.info("No disease prior detected; module scoring will not include disease columns.")
+    gene_effects = _derive_mapper_gene_effects(
+        input_path,
+        gene_column=gene_column,
+    )
+    if gene_effects:
+        logger.info("Mapper gene-effect activity lookup active (%d genes).", len(gene_effects))
 
     normalizer = PathwayNormalizer()
     _, theme_descriptions = load_theme_extras()
@@ -803,6 +856,7 @@ def run_module_pipeline(
         pathway_to_genes,
         clustering_df,
         gene_weights=gene_weights,
+        gene_effects=gene_effects,
         disease_genes=disease_genes,
         ppi_coherence_by_module=ppi_coherence_by_module,
         ppi_weight_in_final_score=(
@@ -849,6 +903,10 @@ def run_module_pipeline(
             "module_type": module_type,
             "n_pathways": row["n_pathways"],
             "n_genes": n_genes,
+            "Activity_combined_score_mean": round(float(row.get("activity_combined_score_mean", 0.0)), 6),
+            "Activity_log10q_mean": round(float(row.get("activity_log10q_mean", 0.0)), 6),
+            "Activity_overlap_effect_mean": round(float(row.get("activity_overlap_effect_mean", 0.0)), 6),
+            "Activity_gene_effect_mean": round(float(row.get("activity_gene_effect_mean", 0.0)), 6),
         })
         if bool(row.get("has_disease_prior", False)):
             out_rows[-1]["Disease_relevance_score"] = round(float(row.get("disease_relevance")), 4)

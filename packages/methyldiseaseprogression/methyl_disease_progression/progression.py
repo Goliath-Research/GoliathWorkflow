@@ -422,6 +422,54 @@ def _build_module_variant_rows(stage: StageSpec) -> pd.DataFrame:
     )
 
 
+def _build_module_activity_rows(stage: StageSpec) -> pd.DataFrame:
+    """
+    Module activity long table from modules_ranked.csv activity columns.
+    """
+    if not stage.modules_csv.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(stage.modules_csv)
+    module_col = _first_existing_column(
+        df,
+        ["Module_variant_family", "Module_primary", "Module_display", "Module", "module", "module_name"],
+    )
+    if module_col is None:
+        return pd.DataFrame()
+    metric_map = {
+        "Activity_combined_score_mean": "combined_score",
+        "Activity_gene_effect_mean": "effect_size",
+        "Activity_log10q_mean": "log10q",
+        "Activity_overlap_effect_mean": "overlap_effect",
+    }
+    present = [c for c in metric_map if c in df.columns]
+    if not present:
+        return pd.DataFrame()
+    work = df[[module_col, *present]].copy()
+    work[module_col] = work[module_col].astype(str).str.strip()
+    work = work[work[module_col] != ""]
+    if work.empty:
+        return pd.DataFrame()
+    out_rows: List[Dict[str, Any]] = []
+    for col in present:
+        metric_df = work[[module_col, col]].copy()
+        metric_df[col] = pd.to_numeric(metric_df[col], errors="coerce").fillna(0.0)
+        metric_df = metric_df.sort_values(col, ascending=False).reset_index(drop=True)
+        metric_df["rank"] = metric_df.index + 1
+        metric_name = metric_map[col]
+        for _, row in metric_df.iterrows():
+            out_rows.append(
+                {
+                    "stage_index": stage.stage_index,
+                    "comparison": stage.comparison_label,
+                    "module": str(row[module_col]),
+                    "metric": metric_name,
+                    "value": float(row[col]),
+                    "rank": int(row["rank"]),
+                }
+            )
+    return pd.DataFrame(out_rows)
+
+
 def _build_module_detailed_rows(stage: StageSpec) -> pd.DataFrame:
     """Cluster-level module rows from modules_ranked_detailed.csv when available."""
     if not stage.modules_detailed_csv.exists():
@@ -759,6 +807,7 @@ def render_markdown_report(
     *,
     top_n: int = 10,
     gene_set_metrics_df: Optional[pd.DataFrame] = None,
+    modules_activity_df: Optional[pd.DataFrame] = None,
 ) -> str:
     lines = [
         "# Disease Progression Report",
@@ -792,6 +841,27 @@ def render_markdown_report(
         for label, count in vc.items():
             lines.append(f"- `{label}`: {count}")
     lines.append("")
+    if modules_activity_df is not None and not modules_activity_df.empty:
+        lines.append("## Module activity trajectories")
+        lines.append("")
+        focus = modules_activity_df[
+            modules_activity_df["metric"].astype(str).isin({"combined_score", "effect_size"})
+        ].copy()
+        if focus.empty:
+            lines.append("- Activity table present, but no combined_score/effect_size rows were found.")
+            lines.append("")
+        else:
+            agg = (
+                focus.groupby(["stage_index", "comparison", "metric"], as_index=False)
+                .agg(value=("value", "mean"))
+                .sort_values(["stage_index", "metric"])
+            )
+            for _, row in agg.iterrows():
+                lines.append(
+                    f"- Stage {int(row['stage_index'])} `{row['comparison']}` "
+                    f"{row['metric']}: {float(row['value']):.4f}"
+                )
+            lines.append("")
 
     if gene_set_metrics_df is not None and not gene_set_metrics_df.empty:
         lines.append("## Gene set overlap metrics")
@@ -883,6 +953,7 @@ def run_progression_report(
     modules_variant_path = out_dir / "modules_long_variant.csv"
     modules_detailed_path = out_dir / "modules_long_detailed.csv"
     labels_path = out_dir / "entities_progression_labels.csv"
+    modules_activity_path = out_dir / "modules_activity_long.csv"
     summary_path = out_dir / "summary.json"
 
     genes_df.to_csv(genes_path, index=False)
@@ -891,6 +962,15 @@ def run_progression_report(
     modules_variant_df.to_csv(modules_variant_path, index=False)
     modules_detailed_df.to_csv(modules_detailed_path, index=False)
     labels_df.to_csv(labels_path, index=False)
+    modules_activity_frames = [_build_module_activity_rows(spec) for spec in stage_specs]
+    modules_activity_cols = ["stage_index", "comparison", "module", "metric", "value", "rank"]
+    non_empty_activity = [f for f in modules_activity_frames if not f.empty]
+    modules_activity_df = (
+        pd.concat(non_empty_activity, ignore_index=True)
+        if non_empty_activity
+        else pd.DataFrame(columns=modules_activity_cols)
+    )
+    modules_activity_df.to_csv(modules_activity_path, index=False)
 
     summary: Dict[str, Any] = {
         **meta,
@@ -901,8 +981,15 @@ def run_progression_report(
         "modules_long_csv": str(modules_path),
         "modules_long_variant_csv": str(modules_variant_path),
         "modules_long_detailed_csv": str(modules_detailed_path),
+        "modules_activity_long_csv": str(modules_activity_path),
+        "modules_activity_rows": int(len(modules_activity_df)),
         "labels_csv": str(labels_path),
     }
+    if modules_activity_df.empty:
+        summary["modules_activity_note"] = (
+            "No module activity columns detected in modules_ranked.csv "
+            "(expected Activity_combined_score_mean/Activity_gene_effect_mean)."
+        )
     _gsm = gene_set_fractions_summary(metrics_df, gene_cfg)
     summary["gene_set_fractions"] = _gsm
     summary["gene_set_metrics"] = _gsm
@@ -930,6 +1017,7 @@ def run_progression_report(
                 summary,
                 labels_df,
                 gene_set_metrics_df=metrics_df if not metrics_df.empty else None,
+                modules_activity_df=modules_activity_df if not modules_activity_df.empty else None,
             ),
             encoding="utf-8",
         )

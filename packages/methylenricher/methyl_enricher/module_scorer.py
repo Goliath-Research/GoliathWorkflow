@@ -67,6 +67,58 @@ def compute_module_enrichment_score(
     return _normalize_score(score)
 
 
+def compute_module_activity_components(
+    module_pathways: List[str],
+    merged_df: pd.DataFrame,
+    pathway_to_genes: Dict[str, Set[str]],
+    gene_effects: Optional[Dict[str, float]] = None,
+) -> Dict[str, float]:
+    """
+    Compute interpretable per-module activity components.
+
+    These are exported for longitudinal progression analysis and intentionally kept
+    independent from final ranking-score weights.
+    """
+    out = {
+        "activity_combined_score_mean": 0.0,
+        "activity_log10q_mean": 0.0,
+        "activity_overlap_effect_mean": 0.0,
+        "activity_gene_effect_mean": 0.0,
+    }
+    if not module_pathways:
+        return out
+    key_set = set(module_pathways)
+    term_keys = merged_df["Term"].map(canonical_pathway_key)
+    sub = merged_df[term_keys.isin(key_set)]
+    if sub.empty:
+        return out
+    if "Adjusted P-value" in sub.columns:
+        q = pd.to_numeric(sub["Adjusted P-value"], errors="coerce").fillna(1.0)
+    else:
+        q = pd.Series([1.0] * len(sub))
+    out["activity_log10q_mean"] = float(np.mean(-np.log10(q.clip(lower=1e-10))))
+    if "Combined Score" in sub.columns:
+        out["activity_combined_score_mean"] = float(
+            pd.to_numeric(sub["Combined Score"], errors="coerce").fillna(0.0).mean()
+        )
+    elif "Odds Ratio" in sub.columns:
+        out["activity_combined_score_mean"] = float(
+            pd.to_numeric(sub["Odds Ratio"], errors="coerce").fillna(0.0).mean()
+        )
+    if "overlap_weight_abs_mean" in sub.columns:
+        out["activity_overlap_effect_mean"] = float(
+            pd.to_numeric(sub["overlap_weight_abs_mean"], errors="coerce").fillna(0.0).mean()
+        )
+    all_genes: Set[str] = set()
+    for p in module_pathways:
+        all_genes |= pathway_to_genes.get(p, set())
+    if gene_effects and all_genes:
+        vals = [float(gene_effects.get(g.strip().upper(), 0.0)) for g in all_genes]
+        if vals:
+            out["activity_gene_effect_mean"] = float(np.mean(np.abs(vals)))
+    return out
+
+
 def compute_disease_relevance(
     module_genes: Set[str],
     disease_genes: Optional[Set[str]] = None,
@@ -103,6 +155,7 @@ def score_and_rank_modules(
     weight_disease: float = 0.3,
     ppi_coherence_by_module: Optional[Dict[int, float]] = None,
     ppi_weight_in_final_score: float = 0.0,
+    gene_effects: Optional[Dict[str, float]] = None,
 ) -> pd.DataFrame:
     """
     For each module, compute enrichment score and disease relevance, combine into
@@ -126,6 +179,12 @@ def score_and_rank_modules(
         enrich_score = compute_module_enrichment_score(
             pathways, merged_df, pathway_to_genes, gene_weights
         )
+        activity = compute_module_activity_components(
+            pathways,
+            merged_df,
+            pathway_to_genes,
+            gene_effects=gene_effects,
+        )
         disease_score = compute_disease_relevance(genes, disease_genes)
         if has_disease_prior and np.isfinite(disease_score):
             base_score = weight_enrichment * enrich_score + weight_disease * disease_score
@@ -148,6 +207,10 @@ def score_and_rank_modules(
             "final_score": round(blended_score, 4),
             "disease_relevance_tier": disease_tier,
             "has_disease_prior": has_disease_prior,
+            "activity_combined_score_mean": round(float(activity["activity_combined_score_mean"]), 6),
+            "activity_log10q_mean": round(float(activity["activity_log10q_mean"]), 6),
+            "activity_overlap_effect_mean": round(float(activity["activity_overlap_effect_mean"]), 6),
+            "activity_gene_effect_mean": round(float(activity["activity_gene_effect_mean"]), 6),
         })
     df = pd.DataFrame(rows)
     df.sort_values("final_score", ascending=False, inplace=True)

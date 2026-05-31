@@ -113,3 +113,39 @@ def test_modules_omit_disease_columns_when_prior_filters_to_empty(monkeypatch, t
     assert not out_df.empty
     assert "Disease_relevance_score" not in out_df.columns
     assert "Disease_relevance_tier" not in out_df.columns
+
+
+def test_modules_export_activity_columns(monkeypatch, tmp_path: Path):
+    monkeypatch.setattr(module_pipeline, "EnrichmentAnalyzer", _FakeAnalyzer)
+    in_file = tmp_path / "mapper_for_activity.csv"
+    in_file.write_text(
+        (
+            "gene_name,gene_importance,mean_effect_size,unique_dmps\n"
+            "TP53,0.9,1.3,3\n"
+            "BRCA1,0.8,1.0,2\n"
+            "EGFR,0.7,0.4,2\n"
+            "MTOR,0.6,0.2,1\n"
+        ),
+        encoding="utf-8",
+    )
+
+    out_df = module_pipeline.run_module_pipeline(
+        input_path=in_file,
+        output_dir=tmp_path,
+        gene_column="gene_name",
+        network_plot="none",
+    )
+
+    assert not out_df.empty
+    expected_cols = {
+        "Activity_combined_score_mean",
+        "Activity_log10q_mean",
+        "Activity_overlap_effect_mean",
+        "Activity_gene_effect_mean",
+    }
+    assert expected_cols.issubset(set(out_df.columns))
+    assert pd.to_numeric(out_df["Activity_combined_score_mean"], errors="coerce").fillna(0.0).gt(0).any()
+    assert pd.to_numeric(out_df["Activity_gene_effect_mean"], errors="coerce").fillna(0.0).gt(0).any()
+
+    detailed_df = pd.read_csv(tmp_path / "modules_ranked_detailed.csv")
+    assert expected_cols.issubset(set(detailed_df.columns))
