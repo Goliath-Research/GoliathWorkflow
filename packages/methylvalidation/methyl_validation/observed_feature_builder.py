@@ -38,7 +38,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v26_per_label_centroid_features"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v27_no_tail_agreement"
 HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v1"
 HYBRID_FEATURE_FAMILY_SETS = (
     "dmp",
@@ -813,7 +813,6 @@ def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) ->
                 f"weighted_cosine_similarity_to_cancer_centroid__{suffix}",
                 f"weighted_fraction_dmps_closer_to_cancer_centroid__{suffix}",
                 f"weighted_healthy_tail_evidence__{suffix}",
-                f"weighted_healthy_tail_agreement__{suffix}",
             ]
         )
     return [name for name in names if name not in REMOVED_OBSERVED_HYBRID_FEATURES]
@@ -901,6 +900,7 @@ def build_observed_hybrid_feature_table(
     del quantiles, dmr_window_bp, max_dmr_features, max_gene_features
     # The redesigned schema is fixed; these toggles are retained only for compatibility.
     del include_dmp_features, include_chromosome_features, include_dmr_features, include_gene_features
+    del hist_tail_agreement_threshold
 
     include_dmp_family, include_gene_family, include_structural_family = _family_flags(feature_family_set)
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
@@ -1026,9 +1026,6 @@ def build_observed_hybrid_feature_table(
     hist_eps = float(max(float(hist_eps), 1e-12))
     hist_alpha = float(max(float(hist_alpha), 0.0))
     hist_evidence_clip_cap = float(max(float(hist_evidence_clip_cap), 0.0))
-    hist_tail_agreement_threshold = float(
-        max(0.0, min(1.0, float(hist_tail_agreement_threshold)))
-    )
     hist_min_delta = 0.0
     hist_bin_edges, hist_healthy_counts, hist_cancer_counts = _prepare_histogram_density_artifacts(
         locus_df,
@@ -1112,9 +1109,7 @@ def build_observed_hybrid_feature_table(
                     for k_idx, label_raw in enumerate(cancer_labels_raw):
                         suffix = _feature_label_token(label_raw)
                         key_e = f"weighted_healthy_tail_evidence__{suffix}"
-                        key_a = f"weighted_healthy_tail_agreement__{suffix}"
                         tail_feature_values.setdefault(key_e, float("nan"))
-                        tail_feature_values.setdefault(key_a, float("nan"))
                         counts_c = hist_cancer_counts.get(label_raw)
                         if counts_c is None or counts_c.shape != hist_healthy_counts.shape:
                             continue
@@ -1157,12 +1152,10 @@ def build_observed_hybrid_feature_table(
                         t = np.where(delta_v > 0.0, upper_tail, lower_tail)
                         t = np.clip(t, hist_eps, 1.0)
                         evidence = np.minimum(-np.log(t + hist_eps), hist_evidence_clip_cap)
-                        agreement = (t < hist_tail_agreement_threshold).astype(np.float64)
                         wk_sum = float(np.sum(wk_v))
                         if wk_sum <= 0.0:
                             continue
                         tail_feature_values[key_e] = float(np.sum(wk_v * evidence) / wk_sum)
-                        tail_feature_values[key_a] = float(np.sum(wk_v * agreement) / wk_sum)
 
             healthy_obs = healthy_ref[obs_mask]
             cancer_obs = cancer_ref[obs_mask]
@@ -1337,7 +1330,6 @@ def build_observed_hybrid_feature_table(
         "hist_eps": hist_eps,
         "hist_alpha": hist_alpha,
         "hist_evidence_clip_cap": hist_evidence_clip_cap,
-        "hist_tail_agreement_threshold": hist_tail_agreement_threshold,
         "feature_order_fingerprint": observed_order_fp,
         "schema_fingerprint": schema_fingerprint,
         "feature_non_nan_counts": {feature_names[j]: int(non_nan[j]) for j in range(len(feature_names))},

@@ -1020,7 +1020,6 @@ def test_tabular_observed_hybrid_train_predict_schema_parity(tmp_path: Path, mon
         meta.get("observed_feature_names") or []
     )
     assert "weighted_healthy_tail_evidence__pca1" in set(meta.get("observed_feature_names") or [])
-    assert "weighted_healthy_tail_agreement__pca1" in set(meta.get("observed_feature_names") or [])
     assert float(meta.get("observed_hist_eps", 0.0)) > 0.0
     assert float(meta.get("observed_hist_alpha", -1.0)) >= 0.0
     assert float(meta.get("observed_hist_evidence_clip_cap", -1.0)) >= 0.0
