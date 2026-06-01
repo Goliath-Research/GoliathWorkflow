@@ -52,6 +52,8 @@ If no key is found or the API errors, the tool still emits **`ai_review`** and c
 
 `production/project.json` **`step_config.mapper.disease_term`** is passed through as **`disease_context`** unless **`--disease-context`** is set.
 
+`production/project.json` **`step_config.validation.regulatory.primary_analyte`** is also passed into the Grok advisory payload as analyte context (alongside `sample_type`). This helps interpretation stay aligned with analyte biology (for example, buffy-coat host-response signatures vs cfDNA tumor-derived signatures). If `primary_analyte` is not declared, readiness still runs and marks analyte framing as not declared.
+
 When the production project JSON is valid for [`ProjectConfig`](../../../packages/methylutils/methyl_utils/pipeline_config.py), optional **`description`** fields on disease **`GroupConfig`** entries (including each nested **`stages[]`** child) are read and sent to Grok as **`ordered_stage_narratives`** (comparison token, `disease_group`, short text — no `sample_paths`). The markdown report also lists them under **Stage definitions (from project config)** when present.
 
 Exit codes:

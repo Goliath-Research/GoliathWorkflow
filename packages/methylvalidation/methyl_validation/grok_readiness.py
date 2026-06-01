@@ -101,6 +101,7 @@ def build_sanitized_ai_payload(
     stab = report.get("stability") or {}
     fr = report.get("freeze") or {}
     prog = report.get("progression") or {}
+    reg = report.get("regulatory") or {}
     traj = dict(prog.get("module_trajectory") or {})
     traj_variant = dict(prog.get("module_trajectory_variant") or {})
     traj_detailed = dict(prog.get("module_trajectory_detailed") or {})
@@ -135,6 +136,11 @@ def build_sanitized_ai_payload(
     payload: Dict[str, Any] = {
         "task": "readiness_progression_review",
         "disease_context": (disease_context or "").strip() or None,
+        "analyte_context": {
+            "primary_analyte": reg.get("primary_analyte"),
+            "sample_type": reg.get("sample_type"),
+            "intended_use_summary": reg.get("intended_use_summary"),
+        },
         "deterministic_verdict": {
             "overall": v.get("overall"),
             "stability": v.get("stability"),
@@ -356,6 +362,10 @@ def run_grok_readiness_review(
         "You MUST explicitly compare canonical module trajectory vs variant module trajectory, "
         "and when a detailed cluster-level module trajectory is provided, compare that too. "
         "If tracks diverge, explain why and how that should affect confidence. "
+        "Use analyte_context.primary_analyte and analyte_context.sample_type to frame interpretation "
+        "(for example, host-response dominant patterns may be plausible for buffy-coat, while tumor-derived "
+        "progression specificity may be expected for cfDNA). "
+        "If analyte context is missing, say that confidence is limited by missing analyte framing. "
         "Do not invent unseen statistics."
     )
     user_prompt = (

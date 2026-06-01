@@ -75,7 +75,13 @@ def _write_minimal_project(tree: Path) -> None:
             "detection": {
                 "fixed_dmp_panel": str(prod / "stable_dmps_genomewide.csv"),
                 "alpha": 0.05,
-            }
+            },
+            "validation": {
+                "regulatory": {
+                    "sample_type": "whole blood buffy coat",
+                    "primary_analyte": "buffy_coat",
+                }
+            },
         },
     }
     (prod / "project.json").write_text(json.dumps(project), encoding="utf-8")
@@ -182,6 +188,8 @@ def test_build_sanitized_ai_payload_no_path_like_strings(tmp_path: Path):
     report = analyze_project_root(root)
     payload = build_sanitized_ai_payload(report, disease_context="Example disease", top_n=5)
     assert not payload_contains_path_like_strings(payload)
+    analyte = payload.get("analyte_context") or {}
+    assert analyte.get("primary_analyte") == "buffy_coat"
     ps = payload.get("progression_summary") or {}
     assert "module_trajectory_variant" in ps
     assert "module_trajectory_detailed" in ps
@@ -246,6 +254,7 @@ def test_render_markdown_ai_advisory_section(tmp_path: Path):
     }
     md = render_markdown(report)
     assert "AI readiness commentary (advisory)" in md
+    assert "Primary analyte context used for AI interpretation" in md
     assert "mixed" in md
     assert "Signal A" in md
     assert "Canonical track assessment" in md
@@ -263,6 +272,25 @@ def test_redact_report_for_export_strips_paths(tmp_path: Path):
     assert "paths" not in redacted
     mt = (redacted.get("progression") or {}).get("module_trajectory") or {}
     assert "modules_csv" not in mt
+
+
+def test_primary_analyte_missing_is_non_blocking(tmp_path: Path):
+    root = tmp_path / "ProjNoAnalyte"
+    root.mkdir()
+    _write_minimal_project(root)
+    prod_project = root / "monte_carlo_runs" / "production" / "project.json"
+    payload = json.loads(prod_project.read_text(encoding="utf-8"))
+    payload.setdefault("step_config", {}).setdefault("validation", {}).setdefault("regulatory", {}).pop(
+        "primary_analyte", None
+    )
+    prod_project.write_text(json.dumps(payload), encoding="utf-8")
+
+    report = analyze_project_root(root)
+    ai_payload = build_sanitized_ai_payload(report, disease_context=None, top_n=3)
+    assert "analyte_context" in ai_payload
+    assert (ai_payload.get("analyte_context") or {}).get("primary_analyte") is None
+    md = render_markdown(report)
+    assert "Stability and freeze readiness report" in md
 
 
 def test_main_no_grok_review_json(tmp_path: Path):
@@ -387,6 +415,7 @@ def test_ordered_stage_narratives_in_report_grok_payload_and_markdown(tmp_path: 
                 "alpha": 0.05,
             },
             "mapper": {"disease_term": "Prostate adenocarcinoma"},
+            "validation": {"regulatory": {"sample_type": "plasma", "primary_analyte": "cfdna"}},
         },
     }
     (prod / "project.json").write_text(json.dumps(project_full), encoding="utf-8")
@@ -421,12 +450,14 @@ def test_ordered_stage_narratives_in_report_grok_payload_and_markdown(tmp_path: 
     payload = build_sanitized_ai_payload(
         report, disease_context=report.get("disease_context"), top_n=5
     )
+    assert (payload.get("analyte_context") or {}).get("primary_analyte") == "cfdna"
     assert "Early stage narrative" in json.dumps(payload)
     assert not payload_contains_path_like_strings(payload)
 
     md = render_markdown(report)
     assert "Stage definitions (from project config)" in md
     assert "Early stage narrative" in md
+    assert "Primary analyte" in md
 
 
 def test_ordered_stage_narratives_tolerates_project_without_ordered_label_api(tmp_path: Path):

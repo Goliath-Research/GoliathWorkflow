@@ -427,6 +427,13 @@ class RegulatoryLifecycleConfig(BaseModel):
     )
     target_population: Optional[str] = Field(default=None)
     sample_type: Optional[str] = Field(default=None)
+    primary_analyte: Optional[str] = Field(
+        default=None,
+        description=(
+            "Primary biological analyte for interpretation framing "
+            "(e.g., buffy_coat, cfdna, combined)."
+        ),
+    )
     reference_standard: Optional[str] = Field(default=None)
     claim_boundary: Optional[str] = Field(
         default=None,
@@ -461,6 +468,14 @@ class RegulatoryLifecycleConfig(BaseModel):
                     "allow_clinical_performance_claims=true is not allowed before pivotal_validation stage."
                 )
         return self
+
+    @field_validator("primary_analyte")
+    @classmethod
+    def _normalize_primary_analyte(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        cleaned = "_".join(value.strip().lower().replace("-", " ").split())
+        return cleaned or None
 
 
 class FeatureSelectionConfig(BaseModel):

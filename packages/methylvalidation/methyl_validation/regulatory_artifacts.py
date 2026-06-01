@@ -22,6 +22,7 @@ def _regulatory_dict(config: Optional[Any]) -> Dict[str, Any]:
         "intended_use_summary": getattr(reg, "intended_use_summary", None) if reg is not None else None,
         "target_population": getattr(reg, "target_population", None) if reg is not None else None,
         "sample_type": getattr(reg, "sample_type", None) if reg is not None else None,
+        "primary_analyte": getattr(reg, "primary_analyte", None) if reg is not None else None,
         "reference_standard": getattr(reg, "reference_standard", None) if reg is not None else None,
     }
 

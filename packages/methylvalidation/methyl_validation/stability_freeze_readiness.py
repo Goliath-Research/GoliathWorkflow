@@ -310,6 +310,7 @@ def _extract_regulatory_context(production_project: Dict[str, Any]) -> Dict[str,
         "intended_use_summary": reg.get("intended_use_summary"),
         "target_population": reg.get("target_population"),
         "sample_type": reg.get("sample_type"),
+        "primary_analyte": reg.get("primary_analyte"),
         "reference_standard": reg.get("reference_standard"),
         "raw": reg if isinstance(reg, dict) else {},
     }
@@ -790,6 +791,7 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
 
     def _physician_focus_lines(src_report: Dict[str, Any], verdict: Dict[str, Any]) -> List[str]:
         prog = src_report.get("progression") or {}
+        reg = src_report.get("regulatory") or {}
         traj = prog.get("module_trajectory") or {}
         traj_var = prog.get("module_trajectory_variant") or {}
         traj_det = prog.get("module_trajectory_detailed") or {}
@@ -828,6 +830,7 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             "",
             "- This section is plain-language. Full technical details remain in sections below.",
             f"- **Readiness verdict**: `{verdict.get('overall', 'unknown')}` (enricher: {verdict.get('enricher')}, stability: {verdict.get('stability')}, freeze: {verdict.get('freeze')}, progression: {verdict.get('progression')}).",
+            f"- **Primary analyte framing**: `{reg.get('primary_analyte') or 'not_declared'}` (sample type: `{reg.get('sample_type') or 'not_declared'}`).",
             f"- **Module persistence across all ordered stages**: {traj.get('entities_all_stages', 'n/a')} canonical entities; {traj_var.get('entities_all_stages', 'n/a')} variant-family entities.",
             f"- **Directional progression signal**: monotone-up fraction { _fmt_pct(traj.get('fraction_monotone_up')) } (canonical) and { _fmt_pct(traj_var.get('fraction_monotone_up')) } (variant-family).",
             f"- **Canonical vs variant-family agreement**: `{track_match}`.",
@@ -907,6 +910,8 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
         lines.append(f"- **Target population**: {reg.get('target_population')}")
     if reg.get("sample_type"):
         lines.append(f"- **Sample type**: {reg.get('sample_type')}")
+    if reg.get("primary_analyte"):
+        lines.append(f"- **Primary analyte**: `{reg.get('primary_analyte')}`")
     if reg.get("reference_standard"):
         lines.append(f"- **Reference standard**: {reg.get('reference_standard')}")
     lines.append("")
@@ -1162,6 +1167,10 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
     ai = report.get("ai_review")
     if isinstance(ai, dict) and ai:
         lines.extend(["## AI readiness commentary (advisory)", "", "*Deterministic verdict above is unchanged; this section is LLM-assisted QA only.*", ""])
+        reg = src.get("regulatory") or {}
+        lines.append(
+            f"- **Primary analyte context used for AI interpretation**: `{reg.get('primary_analyte') or 'not_declared'}`"
+        )
         st = ai.get("status")
         lines.append(f"- **Status**: `{st}`")
         if ai.get("model_used"):
