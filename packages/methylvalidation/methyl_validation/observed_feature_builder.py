@@ -38,7 +38,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v27_no_tail_agreement"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v28_no_healthy_centroid_features"
 HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v1"
 HYBRID_FEATURE_FAMILY_SETS = (
     "dmp",
@@ -791,11 +791,8 @@ def _prepare_histogram_density_artifacts(
 def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) -> List[str]:
     names = [
         "max_weighted_directional_score",
-        "weighted_mean_abs_error_to_healthy_centroid",
         "weighted_mean_abs_distance_margin",
-        "weighted_cosine_similarity_to_healthy_centroid",
         "weighted_centroid_contrast_score",
-        "weighted_fraction_dmps_closer_to_healthy_centroid",
         "obs_fraction",
         "weighted_obs_fraction",
         "n_obs_dmps",
@@ -1167,13 +1164,6 @@ def build_observed_hybrid_feature_table(
             wcos_h = _weighted_cosine_similarity(obs_vals, healthy_obs, obs_w)
             wcos_c = _weighted_cosine_similarity(obs_vals, cancer_obs, obs_w)
             weighted_centroid_contrast_score = (wcos_c - wcos_h) + (wjs_h - wjs_c)
-            dist_h = np.abs(obs_vals - healthy_obs)
-            dist_c = np.abs(obs_vals - cancer_obs)
-            obs_w_sum = float(np.sum(obs_w))
-            if obs_w.size == obs_vals.size and obs_w_sum > 0.0:
-                weighted_closer_to_healthy = float(np.sum(obs_w[dist_h < dist_c]) / obs_w_sum)
-            else:
-                weighted_closer_to_healthy = float("nan")
         else:
             max_weighted_directional_score = float("nan")
             per_label_feature_values = {}
@@ -1186,7 +1176,6 @@ def build_observed_hybrid_feature_table(
             wcos_h = float("nan")
             wcos_c = float("nan")
             weighted_centroid_contrast_score = float("nan")
-            weighted_closer_to_healthy = float("nan")
 
         obs_frac = float(n_obs / max(1, n_loci))
         if w.size == n_loci and total_w > 0.0:
@@ -1196,11 +1185,8 @@ def build_observed_hybrid_feature_table(
 
         if include_dmp_family:
             X_feat[i, idx["max_weighted_directional_score"]] = max_weighted_directional_score
-            X_feat[i, idx["weighted_mean_abs_error_to_healthy_centroid"]] = wmae_h
             X_feat[i, idx["weighted_mean_abs_distance_margin"]] = weighted_mean_abs_distance_margin
-            X_feat[i, idx["weighted_cosine_similarity_to_healthy_centroid"]] = wcos_h
             X_feat[i, idx["weighted_centroid_contrast_score"]] = weighted_centroid_contrast_score
-            X_feat[i, idx["weighted_fraction_dmps_closer_to_healthy_centroid"]] = weighted_closer_to_healthy
             X_feat[i, idx["obs_fraction"]] = obs_frac
             X_feat[i, idx["weighted_obs_fraction"]] = obs_w_frac
             X_feat[i, idx["n_obs_dmps"]] = float(n_obs)

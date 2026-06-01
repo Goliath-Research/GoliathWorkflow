@@ -298,14 +298,11 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     expected_names = {
         "max_weighted_directional_score",
         "weighted_directional_agreement__cancer",
-        "weighted_mean_abs_error_to_healthy_centroid",
         "weighted_mean_abs_error_to_cancer_centroid__cancer",
         "weighted_mean_abs_distance_margin",
-        "weighted_cosine_similarity_to_healthy_centroid",
         "weighted_cosine_similarity_to_cancer_centroid__cancer",
         "weighted_centroid_contrast_score",
         "weighted_fraction_dmps_closer_to_cancer_centroid__cancer",
-        "weighted_fraction_dmps_closer_to_healthy_centroid",
         "obs_fraction",
         "weighted_obs_fraction",
         "n_obs_dmps",
@@ -314,40 +311,27 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     }
     assert expected_names.issubset(set(feat.feature_names))
 
-    wmae_h_idx = feat.feature_names.index("weighted_mean_abs_error_to_healthy_centroid")
-    wmae_c_idx = feat.feature_names.index("weighted_mean_abs_error_to_cancer_centroid__cancer")
     wmae_margin_idx = feat.feature_names.index("weighted_mean_abs_distance_margin")
-    wcos_h_idx = feat.feature_names.index("weighted_cosine_similarity_to_healthy_centroid")
-    wcos_c_idx = feat.feature_names.index("weighted_cosine_similarity_to_cancer_centroid__cancer")
     wcontrast_idx = feat.feature_names.index("weighted_centroid_contrast_score")
     weighted_frac_idx = feat.feature_names.index(
         "weighted_fraction_dmps_closer_to_cancer_centroid__cancer"
-    )
-    weighted_healthy_frac_idx = feat.feature_names.index(
-        "weighted_fraction_dmps_closer_to_healthy_centroid"
     )
     max_wds_idx = feat.feature_names.index("max_weighted_directional_score")
     wda_idx = feat.feature_names.index("weighted_directional_agreement__cancer")
     tail_e_idx = feat.feature_names.index("weighted_healthy_tail_evidence__cancer")
 
     # First sample is healthy-like and should be closer to healthy anchor.
-    assert float(feat.X[0, wmae_h_idx]) < float(feat.X[0, wmae_c_idx])
     assert float(feat.X[0, wmae_margin_idx]) < 0.0
-    assert float(feat.X[0, wcos_h_idx]) > float(feat.X[0, wcos_c_idx])
     assert float(feat.X[0, wcontrast_idx]) < 0.0
     assert float(feat.X[0, weighted_frac_idx]) <= 0.5
-    assert float(feat.X[0, weighted_healthy_frac_idx]) >= 0.5
     assert float(feat.X[0, max_wds_idx]) < 0.0
     assert float(feat.X[0, wda_idx]) < 0.5
     assert not np.isfinite(float(feat.X[0, tail_e_idx]))
 
     # Cancer-like sample should move towards cancer anchor.
-    assert float(feat.X[2, wmae_c_idx]) < float(feat.X[2, wmae_h_idx])
     assert float(feat.X[2, wmae_margin_idx]) > 0.0
-    assert float(feat.X[2, wcos_c_idx]) > float(feat.X[2, wcos_h_idx])
     assert float(feat.X[2, wcontrast_idx]) > 0.0
     assert float(feat.X[2, weighted_frac_idx]) >= 0.5
-    assert float(feat.X[2, weighted_healthy_frac_idx]) <= 0.5
     assert float(feat.X[2, max_wds_idx]) > 0.0
     assert float(feat.X[2, wda_idx]) > 0.5
     assert not np.isfinite(float(feat.X[2, tail_e_idx]))
