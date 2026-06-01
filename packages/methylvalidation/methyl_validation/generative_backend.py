@@ -30,6 +30,10 @@ from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
+from .feature_selection import (
+    normalize_runtime_feature_selection_config,
+    select_training_features,
+)
 from .model_bundle import load_bundle_dmp_index, load_bundle_gene_feature_ranges
 from .observed_feature_builder import (
     HYBRID_FEATURE_FAMILY_SETS,
@@ -243,6 +247,7 @@ def train_generative_model(
     observed_hist_alpha: float = 0.5,
     observed_hist_evidence_clip_cap: float = 5.0,
     observed_hist_tail_agreement_threshold: float = 0.10,
+    feature_selection_config: Optional[Dict[str, Any]] = None,
 ) -> Path:
     np.random.seed(int(random_seed))
     with _project_cwd(project_json):
@@ -323,7 +328,7 @@ def train_generative_model(
         )
         X_methyl = np.asarray(feat.X, dtype=np.float32)
         feature_fill_values = fit_feature_fill_values(X_methyl)
-        X_methyl = apply_feature_fill_values(X_methyl, feature_fill_values)
+        X_methyl = apply_feature_fill_values(X_methyl, feature_fill_values.tolist())
         observed_feature_names = list(feat.feature_names)
         observed_feature_report = dict(feat.report)
         dmp_weights = np.ones((X_methyl.shape[1],), dtype=np.float32)
@@ -385,10 +390,29 @@ def train_generative_model(
         X = X_methyl
         feature_weights = dmp_weights
 
+    if feature_mode_norm == "observed_hybrid":
+        base_feature_names = list(observed_feature_names)
+    else:
+        base_feature_names = [f"{c}:{ctx}:{int(pos)}" for c, ctx, pos in feature_order]
+    cov_feature_names = list(preprocessor.output_columns) if preprocessor is not None else []
+    feature_names = base_feature_names + cov_feature_names
+    y_arr = np.asarray(y, dtype=np.int32)
+    fs_cfg = normalize_runtime_feature_selection_config(feature_selection_config)
+    fs_result = select_training_features(X, y_arr.tolist(), feature_names, fs_cfg)
+    selected_feature_names = [str(x) for x in fs_result.get("selected_feature_names", feature_names)]
+    feature_selection_report = dict(fs_result.get("report", {}))
+    if fs_cfg.enabled:
+        selected_indices = [int(i) for i in fs_result.get("selected_indices", [])]
+        if selected_indices:
+            X = X[:, selected_indices]
+            feature_weights = feature_weights[selected_indices]
+            feature_names = [feature_names[i] for i in selected_indices]
+        else:
+            feature_selection_report["warning"] = "selector returned empty indices; training used full feature set"
+
     X_weighted = X * feature_weights.reshape(1, -1)
     encoder_mean, encoder_components, z = _fit_linear_latent_encoder(X_weighted, latent_dim=latent_dim)
 
-    y_arr = np.asarray(y, dtype=np.int32)
     n_classes = len(class_names)
     class_means = np.zeros((n_classes, z.shape[1]), dtype=np.float32)
     class_vars = np.zeros((n_classes, z.shape[1]), dtype=np.float32)
@@ -483,6 +507,10 @@ def train_generative_model(
         "observed_cancer_class_labels": observed_cancer_class_labels,
         "observed_anchor_strategy": observed_anchor_strategy,
         "observed_feature_order_fingerprint": observed_feature_order_fingerprint,
+        "feature_selection": feature_selection_report,
+        "feature_selection_config": feature_selection_config or {},
+        "selected_feature_names": selected_feature_names if fs_cfg.enabled else [],
+        "selected_feature_count": int(len(feature_names)),
         "covariates_path": str(covariates_path) if covariates_path else None,
         "covariate_id_column": covariate_id_column,
         "covariates_strict_join": bool(covariates_strict_join),
@@ -532,6 +560,7 @@ def predict_generative_model_from_project(
         meta = json.load(f)
     class_names = [str(x) for x in meta.get("class_names", [])]
     feature_mode = str(meta.get("feature_mode", "raw_dmp")).strip().lower()
+    selected_feature_names = [str(x) for x in (meta.get("selected_feature_names") or [])]
     with _project_cwd(project_json):
         project = load_project(project_json)
     class_centroid_dirs = _resolve_class_centroid_dirs(project, class_names)
@@ -621,6 +650,20 @@ def predict_generative_model_from_project(
         X = np.concatenate([X_methyl, cov], axis=1)
     else:
         X = X_methyl
+    if selected_feature_names:
+        if feature_mode == "observed_hybrid":
+            raw_feature_names = list(meta.get("observed_feature_names") or [])
+        else:
+            raw_feature_names = [
+                f"{str(r['chromosome'])}:{str(r['context'])}:{int(r['position'])}"
+                for r in meta.get("feature_order", [])
+            ]
+        if cov is not None and preprocessor is not None:
+            raw_feature_names = raw_feature_names + list(preprocessor.output_columns)
+        idx_by_name = {str(name): i for i, name in enumerate(raw_feature_names)}
+        keep_idx = [idx_by_name[name] for name in selected_feature_names if name in idx_by_name]
+        if keep_idx:
+            X = X[:, keep_idx]
 
     feature_weights = np.asarray(data["feature_weights"], dtype=np.float32)
     if X.shape[1] != feature_weights.shape[0]:

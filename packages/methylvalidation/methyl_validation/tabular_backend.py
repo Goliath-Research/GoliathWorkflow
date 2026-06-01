@@ -37,6 +37,10 @@ from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
+from .feature_selection import (
+    normalize_runtime_feature_selection_config,
+    select_training_features,
+)
 from .model_bundle import load_bundle_dmp_index, load_bundle_gene_feature_ranges
 from .observed_feature_builder import (
     HYBRID_FEATURE_FAMILY_SETS,
@@ -402,6 +406,7 @@ def train_tabular_model(
     observed_hist_alpha: float = 0.5,
     observed_hist_evidence_clip_cap: float = 5.0,
     observed_hist_tail_agreement_threshold: float = 0.10,
+    feature_selection_config: Optional[Dict[str, Any]] = None,
     save_train_dataset: bool = False,
     reuse_train_dataset: bool = True,
     train_dataset_path: Optional[str | Path] = None,
@@ -470,6 +475,7 @@ def train_tabular_model(
     train_cache_hit = False
     train_cache_miss_reason: Optional[str] = None
     feature_names: List[str] = []
+    feature_selection_report: Dict[str, Any] = {"enabled": False}
     preprocessor: Optional[CovariatePreprocessor] = None
     cov_report: Dict[str, Any] = {"used": False}
     observed_feature_names: List[str] = []
@@ -764,6 +770,18 @@ def train_tabular_model(
             with open(train_dataset_meta_path, "w", encoding="utf-8") as f:
                 json.dump(train_dataset_meta, f, indent=2)
 
+    fs_cfg = normalize_runtime_feature_selection_config(feature_selection_config)
+    fs_result = select_training_features(X, y_arr.tolist(), feature_names, fs_cfg)
+    selected_feature_names = [str(x) for x in fs_result.get("selected_feature_names", feature_names)]
+    feature_selection_report = dict(fs_result.get("report", {}))
+    if fs_cfg.enabled:
+        selected_indices = [int(i) for i in fs_result.get("selected_indices", [])]
+        if selected_indices:
+            X = X[:, selected_indices]
+            feature_names = selected_feature_names
+        else:
+            feature_selection_report["warning"] = "selector returned empty indices; training used full feature set"
+
     test_dataset_out_path: Optional[Path] = None
     test_cache_hit: Optional[bool] = None
     test_cache_miss_reason: Optional[str] = None
@@ -852,7 +870,7 @@ def train_tabular_model(
                     context="tabular train test-dataset export observed_hybrid",
                 )
                 X_eval = np.asarray(feat_eval.X, dtype=np.float32)
-                X_eval = apply_feature_fill_values(X_eval, feature_fill_values)
+                X_eval = apply_feature_fill_values(X_eval, feature_fill_values.tolist())
             else:
                 X_eval = _extract_matrix_for_samples(eval_paths, refs, feature_order, min_coverage=1)
                 X_eval = np.nan_to_num(np.asarray(X_eval, dtype=np.float32), nan=0.5, posinf=0.5, neginf=0.5)
@@ -864,9 +882,19 @@ def train_tabular_model(
             )
             if cov_eval is not None:
                 X_eval = np.concatenate([X_eval, cov_eval], axis=1)
-            test_feature_names = feature_names
-            if len(test_feature_names) != int(X_eval.shape[1]):
-                test_feature_names = [f"feature_{i}" for i in range(int(X_eval.shape[1]))]
+            raw_test_feature_names = list(feature_names if fs_cfg.enabled else feature_names)
+            if len(raw_test_feature_names) != int(X_eval.shape[1]):
+                raw_test_feature_names = [f"feature_{i}" for i in range(int(X_eval.shape[1]))]
+            if fs_cfg.enabled and selected_feature_names:
+                idx_by_name = {str(name): i for i, name in enumerate(raw_test_feature_names)}
+                keep_idx = [idx_by_name[name] for name in selected_feature_names if name in idx_by_name]
+                if keep_idx:
+                    X_eval = X_eval[:, keep_idx]
+                    test_feature_names = [raw_test_feature_names[i] for i in keep_idx]
+                else:
+                    test_feature_names = raw_test_feature_names
+            else:
+                test_feature_names = raw_test_feature_names
             eval_df = pd.DataFrame(X_eval, columns=test_feature_names)
             eval_y_arr = np.asarray(eval_y, dtype=np.int32)
             eval_df.insert(0, "sample_id", eval_ids)
@@ -961,6 +989,10 @@ def train_tabular_model(
             "observed_hist_alpha": float(observed_hist_alpha),
             "observed_hist_evidence_clip_cap": float(observed_hist_evidence_clip_cap),
             "observed_hist_tail_agreement_threshold": float(observed_hist_tail_agreement_threshold),
+            "feature_selection": feature_selection_report,
+            "feature_selection_config": feature_selection_config or {},
+            "selected_feature_names": selected_feature_names if fs_cfg.enabled else [],
+            "selected_feature_count": int(len(feature_names)),
             "covariates_path": str(covariates_path) if covariates_path else None,
             "covariate_id_column": covariate_id_column,
             "covariates_strict_join": bool(covariates_strict_join),
@@ -1094,6 +1126,7 @@ def predict_tabular_model_from_project(
         meta = json.load(f)
     class_names = [str(x) for x in meta.get("class_names", [])]
     feature_mode = str(meta.get("feature_mode", "raw_dmp")).strip().lower()
+    selected_feature_names = [str(x) for x in (meta.get("selected_feature_names") or [])]
     with _project_cwd(project_json):
         project = load_project(project_json)
     class_centroid_dirs = _resolve_class_centroid_dirs(project, class_names)
@@ -1178,6 +1211,21 @@ def predict_tabular_model_from_project(
     )
     if cov is not None:
         X = np.concatenate([X, cov], axis=1)
+    if selected_feature_names:
+        raw_feature_names: List[str]
+        if feature_mode == "observed_hybrid":
+            raw_feature_names = list(meta.get("observed_feature_names") or [])
+        else:
+            raw_feature_names = [
+                f"{str(r['chromosome'])}:{str(r['context'])}:{int(r['position'])}"
+                for r in meta.get("feature_order", [])
+            ]
+        if cov is not None and preprocessor is not None:
+            raw_feature_names = raw_feature_names + list(preprocessor.output_columns)
+        idx_by_name = {str(name): i for i, name in enumerate(raw_feature_names)}
+        keep_idx = [idx_by_name[name] for name in selected_feature_names if name in idx_by_name]
+        if keep_idx:
+            X = X[:, keep_idx]
 
     probs = estimator.predict_proba(X)
     y_pred = np.asarray(np.argmax(probs, axis=1), dtype=np.int32)
