@@ -68,7 +68,7 @@ type
   end;
 
 var
-  MainForm: TMainForm;
+  MainFormInstance: TMainForm;
 
 implementation
 

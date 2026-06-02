@@ -44,7 +44,7 @@ begin
   Application.Initialize;
   Application.MainFormOnTaskbar := True;
   Application.Title := 'MethylPipeline Config Editor';
-  SchemaEditorRegistration.EnsureRegistered;
-  Application.CreateForm(TMainForm, MainForm);
+  TSchemaEditorRegistration.EnsureRegistered;
+  Application.CreateForm(TMainForm, MainFormInstance);
   Application.Run;
 end.

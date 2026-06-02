@@ -23,6 +23,7 @@ type
 implementation
 
 uses
+  Vcl.Controls,
   Vcl.StdCtrls,
   NullableRowSupport,
   SchemaDefaults,
@@ -52,10 +53,10 @@ begin
   else if not TSchemaValueSummary.IsNullValue(AValue) then
     Edit.Text := AValue.Value;
   Edit.Tag := NativeInt(ARow);
-  Edit.OnChange := procedure(Sender: TObject)
+  Edit.OnChange := ARow.BindNotify(procedure(Sender: TObject)
     begin
       ReadRow(AContext, ARow);
-    end;
+    end);
   ARow.ValueControl := Edit;
   TNullableRowSupport.AddNullCheckbox(AContext, ARow, AValue,
     procedure(Sender: TObject)

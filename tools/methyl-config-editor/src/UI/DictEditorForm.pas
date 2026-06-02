@@ -1,4 +1,4 @@
-unit DictEditorForm;
+﻿unit DictEditorForm;
 
 interface
 
@@ -7,6 +7,7 @@ uses
   Winapi.Messages,
   System.SysUtils,
   System.Classes,
+  System.Generics.Collections,
   Vcl.Graphics,
   Vcl.Controls,
   Vcl.Forms,
@@ -153,7 +154,7 @@ end;
 
 procedure TDictEditorForm.btnRemoveClick(Sender: TObject);
 var
-  R: Integer;
+  R, I, C: Integer;
 begin
   R := SelectedRow;
   if R < 0 then
@@ -165,7 +166,10 @@ begin
   end
   else
   begin
-    StringGrid.DeleteRow(R);
+    for I := R to StringGrid.RowCount - 2 do
+      for C := 0 to StringGrid.ColCount - 1 do
+        StringGrid.Cells[C, I] := StringGrid.Cells[C, I + 1];
+    StringGrid.RowCount := StringGrid.RowCount - 1;
   end;
 end;
 

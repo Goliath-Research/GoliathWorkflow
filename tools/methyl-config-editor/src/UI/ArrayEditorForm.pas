@@ -7,6 +7,7 @@ uses
   Winapi.Messages,
   System.SysUtils,
   System.Classes,
+  System.Generics.Collections,
   Vcl.Graphics,
   Vcl.Controls,
   Vcl.Forms,
@@ -58,6 +59,78 @@ uses
 
 {$R *.dfm}
 
+procedure ClearArray(AArray: TJSONArray);
+var
+  Removed: TJSONValue;
+begin
+  while AArray.Count > 0 do
+  begin
+    Removed := AArray.Remove(0);
+    Removed.Free;
+  end;
+end;
+
+procedure ReplaceArrayElement(AArray: TJSONArray; Index: Integer; AValue: TJSONValue);
+var
+  I: Integer;
+  Tail: TObjectList<TJSONValue>;
+  Removed: TJSONValue;
+begin
+  Tail := TObjectList<TJSONValue>.Create(True);
+  try
+    for I := Index + 1 to AArray.Count - 1 do
+      Tail.Add(AArray.Items[I].Clone as TJSONValue);
+    while AArray.Count > Index do
+    begin
+      Removed := AArray.Remove(AArray.Count - 1);
+      Removed.Free;
+    end;
+    AArray.AddElement(AValue);
+    while Tail.Count > 0 do
+      AArray.AddElement(Tail.Extract(Tail[0]));
+  finally
+    Tail.Free;
+  end;
+end;
+
+procedure RemoveArrayElement(AArray: TJSONArray; Index: Integer);
+var
+  I: Integer;
+  Values: TObjectList<TJSONValue>;
+begin
+  Values := TObjectList<TJSONValue>.Create(True);
+  try
+    for I := 0 to AArray.Count - 1 do
+      if I <> Index then
+        Values.Add(AArray.Items[I].Clone as TJSONValue);
+    ClearArray(AArray);
+    while Values.Count > 0 do
+      AArray.AddElement(Values.Extract(Values[0]));
+  finally
+    Values.Free;
+  end;
+end;
+
+procedure MoveArrayElement(AArray: TJSONArray; FromIndex, ToIndex: Integer);
+var
+  I: Integer;
+  Values: TObjectList<TJSONValue>;
+  Moving: TJSONValue;
+begin
+  Values := TObjectList<TJSONValue>.Create(True);
+  try
+    for I := 0 to AArray.Count - 1 do
+      Values.Add(AArray.Items[I].Clone as TJSONValue);
+    Moving := Values.Extract(Values[FromIndex]);
+    Values.Insert(ToIndex, Moving);
+    ClearArray(AArray);
+    while Values.Count > 0 do
+      AArray.AddElement(Values.Extract(Values[0]));
+  finally
+    Values.Free;
+  end;
+end;
+
 procedure TArrayEditorForm.FormDestroy(Sender: TObject);
 begin
   if Assigned(FWorking) then
@@ -72,12 +145,14 @@ end;
 function TArrayEditorForm.ItemSummary(Index: Integer): string;
 var
   Val: TJSONValue;
+  Schema: TSchemaNode;
 begin
   if (Index < 0) or (Index >= FWorking.Count) then
     Exit('');
   Val := FWorking.Items[Index];
-  if Assigned(ItemSchema) then
-    Result := Format('[%d] %s', [Index, TSchemaValueSummary.Describe(ItemSchema, Val)])
+  Schema := ItemSchema;
+  if Assigned(Schema) then
+    Result := Format('[%d] %s', [Index, TSchemaValueSummary.Describe(Schema, Val)])
   else
     Result := Format('[%d] %s', [Index, Val.Value]);
 end;
@@ -94,15 +169,17 @@ end;
 procedure TArrayEditorForm.btnAddClick(Sender: TObject);
 var
   NewVal: TJSONValue;
+  Schema: TSchemaNode;
 begin
-  if Assigned(ItemSchema) then
-    NewVal := TSchemaDefaults.CreateDefaultValue(ItemSchema)
+  Schema := ItemSchema;
+  if Assigned(Schema) then
+    NewVal := TSchemaDefaults.CreateDefaultValue(Schema)
   else
     NewVal := TJSONNull.Create;
   FWorking.AddElement(NewVal);
   RefreshList;
   ListBox.ItemIndex := FWorking.Count - 1;
-  if Assigned(ItemSchema) and ItemSchema.IsComplex then
+  if Assigned(Schema) and Schema.IsComplex then
     EditItem(ListBox.ItemIndex);
 end;
 
@@ -113,8 +190,7 @@ begin
   Idx := ListBox.ItemIndex;
   if Idx < 0 then
     Exit;
-  FWorking.Items[Idx].Free;
-  FWorking.Remove(Idx);
+  RemoveArrayElement(FWorking, Idx);
   RefreshList;
 end;
 
@@ -124,30 +200,28 @@ var
   Obj: TJSONObject;
   CloneObj: TJSONObject;
   ChildTitle: string;
+  Schema: TSchemaNode;
 begin
   if (Index < 0) or (Index >= FWorking.Count) then
     Exit;
   Val := FWorking.Items[Index];
-  if not Assigned(ItemSchema) then
+  Schema := ItemSchema;
+  if not Assigned(Schema) then
     Exit;
   ChildTitle := FBreadcrumb + Format(' [%d]', [Index]);
-  if ItemSchema.Kind = skObject then
+  if Schema.Kind = skObject then
   begin
     if Val is TJSONObject then
       Obj := TJSONObject(Val)
     else
     begin
-      Obj := TSchemaDefaults.CreateDefaultObject(ItemSchema);
-      FWorking.Items[Index].Free;
-      FWorking.Items[Index] := Obj;
+      Obj := TSchemaDefaults.CreateDefaultObject(Schema);
+      ReplaceArrayElement(FWorking, Index, Obj);
     end;
     CloneObj := Obj.Clone as TJSONObject;
     try
-      if TPropertyEditorForm.EditObject(Self, ChildTitle, ItemSchema, CloneObj) then
-      begin
-        FWorking.Items[Index].Free;
-        FWorking.Items[Index] := CloneObj.Clone as TJSONObject;
-      end;
+      if TPropertyEditorForm.EditObject(Self, ChildTitle, Schema, CloneObj) then
+        ReplaceArrayElement(FWorking, Index, CloneObj.Clone as TJSONObject);
     finally
       CloneObj.Free;
     end;
@@ -169,9 +243,7 @@ begin
   Idx := ListBox.ItemIndex;
   if Idx <= 0 then
     Exit;
-  Val := FWorking.Items[Idx];
-  FWorking.Remove(Idx);
-  FWorking.Insert(Idx - 1, Val);
+  MoveArrayElement(FWorking, Idx, Idx - 1);
   RefreshList;
   ListBox.ItemIndex := Idx - 1;
 end;
@@ -184,9 +256,7 @@ begin
   Idx := ListBox.ItemIndex;
   if (Idx < 0) or (Idx >= FWorking.Count - 1) then
     Exit;
-  Val := FWorking.Items[Idx];
-  FWorking.Remove(Idx);
-  FWorking.Insert(Idx + 1, Val);
+  MoveArrayElement(FWorking, Idx, Idx + 1);
   RefreshList;
   ListBox.ItemIndex := Idx + 1;
 end;
@@ -212,11 +282,7 @@ begin
     Form.RefreshList;
     if Form.ShowModal = mrOk then
     begin
-      while AArray.Count > 0 do
-      begin
-        AArray.Items[0].Free;
-        AArray.Remove(0);
-      end;
+      ClearArray(AArray);
       for I := 0 to Form.FWorking.Count - 1 do
         AArray.AddElement(Form.FWorking.Items[I].Clone as TJSONValue);
       Result := True;

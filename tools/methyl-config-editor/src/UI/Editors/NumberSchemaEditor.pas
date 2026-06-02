@@ -29,7 +29,8 @@ type
 implementation
 
 uses
-  Vcl.ComCtrls,
+  Vcl.Controls,
+  Vcl.Samples.Spin,
   Vcl.StdCtrls,
   NullableRowSupport,
   SchemaDefaults,
@@ -85,10 +86,10 @@ begin
   else
     Spin.Value := 0;
   Spin.Tag := NativeInt(ARow);
-  Spin.OnChange := procedure(Sender: TObject)
+  Spin.OnChange := ARow.BindNotify(procedure(Sender: TObject)
     begin
       ReadRow(AContext, ARow);
-    end;
+    end);
   ARow.ValueControl := Spin;
   TNullableRowSupport.AddNullCheckbox(AContext, ARow, AValue,
     procedure(Sender: TObject)

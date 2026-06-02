@@ -19,18 +19,54 @@ type
 implementation
 
 uses
-  Spring.Container,
+  System.SysUtils,
   SchemaEditorKeys,
   SchemaEditorRegistration,
-  TypedStepSchemas;
+  TypedStepSchemas,
+  StringSchemaEditor,
+  EnumSchemaEditor,
+  BooleanSchemaEditor,
+  NumberSchemaEditor,
+  IntegerSchemaEditor,
+  ObjectSchemaEditor,
+  OneOfObjectSchemaEditor,
+  ArraySchemaEditor,
+  DictionarySchemaEditor,
+  DiscriminatorSchemaEditor,
+  DetectionStepEditor;
 
 class function TSchemaEditorRegistry.TryResolveByName(const AName: string;
   out AEditor: ISchemaPropertyEditor): Boolean;
 begin
   TSchemaEditorRegistration.EnsureRegistered;
-  Result := GlobalContainer.CanResolveNamed<ISchemaPropertyEditor>(AName);
-  if Result then
-    AEditor := GlobalContainer.ResolveNamed<ISchemaPropertyEditor>(AName);
+  Result := True;
+  if AName = TSchemaEditorKeys.StringKey then
+    AEditor := TStringSchemaEditor.Create
+  else if AName = TSchemaEditorKeys.EnumKey then
+    AEditor := TEnumSchemaEditor.Create
+  else if AName = TSchemaEditorKeys.BooleanKey then
+    AEditor := TBooleanSchemaEditor.Create
+  else if AName = TSchemaEditorKeys.IntegerKey then
+    AEditor := TIntegerSchemaEditor.Create
+  else if AName = TSchemaEditorKeys.NumberKey then
+    AEditor := TNumberSchemaEditor.Create
+  else if AName = TSchemaEditorKeys.ObjectKey then
+    AEditor := TObjectSchemaEditor.Create
+  else if AName = TSchemaEditorKeys.OneOfObjectKey then
+    AEditor := TOneOfObjectSchemaEditor.Create
+  else if AName = TSchemaEditorKeys.ArrayKey then
+    AEditor := TArraySchemaEditor.Create
+  else if AName = TSchemaEditorKeys.DictionaryKey then
+    AEditor := TDictionarySchemaEditor.Create
+  else if AName = TSchemaEditorKeys.DiscriminatorKey then
+    AEditor := TDiscriminatorSchemaEditor.Create
+  else if AName = TSchemaEditorKeys.DetectionConfigKey then
+    AEditor := TDetectionStepEditor.Create
+  else
+  begin
+    AEditor := nil;
+    Result := False;
+  end;
 end;
 
 class function TSchemaEditorRegistry.Resolve(ANode: TSchemaNode): ISchemaPropertyEditor;
@@ -45,9 +81,8 @@ begin
     TryResolveByName(ANode.Title, Result) then
     Exit;
   Key := TSchemaEditorKeys.ForNode(ANode);
-  if not GlobalContainer.CanResolveNamed<ISchemaPropertyEditor>(Key) then
+  if not TryResolveByName(Key, Result) then
     raise Exception.CreateFmt('No schema property editor registered for key: %s', [Key]);
-  Result := GlobalContainer.ResolveNamed<ISchemaPropertyEditor>(Key);
 end;
 
 class function TSchemaEditorRegistry.ResolveProperty(const APropertyName: string;

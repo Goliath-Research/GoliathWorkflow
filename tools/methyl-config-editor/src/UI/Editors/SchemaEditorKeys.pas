@@ -27,6 +27,9 @@ type
 
 implementation
 
+uses
+  System.SysUtils;
+
 class function TSchemaEditorKeys.ForNode(ANode: TSchemaNode): string;
 begin
   if not Assigned(ANode) then

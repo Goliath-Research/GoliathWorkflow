@@ -23,6 +23,7 @@ type
 implementation
 
 uses
+  Vcl.Controls,
   Vcl.StdCtrls;
 
 class function TDiscriminatorSchemaEditor.EditorKey: string;
@@ -60,11 +61,11 @@ begin
   if Combo.ItemIndex < 0 then
     Combo.ItemIndex := 0;
   Combo.Tag := NativeInt(ARow);
-  Combo.OnChange := procedure(Sender: TObject)
+  Combo.OnChange := ARow.BindNotify(procedure(Sender: TObject)
     begin
       ReadRow(AContext, ARow);
       AContext.RebuildRows;
-    end;
+    end);
   ARow.ValueControl := Combo;
 end;
 
