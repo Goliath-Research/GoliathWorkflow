@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Explicit product-lifecycle framing and claim boundary metadata.",
+  "properties": {
+    "allow_clinical_performance_claims": {
+      "default": false,
+      "description": "Whether FDA-facing clinical performance claims are allowed at this stage.",
+      "title": "Allow Clinical Performance Claims",
+      "type": "boolean"
+    },
+    "claim_boundary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Explicit statement of allowed claims at this stage (e.g. feasibility-only, no final clinical claims).",
+      "title": "Claim Boundary"
+    },
+    "intended_use_summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Short intended-use statement for reports.",
+      "title": "Intended Use Summary"
+    },
+    "primary_analyte": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Primary biological analyte for interpretation framing (e.g., buffy_coat, cfdna, combined).",
+      "title": "Primary Analyte"
+    },
+    "reference_standard": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reference Standard"
+    },
+    "sample_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sample Type"
+    },
+    "stage": {
+      "default": "feasibility",
+      "description": "Current product lifecycle stage for evidence framing.",
+      "title": "Stage",
+      "type": "string"
+    },
+    "target_population": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Target Population"
+    }
+  },
+  "title": "RegulatoryLifecycleConfig",
+  "type": "object"
+}

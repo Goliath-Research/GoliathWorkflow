@@ -17,6 +17,17 @@ For production migration policy, see [`ROLLOUT.md`](ROLLOUT.md).
 
 **Hyperparameter search:** objective function over `metrics_summary.json` / optional stability outputs, small-grid driver `methyl-hyperparam-search`, see [`HYPERPARAMETER_SEARCH.md`](HYPERPARAMETER_SEARCH.md).
 
+**Config JSON Schemas:** Pydantic models are the source of truth; committed artifacts live under [`schemas/config/`](../../../schemas/config/) at the repo root. Regenerate after changing any pipeline config model:
+
+```bash
+source .venv/bin/activate
+methyl-export-config-schemas              # write/update schemas/config/*.json
+methyl-export-config-schemas --check      # CI drift gate (exit non-zero if stale)
+# or: ./scripts/export_config_schemas.sh
+```
+
+Registry and exporter: `methyl_validation.config_schema_registry`, `methyl_validation.schema_export`. Drift is enforced by `packages/methylvalidation/tests/test_config_schema_export.py` (included in `./scripts/run_tests.sh`).
+
 ---
 
 ## Two Workflows

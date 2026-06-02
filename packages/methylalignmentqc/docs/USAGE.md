@@ -65,13 +65,22 @@ Export the strict, versionable JSON Schema generated from the Pydantic export mo
 
 - `methyl-qc-export-schema` (default: **V1** columnar payload)
 - `methyl-qc-export-schema --variant v2` (**V2** row-oriented payload)
+- `methyl-qc-export-schema --check` — drift check (delegates to the repo-wide exporter when `methyl-validation` is installed)
 
-Default output paths:
+Default output paths (package-local, kept for backward compatibility):
 
 - V1: `packages/methylalignmentqc/schemas/exported_sample_qc.schema.json`
 - V2: `packages/methylalignmentqc/schemas/exported_sample_qc_v2.schema.json`
 
-Use `--output` to write elsewhere. Regenerate whenever the corresponding Pydantic models change.
+Canonical copies for all pipeline config models (including these export payloads) also live under **`schemas/config/`** at the repo root (`alignment_qc/exported_sample_qc*.schema.json`). Regenerate everything after model changes:
+
+```bash
+source .venv/bin/activate
+methyl-export-config-schemas              # all pipeline + AlignmentQC export schemas
+methyl-export-config-schemas --check      # fail if artifacts are stale
+```
+
+`methyl-qc-export-schema` still writes the package `schemas/` tree and mirrors to `schemas/config/` when the central exporter is available. Use `--output` on `methyl-qc-export-schema` only for ad-hoc paths.
 
 ## V2 row-oriented JSON (tools / Azure SQL)
 

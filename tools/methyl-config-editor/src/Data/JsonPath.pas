@@ -1,0 +1,289 @@
+unit JsonPath;
+
+interface
+
+uses
+  System.JSON,
+  System.SysUtils;
+
+type
+  TJsonPath = class
+  public
+    class function SplitPath(const Path: string): TArray<string>;
+    class function GetValue(Root: TJSONValue; const Path: string): TJSONValue;
+    class function GetObject(Root: TJSONValue; const Path: string): TJSONObject;
+    class function GetArray(Root: TJSONValue; const Path: string): TJSONArray;
+    class function EnsureObject(Root: TJSONValue; const Path: string): TJSONObject;
+    class function EnsureArray(Root: TJSONValue; const Path: string): TJSONArray;
+    class procedure SetValue(Root: TJSONValue; const Path: string; Value: TJSONValue);
+    class function CloneValue(Value: TJSONValue): TJSONValue;
+    class function JoinPath(const Base, Segment: string): string;
+  end;
+
+implementation
+
+class function TJsonPath.SplitPath(const Path: string): TArray<string>;
+var
+  Clean: string;
+  Parts: TArray<string>;
+  I: Integer;
+  List: TArray<string>;
+  Count: Integer;
+begin
+  Clean := Path;
+  if Clean.StartsWith('/') then
+    Clean := Copy(Clean, 2, MaxInt);
+  if Clean = '' then
+    Exit(nil);
+  Parts := Clean.Split(['/']);
+  Count := 0;
+  SetLength(List, Length(Parts));
+  for I := 0 to High(Parts) do
+    if Parts[I] <> '' then
+    begin
+      List[Count] := Parts[I];
+      Inc(Count);
+    end;
+  SetLength(List, Count);
+  Result := List;
+end;
+
+class function TJsonPath.JoinPath(const Base, Segment: string): string;
+begin
+  if Base = '' then
+    Result := Segment
+  else
+    Result := Base + '/' + Segment;
+end;
+
+class function TJsonPath.GetValue(Root: TJSONValue; const Path: string): TJSONValue;
+var
+  Segments: TArray<string>;
+  Current: TJSONValue;
+  I: Integer;
+  Idx: Integer;
+begin
+  Result := nil;
+  if not Assigned(Root) then
+    Exit;
+  Segments := SplitPath(Path);
+  if Length(Segments) = 0 then
+    Exit(Root);
+  Current := Root;
+  for I := 0 to High(Segments) do
+  begin
+    if not Assigned(Current) then
+      Exit(nil);
+    if Current is TJSONObject then
+      Current := TJSONObject(Current).GetValue(Segments[I])
+    else if Current is TJSONArray then
+    begin
+      if not TryStrToInt(Segments[I], Idx) then
+        Exit(nil);
+      if (Idx < 0) or (Idx >= TJSONArray(Current).Count) then
+        Exit(nil);
+      Current := TJSONArray(Current).Items[Idx];
+    end
+    else
+      Exit(nil);
+  end;
+  Result := Current;
+end;
+
+class function TJsonPath.GetObject(Root: TJSONValue; const Path: string): TJSONObject;
+var
+  V: TJSONValue;
+begin
+  V := GetValue(Root, Path);
+  if V is TJSONObject then
+    Result := TJSONObject(V)
+  else
+    Result := nil;
+end;
+
+class function TJsonPath.GetArray(Root: TJSONValue; const Path: string): TJSONArray;
+var
+  V: TJSONValue;
+begin
+  V := GetValue(Root, Path);
+  if V is TJSONArray then
+    Result := TJSONArray(V)
+  else
+    Result := nil;
+end;
+
+class function TJsonPath.EnsureObject(Root: TJSONValue; const Path: string): TJSONObject;
+var
+  Segments: TArray<string>;
+  Current: TJSONValue;
+  NextObj: TJSONObject;
+  NextArr: TJSONArray;
+  I, Idx: Integer;
+  Existing: TJSONValue;
+begin
+  if not Assigned(Root) then
+    raise Exception.Create('Root JSON value is nil');
+  Segments := SplitPath(Path);
+  if Length(Segments) = 0 then
+  begin
+    if Root is TJSONObject then
+      Exit(TJSONObject(Root));
+    raise Exception.Create('Root is not an object');
+  end;
+  Current := Root;
+  for I := 0 to High(Segments) do
+  begin
+    if Current is TJSONObject then
+    begin
+      Existing := TJSONObject(Current).GetValue(Segments[I]);
+      if not Assigned(Existing) then
+      begin
+        if I = High(Segments) then
+        begin
+          NextObj := TJSONObject.Create;
+          TJSONObject(Current).AddPair(Segments[I], NextObj);
+          Exit(NextObj);
+        end;
+        NextObj := TJSONObject.Create;
+        TJSONObject(Current).AddPair(Segments[I], NextObj);
+        Current := NextObj;
+      end
+      else
+        Current := Existing;
+    end
+    else if Current is TJSONArray then
+    begin
+      if not TryStrToInt(Segments[I], Idx) then
+        raise Exception.CreateFmt('Invalid array index in path: %s', [Path]);
+      while TJSONArray(Current).Count <= Idx do
+        TJSONArray(Current).AddElement(TJSONNull.Create);
+      if not Assigned(TJSONArray(Current).Items[Idx]) then
+        TJSONArray(Current).Items[Idx] := TJSONNull.Create;
+      Current := TJSONArray(Current).Items[Idx];
+    end
+    else
+      raise Exception.CreateFmt('Cannot traverse path through non-container: %s', [Path]);
+  end;
+  if Current is TJSONObject then
+    Result := TJSONObject(Current)
+  else
+  begin
+    NextObj := TJSONObject.Create;
+    if Current is TJSONArray then
+    begin
+      Idx := StrToIntDef(Segments[High(Segments)], -1);
+      TJSONArray(Current).Items[Idx].Free;
+      TJSONArray(Current).Items[Idx] := NextObj;
+    end
+    else
+      raise Exception.CreateFmt('Path does not resolve to object: %s', [Path]);
+    Result := NextObj;
+  end;
+end;
+
+class function TJsonPath.EnsureArray(Root: TJSONValue; const Path: string): TJSONArray;
+var
+  Obj: TJSONObject;
+  Segments: TArray<string>;
+  Last: string;
+  ParentPath: string;
+  I: Integer;
+  Existing: TJSONValue;
+begin
+  Segments := SplitPath(Path);
+  if Length(Segments) = 0 then
+    raise Exception.Create('Empty path for array');
+  Last := Segments[High(Segments)];
+  ParentPath := '';
+  for I := 0 to High(Segments) - 1 do
+    ParentPath := JoinPath(ParentPath, Segments[I]);
+  if ParentPath = '' then
+  begin
+    if Root is TJSONArray then
+      Exit(TJSONArray(Root));
+    raise Exception.Create('Root is not an array');
+  end;
+  Obj := EnsureObject(Root, ParentPath);
+  Existing := Obj.GetValue(Last);
+  if Existing is TJSONArray then
+    Exit(TJSONArray(Existing));
+  if Assigned(Existing) then
+    Existing.Free;
+  Result := TJSONArray.Create;
+  Obj.AddPair(Last, Result);
+end;
+
+class procedure TJsonPath.SetValue(Root: TJSONValue; const Path: string;
+  Value: TJSONValue);
+var
+  Segments: TArray<string>;
+  Current: TJSONValue;
+  Parent: TJSONValue;
+  I, Idx: Integer;
+  Key: string;
+  Arr: TJSONArray;
+begin
+  if not Assigned(Root) then
+    raise Exception.Create('Root JSON value is nil');
+  Segments := SplitPath(Path);
+  if Length(Segments) = 0 then
+    raise Exception.Create('Cannot set root via path');
+  Current := Root;
+  Parent := nil;
+  for I := 0 to High(Segments) do
+  begin
+    Key := Segments[I];
+    if I = High(Segments) then
+    begin
+      if Current is TJSONObject then
+      begin
+        if TJSONObject(Current).GetValue(Key) <> nil then
+          TJSONObject(Current).RemovePair(Key).Free;
+        TJSONObject(Current).AddPair(Key, Value);
+      end
+      else if Current is TJSONArray then
+      begin
+        if not TryStrToInt(Key, Idx) then
+          raise Exception.CreateFmt('Invalid array index: %s', [Key]);
+        Arr := TJSONArray(Current);
+        while Arr.Count <= Idx do
+          Arr.AddElement(TJSONNull.Create);
+        if Assigned(Arr.Items[Idx]) then
+          Arr.Items[Idx].Free;
+        Arr.Items[Idx] := Value;
+      end
+      else
+        raise Exception.Create('Cannot set value on non-container');
+      Exit;
+    end;
+    Parent := Current;
+    if Current is TJSONObject then
+    begin
+      if not Assigned(TJSONObject(Current).GetValue(Key)) then
+        TJSONObject(Current).AddPair(Key, TJSONObject.Create);
+      Current := TJSONObject(Current).GetValue(Key);
+    end
+    else if Current is TJSONArray then
+    begin
+      if not TryStrToInt(Key, Idx) then
+        raise Exception.CreateFmt('Invalid array index: %s', [Key]);
+      Arr := TJSONArray(Current);
+      while Arr.Count <= Idx do
+        Arr.AddElement(TJSONObject.Create);
+      if not Assigned(Arr.Items[Idx]) then
+        Arr.Items[Idx] := TJSONObject.Create;
+      Current := Arr.Items[Idx];
+    end
+    else
+      raise Exception.CreateFmt('Invalid path segment: %s', [Path]);
+  end;
+end;
+
+class function TJsonPath.CloneValue(Value: TJSONValue): TJSONValue;
+begin
+  if not Assigned(Value) then
+    Exit(nil);
+  Result := Value.Clone as TJSONValue;
+end;
+
+end.

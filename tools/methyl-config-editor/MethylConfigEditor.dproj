@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ProjectGuid>{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}</ProjectGuid>
+    <MainSource>MethylConfigEditor.dpr</MainSource>
+    <ProjectVersion>19.5</ProjectVersion>
+    <FrameworkType>VCL</FrameworkType>
+    <Base>True</Base>
+    <Config Condition="'$(Config)'==''">Debug</Config>
+    <Platform Condition="'$(Platform)'==''">Win64</Platform>
+    <TargetedPlatforms>3</TargetedPlatforms>
+    <AppType>Application</AppType>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
+    <Base>true</Base>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Config)'=='Debug' or '$(Cfg_1)'!=''">
+    <Cfg_1>true</Cfg_1>
+    <CfgParent>Base</CfgParent>
+    <Base>true</Base>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_2)'!=''">
+    <Cfg_2>true</Cfg_2>
+    <CfgParent>Base</CfgParent>
+    <Base>true</Base>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Platform)'=='Win32' or '$(Platform)'=='Win64'">
+    <DCC_DcuOutput>.\$(Platform)\$(Config)</DCC_DcuOutput>
+    <DCC_ExeOutput>.\$(Platform)\$(Config)</DCC_ExeOutput>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Config)'=='Debug'">
+    <DCC_Define>DEBUG;$(DCC_Define)</DCC_Define>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Config)'=='Release'">
+    <DCC_Define>RELEASE;$(DCC_Define)</DCC_Define>
+  </PropertyGroup>
+  <ItemGroup>
+    <DelphiCompile Include="$(MainSource)">
+      <MainSource>MainSource</MainSource>
+    </DelphiCompile>
+    <DCCReference Include="src\App\MainForm.pas">
+      <Form>MainForm</Form>
+    </DCCReference>
+    <DCCReference Include="src\App\AppSettings.pas"/>
+    <DCCReference Include="src\App\SchemaCatalog.pas"/>
+    <DCCReference Include="src\Schema\JsonSchemaLoader.pas"/>
+    <DCCReference Include="src\Schema\SchemaNode.pas"/>
+    <DCCReference Include="src\Schema\SchemaDocument.pas"/>
+    <DCCReference Include="src\Schema\SchemaDefaults.pas"/>
+    <DCCReference Include="src\Schema\SchemaBranchResolver.pas"/>
+    <DCCReference Include="src\Schema\SchemaValidator.pas"/>
+    <DCCReference Include="src\Schema\TypedStepSchemas.pas"/>
+    <DCCReference Include="src\Data\JsonPath.pas"/>
+    <DCCReference Include="src\Data\JsonDocumentModel.pas"/>
+    <DCCReference Include="src\UI\SchemaValueSummary.pas"/>
+    <DCCReference Include="src\UI\Editors\EditorTypes.pas"/>
+    <DCCReference Include="src\UI\Editors\PropertyEditorContext.pas"/>
+    <DCCReference Include="src\UI\Editors\SchemaEditorKeys.pas"/>
+    <DCCReference Include="src\UI\Editors\SchemaEditorRegistry.pas"/>
+    <DCCReference Include="src\UI\Editors\SchemaEditorRegistration.pas"/>
+    <DCCReference Include="src\UI\Editors\AbstractSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\NullableRowSupport.pas"/>
+    <DCCReference Include="src\UI\Editors\ComplexRowSupport.pas"/>
+    <DCCReference Include="src\UI\Editors\StringSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\EnumSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\BooleanSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\NumberSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\IntegerSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\ObjectSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\OneOfObjectSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\ArraySchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\DictionarySchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\DiscriminatorSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\DetectionStepEditor.pas"/>
+    <DCCReference Include="src\UI\PropertyEditorForm.pas">
+      <Form>PropertyEditorForm</Form>
+    </DCCReference>
+    <DCCReference Include="src\UI\ArrayEditorForm.pas">
+      <Form>ArrayEditorForm</Form>
+    </DCCReference>
+    <DCCReference Include="src\UI\DictEditorForm.pas">
+      <Form>DictEditorForm</Form>
+    </DCCReference>
+    <BuildConfiguration Include="Debug">
+      <Key>Cfg_1</Key>
+      <CfgParent>Base</CfgParent>
+    </BuildConfiguration>
+    <BuildConfiguration Include="Base">
+      <Key>Base</Key>
+    </BuildConfiguration>
+    <BuildConfiguration Include="Release">
+      <Key>Cfg_2</Key>
+      <CfgParent>Base</CfgParent>
+    </BuildConfiguration>
+  </ItemGroup>
+  <ProjectExtensions>
+    <Borland.Personality>Delphi.Personality.12</Borland.Personality>
+    <Borland.ProjectType/>
+    <BorlandProject>
+      <Delphi.Personality>
+        <Source>
+          <Source Name="MainSource">MethylConfigEditor.dpr</Source>
+        </Source>
+        <Excluded_Packages/>
+      </Delphi.Personality>
+      <Platforms>
+        <Platform value="Win32">True</Platform>
+        <Platform value="Win64">True</Platform>
+      </Platforms>
+    </BorlandProject>
+  </ProjectExtensions>
+  <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>
+</Project>

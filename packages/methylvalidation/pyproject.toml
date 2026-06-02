@@ -18,12 +18,18 @@ methylutils = {path = "../methylutils", develop = true}
 methyl-predictor = {path = "../methylpredictor", develop = true}
 methyl-detector = {path = "../methyldetector", develop = true}
 methyl_mapper = {path = "../methylmapper", develop = true}
+methyl_enricher = {path = "../methylenricher", develop = true}
+methyl_classifier = {path = "../methylclassifier", develop = true}
+methylcentroid = {path = "../methylcentroid", develop = true}
+methyl_cluster = {path = "../methylcluster", develop = true}
+methyl_alignment_qc = {path = "../methylalignmentqc", develop = true}
 
 [tool.poetry.scripts]
 methyl-validation = "methyl_validation.cli:main"
 methyl-hyperparam-search = "methyl_validation.hyperparam_search:main"
 methyl-stability-freeze-readiness = "methyl_validation.stability_freeze_readiness:main"
 methyl-validation-migrate-backend-config = "methyl_validation.utils.migrate_backend_config:main"
+methyl-export-config-schemas = "methyl_validation.schema_export:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
