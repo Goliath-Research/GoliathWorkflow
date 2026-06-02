@@ -464,6 +464,36 @@ def _candidate_mapper_annotation_paths(
     return out
 
 
+def _candidate_frozen_gene_panel_paths(
+    *,
+    project_json: Path,
+    project: "ProjectConfig",
+    bundle_dir: Path,
+) -> List[Path]:
+    candidates: List[Path] = []
+    try:
+        mb_cfg = project.get_step_config("model_bundle") or {}
+    except Exception:
+        mb_cfg = {}
+    cfg_path = mb_cfg.get("fixed_gene_panel")
+    if cfg_path:
+        p = Path(str(cfg_path))
+        if not p.is_absolute():
+            p = (project_json.parent / p).resolve()
+        candidates.append(p)
+    candidates.append(bundle_dir / FROZEN_GENE_PANEL_NAME)
+    candidates.append(project_json.parent / "model_bundle" / FROZEN_GENE_PANEL_NAME)
+    out: List[Path] = []
+    seen: set[str] = set()
+    for p in candidates:
+        key = str(p)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(p)
+    return out
+
+
 def _candidate_fixed_gene_feature_paths(
     *,
     project_json: Path,
@@ -1225,6 +1255,65 @@ def load_bundle_gene_feature_ranges(bundle_h5: str | Path) -> pd.DataFrame:
             }
         )
     return df
+
+
+def load_bundle_frozen_gene_panel(
+    bundle_h5: str | Path,
+    *,
+    project_json: Optional[str | Path] = None,
+) -> pd.DataFrame:
+    """
+    Load freeze-time gene panel (comparison_label, gene_name, gene_support_n, gene_importance).
+  """
+    path = Path(bundle_h5).expanduser().resolve()
+    bundle_dir = path.parent
+    candidates: List[Path] = [bundle_dir / FROZEN_GENE_PANEL_NAME]
+    if project_json is not None:
+        project_json_path = Path(project_json).expanduser().resolve()
+        try:
+            with _project_cwd(project_json_path):
+                project: "ProjectConfig" = load_project(project_json_path)
+            candidates = _candidate_frozen_gene_panel_paths(
+                project_json=project_json_path,
+                project=project,
+                bundle_dir=bundle_dir,
+            )
+        except Exception:
+            pass
+    panel_path: Optional[Path] = None
+    for candidate in candidates:
+        if candidate.is_file():
+            panel_path = candidate
+            break
+    if panel_path is None:
+        return pd.DataFrame(
+            columns=[
+                "comparison_label",
+                "gene_name",
+                "gene_support_n",
+                "gene_importance",
+            ]
+        )
+    try:
+        df = pd.read_csv(panel_path)
+    except Exception:
+        return pd.DataFrame()
+    if df.empty:
+        return df
+    required = {"gene_name", "gene_support_n", "gene_importance"}
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(
+            f"Frozen gene panel CSV missing required columns {missing}: {panel_path}"
+        )
+    out = df.copy()
+    if "comparison_label" not in out.columns:
+        out["comparison_label"] = "default"
+    out["comparison_label"] = out["comparison_label"].astype(str)
+    out["gene_name"] = out["gene_name"].astype(str)
+    out["gene_support_n"] = pd.to_numeric(out["gene_support_n"], errors="coerce").fillna(0).astype(int)
+    out["gene_importance"] = pd.to_numeric(out["gene_importance"], errors="coerce").fillna(0.0)
+    return out
 
 
 def build_model_feature_bundle(

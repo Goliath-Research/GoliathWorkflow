@@ -137,6 +137,25 @@ class BackendSharedParams(BaseModel):
     observed_hist_alpha: float = Field(default=0.5, ge=0.0)
     observed_hist_evidence_clip_cap: float = Field(default=5.0, ge=0.0)
     observed_hist_tail_agreement_threshold: float = Field(default=0.10, ge=0.0, le=1.0)
+    gene_scored_min_support_n: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "Minimum gene_support_n for a gene to enter the gene_scored comparison panel "
+            "(feature_family_set gene_scored or dmp+gene_scored)."
+        ),
+    )
+    gene_scored_use_region_weight: bool = Field(
+        default=True,
+        description="Multiply per-locus weights by region_weight when building gene_directional_score features.",
+    )
+    gene_scored_gene_weight: str = Field(
+        default="importance_x_sqrt_support",
+        description=(
+            "Gene-level weighting when pooling to gene_directional_score: "
+            "importance_x_sqrt_support or importance_only."
+        ),
+    )
 
     covariates_path: Optional[str] = Field(default=None)
     covariate_id_column: str = Field(default="sample_id")
@@ -161,7 +180,16 @@ class BackendSharedParams(BaseModel):
     @field_validator("feature_family_set")
     @classmethod
     def _validate_feature_family_set(cls, value: str) -> str:
-        allowed = {"dmp", "gene", "structural", "dmp+gene", "dmp+structural", "hybrid-all"}
+        allowed = {
+            "dmp",
+            "gene",
+            "structural",
+            "gene_scored",
+            "dmp+gene",
+            "dmp+structural",
+            "dmp+gene_scored",
+            "hybrid-all",
+        }
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"feature_family_set must be one of {sorted(allowed)}")
@@ -174,6 +202,15 @@ class BackendSharedParams(BaseModel):
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"gene_feature_loading must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("gene_scored_gene_weight")
+    @classmethod
+    def _validate_gene_scored_gene_weight_profile(cls, value: str) -> str:
+        allowed = {"importance_x_sqrt_support", "importance_only"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"gene_scored_gene_weight must be one of {sorted(allowed)}")
         return normalized
 
     @field_validator("mapper_gene_columns")
@@ -955,7 +992,8 @@ class MonteCarloConfig(BaseModel):
         default="dmp",
         description=(
             "For feature_mode=observed_hybrid, controls active feature families: "
-            "dmp | gene | structural | dmp+gene | dmp+structural | hybrid-all."
+            "dmp | gene | structural | gene_scored | dmp+gene | dmp+structural | "
+            "dmp+gene_scored | hybrid-all."
         ),
     )
     gene_feature_loading: str = Field(
@@ -1046,6 +1084,25 @@ class MonteCarloConfig(BaseModel):
         ge=0.0,
         le=1.0,
         description="Observed-hybrid threshold for cancer-direction tail agreement indicator.",
+    )
+    gene_scored_min_support_n: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "Minimum gene_support_n for a gene to enter the gene_scored comparison panel "
+            "(feature_family_set gene_scored or dmp+gene_scored)."
+        ),
+    )
+    gene_scored_use_region_weight: bool = Field(
+        default=True,
+        description="Multiply per-locus weights by region_weight when building gene_directional_score features.",
+    )
+    gene_scored_gene_weight: str = Field(
+        default="importance_x_sqrt_support",
+        description=(
+            "Gene-level weighting when pooling to gene_directional_score: "
+            "importance_x_sqrt_support or importance_only."
+        ),
     )
     ecdf_second_stage_enabled: bool = Field(
         default=False,
@@ -1230,6 +1287,9 @@ class MonteCarloConfig(BaseModel):
             "observed_hist_alpha",
             "observed_hist_evidence_clip_cap",
             "observed_hist_tail_agreement_threshold",
+            "gene_scored_min_support_n",
+            "gene_scored_use_region_weight",
+            "gene_scored_gene_weight",
             "ecdf_second_stage_enabled",
             "covariates_path",
             "covariate_id_column",
@@ -1431,7 +1491,16 @@ class MonteCarloConfig(BaseModel):
     @field_validator("feature_family_set")
     @classmethod
     def _validate_feature_family_set(cls, value: str) -> str:
-        allowed = {"dmp", "gene", "structural", "dmp+gene", "dmp+structural", "hybrid-all"}
+        allowed = {
+            "dmp",
+            "gene",
+            "structural",
+            "gene_scored",
+            "dmp+gene",
+            "dmp+structural",
+            "dmp+gene_scored",
+            "hybrid-all",
+        }
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"feature_family_set must be one of {sorted(allowed)}")
@@ -1444,6 +1513,15 @@ class MonteCarloConfig(BaseModel):
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"gene_feature_loading must be one of {sorted(allowed)}")
+        return normalized
+
+    @field_validator("gene_scored_gene_weight")
+    @classmethod
+    def _validate_gene_scored_gene_weight_profile(cls, value: str) -> str:
+        allowed = {"importance_x_sqrt_support", "importance_only"}
+        normalized = str(value).strip().lower()
+        if normalized not in allowed:
+            raise ValueError(f"gene_scored_gene_weight must be one of {sorted(allowed)}")
         return normalized
 
     @field_validator("mapper_gene_columns")

@@ -309,7 +309,7 @@ class ProjectConfig(BaseModel):
         "optional 'panel' adds hierarchical OvR readout during prediction. "
         "Under 'classifier', optional 'panel' (same shape) applies during classification when using samples_list / centroid validation (OvR pairwise max-contrast only). "
         "Under 'validation', model-backend settings support hybrid observed features via feature_mode='observed_hybrid' "
-        "and feature_family_set in {dmp,gene,structural,dmp+gene,dmp+structural,hybrid-all}; "
+        "and feature_family_set in {dmp,gene,structural,gene_scored,dmp+gene,dmp+structural,dmp+gene_scored,hybrid-all}; "
         "bundle manifests persist schema and aggregation metadata for reproducible train/inference contracts.",
     )
     _sample_qc_cache: Dict[str, List[Tuple[str, List[str], Literal["control", "disease"]]]] = PrivateAttr(

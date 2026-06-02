@@ -596,3 +596,195 @@ def test_observed_feature_builder_dynamic_schema_is_deterministic(monkeypatch):
     )
     assert feat_a.feature_names == feat_b.feature_names
     assert feat_a.report["schema_fingerprint"] == feat_b.report["schema_fingerprint"]
+
+
+def test_family_flags_gene_scored_tokens():
+    assert observed_feature_builder._family_flags("gene_scored") == (False, False, False, True)
+    assert observed_feature_builder._family_flags("dmp+gene_scored") == (True, False, False, True)
+    assert observed_feature_builder._family_flags("hybrid-all") == (True, True, True, False)
+
+
+def test_gene_scored_feature_names_and_fingerprint():
+    from methyl_validation.gene_scored_features import (
+        compute_gene_directional_score_matrix,
+        gene_scored_feature_column,
+        prepare_gene_scored_panels,
+    )
+
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a", "cmp_a"],
+            "chromosome": ["1", "1", "1"],
+            "context": ["CG", "CG", "CG"],
+            "position": [100, 120, 200],
+            "effect_size": [1.0, -1.0, 0.5],
+            "gene_name": ["G1", "G1", "G2"],
+            "region_weight": [1.0, 1.0, 1.0],
+        }
+    )
+    frozen_panel = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a", "cmp_a"],
+            "gene_name": ["G1", "G2", "G3"],
+            "gene_support_n": [2, 2, 1],
+            "gene_importance": [1.0, 0.5, 0.9],
+        }
+    )
+    names = observed_feature_builder.observed_hybrid_feature_names(
+        feature_family_set="gene_scored",
+        dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_panel,
+    )
+    assert names == ["gene_directional_score__cmp_a"]
+    assert "gene::" not in names[0]
+
+    fp_a = observed_feature_builder.observed_hybrid_schema_fingerprint(
+        feature_family_set="gene_scored",
+        dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_panel,
+        gene_scored_min_support_n=2,
+    )
+    fp_b = observed_feature_builder.observed_hybrid_schema_fingerprint(
+        feature_family_set="gene_scored",
+        dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_panel,
+        gene_scored_min_support_n=3,
+    )
+    assert fp_a != fp_b
+
+    feature_order = [("1", "CG", 100), ("1", "CG", 120), ("1", "CG", 200)]
+    X_raw = np.asarray([[0.10, 0.20, 0.30]], dtype=np.float64)
+    panels = prepare_gene_scored_panels(frozen_panel, min_support_n=2)
+    scores = compute_gene_directional_score_matrix(
+        X_raw,
+        feature_order,
+        dmp_df,
+        panels,
+        ["cmp_a"],
+        use_region_weight=True,
+        gene_weight_mode="importance_x_sqrt_support",
+    )
+    assert scores.shape == (1, 1)
+    assert float(scores[0, 0]) == pytest.approx(-0.1, rel=1e-5, abs=1e-6)
+    assert gene_scored_feature_column("cmp_a") == "gene_directional_score__cmp_a"
+
+
+def _fake_extract_gene_scored(sample_paths, reference_positions, chromosome, min_coverage=1):
+    del chromosome, min_coverage
+    poss = []
+    ctxs = []
+    for ctx in sorted(reference_positions.keys()):
+        for p in list(np.asarray(reference_positions[ctx], dtype=np.uint32)):
+            ctxs.append(ctx)
+            poss.append(int(p))
+    rows = []
+    for s in sample_paths:
+        sid = Path(str(s)).name
+        if sid in {"S1", "S2"}:
+            vals = [0.10, 0.20, 0.30]
+        else:
+            vals = [0.70, 0.80, 0.90]
+        rows.append(vals[: len(poss)])
+    X = np.asarray(rows, dtype=np.float32)
+    return (
+        X,
+        np.asarray(poss, dtype=np.uint32),
+        np.asarray(ctxs, dtype=object),
+        {"CG": np.arange(len(poss), dtype=np.uint32)},
+    )
+
+
+def test_observed_feature_builder_gene_scored_family(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_gene_scored,
+    )
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a", "cmp_a"],
+            "chromosome": ["1", "1", "1"],
+            "context": ["CG", "CG", "CG"],
+            "position": [100, 120, 200],
+            "weight": [1.0, 1.0, 1.0],
+            "effect_size": [1.0, -1.0, 0.5],
+            "gene_name": ["G1", "G1", "G2"],
+        }
+    )
+    frozen_panel = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a"],
+            "gene_name": ["G1", "G2"],
+            "gene_support_n": [2, 2],
+            "gene_importance": [1.0, 0.5],
+        }
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
+    y = [0, 0, 1, 1]
+    class_names = ["healthy", "cancer"]
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        feature_family_set="gene_scored",
+        frozen_gene_panel_df=frozen_panel,
+        gene_scored_min_support_n=2,
+    )
+    assert feat.feature_names == ["gene_directional_score__cmp_a"]
+    assert not any(str(n).startswith("gene::") for n in feat.feature_names)
+    col = feat.feature_names.index("gene_directional_score__cmp_a")
+    assert float(feat.X[0, col]) == pytest.approx(-0.1, rel=1e-5, abs=1e-6)
+    assert feat.report["feature_families"]["gene_scored"] is True
+    assert feat.report["feature_families"]["gene"] is False
+
+
+def test_observed_feature_builder_dmp_plus_gene_scored_includes_both_families(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_gene_scored,
+    )
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a", "cmp_a"],
+            "chromosome": ["1", "1", "1"],
+            "context": ["CG", "CG", "CG"],
+            "position": [100, 120, 200],
+            "weight": [1.0, 1.0, 1.0],
+            "effect_size": [1.0, -1.0, 0.5],
+            "gene_name": ["G1", "G1", "G2"],
+        }
+    )
+    frozen_panel = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a"],
+            "gene_name": ["G1", "G2"],
+            "gene_support_n": [2, 2],
+            "gene_importance": [1.0, 0.5],
+        }
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2"]
+    y = [0, 1]
+    class_names = ["healthy", "cancer"]
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        feature_family_set="dmp+gene_scored",
+        frozen_gene_panel_df=frozen_panel,
+    )
+    assert "max_weighted_directional_score" in feat.feature_names
+    assert "gene_directional_score__cmp_a" in feat.feature_names
+    assert not any(str(n).startswith("gene::") for n in feat.feature_names)

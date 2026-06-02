@@ -39,13 +39,15 @@ class ObservedHybridAnchors:
 
 
 OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v28_no_healthy_centroid_features"
-HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v1"
+HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v2_gene_scored"
 HYBRID_FEATURE_FAMILY_SETS = (
     "dmp",
     "gene",
     "structural",
+    "gene_scored",
     "dmp+gene",
     "dmp+structural",
+    "dmp+gene_scored",
     "hybrid-all",
 )
 REMOVED_OBSERVED_HYBRID_FEATURES = {
@@ -206,20 +208,25 @@ def _build_dynamic_mapped_feature_names(
     return gene_names, struct_names, metadata
 
 
-def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool]:
+def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool, bool]:
+    """Return (dmp, legacy_gene, structural, gene_scored)."""
     token = str(feature_family_set or "dmp").strip().lower()
     if token == "dmp":
-        return True, False, False
+        return True, False, False, False
     if token == "gene":
-        return False, True, False
+        return False, True, False, False
     if token == "structural":
-        return False, False, True
+        return False, False, True, False
+    if token == "gene_scored":
+        return False, False, False, True
     if token == "dmp+gene":
-        return True, True, False
+        return True, True, False, False
     if token == "dmp+structural":
-        return True, False, True
+        return True, False, True, False
+    if token == "dmp+gene_scored":
+        return True, False, False, True
     if token == "hybrid-all":
-        return True, True, True
+        return True, True, True, False
     raise ValueError(
         f"Unsupported feature_family_set={feature_family_set!r}; "
         f"allowed={list(HYBRID_FEATURE_FAMILY_SETS)}"
@@ -530,7 +537,9 @@ def derive_observed_hybrid_anchors(
     gene_feature_loading: str = "frozen",
     fixed_gene_features_df: Optional[pd.DataFrame] = None,
 ) -> ObservedHybridAnchors:
-    _include_dmp_family, include_gene_family, _include_structural_family = _family_flags(feature_family_set)
+    _include_dmp_family, include_gene_family, _include_structural_family, _include_gene_scored = _family_flags(
+        feature_family_set
+    )
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
     if gene_feature_loading_norm not in {"frozen", "range"}:
         raise ValueError("gene_feature_loading must be 'frozen' or 'range'")
@@ -836,8 +845,17 @@ def observed_hybrid_feature_names(
     cancer_class_labels: Optional[Sequence[str]] = None,
     feature_family_set: str = "dmp",
     dmp_df: Optional[pd.DataFrame] = None,
+    frozen_gene_panel_df: Optional[pd.DataFrame] = None,
+    gene_scored_min_support_n: int = 2,
 ) -> List[str]:
-    include_dmp_family, include_gene_family, include_structural_family = _family_flags(feature_family_set)
+    from .gene_scored_features import (
+        gene_scored_feature_names,
+        resolve_gene_scored_comparison_labels,
+    )
+
+    include_dmp_family, include_gene_family, include_structural_family, include_gene_scored = (
+        _family_flags(feature_family_set)
+    )
     names: List[str] = []
     if include_dmp_family:
         names.extend(_fixed_feature_names(cancer_class_labels=cancer_class_labels))
@@ -848,6 +866,13 @@ def observed_hybrid_feature_names(
             locus_df=dmp_df,
         )
     )
+    if include_gene_scored:
+        panel_df = frozen_gene_panel_df if frozen_gene_panel_df is not None else pd.DataFrame()
+        cmp_labels = resolve_gene_scored_comparison_labels(
+            dmp_df if dmp_df is not None else pd.DataFrame(),
+            panel_df,
+        )
+        names.extend(gene_scored_feature_names(cmp_labels))
     return names
 
 
@@ -856,13 +881,31 @@ def observed_hybrid_schema_fingerprint(
     *,
     feature_family_set: str = "dmp",
     dmp_df: Optional[pd.DataFrame] = None,
+    frozen_gene_panel_df: Optional[pd.DataFrame] = None,
+    gene_scored_min_support_n: int = 2,
+    gene_scored_use_region_weight: bool = True,
+    gene_scored_gene_weight: str = "importance_x_sqrt_support",
 ) -> str:
     names = observed_hybrid_feature_names(
         cancer_class_labels=cancer_class_labels,
         feature_family_set=feature_family_set,
         dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_gene_panel_df,
+        gene_scored_min_support_n=gene_scored_min_support_n,
     )
-    return hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest()
+    from .gene_scored_features import GENE_SCORED_SCHEMA_VERSION
+
+    payload = "\n".join(names)
+    _, _, _, include_gene_scored = _family_flags(feature_family_set)
+    if include_gene_scored:
+        payload = (
+            f"{payload}\n"
+            f"gene_scored_min_support_n={int(max(1, gene_scored_min_support_n))}\n"
+            f"gene_scored_use_region_weight={bool(gene_scored_use_region_weight)}\n"
+            f"gene_scored_gene_weight={str(gene_scored_gene_weight).strip().lower()}\n"
+            f"{GENE_SCORED_SCHEMA_VERSION}"
+        )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def build_observed_hybrid_feature_table(
@@ -893,13 +936,19 @@ def build_observed_hybrid_feature_table(
     feature_family_set: str = "dmp",
     gene_feature_loading: str = "frozen",
     fixed_gene_features_df: Optional[pd.DataFrame] = None,
+    frozen_gene_panel_df: Optional[pd.DataFrame] = None,
+    gene_scored_min_support_n: int = 2,
+    gene_scored_use_region_weight: bool = True,
+    gene_scored_gene_weight: str = "importance_x_sqrt_support",
 ) -> ObservedFeatureArtifacts:
     del quantiles, dmr_window_bp, max_dmr_features, max_gene_features
     # The redesigned schema is fixed; these toggles are retained only for compatibility.
     del include_dmp_features, include_chromosome_features, include_dmr_features, include_gene_features
     del hist_tail_agreement_threshold
 
-    include_dmp_family, include_gene_family, include_structural_family = _family_flags(feature_family_set)
+    include_dmp_family, include_gene_family, include_structural_family, include_gene_scored_family = (
+        _family_flags(feature_family_set)
+    )
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
     if gene_feature_loading_norm not in {"frozen", "range"}:
         raise ValueError("gene_feature_loading must be 'frozen' or 'range'")
@@ -982,7 +1031,9 @@ def build_observed_hybrid_feature_table(
     feature_names = observed_hybrid_feature_names(
         cancer_class_labels=cancer_labels_raw,
         feature_family_set=str(feature_family_set),
-        dmp_df=locus_df,
+        dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_gene_panel_df,
+        gene_scored_min_support_n=int(gene_scored_min_support_n),
     )
     gene_feature_names, struct_feature_names, mapped_feature_meta = _build_dynamic_mapped_feature_names(
         locus_df,
@@ -1279,6 +1330,48 @@ def build_observed_hybrid_feature_table(
                         )
                         X_feat[i, idx[s_key]] = float(numer / denom)
 
+    gene_scored_report: Dict[str, Any] = {}
+    if include_gene_scored_family:
+        from .gene_scored_features import (
+            compute_gene_directional_score_matrix,
+            gene_scored_feature_column,
+            prepare_gene_scored_panels,
+            resolve_gene_scored_comparison_labels,
+        )
+
+        if frozen_gene_panel_df is None or frozen_gene_panel_df.empty:
+            raise ValueError(
+                "feature_family_set includes gene_scored but frozen gene panel is empty or missing. "
+                "Build freeze-time frozen_genes_production.csv and set step_config.model_bundle.fixed_gene_panel."
+            )
+        cmp_labels = resolve_gene_scored_comparison_labels(dmp_df, frozen_gene_panel_df)
+        panels = prepare_gene_scored_panels(
+            frozen_gene_panel_df,
+            min_support_n=int(gene_scored_min_support_n),
+        )
+        score_matrix = compute_gene_directional_score_matrix(
+            X_raw,
+            feature_order,
+            dmp_df,
+            panels,
+            cmp_labels,
+            use_region_weight=bool(gene_scored_use_region_weight),
+            gene_weight_mode=str(gene_scored_gene_weight),
+        )
+        for j, cmp_label in enumerate(cmp_labels):
+            feat_name = gene_scored_feature_column(cmp_label)
+            if feat_name not in idx:
+                continue
+            col_j = int(idx[feat_name])
+            X_feat[:, col_j] = score_matrix[:, j].astype(np.float32)
+        gene_scored_report = {
+            "comparison_labels": list(cmp_labels),
+            "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
+            "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
+            "gene_scored_gene_weight": str(gene_scored_gene_weight),
+            "n_genes_per_comparison": {k: int(len(v)) for k, v in panels.items()},
+        }
+
     non_nan = np.isfinite(X_feat).sum(axis=0).astype(int).tolist()
     gene_col_idx = [j for j, name in enumerate(feature_names) if str(name).startswith("gene::")]
     struct_col_idx = [j for j, name in enumerate(feature_names) if str(name).startswith("struct::")]
@@ -1293,13 +1386,23 @@ def build_observed_hybrid_feature_table(
     schema_fingerprint = observed_hybrid_schema_fingerprint(
         cancer_class_labels=cancer_labels_raw,
         feature_family_set=str(feature_family_set),
-        dmp_df=locus_df,
+        dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_gene_panel_df,
+        gene_scored_min_support_n=int(gene_scored_min_support_n),
+        gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
+        gene_scored_gene_weight=str(gene_scored_gene_weight),
     )
+    if include_gene_scored_family:
+        schema_version = HYBRID_FEATURE_SCHEMA_VERSION
+    elif include_gene_family or include_structural_family:
+        schema_version = HYBRID_FEATURE_SCHEMA_VERSION
+    else:
+        schema_version = OBSERVED_HYBRID_SCHEMA_VERSION
     report = {
         "n_samples": int(n_samples),
         "n_loci_reference": int(n_loci),
         "n_features": int(len(feature_names)),
-        "schema_version": HYBRID_FEATURE_SCHEMA_VERSION if (include_gene_family or include_structural_family) else OBSERVED_HYBRID_SCHEMA_VERSION,
+        "schema_version": schema_version,
         "quantiles": [0.10, 0.50, 0.90],
         "feature_families": {
             "dmp": bool(include_dmp_family),
@@ -1307,6 +1410,7 @@ def build_observed_hybrid_feature_table(
             "dmr": False,
             "gene": bool(include_gene_family),
             "structural": bool(include_structural_family),
+            "gene_scored": bool(include_gene_scored_family),
         },
         "feature_family_set": str(feature_family_set),
         "gene_feature_loading": gene_feature_loading_norm,
@@ -1334,6 +1438,7 @@ def build_observed_hybrid_feature_table(
             "structural_max": int(np.max(struct_non_empty_per_sample)) if n_samples > 0 else 0,
         },
         "raw_mapped_feature_metadata": mapped_feature_meta,
+        "gene_scored": gene_scored_report,
     }
     return ObservedFeatureArtifacts(X=X_feat, feature_names=feature_names, report=report)
 
