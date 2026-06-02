@@ -3,7 +3,7 @@ unit TypedStepSchemas;
 interface
 
 uses
-  Generics.Collections,
+  Spring.Collections,
   SchemaNode,
   SchemaDocument;
 
@@ -26,7 +26,6 @@ implementation
 uses
   System.SysUtils,
   System.IOUtils,
-  Spring.Collections,
   JsonSchemaLoader;
 
 class procedure TTypedStepSchemas.SetSchemasRoot(const APath: string);

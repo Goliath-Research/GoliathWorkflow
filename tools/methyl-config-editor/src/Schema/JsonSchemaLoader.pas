@@ -6,7 +6,8 @@ uses
   System.Generics.Collections,
   System.JSON,
   System.SysUtils,
-  SchemaNode;
+  SchemaNode,
+  SchemaDocument;
 
 type
   TJsonSchemaLoader = class
@@ -42,8 +43,7 @@ implementation
 uses
   System.Classes,
   System.IOUtils,
-  Generics.Defaults,
-  SchemaDocument;
+  Generics.Defaults;
 
 constructor TJsonSchemaLoader.Create;
 begin
