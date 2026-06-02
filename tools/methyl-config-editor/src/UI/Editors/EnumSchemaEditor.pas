@@ -23,6 +23,7 @@ type
 implementation
 
 uses
+  Vcl.Controls,
   Vcl.StdCtrls,
   NullableRowSupport,
   SchemaDefaults,
@@ -58,10 +59,10 @@ begin
   if Combo.ItemIndex < 0 then
     Combo.ItemIndex := 0;
   Combo.Tag := NativeInt(ARow);
-  Combo.OnChange := procedure(Sender: TObject)
+  Combo.OnChange := ARow.BindNotify(procedure(Sender: TObject)
     begin
       ReadRow(AContext, ARow);
-    end;
+    end);
   ARow.ValueControl := Combo;
   TNullableRowSupport.AddNullCheckbox(AContext, ARow, AValue,
     procedure(Sender: TObject)

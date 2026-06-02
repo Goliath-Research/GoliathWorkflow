@@ -3,6 +3,8 @@ unit ComplexRowSupport;
 interface
 
 uses
+  System.Classes,
+  Vcl.Controls,
   Vcl.StdCtrls,
   Vcl.ExtCtrls,
   System.JSON,
@@ -14,14 +16,14 @@ type
   TComplexRowSupport = class
   public
     class procedure BuildSummaryRow(const AContext: IPropertyEditorContext;
-      ARow: TPropertyRow; AValue: TJSONValue; AOnEdit: TNotifyEvent;
-      AOnClear: TNotifyEvent);
+      ARow: TPropertyRow; AValue: TJSONValue; AOnEdit: TNotifyEventProc;
+      AOnClear: TNotifyEventProc);
   end;
 
 implementation
 
 class procedure TComplexRowSupport.BuildSummaryRow(const AContext: IPropertyEditorContext;
-  ARow: TPropertyRow; AValue: TJSONValue; AOnEdit, AOnClear: TNotifyEvent);
+  ARow: TPropertyRow; AValue: TJSONValue; AOnEdit, AOnClear: TNotifyEventProc);
 var
   Summary: TEdit;
 begin
@@ -38,7 +40,7 @@ begin
   ARow.btnEdit.Width := 75;
   ARow.btnEdit.Caption := 'Edit...';
   ARow.btnEdit.Tag := NativeInt(ARow);
-  ARow.btnEdit.OnClick := AOnEdit;
+  ARow.btnEdit.OnClick := ARow.BindNotify(AOnEdit);
 
   if ARow.SchemaNode.Nullable then
   begin
@@ -48,7 +50,7 @@ begin
     ARow.btnClear.Width := 60;
     ARow.btnClear.Caption := 'Null';
     ARow.btnClear.Tag := NativeInt(ARow);
-    ARow.btnClear.OnClick := AOnClear;
+    ARow.btnClear.OnClick := ARow.BindNotify(AOnClear);
   end;
 end;
 

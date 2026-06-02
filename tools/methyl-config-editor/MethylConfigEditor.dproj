@@ -80,6 +80,7 @@
         <DCCReference Include="src\UI\Editors\DictionarySchemaEditor.pas"/>
         <DCCReference Include="src\UI\Editors\DiscriminatorSchemaEditor.pas"/>
         <DCCReference Include="src\UI\Editors\DetectionStepEditor.pas"/>
+        <DCCReference Include="src\UI\Editors\TypedStepSchemaEditor.pas"/>
         <DCCReference Include="src\UI\PropertyEditorForm.pas">
             <Form>PropertyEditorForm</Form>
         </DCCReference>

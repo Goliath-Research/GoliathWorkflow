@@ -10,18 +10,22 @@ uses
   EditorTypes;
 
 type
+  TGetPropertyValueProc = reference to function(const AName: string): TJSONValue;
+  TSetPropertyValueProc = reference to procedure(const AName: string; AValue: TJSONValue);
+  TRebuildRowsProc = reference to procedure;
+
   TPropertyEditorContext = class(TInterfacedObject, IPropertyEditorContext)
   private
     FOwner: TComponent;
     FObjectSchema: TSchemaNode;
     FBreadcrumb: string;
-    FGetValue: TFunc<string, TJSONValue>;
-    FSetValue: TProc<string, TJSONValue>;
-    FRebuild: TProc;
+    FGetValue: TGetPropertyValueProc;
+    FSetValue: TSetPropertyValueProc;
+    FRebuild: TRebuildRowsProc;
   public
     constructor Create(AOwner: TComponent; AObjectSchema: TSchemaNode;
-      const ABreadcrumb: string; const AGetValue: TFunc<string, TJSONValue>;
-      const ASetValue: TProc<string, TJSONValue>; const ARebuild: TProc);
+      const ABreadcrumb: string; const AGetValue: TGetPropertyValueProc;
+      const ASetValue: TSetPropertyValueProc; const ARebuild: TRebuildRowsProc);
     function GetOwner: TComponent;
     function GetObjectSchema: TSchemaNode;
     function GetBreadcrumb: string;
@@ -35,8 +39,8 @@ implementation
 
 constructor TPropertyEditorContext.Create(AOwner: TComponent;
   AObjectSchema: TSchemaNode; const ABreadcrumb: string;
-  const AGetValue: TFunc<string, TJSONValue>;
-  const ASetValue: TProc<string, TJSONValue>; const ARebuild: TProc);
+  const AGetValue: TGetPropertyValueProc;
+  const ASetValue: TSetPropertyValueProc; const ARebuild: TRebuildRowsProc);
 begin
   inherited Create;
   FOwner := AOwner;

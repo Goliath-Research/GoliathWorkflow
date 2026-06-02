@@ -5,9 +5,14 @@ object ArrayEditorForm: TArrayEditorForm
   Caption = 'Array Editor'
   ClientHeight = 360
   ClientWidth = 520
+  Color = clBtnFace
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -12
+  Font.Name = 'Segoe UI'
+  Font.Style = []
   Position = poScreenCenter
   OnDestroy = FormDestroy
-  PixelsPerInch = 96
   TextHeight = 15
   object PanelBottom: TPanel
     Left = 0

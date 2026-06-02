@@ -68,11 +68,12 @@ type
   end;
 
 var
-  MainForm: TMainForm;
+  MainFormInstance: TMainForm;
 
 implementation
 
 uses
+  System.UITypes,
   System.IOUtils;
 
 {$R *.dfm}

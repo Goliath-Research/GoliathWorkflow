@@ -23,6 +23,7 @@ type
 implementation
 
 uses
+  Vcl.Controls,
   Vcl.StdCtrls,
   NullableRowSupport,
   SchemaDefaults,
@@ -49,10 +50,10 @@ begin
   Check.Caption := '';
   Check.Checked := AValue is TJSONTrue;
   Check.Tag := NativeInt(ARow);
-  Check.OnClick := procedure(Sender: TObject)
+  Check.OnClick := ARow.BindNotify(procedure(Sender: TObject)
     begin
       ReadRow(AContext, ARow);
-    end;
+    end);
   ARow.ValueControl := Check;
   TNullableRowSupport.AddNullCheckbox(AContext, ARow, AValue,
     procedure(Sender: TObject)

@@ -3,6 +3,8 @@ unit NullableRowSupport;
 interface
 
 uses
+  System.Classes,
+  Vcl.Controls,
   Vcl.StdCtrls,
   Vcl.ExtCtrls,
   System.JSON,
@@ -16,7 +18,7 @@ type
   TNullableRowSupport = class
   public
     class procedure AddNullCheckbox(const AContext: IPropertyEditorContext;
-      ARow: TPropertyRow; AValue: TJSONValue; AOnToggle: TNotifyEvent);
+      ARow: TPropertyRow; AValue: TJSONValue; AOnToggle: TNotifyEventProc);
     class procedure SetControlEnabled(ARow: TPropertyRow; AEnabled: Boolean);
     class function IsNullChecked(ARow: TPropertyRow): Boolean;
   end;
@@ -25,7 +27,7 @@ implementation
 
 class procedure TNullableRowSupport.AddNullCheckbox(
   const AContext: IPropertyEditorContext; ARow: TPropertyRow; AValue: TJSONValue;
-  AOnToggle: TNotifyEvent);
+  AOnToggle: TNotifyEventProc);
 begin
   if not ARow.SchemaNode.Nullable then
     Exit;
@@ -36,7 +38,7 @@ begin
   ARow.chkNull.Caption := 'Null';
   ARow.chkNull.Checked := TSchemaValueSummary.IsNullValue(AValue);
   ARow.chkNull.Tag := NativeInt(ARow);
-  ARow.chkNull.OnClick := AOnToggle;
+  ARow.chkNull.OnClick := ARow.BindNotify(AOnToggle);
 end;
 
 class procedure TNullableRowSupport.SetControlEnabled(ARow: TPropertyRow;

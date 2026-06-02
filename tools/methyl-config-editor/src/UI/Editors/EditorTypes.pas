@@ -8,9 +8,19 @@ uses
   Vcl.ExtCtrls,
   System.JSON,
   System.Classes,
+  System.Generics.Collections,
   SchemaNode;
 
 type
+  TNotifyEventProc = reference to procedure(Sender: TObject);
+  TNotifyEventHandler = class
+  private
+    FProc: TNotifyEventProc;
+  public
+    constructor Create(const AProc: TNotifyEventProc);
+    procedure Notify(Sender: TObject);
+  end;
+
   TPropertyRow = class;
 
   IPropertyEditorContext = interface
@@ -36,6 +46,8 @@ type
   end;
 
   TPropertyRow = class
+  private
+    FEventHandlers: TObjectList<TNotifyEventHandler>;
   public
     PropertyName: string;
     SchemaNode: TSchemaNode;
@@ -47,8 +59,44 @@ type
     btnClear: TButton;
     chkNull: TCheckBox;
     ErrorLabel: TLabel;
+    constructor Create;
+    destructor Destroy; override;
+    function BindNotify(const AProc: TNotifyEventProc): TNotifyEvent;
   end;
 
 implementation
+
+constructor TNotifyEventHandler.Create(const AProc: TNotifyEventProc);
+begin
+  inherited Create;
+  FProc := AProc;
+end;
+
+procedure TNotifyEventHandler.Notify(Sender: TObject);
+begin
+  if Assigned(FProc) then
+    FProc(Sender);
+end;
+
+constructor TPropertyRow.Create;
+begin
+  inherited Create;
+  FEventHandlers := TObjectList<TNotifyEventHandler>.Create(True);
+end;
+
+destructor TPropertyRow.Destroy;
+begin
+  FEventHandlers.Free;
+  inherited;
+end;
+
+function TPropertyRow.BindNotify(const AProc: TNotifyEventProc): TNotifyEvent;
+var
+  Handler: TNotifyEventHandler;
+begin
+  Handler := TNotifyEventHandler.Create(AProc);
+  FEventHandlers.Add(Handler);
+  Result := Handler.Notify;
+end;
 
 end.
