@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{F41A7249-2A9C-4B6A-B98A-BC78E76956BF}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="methyl-config-editor\MethylConfigEditor.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="methyl-config-editor\tests\MethylConfigEditorTests.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="MethylConfigEditor">
+        <MSBuild Projects="methyl-config-editor\MethylConfigEditor.dproj"/>
+    </Target>
+    <Target Name="MethylConfigEditor:Clean">
+        <MSBuild Projects="methyl-config-editor\MethylConfigEditor.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MethylConfigEditor:Make">
+        <MSBuild Projects="methyl-config-editor\MethylConfigEditor.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="MethylConfigEditorTests">
+        <MSBuild Projects="methyl-config-editor\tests\MethylConfigEditorTests.dproj"/>
+    </Target>
+    <Target Name="MethylConfigEditorTests:Clean">
+        <MSBuild Projects="methyl-config-editor\tests\MethylConfigEditorTests.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MethylConfigEditorTests:Make">
+        <MSBuild Projects="methyl-config-editor\tests\MethylConfigEditorTests.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="MethylConfigEditor;MethylConfigEditorTests"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="MethylConfigEditor:Clean;MethylConfigEditorTests:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="MethylConfigEditor:Make;MethylConfigEditorTests:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>
