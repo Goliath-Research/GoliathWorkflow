@@ -52,6 +52,24 @@
     <DCCReference Include="src\Data\JsonPath.pas"/>
     <DCCReference Include="src\Data\JsonDocumentModel.pas"/>
     <DCCReference Include="src\UI\SchemaValueSummary.pas"/>
+    <DCCReference Include="src\UI\Editors\EditorTypes.pas"/>
+    <DCCReference Include="src\UI\Editors\PropertyEditorContext.pas"/>
+    <DCCReference Include="src\UI\Editors\SchemaEditorKeys.pas"/>
+    <DCCReference Include="src\UI\Editors\SchemaEditorRegistry.pas"/>
+    <DCCReference Include="src\UI\Editors\SchemaEditorRegistration.pas"/>
+    <DCCReference Include="src\UI\Editors\AbstractSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\NullableRowSupport.pas"/>
+    <DCCReference Include="src\UI\Editors\ComplexRowSupport.pas"/>
+    <DCCReference Include="src\UI\Editors\StringSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\EnumSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\BooleanSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\NumberSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\IntegerSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\ObjectSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\OneOfObjectSchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\ArraySchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\DictionarySchemaEditor.pas"/>
+    <DCCReference Include="src\UI\Editors\DiscriminatorSchemaEditor.pas"/>
     <DCCReference Include="src\UI\PropertyEditorForm.pas">
       <Form>PropertyEditorForm</Form>
     </DCCReference>

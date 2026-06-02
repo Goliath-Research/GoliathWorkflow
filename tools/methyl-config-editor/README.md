@@ -7,7 +7,15 @@ No Delphi class codegen — schemas from `methyl-export-config-schemas` drive th
 ## Requirements
 
 - Delphi 11 or later (VCL, Win32/Win64)
+- [Spring4D](https://bitbucket.org/sglienke/spring4d) (IoC container for property-editor resolution)
 - DUnitX (for tests, optional)
+
+Add Spring4D library paths to the Delphi IDE (or project search path), at minimum:
+
+- `Spring4D/source/Core`
+- `Spring4D/source/Base`
+- `Spring4D/source/Data`
+- `Spring4D/source/Container`
 
 ## Build
 
@@ -27,15 +35,47 @@ Default relative path from `Win64\Debug\`: `..\..\..\schemas\config`.
 
 ## Architecture
 
+Property editing uses **Spring4D `GlobalContainer`** to resolve an `ISchemaPropertyEditor` implementation by name. Each schema shape has its own editor class; `TPropertyEditorForm` only builds rows and delegates to the resolved editor.
+
+```text
+TSchemaEditorKeys.ForNode(schemaNode)  →  editor key (e.g. "string", "object")
+GlobalContainer.ResolveNamed<ISchemaPropertyEditor>(key)
+  → TStringSchemaEditor / TObjectSchemaEditor / ...
+```
+
 | Unit | Role |
 |------|------|
+| `UI/Editors/EditorTypes.pas` | `ISchemaPropertyEditor`, `TPropertyRow` |
+| `UI/Editors/SchemaEditorRegistry.pas` | Resolve editor by schema node (or `$ref` path override) |
+| `UI/Editors/SchemaEditorRegistration.pas` | Register all editors with Spring4D at startup |
+| `UI/Editors/*SchemaEditor.pas` | One class per kind (string, enum, object, array, …) |
 | `Schema/JsonSchemaLoader.pas` | Parse schema, `$ref`/`$defs`, nullable `anyOf`, `oneOf`+`discriminator` |
 | `Schema/SchemaNode.pas` | Internal schema meta-tree |
 | `Data/JsonPath.pas` | JSON pointer get/set |
-| `UI/PropertyEditorForm.pas` | Recursive property grid (one form class, many modals) |
+| `UI/PropertyEditorForm.pas` | Recursive property grid shell (rows + validation) |
 | `UI/ArrayEditorForm.pas` | Array list + nested object editor |
 | `UI/DictEditorForm.pas` | Open `additionalProperties` maps |
 | `App/MainForm.pas` | Schema catalog, document load/save |
+
+### Adding a custom editor
+
+1. Implement `ISchemaPropertyEditor` (subclass `TAbstractSchemaEditor`).
+2. Define a unique `EditorKey` string constant in `SchemaEditorKeys`.
+3. Register in `SchemaEditorRegistration.EnsureRegistered`:
+
+```delphi
+GlobalContainer.RegisterType<ISchemaPropertyEditor, TMyCustomSchemaEditor>
+  .Named('myCustomKey').AsTransient;
+```
+
+4. Optional: register by JSON Schema `$ref` path for a specific model:
+
+```delphi
+GlobalContainer.RegisterType<ISchemaPropertyEditor, TDetectionStepEditor>
+  .Named('#/$defs/MethylDetectorConfig').AsTransient;
+```
+
+`TSchemaEditorRegistry.Resolve` checks `$ref` first, then falls back to kind-based keys.
 
 ## Tests
 
