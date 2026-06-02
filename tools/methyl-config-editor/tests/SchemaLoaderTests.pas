@@ -22,6 +22,8 @@ type
     procedure MonteCarloDiscriminatorOneOf;
     [Test]
     procedure CentroidSchemaLoads;
+    [Test]
+    procedure DetectionTypedEditorRegistered;
   end;
 
 implementation
@@ -31,7 +33,10 @@ uses
   System.SysUtils,
   JsonSchemaLoader,
   SchemaNode,
-  SchemaDocument;
+  SchemaDocument,
+  EditorTypes,
+  SchemaEditorRegistry,
+  SchemaEditorRegistration;
 
 function TSchemaLoaderTests.RepoRoot: string;
 var
@@ -182,6 +187,14 @@ begin
   finally
     Loader.Free;
   end;
+end;
+
+procedure TSchemaLoaderTests.DetectionTypedEditorRegistered;
+var
+  Editor: ISchemaPropertyEditor;
+begin
+  SchemaEditorRegistration.EnsureRegistered;
+  Assert.IsTrue(TSchemaEditorRegistry.TryResolveByName('MethylDetectorConfig', Editor));
 end;
 
 initialization

@@ -25,8 +25,7 @@ implementation
 
 uses
   ComplexRowSupport,
-  DictEditorForm,
-  SchemaDefaults;
+  DictEditorForm;
 
 class function TDictionarySchemaEditor.EditorKey: string;
 begin
@@ -63,15 +62,14 @@ end;
 function TDictionarySchemaEditor.EditValue(const AContext: IPropertyEditorContext;
   ARow: TPropertyRow; AValue: TJSONValue): TJSONValue;
 var
-  Obj, Working: TJSONObject;
+  Working: TJSONObject;
   ChildTitle: string;
 begin
   Result := nil;
   if AValue is TJSONObject then
-    Obj := TJSONObject(AValue)
+    Working := TJSONObject(AValue).Clone as TJSONObject
   else
-    Obj := TJSONObject.Create;
-  Working := Obj.Clone as TJSONObject;
+    Working := TJSONObject.Create;
   try
     ChildTitle := AContext.ChildBreadcrumb(ARow.lblName.Caption);
     if TDictEditorForm.EditDictionary(AContext.GetOwner, ChildTitle, ARow.SchemaNode,

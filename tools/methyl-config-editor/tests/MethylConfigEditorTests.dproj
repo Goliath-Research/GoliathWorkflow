@@ -23,6 +23,15 @@
     <DCCReference Include="..\src\Schema\JsonSchemaLoader.pas"/>
     <DCCReference Include="..\src\Schema\SchemaNode.pas"/>
     <DCCReference Include="..\src\Schema\SchemaDocument.pas"/>
+    <DCCReference Include="..\src\Schema\TypedStepSchemas.pas"/>
+    <DCCReference Include="..\src\UI\Editors\EditorTypes.pas"/>
+    <DCCReference Include="..\src\UI\Editors\SchemaEditorKeys.pas"/>
+    <DCCReference Include="..\src\UI\Editors\SchemaEditorRegistry.pas"/>
+    <DCCReference Include="..\src\UI\Editors\SchemaEditorRegistration.pas"/>
+    <DCCReference Include="..\src\UI\Editors\ObjectSchemaEditor.pas"/>
+    <DCCReference Include="..\src\UI\Editors\AbstractSchemaEditor.pas"/>
+    <DCCReference Include="..\src\UI\Editors\ComplexRowSupport.pas"/>
+    <DCCReference Include="..\src\UI\Editors\DetectionStepEditor.pas"/>
     <DCCReference Include="..\src\Data\JsonPath.pas"/>
   </ItemGroup>
   <Import Project="$(BDS)\Bin\CodeGear.Delphi.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Delphi.Targets')"/>

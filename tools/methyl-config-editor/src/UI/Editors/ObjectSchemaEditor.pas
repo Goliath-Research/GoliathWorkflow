@@ -65,15 +65,14 @@ end;
 function TObjectSchemaEditor.EditValue(const AContext: IPropertyEditorContext;
   ARow: TPropertyRow; AValue: TJSONValue): TJSONValue;
 var
-  Obj, CloneObj: TJSONObject;
+  CloneObj: TJSONObject;
   ChildTitle: string;
 begin
   Result := nil;
   if AValue is TJSONObject then
-    Obj := TJSONObject(AValue)
+    CloneObj := TJSONObject(AValue).Clone as TJSONObject
   else
-    Obj := TSchemaDefaults.CreateDefaultObject(ARow.SchemaNode);
-  CloneObj := Obj.Clone as TJSONObject;
+    CloneObj := TSchemaDefaults.CreateDefaultObject(ARow.SchemaNode);
   try
     ChildTitle := AContext.ChildBreadcrumb(ARow.lblName.Caption);
     if TPropertyEditorForm.EditObject(AContext.GetOwner, ChildTitle, ARow.SchemaNode,

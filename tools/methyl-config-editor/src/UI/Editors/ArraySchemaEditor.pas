@@ -63,23 +63,18 @@ end;
 function TArraySchemaEditor.EditValue(const AContext: IPropertyEditorContext;
   ARow: TPropertyRow; AValue: TJSONValue): TJSONValue;
 var
-  Arr: TJSONArray;
   Working: TJSONArray;
   ChildTitle: string;
-  I: Integer;
 begin
   Result := nil;
   if AValue is TJSONArray then
-    Arr := TJSONArray(AValue)
+    Working := TJSONArray(AValue).Clone as TJSONArray
   else
-    Arr := TJSONArray.Create;
-  Working := Arr.Clone as TJSONArray;
+    Working := TJSONArray.Create;
   try
     ChildTitle := AContext.ChildBreadcrumb(ARow.lblName.Caption);
     if TArrayEditorForm.EditArray(AContext.GetOwner, ChildTitle, ARow.SchemaNode, Working) then
-    begin
       Result := Working.Clone as TJSONArray;
-    end;
   finally
     Working.Free;
   end;

@@ -25,7 +25,8 @@ uses
   OneOfObjectSchemaEditor,
   ArraySchemaEditor,
   DictionarySchemaEditor,
-  DiscriminatorSchemaEditor;
+  DiscriminatorSchemaEditor,
+  DetectionStepEditor;
 
 class procedure TSchemaEditorRegistration.EnsureRegistered;
 begin
@@ -52,6 +53,8 @@ begin
     .Named(TSchemaEditorKeys.DictionaryKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TDiscriminatorSchemaEditor>
     .Named(TSchemaEditorKeys.DiscriminatorKey).AsTransient;
+  GlobalContainer.RegisterType<ISchemaPropertyEditor, TDetectionStepEditor>
+    .Named(TSchemaEditorKeys.DetectionConfigKey).AsTransient;
 
   FRegistered := True;
 end;

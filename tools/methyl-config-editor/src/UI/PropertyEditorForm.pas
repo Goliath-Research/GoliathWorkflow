@@ -56,6 +56,9 @@ type
 
 implementation
 
+uses
+  TypedStepSchemas;
+
 {$R *.dfm}
 
 procedure TPropertyEditorForm.FormCreate(Sender: TObject);
@@ -152,6 +155,7 @@ var
   TitleText: string;
   Val: TJSONValue;
   Editor: ISchemaPropertyEditor;
+  TypedRoot: TSchemaNode;
 begin
   for I := 0 to EffectiveSchema.PropertyCount - 1 do
   begin
@@ -160,13 +164,16 @@ begin
       SameText(Prop.Name, FSchema.DiscriminatorProperty) then
       Continue;
     PropNode := TSchemaNode(Prop.Node);
-    Editor := TSchemaEditorRegistry.Resolve(PropNode);
+    Editor := TSchemaEditorRegistry.ResolveProperty(Prop.Name, PropNode);
     TitleText := PropNode.Title;
     if TitleText = '' then
       TitleText := Prop.Name;
     Row := CreateRowPanel(TitleText, PropNode.Required);
     Row.PropertyName := Prop.Name;
     Row.SchemaNode := PropNode;
+    if TSchemaEditorKeys.IsTypedStepProperty(Prop.Name) and
+      TTypedStepSchemas.TryLoadStepRoot(Prop.Name, TypedRoot) then
+      Row.SchemaNode := TypedRoot;
     Row.Editor := Editor;
     if PropNode.Description <> '' then
       Row.lblName.Hint := PropNode.Description;

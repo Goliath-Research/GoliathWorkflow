@@ -19,7 +19,10 @@ type
       ArrayKey = 'array';
       DictionaryKey = 'dictionary';
       DiscriminatorKey = 'discriminator';
+      DetectionConfigKey = 'MethylDetectorConfig';
     class function ForNode(ANode: TSchemaNode): string;
+    class function IsTypedStepProperty(const APropertyName: string): Boolean;
+    class function TypedStepEditorKey(const APropertyName: string): string;
   end;
 
 implementation
@@ -54,6 +57,19 @@ begin
   else
     Exit(StringKey);
   end;
+end;
+
+class function TSchemaEditorKeys.IsTypedStepProperty(const APropertyName: string): Boolean;
+begin
+  Result := SameText(APropertyName, 'detection');
+end;
+
+class function TSchemaEditorKeys.TypedStepEditorKey(const APropertyName: string): string;
+begin
+  if SameText(APropertyName, 'detection') then
+    Result := DetectionConfigKey
+  else
+    Result := '';
 end;
 
 end.

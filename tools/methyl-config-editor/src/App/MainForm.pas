@@ -17,6 +17,7 @@ uses
   System.JSON,
   AppSettings,
   SchemaCatalog,
+  TypedStepSchemas,
   SchemaDocument,
   JsonSchemaLoader,
   JsonDocumentModel,
@@ -83,6 +84,7 @@ begin
   FCatalog := TSchemaCatalog.Create;
   FDocument := TJsonDocumentModel.Create;
   edtSchemasRoot.Text := FSettings.GetSchemasRoot;
+  TTypedStepSchemas.SetSchemasRoot(edtSchemasRoot.Text);
   ReloadCatalog;
   if FSettings.GetLastDocumentPath <> '' then
   begin
@@ -120,6 +122,7 @@ var
   Idx: Integer;
 begin
   FSettings.SetSchemasRoot(edtSchemasRoot.Text);
+  TTypedStepSchemas.SetSchemasRoot(edtSchemasRoot.Text);
   FCatalog.LoadFromRoot(edtSchemasRoot.Text);
   cboSchema.Items.Clear;
   for I := 0 to FCatalog.Count - 1 do

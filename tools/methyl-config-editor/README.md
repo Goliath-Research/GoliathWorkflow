@@ -68,14 +68,25 @@ GlobalContainer.RegisterType<ISchemaPropertyEditor, TMyCustomSchemaEditor>
   .Named('myCustomKey').AsTransient;
 ```
 
-4. Optional: register by JSON Schema `$ref` path for a specific model:
+4. Optional: register by JSON Schema `$ref` path or model **`title`** for a specific Pydantic model:
 
 ```delphi
 GlobalContainer.RegisterType<ISchemaPropertyEditor, TDetectionStepEditor>
-  .Named('#/$defs/MethylDetectorConfig').AsTransient;
+  .Named('MethylDetectorConfig').AsTransient;
 ```
 
-`TSchemaEditorRegistry.Resolve` checks `$ref` first, then falls back to kind-based keys.
+`TSchemaEditorRegistry.Resolve` checks `$ref`, then **`title`**, then kind-based keys.
+
+### Example: `TDetectionStepEditor`
+
+Registered as `MethylDetectorConfig` (matches `detection.schema.json` root title). Used when:
+
+- Editing a document with **detection.schema.json** selected as the active schema.
+- Editing **`step_config.detection`** inside `project_config.schema.json` (property name `detection` maps to the typed step loader).
+
+The editor shows a compact summary (`chromosome=…; centroids set`) and opens the full recursive property form against the committed **detection** schema, not the loose `step_config` placeholder in the project schema.
+
+Add more typed step editors by mirroring [`DetectionStepEditor.pas`](src/UI/Editors/DetectionStepEditor.pas) and registering in [`SchemaEditorRegistration.pas`](src/UI/Editors/SchemaEditorRegistration.pas); extend [`TypedStepSchemas.pas`](src/Schema/TypedStepSchemas.pas) step id → filename mapping.
 
 ## Tests
 
