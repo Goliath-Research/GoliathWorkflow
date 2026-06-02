@@ -31,6 +31,9 @@ class _StubProjectMulti:
         assert disease_group == "pca1"
         return str(self._det)
 
+    def resolve_detection_output_dir(self, control_group: str, disease_group: str) -> str:
+        return self.get_detection_output_dir(control_group, disease_group)
+
     def get_derived_paths(self):
         return SimpleNamespace(detection_dir=str(self._det))
 
@@ -60,6 +63,9 @@ class _StubProjectBinary:
         assert control_group == "healthy"
         assert disease_group == "pca1"
         return str(self._det)
+
+    def resolve_detection_output_dir(self, control_group: str, disease_group: str) -> str:
+        return self.get_detection_output_dir(control_group, disease_group)
 
     def get_derived_paths(self):
         return SimpleNamespace(detection_dir=str(self._det))

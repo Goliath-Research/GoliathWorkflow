@@ -1074,6 +1074,29 @@ class ProjectConfig(BaseModel):
         """Output dir for detection for one comparison: detections/<control_group>/<disease_group>."""
         return f"{self.get_project_root()}/detections/{control_group}/{disease_group}"
 
+    def resolve_detection_output_dir(self, control_group: str, disease_group: str) -> str:
+        """
+        Resolve an existing detection output directory for one comparison.
+
+        Prefers the canonical ``get_detection_output_dir`` path, but reuses an
+        on-disk sibling directory whose name matches case-insensitively. Legacy
+        freeze runs often wrote lower-cased comparison folders (e.g. ``pca_pca1``)
+        while newer project labels may be mixed-case (``PCa_PCa1``).
+        """
+        canonical = Path(self.get_detection_output_dir(control_group, disease_group))
+        if canonical.exists():
+            return str(canonical)
+        parent = canonical.parent
+        token = canonical.name.casefold()
+        if parent.exists():
+            for child in parent.iterdir():
+                if child.is_dir() and child.name.casefold() == token:
+                    return str(child)
+        lower = canonical.with_name(canonical.name.lower())
+        if lower.exists():
+            return str(lower)
+        return str(canonical)
+
     def get_mapper_output_dir(self, control_group: str, disease_group: str) -> str:
         """Output dir for mapper for one comparison: mapper/<control_group>/<disease_group>."""
         return f"{self.get_project_root()}/mapper/{control_group}/{disease_group}"

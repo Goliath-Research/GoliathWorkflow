@@ -183,3 +183,41 @@ def test_sample_list_csv_resolves_from_samples_base_parent(tmp_path, monkeypatch
     assert resolved == [str(data_dir / "A001"), str(data_dir / "A002")]
 
 
+def test_resolve_detection_output_dir_case_insensitive_fallback(tmp_path):
+    project_root = tmp_path / "out" / "Prod"
+    legacy_dir = project_root / "detections" / "all" / "pca_pca1"
+    legacy_dir.mkdir(parents=True)
+    (legacy_dir / "dmps-1.csv").write_text("chromosome,position\n", encoding="utf-8")
+
+    config_path = tmp_path / "project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "Prod",
+                "output_base": str((tmp_path / "out").resolve()),
+                "samples_base_path": str(tmp_path.resolve()),
+                "controls": {
+                    "label": "healthy",
+                    "groups": [{"label": "all", "sample_paths": ["h.csv"]}],
+                },
+                "diseases": {
+                    "label": "cancer",
+                    "groups": [
+                        {
+                            "label": "PCa",
+                            "stages": [{"label": "PCa1", "sample_paths": ["p1.csv"]}],
+                        }
+                    ],
+                },
+                "comparisons": "control_vs_each_disease",
+            }
+        ),
+        encoding="utf-8",
+    )
+    project = load_project(str(config_path))
+    canonical = project.get_detection_output_dir("all", "PCa_PCa1")
+    resolved = project.resolve_detection_output_dir("all", "PCa_PCa1")
+    assert canonical.endswith("/detections/all/PCa_PCa1")
+    assert resolved == str(legacy_dir.resolve())
+
+
