@@ -156,6 +156,21 @@ class BackendSharedParams(BaseModel):
             "importance_x_sqrt_support or importance_only."
         ),
     )
+    region_directional_region_types: List[str] = Field(
+        default_factory=lambda: ["promoter", "exon", "intron", "terminator"],
+        description=(
+            "Structural region types for region_directional_score__{comparison}__{region} "
+            "when feature_family_set includes gene_scored."
+        ),
+    )
+    region_directional_min_loci: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Minimum panel loci per (comparison, region) required to emit a "
+            "region_directional_score column."
+        ),
+    )
 
     covariates_path: Optional[str] = Field(default=None)
     covariate_id_column: str = Field(default="sample_id")
@@ -212,6 +227,24 @@ class BackendSharedParams(BaseModel):
         if normalized not in allowed:
             raise ValueError(f"gene_scored_gene_weight must be one of {sorted(allowed)}")
         return normalized
+
+    @field_validator("region_directional_region_types")
+    @classmethod
+    def _validate_region_directional_region_types(cls, value: List[str]) -> List[str]:
+        from .gene_scored_features import DEFAULT_REGION_DIRECTIONAL_TYPES, _normalize_structural_feature
+
+        if not value:
+            return list(DEFAULT_REGION_DIRECTIONAL_TYPES)
+        out: List[str] = []
+        for raw in value:
+            token = _normalize_structural_feature(raw)
+            if token == "unknown":
+                raise ValueError(f"Unknown region_directional_region_type: {raw!r}")
+            if token not in out:
+                out.append(token)
+        if not out:
+            raise ValueError("region_directional_region_types cannot be empty")
+        return out
 
     @field_validator("mapper_gene_columns")
     @classmethod
@@ -1104,6 +1137,21 @@ class MonteCarloConfig(BaseModel):
             "importance_x_sqrt_support or importance_only."
         ),
     )
+    region_directional_region_types: List[str] = Field(
+        default_factory=lambda: ["promoter", "exon", "intron", "terminator"],
+        description=(
+            "Structural region types for region_directional_score__{comparison}__{region} "
+            "when feature_family_set includes gene_scored."
+        ),
+    )
+    region_directional_min_loci: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "Minimum panel loci per (comparison, region) required to emit a "
+            "region_directional_score column."
+        ),
+    )
     ecdf_second_stage_enabled: bool = Field(
         default=False,
         description=(
@@ -1290,6 +1338,8 @@ class MonteCarloConfig(BaseModel):
             "gene_scored_min_support_n",
             "gene_scored_use_region_weight",
             "gene_scored_gene_weight",
+            "region_directional_region_types",
+            "region_directional_min_loci",
             "ecdf_second_stage_enabled",
             "covariates_path",
             "covariate_id_column",
@@ -1523,6 +1573,24 @@ class MonteCarloConfig(BaseModel):
         if normalized not in allowed:
             raise ValueError(f"gene_scored_gene_weight must be one of {sorted(allowed)}")
         return normalized
+
+    @field_validator("region_directional_region_types")
+    @classmethod
+    def _validate_region_directional_region_types(cls, value: List[str]) -> List[str]:
+        from .gene_scored_features import DEFAULT_REGION_DIRECTIONAL_TYPES, _normalize_structural_feature
+
+        if not value:
+            return list(DEFAULT_REGION_DIRECTIONAL_TYPES)
+        out: List[str] = []
+        for raw in value:
+            token = _normalize_structural_feature(raw)
+            if token == "unknown":
+                raise ValueError(f"Unknown region_directional_region_type: {raw!r}")
+            if token not in out:
+                out.append(token)
+        if not out:
+            raise ValueError("region_directional_region_types cannot be empty")
+        return out
 
     @field_validator("mapper_gene_columns")
     @classmethod

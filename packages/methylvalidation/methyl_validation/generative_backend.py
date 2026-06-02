@@ -255,6 +255,8 @@ def train_generative_model(
     gene_scored_min_support_n: int = 2,
     gene_scored_use_region_weight: bool = True,
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
+    region_directional_region_types: Optional[List[str]] = None,
+    region_directional_min_loci: int = 1,
     feature_selection_config: Optional[Dict[str, Any]] = None,
 ) -> Path:
     np.random.seed(int(random_seed))
@@ -347,6 +349,8 @@ def train_generative_model(
             gene_scored_min_support_n=int(gene_scored_min_support_n),
             gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
             gene_scored_gene_weight=str(gene_scored_gene_weight),
+            region_directional_region_types=region_directional_region_types,
+            region_directional_min_loci=int(max(1, region_directional_min_loci)),
         )
         X_methyl = np.asarray(feat.X, dtype=np.float32)
         feature_fill_values = fit_feature_fill_values(X_methyl)
@@ -514,6 +518,10 @@ def train_generative_model(
         "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
         "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
         "gene_scored_gene_weight": str(gene_scored_gene_weight).strip().lower(),
+        "region_directional_region_types": [
+            str(x) for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
+        ],
+        "region_directional_min_loci": int(max(1, region_directional_min_loci)),
         "observed_feature_fill_values": (
             [float(v) for v in feature_fill_values.tolist()] if feature_fill_values is not None else None
         ),
@@ -641,6 +649,8 @@ def predict_generative_model_from_project(
             gene_scored_gene_weight=str(
                 meta.get("gene_scored_gene_weight", "importance_x_sqrt_support")
             ),
+            region_directional_region_types=meta.get("region_directional_region_types"),
+            region_directional_min_loci=int(meta.get("region_directional_min_loci", 1)),
         )
         verify_feature_schema(
             feat.feature_names,

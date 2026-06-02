@@ -414,6 +414,8 @@ def train_tabular_model(
     gene_scored_min_support_n: int = 2,
     gene_scored_use_region_weight: bool = True,
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
+    region_directional_region_types: Optional[List[str]] = None,
+    region_directional_min_loci: int = 1,
     feature_selection_config: Optional[Dict[str, Any]] = None,
     save_train_dataset: bool = False,
     reuse_train_dataset: bool = True,
@@ -528,6 +530,8 @@ def train_tabular_model(
                 gene_scored_min_support_n=int(gene_scored_min_support_n),
                 gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
                 gene_scored_gene_weight=str(gene_scored_gene_weight),
+                region_directional_region_types=region_directional_region_types,
+                region_directional_min_loci=int(max(1, region_directional_min_loci)),
             )
             if feature_mode_norm == "observed_hybrid"
             else None
@@ -560,6 +564,10 @@ def train_tabular_model(
         "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
         "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
         "gene_scored_gene_weight": str(gene_scored_gene_weight).strip().lower(),
+        "region_directional_region_types": [
+            str(x) for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
+        ],
+        "region_directional_min_loci": int(max(1, region_directional_min_loci)),
     }
     train_fingerprint = _fingerprint_payload(
         {
@@ -656,6 +664,8 @@ def train_tabular_model(
                                 dmp_df=dmp_df,
                                 frozen_gene_panel_df=frozen_gene_panel_df,
                                 gene_scored_min_support_n=int(gene_scored_min_support_n),
+                                region_directional_region_types=region_directional_region_types,
+                                region_directional_min_loci=int(max(1, region_directional_min_loci)),
                             ),
                             context="tabular train cached observed_hybrid",
                         )
@@ -708,6 +718,8 @@ def train_tabular_model(
                 gene_scored_min_support_n=int(gene_scored_min_support_n),
                 gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
                 gene_scored_gene_weight=str(gene_scored_gene_weight),
+                region_directional_region_types=region_directional_region_types,
+                region_directional_min_loci=int(max(1, region_directional_min_loci)),
             )
             X = np.asarray(feat.X, dtype=np.float32)
             feature_fill_values = fit_feature_fill_values(X)
@@ -801,6 +813,11 @@ def train_tabular_model(
                 "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
                 "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
                 "gene_scored_gene_weight": str(gene_scored_gene_weight).strip().lower(),
+                "region_directional_region_types": [
+                    str(x)
+                    for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
+                ],
+                "region_directional_min_loci": int(max(1, region_directional_min_loci)),
             }
             with open(train_dataset_meta_path, "w", encoding="utf-8") as f:
                 json.dump(train_dataset_meta, f, indent=2)
@@ -902,6 +919,8 @@ def train_tabular_model(
                     gene_scored_min_support_n=int(gene_scored_min_support_n),
                     gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
                     gene_scored_gene_weight=str(gene_scored_gene_weight),
+                    region_directional_region_types=region_directional_region_types,
+                    region_directional_min_loci=int(max(1, region_directional_min_loci)),
                 )
                 verify_feature_schema(
                     feat_eval.feature_names,
@@ -1031,6 +1050,10 @@ def train_tabular_model(
             "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
             "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
             "gene_scored_gene_weight": str(gene_scored_gene_weight).strip().lower(),
+            "region_directional_region_types": [
+                str(x) for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
+            ],
+            "region_directional_min_loci": int(max(1, region_directional_min_loci)),
             "feature_selection": feature_selection_report,
             "feature_selection_config": feature_selection_config or {},
             "selected_feature_names": selected_feature_names if fs_cfg.enabled else [],
@@ -1222,6 +1245,8 @@ def predict_tabular_model_from_project(
             gene_scored_gene_weight=str(
                 meta.get("gene_scored_gene_weight", "importance_x_sqrt_support")
             ),
+            region_directional_region_types=meta.get("region_directional_region_types"),
+            region_directional_min_loci=int(meta.get("region_directional_min_loci", 1)),
         )
         verify_feature_schema(
             feat.feature_names,

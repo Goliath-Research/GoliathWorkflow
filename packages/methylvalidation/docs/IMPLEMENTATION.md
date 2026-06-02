@@ -96,6 +96,12 @@ Gene-directional score (per sample, per `comparison_label`):
 - Per gene: `sum(sign(effect) * |effect| * (beta - 0.5)) / sum(|effect|)` over observed panel loci for that comparison (optional `region_weight` on loci).
 - Pooled: `sum(gene_importance * sqrt(gene_support_n) * dir_g) / sum(gene_importance * sqrt(gene_support_n))` over genes with observed loci.
 
+Region-directional score (same `gene_scored` / `dmp+gene_scored` runs, additional columns):
+
+- Column names: `region_directional_score__{comparison}__{region}` for structural types in `region_directional_region_types` (default `promoter`, `exon`, `intron`, `terminator`).
+- Pooled over all panel loci with mapped `feature_type = region` for that comparison (not by gene): `sum(sign(effect) * |effect| * region_weight * (beta - 0.5)) / sum(|effect| * region_weight)`; reuses `gene_scored_use_region_weight`.
+- Columns are omitted when the panel has fewer than `region_directional_min_loci` loci for that `(comparison, region)` pair (default `1`).
+
 For gene/structural keys, per-sample value uses signed weighted centered methylation over observed loci:
 
 - `sum(sign(effect_size) * abs(effect_size) * (beta - 0.5)) / sum(abs(effect_size))`
