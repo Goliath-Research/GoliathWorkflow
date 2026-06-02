@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Config for alignment QC step: sample paths and output directory.",
+  "properties": {
+    "genome_fasta": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Path to the reference genome FASTA (e.g. hg38.fa). This is the project's shared genome reference; downstream consumers such as the MethylEnricher CIS-BP promoter scan default to this value.",
+      "title": "Genome Fasta"
+    },
+    "output_dir": {
+      "description": "Output directory; one JSON per sample as {output_dir}/{basename}.json",
+      "title": "Output Dir",
+      "type": "string"
+    },
+    "sample_paths": {
+      "description": "List of sample directory paths",
+      "items": {
+        "type": "string"
+      },
+      "title": "Sample Paths",
+      "type": "array"
+    },
+    "validate_schema": {
+      "default": true,
+      "description": "Whether to validate each sample JSON against schema",
+      "title": "Validate Schema",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "sample_paths",
+    "output_dir"
+  ],
+  "title": "AlignmentQCConfig",
+  "type": "object"
+}

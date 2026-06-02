@@ -4,50 +4,61 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 from methyl_alignment_qc.models.sample_qc import ExportedSampleQCPayload
 from methyl_alignment_qc.models.sample_qc_v2 import ExportedSampleQCV2Payload
 
 
+def _schema_dict_from_model(model, *, title: str) -> dict:
+    schema = model.model_json_schema(by_alias=True)
+    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+    schema.setdefault("title", title)
+    return schema
+
+
 def generate_schema_dict_v1() -> dict:
     """Generate JSON Schema from strict Pydantic model (V1 columnar export)."""
-    schema = ExportedSampleQCPayload.model_json_schema(by_alias=True)
-    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
-    schema.setdefault("title", "ExportedSampleQCPayload")
-    return schema
+    return _schema_dict_from_model(ExportedSampleQCPayload, title="ExportedSampleQCPayload")
 
 
 def generate_schema_dict_v2() -> dict:
     """Generate JSON Schema from strict Pydantic model (V2 row-oriented export)."""
-    schema = ExportedSampleQCV2Payload.model_json_schema(by_alias=True)
-    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
-    schema.setdefault("title", "ExportedSampleQCV2Payload")
-    return schema
+    return _schema_dict_from_model(ExportedSampleQCV2Payload, title="ExportedSampleQCV2Payload")
+
+
+def _write_schema_file(output_path: Path, schema: dict) -> Path:
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return output_path
 
 
 def write_schema_v1(output_path: Path) -> Path:
-    """Write V1 schema JSON to output path."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    schema = generate_schema_dict_v1()
-    output_path.write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return output_path
+    return _write_schema_file(output_path, generate_schema_dict_v1())
 
 
 def write_schema_v2(output_path: Path) -> Path:
-    """Write V2 schema JSON to output path."""
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    schema = generate_schema_dict_v2()
-    output_path.write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    return output_path
+    return _write_schema_file(output_path, generate_schema_dict_v2())
 
 
 def _default_schema_output_path(variant: str) -> Path:
-    """Repository-relative default schema destination."""
     pkg_root = Path(__file__).resolve().parents[2]
     if variant == "v2":
         return pkg_root / "schemas" / "exported_sample_qc_v2.schema.json"
     return pkg_root / "schemas" / "exported_sample_qc.schema.json"
+
+
+def _central_schema_path(variant: str) -> Path | None:
+    try:
+        from methyl_validation.config_schema_registry import CONFIG_SCHEMA_SPECS
+        from methyl_validation.schema_export import repo_schemas_config_dir
+
+        spec_id = "alignment_qc_export_v2" if variant == "v2" else "alignment_qc_export_v1"
+        spec = next(s for s in CONFIG_SCHEMA_SPECS if s.schema_id == spec_id)
+        return repo_schemas_config_dir() / spec.filename
+    except ImportError:
+        return None
 
 
 def main() -> None:
@@ -64,14 +75,45 @@ def main() -> None:
         default=None,
         help="Output JSON schema path (default depends on --variant)",
     )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Fail if schema artifacts are stale (uses central exporter when methyl-validation is installed).",
+    )
     args = parser.parse_args()
+
+    if args.check:
+        try:
+            from methyl_validation.config_schema_registry import CONFIG_SCHEMA_SPECS
+            from methyl_validation.schema_export import check_config_schema_drift
+        except ImportError as exc:
+            print(
+                "methyl-qc-export-schema --check requires methyl-validation in the environment.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1) from exc
+        spec_id = "alignment_qc_export_v2" if args.variant == "v2" else "alignment_qc_export_v1"
+        spec = next(s for s in CONFIG_SCHEMA_SPECS if s.schema_id == spec_id)
+        drift = check_config_schema_drift(specs=[spec])
+        if drift:
+            for msg in drift:
+                print(msg, file=sys.stderr)
+            raise SystemExit(1)
+        print(f"Schema drift check passed ({spec_id}).")
+        return
 
     out = args.output if args.output is not None else _default_schema_output_path(args.variant)
     if args.variant == "v2":
-        path = write_schema_v2(out)
+        write_schema_v2(out)
     else:
-        path = write_schema_v1(out)
-    print(f"Wrote schema ({args.variant}): {path}")
+        write_schema_v1(out)
+    print(f"Wrote schema ({args.variant}): {out}")
+
+    central = _central_schema_path(args.variant)
+    if central is not None and central.resolve() != out.resolve():
+        central.parent.mkdir(parents=True, exist_ok=True)
+        central.write_text(out.read_text(encoding="utf-8"), encoding="utf-8")
+        print(f"Wrote schema ({args.variant}) central: {central}")
 
 
 if __name__ == "__main__":

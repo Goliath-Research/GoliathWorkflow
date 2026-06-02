@@ -1,0 +1,2458 @@
+{
+  "$defs": {
+    "BackendProfilesConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "ecdf": {
+          "$ref": "#/$defs/EcdfBackendProfile"
+        },
+        "generative_hybrid": {
+          "$ref": "#/$defs/GenerativeBackendProfile"
+        },
+        "tabular_sklearn": {
+          "$ref": "#/$defs/TabularBackendProfile"
+        }
+      },
+      "title": "BackendProfilesConfig",
+      "type": "object"
+    },
+    "CohortCsv": {
+      "description": "One cohort: display label (must match base project flat ``groups`` labels for K>2) and sample list CSV.",
+      "properties": {
+        "csv": {
+          "description": "Path to CSV of samples (same format as healthy_csv).",
+          "minLength": 1,
+          "title": "Csv",
+          "type": "string"
+        },
+        "label": {
+          "description": "Cohort label: for hierarchical MC must match get_resolved_groups() (e.g. all, pca_pca1).",
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "csv"
+      ],
+      "title": "CohortCsv",
+      "type": "object"
+    },
+    "EcdfBackendParams": {
+      "additionalProperties": false,
+      "properties": {
+        "covariate_categorical_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Categorical Columns"
+        },
+        "covariate_id_column": {
+          "default": "sample_id",
+          "title": "Covariate Id Column",
+          "type": "string"
+        },
+        "covariate_missing_numeric_strategy": {
+          "default": "mean",
+          "title": "Covariate Missing Numeric Strategy",
+          "type": "string"
+        },
+        "covariate_numeric_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Numeric Columns"
+        },
+        "covariate_ordinal_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Ordinal Columns"
+        },
+        "covariate_ordinal_maps": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Ordinal Maps"
+        },
+        "covariate_ordinal_unknown_value": {
+          "default": 0.0,
+          "title": "Covariate Ordinal Unknown Value",
+          "type": "number"
+        },
+        "covariate_standardize_numeric": {
+          "default": true,
+          "title": "Covariate Standardize Numeric",
+          "type": "boolean"
+        },
+        "covariates_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariates Path"
+        },
+        "covariates_strict_join": {
+          "default": false,
+          "title": "Covariates Strict Join",
+          "type": "boolean"
+        },
+        "ecdf_aggregated_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When true, train/use aggregated observed-hybrid ECDF OvR package. When null, auto-enable for feature_mode=observed_hybrid and feature_family_set!=dmp.",
+          "title": "Ecdf Aggregated Enabled"
+        },
+        "ecdf_aggregated_n_bins": {
+          "default": 100,
+          "description": "Histogram bin count per feature for aggregated ECDF heads.",
+          "maximum": 512,
+          "minimum": 8,
+          "title": "Ecdf Aggregated N Bins",
+          "type": "integer"
+        },
+        "ecdf_second_stage_enabled": {
+          "default": false,
+          "title": "Ecdf Second Stage Enabled",
+          "type": "boolean"
+        },
+        "feature_family_set": {
+          "default": "dmp",
+          "title": "Feature Family Set",
+          "type": "string"
+        },
+        "feature_mode": {
+          "default": "raw_dmp",
+          "title": "Feature Mode",
+          "type": "string"
+        },
+        "gene_feature_loading": {
+          "default": "frozen",
+          "description": "For observed_hybrid gene-family features: frozen (use only frozen DMP loci) or range (expand to all loci inside frozen gene-feature ranges).",
+          "title": "Gene Feature Loading",
+          "type": "string"
+        },
+        "mapper_gene_columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Mapper Gene Columns",
+          "type": "array"
+        },
+        "model_bundle_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Bundle Dir"
+        },
+        "model_weight_column": {
+          "default": "effect_size",
+          "title": "Model Weight Column",
+          "type": "string"
+        },
+        "observed_feature_dmr_window_bp": {
+          "default": 100000,
+          "minimum": 1,
+          "title": "Observed Feature Dmr Window Bp",
+          "type": "integer"
+        },
+        "observed_feature_include_chromosome": {
+          "default": true,
+          "title": "Observed Feature Include Chromosome",
+          "type": "boolean"
+        },
+        "observed_feature_include_dmp": {
+          "default": true,
+          "title": "Observed Feature Include Dmp",
+          "type": "boolean"
+        },
+        "observed_feature_include_dmr": {
+          "default": true,
+          "title": "Observed Feature Include Dmr",
+          "type": "boolean"
+        },
+        "observed_feature_include_gene": {
+          "default": true,
+          "title": "Observed Feature Include Gene",
+          "type": "boolean"
+        },
+        "observed_feature_max_dmrs": {
+          "default": 32,
+          "minimum": 0,
+          "title": "Observed Feature Max Dmrs",
+          "type": "integer"
+        },
+        "observed_feature_max_genes": {
+          "default": 32,
+          "minimum": 0,
+          "title": "Observed Feature Max Genes",
+          "type": "integer"
+        },
+        "observed_feature_min_coverage": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Observed Feature Min Coverage",
+          "type": "integer"
+        },
+        "observed_feature_min_obs_fraction": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Observed Feature Min Obs Fraction",
+          "type": "number"
+        },
+        "observed_feature_quantiles": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Observed Feature Quantiles",
+          "type": "array"
+        },
+        "observed_hist_alpha": {
+          "default": 0.5,
+          "minimum": 0.0,
+          "title": "Observed Hist Alpha",
+          "type": "number"
+        },
+        "observed_hist_eps": {
+          "default": 1e-06,
+          "exclusiveMinimum": 0.0,
+          "title": "Observed Hist Eps",
+          "type": "number"
+        },
+        "observed_hist_evidence_clip_cap": {
+          "default": 5.0,
+          "minimum": 0.0,
+          "title": "Observed Hist Evidence Clip Cap",
+          "type": "number"
+        },
+        "observed_hist_tail_agreement_threshold": {
+          "default": 0.1,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Observed Hist Tail Agreement Threshold",
+          "type": "number"
+        },
+        "tabular_max_dmps": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional cap for loci retained from model bundle. null/0 means keep all stable DMPs.",
+          "title": "Tabular Max Dmps"
+        }
+      },
+      "title": "EcdfBackendParams",
+      "type": "object"
+    },
+    "EcdfBackendProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "$ref": "#/$defs/EcdfBackendParams"
+        }
+      },
+      "title": "EcdfBackendProfile",
+      "type": "object"
+    },
+    "FeatureSelectionConfig": {
+      "additionalProperties": false,
+      "description": "Leakage-safe feature selection controls for freeze and model training.",
+      "properties": {
+        "embedded_selector": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Embedded Selector"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "feature_families": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Feature Families",
+          "type": "array"
+        },
+        "group_by_gene": {
+          "default": true,
+          "title": "Group By Gene",
+          "type": "boolean"
+        },
+        "latent_projection": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Latent Projection"
+        },
+        "max_features_per_sample_ratio": {
+          "default": 5.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Max Features Per Sample Ratio",
+          "type": "number"
+        },
+        "max_features_total": {
+          "default": 200,
+          "minimum": 1,
+          "title": "Max Features Total",
+          "type": "integer"
+        },
+        "max_pairwise_correlation": {
+          "default": 0.95,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Max Pairwise Correlation",
+          "type": "number"
+        },
+        "min_abs_effect_size": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Abs Effect Size"
+        },
+        "min_dmp_frequency": {
+          "default": 0.8,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Min Dmp Frequency",
+          "type": "number"
+        },
+        "mode": {
+          "default": "stability_filter",
+          "title": "Mode",
+          "type": "string"
+        },
+        "random_seed": {
+          "default": 13,
+          "title": "Random Seed",
+          "type": "integer"
+        },
+        "redundancy_filter": {
+          "default": "correlation",
+          "title": "Redundancy Filter",
+          "type": "string"
+        }
+      },
+      "title": "FeatureSelectionConfig",
+      "type": "object"
+    },
+    "GenerativeBackendParams": {
+      "additionalProperties": false,
+      "properties": {
+        "covariate_categorical_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Categorical Columns"
+        },
+        "covariate_id_column": {
+          "default": "sample_id",
+          "title": "Covariate Id Column",
+          "type": "string"
+        },
+        "covariate_missing_numeric_strategy": {
+          "default": "mean",
+          "title": "Covariate Missing Numeric Strategy",
+          "type": "string"
+        },
+        "covariate_numeric_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Numeric Columns"
+        },
+        "covariate_ordinal_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Ordinal Columns"
+        },
+        "covariate_ordinal_maps": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Ordinal Maps"
+        },
+        "covariate_ordinal_unknown_value": {
+          "default": 0.0,
+          "title": "Covariate Ordinal Unknown Value",
+          "type": "number"
+        },
+        "covariate_standardize_numeric": {
+          "default": true,
+          "title": "Covariate Standardize Numeric",
+          "type": "boolean"
+        },
+        "covariates_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariates Path"
+        },
+        "covariates_strict_join": {
+          "default": false,
+          "title": "Covariates Strict Join",
+          "type": "boolean"
+        },
+        "feature_family_set": {
+          "default": "dmp",
+          "title": "Feature Family Set",
+          "type": "string"
+        },
+        "feature_mode": {
+          "default": "raw_dmp",
+          "title": "Feature Mode",
+          "type": "string"
+        },
+        "gene_feature_loading": {
+          "default": "frozen",
+          "description": "For observed_hybrid gene-family features: frozen (use only frozen DMP loci) or range (expand to all loci inside frozen gene-feature ranges).",
+          "title": "Gene Feature Loading",
+          "type": "string"
+        },
+        "generative_batch_size": {
+          "default": 64,
+          "minimum": 1,
+          "title": "Generative Batch Size",
+          "type": "integer"
+        },
+        "generative_calibrate": {
+          "default": false,
+          "title": "Generative Calibrate",
+          "type": "boolean"
+        },
+        "generative_covariates_strict": {
+          "default": true,
+          "title": "Generative Covariates Strict",
+          "type": "boolean"
+        },
+        "generative_density_type": {
+          "default": "diag_gaussian",
+          "title": "Generative Density Type",
+          "type": "string"
+        },
+        "generative_epochs": {
+          "default": 50,
+          "minimum": 1,
+          "title": "Generative Epochs",
+          "type": "integer"
+        },
+        "generative_kl_weight": {
+          "default": 0.1,
+          "minimum": 0.0,
+          "title": "Generative Kl Weight",
+          "type": "number"
+        },
+        "generative_latent_dim": {
+          "default": 16,
+          "minimum": 2,
+          "title": "Generative Latent Dim",
+          "type": "integer"
+        },
+        "generative_seed": {
+          "default": 13,
+          "title": "Generative Seed",
+          "type": "integer"
+        },
+        "mapper_gene_columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Mapper Gene Columns",
+          "type": "array"
+        },
+        "model_bundle_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Bundle Dir"
+        },
+        "model_weight_column": {
+          "default": "effect_size",
+          "title": "Model Weight Column",
+          "type": "string"
+        },
+        "observed_feature_dmr_window_bp": {
+          "default": 100000,
+          "minimum": 1,
+          "title": "Observed Feature Dmr Window Bp",
+          "type": "integer"
+        },
+        "observed_feature_include_chromosome": {
+          "default": true,
+          "title": "Observed Feature Include Chromosome",
+          "type": "boolean"
+        },
+        "observed_feature_include_dmp": {
+          "default": true,
+          "title": "Observed Feature Include Dmp",
+          "type": "boolean"
+        },
+        "observed_feature_include_dmr": {
+          "default": true,
+          "title": "Observed Feature Include Dmr",
+          "type": "boolean"
+        },
+        "observed_feature_include_gene": {
+          "default": true,
+          "title": "Observed Feature Include Gene",
+          "type": "boolean"
+        },
+        "observed_feature_max_dmrs": {
+          "default": 32,
+          "minimum": 0,
+          "title": "Observed Feature Max Dmrs",
+          "type": "integer"
+        },
+        "observed_feature_max_genes": {
+          "default": 32,
+          "minimum": 0,
+          "title": "Observed Feature Max Genes",
+          "type": "integer"
+        },
+        "observed_feature_min_coverage": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Observed Feature Min Coverage",
+          "type": "integer"
+        },
+        "observed_feature_min_obs_fraction": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Observed Feature Min Obs Fraction",
+          "type": "number"
+        },
+        "observed_feature_quantiles": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Observed Feature Quantiles",
+          "type": "array"
+        },
+        "observed_hist_alpha": {
+          "default": 0.5,
+          "minimum": 0.0,
+          "title": "Observed Hist Alpha",
+          "type": "number"
+        },
+        "observed_hist_eps": {
+          "default": 1e-06,
+          "exclusiveMinimum": 0.0,
+          "title": "Observed Hist Eps",
+          "type": "number"
+        },
+        "observed_hist_evidence_clip_cap": {
+          "default": 5.0,
+          "minimum": 0.0,
+          "title": "Observed Hist Evidence Clip Cap",
+          "type": "number"
+        },
+        "observed_hist_tail_agreement_threshold": {
+          "default": 0.1,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Observed Hist Tail Agreement Threshold",
+          "type": "number"
+        },
+        "tabular_max_dmps": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional cap for loci retained from model bundle. null/0 means keep all stable DMPs.",
+          "title": "Tabular Max Dmps"
+        }
+      },
+      "title": "GenerativeBackendParams",
+      "type": "object"
+    },
+    "GenerativeBackendProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "$ref": "#/$defs/GenerativeBackendParams"
+        }
+      },
+      "title": "GenerativeBackendProfile",
+      "type": "object"
+    },
+    "HistGradientBoostingMethodConfig": {
+      "properties": {
+        "method": {
+          "const": "hist_gradient_boosting",
+          "title": "Method",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/HistGradientBoostingMethodParams"
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "title": "HistGradientBoostingMethodConfig",
+      "type": "object"
+    },
+    "HistGradientBoostingMethodParams": {
+      "properties": {
+        "learning_rate": {
+          "default": 0.1,
+          "exclusiveMinimum": 0.0,
+          "title": "Learning Rate",
+          "type": "number"
+        },
+        "max_depth": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Depth"
+        },
+        "max_iter": {
+          "default": 100,
+          "minimum": 1,
+          "title": "Max Iter",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 13,
+          "title": "Random State",
+          "type": "integer"
+        }
+      },
+      "title": "HistGradientBoostingMethodParams",
+      "type": "object"
+    },
+    "LogisticRegressionMethodConfig": {
+      "properties": {
+        "method": {
+          "const": "logistic_regression",
+          "title": "Method",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/LogisticRegressionMethodParams"
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "title": "LogisticRegressionMethodConfig",
+      "type": "object"
+    },
+    "LogisticRegressionMethodParams": {
+      "properties": {
+        "c": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "title": "C",
+          "type": "number"
+        },
+        "class_weight": {
+          "default": "balanced",
+          "title": "Class Weight",
+          "type": "string"
+        },
+        "max_iter": {
+          "default": 1000,
+          "minimum": 1,
+          "title": "Max Iter",
+          "type": "integer"
+        },
+        "penalty": {
+          "default": "l2",
+          "title": "Penalty",
+          "type": "string"
+        },
+        "random_state": {
+          "default": 13,
+          "title": "Random State",
+          "type": "integer"
+        },
+        "solver": {
+          "default": "lbfgs",
+          "title": "Solver",
+          "type": "string"
+        }
+      },
+      "title": "LogisticRegressionMethodParams",
+      "type": "object"
+    },
+    "RandomForestMethodConfig": {
+      "properties": {
+        "method": {
+          "const": "random_forest",
+          "title": "Method",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/RandomForestMethodParams"
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "title": "RandomForestMethodConfig",
+      "type": "object"
+    },
+    "RandomForestMethodParams": {
+      "properties": {
+        "class_weight": {
+          "default": "balanced_subsample",
+          "title": "Class Weight",
+          "type": "string"
+        },
+        "min_samples_leaf": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Min Samples Leaf",
+          "type": "integer"
+        },
+        "n_estimators": {
+          "default": 300,
+          "minimum": 1,
+          "title": "N Estimators",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": -1,
+          "title": "N Jobs",
+          "type": "integer"
+        },
+        "random_state": {
+          "default": 13,
+          "title": "Random State",
+          "type": "integer"
+        }
+      },
+      "title": "RandomForestMethodParams",
+      "type": "object"
+    },
+    "RegulatoryLifecycleConfig": {
+      "additionalProperties": false,
+      "description": "Explicit product-lifecycle framing and claim boundary metadata.",
+      "properties": {
+        "allow_clinical_performance_claims": {
+          "default": false,
+          "description": "Whether FDA-facing clinical performance claims are allowed at this stage.",
+          "title": "Allow Clinical Performance Claims",
+          "type": "boolean"
+        },
+        "claim_boundary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit statement of allowed claims at this stage (e.g. feasibility-only, no final clinical claims).",
+          "title": "Claim Boundary"
+        },
+        "intended_use_summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Short intended-use statement for reports.",
+          "title": "Intended Use Summary"
+        },
+        "primary_analyte": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Primary biological analyte for interpretation framing (e.g., buffy_coat, cfdna, combined).",
+          "title": "Primary Analyte"
+        },
+        "reference_standard": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reference Standard"
+        },
+        "sample_type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Type"
+        },
+        "stage": {
+          "default": "feasibility",
+          "description": "Current product lifecycle stage for evidence framing.",
+          "title": "Stage",
+          "type": "string"
+        },
+        "target_population": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Population"
+        }
+      },
+      "title": "RegulatoryLifecycleConfig",
+      "type": "object"
+    },
+    "TabularBackendParams": {
+      "additionalProperties": false,
+      "properties": {
+        "covariate_categorical_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Categorical Columns"
+        },
+        "covariate_id_column": {
+          "default": "sample_id",
+          "title": "Covariate Id Column",
+          "type": "string"
+        },
+        "covariate_missing_numeric_strategy": {
+          "default": "mean",
+          "title": "Covariate Missing Numeric Strategy",
+          "type": "string"
+        },
+        "covariate_numeric_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Numeric Columns"
+        },
+        "covariate_ordinal_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Ordinal Columns"
+        },
+        "covariate_ordinal_maps": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Ordinal Maps"
+        },
+        "covariate_ordinal_unknown_value": {
+          "default": 0.0,
+          "title": "Covariate Ordinal Unknown Value",
+          "type": "number"
+        },
+        "covariate_standardize_numeric": {
+          "default": true,
+          "title": "Covariate Standardize Numeric",
+          "type": "boolean"
+        },
+        "covariates_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariates Path"
+        },
+        "covariates_strict_join": {
+          "default": false,
+          "title": "Covariates Strict Join",
+          "type": "boolean"
+        },
+        "feature_family_set": {
+          "default": "dmp",
+          "title": "Feature Family Set",
+          "type": "string"
+        },
+        "feature_mode": {
+          "default": "raw_dmp",
+          "title": "Feature Mode",
+          "type": "string"
+        },
+        "gene_feature_loading": {
+          "default": "frozen",
+          "description": "For observed_hybrid gene-family features: frozen (use only frozen DMP loci) or range (expand to all loci inside frozen gene-feature ranges).",
+          "title": "Gene Feature Loading",
+          "type": "string"
+        },
+        "mapper_gene_columns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Mapper Gene Columns",
+          "type": "array"
+        },
+        "model_bundle_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Bundle Dir"
+        },
+        "model_weight_column": {
+          "default": "effect_size",
+          "title": "Model Weight Column",
+          "type": "string"
+        },
+        "observed_feature_dmr_window_bp": {
+          "default": 100000,
+          "minimum": 1,
+          "title": "Observed Feature Dmr Window Bp",
+          "type": "integer"
+        },
+        "observed_feature_include_chromosome": {
+          "default": true,
+          "title": "Observed Feature Include Chromosome",
+          "type": "boolean"
+        },
+        "observed_feature_include_dmp": {
+          "default": true,
+          "title": "Observed Feature Include Dmp",
+          "type": "boolean"
+        },
+        "observed_feature_include_dmr": {
+          "default": true,
+          "title": "Observed Feature Include Dmr",
+          "type": "boolean"
+        },
+        "observed_feature_include_gene": {
+          "default": true,
+          "title": "Observed Feature Include Gene",
+          "type": "boolean"
+        },
+        "observed_feature_max_dmrs": {
+          "default": 32,
+          "minimum": 0,
+          "title": "Observed Feature Max Dmrs",
+          "type": "integer"
+        },
+        "observed_feature_max_genes": {
+          "default": 32,
+          "minimum": 0,
+          "title": "Observed Feature Max Genes",
+          "type": "integer"
+        },
+        "observed_feature_min_coverage": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Observed Feature Min Coverage",
+          "type": "integer"
+        },
+        "observed_feature_min_obs_fraction": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Observed Feature Min Obs Fraction",
+          "type": "number"
+        },
+        "observed_feature_quantiles": {
+          "items": {
+            "type": "number"
+          },
+          "title": "Observed Feature Quantiles",
+          "type": "array"
+        },
+        "observed_hist_alpha": {
+          "default": 0.5,
+          "minimum": 0.0,
+          "title": "Observed Hist Alpha",
+          "type": "number"
+        },
+        "observed_hist_eps": {
+          "default": 1e-06,
+          "exclusiveMinimum": 0.0,
+          "title": "Observed Hist Eps",
+          "type": "number"
+        },
+        "observed_hist_evidence_clip_cap": {
+          "default": 5.0,
+          "minimum": 0.0,
+          "title": "Observed Hist Evidence Clip Cap",
+          "type": "number"
+        },
+        "observed_hist_tail_agreement_threshold": {
+          "default": 0.1,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Observed Hist Tail Agreement Threshold",
+          "type": "number"
+        },
+        "tabular_max_dmps": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional cap for loci retained from model bundle. null/0 means keep all stable DMPs.",
+          "title": "Tabular Max Dmps"
+        },
+        "tabular_method_selection_metric": {
+          "default": "balanced_accuracy",
+          "title": "Tabular Method Selection Metric",
+          "type": "string"
+        },
+        "tabular_method_selection_stat": {
+          "default": "mean",
+          "title": "Tabular Method Selection Stat",
+          "type": "string"
+        },
+        "tabular_methods": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "hist_gradient_boosting": "#/$defs/HistGradientBoostingMethodConfig",
+                "logistic_regression": "#/$defs/LogisticRegressionMethodConfig",
+                "random_forest": "#/$defs/RandomForestMethodConfig",
+                "xgboost": "#/$defs/XGBoostMethodConfig"
+              },
+              "propertyName": "method"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/RandomForestMethodConfig"
+              },
+              {
+                "$ref": "#/$defs/HistGradientBoostingMethodConfig"
+              },
+              {
+                "$ref": "#/$defs/LogisticRegressionMethodConfig"
+              },
+              {
+                "$ref": "#/$defs/XGBoostMethodConfig"
+              }
+            ]
+          },
+          "title": "Tabular Methods",
+          "type": "array"
+        },
+        "tabular_model_type": {
+          "default": "random_forest",
+          "title": "Tabular Model Type",
+          "type": "string"
+        },
+        "tabular_reuse_train_dataset": {
+          "default": true,
+          "title": "Tabular Reuse Train Dataset",
+          "type": "boolean"
+        },
+        "tabular_save_test_dataset": {
+          "default": true,
+          "title": "Tabular Save Test Dataset",
+          "type": "boolean"
+        },
+        "tabular_save_train_dataset": {
+          "default": true,
+          "title": "Tabular Save Train Dataset",
+          "type": "boolean"
+        },
+        "tabular_test_dataset_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tabular Test Dataset Path"
+        },
+        "tabular_train_dataset_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tabular Train Dataset Path"
+        }
+      },
+      "title": "TabularBackendParams",
+      "type": "object"
+    },
+    "TabularBackendProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "params": {
+          "$ref": "#/$defs/TabularBackendParams"
+        }
+      },
+      "title": "TabularBackendProfile",
+      "type": "object"
+    },
+    "ValidationPartitionContract": {
+      "additionalProperties": false,
+      "description": "Named dataset partitions for lifecycle-stage evidence contracts.",
+      "properties": {
+        "development_train": {
+          "description": "Sample paths for model development/training partition.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Development Train",
+          "type": "array"
+        },
+        "independence_keys": {
+          "description": "Metadata keys that must remain independent across partitions when available (e.g., sample_id, patient_id, site_id, batch).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Independence Keys",
+          "type": "array"
+        },
+        "internal_validation": {
+          "description": "Sample paths for internal model selection/validation partition.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Internal Validation",
+          "type": "array"
+        },
+        "locked_test": {
+          "description": "Sample paths reserved as locked test (never used for tuning).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Locked Test",
+          "type": "array"
+        },
+        "pivotal_validation": {
+          "description": "Sample paths reserved for pivotal/clinical validation.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Pivotal Validation",
+          "type": "array"
+        },
+        "post_market_monitoring": {
+          "description": "Optional sample paths used for post-market monitoring analyses.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Post Market Monitoring",
+          "type": "array"
+        }
+      },
+      "title": "ValidationPartitionContract",
+      "type": "object"
+    },
+    "XGBoostMethodConfig": {
+      "properties": {
+        "method": {
+          "const": "xgboost",
+          "title": "Method",
+          "type": "string"
+        },
+        "params": {
+          "$ref": "#/$defs/XGBoostMethodParams"
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "title": "XGBoostMethodConfig",
+      "type": "object"
+    },
+    "XGBoostMethodParams": {
+      "properties": {
+        "colsample_bytree": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Colsample Bytree",
+          "type": "number"
+        },
+        "eval_metric": {
+          "default": "mlogloss",
+          "title": "Eval Metric",
+          "type": "string"
+        },
+        "learning_rate": {
+          "default": 0.1,
+          "exclusiveMinimum": 0.0,
+          "title": "Learning Rate",
+          "type": "number"
+        },
+        "max_depth": {
+          "default": 6,
+          "minimum": 1,
+          "title": "Max Depth",
+          "type": "integer"
+        },
+        "min_child_weight": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Min Child Weight",
+          "type": "number"
+        },
+        "n_estimators": {
+          "default": 300,
+          "minimum": 1,
+          "title": "N Estimators",
+          "type": "integer"
+        },
+        "n_jobs": {
+          "default": -1,
+          "title": "N Jobs",
+          "type": "integer"
+        },
+        "objective": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Objective"
+        },
+        "random_state": {
+          "default": 13,
+          "title": "Random State",
+          "type": "integer"
+        },
+        "reg_lambda": {
+          "default": 1.0,
+          "minimum": 0.0,
+          "title": "Reg Lambda",
+          "type": "number"
+        },
+        "subsample": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Subsample",
+          "type": "number"
+        },
+        "tree_method": {
+          "default": "hist",
+          "title": "Tree Method",
+          "type": "string"
+        },
+        "verbosity": {
+          "default": 0,
+          "title": "Verbosity",
+          "type": "integer"
+        }
+      },
+      "title": "XGBoostMethodParams",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Configuration for the Monte Carlo validation runner (binary K=2 or multiclass K>=2).",
+  "properties": {
+    "abort_on_step_failure": {
+      "default": false,
+      "description": "If True, abort all iterations when a pipeline step fails; if False, skip the iteration.",
+      "title": "Abort On Step Failure",
+      "type": "boolean"
+    },
+    "backend_profiles": {
+      "$ref": "#/$defs/BackendProfilesConfig",
+      "description": "Typed backend profile registry. Runtime backend config is resolved exclusively from this field."
+    },
+    "base_project": {
+      "description": "Path to an existing project JSON used as template; sample_paths overridden per run.",
+      "title": "Base Project",
+      "type": "string"
+    },
+    "biological_review_confirmed": {
+      "default": false,
+      "description": "After review, set True in step_config.validation to allow --model (classifier + predictor).",
+      "title": "Biological Review Confirmed",
+      "type": "boolean"
+    },
+    "cohorts": {
+      "description": "Ordered list of at least 2 cohorts {label, csv}. Populated from legacy healthy_csv+disease_csv when omitted.",
+      "items": {
+        "$ref": "#/$defs/CohortCsv"
+      },
+      "title": "Cohorts",
+      "type": "array"
+    },
+    "covariate_categorical_columns": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional explicit categorical covariate columns. Columns are one-hot encoded with frozen vocab.",
+      "title": "Covariate Categorical Columns"
+    },
+    "covariate_id_column": {
+      "default": "sample_id",
+      "description": "Column name in covariates table used to join with sample basename.",
+      "title": "Covariate Id Column",
+      "type": "string"
+    },
+    "covariate_missing_numeric_strategy": {
+      "default": "mean",
+      "description": "How numeric covariate NaNs are imputed: mean | median | zero.",
+      "title": "Covariate Missing Numeric Strategy",
+      "type": "string"
+    },
+    "covariate_numeric_columns": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional explicit numeric covariate columns. When omitted, numeric/categorical role is inferred.",
+      "title": "Covariate Numeric Columns"
+    },
+    "covariate_ordinal_columns": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional explicit ordinal covariate columns (ordered categories such as low/medium/high). These are encoded as single numeric features using covariate_ordinal_maps or known defaults.",
+      "title": "Covariate Ordinal Columns"
+    },
+    "covariate_ordinal_maps": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional mapping per ordinal column from raw level -> code, e.g. {'risk_band': {'low': 1, 'medium': 2, 'high': 3}}.",
+      "title": "Covariate Ordinal Maps"
+    },
+    "covariate_ordinal_unknown_value": {
+      "default": 0.0,
+      "description": "Fallback code used when an ordinal value is missing/unknown at train or inference time.",
+      "title": "Covariate Ordinal Unknown Value",
+      "type": "number"
+    },
+    "covariate_standardize_numeric": {
+      "default": true,
+      "description": "If true, z-score standardize numeric covariates using train-set statistics.",
+      "title": "Covariate Standardize Numeric",
+      "type": "boolean"
+    },
+    "covariates_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional covariates sidecar (HDF5 preferred, CSV accepted). Rows should include sample identifier column for join with sample basename.",
+      "title": "Covariates Path"
+    },
+    "covariates_strict_join": {
+      "default": false,
+      "description": "For covariate-aware tabular/generic paths: require every sample id to exist in covariates sidecar during train/predict.",
+      "title": "Covariates Strict Join",
+      "type": "boolean"
+    },
+    "disease_csv": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Legacy: CSV listing disease samples. Use with healthy_csv, or use cohorts instead.",
+      "title": "Disease Csv"
+    },
+    "ecdf_aggregated_enabled": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "If set for model_backend=ecdf, force enable/disable aggregated observed-hybrid ECDF OvR. If null, auto-enable when feature_mode=observed_hybrid and feature_family_set!=dmp.",
+      "title": "Ecdf Aggregated Enabled"
+    },
+    "ecdf_aggregated_n_bins": {
+      "default": 100,
+      "description": "Histogram bin count per feature for aggregated ECDF OvR heads.",
+      "maximum": 512,
+      "minimum": 8,
+      "title": "Ecdf Aggregated N Bins",
+      "type": "integer"
+    },
+    "ecdf_second_stage_enabled": {
+      "default": false,
+      "description": "If true for model_backend=ecdf, train optional second-stage binary refiner using observed_hybrid features and append extra prediction columns.",
+      "title": "Ecdf Second Stage Enabled",
+      "type": "boolean"
+    },
+    "feature_family_set": {
+      "default": "dmp",
+      "description": "For feature_mode=observed_hybrid, controls active feature families: dmp | gene | structural | dmp+gene | dmp+structural | hybrid-all.",
+      "title": "Feature Family Set",
+      "type": "string"
+    },
+    "feature_mode": {
+      "default": "raw_dmp",
+      "description": "Feature construction mode for tabular/generative backends: raw_dmp (legacy per-locus matrix with methylation fill) or observed_hybrid (observed-only aggregated features).",
+      "title": "Feature Mode",
+      "type": "string"
+    },
+    "feature_selection": {
+      "$ref": "#/$defs/FeatureSelectionConfig",
+      "description": "Optional leakage-safe feature selection controls. Selector is fit on training folds and locked into production artifacts."
+    },
+    "freeze_gene_importance_min": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional lower bound on gene_importance when building freeze-time fixed_gene_panel.",
+      "title": "Freeze Gene Importance Min"
+    },
+    "freeze_min_dmps_per_feature": {
+      "default": 1,
+      "description": "Minimum number of unique frozen DMPs required for a gene-feature segment to be included in freeze-time fixed_gene_features output.",
+      "minimum": 1,
+      "title": "Freeze Min Dmps Per Feature",
+      "type": "integer"
+    },
+    "freeze_stable_dmp_csv": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Path to stable_dmps_production.csv for --freeze (default: monte_carlo_runs/stability/stable_dmps_production.csv).",
+      "title": "Freeze Stable Dmp Csv"
+    },
+    "freeze_top_genes": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional cap per comparison for top-ranked genes in freeze-time fixed_gene_panel.",
+      "title": "Freeze Top Genes"
+    },
+    "frozen_project_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "project.json from --freeze production build; merged into each run for predictor_only mode.",
+      "title": "Frozen Project Path"
+    },
+    "gene_feature_loading": {
+      "default": "frozen",
+      "description": "For feature_mode=observed_hybrid with gene family features, controls locus loading: frozen (exact frozen DMP loci) or range (all loci in frozen gene-feature ranges).",
+      "title": "Gene Feature Loading",
+      "type": "string"
+    },
+    "generative_batch_size": {
+      "default": 64,
+      "description": "For model_backend=generative_hybrid: mini-batch size metadata/control.",
+      "minimum": 1,
+      "title": "Generative Batch Size",
+      "type": "integer"
+    },
+    "generative_calibrate": {
+      "default": false,
+      "description": "For model_backend=generative_hybrid: enable probability calibration stage when available.",
+      "title": "Generative Calibrate",
+      "type": "boolean"
+    },
+    "generative_covariates_strict": {
+      "default": true,
+      "description": "For model_backend=generative_hybrid: require all sample IDs to exist in covariates sidecar when used.",
+      "title": "Generative Covariates Strict",
+      "type": "boolean"
+    },
+    "generative_density_type": {
+      "default": "diag_gaussian",
+      "description": "For model_backend=generative_hybrid: latent class density family (currently diag_gaussian).",
+      "title": "Generative Density Type",
+      "type": "string"
+    },
+    "generative_epochs": {
+      "default": 50,
+      "description": "For model_backend=generative_hybrid: training epochs metadata/control.",
+      "minimum": 1,
+      "title": "Generative Epochs",
+      "type": "integer"
+    },
+    "generative_kl_weight": {
+      "default": 0.1,
+      "description": "For model_backend=generative_hybrid: KL-like regularization weight in hybrid loss/selection metadata.",
+      "minimum": 0.0,
+      "title": "Generative Kl Weight",
+      "type": "number"
+    },
+    "generative_latent_dim": {
+      "default": 16,
+      "description": "For model_backend=generative_hybrid: latent dimensionality.",
+      "minimum": 2,
+      "title": "Generative Latent Dim",
+      "type": "integer"
+    },
+    "generative_seed": {
+      "default": 13,
+      "description": "For model_backend=generative_hybrid: random seed.",
+      "title": "Generative Seed",
+      "type": "integer"
+    },
+    "healthy_csv": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Legacy: CSV listing control/healthy samples. Use with disease_csv, or use cohorts instead.",
+      "title": "Healthy Csv"
+    },
+    "mapper_gene_columns": {
+      "description": "Per-gene columns to carry from mapper all-gene_name-combined.csv into mapper_dmp_annotations.csv and model bundle mapped-locus rows. Set [] to disable this join.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Mapper Gene Columns",
+      "type": "array"
+    },
+    "min_sensitivity_lcb": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional minimum lower confidence bound acceptance criterion for sensitivity.",
+      "title": "Min Sensitivity Lcb"
+    },
+    "min_specificity_lcb": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional minimum lower confidence bound acceptance criterion for specificity.",
+      "title": "Min Specificity Lcb"
+    },
+    "model_backend": {
+      "default": "ecdf",
+      "description": "Runtime backend selector used by CLI mode execution. Project JSON must not define this key directly; use backend_profiles + CLI override semantics.",
+      "title": "Model Backend",
+      "type": "string"
+    },
+    "model_bundle_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional output directory for ModelFeatureBundle files. Default: <production_output_dir>/model_bundle.",
+      "title": "Model Bundle Dir"
+    },
+    "model_weight_column": {
+      "default": "effect_size",
+      "description": "Legacy compatibility field. Model bundle weighting is canonicalized to detector effect_size for tabular/generative backends.",
+      "title": "Model Weight Column",
+      "type": "string"
+    },
+    "n_iterations": {
+      "description": "Number of Monte Carlo iterations (e.g. 50\u2013200).",
+      "minimum": 1,
+      "title": "N Iterations",
+      "type": "integer"
+    },
+    "observed_feature_dmr_window_bp": {
+      "default": 100000,
+      "description": "Fallback DMR window size (bp) used to construct region identifiers when explicit DMR labels are missing.",
+      "minimum": 1,
+      "title": "Observed Feature Dmr Window Bp",
+      "type": "integer"
+    },
+    "observed_feature_include_chromosome": {
+      "default": true,
+      "description": "Enable chromosome-level observed_hybrid summaries.",
+      "title": "Observed Feature Include Chromosome",
+      "type": "boolean"
+    },
+    "observed_feature_include_dmp": {
+      "default": true,
+      "description": "Enable DMP-derived observed_hybrid features (global, quantiles, and disease comparison summaries).",
+      "title": "Observed Feature Include Dmp",
+      "type": "boolean"
+    },
+    "observed_feature_include_dmr": {
+      "default": true,
+      "description": "Enable DMR/region-level observed_hybrid summaries.",
+      "title": "Observed Feature Include Dmr",
+      "type": "boolean"
+    },
+    "observed_feature_include_gene": {
+      "default": true,
+      "description": "Enable gene-level observed_hybrid summaries when gene metadata is available.",
+      "title": "Observed Feature Include Gene",
+      "type": "boolean"
+    },
+    "observed_feature_max_dmrs": {
+      "default": 32,
+      "description": "Maximum number of DMR regions retained in observed_hybrid schema (top-weighted).",
+      "minimum": 0,
+      "title": "Observed Feature Max Dmrs",
+      "type": "integer"
+    },
+    "observed_feature_max_genes": {
+      "default": 32,
+      "description": "Maximum number of genes retained in observed_hybrid schema (top-weighted).",
+      "minimum": 0,
+      "title": "Observed Feature Max Genes",
+      "type": "integer"
+    },
+    "observed_feature_min_coverage": {
+      "default": 1,
+      "description": "Minimum coverage passed to methyl extraction for observed_hybrid features.",
+      "minimum": 1,
+      "title": "Observed Feature Min Coverage",
+      "type": "integer"
+    },
+    "observed_feature_min_obs_fraction": {
+      "default": 0.0,
+      "description": "Minimum observed-fraction evidence threshold for observed_hybrid predictions. Used for reporting/optional rejection in backend outputs.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Observed Feature Min Obs Fraction",
+      "type": "number"
+    },
+    "observed_feature_quantiles": {
+      "description": "Quantiles used by observed_hybrid feature mode when summarizing observed methylation.",
+      "items": {
+        "type": "number"
+      },
+      "title": "Observed Feature Quantiles",
+      "type": "array"
+    },
+    "observed_hist_alpha": {
+      "default": 0.5,
+      "description": "Observed-hybrid histogram additive smoothing alpha applied to bin counts.",
+      "minimum": 0.0,
+      "title": "Observed Hist Alpha",
+      "type": "number"
+    },
+    "observed_hist_eps": {
+      "default": 1e-06,
+      "description": "Observed-hybrid histogram ECDF epsilon for boundary clamp and log safety.",
+      "exclusiveMinimum": 0.0,
+      "title": "Observed Hist Eps",
+      "type": "number"
+    },
+    "observed_hist_evidence_clip_cap": {
+      "default": 5.0,
+      "description": "Observed-hybrid cap for per-locus tail/outlier evidence prior to weighted averaging.",
+      "minimum": 0.0,
+      "title": "Observed Hist Evidence Clip Cap",
+      "type": "number"
+    },
+    "observed_hist_tail_agreement_threshold": {
+      "default": 0.1,
+      "description": "Observed-hybrid threshold for cancer-direction tail agreement indicator.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Observed Hist Tail Agreement Threshold",
+      "type": "number"
+    },
+    "output_base": {
+      "description": "Global output base. Runs under output_base / project_name / monte_carlo_runs / run_0001, ...",
+      "title": "Output Base",
+      "type": "string"
+    },
+    "path_remap": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional prefix remap (old -> new) for path strings in project JSON (e.g. samples_base_path, paths to cohort list files). User cohort CSVs and MV training_*.csv use basenames only; MV testing_*.csv uses absolute paths in a path column and is rewritten during --freeze when needed. Bases like samples_base_path must match the machine. Put under step_config.validation in the project JSON, or pass --path-remap OLD=NEW.",
+      "title": "Path Remap"
+    },
+    "predictor_only": {
+      "default": false,
+      "description": "If True, each iteration only runs methyl-predictor (no centroid/detector/classifier). Requires frozen_project_path (or default monte_carlo_runs/production/project.json) so model paths resolve to the frozen build.",
+      "title": "Predictor Only",
+      "type": "boolean"
+    },
+    "production_output_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Output directory for the final production run (defaults to monte_carlo_runs/production).",
+      "title": "Production Output Dir"
+    },
+    "regulatory": {
+      "$ref": "#/$defs/RegulatoryLifecycleConfig",
+      "description": "Lifecycle-stage framing and claim-boundary metadata for FDA-oriented reporting."
+    },
+    "require_biological_review_for_model": {
+      "default": false,
+      "description": "If True, methyl-validation --model exits unless biological_review_confirmed is true (set in step_config.validation after expert review).",
+      "title": "Require Biological Review For Model",
+      "type": "boolean"
+    },
+    "require_complete_enricher": {
+      "default": false,
+      "description": "If True, readiness audit treats incomplete enricher_completeness.json as no_go (not only a warning).",
+      "title": "Require Complete Enricher",
+      "type": "boolean"
+    },
+    "rollout_balanced_accuracy_drop_max": {
+      "default": 0.005,
+      "description": "Dual-run promotion guard: max allowed BA drop vs baseline.",
+      "minimum": 0.0,
+      "title": "Rollout Balanced Accuracy Drop Max",
+      "type": "number"
+    },
+    "rollout_brier_improvement_min_frac": {
+      "default": 0.02,
+      "description": "Dual-run promotion target: minimum relative Brier improvement.",
+      "minimum": 0.0,
+      "title": "Rollout Brier Improvement Min Frac",
+      "type": "number"
+    },
+    "rollout_ece_improvement_min_frac": {
+      "default": 0.05,
+      "description": "Dual-run promotion target: minimum relative ECE improvement.",
+      "minimum": 0.0,
+      "title": "Rollout Ece Improvement Min Frac",
+      "type": "number"
+    },
+    "rollout_macro_f1_drop_max": {
+      "default": 0.005,
+      "description": "Dual-run promotion guard: max allowed macro-F1 drop vs baseline.",
+      "minimum": 0.0,
+      "title": "Rollout Macro F1 Drop Max",
+      "type": "number"
+    },
+    "rollout_nll_improvement_min_frac": {
+      "default": 0.02,
+      "description": "Dual-run promotion target: minimum relative NLL improvement.",
+      "minimum": 0.0,
+      "title": "Rollout Nll Improvement Min Frac",
+      "type": "number"
+    },
+    "run_mapper_and_enricher": {
+      "default": false,
+      "description": "If True, run methyl-mapper and methyl-enricher inside each MC iteration (optional; not used for --stability).",
+      "title": "Run Mapper And Enricher",
+      "type": "boolean"
+    },
+    "run_stability": {
+      "default": false,
+      "description": "If True, run stability analysis on discovery DMPs after the main loop (gene stability only if enricher ran).",
+      "title": "Run Stability",
+      "type": "boolean"
+    },
+    "samples_base_path": {
+      "description": "Base directory for resolving sample names from CSVs (same as project samples_base_path).",
+      "title": "Samples Base Path",
+      "type": "string"
+    },
+    "seed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional RNG seed for reproducibility.",
+      "title": "Seed"
+    },
+    "skip_enricher": {
+      "default": false,
+      "description": "Skip methyl-enricher step even when run_mapper_and_enricher is true (useful when Grok API calls are too slow).",
+      "title": "Skip Enricher",
+      "type": "boolean"
+    },
+    "stability_convergence_jaccard": {
+      "default": 0.98,
+      "description": "Minimum Jaccard similarity required between current and lagged stable DMP panels.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Stability Convergence Jaccard",
+      "type": "number"
+    },
+    "stability_convergence_max_size_delta": {
+      "default": 0.02,
+      "description": "Maximum allowed relative panel-size change between current and lagged stable DMP panels.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Stability Convergence Max Size Delta",
+      "type": "number"
+    },
+    "stability_convergence_patience": {
+      "default": 3,
+      "description": "Number of consecutive convergence checkpoints that must pass before stopping early.",
+      "minimum": 1,
+      "title": "Stability Convergence Patience",
+      "type": "integer"
+    },
+    "stability_convergence_window": {
+      "default": 5,
+      "description": "Window size (in qualifying runs) for comparing stable panels S_k vs S_(k-window).",
+      "minimum": 1,
+      "title": "Stability Convergence Window",
+      "type": "integer"
+    },
+    "stability_default_freeze_tier": {
+      "default": "extended",
+      "description": "Tier whose stable_dmps_production.csv is aliased to root stability/stable_dmps_production.csv for default --freeze behavior.",
+      "enum": [
+        "core",
+        "extended",
+        "exploratory"
+      ],
+      "title": "Stability Default Freeze Tier",
+      "type": "string"
+    },
+    "stability_dmp_freq": {
+      "default": 0.7,
+      "description": "Minimum frequency (across runs) for a DMP to be considered stable.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Stability Dmp Freq",
+      "type": "number"
+    },
+    "stability_dual_cutoff_enabled": {
+      "default": false,
+      "description": "If true, stability outputs both strict and relaxed stable DMP panels using score = effect_size * sqrt(frequency) with log-score elbow cutoff.",
+      "title": "Stability Dual Cutoff Enabled",
+      "type": "boolean"
+    },
+    "stability_early_stop_enabled": {
+      "default": false,
+      "description": "If true, evaluate convergence of stable DMP panels during the MC loop and stop early when convergence thresholds hold for the configured patience.",
+      "title": "Stability Early Stop Enabled",
+      "type": "boolean"
+    },
+    "stability_featurecuts_enabled": {
+      "default": false,
+      "description": "If true, MC detector runs force classifier_dmp_selection=featurecuts_validation so stability can be computed from discriminatory classifier panels.",
+      "title": "Stability Featurecuts Enabled",
+      "type": "boolean"
+    },
+    "stability_gene_freq": {
+      "default": 0.5,
+      "description": "Minimum frequency for a gene to be considered stable (only when enricher outputs exist).",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Stability Gene Freq",
+      "type": "number"
+    },
+    "stability_min_balanced_accuracy": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "If set, stability counts DMPs only from iterations whose validation_metrics.json balanced_accuracy is >= this value. Frequencies are over those qualifying runs only.",
+      "title": "Stability Min Balanced Accuracy"
+    },
+    "stability_min_iterations": {
+      "default": 20,
+      "description": "Minimum number of qualifying runs required before stability convergence checks can trigger.",
+      "minimum": 1,
+      "title": "Stability Min Iterations",
+      "type": "integer"
+    },
+    "stability_min_selected_dmps": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional lower bound for detector classifier panel size in FeatureCuts mode. Final selected k is max(featurecuts_k, stability_min_selected_dmps).",
+      "title": "Stability Min Selected Dmps"
+    },
+    "stability_relaxed_cutoff_mode": {
+      "default": "elbow_log_score",
+      "description": "How to derive relaxed stability cutoff when dual-cutoff is enabled: elbow_log_score (second elbow in tail) or strict_multiplier.",
+      "enum": [
+        "elbow_log_score",
+        "strict_multiplier"
+      ],
+      "title": "Stability Relaxed Cutoff Mode",
+      "type": "string"
+    },
+    "stability_relaxed_multiplier": {
+      "default": 0.5,
+      "description": "Multiplier applied to strict score threshold when stability_relaxed_cutoff_mode='strict_multiplier'.",
+      "exclusiveMinimum": 0.0,
+      "title": "Stability Relaxed Multiplier",
+      "type": "number"
+    },
+    "stability_score_eps": {
+      "default": 1e-12,
+      "description": "Small epsilon used in log(score + eps) elbow detection.",
+      "exclusiveMinimum": 0.0,
+      "title": "Stability Score Eps",
+      "type": "number"
+    },
+    "stability_target_balanced_accuracy": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional target BA for detector FeatureCuts: choose minimum top-k DMPs that reach this BA on detector validation splits.",
+      "title": "Stability Target Balanced Accuracy"
+    },
+    "stability_tier_core_freq": {
+      "default": 0.85,
+      "description": "Core tier threshold for frequency-based stability.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Stability Tier Core Freq",
+      "type": "number"
+    },
+    "stability_tier_exploratory_freq": {
+      "default": 0.7,
+      "description": "Exploratory tier threshold for frequency-based stability.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Stability Tier Exploratory Freq",
+      "type": "number"
+    },
+    "stability_tier_extended_freq": {
+      "default": 0.8,
+      "description": "Extended tier threshold for frequency-based stability.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Stability Tier Extended Freq",
+      "type": "number"
+    },
+    "stability_tiers_enabled": {
+      "default": false,
+      "description": "If true, write three tiered stability outputs under stability/tier_core, stability/tier_extended, stability/tier_exploratory.",
+      "title": "Stability Tiers Enabled",
+      "type": "boolean"
+    },
+    "subgroup_columns": {
+      "description": "Optional metadata columns for subgroup reporting in clinical performance reports (e.g., sex, age_bin, site_id, race_ethnicity).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Subgroup Columns",
+      "type": "array"
+    },
+    "tabular_max_dmps": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "For model_backend=tabular_sklearn: optional cap on number of loci selected from bundle index. Set null or 0 to keep all stable DMPs.",
+      "title": "Tabular Max Dmps"
+    },
+    "tabular_method_selection_metric": {
+      "default": "balanced_accuracy",
+      "description": "When multiple tabular_methods are evaluated sequentially, select best method using this metric from validation_metrics.",
+      "title": "Tabular Method Selection Metric",
+      "type": "string"
+    },
+    "tabular_method_selection_stat": {
+      "default": "mean",
+      "description": "Selection stat label for method ranking metadata (mean|median). Current per-run selection uses direct metric values.",
+      "title": "Tabular Method Selection Stat",
+      "type": "string"
+    },
+    "tabular_methods": {
+      "anyOf": [
+        {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "hist_gradient_boosting": "#/$defs/HistGradientBoostingMethodConfig",
+                "logistic_regression": "#/$defs/LogisticRegressionMethodConfig",
+                "random_forest": "#/$defs/RandomForestMethodConfig",
+                "xgboost": "#/$defs/XGBoostMethodConfig"
+              },
+              "propertyName": "method"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/RandomForestMethodConfig"
+              },
+              {
+                "$ref": "#/$defs/HistGradientBoostingMethodConfig"
+              },
+              {
+                "$ref": "#/$defs/LogisticRegressionMethodConfig"
+              },
+              {
+                "$ref": "#/$defs/XGBoostMethodConfig"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional ordered list of tabular methods with method-specific parameters. When absent, synthesized from tabular_model_type for backward compatibility.",
+      "title": "Tabular Methods"
+    },
+    "tabular_model_type": {
+      "default": "random_forest",
+      "description": "For model_backend=tabular_sklearn: random_forest | hist_gradient_boosting | logistic_regression | xgboost.",
+      "title": "Tabular Model Type",
+      "type": "string"
+    },
+    "tabular_reuse_train_dataset": {
+      "default": true,
+      "description": "For model_backend=tabular_sklearn: when true and tabular_save_train_dataset is enabled, reuse a previously exported training dataset if its fingerprint matches current inputs.",
+      "title": "Tabular Reuse Train Dataset",
+      "type": "boolean"
+    },
+    "tabular_save_test_dataset": {
+      "default": true,
+      "description": "For model_backend=tabular_sklearn: when an explicit evaluation split is configured, export the assembled test/eval dataset.",
+      "title": "Tabular Save Test Dataset",
+      "type": "boolean"
+    },
+    "tabular_save_train_dataset": {
+      "default": true,
+      "description": "For model_backend=tabular_sklearn: if true, export the assembled training dataset (features + labels + sample_id) for reproducibility/auditing.",
+      "title": "Tabular Save Train Dataset",
+      "type": "boolean"
+    },
+    "tabular_test_dataset_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional output file for exported tabular test/eval dataset. When omitted and tabular_save_test_dataset=true, defaults to the same directory as tabular_train_dataset_path with filename tabular_test_dataset.<ext> (or <model_bundle_dir>/tabular_test_dataset.parquet when train path is also omitted).",
+      "title": "Tabular Test Dataset Path"
+    },
+    "tabular_train_dataset_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional output file for exported tabular training dataset. When omitted and tabular_save_train_dataset=true, defaults to <model_bundle_dir>/tabular_train_dataset.parquet.",
+      "title": "Tabular Train Dataset Path"
+    },
+    "train_fraction": {
+      "description": "Fraction of samples used for training per cohort (e.g. 0.8).",
+      "exclusiveMaximum": 1.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Train Fraction",
+      "type": "number"
+    },
+    "validation": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Validation/Monte Carlo settings when embedded in a project as step_config.validation.",
+      "title": "Validation"
+    },
+    "validation_partitions": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ValidationPartitionContract"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional named partition contract (development/internal/locked/pivotal/post-market)."
+    }
+  },
+  "required": [
+    "samples_base_path",
+    "train_fraction",
+    "n_iterations",
+    "base_project",
+    "output_base"
+  ],
+  "title": "MonteCarloConfig",
+  "type": "object"
+}
