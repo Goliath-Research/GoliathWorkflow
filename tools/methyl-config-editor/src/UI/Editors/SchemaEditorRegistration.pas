@@ -6,13 +6,16 @@ type
   TSchemaEditorRegistration = class
   private
     class var FRegistered: Boolean;
+    class function IsKnownKey(const AKey: string): Boolean; static;
   public
     class procedure EnsureRegistered;
+    class function IsRegistered(const AKey: string): Boolean;
   end;
 
 implementation
 
 uses
+  System.SysUtils,
   Spring.Container,
   EditorTypes,
   SchemaEditorKeys,
@@ -28,34 +31,55 @@ uses
   DiscriminatorSchemaEditor,
   DetectionStepEditor;
 
+class function TSchemaEditorRegistration.IsKnownKey(const AKey: string): Boolean;
+begin
+  Result := SameText(AKey, TSchemaEditorKeys.StringKey) or
+    SameText(AKey, TSchemaEditorKeys.EnumKey) or
+    SameText(AKey, TSchemaEditorKeys.BooleanKey) or
+    SameText(AKey, TSchemaEditorKeys.IntegerKey) or
+    SameText(AKey, TSchemaEditorKeys.NumberKey) or
+    SameText(AKey, TSchemaEditorKeys.ObjectKey) or
+    SameText(AKey, TSchemaEditorKeys.OneOfObjectKey) or
+    SameText(AKey, TSchemaEditorKeys.ArrayKey) or
+    SameText(AKey, TSchemaEditorKeys.DictionaryKey) or
+    SameText(AKey, TSchemaEditorKeys.DiscriminatorKey) or
+    SameText(AKey, TSchemaEditorKeys.DetectionConfigKey);
+end;
+
+class function TSchemaEditorRegistration.IsRegistered(const AKey: string): Boolean;
+begin
+  Result := FRegistered and IsKnownKey(AKey);
+end;
+
 class procedure TSchemaEditorRegistration.EnsureRegistered;
 begin
   if FRegistered then
     Exit;
 
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TStringSchemaEditor>
-    .Named(TSchemaEditorKeys.StringKey).AsTransient;
+    (TSchemaEditorKeys.StringKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TEnumSchemaEditor>
-    .Named(TSchemaEditorKeys.EnumKey).AsTransient;
+    (TSchemaEditorKeys.EnumKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TBooleanSchemaEditor>
-    .Named(TSchemaEditorKeys.BooleanKey).AsTransient;
+    (TSchemaEditorKeys.BooleanKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TIntegerSchemaEditor>
-    .Named(TSchemaEditorKeys.IntegerKey).AsTransient;
+    (TSchemaEditorKeys.IntegerKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TNumberSchemaEditor>
-    .Named(TSchemaEditorKeys.NumberKey).AsTransient;
+    (TSchemaEditorKeys.NumberKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TObjectSchemaEditor>
-    .Named(TSchemaEditorKeys.ObjectKey).AsTransient;
+    (TSchemaEditorKeys.ObjectKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TOneOfObjectSchemaEditor>
-    .Named(TSchemaEditorKeys.OneOfObjectKey).AsTransient;
+    (TSchemaEditorKeys.OneOfObjectKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TArraySchemaEditor>
-    .Named(TSchemaEditorKeys.ArrayKey).AsTransient;
+    (TSchemaEditorKeys.ArrayKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TDictionarySchemaEditor>
-    .Named(TSchemaEditorKeys.DictionaryKey).AsTransient;
+    (TSchemaEditorKeys.DictionaryKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TDiscriminatorSchemaEditor>
-    .Named(TSchemaEditorKeys.DiscriminatorKey).AsTransient;
+    (TSchemaEditorKeys.DiscriminatorKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TDetectionStepEditor>
-    .Named(TSchemaEditorKeys.DetectionConfigKey).AsTransient;
+    (TSchemaEditorKeys.DetectionConfigKey).AsTransient;
 
+  GlobalContainer.Build;
   FRegistered := True;
 end;
 

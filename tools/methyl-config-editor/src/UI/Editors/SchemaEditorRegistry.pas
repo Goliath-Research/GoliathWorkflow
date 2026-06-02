@@ -32,12 +32,11 @@ class function TSchemaEditorRegistry.TryResolveByName(const AName: string;
   out AEditor: ISchemaPropertyEditor): Boolean;
 begin
   TSchemaEditorRegistration.EnsureRegistered;
-  if (AName = '') or not GlobalContainer.CanResolveNamed<ISchemaPropertyEditor>(AName) then
-  begin
-    AEditor := nil;
-    Exit(False);
-  end;
-  AEditor := GlobalContainer.ResolveNamed<ISchemaPropertyEditor>(AName);
+  AEditor := nil;
+  Result := False;
+  if not TSchemaEditorRegistration.IsRegistered(AName) then
+    Exit;
+  AEditor := GlobalContainer.Resolve<ISchemaPropertyEditor>(AName);
   Result := Assigned(AEditor);
 end;
 

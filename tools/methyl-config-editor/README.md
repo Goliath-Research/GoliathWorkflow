@@ -42,9 +42,9 @@ Default relative path from `Win64\Debug\`: `..\..\..\schemas\config`.
 Property editing uses **Spring4D `GlobalContainer`** to resolve an `ISchemaPropertyEditor` implementation by name. Each schema *shape* (string, object, array, …) has its own editor class. **Step configs** are resolved by property name against committed `*.schema.json` files — no per-step Delphi registration required unless you want custom UI.
 
 ```text
-Kind-based (Spring ResolveNamed):
+Kind-based (Spring resolve by name):
   TSchemaEditorKeys.ForNode(schemaNode)  →  "string" | "object" | …
-  GlobalContainer.ResolveNamed<ISchemaPropertyEditor>(key)
+  GlobalContainer.Resolve<ISchemaPropertyEditor>(key)
 
 Step config (convention-based):
   step_config.<name>  →  TryLoadStepRoot(name)  →  <name>.schema.json
@@ -74,14 +74,14 @@ Step config (convention-based):
 
 ```delphi
 GlobalContainer.RegisterType<ISchemaPropertyEditor, TMyCustomSchemaEditor>
-  .Named('myCustomKey').AsTransient;
+  ('myCustomKey').AsTransient;
 ```
 
 4. Optional: register by JSON Schema root **`title`** to override the generic typed step editor for one step:
 
 ```delphi
 GlobalContainer.RegisterType<ISchemaPropertyEditor, TDetectionStepEditor>
-  .Named('MethylDetectorConfig').AsTransient;
+  ('MethylDetectorConfig').AsTransient;
 ```
 
 `TSchemaEditorRegistry.Resolve` checks `$ref`, then **`title`** (Spring), then typed step by title, then kind key.
