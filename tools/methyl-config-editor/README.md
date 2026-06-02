@@ -13,9 +13,13 @@ No Delphi class codegen — schemas from `methyl-export-config-schemas` drive th
 Add Spring4D library paths to the Delphi IDE (or project search path), at minimum:
 
 - `Spring4D/source/Core`
-- `Spring4D/source/Base`
+- `Spring4D/source/Base` (provides `Generics.Defaults` / `Generics.Collections` used alongside the RTL)
 - `Spring4D/source/Data`
 - `Spring4D/source/Container`
+
+Ensure **Spring `Base` precedes the RTL** in the library search path so `Generics.Defaults` resolves to Spring4D’s comparer types (same names as the RTL, different units).
+
+For custom list sorting, use **`TComparer<T>.Construct(...)`**, not `.Default(...)`. Spring’s `.Default` returns a built-in comparer for types that have one; it is not a factory that accepts an anonymous comparison function.
 
 ## Build
 

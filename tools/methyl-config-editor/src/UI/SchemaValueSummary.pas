@@ -23,8 +23,6 @@ end;
 
 class function TSchemaValueSummary.Describe(ANode: TSchemaNode;
   AValue: TJSONValue): string;
-var
-  I: Integer;
 begin
   if IsNullValue(AValue) then
     Exit('(null)');

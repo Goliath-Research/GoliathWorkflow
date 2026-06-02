@@ -3,6 +3,7 @@ unit EditorTypes;
 interface
 
 uses
+  Vcl.Controls,
   Vcl.StdCtrls,
   Vcl.ExtCtrls,
   System.JSON,
@@ -10,12 +11,21 @@ uses
   SchemaNode;
 
 type
-  IPropertyEditorContext = interface;
   TPropertyRow = class;
+
+  IPropertyEditorContext = interface
+    ['{A1B2C3D4-1234-5678-90AB-CDEF12345678}']
+    function GetOwner: TComponent;
+    function GetObjectSchema: TSchemaNode;
+    function GetBreadcrumb: string;
+    function GetPropertyValue(const AName: string): TJSONValue;
+    procedure SetPropertyValue(const AName: string; AValue: TJSONValue);
+    procedure RebuildRows;
+    function ChildBreadcrumb(const ASegment: string): string;
+  end;
 
   ISchemaPropertyEditor = interface
     ['{E8A4B2C1-5D3F-4A2B-9C1E-7F6D5E4C3B2A}']
-    class function EditorKey: string; static;
     function CanEdit(ANode: TSchemaNode): Boolean;
     procedure CreateRow(const AContext: IPropertyEditorContext; ARow: TPropertyRow;
       AValue: TJSONValue);

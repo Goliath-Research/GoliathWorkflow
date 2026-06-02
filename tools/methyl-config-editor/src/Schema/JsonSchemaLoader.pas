@@ -6,7 +6,8 @@ uses
   System.Generics.Collections,
   System.JSON,
   System.SysUtils,
-  SchemaNode;
+  SchemaNode,
+  SchemaDocument;
 
 type
   TJsonSchemaLoader = class
@@ -42,7 +43,7 @@ implementation
 uses
   System.Classes,
   System.IOUtils,
-  SchemaDocument;
+  Generics.Defaults;
 
 constructor TJsonSchemaLoader.Create;
 begin
@@ -166,7 +167,6 @@ var
   I: Integer;
   Key: string;
 begin
-  Result := nil;
   if not Ref.StartsWith('#/') then
     raise Exception.CreateFmt('Unsupported $ref (external refs not supported): %s', [Ref]);
   Parts := Ref.Substring(2).Split(['/']);

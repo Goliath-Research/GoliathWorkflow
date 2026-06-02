@@ -10,17 +10,6 @@ uses
   EditorTypes;
 
 type
-  IPropertyEditorContext = interface
-    ['{A1B2C3D4-1234-5678-90AB-CDEF12345678}']
-    function GetOwner: TComponent;
-    function GetObjectSchema: TSchemaNode;
-    function GetBreadcrumb: string;
-    function GetPropertyValue(const AName: string): TJSONValue;
-    procedure SetPropertyValue(const AName: string; AValue: TJSONValue);
-    procedure RebuildRows;
-    function ChildBreadcrumb(const ASegment: string): string;
-  end;
-
   TPropertyEditorContext = class(TInterfacedObject, IPropertyEditorContext)
   private
     FOwner: TComponent;

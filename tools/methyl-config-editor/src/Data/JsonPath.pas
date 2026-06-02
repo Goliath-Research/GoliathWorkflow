@@ -22,6 +22,35 @@ type
 
 implementation
 
+uses
+  System.Generics.Collections;
+
+procedure SetArrayElement(Arr: TJSONArray; Index: Integer; Value: TJSONValue);
+var
+  I: Integer;
+  Tail: TList<TJSONValue>;
+begin
+  if Index < 0 then
+    raise Exception.Create('Negative array index');
+  while Arr.Count <= Index do
+    Arr.AddElement(TJSONNull.Create);
+  Tail := TList<TJSONValue>.Create;
+  try
+    for I := Index + 1 to Arr.Count - 1 do
+      Tail.Add(Arr.Items[I].Clone as TJSONValue);
+    while Arr.Count > Index do
+    begin
+      Arr.Items[Arr.Count - 1].Free;
+      Arr.Remove(Arr.Count - 1);
+    end;
+    Arr.AddElement(Value);
+    for I := 0 to Tail.Count - 1 do
+      Arr.AddElement(Tail[I]);
+  finally
+    Tail.Free;
+  end;
+end;
+
 class function TJsonPath.SplitPath(const Path: string): TArray<string>;
 var
   Clean: string;
@@ -117,7 +146,6 @@ var
   Segments: TArray<string>;
   Current: TJSONValue;
   NextObj: TJSONObject;
-  NextArr: TJSONArray;
   I, Idx: Integer;
   Existing: TJSONValue;
 begin
@@ -157,8 +185,6 @@ begin
         raise Exception.CreateFmt('Invalid array index in path: %s', [Path]);
       while TJSONArray(Current).Count <= Idx do
         TJSONArray(Current).AddElement(TJSONNull.Create);
-      if not Assigned(TJSONArray(Current).Items[Idx]) then
-        TJSONArray(Current).Items[Idx] := TJSONNull.Create;
       Current := TJSONArray(Current).Items[Idx];
     end
     else
@@ -172,8 +198,7 @@ begin
     if Current is TJSONArray then
     begin
       Idx := StrToIntDef(Segments[High(Segments)], -1);
-      TJSONArray(Current).Items[Idx].Free;
-      TJSONArray(Current).Items[Idx] := NextObj;
+      SetArrayElement(TJSONArray(Current), Idx, NextObj);
     end
     else
       raise Exception.CreateFmt('Path does not resolve to object: %s', [Path]);
@@ -218,7 +243,6 @@ class procedure TJsonPath.SetValue(Root: TJSONValue; const Path: string;
 var
   Segments: TArray<string>;
   Current: TJSONValue;
-  Parent: TJSONValue;
   I, Idx: Integer;
   Key: string;
   Arr: TJSONArray;
@@ -229,7 +253,6 @@ begin
   if Length(Segments) = 0 then
     raise Exception.Create('Cannot set root via path');
   Current := Root;
-  Parent := nil;
   for I := 0 to High(Segments) do
   begin
     Key := Segments[I];
@@ -248,15 +271,12 @@ begin
         Arr := TJSONArray(Current);
         while Arr.Count <= Idx do
           Arr.AddElement(TJSONNull.Create);
-        if Assigned(Arr.Items[Idx]) then
-          Arr.Items[Idx].Free;
-        Arr.Items[Idx] := Value;
+        SetArrayElement(Arr, Idx, Value);
       end
       else
         raise Exception.Create('Cannot set value on non-container');
       Exit;
     end;
-    Parent := Current;
     if Current is TJSONObject then
     begin
       if not Assigned(TJSONObject(Current).GetValue(Key)) then
@@ -270,8 +290,8 @@ begin
       Arr := TJSONArray(Current);
       while Arr.Count <= Idx do
         Arr.AddElement(TJSONObject.Create);
-      if not Assigned(Arr.Items[Idx]) then
-        Arr.Items[Idx] := TJSONObject.Create;
+      if not (Arr.Items[Idx] is TJSONObject) then
+        SetArrayElement(Arr, Idx, TJSONObject.Create);
       Current := Arr.Items[Idx];
     end
     else
