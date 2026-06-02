@@ -238,7 +238,6 @@ end;
 procedure TArrayEditorForm.btnUpClick(Sender: TObject);
 var
   Idx: Integer;
-  Val: TJSONValue;
 begin
   Idx := ListBox.ItemIndex;
   if Idx <= 0 then
@@ -251,7 +250,6 @@ end;
 procedure TArrayEditorForm.btnDownClick(Sender: TObject);
 var
   Idx: Integer;
-  Val: TJSONValue;
 begin
   Idx := ListBox.ItemIndex;
   if (Idx < 0) or (Idx >= FWorking.Count - 1) then

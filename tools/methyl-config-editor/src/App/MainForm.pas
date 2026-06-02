@@ -73,6 +73,7 @@ var
 implementation
 
 uses
+  System.UITypes,
   System.IOUtils;
 
 {$R *.dfm}

@@ -84,7 +84,7 @@ begin
   Title := ADoc.Root.Title;
   if Title = '' then
     Exit;
-  FTitleToStepId.AddOrSetValue(Title, LowerCase(AStepId));
+  FTitleToStepId[Title] := LowerCase(AStepId);
 end;
 
 class procedure TTypedStepSchemas.WarmStepIndex;

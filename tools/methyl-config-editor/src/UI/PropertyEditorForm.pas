@@ -57,6 +57,7 @@ type
 implementation
 
 uses
+  System.UITypes,
   TypedStepSchemas;
 
 {$R *.dfm}
