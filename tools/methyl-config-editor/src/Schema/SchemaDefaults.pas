@@ -21,9 +21,6 @@ uses
 
 class function TSchemaDefaults.CreateDefaultValue(ANode: TSchemaNode): TJSONValue;
 var
-  I: Integer;
-  Prop: TSchemaProperty;
-  Obj: TJSONObject;
   Arr: TJSONArray;
 begin
   if not Assigned(ANode) then

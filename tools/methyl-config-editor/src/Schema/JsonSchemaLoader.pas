@@ -167,7 +167,6 @@ var
   I: Integer;
   Key: string;
 begin
-  Result := nil;
   if not Ref.StartsWith('#/') then
     raise Exception.CreateFmt('Unsupported $ref (external refs not supported): %s', [Ref]);
   Parts := Ref.Substring(2).Split(['/']);
