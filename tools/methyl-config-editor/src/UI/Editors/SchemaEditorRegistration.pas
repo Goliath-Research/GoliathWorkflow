@@ -33,17 +33,17 @@ uses
 
 class function TSchemaEditorRegistration.IsKnownKey(const AKey: string): Boolean;
 begin
-  Result := SameText(AKey, TSchemaEditorKeys.StringKey) or
-    SameText(AKey, TSchemaEditorKeys.EnumKey) or
-    SameText(AKey, TSchemaEditorKeys.BooleanKey) or
-    SameText(AKey, TSchemaEditorKeys.IntegerKey) or
-    SameText(AKey, TSchemaEditorKeys.NumberKey) or
-    SameText(AKey, TSchemaEditorKeys.ObjectKey) or
-    SameText(AKey, TSchemaEditorKeys.OneOfObjectKey) or
-    SameText(AKey, TSchemaEditorKeys.ArrayKey) or
-    SameText(AKey, TSchemaEditorKeys.DictionaryKey) or
-    SameText(AKey, TSchemaEditorKeys.DiscriminatorKey) or
-    SameText(AKey, TSchemaEditorKeys.DetectionConfigKey);
+  Result := SameStr(AKey, TSchemaEditorKeys.StringKey) or
+    SameStr(AKey, TSchemaEditorKeys.EnumKey) or
+    SameStr(AKey, TSchemaEditorKeys.BooleanKey) or
+    SameStr(AKey, TSchemaEditorKeys.IntegerKey) or
+    SameStr(AKey, TSchemaEditorKeys.NumberKey) or
+    SameStr(AKey, TSchemaEditorKeys.ObjectKey) or
+    SameStr(AKey, TSchemaEditorKeys.OneOfObjectKey) or
+    SameStr(AKey, TSchemaEditorKeys.ArrayKey) or
+    SameStr(AKey, TSchemaEditorKeys.DictionaryKey) or
+    SameStr(AKey, TSchemaEditorKeys.DiscriminatorKey) or
+    SameStr(AKey, TSchemaEditorKeys.DetectionConfigKey);
 end;
 
 class function TSchemaEditorRegistration.IsRegistered(const AKey: string): Boolean;
