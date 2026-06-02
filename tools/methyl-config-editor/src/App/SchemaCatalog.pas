@@ -28,7 +28,8 @@ type
 implementation
 
 uses
-  System.IOUtils;
+  System.IOUtils,
+  Generics.Defaults;
 
 constructor TSchemaCatalog.Create;
 begin

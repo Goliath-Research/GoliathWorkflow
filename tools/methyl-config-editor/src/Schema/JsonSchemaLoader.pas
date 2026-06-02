@@ -42,6 +42,7 @@ implementation
 uses
   System.Classes,
   System.IOUtils,
+  Generics.Defaults,
   SchemaDocument;
 
 constructor TJsonSchemaLoader.Create;

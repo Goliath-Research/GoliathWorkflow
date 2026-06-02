@@ -3,6 +3,7 @@ unit TypedStepSchemas;
 interface
 
 uses
+  Generics.Collections,
   SchemaNode,
   SchemaDocument;
 
@@ -10,7 +11,7 @@ type
   TTypedStepSchemas = class
   private
     class var FSchemasRoot: string;
-    class var FCache: TDictionary<string, TSchemaDocument>;
+    class var FCache: IDictionary<string, TSchemaDocument>;
     class function StepFilename(const AStepId: string): string;
   public
     class procedure SetSchemasRoot(const APath: string);
@@ -25,7 +26,7 @@ implementation
 uses
   System.SysUtils,
   System.IOUtils,
-  System.Generics.Collections,
+  Spring.Collections,
   JsonSchemaLoader;
 
 class procedure TTypedStepSchemas.SetSchemasRoot(const APath: string);
@@ -43,12 +44,16 @@ end;
 
 class procedure TTypedStepSchemas.ClearCache;
 var
-  Pair: TPair<string, TSchemaDocument>;
+  Key: string;
+  Doc: TSchemaDocument;
 begin
   if not Assigned(FCache) then
     Exit;
-  for Pair in FCache do
-    Pair.Value.Free;
+  for Key in FCache.Keys do
+  begin
+    Doc := FCache[Key];
+    Doc.Free;
+  end;
   FCache.Clear;
 end;
 
@@ -66,14 +71,16 @@ var
   Doc: TSchemaDocument;
   Loader: TJsonSchemaLoader;
   Path: string;
+  CacheKey: string;
 begin
   ARoot := nil;
   Result := False;
   if FSchemasRoot = '' then
     Exit;
   if not Assigned(FCache) then
-    FCache := TDictionary<string, TSchemaDocument>.Create;
-  if FCache.TryGetValue(LowerCase(AStepId), Doc) then
+    FCache := TCollections.CreateDictionary<string, TSchemaDocument>;
+  CacheKey := LowerCase(AStepId);
+  if FCache.TryGetValue(CacheKey, Doc) then
   begin
     ARoot := Doc.Root;
     Exit(Assigned(ARoot));
@@ -84,7 +91,7 @@ begin
   Loader := TJsonSchemaLoader.Create;
   try
     Doc := Loader.LoadDocumentFromFile(Path);
-    FCache.Add(LowerCase(AStepId), Doc);
+    FCache.Add(CacheKey, Doc);
     ARoot := Doc.Root;
     Result := Assigned(ARoot);
   finally
@@ -102,6 +109,6 @@ initialization
 
 finalization
   TTypedStepSchemas.ClearCache;
-  FreeAndNil(TTypedStepSchemas.FCache);
+  TTypedStepSchemas.FCache := nil;
 
 end.
