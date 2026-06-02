@@ -7,10 +7,16 @@ import numpy as np
 import pandas as pd
 
 from methyl_validation.feature_selection import (
+    _feature_family_from_name,
     normalize_runtime_feature_selection_config,
     run_feature_selection_artifacts,
     select_training_features,
 )
+
+
+def test_feature_family_from_name_recognizes_gene_scored_columns():
+    assert _feature_family_from_name("gene_directional_score__cmp_a") == "gene_scored"
+    assert _feature_family_from_name("region_directional_score__cmp_a__promoter") == "gene_scored"
 
 
 def test_select_training_features_respects_cap_and_returns_indices():

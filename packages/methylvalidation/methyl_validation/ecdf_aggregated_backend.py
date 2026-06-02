@@ -33,6 +33,7 @@ from .model_bundle import load_bundle_dmp_index
 from .observed_feature_builder import (
     build_observed_hybrid_feature_table,
     derive_observed_hybrid_anchors,
+    select_training_feature_matrix,
 )
 from .tabular_backend import (
     _resolve_class_centroid_dirs,
@@ -123,6 +124,7 @@ def train_ecdf_aggregated_ovr_model(
     output_dir: str | Path,
     feature_family_set: str = "gene",
     observed_feature_min_coverage: int = 1,
+    observed_feature_quality_columns: Optional[Sequence[str]] = None,
     observed_hist_eps: float = 1e-6,
     observed_hist_alpha: float = 0.5,
     observed_hist_evidence_clip_cap: float = 5.0,
@@ -159,15 +161,22 @@ def train_ecdf_aggregated_ovr_model(
         hist_evidence_clip_cap=float(observed_hist_evidence_clip_cap),
         hist_tail_agreement_threshold=float(observed_hist_tail_agreement_threshold),
         feature_family_set=str(feature_family_set),
+        observed_feature_quality_columns=observed_feature_quality_columns,
     )
-    X = np.asarray(feat.X, dtype=np.float64)
-    feature_names = list(feat.feature_names)
-    feature_weights = build_effect_size_feature_weights(dmp_df, feature_names)
+    export_feature_names = list(feat.feature_names)
+    training_feature_names = list(feat.training_feature_names)
+    quality_feature_names = list(feat.quality_feature_names)
+    X_train = select_training_feature_matrix(
+        np.asarray(feat.X, dtype=np.float64),
+        export_feature_names,
+        training_feature_names,
+    )
+    feature_weights = build_effect_size_feature_weights(dmp_df, training_feature_names)
     package = train_aggregated_ecdf_ovr_package(
-        X,
+        X_train,
         y,
         class_names=class_names,
-        feature_names=feature_names,
+        feature_names=training_feature_names,
         feature_weights=feature_weights,
         feature_family_set=str(feature_family_set),
         feature_mode="observed_hybrid",
@@ -199,6 +208,12 @@ def train_ecdf_aggregated_ovr_model(
         "hist_evidence_clip_cap": float(observed_hist_evidence_clip_cap),
         "hist_tail_agreement_threshold": float(observed_hist_tail_agreement_threshold),
         "class_centroid_dirs": {str(k): str(v) for k, v in class_centroid_dirs.items()},
+        "export_feature_names": export_feature_names,
+        "training_feature_names": training_feature_names,
+        "quality_feature_names": quality_feature_names,
+        "observed_feature_quality_columns": [
+            str(x) for x in (observed_feature_quality_columns or ["obs_fraction", "n_obs_dmps", "n_total_dmps"])
+        ],
     }
 
     out_dir = Path(output_dir)
@@ -211,7 +226,10 @@ def train_ecdf_aggregated_ovr_model(
             {
                 "classifier_type": AGGREGATED_ECDF_OVR_TYPE,
                 "class_names": [str(x) for x in class_names],
-                "n_features": int(len(feature_names)),
+                "n_features": int(len(training_feature_names)),
+                "n_export_features": int(len(export_feature_names)),
+                "training_feature_names": training_feature_names,
+                "quality_feature_names": quality_feature_names,
                 "feature_family_set": str(feature_family_set),
                 "raw_mapped_feature_formula": str(
                     feat.report.get("raw_mapped_feature_formula", "unknown")
@@ -285,14 +303,24 @@ def predict_ecdf_aggregated_ovr_from_project(
         hist_evidence_clip_cap=float(obs.get("hist_evidence_clip_cap", 5.0)),
         hist_tail_agreement_threshold=float(obs.get("hist_tail_agreement_threshold", 0.10)),
         feature_family_set=str(obs.get("feature_family_set") or "gene"),
+        observed_feature_quality_columns=obs.get("observed_feature_quality_columns"),
     )
+    export_names = [str(x) for x in (obs.get("export_feature_names") or feat.feature_names)]
+    training_names = [str(x) for x in (obs.get("training_feature_names") or feat.training_feature_names)]
+    if list(feat.feature_names) != export_names:
+        raise ValueError("Aggregated ECDF export feature schema mismatch between training and prediction")
     schema_names = [str(x) for x in ((package.get("feature_schema") or {}).get("feature_names") or [])]
-    if list(feat.feature_names) != schema_names:
-        raise ValueError("Aggregated ECDF feature schema mismatch between training and prediction")
+    if training_names and list(training_names) != schema_names:
+        raise ValueError("Aggregated ECDF training feature schema mismatch between training and prediction")
 
+    X_train = select_training_feature_matrix(
+        np.asarray(feat.X, dtype=np.float64),
+        export_names,
+        training_names or schema_names,
+    )
     probs, evidence = predict_aggregated_ecdf_ovr_proba(
         package,
-        np.asarray(feat.X, dtype=np.float64),
+        X_train,
     )
     pred = np.argmax(probs, axis=1).astype(int)
 

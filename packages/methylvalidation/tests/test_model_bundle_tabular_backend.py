@@ -1021,12 +1021,19 @@ def test_tabular_observed_hybrid_train_predict_schema_parity(tmp_path: Path, mon
     assert meta.get("observed_feature_order_fingerprint")
     assert "max_weighted_directional_score" in set(meta.get("observed_feature_names") or [])
     assert "weighted_directional_agreement__pca1" in set(meta.get("observed_feature_names") or [])
-    assert "weighted_mean_abs_error_to_cancer_centroid__pca1" in set(meta.get("observed_feature_names") or [])
     assert "weighted_cosine_similarity_to_cancer_centroid__pca1" in set(meta.get("observed_feature_names") or [])
-    assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca1" in set(
+    assert "weighted_healthy_tail_evidence__pca1" in set(meta.get("observed_feature_names") or [])
+    assert "weighted_mean_abs_error_to_cancer_centroid__pca1" not in set(meta.get("observed_feature_names") or [])
+    assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca1" not in set(
         meta.get("observed_feature_names") or []
     )
-    assert "weighted_healthy_tail_evidence__pca1" in set(meta.get("observed_feature_names") or [])
+    training_names = meta.get("training_feature_names") or []
+    quality_names = meta.get("quality_feature_names") or []
+    assert training_names
+    assert quality_names
+    assert {"obs_fraction", "n_obs_dmps", "n_total_dmps"}.issubset(set(quality_names))
+    assert {"obs_fraction", "n_obs_dmps", "n_total_dmps"}.isdisjoint(set(training_names))
+    assert len(training_names) + len(quality_names) == len(meta.get("observed_feature_names") or [])
     assert float(meta.get("observed_hist_eps", 0.0)) > 0.0
     assert float(meta.get("observed_hist_alpha", -1.0)) >= 0.0
     assert float(meta.get("observed_hist_evidence_clip_cap", -1.0)) >= 0.0

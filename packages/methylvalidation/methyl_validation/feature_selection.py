@@ -17,7 +17,7 @@ import pandas as pd
 class RuntimeFeatureSelectionConfig:
     enabled: bool = False
     mode: str = "stability_filter"
-    feature_families: Tuple[str, ...] = ("dmp", "gene", "structural")
+    feature_families: Tuple[str, ...] = ("dmp", "gene", "structural", "gene_scored")
     max_features_total: int = 200
     max_features_per_sample_ratio: float = 5.0
     min_dmp_frequency: float = 0.8
@@ -39,10 +39,10 @@ def normalize_runtime_feature_selection_config(payload: Optional[Dict[str, Any]]
     families: List[str] = []
     for item in families_raw:
         token = str(item).strip().lower()
-        if token in {"dmp", "gene", "structural"} and token not in families:
+        if token in {"dmp", "gene", "structural", "gene_scored"} and token not in families:
             families.append(token)
     if not families:
-        families = ["dmp", "gene", "structural"]
+        families = ["dmp", "gene", "structural", "gene_scored"]
     return RuntimeFeatureSelectionConfig(
         enabled=bool(payload.get("enabled", False)),
         mode=str(payload.get("mode", "stability_filter")).strip().lower() or "stability_filter",
@@ -93,6 +93,8 @@ def _load_csv(path: Path) -> pd.DataFrame:
 
 def _feature_family_from_name(name: str) -> str:
     token = str(name)
+    if token.startswith("gene_directional_score__") or token.startswith("region_directional_score__"):
+        return "gene_scored"
     if token.startswith("gene::"):
         return "gene"
     if token.startswith("struct::"):
@@ -184,7 +186,7 @@ def select_training_features(
     cap_by_samples = max(1, int(round(float(cfg.max_features_per_sample_ratio) * max(1, n_samples))))
     target_total = max(1, min(int(cfg.max_features_total), cap_by_samples, n_features))
 
-    family_to_indices: Dict[str, List[int]] = {"dmp": [], "gene": [], "structural": []}
+    family_to_indices: Dict[str, List[int]] = {"dmp": [], "gene": [], "structural": [], "gene_scored": []}
     for idx, name in enumerate(names):
         fam = _feature_family_from_name(name)
         if fam in family_to_indices:
@@ -192,7 +194,7 @@ def select_training_features(
 
     active_families = [f for f in cfg.feature_families if family_to_indices.get(f)]
     if not active_families:
-        active_families = ["dmp", "gene", "structural"]
+        active_families = ["dmp", "gene", "structural", "gene_scored"]
 
     per_family_cap = max(1, target_total // max(1, len(active_families)))
     selected: List[int] = []
