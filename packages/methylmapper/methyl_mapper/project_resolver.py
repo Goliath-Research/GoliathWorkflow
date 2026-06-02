@@ -29,27 +29,8 @@ DMP_CSV_PATTERN_BIOLOGICAL = "dmps-*-biological-sorted.csv"
 
 
 def _resolve_detection_dir_with_case_fallback(project, control_group: str, disease_group: str) -> Path:
-    """
-    Resolve detection directory with backward-compatible case-insensitive fallback.
-
-    Some existing runs were written with lower-cased comparison directories
-    (e.g. `pca_pca1`) while newer project labels may be mixed-case
-    (`PCa_PCa1`). Prefer the canonical path, but reuse an existing directory
-    with matching case-folded name when present.
-    """
-    canonical = Path(project.get_detection_output_dir(control_group, disease_group))
-    if canonical.exists():
-        return canonical
-    parent = canonical.parent
-    token = canonical.name.casefold()
-    if parent.exists():
-        for child in parent.iterdir():
-            if child.is_dir() and child.name.casefold() == token:
-                return child
-    lower = canonical.with_name(canonical.name.lower())
-    if lower.exists():
-        return lower
-    return canonical
+    """Backward-compatible wrapper around ProjectConfig.resolve_detection_output_dir."""
+    return Path(project.resolve_detection_output_dir(control_group, disease_group))
 
 
 class MapperStepPaths(BaseModel):

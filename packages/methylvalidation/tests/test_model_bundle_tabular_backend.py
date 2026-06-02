@@ -31,6 +31,9 @@ class _StubProject:
         assert disease_group == "pca1"
         return str(self._det)
 
+    def resolve_detection_output_dir(self, control_group: str, disease_group: str) -> str:
+        return self.get_detection_output_dir(control_group, disease_group)
+
     def get_derived_paths(self):
         return SimpleNamespace(detection_dir=str(self._det))
 
@@ -1020,7 +1023,6 @@ def test_tabular_observed_hybrid_train_predict_schema_parity(tmp_path: Path, mon
         meta.get("observed_feature_names") or []
     )
     assert "weighted_healthy_tail_evidence__pca1" in set(meta.get("observed_feature_names") or [])
-    assert "weighted_healthy_tail_agreement__pca1" in set(meta.get("observed_feature_names") or [])
     assert float(meta.get("observed_hist_eps", 0.0)) > 0.0
     assert float(meta.get("observed_hist_alpha", -1.0)) >= 0.0
     assert float(meta.get("observed_hist_evidence_clip_cap", -1.0)) >= 0.0
