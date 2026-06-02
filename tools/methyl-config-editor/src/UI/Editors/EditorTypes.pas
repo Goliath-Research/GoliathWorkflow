@@ -3,6 +3,7 @@ unit EditorTypes;
 interface
 
 uses
+  Vcl.Controls,
   Vcl.StdCtrls,
   Vcl.ExtCtrls,
   System.JSON,
@@ -15,7 +16,6 @@ type
 
   ISchemaPropertyEditor = interface
     ['{E8A4B2C1-5D3F-4A2B-9C1E-7F6D5E4C3B2A}']
-    class function EditorKey: string; static;
     function CanEdit(ANode: TSchemaNode): Boolean;
     procedure CreateRow(const AContext: IPropertyEditorContext; ARow: TPropertyRow;
       AValue: TJSONValue);
