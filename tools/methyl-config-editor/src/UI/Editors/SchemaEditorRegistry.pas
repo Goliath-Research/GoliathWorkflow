@@ -14,72 +14,65 @@ type
       ANode: TSchemaNode): ISchemaPropertyEditor;
     class function TryResolveByName(const AName: string;
       out AEditor: ISchemaPropertyEditor): Boolean;
+    class function TryResolveTypedStep(const AStepId: string;
+      out AEditor: ISchemaPropertyEditor): Boolean;
   end;
 
 implementation
 
 uses
   System.SysUtils,
+  Spring.Container,
   SchemaEditorKeys,
   SchemaEditorRegistration,
   TypedStepSchemas,
-  StringSchemaEditor,
-  EnumSchemaEditor,
-  BooleanSchemaEditor,
-  NumberSchemaEditor,
-  IntegerSchemaEditor,
-  ObjectSchemaEditor,
-  OneOfObjectSchemaEditor,
-  ArraySchemaEditor,
-  DictionarySchemaEditor,
-  DiscriminatorSchemaEditor,
-  DetectionStepEditor;
+  TypedStepSchemaEditor;
 
 class function TSchemaEditorRegistry.TryResolveByName(const AName: string;
   out AEditor: ISchemaPropertyEditor): Boolean;
 begin
   TSchemaEditorRegistration.EnsureRegistered;
-  Result := True;
-  if AName = TSchemaEditorKeys.StringKey then
-    AEditor := TStringSchemaEditor.Create
-  else if AName = TSchemaEditorKeys.EnumKey then
-    AEditor := TEnumSchemaEditor.Create
-  else if AName = TSchemaEditorKeys.BooleanKey then
-    AEditor := TBooleanSchemaEditor.Create
-  else if AName = TSchemaEditorKeys.IntegerKey then
-    AEditor := TIntegerSchemaEditor.Create
-  else if AName = TSchemaEditorKeys.NumberKey then
-    AEditor := TNumberSchemaEditor.Create
-  else if AName = TSchemaEditorKeys.ObjectKey then
-    AEditor := TObjectSchemaEditor.Create
-  else if AName = TSchemaEditorKeys.OneOfObjectKey then
-    AEditor := TOneOfObjectSchemaEditor.Create
-  else if AName = TSchemaEditorKeys.ArrayKey then
-    AEditor := TArraySchemaEditor.Create
-  else if AName = TSchemaEditorKeys.DictionaryKey then
-    AEditor := TDictionarySchemaEditor.Create
-  else if AName = TSchemaEditorKeys.DiscriminatorKey then
-    AEditor := TDiscriminatorSchemaEditor.Create
-  else if AName = TSchemaEditorKeys.DetectionConfigKey then
-    AEditor := TDetectionStepEditor.Create
-  else
+  if (AName = '') or not GlobalContainer.CanResolveNamed<ISchemaPropertyEditor>(AName) then
   begin
     AEditor := nil;
-    Result := False;
+    Exit(False);
   end;
+  AEditor := GlobalContainer.ResolveNamed<ISchemaPropertyEditor>(AName);
+  Result := Assigned(AEditor);
+end;
+
+class function TSchemaEditorRegistry.TryResolveTypedStep(const AStepId: string;
+  out AEditor: ISchemaPropertyEditor): Boolean;
+var
+  StepRoot: TSchemaNode;
+begin
+  AEditor := nil;
+  Result := False;
+  if not TTypedStepSchemas.TryLoadStepRoot(AStepId, StepRoot) then
+    Exit;
+  if (StepRoot.Title <> '') and TryResolveByName(StepRoot.Title, AEditor) then
+    Exit(True);
+  AEditor := TTypedStepSchemaEditor.Create(AStepId);
+  Result := True;
 end;
 
 class function TSchemaEditorRegistry.Resolve(ANode: TSchemaNode): ISchemaPropertyEditor;
 var
   Key: string;
+  StepId: string;
 begin
   TSchemaEditorRegistration.EnsureRegistered;
   if Assigned(ANode) and (ANode.RefPath <> '') and
     TryResolveByName(ANode.RefPath, Result) then
     Exit;
-  if Assigned(ANode) and (ANode.Title <> '') and
-    TryResolveByName(ANode.Title, Result) then
-    Exit;
+  if Assigned(ANode) and (ANode.Title <> '') then
+  begin
+    if TryResolveByName(ANode.Title, Result) then
+      Exit;
+    StepId := TTypedStepSchemaEditor.StepIdFromNode(ANode);
+    if (StepId <> '') and TryResolveTypedStep(StepId, Result) then
+      Exit;
+  end;
   Key := TSchemaEditorKeys.ForNode(ANode);
   if not TryResolveByName(Key, Result) then
     raise Exception.CreateFmt('No schema property editor registered for key: %s', [Key]);
@@ -87,17 +80,9 @@ end;
 
 class function TSchemaEditorRegistry.ResolveProperty(const APropertyName: string;
   ANode: TSchemaNode): ISchemaPropertyEditor;
-var
-  StepKey: string;
-  StepRoot: TSchemaNode;
 begin
-  if TSchemaEditorKeys.IsTypedStepProperty(APropertyName) then
-  begin
-    StepKey := TSchemaEditorKeys.TypedStepEditorKey(APropertyName);
-    if (StepKey <> '') and TryResolveByName(StepKey, Result) and
-      TTypedStepSchemas.TryLoadStepRoot(APropertyName, StepRoot) then
-      Exit;
-  end;
+  if TryResolveTypedStep(APropertyName, Result) then
+    Exit;
   Result := Resolve(ANode);
 end;
 

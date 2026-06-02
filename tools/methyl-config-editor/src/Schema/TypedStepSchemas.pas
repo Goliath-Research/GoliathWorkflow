@@ -12,10 +12,16 @@ type
   private
     class var FSchemasRoot: string;
     class var FCache: IDictionary<string, TSchemaDocument>;
+    class var FTitleToStepId: IDictionary<string, string>;
     class function StepFilename(const AStepId: string): string;
+    class procedure EnsureMaps;
+    class procedure IndexDocument(const AStepId: string; ADoc: TSchemaDocument);
+    class procedure WarmStepIndex;
   public
     class procedure SetSchemasRoot(const APath: string);
     class function GetSchemasRoot: string;
+    class function HasStepSchema(const AStepId: string): Boolean;
+    class function TryGetStepIdForTitle(const ATitle: string): string;
     class function TryLoadStepRoot(const AStepId: string; out ARoot: TSchemaNode): Boolean;
     class function LoadStepRoot(const AStepId: string): TSchemaNode;
     class procedure ClearCache;
@@ -28,12 +34,21 @@ uses
   System.IOUtils,
   JsonSchemaLoader;
 
+class procedure TTypedStepSchemas.EnsureMaps;
+begin
+  if not Assigned(FCache) then
+    FCache := TCollections.CreateDictionary<string, TSchemaDocument>;
+  if not Assigned(FTitleToStepId) then
+    FTitleToStepId := TCollections.CreateDictionary<string, string>;
+end;
+
 class procedure TTypedStepSchemas.SetSchemasRoot(const APath: string);
 begin
   if SameText(FSchemasRoot, APath) then
     Exit;
   FSchemasRoot := APath;
   ClearCache;
+  WarmStepIndex;
 end;
 
 class function TTypedStepSchemas.GetSchemasRoot: string;
@@ -46,22 +61,74 @@ var
   Key: string;
   Doc: TSchemaDocument;
 begin
-  if not Assigned(FCache) then
-    Exit;
-  for Key in FCache.Keys do
+  if Assigned(FCache) then
   begin
-    Doc := FCache[Key];
-    Doc.Free;
+    for Key in FCache.Keys do
+    begin
+      Doc := FCache[Key];
+      Doc.Free;
+    end;
+    FCache.Clear;
   end;
-  FCache.Clear;
+  if Assigned(FTitleToStepId) then
+    FTitleToStepId.Clear;
+end;
+
+class procedure TTypedStepSchemas.IndexDocument(const AStepId: string;
+  ADoc: TSchemaDocument);
+var
+  Title: string;
+begin
+  if not Assigned(ADoc) or not Assigned(ADoc.Root) then
+    Exit;
+  Title := ADoc.Root.Title;
+  if Title = '' then
+    Exit;
+  FTitleToStepId.AddOrSetValue(Title, LowerCase(AStepId));
+end;
+
+class procedure TTypedStepSchemas.WarmStepIndex;
+var
+  FileName, BaseName: string;
+  Root: TSchemaNode;
+begin
+  if FSchemasRoot = '' then
+    Exit;
+  EnsureMaps;
+  for FileName in TDirectory.GetFiles(FSchemasRoot, '*.schema.json',
+    TSearchOption.soTopDirectoryOnly) do
+  begin
+    BaseName := TPath.GetFileNameWithoutExtension(FileName);
+    TryLoadStepRoot(BaseName, Root);
+    if SameText(BaseName, 'validation_monte_carlo') then
+      TryLoadStepRoot('validation', Root);
+  end;
 end;
 
 class function TTypedStepSchemas.StepFilename(const AStepId: string): string;
 begin
-  if SameText(AStepId, 'detection') then
-    Result := 'detection.schema.json'
+  if SameText(AStepId, 'validation') then
+    Result := 'validation_monte_carlo.schema.json'
+  else if SameText(AStepId, 'validator') then
+    Result := 'predictor.schema.json'
   else
     Result := AStepId + '.schema.json';
+end;
+
+class function TTypedStepSchemas.HasStepSchema(const AStepId: string): Boolean;
+var
+  Root: TSchemaNode;
+begin
+  Result := TryLoadStepRoot(AStepId, Root);
+end;
+
+class function TTypedStepSchemas.TryGetStepIdForTitle(const ATitle: string): string;
+begin
+  Result := '';
+  if (ATitle = '') or not Assigned(FTitleToStepId) then
+    Exit;
+  if not FTitleToStepId.TryGetValue(ATitle, Result) then
+    Result := '';
 end;
 
 class function TTypedStepSchemas.TryLoadStepRoot(const AStepId: string;
@@ -76,8 +143,7 @@ begin
   Result := False;
   if FSchemasRoot = '' then
     Exit;
-  if not Assigned(FCache) then
-    FCache := TCollections.CreateDictionary<string, TSchemaDocument>;
+  EnsureMaps;
   CacheKey := LowerCase(AStepId);
   if FCache.TryGetValue(CacheKey, Doc) then
   begin
@@ -91,6 +157,7 @@ begin
   try
     Doc := Loader.LoadDocumentFromFile(Path);
     FCache.Add(CacheKey, Doc);
+    IndexDocument(AStepId, Doc);
     ARoot := Doc.Root;
     Result := Assigned(ARoot);
   finally
@@ -109,5 +176,6 @@ initialization
 finalization
   TTypedStepSchemas.ClearCache;
   TTypedStepSchemas.FCache := nil;
+  TTypedStepSchemas.FTitleToStepId := nil;
 
 end.

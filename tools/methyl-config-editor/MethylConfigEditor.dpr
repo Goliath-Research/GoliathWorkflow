@@ -34,6 +34,7 @@ uses
   DictionarySchemaEditor in 'src\UI\Editors\DictionarySchemaEditor.pas',
   DiscriminatorSchemaEditor in 'src\UI\Editors\DiscriminatorSchemaEditor.pas',
   DetectionStepEditor in 'src\UI\Editors\DetectionStepEditor.pas',
+  TypedStepSchemaEditor in 'src\UI\Editors\TypedStepSchemaEditor.pas',
   PropertyEditorForm in 'src\UI\PropertyEditorForm.pas' {PropertyEditorForm},
   ArrayEditorForm in 'src\UI\ArrayEditorForm.pas' {ArrayEditorForm},
   DictEditorForm in 'src\UI\DictEditorForm.pas' {DictEditorForm};

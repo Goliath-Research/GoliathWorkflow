@@ -39,12 +39,17 @@ Default relative path from `Win64\Debug\`: `..\..\..\schemas\config`.
 
 ## Architecture
 
-Property editing uses **Spring4D `GlobalContainer`** to resolve an `ISchemaPropertyEditor` implementation by name. Each schema shape has its own editor class; `TPropertyEditorForm` only builds rows and delegates to the resolved editor.
+Property editing uses **Spring4D `GlobalContainer`** to resolve an `ISchemaPropertyEditor` implementation by name. Each schema *shape* (string, object, array, …) has its own editor class. **Step configs** are resolved by property name against committed `*.schema.json` files — no per-step Delphi registration required unless you want custom UI.
 
 ```text
-TSchemaEditorKeys.ForNode(schemaNode)  →  editor key (e.g. "string", "object")
-GlobalContainer.ResolveNamed<ISchemaPropertyEditor>(key)
-  → TStringSchemaEditor / TObjectSchemaEditor / ...
+Kind-based (Spring ResolveNamed):
+  TSchemaEditorKeys.ForNode(schemaNode)  →  "string" | "object" | …
+  GlobalContainer.ResolveNamed<ISchemaPropertyEditor>(key)
+
+Step config (convention-based):
+  step_config.<name>  →  TryLoadStepRoot(name)  →  <name>.schema.json
+  Optional Spring override by schema root title (e.g. MethylDetectorConfig)
+  Else TTypedStepSchemaEditor.Create(name)
 ```
 
 | Unit | Role |
@@ -52,7 +57,7 @@ GlobalContainer.ResolveNamed<ISchemaPropertyEditor>(key)
 | `UI/Editors/EditorTypes.pas` | `ISchemaPropertyEditor`, `TPropertyRow` |
 | `UI/Editors/SchemaEditorRegistry.pas` | Resolve editor by schema node (or `$ref` path override) |
 | `UI/Editors/SchemaEditorRegistration.pas` | Register all editors with Spring4D at startup |
-| `UI/Editors/*SchemaEditor.pas` | One class per kind (string, enum, object, array, …) |
+| `UI/Editors/TypedStepSchemaEditor.pas` | Generic typed step editor (loads committed step schema by id) |
 | `Schema/JsonSchemaLoader.pas` | Parse schema, `$ref`/`$defs`, nullable `anyOf`, `oneOf`+`discriminator` |
 | `Schema/SchemaNode.pas` | Internal schema meta-tree |
 | `Data/JsonPath.pas` | JSON pointer get/set |
@@ -64,7 +69,7 @@ GlobalContainer.ResolveNamed<ISchemaPropertyEditor>(key)
 ### Adding a custom editor
 
 1. Implement `ISchemaPropertyEditor` (subclass `TAbstractSchemaEditor`).
-2. Define a unique `EditorKey` string constant in `SchemaEditorKeys`.
+2. Add a string constant in `SchemaEditorKeys` if it is a new *kind* key, or use the schema root **`title`** for step overrides.
 3. Register in `SchemaEditorRegistration.EnsureRegistered`:
 
 ```delphi
@@ -72,25 +77,32 @@ GlobalContainer.RegisterType<ISchemaPropertyEditor, TMyCustomSchemaEditor>
   .Named('myCustomKey').AsTransient;
 ```
 
-4. Optional: register by JSON Schema `$ref` path or model **`title`** for a specific Pydantic model:
+4. Optional: register by JSON Schema root **`title`** to override the generic typed step editor for one step:
 
 ```delphi
 GlobalContainer.RegisterType<ISchemaPropertyEditor, TDetectionStepEditor>
   .Named('MethylDetectorConfig').AsTransient;
 ```
 
-`TSchemaEditorRegistry.Resolve` checks `$ref`, then **`title`**, then kind-based keys.
+`TSchemaEditorRegistry.Resolve` checks `$ref`, then **`title`** (Spring), then typed step by title, then kind key.
+
+### Step configs in `project_config`
+
+Under `step_config`, each key (e.g. `detection`, `mapper`, `predictor`, `validation`) is matched to a schema file under the schemas root:
+
+| Property name | Schema file (default) |
+|---------------|------------------------|
+| `<name>` | `<name>.schema.json` |
+| `validation` | `validation_monte_carlo.schema.json` |
+| `validator` (deprecated) | `predictor.schema.json` |
+
+When the file exists, `ResolveProperty` loads that schema and opens the recursive property editor. **New steps only need a committed schema file** — run `methyl-export-config-schemas` in Python; no Delphi change unless you want custom summary UI.
+
+Register a Spring named service only when the generic typed editor is not enough (see `TDetectionStepEditor`).
 
 ### Example: `TDetectionStepEditor`
 
-Registered as `MethylDetectorConfig` (matches `detection.schema.json` root title). Used when:
-
-- Editing a document with **detection.schema.json** selected as the active schema.
-- Editing **`step_config.detection`** inside `project_config.schema.json` (property name `detection` maps to the typed step loader).
-
-The editor shows a compact summary (`chromosome=…; centroids set`) and opens the full recursive property form against the committed **detection** schema, not the loose `step_config` placeholder in the project schema.
-
-Add more typed step editors by mirroring [`DetectionStepEditor.pas`](src/UI/Editors/DetectionStepEditor.pas) and registering in [`SchemaEditorRegistration.pas`](src/UI/Editors/SchemaEditorRegistration.pas); extend [`TypedStepSchemas.pas`](src/Schema/TypedStepSchemas.pas) step id → filename mapping.
+Registered in Spring as **`MethylDetectorConfig`**. It overrides the generic `TTypedStepSchemaEditor` for detection only (custom summary line). All other steps use `TTypedStepSchemaEditor` automatically when their schema file is present.
 
 ## Tests
 

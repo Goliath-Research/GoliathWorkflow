@@ -171,8 +171,7 @@ begin
     Row := CreateRowPanel(TitleText, PropNode.Required);
     Row.PropertyName := Prop.Name;
     Row.SchemaNode := PropNode;
-    if TSchemaEditorKeys.IsTypedStepProperty(Prop.Name) and
-      TTypedStepSchemas.TryLoadStepRoot(Prop.Name, TypedRoot) then
+    if TTypedStepSchemas.TryLoadStepRoot(Prop.Name, TypedRoot) then
       Row.SchemaNode := TypedRoot;
     Row.Editor := Editor;
     if PropNode.Description <> '' then

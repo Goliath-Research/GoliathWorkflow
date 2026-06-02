@@ -55,7 +55,8 @@ type
 implementation
 
 uses
-  PropertyEditorForm;
+  PropertyEditorForm,
+  TypedStepSchemas;
 
 {$R *.dfm}
 
@@ -182,6 +183,7 @@ var
   CloneObj: TJSONObject;
   ChildTitle: string;
   VS: TSchemaNode;
+  TypedRoot: TSchemaNode;
 begin
   SaveGrid;
   R := SelectedRow;
@@ -191,6 +193,8 @@ begin
   if Key = '' then
     Exit;
   VS := ValueSchema;
+  if TTypedStepSchemas.TryLoadStepRoot(Key, TypedRoot) then
+    VS := TypedRoot;
   Val := FWorking.GetValue(Key);
   ChildTitle := FBreadcrumb + ' › ' + Key;
   if VS.Kind = skObject then
