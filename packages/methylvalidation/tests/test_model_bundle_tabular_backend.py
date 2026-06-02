@@ -77,10 +77,12 @@ class _StubProjectWithModelBundleConfig(_StubProject):
         detection_dir: Path,
         mapper_annotation_csv: Optional[Path] = None,
         fixed_gene_features_csv: Optional[Path] = None,
+        fixed_gene_panel_csv: Optional[Path] = None,
     ):
         super().__init__(detection_dir)
         self._mapper_annotation_csv = mapper_annotation_csv
         self._fixed_gene_features_csv = fixed_gene_features_csv
+        self._fixed_gene_panel_csv = fixed_gene_panel_csv
 
     def get_step_config(self, step_name: str):
         if step_name == "model_bundle":
@@ -89,6 +91,8 @@ class _StubProjectWithModelBundleConfig(_StubProject):
                 out["mapper_annotation_csv"] = str(self._mapper_annotation_csv)
             if self._fixed_gene_features_csv is not None:
                 out["fixed_gene_features"] = str(self._fixed_gene_features_csv)
+            if self._fixed_gene_panel_csv is not None:
+                out["fixed_gene_panel"] = str(self._fixed_gene_panel_csv)
             return out
         return {}
 
@@ -1282,6 +1286,96 @@ def test_tabular_saves_test_dataset_next_to_train_dataset(tmp_path: Path, monkey
         meta = json.load(f)
     assert bool(meta.get("test_dataset_saved")) is True
     assert str(meta.get("test_dataset_path")).endswith("tabular_test_dataset.parquet")
+
+
+def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1"],
+            "position": [100, 120],
+            "context": ["CG", "CG"],
+            "effect_size": [0.7, -0.4],
+            "weight": [0.8, 0.3],
+            "gene_name": ["G1", "G1"],
+            "comparison_label": ["healthy_vs_pca1", "healthy_vs_pca1"],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    bundle_dir = tmp_path / "bundle"
+    frozen_panel_path = bundle_dir / "frozen_genes_production.csv"
+    frozen_panel_path.parent.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "comparison_label": ["healthy_vs_pca1"],
+            "gene_name": ["G1"],
+            "gene_support_n": [2],
+            "gene_importance": [1.0],
+        }
+    ).to_csv(frozen_panel_path, index=False)
+
+    stub = _StubProjectWithModelBundleConfig(
+        det,
+        fixed_gene_panel_csv=frozen_panel_path,
+    )
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: stub)
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: stub)
+
+    def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
+        del chromosome, min_coverage
+        positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
+        X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
+        for i, p in enumerate(sample_paths):
+            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2"} else 0.8
+        ctx = np.asarray(["CG"] * len(positions), dtype=object)
+        return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
+
+    monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
+    predictor_cfg = SimpleNamespace(
+        test_group_paths=[
+            {"label": "healthy", "class_index": 0, "paths": ["/tmp/S1", "/tmp/S2"]},
+            {"label": "pca1", "class_index": 1, "paths": ["/tmp/S3", "/tmp/S4"]},
+        ],
+    )
+    monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+
+    hybrid_calls: list[dict] = []
+    real_build = tabular_backend.build_observed_hybrid_feature_table
+
+    def _spy_build(*args, **kwargs):
+        panel = kwargs.get("frozen_gene_panel_df")
+        hybrid_calls.append(
+            {
+                "n_samples": len(args[0]) if args else 0,
+                "panel_empty": panel is None or getattr(panel, "empty", True),
+            }
+        )
+        return real_build(*args, **kwargs)
+
+    monkeypatch.setattr(tabular_backend, "build_observed_hybrid_feature_table", _spy_build)
+
+    train_dataset_path = tmp_path / "export" / "tabular_train_dataset.parquet"
+    model_dir = tmp_path / "model"
+    tabular_backend.train_tabular_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir,
+        model_type="random_forest",
+        feature_mode="observed_hybrid",
+        feature_family_set="gene_scored",
+        save_train_dataset=True,
+        train_dataset_path=train_dataset_path,
+        save_test_dataset=True,
+    )
+    test_dataset_path = tmp_path / "export" / "tabular_test_dataset.parquet"
+    assert train_dataset_path.is_file()
+    assert test_dataset_path.is_file()
+    assert len(hybrid_calls) >= 2
+    assert hybrid_calls[0]["panel_empty"] is False
+    assert hybrid_calls[1]["panel_empty"] is False
+    assert hybrid_calls[0]["n_samples"] == 4
+    assert hybrid_calls[1]["n_samples"] == 4
 
 
 def test_tabular_defaults_train_and_test_dataset_paths_to_bundle_dir(tmp_path: Path, monkeypatch):

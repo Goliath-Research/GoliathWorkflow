@@ -218,6 +218,15 @@ def build_model_backend_steps(
                     observed_hist_tail_agreement_threshold=(
                         config.observed_hist_tail_agreement_threshold if config is not None else 0.10
                     ),
+                    gene_scored_min_support_n=(
+                        config.gene_scored_min_support_n if config is not None else 2
+                    ),
+                    gene_scored_use_region_weight=(
+                        config.gene_scored_use_region_weight if config is not None else True
+                    ),
+                    gene_scored_gene_weight=(
+                        config.gene_scored_gene_weight if config is not None else "importance_x_sqrt_support"
+                    ),
                     feature_selection_config=feature_selection_payload,
                     save_train_dataset=(
                         bool(config.tabular_save_train_dataset)
@@ -370,6 +379,15 @@ def build_model_backend_steps(
                     ),
                     observed_hist_tail_agreement_threshold=(
                         config.observed_hist_tail_agreement_threshold if config is not None else 0.10
+                    ),
+                    gene_scored_min_support_n=(
+                        config.gene_scored_min_support_n if config is not None else 2
+                    ),
+                    gene_scored_use_region_weight=(
+                        config.gene_scored_use_region_weight if config is not None else True
+                    ),
+                    gene_scored_gene_weight=(
+                        config.gene_scored_gene_weight if config is not None else "importance_x_sqrt_support"
                     ),
                     feature_selection_config=feature_selection_payload,
                 )

@@ -41,7 +41,12 @@ from .feature_selection import (
     normalize_runtime_feature_selection_config,
     select_training_features,
 )
-from .model_bundle import load_bundle_dmp_index, load_bundle_gene_feature_ranges
+from .gene_scored_features import family_includes_gene_scored
+from .model_bundle import (
+    load_bundle_dmp_index,
+    load_bundle_frozen_gene_panel,
+    load_bundle_gene_feature_ranges,
+)
 from .observed_feature_builder import (
     HYBRID_FEATURE_FAMILY_SETS,
     OBSERVED_HYBRID_SCHEMA_VERSION,
@@ -406,6 +411,9 @@ def train_tabular_model(
     observed_hist_alpha: float = 0.5,
     observed_hist_evidence_clip_cap: float = 5.0,
     observed_hist_tail_agreement_threshold: float = 0.10,
+    gene_scored_min_support_n: int = 2,
+    gene_scored_use_region_weight: bool = True,
+    gene_scored_gene_weight: str = "importance_x_sqrt_support",
     feature_selection_config: Optional[Dict[str, Any]] = None,
     save_train_dataset: bool = False,
     reuse_train_dataset: bool = True,
@@ -420,6 +428,17 @@ def train_tabular_model(
 
     dmp_df = load_bundle_dmp_index(bundle_h5)
     fixed_gene_features_df = load_bundle_gene_feature_ranges(bundle_h5)
+    frozen_gene_panel_df = pd.DataFrame()
+    if family_includes_gene_scored(feature_family_set):
+        frozen_gene_panel_df = load_bundle_frozen_gene_panel(
+            bundle_h5,
+            project_json=project_json,
+        )
+        if frozen_gene_panel_df.empty:
+            raise FileNotFoundError(
+                "feature_family_set includes gene_scored but frozen_genes_production.csv was not found. "
+                "Run freeze with build_frozen_gene_panel or set step_config.model_bundle.fixed_gene_panel."
+            )
     max_dmps_norm = int(max_dmps) if (max_dmps is not None and int(max_dmps) > 0) else 0
     if max_dmps_norm and len(dmp_df) > max_dmps_norm:
         dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
@@ -505,6 +524,10 @@ def train_tabular_model(
                 cancer_class_labels=schema_cancer_labels,
                 feature_family_set=feature_family_set_norm,
                 dmp_df=dmp_df,
+                frozen_gene_panel_df=frozen_gene_panel_df,
+                gene_scored_min_support_n=int(gene_scored_min_support_n),
+                gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
+                gene_scored_gene_weight=str(gene_scored_gene_weight),
             )
             if feature_mode_norm == "observed_hybrid"
             else None
@@ -534,6 +557,9 @@ def train_tabular_model(
         "observed_hist_alpha": float(observed_hist_alpha),
         "observed_hist_evidence_clip_cap": float(observed_hist_evidence_clip_cap),
         "observed_hist_tail_agreement_threshold": float(observed_hist_tail_agreement_threshold),
+        "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
+        "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
+        "gene_scored_gene_weight": str(gene_scored_gene_weight).strip().lower(),
     }
     train_fingerprint = _fingerprint_payload(
         {
@@ -628,6 +654,8 @@ def train_tabular_model(
                                 cancer_class_labels=observed_cancer_class_labels,
                                 feature_family_set=feature_family_set_norm,
                                 dmp_df=dmp_df,
+                                frozen_gene_panel_df=frozen_gene_panel_df,
+                                gene_scored_min_support_n=int(gene_scored_min_support_n),
                             ),
                             context="tabular train cached observed_hybrid",
                         )
@@ -676,6 +704,10 @@ def train_tabular_model(
                 feature_family_set=feature_family_set_norm,
                 gene_feature_loading=gene_feature_loading_norm,
                 fixed_gene_features_df=fixed_gene_features_df,
+                frozen_gene_panel_df=frozen_gene_panel_df,
+                gene_scored_min_support_n=int(gene_scored_min_support_n),
+                gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
+                gene_scored_gene_weight=str(gene_scored_gene_weight),
             )
             X = np.asarray(feat.X, dtype=np.float32)
             feature_fill_values = fit_feature_fill_values(X)
@@ -766,6 +798,9 @@ def train_tabular_model(
                 "observed_hist_alpha": float(observed_hist_alpha),
                 "observed_hist_evidence_clip_cap": float(observed_hist_evidence_clip_cap),
                 "observed_hist_tail_agreement_threshold": float(observed_hist_tail_agreement_threshold),
+                "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
+                "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
+                "gene_scored_gene_weight": str(gene_scored_gene_weight).strip().lower(),
             }
             with open(train_dataset_meta_path, "w", encoding="utf-8") as f:
                 json.dump(train_dataset_meta, f, indent=2)
@@ -863,6 +898,10 @@ def train_tabular_model(
                     feature_family_set=feature_family_set_norm,
                     gene_feature_loading=gene_feature_loading_norm,
                     fixed_gene_features_df=fixed_gene_features_df,
+                    frozen_gene_panel_df=frozen_gene_panel_df,
+                    gene_scored_min_support_n=int(gene_scored_min_support_n),
+                    gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
+                    gene_scored_gene_weight=str(gene_scored_gene_weight),
                 )
                 verify_feature_schema(
                     feat_eval.feature_names,
@@ -989,6 +1028,9 @@ def train_tabular_model(
             "observed_hist_alpha": float(observed_hist_alpha),
             "observed_hist_evidence_clip_cap": float(observed_hist_evidence_clip_cap),
             "observed_hist_tail_agreement_threshold": float(observed_hist_tail_agreement_threshold),
+            "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
+            "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
+            "gene_scored_gene_weight": str(gene_scored_gene_weight).strip().lower(),
             "feature_selection": feature_selection_report,
             "feature_selection_config": feature_selection_config or {},
             "selected_feature_names": selected_feature_names if fs_cfg.enabled else [],
@@ -1171,6 +1213,15 @@ def predict_tabular_model_from_project(
             feature_family_set=str(meta.get("feature_family_set", "dmp")),
             gene_feature_loading=str(meta.get("gene_feature_loading", "frozen")),
             fixed_gene_features_df=load_bundle_gene_feature_ranges(bundle_h5),
+            frozen_gene_panel_df=load_bundle_frozen_gene_panel(
+                bundle_h5,
+                project_json=project_json,
+            ),
+            gene_scored_min_support_n=int(meta.get("gene_scored_min_support_n", 2)),
+            gene_scored_use_region_weight=bool(meta.get("gene_scored_use_region_weight", True)),
+            gene_scored_gene_weight=str(
+                meta.get("gene_scored_gene_weight", "importance_x_sqrt_support")
+            ),
         )
         verify_feature_schema(
             feat.feature_names,
@@ -1271,6 +1322,8 @@ def predict_tabular_model_from_project(
                 {"name": "gene", "feature_family_set": "gene"},
                 {"name": "structural", "feature_family_set": "structural"},
                 {"name": "dmp+gene", "feature_family_set": "dmp+gene"},
+                {"name": "gene_scored", "feature_family_set": "gene_scored"},
+                {"name": "dmp+gene_scored", "feature_family_set": "dmp+gene_scored"},
                 {"name": "dmp+structural", "feature_family_set": "dmp+structural"},
                 {"name": "hybrid-all", "feature_family_set": "hybrid-all"},
             ],

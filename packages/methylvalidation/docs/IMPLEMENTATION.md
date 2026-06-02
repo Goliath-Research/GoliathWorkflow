@@ -86,7 +86,15 @@ ECDF/Bayesian remains DMP-only by design at the first stage. The optional ECDF s
 - `feature_family_set=dmp`: fixed DMP-family observed metrics (legacy behavior).
 - `feature_family_set=gene`: dynamic one-feature-per-mapped-gene keys (`gene::<GENE>`).
 - `feature_family_set=structural`: dynamic one-feature-per-mapped `(gene, feature_type)` keys (`struct::<GENE>::<FEATURE>`).
-- combined families (`dmp+gene`, `dmp+structural`, `hybrid-all`) concatenate families in deterministic order.
+- `feature_family_set=gene_scored`: comparison-level `gene_directional_score__{comparison}` features from frozen gene panels (`frozen_genes_production.csv`) and per-comparison DMP effects (no `gene::` columns).
+- `feature_family_set=dmp+gene_scored`: DMP-family metrics plus gene-directional scores (recommended when using mapper gene panels without legacy per-gene columns).
+- combined families (`dmp+gene`, `dmp+structural`, `hybrid-all`) concatenate families in deterministic order (`hybrid-all` does not include `gene_scored`; use `dmp+gene_scored` explicitly).
+
+Gene-directional score (per sample, per `comparison_label`):
+
+- Gene panel: rows in `frozen_genes_production.csv` with `gene_support_n >= gene_scored_min_support_n` (default `2`, configurable).
+- Per gene: `sum(sign(effect) * |effect| * (beta - 0.5)) / sum(|effect|)` over observed panel loci for that comparison (optional `region_weight` on loci).
+- Pooled: `sum(gene_importance * sqrt(gene_support_n) * dir_g) / sum(gene_importance * sqrt(gene_support_n))` over genes with observed loci.
 
 For gene/structural keys, per-sample value uses signed weighted centered methylation over observed loci:
 
