@@ -227,6 +227,12 @@ def build_model_backend_steps(
                     gene_scored_gene_weight=(
                         config.gene_scored_gene_weight if config is not None else "importance_x_sqrt_support"
                     ),
+                    region_directional_region_types=(
+                        config.region_directional_region_types if config is not None else None
+                    ),
+                    region_directional_min_loci=(
+                        config.region_directional_min_loci if config is not None else 1
+                    ),
                     feature_selection_config=feature_selection_payload,
                     save_train_dataset=(
                         bool(config.tabular_save_train_dataset)
@@ -388,6 +394,12 @@ def build_model_backend_steps(
                     ),
                     gene_scored_gene_weight=(
                         config.gene_scored_gene_weight if config is not None else "importance_x_sqrt_support"
+                    ),
+                    region_directional_region_types=(
+                        config.region_directional_region_types if config is not None else None
+                    ),
+                    region_directional_min_loci=(
+                        config.region_directional_min_loci if config is not None else 1
                     ),
                     feature_selection_config=feature_selection_payload,
                 )

@@ -607,19 +607,22 @@ def test_family_flags_gene_scored_tokens():
 def test_gene_scored_feature_names_and_fingerprint():
     from methyl_validation.gene_scored_features import (
         compute_gene_directional_score_matrix,
+        compute_region_directional_score_matrix,
         gene_scored_feature_column,
         prepare_gene_scored_panels,
+        region_directional_feature_column,
     )
 
     dmp_df = pd.DataFrame(
         {
-            "comparison_label": ["cmp_a", "cmp_a", "cmp_a"],
-            "chromosome": ["1", "1", "1"],
-            "context": ["CG", "CG", "CG"],
-            "position": [100, 120, 200],
-            "effect_size": [1.0, -1.0, 0.5],
-            "gene_name": ["G1", "G1", "G2"],
-            "region_weight": [1.0, 1.0, 1.0],
+            "comparison_label": ["cmp_a", "cmp_a", "cmp_a", "cmp_b", "cmp_b"],
+            "chromosome": ["1", "1", "1", "1", "1"],
+            "context": ["CG", "CG", "CG", "CG", "CG"],
+            "position": [100, 120, 200, 100, 120],
+            "effect_size": [1.0, -1.0, 0.5, 1.0, -1.0],
+            "gene_name": ["G1", "G1", "G2", "G1", "G1"],
+            "feature_type": ["promoter", "exon", "intron", "promoter", "exon"],
+            "region_weight": [1.0, 1.0, 1.0, 1.0, 1.0],
         }
     )
     frozen_panel = pd.DataFrame(
@@ -635,7 +638,12 @@ def test_gene_scored_feature_names_and_fingerprint():
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_panel,
     )
-    assert names == ["gene_directional_score__cmp_a"]
+    assert names == [
+        "gene_directional_score__cmp_a",
+        "region_directional_score__cmp_a__promoter",
+        "region_directional_score__cmp_a__exon",
+        "region_directional_score__cmp_a__intron",
+    ]
     assert "gene::" not in names[0]
 
     fp_a = observed_feature_builder.observed_hybrid_schema_fingerprint(
@@ -650,7 +658,15 @@ def test_gene_scored_feature_names_and_fingerprint():
         frozen_gene_panel_df=frozen_panel,
         gene_scored_min_support_n=3,
     )
+    fp_c = observed_feature_builder.observed_hybrid_schema_fingerprint(
+        feature_family_set="gene_scored",
+        dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_panel,
+        gene_scored_min_support_n=2,
+        region_directional_region_types=["promoter", "exon"],
+    )
     assert fp_a != fp_b
+    assert fp_a != fp_c
 
     feature_order = [("1", "CG", 100), ("1", "CG", 120), ("1", "CG", 200)]
     X_raw = np.asarray([[0.10, 0.20, 0.30]], dtype=np.float64)
@@ -666,7 +682,56 @@ def test_gene_scored_feature_names_and_fingerprint():
     )
     assert scores.shape == (1, 1)
     assert float(scores[0, 0]) == pytest.approx(-0.1, rel=1e-5, abs=1e-6)
+    region_matrix, region_specs = compute_region_directional_score_matrix(
+        X_raw,
+        feature_order,
+        dmp_df,
+        ["cmp_a", "cmp_b"],
+        ["promoter", "exon"],
+        min_loci=1,
+        use_region_weight=True,
+    )
+    assert region_specs == [
+        ("cmp_a", "promoter"),
+        ("cmp_a", "exon"),
+        ("cmp_b", "promoter"),
+        ("cmp_b", "exon"),
+    ]
+    promo_idx = region_specs.index(("cmp_a", "promoter"))
+    exon_idx = region_specs.index(("cmp_a", "exon"))
+    assert float(region_matrix[0, promo_idx]) == pytest.approx(-0.4, rel=1e-5, abs=1e-6)
+    assert float(region_matrix[0, exon_idx]) == pytest.approx(0.3, rel=1e-5, abs=1e-6)
     assert gene_scored_feature_column("cmp_a") == "gene_directional_score__cmp_a"
+    assert region_directional_feature_column("cmp_a", "promoter") == "region_directional_score__cmp_a__promoter"
+
+
+def test_compute_region_directional_score_matrix_hand_calculation():
+    from methyl_validation.gene_scored_features import compute_region_directional_score_matrix
+
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a"],
+            "chromosome": ["1", "1"],
+            "context": ["CG", "CG"],
+            "position": [100, 120],
+            "effect_size": [1.0, -1.0],
+            "feature_type": ["promoter", "promoter"],
+            "region_weight": [1.0, 1.0],
+        }
+    )
+    feature_order = [("1", "CG", 100), ("1", "CG", 120)]
+    X_raw = np.asarray([[0.10, 0.20]], dtype=np.float64)
+    matrix, specs = compute_region_directional_score_matrix(
+        X_raw,
+        feature_order,
+        dmp_df,
+        ["cmp_a"],
+        ["promoter"],
+        min_loci=1,
+        use_region_weight=True,
+    )
+    assert specs == [("cmp_a", "promoter")]
+    assert float(matrix[0, 0]) == pytest.approx(-0.05, rel=1e-5, abs=1e-6)
 
 
 def _fake_extract_gene_scored(sample_paths, reference_positions, chromosome, min_coverage=1):
@@ -709,6 +774,7 @@ def test_observed_feature_builder_gene_scored_family(monkeypatch):
             "weight": [1.0, 1.0, 1.0],
             "effect_size": [1.0, -1.0, 0.5],
             "gene_name": ["G1", "G1", "G2"],
+            "feature_type": ["promoter", "exon", "intron"],
         }
     )
     frozen_panel = pd.DataFrame(
@@ -736,10 +802,13 @@ def test_observed_feature_builder_gene_scored_family(monkeypatch):
         frozen_gene_panel_df=frozen_panel,
         gene_scored_min_support_n=2,
     )
-    assert feat.feature_names == ["gene_directional_score__cmp_a"]
+    assert "gene_directional_score__cmp_a" in feat.feature_names
+    assert "region_directional_score__cmp_a__promoter" in feat.feature_names
     assert not any(str(n).startswith("gene::") for n in feat.feature_names)
-    col = feat.feature_names.index("gene_directional_score__cmp_a")
-    assert float(feat.X[0, col]) == pytest.approx(-0.1, rel=1e-5, abs=1e-6)
+    gene_col = feat.feature_names.index("gene_directional_score__cmp_a")
+    promo_col = feat.feature_names.index("region_directional_score__cmp_a__promoter")
+    assert float(feat.X[0, gene_col]) == pytest.approx(-0.1, rel=1e-5, abs=1e-6)
+    assert float(feat.X[0, promo_col]) == pytest.approx(-0.4, rel=1e-5, abs=1e-6)
     assert feat.report["feature_families"]["gene_scored"] is True
     assert feat.report["feature_families"]["gene"] is False
 
@@ -759,6 +828,7 @@ def test_observed_feature_builder_dmp_plus_gene_scored_includes_both_families(mo
             "weight": [1.0, 1.0, 1.0],
             "effect_size": [1.0, -1.0, 0.5],
             "gene_name": ["G1", "G1", "G2"],
+            "feature_type": ["promoter", "exon", "intron"],
         }
     )
     frozen_panel = pd.DataFrame(

@@ -1299,6 +1299,7 @@ def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path
             "effect_size": [0.7, -0.4],
             "weight": [0.8, 0.3],
             "gene_name": ["G1", "G1"],
+            "feature_type": ["promoter", "exon"],
             "comparison_label": ["healthy_vs_pca1", "healthy_vs_pca1"],
         }
     ).to_csv(det / "dmps-1-classifier.csv", index=False)
@@ -1376,6 +1377,10 @@ def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path
     assert hybrid_calls[1]["panel_empty"] is False
     assert hybrid_calls[0]["n_samples"] == 4
     assert hybrid_calls[1]["n_samples"] == 4
+    with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
+        meta = json.load(f)
+    observed_names = [str(x) for x in (meta.get("observed_feature_names") or [])]
+    assert any(name.startswith("region_directional_score__") for name in observed_names)
 
 
 def test_tabular_defaults_train_and_test_dataset_paths_to_bundle_dir(tmp_path: Path, monkeypatch):

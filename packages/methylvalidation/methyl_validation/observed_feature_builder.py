@@ -39,7 +39,7 @@ class ObservedHybridAnchors:
 
 
 OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v28_no_healthy_centroid_features"
-HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v2_gene_scored"
+HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v3_region_directional"
 HYBRID_FEATURE_FAMILY_SETS = (
     "dmp",
     "gene",
@@ -847,9 +847,12 @@ def observed_hybrid_feature_names(
     dmp_df: Optional[pd.DataFrame] = None,
     frozen_gene_panel_df: Optional[pd.DataFrame] = None,
     gene_scored_min_support_n: int = 2,
+    region_directional_region_types: Optional[Sequence[str]] = None,
+    region_directional_min_loci: int = 1,
 ) -> List[str]:
     from .gene_scored_features import (
         gene_scored_feature_names,
+        region_directional_feature_names,
         resolve_gene_scored_comparison_labels,
     )
 
@@ -868,11 +871,20 @@ def observed_hybrid_feature_names(
     )
     if include_gene_scored:
         panel_df = frozen_gene_panel_df if frozen_gene_panel_df is not None else pd.DataFrame()
-        cmp_labels = resolve_gene_scored_comparison_labels(
-            dmp_df if dmp_df is not None else pd.DataFrame(),
-            panel_df,
-        )
+        work_dmp = dmp_df if dmp_df is not None else pd.DataFrame()
+        cmp_labels = resolve_gene_scored_comparison_labels(work_dmp, panel_df)
         names.extend(gene_scored_feature_names(cmp_labels))
+        if not work_dmp.empty:
+            _, feature_order, _, _, _ = _build_reference_map(work_dmp)
+            names.extend(
+                region_directional_feature_names(
+                    work_dmp,
+                    feature_order,
+                    cmp_labels,
+                    region_directional_region_types,
+                    min_loci=int(max(1, region_directional_min_loci)),
+                )
+            )
     return names
 
 
@@ -885,24 +897,32 @@ def observed_hybrid_schema_fingerprint(
     gene_scored_min_support_n: int = 2,
     gene_scored_use_region_weight: bool = True,
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
+    region_directional_region_types: Optional[Sequence[str]] = None,
+    region_directional_min_loci: int = 1,
 ) -> str:
+    from .gene_scored_features import GENE_SCORED_SCHEMA_VERSION, normalize_region_directional_region_types
+
     names = observed_hybrid_feature_names(
         cancer_class_labels=cancer_class_labels,
         feature_family_set=feature_family_set,
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_gene_panel_df,
         gene_scored_min_support_n=gene_scored_min_support_n,
+        region_directional_region_types=region_directional_region_types,
+        region_directional_min_loci=region_directional_min_loci,
     )
-    from .gene_scored_features import GENE_SCORED_SCHEMA_VERSION
 
     payload = "\n".join(names)
     _, _, _, include_gene_scored = _family_flags(feature_family_set)
     if include_gene_scored:
+        region_types = normalize_region_directional_region_types(region_directional_region_types)
         payload = (
             f"{payload}\n"
             f"gene_scored_min_support_n={int(max(1, gene_scored_min_support_n))}\n"
             f"gene_scored_use_region_weight={bool(gene_scored_use_region_weight)}\n"
             f"gene_scored_gene_weight={str(gene_scored_gene_weight).strip().lower()}\n"
+            f"region_directional_region_types={','.join(region_types)}\n"
+            f"region_directional_min_loci={int(max(1, region_directional_min_loci))}\n"
             f"{GENE_SCORED_SCHEMA_VERSION}"
         )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -940,6 +960,8 @@ def build_observed_hybrid_feature_table(
     gene_scored_min_support_n: int = 2,
     gene_scored_use_region_weight: bool = True,
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
+    region_directional_region_types: Optional[Sequence[str]] = None,
+    region_directional_min_loci: int = 1,
 ) -> ObservedFeatureArtifacts:
     del quantiles, dmr_window_bp, max_dmr_features, max_gene_features
     # The redesigned schema is fixed; these toggles are retained only for compatibility.
@@ -1034,6 +1056,8 @@ def build_observed_hybrid_feature_table(
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_gene_panel_df,
         gene_scored_min_support_n=int(gene_scored_min_support_n),
+        region_directional_region_types=region_directional_region_types,
+        region_directional_min_loci=int(max(1, region_directional_min_loci)),
     )
     gene_feature_names, struct_feature_names, mapped_feature_meta = _build_dynamic_mapped_feature_names(
         locus_df,
@@ -1334,9 +1358,13 @@ def build_observed_hybrid_feature_table(
     if include_gene_scored_family:
         from .gene_scored_features import (
             compute_gene_directional_score_matrix,
+            compute_region_directional_score_matrix,
             gene_scored_feature_column,
+            normalize_region_directional_region_types,
             prepare_gene_scored_panels,
+            region_directional_feature_column,
             resolve_gene_scored_comparison_labels,
+            count_region_directional_panel_loci,
         )
 
         if frozen_gene_panel_df is None or frozen_gene_panel_df.empty:
@@ -1364,12 +1392,40 @@ def build_observed_hybrid_feature_table(
                 continue
             col_j = int(idx[feat_name])
             X_feat[:, col_j] = score_matrix[:, j].astype(np.float32)
+        region_types = normalize_region_directional_region_types(region_directional_region_types)
+        region_matrix, region_specs = compute_region_directional_score_matrix(
+            X_raw,
+            feature_order,
+            dmp_df,
+            cmp_labels,
+            region_types,
+            min_loci=int(max(1, region_directional_min_loci)),
+            use_region_weight=bool(gene_scored_use_region_weight),
+        )
+        for j, (cmp_label, region) in enumerate(region_specs):
+            feat_name = region_directional_feature_column(cmp_label, region)
+            if feat_name not in idx:
+                continue
+            col_j = int(idx[feat_name])
+            X_feat[:, col_j] = region_matrix[:, j].astype(np.float32)
+        n_loci_per_comparison_region = {
+            f"{cmp_label}::{region}": count_region_directional_panel_loci(
+                dmp_df,
+                feature_order,
+                cmp_label,
+                region,
+            )
+            for cmp_label, region in region_specs
+        }
         gene_scored_report = {
             "comparison_labels": list(cmp_labels),
             "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
             "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
             "gene_scored_gene_weight": str(gene_scored_gene_weight),
             "n_genes_per_comparison": {k: int(len(v)) for k, v in panels.items()},
+            "region_directional_region_types": list(region_types),
+            "region_directional_min_loci": int(max(1, region_directional_min_loci)),
+            "n_loci_per_comparison_region": n_loci_per_comparison_region,
         }
 
     non_nan = np.isfinite(X_feat).sum(axis=0).astype(int).tolist()
@@ -1391,6 +1447,8 @@ def build_observed_hybrid_feature_table(
         gene_scored_min_support_n=int(gene_scored_min_support_n),
         gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
         gene_scored_gene_weight=str(gene_scored_gene_weight),
+        region_directional_region_types=region_directional_region_types,
+        region_directional_min_loci=int(max(1, region_directional_min_loci)),
     )
     if include_gene_scored_family:
         schema_version = HYBRID_FEATURE_SCHEMA_VERSION
