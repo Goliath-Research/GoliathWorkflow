@@ -255,6 +255,14 @@
           "title": "Observed Feature Min Obs Fraction",
           "type": "number"
         },
+        "observed_feature_quality_columns": {
+          "description": "Observed-hybrid columns computed and exported but excluded from model training.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Observed Feature Quality Columns",
+          "type": "array"
+        },
         "observed_feature_quantiles": {
           "items": {
             "type": "number"
@@ -694,6 +702,14 @@
           "minimum": 0.0,
           "title": "Observed Feature Min Obs Fraction",
           "type": "number"
+        },
+        "observed_feature_quality_columns": {
+          "description": "Observed-hybrid columns computed and exported but excluded from model training.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Observed Feature Quality Columns",
+          "type": "array"
         },
         "observed_feature_quantiles": {
           "items": {
@@ -1241,6 +1257,14 @@
           "title": "Observed Feature Min Obs Fraction",
           "type": "number"
         },
+        "observed_feature_quality_columns": {
+          "description": "Observed-hybrid columns computed and exported but excluded from model training.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Observed Feature Quality Columns",
+          "type": "array"
+        },
         "observed_feature_quantiles": {
           "items": {
             "type": "number"
@@ -1765,6 +1789,8 @@
     "ecdf_aggregated_n_bins": {
       "anyOf": [
         {
+          "maximum": 512,
+          "minimum": 8,
           "type": "integer"
         },
         {
@@ -1828,6 +1854,7 @@
     "freeze_gene_importance_min": {
       "anyOf": [
         {
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -1841,6 +1868,7 @@
     "freeze_min_dmps_per_feature": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -1867,6 +1895,7 @@
     "freeze_top_genes": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -1919,6 +1948,7 @@
     "gene_scored_min_support_n": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -1945,6 +1975,7 @@
     "generative_batch_size": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -1997,6 +2028,7 @@
     "generative_epochs": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -2010,6 +2042,7 @@
     "generative_kl_weight": {
       "anyOf": [
         {
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2023,6 +2056,7 @@
     "generative_latent_dim": {
       "anyOf": [
         {
+          "minimum": 2,
           "type": "integer"
         },
         {
@@ -2064,6 +2098,8 @@
     "min_sensitivity_lcb": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2077,6 +2113,8 @@
     "min_specificity_lcb": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2129,6 +2167,7 @@
     "n_iterations": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -2142,6 +2181,7 @@
     "observed_feature_dmr_window_bp": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -2207,6 +2247,7 @@
     "observed_feature_max_dmrs": {
       "anyOf": [
         {
+          "minimum": 0,
           "type": "integer"
         },
         {
@@ -2220,6 +2261,7 @@
     "observed_feature_max_genes": {
       "anyOf": [
         {
+          "minimum": 0,
           "type": "integer"
         },
         {
@@ -2233,6 +2275,7 @@
     "observed_feature_min_coverage": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -2246,6 +2289,8 @@
     "observed_feature_min_obs_fraction": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2255,6 +2300,21 @@
       "default": 0.0,
       "description": "Minimum observed-fraction evidence threshold for observed_hybrid predictions. Used for reporting/optional rejection in backend outputs.",
       "title": "Observed Feature Min Obs Fraction"
+    },
+    "observed_feature_quality_columns": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Observed-hybrid columns computed and exported but excluded from model training.",
+      "title": "Observed Feature Quality Columns"
     },
     "observed_feature_quantiles": {
       "anyOf": [
@@ -2274,6 +2334,7 @@
     "observed_hist_alpha": {
       "anyOf": [
         {
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2287,6 +2348,7 @@
     "observed_hist_eps": {
       "anyOf": [
         {
+          "exclusiveMinimum": 0.0,
           "type": "number"
         },
         {
@@ -2300,6 +2362,7 @@
     "observed_hist_evidence_clip_cap": {
       "anyOf": [
         {
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2313,6 +2376,8 @@
     "observed_hist_tail_agreement_threshold": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2368,6 +2433,7 @@
     "region_directional_min_loci": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -2433,6 +2499,7 @@
     "rollout_balanced_accuracy_drop_max": {
       "anyOf": [
         {
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2446,6 +2513,7 @@
     "rollout_brier_improvement_min_frac": {
       "anyOf": [
         {
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2459,6 +2527,7 @@
     "rollout_ece_improvement_min_frac": {
       "anyOf": [
         {
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2472,6 +2541,7 @@
     "rollout_macro_f1_drop_max": {
       "anyOf": [
         {
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2485,6 +2555,7 @@
     "rollout_nll_improvement_min_frac": {
       "anyOf": [
         {
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2550,6 +2621,8 @@
     "stability_convergence_jaccard": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2563,6 +2636,8 @@
     "stability_convergence_max_size_delta": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2576,6 +2651,7 @@
     "stability_convergence_patience": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -2589,6 +2665,7 @@
     "stability_convergence_window": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -2620,6 +2697,8 @@
     "stability_dmp_freq": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2672,6 +2751,8 @@
     "stability_gene_freq": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2685,6 +2766,8 @@
     "stability_min_balanced_accuracy": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2698,6 +2781,7 @@
     "stability_min_iterations": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -2711,6 +2795,7 @@
     "stability_min_selected_dmps": {
       "anyOf": [
         {
+          "minimum": 1,
           "type": "integer"
         },
         {
@@ -2741,6 +2826,7 @@
     "stability_relaxed_multiplier": {
       "anyOf": [
         {
+          "exclusiveMinimum": 0.0,
           "type": "number"
         },
         {
@@ -2754,6 +2840,7 @@
     "stability_score_eps": {
       "anyOf": [
         {
+          "exclusiveMinimum": 0.0,
           "type": "number"
         },
         {
@@ -2767,6 +2854,8 @@
     "stability_target_balanced_accuracy": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2780,6 +2869,8 @@
     "stability_tier_core_freq": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2793,6 +2884,8 @@
     "stability_tier_exploratory_freq": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2806,6 +2899,8 @@
     "stability_tier_extended_freq": {
       "anyOf": [
         {
+          "maximum": 1.0,
+          "minimum": 0.0,
           "type": "number"
         },
         {
@@ -2847,6 +2942,7 @@
     "tabular_max_dmps": {
       "anyOf": [
         {
+          "minimum": 0,
           "type": "integer"
         },
         {
@@ -3002,6 +3098,8 @@
     "train_fraction": {
       "anyOf": [
         {
+          "exclusiveMaximum": 1.0,
+          "exclusiveMinimum": 0.0,
           "type": "number"
         },
         {
