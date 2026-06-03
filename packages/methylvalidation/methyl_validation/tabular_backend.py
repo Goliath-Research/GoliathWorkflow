@@ -56,6 +56,7 @@ from .observed_feature_builder import (
     fit_feature_fill_values,
     observed_hybrid_feature_names,
     observed_hybrid_schema_fingerprint,
+    select_training_feature_matrix,
     sample_ids_from_paths,
     verify_feature_schema,
 )
@@ -416,6 +417,7 @@ def train_tabular_model(
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
     region_directional_region_types: Optional[List[str]] = None,
     region_directional_min_loci: int = 1,
+    observed_feature_quality_columns: Optional[List[str]] = None,
     feature_selection_config: Optional[Dict[str, Any]] = None,
     save_train_dataset: bool = False,
     reuse_train_dataset: bool = True,
@@ -500,6 +502,8 @@ def train_tabular_model(
     preprocessor: Optional[CovariatePreprocessor] = None
     cov_report: Dict[str, Any] = {"used": False}
     observed_feature_names: List[str] = []
+    training_feature_names_obs: List[str] = []
+    quality_feature_names: List[str] = []
     observed_feature_report: Dict[str, Any] = {}
     observed_feature_quantiles_out = [float(q) for q in (observed_feature_quantiles or [])]
     observed_healthy_reference: Optional[np.ndarray] = None
@@ -532,6 +536,7 @@ def train_tabular_model(
                 gene_scored_gene_weight=str(gene_scored_gene_weight),
                 region_directional_region_types=region_directional_region_types,
                 region_directional_min_loci=int(max(1, region_directional_min_loci)),
+                observed_feature_quality_columns=observed_feature_quality_columns,
             )
             if feature_mode_norm == "observed_hybrid"
             else None
@@ -568,6 +573,9 @@ def train_tabular_model(
             str(x) for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
         ],
         "region_directional_min_loci": int(max(1, region_directional_min_loci)),
+        "observed_feature_quality_columns": [
+            str(x) for x in (observed_feature_quality_columns or ["obs_fraction", "n_obs_dmps", "n_total_dmps"])
+        ],
     }
     train_fingerprint = _fingerprint_payload(
         {
@@ -601,6 +609,10 @@ def train_tabular_model(
                         else {"used": bool(preprocessor is not None)}
                     )
                     observed_feature_names = [str(x) for x in (train_meta.get("observed_feature_names") or [])]
+                    training_feature_names_obs = [
+                        str(x) for x in (train_meta.get("training_feature_names") or [])
+                    ]
+                    quality_feature_names = [str(x) for x in (train_meta.get("quality_feature_names") or [])]
                     observed_feature_report = (
                         dict(train_meta.get("observed_feature_report"))
                         if isinstance(train_meta.get("observed_feature_report"), dict)
@@ -666,9 +678,24 @@ def train_tabular_model(
                                 gene_scored_min_support_n=int(gene_scored_min_support_n),
                                 region_directional_region_types=region_directional_region_types,
                                 region_directional_min_loci=int(max(1, region_directional_min_loci)),
+                                observed_feature_quality_columns=observed_feature_quality_columns,
                             ),
                             context="tabular train cached observed_hybrid",
                         )
+                        if not training_feature_names_obs:
+                            quality_set = set(quality_feature_names)
+                            if not quality_set:
+                                quality_set = {"obs_fraction", "n_obs_dmps", "n_total_dmps"}
+                            training_feature_names_obs = [
+                                str(n) for n in observed_feature_names if str(n) not in quality_set
+                            ]
+                        cov_cols = [str(n) for n in feature_names if str(n) not in set(observed_feature_names)]
+                        model_cols = list(training_feature_names_obs) + cov_cols
+                        idx_map = {str(n): int(i) for i, n in enumerate(feature_names)}
+                        keep = [idx_map[n] for n in model_cols if n in idx_map]
+                        if keep:
+                            X = X[:, keep]
+                            feature_names = [str(n) for n in model_cols if str(n) in idx_map]
                     train_cache_hit = True
             except Exception as e:
                 train_cache_miss_reason = f"cache_read_error:{e}"
@@ -676,6 +703,7 @@ def train_tabular_model(
             train_cache_miss_reason = "cache_missing"
 
     if not train_cache_hit:
+        X_export: Optional[np.ndarray] = None
         if feature_mode_norm == "observed_hybrid":
             anchors = derive_observed_hybrid_anchors(
                 all_paths,
@@ -720,11 +748,19 @@ def train_tabular_model(
                 gene_scored_gene_weight=str(gene_scored_gene_weight),
                 region_directional_region_types=region_directional_region_types,
                 region_directional_min_loci=int(max(1, region_directional_min_loci)),
+                observed_feature_quality_columns=observed_feature_quality_columns,
             )
-            X = np.asarray(feat.X, dtype=np.float32)
-            feature_fill_values = fit_feature_fill_values(X)
-            X = apply_feature_fill_values(X, feature_fill_values)
+            X_obs_full = np.asarray(feat.X, dtype=np.float32)
+            feature_fill_values = fit_feature_fill_values(X_obs_full)
+            X_obs_full = apply_feature_fill_values(X_obs_full, feature_fill_values)
             observed_feature_names = list(feat.feature_names)
+            training_feature_names_obs = list(feat.training_feature_names)
+            quality_feature_names = list(feat.quality_feature_names)
+            X = select_training_feature_matrix(
+                X_obs_full,
+                observed_feature_names,
+                training_feature_names_obs,
+            )
             observed_feature_report = dict(feat.report)
             observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
             observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
@@ -755,22 +791,33 @@ def train_tabular_model(
             missing_numeric_strategy=covariate_missing_numeric_strategy,
             standardize_numeric=covariate_standardize_numeric,
         )
+        if feature_mode_norm == "observed_hybrid":
+            X_export = X_obs_full
         if cov is not None:
             X = np.concatenate([X, cov], axis=1)
+            if feature_mode_norm == "observed_hybrid":
+                X_export = np.concatenate([X_obs_full, cov], axis=1)
 
         if feature_mode_norm == "observed_hybrid":
-            base_feature_names = list(observed_feature_names)
+            export_base_feature_names = list(observed_feature_names)
+            model_base_feature_names = list(training_feature_names_obs)
         else:
-            base_feature_names = [f"{c}:{ctx}:{int(pos)}" for c, ctx, pos in feature_order]
+            export_base_feature_names = [f"{c}:{ctx}:{int(pos)}" for c, ctx, pos in feature_order]
+            model_base_feature_names = export_base_feature_names
         cov_feature_names = list(preprocessor.output_columns) if preprocessor is not None else []
-        expected_n_features = len(base_feature_names) + len(cov_feature_names)
+        export_feature_names = export_base_feature_names + cov_feature_names
+        model_feature_names = model_base_feature_names + cov_feature_names
+        export_matrix = X_export if X_export is not None else X
+        if len(export_feature_names) != int(export_matrix.shape[1]):
+            export_feature_names = [f"feature_{i}" for i in range(int(export_matrix.shape[1]))]
+        expected_n_features = len(model_feature_names)
         if expected_n_features != int(X.shape[1]):
             feature_names = [f"feature_{i}" for i in range(int(X.shape[1]))]
         else:
-            feature_names = base_feature_names + cov_feature_names
+            feature_names = model_feature_names
 
         if save_train_dataset and train_dataset_out_path is not None and train_dataset_meta_path is not None:
-            train_export_df = pd.DataFrame(X, columns=feature_names)
+            train_export_df = pd.DataFrame(export_matrix, columns=export_feature_names)
             train_export_df.insert(0, "sample_id", sample_ids)
             train_export_df.insert(1, "class_index", y_arr.astype(int))
             train_export_df.insert(2, "class_label", [class_names[int(v)] for v in y_arr.tolist()])
@@ -783,6 +830,8 @@ def train_tabular_model(
                 "covariate_preprocessor": preprocessor.to_dict() if preprocessor is not None else None,
                 "covariate_report": cov_report,
                 "observed_feature_names": observed_feature_names,
+                "training_feature_names": training_feature_names_obs,
+                "quality_feature_names": quality_feature_names,
                 "observed_feature_report": observed_feature_report,
                 "observed_feature_quantiles": observed_feature_quantiles_out,
                 "observed_feature_fill_values": (
@@ -921,14 +970,20 @@ def train_tabular_model(
                     gene_scored_gene_weight=str(gene_scored_gene_weight),
                     region_directional_region_types=region_directional_region_types,
                     region_directional_min_loci=int(max(1, region_directional_min_loci)),
+                    observed_feature_quality_columns=observed_feature_quality_columns,
                 )
                 verify_feature_schema(
                     feat_eval.feature_names,
                     observed_feature_names,
                     context="tabular train test-dataset export observed_hybrid",
                 )
-                X_eval = np.asarray(feat_eval.X, dtype=np.float32)
-                X_eval = apply_feature_fill_values(X_eval, feature_fill_values.tolist())
+                X_eval_full = np.asarray(feat_eval.X, dtype=np.float32)
+                X_eval_full = apply_feature_fill_values(X_eval_full, feature_fill_values.tolist())
+                X_eval = select_training_feature_matrix(
+                    X_eval_full,
+                    feat_eval.feature_names,
+                    training_feature_names_obs,
+                )
             else:
                 X_eval = _extract_matrix_for_samples(eval_paths, refs, feature_order, min_coverage=1)
                 X_eval = np.nan_to_num(np.asarray(X_eval, dtype=np.float32), nan=0.5, posinf=0.5, neginf=0.5)
@@ -1015,6 +1070,8 @@ def train_tabular_model(
             "n_dmps": int(len(feature_order)),
             "feature_order": [{"chromosome": c, "context": ctx, "position": int(pos)} for c, ctx, pos in feature_order],
             "observed_feature_names": observed_feature_names,
+            "training_feature_names": training_feature_names_obs,
+            "quality_feature_names": quality_feature_names,
             "observed_feature_quantiles": observed_feature_quantiles_out,
             "observed_feature_min_coverage": int(max(1, observed_feature_min_coverage)),
             "observed_feature_min_obs_fraction": float(max(0.0, min(1.0, observed_feature_min_obs_fraction))),
@@ -1054,6 +1111,9 @@ def train_tabular_model(
                 str(x) for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
             ],
             "region_directional_min_loci": int(max(1, region_directional_min_loci)),
+            "observed_feature_quality_columns": [
+                str(x) for x in (observed_feature_quality_columns or ["obs_fraction", "n_obs_dmps", "n_total_dmps"])
+            ],
             "feature_selection": feature_selection_report,
             "feature_selection_config": feature_selection_config or {},
             "selected_feature_names": selected_feature_names if fs_cfg.enabled else [],
@@ -1199,6 +1259,8 @@ def predict_tabular_model_from_project(
     sample_ids = sample_ids_from_paths(samples)
 
     obs_fraction_vec: Optional[np.ndarray] = None
+    n_obs_dmps_vec: Optional[np.ndarray] = None
+    n_total_dmps_vec: Optional[np.ndarray] = None
     if feature_mode == "observed_hybrid":
         bundle_h5 = meta.get("bundle_h5")
         if not isinstance(bundle_h5, str) or not Path(bundle_h5).is_file():
@@ -1247,19 +1309,36 @@ def predict_tabular_model_from_project(
             ),
             region_directional_region_types=meta.get("region_directional_region_types"),
             region_directional_min_loci=int(meta.get("region_directional_min_loci", 1)),
+            observed_feature_quality_columns=meta.get("observed_feature_quality_columns"),
         )
         verify_feature_schema(
             feat.feature_names,
             meta.get("observed_feature_names") or [],
-            context="tabular predict observed_hybrid",
+            context="tabular predict observed_hybrid export schema",
         )
-        X = np.asarray(feat.X, dtype=np.float32)
+        training_names = [str(x) for x in (meta.get("training_feature_names") or [])]
+        if not training_names:
+            quality_set = set(meta.get("quality_feature_names") or [])
+            if not quality_set:
+                quality_set = {"obs_fraction", "n_obs_dmps", "n_total_dmps"}
+            training_names = [str(n) for n in feat.feature_names if str(n) not in quality_set]
+        verify_feature_schema(
+            training_names,
+            meta.get("training_feature_names") or training_names,
+            context="tabular predict observed_hybrid training schema",
+        )
+        X_full = np.asarray(feat.X, dtype=np.float32)
         if "obs_fraction" in feat.feature_names:
-            obs_fraction_vec = X[:, feat.feature_names.index("obs_fraction")].astype(np.float32)
+            obs_fraction_vec = X_full[:, feat.feature_names.index("obs_fraction")].astype(np.float32)
+        if "n_obs_dmps" in feat.feature_names:
+            n_obs_dmps_vec = X_full[:, feat.feature_names.index("n_obs_dmps")].astype(np.float32)
+        if "n_total_dmps" in feat.feature_names:
+            n_total_dmps_vec = X_full[:, feat.feature_names.index("n_total_dmps")].astype(np.float32)
         fill_values = meta.get("observed_feature_fill_values")
         if not isinstance(fill_values, list):
             raise ValueError("Observed-hybrid mode requires observed_feature_fill_values in metadata.")
-        X = apply_feature_fill_values(X, fill_values)
+        X_full = apply_feature_fill_values(X_full, fill_values)
+        X = select_training_feature_matrix(X_full, feat.feature_names, training_names)
     else:
         feature_order = [
             (str(r["chromosome"]), str(r["context"]), int(r["position"]))
@@ -1290,7 +1369,7 @@ def predict_tabular_model_from_project(
     if selected_feature_names:
         raw_feature_names: List[str]
         if feature_mode == "observed_hybrid":
-            raw_feature_names = list(meta.get("observed_feature_names") or [])
+            raw_feature_names = list(training_names)
         else:
             raw_feature_names = [
                 f"{str(r['chromosome'])}:{str(r['context'])}:{int(r['position'])}"
@@ -1382,6 +1461,10 @@ def predict_tabular_model_from_project(
             rec["obs_fraction"] = obs_f
             rec["low_evidence"] = bool(np.isfinite(obs_f) and obs_f < min_obs)
             rec["prediction_evidence_filtered"] = -1 if rec["low_evidence"] else int(y_pred[i])
+        if n_obs_dmps_vec is not None:
+            rec["n_obs_dmps"] = float(n_obs_dmps_vec[i])
+        if n_total_dmps_vec is not None:
+            rec["n_total_dmps"] = float(n_total_dmps_vec[i])
         recs.append(rec)
     pred_csv = out_dir / "predictions.csv"
     pd.DataFrame(recs).to_csv(pred_csv, index=False)

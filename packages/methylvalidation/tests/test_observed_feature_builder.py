@@ -298,43 +298,47 @@ def test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics(mon
     expected_names = {
         "max_weighted_directional_score",
         "weighted_directional_agreement__cancer",
-        "weighted_mean_abs_error_to_cancer_centroid__cancer",
-        "weighted_mean_abs_distance_margin",
         "weighted_cosine_similarity_to_cancer_centroid__cancer",
         "weighted_centroid_contrast_score",
-        "weighted_fraction_dmps_closer_to_cancer_centroid__cancer",
         "obs_fraction",
-        "weighted_obs_fraction",
         "n_obs_dmps",
         "n_total_dmps",
         "weighted_healthy_tail_evidence__cancer",
     }
     assert expected_names.issubset(set(feat.feature_names))
+    removed_names = {
+        "weighted_mean_abs_distance_margin",
+        "weighted_obs_fraction",
+        "weighted_fraction_dmps_closer_to_cancer_centroid__cancer",
+        "weighted_mean_abs_error_to_cancer_centroid__cancer",
+    }
+    assert removed_names.isdisjoint(set(feat.feature_names))
+    for quality_name in ("obs_fraction", "n_obs_dmps", "n_total_dmps"):
+        assert quality_name in feat.feature_names
+        assert quality_name in feat.quality_feature_names
+        assert quality_name not in feat.training_feature_names
 
-    wmae_margin_idx = feat.feature_names.index("weighted_mean_abs_distance_margin")
     wcontrast_idx = feat.feature_names.index("weighted_centroid_contrast_score")
-    weighted_frac_idx = feat.feature_names.index(
-        "weighted_fraction_dmps_closer_to_cancer_centroid__cancer"
-    )
     max_wds_idx = feat.feature_names.index("max_weighted_directional_score")
     wda_idx = feat.feature_names.index("weighted_directional_agreement__cancer")
     tail_e_idx = feat.feature_names.index("weighted_healthy_tail_evidence__cancer")
 
     # First sample is healthy-like and should be closer to healthy anchor.
-    assert float(feat.X[0, wmae_margin_idx]) < 0.0
     assert float(feat.X[0, wcontrast_idx]) < 0.0
-    assert float(feat.X[0, weighted_frac_idx]) <= 0.5
     assert float(feat.X[0, max_wds_idx]) < 0.0
     assert float(feat.X[0, wda_idx]) < 0.5
     assert not np.isfinite(float(feat.X[0, tail_e_idx]))
 
     # Cancer-like sample should move towards cancer anchor.
-    assert float(feat.X[2, wmae_margin_idx]) > 0.0
     assert float(feat.X[2, wcontrast_idx]) > 0.0
-    assert float(feat.X[2, weighted_frac_idx]) >= 0.5
     assert float(feat.X[2, max_wds_idx]) > 0.0
     assert float(feat.X[2, wda_idx]) > 0.5
     assert not np.isfinite(float(feat.X[2, tail_e_idx]))
+
+    profile = feat.report.get("feature_profile") or {}
+    assert profile.get("schema_version") == observed_feature_builder.HYBRID_FEATURE_SCHEMA_VERSION
+    assert profile.get("n_training_features") == len(feat.training_feature_names)
+    assert profile.get("n_quality_features") == len(feat.quality_feature_names)
 
 
 def test_observed_feature_builder_histogram_tail_features_multiclass_names(monkeypatch):
@@ -361,14 +365,14 @@ def test_observed_feature_builder_histogram_tail_features_multiclass_names(monke
     )
     assert "weighted_healthy_tail_evidence__pca1" in feat.feature_names
     assert "weighted_directional_agreement__pca1" in feat.feature_names
-    assert "weighted_mean_abs_error_to_cancer_centroid__pca1" in feat.feature_names
     assert "weighted_cosine_similarity_to_cancer_centroid__pca1" in feat.feature_names
-    assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca1" in feat.feature_names
     assert "weighted_healthy_tail_evidence__pca2" in feat.feature_names
     assert "weighted_directional_agreement__pca2" in feat.feature_names
-    assert "weighted_mean_abs_error_to_cancer_centroid__pca2" in feat.feature_names
     assert "weighted_cosine_similarity_to_cancer_centroid__pca2" in feat.feature_names
-    assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca2" in feat.feature_names
+    assert "weighted_mean_abs_error_to_cancer_centroid__pca1" not in feat.feature_names
+    assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca1" not in feat.feature_names
+    assert "weighted_mean_abs_error_to_cancer_centroid__pca2" not in feat.feature_names
+    assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca2" not in feat.feature_names
 
 
 def test_observed_feature_builder_histogram_tail_features_behaviors(monkeypatch):
@@ -858,3 +862,7 @@ def test_observed_feature_builder_dmp_plus_gene_scored_includes_both_families(mo
     assert "max_weighted_directional_score" in feat.feature_names
     assert "gene_directional_score__cmp_a" in feat.feature_names
     assert not any(str(n).startswith("gene::") for n in feat.feature_names)
+    assert "weighted_mean_abs_distance_margin" not in feat.feature_names
+    assert "obs_fraction" in feat.feature_names
+    assert "obs_fraction" not in feat.training_feature_names
+    assert len(feat.training_feature_names) + len(feat.quality_feature_names) == len(feat.feature_names)

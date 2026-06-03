@@ -46,6 +46,7 @@ from .observed_feature_builder import (
     build_observed_hybrid_feature_table,
     derive_observed_hybrid_anchors,
     fit_feature_fill_values,
+    select_training_feature_matrix,
     sample_ids_from_paths,
     verify_feature_schema,
 )
@@ -257,6 +258,7 @@ def train_generative_model(
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
     region_directional_region_types: Optional[List[str]] = None,
     region_directional_min_loci: int = 1,
+    observed_feature_quality_columns: Optional[List[str]] = None,
     feature_selection_config: Optional[Dict[str, Any]] = None,
 ) -> Path:
     np.random.seed(int(random_seed))
@@ -351,11 +353,19 @@ def train_generative_model(
             gene_scored_gene_weight=str(gene_scored_gene_weight),
             region_directional_region_types=region_directional_region_types,
             region_directional_min_loci=int(max(1, region_directional_min_loci)),
+            observed_feature_quality_columns=observed_feature_quality_columns,
         )
-        X_methyl = np.asarray(feat.X, dtype=np.float32)
-        feature_fill_values = fit_feature_fill_values(X_methyl)
-        X_methyl = apply_feature_fill_values(X_methyl, feature_fill_values.tolist())
+        X_obs_full = np.asarray(feat.X, dtype=np.float32)
+        feature_fill_values = fit_feature_fill_values(X_obs_full)
+        X_obs_full = apply_feature_fill_values(X_obs_full, feature_fill_values.tolist())
         observed_feature_names = list(feat.feature_names)
+        training_feature_names_obs = list(feat.training_feature_names)
+        quality_feature_names = list(feat.quality_feature_names)
+        X_methyl = select_training_feature_matrix(
+            X_obs_full,
+            observed_feature_names,
+            training_feature_names_obs,
+        )
         observed_feature_report = dict(feat.report)
         dmp_weights = np.ones((X_methyl.shape[1],), dtype=np.float32)
         observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
@@ -383,6 +393,8 @@ def train_generative_model(
             dmp_weights = dmp_weights / float(np.max(dmp_weights))
         feature_fill_values = None
         observed_feature_names = []
+        training_feature_names_obs = []
+        quality_feature_names = []
         observed_feature_report = {}
         observed_feature_quantiles_out = [float(q) for q in (observed_feature_quantiles or [])]
         observed_healthy_reference = None
@@ -501,6 +513,8 @@ def train_generative_model(
         "n_covariates": int(n_covariates),
         "feature_order": [{"chromosome": c, "context": ctx, "position": int(pos)} for c, ctx, pos in feature_order],
         "observed_feature_names": observed_feature_names,
+        "training_feature_names": training_feature_names_obs,
+        "quality_feature_names": quality_feature_names,
         "observed_feature_quantiles": observed_feature_quantiles_out,
         "observed_feature_min_coverage": int(max(1, observed_feature_min_coverage)),
         "observed_feature_min_obs_fraction": float(max(0.0, min(1.0, observed_feature_min_obs_fraction))),
@@ -522,6 +536,9 @@ def train_generative_model(
             str(x) for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
         ],
         "region_directional_min_loci": int(max(1, region_directional_min_loci)),
+        "observed_feature_quality_columns": [
+            str(x) for x in (observed_feature_quality_columns or ["obs_fraction", "n_obs_dmps", "n_total_dmps"])
+        ],
         "observed_feature_fill_values": (
             [float(v) for v in feature_fill_values.tolist()] if feature_fill_values is not None else None
         ),
@@ -651,19 +668,32 @@ def predict_generative_model_from_project(
             ),
             region_directional_region_types=meta.get("region_directional_region_types"),
             region_directional_min_loci=int(meta.get("region_directional_min_loci", 1)),
+            observed_feature_quality_columns=meta.get("observed_feature_quality_columns"),
         )
         verify_feature_schema(
             feat.feature_names,
             meta.get("observed_feature_names") or [],
-            context="generative predict observed_hybrid",
+            context="generative predict observed_hybrid export schema",
         )
-        X_methyl = np.asarray(feat.X, dtype=np.float32)
+        training_names = [str(x) for x in (meta.get("training_feature_names") or [])]
+        if not training_names:
+            quality_set = set(meta.get("quality_feature_names") or [])
+            if not quality_set:
+                quality_set = {"obs_fraction", "n_obs_dmps", "n_total_dmps"}
+            training_names = [str(n) for n in feat.feature_names if str(n) not in quality_set]
+        verify_feature_schema(
+            training_names,
+            meta.get("training_feature_names") or training_names,
+            context="generative predict observed_hybrid training schema",
+        )
+        X_full = np.asarray(feat.X, dtype=np.float32)
         if "obs_fraction" in feat.feature_names:
-            obs_fraction_vec = X_methyl[:, feat.feature_names.index("obs_fraction")].astype(np.float32)
+            obs_fraction_vec = X_full[:, feat.feature_names.index("obs_fraction")].astype(np.float32)
         fill_values = meta.get("observed_feature_fill_values")
         if not isinstance(fill_values, list):
             raise ValueError("Observed-hybrid mode requires observed_feature_fill_values in metadata.")
-        X_methyl = apply_feature_fill_values(X_methyl, fill_values)
+        X_full = apply_feature_fill_values(X_full, fill_values)
+        X_methyl = select_training_feature_matrix(X_full, feat.feature_names, training_names)
     else:
         feature_order = [
             (str(r["chromosome"]), str(r["context"]), int(r["position"]))
@@ -696,7 +726,7 @@ def predict_generative_model_from_project(
         X = X_methyl
     if selected_feature_names:
         if feature_mode == "observed_hybrid":
-            raw_feature_names = list(meta.get("observed_feature_names") or [])
+            raw_feature_names = list(training_names)
         else:
             raw_feature_names = [
                 f"{str(r['chromosome'])}:{str(r['context'])}:{int(r['position'])}"

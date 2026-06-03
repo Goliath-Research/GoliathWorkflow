@@ -45,6 +45,7 @@ LEGACY_BACKEND_KEYS = {
     "gene_scored_gene_weight",
     "region_directional_region_types",
     "region_directional_min_loci",
+    "observed_feature_quality_columns",
     "ecdf_second_stage_enabled",
     "covariates_path",
     "covariate_id_column",
@@ -92,6 +93,7 @@ SHARED_PARAM_KEYS = {
     "gene_scored_gene_weight",
     "region_directional_region_types",
     "region_directional_min_loci",
+    "observed_feature_quality_columns",
     "covariates_path",
     "covariate_id_column",
     "covariate_numeric_columns",
@@ -128,14 +130,16 @@ GENERATIVE_PARAM_KEYS = {
 }
 
 
-def _migrate_validation_section(validation: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    before = dict(validation)
-    backend_profiles = BackendProfilesConfig().model_dump(mode="python")
-    active_backend = str(before.get("model_backend") or "ecdf").strip().lower()
-    if active_backend not in {"ecdf", "tabular_sklearn", "generative_hybrid"}:
-        active_backend = "ecdf"
-    for backend in ("ecdf", "tabular_sklearn", "generative_hybrid"):
-        backend_profiles[backend]["enabled"] = backend == active_backend
+def _load_backend_profiles_base(before: Dict[str, Any]) -> Dict[str, Any]:
+    if isinstance(before.get("backend_profiles"), dict):
+        return BackendProfilesConfig.model_validate(before["backend_profiles"]).model_dump(mode="python")
+    return BackendProfilesConfig().model_dump(mode="python")
+
+
+def _apply_legacy_keys_to_backend_profiles(
+    backend_profiles: Dict[str, Any],
+    before: Dict[str, Any],
+) -> None:
     for key in SHARED_PARAM_KEYS:
         if key in before:
             for backend in ("ecdf", "tabular_sklearn", "generative_hybrid"):
@@ -148,6 +152,39 @@ def _migrate_validation_section(validation: Dict[str, Any]) -> Tuple[Dict[str, A
             backend_profiles["generative_hybrid"]["params"][key] = before[key]
     if "ecdf_second_stage_enabled" in before:
         backend_profiles["ecdf"]["params"]["ecdf_second_stage_enabled"] = before["ecdf_second_stage_enabled"]
+
+
+def merge_legacy_validation_keys_into_backend_profiles(
+    validation: Dict[str, Any],
+) -> Tuple[Dict[str, Any], list[str]]:
+    """
+    Move flat legacy backend keys into backend_profiles.params.
+
+    Preserves existing backend_profiles enabled flags and per-backend params.
+    """
+    before = dict(validation)
+    moved = sorted(k for k in before.keys() if k in LEGACY_BACKEND_KEYS)
+    if not moved:
+        return before, moved
+
+    backend_profiles = _load_backend_profiles_base(before)
+    _apply_legacy_keys_to_backend_profiles(backend_profiles, before)
+    migrated = {k: v for k, v in before.items() if k not in LEGACY_BACKEND_KEYS}
+    migrated["backend_profiles"] = backend_profiles
+    return migrated, moved
+
+
+def _migrate_validation_section(validation: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    before = dict(validation)
+    had_backend_profiles = isinstance(before.get("backend_profiles"), dict)
+    backend_profiles = _load_backend_profiles_base(before)
+    active_backend = str(before.get("model_backend") or "ecdf").strip().lower()
+    if active_backend not in {"ecdf", "tabular_sklearn", "generative_hybrid"}:
+        active_backend = "ecdf"
+    if not had_backend_profiles or "model_backend" in before:
+        for backend in ("ecdf", "tabular_sklearn", "generative_hybrid"):
+            backend_profiles[backend]["enabled"] = backend == active_backend
+    _apply_legacy_keys_to_backend_profiles(backend_profiles, before)
     migrated = {k: v for k, v in before.items() if k not in LEGACY_BACKEND_KEYS and k != "backend_profiles"}
     migrated["backend_profiles"] = backend_profiles
     moved = sorted(k for k in before.keys() if k in LEGACY_BACKEND_KEYS)

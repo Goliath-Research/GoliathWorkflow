@@ -5,7 +5,10 @@ import pytest
 from methyl_validation.cli import _resolve_model_mc_backends
 from methyl_validation.config import MonteCarloConfig
 from methyl_validation.mc_config_load import _update_backend_params
-from methyl_validation.utils.migrate_backend_config import _migrate_validation_section
+from methyl_validation.utils.migrate_backend_config import (
+    _migrate_validation_section,
+    merge_legacy_validation_keys_into_backend_profiles,
+)
 
 
 def _base_payload() -> dict:
@@ -36,6 +39,26 @@ def test_model_mc_all_fails_when_no_enabled_profiles():
     payload["backend_profiles"]["generative_hybrid"]["enabled"] = False
     with pytest.raises(ValueError, match="At least one backend profile must have enabled=true"):
         MonteCarloConfig.model_validate(payload)
+
+
+def test_merge_legacy_keys_preserves_backend_enabled_flags():
+    validation = {
+        "train_fraction": 0.8,
+        "gene_scored_min_support_n": 5,
+        "backend_profiles": {
+            "ecdf": {"enabled": True, "params": {"feature_family_set": "dmp"}},
+            "tabular_sklearn": {"enabled": True, "params": {"feature_family_set": "dmp+gene_scored"}},
+            "generative_hybrid": {"enabled": True, "params": {"feature_family_set": "dmp"}},
+        },
+    }
+    migrated, moved = merge_legacy_validation_keys_into_backend_profiles(validation)
+    assert moved == ["gene_scored_min_support_n"]
+    assert "gene_scored_min_support_n" not in migrated
+    assert migrated["backend_profiles"]["ecdf"]["enabled"] is True
+    assert migrated["backend_profiles"]["tabular_sklearn"]["enabled"] is True
+    assert migrated["backend_profiles"]["generative_hybrid"]["enabled"] is True
+    assert migrated["backend_profiles"]["tabular_sklearn"]["params"]["gene_scored_min_support_n"] == 5
+    assert migrated["backend_profiles"]["ecdf"]["params"]["feature_family_set"] == "dmp"
 
 
 def test_migration_moves_legacy_keys_into_backend_profiles():
