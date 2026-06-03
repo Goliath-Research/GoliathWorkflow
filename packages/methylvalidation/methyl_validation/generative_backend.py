@@ -30,10 +30,6 @@ from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
-from .feature_selection import (
-    normalize_runtime_feature_selection_config,
-    select_training_features,
-)
 from .gene_scored_features import family_includes_gene_scored
 from .model_bundle import (
     load_bundle_dmp_index,
@@ -259,7 +255,6 @@ def train_generative_model(
     region_directional_region_types: Optional[List[str]] = None,
     region_directional_min_loci: int = 1,
     observed_feature_quality_columns: Optional[List[str]] = None,
-    feature_selection_config: Optional[Dict[str, Any]] = None,
 ) -> Path:
     np.random.seed(int(random_seed))
     with _project_cwd(project_json):
@@ -435,18 +430,6 @@ def train_generative_model(
     cov_feature_names = list(preprocessor.output_columns) if preprocessor is not None else []
     feature_names = base_feature_names + cov_feature_names
     y_arr = np.asarray(y, dtype=np.int32)
-    fs_cfg = normalize_runtime_feature_selection_config(feature_selection_config)
-    fs_result = select_training_features(X, y_arr.tolist(), feature_names, fs_cfg)
-    selected_feature_names = [str(x) for x in fs_result.get("selected_feature_names", feature_names)]
-    feature_selection_report = dict(fs_result.get("report", {}))
-    if fs_cfg.enabled:
-        selected_indices = [int(i) for i in fs_result.get("selected_indices", [])]
-        if selected_indices:
-            X = X[:, selected_indices]
-            feature_weights = feature_weights[selected_indices]
-            feature_names = [feature_names[i] for i in selected_indices]
-        else:
-            feature_selection_report["warning"] = "selector returned empty indices; training used full feature set"
 
     X_weighted = X * feature_weights.reshape(1, -1)
     encoder_mean, encoder_components, z = _fit_linear_latent_encoder(X_weighted, latent_dim=latent_dim)
@@ -557,9 +540,6 @@ def train_generative_model(
         "observed_cancer_class_labels": observed_cancer_class_labels,
         "observed_anchor_strategy": observed_anchor_strategy,
         "observed_feature_order_fingerprint": observed_feature_order_fingerprint,
-        "feature_selection": feature_selection_report,
-        "feature_selection_config": feature_selection_config or {},
-        "selected_feature_names": selected_feature_names if fs_cfg.enabled else [],
         "selected_feature_count": int(len(feature_names)),
         "covariates_path": str(covariates_path) if covariates_path else None,
         "covariate_id_column": covariate_id_column,

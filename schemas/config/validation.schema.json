@@ -343,109 +343,6 @@
       "title": "EcdfBackendProfile",
       "type": "object"
     },
-    "FeatureSelectionConfig": {
-      "additionalProperties": false,
-      "description": "Leakage-safe feature selection controls for freeze and model training.",
-      "properties": {
-        "embedded_selector": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Embedded Selector"
-        },
-        "enabled": {
-          "default": false,
-          "title": "Enabled",
-          "type": "boolean"
-        },
-        "feature_families": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Feature Families",
-          "type": "array"
-        },
-        "group_by_gene": {
-          "default": true,
-          "title": "Group By Gene",
-          "type": "boolean"
-        },
-        "latent_projection": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Latent Projection"
-        },
-        "max_features_per_sample_ratio": {
-          "default": 5.0,
-          "exclusiveMinimum": 0.0,
-          "title": "Max Features Per Sample Ratio",
-          "type": "number"
-        },
-        "max_features_total": {
-          "default": 200,
-          "minimum": 1,
-          "title": "Max Features Total",
-          "type": "integer"
-        },
-        "max_pairwise_correlation": {
-          "default": 0.95,
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Max Pairwise Correlation",
-          "type": "number"
-        },
-        "min_abs_effect_size": {
-          "anyOf": [
-            {
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Min Abs Effect Size"
-        },
-        "min_dmp_frequency": {
-          "default": 0.8,
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Min Dmp Frequency",
-          "type": "number"
-        },
-        "mode": {
-          "default": "stability_filter",
-          "title": "Mode",
-          "type": "string"
-        },
-        "random_seed": {
-          "default": 13,
-          "title": "Random Seed",
-          "type": "integer"
-        },
-        "redundancy_filter": {
-          "default": "correlation",
-          "title": "Redundancy Filter",
-          "type": "string"
-        }
-      },
-      "title": "FeatureSelectionConfig",
-      "type": "object"
-    },
     "GenerativeBackendParams": {
       "additionalProperties": false,
       "properties": {
@@ -1839,17 +1736,6 @@
       "default": "raw_dmp",
       "description": "Feature construction mode for tabular/generative backends: raw_dmp (legacy per-locus matrix with methylation fill) or observed_hybrid (observed-only aggregated features).",
       "title": "Feature Mode"
-    },
-    "feature_selection": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/FeatureSelectionConfig"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "description": "Optional leakage-safe feature selection controls. Selector is fit on training folds and locked into production artifacts."
     },
     "freeze_gene_importance_min": {
       "anyOf": [

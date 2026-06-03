@@ -1324,7 +1324,6 @@ def build_model_feature_bundle(
     feature_family_set: str = "dmp",
     mapper_annotation_csv: Optional[str | Path] = None,
     require_mapper_annotations: Optional[bool] = None,
-    selected_feature_manifest: Optional[str | Path] = None,
     extra_metadata: Optional[Dict[str, Any]] = None,
 ) -> Path:
     project_json = Path(project_json).absolute()
@@ -1333,14 +1332,6 @@ def build_model_feature_bundle(
 
     with _project_cwd(project_json):
         project: "ProjectConfig" = load_project(project_json)
-    if selected_feature_manifest is None:
-        try:
-            mb_cfg = project.get_step_config("model_bundle") or {}
-        except Exception:
-            mb_cfg = {}
-        selected_from_cfg = mb_cfg.get("selected_feature_manifest")
-        if selected_from_cfg:
-            selected_feature_manifest = selected_from_cfg
     comparisons: List["ComparisonSpec"] = project.get_comparisons()
     paths = project.get_derived_paths()
     classes = [str(label) for label, _paths in project.get_resolved_groups()]
@@ -1441,27 +1432,6 @@ def build_model_feature_bundle(
 
     del weight_column
     dmp_df = pd.concat(rows, ignore_index=True)
-    selected_dmp_keys: Optional[set[str]] = None
-    if selected_feature_manifest is not None:
-        try:
-            from .feature_selection import load_selected_dmp_keys
-
-            selected_dmp_keys = load_selected_dmp_keys(selected_feature_manifest)
-        except Exception:
-            selected_dmp_keys = None
-    if selected_dmp_keys is not None:
-        key_series = dmp_df["chromosome"].astype(str).str.replace("chr", "", regex=False)
-        key_series = key_series.str.cat(
-            pd.to_numeric(dmp_df["position"], errors="coerce").fillna(-1).astype(int).astype(str),
-            sep=":",
-        )
-        key_series = key_series.str.cat(dmp_df["context"].astype(str).str.upper(), sep=":")
-        dmp_df = dmp_df[key_series.isin(selected_dmp_keys)].copy()
-        if dmp_df.empty:
-            raise ValueError(
-                "Selected feature manifest filtered all DMPs from model bundle; "
-                "check feature_selection outputs and model bundle inputs."
-            )
     if mapper_ann_path is not None:
         dmp_df, mapper_lookup_stats = _merge_mapper_annotations(dmp_df, mapper_ann_df)
     dmp_df = dmp_df.sort_values(
@@ -1541,14 +1511,6 @@ def build_model_feature_bundle(
         {
             "path": str(fixed_gene_features_path) if fixed_gene_features_path is not None else None,
             "n_rows": int(len(fixed_gene_features_df)),
-        },
-    )
-    bundle_metadata.setdefault(
-        "feature_selection",
-        {
-            "selected_feature_manifest": str(selected_feature_manifest) if selected_feature_manifest else None,
-            "selected_dmp_count": int(len(selected_dmp_keys)) if selected_dmp_keys is not None else None,
-            "bundle_dmp_count_after_selection": int(len(dmp_df)),
         },
     )
     manifest = ModelFeatureBundleManifest(

@@ -31,7 +31,6 @@ Pytest also enforces this: `packages/methylvalidation/tests/test_config_schema_e
 | `validation_monte_carlo.schema.json` | `methyl_validation.config.MonteCarloConfig` (standalone `--config`) |
 | `progression.schema.json` | `methyl_disease_progression.config.ProgressionStepConfig` |
 | `validation_regulatory.schema.json` | `RegulatoryLifecycleConfig` |
-| `validation_feature_selection.schema.json` | `FeatureSelectionConfig` |
 | `validation_partitions.schema.json` | `ValidationPartitionContract` |
 | `validation_backend_profiles.schema.json` | `BackendProfilesConfig` |
 | `detection.schema.json` | `MethylDetectorConfig` |

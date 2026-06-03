@@ -317,24 +317,6 @@
       "subgroup_columns": [],
       "min_sensitivity_lcb": null,
       "min_specificity_lcb": null,
-      "feature_selection": {
-        "enabled": true,
-        "mode": "stability_filter",
-        "feature_families": [
-          "dmp",
-          "gene",
-          "structural"
-        ],
-        "max_features_total": 150,
-        "max_features_per_sample_ratio": 0.8,
-        "min_dmp_frequency": 0.85,
-        "min_abs_effect_size": null,
-        "group_by_gene": true,
-        "redundancy_filter": "correlation",
-        "max_pairwise_correlation": 0.9,
-        "embedded_selector": null,
-        "latent_projection": null
-      },
       "backend_profiles": {
         "ecdf": {
           "enabled": true,

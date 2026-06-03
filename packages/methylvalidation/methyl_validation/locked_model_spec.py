@@ -59,8 +59,6 @@ def write_locked_model_spec(
     mapper_ann = Path(str(model_bundle_cfg.get("mapper_annotation_csv") or ""))
     fixed_gene_panel = Path(str(model_bundle_cfg.get("fixed_gene_panel") or ""))
     fixed_gene_features = Path(str(model_bundle_cfg.get("fixed_gene_features") or ""))
-    selected_feature_manifest = Path(str(model_bundle_cfg.get("selected_feature_manifest") or ""))
-    feature_selection_dir = production_dir / "feature_selection"
 
     payload: Dict[str, Any] = {
         "spec_version": "locked_model_spec_v1",
@@ -97,39 +95,12 @@ def write_locked_model_spec(
                 "path": str(fixed_gene_features) if fixed_gene_features else None,
                 "sha256": _sha256(fixed_gene_features) if fixed_gene_features else None,
             },
-            "selected_feature_manifest": {
-                "path": str(selected_feature_manifest) if selected_feature_manifest else None,
-                "sha256": _sha256(selected_feature_manifest) if selected_feature_manifest else None,
-            },
-            "selected_features_csv": {
-                "path": str(feature_selection_dir / "selected_features.csv"),
-                "sha256": _sha256(feature_selection_dir / "selected_features.csv"),
-            },
-            "selected_dmps_csv": {
-                "path": str(feature_selection_dir / "selected_dmps.csv"),
-                "sha256": _sha256(feature_selection_dir / "selected_dmps.csv"),
-            },
-            "selected_genes_csv": {
-                "path": str(feature_selection_dir / "selected_genes.csv"),
-                "sha256": _sha256(feature_selection_dir / "selected_genes.csv"),
-            },
-            "selected_gene_features_csv": {
-                "path": str(feature_selection_dir / "selected_gene_features.csv"),
-                "sha256": _sha256(feature_selection_dir / "selected_gene_features.csv"),
-            },
         },
         "selection": selected_backend or None,
         "runtime": {
             "model_backend": str(getattr(config, "model_backend", "")) if config is not None else None,
             "feature_mode": str(getattr(config, "feature_mode", "")) if config is not None else None,
             "feature_family_set": str(getattr(config, "feature_family_set", "")) if config is not None else None,
-            "feature_selection": (
-                getattr(getattr(config, "feature_selection", None), "model_dump", lambda **_: None)(
-                    mode="python", exclude_none=True
-                )
-                if config is not None and getattr(config, "feature_selection", None) is not None
-                else None
-            ),
             "covariates_path": str(getattr(config, "covariates_path", "")) if config is not None else None,
             "validation_partitions": (
                 getattr(getattr(config, "validation_partitions", None), "model_dump", lambda **_: None)(

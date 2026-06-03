@@ -64,13 +64,6 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="RegulatoryLifecycleConfig",
     ),
     ConfigSchemaSpec(
-        schema_id="validation_feature_selection",
-        module="methyl_validation.config",
-        class_name="FeatureSelectionConfig",
-        filename="validation_feature_selection.schema.json",
-        title="FeatureSelectionConfig",
-    ),
-    ConfigSchemaSpec(
         schema_id="validation_partitions",
         module="methyl_validation.config",
         class_name="ValidationPartitionContract",

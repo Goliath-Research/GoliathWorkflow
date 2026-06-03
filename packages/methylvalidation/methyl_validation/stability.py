@@ -1626,7 +1626,6 @@ def freeze_production_model(
         config=config,
     )
     mapper_annotation_cache: Dict[str, Any] = {}
-    feature_selection_artifacts: Dict[str, Any] = {}
     if success:
         try:
             from .model_bundle import (
@@ -1680,28 +1679,6 @@ def freeze_production_model(
                 frozen_gene_panel.get("gene_features_path")
                 or (bundle_dir / FROZEN_GENE_FEATURES_NAME).absolute()
             )
-            try:
-                from .feature_selection import run_feature_selection_artifacts
-
-                fs_payload = (
-                    config.feature_selection.model_dump(mode="python")
-                    if config is not None and getattr(config, "feature_selection", None) is not None
-                    else {}
-                )
-                feature_selection_artifacts = run_feature_selection_artifacts(
-                    production_dir=prod_dir,
-                    config_payload=fs_payload,
-                    training_partition_ids=(
-                        list(getattr(config.validation_partitions, "development_train", []))
-                        if config is not None and getattr(config, "validation_partitions", None) is not None
-                        else None
-                    ),
-                )
-                model_bundle_cfg["selected_feature_manifest"] = str(
-                    feature_selection_artifacts.get("manifest_path")
-                )
-            except Exception as fs_e:
-                feature_selection_artifacts = {"error": str(fs_e)}
             with open(prod_project_path, "w", encoding="utf-8") as f:
                 json.dump(prod_project_payload, f, indent=2)
         except Exception as e:
@@ -1709,10 +1686,8 @@ def freeze_production_model(
             errors = list(errors) + [f"Mapper annotation cache build failed: {e}"]
             mapper_annotation_cache = {}
             frozen_gene_panel = {}
-            feature_selection_artifacts = {}
     else:
         frozen_gene_panel = {}
-        feature_selection_artifacts = {}
 
     summary = {
         "output_dir": str(prod_dir),
@@ -1720,7 +1695,6 @@ def freeze_production_model(
         "production_project": str(prod_project_path),
         "mapper_annotation_cache": mapper_annotation_cache,
         "frozen_gene_panel": frozen_gene_panel,
-        "feature_selection": feature_selection_artifacts,
         "success": success,
         "errors": errors,
         "timings": timings,

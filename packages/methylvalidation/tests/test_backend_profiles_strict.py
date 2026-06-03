@@ -143,14 +143,3 @@ def test_stability_early_stop_requires_window_smaller_than_min_iterations():
     with pytest.raises(ValueError, match="stability_convergence_window must be smaller"):
         MonteCarloConfig.model_validate(payload)
 
-
-def test_feature_selection_defaults_and_validation():
-    cfg = MonteCarloConfig.model_validate(_base_payload())
-    assert cfg.feature_selection.enabled is False
-    assert cfg.feature_selection.mode == "stability_filter"
-    assert cfg.feature_selection.feature_families == ["dmp", "gene", "structural"]
-
-    payload = _base_payload()
-    payload["feature_selection"] = {"enabled": True, "mode": "bad_mode"}
-    with pytest.raises(ValueError, match="feature_selection.mode"):
-        MonteCarloConfig.model_validate(payload)

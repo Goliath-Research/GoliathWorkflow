@@ -107,18 +107,6 @@ def build_model_backend_steps(
     backend = (config.model_backend if config is not None else "ecdf").strip().lower()
     feature_mode = (config.feature_mode if config is not None else "raw_dmp").strip().lower()
     feature_family_set = (config.feature_family_set if config is not None else "dmp").strip().lower()
-    feature_selection_payload = (
-        config.feature_selection.model_dump(mode="python")
-        if config is not None and getattr(config, "feature_selection", None) is not None
-        else {}
-    )
-    feature_selection_enabled = bool(feature_selection_payload.get("enabled", False))
-    selected_feature_manifest = (
-        project_json.parent / "feature_selection" / "feature_selection_manifest.json"
-    )
-    selected_feature_manifest_arg = (
-        str(selected_feature_manifest) if feature_selection_enabled and selected_feature_manifest.is_file() else None
-    )
     if backend == "tabular_sklearn":
         model_dir = predictor_output_dir.parent / "classifiers" if predictor_output_dir is not None else project_json.parent / "classifiers"
 
@@ -137,7 +125,6 @@ def build_model_backend_steps(
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
                     feature_family_set=feature_family_set,
                     require_mapper_annotations=(feature_family_set != "dmp"),
-                    selected_feature_manifest=selected_feature_manifest_arg,
                     extra_metadata={
                         "model_backend": "tabular_sklearn",
                         "feature_mode": (config.feature_mode if config is not None else "raw_dmp"),
@@ -236,7 +223,6 @@ def build_model_backend_steps(
                     observed_feature_quality_columns=(
                         config.observed_feature_quality_columns if config is not None else None
                     ),
-                    feature_selection_config=feature_selection_payload,
                     save_train_dataset=(
                         bool(config.tabular_save_train_dataset)
                         if config is not None
@@ -310,7 +296,6 @@ def build_model_backend_steps(
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
                     feature_family_set=feature_family_set,
                     require_mapper_annotations=(feature_family_set != "dmp"),
-                    selected_feature_manifest=selected_feature_manifest_arg,
                     extra_metadata={
                         "model_backend": "generative_hybrid",
                         "feature_mode": (config.feature_mode if config is not None else "raw_dmp"),
@@ -407,7 +392,6 @@ def build_model_backend_steps(
                     observed_feature_quality_columns=(
                         config.observed_feature_quality_columns if config is not None else None
                     ),
-                    feature_selection_config=feature_selection_payload,
                 )
                 return 0, f"Generative model trained: {model_path}", ""
             except Exception as e:
@@ -466,7 +450,6 @@ def build_model_backend_steps(
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
                     feature_family_set=feature_family_set,
                     require_mapper_annotations=(feature_family_set != "dmp"),
-                    selected_feature_manifest=selected_feature_manifest_arg,
                     extra_metadata={
                         "model_backend": "ecdf",
                         "classifier_type": "ecdf_aggregated_one_vs_rest",

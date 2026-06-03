@@ -555,58 +555,6 @@ class RegulatoryLifecycleConfig(BaseModel):
         return cleaned or None
 
 
-class FeatureSelectionConfig(BaseModel):
-    """Leakage-safe feature selection controls for freeze and model training."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    enabled: bool = Field(default=False)
-    mode: str = Field(default="stability_filter")
-    feature_families: List[str] = Field(default_factory=lambda: ["dmp", "gene", "structural"])
-    max_features_total: int = Field(default=200, ge=1)
-    max_features_per_sample_ratio: float = Field(default=5.0, gt=0.0)
-    min_dmp_frequency: float = Field(default=0.8, ge=0.0, le=1.0)
-    min_abs_effect_size: Optional[float] = Field(default=None, ge=0.0)
-    group_by_gene: bool = Field(default=True)
-    redundancy_filter: str = Field(default="correlation")
-    max_pairwise_correlation: float = Field(default=0.95, ge=0.0, le=1.0)
-    embedded_selector: Optional[str] = Field(default=None)
-    latent_projection: Optional[str] = Field(default=None)
-    random_seed: int = Field(default=13)
-
-    @field_validator("mode")
-    @classmethod
-    def _validate_mode(cls, value: str) -> str:
-        allowed = {"stability_filter"}
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"feature_selection.mode must be one of {sorted(allowed)}")
-        return normalized
-
-    @field_validator("feature_families")
-    @classmethod
-    def _normalize_feature_families(cls, value: List[str]) -> List[str]:
-        allowed = {"dmp", "gene", "structural"}
-        out: List[str] = []
-        seen: set[str] = set()
-        for raw in value:
-            token = str(raw).strip().lower()
-            if token not in allowed or token in seen:
-                continue
-            seen.add(token)
-            out.append(token)
-        return out or ["dmp", "gene", "structural"]
-
-    @field_validator("redundancy_filter")
-    @classmethod
-    def _validate_redundancy_filter(cls, value: str) -> str:
-        allowed = {"none", "correlation"}
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"feature_selection.redundancy_filter must be one of {sorted(allowed)}")
-        return normalized
-
-
 class MonteCarloConfig(BaseModel):
     """Configuration for the Monte Carlo validation runner (binary K=2 or multiclass K>=2)."""
 
@@ -650,13 +598,6 @@ class MonteCarloConfig(BaseModel):
     validation_partitions: Optional[ValidationPartitionContract] = Field(
         default=None,
         description="Optional named partition contract (development/internal/locked/pivotal/post-market).",
-    )
-    feature_selection: FeatureSelectionConfig = Field(
-        default_factory=FeatureSelectionConfig,
-        description=(
-            "Optional leakage-safe feature selection controls. "
-            "Selector is fit on training folds and locked into production artifacts."
-        ),
     )
     subgroup_columns: List[str] = Field(
         default_factory=list,
