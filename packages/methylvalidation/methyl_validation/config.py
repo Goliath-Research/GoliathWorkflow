@@ -1779,6 +1779,59 @@ def _optionalize_annotation(annotation: Any) -> Any:
     return annotation | None
 
 
+def _constraints_from_field_metadata(metadata: Any) -> Dict[str, Any]:
+    """
+    Map Pydantic v2 ``FieldInfo.metadata`` (``annotated_types.*`` instances) to ``Field()`` kwargs.
+
+    Dict-shaped metadata entries are still supported for forward compatibility.
+    """
+    try:
+        import annotated_types as at
+    except ImportError:  # pragma: no cover
+        at = None
+
+    out: Dict[str, Any] = {}
+    for item in metadata or []:
+        if at is not None:
+            if isinstance(item, at.Ge):
+                out["ge"] = item.ge
+                continue
+            if isinstance(item, at.Gt):
+                out["gt"] = item.gt
+                continue
+            if isinstance(item, at.Le):
+                out["le"] = item.le
+                continue
+            if isinstance(item, at.Lt):
+                out["lt"] = item.lt
+                continue
+            if isinstance(item, at.MinLen):
+                out["min_length"] = item.min_length
+                continue
+            if isinstance(item, at.MaxLen):
+                out["max_length"] = item.max_length
+                continue
+            if isinstance(item, at.MultipleOf):
+                out["multiple_of"] = item.multiple_of
+                continue
+        if isinstance(item, dict):
+            for key, value in item.items():
+                if key in {
+                    "ge",
+                    "le",
+                    "gt",
+                    "lt",
+                    "multiple_of",
+                    "min_length",
+                    "max_length",
+                    "pattern",
+                    "strict",
+                    "allow_inf_nan",
+                }:
+                    out[key] = value
+    return out
+
+
 def _validation_step_field_kwargs(field: Any) -> Dict[str, Any]:
     kwargs: Dict[str, Any] = {}
     if field.description:
@@ -1789,23 +1842,7 @@ def _validation_step_field_kwargs(field: Any) -> Dict[str, Any]:
         kwargs["default_factory"] = field.default_factory
     else:
         kwargs["default"] = None
-    for item in field.metadata or []:
-        if not isinstance(item, dict):
-            continue
-        for key, value in item.items():
-            if key in {
-                "ge",
-                "le",
-                "gt",
-                "lt",
-                "multiple_of",
-                "min_length",
-                "max_length",
-                "pattern",
-                "strict",
-                "allow_inf_nan",
-            }:
-                kwargs[key] = value
+    kwargs.update(_constraints_from_field_metadata(field.metadata))
     return kwargs
 
 

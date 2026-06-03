@@ -278,6 +278,14 @@
           "title": "Observed Feature Min Obs Fraction",
           "type": "number"
         },
+        "observed_feature_quality_columns": {
+          "description": "Observed-hybrid columns computed and exported but excluded from model training.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Observed Feature Quality Columns",
+          "type": "array"
+        },
         "observed_feature_quantiles": {
           "items": {
             "type": "number"
@@ -717,6 +725,14 @@
           "minimum": 0.0,
           "title": "Observed Feature Min Obs Fraction",
           "type": "number"
+        },
+        "observed_feature_quality_columns": {
+          "description": "Observed-hybrid columns computed and exported but excluded from model training.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Observed Feature Quality Columns",
+          "type": "array"
         },
         "observed_feature_quantiles": {
           "items": {
@@ -1263,6 +1279,14 @@
           "minimum": 0.0,
           "title": "Observed Feature Min Obs Fraction",
           "type": "number"
+        },
+        "observed_feature_quality_columns": {
+          "description": "Observed-hybrid columns computed and exported but excluded from model training.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Observed Feature Quality Columns",
+          "type": "array"
         },
         "observed_feature_quantiles": {
           "items": {
@@ -2066,6 +2090,14 @@
       "minimum": 0.0,
       "title": "Observed Feature Min Obs Fraction",
       "type": "number"
+    },
+    "observed_feature_quality_columns": {
+      "description": "Observed-hybrid columns computed and exported but excluded from model training.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Observed Feature Quality Columns",
+      "type": "array"
     },
     "observed_feature_quantiles": {
       "description": "Quantiles used by observed_hybrid feature mode when summarizing observed methylation.",

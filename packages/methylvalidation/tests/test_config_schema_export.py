@@ -48,6 +48,8 @@ def test_generate_schema_dict_sets_json_schema_meta():
 
 
 def test_validation_step_schema_has_no_runner_required_fields():
+    from pydantic import ValidationError
+
     from methyl_validation.config import ValidationStepConfig
 
     schema = generate_schema_dict(ValidationStepConfig, title="ValidationStepConfig")
@@ -57,6 +59,13 @@ def test_validation_step_schema_has_no_runner_required_fields():
     assert "base_project" not in props
     assert "train_fraction" in props
     assert "backend_profiles" in props
+
+    # Constraints must propagate from MonteCarloConfig Field(ge/le/...) metadata.
+    ecdf_bins = props["ecdf_aggregated_n_bins"]["anyOf"][0]
+    assert ecdf_bins.get("minimum") == 8
+    assert ecdf_bins.get("maximum") == 512
+    with pytest.raises(ValidationError):
+        ValidationStepConfig.model_validate({"ecdf_aggregated_n_bins": 3})
 
 
 def test_progression_step_schema_artifact_registered():
