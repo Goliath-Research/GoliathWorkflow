@@ -34,14 +34,17 @@ uses
   DiscriminatorSchemaEditor in 'src\UI\Editors\DiscriminatorSchemaEditor.pas',
   PropertyEditorForm in 'src\UI\PropertyEditorForm.pas' {PropertyEditorForm},
   ArrayEditorForm in 'src\UI\ArrayEditorForm.pas' {ArrayEditorForm},
-  DictEditorForm in 'src\UI\DictEditorForm.pas' {DictEditorForm};
+  DictEditorForm in 'src\UI\DictEditorForm.pas' {DictEditorForm},
+  Vcl.Themes,
+  Vcl.Styles;
 
 {$R *.res}
 
 begin
   Application.Initialize;
   Application.MainFormOnTaskbar := True;
-  Application.Title := 'MethylPipeline Config Editor';
+  TStyleManager.TrySetStyle('Aqua Light Slate');
+  Application.Title := 'JSON Schema-based Editor';
   TSchemaEditorRegistration.EnsureRegistered;
   Application.CreateForm(TMainForm, MainFormInstance);
   Application.Run;

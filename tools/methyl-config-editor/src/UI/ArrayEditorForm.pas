@@ -44,6 +44,8 @@ type
     FWorking: TJSONArray;
     FBreadcrumb: string;
     function ItemSchema: TSchemaNode;
+    function EditWrappedValue(const ATitle: string; ASchema: TSchemaNode;
+      AValue: TJSONValue; out AEditedValue: TJSONValue): Boolean;
     procedure RefreshList;
     function ItemSummary(Index: Integer): string;
     procedure EditItem(Index: Integer);
@@ -55,6 +57,8 @@ type
 implementation
 
 uses
+  System.UITypes,
+  DictEditorForm,
   PropertyEditorForm;
 
 {$R *.dfm}
@@ -179,8 +183,7 @@ begin
   FWorking.AddElement(NewVal);
   RefreshList;
   ListBox.ItemIndex := FWorking.Count - 1;
-  if Assigned(Schema) and Schema.IsComplex then
-    EditItem(ListBox.ItemIndex);
+  EditItem(ListBox.ItemIndex);
 end;
 
 procedure TArrayEditorForm.btnRemoveClick(Sender: TObject);
@@ -199,17 +202,21 @@ var
   Val: TJSONValue;
   Obj: TJSONObject;
   CloneObj: TJSONObject;
+  Arr: TJSONArray;
+  CloneArr: TJSONArray;
   ChildTitle: string;
   Schema: TSchemaNode;
+  Edited: TJSONValue;
 begin
   if (Index < 0) or (Index >= FWorking.Count) then
     Exit;
   Val := FWorking.Items[Index];
   Schema := ItemSchema;
-  if not Assigned(Schema) then
-    Exit;
-  ChildTitle := FBreadcrumb + Format(' [%d]', [Index]);
-  if Schema.Kind = skObject then
+  if FBreadcrumb = '' then
+    ChildTitle := Format('[%d]', [Index])
+  else
+    ChildTitle := FBreadcrumb + Format(' / [%d]', [Index]);
+  if Assigned(Schema) and (Schema.Kind = skObject) then
   begin
     if Val is TJSONObject then
       Obj := TJSONObject(Val)
@@ -227,6 +234,92 @@ begin
     end;
     RefreshList;
     ListBox.ItemIndex := Index;
+    Exit;
+  end;
+  if Assigned(Schema) and (Schema.Kind = skDictionary) then
+  begin
+    if Val is TJSONObject then
+      Obj := TJSONObject(Val)
+    else
+      Obj := TJSONObject.Create;
+    CloneObj := Obj.Clone as TJSONObject;
+    try
+      if TDictEditorForm.EditDictionary(Self, ChildTitle, Schema, CloneObj) then
+        ReplaceArrayElement(FWorking, Index, CloneObj.Clone as TJSONObject);
+    finally
+      CloneObj.Free;
+      if Obj <> Val then
+        Obj.Free;
+    end;
+    RefreshList;
+    ListBox.ItemIndex := Index;
+    Exit;
+  end;
+  if Assigned(Schema) and (Schema.Kind = skArray) then
+  begin
+    if Val is TJSONArray then
+      Arr := TJSONArray(Val)
+    else
+      Arr := TJSONArray.Create;
+    CloneArr := Arr.Clone as TJSONArray;
+    try
+      if TArrayEditorForm.EditArray(Self, ChildTitle, Schema, CloneArr) then
+        ReplaceArrayElement(FWorking, Index, CloneArr.Clone as TJSONArray);
+    finally
+      CloneArr.Free;
+      if Arr <> Val then
+        Arr.Free;
+    end;
+    RefreshList;
+    ListBox.ItemIndex := Index;
+    Exit;
+  end;
+  if Assigned(Schema) and (Schema.Kind <> skUnknown) then
+  begin
+    if EditWrappedValue(ChildTitle, Schema, Val, Edited) then
+      ReplaceArrayElement(FWorking, Index, Edited);
+    RefreshList;
+    ListBox.ItemIndex := Index;
+    Exit;
+  end;
+  MessageDlg(Format(
+    'No schema is available for "%s". Array items require an item schema before they can be edited.',
+    [ChildTitle]), TMsgDlgType.mtInformation, [TMsgDlgBtn.mbOK], 0);
+  RefreshList;
+  ListBox.ItemIndex := Index;
+end;
+
+function TArrayEditorForm.EditWrappedValue(const ATitle: string; ASchema: TSchemaNode;
+  AValue: TJSONValue; out AEditedValue: TJSONValue): Boolean;
+var
+  WrapperSchema: TSchemaNode;
+  WrapperObject: TJSONObject;
+  Edited: TJSONValue;
+begin
+  Result := False;
+  AEditedValue := nil;
+  WrapperSchema := TSchemaNode.Create;
+  WrapperObject := TJSONObject.Create;
+  try
+    WrapperSchema.Kind := skObject;
+    WrapperSchema.Title := ATitle;
+    WrapperSchema.AddProperty('value', ASchema);
+    if Assigned(AValue) then
+      WrapperObject.AddPair('value', AValue.Clone as TJSONValue)
+    else
+      WrapperObject.AddPair('value', TSchemaDefaults.CreateDefaultValue(ASchema));
+    if TPropertyEditorForm.EditObject(Self, ATitle, WrapperSchema, WrapperObject) then
+    begin
+      Edited := WrapperObject.GetValue('value');
+      if Assigned(Edited) then
+        AEditedValue := Edited.Clone as TJSONValue
+      else
+        AEditedValue := TJSONNull.Create;
+      Result := True;
+    end;
+  finally
+    WrapperObject.Free;
+    WrapperSchema.Free;
   end;
 end;
 

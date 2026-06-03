@@ -18,6 +18,7 @@ uses
   AppSettings,
   SchemaCatalog,
   SchemaDocument,
+  SchemaNode,
   JsonSchemaLoader,
   JsonDocumentModel,
   SchemaDefaults,
@@ -31,9 +32,12 @@ type
     lblSchemasRoot: TLabel;
     edtSchemasRoot: TEdit;
     btnBrowseSchemas: TButton;
+    btnEditJson: TButton;
+    btnNewJson: TButton;
     MemoJson: TMemo;
     MainMenu: TMainMenu;
     mnuFile: TMenuItem;
+    mnuNewJson: TMenuItem;
     mnuOpenJson: TMenuItem;
     mnuSaveJson: TMenuItem;
     mnuSep1: TMenuItem;
@@ -47,7 +51,9 @@ type
     procedure FormCreate(Sender: TObject);
     procedure FormDestroy(Sender: TObject);
     procedure btnBrowseSchemasClick(Sender: TObject);
+    procedure btnEditJsonClick(Sender: TObject);
     procedure cboSchemaChange(Sender: TObject);
+    procedure mnuNewJsonClick(Sender: TObject);
     procedure mnuOpenJsonClick(Sender: TObject);
     procedure mnuSaveJsonClick(Sender: TObject);
     procedure mnuExitClick(Sender: TObject);
@@ -59,6 +65,15 @@ type
     FSchemaDoc: TSchemaDocument;
     FDocument: TJsonDocumentModel;
     FDocumentPath: string;
+    FHasJsonValue: Boolean;
+    function CanUseRootValue(AValue: TJSONValue; ASchema: TSchemaNode): Boolean;
+    function EditRootValue(const ATitle: string; ASchema: TSchemaNode;
+      ASourceValue: TJSONValue; out AEditedValue: TJSONValue): Boolean;
+    function EditWrappedRootValue(const ATitle: string; ASchema: TSchemaNode;
+      ASourceValue: TJSONValue; out AEditedValue: TJSONValue): Boolean;
+    function EnsureSchemaSelected: Boolean;
+    function SchemaTitle: string;
+    procedure CreateDefaultJsonValue;
     procedure ReloadCatalog;
     procedure LoadSelectedSchema;
     procedure RefreshMemo;
@@ -73,7 +88,10 @@ implementation
 
 uses
   System.UITypes,
-  System.IOUtils;
+  System.IOUtils,
+  ArrayEditorForm,
+  DictEditorForm,
+  SchemaValueSummary;
 
 {$R *.dfm}
 
@@ -82,6 +100,7 @@ begin
   FSettings := TAppSettings.Create(
     TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'methyl-config-editor.ini'));
   FCatalog := TSchemaCatalog.Create;
+  TSchemaCatalog.SetCurrent(FCatalog);
   FDocument := TJsonDocumentModel.Create;
   edtSchemasRoot.Text := FSettings.GetSchemasRoot;
   ReloadCatalog;
@@ -91,6 +110,7 @@ begin
     if TFile.Exists(FDocumentPath) then
     begin
       FDocument.LoadFromFile(FDocumentPath);
+      FHasJsonValue := True;
       RefreshMemo;
     end;
   end;
@@ -112,6 +132,167 @@ begin
   if Idx < 0 then
     Exit('');
   Result := FCatalog.Entry(Idx).FilePath;
+end;
+
+function TMainForm.CanUseRootValue(AValue: TJSONValue; ASchema: TSchemaNode): Boolean;
+begin
+  Result := False;
+  if not Assigned(AValue) or not Assigned(ASchema) then
+    Exit;
+  if TSchemaValueSummary.IsNullValue(AValue) then
+    Exit(ASchema.Nullable or (ASchema.Kind = skNull));
+  case ASchema.Kind of
+    skNull:
+      Result := AValue is TJSONNull;
+    skBoolean:
+      Result := (AValue is TJSONTrue) or (AValue is TJSONFalse);
+    skInteger, skNumber:
+      Result := AValue is TJSONNumber;
+    skString:
+      Result := AValue is TJSONString;
+    skObject, skDictionary:
+      Result := AValue is TJSONObject;
+    skArray:
+      Result := AValue is TJSONArray;
+  else
+    Result := True;
+  end;
+end;
+
+procedure TMainForm.CreateDefaultJsonValue;
+begin
+  if not EnsureSchemaSelected then
+    Exit;
+  FDocument.SetRoot(TSchemaDefaults.CreateDefaultValue(FSchemaDoc.Root), True);
+  FDocumentPath := '';
+  FHasJsonValue := True;
+  RefreshMemo;
+end;
+
+function TMainForm.EditRootValue(const ATitle: string; ASchema: TSchemaNode;
+  ASourceValue: TJSONValue; out AEditedValue: TJSONValue): Boolean;
+var
+  Working: TJSONValue;
+  WorkingObj: TJSONObject;
+  WorkingArr: TJSONArray;
+begin
+  Result := False;
+  AEditedValue := nil;
+  if CanUseRootValue(ASourceValue, ASchema) then
+    Working := ASourceValue.Clone as TJSONValue
+  else
+    Working := TSchemaDefaults.CreateDefaultValue(ASchema);
+  try
+    if TSchemaValueSummary.IsNullValue(Working) then
+      Exit(EditWrappedRootValue(ATitle, ASchema, Working, AEditedValue));
+    case ASchema.Kind of
+      skObject:
+        begin
+          if Working is TJSONObject then
+            WorkingObj := TJSONObject(Working)
+          else
+            WorkingObj := TSchemaDefaults.CreateDefaultObject(ASchema);
+          try
+            if TPropertyEditorForm.EditObject(Self, ATitle, ASchema, WorkingObj) then
+            begin
+              AEditedValue := WorkingObj.Clone as TJSONValue;
+              Result := True;
+            end;
+          finally
+            if WorkingObj <> Working then
+              WorkingObj.Free;
+          end;
+        end;
+      skDictionary:
+        begin
+          if Working is TJSONObject then
+            WorkingObj := TJSONObject(Working)
+          else
+            WorkingObj := TJSONObject.Create;
+          try
+            if TDictEditorForm.EditDictionary(Self, ATitle, ASchema, WorkingObj) then
+            begin
+              AEditedValue := WorkingObj.Clone as TJSONValue;
+              Result := True;
+            end;
+          finally
+            if WorkingObj <> Working then
+              WorkingObj.Free;
+          end;
+        end;
+      skArray:
+        begin
+          if Working is TJSONArray then
+            WorkingArr := TJSONArray(Working)
+          else
+            WorkingArr := TJSONArray.Create;
+          try
+            if TArrayEditorForm.EditArray(Self, ATitle, ASchema, WorkingArr) then
+            begin
+              AEditedValue := WorkingArr.Clone as TJSONValue;
+              Result := True;
+            end;
+          finally
+            if WorkingArr <> Working then
+              WorkingArr.Free;
+          end;
+        end;
+    else
+      Result := EditWrappedRootValue(ATitle, ASchema, Working, AEditedValue);
+    end;
+  finally
+    Working.Free;
+  end;
+end;
+
+function TMainForm.EditWrappedRootValue(const ATitle: string; ASchema: TSchemaNode;
+  ASourceValue: TJSONValue; out AEditedValue: TJSONValue): Boolean;
+var
+  WrapperSchema: TSchemaNode;
+  WrapperObject: TJSONObject;
+  Edited: TJSONValue;
+begin
+  Result := False;
+  AEditedValue := nil;
+  WrapperSchema := TSchemaNode.Create;
+  WrapperObject := TJSONObject.Create;
+  try
+    WrapperSchema.Kind := skObject;
+    WrapperSchema.Title := ATitle;
+    WrapperSchema.AddProperty('value', ASchema);
+    WrapperObject.AddPair('value', ASourceValue.Clone as TJSONValue);
+    if TPropertyEditorForm.EditObject(Self, ATitle, WrapperSchema, WrapperObject) then
+    begin
+      Edited := WrapperObject.GetValue('value');
+      if Assigned(Edited) then
+        AEditedValue := Edited.Clone as TJSONValue
+      else
+        AEditedValue := TJSONNull.Create;
+      Result := True;
+    end;
+  finally
+    WrapperObject.Free;
+    WrapperSchema.Free;
+  end;
+end;
+
+function TMainForm.EnsureSchemaSelected: Boolean;
+begin
+  Result := Assigned(FSchemaDoc) and Assigned(FSchemaDoc.Root);
+  if not Result then
+    MessageDlg('Select a JSON schema first.', TMsgDlgType.mtInformation,
+      [TMsgDlgBtn.mbOK], 0);
+end;
+
+function TMainForm.SchemaTitle: string;
+begin
+  Result := '';
+  if Assigned(FSchemaDoc) and Assigned(FSchemaDoc.Root) then
+    Result := FSchemaDoc.Root.Title;
+  if Result = '' then
+    Result := TPath.GetFileNameWithoutExtension(CurrentSchemaPath);
+  if Result = '' then
+    Result := 'JSON Value';
 end;
 
 procedure TMainForm.ReloadCatalog;
@@ -169,6 +350,11 @@ begin
   end;
 end;
 
+procedure TMainForm.btnEditJsonClick(Sender: TObject);
+begin
+  mnuEditPropertiesClick(Sender);
+end;
+
 procedure TMainForm.cboSchemaChange(Sender: TObject);
 begin
   LoadSelectedSchema;
@@ -180,15 +366,30 @@ begin
   begin
     FDocumentPath := OpenDialogJson.FileName;
     FDocument.LoadFromFile(FDocumentPath);
+    FHasJsonValue := True;
     FSettings.SetLastDocumentPath(FDocumentPath);
     RefreshMemo;
   end;
+end;
+
+procedure TMainForm.mnuNewJsonClick(Sender: TObject);
+begin
+  if not EnsureSchemaSelected then
+    Exit;
+  CreateDefaultJsonValue;
+  mnuEditPropertiesClick(Sender);
 end;
 
 procedure TMainForm.mnuSaveJsonClick(Sender: TObject);
 var
   Path: string;
 begin
+  if not FHasJsonValue then
+  begin
+    if not EnsureSchemaSelected then
+      Exit;
+    CreateDefaultJsonValue;
+  end;
   Path := FDocumentPath;
   if Path = '' then
   begin
@@ -209,25 +410,24 @@ end;
 
 procedure TMainForm.mnuEditPropertiesClick(Sender: TObject);
 var
-  RootObj: TJSONObject;
   Title: string;
+  EditedValue: TJSONValue;
 begin
-  if not Assigned(FSchemaDoc) or not Assigned(FSchemaDoc.Root) then
-  begin
-    MessageDlg('Select a JSON schema first.', TMsgDlgType.mtInformation, [TMsgDlgBtn.mbOK], 0);
+  if not EnsureSchemaSelected then
     Exit;
-  end;
-  RootObj := FDocument.GetRootObject;
-  if RootObj.Count = 0 then
+  if not FHasJsonValue then
   begin
-    RootObj := TSchemaDefaults.CreateDefaultObject(FSchemaDoc.Root);
-    FDocument.SetRoot(RootObj, True);
+    mnuOpenJsonClick(Sender);
+    if not FHasJsonValue then
+      Exit;
   end;
-  Title := FSchemaDoc.Root.Title;
-  if Title = '' then
-    Title := TPath.GetFileNameWithoutExtension(CurrentSchemaPath);
-  if TPropertyEditorForm.EditObject(Self, Title, FSchemaDoc.Root, RootObj) then
+  Title := SchemaTitle;
+  if EditRootValue(Title, FSchemaDoc.Root, FDocument.Root, EditedValue) then
+  begin
+    FDocument.SetRoot(EditedValue, True);
+    FHasJsonValue := True;
     RefreshMemo;
+  end;
 end;
 
 procedure TMainForm.mnuReloadCatalogClick(Sender: TObject);
