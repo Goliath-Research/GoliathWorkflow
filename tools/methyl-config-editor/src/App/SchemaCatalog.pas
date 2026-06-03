@@ -3,7 +3,7 @@ unit SchemaCatalog;
 interface
 
 uses
-  System.Generics.Collections,
+  Spring.Collections,
   System.SysUtils;
 
 type
@@ -14,11 +14,10 @@ type
 
   TSchemaCatalog = class
   private
-    FEntries: TList<TSchemaCatalogEntry>;
+    FEntries: IList<TSchemaCatalogEntry>;
     procedure ScanDirectory(const Root: string; const Relative: string);
   public
     constructor Create;
-    destructor Destroy; override;
     procedure LoadFromRoot(const SchemasRoot: string);
     function Count: Integer;
     function Entry(Index: Integer): TSchemaCatalogEntry;
@@ -34,13 +33,7 @@ uses
 constructor TSchemaCatalog.Create;
 begin
   inherited Create;
-  FEntries := TList<TSchemaCatalogEntry>.Create;
-end;
-
-destructor TSchemaCatalog.Destroy;
-begin
-  FEntries.Free;
-  inherited Destroy;
+  FEntries := TCollections.CreateList<TSchemaCatalogEntry>;
 end;
 
 procedure TSchemaCatalog.ScanDirectory(const Root, Relative: string);

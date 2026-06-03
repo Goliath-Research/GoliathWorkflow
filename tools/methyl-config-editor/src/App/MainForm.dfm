@@ -84,7 +84,6 @@ object MainForm: TMainForm
     ScrollBars = ssBoth
     TabOrder = 1
     WordWrap = False
-    ExplicitHeight = 296
   end
   object MainMenu: TMainMenu
     Left = 640
