@@ -28,8 +28,7 @@ uses
   OneOfObjectSchemaEditor,
   ArraySchemaEditor,
   DictionarySchemaEditor,
-  DiscriminatorSchemaEditor,
-  DetectionStepEditor;
+  DiscriminatorSchemaEditor;
 
 class function TSchemaEditorRegistration.IsKnownKey(const AKey: string): Boolean;
 begin
@@ -42,8 +41,7 @@ begin
     SameStr(AKey, TSchemaEditorKeys.OneOfObjectKey) or
     SameStr(AKey, TSchemaEditorKeys.ArrayKey) or
     SameStr(AKey, TSchemaEditorKeys.DictionaryKey) or
-    SameStr(AKey, TSchemaEditorKeys.DiscriminatorKey) or
-    SameStr(AKey, TSchemaEditorKeys.DetectionConfigKey);
+    SameStr(AKey, TSchemaEditorKeys.DiscriminatorKey);
 end;
 
 class function TSchemaEditorRegistration.IsRegistered(const AKey: string): Boolean;
@@ -76,8 +74,6 @@ begin
     (TSchemaEditorKeys.DictionaryKey).AsTransient;
   GlobalContainer.RegisterType<ISchemaPropertyEditor, TDiscriminatorSchemaEditor>
     (TSchemaEditorKeys.DiscriminatorKey).AsTransient;
-  GlobalContainer.RegisterType<ISchemaPropertyEditor, TDetectionStepEditor>
-    (TSchemaEditorKeys.DetectionConfigKey).AsTransient;
 
   GlobalContainer.Build;
   FRegistered := True;

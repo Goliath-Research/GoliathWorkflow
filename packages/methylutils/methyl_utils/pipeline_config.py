@@ -289,7 +289,7 @@ class ProjectConfig(BaseModel):
         default=None,
         description="Shared chromosome list (e.g. ['1','2',...,'X','Y'])",
     )
-    contexts: Optional[List[str]] = Field(
+    contexts: Optional[List[Literal["CG", "CHG", "CHH"]]] = Field(
         default=None,
         description="Shared contexts (e.g. ['CG'])",
     )
@@ -320,6 +320,28 @@ class ProjectConfig(BaseModel):
     @classmethod
     def output_base_stripped(cls, v: str) -> str:
         return v.rstrip("/") if v else v
+
+    @field_validator("contexts", mode="before")
+    @classmethod
+    def normalize_contexts(cls, value: Any) -> Any:
+        if value is None:
+            return value
+        if isinstance(value, str):
+            tokens = [value]
+        elif isinstance(value, (list, tuple, set)):
+            tokens = list(value)
+        else:
+            return value
+        normalized: List[str] = []
+        allowed = {"CG", "CHG", "CHH"}
+        for token in tokens:
+            text = str(token).strip().upper()
+            if not text:
+                continue
+            if text not in allowed:
+                raise ValueError(f"contexts must contain only {sorted(allowed)}")
+            normalized.append(text)
+        return normalized or None
 
     @model_validator(mode="before")
     @classmethod

@@ -233,6 +233,9 @@ def build_model_backend_steps(
                     region_directional_min_loci=(
                         config.region_directional_min_loci if config is not None else 1
                     ),
+                    observed_feature_quality_columns=(
+                        config.observed_feature_quality_columns if config is not None else None
+                    ),
                     feature_selection_config=feature_selection_payload,
                     save_train_dataset=(
                         bool(config.tabular_save_train_dataset)
@@ -401,6 +404,9 @@ def build_model_backend_steps(
                     region_directional_min_loci=(
                         config.region_directional_min_loci if config is not None else 1
                     ),
+                    observed_feature_quality_columns=(
+                        config.observed_feature_quality_columns if config is not None else None
+                    ),
                     feature_selection_config=feature_selection_payload,
                 )
                 return 0, f"Generative model trained: {model_path}", ""
@@ -488,6 +494,9 @@ def build_model_backend_steps(
                     feature_family_set=feature_family_set,
                     observed_feature_min_coverage=(
                         config.observed_feature_min_coverage if config is not None else 1
+                    ),
+                    observed_feature_quality_columns=(
+                        config.observed_feature_quality_columns if config is not None else None
                     ),
                     observed_hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
                     observed_hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),

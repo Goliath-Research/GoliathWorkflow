@@ -99,10 +99,6 @@ begin
   FOneOfBranches.Free;
   if Assigned(DefaultValue) then
     DefaultValue.Free;
-  if Assigned(ItemsSchema) then
-    ItemsSchema.Free;
-  if Assigned(AdditionalPropertiesSchema) then
-    AdditionalPropertiesSchema.Free;
   FProperties.Free;
   inherited Destroy;
 end;

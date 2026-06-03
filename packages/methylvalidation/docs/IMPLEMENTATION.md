@@ -102,6 +102,22 @@ Region-directional score (same `gene_scored` / `dmp+gene_scored` runs, additiona
 - Pooled over all panel loci with mapped `feature_type = region` for that comparison (not by gene): `sum(sign(effect) * |effect| * region_weight * (beta - 0.5)) / sum(|effect| * region_weight)`; reuses `gene_scored_use_region_weight`.
 - Columns are omitted when the panel has fewer than `region_directional_min_loci` loci for that `(comparison, region)` pair (default `1`).
 
+### Lean DMP feature profile (`hybrid_feature_v4_lean_dmp`)
+
+When the DMP family is active (`dmp`, `dmp+gene_scored`, etc.), observed-hybrid exports use a lean column set:
+
+- **Removed from schema** (no longer computed or exported): `weighted_mean_abs_distance_margin`, `weighted_obs_fraction`, `weighted_fraction_dmps_closer_to_cancer_centroid__*`, `weighted_mean_abs_error_to_cancer_centroid__*`.
+- **Quality-only** (exported in parquet/metadata, excluded from model training): `obs_fraction`, `n_obs_dmps`, `n_total_dmps` (override via `observed_feature_quality_columns`).
+- **Training columns**: lean DMP aggregates (`max_weighted_directional_score`, `weighted_centroid_contrast_score`, per-comparison directional/cosine/tail features) plus any active gene/structural families.
+
+Backends persist three name lists in model metadata and train-dataset sidecars:
+
+- `observed_feature_names` — full export column order (parquet width).
+- `training_feature_names` — columns passed to sklearn/generative/ECDF models.
+- `quality_feature_names` — diagnostics only; still used at predict time for low-evidence filtering via `obs_fraction`.
+
+For E1 `dmp+gene_scored` with four comparisons, expect roughly **41 export** and **38 training** columns after this profile. Re-run `--model` after upgrading (schema fingerprint bump invalidates feature caches).
+
 For gene/structural keys, per-sample value uses signed weighted centered methylation over observed loci:
 
 - `sum(sign(effect_size) * abs(effect_size) * (beta - 0.5)) / sum(abs(effect_size))`

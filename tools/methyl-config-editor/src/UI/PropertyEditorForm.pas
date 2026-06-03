@@ -57,8 +57,7 @@ type
 implementation
 
 uses
-  System.UITypes,
-  TypedStepSchemas;
+  System.UITypes;
 
 {$R *.dfm}
 
@@ -156,7 +155,6 @@ var
   TitleText: string;
   Val: TJSONValue;
   Editor: ISchemaPropertyEditor;
-  TypedRoot: TSchemaNode;
 begin
   for I := 0 to EffectiveSchema.PropertyCount - 1 do
   begin
@@ -172,8 +170,6 @@ begin
     Row := CreateRowPanel(TitleText, PropNode.Required);
     Row.PropertyName := Prop.Name;
     Row.SchemaNode := PropNode;
-    if TTypedStepSchemas.TryLoadStepRoot(Prop.Name, TypedRoot) then
-      Row.SchemaNode := TypedRoot;
     Row.Editor := Editor;
     if PropNode.Description <> '' then
       Row.lblName.Hint := PropNode.Description;

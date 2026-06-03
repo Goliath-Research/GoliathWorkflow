@@ -23,6 +23,8 @@ from scipy.stats import entropy
 class ObservedFeatureArtifacts:
     X: np.ndarray
     feature_names: List[str]
+    training_feature_names: List[str]
+    quality_feature_names: List[str]
     report: Dict[str, Any]
 
 
@@ -39,7 +41,7 @@ class ObservedHybridAnchors:
 
 
 OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v28_no_healthy_centroid_features"
-HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v3_region_directional"
+HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v4_lean_dmp"
 HYBRID_FEATURE_FAMILY_SETS = (
     "dmp",
     "gene",
@@ -57,6 +59,72 @@ REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_hypo_extreme_fraction",
     "topk_minus_rest_abs_shift",
 }
+DEFAULT_QUALITY_ONLY_FEATURES: Tuple[str, ...] = ("obs_fraction", "n_obs_dmps", "n_total_dmps")
+DEFAULT_REMOVED_DMP_FEATURE_SUFFIXES: Tuple[str, ...] = (
+    "weighted_mean_abs_distance_margin",
+    "weighted_obs_fraction",
+    "weighted_fraction_dmps_closer_to_cancer_centroid__",
+    "weighted_mean_abs_error_to_cancer_centroid__",
+)
+
+
+def normalize_quality_only_feature_columns(
+    quality_columns: Optional[Sequence[str]] = None,
+) -> Tuple[str, ...]:
+    if not quality_columns:
+        return DEFAULT_QUALITY_ONLY_FEATURES
+    out: List[str] = []
+    seen: set[str] = set()
+    for raw in quality_columns:
+        token = str(raw).strip()
+        if not token or token in seen:
+            continue
+        seen.add(token)
+        out.append(token)
+    if not out:
+        return DEFAULT_QUALITY_ONLY_FEATURES
+    return tuple(out)
+
+
+def _is_removed_dmp_feature(name: str) -> bool:
+    token = str(name)
+    if token in REMOVED_OBSERVED_HYBRID_FEATURES:
+        return True
+    for suffix in DEFAULT_REMOVED_DMP_FEATURE_SUFFIXES:
+        if token == suffix or token.startswith(suffix):
+            return True
+    return False
+
+
+def _is_quality_only_feature(
+    name: str,
+    quality_columns: Optional[Sequence[str]] = None,
+) -> bool:
+    return str(name) in set(normalize_quality_only_feature_columns(quality_columns))
+
+
+def partition_observed_hybrid_feature_names(
+    feature_names: Sequence[str],
+    *,
+    quality_columns: Optional[Sequence[str]] = None,
+) -> Tuple[List[str], List[str]]:
+    quality_set = set(normalize_quality_only_feature_columns(quality_columns))
+    training_names = [str(n) for n in feature_names if str(n) not in quality_set]
+    quality_names = [str(n) for n in feature_names if str(n) in quality_set]
+    return training_names, quality_names
+
+
+def select_training_feature_matrix(
+    X: np.ndarray,
+    feature_names: Sequence[str],
+    training_feature_names: Sequence[str],
+) -> np.ndarray:
+    arr = np.asarray(X, dtype=np.float32)
+    idx = {str(name): int(j) for j, name in enumerate(feature_names)}
+    cols = [idx[str(name)] for name in training_feature_names]
+    if not cols:
+        return np.zeros((arr.shape[0], 0), dtype=np.float32)
+    return arr[:, cols]
 
 
 def _weighted_mean(values: np.ndarray, weights: np.ndarray) -> float:
@@ -821,7 +889,11 @@ def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) ->
                 f"weighted_healthy_tail_evidence__{suffix}",
             ]
         )
-    return [name for name in names if name not in REMOVED_OBSERVED_HYBRID_FEATURES]
+    return [
+        name
+        for name in names
+        if name not in REMOVED_OBSERVED_HYBRID_FEATURES and not _is_removed_dmp_feature(name)
+    ]
 
 
 def _gene_structural_feature_names(
@@ -849,6 +921,7 @@ def observed_hybrid_feature_names(
     gene_scored_min_support_n: int = 2,
     region_directional_region_types: Optional[Sequence[str]] = None,
     region_directional_min_loci: int = 1,
+    observed_feature_quality_columns: Optional[Sequence[str]] = None,
 ) -> List[str]:
     from .gene_scored_features import (
         gene_scored_feature_names,
@@ -899,6 +972,7 @@ def observed_hybrid_schema_fingerprint(
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
     region_directional_region_types: Optional[Sequence[str]] = None,
     region_directional_min_loci: int = 1,
+    observed_feature_quality_columns: Optional[Sequence[str]] = None,
 ) -> str:
     from .gene_scored_features import GENE_SCORED_SCHEMA_VERSION, normalize_region_directional_region_types
 
@@ -910,10 +984,19 @@ def observed_hybrid_schema_fingerprint(
         gene_scored_min_support_n=gene_scored_min_support_n,
         region_directional_region_types=region_directional_region_types,
         region_directional_min_loci=region_directional_min_loci,
+        observed_feature_quality_columns=observed_feature_quality_columns,
     )
 
     payload = "\n".join(names)
-    _, _, _, include_gene_scored = _family_flags(feature_family_set)
+    include_dmp_family, _, _, include_gene_scored = _family_flags(feature_family_set)
+    if include_dmp_family:
+        quality = normalize_quality_only_feature_columns(observed_feature_quality_columns)
+        payload = (
+            f"{payload}\n"
+            f"{HYBRID_FEATURE_SCHEMA_VERSION}\n"
+            f"quality_only={','.join(quality)}\n"
+            f"removed_dmp={','.join(DEFAULT_REMOVED_DMP_FEATURE_SUFFIXES)}\n"
+        )
     if include_gene_scored:
         region_types = normalize_region_directional_region_types(region_directional_region_types)
         payload = (
@@ -962,6 +1045,7 @@ def build_observed_hybrid_feature_table(
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
     region_directional_region_types: Optional[Sequence[str]] = None,
     region_directional_min_loci: int = 1,
+    observed_feature_quality_columns: Optional[Sequence[str]] = None,
 ) -> ObservedFeatureArtifacts:
     del quantiles, dmr_window_bp, max_dmr_features, max_gene_features
     # The redesigned schema is fixed; these toggles are retained only for compatibility.
@@ -1058,6 +1142,11 @@ def build_observed_hybrid_feature_table(
         gene_scored_min_support_n=int(gene_scored_min_support_n),
         region_directional_region_types=region_directional_region_types,
         region_directional_min_loci=int(max(1, region_directional_min_loci)),
+        observed_feature_quality_columns=observed_feature_quality_columns,
+    )
+    training_feature_names, quality_feature_names = partition_observed_hybrid_feature_names(
+        feature_names,
+        quality_columns=observed_feature_quality_columns,
     )
     gene_feature_names, struct_feature_names, mapped_feature_meta = _build_dynamic_mapped_feature_names(
         locus_df,
@@ -1134,13 +1223,9 @@ def build_observed_hybrid_feature_table(
             for k_idx, mu_k in enumerate(per_cancer_refs):
                 suffix = _feature_label_token(cancer_labels_raw[k_idx])
                 key_da = f"weighted_directional_agreement__{suffix}"
-                key_wmae_c = f"weighted_mean_abs_error_to_cancer_centroid__{suffix}"
                 key_wcos_c = f"weighted_cosine_similarity_to_cancer_centroid__{suffix}"
-                key_frac_c = f"weighted_fraction_dmps_closer_to_cancer_centroid__{suffix}"
                 per_label_feature_values.setdefault(key_da, float("nan"))
-                per_label_feature_values.setdefault(key_wmae_c, float("nan"))
                 per_label_feature_values.setdefault(key_wcos_c, float("nan"))
-                per_label_feature_values.setdefault(key_frac_c, float("nan"))
                 mu_k_obs = mu_k[obs_mask]
                 numer = 2.0 * (obs_vals - healthy_ref[obs_mask])
                 denom = (mu_k_obs - healthy_ref[obs_mask]) + 1e-6
@@ -1158,11 +1243,7 @@ def build_observed_hybrid_feature_table(
                 zk = 2.0 * rk - 1.0
                 cancer_like_k = (zk > 0.0).astype(np.float64)
                 per_label_feature_values[key_da] = float(np.sum(wk_obs * cancer_like_k) / wk_sum)
-                per_label_feature_values[key_wmae_c] = _weighted_mean_abs_error(obs_vals, mu_k_obs, wk_obs)
                 per_label_feature_values[key_wcos_c] = _weighted_cosine_similarity(obs_vals, mu_k_obs, wk_obs)
-                dist_h_k = np.abs(obs_vals - healthy_ref[obs_mask])
-                dist_c_k = np.abs(obs_vals - mu_k_obs)
-                per_label_feature_values[key_frac_c] = float(np.sum(wk_obs[dist_c_k < dist_h_k]) / wk_sum)
                 if not np.isfinite(max_weighted_directional_score) or fk > max_weighted_directional_score:
                     max_weighted_directional_score = fk
 
@@ -1233,9 +1314,6 @@ def build_observed_hybrid_feature_table(
             cancer_obs = cancer_ref[obs_mask]
             wjs_h = _weighted_jensen_shannon_distance(obs_vals, healthy_obs, obs_w)
             wjs_c = _weighted_jensen_shannon_distance(obs_vals, cancer_obs, obs_w)
-            wmae_h = _weighted_mean_abs_error(obs_vals, healthy_obs, obs_w)
-            wmae_c = _weighted_mean_abs_error(obs_vals, cancer_obs, obs_w)
-            weighted_mean_abs_distance_margin = float(wmae_h - wmae_c)
             wcos_h = _weighted_cosine_similarity(obs_vals, healthy_obs, obs_w)
             wcos_c = _weighted_cosine_similarity(obs_vals, cancer_obs, obs_w)
             weighted_centroid_contrast_score = (wcos_c - wcos_h) + (wjs_h - wjs_c)
@@ -1243,27 +1321,14 @@ def build_observed_hybrid_feature_table(
             max_weighted_directional_score = float("nan")
             per_label_feature_values = {}
             tail_feature_values = {}
-            wjs_h = float("nan")
-            wjs_c = float("nan")
-            wmae_h = float("nan")
-            wmae_c = float("nan")
-            weighted_mean_abs_distance_margin = float("nan")
-            wcos_h = float("nan")
-            wcos_c = float("nan")
             weighted_centroid_contrast_score = float("nan")
 
         obs_frac = float(n_obs / max(1, n_loci))
-        if w.size == n_loci and total_w > 0.0:
-            obs_w_frac = float(np.sum(w[obs_mask]) / total_w)
-        else:
-            obs_w_frac = obs_frac
 
         if include_dmp_family:
             X_feat[i, idx["max_weighted_directional_score"]] = max_weighted_directional_score
-            X_feat[i, idx["weighted_mean_abs_distance_margin"]] = weighted_mean_abs_distance_margin
             X_feat[i, idx["weighted_centroid_contrast_score"]] = weighted_centroid_contrast_score
             X_feat[i, idx["obs_fraction"]] = obs_frac
-            X_feat[i, idx["weighted_obs_fraction"]] = obs_w_frac
             X_feat[i, idx["n_obs_dmps"]] = float(n_obs)
             X_feat[i, idx["n_total_dmps"]] = float(n_loci)
             for feat_name, feat_value in per_label_feature_values.items():
@@ -1449,6 +1514,7 @@ def build_observed_hybrid_feature_table(
         gene_scored_gene_weight=str(gene_scored_gene_weight),
         region_directional_region_types=region_directional_region_types,
         region_directional_min_loci=int(max(1, region_directional_min_loci)),
+        observed_feature_quality_columns=observed_feature_quality_columns,
     )
     if include_gene_scored_family:
         schema_version = HYBRID_FEATURE_SCHEMA_VERSION
@@ -1497,8 +1563,22 @@ def build_observed_hybrid_feature_table(
         },
         "raw_mapped_feature_metadata": mapped_feature_meta,
         "gene_scored": gene_scored_report,
+        "feature_profile": {
+            "schema_version": HYBRID_FEATURE_SCHEMA_VERSION if include_dmp_family else schema_version,
+            "removed_dmp_features": list(DEFAULT_REMOVED_DMP_FEATURE_SUFFIXES),
+            "quality_only_features": list(quality_feature_names),
+            "training_feature_names": list(training_feature_names),
+            "n_training_features": int(len(training_feature_names)),
+            "n_quality_features": int(len(quality_feature_names)),
+        },
     }
-    return ObservedFeatureArtifacts(X=X_feat, feature_names=feature_names, report=report)
+    return ObservedFeatureArtifacts(
+        X=X_feat,
+        feature_names=feature_names,
+        training_feature_names=training_feature_names,
+        quality_feature_names=quality_feature_names,
+        report=report,
+    )
 
 
 def verify_feature_schema(

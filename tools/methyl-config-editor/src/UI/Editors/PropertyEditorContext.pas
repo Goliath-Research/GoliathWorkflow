@@ -88,7 +88,7 @@ begin
   if FBreadcrumb = '' then
     Result := ASegment
   else
-    Result := FBreadcrumb + ' › ' + ASegment;
+    Result := FBreadcrumb + ' / ' + ASegment;
 end;
 
 end.

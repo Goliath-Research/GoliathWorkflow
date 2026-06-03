@@ -23,6 +23,7 @@ from .observed_feature_builder import (
     build_observed_hybrid_feature_table,
     derive_observed_hybrid_anchors,
     fit_feature_fill_values,
+    select_training_feature_matrix,
     verify_feature_schema,
 )
 
@@ -241,9 +242,14 @@ def train_and_apply_ecdf_second_stage(
         hist_evidence_clip_cap=float(hist_evidence_clip_cap),
         hist_tail_agreement_threshold=float(hist_tail_agreement_threshold),
     )
-    X_obs = np.asarray(feat.X, dtype=np.float32)
-    fill_values = fit_feature_fill_values(X_obs)
-    X_obs = apply_feature_fill_values(X_obs, fill_values)
+    X_obs_full = np.asarray(feat.X, dtype=np.float32)
+    fill_values = fit_feature_fill_values(X_obs_full)
+    X_obs_full = apply_feature_fill_values(X_obs_full, fill_values)
+    X_obs = select_training_feature_matrix(
+        X_obs_full,
+        feat.feature_names,
+        feat.training_feature_names,
+    )
 
     X_prob = df[["prob_class0", "prob_class1"]].astype(np.float32).to_numpy()
     X = np.concatenate([X_prob, X_obs], axis=1)
@@ -276,6 +282,8 @@ def train_and_apply_ecdf_second_stage(
         "n_features": int(X.shape[1]),
         "n_observed_features": int(X_obs.shape[1]),
         "observed_feature_names": list(feat.feature_names),
+        "training_feature_names": list(feat.training_feature_names),
+        "quality_feature_names": list(feat.quality_feature_names),
         "observed_feature_report": dict(feat.report),
         "observed_feature_fill_values": [float(v) for v in fill_values.tolist()],
         "observed_healthy_reference_vector": [float(v) for v in anchors.healthy_reference_vector.tolist()],

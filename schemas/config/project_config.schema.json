@@ -294,6 +294,11 @@
       "anyOf": [
         {
           "items": {
+            "enum": [
+              "CG",
+              "CHG",
+              "CHH"
+            ],
             "type": "string"
           },
           "type": "array"

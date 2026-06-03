@@ -224,16 +224,19 @@ begin
     ParentPath := JoinPath(ParentPath, Segments[I]);
   if ParentPath = '' then
   begin
-    if Root is TJSONArray then
-      Exit(TJSONArray(Root));
-    raise Exception.Create('Root is not an array');
+    if not (Root is TJSONObject) then
+      raise Exception.Create('Root is not an object');
+    Obj := TJSONObject(Root);
+  end
+  else
+  begin
+    Obj := EnsureObject(Root, ParentPath);
   end;
-  Obj := EnsureObject(Root, ParentPath);
   Existing := Obj.GetValue(Last);
   if Existing is TJSONArray then
     Exit(TJSONArray(Existing));
   if Assigned(Existing) then
-    Existing.Free;
+    Obj.RemovePair(Last).Free;
   Result := TJSONArray.Create;
   Obj.AddPair(Last, Result);
 end;

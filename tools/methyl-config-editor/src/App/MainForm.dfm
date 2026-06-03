@@ -42,7 +42,7 @@ object MainForm: TMainForm
     object cboSchema: TComboBox
       Left = 8
       Top = 33
-      Width = 697
+      Width = 440
       Height = 23
       Style = csDropDownList
       Anchors = [akLeft, akTop, akRight]
@@ -67,6 +67,26 @@ object MainForm: TMainForm
       TabOrder = 2
       OnClick = btnBrowseSchemasClick
     end
+    object btnEditJson: TButton
+      Left = 584
+      Top = 31
+      Width = 121
+      Height = 25
+      Anchors = [akTop, akRight]
+      Caption = 'Edit JSON...'
+      TabOrder = 3
+      OnClick = btnEditJsonClick
+    end
+    object btnNewJson: TButton
+      Left = 456
+      Top = 31
+      Width = 121
+      Height = 25
+      Anchors = [akTop, akRight]
+      Caption = 'New JSON...'
+      TabOrder = 4
+      OnClick = mnuNewJsonClick
+    end
   end
   object MemoJson: TMemo
     Left = 0
@@ -84,13 +104,17 @@ object MainForm: TMainForm
     ScrollBars = ssBoth
     TabOrder = 1
     WordWrap = False
-    ExplicitHeight = 296
   end
   object MainMenu: TMainMenu
     Left = 640
     Top = 120
     object mnuFile: TMenuItem
       Caption = '&File'
+      object mnuNewJson: TMenuItem
+        Caption = '&New JSON from schema...'
+        ShortCut = 16462
+        OnClick = mnuNewJsonClick
+      end
       object mnuOpenJson: TMenuItem
         Caption = '&Open JSON...'
         ShortCut = 16463
@@ -112,7 +136,7 @@ object MainForm: TMainForm
     object mnuEdit: TMenuItem
       Caption = '&Edit'
       object mnuEditProperties: TMenuItem
-        Caption = '&Edit properties...'
+        Caption = '&Edit JSON from schema...'
         ShortCut = 16453
         OnClick = mnuEditPropertiesClick
       end

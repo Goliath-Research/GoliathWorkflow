@@ -36,8 +36,14 @@
         <Cfg_2>true</Cfg_2>
         <Base>true</Base>
     </PropertyGroup>
+    <PropertyGroup Condition="'$(Base)'!=''">
+        <Custom_Styles>&quot;Aqua Light Slate|VCLSTYLE|$(BDSCOMMONDIR)\Styles\AquaLightSlate.vsf&quot;</Custom_Styles>
+    </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win32)'!=''">
         <BT_BuildType>Debug</BT_BuildType>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <Manifest_File>(None)</Manifest_File>
+        <AppDPIAwarenessMode>none</AppDPIAwarenessMode>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_2_Win64)'!=''">
         <BT_BuildType>Debug</BT_BuildType>
@@ -57,7 +63,6 @@
         <DCCReference Include="src\Schema\SchemaDefaults.pas"/>
         <DCCReference Include="src\Schema\SchemaBranchResolver.pas"/>
         <DCCReference Include="src\Schema\SchemaValidator.pas"/>
-        <DCCReference Include="src\Schema\TypedStepSchemas.pas"/>
         <DCCReference Include="src\Data\JsonPath.pas"/>
         <DCCReference Include="src\Data\JsonDocumentModel.pas"/>
         <DCCReference Include="src\UI\SchemaValueSummary.pas"/>
@@ -79,8 +84,6 @@
         <DCCReference Include="src\UI\Editors\ArraySchemaEditor.pas"/>
         <DCCReference Include="src\UI\Editors\DictionarySchemaEditor.pas"/>
         <DCCReference Include="src\UI\Editors\DiscriminatorSchemaEditor.pas"/>
-        <DCCReference Include="src\UI\Editors\DetectionStepEditor.pas"/>
-        <DCCReference Include="src\UI\Editors\TypedStepSchemaEditor.pas"/>
         <DCCReference Include="src\UI\PropertyEditorForm.pas">
             <Form>PropertyEditorForm</Form>
         </DCCReference>

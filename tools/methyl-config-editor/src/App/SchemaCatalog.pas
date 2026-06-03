@@ -4,6 +4,9 @@ interface
 
 uses
   System.Generics.Collections,
+  SchemaDocument,
+  SchemaNode,
+  Spring.Collections,
   System.SysUtils;
 
 type
@@ -14,33 +17,92 @@ type
 
   TSchemaCatalog = class
   private
-    FEntries: TList<TSchemaCatalogEntry>;
+    class var FCurrent: TSchemaCatalog;
+    FEntries: IList<TSchemaCatalogEntry>;
+    FDocuments: TDictionary<string, TSchemaDocument>;
+    class function CanonicalName(const Value: string): string; static;
+    class function EntrySchemaName(const Entry: TSchemaCatalogEntry): string; static;
+    procedure ClearDocuments;
     procedure ScanDirectory(const Root: string; const Relative: string);
+    function TryLoadDocument(Index: Integer; out Document: TSchemaDocument): Boolean;
   public
     constructor Create;
     destructor Destroy; override;
+    class function Current: TSchemaCatalog; static;
+    class procedure SetCurrent(ACatalog: TSchemaCatalog); static;
     procedure LoadFromRoot(const SchemasRoot: string);
     function Count: Integer;
     function Entry(Index: Integer): TSchemaCatalogEntry;
     function FindByPath(const Path: string): Integer;
+    function FindByName(const Name: string): Integer;
+    function TryResolveSchema(const Name: string; out Node: TSchemaNode): Boolean;
   end;
 
 implementation
 
 uses
+  JsonSchemaLoader,
   System.IOUtils,
+  System.StrUtils,
   Generics.Defaults;
 
 constructor TSchemaCatalog.Create;
 begin
   inherited Create;
-  FEntries := TList<TSchemaCatalogEntry>.Create;
+  FEntries := TCollections.CreateList<TSchemaCatalogEntry>;
+  FDocuments := TDictionary<string, TSchemaDocument>.Create;
 end;
 
 destructor TSchemaCatalog.Destroy;
 begin
-  FEntries.Free;
+  if FCurrent = Self then
+    FCurrent := nil;
+  ClearDocuments;
+  FDocuments.Free;
   inherited Destroy;
+end;
+
+class function TSchemaCatalog.Current: TSchemaCatalog;
+begin
+  Result := FCurrent;
+end;
+
+class procedure TSchemaCatalog.SetCurrent(ACatalog: TSchemaCatalog);
+begin
+  FCurrent := ACatalog;
+end;
+
+class function TSchemaCatalog.CanonicalName(const Value: string): string;
+var
+  Ch: Char;
+  S: string;
+begin
+  S := LowerCase(Trim(Value));
+  Result := '';
+  for Ch in S do
+    if CharInSet(Ch, ['a'..'z', '0'..'9']) then
+      Result := Result + Ch;
+end;
+
+class function TSchemaCatalog.EntrySchemaName(
+  const Entry: TSchemaCatalogEntry): string;
+begin
+  Result := TPath.GetFileName(Entry.FilePath);
+  if EndsText('.schema.json', Result) then
+    Delete(Result, Length(Result) - Length('.schema.json') + 1, MaxInt)
+  else if EndsText('.json', Result) then
+    Delete(Result, Length(Result) - Length('.json') + 1, MaxInt)
+  else if EndsText('.schema', Result) then
+    Delete(Result, Length(Result) - Length('.schema') + 1, MaxInt);
+end;
+
+procedure TSchemaCatalog.ClearDocuments;
+var
+  Document: TSchemaDocument;
+begin
+  for Document in FDocuments.Values do
+    Document.Free;
+  FDocuments.Clear;
 end;
 
 procedure TSchemaCatalog.ScanDirectory(const Root, Relative: string);
@@ -77,6 +139,7 @@ end;
 procedure TSchemaCatalog.LoadFromRoot(const SchemasRoot: string);
 begin
   FEntries.Clear;
+  ClearDocuments;
   ScanDirectory(SchemasRoot, '');
   FEntries.Sort(
     TComparer<TSchemaCatalogEntry>.Construct(
@@ -84,6 +147,29 @@ begin
       begin
         Result := CompareText(Left.DisplayName, Right.DisplayName);
       end));
+end;
+
+function TSchemaCatalog.TryLoadDocument(Index: Integer;
+  out Document: TSchemaDocument): Boolean;
+var
+  Loader: TJsonSchemaLoader;
+  Path: string;
+begin
+  Result := False;
+  Document := nil;
+  if (Index < 0) or (Index >= FEntries.Count) then
+    Exit;
+  Path := FEntries[Index].FilePath;
+  if FDocuments.TryGetValue(Path, Document) then
+    Exit(Assigned(Document));
+  Loader := TJsonSchemaLoader.Create;
+  try
+    Document := Loader.LoadDocumentFromFile(Path);
+    FDocuments.Add(Path, Document);
+    Result := True;
+  finally
+    Loader.Free;
+  end;
 end;
 
 function TSchemaCatalog.Count: Integer;
@@ -96,6 +182,21 @@ begin
   Result := FEntries[Index];
 end;
 
+function TSchemaCatalog.FindByName(const Name: string): Integer;
+var
+  I: Integer;
+  Wanted: string;
+begin
+  Result := -1;
+  Wanted := CanonicalName(Name);
+  if Wanted = '' then
+    Exit;
+  for I := 0 to FEntries.Count - 1 do
+    if SameText(CanonicalName(EntrySchemaName(FEntries[I])), Wanted) or
+      SameText(CanonicalName(FEntries[I].DisplayName), Wanted) then
+      Exit(I);
+end;
+
 function TSchemaCatalog.FindByPath(const Path: string): Integer;
 var
   I: Integer;
@@ -104,6 +205,34 @@ begin
   for I := 0 to FEntries.Count - 1 do
     if SameText(FEntries[I].FilePath, Path) then
       Exit(I);
+end;
+
+function TSchemaCatalog.TryResolveSchema(const Name: string;
+  out Node: TSchemaNode): Boolean;
+var
+  I: Integer;
+  Wanted: string;
+  Document: TSchemaDocument;
+begin
+  Result := False;
+  Node := nil;
+  I := FindByName(Name);
+  if (I >= 0) and TryLoadDocument(I, Document) then
+  begin
+    Node := Document.Root;
+    Exit(Assigned(Node));
+  end;
+
+  Wanted := CanonicalName(Name);
+  if Wanted = '' then
+    Exit;
+  for I := 0 to FEntries.Count - 1 do
+    if TryLoadDocument(I, Document) and Assigned(Document.Root) and
+      SameText(CanonicalName(Document.Root.Title), Wanted) then
+    begin
+      Node := Document.Root;
+      Exit(True);
+    end;
 end;
 
 end.

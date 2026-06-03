@@ -172,6 +172,12 @@ class BackendSharedParams(BaseModel):
             "region_directional_score column."
         ),
     )
+    observed_feature_quality_columns: List[str] = Field(
+        default_factory=lambda: ["obs_fraction", "n_obs_dmps", "n_total_dmps"],
+        description=(
+            "Observed-hybrid columns computed and exported but excluded from model training."
+        ),
+    )
 
     covariates_path: Optional[str] = Field(default=None)
     covariate_id_column: str = Field(default="sample_id")
@@ -1153,6 +1159,12 @@ class MonteCarloConfig(BaseModel):
             "region_directional_score column."
         ),
     )
+    observed_feature_quality_columns: List[str] = Field(
+        default_factory=lambda: ["obs_fraction", "n_obs_dmps", "n_total_dmps"],
+        description=(
+            "Observed-hybrid columns computed and exported but excluded from model training."
+        ),
+    )
     ecdf_second_stage_enabled: bool = Field(
         default=False,
         description=(
@@ -1341,6 +1353,7 @@ class MonteCarloConfig(BaseModel):
             "gene_scored_gene_weight",
             "region_directional_region_types",
             "region_directional_min_loci",
+            "observed_feature_quality_columns",
             "ecdf_second_stage_enabled",
             "covariates_path",
             "covariate_id_column",
@@ -1465,6 +1478,12 @@ class MonteCarloConfig(BaseModel):
             "observed_hist_alpha",
             "observed_hist_evidence_clip_cap",
             "observed_hist_tail_agreement_threshold",
+            "gene_scored_min_support_n",
+            "gene_scored_use_region_weight",
+            "gene_scored_gene_weight",
+            "region_directional_region_types",
+            "region_directional_min_loci",
+            "observed_feature_quality_columns",
             "covariates_path",
             "covariate_id_column",
             "covariate_numeric_columns",

@@ -282,7 +282,6 @@ begin
     PropList.Sort(TComparer<TSchemaProperty>.Construct(Compare));
     for var Prop in PropList do
       Node.AddProperty(Prop.Name, TSchemaNode(Prop.Node));
-    PropList.OwnsObjects := False;
   finally
     PropList.Free;
     RequiredSet.Free;
@@ -300,7 +299,7 @@ begin
     Node.ItemsSchema := ResolveNode(TJSONObject(ItemsVal), 'items')
   else if ItemsVal is TJSONTrue then
   begin
-    Node.ItemsSchema := TSchemaNode.Create;
+    Node.ItemsSchema := NewNode;
     Node.ItemsSchema.Kind := skUnknown;
   end;
 end;
@@ -322,7 +321,7 @@ begin
   begin
     Node.AdditionalPropertiesAllowed := True;
     Node.Kind := skDictionary;
-    Node.AdditionalPropertiesSchema := TSchemaNode.Create;
+    Node.AdditionalPropertiesSchema := NewNode;
     Node.AdditionalPropertiesSchema.Kind := skUnknown;
     Exit;
   end;
@@ -419,6 +418,8 @@ var
   Inner: TJSONObject;
   TypeVal: TJSONValue;
   NullableInner: TJSONObject;
+  RefVal: TJSONString;
+  Target: TJSONValue;
 begin
   if FCache.TryGetValue(RefKey, Result) then
     Exit;
@@ -430,8 +431,18 @@ begin
   if TryNormalizeNullableAnyOf(Obj, NullableInner) then
   begin
     Result.Nullable := True;
-    Inner := NullableInner;
     ApplyMetadata(Obj, Result);
+    RefVal := NullableInner.GetValue('$ref') as TJSONString;
+    if Assigned(RefVal) then
+    begin
+      Result.RefPath := RefVal.Value;
+      Target := ResolveRefPath(RefVal.Value);
+      if not (Target is TJSONObject) then
+        raise Exception.CreateFmt('$ref target is not an object: %s', [RefVal.Value]);
+      Inner := TJSONObject(Target);
+    end
+    else
+      Inner := NullableInner;
   end
   else
     Inner := Obj;

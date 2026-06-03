@@ -7,26 +7,25 @@ program MethylConfigEditorTests;
 uses
   System.SysUtils,
   DUnitX.Loggers.Console,
-  DUnitX.Loggers.Xml.NUnit,
   DUnitX.TestFramework,
   SchemaLoaderTests in 'SchemaLoaderTests.pas',
-  JsonPathTests in 'JsonPathTests.pas';
+  JsonPathTests in 'JsonPathTests.pas',
+  JsonSchemaLoader in '..\src\Schema\JsonSchemaLoader.pas',
+  SchemaNode in '..\src\Schema\SchemaNode.pas',
+  SchemaDocument in '..\src\Schema\SchemaDocument.pas',
+  JsonPath in '..\src\Data\JsonPath.pas';
 
 var
   Runner: ITestRunner;
   Results: IRunResults;
   Logger: ITestLogger;
-  NUnitLogger: ITestLogger;
 
 begin
   ReportMemoryLeaksOnShutdown := True;
   Runner := TDUnitX.CreateRunner;
   Runner.UseRTTI := True;
-  Runner.FixtureProvider := TDUnitXFixtureProvider.Create;
   Logger := TDUnitXConsoleLogger.Create(True);
   Runner.AddLogger(Logger);
-  NUnitLogger := TDUnitXNUnitFileLogger.Create(TDUnitX.Options.XMLOutputFile);
-  Runner.AddLogger(NUnitLogger);
   Results := Runner.Execute;
   if not Results.AllPassed then
     ExitCode := 1

@@ -14,6 +14,10 @@ from methyl_utils import load_project
 
 from .cohort_inference import infer_monte_carlo_cohorts_from_project
 from .config import MonteCarloConfig
+from .utils.migrate_backend_config import (
+    LEGACY_BACKEND_KEYS,
+    merge_legacy_validation_keys_into_backend_profiles,
+)
 
 
 def _update_backend_params(config: MonteCarloConfig, backend: str, updates: dict[str, Any]) -> MonteCarloConfig:
@@ -56,7 +60,11 @@ def load_monte_carlo_config(
             project_data = json.load(f)
 
         if "step_config" in project_data and "validation" in project_data.get("step_config", {}):
-            validation_settings = project_data["step_config"]["validation"]
+            validation_settings = dict(project_data["step_config"]["validation"])
+            if any(k in validation_settings for k in LEGACY_BACKEND_KEYS):
+                validation_settings, _ = merge_legacy_validation_keys_into_backend_profiles(
+                    validation_settings
+                )
             cohorts = infer_monte_carlo_cohorts_from_project(project_data, args.project)
             if len(cohorts) < 2:
                 _err(
