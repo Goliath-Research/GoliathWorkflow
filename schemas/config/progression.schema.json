@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "Schema for step_config.progression used by methyl-disease-progression.",
+  "properties": {
+    "disease_context": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "disease_profile": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "enabled": {
+      "default": true,
+      "type": "boolean"
+    },
+    "gene_score_mode": {
+      "default": "effect_x_support",
+      "enum": [
+        "effect_x_support",
+        "gene_importance"
+      ],
+      "type": "string"
+    },
+    "gene_set_metrics": {
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "type": "boolean"
+        },
+        "gene_universe": {
+          "default": "mapper_all",
+          "enum": [
+            "mapper_all",
+            "mapper_top_n",
+            "mapper_min_weight_quantile"
+          ],
+          "type": "string"
+        },
+        "output_basename": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "top_n": {
+          "minimum": 1,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "weight_quantile": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      },
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "gene_set_metrics_enabled": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "gene_set_profile": {
+      "type": [
+        "string",
+        "object",
+        "null"
+      ]
+    },
+    "gene_sets_path": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "ordered_comparison_labels": {
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "ordered_disease_groups": {
+      "items": {
+        "type": "string"
+      },
+      "type": [
+        "array",
+        "null"
+      ]
+    },
+    "ordering_mode": {
+      "default": "project_order",
+      "enum": [
+        "project_order",
+        "auto_gleason"
+      ],
+      "type": "string"
+    },
+    "report_md": {
+      "default": false,
+      "type": "boolean"
+    },
+    "strict_missing": {
+      "default": false,
+      "type": "boolean"
+    }
+  },
+  "title": "ProgressionConfig",
+  "type": "object"
+}

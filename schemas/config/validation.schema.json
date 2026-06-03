@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "Editor alias for step_config.validation. Allows editing Monte Carlo validation settings from project_config.step_config.validation.",
+  "properties": {
+    "abort_on_step_failure": {
+      "default": true,
+      "type": "boolean"
+    },
+    "feature_family_set": {
+      "default": "dmp",
+      "enum": [
+        "dmp",
+        "gene",
+        "structural",
+        "dmp+gene",
+        "dmp+structural",
+        "hybrid-all"
+      ],
+      "type": "string"
+    },
+    "feature_mode": {
+      "default": "raw_dmp",
+      "enum": [
+        "raw_dmp",
+        "observed_hybrid"
+      ],
+      "type": "string"
+    },
+    "n_iterations": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "regulatory": {
+      "additionalProperties": true,
+      "type": "object"
+    },
+    "run_stability": {
+      "default": true,
+      "type": "boolean"
+    },
+    "seed": {
+      "type": "integer"
+    },
+    "train_fraction": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "type": "number"
+    },
+    "validation_partitions": {
+      "additionalProperties": true,
+      "type": "object"
+    }
+  },
+  "title": "ValidationStepConfig",
+  "type": "object"
+}
