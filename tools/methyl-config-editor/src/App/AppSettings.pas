@@ -29,7 +29,7 @@ var
   ExeDir: string;
 begin
   ExeDir := ExtractFilePath(ParamStr(0));
-  Result := TPath.GetFullPath(TPath.Combine(ExeDir, '..\..\..\schemas\config'));
+  Result := TPath.GetFullPath(TPath.Combine(ExeDir, '..\..\schemas\config'));
   if not TDirectory.Exists(Result) then
     Result := TPath.GetFullPath(TPath.Combine(ExeDir, 'schemas\config'));
 end;
