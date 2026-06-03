@@ -19,7 +19,7 @@ Add Spring4D library paths to the Delphi IDE (or project search path), at minimu
 
 All in-memory collections use **Spring4D** (`Spring.Collections.IList`, `IDictionary`) via `TCollections.CreateList`, `CreateObjectList`, and `CreateDictionary`. Class lists that own their elements use `TCollections.CreateObjectList<T>(True)`; non-owning references (for example `oneOf` branches) use `CreateObjectList<T>(False)`. Dictionary values that are heap objects (cached schema documents) are freed explicitly before `Clear`, matching the existing `TypedStepSchemas` pattern.
 
-Sorting uses **`Spring.Comparers.TComparer<T>.Construct(...)`** with an anonymous comparison function. Do not use `.Default(...)` when you need a custom comparator — `.Default` returns a built-in comparer when one exists; it is not a factory for lambdas.
+Custom sorting passes an anonymous comparison function directly to **`IList<T>.Sort`** — Spring.Collections provides a `Sort(const comparer: TComparison<T>)` overload, so no separate comparer unit is required.
 
 ## Build
 

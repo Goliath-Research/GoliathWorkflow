@@ -41,7 +41,6 @@ type
 implementation
 
 uses
-  Spring.Comparers,
   System.Classes,
   System.IOUtils;
 
@@ -270,19 +269,18 @@ begin
       end;
     end;
     PropList.Sort(
-      TComparer<TSchemaProperty>.Construct(
-        function(const Left, Right: TSchemaProperty): Integer
-        var
-          LT, RT: string;
-        begin
-          LT := TSchemaNode(Left.Node).Title;
-          if LT = '' then
-            LT := Left.Name;
-          RT := TSchemaNode(Right.Node).Title;
-          if RT = '' then
-            RT := Right.Name;
-          Result := CompareText(LT, RT);
-        end));
+      function(const Left, Right: TSchemaProperty): Integer
+      var
+        LT, RT: string;
+      begin
+        LT := TSchemaNode(Left.Node).Title;
+        if LT = '' then
+          LT := Left.Name;
+        RT := TSchemaNode(Right.Node).Title;
+        if RT = '' then
+          RT := Right.Name;
+        Result := CompareText(LT, RT);
+      end);
     for var Prop in PropList do
       Node.AddProperty(Prop.Name, TSchemaNode(Prop.Node));
   finally

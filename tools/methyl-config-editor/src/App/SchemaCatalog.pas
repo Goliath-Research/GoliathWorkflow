@@ -41,7 +41,6 @@ implementation
 
 uses
   JsonSchemaLoader,
-  Spring.Comparers,
   System.IOUtils,
   System.StrUtils;
 
@@ -141,11 +140,10 @@ begin
   ClearDocuments;
   ScanDirectory(SchemasRoot, '');
   FEntries.Sort(
-    TComparer<TSchemaCatalogEntry>.Construct(
-      function(const Left, Right: TSchemaCatalogEntry): Integer
-      begin
-        Result := CompareText(Left.DisplayName, Right.DisplayName);
-      end));
+    function(const Left, Right: TSchemaCatalogEntry): Integer
+    begin
+      Result := CompareText(Left.DisplayName, Right.DisplayName);
+    end);
 end;
 
 function TSchemaCatalog.TryLoadDocument(Index: Integer;
