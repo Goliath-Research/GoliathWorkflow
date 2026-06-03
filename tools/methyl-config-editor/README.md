@@ -93,7 +93,8 @@ Under `step_config`, each key (e.g. `detection`, `mapper`, `predictor`, `validat
 | Property name | Schema file (default) |
 |---------------|------------------------|
 | `<name>` | `<name>.schema.json` |
-| `validation` | `validation_monte_carlo.schema.json` |
+| `validation` | `validation.schema.json` |
+| `progression` | `progression.schema.json` |
 | `validator` (deprecated) | `predictor.schema.json` |
 
 When the file exists, `ResolveProperty` loads that schema and opens the recursive property editor. **New steps only need a committed schema file** — run `methyl-export-config-schemas` in Python; no Delphi change unless you want custom summary UI.

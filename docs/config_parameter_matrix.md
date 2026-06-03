@@ -33,8 +33,8 @@ Legacy compatibility boundary:
 | `predictor` | `packages/methylpredictor/methyl_predictor/models/config.py` | `packages/methylpredictor/methyl_predictor/project_resolver.py` | `validator` alias (legacy) |
 | `mapper` | `packages/methylmapper/methyl_mapper/config.py` | `packages/methylmapper/methyl_mapper/project_resolver.py` | `csv_filename_pattern` alias in resolvers |
 | `enricher` | `packages/methylenricher/methyl_enricher/config.py` | `packages/methylenricher/methyl_enricher/project_resolver.py` | `input`/`outdir` aliases (legacy) |
-| `validation` | `packages/methylvalidation/methyl_validation/config.py` | `packages/methylvalidation/methyl_validation/cli.py` + runner/stability | none |
-| `progression` | docs contract + runner/parser | `packages/methyldiseaseprogression/.../progression.py` + `packages/methylvalidation/.../pipeline_runner.py` | `ordered_disease_groups` alias |
+| `validation` | `packages/methylvalidation/methyl_validation/config.py` (`ValidationStepConfig` / `MonteCarloConfig`) | `packages/methylvalidation/methyl_validation/cli.py` + runner/stability | none |
+| `progression` | `packages/methyldiseaseprogression/methyl_disease_progression/config.py` | `packages/methyldiseaseprogression/.../progression.py` + `packages/methylvalidation/.../pipeline_runner.py` | `ordered_disease_groups` alias |
 | `alignment_qc` | `packages/methylalignmentqc/methyl_alignment_qc/models/config.py` | `packages/methylalignmentqc/methyl_alignment_qc/project_resolver.py` | none |
 
 ## Redundancy candidate classification

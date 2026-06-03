@@ -47,6 +47,29 @@ def test_generate_schema_dict_sets_json_schema_meta():
     assert text.endswith("\n")
 
 
+def test_validation_step_schema_has_no_runner_required_fields():
+    from methyl_validation.config import ValidationStepConfig
+
+    schema = generate_schema_dict(ValidationStepConfig, title="ValidationStepConfig")
+    props = schema.get("properties", {})
+    assert schema.get("required", []) == []
+    assert "samples_base_path" not in props
+    assert "base_project" not in props
+    assert "train_fraction" in props
+    assert "backend_profiles" in props
+
+
+def test_progression_step_schema_artifact_registered():
+    root = repo_schemas_config_dir()
+    path = root / "progression.schema.json"
+    assert path.is_file(), "run methyl-export-config-schemas to create progression.schema.json"
+    import json
+
+    schema = json.loads(path.read_text(encoding="utf-8"))
+    assert schema["title"] == "ProgressionStepConfig"
+    assert "enabled" in schema.get("properties", {})
+
+
 def test_check_mode_fails_on_stale_artifact(tmp_path: Path):
     root = tmp_path / "schemas"
     export_all_config_schemas(schemas_root=root, write=True)

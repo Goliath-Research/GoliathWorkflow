@@ -3,9 +3,10 @@ Runner config schema for Monte Carlo validation.
 """
 
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, Dict, FrozenSet, List, Literal, Optional, Union, cast
+from typing import Annotated, Any, ClassVar, Dict, FrozenSet, List, Literal, Optional, Type, Union, cast, get_args, get_origin
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
+from pydantic_core import PydanticUndefined
 
 
 class CohortCsv(BaseModel):
@@ -1733,4 +1734,78 @@ def assert_production_model_build_allowed(config: MonteCarloConfig) -> None:
             "Production model build is blocked: set step_config.validation.biological_review_confirmed "
             "to true after biological review, or set require_biological_review_for_model to false."
         )
+
+
+# Fields injected from the parent project (or CLI) when loading step_config.validation.
+_VALIDATION_STEP_EXCLUDE: FrozenSet[str] = frozenset(
+    {
+        "samples_base_path",
+        "base_project",
+        "output_base",
+        "cohorts",
+        "healthy_csv",
+        "disease_csv",
+        "validation",
+    }
+)
+
+
+def _optionalize_annotation(annotation: Any) -> Any:
+    if annotation is Any:
+        return Optional[Any]
+    origin = get_origin(annotation)
+    if origin is Union:
+        if type(None) in get_args(annotation):
+            return annotation
+    return annotation | None
+
+
+def _validation_step_field_kwargs(field: Any) -> Dict[str, Any]:
+    kwargs: Dict[str, Any] = {}
+    if field.description:
+        kwargs["description"] = field.description
+    if field.default is not PydanticUndefined:
+        kwargs["default"] = field.default
+    elif field.default_factory is not None:
+        kwargs["default_factory"] = field.default_factory
+    else:
+        kwargs["default"] = None
+    for item in field.metadata or []:
+        if not isinstance(item, dict):
+            continue
+        for key, value in item.items():
+            if key in {
+                "ge",
+                "le",
+                "gt",
+                "lt",
+                "multiple_of",
+                "min_length",
+                "max_length",
+                "pattern",
+                "strict",
+                "allow_inf_nan",
+            }:
+                kwargs[key] = value
+    return kwargs
+
+
+def build_validation_step_config() -> Type[BaseModel]:
+    """Build the embeddable validation step model (all fields optional for project JSON)."""
+    fields: Dict[str, Any] = {}
+    for name, info in MonteCarloConfig.model_fields.items():
+        if name in _VALIDATION_STEP_EXCLUDE:
+            continue
+        fields[name] = (
+            _optionalize_annotation(info.annotation),
+            Field(**_validation_step_field_kwargs(info)),
+        )
+    return create_model(
+        "ValidationStepConfig",
+        __config__=ConfigDict(extra="ignore"),
+        **fields,
+    )
+
+
+ValidationStepConfig = build_validation_step_config()
 

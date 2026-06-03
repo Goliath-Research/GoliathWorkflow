@@ -50,6 +50,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="MonteCarloConfig",
     ),
     ConfigSchemaSpec(
+        schema_id="validation_step",
+        module="methyl_validation.config",
+        class_name="ValidationStepConfig",
+        filename="validation.schema.json",
+        title="ValidationStepConfig",
+    ),
+    ConfigSchemaSpec(
         schema_id="validation_regulatory",
         module="methyl_validation.config",
         class_name="RegulatoryLifecycleConfig",
@@ -125,6 +132,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         class_name="MethylCentroidConfig",
         filename="centroid.schema.json",
         title="MethylCentroidConfig",
+    ),
+    ConfigSchemaSpec(
+        schema_id="progression",
+        module="methyl_disease_progression.config",
+        class_name="ProgressionStepConfig",
+        filename="progression.schema.json",
+        title="ProgressionStepConfig",
     ),
     ConfigSchemaSpec(
         schema_id="queue_discovery_task",

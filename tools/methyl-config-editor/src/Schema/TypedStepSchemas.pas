@@ -100,7 +100,7 @@ begin
   begin
     BaseName := TPath.GetFileNameWithoutExtension(FileName);
     TryLoadStepRoot(BaseName, Root);
-    if SameText(BaseName, 'validation_monte_carlo') then
+    if SameText(BaseName, 'validation') or SameText(BaseName, 'validation_monte_carlo') then
       TryLoadStepRoot('validation', Root);
   end;
 end;
@@ -108,7 +108,7 @@ end;
 class function TTypedStepSchemas.StepFilename(const AStepId: string): string;
 begin
   if SameText(AStepId, 'validation') then
-    Result := 'validation_monte_carlo.schema.json'
+    Result := 'validation.schema.json'
   else if SameText(AStepId, 'validator') then
     Result := 'predictor.schema.json'
   else

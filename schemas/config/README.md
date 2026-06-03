@@ -27,7 +27,9 @@ Pytest also enforces this: `packages/methylvalidation/tests/test_config_schema_e
 | File | Pydantic model |
 |------|----------------|
 | `project_config.schema.json` | `methyl_utils.pipeline_config.ProjectConfig` |
-| `validation_monte_carlo.schema.json` | `methyl_validation.config.MonteCarloConfig` |
+| `validation.schema.json` | `methyl_validation.config.ValidationStepConfig` (`step_config.validation`) |
+| `validation_monte_carlo.schema.json` | `methyl_validation.config.MonteCarloConfig` (standalone `--config`) |
+| `progression.schema.json` | `methyl_disease_progression.config.ProgressionStepConfig` |
 | `validation_regulatory.schema.json` | `RegulatoryLifecycleConfig` |
 | `validation_feature_selection.schema.json` | `FeatureSelectionConfig` |
 | `validation_partitions.schema.json` | `ValidationPartitionContract` |

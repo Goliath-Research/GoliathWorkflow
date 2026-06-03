@@ -145,6 +145,25 @@
           "title": "Gene Feature Loading",
           "type": "string"
         },
+        "gene_scored_gene_weight": {
+          "default": "importance_x_sqrt_support",
+          "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
+          "title": "Gene Scored Gene Weight",
+          "type": "string"
+        },
+        "gene_scored_min_support_n": {
+          "default": 2,
+          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp+gene_scored).",
+          "minimum": 1,
+          "title": "Gene Scored Min Support N",
+          "type": "integer"
+        },
+        "gene_scored_use_region_weight": {
+          "default": true,
+          "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
+          "title": "Gene Scored Use Region Weight",
+          "type": "boolean"
+        },
         "mapper_gene_columns": {
           "items": {
             "type": "string"
@@ -251,6 +270,21 @@
           "minimum": 0.0,
           "title": "Observed Hist Tail Agreement Threshold",
           "type": "number"
+        },
+        "region_directional_min_loci": {
+          "default": 1,
+          "description": "Minimum panel loci per (comparison, region) required to emit a region_directional_score column.",
+          "minimum": 1,
+          "title": "Region Directional Min Loci",
+          "type": "integer"
+        },
+        "region_directional_region_types": {
+          "description": "Structural region types for region_directional_score__{comparison}__{region} when feature_family_set includes gene_scored.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Region Directional Region Types",
+          "type": "array"
         },
         "tabular_max_dmps": {
           "anyOf": [
@@ -404,6 +438,25 @@
           "title": "Gene Feature Loading",
           "type": "string"
         },
+        "gene_scored_gene_weight": {
+          "default": "importance_x_sqrt_support",
+          "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
+          "title": "Gene Scored Gene Weight",
+          "type": "string"
+        },
+        "gene_scored_min_support_n": {
+          "default": 2,
+          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp+gene_scored).",
+          "minimum": 1,
+          "title": "Gene Scored Min Support N",
+          "type": "integer"
+        },
+        "gene_scored_use_region_weight": {
+          "default": true,
+          "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
+          "title": "Gene Scored Use Region Weight",
+          "type": "boolean"
+        },
         "generative_batch_size": {
           "default": 64,
           "minimum": 1,
@@ -554,6 +607,21 @@
           "minimum": 0.0,
           "title": "Observed Hist Tail Agreement Threshold",
           "type": "number"
+        },
+        "region_directional_min_loci": {
+          "default": 1,
+          "description": "Minimum panel loci per (comparison, region) required to emit a region_directional_score column.",
+          "minimum": 1,
+          "title": "Region Directional Min Loci",
+          "type": "integer"
+        },
+        "region_directional_region_types": {
+          "description": "Structural region types for region_directional_score__{comparison}__{region} when feature_family_set includes gene_scored.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Region Directional Region Types",
+          "type": "array"
         },
         "tabular_max_dmps": {
           "anyOf": [
@@ -865,6 +933,25 @@
           "title": "Gene Feature Loading",
           "type": "string"
         },
+        "gene_scored_gene_weight": {
+          "default": "importance_x_sqrt_support",
+          "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
+          "title": "Gene Scored Gene Weight",
+          "type": "string"
+        },
+        "gene_scored_min_support_n": {
+          "default": 2,
+          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp+gene_scored).",
+          "minimum": 1,
+          "title": "Gene Scored Min Support N",
+          "type": "integer"
+        },
+        "gene_scored_use_region_weight": {
+          "default": true,
+          "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
+          "title": "Gene Scored Use Region Weight",
+          "type": "boolean"
+        },
         "mapper_gene_columns": {
           "items": {
             "type": "string"
@@ -971,6 +1058,21 @@
           "minimum": 0.0,
           "title": "Observed Hist Tail Agreement Threshold",
           "type": "number"
+        },
+        "region_directional_min_loci": {
+          "default": 1,
+          "description": "Minimum panel loci per (comparison, region) required to emit a region_directional_score column.",
+          "minimum": 1,
+          "title": "Region Directional Min Loci",
+          "type": "integer"
+        },
+        "region_directional_region_types": {
+          "description": "Structural region types for region_directional_score__{comparison}__{region} when feature_family_set includes gene_scored.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Region Directional Region Types",
+          "type": "array"
         },
         "tabular_max_dmps": {
           "anyOf": [
