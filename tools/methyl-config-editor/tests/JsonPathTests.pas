@@ -70,7 +70,8 @@ begin
     Clone := TJsonPath.CloneValue(Root) as TJSONObject;
     try
       Assert.AreEqual('42', Clone.GetValue('n').Value);
-      TJSONObject(Clone.GetValue('n')).AsInt := 99;
+      Clone.RemovePair('n').Free;
+      Clone.AddPair('n', TJSONNumber.Create(99));
       Assert.AreEqual('42', Root.GetValue('n').Value);
     finally
       Clone.Free;

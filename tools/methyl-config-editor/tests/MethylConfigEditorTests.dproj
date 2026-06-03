@@ -194,6 +194,10 @@
         </DelphiCompile>
         <DCCReference Include="SchemaLoaderTests.pas"/>
         <DCCReference Include="JsonPathTests.pas"/>
+        <DCCReference Include="..\src\Schema\JsonSchemaLoader.pas"/>
+        <DCCReference Include="..\src\Schema\SchemaNode.pas"/>
+        <DCCReference Include="..\src\Schema\SchemaDocument.pas"/>
+        <DCCReference Include="..\src\Data\JsonPath.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

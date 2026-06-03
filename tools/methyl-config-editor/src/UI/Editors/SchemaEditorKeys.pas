@@ -19,14 +19,10 @@ type
       ArrayKey = 'array';
       DictionaryKey = 'dictionary';
       DiscriminatorKey = 'discriminator';
-      DetectionConfigKey = 'MethylDetectorConfig';
     class function ForNode(ANode: TSchemaNode): string;
   end;
 
 implementation
-
-uses
-  System.SysUtils;
 
 class function TSchemaEditorKeys.ForNode(ANode: TSchemaNode): string;
 begin

@@ -57,7 +57,6 @@
         <DCCReference Include="src\Schema\SchemaDefaults.pas"/>
         <DCCReference Include="src\Schema\SchemaBranchResolver.pas"/>
         <DCCReference Include="src\Schema\SchemaValidator.pas"/>
-        <DCCReference Include="src\Schema\TypedStepSchemas.pas"/>
         <DCCReference Include="src\Data\JsonPath.pas"/>
         <DCCReference Include="src\Data\JsonDocumentModel.pas"/>
         <DCCReference Include="src\UI\SchemaValueSummary.pas"/>
@@ -79,8 +78,6 @@
         <DCCReference Include="src\UI\Editors\ArraySchemaEditor.pas"/>
         <DCCReference Include="src\UI\Editors\DictionarySchemaEditor.pas"/>
         <DCCReference Include="src\UI\Editors\DiscriminatorSchemaEditor.pas"/>
-        <DCCReference Include="src\UI\Editors\DetectionStepEditor.pas"/>
-        <DCCReference Include="src\UI\Editors\TypedStepSchemaEditor.pas"/>
         <DCCReference Include="src\UI\PropertyEditorForm.pas">
             <Form>PropertyEditorForm</Form>
         </DCCReference>

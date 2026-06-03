@@ -11,7 +11,6 @@ uses
   SchemaDefaults in 'src\Schema\SchemaDefaults.pas',
   SchemaBranchResolver in 'src\Schema\SchemaBranchResolver.pas',
   SchemaValidator in 'src\Schema\SchemaValidator.pas',
-  TypedStepSchemas in 'src\Schema\TypedStepSchemas.pas',
   JsonPath in 'src\Data\JsonPath.pas',
   JsonDocumentModel in 'src\Data\JsonDocumentModel.pas',
   SchemaValueSummary in 'src\UI\SchemaValueSummary.pas',
@@ -33,8 +32,6 @@ uses
   ArraySchemaEditor in 'src\UI\Editors\ArraySchemaEditor.pas',
   DictionarySchemaEditor in 'src\UI\Editors\DictionarySchemaEditor.pas',
   DiscriminatorSchemaEditor in 'src\UI\Editors\DiscriminatorSchemaEditor.pas',
-  DetectionStepEditor in 'src\UI\Editors\DetectionStepEditor.pas',
-  TypedStepSchemaEditor in 'src\UI\Editors\TypedStepSchemaEditor.pas',
   PropertyEditorForm in 'src\UI\PropertyEditorForm.pas' {PropertyEditorForm},
   ArrayEditorForm in 'src\UI\ArrayEditorForm.pas' {ArrayEditorForm},
   DictEditorForm in 'src\UI\DictEditorForm.pas' {DictEditorForm};
