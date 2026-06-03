@@ -22,6 +22,8 @@ object DictEditorForm: TDictEditorForm
     Align = alBottom
     BevelOuter = bvNone
     TabOrder = 0
+    ExplicitTop = 287
+    ExplicitWidth = 550
     object btnOK: TButton
       Left = 368
       Top = 8
@@ -39,6 +41,7 @@ object DictEditorForm: TDictEditorForm
       Height = 25
       Cancel = True
       Caption = 'Cancel'
+      ModalResult = 2
       TabOrder = 1
     end
   end
@@ -50,6 +53,7 @@ object DictEditorForm: TDictEditorForm
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 1
+    ExplicitWidth = 550
     object btnAdd: TButton
       Left = 8
       Top = 8
@@ -90,6 +94,8 @@ object DictEditorForm: TDictEditorForm
     RowCount = 2
     Options = [goFixedVertLine, goFixedHorzLine, goVertLine, goHorzLine, goRangeSelect, goEditing]
     TabOrder = 2
+    ExplicitWidth = 550
+    ExplicitHeight = 246
     ColWidths = (
       180
       360)

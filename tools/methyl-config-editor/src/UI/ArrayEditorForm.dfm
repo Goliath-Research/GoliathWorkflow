@@ -22,6 +22,8 @@ object ArrayEditorForm: TArrayEditorForm
     Align = alBottom
     BevelOuter = bvNone
     TabOrder = 0
+    ExplicitTop = 287
+    ExplicitWidth = 510
     object btnOK: TButton
       Left = 328
       Top = 8
@@ -39,6 +41,7 @@ object ArrayEditorForm: TArrayEditorForm
       Height = 25
       Cancel = True
       Caption = 'Cancel'
+      ModalResult = 2
       TabOrder = 1
     end
   end
@@ -50,6 +53,7 @@ object ArrayEditorForm: TArrayEditorForm
     Align = alTop
     BevelOuter = bvNone
     TabOrder = 1
+    ExplicitWidth = 510
     object btnAdd: TButton
       Left = 8
       Top = 8
@@ -104,5 +108,7 @@ object ArrayEditorForm: TArrayEditorForm
     Align = alClient
     ItemHeight = 15
     TabOrder = 2
+    ExplicitWidth = 510
+    ExplicitHeight = 246
   end
 end
