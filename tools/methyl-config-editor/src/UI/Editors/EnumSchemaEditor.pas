@@ -37,7 +37,7 @@ end;
 function TEnumSchemaEditor.CanEdit(ANode: TSchemaNode): Boolean;
 begin
   Result := inherited CanEdit(ANode) and (ANode.Kind = skString) and
-    (Length(ANode.EnumValues) > 0);
+    (ANode.EnumValues.Count > 0);
 end;
 
 procedure TEnumSchemaEditor.CreateRow(const AContext: IPropertyEditorContext;

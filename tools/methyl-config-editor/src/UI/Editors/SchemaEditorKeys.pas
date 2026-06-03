@@ -38,7 +38,7 @@ begin
     skNumber:
       Exit(NumberKey);
     skString:
-      if Length(ANode.EnumValues) > 0 then
+      if ANode.EnumValues.Count > 0 then
         Exit(EnumKey)
       else
         Exit(StringKey);

@@ -3,7 +3,7 @@ unit JsonSchemaLoader;
 interface
 
 uses
-  System.Generics.Collections,
+  Spring.Collections,
   System.JSON,
   System.SysUtils,
   SchemaNode,
@@ -13,9 +13,9 @@ type
   TJsonSchemaLoader = class
   private
     FRoot: TJSONObject;
-    FCache: TDictionary<string, TSchemaNode>;
-    FResolving: TDictionary<string, Boolean>;
-    FOwned: TObjectList<TSchemaNode>;
+    FCache: IDictionary<string, TSchemaNode>;
+    FResolving: IDictionary<string, Boolean>;
+    FOwned: IList<TSchemaNode>;
     function NewNode: TSchemaNode;
     function ResolveRefPath(const Ref: string): TJSONValue;
     function ParseType(const TypeVal: TJSONValue): TSchemaKind;
@@ -41,23 +41,23 @@ type
 implementation
 
 uses
+  Spring.Comparers,
   System.Classes,
-  System.IOUtils,
-  Generics.Defaults;
+  System.IOUtils;
 
 constructor TJsonSchemaLoader.Create;
 begin
   inherited Create;
-  FCache := TDictionary<string, TSchemaNode>.Create;
-  FResolving := TDictionary<string, Boolean>.Create;
-  FOwned := TObjectList<TSchemaNode>.Create(True);
+  FCache := TCollections.CreateDictionary<string, TSchemaNode>;
+  FResolving := TCollections.CreateDictionary<string, Boolean>;
+  FOwned := TCollections.CreateObjectList<TSchemaNode>(True);
 end;
 
 destructor TJsonSchemaLoader.Destroy;
 begin
-  FOwned.Free;
-  FCache.Free;
-  FResolving.Free;
+  FOwned := nil;
+  FCache := nil;
+  FResolving := nil;
   FRoot.Free;
   inherited Destroy;
 end;
@@ -162,16 +162,19 @@ end;
 
 function TJsonSchemaLoader.ResolveRefPath(const Ref: string): TJSONValue;
 var
-  Parts: TArray<string>;
+  Parts: IList<string>;
   Current: TJSONValue;
   I: Integer;
   Key: string;
+  Segment: string;
 begin
   if not Ref.StartsWith('#/') then
     raise Exception.CreateFmt('Unsupported $ref (external refs not supported): %s', [Ref]);
-  Parts := Ref.Substring(2).Split(['/']);
+  Parts := TCollections.CreateList<string>;
+  for Segment in Ref.Substring(2).Split(['/']) do
+    Parts.Add(Segment);
   Current := FRoot;
-  for I := 0 to High(Parts) do
+  for I := 0 to Parts.Count - 1 do
   begin
     Key := Parts[I];
     if not (Current is TJSONObject) then
@@ -209,12 +212,12 @@ begin
   if V is TJSONArray then
   begin
     EnumArr := TJSONArray(V);
-    SetLength(Node.EnumValues, EnumArr.Count);
+    Node.EnumValues.Clear;
     for I := 0 to EnumArr.Count - 1 do
       if EnumArr.Items[I] is TJSONString then
-        Node.EnumValues[I] := TJSONString(EnumArr.Items[I]).Value
+        Node.EnumValues.Add(TJSONString(EnumArr.Items[I]).Value)
       else
-        Node.EnumValues[I] := EnumArr.Items[I].ToJSON;
+        Node.EnumValues.Add(EnumArr.Items[I].ToJSON);
   end;
   V := Obj.GetValue('minLength');
   if V is TJSONNumber then
@@ -240,24 +243,23 @@ procedure TJsonSchemaLoader.ParseProperties(const Obj: TJSONObject; Node: TSchem
 var
   Props: TJSONObject;
   RequiredArr: TJSONArray;
-  RequiredSet: TDictionary<string, Boolean>;
+  RequiredSet: IDictionary<string, Boolean>;
   Pair: TJSONPair;
   PropNode: TSchemaNode;
   I: Integer;
-  PropList: TObjectList<TSchemaProperty>;
-  Compare: TComparison<TSchemaProperty>;
+  PropList: IList<TSchemaProperty>;
 begin
   Props := Obj.GetValue('properties') as TJSONObject;
   if not Assigned(Props) then
     Exit;
-  RequiredSet := TDictionary<string, Boolean>.Create;
-  PropList := TObjectList<TSchemaProperty>.Create(True);
+  RequiredSet := TCollections.CreateDictionary<string, Boolean>;
+  PropList := TCollections.CreateObjectList<TSchemaProperty>(True);
   try
     RequiredArr := Obj.GetValue('required') as TJSONArray;
     if Assigned(RequiredArr) then
       for I := 0 to RequiredArr.Count - 1 do
         if RequiredArr.Items[I] is TJSONString then
-          RequiredSet.AddOrSetValue(TJSONString(RequiredArr.Items[I]).Value, True);
+          RequiredSet[TJSONString(RequiredArr.Items[I]).Value] := True;
     for Pair in Props do
     begin
       if Pair.JsonValue is TJSONObject then
@@ -267,24 +269,25 @@ begin
         PropList.Add(TSchemaProperty.Create(Pair.JsonString.Value, PropNode));
       end;
     end;
-    Compare := function(const Left, Right: TSchemaProperty): Integer
-      var
-        LT, RT: string;
-      begin
-        LT := TSchemaNode(Left.Node).Title;
-        if LT = '' then
-          LT := Left.Name;
-        RT := TSchemaNode(Right.Node).Title;
-        if RT = '' then
-          RT := Right.Name;
-        Result := CompareText(LT, RT);
-      end;
-    PropList.Sort(TComparer<TSchemaProperty>.Construct(Compare));
+    PropList.Sort(
+      TComparer<TSchemaProperty>.Construct(
+        function(const Left, Right: TSchemaProperty): Integer
+        var
+          LT, RT: string;
+        begin
+          LT := TSchemaNode(Left.Node).Title;
+          if LT = '' then
+            LT := Left.Name;
+          RT := TSchemaNode(Right.Node).Title;
+          if RT = '' then
+            RT := Right.Name;
+          Result := CompareText(LT, RT);
+        end));
     for var Prop in PropList do
       Node.AddProperty(Prop.Name, TSchemaNode(Prop.Node));
   finally
-    PropList.Free;
-    RequiredSet.Free;
+    PropList := nil;
+    RequiredSet := nil;
   end;
 end;
 
@@ -356,7 +359,7 @@ begin
     Mapping := Disc.GetValue('mapping') as TJSONObject;
     if Assigned(Mapping) then
       for Pair in Mapping do
-        Node.DiscriminatorMapping.AddOrSetValue(Pair.JsonString.Value, Pair.JsonValue.Value);
+        Node.DiscriminatorMapping[Pair.JsonString.Value] := Pair.JsonValue.Value;
   end;
   for I := 0 to OneOfArr.Count - 1 do
   begin
@@ -396,16 +399,16 @@ begin
       FCache.Add(RefPath, Result);
       Exit;
     end;
-    FResolving.AddOrSetValue(RefPath, True);
+    FResolving[RefPath] := True;
     try
       Target := ResolveRefPath(RefPath);
       if Target is TJSONObject then
         Result := ParseSchemaObject(TJSONObject(Target), RefPath)
       else
         raise Exception.CreateFmt('$ref target is not an object: %s', [RefPath]);
-      FCache.AddOrSetValue(RefPath, Result);
+      FCache[RefPath] := Result;
     finally
-      FResolving.AddOrSetValue(RefPath, False);
+      FResolving[RefPath] := False;
     end;
     Exit;
   end;
@@ -464,7 +467,7 @@ begin
   if Result.OneOfBranches.Count > 0 then
   begin
     if RefKey.StartsWith('#') then
-      FCache.AddOrSetValue(RefKey, Result);
+      FCache[RefKey] := Result;
     Exit;
   end;
 
@@ -481,7 +484,7 @@ begin
   end;
 
   if RefKey.StartsWith('#') then
-    FCache.AddOrSetValue(RefKey, Result);
+    FCache[RefKey] := Result;
 end;
 
 function TJsonSchemaLoader.LoadFromJson(const Root: TJSONObject): TSchemaNode;
@@ -515,17 +518,10 @@ begin
 end;
 
 function TJsonSchemaLoader.LoadDocumentFromString(const JsonText: string): TSchemaDocument;
-var
-  Node: TSchemaNode;
 begin
-  Node := LoadFromString(JsonText);
   Result := TSchemaDocument.Create;
-  Result.Root := Node;
-  while FOwned.Count > 0 do
-  begin
-    Result.TakeOwnership(FOwned[0]);
-    FOwned.Extract(FOwned[0]);
-  end;
+  Result.Root := LoadFromString(JsonText);
+  Result.AdoptOwnedNodes(FOwned);
 end;
 
 function TJsonSchemaLoader.LoadDocumentFromFile(const Path: string): TSchemaDocument;

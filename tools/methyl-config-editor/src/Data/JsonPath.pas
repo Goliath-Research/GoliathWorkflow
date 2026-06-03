@@ -3,13 +3,14 @@ unit JsonPath;
 interface
 
 uses
+  Spring.Collections,
   System.JSON,
   System.SysUtils;
 
 type
   TJsonPath = class
   public
-    class function SplitPath(const Path: string): TArray<string>;
+    class function SplitPath(const Path: string): IList<string>;
     class function GetValue(Root: TJSONValue; const Path: string): TJSONValue;
     class function GetObject(Root: TJSONValue; const Path: string): TJSONObject;
     class function GetArray(Root: TJSONValue; const Path: string): TJSONArray;
@@ -22,19 +23,16 @@ type
 
 implementation
 
-uses
-  System.Generics.Collections;
-
 procedure SetArrayElement(Arr: TJSONArray; Index: Integer; Value: TJSONValue);
 var
   I: Integer;
-  Tail: TList<TJSONValue>;
+  Tail: IList<TJSONValue>;
 begin
   if Index < 0 then
     raise Exception.Create('Negative array index');
   while Arr.Count <= Index do
     Arr.AddElement(TJSONNull.Create);
-  Tail := TList<TJSONValue>.Create;
+  Tail := TCollections.CreateObjectList<TJSONValue>(False);
   try
     for I := Index + 1 to Arr.Count - 1 do
       Tail.Add(Arr.Items[I].Clone as TJSONValue);
@@ -47,34 +45,24 @@ begin
     for I := 0 to Tail.Count - 1 do
       Arr.AddElement(Tail[I]);
   finally
-    Tail.Free;
+    Tail := nil;
   end;
 end;
 
-class function TJsonPath.SplitPath(const Path: string): TArray<string>;
+class function TJsonPath.SplitPath(const Path: string): IList<string>;
 var
   Clean: string;
-  Parts: TArray<string>;
-  I: Integer;
-  List: TArray<string>;
-  Count: Integer;
+  Part: string;
 begin
+  Result := TCollections.CreateList<string>;
   Clean := Path;
   if Clean.StartsWith('/') then
     Clean := Copy(Clean, 2, MaxInt);
   if Clean = '' then
-    Exit(nil);
-  Parts := Clean.Split(['/']);
-  Count := 0;
-  SetLength(List, Length(Parts));
-  for I := 0 to High(Parts) do
-    if Parts[I] <> '' then
-    begin
-      List[Count] := Parts[I];
-      Inc(Count);
-    end;
-  SetLength(List, Count);
-  Result := List;
+    Exit;
+  for Part in Clean.Split(['/']) do
+    if Part <> '' then
+      Result.Add(Part);
 end;
 
 class function TJsonPath.JoinPath(const Base, Segment: string): string;
@@ -87,7 +75,7 @@ end;
 
 class function TJsonPath.GetValue(Root: TJSONValue; const Path: string): TJSONValue;
 var
-  Segments: TArray<string>;
+  Segments: IList<string>;
   Current: TJSONValue;
   I: Integer;
   Idx: Integer;
@@ -96,10 +84,10 @@ begin
   if not Assigned(Root) then
     Exit;
   Segments := SplitPath(Path);
-  if Length(Segments) = 0 then
+  if Segments.Count = 0 then
     Exit(Root);
   Current := Root;
-  for I := 0 to High(Segments) do
+  for I := 0 to Segments.Count - 1 do
   begin
     if not Assigned(Current) then
       Exit(nil);
@@ -143,7 +131,7 @@ end;
 
 class function TJsonPath.EnsureObject(Root: TJSONValue; const Path: string): TJSONObject;
 var
-  Segments: TArray<string>;
+  Segments: IList<string>;
   Current: TJSONValue;
   NextObj: TJSONObject;
   I, Idx: Integer;
@@ -152,21 +140,21 @@ begin
   if not Assigned(Root) then
     raise Exception.Create('Root JSON value is nil');
   Segments := SplitPath(Path);
-  if Length(Segments) = 0 then
+  if Segments.Count = 0 then
   begin
     if Root is TJSONObject then
       Exit(TJSONObject(Root));
     raise Exception.Create('Root is not an object');
   end;
   Current := Root;
-  for I := 0 to High(Segments) do
+  for I := 0 to Segments.Count - 1 do
   begin
     if Current is TJSONObject then
     begin
       Existing := TJSONObject(Current).GetValue(Segments[I]);
       if not Assigned(Existing) then
       begin
-        if I = High(Segments) then
+        if I = Segments.Count - 1 then
         begin
           NextObj := TJSONObject.Create;
           TJSONObject(Current).AddPair(Segments[I], NextObj);
@@ -197,7 +185,7 @@ begin
     NextObj := TJSONObject.Create;
     if Current is TJSONArray then
     begin
-      Idx := StrToIntDef(Segments[High(Segments)], -1);
+      Idx := StrToIntDef(Segments[Segments.Count - 1], -1);
       SetArrayElement(TJSONArray(Current), Idx, NextObj);
     end
     else
@@ -209,18 +197,18 @@ end;
 class function TJsonPath.EnsureArray(Root: TJSONValue; const Path: string): TJSONArray;
 var
   Obj: TJSONObject;
-  Segments: TArray<string>;
+  Segments: IList<string>;
   Last: string;
   ParentPath: string;
   I: Integer;
   Existing: TJSONValue;
 begin
   Segments := SplitPath(Path);
-  if Length(Segments) = 0 then
+  if Segments.Count = 0 then
     raise Exception.Create('Empty path for array');
-  Last := Segments[High(Segments)];
+  Last := Segments[Segments.Count - 1];
   ParentPath := '';
-  for I := 0 to High(Segments) - 1 do
+  for I := 0 to Segments.Count - 2 do
     ParentPath := JoinPath(ParentPath, Segments[I]);
   if ParentPath = '' then
   begin
@@ -244,7 +232,7 @@ end;
 class procedure TJsonPath.SetValue(Root: TJSONValue; const Path: string;
   Value: TJSONValue);
 var
-  Segments: TArray<string>;
+  Segments: IList<string>;
   Current: TJSONValue;
   I, Idx: Integer;
   Key: string;
@@ -253,13 +241,13 @@ begin
   if not Assigned(Root) then
     raise Exception.Create('Root JSON value is nil');
   Segments := SplitPath(Path);
-  if Length(Segments) = 0 then
+  if Segments.Count = 0 then
     raise Exception.Create('Cannot set root via path');
   Current := Root;
-  for I := 0 to High(Segments) do
+  for I := 0 to Segments.Count - 1 do
   begin
     Key := Segments[I];
-    if I = High(Segments) then
+    if I = Segments.Count - 1 then
     begin
       if Current is TJSONObject then
       begin

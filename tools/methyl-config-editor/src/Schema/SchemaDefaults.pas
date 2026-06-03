@@ -3,7 +3,6 @@ unit SchemaDefaults;
 interface
 
 uses
-  System.Generics.Collections,
   System.JSON,
   SchemaNode;
 
@@ -37,7 +36,7 @@ begin
     skNumber:
       Exit(TJSONNumber.Create(0));
     skString:
-      if Length(ANode.EnumValues) > 0 then
+      if ANode.EnumValues.Count > 0 then
         Exit(TJSONString.Create(ANode.EnumValues[0]))
       else
         Exit(TJSONString.Create(''));
@@ -59,6 +58,7 @@ var
   Prop: TSchemaProperty;
   PropNode: TSchemaNode;
   Branch: TSchemaNode;
+  Key: string;
 begin
   Result := TJSONObject.Create;
   if not Assigned(ANode) then
@@ -75,7 +75,7 @@ begin
     end;
     if ANode.DiscriminatorProperty <> '' then
     begin
-      for var Key in ANode.DiscriminatorMapping.Keys do
+      for Key in ANode.DiscriminatorMapping.Keys do
       begin
         Result.AddPair(ANode.DiscriminatorProperty, TJSONString.Create(Key));
         Break;

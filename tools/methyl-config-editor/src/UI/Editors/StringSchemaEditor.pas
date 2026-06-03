@@ -37,7 +37,7 @@ end;
 function TStringSchemaEditor.CanEdit(ANode: TSchemaNode): Boolean;
 begin
   Result := inherited CanEdit(ANode) and (ANode.Kind = skString) and
-    (Length(ANode.EnumValues) = 0);
+    (ANode.EnumValues.Count = 0);
 end;
 
 procedure TStringSchemaEditor.CreateRow(const AContext: IPropertyEditorContext;

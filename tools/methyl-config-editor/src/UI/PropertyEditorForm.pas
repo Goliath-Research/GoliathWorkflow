@@ -7,7 +7,7 @@ uses
   Winapi.Messages,
   System.SysUtils,
   System.Classes,
-  System.Generics.Collections,
+  Spring.Collections,
   Vcl.Graphics,
   Vcl.Controls,
   Vcl.Forms,
@@ -40,7 +40,7 @@ type
     FWorking: TJSONObject;
     FBreadcrumb: string;
     FContext: IPropertyEditorContext;
-    FRows: TObjectList<TPropertyRow>;
+    FRows: IList<TPropertyRow>;
     procedure ClearRows;
     procedure BuildRows;
     procedure BuildPropertyRows(EffectiveSchema: TSchemaNode);
@@ -63,12 +63,12 @@ uses
 
 procedure TPropertyEditorForm.FormCreate(Sender: TObject);
 begin
-  FRows := TObjectList<TPropertyRow>.Create(True);
+  FRows := TCollections.CreateObjectList<TPropertyRow>(True);
 end;
 
 procedure TPropertyEditorForm.FormDestroy(Sender: TObject);
 begin
-  FRows.Free;
+  FRows := nil;
   FContext := nil;
   if Assigned(FWorking) then
     FWorking.Free;

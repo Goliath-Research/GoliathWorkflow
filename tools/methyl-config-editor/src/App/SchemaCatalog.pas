@@ -3,7 +3,6 @@ unit SchemaCatalog;
 interface
 
 uses
-  System.Generics.Collections,
   SchemaDocument,
   SchemaNode,
   Spring.Collections,
@@ -19,7 +18,7 @@ type
   private
     class var FCurrent: TSchemaCatalog;
     FEntries: IList<TSchemaCatalogEntry>;
-    FDocuments: TDictionary<string, TSchemaDocument>;
+    FDocuments: IDictionary<string, TSchemaDocument>;
     class function CanonicalName(const Value: string): string; static;
     class function EntrySchemaName(const Entry: TSchemaCatalogEntry): string; static;
     procedure ClearDocuments;
@@ -42,15 +41,15 @@ implementation
 
 uses
   JsonSchemaLoader,
+  Spring.Comparers,
   System.IOUtils,
-  System.StrUtils,
-  Generics.Defaults;
+  System.StrUtils;
 
 constructor TSchemaCatalog.Create;
 begin
   inherited Create;
   FEntries := TCollections.CreateList<TSchemaCatalogEntry>;
-  FDocuments := TDictionary<string, TSchemaDocument>.Create;
+  FDocuments := TCollections.CreateDictionary<string, TSchemaDocument>;
 end;
 
 destructor TSchemaCatalog.Destroy;
@@ -58,7 +57,7 @@ begin
   if FCurrent = Self then
     FCurrent := nil;
   ClearDocuments;
-  FDocuments.Free;
+  FDocuments := nil;
   inherited Destroy;
 end;
 

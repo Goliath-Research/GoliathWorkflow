@@ -108,9 +108,9 @@ begin
           ErrorMessage := Format('Minimum length is %d', [ANode.MinLength]);
           Exit(False);
         end;
-        if Length(ANode.EnumValues) > 0 then
+        if ANode.EnumValues.Count > 0 then
         begin
-          for I := 0 to High(ANode.EnumValues) do
+          for I := 0 to ANode.EnumValues.Count - 1 do
             if ANode.EnumValues[I] = S then
               Exit(True);
           ErrorMessage := 'Value must be one of the allowed enum values';

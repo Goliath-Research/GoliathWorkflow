@@ -7,7 +7,7 @@ uses
   Winapi.Messages,
   System.SysUtils,
   System.Classes,
-  System.Generics.Collections,
+  Spring.Collections,
   Vcl.Graphics,
   Vcl.Controls,
   Vcl.Forms,
@@ -77,10 +77,10 @@ end;
 procedure ReplaceArrayElement(AArray: TJSONArray; Index: Integer; AValue: TJSONValue);
 var
   I: Integer;
-  Tail: TObjectList<TJSONValue>;
+  Tail: IList<TJSONValue>;
   Removed: TJSONValue;
 begin
-  Tail := TObjectList<TJSONValue>.Create(True);
+  Tail := TCollections.CreateObjectList<TJSONValue>(False);
   try
     for I := Index + 1 to AArray.Count - 1 do
       Tail.Add(AArray.Items[I].Clone as TJSONValue);
@@ -90,48 +90,49 @@ begin
       Removed.Free;
     end;
     AArray.AddElement(AValue);
-    while Tail.Count > 0 do
-      AArray.AddElement(Tail.Extract(Tail[0]));
+    for I := 0 to Tail.Count - 1 do
+      AArray.AddElement(Tail[I]);
   finally
-    Tail.Free;
+    Tail := nil;
   end;
 end;
 
 procedure RemoveArrayElement(AArray: TJSONArray; Index: Integer);
 var
   I: Integer;
-  Values: TObjectList<TJSONValue>;
+  Values: IList<TJSONValue>;
 begin
-  Values := TObjectList<TJSONValue>.Create(True);
+  Values := TCollections.CreateObjectList<TJSONValue>(False);
   try
     for I := 0 to AArray.Count - 1 do
       if I <> Index then
         Values.Add(AArray.Items[I].Clone as TJSONValue);
     ClearArray(AArray);
-    while Values.Count > 0 do
-      AArray.AddElement(Values.Extract(Values[0]));
+    for I := 0 to Values.Count - 1 do
+      AArray.AddElement(Values[I]);
   finally
-    Values.Free;
+    Values := nil;
   end;
 end;
 
 procedure MoveArrayElement(AArray: TJSONArray; FromIndex, ToIndex: Integer);
 var
   I: Integer;
-  Values: TObjectList<TJSONValue>;
+  Values: IList<TJSONValue>;
   Moving: TJSONValue;
 begin
-  Values := TObjectList<TJSONValue>.Create(True);
+  Values := TCollections.CreateObjectList<TJSONValue>(False);
   try
     for I := 0 to AArray.Count - 1 do
       Values.Add(AArray.Items[I].Clone as TJSONValue);
-    Moving := Values.Extract(Values[FromIndex]);
+    Moving := Values[FromIndex];
+    Values.Delete(FromIndex);
     Values.Insert(ToIndex, Moving);
     ClearArray(AArray);
-    while Values.Count > 0 do
-      AArray.AddElement(Values.Extract(Values[0]));
+    for I := 0 to Values.Count - 1 do
+      AArray.AddElement(Values[I]);
   finally
-    Values.Free;
+    Values := nil;
   end;
 end;
 

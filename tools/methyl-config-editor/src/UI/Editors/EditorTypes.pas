@@ -8,7 +8,7 @@ uses
   Vcl.ExtCtrls,
   System.JSON,
   System.Classes,
-  System.Generics.Collections,
+  Spring.Collections,
   SchemaNode;
 
 type
@@ -47,7 +47,7 @@ type
 
   TPropertyRow = class
   private
-    FEventHandlers: TObjectList<TNotifyEventHandler>;
+    FEventHandlers: IList<TNotifyEventHandler>;
   public
     PropertyName: string;
     SchemaNode: TSchemaNode;
@@ -81,12 +81,12 @@ end;
 constructor TPropertyRow.Create;
 begin
   inherited Create;
-  FEventHandlers := TObjectList<TNotifyEventHandler>.Create(True);
+  FEventHandlers := TCollections.CreateObjectList<TNotifyEventHandler>(True);
 end;
 
 destructor TPropertyRow.Destroy;
 begin
-  FEventHandlers.Free;
+  FEventHandlers := nil;
   inherited;
 end;
 

@@ -3,7 +3,7 @@ unit SchemaNode;
 interface
 
 uses
-  System.Generics.Collections,
+  Spring.Collections,
   System.JSON,
   System.SysUtils;
 
@@ -29,8 +29,8 @@ type
 
   TSchemaNode = class
   private
-    FProperties: TObjectList<TSchemaProperty>;
-    FOneOfBranches: TObjectList<TSchemaNode>;
+    FProperties: IList<TSchemaProperty>;
+    FOneOfBranches: IList<TSchemaNode>;
     function GetPropertyCount: Integer;
     function GetProperty(Index: Integer): TSchemaProperty;
   public
@@ -41,7 +41,7 @@ type
     Nullable: Boolean;
     ReadOnly: Boolean;
     Required: Boolean;
-    EnumValues: TArray<string>;
+    EnumValues: IList<string>;
     DefaultValue: TJSONValue;
     MinLength: Integer;
     MaxLength: Integer;
@@ -54,7 +54,7 @@ type
     AdditionalPropertiesAllowed: Boolean;
     RefPath: string;
     DiscriminatorProperty: string;
-    DiscriminatorMapping: TDictionary<string, string>;
+    DiscriminatorMapping: IDictionary<string, string>;
     ResolvedFromRef: Boolean;
     constructor Create;
     destructor Destroy; override;
@@ -66,7 +66,7 @@ type
     function CloneShallow: TSchemaNode;
     property PropertyCount: Integer read GetPropertyCount;
     property Properties[Index: Integer]: TSchemaProperty read GetProperty;
-    property OneOfBranches: TObjectList<TSchemaNode> read FOneOfBranches;
+    property OneOfBranches: IList<TSchemaNode> read FOneOfBranches;
   end;
 
 implementation
@@ -81,9 +81,10 @@ end;
 constructor TSchemaNode.Create;
 begin
   inherited Create;
-  FProperties := TObjectList<TSchemaProperty>.Create(True);
-  FOneOfBranches := TObjectList<TSchemaNode>.Create(False);
-  DiscriminatorMapping := TDictionary<string, string>.Create;
+  FProperties := TCollections.CreateObjectList<TSchemaProperty>(True);
+  FOneOfBranches := TCollections.CreateObjectList<TSchemaNode>(False);
+  DiscriminatorMapping := TCollections.CreateDictionary<string, string>;
+  EnumValues := TCollections.CreateList<string>;
   Kind := skUnknown;
   MinLength := -1;
   MaxLength := -1;
@@ -95,11 +96,12 @@ end;
 
 destructor TSchemaNode.Destroy;
 begin
-  DiscriminatorMapping.Free;
-  FOneOfBranches.Free;
   if Assigned(DefaultValue) then
     DefaultValue.Free;
-  FProperties.Free;
+  FProperties := nil;
+  FOneOfBranches := nil;
+  DiscriminatorMapping := nil;
+  EnumValues := nil;
   inherited Destroy;
 end;
 
@@ -144,6 +146,8 @@ begin
 end;
 
 function TSchemaNode.CloneShallow: TSchemaNode;
+var
+  E: string;
 begin
   Result := TSchemaNode.Create;
   Result.Kind := Kind;
@@ -153,7 +157,8 @@ begin
   Result.Nullable := Nullable;
   Result.ReadOnly := ReadOnly;
   Result.Required := Required;
-  Result.EnumValues := EnumValues;
+  for E in EnumValues do
+    Result.EnumValues.Add(E);
   if Assigned(DefaultValue) then
     Result.DefaultValue := DefaultValue.Clone as TJSONValue;
   Result.MinLength := MinLength;
