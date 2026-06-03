@@ -23,7 +23,7 @@ object PropertyEditorForm: TPropertyEditorForm
     Align = alBottom
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitTop = 407
+    ExplicitTop = 669
     ExplicitWidth = 630
     object btnOK: TButton
       Left = 448
@@ -42,7 +42,9 @@ object PropertyEditorForm: TPropertyEditorForm
       Height = 25
       Cancel = True
       Caption = 'Cancel'
+      ModalResult = 2
       TabOrder = 1
+      OnClick = btnCancelClick
     end
   end
   object ScrollBox: TScrollBox
@@ -53,6 +55,6 @@ object PropertyEditorForm: TPropertyEditorForm
     Align = alClient
     TabOrder = 1
     ExplicitWidth = 630
-    ExplicitHeight = 407
+    ExplicitHeight = 669
   end
 end
