@@ -1,7 +1,7 @@
 object MainForm: TMainForm
   Left = 0
   Top = 0
-  Caption = 'MethylPipeline Config Editor'
+  Caption = 'JSON Schema Editor'
   ClientHeight = 441
   ClientWidth = 720
   Color = clBtnFace

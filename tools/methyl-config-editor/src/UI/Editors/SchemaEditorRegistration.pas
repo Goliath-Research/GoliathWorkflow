@@ -6,10 +6,8 @@ type
   TSchemaEditorRegistration = class
   private
     class var FRegistered: Boolean;
-    class function IsKnownKey(const AKey: string): Boolean; static;
   public
     class procedure EnsureRegistered;
-    class function IsRegistered(const AKey: string): Boolean;
   end;
 
 implementation
@@ -29,25 +27,6 @@ uses
   ArraySchemaEditor,
   DictionarySchemaEditor,
   DiscriminatorSchemaEditor;
-
-class function TSchemaEditorRegistration.IsKnownKey(const AKey: string): Boolean;
-begin
-  Result := SameStr(AKey, TSchemaEditorKeys.StringKey) or
-    SameStr(AKey, TSchemaEditorKeys.EnumKey) or
-    SameStr(AKey, TSchemaEditorKeys.BooleanKey) or
-    SameStr(AKey, TSchemaEditorKeys.IntegerKey) or
-    SameStr(AKey, TSchemaEditorKeys.NumberKey) or
-    SameStr(AKey, TSchemaEditorKeys.ObjectKey) or
-    SameStr(AKey, TSchemaEditorKeys.OneOfObjectKey) or
-    SameStr(AKey, TSchemaEditorKeys.ArrayKey) or
-    SameStr(AKey, TSchemaEditorKeys.DictionaryKey) or
-    SameStr(AKey, TSchemaEditorKeys.DiscriminatorKey);
-end;
-
-class function TSchemaEditorRegistration.IsRegistered(const AKey: string): Boolean;
-begin
-  Result := FRegistered and IsKnownKey(AKey);
-end;
 
 class procedure TSchemaEditorRegistration.EnsureRegistered;
 begin

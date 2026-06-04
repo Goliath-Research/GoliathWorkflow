@@ -13,10 +13,18 @@ type
   TJsonSchemaLoader = class
   private
     FRoot: TJSONObject;
+    FBaseDir: string;
     FCache: IDictionary<string, TSchemaNode>;
     FResolving: IDictionary<string, Boolean>;
     FOwned: IList<TSchemaNode>;
+    FExternalRoots: IDictionary<string, TJSONObject>;
+    FExternalJsonOwner: IList<TJSONValue>;
     function NewNode: TSchemaNode;
+    procedure ResetState;
+    procedure SplitRefParts(const Ref: string; out FilePart, FragmentPart: string);
+    function ResolveSchemaFilePath(const FilePart: string): string;
+    function LoadExternalRoot(const AbsolutePath: string): TJSONObject;
+    function NavigateFragment(Root: TJSONValue; const FragmentPart: string): TJSONValue;
     function ResolveRefPath(const Ref: string): TJSONValue;
     function ParseType(const TypeVal: TJSONValue): TSchemaKind;
     function IsNullSchema(const Obj: TJSONObject): Boolean;
@@ -50,15 +58,30 @@ begin
   FCache := TCollections.CreateDictionary<string, TSchemaNode>;
   FResolving := TCollections.CreateDictionary<string, Boolean>;
   FOwned := TCollections.CreateObjectList<TSchemaNode>(True);
+  FExternalRoots := TCollections.CreateDictionary<string, TJSONObject>;
+  FExternalJsonOwner := TCollections.CreateObjectList<TJSONValue>(True);
 end;
 
 destructor TJsonSchemaLoader.Destroy;
 begin
+  ResetState;
   FOwned := nil;
   FCache := nil;
   FResolving := nil;
-  FRoot.Free;
+  FExternalRoots := nil;
+  FExternalJsonOwner := nil;
   inherited Destroy;
+end;
+
+procedure TJsonSchemaLoader.ResetState;
+begin
+  FRoot.Free;
+  FRoot := nil;
+  FBaseDir := '';
+  FCache.Clear;
+  FResolving.Clear;
+  FExternalRoots.Clear;
+  FExternalJsonOwner.Clear;
 end;
 
 function TJsonSchemaLoader.IsNullSchema(const Obj: TJSONObject): Boolean;
@@ -143,7 +166,7 @@ begin
     if IsNullSchema(TJSONObject(Branch)) then
       Continue;
     if Assigned(NonNull) then
-      Exit; // more than one non-null branch
+      Exit;
     NonNull := TJSONObject(Branch);
   end;
   if Assigned(NonNull) then
@@ -159,30 +182,122 @@ begin
   FOwned.Add(Result);
 end;
 
-function TJsonSchemaLoader.ResolveRefPath(const Ref: string): TJSONValue;
+procedure TJsonSchemaLoader.SplitRefParts(const Ref: string; out FilePart,
+  FragmentPart: string);
+var
+  HashPos: Integer;
+begin
+  FilePart := '';
+  FragmentPart := '';
+  if Ref = '' then
+    Exit;
+  if Ref.StartsWith('#') then
+  begin
+    FragmentPart := Ref;
+    Exit;
+  end;
+  HashPos := Ref.IndexOf('#');
+  if HashPos >= 0 then
+  begin
+    FilePart := Copy(Ref, 1, HashPos);
+    FragmentPart := Copy(Ref, HashPos + 1, MaxInt);
+  end
+  else
+    FilePart := Ref;
+end;
+
+function TJsonSchemaLoader.ResolveSchemaFilePath(const FilePart: string): string;
+var
+  Candidate: string;
+begin
+  if FBaseDir = '' then
+    raise Exception.CreateFmt('Cannot resolve external $ref without a schema file path: %s',
+      [FilePart]);
+  if TPath.IsPathRooted(FilePart) then
+    Candidate := TPath.GetFullPath(FilePart)
+  else
+    Candidate := TPath.GetFullPath(TPath.Combine(FBaseDir, FilePart));
+  if not TFile.Exists(Candidate) then
+    raise Exception.CreateFmt('Cannot resolve $ref, schema file not found: %s', [Candidate]);
+  Result := Candidate;
+end;
+
+function TJsonSchemaLoader.LoadExternalRoot(const AbsolutePath: string): TJSONObject;
+var
+  JsonText: string;
+  Parsed: TJSONValue;
+begin
+  if FExternalRoots.TryGetValue(AbsolutePath, Result) then
+    Exit;
+  JsonText := TFile.ReadAllText(AbsolutePath, TEncoding.UTF8);
+  Parsed := TJSONObject.ParseJSONValue(JsonText, False, True);
+  if not (Parsed is TJSONObject) then
+  begin
+    Parsed.Free;
+    raise Exception.CreateFmt('$ref schema root must be a JSON object: %s', [AbsolutePath]);
+  end;
+  FExternalJsonOwner.Add(Parsed);
+  Result := TJSONObject(Parsed);
+  FExternalRoots.Add(AbsolutePath, Result);
+end;
+
+function TJsonSchemaLoader.NavigateFragment(Root: TJSONValue;
+  const FragmentPart: string): TJSONValue;
 var
   Parts: IList<string>;
   Current: TJSONValue;
   I: Integer;
   Key: string;
   Segment: string;
+  Clean: string;
 begin
-  if not Ref.StartsWith('#/') then
-    raise Exception.CreateFmt('Unsupported $ref (external refs not supported): %s', [Ref]);
+  if not Assigned(Root) then
+    raise Exception.Create('Cannot navigate $ref fragment on nil root');
+  if (FragmentPart = '') or (FragmentPart = '#') then
+    Exit(Root);
+  Clean := FragmentPart;
+  if Clean.StartsWith('#/') then
+    Clean := Copy(Clean, 3, MaxInt)
+  else if Clean.StartsWith('#') then
+    Clean := Copy(Clean, 2, MaxInt);
+  if Clean = '' then
+    Exit(Root);
   Parts := TCollections.CreateList<string>;
-  for Segment in Ref.Substring(2).Split(['/']) do
-    Parts.Add(Segment);
-  Current := FRoot;
-  for I := 0 to Parts.Count - 1 do
-  begin
-    Key := Parts[I];
-    if not (Current is TJSONObject) then
-      raise Exception.CreateFmt('Invalid $ref path: %s', [Ref]);
-    Current := TJSONObject(Current).GetValue(Key);
-    if not Assigned(Current) then
-      raise Exception.CreateFmt('Invalid $ref path: %s', [Ref]);
+  try
+    for Segment in Clean.Split(['/']) do
+      if Segment <> '' then
+        Parts.Add(Segment);
+    Current := Root;
+    for I := 0 to Parts.Count - 1 do
+    begin
+      Key := Parts[I];
+      if not (Current is TJSONObject) then
+        raise Exception.CreateFmt('Invalid $ref fragment path: %s', [FragmentPart]);
+      Current := TJSONObject(Current).GetValue(Key);
+      if not Assigned(Current) then
+        raise Exception.CreateFmt('Invalid $ref fragment path: %s', [FragmentPart]);
+    end;
+    Result := Current;
+  finally
+    Parts := nil;
   end;
-  Result := Current;
+end;
+
+function TJsonSchemaLoader.ResolveRefPath(const Ref: string): TJSONValue;
+var
+  FilePart, FragmentPart: string;
+  SchemaRoot: TJSONValue;
+  AbsolutePath: string;
+begin
+  SplitRefParts(Ref, FilePart, FragmentPart);
+  if FilePart = '' then
+    SchemaRoot := FRoot
+  else
+  begin
+    AbsolutePath := ResolveSchemaFilePath(FilePart);
+    SchemaRoot := LoadExternalRoot(AbsolutePath);
+  end;
+  Result := NavigateFragment(SchemaRoot, FragmentPart);
 end;
 
 procedure TJsonSchemaLoader.ApplyMetadata(const Obj: TJSONObject; Node: TSchemaNode);
@@ -426,7 +541,7 @@ begin
     Exit;
 
   Result := NewNode;
-  if RefKey.StartsWith('#') then
+  if RefKey.StartsWith('#') or (Pos('#', RefKey) > 0) or (Pos('.json', LowerCase(RefKey)) > 0) then
     Result.RefPath := RefKey;
 
   if TryNormalizeNullableAnyOf(Obj, NullableInner) then
@@ -464,7 +579,7 @@ begin
   ParseOneOfDiscriminator(Inner, Result);
   if Result.OneOfBranches.Count > 0 then
   begin
-    if RefKey.StartsWith('#') then
+    if RefKey.StartsWith('#') or (Pos('.json', LowerCase(RefKey)) > 0) then
       FCache[RefKey] := Result;
     Exit;
   end;
@@ -481,15 +596,18 @@ begin
       ParseAdditionalProperties(Inner, Result);
   end;
 
-  if RefKey.StartsWith('#') then
+  if RefKey.StartsWith('#') or (Pos('.json', LowerCase(RefKey)) > 0) then
     FCache[RefKey] := Result;
 end;
 
 function TJsonSchemaLoader.LoadFromJson(const Root: TJSONObject): TSchemaNode;
+var
+  SavedBaseDir: string;
 begin
+  SavedBaseDir := FBaseDir;
+  ResetState;
+  FBaseDir := SavedBaseDir;
   FRoot := Root.Clone as TJSONObject;
-  FCache.Clear;
-  FResolving.Clear;
   Result := ResolveNode(FRoot, '#');
 end;
 
@@ -512,6 +630,7 @@ end;
 
 function TJsonSchemaLoader.LoadFromFile(const Path: string): TSchemaNode;
 begin
+  FBaseDir := TPath.GetDirectoryName(TPath.GetFullPath(Path));
   Result := LoadFromString(TFile.ReadAllText(Path, TEncoding.UTF8));
 end;
 
@@ -524,7 +643,10 @@ end;
 
 function TJsonSchemaLoader.LoadDocumentFromFile(const Path: string): TSchemaDocument;
 begin
-  Result := LoadDocumentFromString(TFile.ReadAllText(Path, TEncoding.UTF8));
+  FBaseDir := TPath.GetDirectoryName(TPath.GetFullPath(Path));
+  Result := TSchemaDocument.Create;
+  Result.Root := LoadFromString(TFile.ReadAllText(Path, TEncoding.UTF8));
+  Result.AdoptOwnedNodes(FOwned);
 end;
 
 end.

@@ -6,12 +6,14 @@ uses
   AppSettings in 'src\App\AppSettings.pas',
   SchemaCatalog in 'src\App\SchemaCatalog.pas',
   JsonSchemaLoader in 'src\Schema\JsonSchemaLoader.pas',
+  SchemaDocumentCache in 'src\Schema\SchemaDocumentCache.pas',
   SchemaNode in 'src\Schema\SchemaNode.pas',
   SchemaDocument in 'src\Schema\SchemaDocument.pas',
   SchemaDefaults in 'src\Schema\SchemaDefaults.pas',
   SchemaBranchResolver in 'src\Schema\SchemaBranchResolver.pas',
   SchemaValidator in 'src\Schema\SchemaValidator.pas',
   JsonPath in 'src\Data\JsonPath.pas',
+  JsonArrayOps in 'src\Data\JsonArrayOps.pas',
   JsonDocumentModel in 'src\Data\JsonDocumentModel.pas',
   SchemaValueSummary in 'src\UI\SchemaValueSummary.pas',
   EditorTypes in 'src\UI\Editors\EditorTypes.pas',
@@ -44,7 +46,7 @@ begin
   Application.Initialize;
   Application.MainFormOnTaskbar := True;
   TStyleManager.TrySetStyle('Aqua Light Slate');
-  Application.Title := 'JSON Schema-based Editor';
+  Application.Title := 'JSON Schema Editor';
   TSchemaEditorRegistration.EnsureRegistered;
   Application.CreateForm(TMainForm, MainFormInstance);
   Application.Run;

@@ -10,10 +10,12 @@ uses
   DUnitX.TestFramework,
   SchemaLoaderTests in 'SchemaLoaderTests.pas',
   JsonPathTests in 'JsonPathTests.pas',
+  JsonArrayOpsTests in 'JsonArrayOpsTests.pas',
   JsonSchemaLoader in '..\src\Schema\JsonSchemaLoader.pas',
   SchemaNode in '..\src\Schema\SchemaNode.pas',
   SchemaDocument in '..\src\Schema\SchemaDocument.pas',
-  JsonPath in '..\src\Data\JsonPath.pas';
+  JsonPath in '..\src\Data\JsonPath.pas',
+  JsonArrayOps in '..\src\Data\JsonArrayOps.pas';
 
 var
   Runner: ITestRunner;

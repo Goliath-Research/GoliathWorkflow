@@ -148,7 +148,6 @@ end;
 
 procedure TPropertyEditorForm.BuildPropertyRows(EffectiveSchema: TSchemaNode);
 var
-  I: Integer;
   Prop: TSchemaProperty;
   PropNode: TSchemaNode;
   Row: TPropertyRow;
@@ -156,14 +155,13 @@ var
   Val: TJSONValue;
   Editor: ISchemaPropertyEditor;
 begin
-  for I := 0 to EffectiveSchema.PropertyCount - 1 do
+  for Prop in EffectiveSchema.PropertyItems do
   begin
-    Prop := EffectiveSchema.Properties[I];
     if (FSchema.DiscriminatorProperty <> '') and
       SameText(Prop.Name, FSchema.DiscriminatorProperty) then
       Continue;
     PropNode := TSchemaNode(Prop.Node);
-    Editor := TSchemaEditorRegistry.ResolveProperty(Prop.Name, PropNode);
+    Editor := TSchemaEditorRegistry.Resolve(PropNode);
     TitleText := PropNode.Title;
     if TitleText = '' then
       TitleText := Prop.Name;

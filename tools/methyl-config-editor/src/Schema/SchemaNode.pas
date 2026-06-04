@@ -66,6 +66,7 @@ type
     function CloneShallow: TSchemaNode;
     property PropertyCount: Integer read GetPropertyCount;
     property Properties[Index: Integer]: TSchemaProperty read GetProperty;
+    property PropertyItems: IList<TSchemaProperty> read FProperties;
     property OneOfBranches: IList<TSchemaNode> read FOneOfBranches;
   end;
 

@@ -23,31 +23,8 @@ type
 
 implementation
 
-procedure SetArrayElement(Arr: TJSONArray; Index: Integer; Value: TJSONValue);
-var
-  I: Integer;
-  Tail: IList<TJSONValue>;
-begin
-  if Index < 0 then
-    raise Exception.Create('Negative array index');
-  while Arr.Count <= Index do
-    Arr.AddElement(TJSONNull.Create);
-  Tail := TCollections.CreateObjectList<TJSONValue>(False);
-  try
-    for I := Index + 1 to Arr.Count - 1 do
-      Tail.Add(Arr.Items[I].Clone as TJSONValue);
-    while Arr.Count > Index do
-    begin
-      Arr.Items[Arr.Count - 1].Free;
-      Arr.Remove(Arr.Count - 1);
-    end;
-    Arr.AddElement(Value);
-    for I := 0 to Tail.Count - 1 do
-      Arr.AddElement(Tail[I]);
-  finally
-    Tail := nil;
-  end;
-end;
+uses
+  JsonArrayOps;
 
 class function TJsonPath.SplitPath(const Path: string): IList<string>;
 var
@@ -136,6 +113,7 @@ var
   NextObj: TJSONObject;
   I, Idx: Integer;
   Existing: TJSONValue;
+  Arr: TJSONArray;
 begin
   if not Assigned(Root) then
     raise Exception.Create('Root JSON value is nil');
@@ -186,7 +164,8 @@ begin
     if Current is TJSONArray then
     begin
       Idx := StrToIntDef(Segments[Segments.Count - 1], -1);
-      SetArrayElement(TJSONArray(Current), Idx, NextObj);
+      Arr := TJSONArray(Current);
+      TJsonArrayOps.SetElement(Arr, Idx, NextObj);
     end
     else
       raise Exception.CreateFmt('Path does not resolve to object: %s', [Path]);
@@ -217,9 +196,7 @@ begin
     Obj := TJSONObject(Root);
   end
   else
-  begin
     Obj := EnsureObject(Root, ParentPath);
-  end;
   Existing := Obj.GetValue(Last);
   if Existing is TJSONArray then
     Exit(TJSONArray(Existing));
@@ -262,7 +239,7 @@ begin
         Arr := TJSONArray(Current);
         while Arr.Count <= Idx do
           Arr.AddElement(TJSONNull.Create);
-        SetArrayElement(Arr, Idx, Value);
+        TJsonArrayOps.SetElement(Arr, Idx, Value);
       end
       else
         raise Exception.Create('Cannot set value on non-container');
@@ -282,7 +259,7 @@ begin
       while Arr.Count <= Idx do
         Arr.AddElement(TJSONObject.Create);
       if not (Arr.Items[Idx] is TJSONObject) then
-        SetArrayElement(Arr, Idx, TJSONObject.Create);
+        TJsonArrayOps.SetElement(Arr, Idx, TJSONObject.Create);
       Current := Arr.Items[Idx];
     end
     else

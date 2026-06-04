@@ -4,6 +4,7 @@ interface
 
 uses
   SchemaDocument,
+  SchemaDocumentCache,
   SchemaNode,
   Spring.Collections,
   System.SysUtils;
@@ -18,10 +19,9 @@ type
   private
     class var FCurrent: TSchemaCatalog;
     FEntries: IList<TSchemaCatalogEntry>;
-    FDocuments: IDictionary<string, TSchemaDocument>;
+    FDocuments: TSchemaDocumentCache;
     class function CanonicalName(const Value: string): string; static;
     class function EntrySchemaName(const Entry: TSchemaCatalogEntry): string; static;
-    procedure ClearDocuments;
     procedure ScanDirectory(const Root: string; const Relative: string);
     function TryLoadDocument(Index: Integer; out Document: TSchemaDocument): Boolean;
   public
@@ -35,6 +35,8 @@ type
     function FindByPath(const Path: string): Integer;
     function FindByName(const Name: string): Integer;
     function TryResolveSchema(const Name: string; out Node: TSchemaNode): Boolean;
+    function TryGetDocument(const Path: string; out Document: TSchemaDocument): Boolean;
+    procedure PutDocument(const Path: string; ADocument: TSchemaDocument);
   end;
 
 implementation
@@ -48,14 +50,14 @@ constructor TSchemaCatalog.Create;
 begin
   inherited Create;
   FEntries := TCollections.CreateList<TSchemaCatalogEntry>;
-  FDocuments := TCollections.CreateDictionary<string, TSchemaDocument>;
+  FDocuments := TSchemaDocumentCache.Create;
 end;
 
 destructor TSchemaCatalog.Destroy;
 begin
   if FCurrent = Self then
     FCurrent := nil;
-  ClearDocuments;
+  FDocuments.Free;
   FDocuments := nil;
   inherited Destroy;
 end;
@@ -94,15 +96,6 @@ begin
     Delete(Result, Length(Result) - Length('.schema') + 1, MaxInt);
 end;
 
-procedure TSchemaCatalog.ClearDocuments;
-var
-  Document: TSchemaDocument;
-begin
-  for Document in FDocuments.Values do
-    Document.Free;
-  FDocuments.Clear;
-end;
-
 procedure TSchemaCatalog.ScanDirectory(const Root, Relative: string);
 var
   FullDir: string;
@@ -137,13 +130,25 @@ end;
 procedure TSchemaCatalog.LoadFromRoot(const SchemasRoot: string);
 begin
   FEntries.Clear;
-  ClearDocuments;
+  FDocuments.Clear;
   ScanDirectory(SchemasRoot, '');
   FEntries.Sort(
     function(const Left, Right: TSchemaCatalogEntry): Integer
     begin
       Result := CompareText(Left.DisplayName, Right.DisplayName);
     end);
+end;
+
+function TSchemaCatalog.TryGetDocument(const Path: string;
+  out Document: TSchemaDocument): Boolean;
+begin
+  Result := FDocuments.TryGet(Path, Document);
+end;
+
+procedure TSchemaCatalog.PutDocument(const Path: string;
+  ADocument: TSchemaDocument);
+begin
+  FDocuments.Add(Path, ADocument);
 end;
 
 function TSchemaCatalog.TryLoadDocument(Index: Integer;
@@ -157,7 +162,7 @@ begin
   if (Index < 0) or (Index >= FEntries.Count) then
     Exit;
   Path := FEntries[Index].FilePath;
-  if FDocuments.TryGetValue(Path, Document) then
+  if FDocuments.TryGet(Path, Document) then
     Exit(Assigned(Document));
   Loader := TJsonSchemaLoader.Create;
   try
