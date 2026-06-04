@@ -290,6 +290,16 @@ def run_project_ensure_complete(
             continue
 
         print(f"\n--- Ensure-complete: {label} -> {paths.output_dir} ---")
+        comparison_cisbp_context = cisbp_context
+        if cisbp_config is not None and getattr(cisbp_config, "enabled", False):
+            comparison_cisbp_context = resolve_cisbp_context(
+                cisbp_config,
+                project=project,
+                project_path=project_path,
+                cutoff=float(enricher_config.cutoff or 0.05),
+                cache_dir=str(cisbp_context.cache_dir) if cisbp_context else None,
+                comparison_label=label,
+            )
         report, _ = run_comparison_enrichment(
             inp,
             Path(paths.output_dir),
@@ -307,10 +317,10 @@ def run_project_ensure_complete(
                 "input_path": inp,
                 "output_dir": Path(paths.output_dir),
                 "cisbp": cisbp_config,
-                "cisbp_context": cisbp_context,
+                "cisbp_context": comparison_cisbp_context,
             },
             cisbp=cisbp_config,
-            cisbp_context=cisbp_context,
+            cisbp_context=comparison_cisbp_context,
         )
         reports[label] = report
         if report.complete:

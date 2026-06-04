@@ -40,8 +40,8 @@ class CisbpConfig(BaseModel):
         that merges with the Enrichr libraries.
       * ``annotate`` ("1B", planned): annotate TFs already surfaced by ChEA/ENCODE/
         TRRUST results with CIS-BP motif metadata.
-      * ``motif_scan`` ("1C", planned): scan DMP/DMR region sequences with CIS-BP
-        PWMs for direct motif enrichment.
+      * ``motif_scan`` ("1C"): scan DMP/DMR region sequences with CIS-BP PWMs and
+        test for over-represented motifs at differentially methylated loci.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -76,6 +76,16 @@ class CisbpConfig(BaseModel):
     gene_universe_file: Optional[str] = None  # gene list; default = all genes in GTF
     background_size: Optional[int] = None  # ORA background size override
     rebuild_gmt: Optional[bool] = None  # force-rebuild cached GMT
+
+    # DMP region motif scan (mode="motif_scan").
+    dmp_csv_path: Optional[str] = None  # single DMP CSV (overrides dmp_detection_dir)
+    dmp_detection_dir: Optional[str] = None  # directory with dmps-*-*.csv exports
+    dmp_source: Optional[str] = "discovery"  # discovery | classifier
+    region_flank_bp: Optional[int] = 250  # bases on each side of the DMP position
+    max_dmp_regions: Optional[int] = 5000  # cap loci loaded for scanning
+    min_regions_per_tf: Optional[int] = 3  # min DMP regions per TF in the GMT
+    max_regions_per_tf: Optional[int] = 5000
+    rebuild_region_gmt: Optional[bool] = None  # force-rebuild cached region GMT
 
 
 class EnricherStepConfig(BaseModel):

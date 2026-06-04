@@ -13,6 +13,7 @@ Defaults follow the project's existing properties:
 from __future__ import annotations
 
 import os
+import types
 from pathlib import Path
 from typing import Optional
 
@@ -48,6 +49,31 @@ def effective_cisbp_config(enricher_config) -> Optional[object]:
     return cfg
 
 
+def _comparison_for_label(project, label: str):
+    """Return ComparisonSpec (or None) matching an enricher comparison label."""
+    if project is None or not label:
+        return None
+    uses_cd = getattr(project, "uses_control_disease", lambda: False)()
+    if uses_cd:
+        for spec in project.get_comparisons():
+            token = spec.comparison_label or spec.disease_group
+            if token == label:
+                return spec
+        return None
+    resolved = getattr(project, "get_resolved_groups", lambda: [])()
+    if len(resolved) < 2:
+        return None
+    control_label = resolved[0][0]
+    for i in range(1, len(resolved)):
+        if resolved[i][0] == label:
+            return types.SimpleNamespace(
+                control_group=control_label,
+                disease_group=label,
+                comparison_label=label,
+            )
+    return None
+
+
 def resolve_cisbp_context(
     cisbp_config,
     *,
@@ -55,6 +81,9 @@ def resolve_cisbp_context(
     project_path=None,
     cutoff: float = 0.05,
     cache_dir: Optional[str] = None,
+    control_group: Optional[str] = None,
+    disease_group: Optional[str] = None,
+    comparison_label: Optional[str] = None,
 ) -> CisbpContext:
     """Resolve cache dir, GTF, genome FASTA and gene universe for CIS-BP."""
     cd = cache_dir or getattr(cisbp_config, "cache_dir", None)
@@ -97,11 +126,27 @@ def resolve_cisbp_context(
         with open(universe_file, encoding="utf-8") as fh:
             gene_universe = {ln.strip() for ln in fh if ln.strip()}
 
+    dmp_detection_dir = getattr(cisbp_config, "dmp_detection_dir", None)
+    if not dmp_detection_dir and project is not None:
+        cg = control_group
+        dg = disease_group
+        if (not cg or not dg) and comparison_label:
+            spec = _comparison_for_label(project, comparison_label)
+            if spec is not None:
+                cg = cg or spec.control_group
+                dg = dg or spec.disease_group
+        if cg and dg:
+            try:
+                dmp_detection_dir = project.resolve_detection_output_dir(cg, dg)
+            except Exception:
+                dmp_detection_dir = None
+
     return CisbpContext(
         cache_dir=cd,
         gtf=gtf,
         genome_fasta=genome_fasta,
         gene_universe=gene_universe,
+        dmp_detection_dir=dmp_detection_dir,
         background=getattr(cisbp_config, "background_size", None),
         cutoff=cutoff,
     )

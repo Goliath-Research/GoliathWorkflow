@@ -22,6 +22,7 @@ class CisbpContext:
     gtf: Optional[str] = None
     genome_fasta: Optional[str] = None
     gene_universe: Optional[Set[str]] = None
+    dmp_detection_dir: Optional[str] = None
     background: Optional[int] = None
     cutoff: float = 0.05
 

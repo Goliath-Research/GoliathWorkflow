@@ -49,10 +49,9 @@ def test_registry_modes_and_stubs():
     with pytest.raises(ValueError):
         registry.get_mode_handler("nope")
 
-    for planned in ("annotate", "motif_scan"):
-        cfg = CisbpConfig(enabled=True, mode=planned)
-        with pytest.raises(NotImplementedError):
-            run_cisbp(cfg, ["GENEA"], "/tmp/does-not-matter", CisbpContext())
+    cfg = CisbpConfig(enabled=True, mode="annotate")
+    with pytest.raises(NotImplementedError):
+        run_cisbp(cfg, ["GENEA"], "/tmp/does-not-matter", CisbpContext())
 
 
 def test_disabled_returns_none(tmp_path):
@@ -262,6 +261,59 @@ def test_resolve_bundle_local_dir(tmp_path):
     tf = bundle.load_tf_info()
     assert "TFTEST" in set(tf["TF_Name"])
     assert (tf["motif_evidence"] == "Direct").all()
+
+
+def test_motif_scan_dmp_region_ora(tmp_path):
+    """Offline motif_scan: DMP window with ACGT hit -> TFTEST enriched vs background loci."""
+    pytest.importorskip("pyfaidx")
+
+    seq = list("A" * 200)
+    seq[20:24] = list("ACGT")
+    fasta = tmp_path / "genome.fa"
+    fasta.write_text(">chr1\n" + "".join(seq) + "\n")
+
+    dmp_dir = tmp_path / "detections"
+    dmp_dir.mkdir()
+    pd.DataFrame(
+        {
+            "chromosome": ["chr1", "chr1", "chr1"],
+            "position": [22, 150, 180],
+            "gene_name": ["GENEP", "GENEN", "OTHER"],
+        }
+    ).to_csv(dmp_dir / "dmps-1-discovery.csv", index=False)
+
+    bundle_root = tmp_path / "bundle"
+    _make_synthetic_bundle(bundle_root)
+
+    cfg = CisbpConfig(
+        enabled=True,
+        mode="motif_scan",
+        data_dir=str(bundle_root),
+        genome_fasta=str(fasta),
+        dmp_detection_dir=str(dmp_dir),
+        region_flank_bp=60,
+        motif_score_threshold=0.85,
+        min_regions_per_tf=1,
+        auto_download=False,
+    )
+    genes = ["GENEP"]
+    out = tmp_path / "out"
+    label = run_cisbp(
+        cfg,
+        genes,
+        out,
+        CisbpContext(cache_dir=tmp_path / "cache", genome_fasta=str(fasta)),
+    )
+    assert label == "CIS-BP"
+    df = pd.read_csv(out / "enrich_CIS-BP.csv")
+    assert "TFTEST" in set(df["Term"])
+
+
+def test_motif_scan_requires_dmp_inputs(tmp_path):
+    cfg = CisbpConfig(enabled=True, mode="motif_scan", genome_fasta=str(tmp_path / "x.fa"))
+    (tmp_path / "x.fa").write_text(">chr1\nA\n")
+    with pytest.raises(ValueError, match="DMP inputs"):
+        run_cisbp(cfg, ["G"], tmp_path / "out", CisbpContext(cache_dir=tmp_path))
 
 
 def test_resolve_bundle_rechecks_cache_after_lock(tmp_path, monkeypatch):
