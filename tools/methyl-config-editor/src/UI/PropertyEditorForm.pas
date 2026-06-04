@@ -241,11 +241,8 @@ end;
 
 class function TPropertyEditorForm.EditObject(AOwner: TComponent;
   const ABreadcrumb: string; ASchema: TSchemaNode; AObject: TJSONObject): Boolean;
-var
-  Form: TPropertyEditorForm;
-  Pair: TJSONPair;
 begin
-  Form := TPropertyEditorForm.Create(AOwner);
+  var Form := TPropertyEditorForm.Create(AOwner);
   try
     Form.FSchema := ASchema;
     Form.FObject := AObject;
@@ -273,8 +270,11 @@ begin
     Form.BuildRows;
     if Form.ShowModal = mrOk then
     begin
+      var Pair: TJSONPair;
+
       while AObject.Count > 0 do
         AObject.RemovePair(AObject.Pairs[0].JsonString.Value).Free;
+
       for Pair in Form.FWorking do
         AObject.AddPair(Pair.JsonString.Value, Pair.JsonValue.Clone as TJSONValue);
       Result := True;

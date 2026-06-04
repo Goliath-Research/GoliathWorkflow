@@ -11,7 +11,7 @@ object PropertyEditorForm: TPropertyEditorForm
   Font.Height = -12
   Font.Name = 'Segoe UI'
   Font.Style = []
-  Position = poScreenCenter
+  Position = poDefault
   OnCreate = FormCreate
   OnDestroy = FormDestroy
   TextHeight = 15
