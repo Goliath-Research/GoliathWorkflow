@@ -193,7 +193,13 @@ def resolve_fragmentomics_config(
     *,
     project_regulatory: Optional[Dict[str, Any]] = None,
 ) -> Optional[FragmentomicsConfig]:
-    """Build FragmentomicsConfig from alignment_qc step + optional regulatory analyte."""
+    """
+    Build FragmentomicsConfig from alignment_qc step config.
+
+    Prefer merged project config from ``ProjectConfig.get_step_config`` (analyte
+    profiles already applied). The ``auto_profile_from_analyte`` branch remains
+    for callers that pass raw step JSON without profile merge.
+    """
     if not step_cfg:
         step_cfg = {}
     raw = step_cfg.get("fragmentomics")
@@ -201,9 +207,9 @@ def resolve_fragmentomics_config(
         return None
 
     merged: Dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
-    if step_cfg.get("auto_profile_from_analyte") and project_regulatory:
+    if not merged and step_cfg.get("auto_profile_from_analyte") and project_regulatory:
         analyte = str(project_regulatory.get("primary_analyte") or "").strip().lower()
-        if analyte in {"cfdna", "cf_dna", "cell_free_dna"}:
+        if analyte in {"cfdna", "cf_dna", "cell_free_dna", "plasma", "plasma_cfdna"}:
             merged.setdefault("enabled", True)
             merged.setdefault("profile", "cfdna")
 

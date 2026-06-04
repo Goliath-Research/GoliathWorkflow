@@ -114,6 +114,21 @@
           "default": null,
           "title": "Cache Dir"
         },
+        "cisbp_modes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cisbp Modes"
+        },
         "data_dir": {
           "anyOf": [
             {

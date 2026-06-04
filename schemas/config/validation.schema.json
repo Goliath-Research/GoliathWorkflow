@@ -856,6 +856,19 @@
           "title": "Allow Clinical Performance Claims",
           "type": "boolean"
         },
+        "auto_apply_analyte_profile": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When true (default when primary_analyte is set), merge analyte-specific step_config defaults (fragmentomics, CIS-BP, bisulfite QC, etc.). Set false to opt out.",
+          "title": "Auto Apply Analyte Profile"
+        },
         "claim_boundary": {
           "anyOf": [
             {

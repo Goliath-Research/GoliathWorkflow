@@ -530,6 +530,13 @@ class RegulatoryLifecycleConfig(BaseModel):
         default=False,
         description="Whether FDA-facing clinical performance claims are allowed at this stage.",
     )
+    auto_apply_analyte_profile: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When true (default when primary_analyte is set), merge analyte-specific "
+            "step_config defaults (fragmentomics, CIS-BP, bisulfite QC, etc.). Set false to opt out."
+        ),
+    )
 
     @model_validator(mode="after")
     def _validate_stage_claim_alignment(self) -> "RegulatoryLifecycleConfig":

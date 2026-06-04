@@ -26,35 +26,45 @@ from .enricher_completeness import (
 from .module_pipeline import run_module_pipeline
 
 
+def _cisbp_merge_labels(result: Any) -> List[str]:
+    """Normalize run_cisbp return value to a list of library labels."""
+    if not result:
+        return []
+    if isinstance(result, list):
+        return [str(x) for x in result if x]
+    return [str(result)]
+
+
 def _maybe_run_cisbp(
     cisbp: Optional[Any],
     cisbp_context: Optional[Any],
     genes: List[str],
     output_dir: Path,
     cutoff: float,
-) -> Optional[str]:
+) -> List[str]:
     """
     Run the optional CIS-BP integration in the ensure-complete path and return
-    its library label (to include in the merge), or ``None``. Soft-fails so a
-    CIS-BP problem never breaks the core enrichment.
+    library labels to include in the merge. Soft-fails so a CIS-BP problem never
+    breaks the core enrichment.
     """
     if cisbp is None or not getattr(cisbp, "enabled", False):
-        return None
+        return []
     try:
         from .cisbp import run_cisbp, CisbpContext
 
         context = cisbp_context or CisbpContext(cutoff=cutoff)
-        label = run_cisbp(cisbp, genes, output_dir, context=context)
-        if label:
-            print(f"[INFO] ✓ CIS-BP: results added as '{label}'")
+        result = run_cisbp(cisbp, genes, output_dir, context=context)
+        labels = _cisbp_merge_labels(result)
+        if labels:
+            print(f"[INFO] ✓ CIS-BP: results added as {', '.join(labels)}")
         else:
             print("[WARN] CIS-BP produced no enrichment terms; skipping")
-        return label
+        return labels
     except NotImplementedError as exc:
         print(f"[WARN] CIS-BP skipped: {exc}")
     except Exception as exc:  # noqa: BLE001 - never break core enrichment
         print(f"[WARN] CIS-BP integration failed ({type(exc).__name__}): {exc}")
-    return None
+    return []
 
 
 def _filter_comparison(
@@ -138,8 +148,8 @@ def run_comparison_enrichment(
 
             time.sleep(policy.inter_library_delay_seconds)
 
-    cisbp_label = _maybe_run_cisbp(cisbp, cisbp_context, genes, output_dir, cutoff)
-    merge_libraries = list(libraries) + ([cisbp_label] if cisbp_label else [])
+    cisbp_labels = _maybe_run_cisbp(cisbp, cisbp_context, genes, output_dir, cutoff)
+    merge_libraries = list(libraries) + cisbp_labels
     merge_library_results(output_dir, merge_libraries, cutoff=cutoff)
 
     report = assess_completeness(output_dir, libraries, modules_required=False)

@@ -16,6 +16,7 @@ from methyl_enricher.cisbp import download as download_mod
 from methyl_enricher.cisbp import pwm as pwm_mod
 from methyl_enricher.cisbp import annotate, gene_sets, registry, run_cisbp, CisbpContext, available_modes
 from methyl_enricher.cisbp.download import resolve_bundle
+from methyl_utils.analyte_profiles import cisbp_mode_label, resolve_cisbp_modes
 from methyl_enricher.enricher_completeness import merge_library_results
 from methyl_enricher.module_pipeline import _library_category
 
@@ -288,13 +289,25 @@ def test_annotate_tf_metadata_from_chea(tmp_path):
         annotate_libraries=["ChEA_2022"],
     )
     label = run_cisbp(cfg, [], out, CisbpContext(cache_dir=tmp_path / "cache", cutoff=0.05))
-    assert label == "CIS-BP"
-    df = pd.read_csv(out / "enrich_CIS-BP.csv")
+    assert label == "CIS-BP-annotate"
+    df = pd.read_csv(out / "enrich_CIS-BP-annotate.csv")
     assert len(df) == 1
     assert df.iloc[0]["Term"] == "TFTEST"
     assert df.iloc[0]["cisbp_motif_ids"] == "M0001"
     assert df.iloc[0]["source_library"] == "ChEA_2022"
     assert "Direct" in str(df.iloc[0]["cisbp_motif_evidence"])
+
+
+def test_cisbp_multi_mode_labels():
+    class _Cfg:
+        enabled = True
+        label = "CIS-BP"
+        cisbp_modes = ["gene_sets", "motif_scan", "annotate"]
+        mode = "gene_sets"
+
+    assert resolve_cisbp_modes(_Cfg()) == ["gene_sets", "motif_scan", "annotate"]
+    assert cisbp_mode_label("motif_scan") == "CIS-BP-motif"
+    assert cisbp_mode_label("annotate") == "CIS-BP-annotate"
 
 
 def test_normalize_tf_name():
@@ -343,8 +356,8 @@ def test_motif_scan_dmp_region_ora(tmp_path):
         out,
         CisbpContext(cache_dir=tmp_path / "cache", genome_fasta=str(fasta)),
     )
-    assert label == "CIS-BP"
-    df = pd.read_csv(out / "enrich_CIS-BP.csv")
+    assert label == "CIS-BP-motif"
+    df = pd.read_csv(out / "enrich_CIS-BP-motif.csv")
     assert "TFTEST" in set(df["Term"])
 
 

@@ -59,7 +59,7 @@ Enable in `step_config.alignment_qc.bisulfite_conversion`. Place `bisulfite_conv
 
 ## cfDNA fragmentomics (insert-size)
 
-See `step_config.alignment_qc.fragmentomics` and `auto_profile_from_analyte` (enables cfDNA profile when `validation.regulatory.primary_analyte` is `cfdna`). Metrics are stored in `fragmentomics_metrics` on each sample JSON.
+When `validation.regulatory.primary_analyte` is `cfdna`, the [analyte profile](../../docs/ANALYTE_PROFILES.md) enables cfDNA fragmentomics guardrails automatically (or set `fragmentomics` / `auto_profile_from_analyte` explicitly). Metrics are stored in `fragmentomics_metrics` on each sample JSON. Bisulfite conversion QC is also enabled by default for WGBS analytes.
 
 ## Related Documentation
 

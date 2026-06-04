@@ -71,8 +71,13 @@ Set `cisbp.genome_fasta` / `cisbp.gtf` only to override those project defaults. 
 built GMT is cached so subsequent runs are fast. You can also supply a prebuilt GMT
 directly via `gene_set_source=prebuilt_gmt` + `gmt_path`.
 
-Enable via CLI (`--cisbp`, optional `--cisbp-mode`) or, preferably, in the project
-config under `step_config.enricher.cisbp`:
+For **cfDNA** projects, set `validation.regulatory.primary_analyte` to `cfdna` and the
+[pipeline analyte profile](../../docs/ANALYTE_PROFILES.md) enables CIS-BP with
+`cisbp_modes: [gene_sets, motif_scan, annotate]` (three merge labels). Override in
+`step_config.enricher.cisbp` as needed.
+
+Enable via CLI (`--cisbp`, optional `--cisbp-mode`) or in the project config under
+`step_config.enricher.cisbp`:
 
 ```json
 {

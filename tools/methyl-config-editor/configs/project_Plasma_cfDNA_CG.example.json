@@ -26,34 +26,10 @@
   "comparisons": "control_vs_each_disease",
   "step_config": {
     "alignment_qc": {
-      "genome_fasta": "/work/ref/hg38/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
-      "fragmentomics": {
-        "enabled": true,
-        "profile": "cfdna"
-      },
-      "auto_profile_from_analyte": true,
-      "bisulfite_conversion": {
-        "enabled": true,
-        "source": "auto",
-        "min_conversion_rate_pct": 99.0,
-        "max_non_cpg_methylation_pct": 2.0
-      }
-    },
-    "fragmentomics": {
-      "enabled": true,
-      "modes": ["wps", "end_motifs"],
-      "end_motif_k": 4,
-      "wps_bin_bp": 1000
+      "genome_fasta": "/work/ref/hg38/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
     },
     "mapper": {
       "gtf": "/work/ref/hg38/annotation.gtf"
-    },
-    "enricher": {
-      "cisbp": {
-        "enabled": true,
-        "mode": "gene_sets",
-        "species": "Homo_sapiens"
-      }
     },
     "validation": {
       "train_fraction": 0.8,
@@ -61,7 +37,6 @@
       "seed": 42,
       "run_stability": true,
       "stability_dmp_freq": 0.7,
-      "enforce_training_analyte_match": true,
       "regulatory": {
         "stage": "feasibility",
         "primary_analyte": "cfdna",

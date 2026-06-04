@@ -47,8 +47,9 @@ class CisbpConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     enabled: Optional[bool] = None
-    mode: Optional[str] = "gene_sets"  # gene_sets | annotate | motif_scan
-    label: Optional[str] = "CIS-BP"  # library name used in merged results
+    mode: Optional[str] = "gene_sets"  # gene_sets | annotate | motif_scan (used when cisbp_modes unset)
+    cisbp_modes: Optional[List[str]] = None  # e.g. [gene_sets, motif_scan, annotate]; annotate runs last
+    label: Optional[str] = "CIS-BP"  # base library name; motif/annotate modes use suffixed labels
 
     # Data acquisition (CIS-BP has no API; bulk per-species archive download).
     species: Optional[str] = "Homo_sapiens"
