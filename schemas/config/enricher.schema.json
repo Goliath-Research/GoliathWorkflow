@@ -1,8 +1,47 @@
 {
   "$defs": {
     "CisbpConfig": {
-      "description": "Optional CIS-BP transcription-factor motif integration.\n\nCIS-BP (https://cisbp.ccbr.utoronto.ca) ships TF motifs/PWMs, not ready-made\ngene sets. The integration is pluggable via ``mode``:\n\n  * ``gene_sets`` (default, \"1A\"): derive TF -> target-gene sets (by scanning\n    gene promoter sequences with CIS-BP PWMs, or from a prebuilt GMT) and run\n    offline over-representation analysis, emitting an ``enrich_<label>.csv``\n    that merges with the Enrichr libraries.\n  * ``annotate`` (\"1B\", planned): annotate TFs already surfaced by ChEA/ENCODE/\n    TRRUST results with CIS-BP motif metadata.\n  * ``motif_scan`` (\"1C\"): scan DMP/DMR region sequences with CIS-BP PWMs and\n    test for over-represented motifs at differentially methylated loci.",
+      "description": "Optional CIS-BP transcription-factor motif integration.\n\nCIS-BP (https://cisbp.ccbr.utoronto.ca) ships TF motifs/PWMs, not ready-made\ngene sets. The integration is pluggable via ``mode``:\n\n  * ``gene_sets`` (default, \"1A\"): derive TF -> target-gene sets (by scanning\n    gene promoter sequences with CIS-BP PWMs, or from a prebuilt GMT) and run\n    offline over-representation analysis, emitting an ``enrich_<label>.csv``\n    that merges with the Enrichr libraries.\n  * ``annotate`` (\"1B\"): annotate TFs already surfaced by ChEA/ENCODE/TRRUST\n    enrichment with CIS-BP motif metadata.\n  * ``motif_scan`` (\"1C\"): scan DMP/DMR region sequences with CIS-BP PWMs and\n    test for over-represented motifs at differentially methylated loci.",
       "properties": {
+        "annotate_include_unmatched": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": false,
+          "title": "Annotate Include Unmatched"
+        },
+        "annotate_libraries": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Annotate Libraries"
+        },
+        "annotate_max_terms_per_library": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Annotate Max Terms Per Library"
+        },
         "archive_url": {
           "anyOf": [
             {

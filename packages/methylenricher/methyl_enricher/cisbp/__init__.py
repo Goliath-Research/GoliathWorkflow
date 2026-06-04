@@ -7,7 +7,7 @@ service, so this subpackage adapts CIS-BP into the enricher in a pluggable way.
 
 Modes (selected via ``step_config.enricher.cisbp.mode``):
   * ``gene_sets``  (1A, implemented): TF -> target-gene over-representation.
-  * ``annotate``   (1B, planned):     annotate result TFs with CIS-BP metadata.
+  * ``annotate``   (1B):              annotate result TFs with CIS-BP metadata.
   * ``motif_scan`` (1C):              motif enrichment over DMP/DMR sequences.
 
 The public entry point is :func:`run_cisbp`, invoked by

@@ -201,7 +201,7 @@ For theory and package documentation, see:
         type=str,
         choices=['gene_sets', 'annotate', 'motif_scan'],
         default=None,
-        help="CIS-BP mode: gene_sets (default), motif_scan (DMP regions), or annotate (planned)."
+        help="CIS-BP mode: gene_sets (default), annotate (TF metadata), or motif_scan (DMP regions)."
     )
     enrich_group.add_argument(
         '--top', '-t',

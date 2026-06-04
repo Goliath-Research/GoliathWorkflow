@@ -48,10 +48,12 @@ gene-set service, so the integration is pluggable via a `mode`:
   over-representation analysis (ORA) on your gene list, emitting an
   `enrich_CIS-BP.csv` that merges alongside the Enrichr libraries (categorized as a
   `tf` library in the module pipeline).
-- `annotate` (planned): annotate TFs already surfaced by ChEA/ENCODE/TRRUST results
-  with CIS-BP motif metadata.
-- `motif_scan` (planned): scan DMP/DMR region sequences with CIS-BP PWMs for direct
-  motif enrichment.
+- `annotate`: annotate TFs already surfaced by ChEA/ENCODE/TRRUST (or other TF
+  libraries present in the output directory) with CIS-BP motif IDs, evidence, and
+  family metadata. Requires those Enrichr libraries to run **before** CIS-BP in the
+  same output folder.
+- `motif_scan`: scan DMP/DMR region sequences with CIS-BP PWMs for direct motif
+  enrichment at differentially methylated loci.
 
 CIS-BP has no query API, so the per-species archive is **auto-downloaded** from the
 bulk-download endpoint on first use and cached (default cache:

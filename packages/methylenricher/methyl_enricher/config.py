@@ -38,8 +38,8 @@ class CisbpConfig(BaseModel):
         gene promoter sequences with CIS-BP PWMs, or from a prebuilt GMT) and run
         offline over-representation analysis, emitting an ``enrich_<label>.csv``
         that merges with the Enrichr libraries.
-      * ``annotate`` ("1B", planned): annotate TFs already surfaced by ChEA/ENCODE/
-        TRRUST results with CIS-BP motif metadata.
+      * ``annotate`` ("1B"): annotate TFs already surfaced by ChEA/ENCODE/TRRUST
+        enrichment with CIS-BP motif metadata.
       * ``motif_scan`` ("1C"): scan DMP/DMR region sequences with CIS-BP PWMs and
         test for over-represented motifs at differentially methylated loci.
     """
@@ -86,6 +86,11 @@ class CisbpConfig(BaseModel):
     min_regions_per_tf: Optional[int] = 3  # min DMP regions per TF in the GMT
     max_regions_per_tf: Optional[int] = 5000
     rebuild_region_gmt: Optional[bool] = None  # force-rebuild cached region GMT
+
+    # TF annotation (mode="annotate").
+    annotate_libraries: Optional[List[str]] = None  # default: TF libs present in output_dir
+    annotate_max_terms_per_library: Optional[int] = None
+    annotate_include_unmatched: Optional[bool] = False  # emit rows without a CIS-BP match
 
 
 class EnricherStepConfig(BaseModel):
