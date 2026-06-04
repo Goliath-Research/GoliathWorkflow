@@ -612,7 +612,7 @@ var
   RefVal: TJSONString;
   Target: TJSONValue;
   FilePart, FragmentPart: string;
-  AbsolutePath, CacheKey, NullableRef: string;
+  AbsolutePath, NullableRef: string;
   PushedRefBase: Boolean;
   HasNullable: Boolean;
 begin
@@ -628,12 +628,7 @@ begin
     begin
       RefVal := NullableInner.GetValue('$ref') as TJSONString;
       if Assigned(RefVal) then
-      begin
         NullableRef := RefVal.Value;
-        CacheKey := RefCacheKey(NullableRef);
-        if FCache.TryGetValue(CacheKey, Result) then
-          Exit;
-      end;
     end;
 
     Result := NewNode;
@@ -701,9 +696,7 @@ begin
     end;
 
     if ShouldCacheRefKey(RefKey) then
-      FCache[RefKey] := Result
-    else if NullableRef <> '' then
-      FCache[RefCacheKey(NullableRef)] := Result;
+      FCache[RefKey] := Result;
   finally
     if PushedRefBase then
       PopRefBaseDir;

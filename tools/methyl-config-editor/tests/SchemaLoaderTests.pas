@@ -29,6 +29,8 @@ type
     procedure NestedCrossDirectoryRefResolves;
     [Test]
     procedure SameRelativeRefUsesDistinctCacheKeys;
+    [Test]
+    procedure NullableAnyOfRefAfterCachedRef;
   end;
 
 implementation
@@ -291,6 +293,37 @@ begin
       NestedNode := TSchemaNode(NestedProp.Node);
       Assert.AreEqual('SubTypes', NestedNode.Title);
       Assert.IsTrue(NestedNode.FindProperty('subOnly') <> nil);
+    finally
+      Doc.Free;
+    end;
+  finally
+    Loader.Free;
+  end;
+end;
+
+procedure TSchemaLoaderTests.NullableAnyOfRefAfterCachedRef;
+var
+  Loader: TJsonSchemaLoader;
+  Doc: TSchemaDocument;
+  RequiredProp, OptionalProp: TSchemaProperty;
+  RequiredNode, OptionalNode: TSchemaNode;
+begin
+  Loader := TJsonSchemaLoader.Create;
+  try
+    Doc := Loader.LoadDocumentFromFile(FixturePath('nullable_ref_parent.schema.json'));
+    try
+      RequiredProp := Doc.Root.FindProperty('aaaRequired');
+      Assert.IsNotNull(RequiredProp);
+      RequiredNode := TSchemaNode(RequiredProp.Node);
+      Assert.IsFalse(RequiredNode.Nullable);
+      Assert.AreEqual('Widget', RequiredNode.Title);
+
+      OptionalProp := Doc.Root.FindProperty('zzzOptional');
+      Assert.IsNotNull(OptionalProp);
+      OptionalNode := TSchemaNode(OptionalProp.Node);
+      Assert.IsTrue(OptionalNode.Nullable);
+      Assert.AreEqual('Widget', OptionalNode.Title);
+      Assert.IsTrue(OptionalNode.FindProperty('name') <> nil);
     finally
       Doc.Free;
     end;
