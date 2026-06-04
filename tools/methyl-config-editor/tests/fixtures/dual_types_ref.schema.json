@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DualTypesRef",
+  "type": "object",
+  "properties": {
+    "directTypes": {
+      "$ref": "types.schema.json"
+    },
+    "widgetTypes": {
+      "$ref": "sub/widget_types.schema.json"
+    }
+  },
+  "required": ["directTypes", "widgetTypes"]
+}

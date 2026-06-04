@@ -27,6 +27,8 @@ type
     procedure ExternalFileRefResolves;
     [Test]
     procedure NestedCrossDirectoryRefResolves;
+    [Test]
+    procedure SameRelativeRefUsesDistinctCacheKeys;
   end;
 
 implementation
@@ -254,6 +256,41 @@ begin
       PartNode := TSchemaNode(PartProp.Node);
       Assert.AreEqual('Part', PartNode.Title);
       Assert.IsTrue(PartNode.FindProperty('code') <> nil);
+    finally
+      Doc.Free;
+    end;
+  finally
+    Loader.Free;
+  end;
+end;
+
+procedure TSchemaLoaderTests.SameRelativeRefUsesDistinctCacheKeys;
+var
+  Loader: TJsonSchemaLoader;
+  Doc: TSchemaDocument;
+  DirectProp, WidgetProp, NestedProp: TSchemaProperty;
+  DirectNode, WidgetNode, NestedNode: TSchemaNode;
+begin
+  Loader := TJsonSchemaLoader.Create;
+  try
+    Doc := Loader.LoadDocumentFromFile(FixturePath('dual_types_ref.schema.json'));
+    try
+      DirectProp := Doc.Root.FindProperty('directTypes');
+      Assert.IsNotNull(DirectProp);
+      DirectNode := TSchemaNode(DirectProp.Node);
+      Assert.AreEqual('RootTypes', DirectNode.Title);
+      Assert.IsTrue(DirectNode.FindProperty('rootOnly') <> nil);
+
+      WidgetProp := Doc.Root.FindProperty('widgetTypes');
+      Assert.IsNotNull(WidgetProp);
+      WidgetNode := TSchemaNode(WidgetProp.Node);
+      Assert.AreEqual('SubWidgetTypes', WidgetNode.Title);
+
+      NestedProp := WidgetNode.FindProperty('nestedTypes');
+      Assert.IsNotNull(NestedProp);
+      NestedNode := TSchemaNode(NestedProp.Node);
+      Assert.AreEqual('SubTypes', NestedNode.Title);
+      Assert.IsTrue(NestedNode.FindProperty('subOnly') <> nil);
     finally
       Doc.Free;
     end;

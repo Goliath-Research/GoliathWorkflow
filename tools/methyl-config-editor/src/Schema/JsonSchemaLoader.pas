@@ -26,6 +26,8 @@ type
     procedure PushRefBaseDir(const Dir: string);
     procedure PopRefBaseDir;
     procedure SplitRefParts(const Ref: string; out FilePart, FragmentPart: string);
+    function RefCacheKey(const Ref: string): string;
+    function ShouldCacheRefKey(const Key: string): Boolean;
     function ResolveSchemaFilePath(const FilePart: string): string;
     function LoadExternalRoot(const AbsolutePath: string): TJSONObject;
     function NavigateFragment(Root: TJSONValue; const FragmentPart: string): TJSONValue;
@@ -229,6 +231,45 @@ begin
   end
   else
     FilePart := Ref;
+end;
+
+function TJsonSchemaLoader.RefCacheKey(const Ref: string): string;
+var
+  FilePart, FragmentPart: string;
+  AbsolutePath: string;
+  Fragment: string;
+begin
+  SplitRefParts(Ref, FilePart, FragmentPart);
+  if FilePart = '' then
+    Exit(Ref);
+  AbsolutePath := ResolveSchemaFilePath(FilePart);
+  Fragment := FragmentPart;
+  if Fragment.StartsWith('#/') then
+    Fragment := Copy(Fragment, 3, MaxInt)
+  else if Fragment.StartsWith('#') then
+    Fragment := Copy(Fragment, 2, MaxInt);
+  if Fragment = '' then
+    Result := AbsolutePath
+  else
+    Result := AbsolutePath + '#' + Fragment;
+end;
+
+function TJsonSchemaLoader.ShouldCacheRefKey(const Key: string): Boolean;
+var
+  FilePart: string;
+begin
+  if Key = '' then
+    Exit(False);
+  if Key.StartsWith('#') then
+    Exit(True);
+  if TPath.IsPathRooted(Key) then
+    Exit(True);
+  if Pos('#', Key) > 0 then
+  begin
+    FilePart := Copy(Key, 1, Pos('#', Key) - 1);
+    Exit(TFile.Exists(FilePart));
+  end;
+  Result := TFile.Exists(Key);
 end;
 
 function TJsonSchemaLoader.ResolveSchemaFilePath(const FilePart: string): string;
@@ -505,6 +546,7 @@ function TJsonSchemaLoader.ResolveNode(const Obj: TJSONObject;
 var
   RefVal: TJSONString;
   RefPath: string;
+  CacheKey: string;
   FilePart, FragmentPart: string;
   Target: TJSONValue;
   AbsolutePath: string;
@@ -513,18 +555,19 @@ begin
   if Assigned(RefVal) then
   begin
     RefPath := RefVal.Value;
-    if FCache.TryGetValue(RefPath, Result) then
+    CacheKey := RefCacheKey(RefPath);
+    if FCache.TryGetValue(CacheKey, Result) then
       Exit;
-    if FResolving.ContainsKey(RefPath) and FResolving[RefPath] then
+    if FResolving.ContainsKey(CacheKey) and FResolving[CacheKey] then
     begin
       Result := NewNode;
       Result.RefPath := RefPath;
       Result.Kind := skObject;
       Result.ResolvedFromRef := True;
-      FCache.Add(RefPath, Result);
+      FCache.Add(CacheKey, Result);
       Exit;
     end;
-    FResolving[RefPath] := True;
+    FResolving[CacheKey] := True;
     try
       SplitRefParts(RefPath, FilePart, FragmentPart);
       if FilePart <> '' then
@@ -534,7 +577,7 @@ begin
         try
           Target := NavigateFragment(LoadExternalRoot(AbsolutePath), FragmentPart);
           if Target is TJSONObject then
-            Result := ParseSchemaObject(TJSONObject(Target), RefPath)
+            Result := ParseSchemaObject(TJSONObject(Target), CacheKey)
           else
             raise Exception.CreateFmt('$ref target is not an object: %s', [RefPath]);
         finally
@@ -545,13 +588,15 @@ begin
       begin
         Target := NavigateFragment(FRoot, FragmentPart);
         if Target is TJSONObject then
-          Result := ParseSchemaObject(TJSONObject(Target), RefPath)
+          Result := ParseSchemaObject(TJSONObject(Target), CacheKey)
         else
           raise Exception.CreateFmt('$ref target is not an object: %s', [RefPath]);
       end;
-      FCache[RefPath] := Result;
+      if Assigned(Result) then
+        Result.RefPath := RefPath;
+      FCache[CacheKey] := Result;
     finally
-      FResolving[RefPath] := False;
+      FResolving[CacheKey] := False;
     end;
     Exit;
   end;
@@ -567,27 +612,42 @@ var
   RefVal: TJSONString;
   Target: TJSONValue;
   FilePart, FragmentPart: string;
-  AbsolutePath: string;
+  AbsolutePath, CacheKey, NullableRef: string;
   PushedRefBase: Boolean;
+  HasNullable: Boolean;
 begin
-  if FCache.TryGetValue(RefKey, Result) then
+  if ShouldCacheRefKey(RefKey) and FCache.TryGetValue(RefKey, Result) then
     Exit;
 
+  NullableInner := nil;
   PushedRefBase := False;
   try
-    Result := NewNode;
-    if RefKey.StartsWith('#') or (Pos('#', RefKey) > 0) or (Pos('.json', LowerCase(RefKey)) > 0) then
-      Result.RefPath := RefKey;
-
-    if TryNormalizeNullableAnyOf(Obj, NullableInner) then
+    HasNullable := TryNormalizeNullableAnyOf(Obj, NullableInner);
+    NullableRef := '';
+    if HasNullable then
     begin
-      Result.Nullable := True;
-      ApplyMetadata(Obj, Result);
       RefVal := NullableInner.GetValue('$ref') as TJSONString;
       if Assigned(RefVal) then
       begin
-        Result.RefPath := RefVal.Value;
-        SplitRefParts(RefVal.Value, FilePart, FragmentPart);
+        NullableRef := RefVal.Value;
+        CacheKey := RefCacheKey(NullableRef);
+        if FCache.TryGetValue(CacheKey, Result) then
+          Exit;
+      end;
+    end;
+
+    Result := NewNode;
+    if ShouldCacheRefKey(RefKey) then
+      Result.RefPath := RefKey;
+
+    if HasNullable then
+    begin
+      Result.Nullable := True;
+      ApplyMetadata(Obj, Result);
+      if NullableRef <> '' then
+      begin
+        Result.RefPath := NullableRef;
+        SplitRefParts(NullableRef, FilePart, FragmentPart);
         if FilePart <> '' then
         begin
           AbsolutePath := ResolveSchemaFilePath(FilePart);
@@ -598,7 +658,7 @@ begin
         else
           Target := NavigateFragment(FRoot, FragmentPart);
         if not (Target is TJSONObject) then
-          raise Exception.CreateFmt('$ref target is not an object: %s', [RefVal.Value]);
+          raise Exception.CreateFmt('$ref target is not an object: %s', [NullableRef]);
         Inner := TJSONObject(Target);
       end
       else
@@ -623,7 +683,7 @@ begin
     ParseOneOfDiscriminator(Inner, Result);
     if Result.OneOfBranches.Count > 0 then
     begin
-      if RefKey.StartsWith('#') or (Pos('.json', LowerCase(RefKey)) > 0) then
+      if ShouldCacheRefKey(RefKey) then
         FCache[RefKey] := Result;
       Exit;
     end;
@@ -640,8 +700,10 @@ begin
         ParseAdditionalProperties(Inner, Result);
     end;
 
-    if RefKey.StartsWith('#') or (Pos('.json', LowerCase(RefKey)) > 0) then
-      FCache[RefKey] := Result;
+    if ShouldCacheRefKey(RefKey) then
+      FCache[RefKey] := Result
+    else if NullableRef <> '' then
+      FCache[RefCacheKey(NullableRef)] := Result;
   finally
     if PushedRefBase then
       PopRefBaseDir;
