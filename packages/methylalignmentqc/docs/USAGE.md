@@ -43,6 +43,24 @@ For initial metrics extraction workflows, use the package CLI for normalized per
 
 When `wgbs_parabricks_qc.py` runs directly, it writes a `guardrails` block into the input JSON (or into `--output` if specified). This block includes each metric's `value`, `normal_range`, pass/fail state, and a user-facing `message` that explains why the guardrail matters.
 
+## Bisulfite conversion (automated)
+
+Enable in `step_config.alignment_qc.bisulfite_conversion`. Place `bisulfite_conversion.json` in each sample directory:
+
+```json
+{
+  "conversion_rate_pct": 99.2,
+  "non_cpg_methylation_pct": 0.8,
+  "source": "lambda_spikein"
+}
+```
+
+`methyl-qc` adds `bisulfite_conversion_metrics` and `guardrails.details.bisulfite_conversion`. With `source: auto`, a missing sidecar uses the Parabricks deamination qscore as a qualitative proxy only.
+
+## cfDNA fragmentomics (insert-size)
+
+See `step_config.alignment_qc.fragmentomics` and `auto_profile_from_analyte` (enables cfDNA profile when `validation.regulatory.primary_analyte` is `cfdna`). Metrics are stored in `fragmentomics_metrics` on each sample JSON.
+
 ## Related Documentation
 
 - Theory: [`THEORY.md`](THEORY.md)

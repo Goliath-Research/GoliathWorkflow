@@ -5,6 +5,37 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
+class BisulfiteConversionConfig(BaseModel):
+    """Quantitative bisulfite conversion QC (sidecar JSON or deamination proxy)."""
+
+    enabled: bool = Field(default=False)
+    source: Literal["sidecar", "deamination_proxy", "auto"] = Field(
+        default="auto",
+        description="auto: use sidecar when present, else deamination proxy.",
+    )
+    sidecar_filename: str = Field(
+        default="bisulfite_conversion.json",
+        description="Per-sample file in sample dir with conversion_rate_pct and optional non_cpg_methylation_pct.",
+    )
+    min_conversion_rate_pct: float = Field(
+        default=99.0,
+        ge=0.0,
+        le=100.0,
+        description="Minimum acceptable conversion rate (%) when sidecar supplies it.",
+    )
+    max_non_cpg_methylation_pct: float = Field(
+        default=2.0,
+        ge=0.0,
+        le=100.0,
+        description="Maximum acceptable non-CpG methylation (%) when sidecar supplies it.",
+    )
+    max_deamination_qscore_proxy: int = Field(
+        default=30,
+        ge=0,
+        description="Pass deamination qscore proxy when <= this value.",
+    )
+
+
 class FragmentomicsConfig(BaseModel):
     """Optional cfDNA / fragment-length QC derived from insert-size histograms."""
 
@@ -60,6 +91,10 @@ class AlignmentQCConfig(BaseModel):
             "step_config.validation.regulatory.primary_analyte is cfdna."
         ),
     )
+    bisulfite_conversion: Optional[BisulfiteConversionConfig] = Field(
+        default=None,
+        description="Optional bisulfite conversion rate QC from per-sample sidecar files.",
+    )
 
     @field_validator("fragmentomics", mode="before")
     @classmethod
@@ -70,4 +105,15 @@ class AlignmentQCConfig(BaseModel):
             return value
         if isinstance(value, dict):
             return FragmentomicsConfig.model_validate(value)
+        return value
+
+    @field_validator("bisulfite_conversion", mode="before")
+    @classmethod
+    def _coerce_bisulfite(cls, value):  # noqa: ANN001
+        if value is None:
+            return None
+        if isinstance(value, BisulfiteConversionConfig):
+            return value
+        if isinstance(value, dict):
+            return BisulfiteConversionConfig.model_validate(value)
         return value

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -156,6 +156,17 @@ class GuardrailMetric(BaseModel):
     message: str
 
 
+class BisulfiteConversionMetrics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    measurement_source: str
+    conversion_rate_pct: Optional[float] = None
+    non_cpg_methylation_pct: Optional[float] = None
+    deamination_qscore: Optional[int] = None
+    min_conversion_rate_pct: float
+    max_non_cpg_methylation_pct: float
+    notes: Optional[str] = None
+
+
 class FragmentomicsMetrics(BaseModel):
     model_config = ConfigDict(extra="forbid")
     profile: str
@@ -187,6 +198,7 @@ class GuardrailDetails(BaseModel):
     deamination_qscore: GuardrailMetric
     oxog_qscore: GuardrailMetric
     fragmentomics: Optional[FragmentomicsGuardrailDetails] = None
+    bisulfite_conversion: Optional[Dict[str, GuardrailMetric]] = None
 
 
 class GuardrailReport(BaseModel):
@@ -230,3 +242,4 @@ class ExportedSampleQCPayload(ParabricksMetricsPayload):
     summary_stats: SummaryStats
     guardrails: GuardrailReport
     fragmentomics_metrics: Optional[FragmentomicsMetrics] = None
+    bisulfite_conversion_metrics: Optional[BisulfiteConversionMetrics] = None

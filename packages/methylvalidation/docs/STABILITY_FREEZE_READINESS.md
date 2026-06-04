@@ -61,6 +61,8 @@ For **cfDNA** projects, readiness also summarizes **fragmentomics**:
 
 Warnings are emitted when `primary_analyte=cfdna` but these artifacts are missing or guardrails fail.
 
+Plasma/cfDNA **retrain** workflow: see [PLASMA_RETRAIN_PATH.md](PLASMA_RETRAIN_PATH.md). Set `regulatory.model_training_analyte` to `cfdna` and optionally `enforce_training_analyte_match: true` so `--model` cannot reuse a buffy-coat `locked_model_spec.json`.
+
 When the production project JSON is valid for [`ProjectConfig`](../../../packages/methylutils/methyl_utils/pipeline_config.py), optional **`description`** fields on disease **`GroupConfig`** entries (including each nested **`stages[]`** child) are read and sent to Grok as **`ordered_stage_narratives`** (comparison token, `disease_group`, short text — no `sample_paths`). The markdown report also lists them under **Stage definitions (from project config)** when present.
 
 Exit codes:

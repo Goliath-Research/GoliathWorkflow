@@ -35,7 +35,7 @@ Legacy compatibility boundary:
 | `enricher` | `packages/methylenricher/methyl_enricher/config.py` | `packages/methylenricher/methyl_enricher/project_resolver.py` | `input`/`outdir` aliases (legacy) |
 | `validation` | `packages/methylvalidation/methyl_validation/config.py` (`ValidationStepConfig` / `MonteCarloConfig`) | `packages/methylvalidation/methyl_validation/cli.py` + runner/stability | none |
 | `progression` | `packages/methyldiseaseprogression/methyl_disease_progression/config.py` | `packages/methyldiseaseprogression/.../progression.py` + `packages/methylvalidation/.../pipeline_runner.py` | `ordered_disease_groups` alias |
-| `alignment_qc` | `packages/methylalignmentqc/methyl_alignment_qc/models/config.py` | `packages/methylalignmentqc/methyl_alignment_qc/project_resolver.py` | `fragmentomics`, `auto_profile_from_analyte` (cfDNA insert-size QC) |
+| `alignment_qc` | `packages/methylalignmentqc/methyl_alignment_qc/models/config.py` | `packages/methylalignmentqc/methyl_alignment_qc/project_resolver.py` | `fragmentomics`, `auto_profile_from_analyte`, `bisulfite_conversion` (sidecar JSON) |
 | `fragmentomics` | `packages/methylfragmentomics/methyl_fragmentomics/config.py` | `packages/methylfragmentomics/methyl_fragmentomics/project_resolver.py` | BAM WPS + end motifs (`methyl-fragmentomics`) |
 
 ## Redundancy candidate classification

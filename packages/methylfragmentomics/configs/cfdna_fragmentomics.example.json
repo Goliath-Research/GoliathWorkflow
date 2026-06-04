@@ -18,7 +18,11 @@
         "enabled": true,
         "profile": "cfdna"
       },
-      "auto_profile_from_analyte": true
+      "auto_profile_from_analyte": true,
+      "bisulfite_conversion": {
+        "enabled": true,
+        "source": "auto"
+      }
     },
     "fragmentomics": {
       "enabled": true,

@@ -22,8 +22,11 @@ def _chrom_set(cfg: FragmentomicsStepConfig, project_chromosomes: Optional[List[
         s = str(c).strip()
         if not s:
             continue
-        out.add(s if s.startswith("chr") else s)
-        if not s.startswith("chr"):
+        if s.startswith("chr"):
+            out.add(s)
+            out.add(s[3:])
+        else:
+            out.add(s)
             out.add(f"chr{s}")
     return out or None
 

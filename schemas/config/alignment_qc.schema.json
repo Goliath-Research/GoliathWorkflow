@@ -1,5 +1,57 @@
 {
   "$defs": {
+    "BisulfiteConversionConfig": {
+      "description": "Quantitative bisulfite conversion QC (sidecar JSON or deamination proxy).",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "max_deamination_qscore_proxy": {
+          "default": 30,
+          "description": "Pass deamination qscore proxy when <= this value.",
+          "minimum": 0,
+          "title": "Max Deamination Qscore Proxy",
+          "type": "integer"
+        },
+        "max_non_cpg_methylation_pct": {
+          "default": 2.0,
+          "description": "Maximum acceptable non-CpG methylation (%) when sidecar supplies it.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Max Non Cpg Methylation Pct",
+          "type": "number"
+        },
+        "min_conversion_rate_pct": {
+          "default": 99.0,
+          "description": "Minimum acceptable conversion rate (%) when sidecar supplies it.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Min Conversion Rate Pct",
+          "type": "number"
+        },
+        "sidecar_filename": {
+          "default": "bisulfite_conversion.json",
+          "description": "Per-sample file in sample dir with conversion_rate_pct and optional non_cpg_methylation_pct.",
+          "title": "Sidecar Filename",
+          "type": "string"
+        },
+        "source": {
+          "default": "auto",
+          "description": "auto: use sidecar when present, else deamination proxy.",
+          "enum": [
+            "sidecar",
+            "deamination_proxy",
+            "auto"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "title": "BisulfiteConversionConfig",
+      "type": "object"
+    },
     "FragmentomicsConfig": {
       "description": "Optional cfDNA / fragment-length QC derived from insert-size histograms.",
       "properties": {
@@ -79,6 +131,18 @@
       "description": "When true, enable fragmentomics profile cfdna if step_config.validation.regulatory.primary_analyte is cfdna.",
       "title": "Auto Profile From Analyte",
       "type": "boolean"
+    },
+    "bisulfite_conversion": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BisulfiteConversionConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional bisulfite conversion rate QC from per-sample sidecar files."
     },
     "fragmentomics": {
       "anyOf": [

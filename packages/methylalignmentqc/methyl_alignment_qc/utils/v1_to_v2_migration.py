@@ -200,6 +200,7 @@ def v1_model_to_v2(
         summary_stats=v1.summary_stats,
         guardrails=v1.guardrails,
         fragmentomics_metrics=v1.fragmentomics_metrics,
+        bisulfite_conversion_metrics=v1.bisulfite_conversion_metrics,
     )
 
 

@@ -102,6 +102,78 @@
       "title": "BaseDistributionByCycleV2",
       "type": "object"
     },
+    "BisulfiteConversionMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "conversion_rate_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conversion Rate Pct"
+        },
+        "deamination_qscore": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deamination Qscore"
+        },
+        "max_non_cpg_methylation_pct": {
+          "title": "Max Non Cpg Methylation Pct",
+          "type": "number"
+        },
+        "measurement_source": {
+          "title": "Measurement Source",
+          "type": "string"
+        },
+        "min_conversion_rate_pct": {
+          "title": "Min Conversion Rate Pct",
+          "type": "number"
+        },
+        "non_cpg_methylation_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Non Cpg Methylation Pct"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "measurement_source",
+        "min_conversion_rate_pct",
+        "max_non_cpg_methylation_pct"
+      ],
+      "title": "BisulfiteConversionMetrics",
+      "type": "object"
+    },
     "ConversionLog": {
       "additionalProperties": false,
       "properties": {
@@ -475,6 +547,21 @@
       "properties": {
         "at_dropout": {
           "$ref": "#/$defs/GuardrailMetric"
+        },
+        "bisulfite_conversion": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/GuardrailMetric"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bisulfite Conversion"
         },
         "deamination_qscore": {
           "$ref": "#/$defs/GuardrailMetric"
@@ -991,6 +1078,17 @@
     },
     "base_distribution_by_cycle": {
       "$ref": "#/$defs/BaseDistributionByCycleV2"
+    },
+    "bisulfite_conversion_metrics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BisulfiteConversionMetrics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "conversion_log": {
       "$ref": "#/$defs/ConversionLog"

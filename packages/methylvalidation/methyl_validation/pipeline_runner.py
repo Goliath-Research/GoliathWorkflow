@@ -1084,7 +1084,15 @@ def run_pipeline_for_model(
     """
     from .validator_metrics import write_step_timings_csv
 
+    from .analyte_guard import assert_training_analyte_match_for_model
     from .trainer_api import build_model_backend_steps
+
+    enforce_analyte = bool(getattr(config, "enforce_training_analyte_match", False)) if config else False
+    assert_training_analyte_match_for_model(
+        project_json,
+        enforce=enforce_analyte,
+        production_dir=project_json.parent if project_json.name == "project.json" else None,
+    )
 
     errors: List[str] = []
     step_timings: List[Dict[str, Any]] = []

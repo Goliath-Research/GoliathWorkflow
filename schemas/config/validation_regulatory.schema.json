@@ -35,6 +35,19 @@
       "description": "Short intended-use statement for reports.",
       "title": "Intended Use Summary"
     },
+    "model_training_analyte": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Analyte matrix used for stability/freeze/classifier training on this project. Defaults to primary_analyte when omitted. Set to cfdna for plasma/cfDNA retrain paths.",
+      "title": "Model Training Analyte"
+    },
     "primary_analyte": {
       "anyOf": [
         {

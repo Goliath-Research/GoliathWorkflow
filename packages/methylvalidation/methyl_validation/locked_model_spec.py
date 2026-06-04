@@ -77,6 +77,8 @@ def write_locked_model_spec(
             "target_population": reg_cfg.get("target_population"),
             "sample_type": reg_cfg.get("sample_type"),
             "primary_analyte": reg_cfg.get("primary_analyte"),
+            "model_training_analyte": reg_cfg.get("model_training_analyte")
+            or reg_cfg.get("primary_analyte"),
             "reference_standard": reg_cfg.get("reference_standard"),
             "fragmentomics_schema_version": "fragmentomics_run_v1",
         },

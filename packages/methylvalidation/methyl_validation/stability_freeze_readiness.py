@@ -311,6 +311,7 @@ def _extract_regulatory_context(production_project: Dict[str, Any]) -> Dict[str,
         "target_population": reg.get("target_population"),
         "sample_type": reg.get("sample_type"),
         "primary_analyte": reg.get("primary_analyte"),
+        "model_training_analyte": reg.get("model_training_analyte"),
         "reference_standard": reg.get("reference_standard"),
         "raw": reg if isinstance(reg, dict) else {},
     }
@@ -642,6 +643,28 @@ def _compute_verdict(
         warnings.append(
             f"Chromosome imbalance: one chromosome holds ~{balance['max_chrom_share']*100:.1f}% of stable panel."
         )
+
+    training_analyte = None
+    if isinstance(reg.get("raw"), dict):
+        from .analyte_guard import effective_training_analyte
+
+        training_analyte = effective_training_analyte(reg.get("raw"))
+    prod_root = Path(str(report.get("project_root") or "."))
+    locked_spec = prod_root / "monte_carlo_runs" / "production" / "locked_model_spec.json"
+    if locked_spec.is_file() and training_analyte:
+        try:
+            locked_payload = json.loads(locked_spec.read_text(encoding="utf-8"))
+            locked_reg = (locked_payload.get("regulatory") or {}) if isinstance(locked_payload, dict) else {}
+            from .analyte_guard import effective_training_analyte as _eta
+
+            locked_analyte = _eta(locked_reg if isinstance(locked_reg, dict) else None)
+            if locked_analyte and locked_analyte != training_analyte and locked_analyte != "combined":
+                warnings.append(
+                    f"Locked model training analyte ({locked_analyte!r}) differs from project "
+                    f"training analyte ({training_analyte!r}) — re-run freeze/--model on this cohort."
+                )
+        except Exception:
+            pass
 
     if frag.get("expected_for_analyte"):
         aq = frag.get("alignment_qc_fragmentomics") or {}

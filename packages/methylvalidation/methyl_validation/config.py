@@ -511,6 +511,13 @@ class RegulatoryLifecycleConfig(BaseModel):
             "(e.g., buffy_coat, cfdna, combined)."
         ),
     )
+    model_training_analyte: Optional[str] = Field(
+        default=None,
+        description=(
+            "Analyte matrix used for stability/freeze/classifier training on this project. "
+            "Defaults to primary_analyte when omitted. Set to cfdna for plasma/cfDNA retrain paths."
+        ),
+    )
     reference_standard: Optional[str] = Field(default=None)
     claim_boundary: Optional[str] = Field(
         default=None,
@@ -546,12 +553,14 @@ class RegulatoryLifecycleConfig(BaseModel):
                 )
         return self
 
-    @field_validator("primary_analyte")
+    @field_validator("primary_analyte", "model_training_analyte")
     @classmethod
     def _normalize_primary_analyte(cls, value: Optional[str]) -> Optional[str]:
         if value is None:
             return None
         cleaned = "_".join(value.strip().lower().replace("-", " ").split())
+        if cleaned in {"plasma", "plasma_cfdna", "cf_dna", "cell_free_dna"}:
+            return "cfdna"
         return cleaned or None
 
 
@@ -858,6 +867,13 @@ class MonteCarloConfig(BaseModel):
         description=(
             "If True, readiness audit treats incomplete enricher_completeness.json as no_go "
             "(not only a warning)."
+        ),
+    )
+    enforce_training_analyte_match: bool = Field(
+        default=False,
+        description=(
+            "If True, --model fails when step_config.validation.regulatory training analyte "
+            "does not match locked_model_spec.json (blocks buffy-trained model on cfDNA projects)."
         ),
     )
     backend_profiles: BackendProfilesConfig = Field(
