@@ -20,6 +20,7 @@ from sklearn.metrics import (
 from ..models.config import PredictorConfig
 from methyl_utils.ecdf_aggregated_ovr import (
     AGGREGATED_ECDF_OVR_TYPE,
+    GENE_ECDF_OVR_TYPE,
     predict_aggregated_ecdf_ovr_proba,
 )
 
@@ -675,6 +676,76 @@ def _predict_aggregated_ecdf_samples(
     return df
 
 
+def _predict_gene_ecdf_samples(
+    *,
+    classifier: Any,
+    samples_list: List[str],
+    predictions_csv: Path,
+    expected_classes: Optional[List[int]],
+    split_tags: Optional[List[str]],
+) -> pd.DataFrame:
+    pkg = getattr(classifier, "_aggregated_package", None)
+    if not isinstance(pkg, dict):
+        raise ValueError("Gene ECDF classifier package is unavailable")
+    if str(pkg.get("classifier_type")) != GENE_ECDF_OVR_TYPE:
+        raise ValueError("Gene ECDF classifier_type mismatch")
+    raw = pkg.get("raw_gene") or {}
+    dmp_df = raw.get("dmp_df")
+    frozen_gene_panel = raw.get("frozen_gene_panel")
+    if dmp_df is None or not hasattr(dmp_df, "columns"):
+        raise ValueError("Gene ECDF package is missing raw_gene.dmp_df")
+    if frozen_gene_panel is None or not hasattr(frozen_gene_panel, "columns"):
+        raise ValueError("Gene ECDF package is missing raw_gene.frozen_gene_panel")
+
+    try:
+        from methyl_validation.raw_gene_features import build_raw_gene_feature_table
+    except Exception as e:  # pragma: no cover
+        raise RuntimeError(f"Gene ECDF predictor requires methyl_validation package: {e}") from e
+
+    feat = build_raw_gene_feature_table(
+        samples_list,
+        dmp_df,
+        frozen_gene_panel,
+        min_coverage=int(raw.get("min_coverage", 1)),
+        use_region_weight=bool(raw.get("use_region_weight", True)),
+        gene_weight_column=str(raw.get("gene_weight_column") or "mean_effect_size"),
+    )
+    schema_names = [str(x) for x in ((pkg.get("feature_schema") or {}).get("feature_names") or [])]
+    if list(feat.feature_names) != schema_names:
+        raise ValueError("Gene ECDF feature schema mismatch during prediction")
+
+    probs, evidence = predict_aggregated_ecdf_ovr_proba(
+        pkg,
+        np.asarray(feat.X, dtype=np.float64),
+    )
+    pred = np.argmax(probs, axis=1).astype(int)
+    class_names = [str(x) for x in (pkg.get("class_names") or [])]
+
+    df = pd.DataFrame(
+        {
+            "sample": [str(p) for p in samples_list],
+            "prediction": pred.astype(int),
+            "prediction_label": [
+                class_names[int(i)] if int(i) < len(class_names) else f"Class_{int(i)}"
+                for i in pred.tolist()
+            ],
+        }
+    )
+    for j in range(probs.shape[1]):
+        df[f"prob_class{j}"] = probs[:, j]
+        df[f"evidence_class{j}"] = evidence[:, j]
+    if expected_classes is not None:
+        if len(expected_classes) != len(df):
+            raise ValueError("expected_classes length mismatch for gene ECDF prediction")
+        df["expected_class"] = np.asarray(expected_classes, dtype=int)
+    if split_tags is not None:
+        if len(split_tags) != len(df):
+            raise ValueError("evaluation_split length mismatch for gene ECDF prediction")
+        df["evaluation_split"] = [str(x) for x in split_tags]
+    df.to_csv(predictions_csv, index=False)
+    return df
+
+
 def _warn_if_degenerate_predictions(
     y_pred: np.ndarray, n_classes: int, class_names: List[str]
 ) -> None:
@@ -963,6 +1034,14 @@ def run_prediction(config: PredictorConfig) -> Dict[str, Any]:
     classifier_type = str(getattr(classifier, "metadata", {}).get("classifier_type") or "").strip().lower()
     if classifier_type == AGGREGATED_ECDF_OVR_TYPE:
         df = _predict_aggregated_ecdf_samples(
+            classifier=classifier,
+            samples_list=samples_list,
+            predictions_csv=predictions_csv,
+            expected_classes=expected_classes,
+            split_tags=split_tags,
+        )
+    elif classifier_type == GENE_ECDF_OVR_TYPE:
+        df = _predict_gene_ecdf_samples(
             classifier=classifier,
             samples_list=samples_list,
             predictions_csv=predictions_csv,

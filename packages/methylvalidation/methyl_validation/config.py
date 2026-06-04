@@ -193,7 +193,7 @@ class BackendSharedParams(BaseModel):
     @field_validator("feature_mode")
     @classmethod
     def _validate_feature_mode(cls, value: str) -> str:
-        allowed = {"raw_dmp", "observed_hybrid"}
+        allowed = {"raw_dmp", "raw_gene", "observed_hybrid"}
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"feature_mode must be one of {sorted(allowed)}")
@@ -326,8 +326,8 @@ class EcdfBackendParams(BackendSharedParams):
     ecdf_aggregated_enabled: Optional[bool] = Field(
         default=None,
         description=(
-            "When true, train/use aggregated observed-hybrid ECDF OvR package. "
-            "When null, auto-enable for feature_mode=observed_hybrid and feature_family_set!=dmp."
+            "When true, train/use aggregated observed-hybrid ECDF OvR package (experimental). "
+            "When null/false, aggregated mode is disabled."
         ),
     )
     ecdf_aggregated_n_bins: int = Field(
@@ -1140,7 +1140,7 @@ class MonteCarloConfig(BaseModel):
         default=None,
         description=(
             "If set for model_backend=ecdf, force enable/disable aggregated observed-hybrid ECDF OvR. "
-            "If null, auto-enable when feature_mode=observed_hybrid and feature_family_set!=dmp."
+            "When null/false, aggregated mode is disabled (use raw_dmp or raw_gene instead)."
         ),
     )
     ecdf_aggregated_n_bins: int = Field(
@@ -1516,7 +1516,7 @@ class MonteCarloConfig(BaseModel):
     @field_validator("feature_mode")
     @classmethod
     def _validate_feature_mode(cls, value: str) -> str:
-        allowed = {"raw_dmp", "observed_hybrid"}
+        allowed = {"raw_dmp", "raw_gene", "observed_hybrid"}
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"feature_mode must be one of {sorted(allowed)}")

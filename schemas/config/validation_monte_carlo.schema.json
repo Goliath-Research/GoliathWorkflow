@@ -152,7 +152,7 @@
             }
           ],
           "default": null,
-          "description": "When true, train/use aggregated observed-hybrid ECDF OvR package. When null, auto-enable for feature_mode=observed_hybrid and feature_family_set!=dmp.",
+          "description": "When true, train/use aggregated observed-hybrid ECDF OvR package (experimental). When null/false, aggregated mode is disabled.",
           "title": "Ecdf Aggregated Enabled"
         },
         "ecdf_aggregated_n_bins": {
@@ -1701,7 +1701,7 @@
         }
       ],
       "default": null,
-      "description": "If set for model_backend=ecdf, force enable/disable aggregated observed-hybrid ECDF OvR. If null, auto-enable when feature_mode=observed_hybrid and feature_family_set!=dmp.",
+      "description": "If set for model_backend=ecdf, force enable/disable aggregated observed-hybrid ECDF OvR. When null/false, aggregated mode is disabled (use raw_dmp or raw_gene instead).",
       "title": "Ecdf Aggregated Enabled"
     },
     "ecdf_aggregated_n_bins": {

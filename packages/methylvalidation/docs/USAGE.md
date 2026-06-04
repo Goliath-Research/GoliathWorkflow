@@ -269,7 +269,7 @@ Common fields for production staging:
 - `stability_default_freeze_tier`: which tier aliases root `stable_dmps_production.csv` for `--freeze` (default `extended`).
 - `freeze_stable_dmp_csv`: optional override for freeze input panel path (default: `monte_carlo_runs/stability/stable_dmps_production.csv`).
 - `production_output_dir`: optional freeze/model output root (default: `monte_carlo_runs/production`).
-- `ecdf_aggregated_enabled`: optional override for aggregated ECDF OvR mode. `null` uses auto behavior.
+- `ecdf_aggregated_enabled`: when true, enable aggregated observed-hybrid ECDF OvR (experimental). When null/false, disabled.
 - `ecdf_aggregated_n_bins`: histogram bin count for aggregated ECDF OvR package training (default `100`).
 
 `--freeze` fails fast if the stable panel path is missing, so run `--stability` first or set `freeze_stable_dmp_csv`.
@@ -355,16 +355,28 @@ Operational notes:
 - Train/predict schema parity is enforced via stored feature names/fingerprints and fill metadata.
 - Legacy `observed_feature_include_*` toggles are no longer the canonical feature-family contract.
 
-### ECDF aggregated observed-hybrid mode
+### Production ECDF feature modes (`model_backend=ecdf`)
 
-When `model_backend=ecdf` and `feature_mode=observed_hybrid` with `feature_family_set != dmp`, methylvalidation runs aggregated ECDF OvR by default:
+Production `--model` supports three ECDF modes via `step_config.validation.backend_profiles.ecdf.params.feature_mode`:
+
+| `feature_mode` | Description | Artifact |
+|----------------|-------------|----------|
+| `raw_dmp` (default) | Classic OvR on frozen stable DMP loci via methyl-classifier → methyl-predictor | `classifiers/<control>/classifier_*_production.pkl` |
+| `raw_gene` | One ECDF feature per stable gene (weighted mean methylation at gene DMP loci) | `classifiers/ecdf_gene_ovr.pkl` |
+| `observed_hybrid` | Engineered hybrid families (experimental; requires explicit flag) | `classifiers/ecdf_aggregated_ovr.pkl` |
+
+Set `feature_mode: raw_gene` with `feature_family_set: gene` to use the simple gene axis. Freeze must produce `frozen_genes_production.csv` and mapper annotations.
+
+### ECDF aggregated observed-hybrid mode (opt-in)
+
+Aggregated observed-hybrid ECDF OvR runs only when `ecdf_aggregated_enabled: true` (typically for `--model-mc` experiments):
 
 - package artifacts:
   - `production/classifiers/ecdf_aggregated_ovr.pkl`
   - `production/classifiers/ecdf_aggregated_ovr.meta.json`
 - predictor outputs include `evidence_class*` diagnostics (pre-softmax OvR evidence, not p-values)
 - second-stage ECDF refinement is intentionally skipped in this mode
-- set `ecdf_aggregated_enabled` to explicitly force on/off
+- production freeze normalizes `ecdf_aggregated_enabled: false` unless explicitly set in the source project
 
 ### Tabular method configs (`tabular_sklearn`)
 

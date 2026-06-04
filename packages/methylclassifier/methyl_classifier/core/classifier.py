@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from methyl_utils.ecdf_aggregated_ovr import (
     AGGREGATED_ECDF_OVR_TYPE,
+    GENE_ECDF_OVR_TYPE,
     predict_aggregated_ecdf_ovr_proba,
 )
 
@@ -737,7 +738,10 @@ class MethylClassifier:
             if isinstance(model_package, dict) and model_package.get("classifier_type") == ECDF_ONE_VS_REST_TYPE:
                 print(f"✅ Loaded OvR ECDF model package (v{model_package.get('package_version', 'unknown')})")
                 self._load_ovr_ecdf_package(model_package)
-            elif isinstance(model_package, dict) and model_package.get("classifier_type") == AGGREGATED_ECDF_OVR_TYPE:
+            elif isinstance(model_package, dict) and model_package.get("classifier_type") in {
+                AGGREGATED_ECDF_OVR_TYPE,
+                GENE_ECDF_OVR_TYPE,
+            }:
                 self._ovr_mode = False
                 self._aggregated_ovr_mode = True
                 self._aggregated_package = dict(model_package)
@@ -746,14 +750,16 @@ class MethylClassifier:
                 self._ovr_binary_classifiers = []
                 self._ovr_column_indices = []
                 self.metadata = dict(model_package.get("metadata") or {})
-                self.metadata.setdefault("classifier_type", AGGREGATED_ECDF_OVR_TYPE)
+                pkg_type = str(model_package.get("classifier_type") or AGGREGATED_ECDF_OVR_TYPE)
+                self.metadata.setdefault("classifier_type", pkg_type)
                 self.class_names = [str(x) for x in (model_package.get("class_names") or [])]
                 self.n_classes = int(len(self.class_names))
                 self.dmp_positions_df = pd.DataFrame(columns=["chromosome", "position"])
                 feat_names = list(((model_package.get("feature_schema") or {}).get("feature_names") or []))
                 self.metadata["aggregated_feature_names"] = feat_names
+                label = "gene" if pkg_type == GENE_ECDF_OVR_TYPE else "aggregated"
                 print(
-                    f"✅ Loaded aggregated ECDF OvR package "
+                    f"✅ Loaded {label} ECDF OvR package "
                     f"(classes={self.n_classes}, features={len(feat_names)})"
                 )
             elif isinstance(model_package, dict) and 'classifier' in model_package:

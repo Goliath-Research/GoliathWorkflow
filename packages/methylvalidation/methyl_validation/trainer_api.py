@@ -422,12 +422,94 @@ def build_model_backend_steps(
             ("generative-predictor", _run_generative_predict),
         ]
 
-    ecdf_aggregated_auto = feature_mode == "observed_hybrid" and feature_family_set != "dmp"
     ecdf_aggregated_enabled = (
         bool(config.ecdf_aggregated_enabled)
         if config is not None and config.ecdf_aggregated_enabled is not None
-        else ecdf_aggregated_auto
+        else False
     )
+
+    if backend == "ecdf" and feature_mode == "raw_gene":
+        model_dir = (
+            predictor_output_dir.parent / "classifiers"
+            if predictor_output_dir is not None
+            else project_json.parent / "classifiers"
+        )
+
+        def _run_ecdf_gene_bundle() -> tuple[int, str, str]:
+            try:
+                from .model_bundle import build_model_feature_bundle
+
+                bundle_dir = (
+                    Path(config.model_bundle_dir)
+                    if config is not None and config.model_bundle_dir
+                    else (project_json.parent / "model_bundle")
+                )
+                build_model_feature_bundle(
+                    project_json=project_json,
+                    output_dir=bundle_dir,
+                    weight_column=(config.model_weight_column if config is not None else "effect_size"),
+                    feature_family_set="gene",
+                    require_mapper_annotations=True,
+                    extra_metadata={
+                        "model_backend": "ecdf",
+                        "classifier_type": "ecdf_gene_one_vs_rest",
+                        "feature_mode": "raw_gene",
+                        "feature_family_set": "gene",
+                    },
+                )
+                return 0, f"Bundle written to {bundle_dir}", ""
+            except Exception as e:
+                return 1, "", str(e)
+
+        def _run_ecdf_gene_train() -> tuple[int, str, str]:
+            try:
+                from .ecdf_gene_backend import train_ecdf_gene_ovr_model
+
+                bundle_dir = (
+                    Path(config.model_bundle_dir)
+                    if config is not None and config.model_bundle_dir
+                    else (project_json.parent / "model_bundle")
+                )
+                model_path = train_ecdf_gene_ovr_model(
+                    project_json=project_json,
+                    bundle_h5=bundle_dir / "model_feature_bundle.h5",
+                    output_dir=model_dir,
+                    min_coverage=(
+                        config.observed_feature_min_coverage if config is not None else 1
+                    ),
+                    use_region_weight=True,
+                    gene_weight_column="mean_effect_size",
+                    n_bins=(config.ecdf_aggregated_n_bins if config is not None else 100),
+                    temperature=1.0,
+                )
+                return 0, f"Gene ECDF model trained: {model_path}", ""
+            except Exception as e:
+                return 1, "", str(e)
+
+        def _run_ecdf_gene_predict() -> tuple[int, str, str]:
+            try:
+                from .ecdf_gene_backend import predict_ecdf_gene_ovr_from_project
+
+                model_path = model_dir / "ecdf_gene_ovr.pkl"
+                metrics = predict_ecdf_gene_ovr_from_project(
+                    project_json=project_json,
+                    model_path=model_path,
+                    output_dir=(predictor_output_dir or (project_json.parent / "predictors")),
+                )
+                return 0, json.dumps(metrics), ""
+            except Exception as e:
+                return 1, "", str(e)
+
+        def _skip_ecdf_second_stage_gene() -> tuple[int, str, str]:
+            return 0, "ECDF second-stage scorer skipped for raw-gene ECDF OvR mode.", ""
+
+        return [
+            ("model-bundle", _run_ecdf_gene_bundle),
+            ("ecdf-gene-train", _run_ecdf_gene_train),
+            ("ecdf-gene-predictor", _run_ecdf_gene_predict),
+            ("ecdf-second-stage", _skip_ecdf_second_stage_gene),
+        ]
+
     if backend == "ecdf" and ecdf_aggregated_enabled:
         model_dir = (
             predictor_output_dir.parent / "classifiers"

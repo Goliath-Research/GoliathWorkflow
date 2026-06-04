@@ -322,9 +322,10 @@
           "enabled": true,
           "params": {
             "model_bundle_dir": null,
-            "model_weight_column": "weight",
-            "feature_mode": "observed_hybrid",
-            "feature_family_set": "gene",
+            "model_weight_column": "effect_size",
+            "feature_mode": "raw_dmp",
+            "feature_family_set": "dmp",
+            "ecdf_aggregated_enabled": false,
             "observed_feature_quantiles": [
               0.1,
               0.25,

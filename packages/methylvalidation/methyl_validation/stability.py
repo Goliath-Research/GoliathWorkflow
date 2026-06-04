@@ -1542,6 +1542,31 @@ def _merge_stable_dmp_panels(
     return merged_path
 
 
+def _normalize_production_ecdf_backend(project_dict: Dict[str, Any]) -> None:
+    """
+    Patch production validation ECDF params so --model uses a safe default axis.
+
+    Honors explicit raw_gene in the source project; otherwise defaults to raw_dmp.
+    Always disables auto aggregated observed-hybrid unless explicitly enabled.
+    """
+    step_cfg = project_dict.setdefault("step_config", {})
+    validation_cfg = step_cfg.setdefault("validation", {})
+    backend_profiles = validation_cfg.setdefault("backend_profiles", {})
+    ecdf_profile = backend_profiles.setdefault("ecdf", {})
+    params = ecdf_profile.setdefault("params", {})
+
+    requested_mode = str(params.get("feature_mode") or "raw_dmp").strip().lower()
+    if requested_mode == "raw_gene":
+        params["feature_mode"] = "raw_gene"
+        params["feature_family_set"] = "gene"
+    else:
+        params["feature_mode"] = "raw_dmp"
+        params["feature_family_set"] = "dmp"
+    params["model_weight_column"] = "effect_size"
+    if params.get("ecdf_aggregated_enabled") is not True:
+        params["ecdf_aggregated_enabled"] = False
+
+
 def freeze_production_model(
     base_project: Path,
     stable_dmp_csv: str,
@@ -1613,6 +1638,7 @@ def freeze_production_model(
         project_dict["output_base"] = str(prod_dir)
 
     prod_project_path = prod_dir / "project.json"
+    _normalize_production_ecdf_backend(project_dict)
     with open(prod_project_path, "w", encoding="utf-8") as f:
         json.dump(project_dict, f, indent=2)
 

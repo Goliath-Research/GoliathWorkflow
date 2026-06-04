@@ -16,6 +16,10 @@ import pandas as pd
 from .ecdf_classifier import ECDFClassifier
 
 AGGREGATED_ECDF_OVR_TYPE = "ecdf_aggregated_one_vs_rest"
+GENE_ECDF_OVR_TYPE = "ecdf_gene_one_vs_rest"
+SUPPORTED_PACKAGE_ECDF_OVR_TYPES = frozenset(
+    {AGGREGATED_ECDF_OVR_TYPE, GENE_ECDF_OVR_TYPE}
+)
 AGGREGATED_ECDF_OVR_VERSION = 1
 
 
@@ -359,7 +363,7 @@ def predict_aggregated_ecdf_ovr_proba(
         probs: (n_samples, n_classes) posterior probabilities.
         evidence_logits: (n_samples, n_classes) OvR evidence before softmax.
     """
-    if str(package.get("classifier_type")) != AGGREGATED_ECDF_OVR_TYPE:
+    if str(package.get("classifier_type")) not in SUPPORTED_PACKAGE_ECDF_OVR_TYPES:
         raise ValueError(f"Unsupported classifier_type: {package.get('classifier_type')!r}")
     class_names = [str(x) for x in (package.get("class_names") or [])]
     if len(class_names) < 2:

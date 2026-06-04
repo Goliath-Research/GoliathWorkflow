@@ -60,6 +60,24 @@ def write_locked_model_spec(
     fixed_gene_panel = Path(str(model_bundle_cfg.get("fixed_gene_panel") or ""))
     fixed_gene_features = Path(str(model_bundle_cfg.get("fixed_gene_features") or ""))
 
+    ecdf_params = (
+        ((val_cfg.get("backend_profiles") or {}).get("ecdf") or {}).get("params") or {}
+    )
+    feature_mode = str(
+        ecdf_params.get("feature_mode")
+        or (getattr(config, "feature_mode", "") if config is not None else "")
+        or "raw_dmp"
+    ).strip().lower()
+    if feature_mode == "raw_gene":
+        classifier_artifact = production_dir / "classifiers" / "ecdf_gene_ovr.pkl"
+        classifier_kind = "ecdf_gene_one_vs_rest"
+    elif feature_mode == "observed_hybrid" and bool(ecdf_params.get("ecdf_aggregated_enabled")):
+        classifier_artifact = production_dir / "classifiers" / "ecdf_aggregated_ovr.pkl"
+        classifier_kind = "ecdf_aggregated_one_vs_rest"
+    else:
+        classifier_artifact = production_dir / "classifiers"
+        classifier_kind = "ecdf_one_vs_rest"
+
     payload: Dict[str, Any] = {
         "spec_version": "locked_model_spec_v1",
         "source_event": source_event,
@@ -99,11 +117,18 @@ def write_locked_model_spec(
                 "path": str(fixed_gene_features) if fixed_gene_features else None,
                 "sha256": _sha256(fixed_gene_features) if fixed_gene_features else None,
             },
+            "classifier_model": {
+                "kind": classifier_kind,
+                "path": str(classifier_artifact),
+                "sha256": _sha256(classifier_artifact) if classifier_artifact.is_file() else None,
+            },
         },
         "selection": selected_backend or None,
         "runtime": {
             "model_backend": str(getattr(config, "model_backend", "")) if config is not None else None,
-            "feature_mode": str(getattr(config, "feature_mode", "")) if config is not None else None,
+            "feature_mode": feature_mode or (
+                str(getattr(config, "feature_mode", "")) if config is not None else None
+            ),
             "feature_family_set": str(getattr(config, "feature_family_set", "")) if config is not None else None,
             "covariates_path": str(getattr(config, "covariates_path", "")) if config is not None else None,
             "validation_partitions": (

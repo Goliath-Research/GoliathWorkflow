@@ -97,7 +97,7 @@ def test_build_model_backend_steps_ecdf_second_stage_disabled(tmp_path: Path, mo
     assert err == ""
 
 
-def test_build_model_backend_steps_ecdf_observed_hybrid_uses_aggregated_path(tmp_path: Path):
+def test_build_model_backend_steps_ecdf_observed_hybrid_defaults_to_classic_path(tmp_path: Path):
     cfg = MonteCarloConfig.model_validate(
         {
             "samples_base_path": "/tmp",
@@ -112,6 +112,78 @@ def test_build_model_backend_steps_ecdf_observed_hybrid_uses_aggregated_path(tmp
                     "params": {
                         "feature_mode": "observed_hybrid",
                         "feature_family_set": "gene",
+                    },
+                },
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
+        }
+    )
+    steps = build_model_backend_steps(
+        project_json=tmp_path / "project.json",
+        predictor_output_dir=tmp_path / "predictors",
+        config=cfg,
+        per_cancer_group=False,
+        run_classifier_fn=lambda _p, _g: (0, "classifier ok", ""),
+        run_predictor_fn=lambda _p, _o: (0, "predictor ok", ""),
+    )
+    assert [name for name, _ in steps] == ["methyl-classifier", "methyl-predictor", "ecdf-second-stage"]
+
+
+def test_build_model_backend_steps_ecdf_raw_gene_uses_gene_ecdf_path(tmp_path: Path):
+    cfg = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": str(tmp_path / "project.json"),
+            "output_base": str(tmp_path),
+            "backend_profiles": {
+                "ecdf": {
+                    "enabled": True,
+                    "params": {
+                        "feature_mode": "raw_gene",
+                        "feature_family_set": "gene",
+                    },
+                },
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
+        }
+    )
+    steps = build_model_backend_steps(
+        project_json=tmp_path / "project.json",
+        predictor_output_dir=tmp_path / "predictors",
+        config=cfg,
+        per_cancer_group=False,
+        run_classifier_fn=lambda _p, _g: (0, "classifier ok", ""),
+        run_predictor_fn=lambda _p, _o: (0, "predictor ok", ""),
+    )
+    assert [name for name, _ in steps] == [
+        "model-bundle",
+        "ecdf-gene-train",
+        "ecdf-gene-predictor",
+        "ecdf-second-stage",
+    ]
+
+
+def test_build_model_backend_steps_ecdf_observed_hybrid_uses_aggregated_path_when_explicit(tmp_path: Path):
+    cfg = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": str(tmp_path / "project.json"),
+            "output_base": str(tmp_path),
+            "backend_profiles": {
+                "ecdf": {
+                    "enabled": True,
+                    "params": {
+                        "feature_mode": "observed_hybrid",
+                        "feature_family_set": "gene",
+                        "ecdf_aggregated_enabled": True,
                     },
                 },
                 "tabular_sklearn": {"enabled": False, "params": {}},

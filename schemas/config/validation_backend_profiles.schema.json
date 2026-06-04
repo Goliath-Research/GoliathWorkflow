@@ -113,7 +113,7 @@
             }
           ],
           "default": null,
-          "description": "When true, train/use aggregated observed-hybrid ECDF OvR package. When null, auto-enable for feature_mode=observed_hybrid and feature_family_set!=dmp.",
+          "description": "When true, train/use aggregated observed-hybrid ECDF OvR package (experimental). When null/false, aggregated mode is disabled.",
           "title": "Ecdf Aggregated Enabled"
         },
         "ecdf_aggregated_n_bins": {
