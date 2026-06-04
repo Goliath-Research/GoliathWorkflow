@@ -38,17 +38,18 @@ class CisbpConfig(BaseModel):
         gene promoter sequences with CIS-BP PWMs, or from a prebuilt GMT) and run
         offline over-representation analysis, emitting an ``enrich_<label>.csv``
         that merges with the Enrichr libraries.
-      * ``annotate`` ("1B", planned): annotate TFs already surfaced by ChEA/ENCODE/
-        TRRUST results with CIS-BP motif metadata.
-      * ``motif_scan`` ("1C", planned): scan DMP/DMR region sequences with CIS-BP
-        PWMs for direct motif enrichment.
+      * ``annotate`` ("1B"): annotate TFs already surfaced by ChEA/ENCODE/TRRUST
+        enrichment with CIS-BP motif metadata.
+      * ``motif_scan`` ("1C"): scan DMP/DMR region sequences with CIS-BP PWMs and
+        test for over-represented motifs at differentially methylated loci.
     """
 
     model_config = ConfigDict(extra="ignore")
 
     enabled: Optional[bool] = None
-    mode: Optional[str] = "gene_sets"  # gene_sets | annotate | motif_scan
-    label: Optional[str] = "CIS-BP"  # library name used in merged results
+    mode: Optional[str] = "gene_sets"  # gene_sets | annotate | motif_scan (used when cisbp_modes unset)
+    cisbp_modes: Optional[List[str]] = None  # e.g. [gene_sets, motif_scan, annotate]; annotate runs last
+    label: Optional[str] = "CIS-BP"  # base library name; motif/annotate modes use suffixed labels
 
     # Data acquisition (CIS-BP has no API; bulk per-species archive download).
     species: Optional[str] = "Homo_sapiens"
@@ -76,6 +77,21 @@ class CisbpConfig(BaseModel):
     gene_universe_file: Optional[str] = None  # gene list; default = all genes in GTF
     background_size: Optional[int] = None  # ORA background size override
     rebuild_gmt: Optional[bool] = None  # force-rebuild cached GMT
+
+    # DMP region motif scan (mode="motif_scan").
+    dmp_csv_path: Optional[str] = None  # single DMP CSV (overrides dmp_detection_dir)
+    dmp_detection_dir: Optional[str] = None  # directory with dmps-*-*.csv exports
+    dmp_source: Optional[str] = "discovery"  # discovery | classifier
+    region_flank_bp: Optional[int] = 250  # bases on each side of the DMP position
+    max_dmp_regions: Optional[int] = 5000  # cap loci loaded for scanning
+    min_regions_per_tf: Optional[int] = 3  # min DMP regions per TF in the GMT
+    max_regions_per_tf: Optional[int] = 5000
+    rebuild_region_gmt: Optional[bool] = None  # force-rebuild cached region GMT
+
+    # TF annotation (mode="annotate").
+    annotate_libraries: Optional[List[str]] = None  # default: TF libs present in output_dir
+    annotate_max_terms_per_library: Optional[int] = None
+    annotate_include_unmatched: Optional[bool] = False  # emit rows without a CIS-BP match
 
 
 class EnricherStepConfig(BaseModel):

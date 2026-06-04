@@ -10,11 +10,13 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 
+from .classification_metrics import VALIDATION_METRICS_SCHEMA_VERSION
+
 # Schema version for aggregated Monte Carlo metrics artifacts.
-METRICS_SCHEMA_VERSION = "probabilistic_v2_mc_v1"
+METRICS_SCHEMA_VERSION = VALIDATION_METRICS_SCHEMA_VERSION
 
 # Scalar metric keys we want in the flat table and in the summary
-# (skip nested per_class, confusion_matrix).
+# (skip nested per_class, confusion_matrix, screening_binary, class_roles).
 SCALAR_KEYS = [
     "accuracy",
     "balanced_accuracy",
@@ -25,14 +27,28 @@ SCALAR_KEYS = [
     "specificity",
     "macro_precision",
     "macro_recall",
+    "macro_specificity",
     "macro_f1",
     "weighted_f1",
     "precision_binary",
     "recall_binary",
     "f1_binary",
+    "screening_sensitivity",
+    "screening_specificity",
+    "screening_precision",
+    "screening_npv",
+    "screening_f1",
     "n_samples",
     "n_classes",
 ]
+
+_SCREENING_SCALAR_MAP = {
+    "sensitivity": "screening_sensitivity",
+    "specificity": "screening_specificity",
+    "precision": "screening_precision",
+    "npv": "screening_npv",
+    "f1": "screening_f1",
+}
 
 
 def metrics_schema_descriptor() -> Dict[str, Any]:
@@ -49,25 +65,46 @@ def metrics_schema_descriptor() -> Dict[str, Any]:
     }
 
 
+def _flatten_screening_binary(
+    metrics: Dict[str, Any],
+    out: Dict[str, Any],
+    *,
+    key_prefix: str = "",
+) -> None:
+    screening = metrics.get("screening_binary")
+    if not isinstance(screening, dict):
+        return
+    for src, dst in _SCREENING_SCALAR_MAP.items():
+        val = screening.get(src)
+        if isinstance(val, (int, float)):
+            out[f"{key_prefix}{dst}"] = val
+
+
 def _scalar_metrics_from_dict(metrics: Dict[str, Any]) -> Dict[str, Any]:
     """Extract scalar metrics from a validation_metrics dict (skip lists/nested)."""
     out: Dict[str, Any] = {}
     for k in SCALAR_KEYS:
         if k in metrics and isinstance(metrics[k], (int, float)):
             out[k] = metrics[k]
+    _flatten_screening_binary(metrics, out)
     tr = metrics.get("training_metrics")
     ho = metrics.get("holdout_metrics")
     if isinstance(tr, dict):
         for k in SCALAR_KEYS:
             if k in tr and isinstance(tr[k], (int, float)):
                 out[f"training_{k}"] = tr[k]
+        _flatten_screening_binary(tr, out, key_prefix="training_")
     if isinstance(ho, dict):
         for k in SCALAR_KEYS:
             if k in ho and isinstance(ho[k], (int, float)):
                 out[f"holdout_{k}"] = ho[k]
+        _flatten_screening_binary(ho, out, key_prefix="holdout_")
     sem = metrics.get("evaluation_semantics")
     if isinstance(sem, str) and sem:
         out["evaluation_semantics"] = sem
+    vm_schema = metrics.get("metrics_schema_version")
+    if isinstance(vm_schema, str) and vm_schema:
+        out["validation_metrics_schema_version"] = vm_schema
     return out
 
 

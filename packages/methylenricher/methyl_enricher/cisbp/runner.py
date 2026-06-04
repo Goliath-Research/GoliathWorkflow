@@ -7,7 +7,9 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Sequence, Set
+from typing import List, Optional, Sequence, Set, Union
+
+from methyl_utils.analyte_profiles import cisbp_mode_label, resolve_cisbp_modes
 
 from .registry import get_mode_handler
 
@@ -22,6 +24,7 @@ class CisbpContext:
     gtf: Optional[str] = None
     genome_fasta: Optional[str] = None
     gene_universe: Optional[Set[str]] = None
+    dmp_detection_dir: Optional[str] = None
     background: Optional[int] = None
     cutoff: float = 0.05
 
@@ -34,19 +37,40 @@ def run_cisbp(
     genes: Sequence[str],
     output_dir,
     context: Optional[CisbpContext] = None,
-) -> Optional[str]:
+) -> Union[None, str, List[str]]:
     """
-    Run the configured CIS-BP integration mode.
+    Run the configured CIS-BP integration mode(s).
 
-    Returns the library label to merge into enrichment results, or ``None`` when
-    disabled or nothing was produced. Raises for genuine misconfiguration so the
-    caller can surface it; the caller (EnrichmentAnalyzer) decides whether to
-    treat failures as soft.
+    Returns library label(s) to merge into enrichment results, or ``None`` when
+    disabled or nothing was produced. Multiple modes (``cisbp_modes``) return a
+    list of labels in run order.
     """
     if cfg is None or not getattr(cfg, "enabled", False):
         return None
     context = context or CisbpContext()
-    mode = (cfg.mode or "gene_sets").strip().lower()
-    handler = get_mode_handler(mode)
-    logger.info("[CIS-BP] running mode '%s' (label=%s)", mode, cfg.label or "CIS-BP")
-    return handler(cfg, genes, Path(output_dir), context)
+    output_dir = Path(output_dir)
+    base_label = cfg.label or "CIS-BP"
+    modes = resolve_cisbp_modes(cfg)
+
+    labels: List[str] = []
+    for mode in modes:
+        mode_label = cisbp_mode_label(mode, base_label)
+        sub_cfg = cfg
+        if hasattr(cfg, "model_copy"):
+            sub_cfg = cfg.model_copy(update={"mode": mode, "label": mode_label})
+        else:
+            sub_cfg = cfg
+            setattr(sub_cfg, "mode", mode)
+            setattr(sub_cfg, "label", mode_label)
+
+        handler = get_mode_handler(mode)
+        logger.info("[CIS-BP] running mode '%s' (label=%s)", mode, mode_label)
+        result = handler(sub_cfg, genes, output_dir, context)
+        if result:
+            labels.append(result)
+
+    if not labels:
+        return None
+    if len(labels) == 1:
+        return labels[0]
+    return labels

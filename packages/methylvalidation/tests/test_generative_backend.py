@@ -153,6 +153,9 @@ def test_generative_backend_multiclass_train_predict(tmp_path: Path, monkeypatch
         output_dir=tmp_path / "predict",
     )
     assert metrics["n_classes"] == 3
+    assert "sensitivity" not in metrics
+    assert "screening_binary" in metrics
+    assert len(metrics.get("per_class") or []) == 3
     pred_df = pd.read_csv(tmp_path / "predict" / "predictions.csv")
     assert {"prob_class0", "prob_class1", "prob_class2"}.issubset(set(pred_df.columns))
 

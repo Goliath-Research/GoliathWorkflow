@@ -48,10 +48,12 @@ gene-set service, so the integration is pluggable via a `mode`:
   over-representation analysis (ORA) on your gene list, emitting an
   `enrich_CIS-BP.csv` that merges alongside the Enrichr libraries (categorized as a
   `tf` library in the module pipeline).
-- `annotate` (planned): annotate TFs already surfaced by ChEA/ENCODE/TRRUST results
-  with CIS-BP motif metadata.
-- `motif_scan` (planned): scan DMP/DMR region sequences with CIS-BP PWMs for direct
-  motif enrichment.
+- `annotate`: annotate TFs already surfaced by ChEA/ENCODE/TRRUST (or other TF
+  libraries present in the output directory) with CIS-BP motif IDs, evidence, and
+  family metadata. Requires those Enrichr libraries to run **before** CIS-BP in the
+  same output folder.
+- `motif_scan`: scan DMP/DMR region sequences with CIS-BP PWMs for direct motif
+  enrichment at differentially methylated loci.
 
 CIS-BP has no query API, so the per-species archive is **auto-downloaded** from the
 bulk-download endpoint on first use and cached (default cache:
@@ -69,8 +71,13 @@ Set `cisbp.genome_fasta` / `cisbp.gtf` only to override those project defaults. 
 built GMT is cached so subsequent runs are fast. You can also supply a prebuilt GMT
 directly via `gene_set_source=prebuilt_gmt` + `gmt_path`.
 
-Enable via CLI (`--cisbp`, optional `--cisbp-mode`) or, preferably, in the project
-config under `step_config.enricher.cisbp`:
+For **cfDNA** projects, set `validation.regulatory.primary_analyte` to `cfdna` and the
+[pipeline analyte profile](../../docs/ANALYTE_PROFILES.md) enables CIS-BP with
+`cisbp_modes: [gene_sets, motif_scan, annotate]` (three merge labels). Override in
+`step_config.enricher.cisbp` as needed.
+
+Enable via CLI (`--cisbp`, optional `--cisbp-mode`) or in the project config under
+`step_config.enricher.cisbp`:
 
 ```json
 {

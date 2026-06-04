@@ -106,7 +106,7 @@ methyl-validation --project configs/my_project.json --post-model-validation
 
 - Uses frozen artifacts only (no retraining).
 - Supports all model backends.
-- Provides empirical distributions for multiple metrics (`balanced_accuracy`, `sensitivity`, `specificity`, `macro_f1`, etc.).
+- Provides empirical distributions for multiple metrics (`balanced_accuracy`, `macro_f1`, `macro_recall`, `screening_sensitivity` / `screening_specificity` for multiclass, etc.).
 - Includes proper-score diagnostics when probabilities are available (`nll`, `brier_score`, `ece`) in `validation_metrics.json` and MC aggregates.
 - Exports `metrics_distributions_plotly.html` with KDE and ECDF for each metric.
 - Uses the same stratified splitting logic as Workflow 1 for consistency.

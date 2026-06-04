@@ -11,13 +11,6 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import (
-    accuracy_score,
-    balanced_accuracy_score,
-    confusion_matrix,
-    precision_recall_fscore_support,
-)
-
 from methyl_predictor.models.config import PredictorConfig
 from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
@@ -28,6 +21,11 @@ from methyl_utils.ecdf_aggregated_ovr import (
     train_aggregated_ecdf_ovr_package,
 )
 
+from .classification_metrics import (
+    compute_validation_metrics,
+    resolve_class_roles,
+    select_healthy_index_for_labels,
+)
 from .eval_split_resolver import resolve_eval_paths_and_labels
 from .model_bundle import load_bundle_dmp_index
 from .observed_feature_builder import (
@@ -35,10 +33,7 @@ from .observed_feature_builder import (
     derive_observed_hybrid_anchors,
     select_training_feature_matrix,
 )
-from .tabular_backend import (
-    _resolve_class_centroid_dirs,
-    _select_healthy_index_for_labels,
-)
+from .tabular_backend import _resolve_class_centroid_dirs
 
 
 def _load_training_samples(project_json: str | Path) -> Tuple[List[str], np.ndarray, List[str]]:
@@ -59,64 +54,6 @@ def _load_training_samples(project_json: str | Path) -> Tuple[List[str], np.ndar
     return all_paths, np.asarray(y, dtype=np.int32), class_names
 
 
-def _compute_metrics(
-    y_true: np.ndarray,
-    y_pred: np.ndarray,
-    n_classes: int,
-    class_names: Sequence[str],
-) -> Dict[str, Any]:
-    yt = np.asarray(y_true, dtype=int).reshape(-1)
-    yp = np.asarray(y_pred, dtype=int).reshape(-1)
-    labels = list(range(int(n_classes)))
-    metrics: Dict[str, Any] = {
-        "n_samples": int(len(yt)),
-        "n_classes": int(n_classes),
-        "accuracy": float(accuracy_score(yt, yp)) if len(yt) else 0.0,
-        "balanced_accuracy": float(balanced_accuracy_score(yt, yp)) if len(yt) else 0.0,
-    }
-    precision, recall, f1, support = precision_recall_fscore_support(
-        yt,
-        yp,
-        labels=labels,
-        average=None,
-        zero_division=0,
-    )
-    precision = np.asarray(precision, dtype=np.float64)
-    recall = np.asarray(recall, dtype=np.float64)
-    f1 = np.asarray(f1, dtype=np.float64)
-    support = np.asarray(support, dtype=np.int64)
-    metrics["per_class"] = {
-        str(class_names[i] if i < len(class_names) else f"Class_{i}"): {
-            "precision": float(precision[i]),
-            "recall": float(recall[i]),
-            "f1": float(f1[i]),
-            "support": int(support[i]),
-        }
-        for i in range(len(labels))
-    }
-    metrics["macro_precision"] = float(np.mean(precision)) if len(precision) else 0.0
-    metrics["macro_recall"] = float(np.mean(recall)) if len(recall) else 0.0
-    metrics["macro_f1"] = float(np.mean(f1)) if len(f1) else 0.0
-    _, _, weighted_f1, _ = precision_recall_fscore_support(
-        yt,
-        yp,
-        labels=labels,
-        average="weighted",
-        zero_division=0,
-    )
-    metrics["weighted_f1"] = float(weighted_f1)
-    cm = confusion_matrix(yt, yp, labels=labels)
-    metrics["confusion_matrix"] = cm.astype(int).tolist()
-    if int(n_classes) == 2 and cm.shape == (2, 2):
-        tn, fp, fn, tp = [int(v) for v in cm.ravel().tolist()]
-        metrics["specificity"] = float(tn / max(1, tn + fp))
-        metrics["sensitivity"] = float(tp / max(1, tp + fn))
-        metrics["precision_binary"] = float(tp / max(1, tp + fp))
-        metrics["recall_binary"] = metrics["sensitivity"]
-        metrics["f1_binary"] = float(2 * tp / max(1, (2 * tp) + fp + fn))
-    return metrics
-
-
 def train_ecdf_aggregated_ovr_model(
     *,
     project_json: str | Path,
@@ -134,6 +71,7 @@ def train_ecdf_aggregated_ovr_model(
 ) -> Path:
     project = load_project(project_json)
     all_paths, y, class_names = _load_training_samples(project_json)
+    roles = resolve_class_roles(project)
     dmp_df = load_bundle_dmp_index(bundle_h5)
     class_centroid_dirs = _resolve_class_centroid_dirs(project, class_names)
 
@@ -190,6 +128,7 @@ def train_ecdf_aggregated_ovr_model(
         },
     )
     package["feature_report"] = dict(feat.report)
+    package["class_roles"] = roles
     package["observed_hybrid"] = {
         "dmp_df": dmp_df,
         "healthy_reference_vector": anchors.healthy_reference_vector.astype(np.float64),
@@ -293,7 +232,10 @@ def predict_ecdf_aggregated_ovr_from_project(
             np.asarray(v, dtype=np.float64).tolist()
             for v in (obs.get("per_cancer_reference_vectors") or [])
         ],
-        healthy_class_label=str(obs.get("healthy_class_label") or class_names[_select_healthy_index_for_labels(class_names)]),
+        healthy_class_label=str(
+            obs.get("healthy_class_label")
+            or class_names[select_healthy_index_for_labels(class_names)]
+        ),
         cancer_class_labels=[str(x) for x in (obs.get("cancer_class_labels") or class_names[1:])],
         anchor_strategy=str(obs.get("anchor_strategy") or "class_centroid"),
         expected_feature_order_fingerprint=str(obs.get("feature_order_fingerprint") or ""),
@@ -355,7 +297,12 @@ def predict_ecdf_aggregated_ovr_from_project(
     if "expected_class" in df.columns:
         y_true = df["expected_class"].to_numpy(dtype=int)
         y_pred = df["prediction"].to_numpy(dtype=int)
-        scored = _compute_metrics(y_true, y_pred, len(class_names), class_names)
+        class_roles = package.get("class_roles")
+        if not isinstance(class_roles, dict):
+            class_roles = resolve_class_roles(load_project(project_json))
+        scored = compute_validation_metrics(
+            y_true, y_pred, class_names, class_roles=class_roles
+        )
         metrics.update(scored)
 
     metrics_path = out_dir / "validation_metrics.json"

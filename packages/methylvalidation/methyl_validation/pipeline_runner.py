@@ -292,6 +292,30 @@ def _progression_settings(project_json: str | Path) -> Dict[str, Any]:
         return {}
 
 
+def _fragmentomics_settings(project_json: str | Path) -> Dict[str, Any]:
+    try:
+        from methyl_utils import load_project
+    except Exception:
+        return {}
+    try:
+        project = load_project(project_json)
+        return project.get_step_config("fragmentomics") or {}
+    except Exception:
+        return {}
+
+
+def run_fragmentomics(project_json: str | Path) -> tuple[int, str, str]:
+    """Run methyl-fragmentomics --project when step_config.fragmentomics.enabled."""
+    cfg = _fragmentomics_settings(project_json)
+    if not cfg.get("enabled"):
+        return 0, "[skip] fragmentomics not enabled\n", ""
+    cmd = ["methyl-fragmentomics", "--project", str(project_json)]
+    out_dir = cfg.get("output_dir")
+    if out_dir:
+        cmd.extend(["--output-dir", str(out_dir)])
+    return run_cmd(cmd)
+
+
 def run_progression(project_json: str | Path) -> tuple[int, str, str]:
     """Run methyl-disease-progression --project <project_json> with optional step_config args."""
     cfg = _progression_settings(project_json)
@@ -868,6 +892,10 @@ def run_pipeline_for_production(
     step_timings: List[Dict[str, Any]] = []
     steps: List[Tuple[str, Callable[[], tuple[int, str, str]]]] = []
     # Detector reuse implies centroid reuse as well for freeze runs.
+    frag_cfg = _fragmentomics_settings(project_json)
+    if bool(frag_cfg.get("enabled")):
+        steps.insert(0, ("methyl-fragmentomics", lambda: run_fragmentomics(project_json)))
+
     effective_skip_centroid = bool(skip_centroid or skip_detection)
     if not effective_skip_centroid:
         steps.append(("methyl-centroid", lambda: run_centroid(project_json, centroid_step_overrides=None)))
@@ -1056,7 +1084,15 @@ def run_pipeline_for_model(
     """
     from .validator_metrics import write_step_timings_csv
 
+    from .analyte_guard import assert_training_analyte_match_for_model
     from .trainer_api import build_model_backend_steps
+
+    enforce_analyte = bool(getattr(config, "enforce_training_analyte_match", False)) if config else False
+    assert_training_analyte_match_for_model(
+        project_json,
+        enforce=enforce_analyte,
+        production_dir=project_json.parent if project_json.name == "project.json" else None,
+    )
 
     errors: List[str] = []
     step_timings: List[Dict[str, Any]] = []

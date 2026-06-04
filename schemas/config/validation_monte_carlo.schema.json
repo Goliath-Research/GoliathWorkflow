@@ -879,6 +879,19 @@
           "title": "Allow Clinical Performance Claims",
           "type": "boolean"
         },
+        "auto_apply_analyte_profile": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When true (default when primary_analyte is set), merge analyte-specific step_config defaults (fragmentomics, CIS-BP, bisulfite QC, etc.). Set false to opt out.",
+          "title": "Auto Apply Analyte Profile"
+        },
         "claim_boundary": {
           "anyOf": [
             {
@@ -904,6 +917,19 @@
           "default": null,
           "description": "Short intended-use statement for reports.",
           "title": "Intended Use Summary"
+        },
+        "model_training_analyte": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Analyte matrix used for stability/freeze/classifier training on this project. Defaults to primary_analyte when omitted. Set to cfdna for plasma/cfDNA retrain paths.",
+          "title": "Model Training Analyte"
         },
         "primary_analyte": {
           "anyOf": [
@@ -1690,6 +1716,12 @@
       "default": false,
       "description": "If true for model_backend=ecdf, train optional second-stage binary refiner using observed_hybrid features and append extra prediction columns.",
       "title": "Ecdf Second Stage Enabled",
+      "type": "boolean"
+    },
+    "enforce_training_analyte_match": {
+      "default": false,
+      "description": "If True, --model fails when step_config.validation.regulatory training analyte does not match locked_model_spec.json (blocks buffy-trained model on cfDNA projects).",
+      "title": "Enforce Training Analyte Match",
       "type": "boolean"
     },
     "feature_family_set": {

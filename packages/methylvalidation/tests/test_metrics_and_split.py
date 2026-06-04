@@ -39,7 +39,7 @@ def test_validation_metric_summaries_aggregate_runs():
     metrics_df = build_metrics_table(records)
     summary = compute_summary(metrics_df)
 
-    assert summary["metrics_schema_version"] == "probabilistic_v2_mc_v1"
+    assert summary["metrics_schema_version"] == "probabilistic_v3_mc_v1"
     assert math.isclose(summary["accuracy"]["mean"], 0.9)
     assert math.isclose(summary["balanced_accuracy"]["percentiles"]["p50"], 0.8)
     assert math.isclose(summary["sensitivity"]["max"], 0.8)

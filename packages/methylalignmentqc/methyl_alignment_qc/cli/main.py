@@ -80,6 +80,8 @@ Examples:
                 config.sample_paths,
                 config.output_dir,
                 validate_schema=config.validate_schema,
+                fragmentomics=config.fragmentomics,
+                bisulfite_conversion=config.bisulfite_conversion,
             )
             if args.verbose:
                 print(f"Wrote {len(config.sample_paths)} JSON(s) to {config.output_dir}")

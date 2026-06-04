@@ -1,7 +1,161 @@
 {
+  "$defs": {
+    "BisulfiteConversionConfig": {
+      "description": "Quantitative bisulfite conversion QC (sidecar JSON or deamination proxy).",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "max_deamination_qscore_proxy": {
+          "default": 30,
+          "description": "Pass deamination qscore proxy when <= this value.",
+          "minimum": 0,
+          "title": "Max Deamination Qscore Proxy",
+          "type": "integer"
+        },
+        "max_non_cpg_methylation_pct": {
+          "default": 2.0,
+          "description": "Maximum acceptable non-CpG methylation (%) when sidecar supplies it.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Max Non Cpg Methylation Pct",
+          "type": "number"
+        },
+        "min_conversion_rate_pct": {
+          "default": 99.0,
+          "description": "Minimum acceptable conversion rate (%) when sidecar supplies it.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Min Conversion Rate Pct",
+          "type": "number"
+        },
+        "sidecar_filename": {
+          "default": "bisulfite_conversion.json",
+          "description": "Per-sample file in sample dir with conversion_rate_pct and optional non_cpg_methylation_pct.",
+          "title": "Sidecar Filename",
+          "type": "string"
+        },
+        "source": {
+          "default": "auto",
+          "description": "auto: use sidecar when present, else deamination proxy.",
+          "enum": [
+            "sidecar",
+            "deamination_proxy",
+            "auto"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "title": "BisulfiteConversionConfig",
+      "type": "object"
+    },
+    "FragmentomicsConfig": {
+      "description": "Optional cfDNA / fragment-length QC derived from insert-size histograms.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Compute fragmentomics metrics and guardrails.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "long_fragment_min_bp": {
+          "default": 300,
+          "description": "Fragments at or above this size are 'long'.",
+          "minimum": 1,
+          "title": "Long Fragment Min Bp",
+          "type": "integer"
+        },
+        "max_short_fragment_fraction": {
+          "default": 0.35,
+          "description": "Fail cfDNA guardrail when short-fragment fraction exceeds this.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Max Short Fragment Fraction",
+          "type": "number"
+        },
+        "median_insert_max_bp": {
+          "default": 220,
+          "minimum": 1,
+          "title": "Median Insert Max Bp",
+          "type": "integer"
+        },
+        "median_insert_min_bp": {
+          "default": 120,
+          "minimum": 1,
+          "title": "Median Insert Min Bp",
+          "type": "integer"
+        },
+        "nucleosome_peak_bp_max": {
+          "default": 200,
+          "minimum": 1,
+          "title": "Nucleosome Peak Bp Max",
+          "type": "integer"
+        },
+        "nucleosome_peak_bp_min": {
+          "default": 140,
+          "minimum": 1,
+          "title": "Nucleosome Peak Bp Min",
+          "type": "integer"
+        },
+        "profile": {
+          "default": "off",
+          "description": "Guardrail profile: cfdna adds nucleosome/short-fragment checks; wgbs metrics only.",
+          "enum": [
+            "off",
+            "cfdna",
+            "wgbs"
+          ],
+          "title": "Profile",
+          "type": "string"
+        },
+        "short_fragment_max_bp": {
+          "default": 150,
+          "description": "Fragments at or below this size are 'short'.",
+          "minimum": 1,
+          "title": "Short Fragment Max Bp",
+          "type": "integer"
+        }
+      },
+      "title": "FragmentomicsConfig",
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Config for alignment QC step: sample paths and output directory.",
   "properties": {
+    "auto_profile_from_analyte": {
+      "default": false,
+      "description": "When true, enable fragmentomics profile cfdna if step_config.validation.regulatory.primary_analyte is cfdna.",
+      "title": "Auto Profile From Analyte",
+      "type": "boolean"
+    },
+    "bisulfite_conversion": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BisulfiteConversionConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional bisulfite conversion rate QC from per-sample sidecar files."
+    },
+    "fragmentomics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FragmentomicsConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional fragment-length / cfDNA metrics from insert-size histogram."
+    },
     "genome_fasta": {
       "anyOf": [
         {

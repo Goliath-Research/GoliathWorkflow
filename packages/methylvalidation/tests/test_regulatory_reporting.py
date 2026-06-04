@@ -30,6 +30,30 @@ def test_regulatory_lifecycle_blocks_claims_before_pivotal() -> None:
         )
 
 
+def test_clinical_performance_report_multiclass_uses_screening_binary(tmp_path) -> None:
+    cfg = MonteCarloConfig.model_validate({**_base_config_dict(tmp_path), "min_sensitivity_lcb": 0.1})
+    out_dir = tmp_path / "predictor_mc"
+    metrics = {
+        "n_classes": 3,
+        "class_names": ["all", "PCa_Low", "PCa_High"],
+        "confusion_matrix": [[20, 0, 0], [5, 8, 0], [7, 0, 10]],
+        "screening_binary": {
+            "confusion_matrix": [[20, 14], [12, 4]],
+            "sensitivity": 4 / 16,
+            "specificity": 20 / 34,
+        },
+    }
+    result = write_clinical_performance_report(
+        output_dir=out_dir,
+        metrics=metrics,
+        config=cfg,
+        source="unit-test",
+    )
+    ci = result["payload"]["confidence_intervals"]
+    assert ci["available"] is True
+    assert ci.get("ci_view") == "screening_binary"
+
+
 def test_clinical_performance_report_writes_ci_and_gate(tmp_path) -> None:
     cfg = MonteCarloConfig.model_validate(
         {

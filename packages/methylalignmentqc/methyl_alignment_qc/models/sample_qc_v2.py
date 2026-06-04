@@ -9,6 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from .sample_qc import (
     ConversionLog,
     DuplicationMetric,
+    BisulfiteConversionMetrics,
+    FragmentomicsMetrics,
     GCBiasSummary,
     GuardrailReport,
     InsertSizeMetrics,
@@ -163,3 +165,5 @@ class ExportedSampleQCV2Payload(BaseModel):
     duplication_histogram: DuplicationHistogramV2
     summary_stats: SummaryStats
     guardrails: GuardrailReport
+    fragmentomics_metrics: Optional[FragmentomicsMetrics] = None
+    bisulfite_conversion_metrics: Optional[BisulfiteConversionMetrics] = None

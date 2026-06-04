@@ -585,11 +585,20 @@ class EnrichmentAnalyzer:
             context = self.cisbp_context
             if context is None:
                 context = CisbpContext(cutoff=self.cutoff)
-            label = run_cisbp(self.cisbp, genes, output_dir, context=context)
-            if label and label not in self.libraries:
-                self.libraries.append(label)
-                print(f"[INFO] ✓ CIS-BP: results added as '{label}'")
-            elif not label:
+            result = run_cisbp(self.cisbp, genes, output_dir, context=context)
+            labels = (
+                [str(x) for x in result if x]
+                if isinstance(result, list)
+                else ([str(result)] if result else [])
+            )
+            added = []
+            for label in labels:
+                if label not in self.libraries:
+                    self.libraries.append(label)
+                    added.append(label)
+            if added:
+                print(f"[INFO] ✓ CIS-BP: results added as {', '.join(added)}")
+            elif not labels:
                 print("[WARN] CIS-BP produced no enrichment terms; skipping")
         except NotImplementedError as exc:
             print(f"[WARN] CIS-BP skipped: {exc}")

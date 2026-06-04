@@ -311,6 +311,7 @@ def _extract_regulatory_context(production_project: Dict[str, Any]) -> Dict[str,
         "target_population": reg.get("target_population"),
         "sample_type": reg.get("sample_type"),
         "primary_analyte": reg.get("primary_analyte"),
+        "model_training_analyte": reg.get("model_training_analyte"),
         "reference_standard": reg.get("reference_standard"),
         "raw": reg if isinstance(reg, dict) else {},
     }
@@ -448,11 +449,18 @@ def analyze_project_root(
         disease_context = None
     regulatory_context = _extract_regulatory_context(production_project)
     partition_contract = _extract_partition_contract(production_project)
+    from .fragmentomics_context import build_fragmentomics_report
+
+    fragmentomics_context = build_fragmentomics_report(
+        project_root=root,
+        production_project=production_project,
+    )
 
     report: Dict[str, Any] = {
         "project_root": str(root),
         "disease_context": disease_context,
         "regulatory": regulatory_context,
+        "fragmentomics": fragmentomics_context,
         "validation_partitions": partition_contract,
         "paths": {
             "stability_summary": str(stability_summary_path),
@@ -526,6 +534,7 @@ def _compute_verdict(
     enr = report.get("enricher") or {}
     balance = report["panel_balance"]
     reg = report.get("regulatory") or {}
+    frag = report.get("fragmentomics") or {}
     parts = report.get("validation_partitions") or {}
 
     enricher_status = "unknown"
@@ -635,6 +644,47 @@ def _compute_verdict(
             f"Chromosome imbalance: one chromosome holds ~{balance['max_chrom_share']*100:.1f}% of stable panel."
         )
 
+    training_analyte = None
+    if isinstance(reg.get("raw"), dict):
+        from .analyte_guard import effective_training_analyte
+
+        training_analyte = effective_training_analyte(reg.get("raw"))
+    prod_root = Path(str(report.get("project_root") or "."))
+    locked_spec = prod_root / "monte_carlo_runs" / "production" / "locked_model_spec.json"
+    if locked_spec.is_file() and training_analyte:
+        try:
+            locked_payload = json.loads(locked_spec.read_text(encoding="utf-8"))
+            locked_reg = (locked_payload.get("regulatory") or {}) if isinstance(locked_payload, dict) else {}
+            from .analyte_guard import effective_training_analyte as _eta
+
+            locked_analyte = _eta(locked_reg if isinstance(locked_reg, dict) else None)
+            if locked_analyte and locked_analyte != training_analyte and locked_analyte != "combined":
+                warnings.append(
+                    f"Locked model training analyte ({locked_analyte!r}) differs from project "
+                    f"training analyte ({training_analyte!r}) — re-run freeze/--model on this cohort."
+                )
+        except Exception:
+            pass
+
+    if frag.get("expected_for_analyte"):
+        aq = frag.get("alignment_qc_fragmentomics") or {}
+        if int(aq.get("n_samples_with_metrics") or 0) == 0:
+            warnings.append(
+                "primary_analyte=cfdna but no alignment_qc fragmentomics_metrics found — "
+                "run methyl-qc with step_config.alignment_qc.fragmentomics enabled."
+            )
+        elif aq.get("all_fragmentomics_guardrails_pass") is False:
+            warnings.append(
+                "cfDNA fragmentomics guardrails failed for one or more samples in alignment_qc."
+            )
+        if frag.get("fragmentomics_step_enabled"):
+            bam = frag.get("bam_fragmentomics") or {}
+            if not bam.get("summary_present"):
+                warnings.append(
+                    "step_config.fragmentomics.enabled but fragmentomics_summary.json missing — "
+                    "run methyl-fragmentomics."
+                )
+
     stage = str(reg.get("stage") or "feasibility").strip().lower()
     allow_claims = bool(reg.get("allow_clinical_performance_claims", False))
     if stage in {"feasibility", "expanded_development", "internal_validation", "model_freeze"}:
@@ -688,6 +738,25 @@ def _compute_verdict(
         reasons=reasons,
         warnings=warnings,
     )
+
+
+def _fragmentomics_plain_line(frag: Dict[str, Any]) -> str:
+    if not frag.get("expected_for_analyte") and not frag.get("configured"):
+        return "- **Fragmentomics**: not configured for this project."
+    aq = frag.get("alignment_qc_fragmentomics") or {}
+    bam = frag.get("bam_fragmentomics") or {}
+    n_aq = int(aq.get("n_samples_with_metrics") or 0)
+    n_bam = int(bam.get("n_samples") or 0)
+    med = aq.get("cohort_median_insert_size")
+    short = aq.get("cohort_mean_short_fragment_fraction")
+    parts = [f"alignment_qc metrics on {n_aq} sample(s)"]
+    if med is not None:
+        parts.append(f"median insert ~{med} bp")
+    if short is not None:
+        parts.append(f"mean short-fragment fraction ~{short}")
+    if frag.get("fragmentomics_step_enabled"):
+        parts.append(f"BAM step: {n_bam} sample(s) with summary")
+    return "- **Fragmentomics (cfDNA)**: " + "; ".join(parts) + "."
 
 
 def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> str:
@@ -831,6 +900,7 @@ def render_markdown(report: Dict[str, Any], *, redact_paths: bool = False) -> st
             "- This section is plain-language. Full technical details remain in sections below.",
             f"- **Readiness verdict**: `{verdict.get('overall', 'unknown')}` (enricher: {verdict.get('enricher')}, stability: {verdict.get('stability')}, freeze: {verdict.get('freeze')}, progression: {verdict.get('progression')}).",
             f"- **Primary analyte framing**: `{reg.get('primary_analyte') or 'not_declared'}` (sample type: `{reg.get('sample_type') or 'not_declared'}`).",
+            _fragmentomics_plain_line(report.get("fragmentomics") or {}),
             f"- **Module persistence across all ordered stages**: {traj.get('entities_all_stages', 'n/a')} canonical entities; {traj_var.get('entities_all_stages', 'n/a')} variant-family entities.",
             f"- **Directional progression signal**: monotone-up fraction { _fmt_pct(traj.get('fraction_monotone_up')) } (canonical) and { _fmt_pct(traj_var.get('fraction_monotone_up')) } (variant-family).",
             f"- **Canonical vs variant-family agreement**: `{track_match}`.",

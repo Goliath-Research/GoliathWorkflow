@@ -78,6 +78,10 @@ def write_baseline_manifest(
             "intended_use_summary": getattr(reg, "intended_use_summary", None),
             "target_population": getattr(reg, "target_population", None),
             "sample_type": getattr(reg, "sample_type", None),
+            "primary_analyte": getattr(reg, "primary_analyte", None),
+            "model_training_analyte": getattr(reg, "model_training_analyte", None)
+            or getattr(reg, "primary_analyte", None),
+            "fragmentomics_schema_version": "fragmentomics_run_v1",
             "reference_standard": getattr(reg, "reference_standard", None),
         },
         "validation_partitions": {

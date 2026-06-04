@@ -102,6 +102,78 @@
       "title": "BaseDistributionByCycleV2",
       "type": "object"
     },
+    "BisulfiteConversionMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "conversion_rate_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Conversion Rate Pct"
+        },
+        "deamination_qscore": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Deamination Qscore"
+        },
+        "max_non_cpg_methylation_pct": {
+          "title": "Max Non Cpg Methylation Pct",
+          "type": "number"
+        },
+        "measurement_source": {
+          "title": "Measurement Source",
+          "type": "string"
+        },
+        "min_conversion_rate_pct": {
+          "title": "Min Conversion Rate Pct",
+          "type": "number"
+        },
+        "non_cpg_methylation_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Non Cpg Methylation Pct"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "measurement_source",
+        "min_conversion_rate_pct",
+        "max_non_cpg_methylation_pct"
+      ],
+      "title": "BisulfiteConversionMetrics",
+      "type": "object"
+    },
     "ConversionLog": {
       "additionalProperties": false,
       "properties": {
@@ -318,6 +390,83 @@
       "title": "ErrorSummariesV2",
       "type": "object"
     },
+    "FragmentomicsGuardrailDetails": {
+      "additionalProperties": false,
+      "properties": {
+        "median_insert_bp": {
+          "$ref": "#/$defs/GuardrailMetric"
+        },
+        "nucleosome_peak_bp": {
+          "$ref": "#/$defs/GuardrailMetric"
+        },
+        "short_fragment_fraction": {
+          "$ref": "#/$defs/GuardrailMetric"
+        }
+      },
+      "required": [
+        "median_insert_bp",
+        "nucleosome_peak_bp",
+        "short_fragment_fraction"
+      ],
+      "title": "FragmentomicsGuardrailDetails",
+      "type": "object"
+    },
+    "FragmentomicsMetrics": {
+      "additionalProperties": false,
+      "properties": {
+        "long_fragment_fraction": {
+          "title": "Long Fragment Fraction",
+          "type": "number"
+        },
+        "median_insert_size": {
+          "title": "Median Insert Size",
+          "type": "integer"
+        },
+        "nucleosome_peak_bp": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nucleosome Peak Bp"
+        },
+        "nucleosome_peak_bp_max": {
+          "title": "Nucleosome Peak Bp Max",
+          "type": "integer"
+        },
+        "nucleosome_peak_bp_min": {
+          "title": "Nucleosome Peak Bp Min",
+          "type": "integer"
+        },
+        "profile": {
+          "title": "Profile",
+          "type": "string"
+        },
+        "short_fragment_fraction": {
+          "title": "Short Fragment Fraction",
+          "type": "number"
+        },
+        "short_fragment_max_bp": {
+          "title": "Short Fragment Max Bp",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "profile",
+        "median_insert_size",
+        "short_fragment_fraction",
+        "long_fragment_fraction",
+        "short_fragment_max_bp",
+        "nucleosome_peak_bp_min",
+        "nucleosome_peak_bp_max"
+      ],
+      "title": "FragmentomicsMetrics",
+      "type": "object"
+    },
     "GCBiasDetailsRow": {
       "additionalProperties": false,
       "properties": {
@@ -399,8 +548,34 @@
         "at_dropout": {
           "$ref": "#/$defs/GuardrailMetric"
         },
+        "bisulfite_conversion": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "$ref": "#/$defs/GuardrailMetric"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bisulfite Conversion"
+        },
         "deamination_qscore": {
           "$ref": "#/$defs/GuardrailMetric"
+        },
+        "fragmentomics": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FragmentomicsGuardrailDetails"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "gc_dropout": {
           "$ref": "#/$defs/GuardrailMetric"
@@ -904,6 +1079,17 @@
     "base_distribution_by_cycle": {
       "$ref": "#/$defs/BaseDistributionByCycleV2"
     },
+    "bisulfite_conversion_metrics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BisulfiteConversionMetrics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "conversion_log": {
       "$ref": "#/$defs/ConversionLog"
     },
@@ -919,6 +1105,17 @@
     },
     "error_summaries": {
       "$ref": "#/$defs/ErrorSummariesV2"
+    },
+    "fragmentomics_metrics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FragmentomicsMetrics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "gc_bias_details": {
       "$ref": "#/$defs/GCBiasDetailsV2"
