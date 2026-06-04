@@ -30,8 +30,13 @@ begin
   if not TSchemaEditorRegistration.IsRegisteredEditorName(AName) then
     Exit;
   TSchemaEditorRegistration.EnsureRegistered;
-  AEditor := GlobalContainer.Resolve<ISchemaPropertyEditor>(AName);
-  Result := Assigned(AEditor);
+  try
+    AEditor := GlobalContainer.Resolve<ISchemaPropertyEditor>(AName);
+    Result := Assigned(AEditor);
+  except
+    AEditor := nil;
+    Result := False;
+  end;
 end;
 
 class function TSchemaEditorRegistry.Resolve(ANode: TSchemaNode): ISchemaPropertyEditor;
