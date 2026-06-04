@@ -1,7 +1,97 @@
 {
+  "$defs": {
+    "FragmentomicsConfig": {
+      "description": "Optional cfDNA / fragment-length QC derived from insert-size histograms.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "description": "Compute fragmentomics metrics and guardrails.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "long_fragment_min_bp": {
+          "default": 300,
+          "description": "Fragments at or above this size are 'long'.",
+          "minimum": 1,
+          "title": "Long Fragment Min Bp",
+          "type": "integer"
+        },
+        "max_short_fragment_fraction": {
+          "default": 0.35,
+          "description": "Fail cfDNA guardrail when short-fragment fraction exceeds this.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Max Short Fragment Fraction",
+          "type": "number"
+        },
+        "median_insert_max_bp": {
+          "default": 220,
+          "minimum": 1,
+          "title": "Median Insert Max Bp",
+          "type": "integer"
+        },
+        "median_insert_min_bp": {
+          "default": 120,
+          "minimum": 1,
+          "title": "Median Insert Min Bp",
+          "type": "integer"
+        },
+        "nucleosome_peak_bp_max": {
+          "default": 200,
+          "minimum": 1,
+          "title": "Nucleosome Peak Bp Max",
+          "type": "integer"
+        },
+        "nucleosome_peak_bp_min": {
+          "default": 140,
+          "minimum": 1,
+          "title": "Nucleosome Peak Bp Min",
+          "type": "integer"
+        },
+        "profile": {
+          "default": "off",
+          "description": "Guardrail profile: cfdna adds nucleosome/short-fragment checks; wgbs metrics only.",
+          "enum": [
+            "off",
+            "cfdna",
+            "wgbs"
+          ],
+          "title": "Profile",
+          "type": "string"
+        },
+        "short_fragment_max_bp": {
+          "default": 150,
+          "description": "Fragments at or below this size are 'short'.",
+          "minimum": 1,
+          "title": "Short Fragment Max Bp",
+          "type": "integer"
+        }
+      },
+      "title": "FragmentomicsConfig",
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Config for alignment QC step: sample paths and output directory.",
   "properties": {
+    "auto_profile_from_analyte": {
+      "default": false,
+      "description": "When true, enable fragmentomics profile cfdna if step_config.validation.regulatory.primary_analyte is cfdna.",
+      "title": "Auto Profile From Analyte",
+      "type": "boolean"
+    },
+    "fragmentomics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FragmentomicsConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional fragment-length / cfDNA metrics from insert-size histogram."
+    },
     "genome_fasta": {
       "anyOf": [
         {

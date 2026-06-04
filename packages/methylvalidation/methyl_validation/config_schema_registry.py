@@ -120,6 +120,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="AlignmentQCConfig",
     ),
     ConfigSchemaSpec(
+        schema_id="fragmentomics",
+        module="methyl_fragmentomics.config",
+        class_name="FragmentomicsStepConfig",
+        filename="fragmentomics.schema.json",
+        title="FragmentomicsStepConfig",
+    ),
+    ConfigSchemaSpec(
         schema_id="centroid",
         module="methyl_centroid.config",
         class_name="MethylCentroidConfig",

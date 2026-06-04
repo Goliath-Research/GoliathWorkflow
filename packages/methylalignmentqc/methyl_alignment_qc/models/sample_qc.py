@@ -156,6 +156,25 @@ class GuardrailMetric(BaseModel):
     message: str
 
 
+class FragmentomicsMetrics(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    profile: str
+    median_insert_size: int
+    short_fragment_fraction: float
+    long_fragment_fraction: float
+    nucleosome_peak_bp: Optional[int] = None
+    short_fragment_max_bp: int
+    nucleosome_peak_bp_min: int
+    nucleosome_peak_bp_max: int
+
+
+class FragmentomicsGuardrailDetails(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    median_insert_bp: GuardrailMetric
+    nucleosome_peak_bp: GuardrailMetric
+    short_fragment_fraction: GuardrailMetric
+
+
 class GuardrailDetails(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pf_percent: GuardrailMetric
@@ -167,6 +186,7 @@ class GuardrailDetails(BaseModel):
     median_insert_bp: GuardrailMetric
     deamination_qscore: GuardrailMetric
     oxog_qscore: GuardrailMetric
+    fragmentomics: Optional[FragmentomicsGuardrailDetails] = None
 
 
 class GuardrailReport(BaseModel):
@@ -209,3 +229,4 @@ class ExportedSampleQCPayload(ParabricksMetricsPayload):
     duplication_histogram: DuplicationHistogram
     summary_stats: SummaryStats
     guardrails: GuardrailReport
+    fragmentomics_metrics: Optional[FragmentomicsMetrics] = None

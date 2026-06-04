@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from methyl_utils import load_project
 
+from .core.fragmentomics import resolve_fragmentomics_config
 from .models.config import AlignmentQCConfig
 
 
@@ -67,9 +68,22 @@ def resolve_alignment_qc_config(
         "validate_schema": True,
     }
     if step_cfg:
-        for key in ("sample_paths", "output_dir", "validate_schema"):
+        for key in ("sample_paths", "output_dir", "validate_schema", "auto_profile_from_analyte"):
             if key in step_cfg:
                 base[key] = step_cfg[key]
+
+    reg_cfg: Dict[str, Any] = {}
+    val_cfg = project.get_step_config("validation") or {}
+    if isinstance(val_cfg, dict):
+        reg = val_cfg.get("regulatory") or {}
+        if isinstance(reg, dict):
+            reg_cfg = reg
+
+    frag_cfg = resolve_fragmentomics_config(step_cfg, project_regulatory=reg_cfg)
+    if frag_cfg is not None:
+        base["fragmentomics"] = frag_cfg.model_dump(mode="python")
+    elif step_cfg and step_cfg.get("fragmentomics") is not None:
+        base["fragmentomics"] = step_cfg["fragmentomics"]
 
     if step_override_path is not None:
         path = Path(step_override_path)

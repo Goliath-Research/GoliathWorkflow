@@ -12,6 +12,8 @@ from ..models.sample_qc import ExportedSampleQCPayload, ParabricksMetricsPayload
 from ..models.sample_qc_v2 import ExportedSampleQCV2Payload
 from ..utils.v1_to_v2_migration import v1_model_to_v2
 from . import parser as core_parser
+from ..models.config import FragmentomicsConfig
+from .fragmentomics import apply_fragmentomics_to_payload
 from .wgbs_parabricks_qc import check_wgbs_guardrails
 
 
@@ -267,6 +269,7 @@ def process_samples_to_qc_jsons(
     sample_paths: List[str],
     output_dir: str,
     validate_schema: bool = True,
+    fragmentomics: Optional[FragmentomicsConfig] = None,
 ) -> None:
     """
     Parse each sample directory and write one JSON per sample to output_dir.
@@ -347,6 +350,8 @@ def process_samples_to_qc_jsons(
                 payload["guardrails"] = _build_wgbs_guardrail_report(payload)
         except Exception as e:
             raise RuntimeError(f"Failed to compute guardrails for {sample_name} from {parabricks_json}: {e}") from e
+
+        apply_fragmentomics_to_payload(payload, fragmentomics)
 
         if validate_schema:
             errs = validate_sample_qc_metrics(payload)

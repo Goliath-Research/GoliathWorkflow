@@ -299,7 +299,7 @@ class ProjectConfig(BaseModel):
     )
     step_config: Optional[Dict[str, Dict[str, Any]]] = Field(
         default=None,
-        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc, validation, progression, cluster. "
+        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc, fragmentomics, validation, progression, cluster. "
         "Use 'predictor' (not 'validator') for prediction/validation; validator is deprecated. "
         "Values are merged into that step's config (override file / CLI still override these). "
         "Under 'detection', native multiclass PKL export (not MethylDetector runtime) may set: "
@@ -1081,7 +1081,7 @@ class ProjectConfig(BaseModel):
         """
         Return the config dict for a step, or empty dict if not defined.
         Step names: centroid, detection, mapper, enricher, classifier, predictor,
-        alignment_qc, validation, progression, cluster.
+        alignment_qc, fragmentomics, validation, progression, cluster.
         Use 'predictor' (canonical); 'validator' is deprecated but still accepted for backward compatibility.
         """
         if not self.step_config:

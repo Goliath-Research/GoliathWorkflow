@@ -140,6 +140,7 @@ def build_sanitized_ai_payload(
             "primary_analyte": reg.get("primary_analyte"),
             "sample_type": reg.get("sample_type"),
             "intended_use_summary": reg.get("intended_use_summary"),
+            "fragmentomics": (report.get("fragmentomics") or {}),
         },
         "deterministic_verdict": {
             "overall": v.get("overall"),
@@ -365,6 +366,8 @@ def run_grok_readiness_review(
         "Use analyte_context.primary_analyte and analyte_context.sample_type to frame interpretation "
         "(for example, host-response dominant patterns may be plausible for buffy-coat, while tumor-derived "
         "progression specificity may be expected for cfDNA). "
+        "When analyte_context.fragmentomics is present, incorporate cohort insert-size / nucleosome-peak "
+        "and optional WPS/end-motif summaries; note missing fragmentomics as reduced confidence for cfDNA. "
         "If analyte context is missing, say that confidence is limited by missing analyte framing. "
         "Do not invent unseen statistics."
     )
