@@ -25,6 +25,8 @@ type
     procedure CentroidSchemaLoads;
     [Test]
     procedure ExternalFileRefResolves;
+    [Test]
+    procedure NestedCrossDirectoryRefResolves;
   end;
 
 implementation
@@ -223,6 +225,35 @@ begin
       Assert.AreEqual(TSchemaKind.skObject, WidgetNode.Kind);
       Assert.AreEqual('Widget', WidgetNode.Title);
       Assert.IsTrue(WidgetNode.FindProperty('name') <> nil);
+    finally
+      Doc.Free;
+    end;
+  finally
+    Loader.Free;
+  end;
+end;
+
+procedure TSchemaLoaderTests.NestedCrossDirectoryRefResolves;
+var
+  Loader: TJsonSchemaLoader;
+  Doc: TSchemaDocument;
+  WidgetProp, PartProp: TSchemaProperty;
+  WidgetNode, PartNode: TSchemaNode;
+begin
+  Loader := TJsonSchemaLoader.Create;
+  try
+    Doc := Loader.LoadDocumentFromFile(FixturePath('sub_container.schema.json'));
+    try
+      WidgetProp := Doc.Root.FindProperty('widget');
+      Assert.IsNotNull(WidgetProp);
+      WidgetNode := TSchemaNode(WidgetProp.Node);
+      Assert.AreEqual('SubWidget', WidgetNode.Title);
+
+      PartProp := WidgetNode.FindProperty('part');
+      Assert.IsNotNull(PartProp);
+      PartNode := TSchemaNode(PartProp.Node);
+      Assert.AreEqual('Part', PartNode.Title);
+      Assert.IsTrue(PartNode.FindProperty('code') <> nil);
     finally
       Doc.Free;
     end;
