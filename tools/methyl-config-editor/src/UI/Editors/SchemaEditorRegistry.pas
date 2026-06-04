@@ -25,18 +25,13 @@ uses
 class function TSchemaEditorRegistry.TryResolveByName(const AName: string;
   out AEditor: ISchemaPropertyEditor): Boolean;
 begin
-  TSchemaEditorRegistration.EnsureRegistered;
   AEditor := nil;
   Result := False;
-  if AName = '' then
+  if not TSchemaEditorRegistration.IsRegisteredEditorName(AName) then
     Exit;
-  try
-    AEditor := GlobalContainer.Resolve<ISchemaPropertyEditor>(AName);
-    Result := Assigned(AEditor);
-  except
-    AEditor := nil;
-    Result := False;
-  end;
+  TSchemaEditorRegistration.EnsureRegistered;
+  AEditor := GlobalContainer.Resolve<ISchemaPropertyEditor>(AName);
+  Result := Assigned(AEditor);
 end;
 
 class function TSchemaEditorRegistry.Resolve(ANode: TSchemaNode): ISchemaPropertyEditor;
@@ -45,6 +40,7 @@ var
 begin
   TSchemaEditorRegistration.EnsureRegistered;
   if Assigned(ANode) and (ANode.Title <> '') and
+    TSchemaEditorRegistration.IsRegisteredEditorName(ANode.Title) and
     TryResolveByName(ANode.Title, Result) then
     Exit;
   Key := TSchemaEditorKeys.ForNode(ANode);

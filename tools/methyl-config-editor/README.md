@@ -82,14 +82,14 @@ GlobalContainer.RegisterType<ISchemaPropertyEditor, TMyCustomSchemaEditor>
   ('myCustomKey').AsTransient;
 ```
 
-4. Optional: register by JSON Schema **`title`** for a schema-specific override (extension hook):
+4. Optional: register by JSON Schema **`title`** only when you intentionally want a schema-specific override **and** register the same string in Spring (ordinary field titles such as `"Batch"` are not looked up):
 
 ```delphi
 GlobalContainer.RegisterType<ISchemaPropertyEditor, TMyCustomSchemaEditor>
   ('MySchemaTitle').AsTransient;
 ```
 
-Resolution order: optional **title** override (if registered), then **kind** key from `TSchemaEditorKeys.ForNode`.
+Resolution order: optional **title** override only when that title string is explicitly registered in Spring (not ordinary JSON Schema titles), then **kind** key from `TSchemaEditorKeys.ForNode`.
 
 ## Tests
 

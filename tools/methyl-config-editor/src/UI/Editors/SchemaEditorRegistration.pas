@@ -6,14 +6,17 @@ type
   TSchemaEditorRegistration = class
   private
     class var FRegistered: Boolean;
+    class function IsKnownKindKey(const AKey: string): Boolean; static;
   public
     class procedure EnsureRegistered;
+    class function IsRegisteredEditorName(const AName: string): Boolean;
   end;
 
 implementation
 
 uses
   System.SysUtils,
+  System.TypInfo,
   Spring.Container,
   EditorTypes,
   SchemaEditorKeys,
@@ -27,6 +30,30 @@ uses
   ArraySchemaEditor,
   DictionarySchemaEditor,
   DiscriminatorSchemaEditor;
+
+class function TSchemaEditorRegistration.IsKnownKindKey(const AKey: string): Boolean;
+begin
+  Result := SameStr(AKey, TSchemaEditorKeys.StringKey) or
+    SameStr(AKey, TSchemaEditorKeys.EnumKey) or
+    SameStr(AKey, TSchemaEditorKeys.BooleanKey) or
+    SameStr(AKey, TSchemaEditorKeys.IntegerKey) or
+    SameStr(AKey, TSchemaEditorKeys.NumberKey) or
+    SameStr(AKey, TSchemaEditorKeys.ObjectKey) or
+    SameStr(AKey, TSchemaEditorKeys.OneOfObjectKey) or
+    SameStr(AKey, TSchemaEditorKeys.ArrayKey) or
+    SameStr(AKey, TSchemaEditorKeys.DictionaryKey) or
+    SameStr(AKey, TSchemaEditorKeys.DiscriminatorKey);
+end;
+
+class function TSchemaEditorRegistration.IsRegisteredEditorName(const AName: string): Boolean;
+begin
+  if AName = '' then
+    Exit(False);
+  EnsureRegistered;
+  if IsKnownKindKey(AName) then
+    Exit(True);
+  Result := GlobalContainer.IsRegistered(TypeInfo(ISchemaPropertyEditor), AName);
+end;
 
 class procedure TSchemaEditorRegistration.EnsureRegistered;
 begin
