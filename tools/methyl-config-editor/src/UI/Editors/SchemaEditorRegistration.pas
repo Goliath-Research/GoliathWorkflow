@@ -16,7 +16,6 @@ implementation
 
 uses
   System.SysUtils,
-  System.TypInfo,
   Spring.Container,
   EditorTypes,
   SchemaEditorKeys,
@@ -50,9 +49,7 @@ begin
   if AName = '' then
     Exit(False);
   EnsureRegistered;
-  if IsKnownKindKey(AName) then
-    Exit(True);
-  Result := GlobalContainer.IsRegistered(TypeInfo(ISchemaPropertyEditor), AName);
+  Result := IsKnownKindKey(AName);
 end;
 
 class procedure TSchemaEditorRegistration.EnsureRegistered;

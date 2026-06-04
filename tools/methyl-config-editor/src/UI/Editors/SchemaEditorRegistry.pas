@@ -43,11 +43,6 @@ class function TSchemaEditorRegistry.Resolve(ANode: TSchemaNode): ISchemaPropert
 var
   Key: string;
 begin
-  TSchemaEditorRegistration.EnsureRegistered;
-  if Assigned(ANode) and (ANode.Title <> '') and
-    TSchemaEditorRegistration.IsRegisteredEditorName(ANode.Title) and
-    TryResolveByName(ANode.Title, Result) then
-    Exit;
   Key := TSchemaEditorKeys.ForNode(ANode);
   if not TryResolveByName(Key, Result) then
     raise Exception.CreateFmt('No schema property editor registered for key: %s', [Key]);

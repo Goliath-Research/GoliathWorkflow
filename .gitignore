@@ -134,3 +134,4 @@ packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.aux
 *.dcu
 workflow_engine/WfEngineSrv.exe
 tools/methyl-config-editor/tests/MethylConfigEditorTests.res
+/tools/methyl-config-editor/*.rsm
