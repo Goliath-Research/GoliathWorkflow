@@ -17,17 +17,11 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import (
-    accuracy_score,
-    balanced_accuracy_score,
-    confusion_matrix,
-    precision_recall_fscore_support,
-)
-
 from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
 from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
+from .classification_metrics import compute_validation_metrics, resolve_class_roles
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
 from .gene_scored_features import family_includes_gene_scored
@@ -138,51 +132,6 @@ def _posterior_from_latent(
     return (probs / denom).astype(np.float32)
 
 
-def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, class_names: List[str]) -> Dict[str, Any]:
-    n_classes = len(class_names)
-    labels = list(range(n_classes))
-    precision, recall, f1, support = precision_recall_fscore_support(
-        y_true, y_pred, labels=labels, zero_division=0
-    )
-    cm = confusion_matrix(y_true, y_pred, labels=labels)
-    specificity_per_class: List[float] = []
-    for i in range(n_classes):
-        tp = float(cm[i, i])
-        fp = float(cm[:, i].sum() - tp)
-        fn = float(cm[i, :].sum() - tp)
-        tn = float(cm.sum() - tp - fp - fn)
-        denom = tn + fp
-        specificity_per_class.append(float(tn / denom) if denom > 0 else 0.0)
-    macro_precision = float(np.mean(precision)) if len(precision) > 0 else 0.0
-    macro_recall = float(np.mean(recall)) if len(recall) > 0 else 0.0
-    sensitivity = float(recall[1]) if n_classes == 2 and len(recall) > 1 else macro_recall
-    specificity = (
-        float(specificity_per_class[1])
-        if n_classes == 2 and len(specificity_per_class) > 1
-        else float(np.mean(specificity_per_class) if specificity_per_class else 0.0)
-    )
-    precision_binary = float(precision[1]) if n_classes == 2 and len(precision) > 1 else macro_precision
-    recall_binary = float(recall[1]) if n_classes == 2 and len(recall) > 1 else macro_recall
-    f1_binary = float(f1[1]) if n_classes == 2 and len(f1) > 1 else float(np.mean(f1) if len(f1) > 0 else 0.0)
-    return {
-        "accuracy": float(accuracy_score(y_true, y_pred)),
-        "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
-        "confusion_matrix": cm.tolist(),
-        "n_samples": int(len(y_true)),
-        "n_classes": int(n_classes),
-        "class_names": class_names,
-        "sensitivity": sensitivity,
-        "specificity": specificity,
-        "macro_precision": macro_precision,
-        "macro_recall": macro_recall,
-        "precision_binary": precision_binary,
-        "recall_binary": recall_binary,
-        "f1_binary": f1_binary,
-        "macro_f1": float(np.mean(f1)),
-        "weighted_f1": float(np.average(f1, weights=support) if support.sum() > 0 else 0.0),
-    }
-
-
 def _resolve_eval_paths_and_labels(project_json: str | Path, class_names: List[str]) -> Tuple[List[str], Optional[np.ndarray]]:
     predictor_cfg = resolve_predictor_config(project_json)
     return resolve_eval_paths_and_labels(
@@ -279,8 +228,9 @@ def train_generative_model(
         dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
     refs, feature_order = _build_reference_map(dmp_df)
 
+    roles = resolve_class_roles(project)
+    class_names = list(roles["class_names"])
     resolved = project.get_resolved_groups()
-    class_names = [str(lbl) for lbl, _ in resolved]
     class_centroid_dirs = _resolve_class_centroid_dirs(project, class_names)
     all_paths: List[str] = []
     y: List[int] = []
@@ -456,7 +406,9 @@ def train_generative_model(
         class_priors=class_priors,
     )
     y_pred_train = np.asarray(np.argmax(train_probs, axis=1), dtype=np.int32)
-    train_metrics = _compute_metrics(y_arr, y_pred_train, class_names=class_names)
+    train_metrics = compute_validation_metrics(
+        y_arr, y_pred_train, class_names, class_roles=roles
+    )
     train_metrics["metrics_source"] = "generative_train"
     train_metrics["evaluation_split"] = "training"
     train_metrics["n_train_samples"] = int(len(y_arr))
@@ -487,6 +439,7 @@ def train_generative_model(
         "gene_feature_loading": gene_feature_loading_norm,
         "density_type": str(density_type),
         "class_names": class_names,
+        "class_roles": roles,
         "n_classes": int(n_classes),
         "project_json": str(Path(project_json).resolve()),
         "bundle_h5": str(Path(bundle_h5).resolve()),
@@ -740,7 +693,12 @@ def predict_generative_model_from_project(
 
     metrics: Dict[str, Any]
     if y_true is not None and y_true.shape[0] == y_pred.shape[0]:
-        metrics = _compute_metrics(y_true, y_pred, class_names=class_names)
+        eval_roles = meta.get("class_roles")
+        if not isinstance(eval_roles, dict):
+            eval_roles = resolve_class_roles(project)
+        metrics = compute_validation_metrics(
+            y_true, y_pred, class_names, class_roles=eval_roles
+        )
     else:
         metrics = {
             "n_samples": int(y_pred.shape[0]),

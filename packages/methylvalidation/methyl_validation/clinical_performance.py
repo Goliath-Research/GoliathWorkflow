@@ -50,12 +50,26 @@ def _binary_counts_from_confusion(cm: List[List[Any]]) -> Optional[Dict[str, int
     return {"tp": tp, "tn": tn, "fp": fp, "fn": fn}
 
 
+def _confusion_matrix_for_clinical_ci(metrics: Dict[str, Any]) -> List[List[Any]]:
+    """Prefer screening_binary 2x2 CM for multiclass; else top-level confusion_matrix."""
+    n_classes = int(metrics.get("n_classes") or 0)
+    screening = metrics.get("screening_binary")
+    if n_classes > 2 and isinstance(screening, dict):
+        cm = screening.get("confusion_matrix")
+        if isinstance(cm, list):
+            return cm
+    cm = metrics.get("confusion_matrix")
+    return cm if isinstance(cm, list) else []
+
+
 def compute_binary_ci_summary(metrics: Dict[str, Any]) -> Dict[str, Any]:
     """
     Compute sensitivity/specificity/PPV/NPV confidence intervals when possible.
+
+    For multiclass metrics, uses ``screening_binary`` (control vs pooled disease) when present.
     """
     out: Dict[str, Any] = {"available": False}
-    counts = _binary_counts_from_confusion(metrics.get("confusion_matrix") or [])
+    counts = _binary_counts_from_confusion(_confusion_matrix_for_clinical_ci(metrics))
     if counts is None:
         return out
     tp, tn, fp, fn = counts["tp"], counts["tn"], counts["fp"], counts["fn"]
@@ -85,6 +99,11 @@ def compute_binary_ci_summary(metrics: Dict[str, Any]) -> Dict[str, Any]:
             "npv_ci95": {"lower": npv_ci[0], "upper": npv_ci[1]},
         }
     )
+    n_classes = int(metrics.get("n_classes") or 0)
+    if n_classes > 2 and isinstance(metrics.get("screening_binary"), dict):
+        out["ci_view"] = "screening_binary"
+    elif n_classes == 2:
+        out["ci_view"] = "binary"
     return out
 
 
@@ -101,7 +120,11 @@ def evaluate_acceptance_gates(ci_summary: Dict[str, Any], config: Any) -> Dict[s
     if not ci_summary.get("available"):
         gates["pass"] = False
         gates["checks"].append(
-            {"metric": "binary_ci", "pass": False, "reason": "No 2x2 confusion matrix available."}
+            {
+                "metric": "binary_ci",
+                "pass": False,
+                "reason": "No 2x2 confusion matrix available (binary or screening_binary).",
+            }
         )
         return gates
     if min_sens_lcb is not None:
@@ -153,6 +176,28 @@ def _render_markdown(payload: Dict[str, Any]) -> str:
         f"- specificity: {m.get('specificity')}",
         "",
     ]
+    screening = m.get("screening_binary")
+    if isinstance(screening, dict):
+        lines.extend(
+            [
+                "## Screening binary (control vs pooled disease)",
+                "",
+                f"- sensitivity: {screening.get('sensitivity')}",
+                f"- specificity: {screening.get('specificity')}",
+                f"- precision: {screening.get('precision')}",
+                f"- npv: {screening.get('npv')}",
+                "",
+            ]
+        )
+    per_class = m.get("per_class")
+    if isinstance(per_class, list) and per_class:
+        lines.extend(["## Per-class metrics", ""])
+        for row in per_class:
+            lines.append(
+                f"- {row.get('class_name')}: recall={row.get('recall')}, "
+                f"precision={row.get('precision')}, specificity_ovr={row.get('specificity_ovr')}"
+            )
+        lines.append("")
     if ci.get("available"):
         s_ci = ci.get("sensitivity_ci95") or {}
         p_ci = ci.get("specificity_ci95") or {}

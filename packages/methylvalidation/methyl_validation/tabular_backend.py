@@ -20,12 +20,6 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    accuracy_score,
-    balanced_accuracy_score,
-    confusion_matrix,
-    precision_recall_fscore_support,
-)
 try:
     from xgboost import XGBClassifier
 except ImportError:  # pragma: no cover - handled at runtime when xgboost method is requested
@@ -35,6 +29,11 @@ from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
 from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
+from .classification_metrics import (
+    compute_validation_metrics,
+    resolve_class_roles,
+    select_healthy_index_for_labels,
+)
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
 from .gene_scored_features import family_includes_gene_scored
@@ -168,19 +167,6 @@ def _resolve_class_centroid_dirs(project: Any, class_names: Sequence[str]) -> Di
     return {k: v for k, v in label_to_dir.items() if str(v).strip()}
 
 
-def _select_healthy_index_for_labels(class_names: Sequence[str]) -> int:
-    if not class_names:
-        return 0
-    normalized = [str(x).strip().lower() for x in class_names]
-    for name in ("healthy", "control", "normal"):
-        if name in normalized:
-            return int(normalized.index(name))
-    for idx, name in enumerate(normalized):
-        if any(token in name for token in ("healthy", "control", "normal")):
-            return int(idx)
-    return 0
-
-
 def _build_reference_map(
     dmp_df: pd.DataFrame,
 ) -> Tuple[Dict[str, Dict[str, np.ndarray]], List[Tuple[str, str, int]]]:
@@ -312,51 +298,6 @@ def _build_estimator_from_config(method_cfg: Dict[str, Any]):
     return RandomForestClassifier(**resolved), resolved
 
 
-def _compute_metrics(y_true: np.ndarray, y_pred: np.ndarray, class_names: List[str]) -> Dict[str, Any]:
-    n_classes = len(class_names)
-    labels = list(range(n_classes))
-    precision, recall, f1, support = precision_recall_fscore_support(
-        y_true, y_pred, labels=labels, zero_division=0
-    )
-    cm = confusion_matrix(y_true, y_pred, labels=labels)
-    specificity_per_class: List[float] = []
-    for i in range(n_classes):
-        tp = float(cm[i, i])
-        fp = float(cm[:, i].sum() - tp)
-        fn = float(cm[i, :].sum() - tp)
-        tn = float(cm.sum() - tp - fp - fn)
-        denom = tn + fp
-        specificity_per_class.append(float(tn / denom) if denom > 0 else 0.0)
-    macro_precision = float(np.mean(precision)) if len(precision) > 0 else 0.0
-    macro_recall = float(np.mean(recall)) if len(recall) > 0 else 0.0
-    sensitivity = float(recall[1]) if n_classes == 2 and len(recall) > 1 else macro_recall
-    specificity = (
-        float(specificity_per_class[1])
-        if n_classes == 2 and len(specificity_per_class) > 1
-        else float(np.mean(specificity_per_class) if specificity_per_class else 0.0)
-    )
-    precision_binary = float(precision[1]) if n_classes == 2 and len(precision) > 1 else macro_precision
-    recall_binary = float(recall[1]) if n_classes == 2 and len(recall) > 1 else macro_recall
-    f1_binary = float(f1[1]) if n_classes == 2 and len(f1) > 1 else float(np.mean(f1) if len(f1) > 0 else 0.0)
-    return {
-        "accuracy": float(accuracy_score(y_true, y_pred)),
-        "balanced_accuracy": float(balanced_accuracy_score(y_true, y_pred)),
-        "confusion_matrix": cm.tolist(),
-        "n_samples": int(len(y_true)),
-        "n_classes": int(n_classes),
-        "class_names": class_names,
-        "sensitivity": sensitivity,
-        "specificity": specificity,
-        "macro_precision": macro_precision,
-        "macro_recall": macro_recall,
-        "precision_binary": precision_binary,
-        "recall_binary": recall_binary,
-        "f1_binary": f1_binary,
-        "macro_f1": float(np.mean(f1)),
-        "weighted_f1": float(np.average(f1, weights=support) if support.sum() > 0 else 0.0),
-    }
-
-
 def _resolve_eval_paths_and_labels(project_json: str | Path, class_names: List[str]) -> Tuple[List[str], np.ndarray]:
     predictor_cfg = resolve_predictor_config(project_json)
     samples, y_true = resolve_eval_paths_and_labels(
@@ -443,10 +384,11 @@ def train_tabular_model(
         dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
     refs, feature_order = _build_reference_map(dmp_df)
 
+    roles = resolve_class_roles(project)
+    class_names = list(roles["class_names"])
     resolved = project.get_resolved_groups()
-    class_names = [str(lbl) for lbl, _ in resolved]
     class_centroid_dirs = _resolve_class_centroid_dirs(project, class_names)
-    healthy_idx_for_schema = _select_healthy_index_for_labels(class_names)
+    healthy_idx_for_schema = int(roles["control_class_index"])
     schema_cancer_labels = [
         str(name) for i, name in enumerate(class_names) if int(i) != int(healthy_idx_for_schema)
     ]
@@ -1016,7 +958,9 @@ def train_tabular_model(
         method_dir.mkdir(parents=True, exist_ok=True)
         method_model_path = method_dir / "tabular-model.joblib"
         joblib.dump(estimator, method_model_path)
-        train_metrics = _compute_metrics(y_arr, y_pred_train, class_names=class_names)
+        train_metrics = compute_validation_metrics(
+            y_arr, y_pred_train, class_names, class_roles=roles
+        )
         train_metrics["metrics_source"] = "tabular_train"
         train_metrics["evaluation_split"] = "training"
         train_metrics["method"] = method_name
@@ -1035,6 +979,7 @@ def train_tabular_model(
             "feature_family_set": feature_family_set_norm,
             "gene_feature_loading": gene_feature_loading_norm,
             "class_names": class_names,
+            "class_roles": roles,
             "project_json": str(Path(project_json).resolve()),
             "bundle_h5": str(Path(bundle_h5).resolve()),
             "max_dmps": int(max_dmps_norm),
@@ -1353,7 +1298,15 @@ def predict_tabular_model_from_project(
 
     probs = estimator.predict_proba(X)
     y_pred = np.asarray(np.argmax(probs, axis=1), dtype=np.int32)
-    metrics = _compute_metrics(y_true, y_pred, class_names=class_names or ["control", "disease"])
+    eval_roles = meta.get("class_roles")
+    if not isinstance(eval_roles, dict):
+        eval_roles = resolve_class_roles(project)
+    metrics = compute_validation_metrics(
+        y_true,
+        y_pred,
+        class_names or ["control", "disease"],
+        class_roles=eval_roles,
+    )
     metrics["covariate_preprocessing"] = cov_report
     metrics["n_covariate_features_used"] = int(cov.shape[1]) if cov is not None else 0
     metrics_path = out_dir / "validation_metrics.json"
