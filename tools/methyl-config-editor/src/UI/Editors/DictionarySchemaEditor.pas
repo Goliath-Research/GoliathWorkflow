@@ -25,7 +25,7 @@ implementation
 
 uses
   ComplexRowSupport,
-  DictEditorForm;
+  PropertyEditorForm;
 
 class function TDictionarySchemaEditor.EditorKey: string;
 begin
@@ -75,7 +75,7 @@ begin
     Working := TJSONObject.Create;
   try
     ChildTitle := AContext.ChildBreadcrumb(ARow.DisplayName);
-    if TDictEditorForm.EditDictionary(AContext.GetOwner, ChildTitle, ARow.SchemaNode,
+    if TPropertyEditorForm.EditObject(AContext.GetOwner, ChildTitle, ARow.SchemaNode,
       Working) then
       Result := Working.Clone as TJSONObject;
   finally

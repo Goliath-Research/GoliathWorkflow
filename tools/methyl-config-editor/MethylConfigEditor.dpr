@@ -11,6 +11,7 @@ uses
   SchemaDocument in 'src\Schema\SchemaDocument.pas',
   SchemaDefaults in 'src\Schema\SchemaDefaults.pas',
   SchemaBranchResolver in 'src\Schema\SchemaBranchResolver.pas',
+  SchemaDictionaryResolver in 'src\Schema\SchemaDictionaryResolver.pas',
   SchemaValidator in 'src\Schema\SchemaValidator.pas',
   JsonPath in 'src\Data\JsonPath.pas',
   JsonArrayOps in 'src\Data\JsonArrayOps.pas',
@@ -36,7 +37,6 @@ uses
   DiscriminatorSchemaEditor in 'src\UI\Editors\DiscriminatorSchemaEditor.pas',
   PropertyEditorForm in 'src\UI\PropertyEditorForm.pas' {PropertyEditorForm},
   ArrayEditorForm in 'src\UI\ArrayEditorForm.pas' {ArrayEditorForm},
-  DictEditorForm in 'src\UI\DictEditorForm.pas' {DictEditorForm},
   Vcl.Themes,
   Vcl.Styles;
 

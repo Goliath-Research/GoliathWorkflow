@@ -57,7 +57,6 @@ implementation
 
 uses
   System.UITypes,
-  DictEditorForm,
   JsonArrayOps,
   PropertyEditorForm;
 
@@ -172,7 +171,7 @@ begin
       Obj := TJSONObject.Create;
     CloneObj := Obj.Clone as TJSONObject;
     try
-      if TDictEditorForm.EditDictionary(Self, ChildTitle, Schema, CloneObj) then
+      if TPropertyEditorForm.EditObject(Self, ChildTitle, Schema, CloneObj) then
         TJsonArrayOps.ReplaceElement(FWorking, Index, CloneObj.Clone as TJSONObject);
     finally
       CloneObj.Free;

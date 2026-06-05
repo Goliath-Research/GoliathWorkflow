@@ -22,7 +22,8 @@ uses
   EditorTypes,
   PropertyEditorContext,
   SchemaEditorRegistry,
-  SchemaEditorKeys;
+  SchemaEditorKeys,
+  SchemaDictionaryResolver;
 
 type
   TPropertyEditorForm = class(TForm)
@@ -48,6 +49,8 @@ type
     procedure ClearRows;
     procedure BuildRows;
     procedure BuildPropertyRows(EffectiveSchema: TSchemaNode);
+    procedure BuildDictionaryRows;
+    function UsesDictionaryLayout(ANode: TSchemaNode): Boolean;
     procedure BuildDiscriminatorRow;
     function CreateRowPanel(const PropTitle: string; Required: Boolean): TPropertyRow;
     procedure LayoutPropertyGrid;
@@ -289,6 +292,44 @@ begin
   PositionRowControls;
 end;
 
+function TPropertyEditorForm.UsesDictionaryLayout(ANode: TSchemaNode): Boolean;
+begin
+  Result := Assigned(ANode) and (
+    (ANode.Kind = skDictionary) or
+    ((ANode.Kind = skObject) and (ANode.PropertyCount = 0) and
+      ANode.AdditionalPropertiesAllowed));
+end;
+
+procedure TPropertyEditorForm.BuildDictionaryRows;
+var
+  Pair: TJSONPair;
+  Key: string;
+  EntrySchema: TSchemaNode;
+  Row: TPropertyRow;
+  TitleText: string;
+  Val: TJSONValue;
+  Editor: ISchemaPropertyEditor;
+begin
+  for Pair in FWorking do
+  begin
+    Key := Pair.JsonString.Value;
+    if not TSchemaDictionaryResolver.TryResolveEntrySchema(FSchema, Key, EntrySchema) then
+      EntrySchema := TSchemaDictionaryResolver.BaseValueSchema(FSchema);
+    Editor := TSchemaEditorRegistry.Resolve(EntrySchema);
+    TitleText := Key;
+    Row := CreateRowPanel(TitleText, False);
+    Row.PropertyName := Key;
+    Row.SchemaNode := EntrySchema;
+    Row.Editor := Editor;
+    if EntrySchema.Description <> '' then
+      Row.lblName.Hint := EntrySchema.Description;
+    Val := GetPropertyValue(Key);
+    Editor.CreateRow(FContext, Row, Val);
+    HookRowControls(Row);
+  end;
+  PositionRowControls;
+end;
+
 procedure TPropertyEditorForm.BuildPropertyRows(EffectiveSchema: TSchemaNode);
 var
   Prop: TSchemaProperty;
@@ -331,7 +372,10 @@ begin
     Effective := TSchemaBranchResolver.ResolveObjectSchema(FSchema, FWorking);
     if FSchema.OneOfBranches.Count > 0 then
       BuildDiscriminatorRow;
-    BuildPropertyRows(Effective);
+    if UsesDictionaryLayout(Effective) then
+      BuildDictionaryRows
+    else
+      BuildPropertyRows(Effective);
     LayoutPropertyGrid;
   finally
     FBuildingRows := False;

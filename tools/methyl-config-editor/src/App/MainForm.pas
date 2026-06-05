@@ -90,7 +90,7 @@ uses
   System.UITypes,
   System.IOUtils,
   ArrayEditorForm,
-  DictEditorForm,
+  PropertyEditorForm,
   SchemaValueSummary;
 
 {$R *.dfm}
@@ -210,7 +210,7 @@ begin
           else
             WorkingObj := TJSONObject.Create;
           try
-            if TDictEditorForm.EditDictionary(Self, ATitle, ASchema, WorkingObj) then
+            if TPropertyEditorForm.EditObject(Self, ATitle, ASchema, WorkingObj) then
             begin
               AEditedValue := WorkingObj.Clone as TJSONValue;
               Result := True;

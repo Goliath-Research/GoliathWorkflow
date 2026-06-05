@@ -63,6 +63,7 @@
         <DCCReference Include="src\Schema\SchemaDocument.pas"/>
         <DCCReference Include="src\Schema\SchemaDefaults.pas"/>
         <DCCReference Include="src\Schema\SchemaBranchResolver.pas"/>
+        <DCCReference Include="src\Schema\SchemaDictionaryResolver.pas"/>
         <DCCReference Include="src\Schema\SchemaValidator.pas"/>
         <DCCReference Include="src\Data\JsonPath.pas"/>
         <DCCReference Include="src\Data\JsonArrayOps.pas"/>
@@ -91,9 +92,6 @@
         </DCCReference>
         <DCCReference Include="src\UI\ArrayEditorForm.pas">
             <Form>ArrayEditorForm</Form>
-        </DCCReference>
-        <DCCReference Include="src\UI\DictEditorForm.pas">
-            <Form>DictEditorForm</Form>
         </DCCReference>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

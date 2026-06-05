@@ -57,9 +57,8 @@ JSON document        →  PropertyEditorForm (recursive rows)
 | `Schema/SchemaDocumentCache.pas` | Owned cache of loaded schema documents |
 | `Data/JsonPath.pas` | JSON pointer get/set |
 | `Data/JsonArrayOps.pas` | Shared `TJSONArray` replace/remove/move helpers |
-| `UI/PropertyEditorForm.pas` | Recursive property grid shell |
+| `UI/PropertyEditorForm.pas` | Recursive property grid shell (objects and open maps) |
 | `UI/ArrayEditorForm.pas` | Array list editor |
-| `UI/DictEditorForm.pas` | Open map / `additionalProperties` editor |
 | `App/MainForm.pas` | Schema catalog, document load/save |
 
 ### Nested types via `$ref`
