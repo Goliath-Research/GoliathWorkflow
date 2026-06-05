@@ -9,6 +9,9 @@
         <Projects Include="methyl-config-editor\tests\MethylConfigEditorTests.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="methyl-config-editor\MethylConfigEditorWeb.dproj">
+            <Dependencies/>
+        </Projects>
     </ItemGroup>
     <ProjectExtensions>
         <Borland.Personality>Default.Personality.12</Borland.Personality>
@@ -35,14 +38,23 @@
     <Target Name="MethylConfigEditorTests:Make">
         <MSBuild Projects="methyl-config-editor\tests\MethylConfigEditorTests.dproj" Targets="Make"/>
     </Target>
+    <Target Name="MethylConfigEditorWeb">
+        <MSBuild Projects="methyl-config-editor\MethylConfigEditorWeb.dproj"/>
+    </Target>
+    <Target Name="MethylConfigEditorWeb:Clean">
+        <MSBuild Projects="methyl-config-editor\MethylConfigEditorWeb.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MethylConfigEditorWeb:Make">
+        <MSBuild Projects="methyl-config-editor\MethylConfigEditorWeb.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MethylConfigEditor;MethylConfigEditorTests"/>
+        <CallTarget Targets="MethylConfigEditor;MethylConfigEditorTests;MethylConfigEditorWeb"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MethylConfigEditor:Clean;MethylConfigEditorTests:Clean"/>
+        <CallTarget Targets="MethylConfigEditor:Clean;MethylConfigEditorTests:Clean;MethylConfigEditorWeb:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MethylConfigEditor:Make;MethylConfigEditorTests:Make"/>
+        <CallTarget Targets="MethylConfigEditor:Make;MethylConfigEditorTests:Make;MethylConfigEditorWeb:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

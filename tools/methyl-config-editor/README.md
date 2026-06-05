@@ -103,3 +103,50 @@ Tests cover schema loading (including `$ref`), JSON path utilities, and array op
 ## Example configs
 
 The [`configs/`](configs/) folder may contain sample JSON documents for manual testing. They are not part of the tool design.
+
+## Web application (uniGUI)
+
+A uniGUI web port lives alongside the VCL desktop app in [`MethylConfigEditorWeb.dproj`](MethylConfigEditorWeb.dproj). It reuses the shared **Schema**, **Data**, and validation units and replaces the hand-built VCL property grid with **TUniPropertyGrid**.
+
+### Web requirements
+
+- Delphi 11 or later
+- [uniGUI](https://www.unigui.com/) (StandAlone Server or HyperServer)
+- [Spring4D](https://bitbucket.org/sglienke/spring4d) (collections in schema/data layers only; no Spring IoC in the web UI)
+- DUnitX (optional, for tests)
+
+### Build and run (StandAlone Server)
+
+1. Open [`MethylConfigEditorWeb.dproj`](MethylConfigEditorWeb.dproj) in Delphi with uniGUI installed.
+2. Build **Win64**.
+3. Copy [`methyl-config-editor-web.ini`](methyl-config-editor-web.ini) next to the executable (or edit after first run).
+4. Set `Paths.SchemasRoot` to the server directory containing `*.schema.json` (default: `..\..\schemas\config` relative to the exe).
+5. Run `MethylConfigEditorWeb.exe` and open `http://localhost:8077` (port from `[Server] Port` in the INI).
+
+### Web usage
+
+1. Select a schema from the dropdown (loaded from the server schemas root).
+2. **Upload JSON** to load a document, or **New JSON** to create defaults from the schema.
+3. **Edit properties** opens a `TUniPropertyGrid` driven by the schema. Scalar fields edit inline; complex fields (objects, arrays, dictionaries) show a `>>` summary — click the row to open a nested editor.
+4. **Download JSON** saves pretty-printed UTF-8 JSON to the browser.
+
+### Web architecture
+
+| Unit | Role |
+|------|------|
+| `Web/MainForm.pas` | Schema picker, JSON preview, upload/download |
+| `Web/SchemaPropertyGrid.pas` | `TSchemaPropertyGridController` — `Clear` / `AddProperty` / `OnPropertyChange` |
+| `Web/NestedEditorForm.pas` | Modal object/dictionary editor with nested grid |
+| `Web/WebArrayEditorForm.pas` | Array list editor |
+| `Web/SchemaEditorService.pas` | Root value dispatch (object / array / scalar wrapper) |
+| `Core/JsonValueParsing.pas` | Shared string ↔ `TJSONValue` parsing for grid edits |
+
+### Deployment (HyperServer)
+
+For production, deploy the built executable with:
+
+- `methyl-config-editor-web.ini` (schemas root and port)
+- Access to `schemas/config/` on the host
+- HyperServer or Windows service wrapper per [uniGUI deployment docs](https://www.unigui.com/doc/online_help/deployment.html)
+
+The VCL desktop app remains available for parity testing until the web app is validated; then retire `MethylConfigEditor.dproj` as the default editor.
