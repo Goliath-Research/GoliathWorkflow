@@ -15,6 +15,8 @@ Opt out: `"auto_apply_analyte_profile": false` under `regulatory`.
 
 `combined` / unknown analytes: bisulfite QC defaults only.
 
+Background research on analyte tradeoffs: [docs/research/](../research/README.md).
+
 ## CIS-BP multi-mode (cfDNA)
 
 When the profile sets `cisbp_modes`, the enricher runs modes in order and merges separate libraries:
