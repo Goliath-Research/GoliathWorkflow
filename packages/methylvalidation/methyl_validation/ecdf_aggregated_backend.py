@@ -91,6 +91,7 @@ def train_ecdf_aggregated_ovr_model(
         per_cancer_reference_vectors=[v.tolist() for v in anchors.per_cancer_reference_vectors],
         healthy_class_label=anchors.healthy_class_label,
         cancer_class_labels=anchors.cancer_class_labels,
+        all_class_labels=class_names,
         anchor_strategy=anchors.anchor_strategy,
         expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
         centroid_dir_by_class_label=class_centroid_dirs,
@@ -237,6 +238,7 @@ def predict_ecdf_aggregated_ovr_from_project(
             or class_names[select_healthy_index_for_labels(class_names)]
         ),
         cancer_class_labels=[str(x) for x in (obs.get("cancer_class_labels") or class_names[1:])],
+        all_class_labels=class_names,
         anchor_strategy=str(obs.get("anchor_strategy") or "class_centroid"),
         expected_feature_order_fingerprint=str(obs.get("feature_order_fingerprint") or ""),
         centroid_dir_by_class_label={str(k): str(v) for k, v in (obs.get("class_centroid_dirs") or {}).items()},

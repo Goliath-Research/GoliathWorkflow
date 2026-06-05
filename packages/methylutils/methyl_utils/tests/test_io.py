@@ -14,7 +14,7 @@ from methyl_utils.core.io import (
     _indices_for_positions_h5,
     load_from_h5,
 )
-from methyl_utils.core.methyl_frame import MethylSample
+from methyl_utils.core.methyl_frame import MethylCentroid, MethylSample
 
 
 def test_indices_for_positions_h5_matches_full_load():
@@ -141,3 +141,33 @@ def test_methylsample_lookup_at_positions_reference_order_and_coverage():
     assert np.isnan(values[1])
     assert values[2] == pytest.approx(0.5)
     assert values[3] == pytest.approx(1.0)
+
+
+def test_methylcentroid_lookup_at_positions_uses_weighted_mean():
+    """Centroid lookup uses Sm/(Sm+Su), not derived mC/coverage."""
+    import pandas as pd
+
+    pos = np.array([10, 20, 30], dtype=np.uint32)
+    df = pd.DataFrame(
+        {
+            "pos": pos,
+            "tnc": np.zeros(3, dtype=np.uint8),
+            "N": np.array([2, 2, 2], dtype=np.uint32),
+            "Sx": np.array([1.0, 0.5, 1.5], dtype=np.float32),
+            "Sx2": np.array([0.5, 0.25, 0.75], dtype=np.float32),
+            "Sm": np.array([6, 0, 8], dtype=np.uint32),
+            "Su": np.array([4, 10, 2], dtype=np.uint32),
+            "Sc2": np.array([100, 100, 100], dtype=np.uint32),
+            "Swx2": np.array([0.36, 0.0, 0.64], dtype=np.float32),
+        }
+    )
+    centroid = MethylCentroid(df)
+
+    query = np.array([20, 40, 10, 30], dtype=np.uint32)
+    values, availability = centroid.lookup_at_positions(query, min_coverage=5, missing_value=np.nan)
+
+    assert availability.tolist() == [True, False, True, True]
+    assert np.isnan(values[1])
+    assert values[0] == pytest.approx(0.0)  # Sm=0, Su=10
+    assert values[2] == pytest.approx(0.6)  # 6/(6+4)
+    assert values[3] == pytest.approx(0.8)  # 8/(8+2)

@@ -502,6 +502,62 @@ class MethylFrame:
         """Get total coverage (mC + uC)."""
         return self.coverage.values if hasattr(self.coverage, 'values') else np.asarray(self.coverage)
 
+    def lookup_at_positions(
+        self,
+        reference_positions: np.ndarray,
+        *,
+        min_coverage: int = 1,
+        missing_value: float = np.nan,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Return methylation values in *reference_positions* order.
+
+        The method performs exact-position lookup, preserving caller order, and
+        returns both values and an availability mask. Positions that are missing
+        (or that fail coverage threshold) are marked unavailable.
+        """
+        dmp_arr = np.asarray(reference_positions, dtype=np.uint32).ravel()
+        out = np.full(dmp_arr.shape[0], float(missing_value), dtype=np.float64)
+        availability = np.zeros(dmp_arr.shape[0], dtype=bool)
+        if dmp_arr.size == 0 or len(self) == 0:
+            return out, availability
+
+        pos_vals = np.asarray(self.pos, dtype=np.uint32).ravel()
+        meth_vals = np.asarray(self.get_methylation_levels(), dtype=np.float64).ravel()
+        cov_vals = np.asarray(self.get_coverage(), dtype=np.float64).ravel()
+        n = min(pos_vals.size, meth_vals.size, cov_vals.size)
+        if n == 0:
+            return out, availability
+
+        pos_vals = pos_vals[:n]
+        meth_vals = meth_vals[:n]
+        cov_vals = cov_vals[:n]
+
+        order = np.argsort(pos_vals, kind="mergesort")
+        sp = pos_vals[order]
+        sm = meth_vals[order]
+        sc = cov_vals[order]
+
+        idx = np.searchsorted(sp, dmp_arr, side="left").astype(np.int32, copy=False)
+        in_range = idx < sp.size
+        safe_idx = np.minimum(idx, max(sp.size - 1, 0))
+        matched = in_range & (sp[safe_idx] == dmp_arr)
+        if not np.any(matched):
+            return out, availability
+
+        match_idx = np.flatnonzero(matched)
+        raw = sm[safe_idx[match_idx]]
+        cov = sc[safe_idx[match_idx]]
+        finite = np.isfinite(raw)
+        if int(min_coverage) > 0:
+            finite &= cov >= float(min_coverage)
+        if np.any(finite):
+            clip_vals = np.clip(raw[finite], 0.0, 1.0)
+            out_idx = match_idx[finite]
+            out[out_idx] = clip_vals
+            availability[out_idx] = True
+        return out, availability
+
     @classmethod
     def load_from_h5(
         cls,
@@ -661,62 +717,6 @@ class MethylSample(MethylFrame):
         """
         super().close(free_gpu_pool=free_gpu_pool)
 
-    def lookup_at_positions(
-        self,
-        reference_positions: np.ndarray,
-        *,
-        min_coverage: int = 1,
-        missing_value: float = np.nan,
-    ) -> tuple[np.ndarray, np.ndarray]:
-        """
-        Return methylation values in *reference_positions* order.
-
-        The method performs exact-position lookup, preserving caller order, and
-        returns both values and an availability mask. Positions that are missing
-        (or that fail coverage threshold) are marked unavailable.
-        """
-        dmp_arr = np.asarray(reference_positions, dtype=np.uint32).ravel()
-        out = np.full(dmp_arr.shape[0], float(missing_value), dtype=np.float64)
-        availability = np.zeros(dmp_arr.shape[0], dtype=bool)
-        if dmp_arr.size == 0 or len(self) == 0:
-            return out, availability
-
-        pos_vals = np.asarray(self.pos, dtype=np.uint32).ravel()
-        meth_vals = np.asarray(self.get_methylation_levels(), dtype=np.float64).ravel()
-        cov_vals = np.asarray(self.get_coverage(), dtype=np.float64).ravel()
-        n = min(pos_vals.size, meth_vals.size, cov_vals.size)
-        if n == 0:
-            return out, availability
-
-        pos_vals = pos_vals[:n]
-        meth_vals = meth_vals[:n]
-        cov_vals = cov_vals[:n]
-
-        order = np.argsort(pos_vals, kind="mergesort")
-        sp = pos_vals[order]
-        sm = meth_vals[order]
-        sc = cov_vals[order]
-
-        idx = np.searchsorted(sp, dmp_arr, side="left").astype(np.int32, copy=False)
-        in_range = idx < sp.size
-        safe_idx = np.minimum(idx, max(sp.size - 1, 0))
-        matched = in_range & (sp[safe_idx] == dmp_arr)
-        if not np.any(matched):
-            return out, availability
-
-        match_idx = np.flatnonzero(matched)
-        raw = sm[safe_idx[match_idx]]
-        cov = sc[safe_idx[match_idx]]
-        finite = np.isfinite(raw)
-        if int(min_coverage) > 0:
-            finite &= cov >= float(min_coverage)
-        if np.any(finite):
-            clip_vals = np.clip(raw[finite], 0.0, 1.0)
-            out_idx = match_idx[finite]
-            out[out_idx] = clip_vals
-            availability[out_idx] = True
-        return out, availability
-
     def cap_coverage_binomial(
         self,
         n_cap: int,
@@ -868,6 +868,11 @@ class MethylCentroid(MethylFrame):
 
     def get_sample_count(self) -> np.ndarray:
         return self.N.values if hasattr(self.N, "values") else np.asarray(self.N)
+
+    def get_methylation_levels(self) -> np.ndarray:
+        """Coverage-weighted methylation fraction Sm / (Sm + Su)."""
+        wm = self.weighted_mean
+        return wm.values if hasattr(wm, "values") else np.asarray(wm)
 
     @property
     def mean(self):

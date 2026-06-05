@@ -41,7 +41,7 @@ class ObservedHybridAnchors:
 
 
 OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v28_no_healthy_centroid_features"
-HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v4_lean_dmp"
+HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v5_centroid_distance_per_class"
 HYBRID_FEATURE_FAMILY_SETS = (
     "dmp",
     "gene",
@@ -560,6 +560,61 @@ def _extract_matrix_for_samples(
     return np.concatenate(blocks, axis=1)
 
 
+def _extract_centroid_reference_vectors(
+    centroid_dir_by_class_label: Dict[str, str],
+    class_names: Sequence[str],
+    refs: Dict[str, Dict[str, np.ndarray]],
+    feature_order: List[Tuple[str, str, int]],
+    *,
+    min_coverage: int = 1,
+) -> Dict[str, np.ndarray]:
+    out: Dict[str, np.ndarray] = {}
+    n_loci = len(feature_order)
+    for label in class_names:
+        label_str = str(label)
+        centroid_dir = str(centroid_dir_by_class_label.get(label_str) or "").strip()
+        if not centroid_dir:
+            continue
+        X = _extract_matrix_for_samples(
+            [centroid_dir],
+            refs,
+            feature_order,
+            min_coverage=int(max(1, min_coverage)),
+        )
+        if X.shape[0] != 1 or X.shape[1] != n_loci:
+            continue
+        vec = np.asarray(X[0, :], dtype=np.float64)
+        finite = np.isfinite(vec)
+        if np.any(finite):
+            vec = vec.copy()
+            vec[finite] = np.clip(vec[finite], 0.0, 1.0)
+        out[label_str] = vec
+    return out
+
+
+def _resolve_all_class_labels(
+    *,
+    all_class_labels: Optional[Sequence[str]],
+    healthy_class_label: Optional[str],
+    cancer_class_labels: Sequence[str],
+) -> List[str]:
+    if all_class_labels is not None:
+        return [str(x) for x in all_class_labels]
+    labels: List[str] = []
+    healthy = str(healthy_class_label or "").strip()
+    if healthy:
+        labels.append(healthy)
+    for raw in cancer_class_labels:
+        token = str(raw)
+        if token not in labels:
+            labels.append(token)
+    return labels
+
+
+def _centroid_distance_feature_name(class_label: str) -> str:
+    return f"weighted_cosine_distance_to_centroid__{_feature_label_token(class_label)}"
+
+
 def _feature_order_fingerprint(feature_order: Sequence[Tuple[str, str, int]]) -> str:
     text = "\n".join([f"{c}:{ctx}:{int(pos)}" for c, ctx, pos in feature_order])
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -865,7 +920,10 @@ def _prepare_histogram_density_artifacts(
     return bin_edges_ref, healthy_counts_ref, cancer_counts
 
 
-def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) -> List[str]:
+def _fixed_feature_names(
+    cancer_class_labels: Optional[Sequence[str]] = None,
+    all_class_labels: Optional[Sequence[str]] = None,
+) -> List[str]:
     names = [
         "max_weighted_directional_score",
         "weighted_mean_abs_distance_margin",
@@ -889,6 +947,8 @@ def _fixed_feature_names(cancer_class_labels: Optional[Sequence[str]] = None) ->
                 f"weighted_healthy_tail_evidence__{suffix}",
             ]
         )
+    for label in [str(x) for x in (all_class_labels or [])]:
+        names.append(_centroid_distance_feature_name(label))
     return [
         name
         for name in names
@@ -915,6 +975,7 @@ def _gene_structural_feature_names(
 
 def observed_hybrid_feature_names(
     cancer_class_labels: Optional[Sequence[str]] = None,
+    all_class_labels: Optional[Sequence[str]] = None,
     feature_family_set: str = "dmp",
     dmp_df: Optional[pd.DataFrame] = None,
     frozen_gene_panel_df: Optional[pd.DataFrame] = None,
@@ -934,7 +995,12 @@ def observed_hybrid_feature_names(
     )
     names: List[str] = []
     if include_dmp_family:
-        names.extend(_fixed_feature_names(cancer_class_labels=cancer_class_labels))
+        names.extend(
+            _fixed_feature_names(
+                cancer_class_labels=cancer_class_labels,
+                all_class_labels=all_class_labels,
+            )
+        )
     names.extend(
         _gene_structural_feature_names(
             include_gene=include_gene_family,
@@ -963,6 +1029,7 @@ def observed_hybrid_feature_names(
 
 def observed_hybrid_schema_fingerprint(
     cancer_class_labels: Optional[Sequence[str]] = None,
+    all_class_labels: Optional[Sequence[str]] = None,
     *,
     feature_family_set: str = "dmp",
     dmp_df: Optional[pd.DataFrame] = None,
@@ -978,6 +1045,7 @@ def observed_hybrid_schema_fingerprint(
 
     names = observed_hybrid_feature_names(
         cancer_class_labels=cancer_class_labels,
+        all_class_labels=all_class_labels,
         feature_family_set=feature_family_set,
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_gene_panel_df,
@@ -1029,6 +1097,7 @@ def build_observed_hybrid_feature_table(
     per_cancer_reference_vectors: Optional[Sequence[Sequence[float]]] = None,
     healthy_class_label: Optional[str] = None,
     cancer_class_labels: Optional[Sequence[str]] = None,
+    all_class_labels: Optional[Sequence[str]] = None,
     anchor_strategy: Optional[str] = None,
     expected_feature_order_fingerprint: Optional[str] = None,
     centroid_dir_by_class_label: Optional[Dict[str, str]] = None,
@@ -1134,8 +1203,14 @@ def build_observed_hybrid_feature_table(
             [f"cancer_{k+1}" for k in range(len(cancer_labels_raw), len(per_cancer_refs))]
         )
     cancer_labels_raw = cancer_labels_raw[: len(per_cancer_refs)]
+    all_class_labels_list = _resolve_all_class_labels(
+        all_class_labels=all_class_labels,
+        healthy_class_label=healthy_class_label,
+        cancer_class_labels=cancer_labels_raw,
+    )
     feature_names = observed_hybrid_feature_names(
         cancer_class_labels=cancer_labels_raw,
+        all_class_labels=all_class_labels_list,
         feature_family_set=str(feature_family_set),
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_gene_panel_df,
@@ -1194,6 +1269,15 @@ def build_observed_hybrid_feature_table(
         cancer_class_labels=cancer_labels_raw,
         centroid_dir_by_class_label=centroid_dir_by_class_label,
     )
+    centroid_refs_by_label: Dict[str, np.ndarray] = {}
+    if include_dmp_family and centroid_dir_by_class_label and all_class_labels_list:
+        centroid_refs_by_label = _extract_centroid_reference_vectors(
+            centroid_dir_by_class_label,
+            all_class_labels_list,
+            refs,
+            feature_order,
+            min_coverage=int(max(1, min_coverage)),
+        )
 
     def _ecdf_at(count_rows: np.ndarray, locus_indices: np.ndarray, bin_indices: np.ndarray) -> np.ndarray:
         if count_rows.size == 0 or locus_indices.size == 0:
@@ -1317,11 +1401,34 @@ def build_observed_hybrid_feature_table(
             wcos_h = _weighted_cosine_similarity(obs_vals, healthy_obs, obs_w)
             wcos_c = _weighted_cosine_similarity(obs_vals, cancer_obs, obs_w)
             weighted_centroid_contrast_score = (wcos_c - wcos_h) + (wjs_h - wjs_c)
+
+            centroid_distance_values: Dict[str, float] = {}
+            if centroid_refs_by_label:
+                for class_label in all_class_labels_list:
+                    key = _centroid_distance_feature_name(class_label)
+                    centroid_vec = centroid_refs_by_label.get(class_label)
+                    if centroid_vec is None:
+                        centroid_distance_values[key] = float("nan")
+                        continue
+                    centroid_obs = centroid_vec[obs_mask]
+                    valid = np.isfinite(obs_vals) & np.isfinite(centroid_obs) & np.isfinite(obs_w) & (obs_w > 0.0)
+                    if not np.any(valid):
+                        centroid_distance_values[key] = float("nan")
+                        continue
+                    sim = _weighted_cosine_similarity(
+                        obs_vals[valid],
+                        centroid_obs[valid],
+                        obs_w[valid],
+                    )
+                    centroid_distance_values[key] = (
+                        float(1.0 - sim) if np.isfinite(sim) else float("nan")
+                    )
         else:
             max_weighted_directional_score = float("nan")
             per_label_feature_values = {}
             tail_feature_values = {}
             weighted_centroid_contrast_score = float("nan")
+            centroid_distance_values = {}
 
         obs_frac = float(n_obs / max(1, n_loci))
 
@@ -1335,6 +1442,9 @@ def build_observed_hybrid_feature_table(
                 if feat_name in idx:
                     X_feat[i, idx[feat_name]] = float(feat_value)
             for feat_name, feat_value in tail_feature_values.items():
+                if feat_name in idx:
+                    X_feat[i, idx[feat_name]] = float(feat_value)
+            for feat_name, feat_value in centroid_distance_values.items():
                 if feat_name in idx:
                     X_feat[i, idx[feat_name]] = float(feat_value)
 
@@ -1506,6 +1616,7 @@ def build_observed_hybrid_feature_table(
         struct_non_empty_per_sample = np.zeros((n_samples,), dtype=int)
     schema_fingerprint = observed_hybrid_schema_fingerprint(
         cancer_class_labels=cancer_labels_raw,
+        all_class_labels=all_class_labels_list,
         feature_family_set=str(feature_family_set),
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_gene_panel_df,
@@ -1540,6 +1651,7 @@ def build_observed_hybrid_feature_table(
         "gene_feature_loading": gene_feature_loading_norm,
         "healthy_class_label": str(healthy_class_label or "unknown"),
         "cancer_class_labels": [str(x) for x in cancer_labels_raw],
+        "all_class_labels": [str(x) for x in all_class_labels_list],
         "anchor_strategy": str(anchor_strategy or "unspecified"),
         "hist_eps": hist_eps,
         "hist_alpha": hist_alpha,

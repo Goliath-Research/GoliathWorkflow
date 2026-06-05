@@ -633,6 +633,7 @@ def _predict_aggregated_ecdf_samples(
         ],
         healthy_class_label=str(obs.get("healthy_class_label") or ""),
         cancer_class_labels=[str(x) for x in (obs.get("cancer_class_labels") or [])],
+        all_class_labels=class_names,
         anchor_strategy=str(obs.get("anchor_strategy") or "class_centroid"),
         expected_feature_order_fingerprint=str(obs.get("feature_order_fingerprint") or ""),
         centroid_dir_by_class_label={str(k): str(v) for k, v in (obs.get("class_centroid_dirs") or {}).items()},

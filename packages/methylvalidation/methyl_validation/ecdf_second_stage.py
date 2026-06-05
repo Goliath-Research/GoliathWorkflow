@@ -234,6 +234,7 @@ def train_and_apply_ecdf_second_stage(
         per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
         healthy_class_label=anchors.healthy_class_label,
         cancer_class_labels=anchors.cancer_class_labels,
+        all_class_labels=[healthy_label] + cancer_labels,
         anchor_strategy=anchors.anchor_strategy,
         expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
         centroid_dir_by_class_label=centroid_dirs,

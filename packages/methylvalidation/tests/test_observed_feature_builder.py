@@ -373,6 +373,122 @@ def test_observed_feature_builder_histogram_tail_features_multiclass_names(monke
     assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca1" not in feat.feature_names
     assert "weighted_mean_abs_error_to_cancer_centroid__pca2" not in feat.feature_names
     assert "weighted_fraction_dmps_closer_to_cancer_centroid__pca2" not in feat.feature_names
+    assert "weighted_cosine_distance_to_centroid__healthy" in feat.feature_names
+    assert "weighted_cosine_distance_to_centroid__pca1" in feat.feature_names
+    assert "weighted_cosine_distance_to_centroid__pca2" in feat.feature_names
+
+
+def _fake_extract_with_centroid_profiles(sample_paths, reference_positions, chromosome, min_coverage=1):
+    del chromosome, min_coverage
+    rows = []
+    ctxs = []
+    poss = []
+    for ctx in sorted(reference_positions.keys()):
+        for p in list(np.asarray(reference_positions[ctx], dtype=np.uint32)):
+            ctxs.append(ctx)
+            poss.append(int(p))
+    n_pos = len(poss)
+    for s in sample_paths:
+        token = Path(str(s)).name
+        if token.endswith("healthy") or token in {"S1", "S2"}:
+            vals = [0.10, 0.20, 0.30, 0.40]
+        elif token.endswith("pca1") or token in {"S3", "S4"}:
+            vals = [0.70, 0.80, 0.90, 0.95]
+        elif token.endswith("pca2") or token in {"S5", "S6"}:
+            vals = [0.85, 0.88, 0.92, 0.94]
+        else:
+            vals = [0.50] * n_pos
+        rows.append(vals[:n_pos])
+    X = np.asarray(rows, dtype=np.float32)
+    return (
+        X,
+        np.asarray(poss, dtype=np.uint32),
+        np.asarray(ctxs, dtype=object),
+        {"CG": np.arange(n_pos, dtype=np.uint32)},
+    )
+
+
+def test_observed_feature_builder_centroid_distance_features_schema_and_behavior(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_with_centroid_profiles,
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4", "/tmp/S5", "/tmp/S6"]
+    y = [0, 0, 1, 1, 2, 2]
+    class_names = ["healthy", "pca1", "pca2"]
+    dmp_df = _dmp_df()
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    centroid_dirs = {
+        "healthy": "/tmp/centroids/healthy",
+        "pca1": "/tmp/centroids/pca1",
+        "pca2": "/tmp/centroids/pca2",
+    }
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        all_class_labels=class_names,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        centroid_dir_by_class_label=centroid_dirs,
+    )
+
+    for label in class_names:
+        name = f"weighted_cosine_distance_to_centroid__{label}"
+        assert name in feat.feature_names
+        assert name in feat.training_feature_names
+
+    idx_h = feat.feature_names.index("weighted_cosine_distance_to_centroid__healthy")
+    idx_p1 = feat.feature_names.index("weighted_cosine_distance_to_centroid__pca1")
+    idx_p2 = feat.feature_names.index("weighted_cosine_distance_to_centroid__pca2")
+
+    healthy_dist = float(feat.X[0, idx_h])
+    pca1_dist = float(feat.X[0, idx_p1])
+    pca2_dist = float(feat.X[0, idx_p2])
+    assert np.isfinite(healthy_dist)
+    assert healthy_dist <= pca1_dist + 1e-9
+    assert healthy_dist <= pca2_dist + 1e-9
+    assert healthy_dist >= -1e-6
+    assert healthy_dist <= 2.0
+
+    cancer_like_dist = float(feat.X[2, idx_p1])
+    assert np.isfinite(cancer_like_dist)
+    assert cancer_like_dist < float(feat.X[2, idx_h])
+
+
+def test_observed_feature_builder_centroid_distance_missing_dir_is_nan(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_complete,
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
+    y = [0, 0, 1, 1]
+    class_names = ["healthy", "cancer"]
+    dmp_df = _dmp_df()
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        all_class_labels=class_names,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        centroid_dir_by_class_label={"healthy": "/tmp/healthy"},
+    )
+    idx_cancer = feat.feature_names.index("weighted_cosine_distance_to_centroid__cancer")
+    idx_healthy = feat.feature_names.index("weighted_cosine_distance_to_centroid__healthy")
+    assert np.isfinite(float(feat.X[0, idx_healthy]))
+    assert not np.isfinite(float(feat.X[0, idx_cancer]))
 
 
 def test_observed_feature_builder_histogram_tail_features_behaviors(monkeypatch):

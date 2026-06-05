@@ -333,7 +333,7 @@ Example (`step_config.validation`) using all covariate types:
 When `step_config.validation.backend_profiles.<backend>.params.feature_mode` is `observed_hybrid`, feature schema is controlled by:
 
 - `feature_family_set`:
-  - `dmp`: fixed DMP-family observed metrics (legacy behavior)
+  - `dmp`: fixed DMP-family observed metrics (legacy behavior), including per-class `weighted_cosine_distance_to_centroid__{class}` columns computed from methyl-centroid H5 profiles at classifier-panel DMP loci (`dmps-*-classifier.csv`)
   - `gene`: one feature per mapped gene (`gene::<GENE>`)
   - `structural`: one feature per mapped gene-annotation key (`struct::<GENE>::<FEATURE>`)
   - `dmp+gene`, `dmp+structural`, `hybrid-all`: deterministic concatenation of families

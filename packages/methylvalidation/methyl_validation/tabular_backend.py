@@ -464,6 +464,7 @@ def train_tabular_model(
         "observed_hybrid_schema_fingerprint": (
             observed_hybrid_schema_fingerprint(
                 cancer_class_labels=schema_cancer_labels,
+                all_class_labels=class_names,
                 feature_family_set=feature_family_set_norm,
                 dmp_df=dmp_df,
                 frozen_gene_panel_df=frozen_gene_panel_df,
@@ -608,6 +609,7 @@ def train_tabular_model(
                             observed_feature_names,
                             observed_hybrid_feature_names(
                                 cancer_class_labels=observed_cancer_class_labels,
+                                all_class_labels=class_names,
                                 feature_family_set=feature_family_set_norm,
                                 dmp_df=dmp_df,
                                 frozen_gene_panel_df=frozen_gene_panel_df,
@@ -668,6 +670,7 @@ def train_tabular_model(
                 per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
                 healthy_class_label=anchors.healthy_class_label,
                 cancer_class_labels=anchors.cancer_class_labels,
+                all_class_labels=class_names,
                 anchor_strategy=anchors.anchor_strategy,
                 expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
                 centroid_dir_by_class_label=class_centroid_dirs,
@@ -878,6 +881,7 @@ def train_tabular_model(
                     per_cancer_reference_vectors=observed_per_cancer_references,
                     healthy_class_label=observed_healthy_class_label,
                     cancer_class_labels=observed_cancer_class_labels,
+                    all_class_labels=class_names,
                     anchor_strategy=observed_anchor_strategy,
                     expected_feature_order_fingerprint=observed_feature_order_fingerprint,
                     centroid_dir_by_class_label=class_centroid_dirs,
@@ -1200,6 +1204,7 @@ def predict_tabular_model_from_project(
             per_cancer_reference_vectors=meta.get("observed_per_cancer_reference_vectors"),
             healthy_class_label=meta.get("observed_healthy_class_label"),
             cancer_class_labels=meta.get("observed_cancer_class_labels") or [],
+            all_class_labels=class_names,
             anchor_strategy=meta.get("observed_anchor_strategy"),
             expected_feature_order_fingerprint=meta.get("observed_feature_order_fingerprint"),
             centroid_dir_by_class_label=class_centroid_dirs,
