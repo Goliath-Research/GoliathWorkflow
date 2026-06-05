@@ -201,8 +201,15 @@ begin
   FileName := UniMainModule.UploadedFileName;
   if FileName = '' then
     FileName := SchemaTitle + '.json';
-  TempPath := TPath.Combine(TPath.GetTempPath,
-    'methyl-config-' + IntToStr(GetTickCount) + '-' + FileName);
+  TempPath :=
+    TPath.Combine
+    (
+      TPath.GetTempPath,
+      'methyl-config-' +
+      IntToStr(GetTickCount) +
+      '-' +
+      FileName
+    );
   UniMainModule.Document.SaveToFile(TempPath);
   UniSession.SendFile(TempPath, FileName);
 end;
