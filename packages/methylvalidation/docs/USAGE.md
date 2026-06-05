@@ -172,6 +172,8 @@ When to change defaults:
 | `--stability-featurecuts` | Enable detector FeatureCuts during MC (`classifier_dmp_selection=featurecuts_validation`) and compute stability from classifier-panel DMP exports. | Detector step override per run + classifier-panel stability aggregation. |
 | `--stability-target-ba BA` | In FeatureCuts mode, target balanced accuracy used to pick minimum top-k DMPs by effect size. | Detector FeatureCuts target-BA selection (`target_balanced_accuracy`). |
 | `--stability-min-selected-dmps N` | In FeatureCuts mode, enforce minimum selected DMP count per run. | Detector lower bound (`min_selected_dmps`) after FeatureCuts selection. |
+| `--stability-gene-featurecuts` | Run methyl-mapper + gene FeatureCuts after detector in each MC iteration; aggregate stable genes from `genes-classifier.csv`. | Optional gene stability path (requires mapper per iteration; no enricher). |
+| `--stability-min-selected-genes N` | In gene FeatureCuts mode, enforce minimum selected gene count per run. | Gene FeatureCuts lower bound after k-search. |
 | `--skip-centroid` | Reuse existing centroid artifacts and skip centroid recomputation. Works in MC iteration mode and in `--freeze` (detector→mapper→enricher only). | MC loop detector-only on `run_XXXX` artifacts, or freeze runs without `methyl-centroid`. |
 | `--skip-detection` | Recompute only stability artifacts from existing `run_XXXX/detections/.../dmps-*.csv` outputs. Requires `--stability`. | Skips MC iteration execution; runs in-process stability aggregation only. |
 | `--resume [RUN]` | Resume interrupted MC runs for `--stability` / default MC mode. Without `RUN`, repeats the last existing run and continues to `n_iterations`; with `RUN` (1-based), restarts from that run. | MC loop resume control (run directories `run_0001`, `run_0002`, ...). |
@@ -255,7 +257,10 @@ Common fields for production staging:
 - `stability_convergence_jaccard`: required Jaccard overlap between the two stable sets.
 - `stability_convergence_max_size_delta`: max allowed relative panel-size change across checkpoints.
 - `stability_convergence_patience`: consecutive passing checkpoints required before early stop triggers.
-- `stability_gene_freq`: recurrence threshold for stable genes (when enricher outputs are available).
+- `stability_gene_freq`: recurrence threshold for stable genes (classifier gene panels when `stability_gene_featurecuts_enabled`, else enricher outputs).
+- `stability_gene_featurecuts_enabled`: run methyl-mapper + gene FeatureCuts per MC iteration and aggregate stable genes.
+- `stability_min_selected_genes`: optional lower bound for gene FeatureCuts selected gene count.
+- `freeze_stable_gene_csv`: optional override for stable gene panel path (default: `monte_carlo_runs/stability/stable_genes_production.csv` when present).
 - `stability_featurecuts_enabled`: force detector FeatureCuts policy in MC (`classifier_dmp_selection=featurecuts_validation`).
 - `stability_target_balanced_accuracy` / `stability_min_selected_dmps`: optional FeatureCuts constraints used in MC detector overrides.
 - `stability_dual_cutoff_enabled`: enable dual strict/relaxed post-MC panels using `combined_score = effect_size * sqrt(frequency)`.
@@ -273,6 +278,36 @@ Common fields for production staging:
 - `ecdf_aggregated_n_bins`: histogram bin count for aggregated ECDF OvR package training (default `100`).
 
 `--freeze` fails fast if the stable panel path is missing, so run `--stability` first or set `freeze_stable_dmp_csv`.
+
+### Gene stability with FeatureCuts
+
+Optional gene stability runs in the same MC loop when `stability_gene_featurecuts_enabled` is true:
+
+```json
+"validation": {
+  "stability_featurecuts_enabled": true,
+  "stability_gene_featurecuts_enabled": true,
+  "stability_target_balanced_accuracy": 0.95,
+  "stability_min_selected_dmps": 500,
+  "stability_min_selected_genes": 50,
+  "stability_dmp_freq": 0.8,
+  "stability_gene_freq": 0.7,
+  "backend_profiles": {
+    "ecdf": {
+      "params": {
+        "feature_mode": "raw_gene",
+        "feature_family_set": "gene"
+      }
+    }
+  }
+}
+```
+
+CLI: `--stability --stability-featurecuts --stability-gene-featurecuts`.
+
+Per iteration: centroid → detector (DMP FeatureCuts) → methyl-mapper on classifier DMP CSVs → gene FeatureCuts (ECDF OvR k-search on validation BA). Outputs `run_XXXX/gene_stability/genes-classifier.csv`; aggregation writes `stability/stable_genes_production.csv`. `--freeze` copies the stable gene panel into production and wires `raw_gene` for `--model`.
+
+If gene FeatureCuts is enabled without DMP FeatureCuts, the CLI warns and gene FeatureCuts falls back to discovery DMP exports when classifier panels are missing.
 
 ### Strict stability profile example
 
@@ -492,7 +527,8 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `stability/stable_dmps_score_diagnostics.json` / `.csv` | Strict/relaxed cutoff diagnostics (indices, thresholds, retained counts, cutoff mode). |
 | `stability/tier_core/`, `stability/tier_extended/`, `stability/tier_exploratory/` | Tiered dual-cutoff outputs when `stability_tiers_enabled=true`; each folder contains strict/relaxed/scored panels plus diagnostics and a tier-local `stable_dmps_production.csv`. |
 | `stability/stable_dmps_production.csv` (tiered mode) | Root alias copied from `stability_default_freeze_tier` (default: `tier_extended`) so `--freeze` works without extra path overrides. |
-| `stability/dmp_frequency_by_chromosome.html` | Combined Plotly chart with one series per chromosome (both `all` and `selected` traces): X = DMP frequency across runs (%), Y = DMP count. |
+| `stability/stable_genes_production.csv` | Stable gene panel when `stability_gene_featurecuts_enabled` (from classifier gene panels). |
+| `stability/gene_frequency.csv` | Gene recurrence table across qualifying MC runs. |
 | `stability/dmp_frequency_chr_<chrom>.html` | Per-chromosome Plotly chart files, each showing `all` vs `selected` DMP count distributions over frequency (%). |
 | `stability/stability_summary.json` | Stability run summary for DMP/gene frequency plus detector parameter extraction. Includes `detector_parameters.per_run` and `detector_parameters.aggregates` built from `detections/**/results-*.json` (minimal fields: exported/statistical/biological DMP totals, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`), plus `early_stopping` diagnostics (`triggered`, stop iteration, per-checkpoint history). |
 | `production/project.json` | Frozen production project with `fixed_dmp_panel` in `step_config.detection`. |

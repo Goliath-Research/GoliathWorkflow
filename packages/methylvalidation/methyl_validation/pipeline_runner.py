@@ -17,6 +17,39 @@ if TYPE_CHECKING:
     from .config import MonteCarloConfig
 
 
+def _append_gene_stability_steps(
+    steps: List[Any],
+    *,
+    project_json: Path,
+    per_cancer_group: bool,
+    config: Optional["MonteCarloConfig"],
+) -> None:
+    if config is None or not bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
+        return
+    steps.append(
+        (
+            "methyl-mapper",
+            lambda: run_mapper(project_json, per_cancer_group=per_cancer_group),
+            None,
+            None,
+        )
+    )
+
+    def _run_gene_fc() -> tuple[int, str, str]:
+        from .gene_featurecuts import run_gene_featurecuts_for_iteration
+
+        return run_gene_featurecuts_for_iteration(project_json, config)
+
+    steps.append(
+        (
+            "gene-featurecuts",
+            _run_gene_fc,
+            None,
+            None,
+        )
+    )
+
+
 def _format_duration(seconds: float) -> str:
     total = int(max(0, round(float(seconds))))
     h, rem = divmod(total, 3600)
@@ -445,6 +478,12 @@ def run_pipeline_for_iteration(
             None,
             None,
         )
+    )
+    _append_gene_stability_steps(
+        steps,
+        project_json=project_json,
+        per_cancer_group=per_cancer_group,
+        config=config,
     )
     completed_seconds: List[float] = []
     total_steps = len(steps)
@@ -1009,6 +1048,15 @@ def run_pipeline_for_iteration_multiclass(
             ),
         ),
     )
+    if config is not None and bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
+        steps.append(("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=per_cancer_group)))
+
+        def _run_gene_fc_mc() -> tuple[int, str, str]:
+            from .gene_featurecuts import run_gene_featurecuts_for_iteration
+
+            return run_gene_featurecuts_for_iteration(project_json, config)
+
+        steps.append(("gene-featurecuts", _run_gene_fc_mc))
     completed_seconds: List[float] = []
     total_steps = len(steps)
     for step_index, (step_name, run_fn) in enumerate(steps):

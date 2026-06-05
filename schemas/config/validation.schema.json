@@ -1817,6 +1817,19 @@
       "description": "Path to stable_dmps_production.csv for --freeze (default: monte_carlo_runs/stability/stable_dmps_production.csv).",
       "title": "Freeze Stable Dmp Csv"
     },
+    "freeze_stable_gene_csv": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Path to stable_genes_production.csv for freeze gene-axis wiring (default: monte_carlo_runs/stability/stable_genes_production.csv when present).",
+      "title": "Freeze Stable Gene Csv"
+    },
     "freeze_top_genes": {
       "anyOf": [
         {
@@ -2673,6 +2686,19 @@
       "description": "If true, MC detector runs force classifier_dmp_selection=featurecuts_validation so stability can be computed from discriminatory classifier panels.",
       "title": "Stability Featurecuts Enabled"
     },
+    "stability_gene_featurecuts_enabled": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": false,
+      "description": "If true, each MC iteration runs methyl-mapper then gene FeatureCuts (ECDF OvR k-search) after detector, and stability aggregates stable genes from genes-classifier exports.",
+      "title": "Stability Gene Featurecuts Enabled"
+    },
     "stability_gene_freq": {
       "anyOf": [
         {
@@ -2685,7 +2711,7 @@
         }
       ],
       "default": 0.5,
-      "description": "Minimum frequency for a gene to be considered stable (only when enricher outputs exist).",
+      "description": "Minimum frequency for a gene to be considered stable. When stability_gene_featurecuts_enabled, counts genes from per-run classifier gene panels.",
       "title": "Stability Gene Freq"
     },
     "stability_min_balanced_accuracy": {
@@ -2730,6 +2756,20 @@
       "default": null,
       "description": "Optional lower bound for detector classifier panel size in FeatureCuts mode. Final selected k is max(featurecuts_k, stability_min_selected_dmps).",
       "title": "Stability Min Selected Dmps"
+    },
+    "stability_min_selected_genes": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional lower bound for gene classifier panel size in gene FeatureCuts mode. Final selected k is max(featurecuts_k, stability_min_selected_genes).",
+      "title": "Stability Min Selected Genes"
     },
     "stability_relaxed_cutoff_mode": {
       "anyOf": [

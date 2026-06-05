@@ -56,6 +56,13 @@ def write_locked_model_spec(
     model_bundle_cfg = (step_cfg.get("model_bundle") or {}) if isinstance(step_cfg, dict) else {}
 
     stable_panel = Path(str(production_summary.get("fixed_dmp_panel") or production_dir / "stable_dmps_genomewide.csv"))
+    stable_gene_panel = Path(
+        str(
+            production_summary.get("stable_gene_panel")
+            or model_bundle_cfg.get("stability_gene_panel")
+            or ""
+        )
+    )
     mapper_ann = Path(str(model_bundle_cfg.get("mapper_annotation_csv") or ""))
     fixed_gene_panel = Path(str(model_bundle_cfg.get("fixed_gene_panel") or ""))
     fixed_gene_features = Path(str(model_bundle_cfg.get("fixed_gene_features") or ""))
@@ -104,6 +111,10 @@ def write_locked_model_spec(
             "fixed_dmp_panel": {
                 "path": str(stable_panel) if stable_panel else None,
                 "sha256": _sha256(stable_panel) if stable_panel else None,
+            },
+            "stable_genes_production": {
+                "path": str(stable_gene_panel) if stable_gene_panel else None,
+                "sha256": _sha256(stable_gene_panel) if stable_gene_panel else None,
             },
             "mapper_annotation_csv": {
                 "path": str(mapper_ann) if mapper_ann else None,

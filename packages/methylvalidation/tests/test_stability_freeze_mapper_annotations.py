@@ -66,7 +66,7 @@ def test_freeze_production_model_writes_mapper_annotation_pointer(tmp_path: Path
             "comparisons": ["default"],
         }
 
-    def _fake_build_frozen_genes(*, project_json, output_dir, min_dmps_per_feature, gene_importance_min, top_genes):
+    def _fake_build_frozen_genes(*, project_json, output_dir, min_dmps_per_feature, gene_importance_min, top_genes, **kwargs):
         out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         genes = out_dir / "frozen_genes_production.csv"
@@ -156,7 +156,7 @@ def test_freeze_production_model_forwards_skip_detection(tmp_path: Path, monkeyp
             "comparisons": ["default"],
         }
 
-    def _fake_build_frozen_genes(*, project_json, output_dir, min_dmps_per_feature, gene_importance_min, top_genes):
+    def _fake_build_frozen_genes(*, project_json, output_dir, min_dmps_per_feature, gene_importance_min, top_genes, **kwargs):
         out_dir = Path(output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         genes = out_dir / "frozen_genes_production.csv"
@@ -193,3 +193,108 @@ def test_freeze_production_model_forwards_skip_detection(tmp_path: Path, monkeyp
     assert isinstance(kwargs, dict)
     assert kwargs["skip_detection"] is True
     assert kwargs["skip_centroid"] is True
+
+
+def test_freeze_production_model_wires_stable_genes_and_raw_gene(tmp_path: Path, monkeypatch):
+    monte_root = tmp_path / "mc"
+    monte_root.mkdir(parents=True)
+    stability_dir = monte_root / "stability"
+    stability_dir.mkdir()
+    stable_gene_csv = stability_dir / "stable_genes_production.csv"
+    pd.DataFrame(
+        {
+            "gene_name": ["BRCA1"],
+            "frequency": [1.0],
+            "count": [3],
+            "n_runs": [3],
+            "gene_importance": [0.9],
+            "mean_effect_size": [0.3],
+        }
+    ).to_csv(stable_gene_csv, index=False)
+
+    production_dir = monte_root / "production"
+    base_project = tmp_path / "project.json"
+    base_project.write_text(
+        json.dumps(_base_project_payload(tmp_path), indent=2),
+        encoding="utf-8",
+    )
+    stable_dmp_csv = tmp_path / "stable_dmps_production.csv"
+    pd.DataFrame(
+        {
+            "chromosome": ["1"],
+            "position": [100],
+            "context": ["CG"],
+            "effect_size": [0.4],
+        }
+    ).to_csv(stable_dmp_csv, index=False)
+
+    monkeypatch.setattr(
+        pipeline_runner,
+        "run_pipeline_for_production",
+        lambda *args, **kwargs: (True, [], []),
+    )
+    monkeypatch.setattr(
+        model_bundle,
+        "build_mapper_annotation_cache",
+        lambda **kwargs: {"path": str(production_dir / "model_bundle" / "mapper.csv"), "rows": 0},
+    )
+
+    frozen_calls: dict = {}
+
+    def _fake_build_frozen_genes(**kwargs):
+        frozen_calls.update(kwargs)
+        out_dir = Path(kwargs["output_dir"])
+        out_dir.mkdir(parents=True, exist_ok=True)
+        genes = out_dir / "frozen_genes_production.csv"
+        genes.write_text("comparison_label,gene_name,gene_importance\n", encoding="utf-8")
+        feats = out_dir / "frozen_gene_features.csv"
+        feats.write_text(
+            "comparison_label,gene_name,chromosome,feature_type,feature_start,feature_end,n_dmps_in_feature\n",
+            encoding="utf-8",
+        )
+        return {
+            "gene_panel_path": str(genes.absolute()),
+            "gene_features_path": str(feats.absolute()),
+        }
+
+    monkeypatch.setattr(model_bundle, "build_frozen_gene_panel", _fake_build_frozen_genes)
+
+    from methyl_validation.config import MonteCarloConfig
+
+    config = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": str(tmp_path),
+            "cohorts": [
+                {"label": "healthy", "csv": str(tmp_path / "healthy.csv")},
+                {"label": "disease", "csv": str(tmp_path / "disease.csv")},
+            ],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": str(base_project),
+            "output_base": str(tmp_path),
+            "backend_profiles": {
+                "ecdf": {"enabled": True, "params": {}},
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
+            "stability_gene_featurecuts_enabled": True,
+        }
+    )
+
+    summary = stability.freeze_production_model(
+        base_project=base_project,
+        stable_dmp_csv=str(stable_dmp_csv),
+        monte_carlo_runs_root=monte_root,
+        production_output_dir=str(production_dir),
+        skip_centroid=True,
+        config=config,
+    )
+    assert summary["success"] is True
+    assert summary["stable_gene_panel"] is not None
+    prod_project = json.loads((production_dir / "project.json").read_text(encoding="utf-8"))
+    params = prod_project["step_config"]["validation"]["backend_profiles"]["ecdf"]["params"]
+    assert params["feature_mode"] == "raw_gene"
+    assert params["feature_family_set"] == "gene"
+    mb_cfg = prod_project["step_config"]["model_bundle"]
+    assert "stability_gene_panel" in mb_cfg
+    assert frozen_calls.get("stability_gene_panel_path") == summary["stable_gene_panel"]

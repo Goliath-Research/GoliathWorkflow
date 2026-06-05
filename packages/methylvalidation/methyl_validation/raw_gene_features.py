@@ -191,8 +191,16 @@ def build_raw_gene_feature_table(
     min_coverage: int = 1,
     use_region_weight: bool = True,
     gene_weight_column: str = "mean_effect_size",
+    gene_name_order: Optional[Sequence[str]] = None,
 ) -> RawGeneFeatureTable:
-    gene_names = resolve_stable_gene_names(frozen_gene_panel_df)
+    if gene_name_order is not None:
+        gene_names = [
+            _normalize_gene_name(g)
+            for g in gene_name_order
+            if _normalize_gene_name(g)
+        ]
+    else:
+        gene_names = resolve_stable_gene_names(frozen_gene_panel_df)
     feature_names = [_gene_feature_name(g) for g in gene_names]
     if not gene_names:
         return RawGeneFeatureTable(

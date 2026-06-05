@@ -1412,6 +1412,21 @@ def main() -> None:
         help="Optional lower bound for detector selected DMPs in FeatureCuts mode.",
     )
     parser.add_argument(
+        "--stability-gene-featurecuts",
+        action="store_true",
+        help=(
+            "During MC stability runs, run methyl-mapper + gene FeatureCuts after detector "
+            "and aggregate stable genes from classifier gene panels."
+        ),
+    )
+    parser.add_argument(
+        "--stability-min-selected-genes",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Optional lower bound for gene FeatureCuts selected gene count.",
+    )
+    parser.add_argument(
         "--resume",
         nargs="?",
         const=0,
@@ -2470,6 +2485,7 @@ def main() -> None:
             gene_min_freq=config.stability_gene_freq,
             min_balanced_accuracy=config.stability_min_balanced_accuracy,
             prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+            prefer_classifier_gene_panels=bool(config.stability_gene_featurecuts_enabled),
             dual_cutoff_enabled=bool(config.stability_dual_cutoff_enabled),
             relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
             relaxed_multiplier=config.stability_relaxed_multiplier,
@@ -2496,7 +2512,12 @@ def main() -> None:
                     f"strict={tier.get('n_strict_selected')} relaxed={tier.get('n_relaxed_selected')}"
                 )
         gs = stability_summary.get("gene_stability") or {}
-        print(f"  Stable genes: {gs.get('stable_genes_at_threshold', 0)} (non-zero only if enricher ran in iterations)")
+        gene_source = (
+            "classifier gene panels"
+            if config.stability_gene_featurecuts_enabled
+            else "enricher outputs (after --freeze)"
+        )
+        print(f"  Stable genes: {gs.get('stable_genes_at_threshold', 0)} (from {gene_source})")
         print("Done.")
         return
 
@@ -2580,6 +2601,18 @@ def main() -> None:
     n_step_tasks = 1 if config.predictor_only else (
         (5 if config.skip_enricher else 6) if config.run_mapper_and_enricher else 4
     )
+    if not config.predictor_only and bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
+        n_step_tasks += 2
+
+    if bool(getattr(config, "stability_gene_featurecuts_enabled", False)) and not bool(
+        getattr(config, "stability_featurecuts_enabled", False)
+    ):
+        print(
+            "Warning: --stability-gene-featurecuts is enabled but DMP FeatureCuts "
+            "(stability_featurecuts_enabled) is not. Gene FeatureCuts will fall back to "
+            "discovery DMP exports when classifier panels are missing.",
+            file=sys.stderr,
+        )
 
     if use_rich and console is not None:
         progress = Progress(
@@ -3015,6 +3048,7 @@ def main() -> None:
             gene_min_freq=config.stability_gene_freq,
             min_balanced_accuracy=config.stability_min_balanced_accuracy,
             prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+            prefer_classifier_gene_panels=bool(config.stability_gene_featurecuts_enabled),
             dual_cutoff_enabled=bool(config.stability_dual_cutoff_enabled),
             relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
             relaxed_multiplier=config.stability_relaxed_multiplier,
@@ -3042,7 +3076,12 @@ def main() -> None:
                     f"strict={tier.get('n_strict_selected')} relaxed={tier.get('n_relaxed_selected')}"
                 )
         gs = stability_summary.get("gene_stability") or {}
-        print(f"  Stable genes: {gs.get('stable_genes_at_threshold', 0)} (non-zero only if enricher ran in iterations)")
+        gene_source = (
+            "classifier gene panels"
+            if config.stability_gene_featurecuts_enabled
+            else "enricher outputs (after --freeze)"
+        )
+        print(f"  Stable genes: {gs.get('stable_genes_at_threshold', 0)} (from {gene_source})")
 
     df = build_metrics_table(rows)
     all_metrics_csv = monte_carlo_runs_root / "all_metrics.csv"

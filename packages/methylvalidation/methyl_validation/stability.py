@@ -3,8 +3,8 @@ Stability analysis across Monte Carlo runs.
 
 Counts DMPs in detector discovery exports per iteration; optionally restricts
 to iterations with ``balanced_accuracy`` above a threshold (from detector
-validation or, when present, predictor metrics). Gene stability is computed
-only when enricher outputs exist (e.g. after ``--freeze``, not during MC).
+validation or, when present, predictor metrics). Gene stability can use
+classifier gene panels from gene FeatureCuts (MC) or enricher outputs (freeze).
 """
 
 from __future__ import annotations
@@ -128,6 +128,20 @@ def load_enricher_genes(run_dir: Path) -> Optional[pd.DataFrame]:
             except Exception:
                 continue
     return None
+
+
+def load_classifier_genes(run_dir: Path) -> Optional[pd.DataFrame]:
+    """Load gene FeatureCuts classifier panel from a MC run directory."""
+    csv_path = run_dir / "gene_stability" / "genes-classifier.csv"
+    if not csv_path.is_file():
+        return None
+    try:
+        df = pd.read_csv(csv_path)
+    except Exception:
+        return None
+    if df.empty or "gene_name" not in df.columns:
+        return None
+    return df
 
 
 def _numeric_summary(values: List[float]) -> Dict[str, Any]:
@@ -1122,28 +1136,85 @@ def evaluate_dmp_stability_convergence(
 
 
 def compute_gene_stability(
-    monte_carlo_runs_root: Path, min_frequency: float = 0.5
+    monte_carlo_runs_root: Path,
+    min_frequency: float = 0.5,
+    *,
+    min_balanced_accuracy: Optional[float] = None,
+    prefer_classifier_gene_panels: bool = False,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-    """Count gene appearance frequency from enricher outputs."""
-    runs = sorted(monte_carlo_runs_root.glob("run_*"))
+    """Count gene appearance frequency across MC runs."""
+    runs = _list_monte_carlo_run_dirs(monte_carlo_runs_root)
     gene_counts: Counter = Counter()
+    gene_importance_sum: Dict[str, float] = defaultdict(float)
+    gene_importance_runs: Dict[str, int] = defaultdict(int)
+    gene_effect_sum: Dict[str, float] = defaultdict(float)
+    gene_effect_runs: Dict[str, int] = defaultdict(int)
     run_count = 0
+    skipped_no_genes = 0
+    skipped_low_ba = 0
 
     for run_dir in runs:
-        df = load_enricher_genes(run_dir)
+        if prefer_classifier_gene_panels:
+            df = load_classifier_genes(run_dir)
+            if df is None:
+                df = load_enricher_genes(run_dir)
+        else:
+            df = load_enricher_genes(run_dir)
         if df is None or "gene_name" not in df.columns:
+            skipped_no_genes += 1
             continue
+        if min_balanced_accuracy is not None:
+            ba = run_balanced_accuracy(run_dir)
+            if ba is None or ba < float(min_balanced_accuracy):
+                skipped_low_ba += 1
+                continue
         run_count += 1
-        for gene in df["gene_name"].dropna().astype(str):
-            gene_counts[gene.strip()] += 1
+        seen_genes: set[str] = set()
+        for _, row in df.iterrows():
+            gene = str(row.get("gene_name") or "").strip()
+            if not gene:
+                continue
+            seen_genes.add(gene)
+        for gene in seen_genes:
+            gene_counts[gene] += 1
+        for gene in seen_genes:
+            gene_rows = df[df["gene_name"].astype(str).str.strip() == gene]
+            if gene_rows.empty:
+                continue
+            imp = pd.to_numeric(gene_rows.get("gene_importance"), errors="coerce")
+            if imp is not None and imp.notna().any():
+                gene_importance_sum[gene] += float(imp.mean())
+                gene_importance_runs[gene] += 1
+            eff = pd.to_numeric(gene_rows.get("mean_effect_size"), errors="coerce")
+            if eff is not None and eff.notna().any():
+                gene_effect_sum[gene] += float(eff.mean())
+                gene_effect_runs[gene] += 1
 
     if run_count == 0:
-        return pd.DataFrame(), {}
+        return pd.DataFrame(), {
+            "n_runs_analyzed": 0,
+            "total_unique_genes": 0,
+            "stable_genes_at_threshold": 0,
+            "min_frequency": min_frequency,
+            "skipped_no_gene_panel": skipped_no_genes,
+            "skipped_low_balanced_accuracy": skipped_low_ba,
+            "prefer_classifier_gene_panels": bool(prefer_classifier_gene_panels),
+        }
 
     data = []
     for gene, count in gene_counts.items():
         freq = count / run_count
-        data.append({"gene_name": gene, "frequency": freq, "count": count, "n_runs": run_count})
+        row: Dict[str, Any] = {
+            "gene_name": gene,
+            "frequency": freq,
+            "count": count,
+            "n_runs": run_count,
+        }
+        if gene_importance_runs.get(gene, 0) > 0:
+            row["gene_importance"] = gene_importance_sum[gene] / gene_importance_runs[gene]
+        if gene_effect_runs.get(gene, 0) > 0:
+            row["mean_effect_size"] = gene_effect_sum[gene] / gene_effect_runs[gene]
+        data.append(row)
 
     df = pd.DataFrame(data).sort_values("frequency", ascending=False)
 
@@ -1153,9 +1224,38 @@ def compute_gene_stability(
         "total_unique_genes": len(gene_counts),
         "stable_genes_at_threshold": len(stable),
         "min_frequency": min_frequency,
+        "skipped_no_gene_panel": skipped_no_genes,
+        "skipped_low_balanced_accuracy": skipped_low_ba,
+        "prefer_classifier_gene_panels": bool(prefer_classifier_gene_panels),
     }
 
     return df, summary
+
+
+def write_stable_gene_panel(
+    gene_freq_df: pd.DataFrame,
+    output_dir: Path,
+    min_frequency: float = 0.5,
+    top_n: Optional[int] = None,
+) -> Path:
+    """Write stable genes as a production gene panel."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if gene_freq_df.empty:
+        stable = pd.DataFrame(
+            columns=["gene_name", "frequency", "count", "n_runs", "gene_importance", "mean_effect_size"]
+        )
+    else:
+        stable = gene_freq_df[gene_freq_df["frequency"] >= float(min_frequency)].copy()
+        stable = stable.sort_values(
+            ["frequency", "gene_importance", "mean_effect_size", "gene_name"],
+            ascending=[False, False, False, True],
+            na_position="last",
+        )
+        if top_n is not None and int(top_n) > 0:
+            stable = stable.head(int(top_n))
+    out_path = output_dir / "stable_genes_production.csv"
+    stable.to_csv(out_path, index=False)
+    return out_path
 
 
 def write_stable_panel(
@@ -1289,6 +1389,7 @@ def run_stability_analysis(
     top_n_dmps: Optional[int] = None,
     min_balanced_accuracy: Optional[float] = None,
     prefer_classifier_panel_dmps: bool = False,
+    prefer_classifier_gene_panels: bool = False,
     dual_cutoff_enabled: bool = False,
     relaxed_cutoff_mode: str = "elbow_log_score",
     relaxed_multiplier: float = 0.5,
@@ -1310,10 +1411,16 @@ def run_stability_analysis(
         min_balanced_accuracy=min_balanced_accuracy,
         prefer_classifier_panel_dmps=prefer_classifier_panel_dmps,
     )
-    gene_df, gene_summary = compute_gene_stability(monte_carlo_runs_root, gene_min_freq)
+    gene_df, gene_summary = compute_gene_stability(
+        monte_carlo_runs_root,
+        gene_min_freq,
+        min_balanced_accuracy=min_balanced_accuracy,
+        prefer_classifier_gene_panels=prefer_classifier_gene_panels,
+    )
     detector_param_summary = compute_detector_parameter_stability(monte_carlo_runs_root)
 
     stable_dmp_path = None
+    stable_gene_path = None
     selected_dmp_df = pd.DataFrame()
     strict_dmp_path = None
     relaxed_dmp_path = None
@@ -1419,11 +1526,19 @@ def run_stability_analysis(
             dmp_df, selected_dmp_df, output_dir
         )
 
+    if prefer_classifier_gene_panels or not gene_df.empty:
+        stable_gene_path = write_stable_gene_panel(
+            gene_df,
+            output_dir,
+            min_frequency=gene_min_freq,
+        )
+
     summary = {
         "dmp_stability": dmp_summary,
         "gene_stability": gene_summary,
         "detector_parameters": detector_param_summary,
         "stable_dmp_csv": str(stable_dmp_path) if stable_dmp_path else None,
+        "stable_gene_csv": str(stable_gene_path) if stable_gene_path else None,
         "stable_dmp_csv_strict": str(strict_dmp_path) if strict_dmp_path else None,
         "stable_dmp_csv_relaxed": str(relaxed_dmp_path) if relaxed_dmp_path else None,
         "stable_dmp_scored_csv": str(scored_dmp_path) if scored_dmp_path else None,
@@ -1542,11 +1657,17 @@ def _merge_stable_dmp_panels(
     return merged_path
 
 
-def _normalize_production_ecdf_backend(project_dict: Dict[str, Any]) -> None:
+def _normalize_production_ecdf_backend(
+    project_dict: Dict[str, Any],
+    *,
+    config: Optional["MonteCarloConfig"] = None,
+    stable_gene_csv: Optional[str | Path] = None,
+) -> None:
     """
     Patch production validation ECDF params so --model uses a safe default axis.
 
-    Honors explicit raw_gene in the source project; otherwise defaults to raw_dmp.
+    Honors explicit raw_gene in the source project; when gene stability is enabled
+    or a stable gene panel is present, defaults to raw_gene. Otherwise raw_dmp.
     Always disables auto aggregated observed-hybrid unless explicitly enabled.
     """
     step_cfg = project_dict.setdefault("step_config", {})
@@ -1556,7 +1677,19 @@ def _normalize_production_ecdf_backend(project_dict: Dict[str, Any]) -> None:
     params = ecdf_profile.setdefault("params", {})
 
     requested_mode = str(params.get("feature_mode") or "raw_dmp").strip().lower()
-    if requested_mode == "raw_gene":
+    use_raw_gene = requested_mode == "raw_gene"
+    if not use_raw_gene:
+        if config is not None and bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
+            use_raw_gene = True
+        elif stable_gene_csv is not None and Path(stable_gene_csv).is_file():
+            use_raw_gene = True
+        else:
+            model_bundle_cfg = step_cfg.get("model_bundle") or {}
+            stability_gene_panel = model_bundle_cfg.get("stability_gene_panel")
+            if stability_gene_panel and Path(str(stability_gene_panel)).is_file():
+                use_raw_gene = True
+
+    if use_raw_gene:
         params["feature_mode"] = "raw_gene"
         params["feature_family_set"] = "gene"
     else:
@@ -1638,7 +1771,29 @@ def freeze_production_model(
         project_dict["output_base"] = str(prod_dir)
 
     prod_project_path = prod_dir / "project.json"
-    _normalize_production_ecdf_backend(project_dict)
+
+    stable_gene_csv: Optional[Path] = None
+    if config is not None and getattr(config, "freeze_stable_gene_csv", None):
+        stable_gene_csv = Path(str(config.freeze_stable_gene_csv))
+    if stable_gene_csv is None or not stable_gene_csv.is_file():
+        default_gene_csv = monte_carlo_runs_root / "stability" / "stable_genes_production.csv"
+        if default_gene_csv.is_file():
+            stable_gene_csv = default_gene_csv
+
+    bundle_dir = prod_dir / "model_bundle"
+    stability_gene_panel_path: Optional[Path] = None
+    if stable_gene_csv is not None and stable_gene_csv.is_file():
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+        stability_gene_panel_path = bundle_dir / "stable_genes_from_stability.csv"
+        shutil.copy2(stable_gene_csv, stability_gene_panel_path)
+        model_bundle_cfg = project_dict.setdefault("step_config", {}).setdefault("model_bundle", {})
+        model_bundle_cfg["stability_gene_panel"] = str(stability_gene_panel_path)
+
+    _normalize_production_ecdf_backend(
+        project_dict,
+        config=config,
+        stable_gene_csv=stability_gene_panel_path or stable_gene_csv,
+    )
     with open(prod_project_path, "w", encoding="utf-8") as f:
         json.dump(project_dict, f, indent=2)
 
@@ -1689,6 +1844,11 @@ def freeze_production_model(
                     if (config is not None and getattr(config, "freeze_top_genes", None) is not None)
                     else None
                 ),
+                stability_gene_panel_path=(
+                    str(stability_gene_panel_path)
+                    if stability_gene_panel_path is not None and stability_gene_panel_path.is_file()
+                    else None
+                ),
             )
             with open(prod_project_path, encoding="utf-8") as f:
                 prod_project_payload = json.load(f)
@@ -1718,6 +1878,9 @@ def freeze_production_model(
     summary = {
         "output_dir": str(prod_dir),
         "fixed_dmp_panel": str(merged_panel),
+        "stable_gene_panel": (
+            str(stability_gene_panel_path) if stability_gene_panel_path is not None else None
+        ),
         "production_project": str(prod_project_path),
         "mapper_annotation_cache": mapper_annotation_cache,
         "frozen_gene_panel": frozen_gene_panel,

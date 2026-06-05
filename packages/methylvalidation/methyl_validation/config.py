@@ -723,7 +723,32 @@ class MonteCarloConfig(BaseModel):
         default=0.5,
         ge=0.0,
         le=1.0,
-        description="Minimum frequency for a gene to be considered stable (only when enricher outputs exist).",
+        description=(
+            "Minimum frequency for a gene to be considered stable. "
+            "When stability_gene_featurecuts_enabled, counts genes from per-run classifier gene panels."
+        ),
+    )
+    stability_gene_featurecuts_enabled: bool = Field(
+        default=False,
+        description=(
+            "If true, each MC iteration runs methyl-mapper then gene FeatureCuts (ECDF OvR k-search) "
+            "after detector, and stability aggregates stable genes from genes-classifier exports."
+        ),
+    )
+    stability_min_selected_genes: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Optional lower bound for gene classifier panel size in gene FeatureCuts mode. "
+            "Final selected k is max(featurecuts_k, stability_min_selected_genes)."
+        ),
+    )
+    freeze_stable_gene_csv: Optional[str] = Field(
+        default=None,
+        description=(
+            "Path to stable_genes_production.csv for freeze gene-axis wiring "
+            "(default: monte_carlo_runs/stability/stable_genes_production.csv when present)."
+        ),
     )
     stability_dual_cutoff_enabled: bool = Field(
         default=False,

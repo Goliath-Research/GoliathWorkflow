@@ -92,6 +92,7 @@ def aggregate_discovery_monte_carlo(
             gene_min_freq=config.stability_gene_freq,
             min_balanced_accuracy=config.stability_min_balanced_accuracy,
             prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+            prefer_classifier_gene_panels=bool(config.stability_gene_featurecuts_enabled),
             dual_cutoff_enabled=bool(config.stability_dual_cutoff_enabled),
             relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
             relaxed_multiplier=config.stability_relaxed_multiplier,

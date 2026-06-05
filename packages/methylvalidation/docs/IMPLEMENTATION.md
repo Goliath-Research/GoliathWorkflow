@@ -69,8 +69,8 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 
 ### Package mapping by stage
 
-- **MC loop (`methyl-validation` default, with optional `--stability`)**: per iteration runs `methyl-centroid` then `methyl-detector` (`run_pipeline_for_iteration`, `run_pipeline_for_iteration_multiclass`).
-- **`--stability`**: after the MC loop, runs in-process stability aggregation (`run_stability_analysis`) over detector discovery outputs.
+- **MC loop (`methyl-validation` default, with optional `--stability`)**: per iteration runs `methyl-centroid` then `methyl-detector` (`run_pipeline_for_iteration`, `run_pipeline_for_iteration_multiclass`). When `stability_gene_featurecuts_enabled`, also runs `methyl-mapper` and in-process gene FeatureCuts (`gene_featurecuts.run_gene_featurecuts_for_iteration`).
+- **`--stability`**: after the MC loop, runs in-process stability aggregation (`run_stability_analysis`) over detector discovery outputs and optional classifier gene panels.
 - **`--freeze`**: runs `run_pipeline_for_production`: `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, then optional `methyl-disease-progression`.
 - **`--model-mc`**: full retrain+test MC for model selection. With `--model-mc-all`, MethylValidation first builds a shared iteration set (`model_mc/shared/run_XXXX`) for split + centroid + detector, then runs backend-specific train/predict stages under `model_mc/<backend>/run_XXXX`. When split source is reusable from primary MC runs, centroid/detector artifacts are linked into shared/backend run roots instead of recomputing.
 - **`--model`**: runs `run_pipeline_for_model`. Backend comes from `step_config.validation.backend_profiles` (or validated CLI override). For `ecdf`, steps are `methyl-classifier` -> `methyl-predictor`. For `tabular_sklearn` and `generative_hybrid`, steps are in-process bundle -> train -> predict and do not re-run `methyl-detector`.

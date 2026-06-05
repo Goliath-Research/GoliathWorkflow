@@ -682,12 +682,28 @@ def build_frozen_gene_panel(
     min_dmps_per_feature: int = 1,
     gene_importance_min: Optional[float] = None,
     top_genes: Optional[int] = None,
+    stability_gene_panel_path: Optional[str | Path] = None,
 ) -> Dict[str, Any]:
     project_json_path = Path(project_json).absolute()
     out_dir = Path(output_dir).absolute()
     out_dir.mkdir(parents=True, exist_ok=True)
     genes_out = out_dir / FROZEN_GENE_PANEL_NAME
     features_out = out_dir / FROZEN_GENE_FEATURES_NAME
+
+    stability_gene_names: Optional[set[str]] = None
+    if stability_gene_panel_path is not None:
+        stability_path = Path(stability_gene_panel_path)
+        if stability_path.is_file():
+            try:
+                stability_df = pd.read_csv(stability_path)
+                if not stability_df.empty and "gene_name" in stability_df.columns:
+                    stability_gene_names = {
+                        str(g).strip()
+                        for g in stability_df["gene_name"].dropna().astype(str)
+                        if str(g).strip()
+                    }
+            except Exception:
+                stability_gene_names = None
 
     with _project_cwd(project_json_path):
         project: "ProjectConfig" = load_project(project_json_path)
@@ -783,6 +799,8 @@ def build_frozen_gene_panel(
         genes_df["comparison_label"] = genes_df["comparison_label"].astype(str)
         genes_df["gene_importance"] = pd.to_numeric(genes_df.get("gene_importance"), errors="coerce").fillna(0.0)
         genes_df["unique_dmps"] = pd.to_numeric(genes_df.get("unique_dmps"), errors="coerce").fillna(0).astype(int)
+        if stability_gene_names:
+            genes_df = genes_df[genes_df["gene_name"].isin(stability_gene_names)].copy()
         genes_df = genes_df.sort_values(
             ["comparison_label", "gene_importance", "unique_dmps", "gene_name"],
             ascending=[True, False, False, True],
