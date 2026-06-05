@@ -266,10 +266,13 @@ def run_classifier(project_json: str | Path, per_cancer_group: bool = False) -> 
 
 
 def run_mapper(project_json: str | Path, per_cancer_group: bool = False) -> tuple[int, str, str]:
-    """Run methyl-mapper --project <project_json> [--per-cancer-group]."""
+    """Run methyl-mapper --project <project_json>.
+
+    Per-comparison layout is resolved automatically from the project; methyl-mapper
+    does not accept --per-cancer-group (unlike methyl-detector/classifier).
+    """
+    del per_cancer_group  # kept for call-site compatibility
     cmd = ["methyl-mapper", "--project", str(project_json)]
-    if per_cancer_group:
-        cmd.append("--per-cancer-group")
     return run_cmd(cmd)
 
 
