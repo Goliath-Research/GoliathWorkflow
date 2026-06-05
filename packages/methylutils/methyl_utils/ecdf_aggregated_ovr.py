@@ -274,6 +274,7 @@ def train_aggregated_ecdf_ovr_package(
     package_metadata: Dict[str, Any] | None = None,
     n_bins: int = 100,
     temperature: float = 2.0,
+    classifier_type: str = AGGREGATED_ECDF_OVR_TYPE,
 ) -> Dict[str, Any]:
     y_arr = np.asarray(y, dtype=np.int32).reshape(-1)
     X_arr = np.asarray(X, dtype=np.float64)
@@ -332,8 +333,15 @@ def train_aggregated_ecdf_ovr_package(
     metadata.setdefault("n_features", int(X_arr.shape[1]))
     metadata.setdefault("n_classes", int(len(class_names)))
 
+    resolved_type = str(classifier_type or AGGREGATED_ECDF_OVR_TYPE)
+    if resolved_type not in SUPPORTED_PACKAGE_ECDF_OVR_TYPES:
+        raise ValueError(
+            f"Unsupported classifier_type {resolved_type!r}; "
+            f"expected one of {sorted(SUPPORTED_PACKAGE_ECDF_OVR_TYPES)}"
+        )
+
     return {
-        "classifier_type": AGGREGATED_ECDF_OVR_TYPE,
+        "classifier_type": resolved_type,
         "package_version": AGGREGATED_ECDF_OVR_VERSION,
         "class_names": [str(x) for x in class_names],
         "feature_schema": {

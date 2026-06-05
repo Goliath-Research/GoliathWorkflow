@@ -19,6 +19,7 @@ from methyl_utils import load_project
 from methyl_utils.ecdf_aggregated_ovr import (
     predict_aggregated_ecdf_ovr_proba,
     train_aggregated_ecdf_ovr_package,
+    GENE_ECDF_OVR_TYPE,
 )
 
 from .classification_metrics import compute_validation_metrics, resolve_class_roles
@@ -267,8 +268,8 @@ def _evaluate_gene_prefix(
         n_bins=int(max(8, n_bins)),
         temperature=1.0,
         package_metadata={"gene_featurecuts": True},
+        classifier_type=GENE_ECDF_OVR_TYPE,
     )
-    package["classifier_type"] = "ecdf_gene_one_vs_rest"
     probs, _ = predict_aggregated_ecdf_ovr_proba(package, X_va)
     pred = np.argmax(probs, axis=1).astype(int)
     class_roles = {

@@ -84,8 +84,8 @@ def train_ecdf_gene_ovr_model(
             "training_project_json": str(Path(project_json).resolve()),
             "package_notes": "Simple stable-gene ECDF OvR",
         },
+        classifier_type=GENE_ECDF_OVR_TYPE,
     )
-    package["classifier_type"] = GENE_ECDF_OVR_TYPE
     package["feature_report"] = dict(feat.report)
     package["class_roles"] = roles
     package["raw_gene"] = {
