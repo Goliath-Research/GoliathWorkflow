@@ -5,8 +5,10 @@ interface
 uses
   System.Classes,
   System.JSON,
+  System.UITypes,
   uniGUIForm,
   uniGUIApplication,
+  uniGUITypes,
   uniPropertyGrid,
   uniButton,
   uniPanel,
@@ -102,7 +104,7 @@ var
 begin
   Result := False;
   AEdited := nil;
-  Form := TUniNestedEditorForm.Create(UniApplication);
+  Form := TUniNestedEditorForm.Create(uniGUIApplication.UniApplication);
   try
     Form.FSchema := ASchema;
     Form.FWorking := AObject.Clone as TJSONObject;

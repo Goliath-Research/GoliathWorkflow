@@ -3,12 +3,14 @@ unit MainForm;
 interface
 
 uses
+  Winapi.Windows,
   System.Classes,
   System.JSON,
   System.SysUtils,
   uniGUIForm,
   uniGUIApplication,
   uniGUITypes,
+  uniGUIVars,
   uniGUIAbstractClasses,
   uniPanel,
   uniComboBox,
@@ -17,7 +19,8 @@ uses
   uniButton,
   uniFileUpload,
   SchemaNode,
-  SchemaDefaults;
+  SchemaDefaults, uniGUIBaseClasses, uniGUIClasses, uniMultiItem, Vcl.Controls,
+  Vcl.Forms;
 
 type
   TUniMainForm = class(TUniForm)
@@ -32,12 +35,11 @@ type
     UploadJson: TUniFileUpload;
     MemoJson: TUniMemo;
     procedure UniFormCreate(Sender: TObject);
-    procedure UniFormDestroy(Sender: TObject);
     procedure cboSchemaChange(Sender: TObject);
     procedure btnNewJsonClick(Sender: TObject);
     procedure btnEditJsonClick(Sender: TObject);
     procedure btnDownloadJsonClick(Sender: TObject);
-    procedure UploadJsonCompleted(Sender: TObject; AStream: TStream);
+    procedure UploadJsonCompleted(Sender: TObject; AStream: TFileStream);
   private
     procedure ReloadCatalog;
     procedure LoadSelectedSchema;
@@ -57,9 +59,7 @@ implementation
 uses
   MainModule,
   System.IOUtils,
-  System.JSON,
-  SchemaEditorService,
-  UniSession;
+  SchemaEditorService;
 
 function UniMainForm: TUniMainForm;
 begin
@@ -70,10 +70,6 @@ procedure TUniMainForm.UniFormCreate(Sender: TObject);
 begin
   lblSchemasRootValue.Caption := UniMainModule.Settings.GetSchemasRoot;
   ReloadCatalog;
-end;
-
-procedure TUniMainForm.UniFormDestroy(Sender: TObject);
-begin
 end;
 
 function TUniMainForm.CurrentSchemaIndex: Integer;
@@ -169,7 +165,7 @@ begin
   end;
 end;
 
-procedure TUniMainForm.UploadJsonCompleted(Sender: TObject; AStream: TStream);
+procedure TUniMainForm.UploadJsonCompleted(Sender: TObject; AStream: TFileStream);
 var
   Text: string;
   Bytes: TBytes;

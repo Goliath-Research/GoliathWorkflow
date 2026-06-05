@@ -31,6 +31,5 @@ begin
   ReportMemoryLeaksOnShutdown := True;
   Application.Initialize;
   TUniServerModule.Create(Application);
-  TUniGUIMainModule.Create(Application);
   Application.Run;
 end.

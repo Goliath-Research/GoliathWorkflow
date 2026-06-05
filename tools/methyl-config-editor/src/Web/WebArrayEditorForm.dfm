@@ -1,21 +1,23 @@
 object UniWebArrayEditorForm: TUniWebArrayEditorForm
   Left = 0
   Top = 0
-  Width = 640
-  Height = 480
-  Text = ''
-  BorderStyle = bsDialog
+  ClientHeight = 441
+  ClientWidth = 624
   Caption = 'Array Editor'
-  Color = clBtnFace
+  BorderStyle = bsDialog
+  OldCreateOrder = False
+  MonitoredKeys.Keys = <>
+  TextHeight = 15
   object PanelButtons: TUniPanel
     Left = 0
     Top = 0
     Width = 120
-    Height = 430
+    Height = 391
     Hint = ''
     Align = alLeft
-    TabOrder = 1
+    TabOrder = 0
     Caption = ''
+    ExplicitHeight = 430
     object btnAdd: TUniButton
       Left = 10
       Top = 10
@@ -70,21 +72,25 @@ object UniWebArrayEditorForm: TUniWebArrayEditorForm
   object ListBox: TUniListBox
     Left = 120
     Top = 0
-    Width = 520
-    Height = 430
+    Width = 504
+    Height = 391
     Hint = ''
     Align = alClient
     TabOrder = 2
+    ExplicitWidth = 520
+    ExplicitHeight = 430
   end
   object PanelBottom: TUniPanel
     Left = 0
-    Top = 430
-    Width = 640
+    Top = 391
+    Width = 624
     Height = 50
     Hint = ''
     Align = alBottom
-    TabOrder = 3
+    TabOrder = 1
     Caption = ''
+    ExplicitTop = 430
+    ExplicitWidth = 640
     object btnOK: TUniButton
       Left = 440
       Top = 10

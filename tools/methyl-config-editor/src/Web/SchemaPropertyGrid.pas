@@ -8,6 +8,8 @@ uses
   System.SysUtils,
   Spring.Collections,
   uniGUIApplication,
+  uniGUIDialogs,
+  uniGUITypes,
   uniPropertyGrid,
   SchemaNode,
   SchemaBranchResolver,
@@ -71,6 +73,9 @@ type
   end;
 
 implementation
+
+type
+  TUniPropertyGridAccess = class(TUniPropertyGrid);
 
 constructor TSchemaPropertyGridController.Create(AGrid: TUniPropertyGrid);
 begin
@@ -190,7 +195,6 @@ var
   Pair: TJSONPair;
   Key: string;
   EntrySchema: TSchemaNode;
-  Row: TGridPropertyMeta;
   IsComplex: Boolean;
 begin
   for Pair in FWorking do
@@ -209,7 +213,6 @@ var
   Prop: TSchemaProperty;
   PropNode: TSchemaNode;
   IsComplex: Boolean;
-  Row: TGridPropertyMeta;
 begin
   for Prop in EffectiveSchema.PropertyItems do
   begin
@@ -237,7 +240,7 @@ begin
     AddDictionaryRows
   else
     AddPropertyRows(Effective);
-  FGrid.PopulateGrid;
+  TUniPropertyGridAccess(FGrid).PopulateGrid;
 end;
 
 function TSchemaPropertyGridController.GetPropertyValue(const PropName: string): TJSONValue;

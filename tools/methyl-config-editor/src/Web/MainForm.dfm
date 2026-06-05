@@ -1,15 +1,16 @@
 object UniMainForm: TUniMainForm
   Left = 0
   Top = 0
-  Width = 960
-  Height = 640
-  Text = ''
+  ClientHeight = 601
+  ClientWidth = 944
   Caption = 'JSON Schema Editor (Web)'
-  Color = clBtnFace
+  OldCreateOrder = False
+  MonitoredKeys.Keys = <>
+  TextHeight = 15
   object PanelTop: TUniPanel
     Left = 0
     Top = 0
-    Width = 960
+    Width = 944
     Height = 90
     Hint = ''
     Align = alTop
@@ -18,7 +19,7 @@ object UniMainForm: TUniMainForm
     object lblSchema: TUniLabel
       Left = 16
       Top = 12
-      Width = 45
+      Width = 39
       Height = 13
       Hint = ''
       Caption = 'Schema'
@@ -32,12 +33,13 @@ object UniMainForm: TUniMainForm
       Hint = ''
       Text = ''
       TabOrder = 2
+      IconItems = <>
       OnChange = cboSchemaChange
     end
     object lblSchemasRoot: TUniLabel
       Left = 16
       Top = 44
-      Width = 72
+      Width = 69
       Height = 13
       Hint = ''
       Caption = 'Schemas root'
@@ -46,7 +48,7 @@ object UniMainForm: TUniMainForm
     object lblSchemasRootValue: TUniLabel
       Left = 104
       Top = 44
-      Width = 500
+      Width = 63
       Height = 13
       Hint = ''
       Caption = '(server path)'
@@ -72,24 +74,6 @@ object UniMainForm: TUniMainForm
       TabOrder = 6
       OnClick = btnEditJsonClick
     end
-    object UploadJson: TUniFileUpload
-      Left = 672
-      Top = 8
-      Width = 120
-      Height = 28
-      Hint = ''
-      Filter = '.json'
-      Messages.Uploading = 'Uploading...'
-      Messages.PleaseWait = 'Please wait'
-      Messages.UploadError = 'Upload error'
-      Messages.UploadTimeout = 'Timeout occurred'
-      Messages.Uploaded = 'Uploaded'
-      Messages.UploadedMsg = 'Upload completed'
-      Messages.BrowseText = 'Upload JSON'
-      Messages.DragDropText = 'Drop JSON file'
-      Overwrite = True
-      OnCompleted = UploadJsonCompleted
-    end
     object btnDownloadJson: TUniButton
       Left = 800
       Top = 8
@@ -104,13 +88,33 @@ object UniMainForm: TUniMainForm
   object MemoJson: TUniMemo
     Left = 0
     Top = 90
-    Width = 960
-    Height = 550
+    Width = 944
+    Height = 511
     Hint = ''
     Lines.Strings = (
       '{}')
     Align = alClient
-    TabOrder = 2
     ReadOnly = True
+    TabOrder = 0
+  end
+  object UploadJson: TUniFileUpload
+    Filter = '.json'
+    Title = 'Upload'
+    Messages.Uploading = 'Uploading...'
+    Messages.PleaseWait = 'Please wait'
+    Messages.Cancel = 'Cancel'
+    Messages.Processing = 'Processing...'
+    Messages.UploadError = 'Upload error'
+    Messages.Upload = 'Upload'
+    Messages.NoFileError = 'Please select a file'
+    Messages.BrowseText = 'Upload JSON'
+    Messages.UploadTimeout = 'Timeout occurred'
+    Messages.MaxSizeError = 'File is bigger than maximum allowed size'
+    Messages.MaxFilesError = 'You can upload maximum %d files.'
+    Overwrite = True
+    Width = 120
+    OnCompleted = UploadJsonCompleted
+    Left = 672
+    Top = 8
   end
 end

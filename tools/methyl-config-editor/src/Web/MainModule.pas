@@ -21,7 +21,6 @@ type
     FHasJsonValue: Boolean;
     FUploadedFileName: string;
   public
-    constructor Create(AOwner: TComponent); override;
     destructor Destroy; override;
     procedure ReloadCatalog;
     procedure LoadSelectedSchema(const SchemaPath: string);
@@ -43,27 +42,23 @@ implementation
 
 uses
   UniGUIVars,
+  uniGUIApplication,
   JsonSchemaLoader,
   System.IOUtils;
 
 function UniMainModule: TUniMainModule;
 begin
   Result := TUniMainModule(UniApplication.UniMainModule);
-end;
-
-constructor TUniMainModule.Create(AOwner: TComponent);
-var
-  IniPath: string;
-begin
-  inherited;
-  EnableSynchronousOperations := True;
-  IniPath := TPath.Combine(ExtractFilePath(ParamStr(0)),
-    'methyl-config-editor-web.ini');
-  FSettings := TServerSettings.Create(IniPath);
-  FCatalog := TSchemaCatalog.Create;
-  TSchemaCatalog.SetCurrent(FCatalog);
-  FDocument := TJsonDocumentModel.Create;
-  ReloadCatalog;
+  with Result do
+  begin
+    EnableSynchronousOperations := True;
+    var IniPath := TPath.Combine(ExtractFilePath(ParamStr(0)), 'methyl-config-editor-web.ini');
+    FSettings := TServerSettings.Create(IniPath);
+    FCatalog := TSchemaCatalog.Create;
+    TSchemaCatalog.SetCurrent(FCatalog);
+    FDocument := TJsonDocumentModel.Create;
+    ReloadCatalog;
+  end;
 end;
 
 destructor TUniMainModule.Destroy;

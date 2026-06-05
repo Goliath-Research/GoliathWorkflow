@@ -5,9 +5,10 @@ interface
 uses
   Classes,
   SysUtils,
+  uniGUIServer,
   uniGUIMainModule,
-  uniGUIApplication,
-  uniGUICustomServer;
+  uniGUIApplication;
+//  uniGUICustomServer;
 
 type
   TUniServerModule = class(TUniGUIServerModule)

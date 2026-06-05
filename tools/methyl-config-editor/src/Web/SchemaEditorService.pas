@@ -10,6 +10,9 @@ uses
 
 type
   TSchemaEditorService = class
+  private
+    class function EditWrappedRootValue(const ATitle: string; ASchema: TSchemaNode;
+      ASourceValue: TJSONValue; out AEditedValue: TJSONValue): Boolean;
   public
     class function CanUseRootValue(AValue: TJSONValue; ASchema: TSchemaNode): Boolean;
     class function EditValue(const ATitle: string; ASchema: TSchemaNode;
@@ -108,6 +111,7 @@ begin
             WorkingObj := TSchemaDefaults.CreateDefaultObject(ASchema)
           else
             WorkingObj := TJSONObject.Create;
+          EditedObj := nil;
           try
             if TUniNestedEditorForm.EditObject(ATitle, ASchema, WorkingObj, EditedObj) then
             begin
@@ -127,6 +131,7 @@ begin
             WorkingArr := TJSONArray(Working)
           else
             WorkingArr := TJSONArray.Create;
+          EditedArr := nil;
           try
             if TUniWebArrayEditorForm.EditArray(ATitle, ASchema, WorkingArr, EditedArr) then
             begin

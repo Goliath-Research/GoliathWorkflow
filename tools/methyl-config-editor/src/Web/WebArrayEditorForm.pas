@@ -5,12 +5,16 @@ interface
 uses
   System.Classes,
   System.JSON,
+  System.SysUtils,
+  System.UITypes,
   uniGUIForm,
   uniGUIApplication,
+  uniGUITypes,
   uniButton,
   uniPanel,
   uniListBox,
-  SchemaNode;
+  SchemaNode, uniGUIClasses, uniMultiItem, Vcl.Controls, Vcl.Forms,
+  uniGUIBaseClasses;
 
 type
   TUniWebArrayEditorForm = class(TUniForm)
@@ -24,7 +28,6 @@ type
     btnUp: TUniButton;
     btnDown: TUniButton;
     ListBox: TUniListBox;
-    procedure UniFormCreate(Sender: TObject);
     procedure btnAddClick(Sender: TObject);
     procedure btnRemoveClick(Sender: TObject);
     procedure btnEditClick(Sender: TObject);
@@ -58,10 +61,6 @@ uses
 
 {$R *.dfm}
 
-procedure TUniWebArrayEditorForm.UniFormCreate(Sender: TObject);
-begin
-end;
-
 function TUniWebArrayEditorForm.ItemSchema: TSchemaNode;
 begin
   Result := FSchema.ItemsSchema;
@@ -91,7 +90,7 @@ begin
     ListBox.Items.Add(ItemSummary(I));
 end;
 
-procedure TUniWebArrayEditorForm.EditWrappedValue(const ATitle: string;
+function TUniWebArrayEditorForm.EditWrappedValue(const ATitle: string;
   ASchema: TSchemaNode; AValue: TJSONValue; out AEditedValue: TJSONValue): Boolean;
 begin
   Result := TSchemaEditorService.EditValue(ATitle, ASchema, AValue, AEditedValue);
@@ -107,6 +106,8 @@ var
   ChildTitle: string;
   Schema: TSchemaNode;
   Edited: TJSONValue;
+  EditedObj: TJSONObject;
+  EditedArr: TJSONArray;
 begin
   if (Index < 0) or (Index >= FWorking.Count) then
     Exit;
@@ -126,10 +127,15 @@ begin
       TJsonArrayOps.ReplaceElement(FWorking, Index, Obj);
     end;
     CloneObj := Obj.Clone as TJSONObject;
+    EditedObj := nil;
     try
-      if TUniNestedEditorForm.EditObject(ChildTitle, Schema, CloneObj, Edited) then
-        TJsonArrayOps.ReplaceElement(FWorking, Index, Edited);
+      if TUniNestedEditorForm.EditObject(ChildTitle, Schema, CloneObj, EditedObj) then
+      begin
+        TJsonArrayOps.ReplaceElement(FWorking, Index, EditedObj);
+        EditedObj := nil;
+      end;
     finally
+      EditedObj.Free;
       CloneObj.Free;
     end;
     RefreshList;
@@ -143,10 +149,15 @@ begin
     else
       Obj := TJSONObject.Create;
     CloneObj := Obj.Clone as TJSONObject;
+    EditedObj := nil;
     try
-      if TUniNestedEditorForm.EditObject(ChildTitle, Schema, CloneObj, Edited) then
-        TJsonArrayOps.ReplaceElement(FWorking, Index, Edited);
+      if TUniNestedEditorForm.EditObject(ChildTitle, Schema, CloneObj, EditedObj) then
+      begin
+        TJsonArrayOps.ReplaceElement(FWorking, Index, EditedObj);
+        EditedObj := nil;
+      end;
     finally
+      EditedObj.Free;
       CloneObj.Free;
       if Obj <> Val then
         Obj.Free;
@@ -162,10 +173,15 @@ begin
     else
       Arr := TJSONArray.Create;
     CloneArr := Arr.Clone as TJSONArray;
+    EditedArr := nil;
     try
-      if TUniWebArrayEditorForm.EditArray(ChildTitle, Schema, CloneArr, Edited) then
-        TJsonArrayOps.ReplaceElement(FWorking, Index, Edited);
+      if TUniWebArrayEditorForm.EditArray(ChildTitle, Schema, CloneArr, EditedArr) then
+      begin
+        TJsonArrayOps.ReplaceElement(FWorking, Index, EditedArr);
+        EditedArr := nil;
+      end;
     finally
+      EditedArr.Free;
       CloneArr.Free;
       if Arr <> Val then
         Arr.Free;
@@ -262,7 +278,7 @@ var
 begin
   Result := False;
   AEdited := nil;
-  Form := TUniWebArrayEditorForm.Create(UniApplication);
+  Form := TUniWebArrayEditorForm.Create(uniGUIApplication.UniApplication);
   try
     Form.FSchema := ASchema;
     Form.FWorking := AArray.Clone as TJSONArray;

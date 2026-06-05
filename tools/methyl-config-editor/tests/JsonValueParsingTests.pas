@@ -24,6 +24,7 @@ type
 implementation
 
 uses
+  System.SysUtils,
   JsonValueParsing,
   SchemaValueSummary;
 
