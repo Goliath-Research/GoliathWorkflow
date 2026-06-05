@@ -6,6 +6,9 @@
         <Projects Include="methyl-config-editor\MethylConfigEditor.dproj">
             <Dependencies/>
         </Projects>
+        <Projects Include="methyl-config-editor\MethylConfigEditorWeb.dproj">
+            <Dependencies/>
+        </Projects>
         <Projects Include="methyl-config-editor\tests\MethylConfigEditorTests.dproj">
             <Dependencies/>
         </Projects>
@@ -19,6 +22,9 @@
     </ProjectExtensions>
     <Target Name="MethylConfigEditor">
         <MSBuild Projects="methyl-config-editor\MethylConfigEditor.dproj"/>
+    </Target>
+    <Target Name="MethylConfigEditorWeb">
+        <MSBuild Projects="methyl-config-editor\MethylConfigEditorWeb.dproj"/>
     </Target>
     <Target Name="MethylConfigEditor:Clean">
         <MSBuild Projects="methyl-config-editor\MethylConfigEditor.dproj" Targets="Clean"/>
@@ -35,14 +41,20 @@
     <Target Name="MethylConfigEditorTests:Make">
         <MSBuild Projects="methyl-config-editor\tests\MethylConfigEditorTests.dproj" Targets="Make"/>
     </Target>
+    <Target Name="MethylConfigEditorWeb:Clean">
+        <MSBuild Projects="methyl-config-editor\MethylConfigEditorWeb.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="MethylConfigEditorWeb:Make">
+        <MSBuild Projects="methyl-config-editor\MethylConfigEditorWeb.dproj" Targets="Make"/>
+    </Target>
     <Target Name="Build">
-        <CallTarget Targets="MethylConfigEditor;MethylConfigEditorTests"/>
+        <CallTarget Targets="MethylConfigEditor;MethylConfigEditorWeb;MethylConfigEditorTests"/>
     </Target>
     <Target Name="Clean">
-        <CallTarget Targets="MethylConfigEditor:Clean;MethylConfigEditorTests:Clean"/>
+        <CallTarget Targets="MethylConfigEditor:Clean;MethylConfigEditorWeb:Clean;MethylConfigEditorTests:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="MethylConfigEditor:Make;MethylConfigEditorTests:Make"/>
+        <CallTarget Targets="MethylConfigEditor:Make;MethylConfigEditorWeb:Make;MethylConfigEditorTests:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

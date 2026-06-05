@@ -195,6 +195,9 @@
         <DCCReference Include="SchemaLoaderTests.pas"/>
         <DCCReference Include="JsonPathTests.pas"/>
         <DCCReference Include="JsonArrayOpsTests.pas"/>
+        <DCCReference Include="JsonValueParsingTests.pas"/>
+        <DCCReference Include="..\src\Core\JsonValueParsing.pas"/>
+        <DCCReference Include="..\src\UI\SchemaValueSummary.pas"/>
         <DCCReference Include="..\src\Schema\JsonSchemaLoader.pas"/>
         <DCCReference Include="..\src\Schema\SchemaNode.pas"/>
         <DCCReference Include="..\src\Schema\SchemaDocument.pas"/>
