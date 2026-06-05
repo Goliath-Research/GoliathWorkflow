@@ -57,6 +57,28 @@ def test_compute_gene_stability_counts_classifier_panels(tmp_path: Path):
     assert brca["frequency"] == pytest.approx(2 / 3)
 
 
+def _write_enricher_genes(run_dir: Path, genes: list[str]) -> None:
+    enricher_dir = run_dir / "enricher" / "default" / "cmp"
+    enricher_dir.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame({"gene_name": genes}).to_csv(
+        enricher_dir / "all-gene_name-combined.csv",
+        index=False,
+    )
+
+
+def test_compute_gene_stability_enricher_without_metric_columns(tmp_path: Path):
+    mc_root = tmp_path / "monte_carlo_runs"
+    for idx, genes in enumerate([["BRCA1"], ["BRCA1", "TP53"]], start=1):
+        run_dir = mc_root / f"run_{idx:04d}"
+        _write_enricher_genes(run_dir, genes)
+
+    df, summary = compute_gene_stability(mc_root, min_frequency=0.5)
+    assert summary["n_runs_analyzed"] == 2
+    assert set(df["gene_name"].astype(str)) == {"BRCA1", "TP53"}
+    assert "gene_importance" not in df.columns
+    assert "mean_effect_size" not in df.columns
+
+
 def test_write_stable_gene_panel_and_stability_analysis(tmp_path: Path):
     mc_root = tmp_path / "monte_carlo_runs"
     for idx in range(1, 4):

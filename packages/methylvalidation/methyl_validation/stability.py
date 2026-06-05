@@ -1181,14 +1181,16 @@ def compute_gene_stability(
             gene_rows = df[df["gene_name"].astype(str).str.strip() == gene]
             if gene_rows.empty:
                 continue
-            imp = pd.to_numeric(gene_rows.get("gene_importance"), errors="coerce")
-            if imp is not None and imp.notna().any():
-                gene_importance_sum[gene] += float(imp.mean())
-                gene_importance_runs[gene] += 1
-            eff = pd.to_numeric(gene_rows.get("mean_effect_size"), errors="coerce")
-            if eff is not None and eff.notna().any():
-                gene_effect_sum[gene] += float(eff.mean())
-                gene_effect_runs[gene] += 1
+            if "gene_importance" in gene_rows.columns:
+                imp = pd.to_numeric(gene_rows["gene_importance"], errors="coerce")
+                if imp.notna().any():
+                    gene_importance_sum[gene] += float(imp.mean())
+                    gene_importance_runs[gene] += 1
+            if "mean_effect_size" in gene_rows.columns:
+                eff = pd.to_numeric(gene_rows["mean_effect_size"], errors="coerce")
+                if eff.notna().any():
+                    gene_effect_sum[gene] += float(eff.mean())
+                    gene_effect_runs[gene] += 1
 
     if run_count == 0:
         return pd.DataFrame(), {
