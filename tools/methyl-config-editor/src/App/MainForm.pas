@@ -21,8 +21,7 @@ uses
   SchemaNode,
   JsonSchemaLoader,
   JsonDocumentModel,
-  SchemaDefaults,
-  PropertyEditorForm;
+  SchemaDefaults;
 
 type
   TMainForm = class(TForm)
