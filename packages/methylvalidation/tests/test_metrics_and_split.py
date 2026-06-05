@@ -77,15 +77,66 @@ def test_validation_metric_summaries_aggregate_runs():
     assert math.isclose(resource_summary["sample_sizes"]["n_processed_samples"]["mean"], 10.0)
 
 
+def test_iteration_scalar_metrics_flattens_per_class_recall(tmp_path):
+    import json
+
+    from methyl_validation.validator_metrics import _scalar_metrics_from_dict
+
+    metrics = {
+        "balanced_accuracy": 0.5,
+        "macro_recall": 0.5,
+        "per_class": [
+            {"class_index": 0, "class_name": "all", "recall": 1.0},
+            {"class_index": 1, "class_name": "PCa1", "recall": 0.25},
+            {"class_index": 2, "class_name": "PCa2", "recall": 0.5},
+        ],
+        "training_metrics": {
+            "per_class": [
+                {"class_index": 0, "class_name": "all", "recall": 0.9},
+                {"class_index": 1, "class_name": "PCa1", "recall": 0.1},
+            ]
+        },
+        "holdout_metrics": {
+            "per_class": [
+                {"class_index": 0, "class_name": "all", "recall": 0.8},
+                {"class_index": 1, "class_name": "PCa1", "recall": 0.2},
+            ]
+        },
+        "evaluation_semantics": "train_holdout",
+    }
+    flat = _scalar_metrics_from_dict(metrics)
+    assert flat["recall_all"] == 1.0
+    assert flat["recall_PCa1"] == 0.25
+    assert flat["recall_PCa2"] == 0.5
+    assert flat["training_recall_all"] == 0.9
+    assert flat["training_recall_PCa1"] == 0.1
+    assert flat["holdout_recall_all"] == 0.8
+    assert flat["holdout_recall_PCa1"] == 0.2
+
+
 def test_iteration_scalar_metrics_prefers_predictor_then_detector(tmp_path):
     import json
     run_dir = tmp_path / "run_0001"
     pred = run_dir / "predictors" / "x"
     pred.mkdir(parents=True)
     vm = pred / "validation_metrics.json"
-    vm.write_text(json.dumps({"balanced_accuracy": 0.88, "accuracy": 0.9}), encoding="utf-8")
+    vm.write_text(
+        json.dumps(
+            {
+                "balanced_accuracy": 0.88,
+                "accuracy": 0.9,
+                "per_class": [
+                    {"class_index": 0, "class_name": "healthy", "recall": 0.95},
+                    {"class_index": 1, "class_name": "cancer", "recall": 0.81},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
     m = iteration_scalar_metrics_from_run_dir(run_dir)
     assert m.get("balanced_accuracy") == 0.88
+    assert m.get("recall_healthy") == 0.95
+    assert m.get("recall_cancer") == 0.81
     assert m.get("metrics_source") == "predictor"
 
     run2 = tmp_path / "run_0002"
