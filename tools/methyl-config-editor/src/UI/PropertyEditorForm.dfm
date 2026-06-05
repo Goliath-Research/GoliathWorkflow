@@ -23,8 +23,6 @@ object PropertyEditorForm: TPropertyEditorForm
     Align = alBottom
     BevelOuter = bvNone
     TabOrder = 0
-    ExplicitTop = 669
-    ExplicitWidth = 630
     object btnOK: TButton
       Left = 448
       Top = 8
@@ -54,7 +52,5 @@ object PropertyEditorForm: TPropertyEditorForm
     Height = 701
     Align = alClient
     TabOrder = 1
-    ExplicitWidth = 630
-    ExplicitHeight = 669
   end
 end

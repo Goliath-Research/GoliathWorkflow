@@ -22,6 +22,9 @@ type
 
 implementation
 
+uses
+  Winapi.Windows;
+
 class procedure TComplexRowSupport.BuildSummaryRow(const AContext: IPropertyEditorContext;
   ARow: TPropertyRow; AValue: TJSONValue; AOnEdit, AOnClear: TNotifyEventProc);
 var
@@ -32,26 +35,24 @@ begin
   Summary.Align := alClient;
   Summary.ReadOnly := True;
   Summary.Text := TSchemaValueSummary.Describe(ARow.SchemaNode, AValue);
+  Summary.OnKeyDown := ARow.BindKeyDown(procedure(Sender: TObject;
+    var Key: Word; Shift: TShiftState)
+    begin
+      if Key in [VK_BACK, VK_DELETE] then
+      begin
+        AOnClear(Sender);
+        Key := 0;
+      end;
+    end);
   ARow.ValueControl := Summary;
 
   ARow.btnEdit := TButton.Create(ARow.ValuePanel);
   ARow.btnEdit.Parent := ARow.ValuePanel;
   ARow.btnEdit.Align := alRight;
-  ARow.btnEdit.Width := 75;
-  ARow.btnEdit.Caption := 'Edit...';
+  ARow.btnEdit.Width := 28;
+  ARow.btnEdit.Caption := '...';
   ARow.btnEdit.Tag := NativeInt(ARow);
   ARow.btnEdit.OnClick := ARow.BindNotify(AOnEdit);
-
-  if ARow.SchemaNode.Nullable then
-  begin
-    ARow.btnClear := TButton.Create(ARow.ValuePanel);
-    ARow.btnClear.Parent := ARow.ValuePanel;
-    ARow.btnClear.Align := alRight;
-    ARow.btnClear.Width := 60;
-    ARow.btnClear.Caption := 'Null';
-    ARow.btnClear.Tag := NativeInt(ARow);
-    ARow.btnClear.OnClick := ARow.BindNotify(AOnClear);
-  end;
 end;
 
 end.

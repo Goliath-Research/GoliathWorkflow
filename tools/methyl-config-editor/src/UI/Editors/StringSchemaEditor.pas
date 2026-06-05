@@ -25,8 +25,6 @@ implementation
 uses
   Vcl.Controls,
   Vcl.StdCtrls,
-  NullableRowSupport,
-  SchemaDefaults,
   SchemaValueSummary;
 
 class function TStringSchemaEditor.EditorKey: string;
@@ -58,36 +56,24 @@ begin
       ReadRow(AContext, ARow);
     end);
   ARow.ValueControl := Edit;
-  TNullableRowSupport.AddNullCheckbox(AContext, ARow, AValue,
-    procedure(Sender: TObject)
-    begin
-      if TNullableRowSupport.IsNullChecked(ARow) then
-      begin
-        AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create);
-        TNullableRowSupport.SetControlEnabled(ARow, False);
-      end
-      else
-      begin
-        AContext.SetPropertyValue(ARow.PropertyName,
-          TSchemaDefaults.CreateDefaultValue(ARow.SchemaNode));
-        TNullableRowSupport.SetControlEnabled(ARow, True);
-        CreateRow(AContext, ARow, AContext.GetPropertyValue(ARow.PropertyName));
-      end;
-    end);
-  TNullableRowSupport.SetControlEnabled(ARow, not TNullableRowSupport.IsNullChecked(ARow));
 end;
 
 procedure TStringSchemaEditor.ReadRow(const AContext: IPropertyEditorContext;
   ARow: TPropertyRow);
 begin
-  if TNullableRowSupport.IsNullChecked(ARow) then
-  begin
-    AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create);
-    Exit;
-  end;
   if ARow.ValueControl is TEdit then
+  begin
+    if TEdit(ARow.ValueControl).Text = '' then
+    begin
+      if ARow.SchemaNode.Nullable then
+        AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create)
+      else
+        AContext.ClearPropertyValue(ARow.PropertyName);
+      Exit;
+    end;
     AContext.SetPropertyValue(ARow.PropertyName,
       TJSONString.Create(TEdit(ARow.ValueControl).Text));
+  end;
 end;
 
 end.

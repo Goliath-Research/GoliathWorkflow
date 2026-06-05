@@ -50,7 +50,10 @@ begin
     skArray:
       Exit(ArrayKey);
     skDictionary:
-      Exit(DictionaryKey);
+      if ANode.PropertyCount > 0 then
+        Exit(ObjectKey)
+      else
+        Exit(DictionaryKey);
   else
     Exit(StringKey);
   end;

@@ -29,12 +29,21 @@ type
 implementation
 
 uses
+  System.SysUtils,
   Vcl.Controls,
-  Vcl.Samples.Spin,
   Vcl.StdCtrls,
-  NullableRowSupport,
-  SchemaDefaults,
   SchemaValueSummary;
+
+function TryParseJsonFloat(const Text: string; out Value: Double): Boolean;
+var
+  FormatSettings: TFormatSettings;
+begin
+  Result := TryStrToFloat(Text, Value);
+  if Result then
+    Exit;
+  FormatSettings := TFormatSettings.Create('en-US');
+  Result := TryStrToFloat(Text, Value, FormatSettings);
+end;
 
 constructor TNumberSchemaEditor.Create;
 begin
@@ -76,51 +85,57 @@ end;
 procedure TNumberSchemaEditor.CreateRow(const AContext: IPropertyEditorContext;
   ARow: TPropertyRow; AValue: TJSONValue);
 var
-  Spin: TSpinEdit;
+  Edit: TEdit;
 begin
-  Spin := TSpinEdit.Create(ARow.ValuePanel);
-  Spin.Parent := ARow.ValuePanel;
-  Spin.Align := alClient;
+  Edit := TEdit.Create(ARow.ValuePanel);
+  Edit.Parent := ARow.ValuePanel;
+  Edit.Align := alClient;
   if AValue is TJSONNumber then
-    Spin.Value := Trunc(TJSONNumber(AValue).AsDouble)
-  else
-    Spin.Value := 0;
-  Spin.Tag := NativeInt(ARow);
-  Spin.OnChange := ARow.BindNotify(procedure(Sender: TObject)
+    Edit.Text := AValue.Value
+  else if not TSchemaValueSummary.IsNullValue(AValue) then
+    Edit.Text := AValue.Value;
+  Edit.Tag := NativeInt(ARow);
+  Edit.OnChange := ARow.BindNotify(procedure(Sender: TObject)
     begin
       ReadRow(AContext, ARow);
     end);
-  ARow.ValueControl := Spin;
-  TNullableRowSupport.AddNullCheckbox(AContext, ARow, AValue,
-    procedure(Sender: TObject)
-    begin
-      if TNullableRowSupport.IsNullChecked(ARow) then
-      begin
-        AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create);
-        TNullableRowSupport.SetControlEnabled(ARow, False);
-      end
-      else
-      begin
-        AContext.SetPropertyValue(ARow.PropertyName,
-          TSchemaDefaults.CreateDefaultValue(ARow.SchemaNode));
-        TNullableRowSupport.SetControlEnabled(ARow, True);
-        CreateRow(AContext, ARow, AContext.GetPropertyValue(ARow.PropertyName));
-      end;
-    end);
-  TNullableRowSupport.SetControlEnabled(ARow, not TNullableRowSupport.IsNullChecked(ARow));
+  ARow.ValueControl := Edit;
 end;
 
 procedure TNumberSchemaEditor.ReadRow(const AContext: IPropertyEditorContext;
   ARow: TPropertyRow);
+var
+  FloatValue: Double;
+  IntValue: Int64;
+  Text: string;
 begin
-  if TNullableRowSupport.IsNullChecked(ARow) then
+  if not (ARow.ValueControl is TEdit) then
+    Exit;
+
+  Text := Trim(TEdit(ARow.ValueControl).Text);
+  if Text = '' then
   begin
-    AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create);
+    if ARow.SchemaNode.Nullable then
+      AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create)
+    else
+      AContext.ClearPropertyValue(ARow.PropertyName);
     Exit;
   end;
-  if ARow.ValueControl is TSpinEdit then
+
+  if FIntegerMode then
+  begin
+    if TryStrToInt64(Text, IntValue) then
+      AContext.SetPropertyValue(ARow.PropertyName, TJSONNumber.Create(IntValue))
+    else if TryParseJsonFloat(Text, FloatValue) then
+      AContext.SetPropertyValue(ARow.PropertyName, TJSONNumber.Create(FloatValue))
+    else
+      AContext.SetPropertyValue(ARow.PropertyName, TJSONString.Create(Text));
+  end
+  else if TryParseJsonFloat(Text, FloatValue) then
     AContext.SetPropertyValue(ARow.PropertyName,
-      TJSONNumber.Create(TSpinEdit(ARow.ValueControl).Value));
+      TJSONNumber.Create(FloatValue))
+  else
+    AContext.SetPropertyValue(ARow.PropertyName, TJSONString.Create(Text));
 end;
 
 end.

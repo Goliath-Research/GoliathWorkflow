@@ -57,8 +57,11 @@ begin
     end,
     procedure(Sender: TObject)
     begin
-      AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create);
-      UpdateSummary(ARow, nil);
+      if ARow.SchemaNode.Nullable then
+        AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create)
+      else
+        AContext.ClearPropertyValue(ARow.PropertyName);
+      UpdateSummary(ARow, AContext.GetPropertyValue(ARow.PropertyName));
     end);
 end;
 
@@ -74,7 +77,7 @@ begin
   else
     CloneObj := TSchemaDefaults.CreateDefaultObject(ARow.SchemaNode);
   try
-    ChildTitle := AContext.ChildBreadcrumb(ARow.lblName.Caption);
+    ChildTitle := AContext.ChildBreadcrumb(ARow.DisplayName);
     if TPropertyEditorForm.EditObject(AContext.GetOwner, ChildTitle, ARow.SchemaNode,
       CloneObj) then
       Result := CloneObj.Clone as TJSONObject;

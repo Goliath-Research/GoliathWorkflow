@@ -31,6 +31,8 @@ type
     procedure SameRelativeRefUsesDistinctCacheKeys;
     [Test]
     procedure NullableAnyOfRefAfterCachedRef;
+    [Test]
+    procedure ObjectWithFixedPropertiesAndAdditionalPropertiesStaysObject;
   end;
 
 implementation
@@ -324,6 +326,38 @@ begin
       Assert.IsTrue(OptionalNode.Nullable);
       Assert.AreEqual('Widget', OptionalNode.Title);
       Assert.IsTrue(OptionalNode.FindProperty('name') <> nil);
+    finally
+      Doc.Free;
+    end;
+  finally
+    Loader.Free;
+  end;
+end;
+
+procedure TSchemaLoaderTests.ObjectWithFixedPropertiesAndAdditionalPropertiesStaysObject;
+var
+  Loader: TJsonSchemaLoader;
+  Doc: TSchemaDocument;
+begin
+  Loader := TJsonSchemaLoader.Create;
+  try
+    Doc := Loader.LoadDocumentFromString(
+      '{"type":"object","properties":{"name":{"type":"string"}},"additionalProperties":{"type":"string"}}');
+    try
+      Assert.AreEqual(TSchemaKind.skObject, Doc.Root.Kind);
+      Assert.IsTrue(Doc.Root.AdditionalPropertiesAllowed);
+      Assert.IsTrue(Doc.Root.FindProperty('name') <> nil);
+      Assert.IsNotNull(Doc.Root.AdditionalPropertiesSchema);
+    finally
+      Doc.Free;
+    end;
+
+    Doc := Loader.LoadDocumentFromString(
+      '{"type":"object","additionalProperties":{"type":"string"}}');
+    try
+      Assert.AreEqual(TSchemaKind.skDictionary, Doc.Root.Kind);
+      Assert.IsTrue(Doc.Root.AdditionalPropertiesAllowed);
+      Assert.IsNotNull(Doc.Root.AdditionalPropertiesSchema);
     finally
       Doc.Free;
     end;

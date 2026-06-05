@@ -25,8 +25,6 @@ implementation
 uses
   Vcl.Controls,
   Vcl.StdCtrls,
-  NullableRowSupport,
-  SchemaDefaults,
   SchemaValueSummary;
 
 class function TBooleanSchemaEditor.EditorKey: string;
@@ -48,44 +46,39 @@ begin
   Check.Parent := ARow.ValuePanel;
   Check.Align := alClient;
   Check.Caption := '';
-  Check.Checked := AValue is TJSONTrue;
+  Check.AllowGrayed := ARow.SchemaNode.Nullable or not ARow.SchemaNode.Required;
+  if TSchemaValueSummary.IsNullValue(AValue) and Check.AllowGrayed then
+    Check.State := cbGrayed
+  else if AValue is TJSONTrue then
+    Check.State := cbChecked
+  else
+    Check.State := cbUnchecked;
   Check.Tag := NativeInt(ARow);
   Check.OnClick := ARow.BindNotify(procedure(Sender: TObject)
     begin
       ReadRow(AContext, ARow);
     end);
   ARow.ValueControl := Check;
-  TNullableRowSupport.AddNullCheckbox(AContext, ARow, AValue,
-    procedure(Sender: TObject)
-    begin
-      if TNullableRowSupport.IsNullChecked(ARow) then
-      begin
-        AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create);
-        TNullableRowSupport.SetControlEnabled(ARow, False);
-      end
-      else
-      begin
-        AContext.SetPropertyValue(ARow.PropertyName,
-          TSchemaDefaults.CreateDefaultValue(ARow.SchemaNode));
-        TNullableRowSupport.SetControlEnabled(ARow, True);
-        CreateRow(AContext, ARow, AContext.GetPropertyValue(ARow.PropertyName));
-      end;
-    end);
-  TNullableRowSupport.SetControlEnabled(ARow, not TNullableRowSupport.IsNullChecked(ARow));
 end;
 
 procedure TBooleanSchemaEditor.ReadRow(const AContext: IPropertyEditorContext;
   ARow: TPropertyRow);
 begin
-  if TNullableRowSupport.IsNullChecked(ARow) then
-  begin
-    AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create);
+  if not (ARow.ValueControl is TCheckBox) then
     Exit;
-  end;
-  if TCheckBox(ARow.ValueControl).Checked then
-    AContext.SetPropertyValue(ARow.PropertyName, TJSONTrue.Create)
+  case TCheckBox(ARow.ValueControl).State of
+    cbGrayed:
+      begin
+        if ARow.SchemaNode.Nullable then
+          AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create)
+        else
+          AContext.ClearPropertyValue(ARow.PropertyName);
+      end;
+    cbChecked:
+      AContext.SetPropertyValue(ARow.PropertyName, TJSONTrue.Create);
   else
     AContext.SetPropertyValue(ARow.PropertyName, TJSONFalse.Create);
+  end;
 end;
 
 end.

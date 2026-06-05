@@ -13,12 +13,22 @@ uses
 
 type
   TNotifyEventProc = reference to procedure(Sender: TObject);
+  TKeyEventProc = reference to procedure(Sender: TObject; var Key: Word;
+    Shift: TShiftState);
   TNotifyEventHandler = class
   private
     FProc: TNotifyEventProc;
   public
     constructor Create(const AProc: TNotifyEventProc);
     procedure Notify(Sender: TObject);
+  end;
+
+  TKeyEventHandler = class
+  private
+    FProc: TKeyEventProc;
+  public
+    constructor Create(const AProc: TKeyEventProc);
+    procedure KeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
   end;
 
   TPropertyRow = class;
@@ -30,6 +40,7 @@ type
     function GetBreadcrumb: string;
     function GetPropertyValue(const AName: string): TJSONValue;
     procedure SetPropertyValue(const AName: string; AValue: TJSONValue);
+    procedure ClearPropertyValue(const AName: string);
     procedure RebuildRows;
     function ChildBreadcrumb(const ASegment: string): string;
   end;
@@ -48,7 +59,10 @@ type
   TPropertyRow = class
   private
     FEventHandlers: IList<TNotifyEventHandler>;
+    FKeyHandlers: IList<TKeyEventHandler>;
   public
+    GridRow: Integer;
+    DisplayName: string;
     PropertyName: string;
     SchemaNode: TSchemaNode;
     Editor: ISchemaPropertyEditor;
@@ -62,6 +76,7 @@ type
     constructor Create;
     destructor Destroy; override;
     function BindNotify(const AProc: TNotifyEventProc): TNotifyEvent;
+    function BindKeyDown(const AProc: TKeyEventProc): TKeyEvent;
   end;
 
 implementation
@@ -78,15 +93,30 @@ begin
     FProc(Sender);
 end;
 
+constructor TKeyEventHandler.Create(const AProc: TKeyEventProc);
+begin
+  inherited Create;
+  FProc := AProc;
+end;
+
+procedure TKeyEventHandler.KeyDown(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  if Assigned(FProc) then
+    FProc(Sender, Key, Shift);
+end;
+
 constructor TPropertyRow.Create;
 begin
   inherited Create;
   FEventHandlers := TCollections.CreateObjectList<TNotifyEventHandler>(True);
+  FKeyHandlers := TCollections.CreateObjectList<TKeyEventHandler>(True);
 end;
 
 destructor TPropertyRow.Destroy;
 begin
   FEventHandlers := nil;
+  FKeyHandlers := nil;
   inherited;
 end;
 
@@ -97,6 +127,15 @@ begin
   Handler := TNotifyEventHandler.Create(AProc);
   FEventHandlers.Add(Handler);
   Result := Handler.Notify;
+end;
+
+function TPropertyRow.BindKeyDown(const AProc: TKeyEventProc): TKeyEvent;
+var
+  Handler: TKeyEventHandler;
+begin
+  Handler := TKeyEventHandler.Create(AProc);
+  FKeyHandlers.Add(Handler);
+  Result := Handler.KeyDown;
 end;
 
 end.

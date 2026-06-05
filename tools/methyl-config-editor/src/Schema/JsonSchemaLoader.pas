@@ -487,7 +487,8 @@ begin
   if AP is TJSONTrue then
   begin
     Node.AdditionalPropertiesAllowed := True;
-    Node.Kind := skDictionary;
+    if Node.PropertyCount = 0 then
+      Node.Kind := skDictionary;
     Node.AdditionalPropertiesSchema := NewNode;
     Node.AdditionalPropertiesSchema.Kind := skUnknown;
     Exit;
@@ -495,7 +496,7 @@ begin
   if AP is TJSONObject then
   begin
     Node.AdditionalPropertiesAllowed := True;
-    if Node.Kind = skObject then
+    if (Node.Kind = skObject) and (Node.PropertyCount = 0) then
       Node.Kind := skDictionary;
     Node.AdditionalPropertiesSchema := ResolveNode(TJSONObject(AP), 'additionalProperties');
   end;

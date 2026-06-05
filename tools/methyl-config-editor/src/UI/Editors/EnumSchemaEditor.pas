@@ -25,8 +25,6 @@ implementation
 uses
   Vcl.Controls,
   Vcl.StdCtrls,
-  NullableRowSupport,
-  SchemaDefaults,
   SchemaValueSummary;
 
 class function TEnumSchemaEditor.EditorKey: string;
@@ -49,51 +47,39 @@ begin
   Combo := TComboBox.Create(ARow.ValuePanel);
   Combo.Parent := ARow.ValuePanel;
   Combo.Align := alClient;
-  Combo.Style := csDropDownList;
+  Combo.Style := csDropDown;
   for E in ARow.SchemaNode.EnumValues do
     Combo.Items.Add(E);
   if AValue is TJSONString then
-    Combo.ItemIndex := Combo.Items.IndexOf(TJSONString(AValue).Value)
+    Combo.Text := TJSONString(AValue).Value
+  else if TSchemaValueSummary.IsNullValue(AValue) then
+    Combo.Text := ''
   else
-    Combo.ItemIndex := 0;
-  if Combo.ItemIndex < 0 then
-    Combo.ItemIndex := 0;
+    Combo.Text := AValue.Value;
   Combo.Tag := NativeInt(ARow);
   Combo.OnChange := ARow.BindNotify(procedure(Sender: TObject)
     begin
       ReadRow(AContext, ARow);
     end);
   ARow.ValueControl := Combo;
-  TNullableRowSupport.AddNullCheckbox(AContext, ARow, AValue,
-    procedure(Sender: TObject)
-    begin
-      if TNullableRowSupport.IsNullChecked(ARow) then
-      begin
-        AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create);
-        TNullableRowSupport.SetControlEnabled(ARow, False);
-      end
-      else
-      begin
-        AContext.SetPropertyValue(ARow.PropertyName,
-          TSchemaDefaults.CreateDefaultValue(ARow.SchemaNode));
-        TNullableRowSupport.SetControlEnabled(ARow, True);
-        CreateRow(AContext, ARow, AContext.GetPropertyValue(ARow.PropertyName));
-      end;
-    end);
-  TNullableRowSupport.SetControlEnabled(ARow, not TNullableRowSupport.IsNullChecked(ARow));
 end;
 
 procedure TEnumSchemaEditor.ReadRow(const AContext: IPropertyEditorContext;
   ARow: TPropertyRow);
 begin
-  if TNullableRowSupport.IsNullChecked(ARow) then
-  begin
-    AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create);
-    Exit;
-  end;
   if ARow.ValueControl is TComboBox then
+  begin
+    if TComboBox(ARow.ValueControl).Text = '' then
+    begin
+      if ARow.SchemaNode.Nullable then
+        AContext.SetPropertyValue(ARow.PropertyName, TJSONNull.Create)
+      else
+        AContext.ClearPropertyValue(ARow.PropertyName);
+      Exit;
+    end;
     AContext.SetPropertyValue(ARow.PropertyName,
       TJSONString.Create(TComboBox(ARow.ValueControl).Text));
+  end;
 end;
 
 end.
