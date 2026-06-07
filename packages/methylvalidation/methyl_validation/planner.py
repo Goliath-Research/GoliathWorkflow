@@ -15,7 +15,11 @@ from pydantic import ValidationError
 
 from .config import MonteCarloConfig
 from .mc_config_load import write_mc_config_snapshot
-from .mc_manifest import write_baseline_manifest, write_detector_featurecuts_override
+from .mc_manifest import (
+    write_baseline_manifest,
+    write_detector_featurecuts_override,
+    write_mapper_classifier_override,
+)
 from .project_gen import (
     apply_frozen_pipeline_artifacts_to_run_project,
     generate_run_project,
@@ -227,6 +231,8 @@ def plan_discovery_runs(
         else:
             n_fresh += 1
             det_override = write_detector_featurecuts_override(run_dir, config)
+            if config.stability_gene_featurecuts_enabled:
+                write_mapper_classifier_override(run_dir)
 
             if layout == "binary":
                 (

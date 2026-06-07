@@ -743,6 +743,15 @@ class MonteCarloConfig(BaseModel):
             "Final selected k is max(featurecuts_k, stability_min_selected_genes)."
         ),
     )
+    stability_gene_featurecuts_max_dmps: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Optional genome-wide cap on classifier DMP loci used for MC gene FeatureCuts "
+            "(after deduplication). When unset, all FeatureCuts classifier exports are used "
+            "(typically ~min_selected_dmps per chromosome × number of chromosomes)."
+        ),
+    )
     freeze_stable_gene_csv: Optional[str] = Field(
         default=None,
         description=(

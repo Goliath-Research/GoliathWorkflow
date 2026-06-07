@@ -29,7 +29,7 @@ from .raw_gene_features import (
     build_gene_panel_feature_weights,
     build_raw_gene_feature_table,
 )
-from .stability import load_discovery_dmps
+from .stability import load_classifier_dmp_panel
 
 logger = logging.getLogger(__name__)
 
@@ -358,12 +358,15 @@ def run_gene_featurecuts_for_iteration(
     run_dir = project_json.parent
     warnings: List[str] = []
 
-    dmp_df = load_discovery_dmps(run_dir, prefer_classifier_panel=True)
+    dmp_df = load_classifier_dmp_panel(
+        run_dir,
+        max_dmps=getattr(config, "stability_gene_featurecuts_max_dmps", None),
+    )
     if dmp_df is None or dmp_df.empty:
-        dmp_df = load_discovery_dmps(run_dir, prefer_classifier_panel=False)
-        warnings.append("classifier DMP panel missing; used discovery DMP exports")
-    if dmp_df is None or dmp_df.empty:
-        return 1, "", "Gene FeatureCuts: no DMP exports found in run directory"
+        return 1, "", (
+            "Gene FeatureCuts: no classifier DMP exports found in run directory "
+            "(run detector with FeatureCuts first; discovery DMPs are not used)"
+        )
 
     gene_combined = _load_mapper_gene_combined_tables(run_dir)
     intersections = _load_mapper_intersections(run_dir)

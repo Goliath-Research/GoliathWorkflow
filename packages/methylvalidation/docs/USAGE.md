@@ -290,6 +290,7 @@ Optional gene stability runs in the same MC loop when `stability_gene_featurecut
   "stability_target_balanced_accuracy": 0.95,
   "stability_min_selected_dmps": 500,
   "stability_min_selected_genes": 50,
+  "stability_gene_featurecuts_max_dmps": 500,
   "stability_dmp_freq": 0.8,
   "stability_gene_freq": 0.7,
   "backend_profiles": {
@@ -305,9 +306,11 @@ Optional gene stability runs in the same MC loop when `stability_gene_featurecut
 
 CLI: `--stability --stability-featurecuts --stability-gene-featurecuts`.
 
-Per iteration: centroid → detector (DMP FeatureCuts) → methyl-mapper on classifier DMP CSVs → gene FeatureCuts (ECDF OvR k-search on validation BA). Outputs `run_XXXX/gene_stability/genes-classifier.csv`; aggregation writes `stability/stable_genes_production.csv`. `--freeze` copies the stable gene panel into production and wires `raw_gene` for `--model`.
+Per iteration: centroid → detector (DMP FeatureCuts) → methyl-mapper on **classifier** DMP CSVs (`dmps-*-classifier.csv`, via `mapper_step_override.json`) → gene FeatureCuts (ECDF OvR k-search on validation BA). Outputs `run_XXXX/gene_stability/genes-classifier.csv`; aggregation writes `stability/stable_genes_production.csv`. `--freeze` copies the stable gene panel into production and wires `raw_gene` for `--model`.
 
-If gene FeatureCuts is enabled without DMP FeatureCuts, the CLI warns and gene FeatureCuts falls back to discovery DMP exports when classifier panels are missing.
+Gene FeatureCuts and the mapper step use the detector FeatureCuts classifier panel only—not discovery DMPs. Set `stability_gene_featurecuts_max_dmps` to cap the genome-wide classifier loci count (after deduplication) when the per-chromosome FeatureCuts exports are still too large.
+
+If gene FeatureCuts is enabled without DMP FeatureCuts, the CLI warns; iterations fail at gene FeatureCuts unless classifier exports exist from a prior detector run.
 
 ### Strict stability profile example
 

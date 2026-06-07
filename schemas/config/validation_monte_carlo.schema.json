@@ -2289,6 +2289,20 @@
       "title": "Stability Gene Featurecuts Enabled",
       "type": "boolean"
     },
+    "stability_gene_featurecuts_max_dmps": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional genome-wide cap on classifier DMP loci used for MC gene FeatureCuts (after deduplication). When unset, all FeatureCuts classifier exports are used (typically ~min_selected_dmps per chromosome \u00d7 number of chromosomes).",
+      "title": "Stability Gene Featurecuts Max Dmps"
+    },
     "stability_gene_freq": {
       "default": 0.5,
       "description": "Minimum frequency for a gene to be considered stable. When stability_gene_featurecuts_enabled, counts genes from per-run classifier gene panels.",

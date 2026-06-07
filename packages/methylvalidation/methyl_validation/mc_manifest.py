@@ -128,3 +128,21 @@ def write_detector_featurecuts_override(
     with open(out, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
     return out
+
+
+CLASSIFIER_DMP_CSV_PATTERN = "dmps-*-classifier.csv"
+
+
+def write_mapper_classifier_override(run_dir: Path) -> Path:
+    """
+    Force methyl-mapper to consume detector FeatureCuts classifier panels during MC gene stability.
+
+    Without this, projects that default to ``dmps-*-discovery.csv`` map every significant DMP
+    (tens of thousands of loci) instead of the smaller classifier exports.
+    """
+    out = run_dir / "mapper_step_override.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"csv_filename_pattern": CLASSIFIER_DMP_CSV_PATTERN}
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return out

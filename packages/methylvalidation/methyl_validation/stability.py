@@ -116,6 +116,54 @@ def load_discovery_dmps(run_dir: Path, prefer_classifier_panel: bool = False) ->
     return pd.concat(frames, ignore_index=True)
 
 
+def load_classifier_dmp_panel(
+    run_dir: Path,
+    *,
+    max_dmps: Optional[int] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Load the detector FeatureCuts classifier DMP panel for gene-axis work.
+
+    Uses ``dmps-*-classifier.csv`` exports only (not discovery), deduplicates loci genome-wide,
+    and optionally caps to the top ``max_dmps`` by absolute effect size.
+    """
+    detection_dirs = list(run_dir.glob("**/detections/*/*"))
+    if not detection_dirs:
+        detection_dirs = list(run_dir.glob("detections/*/*"))
+    frames: list = []
+    for d in detection_dirs:
+        for csv in sorted(d.glob("dmps-*-classifier.csv")):
+            try:
+                frames.append(pd.read_csv(csv))
+            except Exception:
+                continue
+    if not frames:
+        return None
+    df = pd.concat(frames, ignore_index=True)
+    if df.empty:
+        return df
+    if "chromosome" not in df.columns or "position" not in df.columns:
+        return df
+
+    work = df.copy()
+    if "effect_size" not in work.columns:
+        work["effect_size"] = 0.0
+    work["_abs_effect"] = pd.to_numeric(work["effect_size"], errors="coerce").fillna(0.0).abs()
+    keys: List[Tuple[Any, int]] = []
+    for _, row in work.iterrows():
+        try:
+            keys.append(_dmp_key_from_row(row))
+        except Exception:
+            keys.append((None, -1))
+    work["_dmp_key"] = keys
+    work = work[work["_dmp_key"].map(lambda k: k[1] >= 0)].copy()
+    work = work.sort_values(["_abs_effect"], ascending=False, na_position="last")
+    work = work.drop_duplicates(subset=["_dmp_key"], keep="first")
+    if max_dmps is not None and int(max_dmps) > 0 and len(work) > int(max_dmps):
+        work = work.head(int(max_dmps)).copy()
+    return work.drop(columns=["_abs_effect", "_dmp_key"], errors="ignore")
+
+
 def load_enricher_genes(run_dir: Path) -> Optional[pd.DataFrame]:
     """Load enricher gene output (all-gene_name-combined.csv or similar)."""
     enricher_dirs = list(run_dir.glob("**/enricher/*/*")) or list(run_dir.glob("enricher/*/*"))

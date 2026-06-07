@@ -70,7 +70,7 @@ from .mc_config_load import (
     ensure_monte_carlo_output_tree,
     load_monte_carlo_config,
 )
-from .mc_manifest import write_baseline_manifest, write_detector_featurecuts_override
+from .mc_manifest import write_baseline_manifest, write_detector_featurecuts_override, write_mapper_classifier_override
 
 
 _RUN_ID_RE = re.compile(r"^run_(\d{4})$")
@@ -2609,8 +2609,8 @@ def main() -> None:
     ):
         print(
             "Warning: --stability-gene-featurecuts is enabled but DMP FeatureCuts "
-            "(stability_featurecuts_enabled) is not. Gene FeatureCuts will fall back to "
-            "discovery DMP exports when classifier panels are missing.",
+            "(stability_featurecuts_enabled) is not. Gene FeatureCuts requires detector "
+            "classifier DMP exports (dmps-*-classifier.csv); discovery DMPs are not used.",
             file=sys.stderr,
         )
 
@@ -2652,6 +2652,8 @@ def main() -> None:
             run_dir = monte_carlo_runs_root / run_id
             seed_i = (config.seed + i) if config.seed is not None else None
             detector_step_override = write_detector_featurecuts_override(run_dir, config)
+            if config.stability_gene_featurecuts_enabled:
+                write_mapper_classifier_override(run_dir)
 
             if progress is not None:
                 task_steps = progress.add_task("Steps", total=n_step_tasks, completed=0)

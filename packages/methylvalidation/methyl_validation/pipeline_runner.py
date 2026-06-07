@@ -270,9 +270,15 @@ def run_mapper(project_json: str | Path, per_cancer_group: bool = False) -> tupl
 
     Per-comparison layout is resolved automatically from the project; methyl-mapper
     does not accept --per-cancer-group (unlike methyl-detector/classifier).
+
+    When ``mapper_step_override.json`` exists beside the iteration ``project.json``
+    (written during MC gene stability), it is passed as ``--step-override``.
     """
     del per_cancer_group  # kept for call-site compatibility
     cmd = ["methyl-mapper", "--project", str(project_json)]
+    mapper_override = Path(project_json).resolve().parent / "mapper_step_override.json"
+    if mapper_override.is_file():
+        cmd.extend(["--step-override", str(mapper_override)])
     return run_cmd(cmd)
 
 
