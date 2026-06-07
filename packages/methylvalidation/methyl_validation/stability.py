@@ -81,6 +81,13 @@ def run_balanced_accuracy(run_dir: Path) -> Optional[float]:
         return None
 
 
+def stability_dmp_panel_source_label(*, prefer_classifier_panel_dmps: bool) -> str:
+    """Human-readable label for which detector exports stability aggregation reads."""
+    if prefer_classifier_panel_dmps:
+        return "classifier DMP panels (dmps-*-classifier.csv)"
+    return "discovery DMP exports (dmps-*-discovery.csv)"
+
+
 def load_discovery_dmps(run_dir: Path, prefer_classifier_panel: bool = False) -> Optional[pd.DataFrame]:
     """Load and concatenate detector DMP exports from a MC run directory.
 
@@ -986,6 +993,10 @@ def _compute_dmp_stability_from_run_dirs(
             "skipped_no_discovery": skipped_no_discovery,
             "skipped_low_balanced_accuracy": skipped_low_ba,
             "min_balanced_accuracy": min_balanced_accuracy,
+            "prefer_classifier_panel_dmps": bool(prefer_classifier_panel_dmps),
+            "dmp_panel_source": stability_dmp_panel_source_label(
+                prefer_classifier_panel_dmps=prefer_classifier_panel_dmps
+            ),
         }
 
     data = []
@@ -1041,6 +1052,10 @@ def _compute_dmp_stability_from_run_dirs(
         "stable_dmps_at_threshold": len(stable),
         "min_frequency": min_frequency,
         "stable_dmp_fraction": len(stable) / len(dmp_run_hits) if len(dmp_run_hits) > 0 else 0.0,
+        "prefer_classifier_panel_dmps": bool(prefer_classifier_panel_dmps),
+        "dmp_panel_source": stability_dmp_panel_source_label(
+            prefer_classifier_panel_dmps=prefer_classifier_panel_dmps
+        ),
     }
     return df, summary
 

@@ -59,10 +59,11 @@ from .validator_metrics import (
     write_summary_json,
 )
 from .stability import (
-    run_stability_analysis,
+    evaluate_dmp_stability_convergence,
     freeze_production_model,
     build_production_model,
-    evaluate_dmp_stability_convergence,
+    run_stability_analysis,
+    stability_dmp_panel_source_label,
 )
 from .rollout import evaluate_dual_run, write_rollout_report
 from .mc_config_load import (
@@ -137,6 +138,38 @@ def _list_existing_run_numbers(monte_carlo_runs_root: Path) -> List[int]:
         if m:
             nums.append(int(m.group(1)))
     return nums
+
+
+def _print_stability_summary(stability_summary: Dict[str, Any], config: MonteCarloConfig) -> None:
+    dmp_summary = stability_summary.get("dmp_stability") or {}
+    print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
+    dmp_source = dmp_summary.get("dmp_panel_source") or stability_dmp_panel_source_label(
+        prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+    )
+    print(
+        f"  Stable DMPs: {dmp_summary.get('stable_dmps_at_threshold', 0)} "
+        f"(from {dmp_source}; {dmp_summary.get('n_runs_analyzed', 0)} runs analyzed)"
+    )
+    if stability_summary.get("tiered_stability_enabled"):
+        print(
+            f"  Tiered panels enabled (default freeze tier: {stability_summary.get('stability_default_freeze_tier')})"
+        )
+        tiers = stability_summary.get("stability_tiers") or {}
+        for tier_name in ("core", "extended", "exploratory"):
+            tier = tiers.get(tier_name) or {}
+            if not tier:
+                continue
+            print(
+                f"    {tier_name}: min_freq={tier.get('min_frequency')} "
+                f"strict={tier.get('n_strict_selected')} relaxed={tier.get('n_relaxed_selected')}"
+            )
+    gs = stability_summary.get("gene_stability") or {}
+    gene_source = (
+        "classifier gene panels"
+        if config.stability_gene_featurecuts_enabled
+        else "enricher outputs (after --freeze)"
+    )
+    print(f"  Stable genes: {gs.get('stable_genes_at_threshold', 0)} (from {gene_source})")
 
 
 def _resolve_resume_start_iteration(
@@ -2506,7 +2539,13 @@ def main() -> None:
         sys.exit(1)
 
     if args.skip_detection:
-        print("\nRunning stability analysis on existing discovery outputs (skip-detection mode)...")
+        dmp_source = stability_dmp_panel_source_label(
+            prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+        )
+        print(
+            f"\nRunning stability analysis on existing detector outputs (skip-detection mode; "
+            f"DMP source: {dmp_source})..."
+        )
         stability_summary = run_stability_analysis(
             monte_carlo_runs_root=monte_carlo_runs_root,
             dmp_min_freq=config.stability_dmp_freq,
@@ -2524,28 +2563,7 @@ def main() -> None:
             tier_exploratory_frequency=config.stability_tier_exploratory_freq,
             default_freeze_tier=config.stability_default_freeze_tier,
         )
-        print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
-        print(f"  Stable DMPs: {stability_summary['dmp_stability'].get('stable_dmps_at_threshold', 0)}")
-        if stability_summary.get("tiered_stability_enabled"):
-            print(
-                f"  Tiered panels enabled (default freeze tier: {stability_summary.get('stability_default_freeze_tier')})"
-            )
-            tiers = stability_summary.get("stability_tiers") or {}
-            for tier_name in ("core", "extended", "exploratory"):
-                tier = tiers.get(tier_name) or {}
-                if not tier:
-                    continue
-                print(
-                    f"    {tier_name}: min_freq={tier.get('min_frequency')} "
-                    f"strict={tier.get('n_strict_selected')} relaxed={tier.get('n_relaxed_selected')}"
-                )
-        gs = stability_summary.get("gene_stability") or {}
-        gene_source = (
-            "classifier gene panels"
-            if config.stability_gene_featurecuts_enabled
-            else "enricher outputs (after --freeze)"
-        )
-        print(f"  Stable genes: {gs.get('stable_genes_at_threshold', 0)} (from {gene_source})")
+        _print_stability_summary(stability_summary, config)
         print("Done.")
         return
 
@@ -3071,7 +3089,10 @@ def main() -> None:
         sys.exit(1)
 
     if args.stability or config.run_stability:
-        print("\nRunning stability analysis on discovery outputs...")
+        dmp_source = stability_dmp_panel_source_label(
+            prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+        )
+        print(f"\nRunning stability analysis on existing detector outputs (DMP source: {dmp_source})...")
         stability_summary = run_stability_analysis(
             monte_carlo_runs_root=monte_carlo_runs_root,
             dmp_min_freq=config.stability_dmp_freq,
@@ -3090,28 +3111,7 @@ def main() -> None:
             default_freeze_tier=config.stability_default_freeze_tier,
             convergence_diagnostics=early_stop_summary,
         )
-        print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
-        print(f"  Stable DMPs: {stability_summary['dmp_stability'].get('stable_dmps_at_threshold', 0)}")
-        if stability_summary.get("tiered_stability_enabled"):
-            print(
-                f"  Tiered panels enabled (default freeze tier: {stability_summary.get('stability_default_freeze_tier')})"
-            )
-            tiers = stability_summary.get("stability_tiers") or {}
-            for tier_name in ("core", "extended", "exploratory"):
-                tier = tiers.get(tier_name) or {}
-                if not tier:
-                    continue
-                print(
-                    f"    {tier_name}: min_freq={tier.get('min_frequency')} "
-                    f"strict={tier.get('n_strict_selected')} relaxed={tier.get('n_relaxed_selected')}"
-                )
-        gs = stability_summary.get("gene_stability") or {}
-        gene_source = (
-            "classifier gene panels"
-            if config.stability_gene_featurecuts_enabled
-            else "enricher outputs (after --freeze)"
-        )
-        print(f"  Stable genes: {gs.get('stable_genes_at_threshold', 0)} (from {gene_source})")
+        _print_stability_summary(stability_summary, config)
 
     df = build_metrics_table(rows)
     all_metrics_csv = monte_carlo_runs_root / "all_metrics.csv"

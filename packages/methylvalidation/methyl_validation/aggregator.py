@@ -85,7 +85,12 @@ def aggregate_discovery_monte_carlo(
         sys.exit(1)
 
     if run_stability:
-        print("\nRunning stability analysis on discovery outputs...")
+        from .stability import stability_dmp_panel_source_label
+
+        dmp_source = stability_dmp_panel_source_label(
+            prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+        )
+        print(f"\nRunning stability analysis on existing detector outputs (DMP source: {dmp_source})...")
         run_stability_analysis(
             monte_carlo_runs_root=monte_carlo_runs_root,
             dmp_min_freq=config.stability_dmp_freq,
