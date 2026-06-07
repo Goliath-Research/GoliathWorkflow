@@ -2556,6 +2556,48 @@
       "description": "Skip methyl-enricher step even when run_mapper_and_enricher is true (useful when Grok API calls are too slow).",
       "title": "Skip Enricher"
     },
+    "stability_classifier_export_margin_abs": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "MC detector override: extra top-ranked DMPs in extended classifier CSV beyond k_core.",
+      "title": "Stability Classifier Export Margin Abs"
+    },
+    "stability_classifier_export_margin_pct": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "MC detector override: extended classifier CSV margin as a fraction above k_core.",
+      "title": "Stability Classifier Export Margin Pct"
+    },
+    "stability_classifier_export_max_dmps": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "MC detector override: per-chromosome cap on extended classifier CSV size.",
+      "title": "Stability Classifier Export Max Dmps"
+    },
     "stability_convergence_jaccard": {
       "anyOf": [
         {
@@ -2743,6 +2785,20 @@
       "description": "If set, stability counts DMPs only from iterations whose validation_metrics.json balanced_accuracy is >= this value. Frequencies are over those qualifying runs only.",
       "title": "Stability Min Balanced Accuracy"
     },
+    "stability_min_core_dmps": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional small guardrail on detector k_core during MC FeatureCuts (passed to detector min_core_dmps).",
+      "title": "Stability Min Core Dmps"
+    },
     "stability_min_iterations": {
       "anyOf": [
         {
@@ -2768,7 +2824,7 @@
         }
       ],
       "default": null,
-      "description": "Optional lower bound for detector classifier panel size in FeatureCuts mode. Final selected k is max(featurecuts_k, stability_min_selected_dmps).",
+      "description": "Deprecated alias for stability_min_core_dmps when that field is unset. Does not widen mapper exports; use stability_classifier_export_margin_* instead.",
       "title": "Stability Min Selected Dmps"
     },
     "stability_min_selected_genes": {

@@ -2,8 +2,9 @@
 Resolve DMP CSV paths for dual-branch exports (discovery vs classifier).
 
 MethylDetector ``dmp_export_mode=dual`` writes:
-  - ``dmps-{chrom}-discovery.csv`` — mapper / enricher / interpretation
-  - ``dmps-{chrom}-classifier.csv`` — prediction panel (matches classifier pickle positions)
+  - ``dmps-{chrom}-discovery.csv`` — broad biology
+  - ``dmps-{chrom}-classifier.csv`` — core prediction panel (matches classifier pickle)
+  - ``dmps-{chrom}-classifier-extended.csv`` — mapper / gene annotation (k_core + margin)
 
 Unified mode writes a single ``dmps-{chrom}.csv`` (classifier panel; may be widened for mapper).
 """
@@ -23,7 +24,11 @@ def find_classifier_dmps_csvs(detection_dir: Path) -> List[Path]:
     """
     if not detection_dir.exists():
         return []
-    classifier = sorted(detection_dir.glob("dmps-*-classifier.csv"))
+    classifier = sorted(
+        p
+        for p in detection_dir.glob("dmps-*-classifier.csv")
+        if not p.stem.endswith("-classifier-extended")
+    )
     if classifier:
         return classifier
     out: List[Path] = []

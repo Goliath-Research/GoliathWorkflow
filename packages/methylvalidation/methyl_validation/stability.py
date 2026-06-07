@@ -98,7 +98,7 @@ def load_discovery_dmps(run_dir: Path, prefer_classifier_panel: bool = False) ->
     for d in detection_dirs:
         patterns: List[str]
         if prefer_classifier_panel:
-            patterns = ["dmps-*-classifier.csv", "dmps-*.csv", "dmps-*-discovery.csv"]
+            patterns = ["dmps-*-classifier.csv", "dmps-*-discovery.csv"]
         else:
             patterns = ["dmps-*-discovery.csv"]
         found_local = False
@@ -124,15 +124,23 @@ def load_classifier_dmp_panel(
     """
     Load the detector FeatureCuts classifier DMP panel for gene-axis work.
 
-    Uses ``dmps-*-classifier.csv`` exports only (not discovery), deduplicates loci genome-wide,
-    and optionally caps to the top ``max_dmps`` by absolute effect size.
+    Uses ``dmps-*-classifier-extended.csv`` when present (mapper/gene annotation panel),
+    otherwise ``dmps-*-classifier.csv``. Deduplicates loci genome-wide and optionally caps to the
+    top ``max_dmps`` by absolute effect size.
     """
     detection_dirs = list(run_dir.glob("**/detections/*/*"))
     if not detection_dirs:
         detection_dirs = list(run_dir.glob("detections/*/*"))
     frames: list = []
     for d in detection_dirs:
-        for csv in sorted(d.glob("dmps-*-classifier.csv")):
+        csvs = sorted(d.glob("dmps-*-classifier-extended.csv"))
+        if not csvs:
+            csvs = sorted(
+                p
+                for p in d.glob("dmps-*-classifier.csv")
+                if not p.stem.endswith("-classifier-extended")
+            )
+        for csv in csvs:
             try:
                 frames.append(pd.read_csv(csv))
             except Exception:

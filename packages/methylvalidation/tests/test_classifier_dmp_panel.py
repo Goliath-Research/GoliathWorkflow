@@ -5,7 +5,10 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from methyl_validation.mc_manifest import CLASSIFIER_DMP_CSV_PATTERN, write_mapper_classifier_override
+from methyl_validation.mc_manifest import (
+    CLASSIFIER_EXTENDED_DMP_CSV_PATTERN,
+    write_mapper_classifier_override,
+)
 from methyl_validation.stability import load_classifier_dmp_panel
 
 
@@ -13,7 +16,7 @@ def test_write_mapper_classifier_override(tmp_path: Path):
     out = write_mapper_classifier_override(tmp_path / "run_0001")
     assert out.is_file()
     payload = out.read_text(encoding="utf-8")
-    assert CLASSIFIER_DMP_CSV_PATTERN in payload
+    assert CLASSIFIER_EXTENDED_DMP_CSV_PATTERN in payload
 
 
 def test_load_classifier_dmp_panel_dedupes_and_caps(tmp_path: Path):
@@ -36,6 +39,22 @@ def test_load_classifier_dmp_panel_dedupes_and_caps(tmp_path: Path):
             "effect_size": [0.4],
         }
     ).to_csv(det / "dmps-2-classifier.csv", index=False)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1", "2"],
+            "position": [100, 300, 200],
+            "context": ["CG", "CG", "CG"],
+            "effect_size": [0.9, 0.4, 0.5],
+        }
+    ).to_csv(det / "dmps-1-classifier-extended.csv", index=False)
+    pd.DataFrame(
+        {
+            "chromosome": ["2"],
+            "position": [200],
+            "context": ["CG"],
+            "effect_size": [0.5],
+        }
+    ).to_csv(det / "dmps-2-classifier-extended.csv", index=False)
 
     full = load_classifier_dmp_panel(run_dir)
     assert full is not None

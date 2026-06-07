@@ -1409,7 +1409,35 @@ def main() -> None:
         type=int,
         default=None,
         metavar="N",
-        help="Optional lower bound for detector selected DMPs in FeatureCuts mode.",
+        help="Deprecated alias for --stability-min-core-dmps when that flag is unset.",
+    )
+    parser.add_argument(
+        "--stability-min-core-dmps",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Optional small guardrail on detector k_core after FeatureCuts.",
+    )
+    parser.add_argument(
+        "--stability-classifier-export-margin-pct",
+        type=float,
+        default=None,
+        metavar="P",
+        help="Fractional margin above k_core for extended classifier CSV exports.",
+    )
+    parser.add_argument(
+        "--stability-classifier-export-margin-abs",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Absolute margin above k_core for extended classifier CSV exports.",
+    )
+    parser.add_argument(
+        "--stability-classifier-export-max-dmps",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Per-chromosome cap on extended classifier CSV size.",
     )
     parser.add_argument(
         "--stability-gene-featurecuts",

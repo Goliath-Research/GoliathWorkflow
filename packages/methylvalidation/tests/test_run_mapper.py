@@ -38,7 +38,10 @@ def test_run_mapper_passes_mapper_step_override_when_present(monkeypatch, tmp_pa
     project_json = run_dir / "project.json"
     project_json.write_text("{}", encoding="utf-8")
     override = run_dir / "mapper_step_override.json"
-    override.write_text('{"csv_filename_pattern": "dmps-*-classifier.csv"}', encoding="utf-8")
+    override.write_text(
+        '{"csv_filename_pattern": "dmps-*-classifier-extended.csv"}',
+        encoding="utf-8",
+    )
 
     pipeline_runner.run_mapper(project_json)
     assert captured["cmd"] == [

@@ -226,6 +226,34 @@
       "title": "Classifier Dmp Selection",
       "type": "string"
     },
+    "classifier_export_margin_abs": {
+      "default": 10,
+      "description": "Dual export: add this many top-ranked DMPs beyond k_core for the extended classifier CSV.",
+      "minimum": 0,
+      "title": "Classifier Export Margin Abs",
+      "type": "integer"
+    },
+    "classifier_export_margin_pct": {
+      "default": 0.1,
+      "description": "Dual export: extend dmps-{chrom}-classifier-extended.csv to at least ceil(k_core * (1 + margin_pct)) for mapper/gene annotation.",
+      "minimum": 0.0,
+      "title": "Classifier Export Margin Pct",
+      "type": "number"
+    },
+    "classifier_export_max_dmps": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": 200,
+      "description": "Dual export: cap k_extended per chromosome (annotation panel only; core pickle unchanged).",
+      "title": "Classifier Export Max Dmps"
+    },
     "context_weight_direction": {
       "default": "inverse",
       "description": "How to derive context weight from trimmed mean effect_size: 'inverse' = weight \u221d 1/mean_effect_size (down-weight contexts with inflated effect_size, e.g. CHH); 'proportional' = weight \u221d mean_effect_size (legacy).",
@@ -456,6 +484,20 @@
       "description": "Optional heterogeneity filter. If set, drop positions where both groups exceed this between-sample variance estimate (tau2), because they are likely heterogeneous subpopulations rather than clean DMPs.",
       "title": "Max Tau2 For Dmp"
     },
+    "min_core_dmps": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional small guardrail on the core classifier panel (k_core) after FeatureCuts. Use only to avoid trivially tiny panels; does not apply a large fixed export floor.",
+      "title": "Min Core Dmps"
+    },
     "min_coverage": {
       "default": 4,
       "description": "Minimum total coverage (Sm+uC) per position in each centroid for a position to be a DMP candidate. Same default as MethylCentroid; use higher for stricter precision when comparing centroids.",
@@ -496,7 +538,7 @@
         }
       ],
       "default": null,
-      "description": "Minimum number of DMPs to select via binary search (None = auto-determine)",
+      "description": "Deprecated alias for min_core_dmps when min_core_dmps is unset. Does not widen mapper exports; use classifier_export_margin_* for annotation panels.",
       "title": "Min Selected Dmps"
     },
     "output_dir": {
