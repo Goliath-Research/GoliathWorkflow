@@ -19,6 +19,11 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 9. [`wf_sql_branch_parity.sql`](wf_sql_branch_parity.sql) — SQL IF/SWITCH/WHILE variable-branch parity (`condition_var`/`switch_var`) with Delphi runtime behavior.
 10. [`workflow_methylvalidation_seed.sql`](workflow_methylvalidation_seed.sql) — explicit MethylValidation workflow seed (MC centroid/detector loop + post-loop centroid/detector/mapper/enricher/disease progression).
 11. [`wf_sql_runtime_parity.sql`](wf_sql_runtime_parity.sql) — SQL-only parity for scope init from context, `${var.*}` resolution, and `mc.taskConfig` payload injection.
+12. [`wf_sql_scope_writepath_parity.sql`](wf_sql_scope_writepath_parity.sql) — SQL write-path parity: `wf_apply_output_bindings`, `wf_open_scope`, scope copy for PARALLEL children.
+13. [`wf_pca_two_group_seed.sql`](wf_pca_two_group_seed.sql) — PCaTwoGroupFlow: per-chromosome centroid+detection fan-out (milestone 1).
+14. [`wf_pca_two_group_run_example.sql`](wf_pca_two_group_run_example.sql) — End-to-end worker simulation + assertions for PCaTwoGroupFlow.
+
+See also: [CAPABILITY_CHECK.md](CAPABILITY_CHECK.md), [sql/wf_worker_contracts_pca_two_group.md](sql/wf_worker_contracts_pca_two_group.md), [sql/wf_foreach_design.md](sql/wf_foreach_design.md).
 
 To redeploy from scratch, drop runtime tables before re-running `workflow_definition.sql` if `workflow_instance` exists (it references `workflow_version`). Example:
 

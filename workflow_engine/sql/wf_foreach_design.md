@@ -1,0 +1,138 @@
+# FOREACH Node Type — Design Specification (Scale-up)
+
+**Status:** Design only (not implemented).  
+**Goal:** Express data-driven fan-out over JSON collections without static node explosion for full `project_PCa3.json` workflows.
+
+---
+
+## Problem
+
+Milestone 1 (`PCaTwoGroupFlow`) uses **122 workflow nodes** for 24 chromosomes × 2 groups. Full PCa3 scale:
+
+- 3 groups × 2 comparisons × 24 chromosomes × 1 context ≈ **hundreds of ACTION nodes** if statically generated.
+- Placeholders cannot index arrays: `${var.chromosomes[i]}` is unsupported.
+- Only `REPEAT` (fixed count) and `WHILE` (condition) exist today.
+
+---
+
+## Proposed node type: `FOREACH`
+
+### Definition table changes
+
+Extend `wf.workflow_node` CHECK constraint:
+
+```sql
+CONSTRAINT CK_wn_node_type CHECK (node_type IN (
+  N'ACTION', N'SEQUENCE', N'PARALLEL', N'IF', N'SWITCH', N'REPEAT', N'WHILE', N'FOREACH'
+))
+```
+
+New columns (additive migration):
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `foreach_collection_var` | `nvarchar(128)` | Scope variable name holding JSON array |
+| `foreach_item_var` | `nvarchar(128)` | Loop item variable written each iteration (default `item`) |
+| `foreach_index_var` | `nvarchar(128)` | Optional index variable (default `index`) |
+
+Single **BODY** child edge (same as REPEAT/WHILE).
+
+### Runtime behavior
+
+1. On `FOREACH` activation, read `foreach_collection_var` from scope as JSON array.
+2. Parse length `N`. If `N = 0`, complete FOREACH immediately.
+3. Insert `wf.loop_state` row (reuse table) with `repeat_target_count = N`, `current_iteration = 0`.
+4. For iteration `k` in `1..N`:
+   - Set scope variables:
+     - `foreach_item_var` → `JSON_QUERY(array, '$[k-1]')`
+     - `foreach_index_var` → `k-1` (integer JSON)
+   - Seed `ctx.iterationNo = k` (consistent with REPEAT).
+   - Activate BODY child once per iteration **sequentially** (like REPEAT), or optionally fan-out in parallel (config flag — default sequential for predictable scope).
+
+5. On BODY complete: increment iteration; if `< N`, re-enter BODY; else complete FOREACH.
+
+Alternative **parallel FOREACH** mode: activate `N` BODY subtrees under a synthetic inner PARALLEL (future).
+
+### Placeholder enhancements
+
+Extend `wf.wf_resolve_token`:
+
+| Token | Meaning |
+|-------|---------|
+| `${var.name}` | Existing scope lookup |
+| `${var.name[0]}` | `JSON_QUERY` index into array/object scope value |
+| `${ctx.item}` | Shorthand for current FOREACH item (also stored as scope var) |
+| `${ctx.index}` | FOREACH zero-based index |
+
+Reject general expressions; allow **only** `var.<ident>[<integer>]` as an extension of existing token grammar.
+
+---
+
+## Example compact workflow (future)
+
+```text
+SEQUENCE pca_full
+└─ FOREACH comparisons (var: mc.comparisons)
+   └─ SEQUENCE one_comparison
+      └─ FOREACH chromosomes (var: mc.chromosomes)
+         └─ SEQUENCE one_chr
+            ├─ PARALLEL centroids
+            │  ├─ ACTION centroid_g1  (templates use ${ctx.item.chr}, ${var.comparison.controlDir})
+            │  └─ ACTION centroid_g2
+            └─ ACTION detect
+```
+
+Instance `context_json` seeds:
+
+```json
+{
+  "projectPath": ".../project_PCa3.json",
+  "context": "CG",
+  "mc": {
+    "chromosomes": ["1","2",...,"Y"],
+    "comparisons": [
+      {"label":"PCa_Low","centroid1Dir":"...","centroid2Dir":"...","detectOutDir":"..."},
+      {"label":"PCa_High", "...": "..."}
+    ]
+  }
+}
+```
+
+Node count: **O(comparisons + chromosomes)** composite nodes, not **O(comparisons × chromosomes × actions)**.
+
+---
+
+## Stored procedures to add/change
+
+| Object | Change |
+|--------|--------|
+| `wf.wf_engine_activate` | `FOREACH` branch: init loop_state, bind item/index scope vars, activate BODY |
+| `wf.wf_foreach_continue` | New proc (mirror `wf_repeat_continue`) |
+| `wf.wf_engine_on_action_complete` | Route parent `FOREACH` → `wf_foreach_continue` |
+| `wf.wf_resolve_token` | Parse `var.x[n]` and `ctx.item` / `ctx.index` |
+| `wf.wf_open_scope` | No change (FOREACH is composite, opens scope like REPEAT) |
+
+---
+
+## Migration path
+
+1. Ship milestone 1 with static `PCaTwoGroupFlow` (validates worker contracts + SQL write-path).
+2. Implement FOREACH + indexing in SQL parity scripts.
+3. Add generator or hand-authored compact workflow for 2 comparisons × 24 chromosomes.
+4. Integrate with `wf.monte_carlo_plan` / `mc.taskConfig` for MC iterations (outer REPEAT, inner FOREACH).
+
+---
+
+## Open questions
+
+1. **Parallel vs sequential FOREACH:** Should each iteration run concurrently? Sequential matches REPEAT semantics and simplifies scope; parallel requires isolated scope per iteration (like PARALLEL children).
+2. **Nested FOREACH scope:** Item variables shadow outer loop names via scope chain walk (existing `wf_get_scope_variable_json` behavior).
+3. **JSON Schema validation:** Optional future table `wf.workflow_action_payload_schema` storing JSON Schema documents validated at claim time.
+
+---
+
+## References
+
+- Static milestone: [wf_pca_two_group_seed.sql](wf_pca_two_group_seed.sql)
+- Capability check: [../CAPABILITY_CHECK.md](../CAPABILITY_CHECK.md)
+- Delphi scope semantics: [../src/WfEngine.Scope.pas](../src/WfEngine.Scope.pas)
