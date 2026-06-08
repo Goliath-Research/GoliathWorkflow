@@ -78,25 +78,29 @@ Deploy **after** `wf_sql_runtime_parity.sql` and `wf_sql_branch_parity.sql`.
 
 | Gap | Impact on PCa3 |
 |-----|------------------|
-| No `FOREACH` node type | Per-chromosome fan-out requires **static** node generation at seed time (see [sql/wf_pca_two_group_seed.sql](sql/wf_pca_two_group_seed.sql)) |
+| No `FOREACH` node type | Per-chromosome / per-comparison fan-out uses **static** node generation at seed time. **Milestone 2:** [wf_pca_ovr_seed.sql](sql/wf_pca_ovr_seed.sql) (`PCaOvrFlow`) — 2 parallel comparisons + post mapper/enricher/progression. |
 | No array indexing in placeholders (`var.list[idx]`) | Cannot select i-th chromosome from a JSON array in templates |
 | No expression language in `${...}` | No `(`, `+`, spaces in tokens |
 | `payload_schema_ref` is external only | Worker validates JSON shape; DB does not enforce JSON Schema |
 | Detector has no `--chromosome` CLI flag | Single-chromosome worker runs need `step-override` with `"chromosome": ["N"]` |
 
-See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREACH` enhancement.
+See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREACH` enhancement (milestone 3 — data-driven full project without node explosion).
 
 ---
 
 ## 4. PCa3 pipeline mapping (high level)
 
-| Pipeline step | Worker capability | Milestone 1 |
-|---------------|-------------------|-------------|
-| Centroid per group | `methyl-centroid` | `pca.centroid` ACTION per (group, chromosome) |
-| Detection per comparison | `methyl-detector` | `pca.detector` ACTION per chromosome (after both centroids) |
-| Mapper / enricher / model | various | Out of scope for milestone 1; see [workflow_methylvalidation_seed.sql](sql/workflow_methylvalidation_seed.sql) |
+| Pipeline step | Worker capability | Milestone |
+|---------------|-------------------|-----------|
+| Centroid per group | `methyl-centroid` | 1 + 2 |
+| Detection per comparison | `methyl-detector` | 1 + 2 |
+| Mapper (all comparisons) | `methyl-mapper` | **2** ([PCaOvrFlow](sql/PCaOvrFlow.md)) |
+| Enricher | `methyl-enricher` | **2** |
+| Disease progression | `methyl-disease-progression` | **2** |
+| MC validation loop | various | [workflow_methylvalidation_seed.sql](sql/workflow_methylvalidation_seed.sql) |
 
-**Milestone 1 workflow:** `PCaTwoGroupFlow` — one control vs one disease group, 24 chromosomes, parallel by chromosome. See [sql/wf_worker_contracts_pca_two_group.md](sql/wf_worker_contracts_pca_two_group.md).
+**Milestone 1:** `PCaTwoGroupFlow` — one control vs one disease, 24 chromosomes.  
+**Milestone 2:** `PCaOvrFlow` — `control_vs_each_disease` (PCa_Low ∥ PCa_High), then mapper → enricher → progression.
 
 ---
 
@@ -110,7 +114,8 @@ See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREA
 6. **`wf_sql_scope_writepath_parity.sql`** (write-path parity)
 7. **`wf_sp_delete_workflow_def.sql`** (delete/rebuild definitions)
 8. `wf_pca_two_group_seed.sql`
-9. `wf_pca_two_group_run_example.sql` (validation)
+9. `wf_pca_ovr_seed.sql` — PCaOvrFlow (parallel OvR comparisons + progression)
+10. `wf_pca_two_group_run_example.sql` (validation)
 
 ---
 

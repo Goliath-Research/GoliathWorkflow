@@ -22,9 +22,10 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 12. [`wf_sql_scope_writepath_parity.sql`](wf_sql_scope_writepath_parity.sql) — SQL write-path parity: `wf_apply_output_bindings`, `wf_open_scope`, scope copy for PARALLEL children.
 13. [`wf_sp_delete_workflow_def.sql`](wf_sp_delete_workflow_def.sql) — `sp_delete_workflow_def`: remove a workflow definition (and instances) so seed scripts can be re-run.
 14. [`wf_pca_two_group_seed.sql`](wf_pca_two_group_seed.sql) — PCaTwoGroupFlow: per-chromosome centroid+detection fan-out (milestone 1).
-15. [`wf_pca_two_group_run_example.sql`](wf_pca_two_group_run_example.sql) — End-to-end worker simulation + assertions for PCaTwoGroupFlow.
+15. [`wf_pca_ovr_seed.sql`](wf_pca_ovr_seed.sql) — PCaOvrFlow: parallel OvR comparisons + mapper/enricher/progression (milestone 2).
+16. [`wf_pca_two_group_run_example.sql`](wf_pca_two_group_run_example.sql) — End-to-end worker simulation + assertions for PCaTwoGroupFlow.
 
-See also: [CAPABILITY_CHECK.md](CAPABILITY_CHECK.md), [sql/wf_worker_contracts_pca_two_group.md](sql/wf_worker_contracts_pca_two_group.md), [sql/wf_foreach_design.md](sql/wf_foreach_design.md).
+See also: [CAPABILITY_CHECK.md](CAPABILITY_CHECK.md), [sql/PCaOvrFlow.md](sql/PCaOvrFlow.md), [sql/wf_worker_contracts_pca_two_group.md](sql/wf_worker_contracts_pca_two_group.md), [sql/wf_worker_contracts_pca_ovr.md](sql/wf_worker_contracts_pca_ovr.md), [sql/wf_foreach_design.md](sql/wf_foreach_design.md).
 
 To redeploy from scratch, drop runtime tables before re-running `workflow_definition.sql` if `workflow_instance` exists (it references `workflow_version`). Example:
 
