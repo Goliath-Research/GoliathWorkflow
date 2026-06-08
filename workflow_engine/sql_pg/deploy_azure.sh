@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# Deploy MethylPipeline wf schema to Azure Database for PostgreSQL.
+#
+# Prerequisites:
+#   - psql (PostgreSQL client 15+)
+#   - Your client IP allowed in Azure PG firewall (or run from Azure VM / Cloud Shell)
+#   - Database created (e.g. epimethyl) and login granted CONNECT on it
+#
+# Native PostgreSQL auth (dba):
+#   export PGHOST=epimethyl.postgres.database.azure.com
+#   export PGPORT=5432
+#   export PGDATABASE=epimethyl
+#   export PGUSER=dba
+#   export PGPASSWORD='...'
+#   ./deploy_azure.sh
+#
+# Microsoft Entra ID auth:
+#   export PGHOST=epimethyl.postgres.database.azure.com
+#   export PGPORT=5432
+#   export PGDATABASE=epimethyl
+#   export PGUSER='you@epimethyl.com'
+#   export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)"
+#   ./deploy_azure.sh
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+export PGHOST="${PGHOST:-epimethyl.postgres.database.azure.com}"
+export PGPORT="${PGPORT:-5432}"
+export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-epimethyl}}"
+export PGSSLMODE="${PGSSLMODE:-require}"
+
+if [[ -z "${PGUSER:-}" ]]; then
+  PGUSER="${POSTGRES_USER:-dba}"
+  export PGUSER
+fi
+
+if [[ -z "${PGPASSWORD:-}" ]]; then
+  if [[ -n "${POSTGRES_PASSWORD:-}" ]]; then
+    export PGPASSWORD="$POSTGRES_PASSWORD"
+  elif command -v az >/dev/null 2>&1; then
+    echo "PGPASSWORD not set; fetching Entra token via az cli..."
+    export PGPASSWORD
+    PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)"
+  else
+    echo "Set PGPASSWORD (native auth) or install az cli for Entra auth." >&2
+    exit 1
+  fi
+fi
+
+SCRIPTS=(
+  00_schema.sql
+  03_engine_core.sql
+  05_runtime_parity.sql
+  06_scope_writepath_parity.sql
+  07_scope_encoding_parity.sql
+  01_worker_api.sql
+  02_repository_api.sql
+  04_admin.sql
+)
+
+echo "Target: host=$PGHOST db=$PGDATABASE user=$PGUSER sslmode=$PGSSLMODE"
+
+echo "Preflight..."
+psql -q -v ON_ERROR_STOP=1 -c "SELECT current_user, current_database(), version();"
+
+for name in "${SCRIPTS[@]}"; do
+  path="$SCRIPT_DIR/$name"
+  if [[ ! -f "$path" ]]; then
+    echo "Missing script: $path" >&2
+    exit 1
+  fi
+  echo "Applying $name ..."
+  psql -q -v ON_ERROR_STOP=1 -f "$path"
+done
+
+echo "Contract check..."
+python3 "$REPO_ROOT/workflow_engine/contract/validate_contract.py"
+
+echo "Deployed wf objects on $PGHOST/$PGDATABASE"

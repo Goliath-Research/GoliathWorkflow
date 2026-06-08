@@ -15,6 +15,55 @@ Deploy **in order**:
 | 7 | [`02_repository_api.sql`](02_repository_api.sql) | Middle-tier repository wrappers |
 | 8 | [`04_admin.sql`](04_admin.sql) | Admin (`sp_delete_workflow_def`) |
 
+## Azure Database for PostgreSQL
+
+Use [`deploy_azure.sh`](deploy_azure.sh) from a machine whose IP is allowed in the server firewall (Azure Portal → Networking, or run from Azure Cloud Shell / a VM in the same VNet).
+
+**Native auth (`dba`):**
+
+```bash
+export PGHOST=epimethyl.postgres.database.azure.com
+export PGPORT=5432
+export PGDATABASE=epimethyl
+export PGUSER=dba
+export PGPASSWORD='...'          # store in Key Vault / env, not in git
+export PGSSLMODE=require
+
+./workflow_engine/sql_pg/deploy_azure.sh
+```
+
+**Microsoft Entra ID:**
+
+```bash
+export PGHOST=epimethyl.postgres.database.azure.com
+export PGPORT=5432
+export PGDATABASE=epimethyl
+export PGUSER='you@epimethyl.com'
+export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)"
+export PGSSLMODE=require
+
+./workflow_engine/sql_pg/deploy_azure.sh
+```
+
+Connect to database **`epimethyl`** (not `postgres`) for the wf schema. If the database does not exist yet, create it as an admin on the `postgres` database first:
+
+```sql
+CREATE DATABASE epimethyl OWNER dba;
+```
+
+**Middle-tier env (Delphi / REST gateway):**
+
+```bash
+export BACKEND_DB=postgres
+export POSTGRES_HOST=epimethyl.postgres.database.azure.com
+export POSTGRES_PORT=5432
+export POSTGRES_DB=epimethyl
+export POSTGRES_USER=dba
+export POSTGRES_PASSWORD='...'
+```
+
+After schema deploy, migrate **data** separately (pg_dump/pg_restore or ETL). The scripts above create objects only — no seed workflows or domain tables beyond `wf`.
+
 ## Local container
 
 ```bash
