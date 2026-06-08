@@ -15,6 +15,7 @@ uses
   Uni,
   WfEngine.Exceptions,
   WfEngine.Interfaces,
+  WfEngine.Dialect,
   WfEngine.Scheduler,
   WfEngine.Types;
 
@@ -57,7 +58,7 @@ begin
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    P.StoredProcName := WF_SCHEMA + '.wf_worker_authenticate';
+    P.StoredProcName := WfSchemaDot + 'wf_worker_authenticate';
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
     P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;
     P.ExecProc;
@@ -75,7 +76,7 @@ begin
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    P.StoredProcName := WF_SCHEMA + 'sp_worker_request_task';
+    P.StoredProcName := WfSchemaDot + 'sp_worker_request_task';
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
     P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;
     if ACapability = '' then
@@ -111,7 +112,6 @@ function TWorkflowWorkerApi.SubmitResult(const ANodeExecutionId, AWorkerId: Int6
   const AWorkerToken: string; AResultCode: Integer; const AOutputJson: string): TSubmitResultAck;
 var
   P: TUniStoredProc;
-  OutAccepted: TParam;
 begin
   FillChar(Result, SizeOf(Result), 0);
   AuthenticateProc(AWorkerId, AWorkerToken);
@@ -123,8 +123,8 @@ begin
     try
       Q.Connection := FConnection;
       Q.SQL.Text := Format(
-        'SELECT 1 FROM %s.task_lease WHERE node_execution_id = :ne AND worker_id = :wid',
-        [WF_SCHEMA]);
+        'SELECT 1 FROM %stask_lease WHERE node_execution_id = :ne AND worker_id = :wid',
+        [WfSchemaDot]);
       Q.ParamByName('ne').AsLargeInt := ANodeExecutionId;
       Q.ParamByName('wid').AsLargeInt := AWorkerId;
       Q.Open;
@@ -140,7 +140,36 @@ begin
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    P.StoredProcName := WF_SCHEMA + 'sp_worker_submit_result';
+    if GetWorkflowBackend = wbPostgres then
+    begin
+      var Q := TUniQuery.Create(nil);
+      try
+        Q.Connection := FConnection;
+        Q.SQL.Text := Format(
+          'SELECT accepted, instance_status, next_ready_count FROM %ssp_worker_submit_result(:ne, :wid, :tok, :rc, CAST(:out AS jsonb))',
+          [WfSchemaDot]);
+        Q.ParamByName('ne').AsLargeInt := ANodeExecutionId;
+        Q.ParamByName('wid').AsLargeInt := AWorkerId;
+        Q.ParamByName('tok').AsString := AWorkerToken;
+        Q.ParamByName('rc').AsInteger := AResultCode;
+        if AOutputJson = '' then
+          Q.ParamByName('out').Clear
+        else
+          Q.ParamByName('out').AsString := AOutputJson;
+        Q.Open;
+        if not Q.Eof then
+        begin
+          Result.Accepted := Q.FieldByName('accepted').AsBoolean;
+          Result.InstanceStatus := TWorkflowInstanceStatus.FromDb(Q.FieldByName('instance_status').AsString);
+          Result.NextReadyCount := Q.FieldByName('next_ready_count').AsInteger;
+        end;
+      finally
+        Q.Free;
+      end;
+      Exit;
+    end;
+
+    P.StoredProcName := WfSchemaDot + 'sp_worker_submit_result';
     P.Params.CreateParam(ftLargeint, 'node_execution_id', ptInput).AsLargeInt := ANodeExecutionId;
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
     P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;
@@ -149,14 +178,13 @@ begin
       P.Params.CreateParam(ftWideMemo, 'output_json', ptInput).Clear
     else
       P.Params.CreateParam(ftWideMemo, 'output_json', ptInput).AsString := AOutputJson;
-    OutAccepted := P.Params.CreateParam(ftBoolean, 'accepted', ptOutput);
-    P.Params.CreateParam(ftString, 'instance_status', ptOutput);
-    P.Params.CreateParam(ftInteger, 'next_ready_count', ptOutput);
-    P.ExecProc;
-    Result.Accepted := OutAccepted.AsBoolean;
-    Result.InstanceStatus := TWorkflowInstanceStatus.FromDb(
-      P.ParamByName('instance_status').AsString);
-    Result.NextReadyCount := P.ParamByName('next_ready_count').AsInteger;
+    P.Open;
+    if not P.Eof then
+    begin
+      Result.Accepted := P.FieldByName('accepted').AsBoolean;
+      Result.InstanceStatus := TWorkflowInstanceStatus.FromDb(P.FieldByName('instance_status').AsString);
+      Result.NextReadyCount := P.FieldByName('next_ready_count').AsInteger;
+    end;
   finally
     P.Free;
   end;
@@ -171,7 +199,7 @@ begin
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    P.StoredProcName := WF_SCHEMA + 'sp_worker_heartbeat';
+    P.StoredProcName := WfSchemaDot + 'sp_worker_heartbeat';
     P.Params.CreateParam(ftLargeint, 'node_execution_id', ptInput).AsLargeInt := ANodeExecutionId;
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
     P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;
@@ -195,7 +223,7 @@ begin
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    P.StoredProcName := WF_SCHEMA + 'sp_worker_fail_task';
+    P.StoredProcName := WfSchemaDot + 'sp_worker_fail_task';
     P.Params.CreateParam(ftLargeint, 'node_execution_id', ptInput).AsLargeInt := ANodeExecutionId;
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
     P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;

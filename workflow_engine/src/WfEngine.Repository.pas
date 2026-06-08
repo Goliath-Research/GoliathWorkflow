@@ -95,7 +95,8 @@ implementation
 uses
   System.DateUtils,
   System.JSON,
-  System.StrUtils;
+  System.StrUtils,
+  WfEngine.Dialect;
 
 { TWorkflowRepository }
 
@@ -213,7 +214,7 @@ begin
       'SELECT id, workflow_version_id, node_type, node_key, workflow_action_id, ' +
       'repeat_count, condition_ref_node_key, switch_ref_node_key, condition_var, switch_var ' +
       'FROM %s.workflow_node WHERE workflow_version_id = %d',
-      [WF_SCHEMA, AVersionId]));
+      [WfSchema, AVersionId]));
     try
       while not Q.Eof do
       begin
@@ -258,7 +259,7 @@ begin
     begin
       Q := OpenQuery(Format(
         'SELECT template_json FROM %s.workflow_input_template WHERE workflow_node_id = %d',
-        [WF_SCHEMA, Nodes[I].Id]));
+        [WfSchema, Nodes[I].Id]));
       try
         if not Q.Eof then
         begin
@@ -277,7 +278,7 @@ begin
       'switch_case_value, is_default FROM %s.workflow_edge e ' +
       'INNER JOIN %s.workflow_node pn ON pn.id = e.parent_node_id ' +
       'WHERE pn.workflow_version_id = %d ORDER BY e.parent_node_id, e.child_order',
-      [WF_SCHEMA, WF_SCHEMA, AVersionId]));
+      [WfSchema, WfSchema, AVersionId]));
     try
       while not Q.Eof do
       begin
@@ -305,7 +306,7 @@ begin
     Result.Edges := Edges.ToArray;
     Result.RootNodeId := ScalarInt64(Format(
       'SELECT root_node_id FROM %s.workflow_version WHERE id = %d',
-      [WF_SCHEMA, AVersionId]));
+      [WfSchema, AVersionId]));
     Result.BuildIndexes;
   finally
     Nodes.Free;
@@ -317,48 +318,54 @@ function TWorkflowRepository.GetInstanceVersionId(const AInstanceId: Int64): Int
 begin
   Result := ScalarInt64(Format(
     'SELECT workflow_version_id FROM %s.workflow_instance WHERE id = %d',
-    [WF_SCHEMA, AInstanceId]));
+    [WfSchema, AInstanceId]));
 end;
 
 function TWorkflowRepository.GetInstanceStatus(const AInstanceId: Int64): TWorkflowInstanceStatus;
 begin
   Result := TWorkflowInstanceStatus.FromDb(ScalarStr(Format(
     'SELECT status FROM %s.workflow_instance WHERE id = %d',
-    [WF_SCHEMA, AInstanceId])));
+    [WfSchema, AInstanceId])));
 end;
 
 procedure TWorkflowRepository.SetInstanceStatus(const AInstanceId: Int64;
   AStatus: TWorkflowInstanceStatus);
 var
-  Extra: string;
+  P: TUniStoredProc;
 begin
-  Extra := '';
-  if AStatus in [wisCompleted, wisFailed, wisCancelled] then
-    Extra := ', completed_at_utc = SYSUTCDATETIME()';
-  if AStatus = wisRunning then
-    Extra := ', started_at_utc = ISNULL(started_at_utc, SYSUTCDATETIME())';
-  ExecSql(Format(
-    'UPDATE %s.workflow_instance SET status = ''%s''%s WHERE id = %d',
-    [WF_SCHEMA, AStatus.ToDb, Extra, AInstanceId]));
+  P := TUniStoredProc.Create(nil);
+  try
+    P.Connection := FConnection;
+    P.StoredProcName := WfSchemaDot + 'wf_repo_set_instance_status';
+    P.Params.CreateParam(ftLargeint, 'instance_id', ptInput).AsLargeInt := AInstanceId;
+    P.Params.CreateParam(ftString, 'status', ptInput).AsString := AStatus.ToDb;
+    P.ExecProc;
+  finally
+    P.Free;
+  end;
 end;
 
 function TWorkflowRepository.CreateWorkflowInstance(const AVersionId: Int64;
   const AContextJson: string): Int64;
 var
   Q: TUniQuery;
-  Ctx: string;
 begin
-  if AContextJson = '' then
-    Ctx := 'NULL'
-  else
-    Ctx := QuotedStr(AContextJson);
   Q := TUniQuery.Create(nil);
   try
     Q.Connection := FConnection;
-    Q.SQL.Text := Format(
-      'INSERT INTO %s.workflow_instance (workflow_version_id, status, context_json) ' +
-      'OUTPUT INSERTED.id VALUES (%d, ''CREATED'', %s)',
-      [WF_SCHEMA, AVersionId, Ctx]);
+    if GetWorkflowBackend = wbPostgres then
+      Q.SQL.Text := Format(
+        'SELECT id FROM %swf_repo_create_workflow_instance(:vid, CAST(:ctx AS jsonb))',
+        [WfSchemaDot])
+    else
+      Q.SQL.Text := Format(
+        'EXEC %swf_repo_create_workflow_instance @version_id = :vid, @context_json = :ctx',
+        [WfSchemaDot]);
+    Q.ParamByName('vid').AsLargeInt := AVersionId;
+    if AContextJson = '' then
+      Q.ParamByName('ctx').Clear
+    else
+      Q.ParamByName('ctx').AsString := AContextJson;
     Q.Open;
     Result := Q.Fields[0].AsLargeInt;
   finally
@@ -369,35 +376,42 @@ end;
 function TWorkflowRepository.InsertNodeExecution(const ARec: TNodeExecution): Int64;
 var
   Q: TUniQuery;
-  ParentSql: string;
-  AvailSql: string;
 begin
-  if ARec.HasParentExecution then
-    ParentSql := IntToStr(ARec.ParentNodeExecutionId)
-  else
-    ParentSql := 'NULL';
-  if ARec.Status = nesReady then
-    AvailSql := 'SYSUTCDATETIME()'
-  else
-    AvailSql := 'NULL';
-
   Q := TUniQuery.Create(nil);
   try
     Q.Connection := FConnection;
-    Q.SQL.Text := Format(
-      'INSERT INTO %s.node_execution (workflow_instance_id, workflow_node_id, status, ' +
-      'attempt_no, parent_node_execution_id, iteration_no, input_json, available_at_utc, started_at_utc) ' +
-      'OUTPUT INSERTED.id VALUES (%d, %d, ''%s'', %d, %s, %d, %s, %s, %s)',
-      [WF_SCHEMA,
-       ARec.WorkflowInstanceId,
-       ARec.WorkflowNodeId,
-       ARec.Status.ToDb,
-       ARec.AttemptNo,
-       ParentSql,
-       ARec.IterationNo,
-       IfThen(ARec.InputJson <> '', QuotedStr(ARec.InputJson), 'NULL'),
-       AvailSql,
-       IfThen(ARec.Status = nesRunning, 'SYSUTCDATETIME()', 'NULL')]);
+    if GetWorkflowBackend = wbPostgres then
+      Q.SQL.Text := Format(
+        'SELECT id FROM %swf_repo_insert_node_execution(:wi, :wn, :st, :att, :par, :iter, ' +
+        'CAST(:inp AS jsonb), :avail, :start)',
+        [WfSchemaDot])
+    else
+      Q.SQL.Text := Format(
+        'EXEC %swf_repo_insert_node_execution @workflow_instance_id=:wi, @workflow_node_id=:wn, ' +
+        '@status=:st, @attempt_no=:att, @parent_node_execution_id=:par, @iteration_no=:iter, ' +
+        '@input_json=:inp, @set_available_now=:avail, @set_started_now=:start',
+        [WfSchemaDot]);
+    Q.ParamByName('wi').AsLargeInt := ARec.WorkflowInstanceId;
+    Q.ParamByName('wn').AsLargeInt := ARec.WorkflowNodeId;
+    Q.ParamByName('st').AsString := ARec.Status.ToDb;
+    Q.ParamByName('att').AsInteger := ARec.AttemptNo;
+    if ARec.HasParentExecution then
+      Q.ParamByName('par').AsLargeInt := ARec.ParentNodeExecutionId
+    else
+      Q.ParamByName('par').Clear;
+    Q.ParamByName('iter').AsInteger := ARec.IterationNo;
+    if ARec.InputJson <> '' then
+      Q.ParamByName('inp').AsString := ARec.InputJson
+    else
+      Q.ParamByName('inp').Clear;
+    if ARec.Status = nesReady then
+      Q.ParamByName('avail').AsBoolean := True
+    else
+      Q.ParamByName('avail').AsBoolean := False;
+    if ARec.Status = nesRunning then
+      Q.ParamByName('start').AsBoolean := True
+    else
+      Q.ParamByName('start').AsBoolean := False;
     Q.Open;
     Result := Q.Fields[0].AsLargeInt;
   finally
@@ -409,24 +423,26 @@ procedure TWorkflowRepository.UpdateNodeExecutionStatus(const AExecutionId: Int6
   AStatus: TNodeExecutionStatus; const AOutputJson: string; AResultCode: Integer;
   AHasResultCode: Boolean; AEngineErrorCode: Integer; const AEngineErrorMessage: string);
 var
-  OutSql, RcSql, ErrSql: string;
+  P: TUniStoredProc;
 begin
-  if AOutputJson = '' then
-    OutSql := 'NULL'
-  else
-    OutSql := QuotedStr(AOutputJson);
-  if AHasResultCode then
-    RcSql := Format(', result_code = %d', [AResultCode])
-  else
-    RcSql := '';
-  if AEngineErrorCode <> 0 then
-    ErrSql := Format(', engine_error_code = %d, engine_error_message = %s',
-      [AEngineErrorCode, QuotedStr(AEngineErrorMessage)])
-  else
-    ErrSql := '';
-  ExecSql(Format(
-    'UPDATE %s.node_execution SET status = ''%s'', output_json = %s, ended_at_utc = SYSUTCDATETIME()%s%s WHERE id = %d',
-    [WF_SCHEMA, AStatus.ToDb, OutSql, RcSql, ErrSql, AExecutionId]));
+  P := TUniStoredProc.Create(nil);
+  try
+    P.Connection := FConnection;
+    P.StoredProcName := WfSchemaDot + 'wf_repo_update_node_execution_status';
+    P.Params.CreateParam(ftLargeint, 'execution_id', ptInput).AsLargeInt := AExecutionId;
+    P.Params.CreateParam(ftString, 'status', ptInput).AsString := AStatus.ToDb;
+    if AOutputJson = '' then
+      P.Params.CreateParam(ftWideMemo, 'output_json', ptInput).Clear
+    else
+      P.Params.CreateParam(ftWideMemo, 'output_json', ptInput).AsString := AOutputJson;
+    P.Params.CreateParam(ftBoolean, 'has_result_code', ptInput).AsBoolean := AHasResultCode;
+    P.Params.CreateParam(ftInteger, 'result_code', ptInput).AsInteger := AResultCode;
+    P.Params.CreateParam(ftInteger, 'engine_error_code', ptInput).AsInteger := AEngineErrorCode;
+    P.Params.CreateParam(ftWideString, 'engine_error_message', ptInput).AsString := AEngineErrorMessage;
+    P.ExecProc;
+  finally
+    P.Free;
+  end;
 end;
 
 procedure TWorkflowRepository.UpdateNodeExecutionInputJson(const AExecutionId: Int64;
@@ -434,14 +450,14 @@ procedure TWorkflowRepository.UpdateNodeExecutionInputJson(const AExecutionId: I
 begin
   ExecSql(Format(
     'UPDATE %s.node_execution SET input_json = %s WHERE id = %d',
-    [WF_SCHEMA, QuotedStr(AInputJson), AExecutionId]));
+    [WfSchema, QuotedStr(AInputJson), AExecutionId]));
 end;
 
 procedure TWorkflowRepository.DeleteTaskLease(const ANodeExecutionId: Int64);
 begin
   ExecSql(Format(
     'DELETE FROM %s.task_lease WHERE node_execution_id = %d',
-    [WF_SCHEMA, ANodeExecutionId]));
+    [WfSchema, ANodeExecutionId]));
 end;
 
 procedure TWorkflowRepository.SaveExecutionContext(const ANodeExecutionId: Int64;
@@ -451,12 +467,12 @@ var
 begin
   ExecSql(Format(
     'DELETE FROM %s.execution_context WHERE node_execution_id = %d',
-    [WF_SCHEMA, ANodeExecutionId]));
+    [WfSchema, ANodeExecutionId]));
   for E in AEntries do
     ExecSql(Format(
       'INSERT INTO %s.execution_context (node_execution_id, context_key, context_value_json) ' +
       'VALUES (%d, %s, %s)',
-      [WF_SCHEMA, ANodeExecutionId, QuotedStr(E.ContextKey), QuotedStr(E.ContextValueJson)]));
+      [WfSchema, ANodeExecutionId, QuotedStr(E.ContextKey), QuotedStr(E.ContextValueJson)]));
 end;
 
 function TWorkflowRepository.TryGetExecutionContextValue(const ANodeExecutionId: Int64;
@@ -464,7 +480,7 @@ function TWorkflowRepository.TryGetExecutionContextValue(const ANodeExecutionId:
 begin
   AValueJson := ScalarStr(Format(
     'SELECT context_value_json FROM %s.execution_context WHERE node_execution_id = %d AND context_key = %s',
-    [WF_SCHEMA, ANodeExecutionId, QuotedStr(AContextKey)]));
+    [WfSchema, ANodeExecutionId, QuotedStr(AContextKey)]));
   Result := AValueJson <> '';
 end;
 
@@ -474,15 +490,12 @@ var
   Q: TUniQuery;
 begin
   Q := OpenQuery(Format(
-    'SELECT TOP 1 ne.result_code FROM %s.node_execution ne ' +
-    'INNER JOIN %s.workflow_node wn ON wn.id = ne.workflow_node_id ' +
-    'WHERE ne.workflow_instance_id = %d AND wn.node_key = %s AND ne.status = ''SUCCEEDED'' ' +
-    'ORDER BY ne.ended_at_utc DESC, ne.id DESC',
-    [WF_SCHEMA, WF_SCHEMA, AInstanceId, QuotedStr(ANodeKey)]));
+    'SELECT found, result_code FROM %swf_repo_try_latest_task_result_code(%d, %s)',
+    [WfSchemaDot, AInstanceId, QuotedStr(ANodeKey)]));
   try
-    Result := not Q.Eof and not Q.Fields[0].IsNull;
+    Result := (not Q.Eof) and Q.FieldByName('found').AsBoolean;
     if Result then
-      AResultCode := Q.Fields[0].AsInteger;
+      AResultCode := Q.FieldByName('result_code').AsInteger;
   finally
     Q.Free;
   end;
@@ -556,7 +569,7 @@ begin
     'INNER JOIN %s.workflow_node wn ON wn.id = ne.workflow_node_id ' +
     'WHERE ne.workflow_instance_id = %d AND wn.node_key = %s AND ne.status = ''SUCCEEDED'' ' +
     'ORDER BY ne.ended_at_utc DESC, ne.id DESC',
-    [WF_SCHEMA, WF_SCHEMA, AInstanceId, QuotedStr(ANodeKey)]));
+    [WfSchema, WfSchema, AInstanceId, QuotedStr(ANodeKey)]));
   Result := ExtractJsonFragment(OutJson, AJsonPath, AFragmentJson);
 end;
 
@@ -607,7 +620,7 @@ begin
   Q := OpenQuery(Format(
     'SELECT ne.*, wn.node_key, wn.node_type FROM %s.node_execution ne ' +
     'INNER JOIN %s.workflow_node wn ON wn.id = ne.workflow_node_id WHERE ne.id = %d',
-    [WF_SCHEMA, WF_SCHEMA, AExecutionId]));
+    [WfSchema, WfSchema, AExecutionId]));
   try
     Result := not Q.Eof;
     if Result then
@@ -628,7 +641,7 @@ begin
       'SELECT ne.*, wn.node_key, wn.node_type FROM %s.node_execution ne ' +
       'INNER JOIN %s.workflow_node wn ON wn.id = ne.workflow_node_id ' +
       'WHERE ne.parent_node_execution_id = %d ORDER BY ne.id',
-      [WF_SCHEMA, WF_SCHEMA, AParentExecutionId]));
+      [WfSchema, WfSchema, AParentExecutionId]));
     try
       while not Q.Eof do
       begin
@@ -652,7 +665,7 @@ begin
   Q := OpenQuery(Format(
     'SELECT id, workflow_instance_id, control_node_id, scope_node_execution_id, ' +
     'current_iteration, repeat_target_count FROM %s.loop_state WHERE scope_node_execution_id = %d',
-    [WF_SCHEMA, AScopeExecutionId]));
+    [WfSchema, AScopeExecutionId]));
   try
     Result := not Q.Eof;
     if not Result then
@@ -675,11 +688,20 @@ begin
   Q := TUniQuery.Create(nil);
   try
     Q.Connection := FConnection;
-    Q.SQL.Text := Format(
-      'INSERT INTO %s.loop_state (workflow_instance_id, control_node_id, scope_node_execution_id, ' +
-      'current_iteration, repeat_target_count) OUTPUT INSERTED.id VALUES (%d, %d, %d, %d, %d)',
-      [WF_SCHEMA, AState.WorkflowInstanceId, AState.ControlNodeId, AState.ScopeNodeExecutionId,
-       AState.CurrentIteration, AState.RepeatTargetCount]);
+    if GetWorkflowBackend = wbPostgres then
+      Q.SQL.Text := Format(
+        'SELECT id FROM %swf_repo_insert_loop_state(:wi, :ctl, :scope, :cur, :max)',
+        [WfSchemaDot])
+    else
+      Q.SQL.Text := Format(
+        'EXEC %swf_repo_insert_loop_state @workflow_instance_id=:wi, @control_node_id=:ctl, ' +
+        '@scope_node_execution_id=:scope, @current_iteration=:cur, @repeat_target_count=:max',
+        [WfSchemaDot]);
+    Q.ParamByName('wi').AsLargeInt := AState.WorkflowInstanceId;
+    Q.ParamByName('ctl').AsLargeInt := AState.ControlNodeId;
+    Q.ParamByName('scope').AsLargeInt := AState.ScopeNodeExecutionId;
+    Q.ParamByName('cur').AsInteger := AState.CurrentIteration;
+    Q.ParamByName('max').AsInteger := AState.RepeatTargetCount;
     Q.Open;
     AId := Q.Fields[0].AsLargeInt;
   finally
@@ -692,7 +714,7 @@ procedure TWorkflowRepository.UpdateLoopStateIteration(const ALoopStateId: Int64
 begin
   ExecSql(Format(
     'UPDATE %s.loop_state SET current_iteration = %d WHERE id = %d',
-    [WF_SCHEMA, ACurrentIteration, ALoopStateId]));
+    [WfSchema, ACurrentIteration, ALoopStateId]));
 end;
 
 function TWorkflowRepository.GetRunningInstances(const AMaxCount: Integer): TArray<Int64>;
@@ -702,9 +724,17 @@ var
 begin
   L := TList<Int64>.Create;
   try
-    Q := OpenQuery(Format(
-      'SELECT TOP (%d) id FROM %s.workflow_instance WHERE status = ''RUNNING'' ORDER BY id',
-      [AMaxCount, WF_SCHEMA]));
+    if GetWorkflowBackend = wbPostgres then
+      Q := OpenQuery(Format(
+        'SELECT id FROM %swf_repo_get_running_instances(%d)',
+        [WfSchemaDot, AMaxCount]))
+    else
+    begin
+      Q := TUniQuery.Create(nil);
+      Q.Connection := FConnection;
+      Q.SQL.Text := Format('EXEC %swf_repo_get_running_instances @max_count = %d', [WfSchemaDot, AMaxCount]);
+      Q.Open;
+    end;
     try
       while not Q.Eof do
       begin
@@ -724,7 +754,7 @@ function TWorkflowRepository.CountReadyTasks(const AInstanceId: Int64): Integer;
 begin
   Result := ScalarInt(Format(
     'SELECT COUNT(*) FROM %s.node_execution WHERE workflow_instance_id = %d AND status = ''READY''',
-    [WF_SCHEMA, AInstanceId]));
+    [WfSchema, AInstanceId]));
 end;
 
 function TWorkflowRepository.LoadInputBindings(const ANodeId: Int64): TArray<TPair<string, string>>;
@@ -736,7 +766,7 @@ begin
   try
     Q := OpenQuery(Format(
       'SELECT target_json_path, source_expr FROM %s.workflow_input_binding WHERE workflow_node_id = %d ORDER BY id',
-      [WF_SCHEMA, ANodeId]));
+      [WfSchema, ANodeId]));
     try
       while not Q.Eof do
       begin
@@ -758,7 +788,7 @@ function TWorkflowRepository.GetInstanceContextJson(const AInstanceId: Int64): s
 begin
   Result := ScalarStr(Format(
     'SELECT CAST(context_json AS NVARCHAR(MAX)) FROM %s.workflow_instance WHERE id = %d',
-    [WF_SCHEMA, AInstanceId]));
+    [WfSchema, AInstanceId]));
 end;
 
 procedure TWorkflowRepository.UpdateInstanceContextJson(const AInstanceId: Int64;
@@ -766,46 +796,56 @@ procedure TWorkflowRepository.UpdateInstanceContextJson(const AInstanceId: Int64
 begin
   ExecSql(Format(
     'UPDATE %s.workflow_instance SET context_json = %s WHERE id = %d',
-    [WF_SCHEMA, IfThen(AContextJson <> '', QuotedStr(AContextJson), 'NULL'), AInstanceId]));
+    [WfSchema, IfThen(AContextJson <> '', QuotedStr(AContextJson), 'NULL'), AInstanceId]));
 end;
 
 procedure TWorkflowRepository.UpsertMonteCarloPlan(const AInstanceId: Int64;
   const ABaseProjectPath, ALayout: string; ASeed, AFeatureIterations,
   AQualityIterations: Integer; const AConfigJson: string);
+var
+  P: TUniStoredProc;
 begin
-  ExecSql(Format(
-    'IF EXISTS (SELECT 1 FROM %s.monte_carlo_plan WHERE workflow_instance_id = %d) ' +
-    'UPDATE %s.monte_carlo_plan SET base_project_path = %s, layout_name = %s, seed = %d, ' +
-    'feature_iterations = %d, quality_iterations = %d, config_json = %s, updated_at_utc = SYSUTCDATETIME() ' +
-    'WHERE workflow_instance_id = %d ' +
-    'ELSE INSERT INTO %s.monte_carlo_plan ' +
-    '(workflow_instance_id, base_project_path, layout_name, seed, feature_iterations, quality_iterations, config_json) ' +
-    'VALUES (%d, %s, %s, %d, %d, %d, %s)',
-    [WF_SCHEMA, AInstanceId,
-     WF_SCHEMA, QuotedStr(ABaseProjectPath), QuotedStr(ALayout), ASeed,
-     AFeatureIterations, AQualityIterations, IfThen(AConfigJson <> '', QuotedStr(AConfigJson), 'NULL'),
-     AInstanceId,
-     WF_SCHEMA,
-     AInstanceId, QuotedStr(ABaseProjectPath), QuotedStr(ALayout), ASeed,
-     AFeatureIterations, AQualityIterations, IfThen(AConfigJson <> '', QuotedStr(AConfigJson), 'NULL')]));
+  P := TUniStoredProc.Create(nil);
+  try
+    P.Connection := FConnection;
+    P.StoredProcName := WfSchemaDot + 'wf_repo_upsert_monte_carlo_plan';
+    P.Params.CreateParam(ftLargeint, 'instance_id', ptInput).AsLargeInt := AInstanceId;
+    P.Params.CreateParam(ftWideString, 'base_project_path', ptInput).AsString := ABaseProjectPath;
+    P.Params.CreateParam(ftWideString, 'layout', ptInput).AsString := ALayout;
+    P.Params.CreateParam(ftInteger, 'seed', ptInput).AsInteger := ASeed;
+    P.Params.CreateParam(ftInteger, 'feature_iterations', ptInput).AsInteger := AFeatureIterations;
+    P.Params.CreateParam(ftInteger, 'quality_iterations', ptInput).AsInteger := AQualityIterations;
+    if AConfigJson = '' then
+      P.Params.CreateParam(ftWideMemo, 'config_json', ptInput).Clear
+    else
+      P.Params.CreateParam(ftWideMemo, 'config_json', ptInput).AsString := AConfigJson;
+    P.ExecProc;
+  finally
+    P.Free;
+  end;
 end;
 
 procedure TWorkflowRepository.UpsertMonteCarloRun(const AInstanceId: Int64;
   const ARunId: string; AIterationNo: Integer; const APhase, ATaskConfigJson: string);
+var
+  P: TUniStoredProc;
 begin
-  ExecSql(Format(
-    'IF EXISTS (SELECT 1 FROM %s.monte_carlo_run WHERE workflow_instance_id = %d AND run_id = %s) ' +
-    'UPDATE %s.monte_carlo_run SET iteration_no = %d, phase_name = %s, task_config_json = %s, updated_at_utc = SYSUTCDATETIME() ' +
-    'WHERE workflow_instance_id = %d AND run_id = %s ' +
-    'ELSE INSERT INTO %s.monte_carlo_run ' +
-    '(workflow_instance_id, run_id, iteration_no, phase_name, task_config_json) ' +
-    'VALUES (%d, %s, %d, %s, %s)',
-    [WF_SCHEMA, AInstanceId, QuotedStr(ARunId),
-     WF_SCHEMA, AIterationNo, QuotedStr(APhase), IfThen(ATaskConfigJson <> '', QuotedStr(ATaskConfigJson), 'NULL'),
-     AInstanceId, QuotedStr(ARunId),
-     WF_SCHEMA,
-     AInstanceId, QuotedStr(ARunId), AIterationNo, QuotedStr(APhase),
-     IfThen(ATaskConfigJson <> '', QuotedStr(ATaskConfigJson), 'NULL')]));
+  P := TUniStoredProc.Create(nil);
+  try
+    P.Connection := FConnection;
+    P.StoredProcName := WfSchemaDot + 'wf_repo_upsert_monte_carlo_run';
+    P.Params.CreateParam(ftLargeint, 'instance_id', ptInput).AsLargeInt := AInstanceId;
+    P.Params.CreateParam(ftWideString, 'run_id', ptInput).AsString := ARunId;
+    P.Params.CreateParam(ftInteger, 'iteration_no', ptInput).AsInteger := AIterationNo;
+    P.Params.CreateParam(ftWideString, 'phase', ptInput).AsString := APhase;
+    if ATaskConfigJson = '' then
+      P.Params.CreateParam(ftWideMemo, 'task_config_json', ptInput).Clear
+    else
+      P.Params.CreateParam(ftWideMemo, 'task_config_json', ptInput).AsString := ATaskConfigJson;
+    P.ExecProc;
+  finally
+    P.Free;
+  end;
 end;
 
 function TWorkflowRepository.TryGetMonteCarloRunTaskConfig(const AInstanceId: Int64;
@@ -813,7 +853,7 @@ function TWorkflowRepository.TryGetMonteCarloRunTaskConfig(const AInstanceId: In
 begin
   ATaskConfigJson := ScalarStr(Format(
     'SELECT task_config_json FROM %s.monte_carlo_run WHERE workflow_instance_id = %d AND run_id = %s',
-    [WF_SCHEMA, AInstanceId, QuotedStr(ARunId)]));
+    [WfSchema, AInstanceId, QuotedStr(ARunId)]));
   Result := ATaskConfigJson <> '';
 end;
 
@@ -822,7 +862,7 @@ procedure TWorkflowRepository.DeleteScopeVariables(const AInstanceId: Int64;
 begin
   ExecSql(Format(
     'DELETE FROM %s.scope_variable WHERE workflow_instance_id = %d AND scope_node_execution_id = %d',
-    [WF_SCHEMA, AInstanceId, AScopeExecId]));
+    [WfSchema, AInstanceId, AScopeExecId]));
 end;
 
 procedure TWorkflowRepository.CopyScopeVariables(const AInstanceId, AFromScopeExecId,
@@ -832,19 +872,26 @@ begin
     'INSERT INTO %s.scope_variable (workflow_instance_id, scope_node_execution_id, var_name, value_json) ' +
     'SELECT workflow_instance_id, %d, var_name, value_json FROM %s.scope_variable ' +
     'WHERE workflow_instance_id = %d AND scope_node_execution_id = %d',
-    [WF_SCHEMA, AToScopeExecId, WF_SCHEMA, AInstanceId, AFromScopeExecId]));
+    [WfSchema, AToScopeExecId, WfSchema, AInstanceId, AFromScopeExecId]));
 end;
 
 procedure TWorkflowRepository.SetScopeVariable(const AInstanceId, AScopeExecId: Int64;
   const AVarName, AValueJson: string);
+var
+  P: TUniStoredProc;
 begin
-  ExecSql(Format(
-    'DELETE FROM %s.scope_variable WHERE workflow_instance_id = %d AND scope_node_execution_id = %d AND var_name = %s',
-    [WF_SCHEMA, AInstanceId, AScopeExecId, QuotedStr(AVarName)]));
-  ExecSql(Format(
-    'INSERT INTO %s.scope_variable (workflow_instance_id, scope_node_execution_id, var_name, value_json) ' +
-    'VALUES (%d, %d, %s, %s)',
-    [WF_SCHEMA, AInstanceId, AScopeExecId, QuotedStr(AVarName), QuotedStr(AValueJson)]));
+  P := TUniStoredProc.Create(nil);
+  try
+    P.Connection := FConnection;
+    P.StoredProcName := WfSchemaDot + 'wf_repo_set_scope_variable';
+    P.Params.CreateParam(ftLargeint, 'instance_id', ptInput).AsLargeInt := AInstanceId;
+    P.Params.CreateParam(ftLargeint, 'scope_exec_id', ptInput).AsLargeInt := AScopeExecId;
+    P.Params.CreateParam(ftWideString, 'var_name', ptInput).AsString := AVarName;
+    P.Params.CreateParam(ftWideMemo, 'value_json', ptInput).AsString := AValueJson;
+    P.ExecProc;
+  finally
+    P.Free;
+  end;
 end;
 
 function TWorkflowRepository.TryGetScopeVariableDirect(const AInstanceId, AScopeExecId: Int64;
@@ -853,7 +900,7 @@ begin
   AValueJson := ScalarStr(Format(
     'SELECT value_json FROM %s.scope_variable WHERE workflow_instance_id = %d AND ' +
     'scope_node_execution_id = %d AND var_name = %s',
-    [WF_SCHEMA, AInstanceId, AScopeExecId, QuotedStr(AVarName)]));
+    [WfSchema, AInstanceId, AScopeExecId, QuotedStr(AVarName)]));
   Result := AValueJson <> '';
 end;
 
@@ -913,7 +960,7 @@ begin
   try
     Q := OpenQuery(Format(
       'SELECT var_name, default_expr FROM %s.node_scope_default WHERE workflow_node_id = %d ORDER BY id',
-      [WF_SCHEMA, ANodeId]));
+      [WfSchema, ANodeId]));
     try
       while not Q.Eof do
       begin
@@ -942,7 +989,7 @@ begin
     Q := OpenQuery(Format(
       'SELECT var_name, source_kind, source_json_path FROM %s.variable_output_binding ' +
       'WHERE workflow_node_id = %d ORDER BY id',
-      [WF_SCHEMA, ANodeId]));
+      [WfSchema, ANodeId]));
     try
       while not Q.Eof do
       begin

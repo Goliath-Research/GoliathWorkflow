@@ -43,6 +43,8 @@ contains
   WfEngine.ControlFlow in 'src\WfEngine.ControlFlow.pas',
   WfEngine.Scheduler in 'src\WfEngine.Scheduler.pas',
   WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
+  WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
+  WfEngine.DbAuth in 'src\WfEngine.DbAuth.pas',
   WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
   WfEngine in 'src\WfEngine.pas';
 

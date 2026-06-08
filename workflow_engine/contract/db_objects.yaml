@@ -1,0 +1,171 @@
+# MethylPipeline DB Object Contract (machine-readable)
+# Both Azure SQL and PostgreSQL must implement all objects in required: true sections.
+
+version: "1.0"
+schema: wf
+
+conventions:
+  identity_return: single_column_result_set  # column: id
+  submit_result_return: single_row_result_set  # accepted, instance_status, next_ready_count
+  json_type:
+    mssql: json
+    postgres: jsonb
+
+objects:
+  worker_api:
+    - name: wf.wf_worker_authenticate
+      kind: procedure
+      required: true
+      parameters:
+        - { name: worker_id, type: bigint, direction: in }
+        - { name: worker_token, type: text, direction: in }
+    - name: wf.sp_worker_request_task
+      kind: procedure
+      required: true
+      parameters:
+        - { name: worker_id, type: bigint, direction: in }
+        - { name: worker_token, type: text, direction: in }
+        - { name: capability, type: text, direction: in, nullable: true }
+        - { name: max_lease_seconds, type: int, direction: in, default: 300 }
+      result_set:
+        columns:
+          - { name: node_execution_id, type: bigint }
+          - { name: workflow_instance_id, type: bigint }
+          - { name: node_key, type: text }
+          - { name: action_name, type: text }
+          - { name: capability, type: text }
+          - { name: attempt_no, type: int }
+          - { name: input_json, type: json }
+          - { name: iteration_no, type: int }
+        cardinality: zero_or_one
+    - name: wf.sp_worker_submit_result
+      kind: procedure
+      required: true
+      parameters:
+        - { name: node_execution_id, type: bigint, direction: in }
+        - { name: worker_id, type: bigint, direction: in }
+        - { name: worker_token, type: text, direction: in }
+        - { name: result_code, type: int, direction: in }
+        - { name: output_json, type: json, direction: in, nullable: true }
+      result_set:
+        columns:
+          - { name: accepted, type: boolean }
+          - { name: instance_status, type: text }
+          - { name: next_ready_count, type: int }
+        cardinality: exactly_one
+    - name: wf.sp_worker_heartbeat
+      kind: procedure
+      required: true
+      parameters:
+        - { name: node_execution_id, type: bigint, direction: in }
+        - { name: worker_id, type: bigint, direction: in }
+        - { name: worker_token, type: text, direction: in }
+        - { name: extend_seconds, type: int, direction: in, default: 300 }
+      result_set:
+        columns:
+          - { name: rows_updated, type: int }
+        cardinality: exactly_one
+    - name: wf.sp_worker_fail_task
+      kind: procedure
+      required: true
+      parameters:
+        - { name: node_execution_id, type: bigint, direction: in }
+        - { name: worker_id, type: bigint, direction: in }
+        - { name: worker_token, type: text, direction: in }
+        - { name: error_code, type: int, direction: in }
+        - { name: error_message, type: text, direction: in, nullable: true }
+    - name: wf.sp_start_workflow_instance
+      kind: procedure
+      required: true
+      parameters:
+        - { name: workflow_instance_id, type: bigint, direction: in }
+
+  repository_api:
+    - name: wf.wf_repo_set_instance_status
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_create_workflow_instance
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_insert_node_execution
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_update_node_execution_status
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_insert_loop_state
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_get_running_instances
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_try_latest_task_result_code
+      kind: function
+      required: true
+    - name: wf.wf_repo_upsert_monte_carlo_plan
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_upsert_monte_carlo_run
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_set_scope_variable
+      kind: procedure
+      required: true
+
+  engine_runtime:
+    - name: wf.wf_json_fragment_from_string
+      kind: function
+      required: true
+    - name: wf.wf_try_task_result_code
+      kind: function
+      required: true
+    - name: wf.wf_try_task_output_json
+      kind: function
+      required: true
+    - name: wf.wf_get_scope_variable_json
+      kind: function
+      required: true
+    - name: wf.wf_get_scope_variable_int
+      kind: function
+      required: true
+    - name: wf.wf_engine_activate
+      kind: procedure
+      required: true
+    - name: wf.wf_engine_on_action_complete
+      kind: procedure
+      required: true
+    - name: wf.wf_engine_continue_parent
+      kind: procedure
+      required: true
+    - name: wf.wf_resolve_token
+      kind: procedure
+      required: true
+    - name: wf.wf_init_instance_scope_from_context
+      kind: procedure
+      required: true
+    - name: wf.wf_set_scope_variable
+      kind: procedure
+      required: true
+    - name: wf.wf_sequence_continue
+      kind: procedure
+      required: true
+    - name: wf.wf_parallel_continue
+      kind: procedure
+      required: true
+    - name: wf.wf_repeat_continue
+      kind: procedure
+      required: true
+    - name: wf.wf_while_continue
+      kind: procedure
+      required: true
+
+  admin:
+    - name: wf.sp_delete_workflow_def
+      kind: procedure
+      required: true
+
+  domain:
+    - name: dbo.spMapDMP2Genes
+      kind: procedure
+      required: false
+      notes: Azure SQL only until domain schema ported

@@ -1,0 +1,359 @@
+openapi: 3.0.3
+info:
+  title: MethylPipeline Workflow API
+  description: |
+    Cross-language REST contract for workflow workers and admin operations.
+    Maps 1:1 to DB objects in `workflow_engine/contract/db_objects.yaml`.
+    First implementation: Delphi middle-tier (`WfEngineSrv` / portal REST layer).
+  version: 1.0.0
+
+servers:
+  - url: https://api.example.com/v1
+    description: Production
+  - url: http://localhost:8080/v1
+    description: Local Delphi or alternate middle-tier
+
+tags:
+  - name: workers
+    description: Remote worker poll/submit protocol
+  - name: admin
+    description: Workflow instance and definition management
+
+paths:
+  /workers/authenticate:
+    post:
+      tags: [workers]
+      summary: Validate worker credentials
+      operationId: workerAuthenticate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerAuthRequest'
+      responses:
+        '200':
+          description: Worker authenticated
+        '401':
+          description: Invalid credentials
+
+  /workers/tasks/request:
+    post:
+      tags: [workers]
+      summary: Claim one READY task (wf.sp_worker_request_task)
+      operationId: workerRequestTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerRequestTaskRequest'
+      responses:
+        '200':
+          description: Task claim result (zero or one task)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerTaskClaimResponse'
+
+  /workers/tasks/{nodeExecutionId}/submit:
+    post:
+      tags: [workers]
+      summary: Submit task result (wf.sp_worker_submit_result)
+      operationId: workerSubmitResult
+      parameters:
+        - name: nodeExecutionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerSubmitResultRequest'
+      responses:
+        '200':
+          description: Submit acknowledgement row
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerSubmitResultResponse'
+
+  /workers/tasks/{nodeExecutionId}/heartbeat:
+    post:
+      tags: [workers]
+      summary: Extend task lease (wf.sp_worker_heartbeat)
+      operationId: workerHeartbeat
+      parameters:
+        - name: nodeExecutionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerHeartbeatRequest'
+      responses:
+        '200':
+          description: Rows updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  rows_updated:
+                    type: integer
+
+  /workers/tasks/{nodeExecutionId}/fail:
+    post:
+      tags: [workers]
+      summary: Fail task (wf.sp_worker_fail_task)
+      operationId: workerFailTask
+      parameters:
+        - name: nodeExecutionId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerFailTaskRequest'
+      responses:
+        '204':
+          description: Task failed
+
+  /workflows/instances:
+    post:
+      tags: [admin]
+      summary: Create and start workflow instance
+      operationId: createWorkflowInstance
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInstanceRequest'
+      responses:
+        '201':
+          description: Instance created and started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowInstanceSummary'
+
+  /workflows/instances/{instanceId}:
+    get:
+      tags: [admin]
+      summary: Get workflow instance status
+      operationId: getWorkflowInstance
+      parameters:
+        - name: instanceId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Instance status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowInstanceSummary'
+
+  /workflows/instances/{instanceId}/start:
+    post:
+      tags: [admin]
+      summary: Start workflow instance (wf.sp_start_workflow_instance)
+      operationId: startWorkflowInstance
+      parameters:
+        - name: instanceId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: Instance started
+
+  /workflows/definitions/{name}:
+    delete:
+      tags: [admin]
+      summary: Delete workflow definition (wf.sp_delete_workflow_def)
+      operationId: deleteWorkflowDefinition
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: deleteInstances
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Definition deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted_instance_count:
+                    type: integer
+                  deleted_version_count:
+                    type: integer
+
+components:
+  schemas:
+    WorkerAuthRequest:
+      type: object
+      required: [worker_id, worker_token]
+      properties:
+        worker_id:
+          type: integer
+          format: int64
+        worker_token:
+          type: string
+
+    WorkerRequestTaskRequest:
+      type: object
+      required: [worker_id, worker_token]
+      properties:
+        worker_id:
+          type: integer
+          format: int64
+        worker_token:
+          type: string
+        capability:
+          type: string
+          nullable: true
+        max_lease_seconds:
+          type: integer
+          default: 300
+
+    WorkerTaskClaimResponse:
+      type: object
+      required: [has_task]
+      properties:
+        has_task:
+          type: boolean
+        node_execution_id:
+          type: integer
+          format: int64
+        workflow_instance_id:
+          type: integer
+          format: int64
+        node_key:
+          type: string
+        action_name:
+          type: string
+        capability:
+          type: string
+        attempt_no:
+          type: integer
+        input_json:
+          type: object
+          additionalProperties: true
+        iteration_no:
+          type: integer
+
+    WorkerSubmitResultRequest:
+      type: object
+      required: [worker_id, worker_token, result_code]
+      properties:
+        worker_id:
+          type: integer
+          format: int64
+        worker_token:
+          type: string
+        result_code:
+          type: integer
+        output_json:
+          type: object
+          additionalProperties: true
+          nullable: true
+
+    WorkerSubmitResultResponse:
+      type: object
+      properties:
+        accepted:
+          type: boolean
+        instance_status:
+          type: string
+        next_ready_count:
+          type: integer
+
+    WorkerHeartbeatRequest:
+      type: object
+      required: [worker_id, worker_token]
+      properties:
+        worker_id:
+          type: integer
+          format: int64
+        worker_token:
+          type: string
+        extend_seconds:
+          type: integer
+          default: 300
+
+    WorkerFailTaskRequest:
+      type: object
+      required: [worker_id, worker_token, error_code]
+      properties:
+        worker_id:
+          type: integer
+          format: int64
+        worker_token:
+          type: string
+        error_code:
+          type: integer
+        error_message:
+          type: string
+          nullable: true
+
+    CreateInstanceRequest:
+      type: object
+      required: [workflow_version_id]
+      properties:
+        workflow_version_id:
+          type: integer
+          format: int64
+        context_json:
+          type: object
+          additionalProperties: true
+
+    WorkflowInstanceSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+        workflow_version_id:
+          type: integer
+          format: int64
+        status:
+          type: string
+          enum: [CREATED, RUNNING, COMPLETED, FAILED, CANCELLED]
+
+  securitySchemes:
+    WorkerToken:
+      type: apiKey
+      in: header
+      name: X-Worker-Token
+
+security:
+  - WorkerToken: []
