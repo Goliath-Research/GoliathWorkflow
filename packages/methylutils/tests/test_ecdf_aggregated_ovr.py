@@ -5,6 +5,7 @@ import pandas as pd
 
 from methyl_utils.ecdf_aggregated_ovr import (
     AGGREGATED_ECDF_OVR_TYPE,
+    GENE_ECDF_OVR_TYPE,
     build_effect_size_feature_weights,
     predict_aggregated_ecdf_ovr_proba,
     train_aggregated_ecdf_ovr_package,
@@ -61,6 +62,35 @@ def test_train_and_predict_aggregated_package_roundtrip() -> None:
     ), "evidence logits must be raw pre-softmax values, not max-shifted"
     pred = np.argmax(probs, axis=1)
     assert set(pred.tolist()) <= {0, 1}
+
+
+def test_train_and_predict_gene_ecdf_package_roundtrip() -> None:
+    X = np.asarray(
+        [
+            [0.2, 0.8],
+            [0.3, 0.7],
+            [0.8, 0.2],
+            [0.9, 0.1],
+        ],
+        dtype=np.float64,
+    )
+    y = np.asarray([0, 0, 1, 1], dtype=np.int32)
+    feature_names = ["gene::GENE1", "gene::GENE2"]
+    weights = np.asarray([1.0, 1.0], dtype=np.float64)
+
+    pkg = train_aggregated_ecdf_ovr_package(
+        X,
+        y,
+        class_names=["healthy", "disease"],
+        feature_names=feature_names,
+        feature_weights=weights,
+        feature_family_set="gene",
+        feature_mode="raw_gene",
+        classifier_type=GENE_ECDF_OVR_TYPE,
+    )
+    assert pkg["classifier_type"] == GENE_ECDF_OVR_TYPE
+    probs, _ = predict_aggregated_ecdf_ovr_proba(pkg, X)
+    assert probs.shape == (4, 2)
 
 
 def test_build_effect_size_feature_weights_supports_dynamic_keys() -> None:

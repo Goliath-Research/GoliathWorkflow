@@ -753,6 +753,13 @@ def _build_blind_predictor_dict(
 
 
 MULTICLASS_CLASSIFIER_FILENAME = "multiclass-classifier.pkl"
+ECDF_GENE_OVR_FILENAME = "ecdf_gene_ovr.pkl"
+ECDF_AGGREGATED_OVR_FILENAME = "ecdf_aggregated_ovr.pkl"
+_MULTICLASS_MODEL_FILENAMES = (
+    MULTICLASS_CLASSIFIER_FILENAME,
+    ECDF_GENE_OVR_FILENAME,
+    ECDF_AGGREGATED_OVR_FILENAME,
+)
 
 
 def _holdout_multiclass_group_paths_nonempty(step_cfg: Dict[str, Any]) -> bool:
@@ -821,11 +828,12 @@ def _get_multiclass_model_path(
             return p
     classifier_step = project.get_step_config("classifier") or {}
     classifier_dir = paths.classifier_dir
-    # Prefer native merged multiclass PKL (detector export) over OvR bundle when both exist.
+    # Prefer native merged multiclass PKL (detector export) over validation ECDF OvR bundles.
     if classifier_dir:
-        native_mc = Path(classifier_dir) / MULTICLASS_CLASSIFIER_FILENAME
-        if native_mc.is_file():
-            return native_mc
+        for name in _MULTICLASS_MODEL_FILENAMES:
+            candidate = Path(classifier_dir) / name
+            if candidate.is_file():
+                return candidate
     scp = classifier_step.get("save_classifier_path")
     if scp and Path(scp).is_file():
         return Path(scp)

@@ -133,6 +133,34 @@ def apply_monte_carlo_config_overrides(
         config = config.model_copy(
             update={"stability_min_selected_dmps": int(args.stability_min_selected_dmps)}
         )
+    if getattr(args, "stability_min_core_dmps", None) is not None:
+        config = config.model_copy(
+            update={"stability_min_core_dmps": int(args.stability_min_core_dmps)}
+        )
+    if getattr(args, "stability_classifier_export_margin_pct", None) is not None:
+        config = config.model_copy(
+            update={
+                "stability_classifier_export_margin_pct": float(
+                    args.stability_classifier_export_margin_pct
+                )
+            }
+        )
+    if getattr(args, "stability_classifier_export_margin_abs", None) is not None:
+        config = config.model_copy(
+            update={
+                "stability_classifier_export_margin_abs": int(
+                    args.stability_classifier_export_margin_abs
+                )
+            }
+        )
+    if getattr(args, "stability_classifier_export_max_dmps", None) is not None:
+        config = config.model_copy(
+            update={
+                "stability_classifier_export_max_dmps": int(
+                    args.stability_classifier_export_max_dmps
+                )
+            }
+        )
     if getattr(args, "stability_gene_featurecuts", None):
         config = config.model_copy(update={"stability_gene_featurecuts_enabled": True})
     if getattr(args, "stability_min_selected_genes", None) is not None:

@@ -743,6 +743,15 @@ class MonteCarloConfig(BaseModel):
             "Final selected k is max(featurecuts_k, stability_min_selected_genes)."
         ),
     )
+    stability_gene_featurecuts_max_dmps: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Optional genome-wide cap on classifier DMP loci used for MC gene FeatureCuts "
+            "(after deduplication). When unset, all FeatureCuts classifier exports are used "
+            "(typically ~min_selected_dmps per chromosome × number of chromosomes)."
+        ),
+    )
     freeze_stable_gene_csv: Optional[str] = Field(
         default=None,
         description=(
@@ -829,9 +838,32 @@ class MonteCarloConfig(BaseModel):
         default=None,
         ge=1,
         description=(
-            "Optional lower bound for detector classifier panel size in FeatureCuts mode. "
-            "Final selected k is max(featurecuts_k, stability_min_selected_dmps)."
+            "Deprecated alias for stability_min_core_dmps when that field is unset. "
+            "Does not widen mapper exports; use stability_classifier_export_margin_* instead."
         ),
+    )
+    stability_min_core_dmps: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Optional small guardrail on detector k_core during MC FeatureCuts "
+            "(passed to detector min_core_dmps)."
+        ),
+    )
+    stability_classifier_export_margin_pct: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="MC detector override: extended classifier CSV margin as a fraction above k_core.",
+    )
+    stability_classifier_export_margin_abs: Optional[int] = Field(
+        default=None,
+        ge=0,
+        description="MC detector override: extra top-ranked DMPs in extended classifier CSV beyond k_core.",
+    )
+    stability_classifier_export_max_dmps: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="MC detector override: per-chromosome cap on extended classifier CSV size.",
     )
     run_mapper_and_enricher: bool = Field(
         default=False,

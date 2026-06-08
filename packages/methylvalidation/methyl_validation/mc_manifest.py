@@ -110,21 +110,58 @@ def write_detector_featurecuts_override(
 ) -> Optional[Path]:
     enable_featurecuts = bool(config.stability_featurecuts_enabled)
     target_ba = config.stability_target_balanced_accuracy
-    min_selected_dmps = config.stability_min_selected_dmps
-    if not enable_featurecuts and target_ba is None and min_selected_dmps is None:
+    min_core_dmps = config.stability_min_core_dmps
+    if min_core_dmps is None:
+        min_core_dmps = config.stability_min_selected_dmps
+    margin_pct = config.stability_classifier_export_margin_pct
+    margin_abs = config.stability_classifier_export_margin_abs
+    margin_max = config.stability_classifier_export_max_dmps
+    if (
+        not enable_featurecuts
+        and target_ba is None
+        and min_core_dmps is None
+        and margin_pct is None
+        and margin_abs is None
+        and margin_max is None
+    ):
         return None
 
     payload: Dict[str, Any] = {}
-    if enable_featurecuts or target_ba is not None or min_selected_dmps is not None:
+    if enable_featurecuts or target_ba is not None or min_core_dmps is not None:
         payload["classifier_dmp_selection"] = "featurecuts_validation"
     if target_ba is not None:
         payload["target_balanced_accuracy"] = float(target_ba)
-    if min_selected_dmps is not None:
-        payload["min_selected_dmps"] = int(min_selected_dmps)
+    if min_core_dmps is not None:
+        payload["min_core_dmps"] = int(min_core_dmps)
+    if margin_pct is not None:
+        payload["classifier_export_margin_pct"] = float(margin_pct)
+    if margin_abs is not None:
+        payload["classifier_export_margin_abs"] = int(margin_abs)
+    if margin_max is not None:
+        payload["classifier_export_max_dmps"] = int(margin_max)
     if not payload:
         return None
     out = run_dir / "detector_step_override.json"
     out.parent.mkdir(parents=True, exist_ok=True)
+    with open(out, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return out
+
+
+CLASSIFIER_DMP_CSV_PATTERN = "dmps-*-classifier.csv"
+CLASSIFIER_EXTENDED_DMP_CSV_PATTERN = "dmps-*-classifier-extended.csv"
+
+
+def write_mapper_classifier_override(run_dir: Path) -> Path:
+    """
+    Force methyl-mapper to consume detector extended classifier panels during MC gene stability.
+
+    Without this, projects that default to ``dmps-*-discovery.csv`` map every significant DMP
+    (tens of thousands of loci) instead of the smaller classifier exports.
+    """
+    out = run_dir / "mapper_step_override.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"csv_filename_pattern": CLASSIFIER_EXTENDED_DMP_CSV_PATTERN}
     with open(out, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
     return out

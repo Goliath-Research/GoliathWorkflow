@@ -4,6 +4,7 @@ distribution summaries under a versioned metrics schema.
 """
 
 import json
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -59,10 +60,50 @@ def metrics_schema_descriptor() -> Dict[str, Any]:
         "metrics_schema_version": METRICS_SCHEMA_VERSION,
         "scalar_metric_keys": list(SCALAR_KEYS),
         "notes": (
-            "Flat tables include scalar top-level keys and optional training_/holdout_"
-            " prefixed variants when evaluation_semantics=train_holdout."
+            "Flat tables include scalar top-level keys, per-class recall columns "
+            "(recall_<class_name>), and optional training_/holdout_ prefixed variants "
+            "when evaluation_semantics=train_holdout."
         ),
     }
+
+
+def _sanitize_class_label(class_name: str, class_index: int) -> str:
+    raw = str(class_name).strip() if class_name else ""
+    sanitized = re.sub(r"[^\w]+", "_", raw).strip("_")
+    if not sanitized:
+        sanitized = f"class_{class_index}"
+    return sanitized
+
+
+def _recall_column_name(class_index: int, class_name: str) -> str:
+    return f"recall_{_sanitize_class_label(class_name, class_index)}"
+
+
+def _flatten_per_class_recall(
+    metrics: Dict[str, Any],
+    out: Dict[str, Any],
+    *,
+    key_prefix: str = "",
+) -> None:
+    per_class = metrics.get("per_class")
+    if not isinstance(per_class, list):
+        return
+    used: set[str] = set()
+    for i, row in enumerate(per_class):
+        if not isinstance(row, dict):
+            continue
+        recall = row.get("recall")
+        if not isinstance(recall, (int, float)):
+            continue
+        class_index = row.get("class_index")
+        if not isinstance(class_index, int):
+            class_index = i
+        class_name = str(row.get("class_name", f"class_{class_index}"))
+        col = f"{key_prefix}{_recall_column_name(class_index, class_name)}"
+        if col in used:
+            col = f"{key_prefix}recall_{_sanitize_class_label(class_name, class_index)}_{class_index}"
+        used.add(col)
+        out[col] = float(recall)
 
 
 def _flatten_screening_binary(
@@ -87,6 +128,7 @@ def _scalar_metrics_from_dict(metrics: Dict[str, Any]) -> Dict[str, Any]:
         if k in metrics and isinstance(metrics[k], (int, float)):
             out[k] = metrics[k]
     _flatten_screening_binary(metrics, out)
+    _flatten_per_class_recall(metrics, out)
     tr = metrics.get("training_metrics")
     ho = metrics.get("holdout_metrics")
     if isinstance(tr, dict):
@@ -94,11 +136,13 @@ def _scalar_metrics_from_dict(metrics: Dict[str, Any]) -> Dict[str, Any]:
             if k in tr and isinstance(tr[k], (int, float)):
                 out[f"training_{k}"] = tr[k]
         _flatten_screening_binary(tr, out, key_prefix="training_")
+        _flatten_per_class_recall(tr, out, key_prefix="training_")
     if isinstance(ho, dict):
         for k in SCALAR_KEYS:
             if k in ho and isinstance(ho[k], (int, float)):
                 out[f"holdout_{k}"] = ho[k]
         _flatten_screening_binary(ho, out, key_prefix="holdout_")
+        _flatten_per_class_recall(ho, out, key_prefix="holdout_")
     sem = metrics.get("evaluation_semantics")
     if isinstance(sem, str) and sem:
         out["evaluation_semantics"] = sem

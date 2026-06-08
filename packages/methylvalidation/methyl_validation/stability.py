@@ -81,6 +81,13 @@ def run_balanced_accuracy(run_dir: Path) -> Optional[float]:
         return None
 
 
+def stability_dmp_panel_source_label(*, prefer_classifier_panel_dmps: bool) -> str:
+    """Human-readable label for which detector exports stability aggregation reads."""
+    if prefer_classifier_panel_dmps:
+        return "classifier DMP panels (dmps-*-classifier.csv)"
+    return "discovery DMP exports (dmps-*-discovery.csv)"
+
+
 def load_discovery_dmps(run_dir: Path, prefer_classifier_panel: bool = False) -> Optional[pd.DataFrame]:
     """Load and concatenate detector DMP exports from a MC run directory.
 
@@ -98,7 +105,7 @@ def load_discovery_dmps(run_dir: Path, prefer_classifier_panel: bool = False) ->
     for d in detection_dirs:
         patterns: List[str]
         if prefer_classifier_panel:
-            patterns = ["dmps-*-classifier.csv", "dmps-*.csv", "dmps-*-discovery.csv"]
+            patterns = ["dmps-*-classifier.csv", "dmps-*-discovery.csv"]
         else:
             patterns = ["dmps-*-discovery.csv"]
         found_local = False
@@ -114,6 +121,62 @@ def load_discovery_dmps(run_dir: Path, prefer_classifier_panel: bool = False) ->
     if not frames:
         return None
     return pd.concat(frames, ignore_index=True)
+
+
+def load_classifier_dmp_panel(
+    run_dir: Path,
+    *,
+    max_dmps: Optional[int] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Load the detector FeatureCuts classifier DMP panel for gene-axis work.
+
+    Uses ``dmps-*-classifier-extended.csv`` when present (mapper/gene annotation panel),
+    otherwise ``dmps-*-classifier.csv``. Deduplicates loci genome-wide and optionally caps to the
+    top ``max_dmps`` by absolute effect size.
+    """
+    detection_dirs = list(run_dir.glob("**/detections/*/*"))
+    if not detection_dirs:
+        detection_dirs = list(run_dir.glob("detections/*/*"))
+    frames: list = []
+    for d in detection_dirs:
+        csvs = sorted(d.glob("dmps-*-classifier-extended.csv"))
+        if not csvs:
+            csvs = sorted(
+                p
+                for p in d.glob("dmps-*-classifier.csv")
+                if not p.stem.endswith("-classifier-extended")
+            )
+        for csv in csvs:
+            try:
+                frames.append(pd.read_csv(csv))
+            except Exception:
+                continue
+    if not frames:
+        return None
+    df = pd.concat(frames, ignore_index=True)
+    if df.empty:
+        return df
+    if "chromosome" not in df.columns or "position" not in df.columns:
+        return df
+
+    work = df.copy()
+    if "effect_size" not in work.columns:
+        work["effect_size"] = 0.0
+    work["_abs_effect"] = pd.to_numeric(work["effect_size"], errors="coerce").fillna(0.0).abs()
+    keys: List[Tuple[Any, int]] = []
+    for _, row in work.iterrows():
+        try:
+            keys.append(_dmp_key_from_row(row))
+        except Exception:
+            keys.append((None, -1))
+    work["_dmp_key"] = keys
+    work = work[work["_dmp_key"].map(lambda k: k[1] >= 0)].copy()
+    work = work.sort_values(["_abs_effect"], ascending=False, na_position="last")
+    work = work.drop_duplicates(subset=["_dmp_key"], keep="first")
+    if max_dmps is not None and int(max_dmps) > 0 and len(work) > int(max_dmps):
+        work = work.head(int(max_dmps)).copy()
+    return work.drop(columns=["_abs_effect", "_dmp_key"], errors="ignore")
 
 
 def load_enricher_genes(run_dir: Path) -> Optional[pd.DataFrame]:
@@ -930,6 +993,10 @@ def _compute_dmp_stability_from_run_dirs(
             "skipped_no_discovery": skipped_no_discovery,
             "skipped_low_balanced_accuracy": skipped_low_ba,
             "min_balanced_accuracy": min_balanced_accuracy,
+            "prefer_classifier_panel_dmps": bool(prefer_classifier_panel_dmps),
+            "dmp_panel_source": stability_dmp_panel_source_label(
+                prefer_classifier_panel_dmps=prefer_classifier_panel_dmps
+            ),
         }
 
     data = []
@@ -985,6 +1052,10 @@ def _compute_dmp_stability_from_run_dirs(
         "stable_dmps_at_threshold": len(stable),
         "min_frequency": min_frequency,
         "stable_dmp_fraction": len(stable) / len(dmp_run_hits) if len(dmp_run_hits) > 0 else 0.0,
+        "prefer_classifier_panel_dmps": bool(prefer_classifier_panel_dmps),
+        "dmp_panel_source": stability_dmp_panel_source_label(
+            prefer_classifier_panel_dmps=prefer_classifier_panel_dmps
+        ),
     }
     return df, summary
 

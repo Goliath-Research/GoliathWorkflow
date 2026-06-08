@@ -171,7 +171,11 @@ When to change defaults:
 | `--stability` | Run stability analysis after the MC loop (Workflow 1, Step 1). | MC loop (`methyl-centroid` + `methyl-detector`) then in-process stability aggregation. |
 | `--stability-featurecuts` | Enable detector FeatureCuts during MC (`classifier_dmp_selection=featurecuts_validation`) and compute stability from classifier-panel DMP exports. | Detector step override per run + classifier-panel stability aggregation. |
 | `--stability-target-ba BA` | In FeatureCuts mode, target balanced accuracy used to pick minimum top-k DMPs by effect size. | Detector FeatureCuts target-BA selection (`target_balanced_accuracy`). |
-| `--stability-min-selected-dmps N` | In FeatureCuts mode, enforce minimum selected DMP count per run. | Detector lower bound (`min_selected_dmps`) after FeatureCuts selection. |
+| `--stability-min-selected-dmps N` | Deprecated alias for `--stability-min-core-dmps` when that flag is unset. | Small guardrail on core classifier panel (`min_core_dmps`). |
+| `--stability-min-core-dmps N` | Optional small guardrail on detector k_core after FeatureCuts. | Passed to detector `min_core_dmps`. |
+| `--stability-classifier-export-margin-pct P` | Fractional margin above k_core for extended classifier CSV. | Detector `classifier_export_margin_pct` override. |
+| `--stability-classifier-export-margin-abs N` | Absolute margin above k_core for extended classifier CSV. | Detector `classifier_export_margin_abs` override. |
+| `--stability-classifier-export-max-dmps N` | Per-chromosome cap on extended classifier CSV. | Detector `classifier_export_max_dmps` override. |
 | `--stability-gene-featurecuts` | Run methyl-mapper + gene FeatureCuts after detector in each MC iteration; aggregate stable genes from `genes-classifier.csv`. | Optional gene stability path (requires mapper per iteration; no enricher). |
 | `--stability-min-selected-genes N` | In gene FeatureCuts mode, enforce minimum selected gene count per run. | Gene FeatureCuts lower bound after k-search. |
 | `--skip-centroid` | Reuse existing centroid artifacts and skip centroid recomputation. Works in MC iteration mode and in `--freeze` (detector→mapper→enricher only). | MC loop detector-only on `run_XXXX` artifacts, or freeze runs without `methyl-centroid`. |
@@ -288,8 +292,12 @@ Optional gene stability runs in the same MC loop when `stability_gene_featurecut
   "stability_featurecuts_enabled": true,
   "stability_gene_featurecuts_enabled": true,
   "stability_target_balanced_accuracy": 0.95,
-  "stability_min_selected_dmps": 500,
+  "stability_min_core_dmps": 50,
+  "stability_classifier_export_margin_pct": 0.10,
+  "stability_classifier_export_margin_abs": 10,
+  "stability_classifier_export_max_dmps": 200,
   "stability_min_selected_genes": 50,
+  "stability_gene_featurecuts_max_dmps": 500,
   "stability_dmp_freq": 0.8,
   "stability_gene_freq": 0.7,
   "backend_profiles": {
@@ -305,9 +313,11 @@ Optional gene stability runs in the same MC loop when `stability_gene_featurecut
 
 CLI: `--stability --stability-featurecuts --stability-gene-featurecuts`.
 
-Per iteration: centroid → detector (DMP FeatureCuts) → methyl-mapper on classifier DMP CSVs → gene FeatureCuts (ECDF OvR k-search on validation BA). Outputs `run_XXXX/gene_stability/genes-classifier.csv`; aggregation writes `stability/stable_genes_production.csv`. `--freeze` copies the stable gene panel into production and wires `raw_gene` for `--model`.
+Per iteration: centroid → detector (DMP FeatureCuts) → methyl-mapper on **extended classifier** DMP CSVs (`dmps-*-classifier-extended.csv`, via `mapper_step_override.json`) → gene FeatureCuts (ECDF OvR k-search on validation BA). Outputs `run_XXXX/gene_stability/genes-classifier.csv`; aggregation writes `stability/stable_genes_production.csv`. `--freeze` copies the stable gene panel into production and wires `raw_gene` for `--model`.
 
-If gene FeatureCuts is enabled without DMP FeatureCuts, the CLI warns and gene FeatureCuts falls back to discovery DMP exports when classifier panels are missing.
+Detector exports three DMP branches per chromosome: `dmps-{chr}-discovery.csv` (broad), `dmps-{chr}-classifier.csv` (core model panel), and `dmps-{chr}-classifier-extended.csv` (k_core plus margin for mapper/gene work). DMP stability uses the core classifier CSV; mapper/gene FeatureCuts use extended. Set `stability_classifier_export_margin_pct` / `_abs` / `_max_dmps` to control extended size; `stability_gene_featurecuts_max_dmps` caps genome-wide extended loci after deduplication.
+
+If gene FeatureCuts is enabled without DMP FeatureCuts, the CLI warns; iterations fail at gene FeatureCuts unless classifier exports exist from a prior detector run.
 
 ### Strict stability profile example
 

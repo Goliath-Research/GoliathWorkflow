@@ -29,7 +29,10 @@ def test_write_detector_featurecuts_override(tmp_path: Path):
         _minimal_mc_dict(
             stability_featurecuts_enabled=True,
             stability_target_balanced_accuracy=0.95,
-            stability_min_selected_dmps=1200,
+            stability_min_core_dmps=50,
+            stability_classifier_export_margin_pct=0.10,
+            stability_classifier_export_margin_abs=10,
+            stability_classifier_export_max_dmps=200,
         )
     )
     out = write_detector_featurecuts_override(tmp_path / "run_0001", cfg)
@@ -37,7 +40,10 @@ def test_write_detector_featurecuts_override(tmp_path: Path):
     payload = json.loads(out.read_text(encoding="utf-8"))
     assert payload["classifier_dmp_selection"] == "featurecuts_validation"
     assert payload["target_balanced_accuracy"] == 0.95
-    assert payload["min_selected_dmps"] == 1200
+    assert payload["min_core_dmps"] == 50
+    assert payload["classifier_export_margin_pct"] == 0.10
+    assert payload["classifier_export_margin_abs"] == 10
+    assert payload["classifier_export_max_dmps"] == 200
 
 
 def test_load_discovery_dmps_prefers_classifier_panel(tmp_path: Path):

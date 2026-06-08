@@ -496,6 +496,7 @@ class MethylDetector:
         sorted_by_importance_df = self._compute_biological_importance(bio_dmps_df)
         self._featurecuts_last_result = None
         self._final_validation_results = None
+        self._classifier_panel_audit = None
         export_mode = getattr(self.config, "dmp_export_mode", "unified")
         classifier_dmps_df = self._classifier_dmps_from_sorted(sorted_by_importance_df)
         selected_dmps_df = classifier_dmps_df
@@ -505,6 +506,10 @@ class MethylDetector:
             logger.info("💾 Exporting DMPs and classifier (mode=%s)...", export_mode)
             if export_mode == "dual":
                 discovery_dmps_df = self._discovery_dmps_from_sorted(sorted_by_importance_df)
+                extended_dmps_df = self._classifier_extended_dmps_from_core(
+                    sorted_by_importance_df,
+                    classifier_dmps_df,
+                )
                 if len(discovery_dmps_df) < int(self.config.min_dmps_for_export):
                     logger.warning(
                         "Discovery DMP count %s is below min_dmps_for_export=%s (mapper/enricher may be sparse)",
@@ -513,7 +518,12 @@ class MethylDetector:
                     )
                 self._export_unified_csv(discovery_dmps_df, suffix="-discovery")
                 self._export_unified_csv(classifier_dmps_df, suffix="-classifier")
-                self._write_dmp_branch_metadata(discovery_dmps_df, classifier_dmps_df)
+                self._export_unified_csv(extended_dmps_df, suffix="-classifier-extended")
+                self._write_dmp_branch_metadata(
+                    discovery_dmps_df,
+                    classifier_dmps_df,
+                    extended_dmps_df,
+                )
             else:
                 export_df = classifier_dmps_df
                 if (
@@ -2351,14 +2361,14 @@ class MethylDetector:
                         selected = pool.iloc[:final_k].copy().reset_index(drop=True)
                 k_after_target_and_effect = int(final_k)
 
-                # Enforce minimum DMP count for robustness on new samples
-                min_dmps = getattr(self.config, "min_selected_dmps", None)
-                if min_dmps is not None and len(selected) < int(min_dmps):
+                min_core = self._resolve_min_core_dmps()
+                if min_core is not None and len(selected) < int(min_core):
                     logger.info(
-                        "FeatureCuts selected %s but min_selected_dmps=%s — expanding classifier panel to minimum",
-                        len(selected), min_dmps
+                        "FeatureCuts selected %s but min_core_dmps=%s — expanding core classifier panel",
+                        len(selected),
+                        min_core,
                     )
-                    selected = sorted_by_importance_df.iloc[: int(min_dmps)].copy().reset_index(drop=True)
+                    selected = sorted_by_importance_df.iloc[: int(min_core)].copy().reset_index(drop=True)
 
                 final_k = int(len(selected))
                 ba_text = "n/a"
@@ -2367,14 +2377,21 @@ class MethylDetector:
                         ba_text = f"{float(res.get('balanced_accuracy')):.4f}"
                     except (TypeError, ValueError):
                         ba_text = "n/a"
+                self._classifier_panel_audit = {
+                    "k_target_ba": int(selected_k_target),
+                    "k_effect_size": int(k_effect_size),
+                    "k_core": int(final_k),
+                    "balanced_accuracy_at_k_target": ba_text,
+                    "min_core_dmps": (int(min_core) if min_core is not None else None),
+                }
                 logger.info(
                     "📋 Classifier panel audit (FeatureCuts): k_target_ba=%s (BA=%s), "
-                    "k_effect_size=%s, k_after_max=%s, min_selected_dmps=%s, k_final=%s",
+                    "k_effect_size=%s, k_after_max=%s, min_core_dmps=%s, k_core=%s",
                     selected_k_target,
                     ba_text,
                     k_effect_size,
                     k_after_target_and_effect,
-                    (str(min_dmps) if min_dmps is not None else "none"),
+                    (str(min_core) if min_core is not None else "none"),
                     final_k,
                 )
                 logger.info("📋 Classifier panel: FeatureCuts selected k=%s DMPs", final_k)
@@ -2393,9 +2410,71 @@ class MethylDetector:
             logger.warning("FeatureCuts failed or empty; falling back to elbow-only classifier panel")
 
         out = self._effect_size_elbow_trim(sorted_by_importance_df.copy(), enabled=True)
+        self._classifier_panel_audit = {
+            "k_target_ba": None,
+            "k_effect_size": int(len(out)),
+            "k_core": int(len(out)),
+            "balanced_accuracy_at_k_target": None,
+            "min_core_dmps": self._resolve_min_core_dmps(),
+        }
         logger.info("📋 Classifier panel: %s DMPs after elbow trim", len(out))
         self._check_centroid_self_classification(out)
         return out
+
+    def _resolve_min_core_dmps(self) -> Optional[int]:
+        min_core = getattr(self.config, "min_core_dmps", None)
+        if min_core is not None:
+            return int(min_core)
+        legacy = getattr(self.config, "min_selected_dmps", None)
+        return int(legacy) if legacy is not None else None
+
+    def _compute_extended_panel_k(self, k_core: int, pool_len: int) -> int:
+        import math
+
+        k_core = max(0, int(k_core))
+        if k_core <= 0 or pool_len <= 0:
+            return k_core
+        k_extended = k_core
+        margin_pct = float(getattr(self.config, "classifier_export_margin_pct", 0.0) or 0.0)
+        margin_abs = int(getattr(self.config, "classifier_export_margin_abs", 0) or 0)
+        if margin_pct > 0.0:
+            k_from_pct = k_core + int(math.ceil(k_core * float(margin_pct)))
+            k_extended = max(k_extended, k_from_pct)
+        if margin_abs > 0:
+            k_extended = max(k_extended, k_core + margin_abs)
+        max_dmps = getattr(self.config, "classifier_export_max_dmps", None)
+        if max_dmps is not None:
+            k_extended = min(k_extended, int(max_dmps))
+        k_extended = min(k_extended, int(pool_len))
+        return max(k_extended, k_core)
+
+    def _classifier_extended_dmps_from_core(
+        self,
+        sorted_by_importance_df: pd.DataFrame,
+        core_df: pd.DataFrame,
+    ) -> pd.DataFrame:
+        """Annotation panel for mapper/gene stability: k_core plus a modest ranked margin."""
+        k_core = int(len(core_df))
+        if k_core <= 0:
+            return core_df.copy()
+        pool = sorted_by_importance_df.reset_index(drop=True)
+        k_extended = self._compute_extended_panel_k(k_core, len(pool))
+        if k_extended <= k_core:
+            return core_df.copy().reset_index(drop=True)
+        extended = pool.iloc[:k_extended].copy().reset_index(drop=True)
+        audit = getattr(self, "_classifier_panel_audit", None) or {}
+        audit = dict(audit)
+        audit["k_extended"] = int(k_extended)
+        self._classifier_panel_audit = audit
+        logger.info(
+            "📋 Classifier extended panel: k_core=%s → k_extended=%s (margin_pct=%s, margin_abs=%s, max=%s)",
+            k_core,
+            k_extended,
+            getattr(self.config, "classifier_export_margin_pct", None),
+            getattr(self.config, "classifier_export_margin_abs", None),
+            getattr(self.config, "classifier_export_max_dmps", None),
+        )
+        return extended
 
     def _discovery_dmps_from_sorted(self, sorted_by_importance_df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -2410,6 +2489,7 @@ class MethylDetector:
         self,
         discovery_dmps_df: pd.DataFrame,
         classifier_dmps_df: pd.DataFrame,
+        extended_dmps_df: Optional[pd.DataFrame] = None,
     ) -> None:
         """Sidecar JSON describing dual-branch exports (methods / reproducibility)."""
         import json
@@ -2441,6 +2521,18 @@ class MethylDetector:
             "classifier_dmp_selection": getattr(self.config, "classifier_dmp_selection", "elbow"),
             "n_dmps_discovery": int(len(discovery_dmps_df)),
             "n_dmps_classifier": int(len(classifier_dmps_df)),
+            "n_dmps_classifier_extended": int(len(extended_dmps_df))
+            if extended_dmps_df is not None
+            else int(len(classifier_dmps_df)),
+            "classifier_panel_audit": getattr(self, "_classifier_panel_audit", None),
+            "classifier_export_margin_pct": float(
+                getattr(self.config, "classifier_export_margin_pct", 0.0) or 0.0
+            ),
+            "classifier_export_margin_abs": int(
+                getattr(self.config, "classifier_export_margin_abs", 0) or 0
+            ),
+            "classifier_export_max_dmps": getattr(self.config, "classifier_export_max_dmps", None),
+            "min_core_dmps": self._resolve_min_core_dmps(),
             "min_dmps_for_export": int(self.config.min_dmps_for_export),
             "discovery_dynamic_dmp_cutoff_enabled": bool(
                 getattr(self.config, "discovery_dynamic_dmp_cutoff_enabled", False)
@@ -2449,10 +2541,14 @@ class MethylDetector:
             "files": {
                 "discovery_csv": f"dmps-{self.chromosome}-discovery.csv",
                 "classifier_csv": f"dmps-{self.chromosome}-classifier.csv",
+                "classifier_extended_csv": f"dmps-{self.chromosome}-classifier-extended.csv",
                 "classifier_pickle": f"classifier-{self.chromosome}-{ctx_str}.pkl",
             },
             "featurecuts_validation_summary": fc_summary,
-            "note": "Use discovery CSV for MethylMapper/MethylEnricher; classifier CSV + pickle for prediction.",
+            "note": (
+                "Use classifier-extended CSV for mapper/gene annotation; core classifier CSV + pickle for prediction; "
+                "discovery CSV for broad biology."
+            ),
         }
         with open(meta_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)

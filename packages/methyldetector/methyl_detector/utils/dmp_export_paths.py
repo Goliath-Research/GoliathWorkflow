@@ -11,10 +11,18 @@ from pathlib import Path
 from typing import List, Optional
 
 
+def find_classifier_extended_dmps_csvs(detection_dir: Path) -> List[Path]:
+    if not detection_dir.exists():
+        return []
+    return sorted(detection_dir.glob("dmps-*-classifier-extended.csv"))
+
+
 def find_classifier_dmps_csvs(detection_dir: Path) -> List[Path]:
     if not detection_dir.exists():
         return []
-    classifier = sorted(detection_dir.glob("dmps-*-classifier.csv"))
+    classifier = sorted(
+        p for p in detection_dir.glob("dmps-*-classifier.csv") if not p.stem.endswith("-classifier-extended")
+    )
     if classifier:
         return classifier
     out: List[Path] = []

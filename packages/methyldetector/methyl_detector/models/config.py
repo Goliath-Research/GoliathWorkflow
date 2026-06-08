@@ -379,8 +379,38 @@ class MethylDetectorConfig(BaseModel):
         ),
     )
     min_selected_dmps: Optional[int] = Field(
-        default=None, ge=1,
-        description="Minimum number of DMPs to select via binary search (None = auto-determine)"
+        default=None,
+        ge=1,
+        description=(
+            "Deprecated alias for min_core_dmps when min_core_dmps is unset. "
+            "Does not widen mapper exports; use classifier_export_margin_* for annotation panels."
+        ),
+    )
+    min_core_dmps: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Optional small guardrail on the core classifier panel (k_core) after FeatureCuts. "
+            "Use only to avoid trivially tiny panels; does not apply a large fixed export floor."
+        ),
+    )
+    classifier_export_margin_pct: float = Field(
+        default=0.10,
+        ge=0.0,
+        description=(
+            "Dual export: extend dmps-{chrom}-classifier-extended.csv to at least "
+            "ceil(k_core * (1 + margin_pct)) for mapper/gene annotation."
+        ),
+    )
+    classifier_export_margin_abs: int = Field(
+        default=10,
+        ge=0,
+        description="Dual export: add this many top-ranked DMPs beyond k_core for the extended classifier CSV.",
+    )
+    classifier_export_max_dmps: Optional[int] = Field(
+        default=200,
+        ge=1,
+        description="Dual export: cap k_extended per chromosome (annotation panel only; core pickle unchanged).",
     )
     min_dmps_for_export: int = Field(
         default=1000, ge=1,

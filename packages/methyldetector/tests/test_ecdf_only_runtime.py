@@ -377,7 +377,7 @@ def test_featurecuts_logs_dual_self_check_panels(monkeypatch):
             temp_dir,
             classifier_dmp_selection="featurecuts_validation",
             target_balanced_accuracy=0.95,
-            min_selected_dmps=10,
+            min_core_dmps=10,
             dynamic_dmp_cutoff_enabled=True,
         )
         sorted_df = pd.DataFrame(
