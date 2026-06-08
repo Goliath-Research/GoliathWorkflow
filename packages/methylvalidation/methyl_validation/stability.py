@@ -13,7 +13,7 @@ import json
 import shutil
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -1145,6 +1145,7 @@ def evaluate_dmp_stability_convergence(
     eligible = (k >= int(min_iterations)) and (k > int(convergence_window))
     if not eligible:
         return {
+            "axis": "dmp",
             "eligible_for_check": False,
             "converged_checkpoint": False,
             "n_attempted_runs": len(all_runs),
@@ -1206,15 +1207,15 @@ def evaluate_dmp_stability_convergence(
     }
 
 
-def compute_gene_stability(
-    monte_carlo_runs_root: Path,
+def _compute_gene_stability_from_run_dirs(
+    run_dirs: Sequence[Path],
     min_frequency: float = 0.5,
     *,
     min_balanced_accuracy: Optional[float] = None,
     prefer_classifier_gene_panels: bool = False,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-    """Count gene appearance frequency across MC runs."""
-    runs = _list_monte_carlo_run_dirs(monte_carlo_runs_root)
+    """Count gene appearance frequency across an explicit list of MC run dirs."""
+    runs = list(run_dirs)
     gene_counts: Counter = Counter()
     gene_importance_sum: Dict[str, float] = defaultdict(float)
     gene_importance_runs: Dict[str, int] = defaultdict(int)
@@ -1303,6 +1304,141 @@ def compute_gene_stability(
     }
 
     return df, summary
+
+
+def compute_gene_stability(
+    monte_carlo_runs_root: Path,
+    min_frequency: float = 0.5,
+    *,
+    min_balanced_accuracy: Optional[float] = None,
+    prefer_classifier_gene_panels: bool = False,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    """Count gene appearance frequency across MC runs."""
+    runs = _list_monte_carlo_run_dirs(monte_carlo_runs_root)
+    return _compute_gene_stability_from_run_dirs(
+        run_dirs=runs,
+        min_frequency=min_frequency,
+        min_balanced_accuracy=min_balanced_accuracy,
+        prefer_classifier_gene_panels=prefer_classifier_gene_panels,
+    )
+
+
+def _stable_gene_key_set(gene_freq_df: pd.DataFrame, min_frequency: float) -> set[str]:
+    if gene_freq_df.empty or "frequency" not in gene_freq_df.columns:
+        return set()
+    selected = gene_freq_df[gene_freq_df["frequency"] >= float(min_frequency)]
+    keys: set[str] = set()
+    for _, row in selected.iterrows():
+        gene = str(row.get("gene_name") or "").strip()
+        if gene:
+            keys.add(gene)
+    return keys
+
+
+def evaluate_gene_stability_convergence(
+    monte_carlo_runs_root: Path,
+    *,
+    min_frequency: float = 0.5,
+    min_balanced_accuracy: Optional[float] = None,
+    prefer_classifier_gene_panels: bool = False,
+    min_iterations: int = 20,
+    convergence_window: int = 5,
+    convergence_jaccard: float = 0.98,
+    convergence_max_size_delta: float = 0.02,
+) -> Dict[str, Any]:
+    """
+    Gene-axis analogue of ``evaluate_dmp_stability_convergence``.
+
+    Compares the stable GENE panel at k qualifying runs vs k-window qualifying
+    runs. Use this when the production model feature axis is ``raw_gene`` so the
+    early-stop criterion tracks the genes the model is actually built from rather
+    than the underlying DMP loci. Returns convergence diagnostics for one
+    checkpoint; caller handles patience.
+    """
+    all_runs = _list_monte_carlo_run_dirs(monte_carlo_runs_root)
+    qualifying_runs: List[Path] = []
+    skipped_no_genes = 0
+    skipped_low_ba = 0
+    for run_dir in all_runs:
+        if prefer_classifier_gene_panels:
+            df = load_classifier_genes(run_dir)
+            if df is None:
+                df = load_enricher_genes(run_dir)
+        else:
+            df = load_enricher_genes(run_dir)
+        if df is None or "gene_name" not in df.columns:
+            skipped_no_genes += 1
+            continue
+        if min_balanced_accuracy is not None:
+            ba = run_balanced_accuracy(run_dir)
+            if ba is None or ba < float(min_balanced_accuracy):
+                skipped_low_ba += 1
+                continue
+        qualifying_runs.append(run_dir)
+
+    k = len(qualifying_runs)
+    eligible = (k >= int(min_iterations)) and (k > int(convergence_window))
+    if not eligible:
+        return {
+            "axis": "gene",
+            "eligible_for_check": False,
+            "converged_checkpoint": False,
+            "n_attempted_runs": len(all_runs),
+            "n_runs_analyzed": k,
+            "skipped_no_gene_panel": skipped_no_genes,
+            "skipped_low_balanced_accuracy": skipped_low_ba,
+            "min_balanced_accuracy": min_balanced_accuracy,
+            "min_frequency": float(min_frequency),
+            "min_iterations": int(min_iterations),
+            "convergence_window": int(convergence_window),
+            "convergence_jaccard": float(convergence_jaccard),
+            "convergence_max_size_delta": float(convergence_max_size_delta),
+            "reason": "insufficient_qualifying_runs",
+        }
+
+    current_df, _ = _compute_gene_stability_from_run_dirs(
+        run_dirs=qualifying_runs,
+        min_frequency=min_frequency,
+        min_balanced_accuracy=None,
+        prefer_classifier_gene_panels=prefer_classifier_gene_panels,
+    )
+    previous_df, _ = _compute_gene_stability_from_run_dirs(
+        run_dirs=qualifying_runs[: k - int(convergence_window)],
+        min_frequency=min_frequency,
+        min_balanced_accuracy=None,
+        prefer_classifier_gene_panels=prefer_classifier_gene_panels,
+    )
+    stable_current = _stable_gene_key_set(current_df, min_frequency=min_frequency)
+    stable_previous = _stable_gene_key_set(previous_df, min_frequency=min_frequency)
+    jaccard = _jaccard_similarity(stable_current, stable_previous)
+    prev_size = len(stable_previous)
+    curr_size = len(stable_current)
+    size_delta = float(abs(curr_size - prev_size) / max(1, prev_size))
+    converged_checkpoint = (
+        (jaccard >= float(convergence_jaccard))
+        and (size_delta <= float(convergence_max_size_delta))
+    )
+    return {
+        "axis": "gene",
+        "eligible_for_check": True,
+        "converged_checkpoint": bool(converged_checkpoint),
+        "n_attempted_runs": len(all_runs),
+        "n_runs_analyzed": k,
+        "skipped_no_gene_panel": skipped_no_genes,
+        "skipped_low_balanced_accuracy": skipped_low_ba,
+        "min_balanced_accuracy": min_balanced_accuracy,
+        "min_frequency": float(min_frequency),
+        "min_iterations": int(min_iterations),
+        "convergence_window": int(convergence_window),
+        "convergence_jaccard": float(convergence_jaccard),
+        "convergence_max_size_delta": float(convergence_max_size_delta),
+        "jaccard": float(jaccard),
+        "relative_size_delta": float(size_delta),
+        "stable_panel_size_current": int(curr_size),
+        "stable_panel_size_previous": int(prev_size),
+        "k_qualifying_runs_current": int(k),
+        "k_qualifying_runs_previous": int(k - int(convergence_window)),
+    }
 
 
 def write_stable_gene_panel(

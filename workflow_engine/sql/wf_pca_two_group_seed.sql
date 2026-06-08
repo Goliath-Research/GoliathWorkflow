@@ -118,7 +118,7 @@ BEGIN
         SET @n_cent_par = SCOPE_IDENTITY();
 
         INSERT INTO wf.workflow_edge (parent_node_id, child_node_id, child_order, branch_kind, condition_expr, switch_case_value, is_default)
-        VALUES (@n_chr_seq, @n_cent_par, 0, N'PARALLEL', NULL, NULL, 0);
+        VALUES (@n_chr_seq, @n_cent_par, 0, N'SEQUENCE', NULL, NULL, 0);
 
         INSERT INTO wf.workflow_node (workflow_version_id, node_type, node_key, workflow_action_id, repeat_count, condition_ref_node_key, switch_ref_node_key, condition_var, switch_var)
         VALUES (@ver_id, N'ACTION', CONCAT(N'centroid_g1_', @chr), @a_centroid, NULL, NULL, NULL, NULL, NULL);

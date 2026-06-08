@@ -115,7 +115,7 @@ BEGIN
             @text = @def_expr,
             @node_execution_id = @to_scope,
             @workflow_instance_id = @workflow_instance_id,
-            @out_text = @resolved OUTPUT,
+            @resolved = @resolved OUTPUT,
             @failed = @failed OUTPUT,
             @fail_code = @fc OUTPUT,
             @fail_msg = @fm OUTPUT;
@@ -188,6 +188,7 @@ BEGIN
     DECLARE @source_path NVARCHAR(1024);
     DECLARE @frag NVARCHAR(MAX);
     DECLARE @jp NVARCHAR(1024);
+    DECLARE @bi BIGINT;
 
     DECLARE bind_cur CURSOR LOCAL FAST_FORWARD FOR
         SELECT var_name, source_kind, source_json_path
@@ -221,7 +222,13 @@ BEGIN
                     IF @frag IS NULL
                         SET @frag = N'null';
                     ELSE IF ISJSON(@frag) = 0
-                        SET @frag = wf.wf_json_fragment_from_string(@frag);
+                    BEGIN
+                        SET @bi = TRY_CONVERT(BIGINT, @frag);
+                        IF @bi IS NOT NULL AND CAST(@bi AS NVARCHAR(50)) = LTRIM(RTRIM(@frag))
+                            SET @frag = CAST(@bi AS NVARCHAR(50));
+                        ELSE
+                            SET @frag = wf.wf_json_fragment_from_string(@frag);
+                    END
                 END
             END
         END
@@ -400,21 +407,9 @@ BEGIN
         DECLARE @failed BIT;
         DECLARE @fc INT;
         DECLARE @fm NVARCHAR(1024);
-        DECLARE @scope_root BIGINT = ISNULL(@parent_node_execution_id, @ne_id);
-
-        IF @parent_node_execution_id IS NOT NULL
-        BEGIN
-            DECLARE @parent_ntype2 VARCHAR(32);
-            SELECT @parent_ntype2 = wn.node_type
-            FROM wf.node_execution AS ne
-            INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
-            WHERE ne.id = @parent_node_execution_id;
-            IF @parent_ntype2 = N'PARALLEL'
-                SET @scope_root = @ne_id;
-        END
 
         EXEC wf.wf_build_input_json_for_action
-            @node_execution_id = @scope_root,
+            @node_execution_id = @ne_id,
             @workflow_instance_id = @workflow_instance_id,
             @workflow_node_id = @workflow_node_id,
             @final_json = @fj OUTPUT,
