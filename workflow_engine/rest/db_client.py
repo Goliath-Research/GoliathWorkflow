@@ -25,7 +25,8 @@ def _sql_literal(value: Any) -> str:
     if isinstance(value, int):
         return str(value)
     if isinstance(value, (dict, list)):
-        return f"'{json.dumps(value)}'::jsonb"
+        escaped = json.dumps(value).replace("'", "''")
+        return f"'{escaped}'::jsonb"
     escaped = str(value).replace("'", "''")
     return f"'{escaped}'"
 

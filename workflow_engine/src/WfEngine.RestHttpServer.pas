@@ -64,8 +64,10 @@ begin
   begin
     ARequestInfo.PostStream.Position := 0;
     Stream := ARequestInfo.PostStream;
-    SetLength(Body, Stream.Size);
-    Stream.ReadBuffer(Body[1], Stream.Size);
+    var Bytes: TBytes;
+    SetLength(Bytes, Stream.Size);
+    Stream.ReadBuffer(Bytes[0], Stream.Size);
+    Body := TEncoding.UTF8.GetString(Bytes);
   end;
 
   ResponseBody := FApi.Handle(ARequestInfo.Command, ARequestInfo.Document, Body, Status);

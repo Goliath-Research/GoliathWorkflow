@@ -193,7 +193,9 @@ begin
       JsonGetInt64(BodyObj, 'worker_id', True, WorkerId);
       JsonGetString(BodyObj, 'worker_token', True, WorkerToken);
       JsonGetString(BodyObj, 'capability', False, Capability);
-      ExtendSec := StrToIntDef(BodyObj.GetValue('max_lease_seconds').Value, 300);
+      var MaxLeaseVal: Int64;
+      JsonGetInt64(BodyObj, 'max_lease_seconds', False, MaxLeaseVal);
+      if MaxLeaseVal > 0 then ExtendSec := Integer(MaxLeaseVal) else ExtendSec := 300;
       Claim := FSvc.WorkerApi.RequestTask(WorkerId, WorkerToken, Capability, ExtendSec);
       Resp := TJSONObject.Create;
       try
@@ -222,7 +224,9 @@ begin
       NodeExecId := StrToInt64Def(Param, 0);
       JsonGetInt64(BodyObj, 'worker_id', True, WorkerId);
       JsonGetString(BodyObj, 'worker_token', True, WorkerToken);
-      ResultCode := StrToIntDef(BodyObj.GetValue('result_code').Value, 0);
+      var ResultCodeVal: Int64;
+      JsonGetInt64(BodyObj, 'result_code', False, ResultCodeVal);
+      ResultCode := Integer(ResultCodeVal);
       ContextJson := '';
       if BodyObj.GetValue('output_json') <> nil then
         ContextJson := BodyObj.GetValue('output_json').ToJSON;
@@ -245,7 +249,9 @@ begin
       NodeExecId := StrToInt64Def(Param, 0);
       JsonGetInt64(BodyObj, 'worker_id', True, WorkerId);
       JsonGetString(BodyObj, 'worker_token', True, WorkerToken);
-      ExtendSec := StrToIntDef(BodyObj.GetValue('extend_seconds').Value, 300);
+      var ExtendVal: Int64;
+      JsonGetInt64(BodyObj, 'extend_seconds', False, ExtendVal);
+      if ExtendVal > 0 then ExtendSec := Integer(ExtendVal) else ExtendSec := 300;
       RowsUpdated := FSvc.WorkerApi.Heartbeat(NodeExecId, WorkerId, WorkerToken, ExtendSec);
       AStatus := 200;
       Result := Format('{"rows_updated":%d}', [RowsUpdated]);
@@ -257,7 +263,9 @@ begin
       NodeExecId := StrToInt64Def(Param, 0);
       JsonGetInt64(BodyObj, 'worker_id', True, WorkerId);
       JsonGetString(BodyObj, 'worker_token', True, WorkerToken);
-      ErrCode := StrToIntDef(BodyObj.GetValue('error_code').Value, 0);
+      var ErrCodeVal: Int64;
+      JsonGetInt64(BodyObj, 'error_code', False, ErrCodeVal);
+      ErrCode := Integer(ErrCodeVal);
       JsonGetString(BodyObj, 'error_message', False, ErrMsg);
       FSvc.WorkerApi.FailTask(NodeExecId, WorkerId, WorkerToken, ErrCode, ErrMsg);
       AStatus := 204;
