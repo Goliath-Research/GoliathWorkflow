@@ -77,6 +77,6 @@ for name in "${SCRIPTS[@]}"; do
 done
 
 echo "Contract check..."
-python3 "$REPO_ROOT/workflow_engine/contract/validate_contract.py"
+"$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/workflow_engine/contract/validate_contract.py"
 
 echo "Deployed wf objects on $PGHOST/$PGDATABASE"
