@@ -76,6 +76,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 AS $$
+#variable_conflict use_column
 DECLARE
   v_now timestamptz := (now() AT TIME ZONE 'utc');
   v_lease_end timestamptz := v_now + make_interval(secs => p_max_lease_seconds);
@@ -143,6 +144,7 @@ CREATE OR REPLACE FUNCTION wf.sp_worker_submit_result(
 RETURNS TABLE (accepted boolean, instance_status text, next_ready_count int)
 LANGUAGE plpgsql
 AS $$
+#variable_conflict use_column
 DECLARE
   v_lease_worker bigint;
   v_cur_status text;
@@ -268,6 +270,8 @@ BEGIN
   SET status = 'RUNNING',
       started_at_utc = (now() AT TIME ZONE 'utc')
   WHERE id = p_workflow_instance_id;
+
+  CALL wf.wf_init_instance_scope_from_context(p_workflow_instance_id);
 
   CALL wf.wf_engine_activate(
     p_workflow_instance_id,

@@ -31,7 +31,10 @@ requires
   rtl,
   dbrtl,
   dac370,
-  unidac370;
+  unidac370,
+  IndySystem,
+  IndyCore,
+  IndyProtocols;
 
 contains
   WfEngine.Types in 'src\WfEngine.Types.pas',
@@ -46,6 +49,8 @@ contains
   WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
   WfEngine.DbAuth in 'src\WfEngine.DbAuth.pas',
   WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
+  WfEngine.RestApi in 'src\WfEngine.RestApi.pas',
+  WfEngine.RestHttpServer in 'src\WfEngine.RestHttpServer.pas',
   WfEngine in 'src\WfEngine.pas';
 
 end.

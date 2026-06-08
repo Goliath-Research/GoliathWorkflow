@@ -563,13 +563,23 @@ function TWorkflowRepository.TryGetLatestTaskOutputJson(const AInstanceId: Int64
   const ANodeKey, AJsonPath: string; out AFragmentJson: string): Boolean;
 var
   OutJson: string;
+  Sql: string;
 begin
-  OutJson := ScalarStr(Format(
-    'SELECT TOP 1 CAST(ne.output_json AS NVARCHAR(MAX)) FROM %s.node_execution ne ' +
-    'INNER JOIN %s.workflow_node wn ON wn.id = ne.workflow_node_id ' +
-    'WHERE ne.workflow_instance_id = %d AND wn.node_key = %s AND ne.status = ''SUCCEEDED'' ' +
-    'ORDER BY ne.ended_at_utc DESC, ne.id DESC',
-    [WfSchema, WfSchema, AInstanceId, QuotedStr(ANodeKey)]));
+  if GetWorkflowBackend = wbPostgres then
+    Sql := Format(
+      'SELECT ne.output_json::text FROM %s.node_execution ne ' +
+      'INNER JOIN %s.workflow_node wn ON wn.id = ne.workflow_node_id ' +
+      'WHERE ne.workflow_instance_id = %d AND wn.node_key = %s AND ne.status = ''SUCCEEDED'' ' +
+      'ORDER BY ne.ended_at_utc DESC NULLS LAST, ne.id DESC LIMIT 1',
+      [WfSchema, WfSchema, AInstanceId, QuotedStr(ANodeKey)])
+  else
+    Sql := Format(
+      'SELECT TOP 1 CAST(ne.output_json AS NVARCHAR(MAX)) FROM %s.node_execution ne ' +
+      'INNER JOIN %s.workflow_node wn ON wn.id = ne.workflow_node_id ' +
+      'WHERE ne.workflow_instance_id = %d AND wn.node_key = %s AND ne.status = ''SUCCEEDED'' ' +
+      'ORDER BY ne.ended_at_utc DESC, ne.id DESC',
+      [WfSchema, WfSchema, AInstanceId, QuotedStr(ANodeKey)]);
+  OutJson := ScalarStr(Sql);
   Result := ExtractJsonFragment(OutJson, AJsonPath, AFragmentJson);
 end;
 
@@ -785,10 +795,18 @@ begin
 end;
 
 function TWorkflowRepository.GetInstanceContextJson(const AInstanceId: Int64): string;
+var
+  Sql: string;
 begin
-  Result := ScalarStr(Format(
-    'SELECT CAST(context_json AS NVARCHAR(MAX)) FROM %s.workflow_instance WHERE id = %d',
-    [WfSchema, AInstanceId]));
+  if GetWorkflowBackend = wbPostgres then
+    Sql := Format(
+      'SELECT context_json::text FROM %s.workflow_instance WHERE id = %d',
+      [WfSchema, AInstanceId])
+  else
+    Sql := Format(
+      'SELECT CAST(context_json AS NVARCHAR(MAX)) FROM %s.workflow_instance WHERE id = %d',
+      [WfSchema, AInstanceId]);
+  Result := ScalarStr(Sql);
 end;
 
 procedure TWorkflowRepository.UpdateInstanceContextJson(const AInstanceId: Int64;

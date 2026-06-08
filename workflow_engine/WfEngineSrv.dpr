@@ -15,7 +15,10 @@ uses
   WfEngine.Repository in 'src\WfEngine.Repository.pas',
   WfEngine.Scheduler in 'src\WfEngine.Scheduler.pas',
   WfEngine.Scope in 'src\WfEngine.Scope.pas',
-  WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas';
+  WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
+  WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
+  WfEngine.DbAuth in 'src\WfEngine.DbAuth.pas',
+  WfEngine.RestHttpServer in 'src\WfEngine.RestHttpServer.pas';
 
 function GetArgValue(const Args: TArray<string>; const Name: string; const Default: string): string;
 var
@@ -36,17 +39,21 @@ begin
   Writeln('Usage:');
   Writeln('  WfEngineSrv /run [pollms=1000] [maxinstances=50]');
   Writeln('  WfEngineSrv /startinstance version=<id> [context={}]');
+  Writeln('  WfEngineSrv /rest [port=8080]');
   Writeln;
   Writeln('Environment:');
   Writeln('  METHYLPIPELINE_DB  UniDAC connection string (required)');
+  Writeln('  BACKEND_DB         mssql | postgres (optional)');
 end;
 
 var
   Cfg: TWorkflowEngineServiceConfig;
   Svc: TWorkflowEngineHostedService;
+  RestSrv: TRestHttpServer;
   Args: TArray<string>;
   Mode, Conn, Ctx: string;
   VersionId, InstanceId: Int64;
+  RestPort: Integer;
   I: Integer;
 begin
   try
@@ -62,7 +69,9 @@ begin
 
     Conn := GetEnvironmentVariable('METHYLPIPELINE_DB');
     if Conn = '' then
-      raise Exception.Create('Set environment variable METHYLPIPELINE_DB to a UniDAC connection string.');
+      Conn := BuildConnectionStringFromEnv;
+    if Conn = '' then
+      raise Exception.Create('Set METHYLPIPELINE_DB or POSTGRES_*/AZURE_SQL_* environment variables.');
 
     Cfg.ConnectionString := Conn;
     Cfg.UseEngineSubmitPath := True;
@@ -85,6 +94,19 @@ begin
         Ctx := GetArgValue(Args, 'context', '{}');
         InstanceId := Svc.CreateAndStartInstance(VersionId, Ctx);
         Writeln(Format('Started workflow instance %d (version %d).', [InstanceId, VersionId]));
+      end
+      else if Mode = '/rest' then
+      begin
+        RestPort := StrToIntDef(GetArgValue(Args, 'port', '8080'), 8080);
+        RestSrv := TRestHttpServer.Create(Svc);
+        try
+          RestSrv.Start(RestPort);
+          Writeln('Press Ctrl+C to stop REST server.');
+          while True do
+            Sleep(1000);
+        finally
+          RestSrv.Free;
+        end;
       end
       else
         PrintUsage;

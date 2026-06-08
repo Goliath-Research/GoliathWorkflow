@@ -29,33 +29,62 @@ def _pg_dsn() -> str:
     return f"postgresql://{user}:{password}@{host}:{port}/{db}"
 
 
+def _pg_env() -> dict[str, str]:
+    env = os.environ.copy()
+    if "PGPASSWORD" not in env and os.environ.get("POSTGRES_PASSWORD"):
+        env["PGPASSWORD"] = os.environ["POSTGRES_PASSWORD"]
+    return env
+
+
 def _run_psql(dsn: str, sql_path: Path) -> None:
     subprocess.run(
-        ["psql", dsn, "-v", "ON_ERROR_STOP=1", "-f", str(sql_path)],
+        ["psql", "-q", dsn, "-v", "ON_ERROR_STOP=1", "-f", str(sql_path)],
         check=True,
         capture_output=True,
         text=True,
+        env=_pg_env(),
     )
 
 
 def deploy_postgres(dsn: str) -> None:
-    for name in ("00_schema.sql", "03_engine_core.sql", "01_worker_api.sql", "02_repository_api.sql", "04_admin.sql"):
+    scripts = (
+        "00_schema.sql",
+        "03_engine_core.sql",
+        "05_runtime_parity.sql",
+        "06_scope_writepath_parity.sql",
+        "07_scope_encoding_parity.sql",
+        "01_worker_api.sql",
+        "02_repository_api.sql",
+        "04_admin.sql",
+    )
+    for name in scripts:
         _run_psql(dsn, SQL_PG / name)
 
 
 def _psql_query(dsn: str, sql: str) -> str:
     proc = subprocess.run(
-        ["psql", dsn, "-t", "-A", "-c", sql],
+        ["psql", "-q", dsn, "-t", "-A", "-c", sql],
         check=True,
         capture_output=True,
         text=True,
+        env=_pg_env(),
     )
     return proc.stdout.strip()
 
 
+def _psql_query_optional(dsn: str, sql: str) -> None:
+    subprocess.run(
+        ["psql", "-q", dsn, "-t", "-A", "-c", sql],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=_pg_env(),
+    )
+
+
 def seed_minimal_workflow(dsn: str) -> tuple[int, int, str]:
     """Returns (version_id, worker_id, worker_token)."""
-    _psql_query(dsn, "DELETE FROM wf.workflow_def WHERE name = 'ParityFlow';")
+    _psql_query_optional(dsn, "SELECT * FROM wf.sp_delete_workflow_def(NULL, 'ParityFlow', true);")
     _psql_query(dsn, "INSERT INTO wf.workflow_def (name) VALUES ('ParityFlow');")
     def_id = int(_psql_query(dsn, "SELECT id FROM wf.workflow_def WHERE name='ParityFlow' LIMIT 1;"))
     version_id = int(
@@ -64,12 +93,16 @@ def seed_minimal_workflow(dsn: str) -> tuple[int, int, str]:
             f"INSERT INTO wf.workflow_version (workflow_def_id) VALUES ({def_id}) RETURNING id;",
         )
     )
-    action_id = int(
-        _psql_query(
-            dsn,
-            "INSERT INTO wf.workflow_action (action_name, capability) VALUES ('LoadInput','test-cap') RETURNING id;",
+    action_id = _psql_query(dsn, "SELECT id FROM wf.workflow_action WHERE action_name='LoadInput' LIMIT 1;")
+    if not action_id:
+        action_id = int(
+            _psql_query(
+                dsn,
+                "INSERT INTO wf.workflow_action (action_name, capability) VALUES ('LoadInput','test-cap') RETURNING id;",
+            )
         )
-    )
+    else:
+        action_id = int(action_id)
     node_id = int(
         _psql_query(
             dsn,
@@ -79,22 +112,34 @@ def seed_minimal_workflow(dsn: str) -> tuple[int, int, str]:
     )
     _psql_query(dsn, f"UPDATE wf.workflow_version SET root_node_id = {node_id} WHERE id = {version_id};")
 
-    cluster_id = int(
-        _psql_query(
-            dsn,
-            "INSERT INTO wf.cluster (cluster_key, name) VALUES ('parity','Parity') RETURNING id;",
+    cluster_id = _psql_query(dsn, "SELECT id FROM wf.cluster WHERE cluster_key='parity' LIMIT 1;")
+    if not cluster_id:
+        cluster_id = int(
+            _psql_query(
+                dsn,
+                "INSERT INTO wf.cluster (cluster_key, name) VALUES ('parity','Parity') RETURNING id;",
+            )
         )
+    else:
+        cluster_id = int(cluster_id)
+    worker_id = _psql_query(
+        dsn,
+        f"SELECT id FROM wf.worker WHERE cluster_id={cluster_id} AND external_worker_key='w1' LIMIT 1;",
     )
-    worker_id = int(
-        _psql_query(
-            dsn,
-            f"INSERT INTO wf.worker (cluster_id, external_worker_key) VALUES ({cluster_id}, 'w1') RETURNING id;",
+    if not worker_id:
+        worker_id = int(
+            _psql_query(
+                dsn,
+                f"INSERT INTO wf.worker (cluster_id, external_worker_key) VALUES ({cluster_id}, 'w1') RETURNING id;",
+            )
         )
-    )
+    else:
+        worker_id = int(worker_id)
     token = "parity-test-token"
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     _psql_query(
         dsn,
+        f"DELETE FROM wf.worker_token WHERE worker_id={worker_id}; "
         f"INSERT INTO wf.worker_token (worker_id, token_hash) VALUES ({worker_id}, decode('{token_hash}','hex'));",
     )
     return version_id, worker_id, token
@@ -138,6 +183,127 @@ def test_repository_postgres(dsn: str) -> None:
     assert status == "RUNNING"
 
 
+def test_scope_resolver_postgres(dsn: str) -> None:
+    """Context scope vars resolve into action input_json via ${var.*}."""
+    _psql_query_optional(dsn, "SELECT * FROM wf.sp_delete_workflow_def(NULL, 'ScopeParity', true);")
+    _psql_query(dsn, "INSERT INTO wf.workflow_def (name) VALUES ('ScopeParity');")
+    def_id = int(_psql_query(dsn, "SELECT id FROM wf.workflow_def WHERE name='ScopeParity' LIMIT 1;"))
+    version_id = int(
+        _psql_query(dsn, f"INSERT INTO wf.workflow_version (workflow_def_id) VALUES ({def_id}) RETURNING id;")
+    )
+    action_id = _psql_query(dsn, "SELECT id FROM wf.workflow_action WHERE action_name='Echo' LIMIT 1;")
+    if not action_id:
+        action_id = int(
+            _psql_query(
+                dsn,
+                "INSERT INTO wf.workflow_action (action_name, capability) VALUES ('Echo','test-cap') RETURNING id;",
+            )
+        )
+    else:
+        action_id = int(action_id)
+    node_id = int(
+        _psql_query(
+            dsn,
+            f"INSERT INTO wf.workflow_node (workflow_version_id, node_type, node_key, workflow_action_id) "
+            f"VALUES ({version_id}, 'ACTION', 'echo', {action_id}) RETURNING id;",
+        )
+    )
+    _psql_query(dsn, f"UPDATE wf.workflow_version SET root_node_id = {node_id} WHERE id = {version_id};")
+    _psql_query(
+        dsn,
+        f"INSERT INTO wf.workflow_input_template (workflow_node_id, template_json) "
+        f"VALUES ({node_id}, '{{}}'::jsonb);",
+    )
+    _psql_query(
+        dsn,
+        f"INSERT INTO wf.workflow_input_binding (workflow_node_id, target_json_path, source_expr, is_required) "
+        f"VALUES ({node_id}, 'message', '${{var.greeting}}', true);",
+    )
+
+    instance_id = int(
+        _psql_query(
+            dsn,
+            f"SELECT id FROM wf.wf_repo_create_workflow_instance({version_id}, '{{\"greeting\":\"hello-scope\"}}'::jsonb);",
+        )
+    )
+    _psql_query(dsn, f"CALL wf.sp_start_workflow_instance({instance_id});")
+
+    input_json = _psql_query(
+        dsn,
+        f"SELECT input_json::text FROM wf.node_execution WHERE workflow_instance_id={instance_id} AND status='READY' LIMIT 1;",
+    )
+    assert "hello-scope" in input_json, f"expected resolved greeting in input_json: {input_json}"
+
+
+def test_rest_gateway_postgres(dsn: str) -> None:
+    import json
+    import subprocess
+    import time
+    import urllib.error
+    import urllib.request
+    from pathlib import Path
+
+    version_id, worker_id, token = seed_minimal_workflow(dsn)
+    gateway = Path(__file__).resolve().parents[2] / "rest" / "gateway.py"
+    env = os.environ.copy()
+    env["METHYL_REST_PG_DSN"] = dsn
+    proc = subprocess.Popen(
+        [sys.executable, str(gateway), "--host", "127.0.0.1", "--port", "18080"],
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        for _ in range(50):
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:18080/v1/workflows/instances/1", timeout=1):
+                    pass
+            except urllib.error.HTTPError:
+                break
+            except Exception:
+                time.sleep(0.2)
+        else:
+            raise RuntimeError("REST gateway did not start")
+
+        def post(path: str, payload: dict) -> dict:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:18080/v1{path}",
+                data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                body = resp.read().decode()
+                return json.loads(body) if body else {}
+
+        post("/workers/authenticate", {"worker_id": worker_id, "worker_token": token})
+        created = post(
+            "/workflows/instances",
+            {"workflow_version_id": version_id, "context_json": {}},
+        )
+        assert created["status"] == "RUNNING", created
+        claim = post(
+            "/workers/tasks/request",
+            {"worker_id": worker_id, "worker_token": token, "capability": "test-cap"},
+        )
+        assert claim.get("has_task"), claim
+        ne_id = int(claim["node_execution_id"])
+        ack = post(
+            f"/workers/tasks/{ne_id}/submit",
+            {
+                "worker_id": worker_id,
+                "worker_token": token,
+                "result_code": 1,
+                "output_json": {"ok": True},
+            },
+        )
+        assert ack.get("accepted") is True, ack
+        assert ack.get("instance_status") == "COMPLETED", ack
+    finally:
+        proc.terminate()
+        proc.wait(timeout=5)
+
+
 def main() -> int:
     if not shutil_which("psql"):
         print("psql not found; skip postgres parity (install postgresql-client)", file=sys.stderr)
@@ -146,7 +312,29 @@ def main() -> int:
     dsn = _pg_dsn()
     db_name = os.environ.get("POSTGRES_DB", "methylpipeline_parity")
     admin = dsn.rsplit("/", 1)[0] + "/postgres"
-    subprocess.run(["createdb", "-h", os.environ.get("POSTGRES_HOST", "localhost"), db_name], check=False)
+    subprocess.run(
+        [
+            "psql",
+            "-q",
+            admin,
+            "-c",
+            f"DROP DATABASE IF EXISTS {db_name} WITH (FORCE);",
+        ],
+        check=True,
+        env=_pg_env(),
+    )
+    subprocess.run(
+        [
+            "createdb",
+            "-h",
+            os.environ.get("POSTGRES_HOST", "localhost"),
+            "-U",
+            os.environ.get("POSTGRES_USER", "postgres"),
+            db_name,
+        ],
+        check=True,
+        env=_pg_env(),
+    )
 
     print(f"Deploying PostgreSQL schema to {dsn}")
     deploy_postgres(dsn)
@@ -155,6 +343,10 @@ def main() -> int:
     test_worker_api_postgres(dsn)
     print("Running repository parity...")
     test_repository_postgres(dsn)
+    print("Running scope resolver parity...")
+    test_scope_resolver_postgres(dsn)
+    print("Running REST gateway smoke test...")
+    test_rest_gateway_postgres(dsn)
 
     print("Validating contract lockstep...")
     proc = subprocess.run([sys.executable, str(CONTRACT_SCRIPT)], capture_output=True, text=True)

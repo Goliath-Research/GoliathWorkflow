@@ -70,3 +70,16 @@ Tokens are verified against `HASHBYTES('SHA2_256', @worker_token)` rows in `wf.w
 ## Placeholders
 
 Templates use `${...}` tokens only. Supported references include `ctx.iterationNo`, `ctx.sequenceIndex`, `ctx.parallelIndex`, `ctx.parent.resultCode`, and `ctx.task.<node_key>.resultCode` / `ctx.task.<node_key>.output.<path>`.
+
+## REST middle-tier
+
+OpenAPI contract: [`../contracts/openapi.yaml`](../contracts/openapi.yaml)
+
+| Implementation | Command | Backend |
+|----------------|---------|---------|
+| Delphi (production) | `WfEngineSrv /rest port=8080` | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |
+| Python (CI / Linux) | `python workflow_engine/rest/gateway.py --port 8080` | PostgreSQL via `psql` |
+
+PostgreSQL parity scripts (`sql_pg/05`–`07`) port runtime resolver, scope write-path, and JSON encoding from the T-SQL parity scripts. FOREACH (`wf_sql_foreach_support.sql`) remains MSSQL-only for now.
+
+Parity harness: `python workflow_engine/tests/parity/run_parity.py` (requires `psql` + Postgres 17).

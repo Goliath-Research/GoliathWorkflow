@@ -134,7 +134,9 @@ RETURNS TABLE (found boolean, result_code int)
 LANGUAGE plpgsql
 STABLE
 AS $$
-DECLARE v_rc int;
+DECLARE
+  v_rc int;
+  v_found boolean := false;
 BEGIN
   SELECT ne.result_code INTO v_rc
   FROM wf.node_execution ne
@@ -144,11 +146,11 @@ BEGIN
     AND ne.status = 'SUCCEEDED'
   ORDER BY ne.ended_at_utc DESC NULLS LAST, ne.id DESC
   LIMIT 1;
-  IF v_rc IS NULL THEN
-    RETURN QUERY SELECT false, NULL::int;
-  ELSE
-    RETURN QUERY SELECT true, v_rc;
-  END IF;
+  /* FOUND is set by PL/pgSQL after SELECT INTO: true if a row was returned,
+     false if no row matched. This correctly distinguishes "row exists with
+     NULL result_code" from "no matching row". */
+  v_found := FOUND;
+  RETURN QUERY SELECT v_found, v_rc;
 END;
 $$;
 

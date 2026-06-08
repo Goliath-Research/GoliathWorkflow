@@ -38,6 +38,7 @@ type
     procedure Stop;
     property Engine: IWorkflowEngine read FEngine;
     property WorkerApi: IWorkflowWorkerApi read FWorkerApi;
+    property Connection: TUniConnection read FConnection;
   end;
 
 implementation
