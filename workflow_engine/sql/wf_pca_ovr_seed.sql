@@ -1,4 +1,7 @@
 /*
+  DEPRECATED: use wf_data_driven_pipeline_seed.sql (DataDrivenPipeline + FOREACH).
+  Retained as a historical milestone-2 reference only.
+
   Workflow Engine (wf schema) - PCaOvrFlow seed.
 
   OvR scale-up for project_PCa3.json (control_vs_each_disease):

@@ -13,7 +13,7 @@ This document maps the workflow "language" (tree control flow, remote worker tas
 | Concept | Schema object | Notes |
 |---------|---------------|-------|
 | Workflow definition | `wf.workflow_def`, `wf.workflow_version` | Versioned; `root_node_id` points at tree root |
-| Node kinds | `wf.workflow_node.node_type` | CHECK: `ACTION`, `SEQUENCE`, `PARALLEL`, `IF`, `SWITCH`, `REPEAT`, `WHILE` (~line 197) |
+| Node kinds | `wf.workflow_node.node_type` | CHECK: `ACTION`, `SEQUENCE`, `PARALLEL`, `IF`, `SWITCH`, `REPEAT`, `WHILE`, **`FOREACH`** |
 | Parent/child + order | `wf.workflow_edge` | `child_order`, `branch_kind` (`SEQUENCE`, `PARALLEL`, `THEN`, `ELSE`, `CASE`, `DEFAULT`, `BODY`) |
 | Instance run | `wf.workflow_instance` | `status`, `context_json`, timestamps |
 | Per-node runtime | `wf.node_execution` | `status`, `input_json`, `output_json`, `result_code`, parent/iteration |
@@ -40,6 +40,8 @@ Supported token families:
 - `${ctx.iterationNo}`, `${ctx.sequenceIndex}`, `${ctx.parallelIndex}`, `${ctx.parent.resultCode}`
 - `${ctx.task.<node_key>.resultCode}`, `${ctx.task.<node_key>.output.<path>}`
 - `${var.<name>}` (scope walk via `wf.wf_get_scope_variable_json`)
+- `${var.<array>[n]}` (indexed element from JSON array scope value)
+- `${ctx.item}` / `${ctx.index}` (current FOREACH element and zero-based index)
 
 ### 1.3 Variables and scopes (read-path)
 
@@ -76,11 +78,11 @@ Deploy **after** `wf_sql_runtime_parity.sql` and `wf_sql_branch_parity.sql`.
 
 ## 3. Remaining gaps (scale-up)
 
-| Gap | Impact on PCa3 |
-|-----|------------------|
-| No `FOREACH` node type | Per-chromosome / per-comparison fan-out uses **static** node generation at seed time. **Milestone 2:** [wf_pca_ovr_seed.sql](sql/wf_pca_ovr_seed.sql) (`PCaOvrFlow`) — 2 parallel comparisons + post mapper/enricher/progression. |
-| No array indexing in placeholders (`var.list[idx]`) | Cannot select i-th chromosome from a JSON array in templates |
-| No expression language in `${...}` | No `(`, `+`, spaces in tokens |
+| Gap | Impact |
+|-----|--------|
+| ~~No `FOREACH` node type~~ | **Implemented** — [`wf_sql_foreach_support.sql`](sql/wf_sql_foreach_support.sql); generic workflow [`wf_data_driven_pipeline_seed.sql`](sql/wf_data_driven_pipeline_seed.sql) |
+| ~~No array indexing in placeholders~~ | **Implemented** — `${var.name[n]}` in `wf_resolve_token` |
+| No expression language in `${...}` | No `(`, `+`, spaces in tokens; object fields use FOREACH flatten or indexed arrays |
 | `payload_schema_ref` is external only | Worker validates JSON shape; DB does not enforce JSON Schema |
 | Detector has no `--chromosome` CLI flag | Single-chromosome worker runs need `step-override` with `"chromosome": ["N"]` |
 
@@ -112,10 +114,11 @@ See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREA
 4. `wf_sql_runtime_parity.sql`
 5. `wf_sql_branch_parity.sql`
 6. **`wf_sql_scope_writepath_parity.sql`** (write-path parity)
-7. **`wf_sp_delete_workflow_def.sql`** (delete/rebuild definitions)
-8. `wf_pca_two_group_seed.sql`
-9. `wf_pca_ovr_seed.sql` — PCaOvrFlow (parallel OvR comparisons + progression)
-10. `wf_pca_two_group_run_example.sql` (validation)
+7. **`wf_sql_foreach_support.sql`** (FOREACH node + indexed placeholders)
+8. **`wf_sp_delete_workflow_def.sql`** (delete/rebuild definitions)
+9. **`wf_data_driven_pipeline_seed.sql`** — generic DataDrivenPipeline (preferred)
+10. `wf_pca_two_group_seed.sql` / `wf_pca_ovr_seed.sql` — **deprecated** static generators
+11. `wf_pca_two_group_run_example.sql` (validation, optional)
 
 ---
 

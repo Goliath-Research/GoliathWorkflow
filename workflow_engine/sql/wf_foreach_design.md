@@ -1,7 +1,7 @@
-# FOREACH Node Type — Design Specification (Scale-up)
+# FOREACH Node Type
 
-**Status:** Design only (not implemented).  
-**Goal:** Express data-driven fan-out over JSON collections without static node explosion for full `project_PCa3.json` workflows.
+**Status:** Implemented in [`wf_sql_foreach_support.sql`](wf_sql_foreach_support.sql).  
+**Goal:** Express data-driven fan-out over JSON collections without static node explosion.
 
 ---
 

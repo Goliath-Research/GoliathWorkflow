@@ -1,4 +1,7 @@
 ﻿/*
+  DEPRECATED: use wf_data_driven_pipeline_seed.sql (DataDrivenPipeline + FOREACH).
+  Retained as a historical milestone-1 reference only.
+
   Workflow Engine (wf schema) - PCaTwoGroupFlow seed.
 
   Two-group comparison (control vs one disease stage), per-chromosome fan-out:
