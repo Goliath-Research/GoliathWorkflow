@@ -34,7 +34,7 @@ CREATE OR ALTER PROCEDURE wf.wf_set_scope_variable
     @workflow_instance_id BIGINT,
     @scope_node_execution_id BIGINT,
     @var_name NVARCHAR(128),
-    @value_json NVARCHAR(MAX)
+    @value_json json
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -48,7 +48,7 @@ BEGIN
             @workflow_instance_id AS workflow_instance_id,
             ISNULL(@scope_node_execution_id, 0) AS scope_node_execution_id,
             @var_name AS var_name,
-            ISNULL(@value_json, N'null') AS value_json
+            @value_json AS value_json
     ) AS s
     ON t.workflow_instance_id = s.workflow_instance_id
        AND t.scope_node_execution_id = s.scope_node_execution_id
@@ -449,9 +449,10 @@ BEGIN
     );
     SET @pex = SCOPE_IDENTITY();
 
+    DECLARE @scope int = ISNULL(@parent_node_execution_id, 0);
     EXEC wf.wf_open_scope
         @workflow_instance_id = @workflow_instance_id,
-        @from_scope_exec_id = ISNULL(@parent_node_execution_id, 0),
+        @from_scope_exec_id = @scope,
         @to_scope_exec_id = @pex,
         @workflow_node_id = @workflow_node_id;
 
