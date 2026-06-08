@@ -1,4 +1,4 @@
-/*
+﻿/*
   MethylPipeline wf schema — canonical JSON-value encoding (additive).
 
   Problem:
@@ -212,11 +212,12 @@ BEGIN
         @value_json = @elem;
 
     /* Store the index as a bare JSON integer. */
+    DECLARE @json_idx json = CAST(@zero_based_index AS NVARCHAR(32));
     EXEC wf.wf_set_scope_variable
         @workflow_instance_id = @workflow_instance_id,
         @scope_node_execution_id = @scope_node_execution_id,
         @var_name = @index_var,
-        @value_json = CAST(@zero_based_index AS NVARCHAR(32));
+        @value_json = @json_idx;
 
     /* Flatten object keys into scope. */
     IF @is_scalar = 0 AND @elem IS NOT NULL AND LEFT(LTRIM(@elem), 1) = N'{'
@@ -234,11 +235,12 @@ BEGIN
         BEGIN
             IF @fk IS NOT NULL AND @fk <> @item_var AND @fk <> @index_var
             BEGIN
+                DECLARE @json_val json = wf.wf_json_encode_openjson(@fv, @ft, @elem, @fk);
                 EXEC wf.wf_set_scope_variable
                     @workflow_instance_id = @workflow_instance_id,
                     @scope_node_execution_id = @scope_node_execution_id,
                     @var_name = @fk,
-                    @value_json = wf.wf_json_encode_openjson(@fv, @ft, @elem, @fk);
+                    @value_json = @json_val;
             END
             FETCH NEXT FROM fk INTO @fk, @fv, @ft;
         END

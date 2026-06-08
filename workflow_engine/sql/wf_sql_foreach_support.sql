@@ -133,11 +133,12 @@ BEGIN
         @var_name = @item_var,
         @value_json = @elem;
 
+    DECLARE @json json = CAST(@zero_based_index AS json);
     EXEC wf.wf_set_scope_variable
         @workflow_instance_id = @workflow_instance_id,
         @scope_node_execution_id = @scope_node_execution_id,
         @var_name = @index_var,
-        @value_json = CAST(@zero_based_index AS NVARCHAR(32));
+        @value_json = @json;
 
     IF @elem IS NOT NULL AND LEFT(LTRIM(@elem), 1) = N'{'
     BEGIN
