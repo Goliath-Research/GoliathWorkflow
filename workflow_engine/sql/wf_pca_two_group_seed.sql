@@ -15,6 +15,11 @@
   Prerequisites:
   - Base wf schema + wf_scope_variables.sql
   - wf_sql_runtime_parity.sql, wf_sql_branch_parity.sql, wf_sql_scope_writepath_parity.sql (recommended)
+  - wf_sp_delete_workflow_def.sql (to rebuild after schema/seed changes)
+
+  Rebuild:
+    EXEC wf.sp_delete_workflow_def @workflow_name = N'PCaTwoGroupFlow';
+    -- then re-run this script
 */
 
 SET ANSI_NULLS ON;
@@ -31,7 +36,7 @@ GO
 
 IF EXISTS (SELECT 1 FROM wf.workflow_def WHERE name = N'PCaTwoGroupFlow')
 BEGIN
-    PRINT N'Seed skipped: wf.workflow_def "PCaTwoGroupFlow" already exists.';
+    PRINT N'Seed skipped: wf.workflow_def "PCaTwoGroupFlow" already exists. Rebuild: EXEC wf.sp_delete_workflow_def @workflow_name = N''PCaTwoGroupFlow''; then re-run this script.';
 END
 ELSE
 BEGIN

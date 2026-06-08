@@ -20,8 +20,9 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 10. [`workflow_methylvalidation_seed.sql`](workflow_methylvalidation_seed.sql) — explicit MethylValidation workflow seed (MC centroid/detector loop + post-loop centroid/detector/mapper/enricher/disease progression).
 11. [`wf_sql_runtime_parity.sql`](wf_sql_runtime_parity.sql) — SQL-only parity for scope init from context, `${var.*}` resolution, and `mc.taskConfig` payload injection.
 12. [`wf_sql_scope_writepath_parity.sql`](wf_sql_scope_writepath_parity.sql) — SQL write-path parity: `wf_apply_output_bindings`, `wf_open_scope`, scope copy for PARALLEL children.
-13. [`wf_pca_two_group_seed.sql`](wf_pca_two_group_seed.sql) — PCaTwoGroupFlow: per-chromosome centroid+detection fan-out (milestone 1).
-14. [`wf_pca_two_group_run_example.sql`](wf_pca_two_group_run_example.sql) — End-to-end worker simulation + assertions for PCaTwoGroupFlow.
+13. [`wf_sp_delete_workflow_def.sql`](wf_sp_delete_workflow_def.sql) — `sp_delete_workflow_def`: remove a workflow definition (and instances) so seed scripts can be re-run.
+14. [`wf_pca_two_group_seed.sql`](wf_pca_two_group_seed.sql) — PCaTwoGroupFlow: per-chromosome centroid+detection fan-out (milestone 1).
+15. [`wf_pca_two_group_run_example.sql`](wf_pca_two_group_run_example.sql) — End-to-end worker simulation + assertions for PCaTwoGroupFlow.
 
 See also: [CAPABILITY_CHECK.md](CAPABILITY_CHECK.md), [sql/wf_worker_contracts_pca_two_group.md](sql/wf_worker_contracts_pca_two_group.md), [sql/wf_foreach_design.md](sql/wf_foreach_design.md).
 
@@ -47,6 +48,7 @@ DROP TABLE IF EXISTS dbo.workflow_instance;
 | `wf.sp_worker_request_task @worker_id BIGINT, @worker_token NVARCHAR(4000), @capability, @max_lease_seconds` | Authenticates registered worker; atomically claims one `READY` action row (returns 0 or 1 row). |
 | `wf.sp_worker_submit_result @node_execution_id, @worker_id BIGINT, @worker_token, @result_code, @output_json NVARCHAR(MAX), ... OUTPUT` | Validates lease + token; advances control flow. Use `@result_code < 0` to fail the instance. Payload must be valid JSON text (stored in `json` columns via explicit cast). |
 | `wf.sp_worker_heartbeat` / `wf.sp_worker_fail_task` | Lease renewal and explicit failure (same `@worker_id` / `@worker_token`). |
+| `wf.sp_delete_workflow_def @workflow_name` or `@workflow_def_id` | Remove a workflow definition (optional instance purge) so seed scripts can be re-run. |
 
 Tokens are verified against `HASHBYTES('SHA2_256', @worker_token)` rows in `wf.worker_token` (portal must register workers and issue secrets before polling).
 

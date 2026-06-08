@@ -108,8 +108,9 @@ See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREA
 4. `wf_sql_runtime_parity.sql`
 5. `wf_sql_branch_parity.sql`
 6. **`wf_sql_scope_writepath_parity.sql`** (write-path parity)
-7. `wf_pca_two_group_seed.sql`
-8. `wf_pca_two_group_run_example.sql` (validation)
+7. **`wf_sp_delete_workflow_def.sql`** (delete/rebuild definitions)
+8. `wf_pca_two_group_seed.sql`
+9. `wf_pca_two_group_run_example.sql` (validation)
 
 ---
 
