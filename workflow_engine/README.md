@@ -22,6 +22,7 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 12. [`wf_sql_scope_writepath_parity.sql`](wf_sql_scope_writepath_parity.sql) — SQL write-path parity: `wf_apply_output_bindings`, `wf_open_scope`, scope copy for PARALLEL children.
 13. [`wf_sp_delete_workflow_def.sql`](wf_sp_delete_workflow_def.sql) — `sp_delete_workflow_def`: remove a workflow definition (and instances) so seed scripts can be re-run.
 14. [`wf_sql_foreach_support.sql`](wf_sql_foreach_support.sql) — **FOREACH** control-flow node, parallel mode, `${var.name[n]}`, `${ctx.item}`.
+14a. [`wf_sql_scope_encoding_parity.sql`](wf_sql_scope_encoding_parity.sql) — canonical JSON-value encoding (`wf_json_encode_scalar/openjson`); fixes integer-as-string write-path inconsistency. Deploy immediately after `wf_sql_foreach_support.sql`.
 15. [`wf_data_driven_pipeline_seed.sql`](wf_data_driven_pipeline_seed.sql) — **DataDrivenPipeline** (generic; instance `context_json` drives fan-out).
 16. [`wf_pca_two_group_seed.sql`](wf_pca_two_group_seed.sql) — **deprecated** static PCaTwoGroupFlow.
 17. [`wf_pca_ovr_seed.sql`](wf_pca_ovr_seed.sql) — **deprecated** static PCaOvrFlow.
