@@ -307,20 +307,15 @@ BEGIN
     SET NOCOUNT ON;
 
     DECLARE @inst BIGINT;
-    DECLARE @ls BIGINT;
-    DECLARE @cur INT;
     DECLARE @max INT;
 
     SELECT @inst = workflow_instance_id FROM wf.node_execution WHERE id = @foreach_execution_id;
 
-    SELECT TOP (1)
-        @ls = id,
-        @cur = current_iteration,
-        @max = repeat_target_count
+    SELECT TOP (1) @max = repeat_target_count
     FROM wf.loop_state
     WHERE scope_node_execution_id = @foreach_execution_id;
 
-    IF @ls IS NULL
+    IF @max IS NULL
     BEGIN
         UPDATE wf.node_execution SET status = N'FAILED', engine_error_code = 10009, ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
         UPDATE wf.workflow_instance SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME() WHERE id = @inst;
@@ -337,10 +332,16 @@ BEGIN
         RETURN;
     END
 
-    SET @cur += 1;
-    UPDATE wf.loop_state SET current_iteration = @cur WHERE id = @ls;
+    /* Count finished children directly from node_execution — no shared counter, no lost-update race.
+       Each child's terminal status is committed before this proc is called. */
+    DECLARE @finished INT = (
+        SELECT COUNT(*)
+        FROM wf.node_execution
+        WHERE parent_node_execution_id = @foreach_execution_id
+          AND status IN (N'SUCCEEDED', N'FAILED', N'SKIPPED', N'CANCELLED')
+    );
 
-    IF @cur < @max
+    IF @finished < @max
         RETURN;
 
     UPDATE wf.node_execution SET status = N'SUCCEEDED', ended_at_utc = SYSUTCDATETIME() WHERE id = @foreach_execution_id;
@@ -715,6 +716,27 @@ BEGIN
                 FROM wf.scope_variable AS sv
                 WHERE sv.workflow_instance_id = @workflow_instance_id
                   AND sv.scope_node_execution_id = @parent_node_execution_id;
+            END
+
+            /* FOREACH BODY → direct ACTION: bind item/index scope vars before input resolution. */
+            IF @parent_ntype = N'FOREACH'
+            BEGIN
+                INSERT INTO wf.scope_variable (workflow_instance_id, scope_node_execution_id, var_name, value_json)
+                SELECT
+                    sv.workflow_instance_id,
+                    @ne_id,
+                    sv.var_name,
+                    sv.value_json
+                FROM wf.scope_variable AS sv
+                WHERE sv.workflow_instance_id = @workflow_instance_id
+                  AND sv.scope_node_execution_id = @parent_node_execution_id;
+
+                EXEC wf.wf_try_bind_foreach_body
+                    @workflow_instance_id = @workflow_instance_id,
+                    @workflow_node_id = @workflow_node_id,
+                    @parent_node_execution_id = @parent_node_execution_id,
+                    @scope_node_execution_id = @ne_id,
+                    @iteration_no = @iteration_no;
             END
         END
 
