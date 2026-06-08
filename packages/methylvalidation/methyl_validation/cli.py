@@ -60,6 +60,7 @@ from .validator_metrics import (
 )
 from .stability import (
     evaluate_dmp_stability_convergence,
+    evaluate_gene_stability_convergence,
     freeze_production_model,
     build_production_model,
     run_stability_analysis,
@@ -2683,10 +2684,20 @@ def main() -> None:
         early_stop_active = bool(
             (args.stability or config.run_stability) and config.stability_early_stop_enabled
         )
+        requested_feature_mode = str(getattr(config, "feature_mode", "raw_dmp") or "raw_dmp").strip().lower()
+        early_stop_axis = (
+            "gene"
+            if (
+                requested_feature_mode == "raw_gene"
+                or bool(config.stability_gene_featurecuts_enabled)
+            )
+            else "dmp"
+        )
         convergence_pass_streak = 0
         early_stop_checkpoint_history: List[Dict[str, Any]] = []
         early_stop_summary: Dict[str, Any] = {
             "enabled": bool(early_stop_active),
+            "axis": early_stop_axis,
             "triggered": False,
             "stopped_after_iteration": None,
             "patience_required": int(config.stability_convergence_patience),
@@ -3032,16 +3043,28 @@ def main() -> None:
             row = {"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), **scalar}
             rows.append(row)
             if early_stop_active:
-                checkpoint = evaluate_dmp_stability_convergence(
-                    monte_carlo_runs_root=monte_carlo_runs_root,
-                    min_frequency=float(config.stability_dmp_freq),
-                    min_balanced_accuracy=config.stability_min_balanced_accuracy,
-                    prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
-                    min_iterations=int(config.stability_min_iterations),
-                    convergence_window=int(config.stability_convergence_window),
-                    convergence_jaccard=float(config.stability_convergence_jaccard),
-                    convergence_max_size_delta=float(config.stability_convergence_max_size_delta),
-                )
+                if early_stop_axis == "gene":
+                    checkpoint = evaluate_gene_stability_convergence(
+                        monte_carlo_runs_root=monte_carlo_runs_root,
+                        min_frequency=float(config.stability_gene_freq),
+                        min_balanced_accuracy=config.stability_min_balanced_accuracy,
+                        prefer_classifier_gene_panels=bool(config.stability_gene_featurecuts_enabled),
+                        min_iterations=int(config.stability_min_iterations),
+                        convergence_window=int(config.stability_convergence_window),
+                        convergence_jaccard=float(config.stability_convergence_jaccard),
+                        convergence_max_size_delta=float(config.stability_convergence_max_size_delta),
+                    )
+                else:
+                    checkpoint = evaluate_dmp_stability_convergence(
+                        monte_carlo_runs_root=monte_carlo_runs_root,
+                        min_frequency=float(config.stability_dmp_freq),
+                        min_balanced_accuracy=config.stability_min_balanced_accuracy,
+                        prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+                        min_iterations=int(config.stability_min_iterations),
+                        convergence_window=int(config.stability_convergence_window),
+                        convergence_jaccard=float(config.stability_convergence_jaccard),
+                        convergence_max_size_delta=float(config.stability_convergence_max_size_delta),
+                    )
                 checkpoint["iteration"] = int(i + 1)
                 checkpoint["run_id"] = run_id
                 if checkpoint.get("eligible_for_check") and checkpoint.get("converged_checkpoint"):
@@ -3075,6 +3098,7 @@ def main() -> None:
                     progress.update(task_iter, completed=i + 1)
                 print(
                     "Early stopping triggered for stability MC: "
+                    f"axis={early_stop_axis}, "
                     f"iteration={i + 1}, "
                     f"patience={config.stability_convergence_patience}, "
                     f"window={config.stability_convergence_window}, "

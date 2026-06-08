@@ -1100,7 +1100,7 @@ def _stable_dmp_key_set(dmp_freq_df: pd.DataFrame, min_frequency: float) -> set[
     return keys
 
 
-def _jaccard_similarity(a: set[Tuple[str, int]], b: set[Tuple[str, int]]) -> float:
+def _jaccard_similarity(a: set[Any], b: set[Any]) -> float:
     if not a and not b:
         return 1.0
     union = a | b
@@ -1186,6 +1186,7 @@ def evaluate_dmp_stability_convergence(
         and (size_delta <= float(convergence_max_size_delta))
     )
     return {
+        "axis": "dmp",
         "eligible_for_check": True,
         "converged_checkpoint": bool(converged_checkpoint),
         "n_attempted_runs": len(all_runs),

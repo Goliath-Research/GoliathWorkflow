@@ -7,6 +7,7 @@ import pytest
 
 from methyl_validation.stability import (
     compute_gene_stability,
+    evaluate_gene_stability_convergence,
     load_classifier_genes,
     run_stability_analysis,
     write_stable_gene_panel,
@@ -107,3 +108,72 @@ def test_write_stable_gene_panel_and_stability_analysis(tmp_path: Path):
     stable = pd.read_csv(stable_gene_csv)
     assert set(stable["gene_name"].astype(str)) == {"BRCA1", "TP53"}
     assert (mc_root / "stability" / "gene_frequency.csv").is_file()
+
+
+def test_evaluate_gene_stability_convergence_detects_converged_panel(tmp_path: Path):
+    mc_root = tmp_path / "monte_carlo_runs"
+    for idx in range(1, 7):
+        _write_classifier_genes(mc_root / f"run_{idx:04d}", ["BRCA1", "TP53"])
+
+    result = evaluate_gene_stability_convergence(
+        mc_root,
+        min_frequency=0.8,
+        prefer_classifier_gene_panels=True,
+        min_iterations=5,
+        convergence_window=2,
+        convergence_jaccard=0.99,
+        convergence_max_size_delta=0.0,
+    )
+    assert result["axis"] == "gene"
+    assert result["eligible_for_check"] is True
+    assert result["converged_checkpoint"] is True
+    assert result["jaccard"] == 1.0
+    assert result["relative_size_delta"] == 0.0
+
+
+def test_evaluate_gene_stability_convergence_detects_drift(tmp_path: Path):
+    mc_root = tmp_path / "monte_carlo_runs"
+    # First runs are stable on BRCA1/TP53; later runs introduce new genes so the
+    # current stable panel diverges from the lagged panel.
+    panels = [
+        ["BRCA1", "TP53"],
+        ["BRCA1", "TP53"],
+        ["BRCA1", "TP53"],
+        ["EGFR", "KRAS"],
+        ["EGFR", "KRAS"],
+        ["EGFR", "KRAS"],
+    ]
+    for idx, genes in enumerate(panels, start=1):
+        _write_classifier_genes(mc_root / f"run_{idx:04d}", genes)
+
+    result = evaluate_gene_stability_convergence(
+        mc_root,
+        min_frequency=0.9,
+        prefer_classifier_gene_panels=True,
+        min_iterations=5,
+        convergence_window=3,
+        convergence_jaccard=0.99,
+        convergence_max_size_delta=0.0,
+    )
+    assert result["axis"] == "gene"
+    assert result["eligible_for_check"] is True
+    assert result["converged_checkpoint"] is False
+    assert result["jaccard"] < 0.99
+
+
+def test_evaluate_gene_stability_convergence_reports_insufficient_runs(tmp_path: Path):
+    mc_root = tmp_path / "monte_carlo_runs"
+    for idx in range(1, 4):
+        _write_classifier_genes(mc_root / f"run_{idx:04d}", ["BRCA1", "TP53"])
+
+    result = evaluate_gene_stability_convergence(
+        mc_root,
+        min_frequency=0.8,
+        prefer_classifier_gene_panels=True,
+        min_iterations=5,
+        convergence_window=2,
+    )
+    assert result["axis"] == "gene"
+    assert result["eligible_for_check"] is False
+    assert result["converged_checkpoint"] is False
+    assert result["reason"] == "insufficient_qualifying_runs"
