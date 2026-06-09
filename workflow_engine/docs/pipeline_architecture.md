@@ -6,13 +6,16 @@ Presentation-oriented overview of how a **project configuration** (JSON), a **sc
 
 **Related code:** [`schemas/config/`](/home/ubuntu/MethylPipeline/schemas/config/), [`tools/methyl-config-editor/`](/home/ubuntu/MethylPipeline/tools/methyl-config-editor/), [`workflow_engine/`](/home/ubuntu/MethylPipeline/workflow_engine/)
 
-**Other formats (HTML / PDF):** render [`pipeline_architecture.qmd`](pipeline_architecture.qmd) with Quarto — see [Rendering](#rendering-this-document) at the end of that file, or run:
+**Other formats (HTML / PDF):** Quarto source is [`pipeline_architecture.qmd`](pipeline_architecture.qmd), generated from this file.
+
+**Local HTML (diagrams need a live preview server — do not open `pipeline_architecture.html` directly in the browser or in the IDE preview):**
 
 ```bash
-python workflow_engine/docs/build_pipeline_architecture_qmd.py   # sync from this .md
-quarto render workflow_engine/docs/pipeline_architecture.qmd --to html
-quarto render workflow_engine/docs/pipeline_architecture.qmd --to pdf
+python workflow_engine/docs/build_pipeline_architecture_qmd.py
+quarto preview workflow_engine/docs/pipeline_architecture.qmd
 ```
+
+Quarto serves the page at `http://localhost:…` and Mermaid renders in your normal browser. See [Rendering](#rendering-this-document) at the end of the `.qmd` for PDF commands.
 
 ---
 
@@ -20,35 +23,39 @@ quarto render workflow_engine/docs/pipeline_architecture.qmd --to pdf
 
 ```mermaid
 flowchart TB
-  subgraph portal [Company Portal]
-    editor["Schema-driven config editor\n(methyl-config-editor Web)"]
-    run["Start workflow run\nPOST /v1/workflows/instances"]
+  subgraph portal ["Company Portal"]
+    editor["Schema-driven config editor<br/>(methyl-config-editor Web)"]
+    run["Start workflow run<br/>POST /v1/workflows/instances"]
   end
-  subgraph db [Backend Database]
-    def["Workflow definition\nDataDrivenPipeline"]
-    inst["workflow_instance\n+ context_json"]
-    exec["node_execution\n+ scope_variable"]
+  subgraph database ["Backend Database"]
+    wfDef["Workflow definition<br/>DataDrivenPipeline"]
+    inst["workflow_instance<br/>+ context_json"]
+    nexec["node_execution<br/>+ scope_variable"]
   end
-  subgraph mt [Internal Middle-Tier]
-    rest["WfEngine REST API\n:8080"]
-    engine["Workflow engine\n(T-SQL / PL/pgSQL procs)"]
+  subgraph mt ["Internal Middle-Tier"]
+    rest["WfEngine REST API<br/>:8080"]
+    engine["Workflow engine<br/>(T-SQL / PL/pgSQL procs)"]
   end
-  subgraph workers [Remote Workers / Cluster]
+  subgraph workers ["Remote Workers / Cluster"]
     w1["methyl-centroid"]
     w2["methyl-detector"]
     w3["methyl-mapper / enricher / progression"]
   end
-  storage[("Shared storage\nNFS / Azure Files\n/work/...")]
+  storage[("Shared storage<br/>NFS / Azure Files<br/>/work/...")]
 
   editor -->|"validated project.json"| run
-  run -->|"planner → context_json"| inst
-  def --> inst
-  inst --> exec
+  run -->|"planner -> context_json"| inst
+  wfDef --> inst
+  inst --> nexec
   rest --> engine
-  engine --> db
-  w1 & w2 & w3 -->|"poll / submit"| rest
-  w1 & w2 & w3 --> storage
-  exec -.->|"input_json paths"| storage
+  engine --> nexec
+  w1 -->|"poll / submit"| rest
+  w2 -->|"poll / submit"| rest
+  w3 -->|"poll / submit"| rest
+  w1 --> storage
+  w2 --> storage
+  w3 --> storage
+  nexec -.->|"input_json paths"| storage
 ```
 
 | Layer | Technology | Responsibility |

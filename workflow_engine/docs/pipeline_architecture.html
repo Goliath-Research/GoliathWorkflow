@@ -73,9 +73,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="pipeline_architecture_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="pipeline_architecture_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="pipeline_architecture_files/libs/bootstrap/bootstrap-e21907d622bbd64d2e79a3a37f4febb6.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
-<script src="pipeline_architecture_files/libs/quarto-diagram/mermaid.min.js"></script>
-<script src="pipeline_architecture_files/libs/quarto-diagram/mermaid-init.js"></script>
-<link href="pipeline_architecture_files/libs/quarto-diagram/mermaid.css" rel="stylesheet">
 
 
 </head>
@@ -177,50 +174,48 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Presentation-oriented overview of how a <strong>project configuration</strong> (JSON), a <strong>schema-validated portal editor</strong>, a <strong>workflow database</strong> (including <strong>scoped variables</strong>), a <strong>stateless middle-tier</strong>, and <strong>remote workers</strong> cooperate to run a configurable methylation pipeline on a shared-storage cluster.</p>
 <p><strong>Audience:</strong> engineers and stakeholders reviewing the company portal, backend database, middle-tier, and compute workers.</p>
 <p><strong>Related code:</strong> <a href="./home/ubuntu/MethylPipeline/schemas/config/"><code>schemas/config/</code></a>, <a href="./home/ubuntu/MethylPipeline/tools/methyl-config-editor/"><code>tools/methyl-config-editor/</code></a>, <a href="./home/ubuntu/MethylPipeline/workflow_engine/"><code>workflow_engine/</code></a></p>
+<p><strong>Other formats (HTML / PDF):</strong> Quarto source is <a href="pipeline_architecture.qmd"><code>pipeline_architecture.qmd</code></a>, generated from this file.</p>
+<p><strong>Local HTML (diagrams need a live preview server — do not open <code>pipeline_architecture.html</code> directly in the browser or in the IDE preview):</strong></p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> workflow_engine/docs/build_pipeline_architecture_qmd.py</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">quarto</span> preview workflow_engine/docs/pipeline_architecture.qmd</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Quarto serves the page at <code>http://localhost:…</code> and Mermaid renders in your normal browser. See <a href="#rendering-this-document">Rendering</a> at the end of the <code>.qmd</code> for PDF commands.</p>
 <hr>
 <section id="presentation-map-four-layers" class="level2" data-number="1">
 <h2 data-number="1" class="anchored" data-anchor-id="presentation-map-four-layers"><span class="header-section-number">1</span> Presentation map (four layers)</h2>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">flowchart TB
-  subgraph portal [Company Portal]
-    editor["Schema-driven config editor\n(methyl-config-editor Web)"]
-    run["Start workflow run\nPOST /v1/workflows/instances"]
+<pre class="mermaid"><code>flowchart TB
+  subgraph portal ["Company Portal"]
+    editor["Schema-driven config editor&lt;br/&gt;(methyl-config-editor Web)"]
+    run["Start workflow run&lt;br/&gt;POST /v1/workflows/instances"]
   end
-  subgraph db [Backend Database]
-    def["Workflow definition\nDataDrivenPipeline"]
-    inst["workflow_instance\n+ context_json"]
-    exec["node_execution\n+ scope_variable"]
+  subgraph database ["Backend Database"]
+    wfDef["Workflow definition&lt;br/&gt;DataDrivenPipeline"]
+    inst["workflow_instance&lt;br/&gt;+ context_json"]
+    nexec["node_execution&lt;br/&gt;+ scope_variable"]
   end
-  subgraph mt [Internal Middle-Tier]
-    rest["WfEngine REST API\n:8080"]
-    engine["Workflow engine\n(T-SQL / PL/pgSQL procs)"]
+  subgraph mt ["Internal Middle-Tier"]
+    rest["WfEngine REST API&lt;br/&gt;:8080"]
+    engine["Workflow engine&lt;br/&gt;(T-SQL / PL/pgSQL procs)"]
   end
-  subgraph workers [Remote Workers / Cluster]
+  subgraph workers ["Remote Workers / Cluster"]
     w1["methyl-centroid"]
     w2["methyl-detector"]
     w3["methyl-mapper / enricher / progression"]
   end
-  storage[("Shared storage\nNFS / Azure Files\n/work/...")]
+  storage[("Shared storage&lt;br/&gt;NFS / Azure Files&lt;br/&gt;/work/...")]
 
   editor --&gt;|"validated project.json"| run
-  run --&gt;|"planner → context_json"| inst
-  def --&gt; inst
-  inst --&gt; exec
+  run --&gt;|"planner -&gt; context_json"| inst
+  wfDef --&gt; inst
+  inst --&gt; nexec
   rest --&gt; engine
-  engine --&gt; db
-  w1 &amp; w2 &amp; w3 --&gt;|"poll / submit"| rest
-  w1 &amp; w2 &amp; w3 --&gt; storage
-  exec -.-&gt;|"input_json paths"| storage
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  engine --&gt; nexec
+  w1 --&gt;|"poll / submit"| rest
+  w2 --&gt;|"poll / submit"| rest
+  w3 --&gt;|"poll / submit"| rest
+  w1 --&gt; storage
+  w2 --&gt; storage
+  w3 --&gt; storage
+  nexec -.-&gt;|"input_json paths"| storage</code></pre>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 20%">
@@ -317,12 +312,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="cohort-hierarchy" class="level3" data-number="2.2">
 <h3 data-number="2.2" class="anchored" data-anchor-id="cohort-hierarchy"><span class="header-section-number">2.2</span> Cohort hierarchy</h3>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">flowchart TD
+<pre class="mermaid"><code>flowchart TD
   root["ProjectConfig"]
   root --&gt; meta["Metadata\nproject_name, laboratory, batch"]
   root --&gt; paths["Paths\noutput_base, samples_base_path, path_remap"]
@@ -335,13 +325,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   ctrl --&gt; g1["groups[]\nlabel, sample_paths"]
   dis --&gt; g2["groups[]"]
   g2 --&gt; stages["stages[]\noptional nesting"]
-  stages --&gt; leaf["Resolved label:\n{parent}_{stage}\ne.g. PCa_PCa1"]
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  stages --&gt; leaf["Resolved label:\n{parent}_{stage}\ne.g. PCa_PCa1"]</code></pre>
 <p><strong>Control side</strong> (<code>controls</code>): one or more groups, e.g.&nbsp;<code>all</code> with a CSV of healthy sample paths.</p>
 <p><strong>Disease side</strong> (<code>diseases</code>): groups may nest <strong><code>stages</code></strong> (e.g.&nbsp;Gleason PCa1–PCa4 under parent <code>PCa</code>). Resolved centroid labels become <code>{parent}_{stage}</code> → <code>PCa_PCa1</code>.</p>
 </section>
@@ -379,32 +363,32 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="example-snippet-two-group-ovr-style" class="level3" data-number="2.4">
 <h3 data-number="2.4" class="anchored" data-anchor-id="example-snippet-two-group-ovr-style"><span class="header-section-number">2.4</span> Example snippet (two-group OvR style)</h3>
 <p>External reference project (not in repo): <code>project_PCa3.json</code> with one control (<code>all</code>) and two disease stages (<code>PCa_Low</code>, <code>PCa_High</code>). In-repo analogue with four stages:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"project_name"</span><span class="fu">:</span> <span class="st">"Healthy_vs_PCa1-4-CG"</span><span class="fu">,</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"output_base"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer"</span><span class="fu">,</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"controls"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"healthy"</span><span class="fu">,</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"all"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"/work/prostate-cancer/data/healthy.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">]</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"diseases"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"cancer"</span><span class="fu">,</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa"</span><span class="fu">,</span></span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"stages"</span><span class="fu">:</span> <span class="ot">[</span></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa1"</span><span class="fu">,</span> <span class="dt">"description"</span><span class="fu">:</span> <span class="st">"Gleason Score 3+3"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"..."</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">,</span></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa2"</span><span class="fu">,</span> <span class="dt">"description"</span><span class="fu">:</span> <span class="st">"Gleason Score 3+4"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"..."</span><span class="ot">]</span> <span class="fu">}</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>      <span class="ot">]</span></span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span><span class="ot">]</span></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"comparisons"</span><span class="fu">:</span> <span class="st">"control_vs_each_disease"</span><span class="fu">,</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"chromosomes"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"1"</span><span class="ot">,</span> <span class="st">"2"</span><span class="ot">,</span> <span class="st">"..."</span><span class="ot">,</span> <span class="st">"22"</span><span class="ot">,</span> <span class="st">"X"</span><span class="ot">,</span> <span class="st">"Y"</span><span class="ot">]</span><span class="fu">,</span></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"contexts"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"CG"</span><span class="ot">]</span><span class="fu">,</span></span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"step_config"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"centroid"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"base_config"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"use_gpu"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span> <span class="dt">"min_coverage"</span><span class="fu">:</span> <span class="dv">4</span> <span class="fu">}</span> <span class="fu">},</span></span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"detection"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"alpha"</span><span class="fu">:</span> <span class="fl">0.05</span> <span class="fu">},</span></span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"progression"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"ordered_comparison_labels"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"PCa1"</span><span class="ot">,</span> <span class="st">"PCa2"</span><span class="ot">,</span> <span class="st">"PCa3"</span><span class="ot">,</span> <span class="st">"PCa4"</span><span class="ot">]</span> <span class="fu">}</span></span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"project_name"</span><span class="fu">:</span> <span class="st">"Healthy_vs_PCa1-4-CG"</span><span class="fu">,</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"output_base"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer"</span><span class="fu">,</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"controls"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"healthy"</span><span class="fu">,</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"all"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"/work/prostate-cancer/data/healthy.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">]</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"diseases"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"cancer"</span><span class="fu">,</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa"</span><span class="fu">,</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"stages"</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa1"</span><span class="fu">,</span> <span class="dt">"description"</span><span class="fu">:</span> <span class="st">"Gleason Score 3+3"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"..."</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa2"</span><span class="fu">,</span> <span class="dt">"description"</span><span class="fu">:</span> <span class="st">"Gleason Score 3+4"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"..."</span><span class="ot">]</span> <span class="fu">}</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>      <span class="ot">]</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span><span class="ot">]</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"comparisons"</span><span class="fu">:</span> <span class="st">"control_vs_each_disease"</span><span class="fu">,</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"chromosomes"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"1"</span><span class="ot">,</span> <span class="st">"2"</span><span class="ot">,</span> <span class="st">"..."</span><span class="ot">,</span> <span class="st">"22"</span><span class="ot">,</span> <span class="st">"X"</span><span class="ot">,</span> <span class="st">"Y"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"contexts"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"CG"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"step_config"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"centroid"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"base_config"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"use_gpu"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span> <span class="dt">"min_coverage"</span><span class="fu">:</span> <span class="dv">4</span> <span class="fu">}</span> <span class="fu">},</span></span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"detection"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"alpha"</span><span class="fu">:</span> <span class="fl">0.05</span> <span class="fu">},</span></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"progression"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"ordered_comparison_labels"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"PCa1"</span><span class="ot">,</span> <span class="st">"PCa2"</span><span class="ot">,</span> <span class="st">"PCa3"</span><span class="ot">,</span> <span class="st">"PCa4"</span><span class="ot">]</span> <span class="fu">}</span></span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>For a <strong>two-group OvR</strong> study (one control vs two disease stages), use <code>"comparisons": "control_vs_each_disease"</code> with two disease leaves (<code>PCa_Low</code>, <code>PCa_High</code>) — see <a href="#5-two-group-example-config--workflow-tree">Section 5</a>.</p>
 <hr>
 </section>
@@ -414,12 +398,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Schemas are <strong>JSON Schema draft 2020-12</strong>. The top-level document is generated from Pydantic (<code>ProjectConfig</code>) and kept in sync via <code>methyl-export-config-schemas</code> (<a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/config_schema_registry.py"><code>packages/methylvalidation/methyl_validation/config_schema_registry.py</code></a>).</p>
 <section id="reference-tree" class="level3" data-number="3.1">
 <h3 data-number="3.1" class="anchored" data-anchor-id="reference-tree"><span class="header-section-number">3.1</span> Reference tree</h3>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">flowchart LR
+<pre class="mermaid"><code>flowchart LR
   pcs["project_config.schema.json"]
   pcs --&gt; cds["$defs/ControlDiseaseSide"]
   pcs --&gt; gc["$defs/GroupConfig\n(recursive: stages)"]
@@ -433,13 +412,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   sc2 --&gt; cls["classifier.schema.json"]
   sc2 --&gt; val["validation.schema.json"]
   sc2 --&gt; prog["progression.schema.json"]
-  sc2 --&gt; aqc["alignment_qc.schema.json"]
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  sc2 --&gt; aqc["alignment_qc.schema.json"]</code></pre>
 </section>
 <section id="defs-in-project_config.schema.json" class="level3" data-number="3.2">
 <h3 data-number="3.2" class="anchored" data-anchor-id="defs-in-project_config.schema.json"><span class="header-section-number">3.2</span> <code>$defs</code> in <code>project_config.schema.json</code></h3>
@@ -575,12 +548,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </table>
 <section id="editor-flow" class="level3" data-number="4.1">
 <h3 data-number="4.1" class="anchored" data-anchor-id="editor-flow"><span class="header-section-number">4.1</span> Editor flow</h3>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">flowchart LR
+<pre class="mermaid"><code>flowchart LR
   user["Portal user\n(browser)"]
   web["MethylConfigEditorWeb\n:8077"]
   schemas["schemas/config/\n*.schema.json"]
@@ -595,13 +563,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   loader --&gt; nested
   grid --&gt; json
   nested --&gt; json
-  json --&gt;|"Download"| user
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  json --&gt;|"Download"| user</code></pre>
 <p><strong>Behavior:</strong></p>
 <ol type="1">
 <li>Administrator points the web app at <code>schemas/config</code> (<code>Paths.SchemasRoot</code> in <code>methyl-config-editor-web.ini</code>).</li>
@@ -735,12 +697,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="entity-relationship-simplified" class="level3" data-number="5.3">
 <h3 data-number="5.3" class="anchored" data-anchor-id="entity-relationship-simplified"><span class="header-section-number">5.3</span> Entity relationship (simplified)</h3>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">erDiagram
+<pre class="mermaid"><code>erDiagram
   workflow_def ||--o{ workflow_version : has
   workflow_version ||--o{ workflow_node : contains
   workflow_node ||--o{ workflow_edge : links
@@ -750,13 +707,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   node_execution ||--o| task_lease : lease
   workflow_action ||--o{ workflow_node : action
   cluster ||--o{ worker : registers
-  worker ||--o{ worker_token : auth
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  worker ||--o{ worker_token : auth</code></pre>
 </section>
 <section id="scoped-variables-declaration-assignment-and-use" class="level3" data-number="5.4">
 <h3 data-number="5.4" class="anchored" data-anchor-id="scoped-variables-declaration-assignment-and-use"><span class="header-section-number">5.4</span> Scoped variables — declaration, assignment, and use</h3>
@@ -805,12 +756,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tbody>
 </table>
 <p><strong>Scope identity:</strong> <code>scope_node_execution_id = 0</code> is the <strong>instance root</strong> (global scope). Each composite node (SEQUENCE, PARALLEL, REPEAT, WHILE, FOREACH, IF, SWITCH) opens a child scope tied to its <code>node_execution.id</code>. Lookup walks <strong>up the parent chain</strong> until a name is found (<code>wf.wf_get_scope_variable_json</code>).</p>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">flowchart TD
+<pre class="mermaid"><code>flowchart TD
   ctx["context_json\n(instance start)"]
   root["scope id = 0\nprojectPath, comparisons[], mc.*"]
   fecp["FOREACH scope\nvar.label, var.chromosome"]
@@ -821,13 +767,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   fecp --&gt; seq
   seq --&gt; act
   act --&gt;|"variable_output_binding\non submit"| act
-  act -.-&gt;|"visible to siblings\nvia parent walk"| seq
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  act -.-&gt;|"visible to siblings\nvia parent walk"| seq</code></pre>
 </section>
 <section id="declaration-definition-time" class="level4" data-number="5.4.2">
 <h4 data-number="5.4.2" class="anchored" data-anchor-id="declaration-definition-time"><span class="header-section-number">5.4.2</span> Declaration (definition-time)</h4>
@@ -935,12 +875,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="worker-driven-conditions-and-branching" class="level3" data-number="5.5">
 <h3 data-number="5.5" class="anchored" data-anchor-id="worker-driven-conditions-and-branching"><span class="header-section-number">5.5</span> Worker-driven conditions and branching</h3>
 <p>For conditions that depend on <strong>data-dependent computation</strong>, the workflow pattern is:</p>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">sequenceDiagram
+<pre class="mermaid"><code>sequenceDiagram
   participant E as Workflow engine
   participant W as Worker ACTION
   participant S as scope_variable
@@ -950,13 +885,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   W-&gt;&gt;E: submit result_code + output_json
   E-&gt;&gt;S: variable_output_binding writes e.g. shouldRunQc, hasMorePages, mode
   E-&gt;&gt;E: IF / SWITCH / WHILE reads condition_var
-  E-&gt;&gt;E: Activate THEN, ELSE, CASE, or next loop body
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  E-&gt;&gt;E: Activate THEN, ELSE, CASE, or next loop body</code></pre>
 <p><strong>Example tree</strong> (from Delphi reference seed <code>DelphiTreeFlow</code>):</p>
 <ul>
 <li><code>GateIf</code> — <code>condition_var = shouldRunQc</code>: worker sets <code>1</code> to run QC, <code>0</code> to skip.</li>
@@ -1045,12 +974,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="example-workflow-topology-methylvalidationflow" class="level4" data-number="5.6.2">
 <h4 data-number="5.6.2" class="anchored" data-anchor-id="example-workflow-topology-methylvalidationflow"><span class="header-section-number">5.6.2</span> Example workflow topology (<code>MethylValidationFlow</code>)</h4>
 <p>Seed: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/workflow_methylvalidation_seed.sql"><code>workflow_methylvalidation_seed.sql</code></a></p>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">flowchart TD
+<pre class="mermaid"><code>flowchart TD
   root["SEQUENCE mv_root"]
   root --&gt; feat["REPEAT mv_feature_loop\nN = featureIterations"]
   root --&gt; fin["SEQUENCE mv_final_sequence\nfull train set"]
@@ -1061,36 +985,30 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   fin --&gt; fd2["detector"]
   fin --&gt; map["mapper"]
   fin --&gt; enr["enricher"]
-  fin --&gt; prog["progression"]
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  fin --&gt; prog["progression"]</code></pre>
 <p>Each <strong>REPEAT</strong> body receives a distinct <code>mc.taskConfig</code> describing one stratified draw. The <strong>final sequence</strong> runs once on the full sample set after all feature-stability iterations complete.</p>
 <p><strong>Future composition:</strong> outer <code>REPEAT</code> (or <code>FOREACH</code> over <code>wf.monte_carlo_run</code> rows) × inner <code>FOREACH</code> over chromosomes/comparisons — see <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_foreach_design.md"><code>wf_foreach_design.md</code></a>.</p>
 <p>Example <code>context_json</code> fragment for MC instances:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"monteCarlo"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"baseProject"</span><span class="fu">:</span> <span class="st">"/work/study/project.json"</span><span class="fu">,</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"layout"</span><span class="fu">:</span> <span class="st">"binary"</span><span class="fu">,</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"seed"</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"featureIterations"</span><span class="fu">:</span> <span class="dv">30</span><span class="fu">,</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"qualityIterations"</span><span class="fu">:</span> <span class="dv">20</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb13"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"monteCarlo"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"baseProject"</span><span class="fu">:</span> <span class="st">"/work/study/project.json"</span><span class="fu">,</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"layout"</span><span class="fu">:</span> <span class="st">"binary"</span><span class="fu">,</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"seed"</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"featureIterations"</span><span class="fu">:</span> <span class="dv">30</span><span class="fu">,</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"qualityIterations"</span><span class="fu">:</span> <span class="dv">20</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Project-level MC parameters also live under <code>step_config.validation</code> in the portal schema (<code>validation_monte_carlo</code> in <a href="./home/ubuntu/MethylPipeline/schemas/config/validation.schema.json"><code>validation.schema.json</code></a>): <code>train_fraction</code>, <code>n_iterations</code>, cohort CSVs, and regulatory metadata.</p>
 </section>
 </section>
 <section id="cluster-metadata-in-db" class="level3" data-number="5.7">
 <h3 data-number="5.7" class="anchored" data-anchor-id="cluster-metadata-in-db"><span class="header-section-number">5.7</span> Cluster metadata in DB</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode sql code-with-copy"><code class="sourceCode sql"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>wf.<span class="kw">cluster</span> (</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  cluster_key, name, provider,</span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  shared_storage_uri,    <span class="co">-- e.g. file://share or https://...</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  worker_mount_path,     <span class="co">-- default '/work'</span></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  status</span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb14"><pre class="sourceCode sql code-with-copy"><code class="sourceCode sql"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>wf.<span class="kw">cluster</span> (</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  cluster_key, name, provider,</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  shared_storage_uri,    <span class="co">-- e.g. file://share or https://...</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  worker_mount_path,     <span class="co">-- default '/work'</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  status</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Workers register against a cluster; capabilities are stored on <code>wf.worker.capabilities</code> (JSON).</p>
 <hr>
 </section>
@@ -1140,39 +1058,34 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="instance-context_json-runtime" class="level3" data-number="6.2">
 <h3 data-number="6.2" class="anchored" data-anchor-id="instance-context_json-runtime"><span class="header-section-number">6.2</span> 5.2 Instance <code>context_json</code> (runtime)</h3>
 <p>From <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/instance_context_examples/pca_ovr.json"><code>workflow_engine/sql/instance_context_examples/pca_ovr.json</code></a>:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"projectPath"</span><span class="fu">:</span> <span class="st">"/home/ubuntu/Work/prostate-cancer/configs/project_PCa3.json"</span><span class="fu">,</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"context"</span><span class="fu">:</span> <span class="st">"CG"</span><span class="fu">,</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"centroid1Dir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/centroids/controls/healthy/all"</span><span class="fu">,</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"group1Label"</span><span class="fu">:</span> <span class="st">"group1"</span><span class="fu">,</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"orderedComparisonLabels"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"PCa_Low"</span><span class="ot">,</span> <span class="st">"PCa_High"</span><span class="ot">]</span><span class="fu">,</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"chromosomes"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"1"</span><span class="ot">,</span> <span class="st">"2"</span><span class="ot">,</span> <span class="st">"..."</span><span class="ot">,</span> <span class="st">"22"</span><span class="ot">,</span> <span class="st">"X"</span><span class="ot">,</span> <span class="st">"Y"</span><span class="ot">]</span><span class="fu">,</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"comparisons"</span><span class="fu">:</span> <span class="ot">[</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa_Low"</span><span class="fu">,</span></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"centroid2Dir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low"</span><span class="fu">,</span></span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"detectOutDir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/detections/all/PCa_Low"</span><span class="fu">,</span></span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"group2Label"</span><span class="fu">:</span> <span class="st">"group2"</span></span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span><span class="ot">,</span></span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span></span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa_High"</span><span class="fu">,</span></span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"centroid2Dir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_High"</span><span class="fu">,</span></span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"detectOutDir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/detections/all/PCa_High"</span><span class="fu">,</span></span>
-<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"group2Label"</span><span class="fu">:</span> <span class="st">"group2"</span></span>
-<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
-<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>  <span class="ot">]</span></span>
-<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"projectPath"</span><span class="fu">:</span> <span class="st">"/home/ubuntu/Work/prostate-cancer/configs/project_PCa3.json"</span><span class="fu">,</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"context"</span><span class="fu">:</span> <span class="st">"CG"</span><span class="fu">,</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"centroid1Dir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/centroids/controls/healthy/all"</span><span class="fu">,</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"group1Label"</span><span class="fu">:</span> <span class="st">"group1"</span><span class="fu">,</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"orderedComparisonLabels"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"PCa_Low"</span><span class="ot">,</span> <span class="st">"PCa_High"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"chromosomes"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"1"</span><span class="ot">,</span> <span class="st">"2"</span><span class="ot">,</span> <span class="st">"..."</span><span class="ot">,</span> <span class="st">"22"</span><span class="ot">,</span> <span class="st">"X"</span><span class="ot">,</span> <span class="st">"Y"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"comparisons"</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa_Low"</span><span class="fu">,</span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"centroid2Dir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low"</span><span class="fu">,</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"detectOutDir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/detections/all/PCa_Low"</span><span class="fu">,</span></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"group2Label"</span><span class="fu">:</span> <span class="st">"group2"</span></span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa_High"</span><span class="fu">,</span></span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"centroid2Dir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_High"</span><span class="fu">,</span></span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"detectOutDir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/detections/all/PCa_High"</span><span class="fu">,</span></span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"group2Label"</span><span class="fu">:</span> <span class="st">"group2"</span></span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>  <span class="ot">]</span></span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>No per-chromosome nodes are stored in the DB — only <strong>~15 static nodes</strong> in <code>DataDrivenPipeline</code>; fan-out is entirely data-driven.</p>
 </section>
 <section id="workflow-tree-datadrivenpipeline" class="level3" data-number="6.3">
 <h3 data-number="6.3" class="anchored" data-anchor-id="workflow-tree-datadrivenpipeline"><span class="header-section-number">6.3</span> 5.3 Workflow tree (<code>DataDrivenPipeline</code>)</h3>
 <p>Seed: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_data_driven_pipeline_seed.sql"><code>workflow_engine/sql/wf_data_driven_pipeline_seed.sql</code></a></p>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">flowchart TD
+<pre class="mermaid"><code>flowchart TD
   root["SEQUENCE root"]
   root --&gt; fecp["FOREACH foreach_comparisons\nparallel, var: comparisons"]
   root --&gt; post["SEQUENCE post_pipeline"]
@@ -1185,13 +1098,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   par --&gt; c2["ACTION centroid_g2"]
   post --&gt; mapper["ACTION mapper"]
   post --&gt; enricher["ACTION enricher"]
-  post --&gt; prog["ACTION progression"]
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  post --&gt; prog["ACTION progression"]</code></pre>
 </section>
 <section id="per-chromosome-dependency-one-comparison" class="level3" data-number="6.4">
 <h3 data-number="6.4" class="anchored" data-anchor-id="per-chromosome-dependency-one-comparison"><span class="header-section-number">6.4</span> 5.4 Per-chromosome dependency (one comparison)</h3>
@@ -1336,12 +1243,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="request-submit-sequence" class="level3" data-number="7.2">
 <h3 data-number="7.2" class="anchored" data-anchor-id="request-submit-sequence"><span class="header-section-number">7.2</span> Request / submit sequence</h3>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">sequenceDiagram
+<pre class="mermaid"><code>sequenceDiagram
   participant W as Worker
   participant MT as Middle-Tier REST
   participant DB as Database wf schema
@@ -1359,13 +1261,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   DB-&gt;&gt;DB: wf_engine_on_action_complete
   Note over DB: apply output bindings to scope_variable
   Note over DB: activate next READY nodes (IF/SWITCH use scope)
-  MT--&gt;&gt;W: accepted, instance_status
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  MT--&gt;&gt;W: accepted, instance_status</code></pre>
 </section>
 <section id="middle-tier-responsibilities" class="level3" data-number="7.3">
 <h3 data-number="7.3" class="anchored" data-anchor-id="middle-tier-responsibilities"><span class="header-section-number">7.3</span> Middle-tier responsibilities</h3>
@@ -1464,12 +1360,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="architecture-diagram" class="level3" data-number="8.2">
 <h3 data-number="8.2" class="anchored" data-anchor-id="architecture-diagram"><span class="header-section-number">8.2</span> Architecture diagram</h3>
-<div class="cell" data-layout-align="default">
-<div class="cell-output-display">
-<div>
-<p></p><figure class="figure"><p></p>
-<div>
-<pre class="mermaid mermaid-js">flowchart LR
+<pre class="mermaid"><code>flowchart LR
   subgraph cluster [Compute cluster]
     n1["Worker A\nmethyl-centroid"]
     n2["Worker B\nmethyl-centroid"]
@@ -1493,13 +1384,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   n4 --&gt; d1
   n4 --&gt; m1
   n1 &amp; n2 &amp; n3 &amp; n4 --&gt; MT
-  MT --&gt; DB
-</pre>
-</div>
-<p></p></figure><p></p>
-</div>
-</div>
-</div>
+  MT --&gt; DB</code></pre>
 </section>
 <section id="minimizing-total-processing-time" class="level3" data-number="8.3">
 <h3 data-number="8.3" class="anchored" data-anchor-id="minimizing-total-processing-time"><span class="header-section-number">8.3</span> Minimizing total processing time</h3>
@@ -1595,15 +1480,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="rendering-this-document" class="level2" data-number="10">
 <h2 data-number="10" class="anchored" data-anchor-id="rendering-this-document"><span class="header-section-number">10</span> Rendering this document</h2>
-<p>This Quarto source is generated from <a href="pipeline_architecture.md"><code>pipeline_architecture.md</code></a>. Edit the Markdown, then regenerate:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> workflow_engine/docs/build_pipeline_architecture_qmd.py</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">quarto</span> render workflow_engine/docs/pipeline_architecture.qmd <span class="at">--to</span> html</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ex">quarto</span> render workflow_engine/docs/pipeline_architecture.qmd <span class="at">--to</span> pdf</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<ul>
-<li><strong>HTML</strong> uses interactive Mermaid diagrams.</li>
-<li><strong>PDF</strong> uses TikZ vector figures (same approach as <a href="../../docs/MethylPipeline-overview.qmd"><code>docs/MethylPipeline-overview.qmd</code></a>).</li>
-<li>PDF requires a TeX installation (<code>quarto install tinytex</code> or TeX Live with <code>lualatex</code>).</li>
-</ul>
+<p>Edit <a href="pipeline_architecture.md"><code>pipeline_architecture.md</code></a>, regenerate the Quarto source, then render locally:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb21"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> workflow_engine/docs/build_pipeline_architecture_qmd.py</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a><span class="co"># HTML — use preview (recommended); Mermaid needs HTTP + JavaScript</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a><span class="ex">quarto</span> preview workflow_engine/docs/pipeline_architecture.qmd</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Or use the helper script from the repo root:</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> workflow_engine/docs/render-pipeline-architecture.sh preview</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a><span class="co"># PDF — vector TikZ figures (requires TeX / lualatex)</span></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a><span class="ex">quarto</span> render workflow_engine/docs/pipeline_architecture.qmd <span class="at">--to</span> pdf</span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a><span class="co"># bash workflow_engine/docs/render-pipeline-architecture.sh pdf</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>HTML:</strong> Open the URL that <code>quarto preview</code> prints (typically <code>http://localhost:…</code>) in your normal browser. Do <strong>not</strong> open <code>pipeline_architecture.html</code> directly from disk (<code>file://</code>) or in the IDE Markdown/HTML preview — Mermaid will not run and you will see raw diagram source (<code>erDiagram</code>, <code>flowchart</code>, etc.).</p>
+<p><strong>PDF:</strong> Uses TikZ figures (same approach as <a href="../../docs/MethylPipeline-overview.qmd"><code>docs/MethylPipeline-overview.qmd</code></a>). Install TeX if needed: <code>quarto install tinytex</code>.</p>
 </section>
 
 </main>
@@ -2009,6 +1899,24 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   });
   </script>
 </div> <!-- /content -->
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", async function () {
+  if (typeof mermaid === "undefined") return;
+  mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "loose" });
+  var i = 0;
+  for (const el of document.querySelectorAll("pre.mermaid")) {
+    const code = el.querySelector("code");
+    let text = (code ? code.textContent : el.textContent) || "";
+    try {
+      const out = await mermaid.render("mmd-" + (++i), text.trim());
+      el.outerHTML = out.svg;
+    } catch (err) {
+      console.error("Mermaid render failed:", err);
+    }
+  }
+});
+</script>
 
 
 
