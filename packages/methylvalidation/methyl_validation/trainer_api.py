@@ -17,6 +17,17 @@ StepFn = Callable[[], tuple[int, str, str]]
 TrainerStep = Tuple[str, StepFn]
 
 
+def _normalized_feature_family_set(config: Any) -> str:
+    from .observed_feature_builder import normalize_feature_family_set
+
+    raw = config.feature_family_set if config is not None else "dmp_scored"
+    return normalize_feature_family_set(raw)
+
+
+def _requires_mapper_annotations(feature_family_set: str) -> bool:
+    return str(feature_family_set) != "dmp_scored"
+
+
 def _write_ecdf_training_metrics(project_json: Path, classifier_output_dir: Path) -> tuple[bool, str]:
     """
     Evaluate the ECDF classifier on training cohorts and persist training_metrics.json.
@@ -106,7 +117,7 @@ def build_model_backend_steps(
 ) -> List[TrainerStep]:
     backend = (config.model_backend if config is not None else "ecdf").strip().lower()
     feature_mode = (config.feature_mode if config is not None else "raw_dmp").strip().lower()
-    feature_family_set = (config.feature_family_set if config is not None else "dmp").strip().lower()
+    feature_family_set = _normalized_feature_family_set(config)
     if backend == "tabular_sklearn":
         model_dir = predictor_output_dir.parent / "classifiers" if predictor_output_dir is not None else project_json.parent / "classifiers"
 
@@ -124,11 +135,11 @@ def build_model_backend_steps(
                     output_dir=bundle_dir,
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
                     feature_family_set=feature_family_set,
-                    require_mapper_annotations=(feature_family_set != "dmp"),
+                    require_mapper_annotations=_requires_mapper_annotations(feature_family_set),
                     extra_metadata={
                         "model_backend": "tabular_sklearn",
                         "feature_mode": (config.feature_mode if config is not None else "raw_dmp"),
-                        "feature_family_set": (config.feature_family_set if config is not None else "dmp"),
+                        "feature_family_set": feature_family_set,
                     },
                 )
                 return 0, f"Bundle written to {bundle_dir}", ""
@@ -195,7 +206,7 @@ def build_model_backend_steps(
                     observed_feature_max_genes=(
                         config.observed_feature_max_genes if config is not None else 32
                     ),
-                    feature_family_set=(config.feature_family_set if config is not None else "dmp"),
+                    feature_family_set=feature_family_set,
                     gene_feature_loading=(config.gene_feature_loading if config is not None else "frozen"),
                     observed_hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
                     observed_hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
@@ -295,11 +306,11 @@ def build_model_backend_steps(
                     output_dir=bundle_dir,
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
                     feature_family_set=feature_family_set,
-                    require_mapper_annotations=(feature_family_set != "dmp"),
+                    require_mapper_annotations=_requires_mapper_annotations(feature_family_set),
                     extra_metadata={
                         "model_backend": "generative_hybrid",
                         "feature_mode": (config.feature_mode if config is not None else "raw_dmp"),
-                        "feature_family_set": (config.feature_family_set if config is not None else "dmp"),
+                        "feature_family_set": feature_family_set,
                     },
                 )
                 return 0, f"Bundle written to {bundle_dir}", ""
@@ -364,7 +375,7 @@ def build_model_backend_steps(
                     observed_feature_max_genes=(
                         config.observed_feature_max_genes if config is not None else 32
                     ),
-                    feature_family_set=(config.feature_family_set if config is not None else "dmp"),
+                    feature_family_set=feature_family_set,
                     gene_feature_loading=(config.gene_feature_loading if config is not None else "frozen"),
                     observed_hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
                     observed_hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
@@ -531,7 +542,7 @@ def build_model_backend_steps(
                     output_dir=bundle_dir,
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
                     feature_family_set=feature_family_set,
-                    require_mapper_annotations=(feature_family_set != "dmp"),
+                    require_mapper_annotations=_requires_mapper_annotations(feature_family_set),
                     extra_metadata={
                         "model_backend": "ecdf",
                         "classifier_type": "ecdf_aggregated_one_vs_rest",

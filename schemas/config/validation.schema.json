@@ -146,7 +146,7 @@
           "type": "boolean"
         },
         "feature_family_set": {
-          "default": "dmp",
+          "default": "dmp_scored",
           "title": "Feature Family Set",
           "type": "string"
         },
@@ -169,7 +169,7 @@
         },
         "gene_scored_min_support_n": {
           "default": 2,
-          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp+gene_scored).",
+          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
           "minimum": 1,
           "title": "Gene Scored Min Support N",
           "type": "integer"
@@ -447,7 +447,7 @@
           "type": "boolean"
         },
         "feature_family_set": {
-          "default": "dmp",
+          "default": "dmp_scored",
           "title": "Feature Family Set",
           "type": "string"
         },
@@ -470,7 +470,7 @@
         },
         "gene_scored_min_support_n": {
           "default": 2,
-          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp+gene_scored).",
+          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
           "minimum": 1,
           "title": "Gene Scored Min Support N",
           "type": "integer"
@@ -1071,7 +1071,7 @@
           "type": "boolean"
         },
         "feature_family_set": {
-          "default": "dmp",
+          "default": "dmp_scored",
           "title": "Feature Family Set",
           "type": "string"
         },
@@ -1094,7 +1094,7 @@
         },
         "gene_scored_min_support_n": {
           "default": 2,
-          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp+gene_scored).",
+          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
           "minimum": 1,
           "title": "Gene Scored Min Support N",
           "type": "integer"
@@ -1759,8 +1759,8 @@
           "type": "null"
         }
       ],
-      "default": "dmp",
-      "description": "For feature_mode=observed_hybrid, controls active feature families: dmp | gene | structural | gene_scored | dmp+gene | dmp+structural | dmp+gene_scored | hybrid-all.",
+"default": "dmp_scored",
+          "description": "For feature_mode=observed_hybrid, controls active feature families: dmp_scored | gene | structural | gene_scored | dmp_scored+gene | dmp_scored+structural | dmp_scored+gene_scored | hybrid-all. Legacy aliases (dmp, dmp+gene_scored, etc.) are accepted.",
       "title": "Feature Family Set"
     },
     "feature_mode": {
@@ -1894,7 +1894,7 @@
         }
       ],
       "default": 2,
-      "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp+gene_scored).",
+      "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
       "title": "Gene Scored Min Support N"
     },
     "gene_scored_use_region_weight": {

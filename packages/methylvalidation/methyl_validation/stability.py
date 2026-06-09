@@ -1904,7 +1904,7 @@ def _normalize_production_ecdf_backend(
         params["feature_family_set"] = "gene"
     else:
         params["feature_mode"] = "raw_dmp"
-        params["feature_family_set"] = "dmp"
+        params["feature_family_set"] = "dmp_scored"
     params["model_weight_column"] = "effect_size"
     if params.get("ecdf_aggregated_enabled") is not True:
         params["ecdf_aggregated_enabled"] = False

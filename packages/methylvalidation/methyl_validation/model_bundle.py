@@ -1339,7 +1339,7 @@ def build_model_feature_bundle(
     output_dir: str | Path,
     *,
     weight_column: str = "effect_size",
-    feature_family_set: str = "dmp",
+    feature_family_set: str = "dmp_scored",
     mapper_annotation_csv: Optional[str | Path] = None,
     require_mapper_annotations: Optional[bool] = None,
     extra_metadata: Optional[Dict[str, Any]] = None,
@@ -1407,8 +1407,14 @@ def build_model_feature_bundle(
             "No detector DMP CSVs found for bundle build. Expected dmps-*-classifier.csv or dmps-*.csv under detection dirs."
         )
 
-    family_token = str(feature_family_set or "dmp").strip().lower()
-    strict_mapper = bool(require_mapper_annotations) if require_mapper_annotations is not None else (family_token != "dmp")
+    from .observed_feature_builder import normalize_feature_family_set
+
+    family_token = normalize_feature_family_set(feature_family_set)
+    strict_mapper = (
+        bool(require_mapper_annotations)
+        if require_mapper_annotations is not None
+        else (family_token != "dmp_scored")
+    )
     mapper_ann_path: Optional[Path] = None
     mapper_ann_df = pd.DataFrame()
     mapper_lookup_stats: Dict[str, Any] = {

@@ -115,7 +115,7 @@ class BackendSharedParams(BaseModel):
     )
 
     feature_mode: str = Field(default="raw_dmp")
-    feature_family_set: str = Field(default="dmp")
+    feature_family_set: str = Field(default="dmp_scored")
     gene_feature_loading: str = Field(
         default="frozen",
         description=(
@@ -143,7 +143,7 @@ class BackendSharedParams(BaseModel):
         ge=1,
         description=(
             "Minimum gene_support_n for a gene to enter the gene_scored comparison panel "
-            "(feature_family_set gene_scored or dmp+gene_scored)."
+            "(feature_family_set gene_scored or dmp_scored+gene_scored)."
         ),
     )
     gene_scored_use_region_weight: bool = Field(
@@ -202,20 +202,9 @@ class BackendSharedParams(BaseModel):
     @field_validator("feature_family_set")
     @classmethod
     def _validate_feature_family_set(cls, value: str) -> str:
-        allowed = {
-            "dmp",
-            "gene",
-            "structural",
-            "gene_scored",
-            "dmp+gene",
-            "dmp+structural",
-            "dmp+gene_scored",
-            "hybrid-all",
-        }
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"feature_family_set must be one of {sorted(allowed)}")
-        return normalized
+        from .observed_feature_builder import normalize_feature_family_set
+
+        return normalize_feature_family_set(value)
 
     @field_validator("gene_feature_loading")
     @classmethod
@@ -1050,11 +1039,12 @@ class MonteCarloConfig(BaseModel):
         ),
     )
     feature_family_set: str = Field(
-        default="dmp",
+        default="dmp_scored",
         description=(
             "For feature_mode=observed_hybrid, controls active feature families: "
-            "dmp | gene | structural | gene_scored | dmp+gene | dmp+structural | "
-            "dmp+gene_scored | hybrid-all."
+            "dmp_scored | gene | structural | gene_scored | dmp_scored+gene | "
+            "dmp_scored+structural | dmp_scored+gene_scored | hybrid-all. "
+            "Legacy aliases (dmp, dmp+gene_scored, etc.) are accepted and normalized."
         ),
     )
     gene_feature_loading: str = Field(
@@ -1151,7 +1141,7 @@ class MonteCarloConfig(BaseModel):
         ge=1,
         description=(
             "Minimum gene_support_n for a gene to enter the gene_scored comparison panel "
-            "(feature_family_set gene_scored or dmp+gene_scored)."
+            "(feature_family_set gene_scored or dmp_scored+gene_scored)."
         ),
     )
     gene_scored_use_region_weight: bool = Field(
@@ -1582,20 +1572,9 @@ class MonteCarloConfig(BaseModel):
     @field_validator("feature_family_set")
     @classmethod
     def _validate_feature_family_set(cls, value: str) -> str:
-        allowed = {
-            "dmp",
-            "gene",
-            "structural",
-            "gene_scored",
-            "dmp+gene",
-            "dmp+structural",
-            "dmp+gene_scored",
-            "hybrid-all",
-        }
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"feature_family_set must be one of {sorted(allowed)}")
-        return normalized
+        from .observed_feature_builder import normalize_feature_family_set
+
+        return normalize_feature_family_set(value)
 
     @field_validator("gene_feature_loading")
     @classmethod

@@ -31,6 +31,7 @@ from .model_bundle import load_bundle_dmp_index
 from .observed_feature_builder import (
     build_observed_hybrid_feature_table,
     derive_observed_hybrid_anchors,
+    normalize_feature_family_set,
     select_training_feature_matrix,
 )
 from .tabular_backend import _resolve_class_centroid_dirs
@@ -69,6 +70,7 @@ def train_ecdf_aggregated_ovr_model(
     n_bins: int = 100,
     temperature: float = 2.0,
 ) -> Path:
+    feature_family_set = normalize_feature_family_set(feature_family_set)
     project = load_project(project_json)
     all_paths, y, class_names = _load_training_samples(project_json)
     roles = resolve_class_roles(project)
@@ -246,7 +248,7 @@ def predict_ecdf_aggregated_ovr_from_project(
         hist_alpha=float(obs.get("hist_alpha", 0.5)),
         hist_evidence_clip_cap=float(obs.get("hist_evidence_clip_cap", 5.0)),
         hist_tail_agreement_threshold=float(obs.get("hist_tail_agreement_threshold", 0.10)),
-        feature_family_set=str(obs.get("feature_family_set") or "gene"),
+        feature_family_set=normalize_feature_family_set(str(obs.get("feature_family_set") or "gene")),
         observed_feature_quality_columns=obs.get("observed_feature_quality_columns"),
     )
     export_names = [str(x) for x in (obs.get("export_feature_names") or feat.feature_names)]

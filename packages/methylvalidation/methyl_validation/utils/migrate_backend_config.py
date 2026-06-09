@@ -130,6 +130,28 @@ GENERATIVE_PARAM_KEYS = {
 }
 
 
+def _canonicalize_feature_family_set_value(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    from methyl_validation.observed_feature_builder import normalize_feature_family_set
+
+    try:
+        return normalize_feature_family_set(value)
+    except ValueError:
+        return value
+
+
+def _canonicalize_feature_family_sets(backend_profiles: Dict[str, Any]) -> None:
+    for backend in ("ecdf", "tabular_sklearn", "generative_hybrid"):
+        params = backend_profiles.get(backend, {}).get("params")
+        if not isinstance(params, dict):
+            continue
+        if "feature_family_set" in params:
+            params["feature_family_set"] = _canonicalize_feature_family_set_value(
+                params["feature_family_set"]
+            )
+
+
 def _load_backend_profiles_base(before: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(before.get("backend_profiles"), dict):
         return BackendProfilesConfig.model_validate(before["backend_profiles"]).model_dump(mode="python")
@@ -169,7 +191,12 @@ def merge_legacy_validation_keys_into_backend_profiles(
 
     backend_profiles = _load_backend_profiles_base(before)
     _apply_legacy_keys_to_backend_profiles(backend_profiles, before)
+    _canonicalize_feature_family_sets(backend_profiles)
     migrated = {k: v for k, v in before.items() if k not in LEGACY_BACKEND_KEYS}
+    if "feature_family_set" in migrated:
+        migrated["feature_family_set"] = _canonicalize_feature_family_set_value(
+            migrated["feature_family_set"]
+        )
     migrated["backend_profiles"] = backend_profiles
     return migrated, moved
 
@@ -185,7 +212,12 @@ def _migrate_validation_section(validation: Dict[str, Any]) -> Tuple[Dict[str, A
         for backend in ("ecdf", "tabular_sklearn", "generative_hybrid"):
             backend_profiles[backend]["enabled"] = backend == active_backend
     _apply_legacy_keys_to_backend_profiles(backend_profiles, before)
+    _canonicalize_feature_family_sets(backend_profiles)
     migrated = {k: v for k, v in before.items() if k not in LEGACY_BACKEND_KEYS and k != "backend_profiles"}
+    if "feature_family_set" in migrated:
+        migrated["feature_family_set"] = _canonicalize_feature_family_set_value(
+            migrated["feature_family_set"]
+        )
     migrated["backend_profiles"] = backend_profiles
     moved = sorted(k for k in before.keys() if k in LEGACY_BACKEND_KEYS)
     return migrated, {"active_backend": active_backend, "moved_keys": moved}

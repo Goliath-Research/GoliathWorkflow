@@ -43,15 +43,50 @@ class ObservedHybridAnchors:
 OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v28_no_healthy_centroid_features"
 HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v5_centroid_distance_per_class"
 HYBRID_FEATURE_FAMILY_SETS = (
-    "dmp",
+    "dmp_scored",
     "gene",
     "structural",
     "gene_scored",
-    "dmp+gene",
-    "dmp+structural",
-    "dmp+gene_scored",
+    "dmp_scored+gene",
+    "dmp_scored+structural",
+    "dmp_scored+gene_scored",
     "hybrid-all",
 )
+LEGACY_FEATURE_FAMILY_ALIASES: Dict[str, str] = {
+    "dmp": "dmp_scored",
+    "dmp+gene": "dmp_scored+gene",
+    "dmp+structural": "dmp_scored+structural",
+    "dmp+gene_scored": "dmp_scored+gene_scored",
+}
+
+
+def normalize_feature_family_set(value: Optional[str]) -> str:
+    """Return canonical feature_family_set token (legacy aliases accepted)."""
+    token = str(value or "dmp_scored").strip().lower()
+    token = LEGACY_FEATURE_FAMILY_ALIASES.get(token, token)
+    if token not in HYBRID_FEATURE_FAMILY_SETS:
+        legacy = ", ".join(sorted(LEGACY_FEATURE_FAMILY_ALIASES.keys()))
+        canonical = ", ".join(HYBRID_FEATURE_FAMILY_SETS)
+        raise ValueError(
+            f"Unsupported feature_family_set={value!r}; "
+            f"canonical values: {canonical}. Legacy aliases also accepted: {legacy}."
+        )
+    return token
+
+
+def family_includes_dmp_scored(feature_family_set: Optional[str]) -> bool:
+    include_dmp, _, _, _ = _family_flags(feature_family_set)
+    return bool(include_dmp)
+
+
+def describe_active_feature_families(feature_family_set: Optional[str]) -> Dict[str, bool]:
+    include_dmp, include_gene, include_structural, include_gene_scored = _family_flags(feature_family_set)
+    return {
+        "dmp_scored": bool(include_dmp),
+        "gene": bool(include_gene),
+        "structural": bool(include_structural),
+        "gene_scored": bool(include_gene_scored),
+    }
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
     "gene_shift_iqr",
@@ -277,9 +312,9 @@ def _build_dynamic_mapped_feature_names(
 
 
 def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool, bool]:
-    """Return (dmp, legacy_gene, structural, gene_scored)."""
-    token = str(feature_family_set or "dmp").strip().lower()
-    if token == "dmp":
+    """Return (dmp_scored, legacy_gene, structural, gene_scored)."""
+    token = normalize_feature_family_set(feature_family_set)
+    if token == "dmp_scored":
         return True, False, False, False
     if token == "gene":
         return False, True, False, False
@@ -287,11 +322,11 @@ def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool, 
         return False, False, True, False
     if token == "gene_scored":
         return False, False, False, True
-    if token == "dmp+gene":
+    if token == "dmp_scored+gene":
         return True, True, False, False
-    if token == "dmp+structural":
+    if token == "dmp_scored+structural":
         return True, False, True, False
-    if token == "dmp+gene_scored":
+    if token == "dmp_scored+gene_scored":
         return True, False, False, True
     if token == "hybrid-all":
         return True, True, True, False
@@ -656,7 +691,7 @@ def derive_observed_hybrid_anchors(
     dmp_df: pd.DataFrame,
     *,
     min_coverage: int = 1,
-    feature_family_set: str = "dmp",
+    feature_family_set: str = "dmp_scored",
     gene_feature_loading: str = "frozen",
     fixed_gene_features_df: Optional[pd.DataFrame] = None,
 ) -> ObservedHybridAnchors:
@@ -976,7 +1011,7 @@ def _gene_structural_feature_names(
 def observed_hybrid_feature_names(
     cancer_class_labels: Optional[Sequence[str]] = None,
     all_class_labels: Optional[Sequence[str]] = None,
-    feature_family_set: str = "dmp",
+    feature_family_set: str = "dmp_scored",
     dmp_df: Optional[pd.DataFrame] = None,
     frozen_gene_panel_df: Optional[pd.DataFrame] = None,
     gene_scored_min_support_n: int = 2,
@@ -1031,7 +1066,7 @@ def observed_hybrid_schema_fingerprint(
     cancer_class_labels: Optional[Sequence[str]] = None,
     all_class_labels: Optional[Sequence[str]] = None,
     *,
-    feature_family_set: str = "dmp",
+    feature_family_set: str = "dmp_scored",
     dmp_df: Optional[pd.DataFrame] = None,
     frozen_gene_panel_df: Optional[pd.DataFrame] = None,
     gene_scored_min_support_n: int = 2,
@@ -1105,7 +1140,7 @@ def build_observed_hybrid_feature_table(
     hist_alpha: float = 0.5,
     hist_evidence_clip_cap: float = 5.0,
     hist_tail_agreement_threshold: float = 0.10,
-    feature_family_set: str = "dmp",
+    feature_family_set: str = "dmp_scored",
     gene_feature_loading: str = "frozen",
     fixed_gene_features_df: Optional[pd.DataFrame] = None,
     frozen_gene_panel_df: Optional[pd.DataFrame] = None,
@@ -1640,7 +1675,7 @@ def build_observed_hybrid_feature_table(
         "schema_version": schema_version,
         "quantiles": [0.10, 0.50, 0.90],
         "feature_families": {
-            "dmp": bool(include_dmp_family),
+            "dmp_scored": bool(include_dmp_family),
             "chromosome": False,
             "dmr": False,
             "gene": bool(include_gene_family),
