@@ -59,7 +59,7 @@ Examples:
     )
     config_group.add_argument(
         '--group',
-        help='Which cohort to build: group1, group2, all (all N groups), or 0-based index (e.g. 0); requires --project'
+        help='Which cohort to build: group1, group2, all (every group), 0-based index, or project group label (e.g. PCa); requires --project'
     )
     config_group.add_argument(
         '--step-override',

@@ -33,6 +33,35 @@ def _forbid_centroid_samples_key(step_dict: Any, source: str) -> None:
         )
 
 
+def _normalize_centroid_group_arg(
+    project: Any,
+    group: Union[str, int],
+) -> Union[str, int]:
+    """
+    Map CLI ``--group`` tokens to group1/group2 aliases or a 0-based index.
+
+    Accepts project group labels (e.g. ``all``, ``PCa``) in addition to
+    ``group1``, ``group2``, and integer indices.
+    """
+    if isinstance(group, int):
+        return group
+    token = str(group).strip()
+    lower = token.lower()
+    if lower == "group1":
+        return "group1"
+    if lower == "group2":
+        return "group2"
+    resolved = project.get_resolved_groups()
+    for i, (label, _paths) in enumerate(resolved):
+        if str(label).casefold() == lower:
+            return i
+    valid = ", ".join(repr(label) for label, _ in resolved)
+    raise ValueError(
+        f"group {token!r} not found; use group1, group2, a 0-based index, "
+        f"or a project group label ({valid})"
+    )
+
+
 def _get_group_config_for_label(project: Any, side: str, label: str) -> Optional[Any]:
     """Return the GroupConfig for (side, label) if project uses control/disease; else None."""
     if not project.uses_control_disease():
@@ -179,6 +208,7 @@ def run_centroid_for_one_group(
     from .cli import run_batch_processing
 
     project = load_project(project_path)
+    group = _normalize_centroid_group_arg(project, group)
     if not isinstance(group, int) or not project.uses_control_disease():
         batch = resolve_centroid_batch_config(project_path, group, step_override_path)
         run_batch_processing(batch)
@@ -211,10 +241,11 @@ def resolve_centroid_batch_config(
 ) -> BatchProcessingConfig:
     """
     Build BatchProcessingConfig for one group from a project config.
-    group may be "group1", "group2", or an integer index 0, 1, ... for N-group projects.
+    group may be "group1", "group2", an integer index 0, 1, ..., or a project group label.
     Returns Pydantic BatchProcessingConfig.
     """
     project = load_project(project_path)
+    group = _normalize_centroid_group_arg(project, group)
     paths = project.get_derived_paths()
     resolved = project.get_resolved_groups()
 
@@ -259,7 +290,11 @@ def resolve_centroid_batch_config(
                 "(pip install -e packages/methylutils)."
             )
     else:
-        raise ValueError("group must be 'group1', 'group2', or an integer index")
+        valid = ", ".join(repr(label) for label, _ in resolved)
+        raise ValueError(
+            "group must be 'group1', 'group2', an integer index, "
+            f"or a project group label ({valid})"
+        )
 
     base_config = MethylCentroidConfig(
         laboratory=project.project_name,

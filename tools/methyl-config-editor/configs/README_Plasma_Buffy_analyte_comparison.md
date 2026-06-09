@@ -28,8 +28,13 @@ source /path/to/MethylPipeline/.venv/bin/activate
 ```bash
 PROJ=/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json
 
+# One command builds both cohort centroids (healthy + PCa):
 methyl-centroid --project "$PROJ" --group all
-methyl-centroid --project "$PROJ" --group PCa
+
+# Or run each cohort separately (group1/group2, 0/1, or project labels all/PCa):
+# methyl-centroid --project "$PROJ" --group group1
+# methyl-centroid --project "$PROJ" --group PCa
+
 methyl-detector --project "$PROJ"
 methyl-mapper --project "$PROJ"
 methyl-enricher --project "$PROJ"
@@ -43,7 +48,7 @@ methyl-qc --project "$PROJ"
 PROJ=/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json
 
 methyl-centroid --project "$PROJ" --group all
-methyl-centroid --project "$PROJ" --group PCa
+
 methyl-detector --project "$PROJ"
 methyl-mapper --project "$PROJ"
 methyl-enricher --project "$PROJ"
