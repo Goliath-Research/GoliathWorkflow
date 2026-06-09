@@ -749,6 +749,7 @@ def test_gene_scored_feature_names_and_fingerprint():
         gene_directional_iqr_column,
         gene_panel_obs_fraction_column,
         gene_scored_feature_column,
+        gene_weighted_sign_agreement_column,
         prepare_gene_scored_panels,
     )
 
@@ -770,6 +771,7 @@ def test_gene_scored_feature_names_and_fingerprint():
             "gene_name": ["G1", "G2", "G3"],
             "gene_support_n": [2, 2, 1],
             "gene_importance": [1.0, 0.5, 0.9],
+            "mean_effect_size": [1.0, -1.0, 0.5],
         }
     )
     names = observed_feature_builder.observed_hybrid_feature_names(
@@ -781,6 +783,7 @@ def test_gene_scored_feature_names_and_fingerprint():
         "gene_directional_score__cmp_a",
         "gene_panel_obs_fraction__cmp_a",
         "gene_directional_iqr__cmp_a",
+        "gene_weighted_sign_agreement__cmp_a",
     ]
     assert "gene::" not in names[0]
 
@@ -809,7 +812,7 @@ def test_gene_scored_feature_names_and_fingerprint():
     feature_order = [("1", "CG", 100), ("1", "CG", 120), ("1", "CG", 200)]
     X_raw = np.asarray([[0.10, 0.20, 0.30]], dtype=np.float64)
     panels = prepare_gene_scored_panels(frozen_panel, min_support_n=2)
-    directional, obs_fraction, directional_iqr = compute_gene_scored_matrices(
+    directional, obs_fraction, directional_iqr, sign_agreement = compute_gene_scored_matrices(
         X_raw,
         feature_order,
         dmp_df,
@@ -822,9 +825,46 @@ def test_gene_scored_feature_names_and_fingerprint():
     assert float(directional[0, 0]) == pytest.approx(-0.1, rel=1e-5, abs=1e-6)
     assert float(obs_fraction[0, 0]) == pytest.approx(1.0, rel=1e-5, abs=1e-6)
     assert float(directional_iqr[0, 0]) == pytest.approx(0.075, rel=1e-5, abs=1e-6)
+    assert float(sign_agreement[0, 0]) == pytest.approx(1.0 / 3.0, rel=1e-5, abs=1e-6)
     assert gene_scored_feature_column("cmp_a") == "gene_directional_score__cmp_a"
     assert gene_panel_obs_fraction_column("cmp_a") == "gene_panel_obs_fraction__cmp_a"
     assert gene_directional_iqr_column("cmp_a") == "gene_directional_iqr__cmp_a"
+    assert gene_weighted_sign_agreement_column("cmp_a") == "gene_weighted_sign_agreement__cmp_a"
+
+
+def test_gene_weighted_sign_agreement_nan_without_prior():
+    from methyl_validation.gene_scored_features import compute_gene_scored_matrices, prepare_gene_scored_panels
+
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a"],
+            "chromosome": ["1"],
+            "context": ["CG"],
+            "position": [100],
+            "effect_size": [1.0],
+            "gene_name": ["G1"],
+        }
+    )
+    frozen_panel = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a"],
+            "gene_name": ["G1"],
+            "gene_support_n": [2],
+            "gene_importance": [1.0],
+            "mean_effect_size": [0.0],
+        }
+    )
+    feature_order = [("1", "CG", 100)]
+    X_raw = np.asarray([[0.10]], dtype=np.float64)
+    panels = prepare_gene_scored_panels(frozen_panel, min_support_n=2)
+    _, _, _, sign_agreement = compute_gene_scored_matrices(
+        X_raw,
+        feature_order,
+        dmp_df,
+        panels,
+        ["cmp_a"],
+    )
+    assert not np.isfinite(sign_agreement[0, 0])
 
 
 def test_gene_scored_panel_obs_fraction_single_gene_observed():
@@ -851,7 +891,7 @@ def test_gene_scored_panel_obs_fraction_single_gene_observed():
     feature_order = [("1", "CG", 100), ("1", "CG", 120)]
     X_raw = np.asarray([[0.10, 0.20]], dtype=np.float64)
     panels = prepare_gene_scored_panels(frozen_panel, min_support_n=2)
-    _, obs_fraction, directional_iqr = compute_gene_scored_matrices(
+    _, obs_fraction, directional_iqr, _ = compute_gene_scored_matrices(
         X_raw,
         feature_order,
         dmp_df,
@@ -940,6 +980,7 @@ def test_observed_feature_builder_gene_scored_family(monkeypatch):
             "gene_name": ["G1", "G2"],
             "gene_support_n": [2, 2],
             "gene_importance": [1.0, 0.5],
+            "mean_effect_size": [1.0, -1.0],
         }
     )
     sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
@@ -962,14 +1003,17 @@ def test_observed_feature_builder_gene_scored_family(monkeypatch):
     assert "gene_directional_score__cmp_a" in feat.feature_names
     assert "gene_panel_obs_fraction__cmp_a" in feat.feature_names
     assert "gene_directional_iqr__cmp_a" in feat.feature_names
+    assert "gene_weighted_sign_agreement__cmp_a" in feat.feature_names
     assert not any(str(n).startswith("gene::") for n in feat.feature_names)
     assert not any(str(n).startswith("region_directional_score__") for n in feat.feature_names)
     gene_col = feat.feature_names.index("gene_directional_score__cmp_a")
     obs_col = feat.feature_names.index("gene_panel_obs_fraction__cmp_a")
     iqr_col = feat.feature_names.index("gene_directional_iqr__cmp_a")
+    agree_col = feat.feature_names.index("gene_weighted_sign_agreement__cmp_a")
     assert float(feat.X[0, gene_col]) == pytest.approx(-0.1, rel=1e-5, abs=1e-6)
     assert float(feat.X[0, obs_col]) == pytest.approx(1.0, rel=1e-5, abs=1e-6)
     assert float(feat.X[0, iqr_col]) == pytest.approx(0.075, rel=1e-5, abs=1e-6)
+    assert float(feat.X[0, agree_col]) == pytest.approx(1.0 / 3.0, rel=1e-5, abs=1e-6)
     assert feat.report["feature_families"]["gene_scored"] is True
     assert feat.report["feature_families"]["gene"] is False
 
@@ -1018,8 +1062,198 @@ def test_observed_feature_builder_dmp_plus_gene_scored_includes_both_families(mo
     )
     assert "max_weighted_directional_score" in feat.feature_names
     assert "gene_directional_score__cmp_a" in feat.feature_names
+    assert "gene_weighted_sign_agreement__cmp_a" in feat.feature_names
     assert not any(str(n).startswith("gene::") for n in feat.feature_names)
     assert "weighted_mean_abs_distance_margin" not in feat.feature_names
     assert "obs_fraction" in feat.feature_names
     assert "obs_fraction" not in feat.training_feature_names
     assert len(feat.training_feature_names) + len(feat.quality_feature_names) == len(feat.feature_names)
+
+
+def test_gene_scored_progression_k1_no_derived_columns():
+    from methyl_validation.gene_scored_features import gene_scored_progression_feature_names
+
+    assert gene_scored_progression_feature_names(["cmp_a"]) == []
+
+
+def test_gene_scored_progression_k2_contrast_and_slope():
+    from methyl_validation.gene_scored_features import (
+        GENE_DIRECTIONAL_PROGRESSION_SLOPE,
+        compute_gene_scored_progression_features,
+        gene_directional_contrast_column,
+        gene_scored_progression_feature_names,
+    )
+
+    labels = ["pca_low", "pca_high"]
+    assert gene_scored_progression_feature_names(labels) == [
+        gene_directional_contrast_column("pca_low", "pca_high"),
+        GENE_DIRECTIONAL_PROGRESSION_SLOPE,
+    ]
+    mat = np.asarray([[0.1, 0.5]], dtype=np.float64)
+    feats, _ = compute_gene_scored_progression_features(mat, labels)
+    contrast_col = gene_directional_contrast_column("pca_low", "pca_high")
+    assert float(feats[contrast_col][0]) == pytest.approx(0.4, rel=1e-5, abs=1e-6)
+    assert float(feats[GENE_DIRECTIONAL_PROGRESSION_SLOPE][0]) == pytest.approx(0.4, rel=1e-5, abs=1e-6)
+
+
+def test_gene_scored_progression_k4_column_count():
+    from methyl_validation.gene_scored_features import (
+        GENE_DIRECTIONAL_PROGRESSION_SLOPE,
+        GENE_DIRECTIONAL_RANGE,
+        compute_gene_scored_progression_features,
+        gene_directional_adjacent_delta_column,
+        gene_directional_contrast_column,
+        gene_scored_progression_feature_names,
+    )
+
+    labels = ["stage_a", "stage_b", "stage_c", "stage_d"]
+    names = gene_scored_progression_feature_names(labels)
+    assert len(names) == 6
+    assert names[0] == gene_directional_contrast_column("stage_a", "stage_d")
+    assert GENE_DIRECTIONAL_PROGRESSION_SLOPE in names
+    assert GENE_DIRECTIONAL_RANGE in names
+    assert gene_directional_adjacent_delta_column("stage_a", "stage_b") in names
+    mat = np.asarray([[0.0, 0.1, 0.3, 0.6]], dtype=np.float64)
+    feats, _ = compute_gene_scored_progression_features(mat, labels)
+    assert float(feats[GENE_DIRECTIONAL_RANGE][0]) == pytest.approx(0.6, rel=1e-5, abs=1e-6)
+    assert float(feats[gene_directional_adjacent_delta_column("stage_b", "stage_c")][0]) == pytest.approx(
+        0.2, rel=1e-5, abs=1e-6
+    )
+
+
+def test_gene_scored_progression_resolve_order_explicit_and_append_missing():
+    from methyl_validation.gene_scored_features import resolve_gene_scored_progression_order
+
+    order = resolve_gene_scored_progression_order(
+        ["cmp_c", "cmp_a", "cmp_b"],
+        explicit_order=["cmp_b", "cmp_a"],
+    )
+    assert order == ["cmp_b", "cmp_a", "cmp_c"]
+
+
+def test_gene_scored_progression_nan_when_endpoint_missing():
+    from methyl_validation.gene_scored_features import (
+        GENE_DIRECTIONAL_PROGRESSION_SLOPE,
+        compute_gene_scored_progression_features,
+        gene_directional_contrast_column,
+    )
+
+    labels = ["pca_low", "pca_high"]
+    mat = np.asarray([[0.1, np.nan]], dtype=np.float64)
+    feats, _ = compute_gene_scored_progression_features(mat, labels)
+    contrast_col = gene_directional_contrast_column("pca_low", "pca_high")
+    assert not np.isfinite(feats[contrast_col][0])
+    assert not np.isfinite(feats[GENE_DIRECTIONAL_PROGRESSION_SLOPE][0])
+
+
+def test_gene_scored_progression_explicit_contrast_dedupes_extreme():
+    from methyl_validation.gene_scored_features import (
+        gene_directional_contrast_column,
+        gene_scored_progression_feature_names,
+    )
+
+    labels = ["pca_low", "pca_high"]
+    names = gene_scored_progression_feature_names(
+        labels,
+        contrast_pairs=[["pca_low", "pca_high"]],
+    )
+    contrast_col = gene_directional_contrast_column("pca_low", "pca_high")
+    assert names.count(contrast_col) == 1
+
+
+def test_gene_scored_progression_fingerprint_changes_with_order():
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_b"],
+            "chromosome": ["1", "1"],
+            "context": ["CG", "CG"],
+            "position": [100, 120],
+            "effect_size": [1.0, -1.0],
+            "gene_name": ["G1", "G1"],
+        }
+    )
+    frozen_panel = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_b"],
+            "gene_name": ["G1", "G1"],
+            "gene_support_n": [2, 2],
+            "gene_importance": [1.0, 1.0],
+            "mean_effect_size": [1.0, -1.0],
+        }
+    )
+    fp_a = observed_feature_builder.observed_hybrid_schema_fingerprint(
+        feature_family_set="gene_scored",
+        dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_panel,
+        gene_scored_ordered_comparison_labels=["cmp_a", "cmp_b"],
+    )
+    fp_b = observed_feature_builder.observed_hybrid_schema_fingerprint(
+        feature_family_set="gene_scored",
+        dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_panel,
+        gene_scored_ordered_comparison_labels=["cmp_b", "cmp_a"],
+    )
+    assert fp_a != fp_b
+
+
+def test_observed_feature_builder_gene_scored_progression_k2(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_gene_scored,
+    )
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["pca_low", "pca_low", "pca_high", "pca_high"],
+            "chromosome": ["1", "1", "1", "1"],
+            "context": ["CG", "CG", "CG", "CG"],
+            "position": [100, 120, 100, 120],
+            "weight": [1.0, 1.0, 1.0, 1.0],
+            "effect_size": [1.0, -1.0, 1.0, -1.0],
+            "gene_name": ["G1", "G1", "G1", "G1"],
+            "feature_type": ["promoter", "exon", "promoter", "exon"],
+        }
+    )
+    frozen_panel = pd.DataFrame(
+        {
+            "comparison_label": ["pca_low", "pca_high"],
+            "gene_name": ["G1", "G1"],
+            "gene_support_n": [2, 2],
+            "gene_importance": [1.0, 1.0],
+            "mean_effect_size": [1.0, -1.0],
+        }
+    )
+    sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
+    y = [0, 0, 1, 1]
+    class_names = ["healthy", "cancer"]
+    anchors = _derive_anchors(sample_paths, y, class_names, dmp_df)
+    feat = observed_feature_builder.build_observed_hybrid_feature_table(
+        sample_paths,
+        dmp_df,
+        healthy_reference_vector=anchors.healthy_reference_vector,
+        cancer_reference_vector=anchors.cancer_reference_vector,
+        healthy_class_label=anchors.healthy_class_label,
+        cancer_class_labels=anchors.cancer_class_labels,
+        anchor_strategy=anchors.anchor_strategy,
+        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+        feature_family_set="gene_scored",
+        frozen_gene_panel_df=frozen_panel,
+        gene_scored_min_support_n=2,
+        gene_scored_ordered_comparison_labels=["pca_low", "pca_high"],
+    )
+    from methyl_validation.gene_scored_features import (
+        GENE_DIRECTIONAL_PROGRESSION_SLOPE,
+        gene_directional_contrast_column,
+    )
+
+    contrast_col = gene_directional_contrast_column("pca_low", "pca_high")
+    assert contrast_col in feat.feature_names
+    assert GENE_DIRECTIONAL_PROGRESSION_SLOPE in feat.feature_names
+    low_col = feat.feature_names.index("gene_directional_score__pca_low")
+    high_col = feat.feature_names.index("gene_directional_score__pca_high")
+    contrast_idx = feat.feature_names.index(contrast_col)
+    assert float(feat.X[0, contrast_idx]) == pytest.approx(
+        float(feat.X[0, high_col] - feat.X[0, low_col]), rel=1e-4, abs=1e-4
+    )
+    assert feat.report["gene_scored"]["progression_k"] == 2
+    assert feat.report["gene_scored"]["progression_order"] == ["pca_low", "pca_high"]

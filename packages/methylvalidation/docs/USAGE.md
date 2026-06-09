@@ -381,7 +381,7 @@ When `step_config.validation.backend_profiles.<backend>.params.feature_mode` is 
   - `dmp_scored`: aggregated DMP-family observed metrics (`max_weighted_directional_score`, etc.), including per-class `weighted_cosine_distance_to_centroid__{class}` columns from methyl-centroid H5 profiles at classifier-panel DMP loci (`dmps-*-classifier.csv`). Legacy alias: `dmp`.
   - `gene`: one feature per mapped gene (`gene::<GENE>`)
   - `structural`: one feature per mapped gene-annotation key (`struct::<GENE>::<FEATURE>`)
-  - `gene_scored`: comparison-level features from frozen gene panels: `gene_directional_score__{comparison}`, `gene_panel_obs_fraction__{comparison}`, `gene_directional_iqr__{comparison}`
+  - `gene_scored`: comparison-level features from frozen gene panels: `gene_directional_score__{comparison}`, `gene_panel_obs_fraction__{comparison}`, `gene_directional_iqr__{comparison}`, `gene_weighted_sign_agreement__{comparison}`; when **K ≥ 2** ordered comparisons, also progression contrasts (`gene_directional_contrast__*`, `gene_directional_adjacent_delta__*`, `gene_directional_progression_slope`, `gene_directional_range`) from directional scores only
   - `dmp_scored+gene_scored`: DMP-family metrics plus gene-directional scores (legacy alias: `dmp+gene_scored`)
   - `dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`: deterministic concatenation of families (legacy aliases: `dmp+gene`, `dmp+structural`)
 
@@ -515,7 +515,7 @@ Prefer these canonical keys in project files:
 
 - **`comparisons`** is the canonical source for which disease leaves exist and in what order.
 - **Classifier / predictor `panel`**: you may omit both `step_config.classifier.panel` and `step_config.predictor.panel`. Classifier and predictor then use a panel derived from comparisons (disease leaves grouped under each disease **parent** label). If you set only `classifier.panel`, predictor inherits it unless `predictor.panel` is set explicitly.
-- **`step_config.progression.ordered_comparison_labels`**: optional. When omitted, disease-progression uses the same order as **`get_comparisons()`** / `get_ordered_comparison_labels()` on `ProjectConfig`.
+- **`step_config.progression.ordered_comparison_labels`**: optional. When omitted, disease-progression uses the same order as **`get_comparisons()`** / `get_ordered_comparison_labels()` on `ProjectConfig`. The same order drives **`gene_scored` progression/contrast features** when `feature_family_set` includes `gene_scored` (override with backend `gene_scored_ordered_comparison_labels` if needed).
 - **Monte Carlo hierarchical runs**: the template project does **not** need nested `step_config.predictor.controls` / `diseases` mirroring the top-level cohorts, and does **not** need `train_group_paths` / `holdout_group_paths` for split wiring. Run `project.json` generation copies top-level cohort shape into the predictor step and points leaves at per-run `testing_*.csv` files (see `methyl_validation.project_gen`).
 
 ### Rollout comparison thresholds

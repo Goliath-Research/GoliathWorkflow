@@ -100,6 +100,19 @@ Additional `gene_scored` columns per comparison (same frozen panel and per-gene 
 
 - `gene_panel_obs_fraction__{comparison}`: fraction of panel genes with at least one observed locus in the sample.
 - `gene_directional_iqr__{comparison}`: IQR of per-gene `dir_g` values; left NaN when fewer than two panel genes have observed loci.
+- `gene_weighted_sign_agreement__{comparison}`: weighted fraction of panel genes whose `sign(dir_g)` matches `sign(mean_effect_size)` from the frozen panel; uses the same `w_g` as directional score; NaN when no eligible genes have nonzero prior.
+
+When **K ≥ 2** ordered comparisons are available, derived progression features are computed from **`gene_directional_score` only** (schema `gene_scored_v5_progression_contrast`):
+
+| K | Derived columns |
+|---|-----------------|
+| 1 | none (base 4 per comparison only) |
+| 2 | `gene_directional_contrast__{first}__{last}` (= score(last) − score(first)), `gene_directional_progression_slope` |
+| ≥3 | above plus `gene_directional_range` and K−1 `gene_directional_adjacent_delta__{left}__{right}` (= score(right) − score(left) for consecutive steps) |
+
+Order resolution: `gene_scored_ordered_comparison_labels` (backend override) → `step_config.progression.ordered_comparison_labels` / `ordered_disease_groups` → `ProjectConfig.get_ordered_comparison_labels()` → append any remaining comparisons (sorted). Optional `gene_scored_contrast_pairs: [[left, right], ...]` adds extra contrast columns (deduped against the auto extreme pair).
+
+NaN rules: contrast/delta NaN when either endpoint is NaN; slope requires ≥2 finite ordered scores; range requires all K scores finite.
 
 Region-directional scores (`region_directional_score__*`) are no longer emitted under `gene_scored`; helpers remain in code for a future `structural_scored` family (frozen-panel-restricted).
 
@@ -117,7 +130,7 @@ Backends persist three name lists in model metadata and train-dataset sidecars:
 - `training_feature_names` — columns passed to sklearn/generative/ECDF models.
 - `quality_feature_names` — diagnostics only; still used at predict time for low-evidence filtering via `obs_fraction`.
 
-For E1 `dmp_scored+gene_scored` with four comparisons, expect roughly **29 export** and **26 training** columns after this profile (12 gene_scored columns: 3 per comparison). Re-run `--model` after upgrading (schema fingerprint bump invalidates feature caches).
+For E1 `dmp_scored+gene_scored` with four comparisons, expect roughly **39 export** and **36 training** columns after this profile (22 gene_scored columns: 16 base + 6 progression derived). With two comparisons: 10 gene_scored columns (8 base + 2 derived). Re-run `--model` after upgrading (schema fingerprint bump invalidates feature caches).
 
 For gene/structural keys, per-sample value uses signed weighted centered methylation over observed loci:
 

@@ -10,6 +10,7 @@ Region-directional helpers below are reserved for a future structural_scored fam
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
@@ -37,8 +38,13 @@ def _feature_label_token(label: object) -> str:
 GENE_SCORED_FEATURE_PREFIX = "gene_directional_score__"
 GENE_PANEL_OBS_FRACTION_PREFIX = "gene_panel_obs_fraction__"
 GENE_DIRECTIONAL_IQR_PREFIX = "gene_directional_iqr__"
+GENE_WEIGHTED_SIGN_AGREEMENT_PREFIX = "gene_weighted_sign_agreement__"
+GENE_DIRECTIONAL_CONTRAST_PREFIX = "gene_directional_contrast__"
+GENE_DIRECTIONAL_ADJACENT_PREFIX = "gene_directional_adjacent_delta__"
+GENE_DIRECTIONAL_PROGRESSION_SLOPE = "gene_directional_progression_slope"
+GENE_DIRECTIONAL_RANGE = "gene_directional_range"
 REGION_DIRECTIONAL_FEATURE_PREFIX = "region_directional_score__"
-GENE_SCORED_SCHEMA_VERSION = "gene_scored_v3_panel_coverage_iqr"
+GENE_SCORED_SCHEMA_VERSION = "gene_scored_v5_progression_contrast"
 DEFAULT_REGION_DIRECTIONAL_TYPES: Tuple[str, ...] = (
     "promoter",
     "exon",
@@ -60,6 +66,217 @@ def gene_panel_obs_fraction_column(comparison_label: object) -> str:
 
 def gene_directional_iqr_column(comparison_label: object) -> str:
     return f"{GENE_DIRECTIONAL_IQR_PREFIX}{_feature_label_token(comparison_label)}"
+
+
+def gene_weighted_sign_agreement_column(comparison_label: object) -> str:
+    return f"{GENE_WEIGHTED_SIGN_AGREEMENT_PREFIX}{_feature_label_token(comparison_label)}"
+
+
+def gene_directional_contrast_column(left_label: object, right_label: object) -> str:
+    return (
+        f"{GENE_DIRECTIONAL_CONTRAST_PREFIX}"
+        f"{_feature_label_token(left_label)}__{_feature_label_token(right_label)}"
+    )
+
+
+def gene_directional_adjacent_delta_column(left_label: object, right_label: object) -> str:
+    return (
+        f"{GENE_DIRECTIONAL_ADJACENT_PREFIX}"
+        f"{_feature_label_token(left_label)}__{_feature_label_token(right_label)}"
+    )
+
+
+def normalize_gene_scored_contrast_pairs(
+    contrast_pairs: Optional[Sequence[Sequence[str]]],
+) -> List[Tuple[str, str]]:
+    if not contrast_pairs:
+        return []
+    out: List[Tuple[str, str]] = []
+    seen: set[Tuple[str, str]] = set()
+    for pair in contrast_pairs:
+        if pair is None or len(pair) != 2:
+            raise ValueError("Each gene_scored_contrast_pairs entry must be [left, right] with two labels.")
+        left = str(pair[0]).strip()
+        right = str(pair[1]).strip()
+        if not left or not right:
+            raise ValueError("gene_scored_contrast_pairs labels must be non-empty strings.")
+        key = (left, right)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
+def resolve_gene_scored_progression_order(
+    available_labels: Sequence[str],
+    *,
+    project_json: Optional[str | Path] = None,
+    explicit_order: Optional[Sequence[str]] = None,
+) -> List[str]:
+    available_set = {str(x).strip() for x in available_labels if str(x).strip()}
+    if not available_set:
+        return []
+
+    order_tokens: List[str] = []
+    if explicit_order:
+        order_tokens = [str(x).strip() for x in explicit_order if str(x).strip()]
+    elif project_json is not None:
+        from methyl_utils import load_project
+
+        project = load_project(Path(project_json))
+        progression_cfg = project.get_step_config("progression") or {}
+        cfg_order = progression_cfg.get("ordered_comparison_labels") or progression_cfg.get(
+            "ordered_disease_groups"
+        )
+        if isinstance(cfg_order, list) and cfg_order:
+            order_tokens = [str(x).strip() for x in cfg_order if str(x).strip()]
+        else:
+            get_ordered = getattr(project, "get_ordered_comparison_labels", None)
+            if callable(get_ordered):
+                order_tokens = [str(x).strip() for x in get_ordered() if str(x).strip()]
+
+    filtered: List[str] = []
+    seen: set[str] = set()
+    for token in order_tokens:
+        if token in available_set and token not in seen:
+            filtered.append(token)
+            seen.add(token)
+    for token in sorted(available_set):
+        if token not in seen:
+            filtered.append(token)
+            seen.add(token)
+    return filtered
+
+
+def gene_scored_progression_feature_names(
+    ordered_labels: Sequence[str],
+    *,
+    contrast_pairs: Optional[Sequence[Sequence[str]]] = None,
+) -> List[str]:
+    labels = [str(x) for x in ordered_labels]
+    k = len(labels)
+    if k < 2:
+        return []
+
+    names: List[str] = []
+    seen: set[str] = set()
+
+    def _add(name: str) -> None:
+        if name not in seen:
+            seen.add(name)
+            names.append(name)
+
+    first, last = labels[0], labels[-1]
+    _add(gene_directional_contrast_column(first, last))
+    _add(GENE_DIRECTIONAL_PROGRESSION_SLOPE)
+
+    if k >= 3:
+        _add(GENE_DIRECTIONAL_RANGE)
+        for i in range(k - 1):
+            _add(gene_directional_adjacent_delta_column(labels[i], labels[i + 1]))
+
+    for left, right in normalize_gene_scored_contrast_pairs(contrast_pairs):
+        _add(gene_directional_contrast_column(left, right))
+
+    return names
+
+
+def _pair_delta_column(
+    matrix: np.ndarray,
+    j_left: int,
+    j_right: int,
+) -> np.ndarray:
+    n_samples = int(matrix.shape[0])
+    out = np.full((n_samples,), np.nan, dtype=np.float64)
+    for i in range(n_samples):
+        left_v = float(matrix[i, j_left])
+        right_v = float(matrix[i, j_right])
+        if np.isfinite(left_v) and np.isfinite(right_v):
+            out[i] = right_v - left_v
+    return out
+
+
+def _progression_slope_column(matrix: np.ndarray) -> np.ndarray:
+    n_samples, k = matrix.shape
+    out = np.full((n_samples,), np.nan, dtype=np.float64)
+    if k < 2:
+        return out
+    x_all = np.arange(k, dtype=np.float64)
+    for i in range(n_samples):
+        row = np.asarray(matrix[i, :], dtype=np.float64)
+        mask = np.isfinite(row)
+        if int(mask.sum()) < 2:
+            continue
+        x = x_all[mask]
+        y = row[mask]
+        x_mean = float(np.mean(x))
+        y_mean = float(np.mean(y))
+        denom = float(np.sum((x - x_mean) ** 2))
+        if denom <= 0.0:
+            continue
+        slope = float(np.sum((x - x_mean) * (y - y_mean)) / denom)
+        out[i] = slope
+    return out
+
+
+def _progression_range_column(matrix: np.ndarray) -> np.ndarray:
+    n_samples, k = matrix.shape
+    out = np.full((n_samples,), np.nan, dtype=np.float64)
+    if k < 2:
+        return out
+    for i in range(n_samples):
+        row = np.asarray(matrix[i, :], dtype=np.float64)
+        if not np.all(np.isfinite(row)):
+            continue
+        out[i] = float(np.max(row) - np.min(row))
+    return out
+
+
+def compute_gene_scored_progression_features(
+    directional_matrix: np.ndarray,
+    ordered_labels: Sequence[str],
+    *,
+    contrast_pairs: Optional[Sequence[Sequence[str]]] = None,
+) -> Tuple[Dict[str, np.ndarray], List[str]]:
+    labels = [str(x) for x in ordered_labels]
+    feature_names = gene_scored_progression_feature_names(labels, contrast_pairs=contrast_pairs)
+    n_samples = int(directional_matrix.shape[0]) if directional_matrix.ndim == 2 else 0
+    features: Dict[str, np.ndarray] = {
+        name: np.full((n_samples,), np.nan, dtype=np.float64) for name in feature_names
+    }
+    if n_samples == 0 or len(labels) < 2:
+        return features, feature_names
+
+    label_to_idx = {label: idx for idx, label in enumerate(labels)}
+    k = len(labels)
+
+    if gene_directional_contrast_column(labels[0], labels[-1]) in features:
+        features[gene_directional_contrast_column(labels[0], labels[-1])] = _pair_delta_column(
+            directional_matrix, 0, k - 1
+        )
+    if GENE_DIRECTIONAL_PROGRESSION_SLOPE in features:
+        features[GENE_DIRECTIONAL_PROGRESSION_SLOPE] = _progression_slope_column(directional_matrix)
+    if GENE_DIRECTIONAL_RANGE in features:
+        features[GENE_DIRECTIONAL_RANGE] = _progression_range_column(directional_matrix)
+    if k >= 3:
+        for i in range(k - 1):
+            col = gene_directional_adjacent_delta_column(labels[i], labels[i + 1])
+            if col in features:
+                features[col] = _pair_delta_column(directional_matrix, i, i + 1)
+
+    for left, right in normalize_gene_scored_contrast_pairs(contrast_pairs):
+        col = gene_directional_contrast_column(left, right)
+        if col not in features:
+            continue
+        if col == gene_directional_contrast_column(labels[0], labels[-1]):
+            continue
+        j_left = label_to_idx.get(left)
+        j_right = label_to_idx.get(right)
+        if j_left is not None and j_right is not None:
+            features[col] = _pair_delta_column(directional_matrix, j_left, j_right)
+
+    return features, feature_names
 
 
 def family_includes_gene_scored(feature_family_set: Optional[str]) -> bool:
@@ -99,14 +316,57 @@ def resolve_gene_scored_comparison_labels(
     return labels
 
 
+def validate_gene_scored_contrast_pairs_against_labels(
+    contrast_pairs: Optional[Sequence[Sequence[str]]],
+    available_labels: Sequence[str],
+) -> None:
+    available = {str(x).strip() for x in available_labels if str(x).strip()}
+    for left, right in normalize_gene_scored_contrast_pairs(contrast_pairs):
+        if left not in available:
+            raise ValueError(
+                f"gene_scored_contrast_pairs label {left!r} is not in available comparisons: "
+                f"{sorted(available)}"
+            )
+        if right not in available:
+            raise ValueError(
+                f"gene_scored_contrast_pairs label {right!r} is not in available comparisons: "
+                f"{sorted(available)}"
+            )
+
+
+def resolve_gene_scored_labels_for_features(
+    dmp_df: pd.DataFrame,
+    frozen_gene_panel_df: pd.DataFrame,
+    *,
+    project_json: Optional[str | Path] = None,
+    explicit_order: Optional[Sequence[str]] = None,
+) -> Tuple[List[str], List[str]]:
+    available = resolve_gene_scored_comparison_labels(dmp_df, frozen_gene_panel_df)
+    progression_order = resolve_gene_scored_progression_order(
+        available,
+        project_json=project_json,
+        explicit_order=explicit_order,
+    )
+    return available, progression_order
+
+
 def gene_scored_feature_names(
     comparison_labels: Sequence[str],
+    *,
+    contrast_pairs: Optional[Sequence[Sequence[str]]] = None,
 ) -> List[str]:
     names: List[str] = []
     for label in comparison_labels:
         names.append(gene_scored_feature_column(label))
         names.append(gene_panel_obs_fraction_column(label))
         names.append(gene_directional_iqr_column(label))
+        names.append(gene_weighted_sign_agreement_column(label))
+    names.extend(
+        gene_scored_progression_feature_names(
+            comparison_labels,
+            contrast_pairs=contrast_pairs,
+        )
+    )
     return names
 
 
@@ -383,6 +643,13 @@ def _gene_weight(
     return importance * float(np.sqrt(support_n))
 
 
+def _gene_prior_sign(row: pd.Series) -> Optional[float]:
+    effect = float(pd.to_numeric(row.get("mean_effect_size"), errors="coerce") or 0.0)
+    if not np.isfinite(effect) or effect == 0.0:
+        return None
+    return float(np.sign(effect))
+
+
 def _prepare_gene_scored_dmp_work(
     dmp_df: pd.DataFrame,
     *,
@@ -463,22 +730,23 @@ def compute_gene_scored_matrices(
     *,
     use_region_weight: bool = True,
     gene_weight_mode: str = "importance_x_sqrt_support",
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     n_samples = int(X_raw.shape[0])
     labels = [str(x) for x in comparison_labels]
     directional = np.full((n_samples, len(labels)), np.nan, dtype=np.float64)
     obs_fraction = np.full((n_samples, len(labels)), np.nan, dtype=np.float64)
     directional_iqr = np.full((n_samples, len(labels)), np.nan, dtype=np.float64)
+    sign_agreement = np.full((n_samples, len(labels)), np.nan, dtype=np.float64)
     if n_samples == 0 or not labels:
-        return directional, obs_fraction, directional_iqr
+        return directional, obs_fraction, directional_iqr, sign_agreement
 
     order_index = build_locus_order_index(feature_order)
     if dmp_df is None or dmp_df.empty:
-        return directional, obs_fraction, directional_iqr
+        return directional, obs_fraction, directional_iqr, sign_agreement
 
     work = _prepare_gene_scored_dmp_work(dmp_df, use_region_weight=use_region_weight)
     if work.empty:
-        return directional, obs_fraction, directional_iqr
+        return directional, obs_fraction, directional_iqr, sign_agreement
 
     for j, cmp_label in enumerate(labels):
         panel = panels.get(cmp_label)
@@ -500,6 +768,8 @@ def compute_gene_scored_matrices(
             sample_row = np.asarray(X_raw[i, :], dtype=np.float64)
             score_num = 0.0
             score_den = 0.0
+            agree_num = 0.0
+            agree_den = 0.0
             dir_values: List[float] = []
             n_genes_observed = 0
             for _, grow in panel.iterrows():
@@ -517,12 +787,20 @@ def compute_gene_scored_matrices(
                     continue
                 score_num += w_g * dir_g
                 score_den += w_g
+                prior_sign = _gene_prior_sign(grow)
+                if prior_sign is None:
+                    continue
+                agree_den += w_g
+                if float(np.sign(dir_g)) == prior_sign:
+                    agree_num += w_g
             obs_fraction[i, j] = float(n_genes_observed / panel_size)
             if score_den > 0.0:
                 directional[i, j] = float(score_num / score_den)
             directional_iqr[i, j] = _directional_iqr(dir_values)
+            if agree_den > 0.0:
+                sign_agreement[i, j] = float(agree_num / agree_den)
 
-    return directional, obs_fraction, directional_iqr
+    return directional, obs_fraction, directional_iqr, sign_agreement
 
 
 def compute_gene_directional_score_matrix(
@@ -535,7 +813,7 @@ def compute_gene_directional_score_matrix(
     use_region_weight: bool = True,
     gene_weight_mode: str = "importance_x_sqrt_support",
 ) -> np.ndarray:
-    directional, _, _ = compute_gene_scored_matrices(
+    directional, _, _, _ = compute_gene_scored_matrices(
         X_raw,
         feature_order,
         dmp_df,
