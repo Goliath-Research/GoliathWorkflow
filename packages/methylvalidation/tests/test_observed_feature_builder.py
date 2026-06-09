@@ -745,11 +745,11 @@ def test_normalize_feature_family_set_canonical_and_legacy_aliases():
 
 def test_gene_scored_feature_names_and_fingerprint():
     from methyl_validation.gene_scored_features import (
-        compute_gene_directional_score_matrix,
-        compute_region_directional_score_matrix,
+        compute_gene_scored_matrices,
+        gene_directional_iqr_column,
+        gene_panel_obs_fraction_column,
         gene_scored_feature_column,
         prepare_gene_scored_panels,
-        region_directional_feature_column,
     )
 
     dmp_df = pd.DataFrame(
@@ -779,9 +779,8 @@ def test_gene_scored_feature_names_and_fingerprint():
     )
     assert names == [
         "gene_directional_score__cmp_a",
-        "region_directional_score__cmp_a__promoter",
-        "region_directional_score__cmp_a__exon",
-        "region_directional_score__cmp_a__intron",
+        "gene_panel_obs_fraction__cmp_a",
+        "gene_directional_iqr__cmp_a",
     ]
     assert "gene::" not in names[0]
 
@@ -802,7 +801,7 @@ def test_gene_scored_feature_names_and_fingerprint():
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_panel,
         gene_scored_min_support_n=2,
-        region_directional_region_types=["promoter", "exon"],
+        gene_scored_gene_weight="importance_only",
     )
     assert fp_a != fp_b
     assert fp_a != fp_c
@@ -810,7 +809,7 @@ def test_gene_scored_feature_names_and_fingerprint():
     feature_order = [("1", "CG", 100), ("1", "CG", 120), ("1", "CG", 200)]
     X_raw = np.asarray([[0.10, 0.20, 0.30]], dtype=np.float64)
     panels = prepare_gene_scored_panels(frozen_panel, min_support_n=2)
-    scores = compute_gene_directional_score_matrix(
+    directional, obs_fraction, directional_iqr = compute_gene_scored_matrices(
         X_raw,
         feature_order,
         dmp_df,
@@ -819,29 +818,48 @@ def test_gene_scored_feature_names_and_fingerprint():
         use_region_weight=True,
         gene_weight_mode="importance_x_sqrt_support",
     )
-    assert scores.shape == (1, 1)
-    assert float(scores[0, 0]) == pytest.approx(-0.1, rel=1e-5, abs=1e-6)
-    region_matrix, region_specs = compute_region_directional_score_matrix(
+    assert directional.shape == (1, 1)
+    assert float(directional[0, 0]) == pytest.approx(-0.1, rel=1e-5, abs=1e-6)
+    assert float(obs_fraction[0, 0]) == pytest.approx(1.0, rel=1e-5, abs=1e-6)
+    assert float(directional_iqr[0, 0]) == pytest.approx(0.075, rel=1e-5, abs=1e-6)
+    assert gene_scored_feature_column("cmp_a") == "gene_directional_score__cmp_a"
+    assert gene_panel_obs_fraction_column("cmp_a") == "gene_panel_obs_fraction__cmp_a"
+    assert gene_directional_iqr_column("cmp_a") == "gene_directional_iqr__cmp_a"
+
+
+def test_gene_scored_panel_obs_fraction_single_gene_observed():
+    from methyl_validation.gene_scored_features import compute_gene_scored_matrices, prepare_gene_scored_panels
+
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a"],
+            "chromosome": ["1", "1"],
+            "context": ["CG", "CG"],
+            "position": [100, 120],
+            "effect_size": [1.0, -1.0],
+            "gene_name": ["G1", "G1"],
+        }
+    )
+    frozen_panel = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a"],
+            "gene_name": ["G1", "G2"],
+            "gene_support_n": [2, 2],
+            "gene_importance": [1.0, 1.0],
+        }
+    )
+    feature_order = [("1", "CG", 100), ("1", "CG", 120)]
+    X_raw = np.asarray([[0.10, 0.20]], dtype=np.float64)
+    panels = prepare_gene_scored_panels(frozen_panel, min_support_n=2)
+    _, obs_fraction, directional_iqr = compute_gene_scored_matrices(
         X_raw,
         feature_order,
         dmp_df,
-        ["cmp_a", "cmp_b"],
-        ["promoter", "exon"],
-        min_loci=1,
-        use_region_weight=True,
+        panels,
+        ["cmp_a"],
     )
-    assert region_specs == [
-        ("cmp_a", "promoter"),
-        ("cmp_a", "exon"),
-        ("cmp_b", "promoter"),
-        ("cmp_b", "exon"),
-    ]
-    promo_idx = region_specs.index(("cmp_a", "promoter"))
-    exon_idx = region_specs.index(("cmp_a", "exon"))
-    assert float(region_matrix[0, promo_idx]) == pytest.approx(-0.4, rel=1e-5, abs=1e-6)
-    assert float(region_matrix[0, exon_idx]) == pytest.approx(0.3, rel=1e-5, abs=1e-6)
-    assert gene_scored_feature_column("cmp_a") == "gene_directional_score__cmp_a"
-    assert region_directional_feature_column("cmp_a", "promoter") == "region_directional_score__cmp_a__promoter"
+    assert float(obs_fraction[0, 0]) == pytest.approx(0.5, rel=1e-5, abs=1e-6)
+    assert not np.isfinite(directional_iqr[0, 0])
 
 
 def test_compute_region_directional_score_matrix_hand_calculation():
@@ -942,12 +960,16 @@ def test_observed_feature_builder_gene_scored_family(monkeypatch):
         gene_scored_min_support_n=2,
     )
     assert "gene_directional_score__cmp_a" in feat.feature_names
-    assert "region_directional_score__cmp_a__promoter" in feat.feature_names
+    assert "gene_panel_obs_fraction__cmp_a" in feat.feature_names
+    assert "gene_directional_iqr__cmp_a" in feat.feature_names
     assert not any(str(n).startswith("gene::") for n in feat.feature_names)
+    assert not any(str(n).startswith("region_directional_score__") for n in feat.feature_names)
     gene_col = feat.feature_names.index("gene_directional_score__cmp_a")
-    promo_col = feat.feature_names.index("region_directional_score__cmp_a__promoter")
+    obs_col = feat.feature_names.index("gene_panel_obs_fraction__cmp_a")
+    iqr_col = feat.feature_names.index("gene_directional_iqr__cmp_a")
     assert float(feat.X[0, gene_col]) == pytest.approx(-0.1, rel=1e-5, abs=1e-6)
-    assert float(feat.X[0, promo_col]) == pytest.approx(-0.4, rel=1e-5, abs=1e-6)
+    assert float(feat.X[0, obs_col]) == pytest.approx(1.0, rel=1e-5, abs=1e-6)
+    assert float(feat.X[0, iqr_col]) == pytest.approx(0.075, rel=1e-5, abs=1e-6)
     assert feat.report["feature_families"]["gene_scored"] is True
     assert feat.report["feature_families"]["gene"] is False
 
