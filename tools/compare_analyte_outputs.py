@@ -142,7 +142,13 @@ def write_locus_lists(
     buffy_only = buffy_loci - plasma_loci
 
     def to_rows(items: Iterable[LocusKey]) -> pd.DataFrame:
-        return pd.DataFrame([{"chromosome": c, "position": p} for c, p in sorted(items)])
+        sorted_items = sorted(items)
+        return pd.DataFrame(
+            {
+                "chromosome": [c for c, _ in sorted_items],
+                "position": [p for _, p in sorted_items],
+            }
+        )
 
     to_rows(shared).to_csv(out_dir / "dmps_shared_loci.csv", index=False)
     to_rows(plasma_only).to_csv(out_dir / "dmps_plasma_only_loci.csv", index=False)
