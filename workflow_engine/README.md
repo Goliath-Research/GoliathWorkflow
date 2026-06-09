@@ -30,7 +30,7 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 17. [`wf_pca_ovr_seed.sql`](wf_pca_ovr_seed.sql) — **deprecated** static PCaOvrFlow.
 18. [`wf_pca_two_group_run_example.sql`](wf_pca_two_group_run_example.sql) — optional simulation for legacy seed.
 
-See also: [CAPABILITY_CHECK.md](CAPABILITY_CHECK.md), [sql/DataDrivenPipeline.md](sql/DataDrivenPipeline.md), [contract/db_objects.md](contract/db_objects.md), [sql_pg/README.md](sql_pg/README.md), [../contracts/openapi.yaml](../contracts/openapi.yaml), [../workers/WORKER_PROTOCOL.md](../workers/WORKER_PROTOCOL.md), [sql/wf_foreach_design.md](sql/wf_foreach_design.md), [sql/instance_context_examples/pca_ovr.json](sql/instance_context_examples/pca_ovr.json).
+See also: [CAPABILITY_CHECK.md](CAPABILITY_CHECK.md), [sql/DataDrivenPipeline.md](sql/DataDrivenPipeline.md), [docs/pipeline_architecture.md](docs/pipeline_architecture.md) (Quarto HTML/PDF: [docs/pipeline_architecture.qmd](docs/pipeline_architecture.qmd)), [contract/db_objects.md](contract/db_objects.md), [sql_pg/README.md](sql_pg/README.md), [../contracts/openapi.yaml](../contracts/openapi.yaml), [../workers/WORKER_PROTOCOL.md](../workers/WORKER_PROTOCOL.md), [sql/wf_foreach_design.md](sql/wf_foreach_design.md), [sql/instance_context_examples/pca_ovr.json](sql/instance_context_examples/pca_ovr.json).
 
 To redeploy from scratch, drop runtime tables before re-running `workflow_definition.sql` if `workflow_instance` exists (it references `workflow_version`). Example:
 

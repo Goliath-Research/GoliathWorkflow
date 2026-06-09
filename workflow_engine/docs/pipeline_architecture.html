@@ -1,0 +1,2016 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.36">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="dcterms.date" content="2026-06-09">
+
+<title>Configurable Methylation Pipeline — Architecture</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="pipeline_architecture_files/libs/clipboard/clipboard.min.js"></script>
+<script src="pipeline_architecture_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="pipeline_architecture_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="pipeline_architecture_files/libs/quarto-html/popper.min.js"></script>
+<script src="pipeline_architecture_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="pipeline_architecture_files/libs/quarto-html/anchor.min.js"></script>
+<link href="pipeline_architecture_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="pipeline_architecture_files/libs/quarto-html/quarto-syntax-highlighting-845c23b38eaddc0f92fda52bfe77a8c8.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="pipeline_architecture_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="pipeline_architecture_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="pipeline_architecture_files/libs/bootstrap/bootstrap-e21907d622bbd64d2e79a3a37f4febb6.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script src="pipeline_architecture_files/libs/quarto-diagram/mermaid.min.js"></script>
+<script src="pipeline_architecture_files/libs/quarto-diagram/mermaid-init.js"></script>
+<link href="pipeline_architecture_files/libs/quarto-diagram/mermaid.css" rel="stylesheet">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#presentation-map-four-layers" id="toc-presentation-map-four-layers" class="nav-link active" data-scroll-target="#presentation-map-four-layers"><span class="header-section-number">1</span> Presentation map (four layers)</a></li>
+  <li><a href="#project-configuration" id="toc-project-configuration" class="nav-link" data-scroll-target="#project-configuration"><span class="header-section-number">2</span> 1. Project configuration</a>
+  <ul class="collapse">
+  <li><a href="#top-level-structure" id="toc-top-level-structure" class="nav-link" data-scroll-target="#top-level-structure"><span class="header-section-number">2.1</span> Top-level structure</a></li>
+  <li><a href="#cohort-hierarchy" id="toc-cohort-hierarchy" class="nav-link" data-scroll-target="#cohort-hierarchy"><span class="header-section-number">2.2</span> Cohort hierarchy</a></li>
+  <li><a href="#comparisons" id="toc-comparisons" class="nav-link" data-scroll-target="#comparisons"><span class="header-section-number">2.3</span> Comparisons</a></li>
+  <li><a href="#example-snippet-two-group-ovr-style" id="toc-example-snippet-two-group-ovr-style" class="nav-link" data-scroll-target="#example-snippet-two-group-ovr-style"><span class="header-section-number">2.4</span> Example snippet (two-group OvR style)</a></li>
+  </ul></li>
+  <li><a href="#json-schema-hierarchy" id="toc-json-schema-hierarchy" class="nav-link" data-scroll-target="#json-schema-hierarchy"><span class="header-section-number">3</span> 2. JSON Schema hierarchy</a>
+  <ul class="collapse">
+  <li><a href="#reference-tree" id="toc-reference-tree" class="nav-link" data-scroll-target="#reference-tree"><span class="header-section-number">3.1</span> Reference tree</a></li>
+  <li><a href="#defs-in-project_config.schema.json" id="toc-defs-in-project_config.schema.json" class="nav-link" data-scroll-target="#defs-in-project_config.schema.json"><span class="header-section-number">3.2</span> <code>$defs</code> in <code>project_config.schema.json</code></a></li>
+  <li><a href="#per-step-schemas-schemasconfig" id="toc-per-step-schemas-schemasconfig" class="nav-link" data-scroll-target="#per-step-schemas-schemasconfig"><span class="header-section-number">3.3</span> Per-step schemas (<code>schemas/config/</code>)</a></li>
+  <li><a href="#constraint-enforcement" id="toc-constraint-enforcement" class="nav-link" data-scroll-target="#constraint-enforcement"><span class="header-section-number">3.4</span> Constraint enforcement</a></li>
+  </ul></li>
+  <li><a href="#portal-config-editor" id="toc-portal-config-editor" class="nav-link" data-scroll-target="#portal-config-editor"><span class="header-section-number">4</span> 3. Portal config editor</a>
+  <ul class="collapse">
+  <li><a href="#editor-flow" id="toc-editor-flow" class="nav-link" data-scroll-target="#editor-flow"><span class="header-section-number">4.1</span> Editor flow</a></li>
+  <li><a href="#from-project-json-to-workflow-run" id="toc-from-project-json-to-workflow-run" class="nav-link" data-scroll-target="#from-project-json-to-workflow-run"><span class="header-section-number">4.2</span> From project JSON to workflow run</a></li>
+  </ul></li>
+  <li><a href="#workflow-database-model" id="toc-workflow-database-model" class="nav-link" data-scroll-target="#workflow-database-model"><span class="header-section-number">5</span> 4. Workflow database model</a>
+  <ul class="collapse">
+  <li><a href="#tables-by-layer" id="toc-tables-by-layer" class="nav-link" data-scroll-target="#tables-by-layer"><span class="header-section-number">5.1</span> Tables by layer</a></li>
+  <li><a href="#control-flow-node-types" id="toc-control-flow-node-types" class="nav-link" data-scroll-target="#control-flow-node-types"><span class="header-section-number">5.2</span> Control-flow node types</a></li>
+  <li><a href="#entity-relationship-simplified" id="toc-entity-relationship-simplified" class="nav-link" data-scroll-target="#entity-relationship-simplified"><span class="header-section-number">5.3</span> Entity relationship (simplified)</a></li>
+  <li><a href="#scoped-variables-declaration-assignment-and-use" id="toc-scoped-variables-declaration-assignment-and-use" class="nav-link" data-scroll-target="#scoped-variables-declaration-assignment-and-use"><span class="header-section-number">5.4</span> Scoped variables — declaration, assignment, and use</a></li>
+  <li><a href="#worker-driven-conditions-and-branching" id="toc-worker-driven-conditions-and-branching" class="nav-link" data-scroll-target="#worker-driven-conditions-and-branching"><span class="header-section-number">5.5</span> Worker-driven conditions and branching</a></li>
+  <li><a href="#monte-carlo-runs-and-stratified-partitions" id="toc-monte-carlo-runs-and-stratified-partitions" class="nav-link" data-scroll-target="#monte-carlo-runs-and-stratified-partitions"><span class="header-section-number">5.6</span> Monte Carlo runs and stratified partitions</a></li>
+  <li><a href="#cluster-metadata-in-db" id="toc-cluster-metadata-in-db" class="nav-link" data-scroll-target="#cluster-metadata-in-db"><span class="header-section-number">5.7</span> Cluster metadata in DB</a></li>
+  </ul></li>
+  <li><a href="#two-group-example-config-workflow-tree" id="toc-two-group-example-config-workflow-tree" class="nav-link" data-scroll-target="#two-group-example-config-workflow-tree"><span class="header-section-number">6</span> 5. Two-group example: config → workflow tree</a>
+  <ul class="collapse">
+  <li><a href="#project-intent-pca3-style" id="toc-project-intent-pca3-style" class="nav-link" data-scroll-target="#project-intent-pca3-style"><span class="header-section-number">6.1</span> 5.1 Project intent (PCa3-style)</a></li>
+  <li><a href="#instance-context_json-runtime" id="toc-instance-context_json-runtime" class="nav-link" data-scroll-target="#instance-context_json-runtime"><span class="header-section-number">6.2</span> 5.2 Instance <code>context_json</code> (runtime)</a></li>
+  <li><a href="#workflow-tree-datadrivenpipeline" id="toc-workflow-tree-datadrivenpipeline" class="nav-link" data-scroll-target="#workflow-tree-datadrivenpipeline"><span class="header-section-number">6.3</span> 5.3 Workflow tree (<code>DataDrivenPipeline</code>)</a></li>
+  <li><a href="#per-chromosome-dependency-one-comparison" id="toc-per-chromosome-dependency-one-comparison" class="nav-link" data-scroll-target="#per-chromosome-dependency-one-comparison"><span class="header-section-number">6.4</span> 5.4 Per-chromosome dependency (one comparison)</a></li>
+  <li><a href="#execution-scale-pca-ovr-example" id="toc-execution-scale-pca-ovr-example" class="nav-link" data-scroll-target="#execution-scale-pca-ovr-example"><span class="header-section-number">6.5</span> 5.5 Execution scale (PCa OvR example)</a></li>
+  <li><a href="#input-templates-resolved-at-claim-time" id="toc-input-templates-resolved-at-claim-time" class="nav-link" data-scroll-target="#input-templates-resolved-at-claim-time"><span class="header-section-number">6.6</span> 5.6 Input templates (resolved at claim time)</a></li>
+  </ul></li>
+  <li><a href="#worker-protocol-and-middle-tier" id="toc-worker-protocol-and-middle-tier" class="nav-link" data-scroll-target="#worker-protocol-and-middle-tier"><span class="header-section-number">7</span> 6. Worker protocol and middle-tier</a>
+  <ul class="collapse">
+  <li><a href="#rest-endpoints" id="toc-rest-endpoints" class="nav-link" data-scroll-target="#rest-endpoints"><span class="header-section-number">7.1</span> REST endpoints</a></li>
+  <li><a href="#request-submit-sequence" id="toc-request-submit-sequence" class="nav-link" data-scroll-target="#request-submit-sequence"><span class="header-section-number">7.2</span> Request / submit sequence</a></li>
+  <li><a href="#middle-tier-responsibilities" id="toc-middle-tier-responsibilities" class="nav-link" data-scroll-target="#middle-tier-responsibilities"><span class="header-section-number">7.3</span> Middle-tier responsibilities</a></li>
+  <li><a href="#capability-matching" id="toc-capability-matching" class="nav-link" data-scroll-target="#capability-matching"><span class="header-section-number">7.4</span> Capability matching</a></li>
+  </ul></li>
+  <li><a href="#cluster-and-shared-storage-model" id="toc-cluster-and-shared-storage-model" class="nav-link" data-scroll-target="#cluster-and-shared-storage-model"><span class="header-section-number">8</span> 7. Cluster and shared storage model</a>
+  <ul class="collapse">
+  <li><a href="#assumptions" id="toc-assumptions" class="nav-link" data-scroll-target="#assumptions"><span class="header-section-number">8.1</span> Assumptions</a></li>
+  <li><a href="#architecture-diagram" id="toc-architecture-diagram" class="nav-link" data-scroll-target="#architecture-diagram"><span class="header-section-number">8.2</span> Architecture diagram</a></li>
+  <li><a href="#minimizing-total-processing-time" id="toc-minimizing-total-processing-time" class="nav-link" data-scroll-target="#minimizing-total-processing-time"><span class="header-section-number">8.3</span> Minimizing total processing time</a></li>
+  <li><a href="#portal-planner-engine-end-to-end" id="toc-portal-planner-engine-end-to-end" class="nav-link" data-scroll-target="#portal-planner-engine-end-to-end"><span class="header-section-number">8.4</span> Portal + planner + engine (end-to-end)</a></li>
+  </ul></li>
+  <li><a href="#further-reading" id="toc-further-reading" class="nav-link" data-scroll-target="#further-reading"><span class="header-section-number">9</span> Further reading</a></li>
+  <li><a href="#rendering-this-document" id="toc-rendering-this-document" class="nav-link" data-scroll-target="#rendering-this-document"><span class="header-section-number">10</span> Rendering this document</a></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="../../pipeline_architecture.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Configurable Methylation Pipeline — Architecture</h1>
+<p class="subtitle lead">Portal, workflow database, middle-tier, workers, and scoped variables</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+    <div>
+    <div class="quarto-title-meta-heading">Published</div>
+    <div class="quarto-title-meta-contents">
+      <p class="date">June 9, 2026</p>
+    </div>
+  </div>
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>Presentation-oriented overview of how a <strong>project configuration</strong> (JSON), a <strong>schema-validated portal editor</strong>, a <strong>workflow database</strong> (including <strong>scoped variables</strong>), a <strong>stateless middle-tier</strong>, and <strong>remote workers</strong> cooperate to run a configurable methylation pipeline on a shared-storage cluster.</p>
+<p><strong>Audience:</strong> engineers and stakeholders reviewing the company portal, backend database, middle-tier, and compute workers.</p>
+<p><strong>Related code:</strong> <a href="./home/ubuntu/MethylPipeline/schemas/config/"><code>schemas/config/</code></a>, <a href="./home/ubuntu/MethylPipeline/tools/methyl-config-editor/"><code>tools/methyl-config-editor/</code></a>, <a href="./home/ubuntu/MethylPipeline/workflow_engine/"><code>workflow_engine/</code></a></p>
+<hr>
+<section id="presentation-map-four-layers" class="level2" data-number="1">
+<h2 data-number="1" class="anchored" data-anchor-id="presentation-map-four-layers"><span class="header-section-number">1</span> Presentation map (four layers)</h2>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart TB
+  subgraph portal [Company Portal]
+    editor["Schema-driven config editor\n(methyl-config-editor Web)"]
+    run["Start workflow run\nPOST /v1/workflows/instances"]
+  end
+  subgraph db [Backend Database]
+    def["Workflow definition\nDataDrivenPipeline"]
+    inst["workflow_instance\n+ context_json"]
+    exec["node_execution\n+ scope_variable"]
+  end
+  subgraph mt [Internal Middle-Tier]
+    rest["WfEngine REST API\n:8080"]
+    engine["Workflow engine\n(T-SQL / PL/pgSQL procs)"]
+  end
+  subgraph workers [Remote Workers / Cluster]
+    w1["methyl-centroid"]
+    w2["methyl-detector"]
+    w3["methyl-mapper / enricher / progression"]
+  end
+  storage[("Shared storage\nNFS / Azure Files\n/work/...")]
+
+  editor --&gt;|"validated project.json"| run
+  run --&gt;|"planner → context_json"| inst
+  def --&gt; inst
+  inst --&gt; exec
+  rest --&gt; engine
+  engine --&gt; db
+  w1 &amp; w2 &amp; w3 --&gt;|"poll / submit"| rest
+  w1 &amp; w2 &amp; w3 --&gt; storage
+  exec -.-&gt;|"input_json paths"| storage
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 34%">
+<col style="width: 45%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Layer</th>
+<th>Technology</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Portal</td>
+<td>uniGUI web app (<code>MethylConfigEditorWeb</code>)</td>
+<td>Edit <code>project.json</code> against JSON Schema; start runs</td>
+</tr>
+<tr class="even">
+<td>Database</td>
+<td>Azure SQL or Azure PostgreSQL (<code>wf</code> schema)</td>
+<td>Store workflow tree, instances, executions, leases</td>
+</tr>
+<tr class="odd">
+<td>Middle-tier</td>
+<td>Delphi <code>WfEngine</code> + REST (<code>/v1/*</code>)</td>
+<td>Stateless HTTP proxy; invokes engine stored procedures</td>
+</tr>
+<tr class="even">
+<td>Workers</td>
+<td>Python/CLI on cluster nodes</td>
+<td>Poll tasks by capability; read/write shared paths</td>
+</tr>
+</tbody>
+</table>
+<hr>
+</section>
+<section id="project-configuration" class="level2" data-number="2">
+<h2 data-number="2" class="anchored" data-anchor-id="project-configuration"><span class="header-section-number">2</span> 1. Project configuration</h2>
+<p>A <strong>project config</strong> is a single JSON file that describes <em>what</em> to run: cohorts, comparisons, chromosomes, contexts, and per-step tool parameters. It is the scientific contract for one methylation study.</p>
+<p><strong>Canonical schema:</strong> <a href="./home/ubuntu/MethylPipeline/schemas/config/project_config.schema.json"><code>schemas/config/project_config.schema.json</code></a><br>
+<strong>Pydantic model:</strong> <a href="./home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/pipeline_config.py"><code>packages/methylutils/methyl_utils/pipeline_config.py</code></a><br>
+<strong>In-repo examples:</strong> <a href="./home/ubuntu/MethylPipeline/tools/methyl-config-editor/configs/"><code>tools/methyl-config-editor/configs/</code></a></p>
+<section id="top-level-structure" class="level3" data-number="2.1">
+<h3 data-number="2.1" class="anchored" data-anchor-id="top-level-structure"><span class="header-section-number">2.1</span> Top-level structure</h3>
+<p>Only <strong><code>project_name</code></strong> and <strong><code>output_base</code></strong> are required. Everything else is optional and validated by schema.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 53%">
+<col style="width: 46%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>project_name</code></td>
+<td>Identifier; output lives under <code>{output_base}/{project_name}/</code></td>
+</tr>
+<tr class="even">
+<td><code>output_base</code></td>
+<td>Global output root (e.g.&nbsp;<code>/work/prostate-cancer</code>)</td>
+</tr>
+<tr class="odd">
+<td><code>controls</code> / <code>disease</code></td>
+<td>Two-sided layout: control vs disease cohorts</td>
+</tr>
+<tr class="even">
+<td><code>comparisons</code></td>
+<td>Shorthand string or explicit list of control vs disease pairs</td>
+</tr>
+<tr class="odd">
+<td><code>chromosomes</code></td>
+<td>Shared list (<code>"1"</code>…<code>"22"</code>, <code>"X"</code>, <code>"Y"</code>)</td>
+</tr>
+<tr class="even">
+<td><code>contexts</code></td>
+<td>Methylation contexts: <code>CG</code>, <code>CHG</code>, <code>CHH</code></td>
+</tr>
+<tr class="odd">
+<td><code>path_remap</code></td>
+<td>Prefix replacement when sample paths moved (e.g.&nbsp;NAS → cluster mount)</td>
+</tr>
+<tr class="even">
+<td><code>step_config</code></td>
+<td>Per-step overrides: <code>centroid</code>, <code>detection</code>, <code>mapper</code>, <code>enricher</code>, <code>classifier</code>, <code>predictor</code>, <code>validation</code>, <code>progression</code>, …</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="cohort-hierarchy" class="level3" data-number="2.2">
+<h3 data-number="2.2" class="anchored" data-anchor-id="cohort-hierarchy"><span class="header-section-number">2.2</span> Cohort hierarchy</h3>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart TD
+  root["ProjectConfig"]
+  root --&gt; meta["Metadata\nproject_name, laboratory, batch"]
+  root --&gt; paths["Paths\noutput_base, samples_base_path, path_remap"]
+  root --&gt; ctrl["control\n(ControlDiseaseSide)"]
+  root --&gt; dis["disease\n(ControlDiseaseSide)"]
+  root --&gt; cmp["comparisons"]
+  root --&gt; chr["chromosomes[]"]
+  root --&gt; ctx["contexts[]"]
+  root --&gt; sc["step_config{}"]
+  ctrl --&gt; g1["groups[]\nlabel, sample_paths"]
+  dis --&gt; g2["groups[]"]
+  g2 --&gt; stages["stages[]\noptional nesting"]
+  stages --&gt; leaf["Resolved label:\n{parent}_{stage}\ne.g. PCa_PCa1"]
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+<p><strong>Control side</strong> (<code>controls</code>): one or more groups, e.g.&nbsp;<code>all</code> with a CSV of healthy sample paths.</p>
+<p><strong>Disease side</strong> (<code>diseases</code>): groups may nest <strong><code>stages</code></strong> (e.g.&nbsp;Gleason PCa1–PCa4 under parent <code>PCa</code>). Resolved centroid labels become <code>{parent}_{stage}</code> → <code>PCa_PCa1</code>.</p>
+</section>
+<section id="comparisons" class="level3" data-number="2.3">
+<h3 data-number="2.3" class="anchored" data-anchor-id="comparisons"><span class="header-section-number">2.3</span> Comparisons</h3>
+<p><code>comparisons</code> can be:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 37%">
+<col style="width: 62%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Form</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>"control_vs_each_disease"</code></td>
+<td>First control group vs <strong>each</strong> resolved disease leaf</td>
+</tr>
+<tr class="even">
+<td><code>"all_pairs"</code></td>
+<td>Every control leaf × every disease leaf</td>
+</tr>
+<tr class="odd">
+<td><code>[{control_group, disease_group, comparison_label?}, …]</code></td>
+<td>Explicit list</td>
+</tr>
+</tbody>
+</table>
+<p>Detection output paths follow: <code>detections/{control_group}/{disease_group}/</code>.</p>
+</section>
+<section id="example-snippet-two-group-ovr-style" class="level3" data-number="2.4">
+<h3 data-number="2.4" class="anchored" data-anchor-id="example-snippet-two-group-ovr-style"><span class="header-section-number">2.4</span> Example snippet (two-group OvR style)</h3>
+<p>External reference project (not in repo): <code>project_PCa3.json</code> with one control (<code>all</code>) and two disease stages (<code>PCa_Low</code>, <code>PCa_High</code>). In-repo analogue with four stages:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"project_name"</span><span class="fu">:</span> <span class="st">"Healthy_vs_PCa1-4-CG"</span><span class="fu">,</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"output_base"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer"</span><span class="fu">,</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"controls"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"healthy"</span><span class="fu">,</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"all"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"/work/prostate-cancer/data/healthy.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">]</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"diseases"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"cancer"</span><span class="fu">,</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa"</span><span class="fu">,</span></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"stages"</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa1"</span><span class="fu">,</span> <span class="dt">"description"</span><span class="fu">:</span> <span class="st">"Gleason Score 3+3"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"..."</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa2"</span><span class="fu">,</span> <span class="dt">"description"</span><span class="fu">:</span> <span class="st">"Gleason Score 3+4"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"..."</span><span class="ot">]</span> <span class="fu">}</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>      <span class="ot">]</span></span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span><span class="ot">]</span></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"comparisons"</span><span class="fu">:</span> <span class="st">"control_vs_each_disease"</span><span class="fu">,</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"chromosomes"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"1"</span><span class="ot">,</span> <span class="st">"2"</span><span class="ot">,</span> <span class="st">"..."</span><span class="ot">,</span> <span class="st">"22"</span><span class="ot">,</span> <span class="st">"X"</span><span class="ot">,</span> <span class="st">"Y"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"contexts"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"CG"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"step_config"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"centroid"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"base_config"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"use_gpu"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span> <span class="dt">"min_coverage"</span><span class="fu">:</span> <span class="dv">4</span> <span class="fu">}</span> <span class="fu">},</span></span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"detection"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"alpha"</span><span class="fu">:</span> <span class="fl">0.05</span> <span class="fu">},</span></span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"progression"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"ordered_comparison_labels"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"PCa1"</span><span class="ot">,</span> <span class="st">"PCa2"</span><span class="ot">,</span> <span class="st">"PCa3"</span><span class="ot">,</span> <span class="st">"PCa4"</span><span class="ot">]</span> <span class="fu">}</span></span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>For a <strong>two-group OvR</strong> study (one control vs two disease stages), use <code>"comparisons": "control_vs_each_disease"</code> with two disease leaves (<code>PCa_Low</code>, <code>PCa_High</code>) — see <a href="#5-two-group-example-config--workflow-tree">Section 5</a>.</p>
+<hr>
+</section>
+</section>
+<section id="json-schema-hierarchy" class="level2" data-number="3">
+<h2 data-number="3" class="anchored" data-anchor-id="json-schema-hierarchy"><span class="header-section-number">3</span> 2. JSON Schema hierarchy</h2>
+<p>Schemas are <strong>JSON Schema draft 2020-12</strong>. The top-level document is generated from Pydantic (<code>ProjectConfig</code>) and kept in sync via <code>methyl-export-config-schemas</code> (<a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/config_schema_registry.py"><code>packages/methylvalidation/methyl_validation/config_schema_registry.py</code></a>).</p>
+<section id="reference-tree" class="level3" data-number="3.1">
+<h3 data-number="3.1" class="anchored" data-anchor-id="reference-tree"><span class="header-section-number">3.1</span> Reference tree</h3>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart LR
+  pcs["project_config.schema.json"]
+  pcs --&gt; cds["$defs/ControlDiseaseSide"]
+  pcs --&gt; gc["$defs/GroupConfig\n(recursive: stages)"]
+  pcs --&gt; cs["$defs/ComparisonSpec"]
+  pcs --&gt; sub["$defs/SubclusterRequest"]
+  pcs --&gt; sc2["step_config keys"]
+  sc2 --&gt; cent["centroid.schema.json"]
+  sc2 --&gt; det["detection.schema.json"]
+  sc2 --&gt; map["mapper.schema.json"]
+  sc2 --&gt; enr["enricher.schema.json"]
+  sc2 --&gt; cls["classifier.schema.json"]
+  sc2 --&gt; val["validation.schema.json"]
+  sc2 --&gt; prog["progression.schema.json"]
+  sc2 --&gt; aqc["alignment_qc.schema.json"]
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+</section>
+<section id="defs-in-project_config.schema.json" class="level3" data-number="3.2">
+<h3 data-number="3.2" class="anchored" data-anchor-id="defs-in-project_config.schema.json"><span class="header-section-number">3.2</span> <code>$defs</code> in <code>project_config.schema.json</code></h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 45%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Definition</th>
+<th>Required fields</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ComparisonSpec</code></td>
+<td><code>control_group</code>, <code>disease_group</code></td>
+<td>One pairwise comparison</td>
+</tr>
+<tr class="even">
+<td><code>ControlDiseaseSide</code></td>
+<td><code>label</code></td>
+<td>Control or disease side with <code>groups[]</code></td>
+</tr>
+<tr class="odd">
+<td><code>GroupConfig</code></td>
+<td><code>label</code></td>
+<td>Cohort or stage; optional <code>stages[]</code>, <code>subcluster</code>, <code>level_labels_path</code></td>
+</tr>
+<tr class="even">
+<td><code>SubclusterRequest</code></td>
+<td>(none)</td>
+<td>Optional MethylCluster pre-centroid clustering</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="per-step-schemas-schemasconfig" class="level3" data-number="3.3">
+<h3 data-number="3.3" class="anchored" data-anchor-id="per-step-schemas-schemasconfig"><span class="header-section-number">3.3</span> Per-step schemas (<code>schemas/config/</code>)</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>File</th>
+<th>Step</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>centroid.schema.json</code></td>
+<td>MethylCentroid</td>
+</tr>
+<tr class="even">
+<td><code>detection.schema.json</code></td>
+<td>MethylDetector</td>
+</tr>
+<tr class="odd">
+<td><code>mapper.schema.json</code></td>
+<td>MethylMapper</td>
+</tr>
+<tr class="even">
+<td><code>enricher.schema.json</code></td>
+<td>MethylEnricher</td>
+</tr>
+<tr class="odd">
+<td><code>classifier.schema.json</code></td>
+<td>MethylClassifier</td>
+</tr>
+<tr class="even">
+<td><code>predictor.schema.json</code></td>
+<td>MethylPredictor</td>
+</tr>
+<tr class="odd">
+<td><code>validation.schema.json</code></td>
+<td>MethylValidation (+ nested <code>validation_monte_carlo</code>, <code>validation_regulatory</code>, <code>validation_backend_profiles</code>, …)</td>
+</tr>
+<tr class="even">
+<td><code>progression.schema.json</code></td>
+<td>MethylDiseaseProgression</td>
+</tr>
+<tr class="odd">
+<td><code>alignment_qc.schema.json</code></td>
+<td>Alignment QC</td>
+</tr>
+</tbody>
+</table>
+<p><code>step_config</code> in the project file is an open object: keys name the step; values are merged into each tool’s config at runtime (CLI and workers still override with flags/files).</p>
+</section>
+<section id="constraint-enforcement" class="level3" data-number="3.4">
+<h3 data-number="3.4" class="anchored" data-anchor-id="constraint-enforcement"><span class="header-section-number">3.4</span> Constraint enforcement</h3>
+<ul>
+<li><strong>Portal editor:</strong> loads <code>*.schema.json</code> and blocks invalid types, missing required fields, and bad enums at edit time (<a href="#3-portal-config-editor">Section 3</a>).</li>
+<li><strong>Python runtime:</strong> <code>ProjectConfig.model_validate()</code> on <code>load_project()</code> enforces the same rules before any pipeline step runs.</li>
+<li><strong>Comparisons resolution:</strong> <code>get_comparisons()</code> in <code>pipeline_config.py</code> expands shorthands and validates that <code>control_group</code> / <code>disease_group</code> labels exist in resolved cohort leaves.</li>
+</ul>
+<hr>
+</section>
+</section>
+<section id="portal-config-editor" class="level2" data-number="4">
+<h2 data-number="4" class="anchored" data-anchor-id="portal-config-editor"><span class="header-section-number">4</span> 3. Portal config editor</h2>
+<p>There is <strong>no separate React/TypeScript portal</strong> in this repository. JSON editing is provided by <strong>methyl-config-editor</strong>: a schema-driven Delphi application with a <strong>web port</strong> suitable for embedding in a company portal.</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>Path</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Desktop (VCL)</td>
+<td><a href="./home/ubuntu/MethylPipeline/tools/methyl-config-editor/MethylConfigEditor.dproj"><code>tools/methyl-config-editor/MethylConfigEditor.dproj</code></a></td>
+</tr>
+<tr class="even">
+<td>Web (uniGUI)</td>
+<td><a href="./home/ubuntu/MethylPipeline/tools/methyl-config-editor/MethylConfigEditorWeb.dproj"><code>tools/methyl-config-editor/MethylConfigEditorWeb.dproj</code></a> — default port <strong>8077</strong></td>
+</tr>
+<tr class="odd">
+<td>Schema loader</td>
+<td><a href="./home/ubuntu/MethylPipeline/tools/methyl-config-editor/src/Schema/JsonSchemaLoader.pas"><code>src/Schema/JsonSchemaLoader.pas</code></a></td>
+</tr>
+<tr class="even">
+<td>Web property grid</td>
+<td><a href="./home/ubuntu/MethylPipeline/tools/methyl-config-editor/src/Web/SchemaPropertyGrid.pas"><code>src/Web/SchemaPropertyGrid.pas</code></a></td>
+</tr>
+</tbody>
+</table>
+<section id="editor-flow" class="level3" data-number="4.1">
+<h3 data-number="4.1" class="anchored" data-anchor-id="editor-flow"><span class="header-section-number">4.1</span> Editor flow</h3>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart LR
+  user["Portal user\n(browser)"]
+  web["MethylConfigEditorWeb\n:8077"]
+  schemas["schemas/config/\n*.schema.json"]
+  loader["JsonSchemaLoader\n→ TSchemaNode meta-tree"]
+  grid["TSchemaPropertyGrid\ninline scalars"]
+  nested["NestedEditorForm /\nWebArrayEditorForm"]
+  json["project.json\n(upload / download)"]
+
+  user --&gt;|"Upload"| web
+  schemas --&gt; loader
+  loader --&gt; grid
+  loader --&gt; nested
+  grid --&gt; json
+  nested --&gt; json
+  json --&gt;|"Download"| user
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+<p><strong>Behavior:</strong></p>
+<ol type="1">
+<li>Administrator points the web app at <code>schemas/config</code> (<code>Paths.SchemasRoot</code> in <code>methyl-config-editor-web.ini</code>).</li>
+<li>User selects schema <strong><code>project_config.schema.json</code></strong>, uploads or creates JSON.</li>
+<li><strong>Scalars</strong> edit inline in <code>TUniPropertyGrid</code>; <strong>objects/arrays</strong> open modal nested editors.</li>
+<li><code>$ref</code> to sibling files (e.g.&nbsp;<code>centroid.schema.json</code>) resolves at load time — no code generation.</li>
+<li>User downloads validated JSON.</li>
+</ol>
+</section>
+<section id="from-project-json-to-workflow-run" class="level3" data-number="4.2">
+<h3 data-number="4.2" class="anchored" data-anchor-id="from-project-json-to-workflow-run"><span class="header-section-number">4.2</span> From project JSON to workflow run</h3>
+<p>The portal (or a separate <strong>planner service</strong>) maps a validated project config into a <strong><code>workflow_instance.context_json</code></strong> — runtime variables for the workflow engine, not a copy of the full project file.</p>
+<p>Typical mapping:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Project config</th>
+<th><code>context_json</code></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Resolved comparisons</td>
+<td><code>comparisons[]</code> with <code>label</code>, <code>centroid2Dir</code>, <code>detectOutDir</code>, …</td>
+</tr>
+<tr class="even">
+<td><code>chromosomes</code></td>
+<td><code>chromosomes[]</code></td>
+</tr>
+<tr class="odd">
+<td><code>output_base</code> + paths</td>
+<td><code>centroid1Dir</code>, <code>projectPath</code>, tool name strings</td>
+</tr>
+<tr class="even">
+<td><code>step_config.progression.ordered_comparison_labels</code></td>
+<td><code>orderedComparisonLabels</code></td>
+</tr>
+</tbody>
+</table>
+<p>Example instance payload: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/instance_context_examples/pca_ovr.json"><code>workflow_engine/sql/instance_context_examples/pca_ovr.json</code></a>.</p>
+<p>Starting a run (middle-tier):</p>
+<pre class="http"><code>POST /v1/workflows/instances
+{ "workflow_version_id": &lt;DataDrivenPipeline version id&gt;, "context_json": { ... } }</code></pre>
+<hr>
+</section>
+</section>
+<section id="workflow-database-model" class="level2" data-number="5">
+<h2 data-number="5" class="anchored" data-anchor-id="workflow-database-model"><span class="header-section-number">5</span> 4. Workflow database model</h2>
+<p>The workflow engine stores <strong>definitions</strong> (reusable trees) and <strong>runtime</strong> (instances, executions, leases). The same logical model deploys to <strong>Azure SQL Database</strong> (T-SQL, <code>json</code> columns) or <strong>Azure PostgreSQL</strong> (<code>jsonb</code>). Stored procedure names are contractually identical (<a href="./home/ubuntu/MethylPipeline/workflow_engine/contract/db_objects.yaml"><code>workflow_engine/contract/db_objects.yaml</code></a>).</p>
+<p>Deploy scripts:</p>
+<ul>
+<li>SQL Server: bundled <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/MethylPipeline.sql"><code>workflow_engine/sql/MethylPipeline.sql</code></a> + parity scripts</li>
+<li>PostgreSQL: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql_pg/"><code>workflow_engine/sql_pg/</code></a> (<code>00_schema.sql</code> … <code>07_scope_encoding_parity.sql</code>)</li>
+</ul>
+<section id="tables-by-layer" class="level3" data-number="5.1">
+<h3 data-number="5.1" class="anchored" data-anchor-id="tables-by-layer"><span class="header-section-number">5.1</span> Tables by layer</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 46%">
+<col style="width: 53%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Layer</th>
+<th>Tables</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Definition</strong></td>
+<td><code>workflow_def</code>, <code>workflow_version</code>, <code>workflow_node</code>, <code>workflow_edge</code>, <code>workflow_action</code>, <code>workflow_input_template</code>, <code>workflow_input_binding</code>, <code>variable_output_binding</code>, <code>node_scope_default</code></td>
+</tr>
+<tr class="even">
+<td><strong>Runtime</strong></td>
+<td><code>workflow_instance</code>, <code>node_execution</code>, <code>task_lease</code>, <code>loop_state</code>, <code>execution_context</code>, <code>scope_variable</code>, <code>instance_cursor</code></td>
+</tr>
+<tr class="odd">
+<td><strong>Workers / cluster</strong></td>
+<td><code>worker</code>, <code>worker_token</code>, <code>cluster</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="control-flow-node-types" class="level3" data-number="5.2">
+<h3 data-number="5.2" class="anchored" data-anchor-id="control-flow-node-types"><span class="header-section-number">5.2</span> Control-flow node types</h3>
+<p><code>workflow_node.node_type</code> CHECK constraint:</p>
+<pre><code>ACTION | SEQUENCE | PARALLEL | IF | SWITCH | REPEAT | WHILE | FOREACH</code></pre>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>ACTION</code></td>
+<td>Leaf task; bound to <code>workflow_action</code>; becomes <code>READY</code> for workers</td>
+</tr>
+<tr class="even">
+<td><code>SEQUENCE</code></td>
+<td>Run children in <code>child_order</code></td>
+</tr>
+<tr class="odd">
+<td><code>PARALLEL</code></td>
+<td>Run all children concurrently; complete when all succeed</td>
+</tr>
+<tr class="even">
+<td><code>FOREACH</code></td>
+<td>Iterate a JSON array from <code>context_json</code> (<code>foreach_collection_var</code>); <code>foreach_parallel=1</code> fans out all iterations at once</td>
+</tr>
+<tr class="odd">
+<td><code>IF</code> / <code>SWITCH</code></td>
+<td>Branch on scope variable or prior task result</td>
+</tr>
+<tr class="even">
+<td><code>REPEAT</code> / <code>WHILE</code></td>
+<td>Fixed-count or condition loops</td>
+</tr>
+</tbody>
+</table>
+<p><code>workflow_edge.branch_kind</code>: <code>SEQUENCE</code>, <code>PARALLEL</code>, <code>THEN</code>, <code>ELSE</code>, <code>CASE</code>, <code>DEFAULT</code>, <code>BODY</code>.</p>
+</section>
+<section id="entity-relationship-simplified" class="level3" data-number="5.3">
+<h3 data-number="5.3" class="anchored" data-anchor-id="entity-relationship-simplified"><span class="header-section-number">5.3</span> Entity relationship (simplified)</h3>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">erDiagram
+  workflow_def ||--o{ workflow_version : has
+  workflow_version ||--o{ workflow_node : contains
+  workflow_node ||--o{ workflow_edge : links
+  workflow_node ||--o| workflow_input_template : template
+  workflow_version ||--o{ workflow_instance : runs
+  workflow_instance ||--o{ node_execution : executes
+  node_execution ||--o| task_lease : lease
+  workflow_action ||--o{ workflow_node : action
+  cluster ||--o{ worker : registers
+  worker ||--o{ worker_token : auth
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+</section>
+<section id="scoped-variables-declaration-assignment-and-use" class="level3" data-number="5.4">
+<h3 data-number="5.4" class="anchored" data-anchor-id="scoped-variables-declaration-assignment-and-use"><span class="header-section-number">5.4</span> Scoped variables — declaration, assignment, and use</h3>
+<p>Scoped variables are a first-class workflow feature: they carry <strong>instance parameters</strong>, <strong>loop indices</strong>, <strong>FOREACH item fields</strong>, and <strong>outputs from prior worker actions</strong> through the execution tree. The engine resolves them when building <code>input_json</code> and when choosing IF / SWITCH / WHILE branches.</p>
+<p><strong>Why they exist:</strong></p>
+<ol type="1">
+<li><strong>Complex control flow</strong> — conditions that are too rich for a static workflow definition (QC gates, pagination, model-quality thresholds, custom business rules) can be evaluated inside a worker ACTION; the worker writes an integer or JSON fragment back into scope, and downstream IF / SWITCH / WHILE nodes read that value.</li>
+<li><strong>Monte Carlo validation</strong> — each iteration needs a <strong>fresh stratified train/validation partition</strong> of cohort samples (e.g.&nbsp;80% train / 20% test per cohort). Those partition descriptors are stored as scoped variables (<code>mc.taskConfig</code>) and injected into every pipeline step for that iteration.</li>
+</ol>
+<section id="storage-model" class="level4" data-number="5.4.1">
+<h4 data-number="5.4.1" class="anchored" data-anchor-id="storage-model"><span class="header-section-number">5.4.1</span> Storage model</h4>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 38%">
+<col style="width: 33%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Object</th>
+<th>Layer</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>wf.scope_variable</code></td>
+<td>Runtime</td>
+<td><code>(workflow_instance_id, scope_node_execution_id, var_name) → value_json</code></td>
+</tr>
+<tr class="even">
+<td><code>wf.node_scope_default</code></td>
+<td>Definition</td>
+<td>Variables declared when a composite scope <strong>opens</strong> (<code>var_name</code>, <code>default_expr</code>)</td>
+</tr>
+<tr class="odd">
+<td><code>wf.variable_output_binding</code></td>
+<td>Definition</td>
+<td>Maps ACTION <strong>output</strong> → scope variable (<code>result_code</code> or <code>output_path</code> into <code>output_json</code>)</td>
+</tr>
+<tr class="even">
+<td><code>workflow_node.condition_var</code> / <code>switch_var</code></td>
+<td>Definition</td>
+<td>IF / SWITCH / WHILE read these names from scope</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Scope identity:</strong> <code>scope_node_execution_id = 0</code> is the <strong>instance root</strong> (global scope). Each composite node (SEQUENCE, PARALLEL, REPEAT, WHILE, FOREACH, IF, SWITCH) opens a child scope tied to its <code>node_execution.id</code>. Lookup walks <strong>up the parent chain</strong> until a name is found (<code>wf.wf_get_scope_variable_json</code>).</p>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart TD
+  ctx["context_json\n(instance start)"]
+  root["scope id = 0\nprojectPath, comparisons[], mc.*"]
+  fecp["FOREACH scope\nvar.label, var.chromosome"]
+  seq["SEQUENCE scope\ncopied from parent"]
+  act["ACTION scope\noutput bindings write here"]
+  ctx --&gt;|"wf_init_instance_scope_from_context"| root
+  root --&gt; fecp
+  fecp --&gt; seq
+  seq --&gt; act
+  act --&gt;|"variable_output_binding\non submit"| act
+  act -.-&gt;|"visible to siblings\nvia parent walk"| seq
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+</section>
+<section id="declaration-definition-time" class="level4" data-number="5.4.2">
+<h4 data-number="5.4.2" class="anchored" data-anchor-id="declaration-definition-time"><span class="header-section-number">5.4.2</span> Declaration (definition-time)</h4>
+<p><strong><code>node_scope_default</code></strong> declares variables that appear when a node’s scope opens. Values are <strong>expressions</strong>, not literals: the engine resolves <code>${...}</code> placeholders against the current scope before assignment.</p>
+<p>Example from per-comparison nodes in legacy PCa seeds: <code>centroid2Dir</code>, <code>detectOutDir</code>, and <code>comparisonLabel</code> are seeded as defaults on each comparison subtree so the workflow definition stays generic while paths vary by comparison label.</p>
+</section>
+<section id="assignment-runtime" class="level4" data-number="5.4.3">
+<h4 data-number="5.4.3" class="anchored" data-anchor-id="assignment-runtime"><span class="header-section-number">5.4.3</span> Assignment (runtime)</h4>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 42%">
+<col style="width: 23%">
+<col style="width: 34%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Mechanism</th>
+<th>When</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Instance bootstrap</td>
+<td><code>StartInstance</code></td>
+<td>Every top-level key in <code>context_json</code> → scope <code>0</code></td>
+</tr>
+<tr class="even">
+<td>Scope open</td>
+<td>Composite activation</td>
+<td>Copy parent scope + apply <code>node_scope_default</code></td>
+</tr>
+<tr class="odd">
+<td>FOREACH iteration</td>
+<td>Each loop body activation</td>
+<td>Bind <code>foreach_item_var</code> fields (<code>label</code>, <code>chromosome</code>, …) and <code>foreach_index_var</code></td>
+</tr>
+<tr class="even">
+<td>REPEAT / WHILE</td>
+<td>Loop body</td>
+<td><code>${ctx.iterationNo}</code> in <code>execution_context</code></td>
+</tr>
+<tr class="odd">
+<td>ACTION complete</td>
+<td>Worker submit</td>
+<td><code>variable_output_binding</code>: <code>result_code</code> or JSON path from <code>output_json</code></td>
+</tr>
+<tr class="even">
+<td>Monte Carlo planner</td>
+<td>Instance start / iteration</td>
+<td><code>mc.taskConfig</code>, <code>mc.runId</code>, <code>mc.phase</code>, …</td>
+</tr>
+</tbody>
+</table>
+<p>Engine write-path: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sql_scope_writepath_parity.sql"><code>wf_sql_scope_writepath_parity.sql</code></a> (<code>wf_set_scope_variable</code>, <code>wf_open_scope</code>, <code>wf_apply_output_bindings</code>).</p>
+</section>
+<section id="use-read-path" class="level4" data-number="5.4.4">
+<h4 data-number="5.4.4" class="anchored" data-anchor-id="use-read-path"><span class="header-section-number">5.4.4</span> Use (read-path)</h4>
+<p><strong>Input templates and bindings</strong> resolve placeholders at task claim time:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 45%">
+<col style="width: 29%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Token family</th>
+<th>Example</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Scope variable</td>
+<td><code>${var.chromosome}</code></td>
+<td>Scope chain walk</td>
+</tr>
+<tr class="even">
+<td>Indexed array in scope</td>
+<td><code>${var.orderedComparisonLabels[0]}</code></td>
+<td>JSON array element</td>
+</tr>
+<tr class="odd">
+<td>FOREACH context</td>
+<td><code>${ctx.item}</code>, <code>${ctx.index}</code></td>
+<td>Current iteration</td>
+</tr>
+<tr class="even">
+<td>Loop context</td>
+<td><code>${ctx.iterationNo}</code>, <code>${ctx.parallelIndex}</code></td>
+<td><code>execution_context</code></td>
+</tr>
+<tr class="odd">
+<td>Prior task</td>
+<td><code>${ctx.task.detect.resultCode}</code></td>
+<td>Latest terminal execution of <code>detect</code></td>
+</tr>
+</tbody>
+</table>
+<p>The resolver does <strong>not</strong> evaluate arithmetic or boolean expressions in placeholders. Any logic beyond simple lookup must run in a worker (or in the planner before the instance starts) and <strong>publish</strong> a scalar or JSON value into scope.</p>
+<p><strong>Control-flow reads:</strong> IF, SWITCH, and WHILE nodes specify <code>condition_var</code> / <code>switch_var</code>. The engine reads an <strong>integer</strong> from scope (<code>0</code> = false / exit loop; non-zero = true / continue). If the variable is absent, it falls back to <code>condition_ref_node_key</code> / <code>switch_ref_node_key</code> (prior ACTION <code>result_code</code>). See <a href="./home/ubuntu/MethylPipeline/workflow_engine/WORKFLOW_ENGINE_DELPHI.md"><code>WORKFLOW_ENGINE_DELPHI.md</code></a> and <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sql_branch_parity.sql"><code>wf_sql_branch_parity.sql</code></a>.</p>
+</section>
+</section>
+<section id="worker-driven-conditions-and-branching" class="level3" data-number="5.5">
+<h3 data-number="5.5" class="anchored" data-anchor-id="worker-driven-conditions-and-branching"><span class="header-section-number">5.5</span> Worker-driven conditions and branching</h3>
+<p>For conditions that depend on <strong>data-dependent computation</strong>, the workflow pattern is:</p>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">sequenceDiagram
+  participant E as Workflow engine
+  participant W as Worker ACTION
+  participant S as scope_variable
+
+  E-&gt;&gt;W: input_json (paths, params)
+  Note over W: Run analysis, QC, or rule engine
+  W-&gt;&gt;E: submit result_code + output_json
+  E-&gt;&gt;S: variable_output_binding writes e.g. shouldRunQc, hasMorePages, mode
+  E-&gt;&gt;E: IF / SWITCH / WHILE reads condition_var
+  E-&gt;&gt;E: Activate THEN, ELSE, CASE, or next loop body
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+<p><strong>Example tree</strong> (from Delphi reference seed <code>DelphiTreeFlow</code>):</p>
+<ul>
+<li><code>GateIf</code> — <code>condition_var = shouldRunQc</code>: worker sets <code>1</code> to run QC, <code>0</code> to skip.</li>
+<li><code>ModeSwitch</code> — <code>switch_var = mode</code>: worker chooses normalization branch (<code>1</code>, <code>2</code>, or default).</li>
+<li><code>PollWhile</code> — <code>condition_var = hasMorePages</code>: pagination worker sets <code>1</code> until no pages remain, then <code>0</code>.</li>
+</ul>
+<p>This keeps the <strong>workflow graph static</strong> while allowing arbitrarily complex predicates inside workers. Bindings can take either:</p>
+<ul>
+<li><strong><code>source_kind = result_code</code></strong> — worker returns a signed integer directly.</li>
+<li><strong><code>source_kind = output_path</code></strong> — worker returns JSON; engine extracts a field (e.g.&nbsp;<code>$.gate.passed</code>) into scope.</li>
+</ul>
+</section>
+<section id="monte-carlo-runs-and-stratified-partitions" class="level3" data-number="5.6">
+<h3 data-number="5.6" class="anchored" data-anchor-id="monte-carlo-runs-and-stratified-partitions"><span class="header-section-number">5.6</span> Monte Carlo runs and stratified partitions</h3>
+<p>Monte Carlo validation (<a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/"><code>packages/methylvalidation</code></a>) repeats the full pipeline on many <strong>independent random splits</strong> of the same cohorts. Each iteration:</p>
+<ol type="1">
+<li>Draws a <strong>stratified partition</strong> per cohort: fraction <code>train_fraction</code> (e.g.&nbsp;<code>0.8</code>) for training, remainder for validation.</li>
+<li>Shuffles samples <strong>within each cohort</strong> independently (binary: control + disease; multiclass: K cohorts).</li>
+<li>Materializes a <strong>run-specific</strong> <code>project.json</code> (train sample lists, validation CSVs, output under <code>monte_carlo_runs/run_XXXX/</code>).</li>
+<li>Runs centroid → detector → … on that partition only.</li>
+</ol>
+<p>Stratified split implementation: <a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/split.py"><code>methyl_validation/split.py</code></a> (<code>stratified_split</code>, <code>stratified_split_multiclass</code>). Planner: <a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/planner.py"><code>methyl_validation/planner.py</code></a>.</p>
+<section id="workflow-engine-bridge" class="level4" data-number="5.6.1">
+<h4 data-number="5.6.1" class="anchored" data-anchor-id="workflow-engine-bridge"><span class="header-section-number">5.6.1</span> Workflow engine bridge</h4>
+<p>Monte Carlo is represented explicitly in the DB, not only as filesystem artifacts:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 64%">
+<col style="width: 36%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Table / object</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>wf.monte_carlo_plan</code></td>
+<td>One row per instance: <code>base_project_path</code>, <code>layout</code>, <code>seed</code>, <code>feature_iterations</code>, <code>quality_iterations</code>, <code>config_json</code></td>
+</tr>
+<tr class="even">
+<td><code>wf.monte_carlo_run</code></td>
+<td>One row per planned iteration: <code>run_id</code>, <code>phase_name</code> (<code>feature</code> | <code>quality</code>), <code>task_config_json</code></td>
+</tr>
+<tr class="odd">
+<td>Instance <code>context_json.monteCarlo</code></td>
+<td>Seeds plan metadata when the middle-tier starts an instance</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Scoped variables for MC</strong> (instance root and per-iteration):</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 52%">
+<col style="width: 47%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Variable</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>mc.enabled</code>, <code>mc.seed</code>, <code>mc.layout</code></td>
+<td>Plan metadata from <code>context_json</code></td>
+</tr>
+<tr class="even">
+<td><code>mc.featureIterations</code>, <code>mc.qualityIterations</code></td>
+<td>Loop bounds</td>
+</tr>
+<tr class="odd">
+<td><code>mc.phase</code>, <code>mc.phaseIteration</code>, <code>mc.runId</code></td>
+<td>Current iteration identity</td>
+</tr>
+<tr class="even">
+<td><code>mc.taskConfig</code></td>
+<td>JSON descriptor for this run (project path, train/val lists, detector overrides)</td>
+</tr>
+</tbody>
+</table>
+<p>On ACTION activation, the engine <strong>injects</strong> <code>mc.taskConfig</code> into worker <code>input_json</code> (top-level payload or <code>mcTaskConfig</code> property) so centroid/detector workers receive the stratified partition for <strong>that</strong> iteration without re-rolling the split.</p>
+<p>Schema migration: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_monte_carlo_support.sql"><code>wf_monte_carlo_support.sql</code></a>.</p>
+</section>
+<section id="example-workflow-topology-methylvalidationflow" class="level4" data-number="5.6.2">
+<h4 data-number="5.6.2" class="anchored" data-anchor-id="example-workflow-topology-methylvalidationflow"><span class="header-section-number">5.6.2</span> Example workflow topology (<code>MethylValidationFlow</code>)</h4>
+<p>Seed: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/workflow_methylvalidation_seed.sql"><code>workflow_methylvalidation_seed.sql</code></a></p>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart TD
+  root["SEQUENCE mv_root"]
+  root --&gt; feat["REPEAT mv_feature_loop\nN = featureIterations"]
+  root --&gt; fin["SEQUENCE mv_final_sequence\nfull train set"]
+  feat --&gt; fseq["SEQUENCE per iteration"]
+  fseq --&gt; fc["ACTION centroid\nmc.taskConfig"]
+  fseq --&gt; fd["ACTION detector\nmc.taskConfig"]
+  fin --&gt; fc2["centroid"]
+  fin --&gt; fd2["detector"]
+  fin --&gt; map["mapper"]
+  fin --&gt; enr["enricher"]
+  fin --&gt; prog["progression"]
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+<p>Each <strong>REPEAT</strong> body receives a distinct <code>mc.taskConfig</code> describing one stratified draw. The <strong>final sequence</strong> runs once on the full sample set after all feature-stability iterations complete.</p>
+<p><strong>Future composition:</strong> outer <code>REPEAT</code> (or <code>FOREACH</code> over <code>wf.monte_carlo_run</code> rows) × inner <code>FOREACH</code> over chromosomes/comparisons — see <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_foreach_design.md"><code>wf_foreach_design.md</code></a>.</p>
+<p>Example <code>context_json</code> fragment for MC instances:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"monteCarlo"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"baseProject"</span><span class="fu">:</span> <span class="st">"/work/study/project.json"</span><span class="fu">,</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"layout"</span><span class="fu">:</span> <span class="st">"binary"</span><span class="fu">,</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"seed"</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"featureIterations"</span><span class="fu">:</span> <span class="dv">30</span><span class="fu">,</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"qualityIterations"</span><span class="fu">:</span> <span class="dv">20</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Project-level MC parameters also live under <code>step_config.validation</code> in the portal schema (<code>validation_monte_carlo</code> in <a href="./home/ubuntu/MethylPipeline/schemas/config/validation.schema.json"><code>validation.schema.json</code></a>): <code>train_fraction</code>, <code>n_iterations</code>, cohort CSVs, and regulatory metadata.</p>
+</section>
+</section>
+<section id="cluster-metadata-in-db" class="level3" data-number="5.7">
+<h3 data-number="5.7" class="anchored" data-anchor-id="cluster-metadata-in-db"><span class="header-section-number">5.7</span> Cluster metadata in DB</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode sql code-with-copy"><code class="sourceCode sql"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>wf.<span class="kw">cluster</span> (</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  cluster_key, name, provider,</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  shared_storage_uri,    <span class="co">-- e.g. file://share or https://...</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  worker_mount_path,     <span class="co">-- default '/work'</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  status</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Workers register against a cluster; capabilities are stored on <code>wf.worker.capabilities</code> (JSON).</p>
+<hr>
+</section>
+</section>
+<section id="two-group-example-config-workflow-tree" class="level2" data-number="6">
+<h2 data-number="6" class="anchored" data-anchor-id="two-group-example-config-workflow-tree"><span class="header-section-number">6</span> 5. Two-group example: config → workflow tree</h2>
+<p>This section ties <strong>one control vs two disease groups</strong> (OvR-style) to the <strong><code>DataDrivenPipeline</code></strong> workflow definition and a concrete <code>context_json</code>.</p>
+<section id="project-intent-pca3-style" class="level3" data-number="6.1">
+<h3 data-number="6.1" class="anchored" data-anchor-id="project-intent-pca3-style"><span class="header-section-number">6.1</span> 5.1 Project intent (PCa3-style)</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Item</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Control</td>
+<td><code>controls.all</code></td>
+</tr>
+<tr class="even">
+<td>Disease stages</td>
+<td>e.g.&nbsp;<code>PCa_Low</code>, <code>PCa_High</code> (two comparisons)</td>
+</tr>
+<tr class="odd">
+<td>Context</td>
+<td><code>CG</code></td>
+</tr>
+<tr class="even">
+<td>Chromosomes</td>
+<td>24 (<code>1</code>–<code>22</code>, <code>X</code>, <code>Y</code>)</td>
+</tr>
+<tr class="odd">
+<td>Comparisons shorthand</td>
+<td><code>control_vs_each_disease</code></td>
+</tr>
+</tbody>
+</table>
+<p>Resolved directories (under <code>/work/prostate-cancer/PCa3/</code>):</p>
+<ul>
+<li>Centroids control: <code>centroids/controls/healthy/all</code></li>
+<li>Centroids disease: <code>centroids/diseases/cancer/{PCa_Low|PCa_High}</code></li>
+<li>Detections: <code>detections/all/{PCa_Low|PCa_High}</code></li>
+</ul>
+</section>
+<section id="instance-context_json-runtime" class="level3" data-number="6.2">
+<h3 data-number="6.2" class="anchored" data-anchor-id="instance-context_json-runtime"><span class="header-section-number">6.2</span> 5.2 Instance <code>context_json</code> (runtime)</h3>
+<p>From <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/instance_context_examples/pca_ovr.json"><code>workflow_engine/sql/instance_context_examples/pca_ovr.json</code></a>:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"projectPath"</span><span class="fu">:</span> <span class="st">"/home/ubuntu/Work/prostate-cancer/configs/project_PCa3.json"</span><span class="fu">,</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"context"</span><span class="fu">:</span> <span class="st">"CG"</span><span class="fu">,</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"centroid1Dir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/centroids/controls/healthy/all"</span><span class="fu">,</span></span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"group1Label"</span><span class="fu">:</span> <span class="st">"group1"</span><span class="fu">,</span></span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"orderedComparisonLabels"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"PCa_Low"</span><span class="ot">,</span> <span class="st">"PCa_High"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"chromosomes"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"1"</span><span class="ot">,</span> <span class="st">"2"</span><span class="ot">,</span> <span class="st">"..."</span><span class="ot">,</span> <span class="st">"22"</span><span class="ot">,</span> <span class="st">"X"</span><span class="ot">,</span> <span class="st">"Y"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"comparisons"</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa_Low"</span><span class="fu">,</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"centroid2Dir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low"</span><span class="fu">,</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"detectOutDir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/detections/all/PCa_Low"</span><span class="fu">,</span></span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"group2Label"</span><span class="fu">:</span> <span class="st">"group2"</span></span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"PCa_High"</span><span class="fu">,</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"centroid2Dir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_High"</span><span class="fu">,</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"detectOutDir"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/PCa3/detections/all/PCa_High"</span><span class="fu">,</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"group2Label"</span><span class="fu">:</span> <span class="st">"group2"</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>  <span class="ot">]</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>No per-chromosome nodes are stored in the DB — only <strong>~15 static nodes</strong> in <code>DataDrivenPipeline</code>; fan-out is entirely data-driven.</p>
+</section>
+<section id="workflow-tree-datadrivenpipeline" class="level3" data-number="6.3">
+<h3 data-number="6.3" class="anchored" data-anchor-id="workflow-tree-datadrivenpipeline"><span class="header-section-number">6.3</span> 5.3 Workflow tree (<code>DataDrivenPipeline</code>)</h3>
+<p>Seed: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_data_driven_pipeline_seed.sql"><code>workflow_engine/sql/wf_data_driven_pipeline_seed.sql</code></a></p>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart TD
+  root["SEQUENCE root"]
+  root --&gt; fecp["FOREACH foreach_comparisons\nparallel, var: comparisons"]
+  root --&gt; post["SEQUENCE post_pipeline"]
+  fecp --&gt; seqcmp["SEQUENCE one_comparison"]
+  seqcmp --&gt; fechr["FOREACH foreach_chromosomes\nparallel, var: chromosomes"]
+  fechr --&gt; seqchr["SEQUENCE one_chromosome"]
+  seqchr --&gt; par["PARALLEL centroids"]
+  seqchr --&gt; det["ACTION detect"]
+  par --&gt; c1["ACTION centroid_g1"]
+  par --&gt; c2["ACTION centroid_g2"]
+  post --&gt; mapper["ACTION mapper"]
+  post --&gt; enricher["ACTION enricher"]
+  post --&gt; prog["ACTION progression"]
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+</section>
+<section id="per-chromosome-dependency-one-comparison" class="level3" data-number="6.4">
+<h3 data-number="6.4" class="anchored" data-anchor-id="per-chromosome-dependency-one-comparison"><span class="header-section-number">6.4</span> 5.4 Per-chromosome dependency (one comparison)</h3>
+<pre class="text"><code>one_chromosome (SEQUENCE)
+├─ PARALLEL centroids
+│  ├─ centroid_g1  (methyl-centroid → centroid1Dir)
+│  └─ centroid_g2  (methyl-centroid → centroid2Dir)
+└─ detect         (methyl-detector → detectOutDir)</code></pre>
+<p><code>detect</code> runs only after <strong>both</strong> centroids for that chromosome succeed (PARALLEL parent must complete first).</p>
+</section>
+<section id="execution-scale-pca-ovr-example" class="level3" data-number="6.5">
+<h3 data-number="6.5" class="anchored" data-anchor-id="execution-scale-pca-ovr-example"><span class="header-section-number">6.5</span> 5.5 Execution scale (PCa OvR example)</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Phase</th>
+<th style="text-align: right;">Count</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Comparisons (parallel)</td>
+<td style="text-align: right;">2</td>
+</tr>
+<tr class="even">
+<td>Chromosomes per comparison</td>
+<td style="text-align: right;">24</td>
+</tr>
+<tr class="odd">
+<td>Actions per chromosome</td>
+<td style="text-align: right;">3 (2 centroids + 1 detect)</td>
+</tr>
+<tr class="even">
+<td><strong>Subtotal ACTION tasks</strong></td>
+<td style="text-align: right;"><strong>2 × 24 × 3 = 144</strong></td>
+</tr>
+<tr class="odd">
+<td>Post-pipeline (sequential)</td>
+<td style="text-align: right;">mapper + enricher + progression = <strong>3</strong></td>
+</tr>
+<tr class="even">
+<td><strong>Total ACTION executions</strong></td>
+<td style="text-align: right;"><strong>147</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Post steps run only after <strong>all</strong> comparison branches complete (root <code>SEQUENCE</code>: fan-out then post_pipeline).</p>
+</section>
+<section id="input-templates-resolved-at-claim-time" class="level3" data-number="6.6">
+<h3 data-number="6.6" class="anchored" data-anchor-id="input-templates-resolved-at-claim-time"><span class="header-section-number">6.6</span> 5.6 Input templates (resolved at claim time)</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 18%">
+<col style="width: 81%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Node</th>
+<th>Resolved <code>input_json</code> fields</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>centroid_g1</code></td>
+<td><code>project</code>, <code>group</code>, <code>chromosome</code>, <code>context</code>, <code>comparison</code>, <code>outputDir</code> → <code>centroid1Dir</code></td>
+</tr>
+<tr class="even">
+<td><code>centroid_g2</code></td>
+<td>same with <code>centroid2Dir</code></td>
+</tr>
+<tr class="odd">
+<td><code>detect</code></td>
+<td><code>project</code>, <code>chromosome</code>, <code>centroid1Dir</code>, <code>centroid2Dir</code>, <code>outputDir</code></td>
+</tr>
+<tr class="even">
+<td><code>mapper</code> / <code>enricher</code></td>
+<td><code>project</code> only (reads detection outputs from shared storage)</td>
+</tr>
+<tr class="odd">
+<td><code>progression</code></td>
+<td><code>project</code>, <code>orderedComparisonLabels</code></td>
+</tr>
+</tbody>
+</table>
+<p>Worker contracts: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_worker_contracts_pca_ovr.md"><code>workflow_engine/sql/wf_worker_contracts_pca_ovr.md</code></a></p>
+<hr>
+</section>
+</section>
+<section id="worker-protocol-and-middle-tier" class="level2" data-number="7">
+<h2 data-number="7" class="anchored" data-anchor-id="worker-protocol-and-middle-tier"><span class="header-section-number">7</span> 6. Worker protocol and middle-tier</h2>
+<p>Workers <strong>never connect to the database directly</strong>. They use the REST API (or an equivalent gateway) documented in <a href="./home/ubuntu/MethylPipeline/contracts/openapi.yaml"><code>contracts/openapi.yaml</code></a> and <a href="./home/ubuntu/MethylPipeline/workflow_engine/WORKER_PROTOCOL.md"><code>workflow_engine/WORKER_PROTOCOL.md</code></a>.</p>
+<section id="rest-endpoints" class="level3" data-number="7.1">
+<h3 data-number="7.1" class="anchored" data-anchor-id="rest-endpoints"><span class="header-section-number">7.1</span> REST endpoints</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Method</th>
+<th>Path</th>
+<th>Caller</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>POST</code></td>
+<td><code>/v1/workers/authenticate</code></td>
+<td>Worker registration</td>
+</tr>
+<tr class="even">
+<td><code>POST</code></td>
+<td><code>/v1/workers/tasks/request</code></td>
+<td>Worker poll loop</td>
+</tr>
+<tr class="odd">
+<td><code>POST</code></td>
+<td><code>/v1/workers/tasks/{id}/submit</code></td>
+<td>Task completion</td>
+</tr>
+<tr class="even">
+<td><code>POST</code></td>
+<td><code>/v1/workers/tasks/{id}/heartbeat</code></td>
+<td>Long-running jobs</td>
+</tr>
+<tr class="odd">
+<td><code>POST</code></td>
+<td><code>/v1/workers/tasks/{id}/fail</code></td>
+<td>Explicit failure</td>
+</tr>
+<tr class="even">
+<td><code>POST</code></td>
+<td><code>/v1/workflows/instances</code></td>
+<td>Portal / admin</td>
+</tr>
+<tr class="odd">
+<td><code>GET</code></td>
+<td><code>/v1/workflows/instances/{id}</code></td>
+<td>Portal status</td>
+</tr>
+</tbody>
+</table>
+<p>Implementation: <a href="./home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.RestApi.pas"><code>workflow_engine/src/WfEngine.RestApi.pas</code></a>, served by <a href="./home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.RestHttpServer.pas"><code>WfEngine.RestHttpServer.pas</code></a> (default port <strong>8080</strong>).</p>
+<p>Python gateway (PostgreSQL parity testing): <a href="./home/ubuntu/MethylPipeline/workflow_engine/rest/gateway.py"><code>workflow_engine/rest/gateway.py</code></a>.</p>
+</section>
+<section id="request-submit-sequence" class="level3" data-number="7.2">
+<h3 data-number="7.2" class="anchored" data-anchor-id="request-submit-sequence"><span class="header-section-number">7.2</span> Request / submit sequence</h3>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">sequenceDiagram
+  participant W as Worker
+  participant MT as Middle-Tier REST
+  participant DB as Database wf schema
+
+  W-&gt;&gt;MT: POST /v1/workers/tasks/request
+  Note over W,MT: worker_id, token, capability filter
+  MT-&gt;&gt;DB: sp_worker_request_task
+  DB--&gt;&gt;MT: 0 or 1 row READY to RUNNING plus lease
+  MT--&gt;&gt;W: has_task, input_json, node_execution_id
+
+  Note over W: Run methyl-centroid / methyl-detector / ...
+
+  W-&gt;&gt;MT: POST /v1/workers/tasks/id/submit
+  MT-&gt;&gt;DB: sp_worker_submit_result
+  DB-&gt;&gt;DB: wf_engine_on_action_complete
+  Note over DB: apply output bindings to scope_variable
+  Note over DB: activate next READY nodes (IF/SWITCH use scope)
+  MT--&gt;&gt;W: accepted, instance_status
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+</section>
+<section id="middle-tier-responsibilities" class="level3" data-number="7.3">
+<h3 data-number="7.3" class="anchored" data-anchor-id="middle-tier-responsibilities"><span class="header-section-number">7.3</span> Middle-tier responsibilities</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 64%">
+<col style="width: 35%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong><code>WfEngine.RestHttpServer</code></strong></td>
+<td>HTTP → <code>TRestApiService.Handle</code></td>
+</tr>
+<tr class="even">
+<td><strong><code>TRestApiService</code></strong></td>
+<td>Auth, JSON parse, call <code>sp_*</code> or Delphi engine path</td>
+</tr>
+<tr class="odd">
+<td><strong><code>TWorkflowEngine</code> / SQL procs</strong></td>
+<td>Activate graph, resolve templates, advance control flow</td>
+</tr>
+<tr class="even">
+<td><strong><code>TWorkflowEngineHostedService.RunUntilStopped</code></strong></td>
+<td>Observability tick only — <strong>does not dispatch tasks</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>State:</strong> All workflow progress lives in the database (<code>node_execution.status</code>, <code>task_lease</code>, <code>scope_variable</code>). The middle-tier is <strong>stateless</strong> between HTTP calls.</p>
+</section>
+<section id="capability-matching" class="level3" data-number="7.4">
+<h3 data-number="7.4" class="anchored" data-anchor-id="capability-matching"><span class="header-section-number">7.4</span> Capability matching</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th><code>workflow_action</code></th>
+<th>Capability string</th>
+<th>Worker advertises</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>pipeline.centroid</code></td>
+<td><code>methyl-centroid</code></td>
+<td><code>methyl-centroid</code></td>
+</tr>
+<tr class="even">
+<td><code>pipeline.detector</code></td>
+<td><code>methyl-detector</code></td>
+<td><code>methyl-detector</code></td>
+</tr>
+<tr class="odd">
+<td><code>pipeline.mapper</code></td>
+<td><code>methyl-mapper</code></td>
+<td><code>methyl-mapper</code></td>
+</tr>
+<tr class="even">
+<td><code>pipeline.enricher</code></td>
+<td><code>methyl-enricher</code></td>
+<td><code>methyl-enricher</code></td>
+</tr>
+<tr class="odd">
+<td><code>pipeline.progression</code></td>
+<td><code>methyl-disease-progression</code></td>
+<td><code>methyl-disease-progression</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>sp_worker_request_task</code> claims the oldest <code>READY</code> row matching the worker’s capability (optional filter), using <code>FOR UPDATE SKIP LOCKED</code> on PostgreSQL for safe concurrent polling.</p>
+<hr>
+</section>
+</section>
+<section id="cluster-and-shared-storage-model" class="level2" data-number="8">
+<h2 data-number="8" class="anchored" data-anchor-id="cluster-and-shared-storage-model"><span class="header-section-number">8</span> 7. Cluster and shared storage model</h2>
+<p>Distributed processing assumes <strong>all worker nodes see the same filesystem</strong> at a common mount point, conventionally <strong><code>/work</code></strong>, recorded in <code>wf.cluster.worker_mount_path</code> and optionally <code>shared_storage_uri</code>.</p>
+<section id="assumptions" class="level3" data-number="8.1">
+<h3 data-number="8.1" class="anchored" data-anchor-id="assumptions"><span class="header-section-number">8.1</span> Assumptions</h3>
+<ol type="1">
+<li><strong>Shared storage:</strong> NFS, Azure Files, or equivalent mounted at <code>/work</code> on every compute node.</li>
+<li><strong>Path contract:</strong> <code>input_json</code> carries absolute paths under that mount (<code>centroid1Dir</code>, <code>detectOutDir</code>, …). Workers read and write files directly; the DB stores paths, not file bytes.</li>
+<li><strong>No worker-to-worker RPC:</strong> Dependencies are enforced only by the workflow tree (e.g.&nbsp;<code>detect</code> after both centroids for the same chromosome).</li>
+<li><strong>Maximize parallelism:</strong> Outer <code>FOREACH</code> over comparisons and inner <code>FOREACH</code> over chromosomes both use <strong><code>foreach_parallel = 1</code></strong>, so up to <code>len(comparisons) × len(chromosomes)</code> centroid pairs and detections can run concurrently, bounded by worker count.</li>
+<li><strong>Serialization within a chromosome:</strong> For each <code>(comparison, chromosome)</code>, detect waits for both centroids — the only mandatory per-chromosome barrier.</li>
+<li><strong>Post-pipeline barrier:</strong> Mapper, enricher, and progression run only after <strong>all</strong> detection tasks complete (second child of root <code>SEQUENCE</code>).</li>
+</ol>
+</section>
+<section id="architecture-diagram" class="level3" data-number="8.2">
+<h3 data-number="8.2" class="anchored" data-anchor-id="architecture-diagram"><span class="header-section-number">8.2</span> Architecture diagram</h3>
+<div class="cell" data-layout-align="default">
+<div class="cell-output-display">
+<div>
+<p></p><figure class="figure"><p></p>
+<div>
+<pre class="mermaid mermaid-js">flowchart LR
+  subgraph cluster [Compute cluster]
+    n1["Worker A\nmethyl-centroid"]
+    n2["Worker B\nmethyl-centroid"]
+    n3["Worker C\nmethyl-detector"]
+    n4["Worker D\nmethyl-mapper"]
+  end
+  subgraph storage [Shared storage /work]
+    c1["centroids/controls/.../*.h5"]
+    c2["centroids/diseases/.../*.h5"]
+    d1["detections/.../dmps-*.csv"]
+    m1["mapper/ enricher/ progression/"]
+  end
+  MT["Middle-tier REST"]
+  DB[("Azure SQL or PostgreSQL")]
+
+  n1 --&gt; c1
+  n2 --&gt; c2
+  n3 --&gt; c1
+  n3 --&gt; c2
+  n3 --&gt; d1
+  n4 --&gt; d1
+  n4 --&gt; m1
+  n1 &amp; n2 &amp; n3 &amp; n4 --&gt; MT
+  MT --&gt; DB
+</pre>
+</div>
+<p></p></figure><p></p>
+</div>
+</div>
+</div>
+</section>
+<section id="minimizing-total-processing-time" class="level3" data-number="8.3">
+<h3 data-number="8.3" class="anchored" data-anchor-id="minimizing-total-processing-time"><span class="header-section-number">8.3</span> Minimizing total processing time</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 57%">
+<col style="width: 42%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Technique</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Per-chromosome parallelism</td>
+<td>24 chromosomes per comparison run concurrently</td>
+</tr>
+<tr class="even">
+<td>Per-comparison parallelism</td>
+<td>Multiple disease groups run concurrently</td>
+</tr>
+<tr class="odd">
+<td>Capability-specific workers</td>
+<td>Centroid-heavy and detector-heavy nodes scale independently</td>
+</tr>
+<tr class="even">
+<td><code>SKIP LOCKED</code> task claim</td>
+<td>Many workers poll without blocking each other</td>
+</tr>
+<tr class="odd">
+<td>Shared output paths</td>
+<td>Centroid output for chr <em>N</em> is input to detect for chr <em>N</em> on the same mount — no data shipping between nodes</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="portal-planner-engine-end-to-end" class="level3" data-number="8.4">
+<h3 data-number="8.4" class="anchored" data-anchor-id="portal-planner-engine-end-to-end"><span class="header-section-number">8.4</span> Portal + planner + engine (end-to-end)</h3>
+<pre class="text"><code>1. User edits project.json in portal (schema-validated)
+2. Planner builds context_json (comparisons[], chromosomes[], dirs)
+3. Portal POST /v1/workflows/instances { workflow_version_id, context_json }
+4. Engine activates DataDrivenPipeline → thousands of READY rows materialized logically
+5. Workers on cluster pull tasks, read/write /work/..., submit results
+6. Instance status → COMPLETED when root SEQUENCE finishes</code></pre>
+<hr>
+</section>
+</section>
+<section id="further-reading" class="level2" data-number="9">
+<h2 data-number="9" class="anchored" data-anchor-id="further-reading"><span class="header-section-number">9</span> Further reading</h2>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Document</th>
+<th>Topic</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/DataDrivenPipeline.md"><code>workflow_engine/sql/DataDrivenPipeline.md</code></a></td>
+<td>FOREACH workflow, deploy order</td>
+</tr>
+<tr class="even">
+<td><a href="./home/ubuntu/MethylPipeline/workflow_engine/WORKFLOW_ENGINE_DELPHI.md"><code>workflow_engine/WORKFLOW_ENGINE_DELPHI.md</code></a></td>
+<td>Scope variables, IF/SWITCH/WHILE, Monte Carlo bridge</td>
+</tr>
+<tr class="odd">
+<td><a href="./home/ubuntu/MethylPipeline/workflow_engine/CAPABILITY_CHECK.md"><code>workflow_engine/CAPABILITY_CHECK.md</code></a></td>
+<td>Engine capabilities vs gaps</td>
+</tr>
+<tr class="even">
+<td><a href="./home/ubuntu/MethylPipeline/docs/theory/chapters/05-methylpredictor-and-validation.qmd"><code>docs/theory/chapters/05-methylpredictor-and-validation.qmd</code></a></td>
+<td>Theory: Monte Carlo splits and validation</td>
+</tr>
+<tr class="odd">
+<td><a href="./home/ubuntu/MethylPipeline/docs/theory/chapters/11-project-configuration.qmd"><code>docs/theory/chapters/11-project-configuration.qmd</code></a></td>
+<td>Theory: project configuration</td>
+</tr>
+<tr class="even">
+<td><a href="./home/ubuntu/MethylPipeline/tools/methyl-config-editor/README.md"><code>tools/methyl-config-editor/README.md</code></a></td>
+<td>Config editor setup</td>
+</tr>
+<tr class="odd">
+<td><a href="./home/ubuntu/MethylPipeline/workflow_engine/README.md"><code>workflow_engine/README.md</code></a></td>
+<td>SQL deploy order</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<p><em>Document version: aligns with <code>DataDrivenPipeline</code> seed, <code>FOREACH</code> engine support, scoped-variable write-path parity, and Monte Carlo plan/run tables.</em></p>
+<hr>
+</section>
+<section id="rendering-this-document" class="level2" data-number="10">
+<h2 data-number="10" class="anchored" data-anchor-id="rendering-this-document"><span class="header-section-number">10</span> Rendering this document</h2>
+<p>This Quarto source is generated from <a href="pipeline_architecture.md"><code>pipeline_architecture.md</code></a>. Edit the Markdown, then regenerate:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> workflow_engine/docs/build_pipeline_architecture_qmd.py</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="ex">quarto</span> render workflow_engine/docs/pipeline_architecture.qmd <span class="at">--to</span> html</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ex">quarto</span> render workflow_engine/docs/pipeline_architecture.qmd <span class="at">--to</span> pdf</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<ul>
+<li><strong>HTML</strong> uses interactive Mermaid diagrams.</li>
+<li><strong>PDF</strong> uses TikZ vector figures (same approach as <a href="../../docs/MethylPipeline-overview.qmd"><code>docs/MethylPipeline-overview.qmd</code></a>).</li>
+<li>PDF requires a TeX installation (<code>quarto install tinytex</code> or TeX Live with <code>lualatex</code>).</li>
+</ul>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
