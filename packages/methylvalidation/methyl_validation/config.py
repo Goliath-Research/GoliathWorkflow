@@ -160,16 +160,16 @@ class BackendSharedParams(BaseModel):
     region_directional_region_types: List[str] = Field(
         default_factory=lambda: ["promoter", "exon", "intron", "terminator"],
         description=(
-            "Structural region types for region_directional_score__{comparison}__{region} "
-            "when feature_family_set includes gene_scored."
+            "Deprecated: ignored by gene_scored feature build. Reserved for a future "
+            "structural_scored family."
         ),
     )
     region_directional_min_loci: int = Field(
         default=1,
         ge=1,
         description=(
-            "Minimum panel loci per (comparison, region) required to emit a "
-            "region_directional_score column."
+            "Deprecated: ignored by gene_scored feature build. Reserved for a future "
+            "structural_scored family."
         ),
     )
     observed_feature_quality_columns: List[str] = Field(
@@ -1158,16 +1158,16 @@ class MonteCarloConfig(BaseModel):
     region_directional_region_types: List[str] = Field(
         default_factory=lambda: ["promoter", "exon", "intron", "terminator"],
         description=(
-            "Structural region types for region_directional_score__{comparison}__{region} "
-            "when feature_family_set includes gene_scored."
+            "Deprecated: ignored by gene_scored feature build. Reserved for a future "
+            "structural_scored family."
         ),
     )
     region_directional_min_loci: int = Field(
         default=1,
         ge=1,
         description=(
-            "Minimum panel loci per (comparison, region) required to emit a "
-            "region_directional_score column."
+            "Deprecated: ignored by gene_scored feature build. Reserved for a future "
+            "structural_scored family."
         ),
     )
     observed_feature_quality_columns: List[str] = Field(

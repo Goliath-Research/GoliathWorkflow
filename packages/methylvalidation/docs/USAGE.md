@@ -381,7 +381,7 @@ When `step_config.validation.backend_profiles.<backend>.params.feature_mode` is 
   - `dmp_scored`: aggregated DMP-family observed metrics (`max_weighted_directional_score`, etc.), including per-class `weighted_cosine_distance_to_centroid__{class}` columns from methyl-centroid H5 profiles at classifier-panel DMP loci (`dmps-*-classifier.csv`). Legacy alias: `dmp`.
   - `gene`: one feature per mapped gene (`gene::<GENE>`)
   - `structural`: one feature per mapped gene-annotation key (`struct::<GENE>::<FEATURE>`)
-  - `gene_scored`: comparison-level `gene_directional_score__{comparison}` from frozen gene panels
+  - `gene_scored`: comparison-level features from frozen gene panels: `gene_directional_score__{comparison}`, `gene_panel_obs_fraction__{comparison}`, `gene_directional_iqr__{comparison}`
   - `dmp_scored+gene_scored`: DMP-family metrics plus gene-directional scores (legacy alias: `dmp+gene_scored`)
   - `dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`: deterministic concatenation of families (legacy aliases: `dmp+gene`, `dmp+structural`)
 

@@ -96,11 +96,12 @@ Gene-directional score (per sample, per `comparison_label`):
 - Per gene: `sum(sign(effect) * |effect| * (beta - 0.5)) / sum(|effect|)` over observed panel loci for that comparison (optional `region_weight` on loci).
 - Pooled: `sum(gene_importance * sqrt(gene_support_n) * dir_g) / sum(gene_importance * sqrt(gene_support_n))` over genes with observed loci.
 
-Region-directional score (same `gene_scored` / `dmp_scored+gene_scored` runs, additional columns):
+Additional `gene_scored` columns per comparison (same frozen panel and per-gene `dir_g` pass):
 
-- Column names: `region_directional_score__{comparison}__{region}` for structural types in `region_directional_region_types` (default `promoter`, `exon`, `intron`, `terminator`).
-- Pooled over all panel loci with mapped `feature_type = region` for that comparison (not by gene): `sum(sign(effect) * |effect| * region_weight * (beta - 0.5)) / sum(|effect| * region_weight)`; reuses `gene_scored_use_region_weight`.
-- Columns are omitted when the panel has fewer than `region_directional_min_loci` loci for that `(comparison, region)` pair (default `1`).
+- `gene_panel_obs_fraction__{comparison}`: fraction of panel genes with at least one observed locus in the sample.
+- `gene_directional_iqr__{comparison}`: IQR of per-gene `dir_g` values; left NaN when fewer than two panel genes have observed loci.
+
+Region-directional scores (`region_directional_score__*`) are no longer emitted under `gene_scored`; helpers remain in code for a future `structural_scored` family (frozen-panel-restricted).
 
 ### Lean DMP feature profile (`hybrid_feature_v4_lean_dmp`)
 
@@ -116,7 +117,7 @@ Backends persist three name lists in model metadata and train-dataset sidecars:
 - `training_feature_names` — columns passed to sklearn/generative/ECDF models.
 - `quality_feature_names` — diagnostics only; still used at predict time for low-evidence filtering via `obs_fraction`.
 
-For E1 `dmp_scored+gene_scored` with four comparisons, expect roughly **41 export** and **38 training** columns after this profile. Re-run `--model` after upgrading (schema fingerprint bump invalidates feature caches).
+For E1 `dmp_scored+gene_scored` with four comparisons, expect roughly **29 export** and **26 training** columns after this profile (12 gene_scored columns: 3 per comparison). Re-run `--model` after upgrading (schema fingerprint bump invalidates feature caches).
 
 For gene/structural keys, per-sample value uses signed weighted centered methylation over observed loci:
 

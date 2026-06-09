@@ -1021,7 +1021,6 @@ def observed_hybrid_feature_names(
 ) -> List[str]:
     from .gene_scored_features import (
         gene_scored_feature_names,
-        region_directional_feature_names,
         resolve_gene_scored_comparison_labels,
     )
 
@@ -1048,17 +1047,6 @@ def observed_hybrid_feature_names(
         work_dmp = dmp_df if dmp_df is not None else pd.DataFrame()
         cmp_labels = resolve_gene_scored_comparison_labels(work_dmp, panel_df)
         names.extend(gene_scored_feature_names(cmp_labels))
-        if not work_dmp.empty:
-            _, feature_order, _, _, _ = _build_reference_map(work_dmp)
-            names.extend(
-                region_directional_feature_names(
-                    work_dmp,
-                    feature_order,
-                    cmp_labels,
-                    region_directional_region_types,
-                    min_loci=int(max(1, region_directional_min_loci)),
-                )
-            )
     return names
 
 
@@ -1076,7 +1064,7 @@ def observed_hybrid_schema_fingerprint(
     region_directional_min_loci: int = 1,
     observed_feature_quality_columns: Optional[Sequence[str]] = None,
 ) -> str:
-    from .gene_scored_features import GENE_SCORED_SCHEMA_VERSION, normalize_region_directional_region_types
+    from .gene_scored_features import GENE_SCORED_SCHEMA_VERSION
 
     names = observed_hybrid_feature_names(
         cancer_class_labels=cancer_class_labels,
@@ -1101,14 +1089,11 @@ def observed_hybrid_schema_fingerprint(
             f"removed_dmp={','.join(DEFAULT_REMOVED_DMP_FEATURE_SUFFIXES)}\n"
         )
     if include_gene_scored:
-        region_types = normalize_region_directional_region_types(region_directional_region_types)
         payload = (
             f"{payload}\n"
             f"gene_scored_min_support_n={int(max(1, gene_scored_min_support_n))}\n"
             f"gene_scored_use_region_weight={bool(gene_scored_use_region_weight)}\n"
             f"gene_scored_gene_weight={str(gene_scored_gene_weight).strip().lower()}\n"
-            f"region_directional_region_types={','.join(region_types)}\n"
-            f"region_directional_min_loci={int(max(1, region_directional_min_loci))}\n"
             f"{GENE_SCORED_SCHEMA_VERSION}"
         )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
@@ -1567,14 +1552,12 @@ def build_observed_hybrid_feature_table(
     gene_scored_report: Dict[str, Any] = {}
     if include_gene_scored_family:
         from .gene_scored_features import (
-            compute_gene_directional_score_matrix,
-            compute_region_directional_score_matrix,
+            compute_gene_scored_matrices,
+            gene_directional_iqr_column,
+            gene_panel_obs_fraction_column,
             gene_scored_feature_column,
-            normalize_region_directional_region_types,
             prepare_gene_scored_panels,
-            region_directional_feature_column,
             resolve_gene_scored_comparison_labels,
-            count_region_directional_panel_loci,
         )
 
         if frozen_gene_panel_df is None or frozen_gene_panel_df.empty:
@@ -1587,7 +1570,7 @@ def build_observed_hybrid_feature_table(
             frozen_gene_panel_df,
             min_support_n=int(gene_scored_min_support_n),
         )
-        score_matrix = compute_gene_directional_score_matrix(
+        score_matrix, obs_fraction_matrix, iqr_matrix = compute_gene_scored_matrices(
             X_raw,
             feature_order,
             dmp_df,
@@ -1597,45 +1580,21 @@ def build_observed_hybrid_feature_table(
             gene_weight_mode=str(gene_scored_gene_weight),
         )
         for j, cmp_label in enumerate(cmp_labels):
-            feat_name = gene_scored_feature_column(cmp_label)
-            if feat_name not in idx:
-                continue
-            col_j = int(idx[feat_name])
-            X_feat[:, col_j] = score_matrix[:, j].astype(np.float32)
-        region_types = normalize_region_directional_region_types(region_directional_region_types)
-        region_matrix, region_specs = compute_region_directional_score_matrix(
-            X_raw,
-            feature_order,
-            dmp_df,
-            cmp_labels,
-            region_types,
-            min_loci=int(max(1, region_directional_min_loci)),
-            use_region_weight=bool(gene_scored_use_region_weight),
-        )
-        for j, (cmp_label, region) in enumerate(region_specs):
-            feat_name = region_directional_feature_column(cmp_label, region)
-            if feat_name not in idx:
-                continue
-            col_j = int(idx[feat_name])
-            X_feat[:, col_j] = region_matrix[:, j].astype(np.float32)
-        n_loci_per_comparison_region = {
-            f"{cmp_label}::{region}": count_region_directional_panel_loci(
-                dmp_df,
-                feature_order,
-                cmp_label,
-                region,
-            )
-            for cmp_label, region in region_specs
-        }
+            for feat_name, matrix in (
+                (gene_scored_feature_column(cmp_label), score_matrix),
+                (gene_panel_obs_fraction_column(cmp_label), obs_fraction_matrix),
+                (gene_directional_iqr_column(cmp_label), iqr_matrix),
+            ):
+                if feat_name not in idx:
+                    continue
+                col_j = int(idx[feat_name])
+                X_feat[:, col_j] = matrix[:, j].astype(np.float32)
         gene_scored_report = {
             "comparison_labels": list(cmp_labels),
             "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
             "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
             "gene_scored_gene_weight": str(gene_scored_gene_weight),
             "n_genes_per_comparison": {k: int(len(v)) for k, v in panels.items()},
-            "region_directional_region_types": list(region_types),
-            "region_directional_min_loci": int(max(1, region_directional_min_loci)),
-            "n_loci_per_comparison_region": n_loci_per_comparison_region,
         }
 
     non_nan = np.isfinite(X_feat).sum(axis=0).astype(int).tolist()
