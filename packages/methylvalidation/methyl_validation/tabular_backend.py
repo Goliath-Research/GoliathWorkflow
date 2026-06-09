@@ -43,12 +43,13 @@ from .model_bundle import (
     load_bundle_gene_feature_ranges,
 )
 from .observed_feature_builder import (
-    HYBRID_FEATURE_FAMILY_SETS,
     OBSERVED_HYBRID_SCHEMA_VERSION,
     apply_feature_fill_values,
     build_observed_hybrid_feature_table,
     derive_observed_hybrid_anchors,
+    describe_active_feature_families,
     fit_feature_fill_values,
+    normalize_feature_family_set,
     observed_hybrid_feature_names,
     observed_hybrid_schema_fingerprint,
     select_training_feature_matrix,
@@ -343,7 +344,7 @@ def train_tabular_model(
     observed_feature_dmr_window_bp: int = 100000,
     observed_feature_max_dmrs: int = 32,
     observed_feature_max_genes: int = 32,
-    feature_family_set: str = "dmp",
+    feature_family_set: str = "dmp_scored",
     gene_feature_loading: str = "frozen",
     observed_hist_eps: float = 1e-6,
     observed_hist_alpha: float = 0.5,
@@ -402,12 +403,8 @@ def train_tabular_model(
             sample_ids.append(Path(str(p)).name)
 
     feature_mode_norm = str(feature_mode or "raw_dmp").strip().lower()
-    feature_family_set_norm = str(feature_family_set or "dmp").strip().lower()
+    feature_family_set_norm = normalize_feature_family_set(feature_family_set)
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
-    if feature_family_set_norm not in HYBRID_FEATURE_FAMILY_SETS:
-        raise ValueError(
-            f"feature_family_set must be one of {list(HYBRID_FEATURE_FAMILY_SETS)}, got {feature_family_set!r}"
-        )
     if gene_feature_loading_norm not in {"frozen", "range"}:
         raise ValueError(
             f"gene_feature_loading must be one of ['frozen', 'range'], got {gene_feature_loading!r}"
@@ -1214,7 +1211,7 @@ def predict_tabular_model_from_project(
             hist_tail_agreement_threshold=float(
                 meta.get("observed_hist_tail_agreement_threshold", 0.10)
             ),
-            feature_family_set=str(meta.get("feature_family_set", "dmp")),
+            feature_family_set=normalize_feature_family_set(str(meta.get("feature_family_set", "dmp_scored"))),
             gene_feature_loading=str(meta.get("gene_feature_loading", "frozen")),
             fixed_gene_features_df=load_bundle_gene_feature_ranges(bundle_h5),
             frozen_gene_panel_df=load_bundle_frozen_gene_panel(
@@ -1318,7 +1315,7 @@ def predict_tabular_model_from_project(
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
     if feature_mode == "observed_hybrid":
-        active_family_set = str(meta.get("feature_family_set", "dmp"))
+        active_family_set = normalize_feature_family_set(str(meta.get("feature_family_set", "dmp_scored")))
         active_gene_loading = str(meta.get("gene_feature_loading", "frozen"))
         cm = metrics.get("confusion_matrix") or []
         worst_group_ba = None
@@ -1329,6 +1326,7 @@ def predict_tabular_model_from_project(
                 recalls.append(float(row[i]) / denom if denom > 0 else 0.0)
             if recalls:
                 worst_group_ba = float(min(recalls))
+        family_flags = describe_active_feature_families(active_family_set)
         ablation_report = {
             "backend": "tabular_sklearn",
             "feature_mode": feature_mode,
@@ -1342,20 +1340,18 @@ def predict_tabular_model_from_project(
             "active_feature_family_set": active_family_set,
             "active_gene_feature_loading": active_gene_loading,
             "active_feature_families": {
-                "dmp": ("dmp" in active_family_set or active_family_set == "hybrid-all"),
+                **family_flags,
                 "chromosome": bool(meta.get("observed_feature_include_chromosome", True)),
                 "dmr": bool(meta.get("observed_feature_include_dmr", True)),
-                "gene": ("gene" in active_family_set or active_family_set == "hybrid-all"),
-                "structural": ("structural" in active_family_set or active_family_set == "hybrid-all"),
             },
             "mandatory_ablation_matrix": [
-                {"name": "dmp", "feature_family_set": "dmp"},
+                {"name": "dmp_scored", "feature_family_set": "dmp_scored"},
                 {"name": "gene", "feature_family_set": "gene"},
                 {"name": "structural", "feature_family_set": "structural"},
-                {"name": "dmp+gene", "feature_family_set": "dmp+gene"},
+                {"name": "dmp_scored+gene", "feature_family_set": "dmp_scored+gene"},
                 {"name": "gene_scored", "feature_family_set": "gene_scored"},
-                {"name": "dmp+gene_scored", "feature_family_set": "dmp+gene_scored"},
-                {"name": "dmp+structural", "feature_family_set": "dmp+structural"},
+                {"name": "dmp_scored+gene_scored", "feature_family_set": "dmp_scored+gene_scored"},
+                {"name": "dmp_scored+structural", "feature_family_set": "dmp_scored+structural"},
                 {"name": "hybrid-all", "feature_family_set": "hybrid-all"},
             ],
         }

@@ -74,7 +74,7 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 - **`--freeze`**: runs `run_pipeline_for_production`: `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, then optional `methyl-disease-progression`.
 - **`--model-mc`**: full retrain+test MC for model selection. With `--model-mc-all`, MethylValidation first builds a shared iteration set (`model_mc/shared/run_XXXX`) for split + centroid + detector, then runs backend-specific train/predict stages under `model_mc/<backend>/run_XXXX`. When split source is reusable from primary MC runs, centroid/detector artifacts are linked into shared/backend run roots instead of recomputing.
 - **`--model`**: runs `run_pipeline_for_model`. Backend comes from `step_config.validation.backend_profiles` (or validated CLI override). For `ecdf`, steps are `methyl-classifier` -> `methyl-predictor`. For `tabular_sklearn` and `generative_hybrid`, steps are in-process bundle -> train -> predict and do not re-run `methyl-detector`.
-- **Aggregated ECDF observed-hybrid mode**: when `model_backend=ecdf` and observed-hybrid mapped features are active (`feature_family_set != dmp`), trainer API runs `ecdf-aggregated-train` -> `ecdf-aggregated-predictor` and intentionally skips `ecdf-second-stage`.
+- **Aggregated ECDF observed-hybrid mode**: when `model_backend=ecdf` and observed-hybrid mapped features are active (`feature_family_set != dmp_scored`), trainer API runs `ecdf-aggregated-train` -> `ecdf-aggregated-predictor` and intentionally skips `ecdf-second-stage`.
 - **`--select-best-model`**: ranks backend model-MC summaries and runs final all-data production model build using selected backend.
 - **`--post-model-validation`**: runs MC holdout evaluation against frozen production artifacts only (no retraining). `ecdf` dispatches predictor-only runs; `tabular_sklearn` and `generative_hybrid` dispatch frozen model inference via backend predictors.
 - Legacy flat backend keys under `step_config.validation` are now rejected; migration is handled by `methyl-validation-migrate-backend-config`.
@@ -83,12 +83,12 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 
 ECDF/Bayesian remains DMP-only by design at the first stage. The optional ECDF second stage and the `observed_hybrid` path used by ECDF-aggregated/tabular/generative backends share a unified mapped-feature builder with explicit family toggles:
 
-- `feature_family_set=dmp`: fixed DMP-family observed metrics (legacy behavior).
+- `feature_family_set=dmp_scored`: aggregated DMP-family observed metrics (`max_weighted_directional_score`, etc.). Legacy alias: `dmp`.
 - `feature_family_set=gene`: dynamic one-feature-per-mapped-gene keys (`gene::<GENE>`).
 - `feature_family_set=structural`: dynamic one-feature-per-mapped `(gene, feature_type)` keys (`struct::<GENE>::<FEATURE>`).
 - `feature_family_set=gene_scored`: comparison-level `gene_directional_score__{comparison}` features from frozen gene panels (`frozen_genes_production.csv`) and per-comparison DMP effects (no `gene::` columns).
-- `feature_family_set=dmp+gene_scored`: DMP-family metrics plus gene-directional scores (recommended when using mapper gene panels without legacy per-gene columns).
-- combined families (`dmp+gene`, `dmp+structural`, `hybrid-all`) concatenate families in deterministic order (`hybrid-all` does not include `gene_scored`; use `dmp+gene_scored` explicitly).
+- `feature_family_set=dmp_scored+gene_scored`: DMP-family metrics plus gene-directional scores (recommended when using mapper gene panels without legacy per-gene columns). Legacy alias: `dmp+gene_scored`.
+- combined families (`dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`) concatenate families in deterministic order (`hybrid-all` does not include `gene_scored`; use `dmp_scored+gene_scored` explicitly).
 
 Gene-directional score (per sample, per `comparison_label`):
 
@@ -96,7 +96,7 @@ Gene-directional score (per sample, per `comparison_label`):
 - Per gene: `sum(sign(effect) * |effect| * (beta - 0.5)) / sum(|effect|)` over observed panel loci for that comparison (optional `region_weight` on loci).
 - Pooled: `sum(gene_importance * sqrt(gene_support_n) * dir_g) / sum(gene_importance * sqrt(gene_support_n))` over genes with observed loci.
 
-Region-directional score (same `gene_scored` / `dmp+gene_scored` runs, additional columns):
+Region-directional score (same `gene_scored` / `dmp_scored+gene_scored` runs, additional columns):
 
 - Column names: `region_directional_score__{comparison}__{region}` for structural types in `region_directional_region_types` (default `promoter`, `exon`, `intron`, `terminator`).
 - Pooled over all panel loci with mapped `feature_type = region` for that comparison (not by gene): `sum(sign(effect) * |effect| * region_weight * (beta - 0.5)) / sum(|effect| * region_weight)`; reuses `gene_scored_use_region_weight`.
@@ -104,7 +104,7 @@ Region-directional score (same `gene_scored` / `dmp+gene_scored` runs, additiona
 
 ### Lean DMP feature profile (`hybrid_feature_v4_lean_dmp`)
 
-When the DMP family is active (`dmp`, `dmp+gene_scored`, etc.), observed-hybrid exports use a lean column set:
+When the DMP-scored family is active (`dmp_scored`, `dmp_scored+gene_scored`, etc.), observed-hybrid exports use a lean column set:
 
 - **Removed from schema** (no longer computed or exported): `weighted_mean_abs_distance_margin`, `weighted_obs_fraction`, `weighted_fraction_dmps_closer_to_cancer_centroid__*`, `weighted_mean_abs_error_to_cancer_centroid__*`.
 - **Quality-only** (exported in parquet/metadata, excluded from model training): `obs_fraction`, `n_obs_dmps`, `n_total_dmps` (override via `observed_feature_quality_columns`).
@@ -116,7 +116,7 @@ Backends persist three name lists in model metadata and train-dataset sidecars:
 - `training_feature_names` — columns passed to sklearn/generative/ECDF models.
 - `quality_feature_names` — diagnostics only; still used at predict time for low-evidence filtering via `obs_fraction`.
 
-For E1 `dmp+gene_scored` with four comparisons, expect roughly **41 export** and **38 training** columns after this profile. Re-run `--model` after upgrading (schema fingerprint bump invalidates feature caches).
+For E1 `dmp_scored+gene_scored` with four comparisons, expect roughly **41 export** and **38 training** columns after this profile. Re-run `--model` after upgrading (schema fingerprint bump invalidates feature caches).
 
 For gene/structural keys, per-sample value uses signed weighted centered methylation over observed loci:
 

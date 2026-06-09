@@ -29,7 +29,7 @@ methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa
 - `tabular_sklearn`: in-process bundle -> train -> predict
 - `generative_hybrid`: in-process bundle -> train -> predict
 
-For `ecdf` + observed-hybrid mapped families (`feature_mode=observed_hybrid`, `feature_family_set!=dmp`), the runtime path is aggregated ECDF OvR package train/predict and skips ECDF second-stage refinement.
+For `ecdf` + observed-hybrid mapped families (`feature_mode=observed_hybrid`, `feature_family_set!=dmp_scored`), the runtime path is aggregated ECDF OvR package train/predict and skips ECDF second-stage refinement.
 
 Configured by `step_config.validation.backend_profiles` (plus optional CLI backend override).
 

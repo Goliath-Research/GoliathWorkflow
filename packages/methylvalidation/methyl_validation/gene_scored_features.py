@@ -50,8 +50,10 @@ def gene_scored_feature_column(comparison_label: object) -> str:
 
 
 def family_includes_gene_scored(feature_family_set: Optional[str]) -> bool:
-    token = str(feature_family_set or "dmp").strip().lower()
-    return token in {"gene_scored", "dmp+gene_scored"}
+    from .observed_feature_builder import normalize_feature_family_set
+
+    token = normalize_feature_family_set(feature_family_set)
+    return token in {"gene_scored", "dmp_scored+gene_scored"}
 
 
 def resolve_gene_scored_comparison_labels(

@@ -128,7 +128,7 @@ def test_normalize_production_ecdf_backend_defaults_to_raw_dmp():
     _normalize_production_ecdf_backend(project)
     params = project["step_config"]["validation"]["backend_profiles"]["ecdf"]["params"]
     assert params["feature_mode"] == "raw_dmp"
-    assert params["feature_family_set"] == "dmp"
+    assert params["feature_family_set"] == "dmp_scored"
     assert params["model_weight_column"] == "effect_size"
     assert params["ecdf_aggregated_enabled"] is False
 

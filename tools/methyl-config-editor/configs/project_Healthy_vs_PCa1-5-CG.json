@@ -333,7 +333,7 @@
             "model_bundle_dir": null,
             "model_weight_column": "effect_size",
             "feature_mode": "raw_dmp",
-            "feature_family_set": "dmp",
+            "feature_family_set": "dmp_scored",
             "ecdf_aggregated_enabled": false,
             "observed_feature_quantiles": [
               0.1,

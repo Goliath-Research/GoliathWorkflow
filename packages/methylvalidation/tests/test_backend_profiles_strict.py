@@ -58,7 +58,12 @@ def test_merge_legacy_keys_preserves_backend_enabled_flags():
     assert migrated["backend_profiles"]["tabular_sklearn"]["enabled"] is True
     assert migrated["backend_profiles"]["generative_hybrid"]["enabled"] is True
     assert migrated["backend_profiles"]["tabular_sklearn"]["params"]["gene_scored_min_support_n"] == 5
-    assert migrated["backend_profiles"]["ecdf"]["params"]["feature_family_set"] == "dmp"
+    assert migrated["backend_profiles"]["ecdf"]["params"]["feature_family_set"] == "dmp_scored"
+    assert (
+        migrated["backend_profiles"]["tabular_sklearn"]["params"]["feature_family_set"]
+        == "dmp_scored+gene_scored"
+    )
+    assert migrated["backend_profiles"]["generative_hybrid"]["params"]["feature_family_set"] == "dmp_scored"
 
 
 def test_migration_moves_legacy_keys_into_backend_profiles():
