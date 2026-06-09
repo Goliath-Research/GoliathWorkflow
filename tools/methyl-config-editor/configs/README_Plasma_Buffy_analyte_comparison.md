@@ -6,8 +6,8 @@ Binary **healthy vs PCa** projects (~15 samples per arm, paired subjects) for cr
 
 | File | Analyte | Sample lists |
 |------|---------|----------------|
-| `project_Plasma_healthy_vs_PCa.json` | `cfdna` (fragmentomics on) | `/work/data/healthy_p.csv`, `/work/data/pca_p.csv` |
-| `project_Buffy_healthy_vs_PCa.json` | `buffy_coat` (fragmentomics off) | `/work/data/healthy_b.csv`, `/work/data/pca_b.csv` |
+| `project_Plasma_healthy_vs_PCa.json` | `cfdna` (fragmentomics on) | `/work/prostate-cancer/data/healthy_p.csv`, `/work/prostate-cancer/data/pca_p.csv` |
+| `project_Buffy_healthy_vs_PCa.json` | `buffy_coat` (fragmentomics off) | `/work/prostate-cancer/data/healthy_b.csv`, `/work/prostate-cancer/data/pca_b.csv` |
 
 Cluster copies: `/work/prostate-cancer/configs/` (same content).
 
@@ -77,7 +77,7 @@ Outputs: `dmp_overlap_summary.json`, `gene_overlap_summary.json`, and CSV lists 
 
 ### Pre-flight QC (paired cohort)
 
-Verify 1:1 patient pairing across analytes before interpreting biology, e.g. a manifest at `/work/data/plasma_buffy_pairing.csv` with columns `patient_id`, `plasma_sample`, `buffy_sample`, `group`.
+Verify 1:1 patient pairing across analytes before interpreting biology, e.g. a manifest at `/work/prostate-cancer/data/plasma_buffy_pairing.csv` with columns `patient_id`, `plasma_sample`, `buffy_sample`, `group`.
 
 ## Config validation
 
