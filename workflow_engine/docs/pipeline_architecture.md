@@ -1,6 +1,6 @@
 # Configurable Methylation Pipeline — Architecture
 
-Presentation-oriented overview of how a **project configuration** (JSON), a **schema-validated portal editor**, a **workflow database**, a **stateless middle-tier**, and **remote workers** cooperate to run a configurable methylation pipeline on a shared-storage cluster.
+Presentation-oriented overview of how a **project configuration** (JSON), a **schema-validated portal editor**, a **workflow database** (including **scoped variables**), a **stateless middle-tier**, and **remote workers** cooperate to run a configurable methylation pipeline on a shared-storage cluster.
 
 **Audience:** engineers and stakeholders reviewing the company portal, backend database, middle-tier, and compute workers.
 
@@ -320,12 +320,177 @@ erDiagram
   worker ||--o{ worker_token : auth
 ```
 
-### Scope and placeholders
+### Scoped variables — declaration, assignment, and use
 
-- **`workflow_instance.context_json`** seeds global scope (`scope_node_execution_id = 0`).
-- **`FOREACH`** binds each array element into scope (object fields flattened to `${var.label}`, `${var.chromosome}`, etc.).
-- **`workflow_input_template`** uses placeholders: `${var.projectPath}`, `${var.chromosome}`, `${ctx.iterationNo}`, …
-- Engine procedures: `wf_init_instance_scope_from_context`, `wf_open_scope`, `wf_apply_output_bindings` ([`wf_sql_scope_writepath_parity.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sql_scope_writepath_parity.sql)).
+Scoped variables are a first-class workflow feature: they carry **instance parameters**, **loop indices**, **FOREACH item fields**, and **outputs from prior worker actions** through the execution tree. The engine resolves them when building `input_json` and when choosing IF / SWITCH / WHILE branches.
+
+**Why they exist:**
+
+1. **Complex control flow** — conditions that are too rich for a static workflow definition (QC gates, pagination, model-quality thresholds, custom business rules) can be evaluated inside a worker ACTION; the worker writes an integer or JSON fragment back into scope, and downstream IF / SWITCH / WHILE nodes read that value.
+2. **Monte Carlo validation** — each iteration needs a **fresh stratified train/validation partition** of cohort samples (e.g. 80% train / 20% test per cohort). Those partition descriptors are stored as scoped variables (`mc.taskConfig`) and injected into every pipeline step for that iteration.
+
+#### Storage model
+
+| Object | Layer | Role |
+|--------|-------|------|
+| `wf.scope_variable` | Runtime | `(workflow_instance_id, scope_node_execution_id, var_name) → value_json` |
+| `wf.node_scope_default` | Definition | Variables declared when a composite scope **opens** (`var_name`, `default_expr`) |
+| `wf.variable_output_binding` | Definition | Maps ACTION **output** → scope variable (`result_code` or `output_path` into `output_json`) |
+| `workflow_node.condition_var` / `switch_var` | Definition | IF / SWITCH / WHILE read these names from scope |
+
+**Scope identity:** `scope_node_execution_id = 0` is the **instance root** (global scope). Each composite node (SEQUENCE, PARALLEL, REPEAT, WHILE, FOREACH, IF, SWITCH) opens a child scope tied to its `node_execution.id`. Lookup walks **up the parent chain** until a name is found (`wf.wf_get_scope_variable_json`).
+
+```mermaid
+flowchart TD
+  ctx["context_json\n(instance start)"]
+  root["scope id = 0\nprojectPath, comparisons[], mc.*"]
+  fecp["FOREACH scope\nvar.label, var.chromosome"]
+  seq["SEQUENCE scope\ncopied from parent"]
+  act["ACTION scope\noutput bindings write here"]
+  ctx -->|"wf_init_instance_scope_from_context"| root
+  root --> fecp
+  fecp --> seq
+  seq --> act
+  act -->|"variable_output_binding\non submit"| act
+  act -.->|"visible to siblings\nvia parent walk"| seq
+```
+
+#### Declaration (definition-time)
+
+**`node_scope_default`** declares variables that appear when a node’s scope opens. Values are **expressions**, not literals: the engine resolves `${...}` placeholders against the current scope before assignment.
+
+Example from per-comparison nodes in legacy PCa seeds: `centroid2Dir`, `detectOutDir`, and `comparisonLabel` are seeded as defaults on each comparison subtree so the workflow definition stays generic while paths vary by comparison label.
+
+#### Assignment (runtime)
+
+| Mechanism | When | Example |
+|-----------|------|---------|
+| Instance bootstrap | `StartInstance` | Every top-level key in `context_json` → scope `0` |
+| Scope open | Composite activation | Copy parent scope + apply `node_scope_default` |
+| FOREACH iteration | Each loop body activation | Bind `foreach_item_var` fields (`label`, `chromosome`, …) and `foreach_index_var` |
+| REPEAT / WHILE | Loop body | `${ctx.iterationNo}` in `execution_context` |
+| ACTION complete | Worker submit | `variable_output_binding`: `result_code` or JSON path from `output_json` |
+| Monte Carlo planner | Instance start / iteration | `mc.taskConfig`, `mc.runId`, `mc.phase`, … |
+
+Engine write-path: [`wf_sql_scope_writepath_parity.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sql_scope_writepath_parity.sql) (`wf_set_scope_variable`, `wf_open_scope`, `wf_apply_output_bindings`).
+
+#### Use (read-path)
+
+**Input templates and bindings** resolve placeholders at task claim time:
+
+| Token family | Example | Source |
+|--------------|---------|--------|
+| Scope variable | `${var.chromosome}` | Scope chain walk |
+| Indexed array in scope | `${var.orderedComparisonLabels[0]}` | JSON array element |
+| FOREACH context | `${ctx.item}`, `${ctx.index}` | Current iteration |
+| Loop context | `${ctx.iterationNo}`, `${ctx.parallelIndex}` | `execution_context` |
+| Prior task | `${ctx.task.detect.resultCode}` | Latest terminal execution of `detect` |
+
+The resolver does **not** evaluate arithmetic or boolean expressions in placeholders. Any logic beyond simple lookup must run in a worker (or in the planner before the instance starts) and **publish** a scalar or JSON value into scope.
+
+**Control-flow reads:** IF, SWITCH, and WHILE nodes specify `condition_var` / `switch_var`. The engine reads an **integer** from scope (`0` = false / exit loop; non-zero = true / continue). If the variable is absent, it falls back to `condition_ref_node_key` / `switch_ref_node_key` (prior ACTION `result_code`). See [`WORKFLOW_ENGINE_DELPHI.md`](/home/ubuntu/MethylPipeline/workflow_engine/WORKFLOW_ENGINE_DELPHI.md) and [`wf_sql_branch_parity.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sql_branch_parity.sql).
+
+### Worker-driven conditions and branching
+
+For conditions that depend on **data-dependent computation**, the workflow pattern is:
+
+```mermaid
+sequenceDiagram
+  participant E as Workflow engine
+  participant W as Worker ACTION
+  participant S as scope_variable
+
+  E->>W: input_json (paths, params)
+  Note over W: Run analysis, QC, or rule engine
+  W->>E: submit result_code + output_json
+  E->>S: variable_output_binding writes e.g. shouldRunQc, hasMorePages, mode
+  E->>E: IF / SWITCH / WHILE reads condition_var
+  E->>E: Activate THEN, ELSE, CASE, or next loop body
+```
+
+**Example tree** (from Delphi reference seed `DelphiTreeFlow`):
+
+- `GateIf` — `condition_var = shouldRunQc`: worker sets `1` to run QC, `0` to skip.
+- `ModeSwitch` — `switch_var = mode`: worker chooses normalization branch (`1`, `2`, or default).
+- `PollWhile` — `condition_var = hasMorePages`: pagination worker sets `1` until no pages remain, then `0`.
+
+This keeps the **workflow graph static** while allowing arbitrarily complex predicates inside workers. Bindings can take either:
+
+- **`source_kind = result_code`** — worker returns a signed integer directly.
+- **`source_kind = output_path`** — worker returns JSON; engine extracts a field (e.g. `$.gate.passed`) into scope.
+
+### Monte Carlo runs and stratified partitions
+
+Monte Carlo validation ([`packages/methylvalidation`](/home/ubuntu/MethylPipeline/packages/methylvalidation/)) repeats the full pipeline on many **independent random splits** of the same cohorts. Each iteration:
+
+1. Draws a **stratified partition** per cohort: fraction `train_fraction` (e.g. `0.8`) for training, remainder for validation.
+2. Shuffles samples **within each cohort** independently (binary: control + disease; multiclass: K cohorts).
+3. Materializes a **run-specific** `project.json` (train sample lists, validation CSVs, output under `monte_carlo_runs/run_XXXX/`).
+4. Runs centroid → detector → … on that partition only.
+
+Stratified split implementation: [`methyl_validation/split.py`](/home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/split.py) (`stratified_split`, `stratified_split_multiclass`). Planner: [`methyl_validation/planner.py`](/home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/planner.py).
+
+#### Workflow engine bridge
+
+Monte Carlo is represented explicitly in the DB, not only as filesystem artifacts:
+
+| Table / object | Content |
+|----------------|---------|
+| `wf.monte_carlo_plan` | One row per instance: `base_project_path`, `layout`, `seed`, `feature_iterations`, `quality_iterations`, `config_json` |
+| `wf.monte_carlo_run` | One row per planned iteration: `run_id`, `phase_name` (`feature` \| `quality`), `task_config_json` |
+| Instance `context_json.monteCarlo` | Seeds plan metadata when the middle-tier starts an instance |
+
+**Scoped variables for MC** (instance root and per-iteration):
+
+| Variable | Meaning |
+|----------|---------|
+| `mc.enabled`, `mc.seed`, `mc.layout` | Plan metadata from `context_json` |
+| `mc.featureIterations`, `mc.qualityIterations` | Loop bounds |
+| `mc.phase`, `mc.phaseIteration`, `mc.runId` | Current iteration identity |
+| `mc.taskConfig` | JSON descriptor for this run (project path, train/val lists, detector overrides) |
+
+On ACTION activation, the engine **injects** `mc.taskConfig` into worker `input_json` (top-level payload or `mcTaskConfig` property) so centroid/detector workers receive the stratified partition for **that** iteration without re-rolling the split.
+
+Schema migration: [`wf_monte_carlo_support.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_monte_carlo_support.sql).
+
+#### Example workflow topology (`MethylValidationFlow`)
+
+Seed: [`workflow_methylvalidation_seed.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/workflow_methylvalidation_seed.sql)
+
+```mermaid
+flowchart TD
+  root["SEQUENCE mv_root"]
+  root --> feat["REPEAT mv_feature_loop\nN = featureIterations"]
+  root --> fin["SEQUENCE mv_final_sequence\nfull train set"]
+  feat --> fseq["SEQUENCE per iteration"]
+  fseq --> fc["ACTION centroid\nmc.taskConfig"]
+  fseq --> fd["ACTION detector\nmc.taskConfig"]
+  fin --> fc2["centroid"]
+  fin --> fd2["detector"]
+  fin --> map["mapper"]
+  fin --> enr["enricher"]
+  fin --> prog["progression"]
+```
+
+Each **REPEAT** body receives a distinct `mc.taskConfig` describing one stratified draw. The **final sequence** runs once on the full sample set after all feature-stability iterations complete.
+
+**Future composition:** outer `REPEAT` (or `FOREACH` over `wf.monte_carlo_run` rows) × inner `FOREACH` over chromosomes/comparisons — see [`wf_foreach_design.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_foreach_design.md).
+
+Example `context_json` fragment for MC instances:
+
+```json
+{
+  "monteCarlo": {
+    "baseProject": "/work/study/project.json",
+    "layout": "binary",
+    "seed": 42,
+    "featureIterations": 30,
+    "qualityIterations": 20
+  }
+}
+```
+
+Project-level MC parameters also live under `step_config.validation` in the portal schema (`validation_monte_carlo` in [`validation.schema.json`](/home/ubuntu/MethylPipeline/schemas/config/validation.schema.json)): `train_fraction`, `n_iterations`, cohort CSVs, and regulatory metadata.
 
 ### Cluster metadata in DB
 
@@ -492,7 +657,8 @@ sequenceDiagram
   W->>MT: POST /v1/workers/tasks/id/submit
   MT->>DB: sp_worker_submit_result
   DB->>DB: wf_engine_on_action_complete
-  Note over DB: activate next READY nodes
+  Note over DB: apply output bindings to scope_variable
+  Note over DB: activate next READY nodes (IF/SWITCH use scope)
   MT-->>W: accepted, instance_status
 ```
 
@@ -592,11 +758,13 @@ flowchart LR
 | Document | Topic |
 |----------|--------|
 | [`workflow_engine/sql/DataDrivenPipeline.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/DataDrivenPipeline.md) | FOREACH workflow, deploy order |
+| [`workflow_engine/WORKFLOW_ENGINE_DELPHI.md`](/home/ubuntu/MethylPipeline/workflow_engine/WORKFLOW_ENGINE_DELPHI.md) | Scope variables, IF/SWITCH/WHILE, Monte Carlo bridge |
 | [`workflow_engine/CAPABILITY_CHECK.md`](/home/ubuntu/MethylPipeline/workflow_engine/CAPABILITY_CHECK.md) | Engine capabilities vs gaps |
+| [`docs/theory/chapters/05-methylpredictor-and-validation.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/05-methylpredictor-and-validation.qmd) | Theory: Monte Carlo splits and validation |
 | [`docs/theory/chapters/11-project-configuration.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/11-project-configuration.qmd) | Theory: project configuration |
 | [`tools/methyl-config-editor/README.md`](/home/ubuntu/MethylPipeline/tools/methyl-config-editor/README.md) | Config editor setup |
 | [`workflow_engine/README.md`](/home/ubuntu/MethylPipeline/workflow_engine/README.md) | SQL deploy order |
 
 ---
 
-*Document version: aligns with `DataDrivenPipeline` seed, `FOREACH` engine support, and `wf` schema as of milestone PCa OvR per-chromosome fan-out.*
+*Document version: aligns with `DataDrivenPipeline` seed, `FOREACH` engine support, scoped-variable write-path parity, and Monte Carlo plan/run tables.*
