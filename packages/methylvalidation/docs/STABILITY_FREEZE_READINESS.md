@@ -15,7 +15,7 @@ After Monte Carlo **stability** and production **freeze**, review artifacts befo
 Set `step_config.validation.require_complete_enricher: true` to treat incomplete Enrichr as **no_go** (default: warning only).
 
 **Important:** MC **stability** does not run disease progression; progression is produced during **freeze** (and downstream mapper/enricher) when `step_config.progression.enabled` is true. See [`USAGE.md`](USAGE.md).
-For observed-hybrid mapped-family model builds (`feature_family_set != dmp`), freeze should also emit mapper annotation cache metadata (`production_summary.json -> mapper_annotation_cache`) and a cache CSV under `production/model_bundle/`.
+For observed-hybrid mapped-family model builds (`feature_family_set != dmp_scored`), freeze should also emit mapper annotation cache metadata (`production_summary.json -> mapper_annotation_cache`) and a cache CSV under `production/model_bundle/`.
 
 ## CLI
 

@@ -377,11 +377,22 @@ Example (`step_config.validation`) using all covariate types:
 
 When `step_config.validation.backend_profiles.<backend>.params.feature_mode` is `observed_hybrid`, feature schema is controlled by:
 
-- `feature_family_set`:
-  - `dmp`: fixed DMP-family observed metrics (legacy behavior), including per-class `weighted_cosine_distance_to_centroid__{class}` columns computed from methyl-centroid H5 profiles at classifier-panel DMP loci (`dmps-*-classifier.csv`)
+- `feature_family_set` (applies only when `feature_mode=observed_hybrid`; ignored for `raw_dmp` / `raw_gene`):
+  - `dmp_scored`: aggregated DMP-family observed metrics (`max_weighted_directional_score`, etc.), including per-class `weighted_cosine_distance_to_centroid__{class}` columns from methyl-centroid H5 profiles at classifier-panel DMP loci (`dmps-*-classifier.csv`). Legacy alias: `dmp`.
   - `gene`: one feature per mapped gene (`gene::<GENE>`)
   - `structural`: one feature per mapped gene-annotation key (`struct::<GENE>::<FEATURE>`)
-  - `dmp+gene`, `dmp+structural`, `hybrid-all`: deterministic concatenation of families
+  - `gene_scored`: comparison-level `gene_directional_score__{comparison}` from frozen gene panels
+  - `dmp_scored+gene_scored`: DMP-family metrics plus gene-directional scores (legacy alias: `dmp+gene_scored`)
+  - `dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`: deterministic concatenation of families (legacy aliases: `dmp+gene`, `dmp+structural`)
+
+| Legacy alias | Canonical token |
+|--------------|-----------------|
+| `dmp` | `dmp_scored` |
+| `dmp+gene` | `dmp_scored+gene` |
+| `dmp+structural` | `dmp_scored+structural` |
+| `dmp+gene_scored` | `dmp_scored+gene_scored` |
+
+Project JSON may still use legacy tokens; validators and `methyl-validation-migrate-backend-config` rewrite them to canonical names on load.
 
 For `gene`/`structural` families, per-sample mapped features are computed as signed weighted centered methylation over observed loci:
 
@@ -389,7 +400,7 @@ For `gene`/`structural` families, per-sample mapped features are computed as sig
 
 Operational notes:
 
-- For non-`dmp` families, model build requires mapper annotations from freeze (`mapper_annotation_csv`); this is enforced in trainer flows.
+- For non-`dmp_scored`-only families, model build requires mapper annotations from freeze (`mapper_annotation_csv`); this is enforced in trainer flows.
 - Freeze-time mapper cache can also carry per-gene mapper aggregates from `all-gene_name-combined.csv` through `step_config.model_bundle.mapper_gene_columns` (fallback `step_config.mapper.mapper_gene_columns`), defaulting to `["gene_importance", "gene_effect_signed_wsum", "gene_direction", "gene_effect_abs_wsum", "gene_support_n", "gene_score", "mean_effect_size", "gene_effect_compound", "gene_feature_effect_compound"]`; set `[]` to disable.
 - Freeze now also writes and wires:
   - `step_config.model_bundle.fixed_gene_panel` -> `production/model_bundle/frozen_genes_production.csv`
@@ -469,6 +480,8 @@ Canonical nested JSON example:
 Legacy backend keys are rejected at config validation time. Use:
 
 `methyl-validation-migrate-backend-config /path/to/project.json --in-place`
+
+After upgrading, run migration to canonicalize legacy `feature_family_set` tokens (`dmp` → `dmp_scored`, etc.) in `backend_profiles.*.params`.
 
 ### Optional: `step_config.progression`
 

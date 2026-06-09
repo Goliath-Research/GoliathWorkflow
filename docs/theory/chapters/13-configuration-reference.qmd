@@ -292,8 +292,8 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `model_weight_column` | str | `"effect_size"` | — | Legacy compatibility field. Tabular/generative model bundle weighting is canonicalized to detector `effect_size`. |
 | `tabular_model_type` | str | `"random_forest"` | `"random_forest"`, `"hist_gradient_boosting"`, `"logistic_regression"`, `"xgboost"` | Model type when `model_backend="tabular_sklearn"`. |
 | `tabular_max_dmps` | int \| null | `null` | null, `0`, or ≥ 10 | DMP cap for tabular/generative backend training. `null`/`0` keeps all stable loci from the bundle index; positive values keep top loci by descending effect size. |
-| `feature_family_set` | str | `"dmp"` | `dmp`, `gene`, `structural`, `dmp+gene`, `dmp+structural`, `hybrid-all` | Feature-family contract for observed-hybrid model bundles and predictors. |
-| `ecdf_aggregated_enabled` | bool \| null | `null` | — | Toggle aggregated ECDF OvR for `model_backend=ecdf`. `null` auto-enables when `feature_mode=observed_hybrid` and `feature_family_set!=dmp`. |
+| `feature_family_set` | str | `"dmp_scored"` | `dmp_scored`, `gene`, `structural`, `gene_scored`, `dmp_scored+gene`, `dmp_scored+structural`, `dmp_scored+gene_scored`, `hybrid-all` (legacy aliases `dmp`, `dmp+gene`, `dmp+structural`, `dmp+gene_scored` accepted) | Feature-family contract for observed-hybrid model bundles and predictors. Applies only when `feature_mode=observed_hybrid`. |
+| `ecdf_aggregated_enabled` | bool \| null | `null` | — | Toggle aggregated ECDF OvR for `model_backend=ecdf`. `null` auto-enables when `feature_mode=observed_hybrid` and `feature_family_set!=dmp_scored`. |
 | `ecdf_aggregated_n_bins` | int | `100` | [8, 512] | Histogram bin count for aggregated ECDF OvR package training. |
 | `covariates_path` | str \| null | `null` | — | Optional covariates sidecar (`.h5` preferred, `.csv` accepted) for tabular or generative backend. |
 | `covariate_id_column` | str | `"sample_id"` | — | Covariates column used to join rows with sample basenames. |

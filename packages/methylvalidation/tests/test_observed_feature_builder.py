@@ -720,8 +720,27 @@ def test_observed_feature_builder_dynamic_schema_is_deterministic(monkeypatch):
 
 def test_family_flags_gene_scored_tokens():
     assert observed_feature_builder._family_flags("gene_scored") == (False, False, False, True)
-    assert observed_feature_builder._family_flags("dmp+gene_scored") == (True, False, False, True)
+    assert observed_feature_builder._family_flags("dmp_scored+gene_scored") == (True, False, False, True)
     assert observed_feature_builder._family_flags("hybrid-all") == (True, True, True, False)
+
+
+def test_normalize_feature_family_set_canonical_and_legacy_aliases():
+    assert observed_feature_builder.normalize_feature_family_set("dmp_scored") == "dmp_scored"
+    assert observed_feature_builder.normalize_feature_family_set("dmp") == "dmp_scored"
+    assert (
+        observed_feature_builder.normalize_feature_family_set("dmp+gene_scored")
+        == "dmp_scored+gene_scored"
+    )
+    assert observed_feature_builder.normalize_feature_family_set("dmp+gene") == "dmp_scored+gene"
+    assert (
+        observed_feature_builder.normalize_feature_family_set("dmp+structural")
+        == "dmp_scored+structural"
+    )
+    assert observed_feature_builder._family_flags("dmp") == observed_feature_builder._family_flags(
+        "dmp_scored"
+    )
+    with pytest.raises(ValueError, match="Unsupported feature_family_set"):
+        observed_feature_builder.normalize_feature_family_set("unknown_family")
 
 
 def test_gene_scored_feature_names_and_fingerprint():

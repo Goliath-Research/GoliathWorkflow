@@ -311,7 +311,7 @@ Backend selection is driven by `step_config.validation.backend_profiles`. Enable
 `--post-model-validation` supports all model backends (`ecdf`, `tabular_sklearn`, `generative_hybrid`) and is an optional descriptive stage after final model build.
 Legacy flat backend keys are rejected; migrate old project files with `methyl-validation-migrate-backend-config <project.json> --in-place`.
 
-For `ecdf` backends, observed-hybrid mapped-family runs (`feature_mode=observed_hybrid`, `feature_family_set!=dmp`) use aggregated ECDF OvR package training/prediction; in this mode second-stage ECDF refinement is skipped.
+For `ecdf` backends, observed-hybrid mapped-family runs (`feature_mode=observed_hybrid`, `feature_family_set!=dmp_scored`) use aggregated ECDF OvR package training/prediction; in this mode second-stage ECDF refinement is skipped.
 
 ### Recommended backend-selection defaults (PCa)
 
