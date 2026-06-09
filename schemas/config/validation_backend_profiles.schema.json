@@ -164,6 +164,41 @@
           "title": "Gene Scored Use Region Weight",
           "type": "boolean"
         },
+        "gene_scored_ordered_comparison_labels": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+          "title": "Gene Scored Ordered Comparison Labels"
+        },
+        "gene_scored_contrast_pairs": {
+          "anyOf": [
+            {
+              "items": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional extra directional contrast pairs [[left, right], ...]; emits gene_directional_contrast__{left}__{right} = score(right)-score(left). Auto extreme pair added when K>=2 unless already listed.",
+          "title": "Gene Scored Contrast Pairs"
+        },
         "mapper_gene_columns": {
           "items": {
             "type": "string"
@@ -464,6 +499,41 @@
           "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
           "title": "Gene Scored Use Region Weight",
           "type": "boolean"
+        },
+        "gene_scored_ordered_comparison_labels": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+          "title": "Gene Scored Ordered Comparison Labels"
+        },
+        "gene_scored_contrast_pairs": {
+          "anyOf": [
+            {
+              "items": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional extra directional contrast pairs [[left, right], ...]; emits gene_directional_contrast__{left}__{right} = score(right)-score(left). Auto extreme pair added when K>=2 unless already listed.",
+          "title": "Gene Scored Contrast Pairs"
         },
         "generative_batch_size": {
           "default": 64,
@@ -967,6 +1037,41 @@
           "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
           "title": "Gene Scored Use Region Weight",
           "type": "boolean"
+        },
+        "gene_scored_ordered_comparison_labels": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+          "title": "Gene Scored Ordered Comparison Labels"
+        },
+        "gene_scored_contrast_pairs": {
+          "anyOf": [
+            {
+              "items": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional extra directional contrast pairs [[left, right], ...]; emits gene_directional_contrast__{left}__{right} = score(right)-score(left). Auto extreme pair added when K>=2 unless already listed.",
+          "title": "Gene Scored Contrast Pairs"
         },
         "mapper_gene_columns": {
           "items": {

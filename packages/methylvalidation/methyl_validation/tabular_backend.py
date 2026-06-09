@@ -353,6 +353,8 @@ def train_tabular_model(
     gene_scored_min_support_n: int = 2,
     gene_scored_use_region_weight: bool = True,
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
+    gene_scored_ordered_comparison_labels: Optional[List[str]] = None,
+    gene_scored_contrast_pairs: Optional[List[List[str]]] = None,
     region_directional_region_types: Optional[List[str]] = None,
     region_directional_min_loci: int = 1,
     observed_feature_quality_columns: Optional[List[str]] = None,
@@ -447,6 +449,7 @@ def train_tabular_model(
     observed_cancer_class_labels: List[str] = []
     observed_anchor_strategy: Optional[str] = None
     observed_feature_order_fingerprint: Optional[str] = None
+    gene_scored_progression_order: Optional[List[str]] = None
     feature_fill_values: Optional[np.ndarray] = None
     X = np.zeros((0, 0), dtype=np.float32)
 
@@ -468,6 +471,9 @@ def train_tabular_model(
                 gene_scored_min_support_n=int(gene_scored_min_support_n),
                 gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
                 gene_scored_gene_weight=str(gene_scored_gene_weight),
+                gene_scored_ordered_comparison_labels=gene_scored_ordered_comparison_labels,
+                gene_scored_contrast_pairs=gene_scored_contrast_pairs,
+                project_json=project_json,
                 region_directional_region_types=region_directional_region_types,
                 region_directional_min_loci=int(max(1, region_directional_min_loci)),
                 observed_feature_quality_columns=observed_feature_quality_columns,
@@ -503,6 +509,12 @@ def train_tabular_model(
         "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
         "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
         "gene_scored_gene_weight": str(gene_scored_gene_weight).strip().lower(),
+        "gene_scored_ordered_comparison_labels": (
+            [str(x) for x in gene_scored_ordered_comparison_labels]
+            if gene_scored_ordered_comparison_labels
+            else None
+        ),
+        "gene_scored_contrast_pairs": gene_scored_contrast_pairs,
         "region_directional_region_types": [
             str(x) for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
         ],
@@ -594,6 +606,9 @@ def train_tabular_model(
                         if train_meta.get("observed_feature_order_fingerprint") is not None
                         else None
                     )
+                    raw_prog_order = train_meta.get("gene_scored_progression_order")
+                    if isinstance(raw_prog_order, list) and raw_prog_order:
+                        gene_scored_progression_order = [str(x) for x in raw_prog_order]
                     if feature_mode_norm == "observed_hybrid":
                         if (
                             not observed_feature_names
@@ -611,6 +626,11 @@ def train_tabular_model(
                                 dmp_df=dmp_df,
                                 frozen_gene_panel_df=frozen_gene_panel_df,
                                 gene_scored_min_support_n=int(gene_scored_min_support_n),
+                                gene_scored_ordered_comparison_labels=(
+                                    gene_scored_progression_order or gene_scored_ordered_comparison_labels
+                                ),
+                                gene_scored_contrast_pairs=gene_scored_contrast_pairs,
+                                project_json=project_json,
                                 region_directional_region_types=region_directional_region_types,
                                 region_directional_min_loci=int(max(1, region_directional_min_loci)),
                                 observed_feature_quality_columns=observed_feature_quality_columns,
@@ -682,6 +702,9 @@ def train_tabular_model(
                 gene_scored_min_support_n=int(gene_scored_min_support_n),
                 gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
                 gene_scored_gene_weight=str(gene_scored_gene_weight),
+                gene_scored_ordered_comparison_labels=gene_scored_ordered_comparison_labels,
+                gene_scored_contrast_pairs=gene_scored_contrast_pairs,
+                project_json=project_json,
                 region_directional_region_types=region_directional_region_types,
                 region_directional_min_loci=int(max(1, region_directional_min_loci)),
                 observed_feature_quality_columns=observed_feature_quality_columns,
@@ -698,6 +721,12 @@ def train_tabular_model(
                 training_feature_names_obs,
             )
             observed_feature_report = dict(feat.report)
+            gene_scored_progression_order = None
+            gene_scored_report = observed_feature_report.get("gene_scored")
+            if isinstance(gene_scored_report, dict):
+                raw_order = gene_scored_report.get("progression_order")
+                if isinstance(raw_order, list) and raw_order:
+                    gene_scored_progression_order = [str(x) for x in raw_order]
             observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
             observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
             observed_cancer_reference = anchors.cancer_reference_vector.astype(np.float32)
@@ -798,6 +827,13 @@ def train_tabular_model(
                 "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
                 "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
                 "gene_scored_gene_weight": str(gene_scored_gene_weight).strip().lower(),
+                "gene_scored_ordered_comparison_labels": (
+                    [str(x) for x in gene_scored_ordered_comparison_labels]
+                    if gene_scored_ordered_comparison_labels
+                    else None
+                ),
+                "gene_scored_contrast_pairs": gene_scored_contrast_pairs,
+                "gene_scored_progression_order": gene_scored_progression_order,
                 "region_directional_region_types": [
                     str(x)
                     for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
@@ -893,6 +929,9 @@ def train_tabular_model(
                     gene_scored_min_support_n=int(gene_scored_min_support_n),
                     gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
                     gene_scored_gene_weight=str(gene_scored_gene_weight),
+                    gene_scored_ordered_comparison_labels=gene_scored_ordered_comparison_labels,
+                    gene_scored_contrast_pairs=gene_scored_contrast_pairs,
+                    project_json=project_json,
                     region_directional_region_types=region_directional_region_types,
                     region_directional_min_loci=int(max(1, region_directional_min_loci)),
                     observed_feature_quality_columns=observed_feature_quality_columns,
@@ -1025,6 +1064,13 @@ def train_tabular_model(
             "gene_scored_min_support_n": int(max(1, gene_scored_min_support_n)),
             "gene_scored_use_region_weight": bool(gene_scored_use_region_weight),
             "gene_scored_gene_weight": str(gene_scored_gene_weight).strip().lower(),
+            "gene_scored_ordered_comparison_labels": (
+                [str(x) for x in gene_scored_ordered_comparison_labels]
+                if gene_scored_ordered_comparison_labels
+                else None
+            ),
+            "gene_scored_contrast_pairs": gene_scored_contrast_pairs,
+            "gene_scored_progression_order": gene_scored_progression_order,
             "region_directional_region_types": [
                 str(x) for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
             ],
@@ -1223,6 +1269,12 @@ def predict_tabular_model_from_project(
             gene_scored_gene_weight=str(
                 meta.get("gene_scored_gene_weight", "importance_x_sqrt_support")
             ),
+            gene_scored_ordered_comparison_labels=(
+                meta.get("gene_scored_progression_order")
+                or meta.get("gene_scored_ordered_comparison_labels")
+            ),
+            gene_scored_contrast_pairs=meta.get("gene_scored_contrast_pairs"),
+            project_json=project_json,
             region_directional_region_types=meta.get("region_directional_region_types"),
             region_directional_min_loci=int(meta.get("region_directional_min_loci", 1)),
             observed_feature_quality_columns=meta.get("observed_feature_quality_columns"),

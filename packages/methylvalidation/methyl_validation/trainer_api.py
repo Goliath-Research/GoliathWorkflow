@@ -225,6 +225,12 @@ def build_model_backend_steps(
                     gene_scored_gene_weight=(
                         config.gene_scored_gene_weight if config is not None else "importance_x_sqrt_support"
                     ),
+                    gene_scored_ordered_comparison_labels=(
+                        config.gene_scored_ordered_comparison_labels if config is not None else None
+                    ),
+                    gene_scored_contrast_pairs=(
+                        config.gene_scored_contrast_pairs if config is not None else None
+                    ),
                     region_directional_region_types=(
                         config.region_directional_region_types if config is not None else None
                     ),
@@ -393,6 +399,12 @@ def build_model_backend_steps(
                     ),
                     gene_scored_gene_weight=(
                         config.gene_scored_gene_weight if config is not None else "importance_x_sqrt_support"
+                    ),
+                    gene_scored_ordered_comparison_labels=(
+                        config.gene_scored_ordered_comparison_labels if config is not None else None
+                    ),
+                    gene_scored_contrast_pairs=(
+                        config.gene_scored_contrast_pairs if config is not None else None
                     ),
                     region_directional_region_types=(
                         config.region_directional_region_types if config is not None else None

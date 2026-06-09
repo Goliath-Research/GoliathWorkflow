@@ -157,6 +157,21 @@ class BackendSharedParams(BaseModel):
             "importance_x_sqrt_support or importance_only."
         ),
     )
+    gene_scored_ordered_comparison_labels: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Optional override for gene_scored progression order. When null, order is taken from "
+            "step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels()."
+        ),
+    )
+    gene_scored_contrast_pairs: Optional[List[List[str]]] = Field(
+        default=None,
+        description=(
+            "Optional extra directional contrast pairs [[left, right], ...]; emits "
+            "gene_directional_contrast__{left}__{right} = score(right)-score(left). "
+            "Auto extreme pair added when K>=2 unless already listed."
+        ),
+    )
     region_directional_region_types: List[str] = Field(
         default_factory=lambda: ["promoter", "exon", "intron", "terminator"],
         description=(
@@ -223,6 +238,17 @@ class BackendSharedParams(BaseModel):
         if normalized not in allowed:
             raise ValueError(f"gene_scored_gene_weight must be one of {sorted(allowed)}")
         return normalized
+
+    @field_validator("gene_scored_contrast_pairs")
+    @classmethod
+    def _validate_gene_scored_contrast_pairs_profile(
+        cls, value: Optional[List[List[str]]]
+    ) -> Optional[List[List[str]]]:
+        if value is None:
+            return None
+        from .gene_scored_features import normalize_gene_scored_contrast_pairs
+
+        return [[left, right] for left, right in normalize_gene_scored_contrast_pairs(value)]
 
     @field_validator("region_directional_region_types")
     @classmethod
@@ -1155,6 +1181,21 @@ class MonteCarloConfig(BaseModel):
             "importance_x_sqrt_support or importance_only."
         ),
     )
+    gene_scored_ordered_comparison_labels: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Optional override for gene_scored progression order. When null, order is taken from "
+            "step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels()."
+        ),
+    )
+    gene_scored_contrast_pairs: Optional[List[List[str]]] = Field(
+        default=None,
+        description=(
+            "Optional extra directional contrast pairs [[left, right], ...]; emits "
+            "gene_directional_contrast__{left}__{right} = score(right)-score(left). "
+            "Auto extreme pair added when K>=2 unless already listed."
+        ),
+    )
     region_directional_region_types: List[str] = Field(
         default_factory=lambda: ["promoter", "exon", "intron", "terminator"],
         description=(
@@ -1362,6 +1403,8 @@ class MonteCarloConfig(BaseModel):
             "gene_scored_min_support_n",
             "gene_scored_use_region_weight",
             "gene_scored_gene_weight",
+            "gene_scored_ordered_comparison_labels",
+            "gene_scored_contrast_pairs",
             "region_directional_region_types",
             "region_directional_min_loci",
             "observed_feature_quality_columns",
@@ -1492,6 +1535,8 @@ class MonteCarloConfig(BaseModel):
             "gene_scored_min_support_n",
             "gene_scored_use_region_weight",
             "gene_scored_gene_weight",
+            "gene_scored_ordered_comparison_labels",
+            "gene_scored_contrast_pairs",
             "region_directional_region_types",
             "region_directional_min_loci",
             "observed_feature_quality_columns",
@@ -1593,6 +1638,17 @@ class MonteCarloConfig(BaseModel):
         if normalized not in allowed:
             raise ValueError(f"gene_scored_gene_weight must be one of {sorted(allowed)}")
         return normalized
+
+    @field_validator("gene_scored_contrast_pairs")
+    @classmethod
+    def _validate_gene_scored_contrast_pairs_profile(
+        cls, value: Optional[List[List[str]]]
+    ) -> Optional[List[List[str]]]:
+        if value is None:
+            return None
+        from .gene_scored_features import normalize_gene_scored_contrast_pairs
+
+        return [[left, right] for left, right in normalize_gene_scored_contrast_pairs(value)]
 
     @field_validator("region_directional_region_types")
     @classmethod
