@@ -71,12 +71,25 @@ For each project `{output_base}/{project_name}/` (default `/work/prostate-cancer
 After both projects finish, compare overlap with:
 
 ```bash
+# Discovery DMPs (default; broad biology panel)
 python tools/compare_analyte_outputs.py \
   --plasma-root /work/prostate-cancer/Plasma_healthy_vs_PCa \
   --buffy-root /work/prostate-cancer/Buffy_healthy_vs_PCa \
   --comparison all/PCa \
-  --out /work/prostate-cancer/analyte_comparison/all_vs_PCa/
+  --out /work/prostate-cancer/analyte_comparison/all_vs_PCa/discovery
+
+# Classifier DMPs (model candidates; same methyl-detector run, no re-run)
+python tools/compare_analyte_outputs.py \
+  --plasma-root /work/prostate-cancer/Plasma_healthy_vs_PCa \
+  --buffy-root /work/prostate-cancer/Buffy_healthy_vs_PCa \
+  --comparison all/PCa \
+  --dmp-source classifier \
+  --out /work/prostate-cancer/analyte_comparison/all_vs_PCa/classifier
 ```
+
+`--dmp-source` accepts `discovery` (default), `classifier`, or `classifier-extended`.
+Mapper gene overlap still reflects whichever DMP panel methyl-mapper used (`step_config.mapper.csv_pattern`);
+re-run methyl-mapper with `dmps-*-classifier.csv` only if you need classifier-based gene overlap.
 
 Outputs: `dmp_overlap_summary.json`, `gene_overlap_summary.json`, and CSV lists of shared/private DMP loci and genes.
 

@@ -2,9 +2,16 @@
 """
 Compare raw DMP and mapper gene outputs between plasma and buffy-coat project runs.
 
-Expects single-run discovery artifacts under each project root:
-  detections/<control>/<disease>/dmps-*-discovery.csv
-  mapper/<control>/<disease>/all-gene_name-combined.csv
+DMP locus overlap reads per-chromosome CSVs under detections/<control>/<disease>/.
+Both discovery and classifier panels are written by methyl-detector (dual export); use
+--dmp-source to choose which set to compare without re-running detection.
+
+  dmps-*-discovery.csv           broad biology / mapper input (default)
+  dmps-*-classifier.csv          core model panel (final model candidates)
+  dmps-*-classifier-extended.csv classifier + margin (mapper/gene FeatureCuts)
+
+Mapper gene overlap uses mapper/<control>/<disease>/all-gene_name-combined.csv from
+whatever DMP panel methyl-mapper was run with (project step_config.mapper.csv_pattern).
 """
 
 from __future__ import annotations
@@ -18,6 +25,12 @@ import pandas as pd
 
 
 LocusKey = Tuple[str, int]
+
+DMP_SOURCE_PATTERNS: Dict[str, str] = {
+    "discovery": "dmps-*-discovery.csv",
+    "classifier": "dmps-*-classifier.csv",
+    "classifier-extended": "dmps-*-classifier-extended.csv",
+}
 
 
 def _normalize_chrom(value: object) -> str:
@@ -38,15 +51,23 @@ def _locus_key(row: pd.Series) -> Optional[LocusKey]:
         return None
 
 
-def load_discovery_dmps(detection_dir: Path) -> pd.DataFrame:
-    files = sorted(detection_dir.glob("dmps-*-discovery.csv"))
+def load_dmps(detection_dir: Path, dmp_source: str) -> pd.DataFrame:
+    pattern = DMP_SOURCE_PATTERNS[dmp_source]
+    files = sorted(detection_dir.glob(pattern))
+    if dmp_source == "classifier":
+        files = [p for p in files if not p.stem.endswith("-classifier-extended")]
     if not files:
-        raise FileNotFoundError(f"No dmps-*-discovery.csv under {detection_dir}")
+        raise FileNotFoundError(f"No {pattern} under {detection_dir}")
     frames = [pd.read_csv(path) for path in files]
     combined = pd.concat(frames, ignore_index=True)
     combined["_locus"] = combined.apply(_locus_key, axis=1)
     combined = combined.dropna(subset=["_locus"])
     return combined
+
+
+def load_discovery_dmps(detection_dir: Path) -> pd.DataFrame:
+    """Backward-compatible alias."""
+    return load_dmps(detection_dir, "discovery")
 
 
 def locus_set(df: pd.DataFrame) -> Set[LocusKey]:
@@ -164,6 +185,15 @@ def parse_args() -> argparse.Namespace:
         default="all/PCa",
         help="Comparison subpath under detections/ and mapper/ (default: all/PCa)",
     )
+    parser.add_argument(
+        "--dmp-source",
+        choices=sorted(DMP_SOURCE_PATTERNS),
+        default="discovery",
+        help=(
+            "Which detector DMP export to compare (default: discovery). "
+            "classifier = core model panel; no re-run needed if methyl-detector already ran."
+        ),
+    )
     parser.add_argument("--out", type=Path, required=True, help="Directory for summary JSON and CSV lists")
     parser.add_argument("--gene-column", default="gene_name", help="Mapper gene column (default: gene_name)")
     return parser.parse_args()
@@ -179,14 +209,16 @@ def main() -> None:
     plasma_mapper = args.plasma_root / "mapper" / rel
     buffy_mapper = args.buffy_root / "mapper" / rel
 
-    plasma_dmps = load_discovery_dmps(plasma_detection)
-    buffy_dmps = load_discovery_dmps(buffy_detection)
+    plasma_dmps = load_dmps(plasma_detection, args.dmp_source)
+    buffy_dmps = load_dmps(buffy_detection, args.dmp_source)
     plasma_loci = locus_set(plasma_dmps)
     buffy_loci = locus_set(buffy_dmps)
     shared_loci = plasma_loci & buffy_loci
 
     dmp_summary: Dict[str, Any] = {
         "comparison": args.comparison,
+        "dmp_source": args.dmp_source,
+        "dmp_glob": DMP_SOURCE_PATTERNS[args.dmp_source],
         "plasma_root": str(args.plasma_root),
         "buffy_root": str(args.buffy_root),
         "plasma_dmp_count": len(plasma_loci),
