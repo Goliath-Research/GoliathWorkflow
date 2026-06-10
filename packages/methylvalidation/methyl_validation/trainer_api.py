@@ -231,6 +231,21 @@ def build_model_backend_steps(
                     gene_scored_contrast_pairs=(
                         config.gene_scored_contrast_pairs if config is not None else None
                     ),
+                    structural_scored_min_support_n=(
+                        config.structural_scored_min_support_n if config is not None else 2
+                    ),
+                    structural_scored_use_region_weight=(
+                        config.structural_scored_use_region_weight if config is not None else True
+                    ),
+                    structural_scored_weight=(
+                        config.structural_scored_weight if config is not None else "compound_x_sqrt_support"
+                    ),
+                    structural_scored_ordered_comparison_labels=(
+                        config.structural_scored_ordered_comparison_labels if config is not None else None
+                    ),
+                    structural_scored_contrast_pairs=(
+                        config.structural_scored_contrast_pairs if config is not None else None
+                    ),
                     region_directional_region_types=(
                         config.region_directional_region_types if config is not None else None
                     ),
@@ -405,6 +420,21 @@ def build_model_backend_steps(
                     ),
                     gene_scored_contrast_pairs=(
                         config.gene_scored_contrast_pairs if config is not None else None
+                    ),
+                    structural_scored_min_support_n=(
+                        config.structural_scored_min_support_n if config is not None else 2
+                    ),
+                    structural_scored_use_region_weight=(
+                        config.structural_scored_use_region_weight if config is not None else True
+                    ),
+                    structural_scored_weight=(
+                        config.structural_scored_weight if config is not None else "compound_x_sqrt_support"
+                    ),
+                    structural_scored_ordered_comparison_labels=(
+                        config.structural_scored_ordered_comparison_labels if config is not None else None
+                    ),
+                    structural_scored_contrast_pairs=(
+                        config.structural_scored_contrast_pairs if config is not None else None
                     ),
                     region_directional_region_types=(
                         config.region_directional_region_types if config is not None else None

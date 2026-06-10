@@ -184,41 +184,6 @@
           "title": "Gene Feature Loading",
           "type": "string"
         },
-        "gene_scored_gene_weight": {
-          "default": "importance_x_sqrt_support",
-          "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
-          "title": "Gene Scored Gene Weight",
-          "type": "string"
-        },
-        "gene_scored_min_support_n": {
-          "default": 2,
-          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
-          "minimum": 1,
-          "title": "Gene Scored Min Support N",
-          "type": "integer"
-        },
-        "gene_scored_use_region_weight": {
-          "default": true,
-          "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
-          "title": "Gene Scored Use Region Weight",
-          "type": "boolean"
-        },
-        "gene_scored_ordered_comparison_labels": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
-          "title": "Gene Scored Ordered Comparison Labels"
-        },
         "gene_scored_contrast_pairs": {
           "anyOf": [
             {
@@ -237,6 +202,41 @@
           "default": null,
           "description": "Optional extra directional contrast pairs [[left, right], ...]; emits gene_directional_contrast__{left}__{right} = score(right)-score(left). Auto extreme pair added when K>=2 unless already listed.",
           "title": "Gene Scored Contrast Pairs"
+        },
+        "gene_scored_gene_weight": {
+          "default": "importance_x_sqrt_support",
+          "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
+          "title": "Gene Scored Gene Weight",
+          "type": "string"
+        },
+        "gene_scored_min_support_n": {
+          "default": 2,
+          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
+          "minimum": 1,
+          "title": "Gene Scored Min Support N",
+          "type": "integer"
+        },
+        "gene_scored_ordered_comparison_labels": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+          "title": "Gene Scored Ordered Comparison Labels"
+        },
+        "gene_scored_use_region_weight": {
+          "default": true,
+          "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
+          "title": "Gene Scored Use Region Weight",
+          "type": "boolean"
         },
         "mapper_gene_columns": {
           "items": {
@@ -355,18 +355,72 @@
         },
         "region_directional_min_loci": {
           "default": 1,
-          "description": "Minimum panel loci per (comparison, region) required to emit a region_directional_score column.",
+          "description": "Minimum panel loci in the classifier DMP index required to emit structural_scored columns for a (comparison, region) pair.",
           "minimum": 1,
           "title": "Region Directional Min Loci",
           "type": "integer"
         },
         "region_directional_region_types": {
-          "description": "Structural region types for region_directional_score__{comparison}__{region} when feature_family_set includes gene_scored.",
+          "description": "Structural region types considered when building structural_scored features (feature_family_set structural_scored or dmp_scored+structural_scored).",
           "items": {
             "type": "string"
           },
           "title": "Region Directional Region Types",
           "type": "array"
+        },
+        "structural_scored_contrast_pairs": {
+          "anyOf": [
+            {
+              "items": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional extra directional contrast pairs [[left, right], ...] per region type; emits structural_directional_contrast__{left}__{right}__{region}. Auto extreme pair added when K>=2 unless already listed.",
+          "title": "Structural Scored Contrast Pairs"
+        },
+        "structural_scored_min_support_n": {
+          "default": 2,
+          "description": "Minimum n_dmps_in_feature for a gene-feature row to enter the structural_scored panel (feature_family_set structural_scored or dmp_scored+structural_scored).",
+          "minimum": 1,
+          "title": "Structural Scored Min Support N",
+          "type": "integer"
+        },
+        "structural_scored_ordered_comparison_labels": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override for structural_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+          "title": "Structural Scored Ordered Comparison Labels"
+        },
+        "structural_scored_use_region_weight": {
+          "default": true,
+          "description": "Multiply per-locus weights by region_weight when building structural_directional_score features.",
+          "title": "Structural Scored Use Region Weight",
+          "type": "boolean"
+        },
+        "structural_scored_weight": {
+          "default": "compound_x_sqrt_support",
+          "description": "Gene-feature weighting when pooling to structural_directional_score: compound_x_sqrt_support or compound_only.",
+          "title": "Structural Scored Weight",
+          "type": "string"
         },
         "tabular_max_dmps": {
           "anyOf": [
@@ -520,41 +574,6 @@
           "title": "Gene Feature Loading",
           "type": "string"
         },
-        "gene_scored_gene_weight": {
-          "default": "importance_x_sqrt_support",
-          "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
-          "title": "Gene Scored Gene Weight",
-          "type": "string"
-        },
-        "gene_scored_min_support_n": {
-          "default": 2,
-          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
-          "minimum": 1,
-          "title": "Gene Scored Min Support N",
-          "type": "integer"
-        },
-        "gene_scored_use_region_weight": {
-          "default": true,
-          "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
-          "title": "Gene Scored Use Region Weight",
-          "type": "boolean"
-        },
-        "gene_scored_ordered_comparison_labels": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
-          "title": "Gene Scored Ordered Comparison Labels"
-        },
         "gene_scored_contrast_pairs": {
           "anyOf": [
             {
@@ -573,6 +592,41 @@
           "default": null,
           "description": "Optional extra directional contrast pairs [[left, right], ...]; emits gene_directional_contrast__{left}__{right} = score(right)-score(left). Auto extreme pair added when K>=2 unless already listed.",
           "title": "Gene Scored Contrast Pairs"
+        },
+        "gene_scored_gene_weight": {
+          "default": "importance_x_sqrt_support",
+          "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
+          "title": "Gene Scored Gene Weight",
+          "type": "string"
+        },
+        "gene_scored_min_support_n": {
+          "default": 2,
+          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
+          "minimum": 1,
+          "title": "Gene Scored Min Support N",
+          "type": "integer"
+        },
+        "gene_scored_ordered_comparison_labels": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+          "title": "Gene Scored Ordered Comparison Labels"
+        },
+        "gene_scored_use_region_weight": {
+          "default": true,
+          "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
+          "title": "Gene Scored Use Region Weight",
+          "type": "boolean"
         },
         "generative_batch_size": {
           "default": 64,
@@ -735,18 +789,72 @@
         },
         "region_directional_min_loci": {
           "default": 1,
-          "description": "Minimum panel loci per (comparison, region) required to emit a region_directional_score column.",
+          "description": "Minimum panel loci in the classifier DMP index required to emit structural_scored columns for a (comparison, region) pair.",
           "minimum": 1,
           "title": "Region Directional Min Loci",
           "type": "integer"
         },
         "region_directional_region_types": {
-          "description": "Structural region types for region_directional_score__{comparison}__{region} when feature_family_set includes gene_scored.",
+          "description": "Structural region types considered when building structural_scored features (feature_family_set structural_scored or dmp_scored+structural_scored).",
           "items": {
             "type": "string"
           },
           "title": "Region Directional Region Types",
           "type": "array"
+        },
+        "structural_scored_contrast_pairs": {
+          "anyOf": [
+            {
+              "items": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional extra directional contrast pairs [[left, right], ...] per region type; emits structural_directional_contrast__{left}__{right}__{region}. Auto extreme pair added when K>=2 unless already listed.",
+          "title": "Structural Scored Contrast Pairs"
+        },
+        "structural_scored_min_support_n": {
+          "default": 2,
+          "description": "Minimum n_dmps_in_feature for a gene-feature row to enter the structural_scored panel (feature_family_set structural_scored or dmp_scored+structural_scored).",
+          "minimum": 1,
+          "title": "Structural Scored Min Support N",
+          "type": "integer"
+        },
+        "structural_scored_ordered_comparison_labels": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override for structural_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+          "title": "Structural Scored Ordered Comparison Labels"
+        },
+        "structural_scored_use_region_weight": {
+          "default": true,
+          "description": "Multiply per-locus weights by region_weight when building structural_directional_score features.",
+          "title": "Structural Scored Use Region Weight",
+          "type": "boolean"
+        },
+        "structural_scored_weight": {
+          "default": "compound_x_sqrt_support",
+          "description": "Gene-feature weighting when pooling to structural_directional_score: compound_x_sqrt_support or compound_only.",
+          "title": "Structural Scored Weight",
+          "type": "string"
         },
         "tabular_max_dmps": {
           "anyOf": [
@@ -1179,41 +1287,6 @@
           "title": "Gene Feature Loading",
           "type": "string"
         },
-        "gene_scored_gene_weight": {
-          "default": "importance_x_sqrt_support",
-          "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
-          "title": "Gene Scored Gene Weight",
-          "type": "string"
-        },
-        "gene_scored_min_support_n": {
-          "default": 2,
-          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
-          "minimum": 1,
-          "title": "Gene Scored Min Support N",
-          "type": "integer"
-        },
-        "gene_scored_use_region_weight": {
-          "default": true,
-          "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
-          "title": "Gene Scored Use Region Weight",
-          "type": "boolean"
-        },
-        "gene_scored_ordered_comparison_labels": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
-          "title": "Gene Scored Ordered Comparison Labels"
-        },
         "gene_scored_contrast_pairs": {
           "anyOf": [
             {
@@ -1232,6 +1305,41 @@
           "default": null,
           "description": "Optional extra directional contrast pairs [[left, right], ...]; emits gene_directional_contrast__{left}__{right} = score(right)-score(left). Auto extreme pair added when K>=2 unless already listed.",
           "title": "Gene Scored Contrast Pairs"
+        },
+        "gene_scored_gene_weight": {
+          "default": "importance_x_sqrt_support",
+          "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
+          "title": "Gene Scored Gene Weight",
+          "type": "string"
+        },
+        "gene_scored_min_support_n": {
+          "default": 2,
+          "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
+          "minimum": 1,
+          "title": "Gene Scored Min Support N",
+          "type": "integer"
+        },
+        "gene_scored_ordered_comparison_labels": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+          "title": "Gene Scored Ordered Comparison Labels"
+        },
+        "gene_scored_use_region_weight": {
+          "default": true,
+          "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
+          "title": "Gene Scored Use Region Weight",
+          "type": "boolean"
         },
         "mapper_gene_columns": {
           "items": {
@@ -1350,18 +1458,72 @@
         },
         "region_directional_min_loci": {
           "default": 1,
-          "description": "Minimum panel loci per (comparison, region) required to emit a region_directional_score column.",
+          "description": "Minimum panel loci in the classifier DMP index required to emit structural_scored columns for a (comparison, region) pair.",
           "minimum": 1,
           "title": "Region Directional Min Loci",
           "type": "integer"
         },
         "region_directional_region_types": {
-          "description": "Structural region types for region_directional_score__{comparison}__{region} when feature_family_set includes gene_scored.",
+          "description": "Structural region types considered when building structural_scored features (feature_family_set structural_scored or dmp_scored+structural_scored).",
           "items": {
             "type": "string"
           },
           "title": "Region Directional Region Types",
           "type": "array"
+        },
+        "structural_scored_contrast_pairs": {
+          "anyOf": [
+            {
+              "items": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional extra directional contrast pairs [[left, right], ...] per region type; emits structural_directional_contrast__{left}__{right}__{region}. Auto extreme pair added when K>=2 unless already listed.",
+          "title": "Structural Scored Contrast Pairs"
+        },
+        "structural_scored_min_support_n": {
+          "default": 2,
+          "description": "Minimum n_dmps_in_feature for a gene-feature row to enter the structural_scored panel (feature_family_set structural_scored or dmp_scored+structural_scored).",
+          "minimum": 1,
+          "title": "Structural Scored Min Support N",
+          "type": "integer"
+        },
+        "structural_scored_ordered_comparison_labels": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override for structural_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+          "title": "Structural Scored Ordered Comparison Labels"
+        },
+        "structural_scored_use_region_weight": {
+          "default": true,
+          "description": "Multiply per-locus weights by region_weight when building structural_directional_score features.",
+          "title": "Structural Scored Use Region Weight",
+          "type": "boolean"
+        },
+        "structural_scored_weight": {
+          "default": "compound_x_sqrt_support",
+          "description": "Gene-feature weighting when pooling to structural_directional_score: compound_x_sqrt_support or compound_only.",
+          "title": "Structural Scored Weight",
+          "type": "string"
         },
         "tabular_max_dmps": {
           "anyOf": [
@@ -1831,7 +1993,7 @@
     },
     "feature_family_set": {
       "default": "dmp_scored",
-      "description": "For feature_mode=observed_hybrid, controls active feature families: dmp_scored | gene | structural | gene_scored | dmp_scored+gene | dmp_scored+structural | dmp_scored+gene_scored | hybrid-all. Legacy aliases (dmp, dmp+gene_scored, etc.) are accepted.",
+      "description": "For feature_mode=observed_hybrid, controls active feature families: dmp_scored | gene | structural | gene_scored | dmp_scored+gene | dmp_scored+structural | dmp_scored+gene_scored | hybrid-all. Legacy aliases (dmp, dmp+gene_scored, etc.) are accepted and normalized.",
       "title": "Feature Family Set",
       "type": "string"
     },
@@ -1921,41 +2083,6 @@
       "title": "Gene Feature Loading",
       "type": "string"
     },
-    "gene_scored_gene_weight": {
-      "default": "importance_x_sqrt_support",
-      "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
-      "title": "Gene Scored Gene Weight",
-      "type": "string"
-    },
-    "gene_scored_min_support_n": {
-      "default": 2,
-      "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
-      "minimum": 1,
-      "title": "Gene Scored Min Support N",
-      "type": "integer"
-    },
-    "gene_scored_use_region_weight": {
-      "default": true,
-      "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
-      "title": "Gene Scored Use Region Weight",
-      "type": "boolean"
-    },
-    "gene_scored_ordered_comparison_labels": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
-      "title": "Gene Scored Ordered Comparison Labels"
-    },
     "gene_scored_contrast_pairs": {
       "anyOf": [
         {
@@ -1974,6 +2101,41 @@
       "default": null,
       "description": "Optional extra directional contrast pairs [[left, right], ...]; emits gene_directional_contrast__{left}__{right} = score(right)-score(left). Auto extreme pair added when K>=2 unless already listed.",
       "title": "Gene Scored Contrast Pairs"
+    },
+    "gene_scored_gene_weight": {
+      "default": "importance_x_sqrt_support",
+      "description": "Gene-level weighting when pooling to gene_directional_score: importance_x_sqrt_support or importance_only.",
+      "title": "Gene Scored Gene Weight",
+      "type": "string"
+    },
+    "gene_scored_min_support_n": {
+      "default": 2,
+      "description": "Minimum gene_support_n for a gene to enter the gene_scored comparison panel (feature_family_set gene_scored or dmp_scored+gene_scored).",
+      "minimum": 1,
+      "title": "Gene Scored Min Support N",
+      "type": "integer"
+    },
+    "gene_scored_ordered_comparison_labels": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional override for gene_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+      "title": "Gene Scored Ordered Comparison Labels"
+    },
+    "gene_scored_use_region_weight": {
+      "default": true,
+      "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
+      "title": "Gene Scored Use Region Weight",
+      "type": "boolean"
     },
     "generative_batch_size": {
       "default": 64,
@@ -2256,13 +2418,13 @@
     },
     "region_directional_min_loci": {
       "default": 1,
-      "description": "Minimum panel loci per (comparison, region) required to emit a region_directional_score column.",
+      "description": "Minimum panel loci in the classifier DMP index required to emit structural_scored columns for a (comparison, region) pair.",
       "minimum": 1,
       "title": "Region Directional Min Loci",
       "type": "integer"
     },
     "region_directional_region_types": {
-      "description": "Structural region types for region_directional_score__{comparison}__{region} when feature_family_set includes gene_scored.",
+      "description": "Structural region types considered when building structural_scored features (feature_family_set structural_scored or dmp_scored+structural_scored).",
       "items": {
         "type": "string"
       },
@@ -2625,6 +2787,60 @@
       "description": "If true, write three tiered stability outputs under stability/tier_core, stability/tier_extended, stability/tier_exploratory.",
       "title": "Stability Tiers Enabled",
       "type": "boolean"
+    },
+    "structural_scored_contrast_pairs": {
+      "anyOf": [
+        {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional extra directional contrast pairs [[left, right], ...] per region type; emits structural_directional_contrast__{left}__{right}__{region}. Auto extreme pair added when K>=2 unless already listed.",
+      "title": "Structural Scored Contrast Pairs"
+    },
+    "structural_scored_min_support_n": {
+      "default": 2,
+      "description": "Minimum n_dmps_in_feature for a gene-feature row to enter the structural_scored panel (feature_family_set structural_scored or dmp_scored+structural_scored).",
+      "minimum": 1,
+      "title": "Structural Scored Min Support N",
+      "type": "integer"
+    },
+    "structural_scored_ordered_comparison_labels": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional override for structural_scored progression order. When null, order is taken from step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels().",
+      "title": "Structural Scored Ordered Comparison Labels"
+    },
+    "structural_scored_use_region_weight": {
+      "default": true,
+      "description": "Multiply per-locus weights by region_weight when building structural_directional_score features.",
+      "title": "Structural Scored Use Region Weight",
+      "type": "boolean"
+    },
+    "structural_scored_weight": {
+      "default": "compound_x_sqrt_support",
+      "description": "Gene-feature weighting when pooling to structural_directional_score: compound_x_sqrt_support or compound_only.",
+      "title": "Structural Scored Weight",
+      "type": "string"
     },
     "subgroup_columns": {
       "description": "Optional metadata columns for subgroup reporting in clinical performance reports (e.g., sex, age_bin, site_id, race_ethnicity).",

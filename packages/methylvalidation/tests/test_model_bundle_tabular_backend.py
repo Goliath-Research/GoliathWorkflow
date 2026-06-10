@@ -1387,7 +1387,7 @@ def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path
     with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
         meta = json.load(f)
     observed_names = [str(x) for x in (meta.get("observed_feature_names") or [])]
-    assert any(name.startswith("region_directional_score__") for name in observed_names)
+    assert any(name.startswith("gene_directional_score__") for name in observed_names)
 
 
 def test_tabular_defaults_train_and_test_dataset_paths_to_bundle_dir(tmp_path: Path, monkeypatch):

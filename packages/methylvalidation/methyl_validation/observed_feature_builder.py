@@ -40,16 +40,18 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v28_no_healthy_centroid_features"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v29_structural_scored"
 HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v5_centroid_distance_per_class"
 HYBRID_FEATURE_FAMILY_SETS = (
     "dmp_scored",
     "gene",
     "structural",
     "gene_scored",
+    "structural_scored",
     "dmp_scored+gene",
     "dmp_scored+structural",
     "dmp_scored+gene_scored",
+    "dmp_scored+structural_scored",
     "hybrid-all",
 )
 LEGACY_FEATURE_FAMILY_ALIASES: Dict[str, str] = {
@@ -57,6 +59,7 @@ LEGACY_FEATURE_FAMILY_ALIASES: Dict[str, str] = {
     "dmp+gene": "dmp_scored+gene",
     "dmp+structural": "dmp_scored+structural",
     "dmp+gene_scored": "dmp_scored+gene_scored",
+    "dmp+structural_scored": "dmp_scored+structural_scored",
 }
 
 
@@ -75,17 +78,20 @@ def normalize_feature_family_set(value: Optional[str]) -> str:
 
 
 def family_includes_dmp_scored(feature_family_set: Optional[str]) -> bool:
-    include_dmp, _, _, _ = _family_flags(feature_family_set)
+    include_dmp, _, _, _, _ = _family_flags(feature_family_set)
     return bool(include_dmp)
 
 
 def describe_active_feature_families(feature_family_set: Optional[str]) -> Dict[str, bool]:
-    include_dmp, include_gene, include_structural, include_gene_scored = _family_flags(feature_family_set)
+    include_dmp, include_gene, include_structural, include_gene_scored, include_structural_scored = (
+        _family_flags(feature_family_set)
+    )
     return {
         "dmp_scored": bool(include_dmp),
         "gene": bool(include_gene),
         "structural": bool(include_structural),
         "gene_scored": bool(include_gene_scored),
+        "structural_scored": bool(include_structural_scored),
     }
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
@@ -311,25 +317,29 @@ def _build_dynamic_mapped_feature_names(
     return gene_names, struct_names, metadata
 
 
-def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool, bool]:
-    """Return (dmp_scored, legacy_gene, structural, gene_scored)."""
+def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool, bool, bool]:
+    """Return (dmp_scored, legacy_gene, structural, gene_scored, structural_scored)."""
     token = normalize_feature_family_set(feature_family_set)
     if token == "dmp_scored":
-        return True, False, False, False
+        return True, False, False, False, False
     if token == "gene":
-        return False, True, False, False
+        return False, True, False, False, False
     if token == "structural":
-        return False, False, True, False
+        return False, False, True, False, False
     if token == "gene_scored":
-        return False, False, False, True
+        return False, False, False, True, False
+    if token == "structural_scored":
+        return False, False, False, False, True
     if token == "dmp_scored+gene":
-        return True, True, False, False
+        return True, True, False, False, False
     if token == "dmp_scored+structural":
-        return True, False, True, False
+        return True, False, True, False, False
     if token == "dmp_scored+gene_scored":
-        return True, False, False, True
+        return True, False, False, True, False
+    if token == "dmp_scored+structural_scored":
+        return True, False, False, False, True
     if token == "hybrid-all":
-        return True, True, True, False
+        return True, True, True, False, False
     raise ValueError(
         f"Unsupported feature_family_set={feature_family_set!r}; "
         f"allowed={list(HYBRID_FEATURE_FAMILY_SETS)}"
@@ -695,8 +705,8 @@ def derive_observed_hybrid_anchors(
     gene_feature_loading: str = "frozen",
     fixed_gene_features_df: Optional[pd.DataFrame] = None,
 ) -> ObservedHybridAnchors:
-    _include_dmp_family, include_gene_family, _include_structural_family, _include_gene_scored = _family_flags(
-        feature_family_set
+    _include_dmp_family, include_gene_family, _include_structural_family, _include_gene_scored, _include_structural_scored = (
+        _family_flags(feature_family_set)
     )
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
     if gene_feature_loading_norm not in {"frozen", "range"}:
@@ -1014,9 +1024,14 @@ def observed_hybrid_feature_names(
     feature_family_set: str = "dmp_scored",
     dmp_df: Optional[pd.DataFrame] = None,
     frozen_gene_panel_df: Optional[pd.DataFrame] = None,
+    fixed_gene_features_df: Optional[pd.DataFrame] = None,
+    feature_order: Optional[Sequence[Tuple[str, str, int]]] = None,
     gene_scored_min_support_n: int = 2,
     gene_scored_ordered_comparison_labels: Optional[Sequence[str]] = None,
     gene_scored_contrast_pairs: Optional[Sequence[Sequence[str]]] = None,
+    structural_scored_min_support_n: int = 2,
+    structural_scored_ordered_comparison_labels: Optional[Sequence[str]] = None,
+    structural_scored_contrast_pairs: Optional[Sequence[Sequence[str]]] = None,
     project_json: Optional[str | Path] = None,
     region_directional_region_types: Optional[Sequence[str]] = None,
     region_directional_min_loci: int = 1,
@@ -1027,8 +1042,15 @@ def observed_hybrid_feature_names(
         resolve_gene_scored_labels_for_features,
         validate_gene_scored_contrast_pairs_against_labels,
     )
+    from .structural_scored_features import (
+        prepare_structural_scored_panels,
+        resolve_structural_scored_column_specs,
+        resolve_structural_scored_labels_for_features,
+        structural_scored_feature_names,
+        validate_structural_scored_contrast_pairs_against_labels,
+    )
 
-    include_dmp_family, include_gene_family, include_structural_family, include_gene_scored = (
+    include_dmp_family, include_gene_family, include_structural_family, include_gene_scored, include_structural_scored = (
         _family_flags(feature_family_set)
     )
     names: List[str] = []
@@ -1065,6 +1087,38 @@ def observed_hybrid_feature_names(
                 contrast_pairs=gene_scored_contrast_pairs,
             )
         )
+    if include_structural_scored:
+        features_df = fixed_gene_features_df if fixed_gene_features_df is not None else pd.DataFrame()
+        work_dmp = dmp_df if dmp_df is not None else pd.DataFrame()
+        order = list(feature_order) if feature_order is not None else []
+        _available, progression_order = resolve_structural_scored_labels_for_features(
+            work_dmp,
+            features_df,
+            project_json=project_json,
+            explicit_order=structural_scored_ordered_comparison_labels,
+        )
+        validate_structural_scored_contrast_pairs_against_labels(
+            structural_scored_contrast_pairs,
+            progression_order,
+        )
+        panels = prepare_structural_scored_panels(
+            features_df,
+            min_support_n=int(structural_scored_min_support_n),
+            region_types=region_directional_region_types,
+        )
+        column_specs = resolve_structural_scored_column_specs(
+            work_dmp,
+            order,
+            panels,
+            min_loci=int(max(1, region_directional_min_loci)),
+        )
+        names.extend(
+            structural_scored_feature_names(
+                column_specs,
+                progression_order,
+                contrast_pairs=structural_scored_contrast_pairs,
+            )
+        )
     return names
 
 
@@ -1075,11 +1129,18 @@ def observed_hybrid_schema_fingerprint(
     feature_family_set: str = "dmp_scored",
     dmp_df: Optional[pd.DataFrame] = None,
     frozen_gene_panel_df: Optional[pd.DataFrame] = None,
+    fixed_gene_features_df: Optional[pd.DataFrame] = None,
+    feature_order: Optional[Sequence[Tuple[str, str, int]]] = None,
     gene_scored_min_support_n: int = 2,
     gene_scored_use_region_weight: bool = True,
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
     gene_scored_ordered_comparison_labels: Optional[Sequence[str]] = None,
     gene_scored_contrast_pairs: Optional[Sequence[Sequence[str]]] = None,
+    structural_scored_min_support_n: int = 2,
+    structural_scored_use_region_weight: bool = True,
+    structural_scored_weight: str = "compound_x_sqrt_support",
+    structural_scored_ordered_comparison_labels: Optional[Sequence[str]] = None,
+    structural_scored_contrast_pairs: Optional[Sequence[Sequence[str]]] = None,
     project_json: Optional[str | Path] = None,
     region_directional_region_types: Optional[Sequence[str]] = None,
     region_directional_min_loci: int = 1,
@@ -1090,6 +1151,13 @@ def observed_hybrid_schema_fingerprint(
         gene_scored_progression_feature_names,
         resolve_gene_scored_labels_for_features,
     )
+    from .structural_scored_features import (
+        STRUCTURAL_SCORED_SCHEMA_VERSION,
+        prepare_structural_scored_panels,
+        resolve_structural_scored_column_specs,
+        resolve_structural_scored_labels_for_features,
+        structural_scored_progression_feature_names,
+    )
 
     names = observed_hybrid_feature_names(
         cancer_class_labels=cancer_class_labels,
@@ -1097,9 +1165,14 @@ def observed_hybrid_schema_fingerprint(
         feature_family_set=feature_family_set,
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_gene_panel_df,
+        fixed_gene_features_df=fixed_gene_features_df,
+        feature_order=feature_order,
         gene_scored_min_support_n=gene_scored_min_support_n,
         gene_scored_ordered_comparison_labels=gene_scored_ordered_comparison_labels,
         gene_scored_contrast_pairs=gene_scored_contrast_pairs,
+        structural_scored_min_support_n=structural_scored_min_support_n,
+        structural_scored_ordered_comparison_labels=structural_scored_ordered_comparison_labels,
+        structural_scored_contrast_pairs=structural_scored_contrast_pairs,
         project_json=project_json,
         region_directional_region_types=region_directional_region_types,
         region_directional_min_loci=region_directional_min_loci,
@@ -1107,7 +1180,9 @@ def observed_hybrid_schema_fingerprint(
     )
 
     payload = "\n".join(names)
-    include_dmp_family, _, _, include_gene_scored = _family_flags(feature_family_set)
+    include_dmp_family, _, _, include_gene_scored, include_structural_scored = _family_flags(
+        feature_family_set
+    )
     if include_dmp_family:
         quality = normalize_quality_only_feature_columns(observed_feature_quality_columns)
         payload = (
@@ -1138,6 +1213,55 @@ def observed_hybrid_schema_fingerprint(
             f"gene_scored_progression_features={','.join(progression_names)}\n"
             f"gene_scored_contrast_pairs={gene_scored_contrast_pairs!r}\n"
             f"{GENE_SCORED_SCHEMA_VERSION}"
+        )
+    if include_structural_scored:
+        features_df = fixed_gene_features_df if fixed_gene_features_df is not None else pd.DataFrame()
+        work_dmp = dmp_df if dmp_df is not None else pd.DataFrame()
+        order = list(feature_order) if feature_order is not None else []
+        _available, progression_order = resolve_structural_scored_labels_for_features(
+            work_dmp,
+            features_df,
+            project_json=project_json,
+            explicit_order=structural_scored_ordered_comparison_labels,
+        )
+        panels = prepare_structural_scored_panels(
+            features_df,
+            min_support_n=int(structural_scored_min_support_n),
+            region_types=region_directional_region_types,
+        )
+        column_specs = resolve_structural_scored_column_specs(
+            work_dmp,
+            order,
+            panels,
+            min_loci=int(max(1, region_directional_min_loci)),
+        )
+        progression_names: List[str] = []
+        regions_with_specs = sorted({region for _, region in column_specs})
+        cmp_labels_in_specs = {cmp for cmp, _ in column_specs}
+        progression_labels = [lbl for lbl in progression_order if lbl in cmp_labels_in_specs]
+        if len(progression_labels) >= 2:
+            for region in regions_with_specs:
+                region_cmps = {c for c, r in column_specs if r == region}
+                if len(region_cmps & set(progression_labels)) >= 2:
+                    progression_names.extend(
+                        structural_scored_progression_feature_names(
+                            progression_labels,
+                            region,
+                            contrast_pairs=structural_scored_contrast_pairs,
+                        )
+                    )
+        payload = (
+            f"{payload}\n"
+            f"structural_scored_min_support_n={int(max(1, structural_scored_min_support_n))}\n"
+            f"structural_scored_use_region_weight={bool(structural_scored_use_region_weight)}\n"
+            f"structural_scored_weight={str(structural_scored_weight).strip().lower()}\n"
+            f"structural_scored_column_specs={column_specs!r}\n"
+            f"structural_scored_progression_order={','.join(progression_order)}\n"
+            f"structural_scored_progression_features={','.join(progression_names)}\n"
+            f"structural_scored_contrast_pairs={structural_scored_contrast_pairs!r}\n"
+            f"region_directional_min_loci={int(max(1, region_directional_min_loci))}\n"
+            f"region_directional_region_types={region_directional_region_types!r}\n"
+            f"{STRUCTURAL_SCORED_SCHEMA_VERSION}"
         )
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -1177,6 +1301,11 @@ def build_observed_hybrid_feature_table(
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
     gene_scored_ordered_comparison_labels: Optional[Sequence[str]] = None,
     gene_scored_contrast_pairs: Optional[Sequence[Sequence[str]]] = None,
+    structural_scored_min_support_n: int = 2,
+    structural_scored_use_region_weight: bool = True,
+    structural_scored_weight: str = "compound_x_sqrt_support",
+    structural_scored_ordered_comparison_labels: Optional[Sequence[str]] = None,
+    structural_scored_contrast_pairs: Optional[Sequence[Sequence[str]]] = None,
     project_json: Optional[str | Path] = None,
     region_directional_region_types: Optional[Sequence[str]] = None,
     region_directional_min_loci: int = 1,
@@ -1187,7 +1316,7 @@ def build_observed_hybrid_feature_table(
     del include_dmp_features, include_chromosome_features, include_dmr_features, include_gene_features
     del hist_tail_agreement_threshold
 
-    include_dmp_family, include_gene_family, include_structural_family, include_gene_scored_family = (
+    include_dmp_family, include_gene_family, include_structural_family, include_gene_scored_family, include_structural_scored_family = (
         _family_flags(feature_family_set)
     )
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
@@ -1280,9 +1409,14 @@ def build_observed_hybrid_feature_table(
         feature_family_set=str(feature_family_set),
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_gene_panel_df,
+        fixed_gene_features_df=fixed_gene_features_df,
+        feature_order=feature_order,
         gene_scored_min_support_n=int(gene_scored_min_support_n),
         gene_scored_ordered_comparison_labels=gene_scored_ordered_comparison_labels,
         gene_scored_contrast_pairs=gene_scored_contrast_pairs,
+        structural_scored_min_support_n=int(structural_scored_min_support_n),
+        structural_scored_ordered_comparison_labels=structural_scored_ordered_comparison_labels,
+        structural_scored_contrast_pairs=structural_scored_contrast_pairs,
         project_json=project_json,
         region_directional_region_types=region_directional_region_types,
         region_directional_min_loci=int(max(1, region_directional_min_loci)),
@@ -1599,6 +1733,7 @@ def build_observed_hybrid_feature_table(
                         X_feat[i, idx[s_key]] = float(numer / denom)
 
     gene_scored_report: Dict[str, Any] = {}
+    structural_scored_report: Dict[str, Any] = {}
     if include_gene_scored_family:
         from .gene_scored_features import (
             compute_gene_scored_matrices,
@@ -1672,6 +1807,93 @@ def build_observed_hybrid_feature_table(
             "n_genes_per_comparison": {k: int(len(v)) for k, v in panels.items()},
         }
 
+    if include_structural_scored_family:
+        from .structural_scored_features import (
+            compute_structural_scored_matrices,
+            compute_structural_scored_progression_features,
+            prepare_structural_scored_panels,
+            resolve_structural_scored_column_specs,
+            resolve_structural_scored_labels_for_features,
+            structural_directional_iqr_column,
+            structural_directional_score_column,
+            structural_panel_obs_fraction_column,
+            structural_weighted_sign_agreement_column,
+            validate_structural_scored_contrast_pairs_against_labels,
+        )
+
+        if fixed_gene_features_df is None or fixed_gene_features_df.empty:
+            raise ValueError(
+                "feature_family_set includes structural_scored but frozen gene features panel is empty or missing. "
+                "Build freeze-time frozen_gene_features.csv and set step_config.model_bundle.fixed_gene_features."
+            )
+        _available, progression_order = resolve_structural_scored_labels_for_features(
+            dmp_df,
+            fixed_gene_features_df,
+            project_json=project_json,
+            explicit_order=structural_scored_ordered_comparison_labels,
+        )
+        validate_structural_scored_contrast_pairs_against_labels(
+            structural_scored_contrast_pairs,
+            progression_order,
+        )
+        panels = prepare_structural_scored_panels(
+            fixed_gene_features_df,
+            min_support_n=int(structural_scored_min_support_n),
+            region_types=region_directional_region_types,
+        )
+        column_specs = resolve_structural_scored_column_specs(
+            dmp_df,
+            feature_order,
+            panels,
+            min_loci=int(max(1, region_directional_min_loci)),
+        )
+        directional_by_spec, obs_by_spec, iqr_by_spec, agree_by_spec = compute_structural_scored_matrices(
+            X_raw,
+            feature_order,
+            dmp_df,
+            panels,
+            column_specs,
+            use_region_weight=bool(structural_scored_use_region_weight),
+            weight_mode=str(structural_scored_weight),
+        )
+        for spec in column_specs:
+            cmp_label, region = spec
+            for feat_name, matrix in (
+                (structural_directional_score_column(cmp_label, region), directional_by_spec),
+                (structural_panel_obs_fraction_column(cmp_label, region), obs_by_spec),
+                (structural_directional_iqr_column(cmp_label, region), iqr_by_spec),
+                (structural_weighted_sign_agreement_column(cmp_label, region), agree_by_spec),
+            ):
+                if feat_name not in idx:
+                    continue
+                X_feat[:, int(idx[feat_name])] = matrix[spec].astype(np.float32)
+        progression_features, progression_feature_names = compute_structural_scored_progression_features(
+            directional_by_spec,
+            column_specs,
+            progression_order,
+            contrast_pairs=structural_scored_contrast_pairs,
+        )
+        for prog_name, prog_vec in progression_features.items():
+            if prog_name not in idx:
+                continue
+            X_feat[:, int(idx[prog_name])] = prog_vec.astype(np.float32)
+        structural_scored_report = {
+            "comparison_labels": list(progression_order),
+            "progression_order": list(progression_order),
+            "column_specs": [list(spec) for spec in column_specs],
+            "progression_feature_names": list(progression_feature_names),
+            "progression_k": int(len(progression_order)),
+            "structural_scored_min_support_n": int(max(1, structural_scored_min_support_n)),
+            "structural_scored_use_region_weight": bool(structural_scored_use_region_weight),
+            "structural_scored_weight": str(structural_scored_weight),
+            "structural_scored_contrast_pairs": structural_scored_contrast_pairs,
+            "region_directional_min_loci": int(max(1, region_directional_min_loci)),
+            "region_directional_region_types": list(
+                region_directional_region_types or ["promoter", "exon", "intron", "terminator"]
+            ),
+            "n_panel_genes_per_spec": {f"{c}::{r}": int(len(panels.get((c, r), []))) for c, r in column_specs},
+        }
+
     non_nan = np.isfinite(X_feat).sum(axis=0).astype(int).tolist()
     gene_col_idx = [j for j, name in enumerate(feature_names) if str(name).startswith("gene::")]
     struct_col_idx = [j for j, name in enumerate(feature_names) if str(name).startswith("struct::")]
@@ -1689,17 +1911,24 @@ def build_observed_hybrid_feature_table(
         feature_family_set=str(feature_family_set),
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_gene_panel_df,
+        fixed_gene_features_df=fixed_gene_features_df,
+        feature_order=feature_order,
         gene_scored_min_support_n=int(gene_scored_min_support_n),
         gene_scored_use_region_weight=bool(gene_scored_use_region_weight),
         gene_scored_gene_weight=str(gene_scored_gene_weight),
         gene_scored_ordered_comparison_labels=gene_scored_ordered_comparison_labels,
         gene_scored_contrast_pairs=gene_scored_contrast_pairs,
+        structural_scored_min_support_n=int(structural_scored_min_support_n),
+        structural_scored_use_region_weight=bool(structural_scored_use_region_weight),
+        structural_scored_weight=str(structural_scored_weight),
+        structural_scored_ordered_comparison_labels=structural_scored_ordered_comparison_labels,
+        structural_scored_contrast_pairs=structural_scored_contrast_pairs,
         project_json=project_json,
         region_directional_region_types=region_directional_region_types,
         region_directional_min_loci=int(max(1, region_directional_min_loci)),
         observed_feature_quality_columns=observed_feature_quality_columns,
     )
-    if include_gene_scored_family:
+    if include_gene_scored_family or include_structural_scored_family:
         schema_version = HYBRID_FEATURE_SCHEMA_VERSION
     elif include_gene_family or include_structural_family:
         schema_version = HYBRID_FEATURE_SCHEMA_VERSION
@@ -1718,6 +1947,7 @@ def build_observed_hybrid_feature_table(
             "gene": bool(include_gene_family),
             "structural": bool(include_structural_family),
             "gene_scored": bool(include_gene_scored_family),
+            "structural_scored": bool(include_structural_scored_family),
         },
         "feature_family_set": str(feature_family_set),
         "gene_feature_loading": gene_feature_loading_norm,
@@ -1747,6 +1977,7 @@ def build_observed_hybrid_feature_table(
         },
         "raw_mapped_feature_metadata": mapped_feature_meta,
         "gene_scored": gene_scored_report,
+        "structural_scored": structural_scored_report,
         "feature_profile": {
             "schema_version": HYBRID_FEATURE_SCHEMA_VERSION if include_dmp_family else schema_version,
             "removed_dmp_features": list(DEFAULT_REMOVED_DMP_FEATURE_SUFFIXES),
