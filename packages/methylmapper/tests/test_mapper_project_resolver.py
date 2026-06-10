@@ -61,6 +61,28 @@ def test_resolve_mapper_paths_per_comparison_uses_canonical_layout(tmp_path):
     assert paths.output_dir == "/work/output/MapperProject/mapper/healthy/pca"
 
 
+def test_resolve_mapper_paths_per_comparison_honors_step_override_output_dir(tmp_path):
+    project_path = _write_project(tmp_path)
+    override = tmp_path / "mapper_classifier_override.json"
+    override.write_text(
+        json.dumps(
+            {
+                "csv_pattern": "dmps-*-classifier.csv",
+                "output_dir": "/work/output/MapperProject/mapper_classifier/healthy/pca",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resolved = resolve_mapper_paths_per_cancer_group(project_path, override)
+
+    assert len(resolved) == 1
+    paths, label = resolved[0]
+    assert label == "pca"
+    assert paths.csv_pattern.endswith("/detections/healthy/pca/dmps-*-classifier.csv")
+    assert paths.output_dir == "/work/output/MapperProject/mapper_classifier/healthy/pca"
+
+
 def test_resolve_mapper_paths_per_comparison_falls_back_to_existing_case_variant(tmp_path):
     out_base = tmp_path / "out"
     project_path = tmp_path / "project_case.json"

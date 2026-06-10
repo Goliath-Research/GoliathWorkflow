@@ -91,29 +91,42 @@ python tools/compare_analyte_outputs.py \
 
 ### Classifier-based gene overlap (optional re-map)
 
-Detection does not need re-running. Re-map from classifier DMPs into a **separate** mapper directory so discovery mapper output is preserved:
+Detection does not need re-running. Re-map from classifier DMPs into a **separate** mapper directory so discovery mapper output is preserved.
+
+**Do not reuse a shared `$ROOT` between plasma and buffy** — if you forget to change it, both runs write to the same folder. Use **per-project override JSON** (paths baked in) or derive the project output root from each `--project` config:
 
 ```bash
 source .venv/bin/activate
-PROJ=/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json
-ROOT=/work/prostate-cancer/Plasma_healthy_vs_PCa
 
-# Option A: step-override JSON (csv_pattern and/or output_dir)
-cat > /tmp/mapper_classifier_override.json <<'EOF'
-{"csv_pattern": "dmps-*-classifier.csv"}
-EOF
+# Project config JSON (not the output directory)
+PLASMA_PROJ=/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json
+BUFFY_PROJ=/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json
 
-methyl-mapper --project "$PROJ" \
-  --step-override /tmp/mapper_classifier_override.json \
-  --output-dir "$ROOT/mapper_classifier/all/PCa"
-
-# Option B: explicit glob + output (also works; GTF still from project step_config)
-# methyl-mapper --project "$PROJ" \
-#   --csv-pattern "$ROOT/detections/all/PCa/dmps-*-classifier.csv" \
-#   --output-dir "$ROOT/mapper_classifier/all/PCa"
+# Optional: derive output root from config (unique per analyte)
+# PLASMA_ROOT=$(python -c "from methyl_utils import load_project; print(load_project('$PLASMA_PROJ').get_derived_paths().output_base)")
 ```
 
-Repeat for buffy. Compare genes:
+**Recommended:** per-analyte step overrides in `configs/` (no shared shell variables):
+
+```bash
+methyl-mapper --project "$PLASMA_PROJ" \
+  --step-override tools/methyl-config-editor/configs/mapper_classifier_plasma.json
+
+methyl-mapper --project "$BUFFY_PROJ" \
+  --step-override tools/methyl-config-editor/configs/mapper_classifier_buffy.json
+```
+
+Each override file sets both `csv_pattern` and `output_dir` under that project's output tree (`Plasma_healthy_vs_PCa/` vs `Buffy_healthy_vs_PCa/`).
+
+If you prefer explicit CLI paths, use the **full detection glob** (not a bare filename) and a **project-specific** output dir:
+
+```bash
+methyl-mapper --project "$PLASMA_PROJ" \
+  --csv-pattern "/work/prostate-cancer/Plasma_healthy_vs_PCa/detections/all/PCa/dmps-*-classifier.csv" \
+  --output-dir "/work/prostate-cancer/Plasma_healthy_vs_PCa/mapper_classifier/all/PCa"
+```
+
+Compare genes:
 
 ```bash
 python tools/compare_analyte_outputs.py \
@@ -127,17 +140,14 @@ python tools/compare_analyte_outputs.py \
 
 ### Enricher on classifier mapper genes (optional)
 
-`methyl-enricher` reads the mapper combined CSV. Point it at the classifier mapper output:
+`methyl-enricher` reads the mapper combined CSV. Use per-analyte override files so plasma and buffy do not share paths:
 
 ```bash
-cat > /tmp/enricher_classifier_override.json <<EOF
-{
-  "input_file": "$ROOT/mapper_classifier/all/PCa/all-gene_name-combined.csv",
-  "output_dir": "$ROOT/enricher_classifier/all/PCa"
-}
-EOF
+methyl-enricher --project "$PLASMA_PROJ" \
+  --step-override tools/methyl-config-editor/configs/enricher_classifier_plasma.json
 
-methyl-enricher --project "$PROJ" --step-override /tmp/enricher_classifier_override.json
+methyl-enricher --project "$BUFFY_PROJ" \
+  --step-override tools/methyl-config-editor/configs/enricher_classifier_buffy.json
 ```
 
 Use enricher outputs under `enricher_classifier/` for pathway/module differences; gene overlap for cross-analyte comparison still comes from mapper `all-gene_name-combined.csv`.

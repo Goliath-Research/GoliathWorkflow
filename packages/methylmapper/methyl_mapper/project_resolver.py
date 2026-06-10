@@ -72,6 +72,11 @@ def resolve_mapper_paths_per_cancer_group(
     if "/" in pattern or "\\" in pattern:
         pattern = Path(pattern).name
 
+    def _mapper_output_dir(control_group: str, disease_group: str) -> str:
+        if step_cfg.get("output_dir") is not None:
+            return str(step_cfg["output_dir"])
+        return str(project.get_mapper_output_dir(control_group, disease_group))
+
     if getattr(project, "uses_control_disease", lambda: False)():
         out: List[Tuple[MapperStepPaths, str]] = []
         for spec in project.get_comparisons():
@@ -81,7 +86,7 @@ def resolve_mapper_paths_per_cancer_group(
                 control_group=spec.control_group,
                 disease_group=spec.disease_group,
             )
-            map_dir = project.get_mapper_output_dir(spec.control_group, spec.disease_group)
+            map_dir = _mapper_output_dir(spec.control_group, spec.disease_group)
             group_csv = str(Path(det_dir) / pattern)
             out.append((MapperStepPaths(csv_pattern=group_csv, output_dir=map_dir), comp_label))
         return out
@@ -96,7 +101,7 @@ def resolve_mapper_paths_per_cancer_group(
             continue
         label = resolved[i][0]
         group_csv = str(Path(project.get_detection_output_dir(control_label, label)) / pattern)
-        group_out = project.get_mapper_output_dir(control_label, label)
+        group_out = _mapper_output_dir(control_label, label)
         out.append((MapperStepPaths(csv_pattern=group_csv, output_dir=group_out), label))
     return out
 
