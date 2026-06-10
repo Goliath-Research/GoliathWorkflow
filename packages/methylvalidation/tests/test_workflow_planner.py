@@ -76,3 +76,25 @@ def test_plan_validation_context_requires_validation_block(tmp_path: Path) -> No
     project_json.write_text(json.dumps({"project_name": "x"}), encoding="utf-8")
     with pytest.raises(ValueError, match="step_config.validation"):
         plan_validation_context({"projectPath": str(project_json), "featureIterations": 1})
+
+
+def test_plan_validation_context_resume_includes_monte_carlo_runs_root(tmp_path: Path) -> None:
+    project_json = _write_minimal_binary_project(tmp_path)
+    plan_validation_context(
+        ValidationPlanRequest(
+            projectPath=str(project_json),
+            featureIterations=1,
+            qualityIterations=0,
+        )
+    )
+    resumed = plan_validation_context(
+        ValidationPlanRequest(
+            projectPath=str(project_json),
+            featureIterations=1,
+            qualityIterations=0,
+            overwrite=False,
+        )
+    )
+    task_config = resumed["iterations"][0]["taskConfig"]
+    assert "monteCarloRunsRoot" in task_config
+    assert Path(task_config["monteCarloRunsRoot"]).is_dir()

@@ -38,7 +38,7 @@ BEGIN
     WHERE id = @workflow_instance_id;
 
     IF @persist_extension = 1
-       AND JSON_VALUE(@context_json, '$.validationPlan') IS NOT NULL
+       AND JSON_QUERY(@context_json, '$.validationPlan') IS NOT NULL
     BEGIN
         EXEC wf.wf_repo_upsert_instance_extension
             @instance_id = @workflow_instance_id,

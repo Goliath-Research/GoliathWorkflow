@@ -1,10 +1,8 @@
 unit WfEngine.WorkerApiAdapter;
 
 {
-  Worker-facing adapter for wf.sp_worker_* procedures.
-  Task generation and workflow progression are handled by TWorkflowEngine (Delphi).
-  Use ProcessWorkerSubmit on the engine after workers complete tasks when bypassing
-  SQL-side wf_engine_on_action_complete (recommended).
+  Worker-facing adapter for wf.sp_worker_* contract procedures.
+  Workflow progression is handled in SQL (sp_worker_submit_result / wf_engine_on_action_complete).
 }
 
 interface
@@ -13,22 +11,19 @@ uses
   System.SysUtils,
   Data.DB,
   Uni,
-  WfEngine.Exceptions,
-  WfEngine.Interfaces,
   WfEngine.Dialect,
-  WfEngine.Scheduler,
+  WfEngine.Interfaces,
   WfEngine.Types;
 
 type
   TWorkflowWorkerApi = class(TInterfacedObject, IWorkflowWorkerApi)
   private
     FConnection: TUniConnection;
-    FEngine: IWorkflowEngine;
     procedure AuthenticateProc(AWorkerId: Int64; const AWorkerToken: string);
     function CallRequestTask(AWorkerId: Int64; const AWorkerToken, ACapability: string;
       AMaxLeaseSeconds: Integer): TWorkerTaskClaimResult;
   public
-    constructor Create(AConnection: TUniConnection; const AEngine: IWorkflowEngine = nil);
+    constructor Create(AConnection: TUniConnection);
     function RequestTask(AWorkerId: Int64; const AWorkerToken, ACapability: string;
       AMaxLeaseSeconds: Integer): TWorkerTaskClaimResult;
     function SubmitResult(const ANodeExecutionId, AWorkerId: Int64; const AWorkerToken: string;
@@ -43,12 +38,10 @@ implementation
 
 { TWorkflowWorkerApi }
 
-constructor TWorkflowWorkerApi.Create(AConnection: TUniConnection;
-  const AEngine: IWorkflowEngine);
+constructor TWorkflowWorkerApi.Create(AConnection: TUniConnection);
 begin
   inherited Create;
   FConnection := AConnection;
-  FEngine := AEngine;
 end;
 
 procedure TWorkflowWorkerApi.AuthenticateProc(AWorkerId: Int64; const AWorkerToken: string);
@@ -112,63 +105,43 @@ function TWorkflowWorkerApi.SubmitResult(const ANodeExecutionId, AWorkerId: Int6
   const AWorkerToken: string; AResultCode: Integer; const AOutputJson: string): TSubmitResultAck;
 var
   P: TUniStoredProc;
+  Q: TUniQuery;
 begin
   FillChar(Result, SizeOf(Result), 0);
   AuthenticateProc(AWorkerId, AWorkerToken);
 
-  if Assigned(FEngine) then
+  if GetWorkflowBackend = wbPostgres then
   begin
-    var LeaseOk := False;
-    var Q := TUniQuery.Create(nil);
+    Q := TUniQuery.Create(nil);
     try
       Q.Connection := FConnection;
       Q.SQL.Text := Format(
-        'SELECT 1 FROM %stask_lease WHERE node_execution_id = :ne AND worker_id = :wid',
+        'SELECT accepted, instance_status, next_ready_count FROM %ssp_worker_submit_result(:ne, :wid, :tok, :rc, CAST(:out AS jsonb))',
         [WfSchemaDot]);
       Q.ParamByName('ne').AsLargeInt := ANodeExecutionId;
       Q.ParamByName('wid').AsLargeInt := AWorkerId;
+      Q.ParamByName('tok').AsString := AWorkerToken;
+      Q.ParamByName('rc').AsInteger := AResultCode;
+      if AOutputJson = '' then
+        Q.ParamByName('out').Clear
+      else
+        Q.ParamByName('out').AsString := AOutputJson;
       Q.Open;
-      LeaseOk := not Q.Eof;
+      if not Q.Eof then
+      begin
+        Result.Accepted := Q.FieldByName('accepted').AsBoolean;
+        Result.InstanceStatus := TWorkflowInstanceStatus.FromDb(Q.FieldByName('instance_status').AsString);
+        Result.NextReadyCount := Q.FieldByName('next_ready_count').AsInteger;
+      end;
     finally
       Q.Free;
     end;
-    if LeaseOk then
-      Result := FEngine.ProcessWorkerSubmit(ANodeExecutionId, AWorkerId, AResultCode, AOutputJson);
     Exit;
   end;
 
   P := TUniStoredProc.Create(nil);
   try
     P.Connection := FConnection;
-    if GetWorkflowBackend = wbPostgres then
-    begin
-      var Q := TUniQuery.Create(nil);
-      try
-        Q.Connection := FConnection;
-        Q.SQL.Text := Format(
-          'SELECT accepted, instance_status, next_ready_count FROM %ssp_worker_submit_result(:ne, :wid, :tok, :rc, CAST(:out AS jsonb))',
-          [WfSchemaDot]);
-        Q.ParamByName('ne').AsLargeInt := ANodeExecutionId;
-        Q.ParamByName('wid').AsLargeInt := AWorkerId;
-        Q.ParamByName('tok').AsString := AWorkerToken;
-        Q.ParamByName('rc').AsInteger := AResultCode;
-        if AOutputJson = '' then
-          Q.ParamByName('out').Clear
-        else
-          Q.ParamByName('out').AsString := AOutputJson;
-        Q.Open;
-        if not Q.Eof then
-        begin
-          Result.Accepted := Q.FieldByName('accepted').AsBoolean;
-          Result.InstanceStatus := TWorkflowInstanceStatus.FromDb(Q.FieldByName('instance_status').AsString);
-          Result.NextReadyCount := Q.FieldByName('next_ready_count').AsInteger;
-        end;
-      finally
-        Q.Free;
-      end;
-      Exit;
-    end;
-
     P.StoredProcName := WfSchemaDot + 'sp_worker_submit_result';
     P.Params.CreateParam(ftLargeint, 'node_execution_id', ptInput).AsLargeInt := ANodeExecutionId;
     P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;

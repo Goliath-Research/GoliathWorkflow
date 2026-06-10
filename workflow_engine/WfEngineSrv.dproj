@@ -182,17 +182,13 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="src\WfEngine.Dialect.pas"/>
+        <DCCReference Include="src\WfEngine.GatewayDb.pas"/>
         <DCCReference Include="src\WfEngine.ServiceLoop.pas"/>
         <DCCReference Include="src\WfEngine.Types.pas"/>
-        <DCCReference Include="src\WfEngine.ControlFlow.pas"/>
-        <DCCReference Include="src\WfEngine.Exceptions.pas"/>
         <DCCReference Include="src\WfEngine.Interfaces.pas"/>
-        <DCCReference Include="src\WfEngine.JsonResolver.pas"/>
-        <DCCReference Include="src\WfEngine.pas"/>
-        <DCCReference Include="src\WfEngine.Repository.pas"/>
-        <DCCReference Include="src\WfEngine.Scheduler.pas"/>
-        <DCCReference Include="src\WfEngine.Scope.pas"/>
         <DCCReference Include="src\WfEngine.WorkerApiAdapter.pas"/>
+        <DCCReference Include="src\WfEngine.RestHttpServer.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

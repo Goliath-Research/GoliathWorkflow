@@ -1,19 +1,17 @@
 unit WfEngine;
 
 {
-  Umbrella unit for the Delphi workflow engine library.
+  Umbrella unit for the Delphi workflow REST gateway library.
 }
 
 interface
 
 uses
-  WfEngine.ControlFlow,
-  WfEngine.Exceptions,
+  WfEngine.Dialect,
+  WfEngine.GatewayDb,
   WfEngine.Interfaces,
-  WfEngine.JsonResolver,
-  WfEngine.Repository,
-  WfEngine.Scope,
-  WfEngine.Scheduler,
+  WfEngine.RestApi,
+  WfEngine.RestHttpServer,
   WfEngine.ServiceLoop,
   WfEngine.Types,
   WfEngine.WorkerApiAdapter;

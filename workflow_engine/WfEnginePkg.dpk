@@ -38,16 +38,10 @@ requires
 
 contains
   WfEngine.Types in 'src\WfEngine.Types.pas',
-  WfEngine.Exceptions in 'src\WfEngine.Exceptions.pas',
   WfEngine.Interfaces in 'src\WfEngine.Interfaces.pas',
-  WfEngine.Repository in 'src\WfEngine.Repository.pas',
-  WfEngine.Scope in 'src\WfEngine.Scope.pas',
-  WfEngine.JsonResolver in 'src\WfEngine.JsonResolver.pas',
-  WfEngine.ControlFlow in 'src\WfEngine.ControlFlow.pas',
-  WfEngine.Scheduler in 'src\WfEngine.Scheduler.pas',
-  WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
   WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
-  WfEngine.DbAuth in 'src\WfEngine.DbAuth.pas',
+  WfEngine.GatewayDb in 'src\WfEngine.GatewayDb.pas',
+  WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
   WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
   WfEngine.RestApi in 'src\WfEngine.RestApi.pas',
   WfEngine.RestHttpServer in 'src\WfEngine.RestHttpServer.pas',

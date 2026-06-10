@@ -135,4 +135,4 @@ Node count: **O(comparisons + chromosomes)** composite nodes, not **O(comparison
 
 - Static milestone: [wf_pca_two_group_seed.sql](wf_pca_two_group_seed.sql)
 - Capability check: [../CAPABILITY_CHECK.md](../CAPABILITY_CHECK.md)
-- Delphi scope semantics: [../src/WfEngine.Scope.pas](../src/WfEngine.Scope.pas)
+- SQL scope write-path parity: `wf_sql_scope_writepath_parity.sql` / `sql_pg/06_scope_writepath_parity.sql`

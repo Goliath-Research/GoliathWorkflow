@@ -88,7 +88,7 @@ Maps [`contracts/openapi.yaml`](../contracts/openapi.yaml) to PostgreSQL wf obje
 Provider Name=PostgreSQL;Data Source=localhost;Port=5432;Database=methylpipeline;User ID=postgres;Password=methyl;
 ```
 
-Set `BACKEND_DB=postgres` and `METHYLPIPELINE_DB` (or `POSTGRES_*` env vars — see `WfEngine.DbAuth.pas`).
+Set `BACKEND_DB=postgres` and `METHYLPIPELINE_DB` (or `POSTGRES_*` env vars — see `WfEngine.Dialect.pas`).
 
 ## Contract validation
 
@@ -100,4 +100,4 @@ python workflow_engine/contract/validate_contract.py
 
 - Result-returning worker APIs are implemented as **functions** returning `TABLE` (PostgreSQL procedures cannot `RETURN QUERY`).
 - Object names match the Azure SQL contract in [`../contract/db_objects.yaml`](../contract/db_objects.yaml).
-- `wf_sql_foreach_support.sql` is not yet ported; FOREACH control flow remains Delphi-first.
+- FOREACH control flow requires SQL runtime parity (`wf_sql_runtime_parity.sql` / `sql_pg` equivalents); the Delphi middle-tier is gateway-only.

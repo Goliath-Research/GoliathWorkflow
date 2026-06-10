@@ -1148,8 +1148,8 @@ sequenceDiagram
 |-----------|------|
 | **`WfEngine.RestHttpServer`** | HTTP → `TRestApiService.Handle` |
 | **`TRestApiService`** | Auth, JSON parse, call `sp_*` or Delphi engine path |
-| **`TWorkflowEngine` / SQL procs** | Activate graph, resolve templates, advance control flow |
-| **`TWorkflowEngineHostedService.RunUntilStopped`** | Observability tick only — **does not dispatch tasks** |
+| **`WfEngine.GatewayDb` / SQL procs** | Create/start instances; activate graph, resolve templates, advance control flow |
+| **`WfEngine.WorkerApiAdapter`** | Worker authenticate, claim, submit, heartbeat, fail |
 
 **State:** All workflow progress lives in the database (`node_execution.status`, `task_lease`, `scope_variable`). The middle-tier is **stateless** between HTTP calls.
 

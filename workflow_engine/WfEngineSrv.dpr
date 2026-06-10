@@ -5,19 +5,12 @@ program WfEngineSrv;
 
 uses
   System.SysUtils,
+  WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
   WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
   WfEngine.Types in 'src\WfEngine.Types.pas',
-  WfEngine.ControlFlow in 'src\WfEngine.ControlFlow.pas',
-  WfEngine.Exceptions in 'src\WfEngine.Exceptions.pas',
   WfEngine.Interfaces in 'src\WfEngine.Interfaces.pas',
-  WfEngine.JsonResolver in 'src\WfEngine.JsonResolver.pas',
-  WfEngine in 'src\WfEngine.pas',
-  WfEngine.Repository in 'src\WfEngine.Repository.pas',
-  WfEngine.Scheduler in 'src\WfEngine.Scheduler.pas',
-  WfEngine.Scope in 'src\WfEngine.Scope.pas',
+  WfEngine.GatewayDb in 'src\WfEngine.GatewayDb.pas',
   WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
-  WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
-  WfEngine.DbAuth in 'src\WfEngine.DbAuth.pas',
   WfEngine.RestHttpServer in 'src\WfEngine.RestHttpServer.pas';
 
 function GetArgValue(const Args: TArray<string>; const Name: string; const Default: string): string;
@@ -34,10 +27,9 @@ end;
 
 procedure PrintUsage;
 begin
-  Writeln('WfEngineSrv - MethylPipeline workflow engine host');
+  Writeln('WfEngineSrv - MethylPipeline workflow REST gateway');
   Writeln;
   Writeln('Usage:');
-  Writeln('  WfEngineSrv /run [pollms=1000] [maxinstances=50]');
   Writeln('  WfEngineSrv /startinstance version=<id> [context={}]');
   Writeln('  WfEngineSrv /rest [port=8080]');
   Writeln;
@@ -74,19 +66,11 @@ begin
       raise Exception.Create('Set METHYLPIPELINE_DB or POSTGRES_*/AZURE_SQL_* environment variables.');
 
     Cfg.ConnectionString := Conn;
-    Cfg.UseEngineSubmitPath := True;
-    Cfg.PollIntervalMs := StrToIntDef(GetArgValue(Args, 'pollms', '1000'), 1000);
-    Cfg.MaxInstancesPerTick := StrToIntDef(GetArgValue(Args, 'maxinstances', '50'), 50);
 
     Mode := LowerCase(Args[0]);
     Svc := TWorkflowEngineHostedService.Create(Cfg);
     try
-      if Mode = '/run' then
-      begin
-        Writeln('Workflow engine running. Press Ctrl+C to stop.');
-        Svc.RunUntilStopped;
-      end
-      else if Mode = '/startinstance' then
+      if Mode = '/startinstance' then
       begin
         VersionId := StrToInt64Def(GetArgValue(Args, 'version', '0'), 0);
         if VersionId <= 0 then
@@ -107,6 +91,12 @@ begin
         finally
           RestSrv.Free;
         end;
+      end
+      else if Mode = '/run' then
+      begin
+        Writeln('The /run poll mode is removed. Workflow progression runs in SQL.');
+        Writeln('Use WfEngineSrv /rest for the OpenAPI gateway, or start instances with /startinstance.');
+        ExitCode := 1;
       end
       else
         PrintUsage;

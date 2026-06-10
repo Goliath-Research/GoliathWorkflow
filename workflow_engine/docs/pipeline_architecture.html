@@ -1393,12 +1393,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td>Auth, JSON parse, call <code>sp_*</code> or Delphi engine path</td>
 </tr>
 <tr class="odd">
-<td><strong><code>TWorkflowEngine</code> / SQL procs</strong></td>
-<td>Activate graph, resolve templates, advance control flow</td>
+<td><strong><code>WfEngine.GatewayDb</code> / SQL procs</strong></td>
+<td>Create/start instances; activate graph, resolve templates, advance control flow</td>
 </tr>
 <tr class="even">
-<td><strong><code>TWorkflowEngineHostedService.RunUntilStopped</code></strong></td>
-<td>Observability tick only — <strong>does not dispatch tasks</strong></td>
+<td><strong><code>WfEngine.WorkerApiAdapter</code></strong></td>
+<td>Worker authenticate, claim, submit, heartbeat, fail</td>
 </tr>
 </tbody>
 </table>

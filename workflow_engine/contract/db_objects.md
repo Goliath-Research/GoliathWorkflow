@@ -72,7 +72,7 @@ Engine errors use integer codes documented in worker API scripts (e.g. `10001` m
 
 ### 2. Repository API (middle-tier persistence)
 
-Dialect-neutral wrappers used by `WfEngine.Repository` — see `db_objects.yaml` `repository` section.
+Dialect-neutral wrappers used by the REST gateway — see `db_objects.yaml` `repository` section.
 
 ### 3. Engine runtime (SQL-only activation path)
 

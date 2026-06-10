@@ -1,172 +1,76 @@
-# Workflow Engine Delphi Implementation
+# Workflow Engine Delphi REST Gateway
 
-This document describes how the Delphi runtime in `workflow_engine/src` executes workflows backed by the `wf` SQL schema, and provides a workflow tree example that exercises all major control-flow branches.
+The Delphi middle-tier in `workflow_engine/src` is a **thin REST gateway** between workers (and other clients) and the `wf` SQL contract. It mirrors the Python reference gateway in `workflow_engine/rest/gateway.py`.
 
-## Runtime architecture
+Workflow activation, control flow, scope resolution, and task progression run **in the database** (`sp_start_workflow_instance`, `sp_worker_submit_result`, `wf_engine_activate`, and related procs). Delphi does not embed an inline engine.
 
-- `WfEngine.Scheduler.pas` (`TWorkflowEngine`) is the orchestration entrypoint.
-- `WfEngine.ControlFlow.pas` (`TWorkflowControlFlow`) performs node activation and parent continuation.
-- `WfEngine.Scope.pas` (`TWorkflowScope`) manages scoped variables, defaults, conditions, and output bindings.
-- `WfEngine.JsonResolver.pas` (`TWorkflowJsonResolver`) resolves `${...}` placeholders in templates and input bindings.
-- `WfEngine.Repository.pas` (`TWorkflowRepository`) persists and reads graph/runtime state from SQL (`wf` schema).
-- `WfEngine.WorkerApiAdapter.pas` (`TWorkflowWorkerApi`) bridges worker stored procedures and optional in-engine submit path.
-- `WfEngine.ServiceLoop.pas` (`TWorkflowEngineHostedService`) wraps connection lifecycle and polling loop for service hosting.
+## Components
+
+| Unit | Role |
+|------|------|
+| `WfEngine.RestHttpServer.pas` | HTTP listener → `TRestApiService` |
+| `WfEngine.RestApi.pas` | OpenAPI routes (`contracts/openapi.yaml`) |
+| `WfEngine.ServiceLoop.pas` (`TWorkflowEngineHostedService`) | UniDAC connection lifecycle |
+| `WfEngine.GatewayDb.pas` | `wf_repo_create_workflow_instance`, `sp_start_workflow_instance` |
+| `WfEngine.WorkerApiAdapter.pas` | `wf_worker_authenticate`, `sp_worker_*` |
+| `WfEngine.Dialect.pas` | Azure SQL / PostgreSQL backend selection |
 
 ## End-to-end lifecycle
 
-1. `StartInstance()` loads graph (`workflow_node` + `workflow_edge`) and validates `root_node_id`.
-2. Instance status changes to `RUNNING`; instance scope (`scope_node_execution_id = 0`) is seeded from `workflow_instance.context_json`.
-3. `ActivateNode()` recursively expands the tree:
-   - `ACTION` creates `node_execution` with `READY` status and resolved `input_json`.
-   - Composite nodes create `RUNNING` execution rows and dispatch children according to type.
-4. Workers claim `READY` actions through `wf.sp_worker_request_task`, execute work, then submit.
-5. `OnActionCompleted()` stores result/output, updates scope variables via output bindings, and continues the parent composite.
-6. Root completion sets instance to `COMPLETED`; any unrecoverable branch failure sets instance to `FAILED`.
+1. **Create instance** — `POST /v1/workflows/instances` calls `wf.wf_repo_create_workflow_instance`, then `wf.sp_start_workflow_instance`.
+2. **Start (optional)** — `POST /v1/workflows/instances/{id}/start` calls `sp_start_workflow_instance` for instances still in `CREATED`.
+3. **Claim** — worker `POST /v1/workers/tasks/request` → `wf.sp_worker_request_task`.
+4. **Submit** — worker `POST /v1/workers/tasks/{id}/submit` → `wf.sp_worker_submit_result` → SQL `wf_engine_on_action_complete` advances the graph.
+5. **Status** — `GET /v1/workflows/instances/{id}` reads `wf.workflow_instance`.
 
-## Control-flow semantics
+All workflow state (`node_execution`, `task_lease`, `scope_variable`) lives in SQL. The gateway is stateless between HTTP calls.
 
-- **Sequence (`ntSequence`)**: executes children by `child_order`; stops on first failed child.
-- **Parallel (`ntParallel`)**: fans out all children; completes only when all are terminal and none failed.
-- **If (`ntIf`)**: condition resolves to integer (`0` false, non-zero true) and selects `THEN` or `ELSE`.
-- **Switch (`ntSwitch`)**: matches integer value against `CASE`; falls back to `DEFAULT`.
-- **Repeat (`ntRepeat`)**: inserts `loop_state`, executes `BODY` until `repeat_target_count`.
-- **While (`ntWhile`)**: evaluates condition before each iteration; exits when condition becomes `0`.
+## Control flow and scope (SQL)
 
-## Scope and data resolution
+Deploy `sql/wf_sql_runtime_parity.sql` (Azure SQL) or the PostgreSQL parity scripts under `sql_pg/` so that:
 
-### Scope hierarchy
+- Instance scope is seeded from `workflow_instance.context_json` at start.
+- `${var.*}` placeholders resolve in SQL input templates.
+- IF/SWITCH/WHILE/REPEAT/FOREACH semantics match the contract in `contract/db_objects.yaml`.
 
-- Instance scope root id is `0` (`WF_INSTANCE_SCOPE_EXECUTION_ID`).
-- Each composite opens a new scope execution id.
-- Variable lookup climbs parent scopes until instance scope.
-- Parallel branches copy parent scope into branch-local scope and write outputs independently.
-
-### Placeholder tokens
-
-Supported `${...}` families:
-
-- `ctx.*` (execution context), e.g. `${ctx.iterationNo}`
-- `var.*` (scope variables), e.g. `${var.sampleId}`
-- `ctx.task.<node_key>.resultCode`
-- `ctx.task.<node_key>.output.<jsonPath>`
-
-Unsupported expression syntax (operators/functions) throws `EWfJson` with engine error `ENGINE_ERROR_UNSUPPORTED_EXPR`.
-
-## Workflow tree example (exercises implementation)
-
-The following tree intentionally covers `SEQUENCE`, `PARALLEL`, `IF`, `SWITCH`, `REPEAT`, `WHILE`, and `ACTION` behavior:
-
-```text
-RootSeq [SEQUENCE]
-├─ LoadInput [ACTION]
-├─ BranchPar [PARALLEL]
-│  ├─ GateIf [IF: condition_var=shouldRunQc]
-│  │  ├─ QcTask [ACTION]                (THEN)
-│  │  └─ SkipQc [ACTION]                (ELSE)
-│  └─ ModeSwitch [SWITCH: switch_var=mode]
-│     ├─ NormalizeA [ACTION]            (CASE 1)
-│     ├─ NormalizeB [ACTION]            (CASE 2)
-│     └─ NormalizeDefault [ACTION]      (DEFAULT)
-├─ RetryRepeat [REPEAT: repeat_count=3]
-│  └─ AlignChunk [ACTION]               (BODY)
-├─ PollWhile [WHILE: condition_var=hasMorePages]
-│  └─ FetchPage [ACTION]                (BODY)
-└─ Publish [ACTION]
-```
-
-### Why this tree is useful
-
-- **Branching correctness**: validates IF and SWITCH selection and missing-branch safeguards.
-- **Join behavior**: validates parallel fan-out/fan-in completion logic.
-- **Loop state**: validates repeat loop persistence and while iterative progression.
-- **Scope writes/reads**: output bindings from branch actions can feed later conditions/switches.
-- **Context fields**: actions receive `ctx.iterationNo`, `ctx.sequenceIndex`, and `ctx.parallelIndex` where applicable.
-
-### SQL seed for this tree
-
-Use `sql/workflow_tree_seed_example.sql` to create this exact workflow in `wf` schema.
-
-- Seeded workflow definition name: `DelphiTreeFlow`
-- Prerequisite migration: `sql/wf_scope_variables.sql`
-- Suggested instance context:
-  - `{"sampleId":"S-001","mode":2,"shouldRunQc":1,"hasMorePages":1}`
-- Deterministic worker result codes to reproduce walkthrough:
-  - `load_input=1`, `fetch_page=1 then 0`, all others `=1`
-- To run the full flow with worker claim/submit simulation, use:
-  - `sql/workflow_tree_run_example.sql` (set `@wid` and `@tok` first)
-
-## Example execution walk-through
-
-Assume:
-
-- `shouldRunQc = 1`
-- `mode = 2`
-- `hasMorePages` starts as `1`, then becomes `0` after two `FetchPage` outputs
-
-Expected high-level progression:
-
-1. `LoadInput` becomes `READY`, completes, and writes initial variables.
-2. `BranchPar` creates two concurrent branches:
-   - `GateIf` activates `QcTask`.
-   - `ModeSwitch` activates `NormalizeB`.
-3. `BranchPar` completes after both branch actions are terminal and successful.
-4. `RetryRepeat` runs `AlignChunk` exactly 3 iterations (`loop_state.current_iteration` advances 1 -> 3).
-5. `PollWhile` runs `FetchPage` twice, then condition evaluates to `0` and loop exits.
-6. `Publish` executes; root sequence completes; instance transitions to `COMPLETED`.
-
-## Failure conventions
-
-- Worker submit with `result_code < 0` marks the action `FAILED` and fails the instance.
-- Missing structural branches (IF/ELSE, SWITCH/DEFAULT, missing BODY) are engine failures with explicit `ENGINE_ERROR_*` codes.
-- JSON/template/context resolution failures raise `EWfJson` and fail the relevant activation path.
-
-## Hosting and operations
-
-- Console host: `WfEngineSrv.dpr`
-  - `/run [pollms=1000] [maxinstances=50]`
-  - `/startinstance version=<id> [context={}]`
-- Required environment variable: `METHYLPIPELINE_DB` (UniDAC connection string).
+For branch resolution parity, also run `sql/wf_sql_branch_parity.sql`.
 
 ## Extension pattern (validation / Monte Carlo)
 
-The engine core does **not** embed Monte Carlo planning. Domain workers populate
-`context_json.iterations[]` before instance start; **`ValidationPipeline`**
-([`wf_validation_pipeline_seed.sql`](sql/wf_validation_pipeline_seed.sql)) uses
-`FOREACH` and templates with `${var.taskConfig}`.
+The gateway does **not** plan iterations. A planner worker (`validation.plan-iterations`) or `POST /v1/validation/plan-iterations` (Python gateway) merges `context_json.iterations[]` before start.
 
-| Component | Role |
-|-----------|------|
-| Planner (`validation.plan-iterations`) | Builds `iterations[]` from project + validation config |
-| `StartInstance` | `wf_init_instance_scope_from_context` only — no MC hooks |
-| `FOREACH` | Flattens each iteration object into scope (`runId`, `taskConfig`, …) |
-| Templates | Embed `${var.taskConfig}` as JSON; no hidden injection in `ResolveInputForAction` |
-| `wf.instance_extension` | Optional audit (`extension_key` e.g. `methylvalidation.plan`) |
+Preferred validation workflow seed: `sql/wf_validation_pipeline_seed.sql` → **ValidationPipeline** (FOREACH over `iterations[]`).
 
 Contract: [`contract/validation_planner_capabilities.md`](contract/validation_planner_capabilities.md).
 
-Scope read helpers live in [`wf_scope_readpath.sql`](sql/wf_scope_readpath.sql):
-`wf.wf_get_scope_variable_json`, `wf.wf_get_scope_variable_int`.
+## Hosting
 
-For SQL-side activation parity (when using SQL `wf_engine_activate` path),
-run `sql/wf_sql_branch_parity.sql` after base deployment/migrations.
-It updates SQL IF/SWITCH/WHILE resolution to:
+Console host: `WfEngineSrv.dpr`
 
-1. evaluate `condition_var` / `switch_var` from scope first
-2. fall back to `condition_ref_node_key` / `switch_ref_node_key` task result codes
+```
+WfEngineSrv /rest [port=8080]
+WfEngineSrv /startinstance version=<id> [context={}]
+```
 
-For SQL-only runtime parity (Delphi optional), also run:
+Environment:
 
-- `sql/wf_sql_runtime_parity.sql`
+- `METHYLPIPELINE_DB` — UniDAC connection string (required), or
+- `POSTGRES_*` / `AZURE_SQL_*` — built by `WfEngine.Dialect.BuildConnectionStringFromEnv`
+- `BACKEND_DB` — `mssql` (default) or `postgres`
 
-It adds SQL-side behaviors that previously required Delphi runtime code:
+The legacy `/run` poll mode is removed; progression is driven by worker submit and SQL procs.
 
-1. initialize instance scope from `workflow_instance.context_json`
-2. resolve `${var.*}` in SQL placeholder resolver
+## Workflow tree example
 
-Preferred validation workflow seed:
+Use `sql/workflow_tree_seed_example.sql` and `sql/workflow_tree_run_example.sql` to exercise control-flow branches end-to-end via worker claim/submit against SQL activation.
 
-- `sql/wf_validation_pipeline_seed.sql` → **ValidationPipeline**
+Seeded workflow name: `DelphiTreeFlow`.
 
-Legacy (deprecated):
+## Python parity
 
-- `sql/workflow_methylvalidation_seed.sql` → **MethylValidationFlow** (REPEAT + `mc.*` bridge)
+For Linux CI and reference workers, use `workflow_engine/rest/gateway.py` with the same routes and contract procs.
+
+```bash
+source .venv/bin/activate
+python workflow_engine/rest/gateway.py --port 8080
+```

@@ -172,6 +172,7 @@ def _materialize_iteration(
             "seed": seed_i,
             "projectJson": str(project_path.resolve()),
             "runDir": str(run_dir.resolve()),
+            "monteCarloRunsRoot": str(monte_carlo_runs_root.resolve()),
         }
         iteration = {
             "runId": display_run_id,
