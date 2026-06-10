@@ -1,0 +1,37 @@
+"""Tests for poll loop."""
+
+from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
+
+from methyl_worker.client import TaskClaim, WorkflowRestClient
+from methyl_worker.runner import WorkerRunner
+
+
+def test_run_once_no_task() -> None:
+    client = MagicMock(spec=WorkflowRestClient)
+    client.request_task.return_value = None
+    runner = WorkerRunner(client, 1, "tok", poll_seconds=0.01)
+    assert runner.run_once() is False
+    client.request_task.assert_called_once()
+
+
+def test_run_once_processes_task() -> None:
+    client = MagicMock(spec=WorkflowRestClient)
+    claim = TaskClaim(
+        node_execution_id=99,
+        workflow_instance_id=1,
+        action_name="sample.qc_failed",
+        capability="sample.mark-failed",
+        input_json={"sampleId": "S1"},
+    )
+    client.request_task.return_value = claim
+    runner = WorkerRunner(client, 1, "tok", poll_seconds=0.01, heartbeat_seconds=3600)
+
+    with patch("methyl_worker.runner.execute_task", return_value={"status": "QC_FAILED"}):
+        assert runner.run_once() is True
+
+    client.submit_result.assert_called_once()
+    args = client.submit_result.call_args[0]
+    assert args[0] == 99
+    assert args[3] == 0

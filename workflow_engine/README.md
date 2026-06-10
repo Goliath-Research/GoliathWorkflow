@@ -76,6 +76,8 @@ Templates use `${...}` tokens only. Supported references include `ctx.iterationN
 
 OpenAPI contract: [`../contracts/openapi.yaml`](../contracts/openapi.yaml)
 
+Python REST worker (poll/submit): [`../workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) — install with `pip install -e workers/`, run `methyl-worker`.
+
 | Implementation | Command | Backend |
 |----------------|---------|---------|
 | Delphi (production) | `WfEngineSrv /rest port=8080` | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |

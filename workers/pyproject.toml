@@ -1,0 +1,18 @@
+[project]
+name = "methyl-worker"
+version = "1.0.0"
+description = "REST workflow worker for MethylPipeline middle-tier"
+readme = "WORKER_PROTOCOL.md"
+requires-python = ">=3.10,<3.13"
+dependencies = []
+
+[project.scripts]
+methyl-worker = "methyl_worker.__main__:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["methyl_worker*"]
