@@ -106,7 +106,6 @@
         <DCCReference Include="src\WfEngine.WorkerApiAdapter.pas"/>
         <DCCReference Include="src\WfEngine.ServiceLoop.pas"/>
         <DCCReference Include="src\WfEngine.RestApi.pas"/>
-        <DCCReference Include="src\WfEngine.RestHttpServer.pas"/>
         <DCCReference Include="src\WfEngine.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

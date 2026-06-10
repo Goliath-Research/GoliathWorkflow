@@ -2,7 +2,8 @@ unit WfEngine.RestApi;
 
 {
   OpenAPI route handlers for contracts/openapi.yaml.
-  Used by WfEngine.RestHttpServer and integration tests.
+  Used by the DMVC gateway controller (WfEngine.Mvc.Controller via
+  WfEngine.GatewayHost) and integration tests.
 }
 
 interface

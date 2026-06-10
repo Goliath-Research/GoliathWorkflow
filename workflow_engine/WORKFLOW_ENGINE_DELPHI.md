@@ -4,16 +4,23 @@ The Delphi middle-tier in `workflow_engine/src` is a **thin REST gateway** betwe
 
 Workflow activation, control flow, scope resolution, and task progression run **in the database** (`sp_start_workflow_instance`, `sp_worker_submit_result`, `wf_engine_activate`, and related procs). Delphi does not embed an inline engine.
 
+The gateway is built on [DelphiMVCFramework](https://github.com/danieleteti/delphimvcframework) (DMVC) and runs as a **Windows service** (`MethylWfGateway`) that can be started, paused, resumed, and stopped through the Service Control Manager.
+
 ## Components
 
 | Unit | Role |
 |------|------|
-| `WfEngine.RestHttpServer.pas` | HTTP listener → `TRestApiService` |
-| `WfEngine.RestApi.pas` | OpenAPI routes (`contracts/openapi.yaml`) |
+| `WfEngine.Mvc.Service.pas` (`TMethylWfGatewayService`) | Windows service; SCM start/pause/continue/stop |
+| `WfEngine.Mvc.WebModule.pas` | WebBroker module hosting `TMVCEngine` |
+| `WfEngine.Mvc.Controller.pas` (`TWfGatewayController`) | DMVC routes (`MVCPath` per `contracts/openapi.yaml`) |
+| `WfEngine.GatewayHost.pas` | Shared gateway state; serializes dispatch onto one DB connection |
+| `WfEngine.RestApi.pas` | Contract dispatcher (method + path + body → SQL procs) |
 | `WfEngine.ServiceLoop.pas` (`TWorkflowEngineHostedService`) | UniDAC connection lifecycle |
 | `WfEngine.GatewayDb.pas` | `wf_repo_create_workflow_instance`, `sp_start_workflow_instance` |
 | `WfEngine.WorkerApiAdapter.pas` | `wf_worker_authenticate`, `sp_worker_*` |
 | `WfEngine.Dialect.pas` | Azure SQL / PostgreSQL backend selection |
+
+`WfEnginePkg` (runtime package) contains only the SQL gateway core; the DMVC/service units belong to the `WfEngineSrv` executable, which requires the DMVC sources on the project search path.
 
 ## End-to-end lifecycle
 
@@ -43,22 +50,43 @@ Preferred validation workflow seed: `sql/wf_validation_pipeline_seed.sql` → **
 
 Contract: [`contract/validation_planner_capabilities.md`](contract/validation_planner_capabilities.md).
 
-## Hosting
+## Hosting (Windows service)
 
-Console host: `WfEngineSrv.dpr`
+`WfEngineSrv.dpr` is a dual-mode host. Without switches it runs under the Service Control Manager.
+
+Install / remove:
 
 ```
-WfEngineSrv /rest [port=8080]
-WfEngineSrv /startinstance version=<id> [context={}]
+WfEngineSrv /install
+WfEngineSrv /uninstall
 ```
 
-Environment:
+Operate like any Windows service (service name `MethylWfGateway`, display name "MethylPipeline Workflow Gateway"):
+
+```
+sc start    MethylWfGateway
+sc pause    MethylWfGateway     (HTTP listener suspended; DB state kept)
+sc continue MethylWfGateway
+sc stop     MethylWfGateway
+```
+
+Pause stops accepting HTTP requests without tearing down the gateway; continue resumes the listener. Stop closes the listener and releases the DB connection.
+
+Development modes:
+
+```
+WfEngineSrv /console [port=8080]                       run gateway in the foreground
+WfEngineSrv /startinstance version=<id> [context={}]   one-shot instance start
+```
+
+Environment (system-level for service mode):
 
 - `METHYLPIPELINE_DB` — UniDAC connection string (required), or
 - `POSTGRES_*` / `AZURE_SQL_*` — built by `WfEngine.Dialect.BuildConnectionStringFromEnv`
 - `BACKEND_DB` — `mssql` (default) or `postgres`
+- `WF_GATEWAY_PORT` — HTTP port (default 8080)
 
-The legacy `/run` poll mode is removed; progression is driven by worker submit and SQL procs.
+Build prerequisite: DMVC (`delphimvcframework/sources`) on the `WfEngineSrv` project search path. The legacy `/run` poll mode and the raw Indy host (`WfEngine.RestHttpServer`) are removed; progression is driven by worker submit and SQL procs.
 
 ## Workflow tree example
 

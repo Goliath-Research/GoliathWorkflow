@@ -84,7 +84,7 @@ Python REST worker (poll/submit): [`../workers/WORKER_PROTOCOL.md`](../workers/W
 
 | Implementation | Command | Backend |
 |----------------|---------|---------|
-| Delphi (production) | `WfEngineSrv /rest port=8080` | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |
+| Delphi (production) | `MethylWfGateway` Windows service (`WfEngineSrv /install`; `/console` for dev) | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |
 | Python (CI / Linux) | `python workflow_engine/rest/gateway.py --port 8080` | PostgreSQL via `psql` |
 
 PostgreSQL parity scripts (`sql_pg/05`–`07`) port runtime resolver, scope write-path, and JSON encoding from the T-SQL parity scripts. FOREACH (`wf_sql_foreach_support.sql`) remains MSSQL-only for now.

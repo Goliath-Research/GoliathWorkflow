@@ -3,7 +3,8 @@
 OpenAPI workflow REST gateway backed by PostgreSQL wf contract objects.
 
 Implements contracts/openapi.yaml for CI parity and reference workers on Linux.
-Delphi WfEngineSrv /rest provides the same routes against UniDAC (MSSQL or PG).
+The Delphi MethylWfGateway Windows service (WfEngineSrv, DMVC-based) provides the
+same routes against UniDAC (MSSQL or PG).
 """
 
 from __future__ import annotations

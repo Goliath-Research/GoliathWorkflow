@@ -31,10 +31,7 @@ requires
   rtl,
   dbrtl,
   dac370,
-  unidac370,
-  IndySystem,
-  IndyCore,
-  IndyProtocols;
+  unidac370;
 
 contains
   WfEngine.Types in 'src\WfEngine.Types.pas',
@@ -44,7 +41,6 @@ contains
   WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
   WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
   WfEngine.RestApi in 'src\WfEngine.RestApi.pas',
-  WfEngine.RestHttpServer in 'src\WfEngine.RestHttpServer.pas',
   WfEngine in 'src\WfEngine.pas';
 
 end.

@@ -80,7 +80,7 @@ export POSTGRES_PASSWORD=methyl POSTGRES_DB=methylpipeline_parity
 python workflow_engine/rest/gateway.py --port 8080
 ```
 
-Maps [`contracts/openapi.yaml`](../contracts/openapi.yaml) to PostgreSQL wf objects. Delphi `WfEngineSrv /rest port=8080` exposes the same routes via UniDAC.
+Maps [`contracts/openapi.yaml`](../contracts/openapi.yaml) to PostgreSQL wf objects. The Delphi `MethylWfGateway` Windows service (`WfEngineSrv`, DMVC-based; `/console` for development) exposes the same routes via UniDAC.
 
 ## Connection string (middle-tier)
 

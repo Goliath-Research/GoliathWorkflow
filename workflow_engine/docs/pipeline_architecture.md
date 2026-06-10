@@ -723,7 +723,7 @@ Workers **never connect to the database directly**. They use the REST API (or an
 | `POST` | `/v1/workflows/instances` | Portal / admin |
 | `GET` | `/v1/workflows/instances/{id}` | Portal status |
 
-Implementation: [`workflow_engine/src/WfEngine.RestApi.pas`](/home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.RestApi.pas), served by [`WfEngine.RestHttpServer.pas`](/home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.RestHttpServer.pas) (default port **8080**).
+Implementation: [`workflow_engine/src/WfEngine.RestApi.pas`](/home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.RestApi.pas), served by the DelphiMVCFramework controller [`WfEngine.Mvc.Controller.pas`](/home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.Mvc.Controller.pas) hosted as Windows service **MethylWfGateway** (default port **8080**, `WF_GATEWAY_PORT`).
 
 Python gateway (PostgreSQL parity testing): [`workflow_engine/rest/gateway.py`](/home/ubuntu/MethylPipeline/workflow_engine/rest/gateway.py).
 
@@ -755,7 +755,7 @@ sequenceDiagram
 
 | Component | Role |
 |-----------|------|
-| **`WfEngine.RestHttpServer`** | HTTP → `TRestApiService.Handle` |
+| **`WfEngine.Mvc.Controller` (DMVC)** | HTTP routes → `TRestApiService.Handle`; hosted by Windows service `MethylWfGateway` |
 | **`TRestApiService`** | Auth, JSON parse, call `wf` contract procs |
 | **`WfEngine.GatewayDb` / SQL procs** | Create/start instances; activate graph, resolve templates, advance control flow |
 | **`WfEngine.WorkerApiAdapter`** | Worker authenticate, claim, submit, heartbeat, fail |

@@ -1,108 +1,139 @@
 program WfEngineSrv;
 
+{
+  MethylPipeline workflow REST gateway (DelphiMVCFramework).
+
+  Default mode: Windows service (MethylWfGateway). Supports the standard
+  VCL service switches (/install, /uninstall) and SCM start/pause/continue/stop.
+
+  Development modes:
+    WfEngineSrv /console [port=8080]
+    WfEngineSrv /startinstance version=<id> [context={}]
+}
+
 {$APPTYPE CONSOLE}
-{$STRONGLINKTYPES ON}
 
 uses
+  Vcl.SvcMgr,
   System.SysUtils,
+  Web.WebReq,
+  IdHTTPWebBrokerBridge,
   WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
-  WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
   WfEngine.Types in 'src\WfEngine.Types.pas',
   WfEngine.Interfaces in 'src\WfEngine.Interfaces.pas',
   WfEngine.GatewayDb in 'src\WfEngine.GatewayDb.pas',
   WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
-  WfEngine.RestHttpServer in 'src\WfEngine.RestHttpServer.pas';
+  WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
+  WfEngine.RestApi in 'src\WfEngine.RestApi.pas',
+  WfEngine.GatewayHost in 'src\WfEngine.GatewayHost.pas',
+  WfEngine.Mvc.Controller in 'src\WfEngine.Mvc.Controller.pas',
+  WfEngine.Mvc.WebModule in 'src\WfEngine.Mvc.WebModule.pas' {WfGatewayWebModule: TWebModule},
+  WfEngine.Mvc.Service in 'src\WfEngine.Mvc.Service.pas' {MethylWfGateway: TService};
 
-function GetArgValue(const Args: TArray<string>; const Name: string; const Default: string): string;
+function GetArgValue(const Name, Default: string): string;
 var
   I: Integer;
-  Prefix: string;
+  Prefix, Arg: string;
 begin
   Prefix := LowerCase(Name) + '=';
-  for I := 0 to High(Args) do
-    if LowerCase(Args[I]).StartsWith(Prefix) then
-      Exit(Copy(Args[I], Length(Prefix) + 1, MaxInt));
+  for I := 1 to ParamCount do
+  begin
+    Arg := ParamStr(I);
+    if LowerCase(Arg).StartsWith(Prefix) then
+      Exit(Copy(Arg, Length(Prefix) + 1, MaxInt));
+  end;
   Result := Default;
 end;
 
 procedure PrintUsage;
 begin
-  Writeln('WfEngineSrv - MethylPipeline workflow REST gateway');
+  Writeln('WfEngineSrv - MethylPipeline workflow REST gateway (Windows service)');
   Writeln;
-  Writeln('Usage:');
+  Writeln('Service management:');
+  Writeln('  WfEngineSrv /install                      register service MethylWfGateway');
+  Writeln('  WfEngineSrv /uninstall                    remove the service');
+  Writeln('  sc start|pause|continue|stop MethylWfGateway');
+  Writeln;
+  Writeln('Development:');
+  Writeln('  WfEngineSrv /console [port=8080]          run gateway in the foreground');
   Writeln('  WfEngineSrv /startinstance version=<id> [context={}]');
-  Writeln('  WfEngineSrv /rest [port=8080]');
   Writeln;
   Writeln('Environment:');
   Writeln('  METHYLPIPELINE_DB  UniDAC connection string (required)');
   Writeln('  BACKEND_DB         mssql | postgres (optional)');
+  Writeln('  WF_GATEWAY_PORT    HTTP port for service mode (default 8080)');
 end;
 
+procedure RunConsole;
+var
+  Bridge: TIdHTTPWebBrokerBridge;
+  Port: Integer;
+begin
+  Port := StrToIntDef(GetArgValue('port', ''), ResolveGatewayPort);
+  if WebRequestHandler <> nil then
+    WebRequestHandler.WebModuleClass := WebModuleClass;
+  InitGatewayHost(ResolveGatewayConnectionString);
+  Bridge := TIdHTTPWebBrokerBridge.Create(nil);
+  try
+    Bridge.DefaultPort := Port;
+    Bridge.Active := True;
+    Writeln(Format('REST API listening on http://0.0.0.0:%d/v1', [Port]));
+    Writeln('Press Ctrl+C to stop.');
+    while True do
+      Sleep(1000);
+  finally
+    Bridge.Free;
+    ShutdownGatewayHost;
+  end;
+end;
+
+procedure RunStartInstance;
 var
   Cfg: TWorkflowEngineServiceConfig;
   Svc: TWorkflowEngineHostedService;
-  RestSrv: TRestHttpServer;
-  Args: TArray<string>;
-  Mode, Conn, Ctx: string;
   VersionId, InstanceId: Int64;
-  RestPort: Integer;
-  I: Integer;
+  Ctx: string;
+begin
+  VersionId := StrToInt64Def(GetArgValue('version', '0'), 0);
+  if VersionId <= 0 then
+    raise Exception.Create('version=<workflow_version_id> is required.');
+  Ctx := GetArgValue('context', '{}');
+  Cfg.ConnectionString := ResolveGatewayConnectionString;
+  Svc := TWorkflowEngineHostedService.Create(Cfg);
+  try
+    InstanceId := Svc.CreateAndStartInstance(VersionId, Ctx);
+    Writeln(Format('Started workflow instance %d (version %d).', [InstanceId, VersionId]));
+  finally
+    Svc.Free;
+  end;
+end;
+
 begin
   try
-    SetLength(Args, ParamCount);
-    for I := 1 to ParamCount do
-      Args[I - 1] := ParamStr(I);
-
-    if (Length(Args) = 0) or SameText(Args[0], '/?') or SameText(Args[0], '-h') or SameText(Args[0], '/help') then
+    if FindCmdLineSwitch('?', True) or FindCmdLineSwitch('h', True) or FindCmdLineSwitch('help', True) then
     begin
       PrintUsage;
       Exit;
     end;
 
-    Conn := GetEnvironmentVariable('METHYLPIPELINE_DB');
-    if Conn = '' then
-      Conn := BuildConnectionStringFromEnv;
-    if Conn = '' then
-      raise Exception.Create('Set METHYLPIPELINE_DB or POSTGRES_*/AZURE_SQL_* environment variables.');
-
-    Cfg.ConnectionString := Conn;
-
-    Mode := LowerCase(Args[0]);
-    Svc := TWorkflowEngineHostedService.Create(Cfg);
-    try
-      if Mode = '/startinstance' then
-      begin
-        VersionId := StrToInt64Def(GetArgValue(Args, 'version', '0'), 0);
-        if VersionId <= 0 then
-          raise Exception.Create('version=<workflow_version_id> is required.');
-        Ctx := GetArgValue(Args, 'context', '{}');
-        InstanceId := Svc.CreateAndStartInstance(VersionId, Ctx);
-        Writeln(Format('Started workflow instance %d (version %d).', [InstanceId, VersionId]));
-      end
-      else if Mode = '/rest' then
-      begin
-        RestPort := StrToIntDef(GetArgValue(Args, 'port', '8080'), 8080);
-        RestSrv := TRestHttpServer.Create(Svc);
-        try
-          RestSrv.Start(RestPort);
-          Writeln('Press Ctrl+C to stop REST server.');
-          while True do
-            Sleep(1000);
-        finally
-          RestSrv.Free;
-        end;
-      end
-      else if Mode = '/run' then
-      begin
-        Writeln('The /run poll mode is removed. Workflow progression runs in SQL.');
-        Writeln('Use WfEngineSrv /rest for the OpenAPI gateway, or start instances with /startinstance.');
-        ExitCode := 1;
-      end
-      else
-        PrintUsage;
-    finally
-      Svc.Free;
+    if FindCmdLineSwitch('console', True) then
+    begin
+      RunConsole;
+      Exit;
     end;
+
+    if FindCmdLineSwitch('startinstance', True) then
+    begin
+      RunStartInstance;
+      Exit;
+    end;
+
+    // Default: run under the Windows Service Control Manager
+    // (also handles /install and /uninstall).
+    if not Application.DelayInitialize or Application.Installing then
+      Application.Initialize;
+    Application.CreateForm(TMethylWfGatewayService, MethylWfGateway);
+    Application.Run;
   except
     on E: Exception do
     begin
