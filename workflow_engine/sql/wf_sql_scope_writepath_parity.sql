@@ -12,7 +12,7 @@
   Prerequisites:
   - Base wf schema (MethylPipeline.sql)
   - wf_scope_variables.sql
-  - wf_monte_carlo_support.sql
+  - wf_scope_readpath.sql
   - wf_sql_runtime_parity.sql
   - wf_sql_branch_parity.sql
 */
@@ -25,7 +25,7 @@ IF OBJECT_ID(N'wf.scope_variable', N'U') IS NULL
    OR OBJECT_ID(N'wf.variable_output_binding', N'U') IS NULL
    OR OBJECT_ID(N'wf.wf_resolve_placeholders', N'P') IS NULL
 BEGIN
-    RAISERROR(N'Prerequisite missing: deploy wf_scope_variables, wf_monte_carlo_support, wf_sql_runtime_parity, wf_sql_branch_parity first.', 16, 1);
+    RAISERROR(N'Prerequisite missing: deploy wf_scope_variables, wf_scope_readpath, wf_sql_runtime_parity, wf_sql_branch_parity first.', 16, 1);
     RETURN;
 END
 GO

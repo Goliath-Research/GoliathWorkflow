@@ -53,7 +53,7 @@ Supported token families:
 | Scope defaults (definition) | `wf.node_scope_default` (`var_name`, `default_expr`) |
 | Output → variable (definition) | `wf.variable_output_binding` (`source_kind`: `result_code` \| `output_path`) |
 
-Scope read walk: [sql/wf_monte_carlo_support.sql](sql/wf_monte_carlo_support.sql) (`wf.wf_get_scope_variable_json` / `_int`).
+Scope read walk: [sql/wf_scope_readpath.sql](sql/wf_scope_readpath.sql) (`wf.wf_get_scope_variable_json` / `_int`).
 
 ### 1.4 Loop index
 
@@ -116,7 +116,7 @@ Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contr
 | Mapper (all comparisons) | `methyl-mapper` | **2** ([PCaOvrFlow](sql/PCaOvrFlow.md)) |
 | Enricher | `methyl-enricher` | **2** |
 | Disease progression | `methyl-disease-progression` | **2** |
-| MC validation loop | various | [workflow_methylvalidation_seed.sql](sql/workflow_methylvalidation_seed.sql) |
+| MC validation loop | **ValidationPipeline** + planner | [wf_validation_pipeline_seed.sql](sql/wf_validation_pipeline_seed.sql) |
 
 **Milestone 1:** `PCaTwoGroupFlow` — one control vs one disease, 24 chromosomes.  
 **Milestone 2:** `PCaOvrFlow` — `control_vs_each_disease` (PCa_Low ∥ PCa_High), then mapper → enricher → progression.
@@ -127,16 +127,21 @@ Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contr
 
 1. `MethylPipeline.sql` (or base `wf` schema)
 2. `wf_scope_variables.sql`
-3. `wf_monte_carlo_support.sql`
-4. `wf_sql_runtime_parity.sql`
-5. `wf_sql_branch_parity.sql`
-6. **`wf_sql_scope_writepath_parity.sql`** (write-path parity)
-7. **`wf_sql_foreach_support.sql`** (FOREACH node + indexed placeholders)
-8. **`wf_sp_delete_workflow_def.sql`** (delete/rebuild definitions)
-9. **`wf_sample_prep_pipeline_seed.sql`** — **SamplePrepPipeline** (per-sample FASTQ → HDF5)
-10. **`wf_data_driven_pipeline_seed.sql`** — generic DataDrivenPipeline (preferred)
-11. `wf_pca_two_group_seed.sql` / `wf_pca_ovr_seed.sql` — **deprecated** static generators
-12. `wf_pca_two_group_run_example.sql` (validation, optional)
+3. `wf_scope_readpath.sql`
+4. `wf_json_column_alignment.sql` (migrate legacy JSON columns to native `json`)
+5. `wf_instance_extension.sql`
+6. `wf_drop_monte_carlo_tables.sql` (remove deprecated `wf.monte_carlo_*`)
+7. `wf_sql_runtime_parity.sql`
+8. `wf_sql_branch_parity.sql`
+9. **`wf_sql_scope_writepath_parity.sql`** (write-path parity)
+10. **`wf_sql_foreach_support.sql`** (FOREACH node + indexed placeholders)
+11. **`wf_sp_delete_workflow_def.sql`** (delete/rebuild definitions)
+12. **`wf_validation_pipeline_seed.sql`** — **ValidationPipeline** (FOREACH iterations)
+13. **`wf_sample_prep_pipeline_seed.sql`** — **SamplePrepPipeline** (per-sample FASTQ → HDF5)
+14. **`wf_data_driven_pipeline_seed.sql`** — generic DataDrivenPipeline (preferred)
+15. `wf_pca_two_group_seed.sql` / `wf_pca_ovr_seed.sql` — **deprecated** static generators
+16. `workflow_methylvalidation_seed.sql` — **deprecated** MethylValidationFlow
+17. `wf_pca_two_group_run_example.sql` (validation, optional)
 
 ---
 

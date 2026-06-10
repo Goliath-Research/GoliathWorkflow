@@ -59,7 +59,7 @@ BEGIN
         workflow_instance_id        BIGINT NOT NULL,
         scope_node_execution_id     BIGINT NOT NULL,
         var_name                    NVARCHAR(128) NOT NULL,
-        value_json                  NVARCHAR(MAX) NOT NULL,
+        value_json                  json NOT NULL,
         updated_at_utc              DATETIME2(7) NOT NULL CONSTRAINT DF_sv_updated DEFAULT (SYSUTCDATETIME()),
         CONSTRAINT PK_scope_variable PRIMARY KEY (workflow_instance_id, scope_node_execution_id, var_name),
         CONSTRAINT FK_sv_instance FOREIGN KEY (workflow_instance_id) REFERENCES wf.workflow_instance(id) ON DELETE CASCADE

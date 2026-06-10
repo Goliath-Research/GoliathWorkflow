@@ -1,5 +1,11 @@
 /*
-  Workflow Engine (wf schema) - MethylValidation explicit workflow seed.
+  DEPRECATED — use ValidationPipeline + context_json.iterations[] instead.
+
+  Workflow Engine (wf schema) - MethylValidation explicit workflow seed (legacy MC bridge).
+
+  Superseded by:
+  - wf_validation_pipeline_seed.sql (ValidationPipeline)
+  - contract/validation_planner_capabilities.md (planner populates iterations[])
 
   Encodes this runtime shape:
     1) MC feature loop (repeat N)
@@ -15,7 +21,7 @@
   Prerequisites:
   - Base wf schema deployed
   - wf_scope_variables.sql applied
-  - (optional) wf_monte_carlo_support.sql for MC metadata/task config persistence
+  - (deprecated) wf_monte_carlo_support.sql — no longer required
 */
 
 SET ANSI_NULLS ON;
@@ -39,10 +45,11 @@ GO
 
 IF EXISTS (SELECT 1 FROM wf.workflow_def WHERE name = N'MethylValidationFlow')
 BEGIN
-    PRINT N'Seed skipped: wf.workflow_def "MethylValidationFlow" already exists.';
+    PRINT N'DEPRECATED seed skipped: MethylValidationFlow already exists. Prefer ValidationPipeline (wf_validation_pipeline_seed.sql).';
 END
 ELSE
 BEGIN
+    PRINT N'WARNING: MethylValidationFlow is deprecated. Deploy ValidationPipeline + validation planner instead.';
     DECLARE @feature_iterations INT = 30;
     DECLARE @quality_iterations INT = 20;
     IF @feature_iterations < 1 SET @feature_iterations = 1;

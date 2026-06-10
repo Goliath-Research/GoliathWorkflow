@@ -102,11 +102,11 @@ objects:
     - name: wf.wf_repo_try_latest_task_result_code
       kind: function
       required: true
-    - name: wf.wf_repo_upsert_monte_carlo_plan
+    - name: wf.wf_repo_upsert_instance_extension
       kind: procedure
       required: true
-    - name: wf.wf_repo_upsert_monte_carlo_run
-      kind: procedure
+    - name: wf.wf_repo_get_instance_extension
+      kind: function
       required: true
     - name: wf.wf_repo_set_scope_variable
       kind: procedure

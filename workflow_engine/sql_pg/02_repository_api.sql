@@ -154,68 +154,49 @@ BEGIN
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE wf.wf_repo_upsert_monte_carlo_plan(
+CREATE OR REPLACE PROCEDURE wf.wf_repo_upsert_instance_extension(
   IN p_instance_id bigint,
-  IN p_base_project_path text,
-  IN p_layout text,
-  IN p_seed int,
-  IN p_feature_iterations int,
-  IN p_quality_iterations int,
-  IN p_config_json jsonb
+  IN p_extension_key text,
+  IN p_data_json jsonb
 )
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  INSERT INTO wf.monte_carlo_plan (
-    workflow_instance_id, base_project_path, layout_name, seed,
-    feature_iterations, quality_iterations, config_json
-  ) VALUES (
-    p_instance_id, p_base_project_path, p_layout, p_seed,
-    p_feature_iterations, p_quality_iterations, p_config_json
-  )
-  ON CONFLICT (workflow_instance_id) DO UPDATE SET
-    base_project_path = EXCLUDED.base_project_path,
-    layout_name = EXCLUDED.layout_name,
-    seed = EXCLUDED.seed,
-    feature_iterations = EXCLUDED.feature_iterations,
-    quality_iterations = EXCLUDED.quality_iterations,
-    config_json = EXCLUDED.config_json,
+  IF p_extension_key IS NULL OR btrim(p_extension_key) = '' THEN
+    RETURN;
+  END IF;
+
+  INSERT INTO wf.instance_extension (workflow_instance_id, extension_key, data_json)
+  VALUES (p_instance_id, p_extension_key, p_data_json)
+  ON CONFLICT (workflow_instance_id, extension_key) DO UPDATE SET
+    data_json = EXCLUDED.data_json,
     updated_at_utc = (now() AT TIME ZONE 'utc');
 END;
 $$;
 
-CREATE OR REPLACE PROCEDURE wf.wf_repo_upsert_monte_carlo_run(
-  IN p_instance_id bigint,
-  IN p_run_id text,
-  IN p_iteration_no int,
-  IN p_phase text,
-  IN p_task_config_json jsonb
+CREATE OR REPLACE FUNCTION wf.wf_repo_get_instance_extension(
+  p_instance_id bigint,
+  p_extension_key text
 )
-LANGUAGE plpgsql
+RETURNS jsonb
+LANGUAGE sql
+STABLE
 AS $$
-BEGIN
-  INSERT INTO wf.monte_carlo_run (
-    workflow_instance_id, run_id, iteration_no, phase_name, task_config_json
-  ) VALUES (
-    p_instance_id, p_run_id, p_iteration_no, p_phase, p_task_config_json
-  )
-  ON CONFLICT (workflow_instance_id, run_id) DO UPDATE SET
-    iteration_no = EXCLUDED.iteration_no,
-    phase_name = EXCLUDED.phase_name,
-    task_config_json = EXCLUDED.task_config_json,
-    updated_at_utc = (now() AT TIME ZONE 'utc');
-END;
+  SELECT ie.data_json
+  FROM wf.instance_extension ie
+  WHERE ie.workflow_instance_id = p_instance_id
+    AND ie.extension_key = p_extension_key;
 $$;
 
 CREATE OR REPLACE PROCEDURE wf.wf_repo_set_scope_variable(
   IN p_instance_id bigint,
   IN p_scope_exec_id bigint,
   IN p_var_name text,
-  IN p_value_json text
+  IN p_value_json jsonb
 )
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  CALL wf.wf_set_scope_variable(p_instance_id, p_scope_exec_id, p_var_name, p_value_json);
+  CALL wf.wf_set_scope_variable(p_instance_id, p_scope_exec_id, p_var_name, p_value_json::text);
 END;
 $$;

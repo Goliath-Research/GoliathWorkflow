@@ -15,10 +15,14 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 5. [`workflow_seed_examples.sql`](workflow_seed_examples.sql) — optional demo workflow (`DemoFlow`).
 6. [`workflow_tree_seed_example.sql`](workflow_tree_seed_example.sql) — optional tree workflow (`DelphiTreeFlow`) matching Delphi runtime walkthrough.
 7. [`workflow_tree_run_example.sql`](workflow_tree_run_example.sql) — optional end-to-end claim/submit simulation loop for `DelphiTreeFlow`.
-8. [`wf_monte_carlo_support.sql`](wf_monte_carlo_support.sql) — Monte Carlo plan/run metadata tables for Delphi middle-tier orchestration.
+8. [`wf_scope_readpath.sql`](wf_scope_readpath.sql) — scope variable read-path helpers (`wf_get_scope_variable_json/int`).
+8a. [`wf_instance_extension.sql`](wf_instance_extension.sql) — generic optional instance extension storage (json/jsonb).
+8b. [`wf_json_column_alignment.sql`](wf_json_column_alignment.sql) — migrate scope/context JSON columns to native types.
+8c. [`wf_drop_monte_carlo_tables.sql`](wf_drop_monte_carlo_tables.sql) — remove deprecated `wf.monte_carlo_*` tables.
 9. [`wf_sql_branch_parity.sql`](wf_sql_branch_parity.sql) — SQL IF/SWITCH/WHILE variable-branch parity (`condition_var`/`switch_var`) with Delphi runtime behavior.
-10. [`workflow_methylvalidation_seed.sql`](workflow_methylvalidation_seed.sql) — explicit MethylValidation workflow seed (MC centroid/detector loop + post-loop centroid/detector/mapper/enricher/disease progression).
-11. [`wf_sql_runtime_parity.sql`](wf_sql_runtime_parity.sql) — SQL-only parity for scope init from context, `${var.*}` resolution, and `mc.taskConfig` payload injection.
+10. [`workflow_methylvalidation_seed.sql`](workflow_methylvalidation_seed.sql) — **deprecated** MethylValidationFlow (use ValidationPipeline).
+10a. [`wf_validation_pipeline_seed.sql`](wf_validation_pipeline_seed.sql) — **ValidationPipeline** (FOREACH over `iterations[]`).
+11. [`wf_sql_runtime_parity.sql`](wf_sql_runtime_parity.sql) — SQL-only parity for scope init from context and `${var.*}` resolution.
 12. [`wf_sql_scope_writepath_parity.sql`](wf_sql_scope_writepath_parity.sql) — SQL write-path parity: `wf_apply_output_bindings`, `wf_open_scope`, scope copy for PARALLEL children.
 13. [`wf_sp_delete_workflow_def.sql`](wf_sp_delete_workflow_def.sql) — `sp_delete_workflow_def`: remove a workflow definition (and instances) so seed scripts can be re-run.
 14. [`wf_sql_foreach_support.sql`](wf_sql_foreach_support.sql) — **FOREACH** control-flow node, parallel mode, `${var.name[n]}`, `${ctx.item}`.

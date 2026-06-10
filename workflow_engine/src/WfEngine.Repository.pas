@@ -67,13 +67,6 @@ type
     function LoadInputBindings(const ANodeId: Int64): TArray<TPair<string, string>>;
     function GetInstanceContextJson(const AInstanceId: Int64): string;
     procedure UpdateInstanceContextJson(const AInstanceId: Int64; const AContextJson: string);
-    procedure UpsertMonteCarloPlan(const AInstanceId: Int64; const ABaseProjectPath,
-      ALayout: string; ASeed, AFeatureIterations, AQualityIterations: Integer;
-      const AConfigJson: string);
-    procedure UpsertMonteCarloRun(const AInstanceId: Int64; const ARunId: string;
-      AIterationNo: Integer; const APhase, ATaskConfigJson: string);
-    function TryGetMonteCarloRunTaskConfig(const AInstanceId: Int64; const ARunId: string;
-      out ATaskConfigJson: string): Boolean;
     procedure DeleteScopeVariables(const AInstanceId: Int64; const AScopeExecId: Int64);
     procedure CopyScopeVariables(const AInstanceId, AFromScopeExecId, AToScopeExecId: Int64);
     procedure SetScopeVariable(const AInstanceId, AScopeExecId: Int64; const AVarName, AValueJson: string);
@@ -815,64 +808,6 @@ begin
   ExecSql(Format(
     'UPDATE %s.workflow_instance SET context_json = %s WHERE id = %d',
     [WfSchema, IfThen(AContextJson <> '', QuotedStr(AContextJson), 'NULL'), AInstanceId]));
-end;
-
-procedure TWorkflowRepository.UpsertMonteCarloPlan(const AInstanceId: Int64;
-  const ABaseProjectPath, ALayout: string; ASeed, AFeatureIterations,
-  AQualityIterations: Integer; const AConfigJson: string);
-var
-  P: TUniStoredProc;
-begin
-  P := TUniStoredProc.Create(nil);
-  try
-    P.Connection := FConnection;
-    P.StoredProcName := WfSchemaDot + 'wf_repo_upsert_monte_carlo_plan';
-    P.Params.CreateParam(ftLargeint, 'instance_id', ptInput).AsLargeInt := AInstanceId;
-    P.Params.CreateParam(ftWideString, 'base_project_path', ptInput).AsString := ABaseProjectPath;
-    P.Params.CreateParam(ftWideString, 'layout', ptInput).AsString := ALayout;
-    P.Params.CreateParam(ftInteger, 'seed', ptInput).AsInteger := ASeed;
-    P.Params.CreateParam(ftInteger, 'feature_iterations', ptInput).AsInteger := AFeatureIterations;
-    P.Params.CreateParam(ftInteger, 'quality_iterations', ptInput).AsInteger := AQualityIterations;
-    if AConfigJson = '' then
-      P.Params.CreateParam(ftWideMemo, 'config_json', ptInput).Clear
-    else
-      P.Params.CreateParam(ftWideMemo, 'config_json', ptInput).AsString := AConfigJson;
-    P.ExecProc;
-  finally
-    P.Free;
-  end;
-end;
-
-procedure TWorkflowRepository.UpsertMonteCarloRun(const AInstanceId: Int64;
-  const ARunId: string; AIterationNo: Integer; const APhase, ATaskConfigJson: string);
-var
-  P: TUniStoredProc;
-begin
-  P := TUniStoredProc.Create(nil);
-  try
-    P.Connection := FConnection;
-    P.StoredProcName := WfSchemaDot + 'wf_repo_upsert_monte_carlo_run';
-    P.Params.CreateParam(ftLargeint, 'instance_id', ptInput).AsLargeInt := AInstanceId;
-    P.Params.CreateParam(ftWideString, 'run_id', ptInput).AsString := ARunId;
-    P.Params.CreateParam(ftInteger, 'iteration_no', ptInput).AsInteger := AIterationNo;
-    P.Params.CreateParam(ftWideString, 'phase', ptInput).AsString := APhase;
-    if ATaskConfigJson = '' then
-      P.Params.CreateParam(ftWideMemo, 'task_config_json', ptInput).Clear
-    else
-      P.Params.CreateParam(ftWideMemo, 'task_config_json', ptInput).AsString := ATaskConfigJson;
-    P.ExecProc;
-  finally
-    P.Free;
-  end;
-end;
-
-function TWorkflowRepository.TryGetMonteCarloRunTaskConfig(const AInstanceId: Int64;
-  const ARunId: string; out ATaskConfigJson: string): Boolean;
-begin
-  ATaskConfigJson := ScalarStr(Format(
-    'SELECT task_config_json FROM %s.monte_carlo_run WHERE workflow_instance_id = %d AND run_id = %s',
-    [WfSchema, AInstanceId, QuotedStr(ARunId)]));
-  Result := ATaskConfigJson <> '';
 end;
 
 procedure TWorkflowRepository.DeleteScopeVariables(const AInstanceId: Int64;

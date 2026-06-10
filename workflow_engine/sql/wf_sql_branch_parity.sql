@@ -6,7 +6,7 @@
     then fall back to *_ref_node_key task result behavior.
 
   Prerequisite:
-  - wf_monte_carlo_support.sql (for wf.wf_get_scope_variable_int helper)
+  - wf_scope_readpath.sql (for wf.wf_get_scope_variable_int helper)
 */
 
 SET ANSI_NULLS ON;

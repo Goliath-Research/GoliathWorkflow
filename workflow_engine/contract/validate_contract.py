@@ -27,6 +27,13 @@ OBJECT_PATTERNS = [
     re.compile(r"CREATE\s+(?:OR\s+REPLACE\s+)?PROCEDURE\s+([\w.]+)", re.I),
 ]
 
+# JSON payload columns must use native json (MSSQL) / jsonb (PG), not NVARCHAR(MAX) or text.
+FORBIDDEN_JSON_COL = re.compile(
+    r"^\s*(value_json|data_json|context_value_json|config_json|task_config_json)\s+"
+    r"(?:nvarchar\s*\(\s*max\s*\)|text)\s",
+    re.I | re.M,
+)
+
 
 def load_required_objects() -> list[str]:
     if yaml is None:
@@ -59,6 +66,24 @@ def scan_sql_dir(directory: Path) -> set[str]:
             for m in pat.finditer(text):
                 found.add(m.group(1).lower())
     return found
+
+
+def audit_json_column_types(directories: dict[str, Path]) -> int:
+    """Fail if wf_* deploy scripts declare JSON payload columns as NVARCHAR(MAX) or text."""
+    exit_code = 0
+    for dialect, directory in directories.items():
+        if not directory.is_dir():
+            continue
+        for path in sorted(directory.glob("wf_*.sql")):
+            text = path.read_text(encoding="utf-8", errors="replace")
+            for match in FORBIDDEN_JSON_COL.finditer(text):
+                print(
+                    f"[{dialect}] forbidden JSON column type in {path.name}: "
+                    f"{match.group(0).strip()} (use json/jsonb)",
+                    file=sys.stderr,
+                )
+                exit_code = 1
+    return exit_code
 
 
 def main() -> int:
@@ -103,6 +128,8 @@ def main() -> int:
             print(f"  mssql-only: {n}")
         for n in only_pg[:20]:
             print(f"  postgres-only: {n}")
+
+    exit_code |= audit_json_column_types(SQL_DIRS)
 
     return exit_code
 

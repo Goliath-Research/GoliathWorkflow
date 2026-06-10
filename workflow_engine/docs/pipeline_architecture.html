@@ -119,7 +119,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#entity-relationship-simplified" id="toc-entity-relationship-simplified" class="nav-link" data-scroll-target="#entity-relationship-simplified"><span class="header-section-number">6.3</span> Entity relationship (simplified)</a></li>
   <li><a href="#scoped-variables-declaration-assignment-and-use" id="toc-scoped-variables-declaration-assignment-and-use" class="nav-link" data-scroll-target="#scoped-variables-declaration-assignment-and-use"><span class="header-section-number">6.4</span> Scoped variables — declaration, assignment, and use</a></li>
   <li><a href="#worker-driven-conditions-and-branching" id="toc-worker-driven-conditions-and-branching" class="nav-link" data-scroll-target="#worker-driven-conditions-and-branching"><span class="header-section-number">6.5</span> Worker-driven conditions and branching</a></li>
-  <li><a href="#monte-carlo-runs-and-stratified-partitions" id="toc-monte-carlo-runs-and-stratified-partitions" class="nav-link" data-scroll-target="#monte-carlo-runs-and-stratified-partitions"><span class="header-section-number">6.6</span> Monte Carlo runs and stratified partitions</a></li>
+  <li><a href="#extension-pattern-validation-and-monte-carlo" id="toc-extension-pattern-validation-and-monte-carlo" class="nav-link" data-scroll-target="#extension-pattern-validation-and-monte-carlo"><span class="header-section-number">6.6</span> Extension pattern: validation and Monte Carlo</a></li>
   <li><a href="#cluster-metadata-in-db" id="toc-cluster-metadata-in-db" class="nav-link" data-scroll-target="#cluster-metadata-in-db"><span class="header-section-number">6.7</span> Cluster metadata in DB</a></li>
   </ul></li>
   <li><a href="#two-group-example-config-workflow-tree" id="toc-two-group-example-config-workflow-tree" class="nav-link" data-scroll-target="#two-group-example-config-workflow-tree"><span class="header-section-number">7</span> 5. Two-group example: config → workflow tree</a>
@@ -857,7 +857,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><strong>Why they exist:</strong></p>
 <ol type="1">
 <li><strong>Complex control flow</strong> — conditions that are too rich for a static workflow definition (QC gates, pagination, model-quality thresholds, custom business rules) can be evaluated inside a worker ACTION; the worker writes an integer or JSON fragment back into scope, and downstream IF / SWITCH / WHILE nodes read that value.</li>
-<li><strong>Monte Carlo validation</strong> — each iteration needs a <strong>fresh stratified train/validation partition</strong> of cohort samples (e.g.&nbsp;80% train / 20% test per cohort). Those partition descriptors are stored as scoped variables (<code>mc.taskConfig</code>) and injected into every pipeline step for that iteration.</li>
+<li><strong>Validation / Monte Carlo iterations</strong> — each iteration needs a <strong>fresh stratified train/validation partition</strong>. A <strong>domain planner</strong> (outside the engine) materializes partition descriptors into <code>context_json.iterations[]</code>; FOREACH flattens each element into scope and templates reference <code>${var.taskConfig}</code> directly.</li>
 </ol>
 <section id="storage-model" class="level4" data-number="6.4.1">
 <h4 data-number="6.4.1" class="anchored" data-anchor-id="storage-model"><span class="header-section-number">6.4.1</span> Storage model</h4>
@@ -900,7 +900,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><strong>Scope identity:</strong> <code>scope_node_execution_id = 0</code> is the <strong>instance root</strong> (global scope). Each composite node (SEQUENCE, PARALLEL, REPEAT, WHILE, FOREACH, IF, SWITCH) opens a child scope tied to its <code>node_execution.id</code>. Lookup walks <strong>up the parent chain</strong> until a name is found (<code>wf.wf_get_scope_variable_json</code>).</p>
 <pre class="mermaid"><code>flowchart TD
   ctx["context_json\n(instance start)"]
-  root["scope id = 0\nprojectPath, comparisons[], mc.*"]
+  root["scope id = 0\nprojectPath, comparisons[], iterations[]"]
   fecp["FOREACH scope\nvar.label, var.chromosome"]
   seq["SEQUENCE scope\ncopied from parent"]
   act["ACTION scope\noutput bindings write here"]
@@ -945,7 +945,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="odd">
 <td>FOREACH iteration</td>
 <td>Each loop body activation</td>
-<td>Bind <code>foreach_item_var</code> fields (<code>label</code>, <code>chromosome</code>, …) and <code>foreach_index_var</code></td>
+<td>Bind <code>foreach_item_var</code> fields and flatten object keys (<code>runId</code>, <code>taskConfig</code>, …)</td>
 </tr>
 <tr class="even">
 <td>REPEAT / WHILE</td>
@@ -958,9 +958,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td><code>variable_output_binding</code>: <code>result_code</code> or JSON path from <code>output_json</code></td>
 </tr>
 <tr class="even">
-<td>Monte Carlo planner</td>
-<td>Instance start / iteration</td>
-<td><code>mc.taskConfig</code>, <code>mc.runId</code>, <code>mc.phase</code>, …</td>
+<td>Domain planner (optional)</td>
+<td>Before instance start</td>
+<td>Populates <code>context_json.iterations[]</code>; may audit via <code>wf.instance_extension</code></td>
 </tr>
 </tbody>
 </table>
@@ -1040,106 +1040,71 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><strong><code>source_kind = output_path</code></strong> — worker returns JSON; engine extracts a field (e.g.&nbsp;<code>$.gate.passed</code>) into scope.</li>
 </ul>
 </section>
-<section id="monte-carlo-runs-and-stratified-partitions" class="level3" data-number="6.6">
-<h3 data-number="6.6" class="anchored" data-anchor-id="monte-carlo-runs-and-stratified-partitions"><span class="header-section-number">6.6</span> Monte Carlo runs and stratified partitions</h3>
-<p>Monte Carlo validation (<a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/"><code>packages/methylvalidation</code></a>) repeats the full pipeline on many <strong>independent random splits</strong> of the same cohorts. Each iteration:</p>
+<section id="extension-pattern-validation-and-monte-carlo" class="level3" data-number="6.6">
+<h3 data-number="6.6" class="anchored" data-anchor-id="extension-pattern-validation-and-monte-carlo"><span class="header-section-number">6.6</span> Extension pattern: validation and Monte Carlo</h3>
+<p>Monte Carlo validation (<a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/"><code>packages/methylvalidation</code></a>) repeats analysis on many <strong>independent random splits</strong> of the same cohorts. That domain logic stays <strong>outside</strong> the workflow engine core:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 30%">
+<col style="width: 69%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Layer</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Engine</strong></td>
+<td>Static graph; <code>FOREACH</code> over <code>context_json.iterations[]</code>; <code>${var.taskConfig}</code> in <code>workflow_input_template</code></td>
+</tr>
+<tr class="even">
+<td><strong>Planner worker</strong></td>
+<td>Reads <code>project.json</code> / portal validation config; produces <code>iterations[]</code> before <code>sp_start_workflow_instance</code></td>
+</tr>
+<tr class="odd">
+<td><strong>Optional audit</strong></td>
+<td><code>wf.instance_extension</code> keyed e.g.&nbsp;<code>methylvalidation.plan</code> (<code>data_json</code> json/jsonb)</td>
+</tr>
+</tbody>
+</table>
+<p>Each planner-produced iteration typically:</p>
 <ol type="1">
-<li>Draws a <strong>stratified partition</strong> per cohort: fraction <code>train_fraction</code> (e.g.&nbsp;<code>0.8</code>) for training, remainder for validation.</li>
-<li>Shuffles samples <strong>within each cohort</strong> independently (binary: control + disease; multiclass: K cohorts).</li>
-<li>Materializes a <strong>run-specific</strong> <code>project.json</code> (train sample lists, validation CSVs, output under <code>monte_carlo_runs/run_XXXX/</code>).</li>
-<li>Runs centroid → detector → … on that partition only.</li>
+<li>Draws a <strong>stratified partition</strong> per cohort (<code>train_fraction</code>, e.g.&nbsp;<code>0.8</code>).</li>
+<li>Materializes a run-specific project under <code>monte_carlo_runs/run_XXXX/</code>.</li>
+<li>Emits an object with <code>runId</code>, <code>phase</code>, <code>projectPath</code>, and opaque <code>taskConfig</code> JSON.</li>
 </ol>
-<p>Stratified split implementation: <a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/split.py"><code>methyl_validation/split.py</code></a> (<code>stratified_split</code>, <code>stratified_split_multiclass</code>). Planner: <a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/planner.py"><code>methyl_validation/planner.py</code></a>.</p>
-<section id="workflow-engine-bridge" class="level4" data-number="6.6.1">
-<h4 data-number="6.6.1" class="anchored" data-anchor-id="workflow-engine-bridge"><span class="header-section-number">6.6.1</span> Workflow engine bridge</h4>
-<p>Monte Carlo is represented explicitly in the DB, not only as filesystem artifacts:</p>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 64%">
-<col style="width: 36%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Table / object</th>
-<th>Content</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>wf.monte_carlo_plan</code></td>
-<td>One row per instance: <code>base_project_path</code>, <code>layout</code>, <code>seed</code>, <code>feature_iterations</code>, <code>quality_iterations</code>, <code>config_json</code></td>
-</tr>
-<tr class="even">
-<td><code>wf.monte_carlo_run</code></td>
-<td>One row per planned iteration: <code>run_id</code>, <code>phase_name</code> (<code>feature</code> | <code>quality</code>), <code>task_config_json</code></td>
-</tr>
-<tr class="odd">
-<td>Instance <code>context_json.monteCarlo</code></td>
-<td>Seeds plan metadata when the middle-tier starts an instance</td>
-</tr>
-</tbody>
-</table>
-<p><strong>Scoped variables for MC</strong> (instance root and per-iteration):</p>
-<table class="caption-top table">
-<colgroup>
-<col style="width: 52%">
-<col style="width: 47%">
-</colgroup>
-<thead>
-<tr class="header">
-<th>Variable</th>
-<th>Meaning</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>mc.enabled</code>, <code>mc.seed</code>, <code>mc.layout</code></td>
-<td>Plan metadata from <code>context_json</code></td>
-</tr>
-<tr class="even">
-<td><code>mc.featureIterations</code>, <code>mc.qualityIterations</code></td>
-<td>Loop bounds</td>
-</tr>
-<tr class="odd">
-<td><code>mc.phase</code>, <code>mc.phaseIteration</code>, <code>mc.runId</code></td>
-<td>Current iteration identity</td>
-</tr>
-<tr class="even">
-<td><code>mc.taskConfig</code></td>
-<td>JSON descriptor for this run (project path, train/val lists, detector overrides)</td>
-</tr>
-</tbody>
-</table>
-<p>On ACTION activation, the engine <strong>injects</strong> <code>mc.taskConfig</code> into worker <code>input_json</code> (top-level payload or <code>mcTaskConfig</code> property) so centroid/detector workers receive the stratified partition for <strong>that</strong> iteration without re-rolling the split.</p>
-<p>Schema migration: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_monte_carlo_support.sql"><code>wf_monte_carlo_support.sql</code></a>.</p>
-</section>
-<section id="example-workflow-topology-methylvalidationflow" class="level4" data-number="6.6.2">
-<h4 data-number="6.6.2" class="anchored" data-anchor-id="example-workflow-topology-methylvalidationflow"><span class="header-section-number">6.6.2</span> Example workflow topology (<code>MethylValidationFlow</code>)</h4>
-<p>Seed: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/workflow_methylvalidation_seed.sql"><code>workflow_methylvalidation_seed.sql</code></a></p>
+<p>Stratified split: <a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/split.py"><code>methyl_validation/split.py</code></a>. Planner contract: <a href="./home/ubuntu/MethylPipeline/workflow_engine/contract/validation_planner_capabilities.md"><code>contract/validation_planner_capabilities.md</code></a>.</p>
+<section id="example-workflow-topology-validationpipeline" class="level4" data-number="6.6.1">
+<h4 data-number="6.6.1" class="anchored" data-anchor-id="example-workflow-topology-validationpipeline"><span class="header-section-number">6.6.1</span> Example workflow topology (<code>ValidationPipeline</code>)</h4>
+<p>Seed: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_validation_pipeline_seed.sql"><code>wf_validation_pipeline_seed.sql</code></a></p>
 <pre class="mermaid"><code>flowchart TD
-  root["SEQUENCE mv_root"]
-  root --&gt; feat["REPEAT mv_feature_loop\nN = featureIterations"]
-  root --&gt; fin["SEQUENCE mv_final_sequence\nfull train set"]
-  feat --&gt; fseq["SEQUENCE per iteration"]
-  fseq --&gt; fc["ACTION centroid\nmc.taskConfig"]
-  fseq --&gt; fd["ACTION detector\nmc.taskConfig"]
-  fin --&gt; fc2["centroid"]
-  fin --&gt; fd2["detector"]
+  root["SEQUENCE root"]
+  root --&gt; fe["FOREACH iterations"]
+  root --&gt; fin["SEQUENCE final_sequence"]
+  fe --&gt; seq["SEQUENCE one_iteration"]
+  seq --&gt; fc["ACTION centroid\n${var.taskConfig}"]
+  seq --&gt; fd["ACTION detector\n${var.taskConfig}"]
   fin --&gt; map["mapper"]
   fin --&gt; enr["enricher"]
   fin --&gt; prog["progression"]</code></pre>
-<p>Each <strong>REPEAT</strong> body receives a distinct <code>mc.taskConfig</code> describing one stratified draw. The <strong>final sequence</strong> runs once on the full sample set after all feature-stability iterations complete.</p>
-<p><strong>Future composition:</strong> outer <code>REPEAT</code> (or <code>FOREACH</code> over <code>wf.monte_carlo_run</code> rows) × inner <code>FOREACH</code> over chromosomes/comparisons — see <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_foreach_design.md"><code>wf_foreach_design.md</code></a>.</p>
-<p>Example <code>context_json</code> fragment for MC instances:</p>
+<p>FOREACH flattening copies each <code>iterations[]</code> element’s fields into scope, so templates embed <code>taskConfig</code> without hidden engine injection. The <strong>final sequence</strong> runs mapper → enricher → progression on the base <code>projectPath</code> after all iterations complete.</p>
+<p><strong>Composition:</strong> outer <code>FOREACH iterations</code> × inner <code>FOREACH comparisons/chromosomes</code> (DataDrivenPipeline pattern) — see <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/wf_foreach_design.md"><code>wf_foreach_design.md</code></a>.</p>
+<p>Example <code>context_json</code> fragment:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb15"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"monteCarlo"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"baseProject"</span><span class="fu">:</span> <span class="st">"/work/study/project.json"</span><span class="fu">,</span></span>
-<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"layout"</span><span class="fu">:</span> <span class="st">"binary"</span><span class="fu">,</span></span>
-<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"seed"</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
-<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"featureIterations"</span><span class="fu">:</span> <span class="dv">30</span><span class="fu">,</span></span>
-<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"qualityIterations"</span><span class="fu">:</span> <span class="dv">20</span></span>
-<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
-<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"projectPath"</span><span class="fu">:</span> <span class="st">"/work/study/Plasma_healthy_vs_PCa"</span><span class="fu">,</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"iterations"</span><span class="fu">:</span> <span class="ot">[</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">{</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"runId"</span><span class="fu">:</span> <span class="st">"feature_run_0001"</span><span class="fu">,</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"phase"</span><span class="fu">:</span> <span class="st">"feature"</span><span class="fu">,</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"projectPath"</span><span class="fu">:</span> <span class="st">"/work/study/.../monte_carlo_runs/run_0001"</span><span class="fu">,</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"taskConfig"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"runId"</span><span class="fu">:</span> <span class="st">"feature_run_0001"</span><span class="fu">,</span> <span class="dt">"phase"</span><span class="fu">:</span> <span class="st">"feature"</span><span class="fu">,</span> <span class="dt">"iteration"</span><span class="fu">:</span> <span class="dv">1</span> <span class="fu">}</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>  <span class="ot">]</span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Full example: <a href="./home/ubuntu/MethylPipeline/workflow_engine/sql/instance_context_examples/validation_mc.json"><code>validation_mc.json</code></a>.</p>
+<p>Legacy <code>MethylValidationFlow</code> + <code>context_json.monteCarlo</code> + <code>wf.monte_carlo_*</code> tables are <strong>deprecated</strong>. See <a href="./home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md"><code>packages/methylvalidation/docs/USAGE.md</code></a> for CLI/filesystem-first validation.</p>
 <p>Project-level MC parameters also live under <code>step_config.validation</code> in the portal schema (<code>validation_monte_carlo</code> in <a href="./home/ubuntu/MethylPipeline/schemas/config/validation.schema.json"><code>validation.schema.json</code></a>): <code>train_fraction</code>, <code>n_iterations</code>, cohort CSVs, and regulatory metadata.</p>
 </section>
 </section>

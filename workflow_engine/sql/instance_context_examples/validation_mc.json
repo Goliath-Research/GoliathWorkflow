@@ -1,0 +1,35 @@
+{
+  "projectPath": "/work/prostate-cancer/Plasma_healthy_vs_PCa",
+  "workerToolMapper": "MethylMapper",
+  "workerToolEnricher": "MethylEnricher",
+  "workerToolProgression": "MethylDiseaseProgression",
+  "orderedComparisonLabels": ["healthy_vs_PCa"],
+  "iterations": [
+    {
+      "runId": "feature_run_0001",
+      "phase": "feature",
+      "projectPath": "/work/prostate-cancer/Plasma_healthy_vs_PCa/monte_carlo_runs/run_0001",
+      "taskConfig": {
+        "runId": "feature_run_0001",
+        "phase": "feature",
+        "iteration": 1,
+        "layout": "binary",
+        "trainFraction": 0.8,
+        "seed": 42
+      }
+    },
+    {
+      "runId": "feature_run_0002",
+      "phase": "feature",
+      "projectPath": "/work/prostate-cancer/Plasma_healthy_vs_PCa/monte_carlo_runs/run_0002",
+      "taskConfig": {
+        "runId": "feature_run_0002",
+        "phase": "feature",
+        "iteration": 2,
+        "layout": "binary",
+        "trainFraction": 0.8,
+        "seed": 42
+      }
+    }
+  ]
+}

@@ -40,7 +40,7 @@ DECLARE
   v_parent bigint;
 BEGIN
   LOOP
-    SELECT sv.value_json INTO v_v
+    SELECT sv.value_json::text INTO v_v
     FROM wf.scope_variable sv
     WHERE sv.workflow_instance_id = p_workflow_instance_id
       AND sv.scope_node_execution_id = v_cur
@@ -90,7 +90,7 @@ LANGUAGE plpgsql
 AS $$
 BEGIN
   INSERT INTO wf.scope_variable (workflow_instance_id, scope_node_execution_id, var_name, value_json, updated_at_utc)
-  VALUES (p_workflow_instance_id, p_scope_node_execution_id, p_var_name, coalesce(p_value_json, 'null'), (now() AT TIME ZONE 'utc'))
+  VALUES (p_workflow_instance_id, p_scope_node_execution_id, p_var_name, coalesce(p_value_json::jsonb, 'null'::jsonb), (now() AT TIME ZONE 'utc'))
   ON CONFLICT (workflow_instance_id, scope_node_execution_id, var_name)
   DO UPDATE SET value_json = EXCLUDED.value_json, updated_at_utc = EXCLUDED.updated_at_utc;
 END;

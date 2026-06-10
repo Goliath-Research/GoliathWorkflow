@@ -145,7 +145,7 @@ CREATE TABLE IF NOT EXISTS wf.execution_context (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   node_execution_id bigint NOT NULL REFERENCES wf.node_execution(id) ON DELETE CASCADE,
   context_key text NOT NULL,
-  context_value_json text NULL,
+  context_value_json jsonb NULL,
   UNIQUE (node_execution_id, context_key)
 );
 
@@ -169,7 +169,7 @@ CREATE TABLE IF NOT EXISTS wf.scope_variable (
   workflow_instance_id bigint NOT NULL REFERENCES wf.workflow_instance(id) ON DELETE CASCADE,
   scope_node_execution_id bigint NOT NULL,
   var_name text NOT NULL,
-  value_json text NOT NULL,
+  value_json jsonb NOT NULL,
   updated_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   PRIMARY KEY (workflow_instance_id, scope_node_execution_id, var_name)
 );
@@ -223,30 +223,14 @@ CREATE TABLE IF NOT EXISTS wf.task_lease (
 
 CREATE INDEX IF NOT EXISTS ix_tl_worker_expiry ON wf.task_lease(worker_id, lease_expires_at_utc);
 
--- Monte Carlo support
-CREATE TABLE IF NOT EXISTS wf.monte_carlo_plan (
-  workflow_instance_id bigint PRIMARY KEY REFERENCES wf.workflow_instance(id) ON DELETE CASCADE,
-  base_project_path text NULL,
-  layout_name text NOT NULL DEFAULT 'binary',
-  seed int NULL,
-  feature_iterations int NOT NULL DEFAULT 0,
-  quality_iterations int NOT NULL DEFAULT 0,
-  config_json jsonb NULL,
-  created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
-  updated_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc')
-);
-
-CREATE TABLE IF NOT EXISTS wf.monte_carlo_run (
-  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+-- Generic instance extension (optional domain audit metadata)
+CREATE TABLE IF NOT EXISTS wf.instance_extension (
   workflow_instance_id bigint NOT NULL REFERENCES wf.workflow_instance(id) ON DELETE CASCADE,
-  run_id text NOT NULL,
-  iteration_no int NOT NULL,
-  phase_name text NOT NULL,
-  task_config_json jsonb NULL,
+  extension_key text NOT NULL,
+  data_json jsonb NULL,
   created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
-  UNIQUE (workflow_instance_id, run_id),
-  CHECK (phase_name IN ('feature','quality'))
+  PRIMARY KEY (workflow_instance_id, extension_key)
 );
 
-CREATE INDEX IF NOT EXISTS ix_mc_run_instance_phase ON wf.monte_carlo_run(workflow_instance_id, phase_name, iteration_no);
+CREATE INDEX IF NOT EXISTS ix_ie_instance ON wf.instance_extension(workflow_instance_id);

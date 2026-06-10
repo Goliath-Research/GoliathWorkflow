@@ -133,59 +133,11 @@ RETURN (
 );
 GO
 
-CREATE OR ALTER PROCEDURE wf.wf_repo_upsert_monte_carlo_plan
-    @instance_id BIGINT,
-    @base_project_path NVARCHAR(1024),
-    @layout NVARCHAR(64),
-    @seed INT,
-    @feature_iterations INT,
-    @quality_iterations INT,
-    @config_json NVARCHAR(MAX) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    IF EXISTS (SELECT 1 FROM wf.monte_carlo_plan WHERE workflow_instance_id = @instance_id)
-        UPDATE wf.monte_carlo_plan
-        SET base_project_path = @base_project_path, layout_name = @layout, seed = @seed,
-            feature_iterations = @feature_iterations, quality_iterations = @quality_iterations,
-            config_json = @config_json, updated_at_utc = SYSUTCDATETIME()
-        WHERE workflow_instance_id = @instance_id;
-    ELSE
-        INSERT INTO wf.monte_carlo_plan (
-            workflow_instance_id, base_project_path, layout_name, seed,
-            feature_iterations, quality_iterations, config_json
-        ) VALUES (
-            @instance_id, @base_project_path, @layout, @seed,
-            @feature_iterations, @quality_iterations, @config_json
-        );
-END;
-GO
-
-CREATE OR ALTER PROCEDURE wf.wf_repo_upsert_monte_carlo_run
-    @instance_id BIGINT,
-    @run_id NVARCHAR(128),
-    @iteration_no INT,
-    @phase NVARCHAR(32),
-    @task_config_json NVARCHAR(MAX) = NULL
-AS
-BEGIN
-    SET NOCOUNT ON;
-    IF EXISTS (SELECT 1 FROM wf.monte_carlo_run WHERE workflow_instance_id = @instance_id AND run_id = @run_id)
-        UPDATE wf.monte_carlo_run
-        SET iteration_no = @iteration_no, phase_name = @phase, task_config_json = @task_config_json,
-            updated_at_utc = SYSUTCDATETIME()
-        WHERE workflow_instance_id = @instance_id AND run_id = @run_id;
-    ELSE
-        INSERT INTO wf.monte_carlo_run (workflow_instance_id, run_id, iteration_no, phase_name, task_config_json)
-        VALUES (@instance_id, @run_id, @iteration_no, @phase, @task_config_json);
-END;
-GO
-
 CREATE OR ALTER PROCEDURE wf.wf_repo_set_scope_variable
     @instance_id BIGINT,
     @scope_exec_id BIGINT,
     @var_name NVARCHAR(128),
-    @value_json NVARCHAR(MAX)
+    @value_json json
 AS
 BEGIN
     SET NOCOUNT ON;

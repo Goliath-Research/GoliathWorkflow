@@ -28,9 +28,11 @@ Repository and worker procs that insert rows **return the new id as a single-col
 
 | Azure SQL | PostgreSQL |
 |-----------|------------|
-| `json` / `NVARCHAR(MAX)` payloads | `jsonb` |
+| `json` | `jsonb` |
 | `OPENJSON` / `FOR JSON` | `jsonb_each`, `jsonb_array_elements`, `jsonb_path_query` |
 | `JSON_VALUE` / `JSON_QUERY` | PG17+ standard `JSON_VALUE` / `JSON_QUERY` where applicable |
+
+**Policy:** JSON **storage** columns use native `json` (MSSQL) / `jsonb` (PostgreSQL) only — never `NVARCHAR(MAX)` or plain `text` for payload columns. Procs may use string variables at the wire boundary; writes cast to native JSON types.
 
 ### Procedure results (not OUTPUT parameters)
 

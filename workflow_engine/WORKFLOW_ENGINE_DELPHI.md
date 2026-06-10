@@ -127,54 +127,25 @@ Expected high-level progression:
   - `/startinstance version=<id> [context={}]`
 - Required environment variable: `METHYLPIPELINE_DB` (UniDAC connection string).
 
-## Monte Carlo bridge (Delphi middle-tier)
+## Extension pattern (validation / Monte Carlo)
 
-The current Delphi engine now seeds Monte Carlo metadata from `workflow_instance.context_json`
-when a `monteCarlo` object exists. This is intended to represent MethylValidation-style
-workflow phases explicitly in DB:
+The engine core does **not** embed Monte Carlo planning. Domain workers populate
+`context_json.iterations[]` before instance start; **`ValidationPipeline`**
+([`wf_validation_pipeline_seed.sql`](sql/wf_validation_pipeline_seed.sql)) uses
+`FOREACH` and templates with `${var.taskConfig}`.
 
-- `feature` phase: stable-feature discovery runs
-- `quality` phase: post-model quality-metric runs
+| Component | Role |
+|-----------|------|
+| Planner (`validation.plan-iterations`) | Builds `iterations[]` from project + validation config |
+| `StartInstance` | `wf_init_instance_scope_from_context` only — no MC hooks |
+| `FOREACH` | Flattens each iteration object into scope (`runId`, `taskConfig`, …) |
+| Templates | Embed `${var.taskConfig}` as JSON; no hidden injection in `ResolveInputForAction` |
+| `wf.instance_extension` | Optional audit (`extension_key` e.g. `methylvalidation.plan`) |
 
-Expected `context_json` shape fragment:
+Contract: [`contract/validation_planner_capabilities.md`](contract/validation_planner_capabilities.md).
 
-```json
-{
-  "monteCarlo": {
-    "baseProject": "path/to/project.json",
-    "layout": "binary",
-    "seed": 42,
-    "featureIterations": 30,
-    "qualityIterations": 20
-  }
-}
-```
-
-Persistence:
-
-- `wf.monte_carlo_plan`: one row per workflow instance
-- `wf.monte_carlo_run`: one row per planned run (phase + iteration + task descriptor JSON)
-- scope variables at instance root:
-  - `mc.enabled`, `mc.seed`, `mc.layout`
-  - `mc.featureIterations`, `mc.qualityIterations`, `mc.totalIterations`
-
-Per action activation (especially inside iteration loops), the engine also seeds
-run-level variables in the action scope:
-
-- `mc.phase` (`feature` or `quality`)
-- `mc.phaseIteration` (1-based index within phase)
-- `mc.runId` (e.g. `feature_run_0007`)
-- `mc.taskConfig` (JSON descriptor from `wf.monte_carlo_run.task_config_json`)
-
-`ResolveInputForAction()` now auto-injects `mc.taskConfig` into action payloads:
-
-- if action input is `{}`, the payload becomes `mc.taskConfig`
-- otherwise, payload gets a top-level `mcTaskConfig` property
-
-`wf_monte_carlo_support.sql` also provides SQL helpers for parity work:
-
-- `wf.wf_get_scope_variable_json(...)`
-- `wf.wf_get_scope_variable_int(...)`
+Scope read helpers live in [`wf_scope_readpath.sql`](sql/wf_scope_readpath.sql):
+`wf.wf_get_scope_variable_json`, `wf.wf_get_scope_variable_int`.
 
 For SQL-side activation parity (when using SQL `wf_engine_activate` path),
 run `sql/wf_sql_branch_parity.sql` after base deployment/migrations.
@@ -191,21 +162,11 @@ It adds SQL-side behaviors that previously required Delphi runtime code:
 
 1. initialize instance scope from `workflow_instance.context_json`
 2. resolve `${var.*}` in SQL placeholder resolver
-3. inject `mc.taskConfig` into action `input_json` in SQL path
 
-To materialize MethylValidation as an explicit DB workflow, use:
+Preferred validation workflow seed:
 
-- `sql/workflow_methylvalidation_seed.sql`
+- `sql/wf_validation_pipeline_seed.sql` → **ValidationPipeline**
 
-It creates `MethylValidationFlow` with this stage topology:
+Legacy (deprecated):
 
-1. MC feature loop (`REPEAT`)
-   - `MethylCentroid`
-   - `MethylDetector`
-2. Post-loop final sample-set sequence
-   - `MethylCentroid`
-   - `MethylDetector`
-   - `MethylMapper`
-   - `MethylEnricher`
-   - `MethylDiseaseProgression`
-
+- `sql/workflow_methylvalidation_seed.sql` → **MethylValidationFlow** (REPEAT + `mc.*` bridge)

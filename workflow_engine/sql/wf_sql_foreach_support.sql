@@ -13,7 +13,7 @@
   - wf.wf_resolve_token (var.name[n], ctx.item, ctx.index)
 
   Prerequisites:
-  - Base wf schema, wf_scope_variables.sql, wf_monte_carlo_support.sql
+  - Base wf schema, wf_scope_variables.sql, wf_scope_readpath.sql
   - wf_sql_runtime_parity.sql, wf_sql_branch_parity.sql, wf_sql_scope_writepath_parity.sql
 
   Deploy AFTER wf_sql_scope_writepath_parity.sql.

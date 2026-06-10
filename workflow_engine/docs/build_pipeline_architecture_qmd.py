@@ -235,15 +235,15 @@ cluster & 1--* worker $\rightarrow$ worker\_token \\
     ),
     "methylvalidation-flow": _fig(
         r"""
-\node[base] (root) {SEQUENCE mv\_root};
-\node[base, below left=0.75cm and 0.2cm of root] (feat) {REPEAT feature loop\\$N$ iterations};
-\node[base, below right=0.75cm and 0.2cm of root] (fin) {SEQUENCE final\\full sample set};
-\node[base, below=0.55cm of feat] (fseq) {centroid $\rightarrow$ detector\\per mc.taskConfig};
-\node[base, below=0.55cm of fin] (fpost) {centroid $\rightarrow$ detector $\rightarrow$\\mapper $\rightarrow$ enricher $\rightarrow$ progression};
-\draw[arr] (root)--(feat); \draw[arr] (root)--(fin);
-\draw[arr] (feat)--(fseq); \draw[arr] (fin)--(fpost);
+\node[base] (root) {SEQUENCE root};
+\node[base, below left=0.75cm and 0.2cm of root] (fe) {FOREACH iterations};
+\node[base, below right=0.75cm and 0.2cm of root] (fin) {SEQUENCE final};
+\node[base, below=0.55cm of fe] (fseq) {centroid $\rightarrow$ detector\\${var.taskConfig}};
+\node[base, below=0.55cm of fin] (fpost) {mapper $\rightarrow$ enricher $\rightarrow$ progression};
+\draw[arr] (root)--(fe); \draw[arr] (root)--(fin);
+\draw[arr] (fe)--(fseq); \draw[arr] (fin)--(fpost);
 """,
-        "MethylValidationFlow: Monte Carlo feature loop then final full-sample pipeline.",
+        "ValidationPipeline: FOREACH planner iterations then final post steps.",
     ),
     "data-driven-pipeline": _fig(
         r"""

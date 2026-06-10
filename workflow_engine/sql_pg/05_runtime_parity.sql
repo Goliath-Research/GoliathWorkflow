@@ -221,7 +221,6 @@ DECLARE
   v_expr text;
   v_req boolean;
   v_frag text;
-  v_mctask text;
   rec record;
 BEGIN
   p_failed := false;
@@ -283,24 +282,5 @@ BEGIN
     END IF;
     p_final_json := wf.wf_json_set_path(p_final_json, v_path, v_frag);
   END LOOP;
-
-  v_mctask := wf.wf_get_scope_variable_json(p_workflow_instance_id, p_node_execution_id, 'mc.taskConfig');
-  IF v_mctask IS NOT NULL THEN
-    IF p_final_json = '{}'::jsonb THEN
-      BEGIN
-        p_final_json := v_mctask::jsonb;
-      EXCEPTION WHEN others THEN
-        p_final_json := wf.wf_json_fragment_from_string(v_mctask)::jsonb;
-      END;
-    ELSE
-      BEGIN
-        p_final_json := wf.wf_json_set_path(p_final_json, '$.mcTaskConfig', v_mctask);
-      EXCEPTION WHEN others THEN
-        p_final_json := wf.wf_json_set_path(
-          p_final_json, '$.mcTaskConfig', wf.wf_json_fragment_from_string(v_mctask)
-        );
-      END;
-    END IF;
-  END IF;
 END;
 $$;

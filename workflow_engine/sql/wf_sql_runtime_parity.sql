@@ -4,12 +4,12 @@
   Purpose:
   - Initialize instance scope variables from workflow_instance.context_json in SQL runtime.
   - Support ${var.*} placeholders in SQL wf_resolve_token.
-  - Inject mc.taskConfig into action input payloads in SQL runtime (same intent as Delphi).
+  - Inject action input payloads via workflow_input_template and ${var.*} placeholders only.
 
   Prerequisites:
   - Base wf schema deployed (MethylPipeline_*.sql)
   - wf_scope_variables.sql (scope_variable table)
-  - wf_monte_carlo_support.sql (wf_get_scope_variable_json/int helper functions)
+  - wf_scope_readpath.sql (wf_get_scope_variable_json/int helper functions)
 */
 
 SET ANSI_NULLS ON;
@@ -19,7 +19,7 @@ GO
 IF OBJECT_ID(N'wf.scope_variable', N'U') IS NULL
    OR OBJECT_ID(N'wf.wf_get_scope_variable_json', N'FN') IS NULL
 BEGIN
-    RAISERROR(N'Prerequisite missing: run wf_scope_variables.sql and wf_monte_carlo_support.sql first.', 16, 1);
+    RAISERROR(N'Prerequisite missing: run wf_scope_variables.sql and wf_scope_readpath.sql first.', 16, 1);
     RETURN;
 END
 GO
@@ -277,18 +277,6 @@ BEGIN
 
     CLOSE c;
     DEALLOCATE c;
-
-    /* Delphi parity: inject mc.taskConfig if available. */
-    DECLARE @mctask NVARCHAR(MAX) = wf.wf_get_scope_variable_json(@workflow_instance_id, @node_execution_id, N'mc.taskConfig');
-    IF @mctask IS NOT NULL
-    BEGIN
-        IF LTRIM(RTRIM(@cur)) = N'{}'
-            SET @cur = @mctask
-        ELSE IF ISJSON(@mctask) = 1
-            SET @cur = JSON_MODIFY(@cur, N'$.mcTaskConfig', JSON_QUERY(@mctask))
-        ELSE
-            SET @cur = JSON_MODIFY(@cur, N'$.mcTaskConfig', JSON_QUERY(wf.wf_json_fragment_from_string(@mctask)));
-    END
 
     SET @final_json = @cur;
 END;
