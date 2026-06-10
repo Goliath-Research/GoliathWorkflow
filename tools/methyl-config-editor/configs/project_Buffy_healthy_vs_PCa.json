@@ -61,6 +61,9 @@
     "CG"
   ],
   "step_config": {
+    "alignment_qc": {
+      "genome_fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+    },
     "centroid": {
       "base_config": {
         "min_coverage": 4,
