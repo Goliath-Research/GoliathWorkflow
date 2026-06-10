@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, urlparse
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from db_client import (
+    apply_validation_plan,
     create_workflow_instance,
     delete_workflow_definition,
     get_workflow_instance,
@@ -88,6 +89,23 @@ class RestGateway:
                 body.get("error_message"),
             )
             return 204, None
+
+        if method == "POST" and path == "/v1/validation/plan-iterations":
+            from methyl_validation.workflow_planner import plan_validation_context
+
+            context = plan_validation_context(body)
+            instance_id = body.get("workflow_instance_id")
+            if instance_id is not None:
+                apply_validation_plan(
+                    self.dsn,
+                    int(instance_id),
+                    context,
+                    persist_extension=bool(body.get("persist_extension", True)),
+                )
+            return 200, {
+                "context_json": context,
+                "n_iterations": len(context.get("iterations", [])),
+            }
 
         if method == "POST" and path == "/v1/workflows/instances":
             instance_id = create_workflow_instance(

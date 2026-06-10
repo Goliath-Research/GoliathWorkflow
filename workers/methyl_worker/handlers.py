@@ -41,6 +41,7 @@ CAPABILITY_HANDLERS: Dict[str, str] = {
     "methyl-extract": "_handle_stub_external",
     "sample.delete-bam": "_handle_stub_external",
     "sample.mark-failed": "_handle_mark_failed",
+    "validation.plan-iterations": "_handle_validation_plan_iterations",
 }
 
 
@@ -69,6 +70,13 @@ def _handle_pipeline_cli(_capability: str, action_name: str, input_json: Dict[st
         raise RuntimeError(f"Unknown tool {tool!r} for capability {capability!r}")
 
     project = _project_path(input_json)
+    task_cfg = input_json.get("taskConfig")
+    if not project and isinstance(task_cfg, dict):
+        for key in ("projectJson", "projectPath", "project"):
+            val = task_cfg.get(key)
+            if val:
+                project = str(val)
+                break
     if not project:
         raise RuntimeError("input_json missing project / projectPath")
 
@@ -179,6 +187,22 @@ def _handle_methyl_fragmentomics(
     }
 
 
+def _handle_validation_plan_iterations(
+    _capability: str, _action_name: str, input_json: Dict[str, Any]
+) -> HandlerResult:
+    """Monte Carlo planner: materialize run projects and return ValidationPipeline context_json."""
+    from methyl_validation.workflow_planner import plan_validation_context
+
+    context = plan_validation_context(input_json)
+    return {
+        "status": "ok",
+        "context_json": context,
+        "iterations": context.get("iterations", []),
+        "n_iterations": len(context.get("iterations", [])),
+        "projectPath": context.get("projectPath"),
+    }
+
+
 def _handle_mark_failed(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
     return {
         "sampleId": input_json.get("sampleId"),
@@ -225,6 +249,7 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
         "_handle_methyl_qc": _handle_methyl_qc,
         "_handle_methyl_fragmentomics": _handle_methyl_fragmentomics,
         "_handle_mark_failed": _handle_mark_failed,
+        "_handle_validation_plan_iterations": _handle_validation_plan_iterations,
         "_handle_stub_external": _handle_stub_external,
     }
     handler = dispatch[handler_key]

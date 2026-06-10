@@ -62,6 +62,13 @@ methyl-worker --api-base http://localhost:8080/v1
 export WORKER_STUB_EXTERNAL=1
 methyl-worker --capability sample.download-fastq
 
+# Monte Carlo planner (local CLI, no workflow poll)
+methyl-worker plan-iterations --plan-input /path/to/plan_request.json
+
+# Register worker with capability validation.plan-iterations to run planner as a workflow ACTION
+export WORKER_CAPABILITY=validation.plan-iterations
+methyl-worker --api-base http://localhost:8080/v1
+
 # One-shot claim (debug)
 methyl-worker --once
 ```
@@ -71,7 +78,7 @@ Modules:
 | Module | Role |
 |--------|------|
 | [`methyl_worker/client.py`](methyl_worker/client.py) | REST client (`request`, `submit`, `heartbeat`, `fail`) |
-| [`methyl_worker/handlers.py`](methyl_worker/handlers.py) | Capability dispatch to methyl-* CLIs and sample-prep handlers |
+| `methyl_worker/handlers.py` | Capability dispatch to methyl-* CLIs, sample-prep handlers, and **`validation.plan-iterations`** (Monte Carlo planner) |
 | [`methyl_worker/runner.py`](methyl_worker/runner.py) | Poll loop with background heartbeat |
 
 Legacy shim: [`reference_rest_worker.py`](reference_rest_worker.py) delegates to `methyl-worker`.

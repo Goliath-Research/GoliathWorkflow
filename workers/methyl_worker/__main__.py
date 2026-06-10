@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import sys
+from pathlib import Path
 
 from .client import WorkflowRestClient
 from .runner import WorkerRunner
@@ -40,9 +41,23 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Call POST /workers/authenticate before polling",
     )
+    parser.add_argument(
+        "command",
+        nargs="?",
+        default="poll",
+        choices=("poll", "plan-iterations"),
+        help="poll (default): workflow task loop; plan-iterations: Monte Carlo planner CLI",
+    )
+    parser.add_argument(
+        "--plan-input",
+        help="JSON file for plan-iterations command (default: stdin or minimal from flags)",
+    )
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    if args.command == "plan-iterations":
+        return _run_plan_iterations_cli(args)
 
     if args.worker_id <= 0 or not args.worker_token:
         parser.error("Set --worker-id and --worker-token (or WORKER_ID / WORKER_TOKEN env vars)")
@@ -79,6 +94,21 @@ def _claim_dict(claim) -> dict | None:
         "node_key": claim.node_key,
         "input_json": claim.input_json,
     }
+
+
+def _run_plan_iterations_cli(args: argparse.Namespace) -> int:
+    from methyl_validation.workflow_planner import plan_validation_context
+
+    if args.plan_input:
+        payload = json.loads(Path(args.plan_input).read_text(encoding="utf-8"))
+    else:
+        payload = {"projectPath": os.environ.get("PROJECT_PATH", "")}
+        if not payload["projectPath"]:
+            print("Set PROJECT_PATH or pass --plan-input", file=sys.stderr)
+            return 2
+    context = plan_validation_context(payload)
+    print(json.dumps(context, indent=2))
+    return 0
 
 
 if __name__ == "__main__":

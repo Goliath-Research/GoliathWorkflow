@@ -131,6 +131,7 @@ Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contr
 4. `wf_json_column_alignment.sql` (migrate legacy JSON columns to native `json`)
 5. `wf_instance_extension.sql`
 6. `wf_drop_monte_carlo_tables.sql` (remove deprecated `wf.monte_carlo_*`)
+6a. `wf_apply_validation_plan.sql` — merge planner `context_json` onto workflow instances
 7. `wf_sql_runtime_parity.sql`
 8. `wf_sql_branch_parity.sql`
 9. **`wf_sql_scope_writepath_parity.sql`** (write-path parity)

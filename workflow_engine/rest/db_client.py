@@ -186,3 +186,18 @@ def delete_workflow_definition(dsn: str, name: str, delete_instances: bool) -> d
         "deleted_instance_count": int(row["deleted_instance_count"]),
         "deleted_version_count": int(row["deleted_version_count"]),
     }
+
+
+def apply_validation_plan(
+    dsn: str,
+    workflow_instance_id: int,
+    context_json: dict[str, Any],
+    *,
+    persist_extension: bool = True,
+) -> None:
+    """Merge ValidationPipeline planner output into instance context (wf.wf_apply_validation_plan)."""
+    exec_sql(
+        dsn,
+        "CALL wf.wf_apply_validation_plan("
+        f"{workflow_instance_id}, {_sql_literal(context_json)}, {persist_extension});",
+    )

@@ -527,8 +527,8 @@ Monte Carlo validation ([`packages/methylvalidation`](/home/ubuntu/MethylPipelin
 | Layer | Responsibility |
 |-------|----------------|
 | **Engine** | Static graph; `FOREACH` over `context_json.iterations[]`; `${var.taskConfig}` in `workflow_input_template` |
-| **Planner worker** | Reads `project.json` / portal validation config; produces `iterations[]` before `sp_start_workflow_instance` |
-| **Optional audit** | `wf.instance_extension` keyed e.g. `methylvalidation.plan` (`data_json` json/jsonb) |
+| **Planner worker** | Capability `validation.plan-iterations`; materializes `monte_carlo_runs/run_*` + returns `iterations[]` ([`workflow_planner.py`](/home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/workflow_planner.py)) |
+| **Optional audit** | `wf.instance_extension` keyed e.g. `methylvalidation.plan`; apply via `wf.wf_apply_validation_plan` |
 
 Each planner-produced iteration typically:
 

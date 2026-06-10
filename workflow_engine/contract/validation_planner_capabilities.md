@@ -12,15 +12,18 @@ Use **`ValidationPipeline`** ([`wf_validation_pipeline_seed.sql`](../sql/wf_vali
 
 Example instance payload: [`validation_mc.json`](../sql/instance_context_examples/validation_mc.json).
 
-## Capability (proposed)
+## Capability (implemented)
 
 | Field | Value |
 |-------|-------|
 | Capability id | `validation.plan-iterations` |
-| Worker package | `packages/methylvalidation` (planner / project_gen) |
-| Invoked by | Portal or middle-tier before instance start |
+| Worker handler | `workers/methyl_worker/handlers.py` → `_handle_validation_plan_iterations` |
+| Core library | `packages/methylvalidation/methyl_validation/workflow_planner.py` |
+| REST | `POST /v1/validation/plan-iterations` (Python gateway) |
+| DB apply | `wf.wf_apply_validation_plan` — merge `context_json` + optional `instance_extension` |
+| CLI | `methyl-worker plan-iterations --plan-input request.json` |
 
-Phase 2: thin handler in `workers/methyl_worker/handlers.py` or dedicated `workers/validation_planner/` wrapping existing `methyl_validation` run-project generation.
+Invoked by portal/middle-tier before instance start, or as a workflow ACTION when a worker registers `validation.plan-iterations`.
 
 ## Input
 
