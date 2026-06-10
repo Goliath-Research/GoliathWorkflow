@@ -87,31 +87,54 @@ TIKZ: dict[str, str] = {
     "presentation-map": _fig(
         r"""
 \node[base, fill=blue!10] (editor) {Schema config editor\\(Web :8077)};
-\node[base, fill=blue!10, right=1.1cm of editor] (run) {Start workflow\\POST /instances};
-\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=blue!6, fit=(editor)(run), label={[font=\small\bfseries]above:Company Portal}] (portalbox) {};
-\node[base, fill=green!10, below=1.35cm of editor] (wfdef) {DataDrivenPipeline\\definition};
+\node[base, fill=blue!10, right=0.55cm of editor] (runprep) {Start SamplePrep};
+\node[base, fill=blue!10, right=0.55cm of runprep] (runddp) {Start DataDriven};
+\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=blue!6, fit=(editor)(runprep)(runddp), label={[font=\small\bfseries]above:Company Portal}] (portalbox) {};
+\node[base, fill=green!10, below=1.35cm of runprep] (wfprep) {SamplePrepPipeline};
+\node[base, fill=green!10, right=0.55cm of wfprep] (wfdef) {DataDrivenPipeline};
 \node[base, fill=green!10, right=0.55cm of wfdef] (inst) {workflow\_instance\\context\_json};
 \node[base, fill=green!10, right=0.55cm of inst] (nexec) {node\_execution\\scope\_variable};
-\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=green!6, fit=(wfdef)(inst)(nexec), label={[font=\small\bfseries]above:Backend Database}] (dbbox) {};
-\node[base, fill=orange!12, below=1.35cm of wfdef] (rest) {WfEngine REST\\:8080};
+\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=green!6, fit=(wfprep)(wfdef)(inst)(nexec), label={[font=\small\bfseries]above:Backend Database}] (dbbox) {};
+\node[base, fill=orange!12, below=1.35cm of wfprep] (rest) {WfEngine REST\\:8080};
 \node[base, fill=orange!12, right=0.75cm of rest] (engine) {Engine procs\\T-SQL / PL/pgSQL};
 \node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=orange!8, fit=(rest)(engine), label={[font=\small\bfseries]above:Middle-Tier}] (mtbox) {};
-\node[base, fill=purple!10, below=1.25cm of rest] (w1) {methyl-centroid};
-\node[base, fill=purple!10, right=0.4cm of w1] (w2) {methyl-detector};
-\node[base, fill=purple!10, right=0.4cm of w2] (w3) {mapper / enricher / prog.};
-\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=purple!6, fit=(w1)(w2)(w3), label={[font=\small\bfseries]above:Remote Workers}] (wbox) {};
+\node[base, fill=purple!10, below=1.25cm of rest] (w0) {download / Parabricks / QC / extract};
+\node[base, fill=purple!10, right=0.4cm of w0] (w1) {methyl-centroid / detector};
+\node[base, fill=purple!10, right=0.4cm of w1] (w3) {mapper / enricher / prog.};
+\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=purple!6, fit=(w0)(w1)(w3), label={[font=\small\bfseries]above:Remote Workers}] (wbox) {};
 \node[base, fill=gray!12, right=1.6cm of inst] (stor) {Shared storage\\NFS / Azure Files\\/work/...};
-\draw[arr] (editor)--node[above, font=\scriptsize]{project.json}(run);
-\draw[arr] (run)--(inst);
-\draw[arr] (wfdef)--(inst);
-\draw[arr] (inst)--(nexec);
-\draw[arr] (rest)--(engine);
-\draw[arr] (engine)--(nexec);
-\draw[arr] (w1)--(rest); \draw[arr] (w2)--(rest); \draw[arr] (w3)--(rest);
-\draw[arr] (w1)--(stor); \draw[arr] (w2)--(stor); \draw[arr] (w3)--(stor);
+\draw[arr] (editor)--(runprep); \draw[arr] (runprep)--(wfprep);
+\draw[arr] (wfprep)--node[above, font=\scriptsize]{HDF5 ready}(runddp);
+\draw[arr] (runddp)--(wfdef);
+\draw[arr] (wfdef)--(inst); \draw[arr] (inst)--(nexec);
+\draw[arr] (rest)--(engine); \draw[arr] (engine)--(nexec);
+\draw[arr] (w0)--(rest); \draw[arr] (w1)--(rest); \draw[arr] (w3)--(rest);
+\draw[arr] (w0)--(stor); \draw[arr] (w1)--(stor); \draw[arr] (w3)--(stor);
 \draw[darr] (nexec)--node[above, font=\scriptsize]{input paths}(stor);
 """,
         "Four-layer architecture: portal, database, middle-tier, and cluster workers.",
+    ),
+    "sample-prep-pipeline": _fig(
+        r"""
+\node[base] (dl) {download FASTQs};
+\node[base, right=0.35cm of dl] (align) {Parabricks fq2bam};
+\node[base, right=0.35cm of align] (delFq) {delete FASTQs};
+\node[base, right=0.35cm of delFq] (qc) {methyl-qc};
+\node[base, below=0.85cm of qc] (gate) {QC pass?};
+\node[base, left=1.2cm of gate] (fail) {mark failed};
+\node[base, right=1.2cm of gate] (cfdna) {cfDNA?};
+\node[base, right=0.55cm of cfdna] (frag) {fragmentomics};
+\node[base, below=0.85cm of gate] (ext) {MethylExtractor};
+\node[base, right=0.55cm of ext] (delBam) {delete BAM};
+\node[base, below=0.85cm of ext] (h5) {chrom-CG.h5};
+\draw[arr] (dl)--(align)--(delFq)--(qc)--(gate);
+\draw[arr] (gate)--node[left, font=\scriptsize]{no}(fail);
+\draw[arr] (gate)--node[right, font=\scriptsize]{yes}(cfdna);
+\draw[arr] (cfdna)--node[above, font=\scriptsize]{yes}(frag);
+\draw[arr] (cfdna)--(ext); \draw[arr] (frag)--(ext);
+\draw[arr] (ext)--(delBam)--(h5);
+""",
+        "SamplePrepPipeline per-sample step order (QC before fragmentomics; cfDNA branch).",
     ),
     "cohort-hierarchy": _fig(
         r"""
@@ -270,6 +293,7 @@ cluster & 1--* worker $\rightarrow$ worker\_token \\
 
 FIGURE_ORDER = [
     "presentation-map",
+    "sample-prep-pipeline",
     "cohort-hierarchy",
     "schema-tree",
     "portal-editor",

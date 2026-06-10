@@ -18,26 +18,36 @@ This pack uses your project configuration at `/home/ubuntu/Work/prostate-cancer/
 
 ## 1) Raw WGBS -> per-chromosome methylation HDF5
 
+Orchestrated by **SamplePrepPipeline** ([`workflow_engine/sql/SamplePrepFlow.md`](../workflow_engine/sql/SamplePrepFlow.md)). **methyl-qc runs before methyl-fragmentomics** so failed samples skip BAM scanning; cfDNA fragmentomics is conditional on `primary_analyte: cfdna`.
+
 ```mermaid
 flowchart TD
-  fastq[RawWgbsFastq] --> pb_fq2bam["External: Parabricks fq2bam"]
+  fastq[RawWgbsFastq] --> dl["External: download FASTQs"]
+  dl --> pb_fq2bam["External: Parabricks fq2bam"]
   pb_fq2bam --> bam[BamCramOutputs]
   pb_fq2bam --> dedup_metrics[PicardStyleDedupMetricsTxt]
   pb_fq2bam --> parabricks_metrics[ParabricksMetricsJson]
+  pb_fq2bam --> delFq["External: delete FASTQs"]
 
   dedup_metrics --> methyl_qc["MethylAlignmentQC (methyl-qc)"]
+  parabricks_metrics --> methyl_qc
   methyl_qc --> qc_json[alignment_qc/sample.json]
+  methyl_qc --> gate{guardrails.overall_pass?}
 
-  parabricks_metrics --> wgbs_guardrails["Optional WGBS Guardrails"]
-  wgbs_guardrails --> guardrail_report[GuardrailPassFailSummary]
-
-  bam --> methyl_extractor["External MethylExtractor / MethylDackel fork"]
-  guardrail_report --> methyl_extractor
+  gate -->|fail| failSample[mark sample QC failed]
+  gate -->|pass| cfdnaCheck{primary_analyte cfdna?}
+  cfdnaCheck -->|yes| fragomics["methyl-fragmentomics (BAM WPS + end motifs)"]
+  cfdnaCheck -->|no| methyl_extractor["External MethylExtractor / MethylDackel fork"]
+  fragomics --> methyl_extractor
+  bam --> fragomics
+  bam --> methyl_extractor
   methyl_extractor --> h5_samples["PerSamplePerChromFiles: {chrom}-{context}.h5"]
+  methyl_extractor --> delBam["External: delete BAM"]
 ```
 
 **Primary outputs**
-- Alignment QC JSONs: `.../alignment_qc/<sample>.json`
+- Alignment QC JSONs: `.../alignment_qc/<sample>.json` (or sample-dir sidecar from methyl-qc)
+- cfDNA fragmentomics (when enabled): `{project}/fragmentomics/{sample_id}/`
 - Per-sample methylation files consumed downstream: `{chrom}-{context}.h5` (for this project, context is `CG`)
 
 ---

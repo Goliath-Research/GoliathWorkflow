@@ -30,12 +30,21 @@ Use this workflow when the cohort is **plasma or cell-free DNA**, not buffy-coat
 - `model_training_analyte`: matrix used for stability, freeze, and `--model` (defaults to `primary_analyte`).
 - `enforce_training_analyte_match`: when true, `--model` **fails** if `locked_model_spec.json` was built for a different analyte (e.g. buffy_coat).
 
-## 2. Upstream QC (before HDF5)
+## 2. Upstream QC and extraction (before HDF5)
 
-1. Parabricks → BAM + `*.qc-metrics.tar` + `{sample}.json`
-2. `methyl-qc --project …` — WGBS guardrails, cfDNA fragmentomics, bisulfite sidecars
-3. Optional: `methyl-fragmentomics --project …` (BAM WPS + end motifs)
-4. MethylDackel / external extractor → `{chrom}-CG.h5`
+Recommended order (SamplePrepPipeline):
+
+1. Download FASTQs → sample directory under `/work/samples/{id}/`
+2. Parabricks → BAM + `*.qc-metrics.tar` + `{sample}.json`
+3. Delete FASTQs (reclaim disk)
+4. `methyl-qc --project …` — WGBS guardrails, cfDNA insert-size rules, bisulfite sidecars; **`guardrails.overall_pass`** gates downstream steps
+5. **If QC pass and `primary_analyte` is `cfdna`:** `methyl-fragmentomics --project …` (BAM WPS + end motifs)
+6. MethylDackel / external extractor → `{chrom}-CG.h5`
+7. Delete BAM (reclaim disk)
+
+**Why QC before fragmentomics:** failed samples should not spend hours scanning BAMs. Fragmentomics still runs before extraction and BAM deletion (both need the aligned BAM). **buffy_coat** projects skip step 5.
+
+Workflow seed: [`workflow_engine/sql/wf_sample_prep_pipeline_seed.sql`](../../../workflow_engine/sql/wf_sample_prep_pipeline_seed.sql).
 
 ### Bisulfite conversion sidecar
 

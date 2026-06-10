@@ -92,6 +92,23 @@ See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREA
 
 ## 4. PCa3 pipeline mapping (high level)
 
+### Milestone 0: Sample prep (upstream)
+
+| Step | Worker capability | Workflow |
+|------|-------------------|----------|
+| Download FASTQs | `sample.download-fastq` | **SamplePrepPipeline** |
+| Parabricks fq2bam | `parabricks.fq2bam` | **SamplePrepPipeline** |
+| Delete FASTQs | `sample.delete-fastqs` | **SamplePrepPipeline** |
+| Alignment QC | `methyl-qc` | **SamplePrepPipeline** |
+| cfDNA fragmentomics | `methyl-fragmentomics` | **SamplePrepPipeline** (cfDNA only) |
+| Methyl extraction | `methyl-extract` | **SamplePrepPipeline** |
+| Delete BAM | `sample.delete-bam` | **SamplePrepPipeline** |
+| QC failed marker | `sample.mark-failed` | **SamplePrepPipeline** (optional) |
+
+Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contract/sample_prep_capabilities.md](contract/sample_prep_capabilities.md).
+
+### Milestone 1–2: Analysis (downstream)
+
 | Pipeline step | Worker capability | Milestone |
 |---------------|-------------------|-----------|
 | Centroid per group | `methyl-centroid` | 1 + 2 |
@@ -116,9 +133,10 @@ See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREA
 6. **`wf_sql_scope_writepath_parity.sql`** (write-path parity)
 7. **`wf_sql_foreach_support.sql`** (FOREACH node + indexed placeholders)
 8. **`wf_sp_delete_workflow_def.sql`** (delete/rebuild definitions)
-9. **`wf_data_driven_pipeline_seed.sql`** — generic DataDrivenPipeline (preferred)
-10. `wf_pca_two_group_seed.sql` / `wf_pca_ovr_seed.sql` — **deprecated** static generators
-11. `wf_pca_two_group_run_example.sql` (validation, optional)
+9. **`wf_sample_prep_pipeline_seed.sql`** — **SamplePrepPipeline** (per-sample FASTQ → HDF5)
+10. **`wf_data_driven_pipeline_seed.sql`** — generic DataDrivenPipeline (preferred)
+11. `wf_pca_two_group_seed.sql` / `wf_pca_ovr_seed.sql` — **deprecated** static generators
+12. `wf_pca_two_group_run_example.sql` (validation, optional)
 
 ---
 

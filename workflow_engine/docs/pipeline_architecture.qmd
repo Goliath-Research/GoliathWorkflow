@@ -65,15 +65,19 @@ Quarto serves the page at `http://localhost:…` and Mermaid renders in your nor
 
 ## Presentation map (four layers)
 
+Two workflow definitions run in sequence: **SamplePrepPipeline** (per-sample FASTQ → HDF5) then **DataDrivenPipeline** (centroid → detector → mapper → enricher).
+
 ::: {.content-visible when-format="html"}
 ```mermaid
 flowchart TB
   subgraph portal ["Company Portal"]
     editor["Schema-driven config editor<br/>(methyl-config-editor Web)"]
-    run["Start workflow run<br/>POST /v1/workflows/instances"]
+    runPrep["Start SamplePrepPipeline"]
+    runDdp["Start DataDrivenPipeline"]
   end
   subgraph database ["Backend Database"]
-    wfDef["Workflow definition<br/>DataDrivenPipeline"]
+    wfPrep["SamplePrepPipeline"]
+    wfDef["DataDrivenPipeline"]
     inst["workflow_instance<br/>+ context_json"]
     nexec["node_execution<br/>+ scope_variable"]
   end
@@ -82,21 +86,26 @@ flowchart TB
     engine["Workflow engine<br/>(T-SQL / PL/pgSQL procs)"]
   end
   subgraph workers ["Remote Workers / Cluster"]
+    w0["download / Parabricks / methyl-qc / extract"]
     w1["methyl-centroid"]
     w2["methyl-detector"]
     w3["methyl-mapper / enricher / progression"]
   end
   storage[("Shared storage<br/>NFS / Azure Files<br/>/work/...")]
 
-  editor -->|"validated project.json"| run
-  run -->|"planner -> context_json"| inst
+  editor -->|"validated project.json"| runPrep
+  runPrep --> wfPrep
+  wfPrep -->|"all samples HDF5 ready"| runDdp
+  runDdp --> wfDef
   wfDef --> inst
   inst --> nexec
   rest --> engine
   engine --> nexec
+  w0 -->|"poll / submit"| rest
   w1 -->|"poll / submit"| rest
   w2 -->|"poll / submit"| rest
   w3 -->|"poll / submit"| rest
+  w0 --> storage
   w1 --> storage
   w2 --> storage
   w3 --> storage
@@ -115,28 +124,29 @@ flowchart TB
   arr/.style={-{Latex[length=2mm]}, thick},
   darr/.style={arr, dashed}]
 \node[base, fill=blue!10] (editor) {Schema config editor\\(Web :8077)};
-\node[base, fill=blue!10, right=1.1cm of editor] (run) {Start workflow\\POST /instances};
-\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=blue!6, fit=(editor)(run), label={[font=\small\bfseries]above:Company Portal}] (portalbox) {};
-\node[base, fill=green!10, below=1.35cm of editor] (wfdef) {DataDrivenPipeline\\definition};
+\node[base, fill=blue!10, right=0.55cm of editor] (runprep) {Start SamplePrep};
+\node[base, fill=blue!10, right=0.55cm of runprep] (runddp) {Start DataDriven};
+\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=blue!6, fit=(editor)(runprep)(runddp), label={[font=\small\bfseries]above:Company Portal}] (portalbox) {};
+\node[base, fill=green!10, below=1.35cm of runprep] (wfprep) {SamplePrepPipeline};
+\node[base, fill=green!10, right=0.55cm of wfprep] (wfdef) {DataDrivenPipeline};
 \node[base, fill=green!10, right=0.55cm of wfdef] (inst) {workflow\_instance\\context\_json};
 \node[base, fill=green!10, right=0.55cm of inst] (nexec) {node\_execution\\scope\_variable};
-\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=green!6, fit=(wfdef)(inst)(nexec), label={[font=\small\bfseries]above:Backend Database}] (dbbox) {};
-\node[base, fill=orange!12, below=1.35cm of wfdef] (rest) {WfEngine REST\\:8080};
+\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=green!6, fit=(wfprep)(wfdef)(inst)(nexec), label={[font=\small\bfseries]above:Backend Database}] (dbbox) {};
+\node[base, fill=orange!12, below=1.35cm of wfprep] (rest) {WfEngine REST\\:8080};
 \node[base, fill=orange!12, right=0.75cm of rest] (engine) {Engine procs\\T-SQL / PL/pgSQL};
 \node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=orange!8, fit=(rest)(engine), label={[font=\small\bfseries]above:Middle-Tier}] (mtbox) {};
-\node[base, fill=purple!10, below=1.25cm of rest] (w1) {methyl-centroid};
-\node[base, fill=purple!10, right=0.4cm of w1] (w2) {methyl-detector};
-\node[base, fill=purple!10, right=0.4cm of w2] (w3) {mapper / enricher / prog.};
-\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=purple!6, fit=(w1)(w2)(w3), label={[font=\small\bfseries]above:Remote Workers}] (wbox) {};
+\node[base, fill=purple!10, below=1.25cm of rest] (w0) {download / Parabricks / QC / extract};
+\node[base, fill=purple!10, right=0.4cm of w0] (w1) {methyl-centroid / detector};
+\node[base, fill=purple!10, right=0.4cm of w1] (w3) {mapper / enricher / prog.};
+\node[draw, dashed, rounded corners=4pt, inner sep=0.35cm, fill=purple!6, fit=(w0)(w1)(w3), label={[font=\small\bfseries]above:Remote Workers}] (wbox) {};
 \node[base, fill=gray!12, right=1.6cm of inst] (stor) {Shared storage\\NFS / Azure Files\\/work/...};
-\draw[arr] (editor)--node[above, font=\scriptsize]{project.json}(run);
-\draw[arr] (run)--(inst);
-\draw[arr] (wfdef)--(inst);
-\draw[arr] (inst)--(nexec);
-\draw[arr] (rest)--(engine);
-\draw[arr] (engine)--(nexec);
-\draw[arr] (w1)--(rest); \draw[arr] (w2)--(rest); \draw[arr] (w3)--(rest);
-\draw[arr] (w1)--(stor); \draw[arr] (w2)--(stor); \draw[arr] (w3)--(stor);
+\draw[arr] (editor)--(runprep); \draw[arr] (runprep)--(wfprep);
+\draw[arr] (wfprep)--node[above, font=\scriptsize]{HDF5 ready}(runddp);
+\draw[arr] (runddp)--(wfdef);
+\draw[arr] (wfdef)--(inst); \draw[arr] (inst)--(nexec);
+\draw[arr] (rest)--(engine); \draw[arr] (engine)--(nexec);
+\draw[arr] (w0)--(rest); \draw[arr] (w1)--(rest); \draw[arr] (w3)--(rest);
+\draw[arr] (w0)--(stor); \draw[arr] (w1)--(stor); \draw[arr] (w3)--(stor);
 \draw[darr] (nexec)--node[above, font=\scriptsize]{input paths}(stor);
 \end{tikzpicture}
 \end{adjustbox}
@@ -152,6 +162,120 @@ flowchart TB
 | Database | Azure SQL or Azure PostgreSQL (`wf` schema) | Store workflow tree, instances, executions, leases |
 | Middle-tier | Delphi `WfEngine` + REST (`/v1/*`) | Stateless HTTP proxy; invokes engine stored procedures |
 | Workers | Python/CLI on cluster nodes | Poll tasks by capability; read/write shared paths |
+
+---
+
+## 0. Per-sample upstream preprocessing (SamplePrepPipeline)
+
+The analysis pipeline ([Section 1](#1-project-configuration) onward) assumes per-chromosome methylation HDF5 files already exist under `samples_base_path`. **SamplePrepPipeline** orchestrates ingest, alignment, QC gating, optional cfDNA fragmentomics, methylation extraction, and cleanup **per sample** before **DataDrivenPipeline** runs.
+
+**Workflow seed:** [`workflow_engine/sql/wf_sample_prep_pipeline_seed.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sample_prep_pipeline_seed.sql)  
+**Operator guide:** [`workflow_engine/sql/SamplePrepFlow.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/SamplePrepFlow.md)  
+**Worker contract:** [`workflow_engine/contract/sample_prep_capabilities.md`](/home/ubuntu/MethylPipeline/workflow_engine/contract/sample_prep_capabilities.md)  
+**Analyte profiles:** [`docs/ANALYTE_PROFILES.md`](/home/ubuntu/MethylPipeline/docs/ANALYTE_PROFILES.md)
+
+### Step order
+
+::: {.content-visible when-format="html"}
+```mermaid
+flowchart TD
+  subgraph perSample [FOREACH sample under /work/samples]
+    dl[download_FASTQs]
+    align[Parabricks_fq2bam]
+    delFq[delete_FASTQs]
+    qc[methyl_qc from Picard/Parabricks metrics]
+    gate{guardrails.overall_pass?}
+    cfdnaCheck{isCfdna?}
+    frag[methyl_fragmentomics]
+    ext[MethylExtractor to chrom-CG.h5]
+    delBam[delete_BAM]
+    fail[sample_qc_failed]
+  end
+  dl --> align --> delFq --> qc --> gate
+  gate -->|no| fail
+  gate -->|yes| cfdnaCheck
+  cfdnaCheck -->|yes| frag --> ext
+  cfdnaCheck -->|no| ext
+  ext --> delBam
+  delBam --> h5["chrom-CG.h5 in sample dir"]
+  h5 --> ddp[DataDrivenPipeline]
+```
+:::
+
+::: {.content-visible when-format="pdf"}
+```{=latex}
+\begin{figure}[htbp]
+\centering
+\begin{adjustbox}{max width=\linewidth,center}
+\begin{tikzpicture}[node distance=0.65cm and 0.55cm,
+  every node/.style={transform shape},
+  base/.style={draw, rounded corners=3pt, align=center, font=\footnotesize, minimum height=0.72cm, text width=2.6cm},
+  arr/.style={-{Latex[length=2mm]}, thick},
+  darr/.style={arr, dashed}]
+\node[base] (dl) {download FASTQs};
+\node[base, right=0.35cm of dl] (align) {Parabricks fq2bam};
+\node[base, right=0.35cm of align] (delFq) {delete FASTQs};
+\node[base, right=0.35cm of delFq] (qc) {methyl-qc};
+\node[base, below=0.85cm of qc] (gate) {QC pass?};
+\node[base, left=1.2cm of gate] (fail) {mark failed};
+\node[base, right=1.2cm of gate] (cfdna) {cfDNA?};
+\node[base, right=0.55cm of cfdna] (frag) {fragmentomics};
+\node[base, below=0.85cm of gate] (ext) {MethylExtractor};
+\node[base, right=0.55cm of ext] (delBam) {delete BAM};
+\node[base, below=0.85cm of ext] (h5) {chrom-CG.h5};
+\draw[arr] (dl)--(align)--(delFq)--(qc)--(gate);
+\draw[arr] (gate)--node[left, font=\scriptsize]{no}(fail);
+\draw[arr] (gate)--node[right, font=\scriptsize]{yes}(cfdna);
+\draw[arr] (cfdna)--node[above, font=\scriptsize]{yes}(frag);
+\draw[arr] (cfdna)--(ext); \draw[arr] (frag)--(ext);
+\draw[arr] (ext)--(delBam)--(h5);
+\end{tikzpicture}
+\end{adjustbox}
+\caption{SamplePrepPipeline per-sample step order (QC before fragmentomics; cfDNA branch).}
+\end{figure}
+```
+:::
+
+
+| Step | Capability | Owner | Primary outputs |
+|------|------------|-------|-----------------|
+| Download FASTQs | `sample.download-fastq` | External | `*.fastq.gz` in `/work/samples/{id}/` |
+| Parabricks fq2bam | `parabricks.fq2bam` | External | `{id}.bam`, `{id}.json`, `*.qc-metrics.tar` |
+| Delete FASTQs | `sample.delete-fastqs` | External | FASTQs removed |
+| methyl-qc | `methyl-qc` | In-repo | V2 QC JSON with `guardrails.overall_pass` |
+| QC gate | workflow **IF** (`qcPass`) | Engine | Skip extract on fail |
+| methyl-fragmentomics | `methyl-fragmentomics` | In-repo (cfDNA only) | `{project}/fragmentomics/{id}/` |
+| MethylExtractor | `methyl-extract` | External | `{chrom}-CG.h5` per project chromosome |
+| Delete BAM | `sample.delete-bam` | External | BAM removed |
+
+**Ordering:** Run **methyl-qc before methyl-fragmentomics** so failed samples do not scan BAMs. Fragmentomics still runs **before** extraction and BAM deletion (both need the aligned BAM). When `primary_analyte` is `cfdna`, the analyte profile enables fragmentomics; `buffy_coat` skips it.
+
+### Storage contract (`/work/samples`)
+
+```
+/work/samples/{sample_id}/
+  *.fastq.gz              (transient; deleted after align)
+  {sample_id}.bam         (transient; deleted after extract)
+  {sample_id}.json        (Parabricks metrics; retained)
+  *.qc-metrics.tar        (optional; retained)
+  bisulfite_conversion.json  (optional sidecar)
+  1-CG.h5 … Y-CG.h5       (retained; consumed by methyl-centroid)
+```
+
+Project [`path_remap`](/home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/pipeline_config.py) bridges NAS paths to `/work/samples`. Sample list CSVs in `project.json` resolve via [`load_and_resolve_sample_paths`](/home/ubuntu/MethylPipeline/packages/methylvalidation/methyl_validation/split.py).
+
+### QC gate semantics
+
+- **`methyl-qc`** reads Parabricks/Picard metrics from the sample directory and writes alignment QC JSON ([`methyl_alignment_qc`](/home/ubuntu/MethylPipeline/packages/methylalignmentqc/)).
+- **`guardrails.overall_pass`** (bound to scope variable `qcPass` after the QC action) drives the workflow **IF** node. Failed samples run `sample.qc_failed` and skip extraction.
+- cfDNA samples additionally get insert-size guardrails via [`fragmentomics.py`](/home/ubuntu/MethylPipeline/packages/methylalignmentqc/methyl_alignment_qc/core/fragmentomics.py) when the analyte profile applies.
+
+### Portal handoff
+
+1. Start **SamplePrepPipeline** when FASTQs are ready (`context_json.samples[]` lists each sample).
+2. On instance **COMPLETED** (all samples have HDF5 + passed QC), start **DataDrivenPipeline** with the same `projectPath`, `comparisons`, and `chromosomes`.
+
+Example instance payload: [`workflow_engine/sql/instance_context_examples/sample_prep_plasma.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql/instance_context_examples/sample_prep_plasma.json).
 
 ---
 

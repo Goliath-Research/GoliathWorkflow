@@ -101,6 +101,23 @@ Control-flow helpers: `wf_sequence_continue`, `wf_parallel_continue`, `wf_repeat
 |--------|---------|
 | `dbo.spMapDMP2Genes` | Map DMPs to genes (methyl-mapper) |
 
+### 6. Workflow action catalog (SamplePrepPipeline)
+
+Registered by [`../sql/wf_sample_prep_pipeline_seed.sql`](../sql/wf_sample_prep_pipeline_seed.sql). Full I/O contract: [`sample_prep_capabilities.md`](sample_prep_capabilities.md).
+
+| action_name | capability |
+|-------------|------------|
+| `sample.download_fastq` | `sample.download-fastq` |
+| `sample.parabricks_fq2bam` | `parabricks.fq2bam` |
+| `sample.delete_fastqs` | `sample.delete-fastqs` |
+| `sample.methyl_qc` | `methyl-qc` |
+| `sample.fragmentomics` | `methyl-fragmentomics` |
+| `sample.methyl_extract` | `methyl-extract` |
+| `sample.delete_bam` | `sample.delete-bam` |
+| `sample.qc_failed` | `sample.mark-failed` |
+
+DataDrivenPipeline actions (`pipeline.centroid`, `pipeline.detector`, …) are registered in [`../sql/wf_data_driven_pipeline_seed.sql`](../sql/wf_data_driven_pipeline_seed.sql).
+
 ## Deployment order
 
 ### Azure SQL
