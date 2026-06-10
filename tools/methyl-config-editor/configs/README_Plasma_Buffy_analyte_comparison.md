@@ -88,8 +88,59 @@ python tools/compare_analyte_outputs.py \
 ```
 
 `--dmp-source` accepts `discovery` (default), `classifier`, or `classifier-extended`.
-Mapper gene overlap still reflects whichever DMP panel methyl-mapper used (`step_config.mapper.csv_pattern`);
-re-run methyl-mapper with `dmps-*-classifier.csv` only if you need classifier-based gene overlap.
+
+### Classifier-based gene overlap (optional re-map)
+
+Detection does not need re-running. Re-map from classifier DMPs into a **separate** mapper directory so discovery mapper output is preserved:
+
+```bash
+source .venv/bin/activate
+PROJ=/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json
+ROOT=/work/prostate-cancer/Plasma_healthy_vs_PCa
+
+# Option A: step-override JSON (csv_pattern and/or output_dir)
+cat > /tmp/mapper_classifier_override.json <<'EOF'
+{"csv_pattern": "dmps-*-classifier.csv"}
+EOF
+
+methyl-mapper --project "$PROJ" \
+  --step-override /tmp/mapper_classifier_override.json \
+  --output-dir "$ROOT/mapper_classifier/all/PCa"
+
+# Option B: explicit glob + output (also works; GTF still from project step_config)
+# methyl-mapper --project "$PROJ" \
+#   --csv-pattern "$ROOT/detections/all/PCa/dmps-*-classifier.csv" \
+#   --output-dir "$ROOT/mapper_classifier/all/PCa"
+```
+
+Repeat for buffy. Compare genes:
+
+```bash
+python tools/compare_analyte_outputs.py \
+  --plasma-root /work/prostate-cancer/Plasma_healthy_vs_PCa \
+  --buffy-root /work/prostate-cancer/Buffy_healthy_vs_PCa \
+  --comparison all/PCa \
+  --dmp-source classifier \
+  --mapper-subdir mapper_classifier \
+  --out /work/prostate-cancer/analyte_comparison/all_vs_PCa/classifier
+```
+
+### Enricher on classifier mapper genes (optional)
+
+`methyl-enricher` reads the mapper combined CSV. Point it at the classifier mapper output:
+
+```bash
+cat > /tmp/enricher_classifier_override.json <<EOF
+{
+  "input_file": "$ROOT/mapper_classifier/all/PCa/all-gene_name-combined.csv",
+  "output_dir": "$ROOT/enricher_classifier/all/PCa"
+}
+EOF
+
+methyl-enricher --project "$PROJ" --step-override /tmp/enricher_classifier_override.json
+```
+
+Use enricher outputs under `enricher_classifier/` for pathway/module differences; gene overlap for cross-analyte comparison still comes from mapper `all-gene_name-combined.csv`.
 
 Outputs: `dmp_overlap_summary.json`, `gene_overlap_summary.json`, and CSV lists of shared/private DMP loci and genes.
 

@@ -12,6 +12,7 @@ Both discovery and classifier panels are written by methyl-detector (dual export
 
 Mapper gene overlap uses mapper/<control>/<disease>/all-gene_name-combined.csv from
 whatever DMP panel methyl-mapper was run with (project step_config.mapper.csv_pattern).
+Use --mapper-subdir when mapper was run to a separate directory (e.g. mapper_classifier).
 """
 
 from __future__ import annotations
@@ -196,6 +197,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--out", type=Path, required=True, help="Directory for summary JSON and CSV lists")
     parser.add_argument("--gene-column", default="gene_name", help="Mapper gene column (default: gene_name)")
+    parser.add_argument(
+        "--mapper-subdir",
+        default="mapper",
+        help='Mapper output segment under project root (default: mapper; e.g. mapper_classifier)',
+    )
     return parser.parse_args()
 
 
@@ -206,8 +212,8 @@ def main() -> None:
 
     plasma_detection = args.plasma_root / "detections" / rel
     buffy_detection = args.buffy_root / "detections" / rel
-    plasma_mapper = args.plasma_root / "mapper" / rel
-    buffy_mapper = args.buffy_root / "mapper" / rel
+    plasma_mapper = args.plasma_root / args.mapper_subdir / rel
+    buffy_mapper = args.buffy_root / args.mapper_subdir / rel
 
     plasma_dmps = load_dmps(plasma_detection, args.dmp_source)
     buffy_dmps = load_dmps(buffy_detection, args.dmp_source)
@@ -233,6 +239,7 @@ def main() -> None:
     buffy_genes = load_gene_names(buffy_mapper, args.gene_column)
     gene_summary = gene_jaccard(plasma_genes, buffy_genes)
     gene_summary["comparison"] = args.comparison
+    gene_summary["mapper_subdir"] = args.mapper_subdir
     gene_summary["plasma_root"] = str(args.plasma_root)
     gene_summary["buffy_root"] = str(args.buffy_root)
 
