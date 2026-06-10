@@ -83,6 +83,52 @@ def test_resolve_mapper_paths_per_comparison_honors_step_override_output_dir(tmp
     assert paths.output_dir == "/work/output/MapperProject/mapper_classifier/healthy/pca"
 
 
+def test_resolve_mapper_paths_per_comparison_output_dir_base_appends_each_comparison(tmp_path):
+    project_path = tmp_path / "project_multi.json"
+    project_path.write_text(
+        json.dumps(
+            {
+                "project_name": "MapperProject",
+                "output_base": "/work/output",
+                "controls": {
+                    "label": "controls",
+                    "groups": [{"label": "healthy", "sample_paths": ["c1"]}],
+                },
+                "diseases": {
+                    "label": "diseases",
+                    "groups": [
+                        {"label": "pca_low", "sample_paths": ["d1"]},
+                        {"label": "pca_high", "sample_paths": ["d2"]},
+                    ],
+                },
+                "comparisons": [
+                    {"control_group": "healthy", "disease_group": "pca_low"},
+                    {"control_group": "healthy", "disease_group": "pca_high"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    override = tmp_path / "mapper_classifier_base.json"
+    override.write_text(
+        json.dumps(
+            {
+                "csv_pattern": "dmps-*-classifier.csv",
+                "output_dir": "/work/output/MapperProject/mapper_classifier",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    resolved = resolve_mapper_paths_per_cancer_group(project_path, override)
+
+    assert len(resolved) == 2
+    by_label = {label: paths for paths, label in resolved}
+    assert by_label["pca_low"].output_dir == "/work/output/MapperProject/mapper_classifier/healthy/pca_low"
+    assert by_label["pca_high"].output_dir == "/work/output/MapperProject/mapper_classifier/healthy/pca_high"
+    assert by_label["pca_low"].output_dir != by_label["pca_high"].output_dir
+
+
 def test_resolve_mapper_paths_per_comparison_falls_back_to_existing_case_variant(tmp_path):
     out_base = tmp_path / "out"
     project_path = tmp_path / "project_case.json"

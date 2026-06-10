@@ -73,9 +73,14 @@ def resolve_mapper_paths_per_cancer_group(
         pattern = Path(pattern).name
 
     def _mapper_output_dir(control_group: str, disease_group: str) -> str:
-        if step_cfg.get("output_dir") is not None:
-            return str(step_cfg["output_dir"])
-        return str(project.get_mapper_output_dir(control_group, disease_group))
+        override = step_cfg.get("output_dir")
+        if override is None:
+            return str(project.get_mapper_output_dir(control_group, disease_group))
+        override_path = Path(override)
+        comparison_tail = (control_group, disease_group)
+        if override_path.parts[-2:] == comparison_tail:
+            return str(override_path)
+        return str(override_path / control_group / disease_group)
 
     if getattr(project, "uses_control_disease", lambda: False)():
         out: List[Tuple[MapperStepPaths, str]] = []

@@ -116,7 +116,7 @@ methyl-mapper --project "$BUFFY_PROJ" \
   --step-override tools/methyl-config-editor/configs/mapper_classifier_buffy.json
 ```
 
-Each override file sets both `csv_pattern` and `output_dir` under that project's output tree (`Plasma_healthy_vs_PCa/` vs `Buffy_healthy_vs_PCa/`).
+Each override file sets `csv_pattern` and `output_dir`. For a single comparison, `output_dir` may be the full path (`.../mapper_classifier/all/PCa`). For projects with multiple comparisons, set `output_dir` to the mapper base (`.../mapper_classifier`); the resolver appends `{control}/{disease}` per comparison.
 
 If you prefer explicit CLI paths, use the **full detection glob** (not a bare filename) and a **project-specific** output dir:
 
