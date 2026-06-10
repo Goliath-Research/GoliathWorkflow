@@ -775,7 +775,33 @@ def build_frozen_gene_panel(
             feature_rows.append(work)
 
     if gene_tables:
-        genes_df = pd.concat(gene_tables, ignore_index=True)
+        genes_full = pd.concat(gene_tables, ignore_index=True)
+        feature_compound_map = pd.DataFrame(
+            columns=["comparison_label", "gene_name", "feature_type", "feature_effect_compound"]
+        )
+        feature_compound_cols = [
+            c for c in genes_full.columns if c.startswith("feature_effect_compound_")
+        ]
+        if feature_compound_cols:
+            melted = genes_full[["comparison_label", "gene_name"] + feature_compound_cols].melt(
+                id_vars=["comparison_label", "gene_name"],
+                value_vars=feature_compound_cols,
+                var_name="feature_col",
+                value_name="feature_effect_compound",
+            )
+            melted["feature_type"] = (
+                melted["feature_col"]
+                .astype(str)
+                .str.replace("feature_effect_compound_", "", regex=False)
+                .map(_normalize_parent_feature)
+            )
+            melted["feature_effect_compound"] = pd.to_numeric(
+                melted["feature_effect_compound"], errors="coerce"
+            ).fillna(0.0)
+            feature_compound_map = melted[
+                ["comparison_label", "gene_name", "feature_type", "feature_effect_compound"]
+            ].copy()
+
         keep_cols = [
             "comparison_label",
             "gene_name",
@@ -794,7 +820,7 @@ def build_frozen_gene_panel(
             "gene_effect_compound",
             "gene_feature_effect_compound",
         ]
-        genes_df = genes_df[[c for c in keep_cols if c in genes_df.columns]].copy()
+        genes_df = genes_full[[c for c in keep_cols if c in genes_full.columns]].copy()
         genes_df["gene_name"] = genes_df["gene_name"].astype(str)
         genes_df["comparison_label"] = genes_df["comparison_label"].astype(str)
         genes_df["gene_importance"] = pd.to_numeric(genes_df.get("gene_importance"), errors="coerce").fillna(0.0)
@@ -828,29 +854,9 @@ def build_frozen_gene_panel(
                 "mean_effect_size",
             ]
         )
-
-    feature_compound_map = pd.DataFrame(columns=["comparison_label", "gene_name", "feature_type", "feature_effect_compound"])
-    if not genes_df.empty:
-        feature_compound_cols = [c for c in genes_df.columns if c.startswith("feature_effect_compound_")]
-        if feature_compound_cols:
-            melted = genes_df[["comparison_label", "gene_name"] + feature_compound_cols].melt(
-                id_vars=["comparison_label", "gene_name"],
-                value_vars=feature_compound_cols,
-                var_name="feature_col",
-                value_name="feature_effect_compound",
-            )
-            melted["feature_type"] = (
-                melted["feature_col"]
-                .astype(str)
-                .str.replace("feature_effect_compound_", "", regex=False)
-                .map(_normalize_parent_feature)
-            )
-            melted["feature_effect_compound"] = pd.to_numeric(
-                melted["feature_effect_compound"], errors="coerce"
-            ).fillna(0.0)
-            feature_compound_map = melted[
-                ["comparison_label", "gene_name", "feature_type", "feature_effect_compound"]
-            ].copy()
+        feature_compound_map = pd.DataFrame(
+            columns=["comparison_label", "gene_name", "feature_type", "feature_effect_compound"]
+        )
 
     if feature_rows:
         fr = pd.concat(feature_rows, ignore_index=True)

@@ -248,6 +248,85 @@ def resolve_structural_scored_column_specs(
     return specs
 
 
+def require_structural_scored_columns_emitted(
+    *,
+    fixed_gene_features_df: pd.DataFrame,
+    panels: Dict[ColumnSpec, pd.DataFrame],
+    column_specs: Sequence[ColumnSpec],
+    structural_scored_only: bool,
+    structural_scored_min_support_n: int = 2,
+    region_directional_min_loci: int = 1,
+    region_directional_region_types: Optional[Sequence[str]] = None,
+) -> None:
+    """Fail fast when structural_scored is the sole family but no columns would be emitted."""
+    if not structural_scored_only or column_specs:
+        return
+
+    regions = set(normalize_region_directional_region_types(region_directional_region_types))
+    min_support = int(max(1, structural_scored_min_support_n))
+    min_loci = int(max(1, region_directional_min_loci))
+    n_rows = int(len(fixed_gene_features_df)) if fixed_gene_features_df is not None else 0
+
+    hints: List[str] = []
+    if n_rows == 0:
+        hints.append("frozen_gene_features.csv is empty or missing")
+    else:
+        work = fixed_gene_features_df.copy()
+        work["n_dmps_in_feature"] = (
+            pd.to_numeric(work.get("n_dmps_in_feature"), errors="coerce").fillna(0).astype(int)
+        )
+        work["feature_effect_compound"] = pd.to_numeric(
+            work.get("feature_effect_compound"), errors="coerce"
+        ).fillna(0.0)
+        work["feature_type"] = (
+            work.get("feature_type", pd.Series(["unknown"] * len(work), index=work.index))
+            .map(_normalize_structural_feature)
+            .astype(str)
+        )
+        n_support = int((work["n_dmps_in_feature"] >= min_support).sum())
+        n_compound = int((work["feature_effect_compound"] > 0.0).sum())
+        n_region = int(work["feature_type"].isin(regions).sum())
+        hints.append(
+            f"frozen_gene_features rows={n_rows}, "
+            f"with n_dmps_in_feature>={min_support}: {n_support}, "
+            f"with feature_effect_compound>0: {n_compound}, "
+            f"in region_directional_region_types: {n_region}"
+        )
+        if n_compound == 0:
+            hints.append(
+                "all feature_effect_compound values are zero; rebuild "
+                "production/model_bundle/frozen_gene_features.csv via build_frozen_gene_panel "
+                "(mapper feature_effect_compound_* columns must be merged at freeze)"
+            )
+        if panels:
+            panel_summary = ", ".join(
+                f"{cmp}::{region}({len(panel)} genes)"
+                for (cmp, region), panel in sorted(panels.items())
+            )
+            hints.append(
+                f"panel gene-features exist ({panel_summary}) but none met "
+                f"region_directional_min_loci={min_loci} in the classifier DMP index; "
+                "check bundle feature_order and mapper locus overlap"
+            )
+        elif n_support == 0:
+            hints.append(
+                f"no rows pass structural_scored_min_support_n={min_support}; "
+                "lower the threshold or rebuild the panel"
+            )
+        elif n_region == 0:
+            hints.append(
+                f"no rows match region_directional_region_types={sorted(regions)} "
+                "(gene_body rows are excluded by default)"
+            )
+
+    detail = "; ".join(hints) if hints else "no structural columns resolved"
+    raise ValueError(
+        "feature_family_set=structural_scored would emit zero training features. "
+        f"{detail}. Combine with dmp_scored (feature_family_set=dmp_scored+structural_scored) "
+        "or fix the frozen gene-feature panel before training."
+    )
+
+
 def resolve_structural_scored_comparison_labels(
     dmp_df: pd.DataFrame,
     frozen_gene_features_df: pd.DataFrame,

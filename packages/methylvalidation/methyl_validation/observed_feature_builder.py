@@ -1814,6 +1814,7 @@ def build_observed_hybrid_feature_table(
             prepare_structural_scored_panels,
             resolve_structural_scored_column_specs,
             resolve_structural_scored_labels_for_features,
+            require_structural_scored_columns_emitted,
             structural_directional_iqr_column,
             structural_directional_score_column,
             structural_panel_obs_fraction_column,
@@ -1846,6 +1847,20 @@ def build_observed_hybrid_feature_table(
             feature_order,
             panels,
             min_loci=int(max(1, region_directional_min_loci)),
+        )
+        require_structural_scored_columns_emitted(
+            fixed_gene_features_df=fixed_gene_features_df,
+            panels=panels,
+            column_specs=column_specs,
+            structural_scored_only=not (
+                include_dmp_family
+                or include_gene_family
+                or include_structural_family
+                or include_gene_scored_family
+            ),
+            structural_scored_min_support_n=int(structural_scored_min_support_n),
+            region_directional_min_loci=int(max(1, region_directional_min_loci)),
+            region_directional_region_types=region_directional_region_types,
         )
         directional_by_spec, obs_by_spec, iqr_by_spec, agree_by_spec = compute_structural_scored_matrices(
             X_raw,

@@ -107,6 +107,24 @@ def _dataset_to_matrix(frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, Lis
     return X, y_arr, sample_ids, class_names, feature_names
 
 
+def _require_non_empty_training_matrix(
+    X: np.ndarray,
+    *,
+    feature_mode: str,
+    feature_family_set: str,
+) -> None:
+    n_features = int(X.shape[1]) if getattr(X, "ndim", 0) == 2 else 0
+    if n_features > 0:
+        return
+    raise ValueError(
+        f"tabular training matrix has zero feature columns "
+        f"(feature_mode={feature_mode}, feature_family_set={feature_family_set}). "
+        "For feature_family_set=structural_scored, rebuild frozen_gene_features.csv and ensure "
+        "structural column specs resolve; delete any cached tabular_train_dataset.parquet that "
+        "was written with zero features."
+    )
+
+
 def _fingerprint_payload(payload: Dict[str, Any]) -> str:
     body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(body.encode("utf-8")).hexdigest()
@@ -1043,6 +1061,11 @@ def train_tabular_model(
                     indent=2,
                 )
 
+    _require_non_empty_training_matrix(
+        X,
+        feature_mode=feature_mode_norm,
+        feature_family_set=feature_family_set_norm,
+    )
     methods = _normalize_tabular_methods(tabular_methods, legacy_model_type=model_type)
     run_selection_eval = len(methods) > 1
     method_rows: List[Dict[str, Any]] = []

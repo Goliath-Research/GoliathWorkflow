@@ -361,6 +361,7 @@ def test_build_frozen_gene_panel_writes_gene_and_feature_outputs(tmp_path: Path,
     assert feats_df.iloc[0]["gene_name"] == "GENE_A"
     assert feats_df.iloc[0]["feature_type"] == "promoter"
     assert int(feats_df.iloc[0]["n_dmps_in_feature"]) == 2
+    assert float(feats_df.iloc[0]["feature_effect_compound"]) == pytest.approx(0.7)
 
 
 def test_normalize_mapper_intersections_uses_dmp_fallback_for_nan_keys(tmp_path: Path):

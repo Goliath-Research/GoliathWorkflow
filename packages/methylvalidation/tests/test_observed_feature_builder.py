@@ -1398,3 +1398,87 @@ def test_observed_feature_builder_structural_scored_family(monkeypatch):
     assert any(n.startswith("structural_directional_score__cmp_a__promoter") for n in feat.feature_names)
     assert not any("__exon" in n for n in feat.feature_names)
     assert not any(str(n).startswith("region_directional_score__") for n in feat.feature_names)
+
+
+def test_require_structural_scored_columns_emitted_zero_compound():
+    from methyl_validation.structural_scored_features import require_structural_scored_columns_emitted
+
+    frozen_features = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a"],
+            "gene_name": ["G1"],
+            "feature_type": ["promoter"],
+            "n_dmps_in_feature": [3],
+            "feature_effect_compound": [0.0],
+        }
+    )
+    with pytest.raises(ValueError, match="zero training features") as exc:
+        require_structural_scored_columns_emitted(
+            fixed_gene_features_df=frozen_features,
+            panels={},
+            column_specs=[],
+            structural_scored_only=True,
+        )
+    assert "feature_effect_compound" in str(exc.value)
+
+
+def test_require_structural_scored_columns_emitted_skipped_when_combined_family():
+    from methyl_validation.structural_scored_features import require_structural_scored_columns_emitted
+
+    require_structural_scored_columns_emitted(
+        fixed_gene_features_df=pd.DataFrame(),
+        panels={},
+        column_specs=[],
+        structural_scored_only=False,
+    )
+
+
+def test_build_observed_hybrid_structural_scored_only_raises_when_no_columns(monkeypatch):
+    monkeypatch.setattr(
+        observed_feature_builder.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract_gene_scored,
+    )
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a"],
+            "chromosome": ["1"],
+            "context": ["CG"],
+            "position": [100],
+            "effect_size": [1.0],
+            "gene_name": ["G1"],
+            "feature_type": ["promoter"],
+        }
+    )
+    frozen_features = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a"],
+            "gene_name": ["G1"],
+            "feature_type": ["promoter"],
+            "n_dmps_in_feature": [2],
+            "feature_effect_compound": [0.0],
+        }
+    )
+    anchors = observed_feature_builder.derive_observed_hybrid_anchors(
+        ["S1", "S2"],
+        [0, 1],
+        ["healthy", "cancer"],
+        dmp_df,
+        feature_family_set="structural_scored",
+        fixed_gene_features_df=frozen_features,
+    )
+    with pytest.raises(ValueError, match="zero training features"):
+        observed_feature_builder.build_observed_hybrid_feature_table(
+            ["S1", "S2"],
+            dmp_df,
+            healthy_reference_vector=anchors.healthy_reference_vector,
+            cancer_reference_vector=anchors.cancer_reference_vector,
+            per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
+            healthy_class_label=anchors.healthy_class_label,
+            cancer_class_labels=anchors.cancer_class_labels,
+            all_class_labels=["healthy", "cancer"],
+            anchor_strategy=anchors.anchor_strategy,
+            expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+            feature_family_set="structural_scored",
+            fixed_gene_features_df=frozen_features,
+        )
