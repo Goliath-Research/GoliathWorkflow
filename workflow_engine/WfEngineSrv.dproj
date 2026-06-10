@@ -191,10 +191,7 @@
         <DCCReference Include="src\WfEngine.RestApi.pas"/>
         <DCCReference Include="src\WfEngine.GatewayHost.pas"/>
         <DCCReference Include="src\WfEngine.Mvc.Controller.pas"/>
-        <DCCReference Include="src\WfEngine.Mvc.WebModule.pas">
-            <Form>WfGatewayWebModule</Form>
-            <DesignClass>TWebModule</DesignClass>
-        </DCCReference>
+        <DCCReference Include="src\WfEngine.Mvc.Server.pas"/>
         <DCCReference Include="src\WfEngine.Mvc.Service.pas">
             <Form>MethylWfGateway</Form>
             <DesignClass>TService</DesignClass>

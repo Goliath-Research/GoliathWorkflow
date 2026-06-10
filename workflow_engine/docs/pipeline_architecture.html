@@ -1345,7 +1345,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </tr>
 </tbody>
 </table>
-<p>Implementation: <a href="./home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.RestApi.pas"><code>workflow_engine/src/WfEngine.RestApi.pas</code></a>, served by the DelphiMVCFramework controller <a href="./home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.Mvc.Controller.pas"><code>WfEngine.Mvc.Controller.pas</code></a> hosted as Windows service <strong>MethylWfGateway</strong> (default port <strong>8080</strong>, <code>WF_GATEWAY_PORT</code>).</p>
+<p>Implementation: <a href="./home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.RestApi.pas"><code>workflow_engine/src/WfEngine.RestApi.pas</code></a>, served by the DelphiMVCFramework controller <a href="./home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.Mvc.Controller.pas"><code>WfEngine.Mvc.Controller.pas</code></a> on DMVC’s <strong>HTTP.sys</strong> server backend, hosted as Windows service <strong>MethylWfGateway</strong> (default port <strong>8080</strong>, <code>WF_GATEWAY_PORT</code>/<code>WF_GATEWAY_HOST</code>).</p>
 <p>Python gateway (PostgreSQL parity testing): <a href="./home/ubuntu/MethylPipeline/workflow_engine/rest/gateway.py"><code>workflow_engine/rest/gateway.py</code></a>.</p>
 </section>
 <section id="request-submit-sequence" class="level3" data-number="8.2">
@@ -1385,7 +1385,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </thead>
 <tbody>
 <tr class="odd">
-<td><strong><code>WfEngine.Mvc.Controller</code> (DMVC)</strong></td>
+<td><strong><code>WfEngine.Mvc.Controller</code> (DMVC / HTTP.sys)</strong></td>
 <td>HTTP routes → <code>TRestApiService.Handle</code>; hosted by Windows service <code>MethylWfGateway</code></td>
 </tr>
 <tr class="even">

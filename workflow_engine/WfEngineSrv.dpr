@@ -1,7 +1,7 @@
 program WfEngineSrv;
 
 {
-  MethylPipeline workflow REST gateway (DelphiMVCFramework).
+  MethylPipeline workflow REST gateway (DelphiMVCFramework, HTTP.sys backend).
 
   Default mode: Windows service (MethylWfGateway). Supports the standard
   VCL service switches (/install, /uninstall) and SCM start/pause/continue/stop.
@@ -16,8 +16,6 @@ program WfEngineSrv;
 uses
   Vcl.SvcMgr,
   System.SysUtils,
-  Web.WebReq,
-  IdHTTPWebBrokerBridge,
   WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
   WfEngine.Types in 'src\WfEngine.Types.pas',
   WfEngine.Interfaces in 'src\WfEngine.Interfaces.pas',
@@ -27,7 +25,7 @@ uses
   WfEngine.RestApi in 'src\WfEngine.RestApi.pas',
   WfEngine.GatewayHost in 'src\WfEngine.GatewayHost.pas',
   WfEngine.Mvc.Controller in 'src\WfEngine.Mvc.Controller.pas',
-  WfEngine.Mvc.WebModule in 'src\WfEngine.Mvc.WebModule.pas' {WfGatewayWebModule: TWebModule},
+  WfEngine.Mvc.Server in 'src\WfEngine.Mvc.Server.pas',
   WfEngine.Mvc.Service in 'src\WfEngine.Mvc.Service.pas' {MethylWfGateway: TService};
 
 function GetArgValue(const Name, Default: string): string;
@@ -47,7 +45,7 @@ end;
 
 procedure PrintUsage;
 begin
-  Writeln('WfEngineSrv - MethylPipeline workflow REST gateway (Windows service)');
+  Writeln('WfEngineSrv - MethylPipeline workflow REST gateway (Windows service, HTTP.sys)');
   Writeln;
   Writeln('Service management:');
   Writeln('  WfEngineSrv /install                      register service MethylWfGateway');
@@ -55,34 +53,35 @@ begin
   Writeln('  sc start|pause|continue|stop MethylWfGateway');
   Writeln;
   Writeln('Development:');
-  Writeln('  WfEngineSrv /console [port=8080]          run gateway in the foreground');
+  Writeln('  WfEngineSrv /console [port=8080]          run gateway in the foreground (localhost)');
   Writeln('  WfEngineSrv /startinstance version=<id> [context={}]');
   Writeln;
   Writeln('Environment:');
   Writeln('  METHYLPIPELINE_DB  UniDAC connection string (required)');
   Writeln('  BACKEND_DB         mssql | postgres (optional)');
-  Writeln('  WF_GATEWAY_PORT    HTTP port for service mode (default 8080)');
+  Writeln('  WF_GATEWAY_PORT    HTTP port (default 8080)');
+  Writeln('  WF_GATEWAY_HOST    HTTP.sys host binding (service default ''+'', console ''localhost'')');
 end;
 
 procedure RunConsole;
 var
-  Bridge: TIdHTTPWebBrokerBridge;
+  Server: TWfGatewayServer;
   Port: Integer;
+  Host: string;
 begin
   Port := StrToIntDef(GetArgValue('port', ''), ResolveGatewayPort);
-  if WebRequestHandler <> nil then
-    WebRequestHandler.WebModuleClass := WebModuleClass;
+  // 'localhost' needs no HTTP.sys URL ACL; override with WF_GATEWAY_HOST.
+  Host := ResolveGatewayHost('localhost');
   InitGatewayHost(ResolveGatewayConnectionString);
-  Bridge := TIdHTTPWebBrokerBridge.Create(nil);
+  Server := TWfGatewayServer.Create(Port, Host);
   try
-    Bridge.DefaultPort := Port;
-    Bridge.Active := True;
-    Writeln(Format('REST API listening on http://0.0.0.0:%d/v1', [Port]));
+    Server.Start;
+    Writeln(Format('REST API listening on http://%s:%d/v1 (HTTP.sys)', [Host, Port]));
     Writeln('Press Ctrl+C to stop.');
     while True do
       Sleep(1000);
   finally
-    Bridge.Free;
+    Server.Free;
     ShutdownGatewayHost;
   end;
 end;

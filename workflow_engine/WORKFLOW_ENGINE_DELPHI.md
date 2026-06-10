@@ -6,12 +6,14 @@ Workflow activation, control flow, scope resolution, and task progression run **
 
 The gateway is built on [DelphiMVCFramework](https://github.com/danieleteti/delphimvcframework) (DMVC) and runs as a **Windows service** (`MethylWfGateway`) that can be started, paused, resumed, and stopped through the Service Control Manager.
 
+It uses DMVC's pluggable server backend (`IMVCServer`) with the **HTTP.sys** driver (`TMVCServerFactory.CreateHttpSys` → `TMVCHttpSysServer`): the Windows kernel-mode HTTP stack (same as IIS/Kestrel), engine-first — no WebBroker module, no Indy sockets.
+
 ## Components
 
 | Unit | Role |
 |------|------|
 | `WfEngine.Mvc.Service.pas` (`TMethylWfGatewayService`) | Windows service; SCM start/pause/continue/stop |
-| `WfEngine.Mvc.WebModule.pas` | WebBroker module hosting `TMVCEngine` |
+| `WfEngine.Mvc.Server.pas` (`TWfGatewayServer`) | Standalone `TMVCEngine` + HTTP.sys `IMVCServer` |
 | `WfEngine.Mvc.Controller.pas` (`TWfGatewayController`) | DMVC routes (`MVCPath` per `contracts/openapi.yaml`) |
 | `WfEngine.GatewayHost.pas` | Shared gateway state; serializes dispatch onto one DB connection |
 | `WfEngine.RestApi.pas` | Contract dispatcher (method + path + body → SQL procs) |
@@ -70,7 +72,7 @@ sc continue MethylWfGateway
 sc stop     MethylWfGateway
 ```
 
-Pause stops accepting HTTP requests without tearing down the gateway; continue resumes the listener. Stop closes the listener and releases the DB connection.
+Pause unregisters the HTTP.sys URL and stops accepting requests without tearing down the gateway; continue re-registers and resumes. Stop closes the listener and releases the DB connection.
 
 Development modes:
 
@@ -85,8 +87,19 @@ Environment (system-level for service mode):
 - `POSTGRES_*` / `AZURE_SQL_*` — built by `WfEngine.Dialect.BuildConnectionStringFromEnv`
 - `BACKEND_DB` — `mssql` (default) or `postgres`
 - `WF_GATEWAY_PORT` — HTTP port (default 8080)
+- `WF_GATEWAY_HOST` — HTTP.sys binding (service default `+` = all interfaces; console default `localhost`)
 
-Build prerequisite: DMVC (`delphimvcframework/sources`) on the `WfEngineSrv` project search path. The legacy `/run` poll mode and the raw Indy host (`WfEngine.RestHttpServer`) are removed; progression is driven by worker submit and SQL procs.
+### HTTP.sys URL ACL
+
+HTTP.sys requires a URL reservation for non-privileged accounts. The service running as **LocalSystem** needs nothing extra. If you run the service under a dedicated account, reserve the URL once:
+
+```
+netsh http add urlacl url=http://+:8080/ user=DOMAIN\WfGatewayAccount
+```
+
+Console mode binds `localhost`, which needs no reservation.
+
+Build prerequisite: DMVC ≥ 3.5 (`delphimvcframework/sources`) on the `WfEngineSrv` project search path. The legacy `/run` poll mode and the raw Indy host (`WfEngine.RestHttpServer`) are removed; progression is driven by worker submit and SQL procs.
 
 ## Workflow tree example
 

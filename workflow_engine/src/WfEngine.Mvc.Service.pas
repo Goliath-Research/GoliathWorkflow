@@ -1,12 +1,13 @@
 unit WfEngine.Mvc.Service;
 
 {
-  Windows service host for the DMVC workflow gateway.
+  Windows service host for the DMVC workflow gateway (HTTP.sys backend).
 
   Service name: MethylWfGateway
-  - Start    -> open DB-backed gateway state and HTTP listener
-  - Pause    -> stop accepting HTTP requests (DB state kept)
-  - Continue -> resume the HTTP listener
+  - Start    -> open DB-backed gateway state and HTTP.sys listener
+  - Pause    -> unregister the HTTP.sys URL and stop accepting requests
+                (DB state kept)
+  - Continue -> re-register and resume listening
   - Stop     -> close listener and release gateway state
 
   Install/uninstall with the standard VCL service switches:
@@ -21,7 +22,7 @@ uses
   System.SysUtils,
   System.Classes,
   Vcl.SvcMgr,
-  IdHTTPWebBrokerBridge;
+  WfEngine.Mvc.Server;
 
 type
   TMethylWfGatewayService = class(TService)
@@ -30,7 +31,7 @@ type
     procedure ServicePause(Sender: TService; var Paused: Boolean);
     procedure ServiceContinue(Sender: TService; var Continued: Boolean);
   private
-    FBridge: TIdHTTPWebBrokerBridge;
+    FServer: TWfGatewayServer;
   public
     function GetServiceController: TServiceController; override;
   end;
@@ -43,9 +44,7 @@ implementation
 {$R *.dfm}
 
 uses
-  Web.WebReq,
-  WfEngine.GatewayHost,
-  WfEngine.Mvc.WebModule;
+  WfEngine.GatewayHost;
 
 procedure ServiceController(CtrlCode: DWORD); stdcall;
 begin
@@ -61,18 +60,16 @@ procedure TMethylWfGatewayService.ServiceStart(Sender: TService; var Started: Bo
 begin
   Started := False;
   try
-    if WebRequestHandler <> nil then
-      WebRequestHandler.WebModuleClass := WebModuleClass;
     InitGatewayHost(ResolveGatewayConnectionString);
-    FBridge := TIdHTTPWebBrokerBridge.Create(nil);
-    FBridge.DefaultPort := ResolveGatewayPort;
-    FBridge.Active := True;
+    // '+' binds all interfaces; LocalSystem holds the HTTP.sys URL ACL.
+    FServer := TWfGatewayServer.Create(ResolveGatewayPort, ResolveGatewayHost('+'));
+    FServer.Start;
     Started := True;
   except
     on E: Exception do
     begin
       LogMessage(Format('MethylWfGateway start failed: %s: %s', [E.ClassName, E.Message]));
-      FreeAndNil(FBridge);
+      FreeAndNil(FServer);
       ShutdownGatewayHost;
     end;
   end;
@@ -80,26 +77,22 @@ end;
 
 procedure TMethylWfGatewayService.ServiceStop(Sender: TService; var Stopped: Boolean);
 begin
-  if Assigned(FBridge) then
-  begin
-    FBridge.Active := False;
-    FreeAndNil(FBridge);
-  end;
+  FreeAndNil(FServer);
   ShutdownGatewayHost;
   Stopped := True;
 end;
 
 procedure TMethylWfGatewayService.ServicePause(Sender: TService; var Paused: Boolean);
 begin
-  if Assigned(FBridge) then
-    FBridge.Active := False;
+  if Assigned(FServer) then
+    FServer.Stop;
   Paused := True;
 end;
 
 procedure TMethylWfGatewayService.ServiceContinue(Sender: TService; var Continued: Boolean);
 begin
-  if Assigned(FBridge) then
-    FBridge.Active := True;
+  if Assigned(FServer) then
+    FServer.Start;
   Continued := True;
 end;
 

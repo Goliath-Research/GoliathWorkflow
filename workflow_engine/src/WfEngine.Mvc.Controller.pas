@@ -68,8 +68,9 @@ var
   Status: Integer;
   Payload: string;
 begin
+  // Backend-agnostic request access (works for HTTP.sys, Indy, WebBroker).
   Payload := HandleGatewayRequest(
-    Context.Request.RawWebRequest.Method,
+    Context.Request.HTTPMethodAsString,
     Context.Request.PathInfo,
     Context.Request.Body,
     Status);
