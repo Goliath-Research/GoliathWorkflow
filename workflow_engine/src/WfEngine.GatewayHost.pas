@@ -16,7 +16,7 @@ procedure InitGatewayHost(const AConnectionString: string);
 procedure ShutdownGatewayHost;
 function GatewayHostInitialized: Boolean;
 
-function HandleGatewayRequest(const AMethod, APath, ABody: string;
+function HandleGatewayRequest(const AMethod, APath, AQuery, ABody: string;
   out AStatus: Integer): string;
 
 function ResolveGatewayConnectionString: string;
@@ -88,7 +88,7 @@ begin
   end;
 end;
 
-function HandleGatewayRequest(const AMethod, APath, ABody: string;
+function HandleGatewayRequest(const AMethod, APath, AQuery, ABody: string;
   out AStatus: Integer): string;
 begin
   GLock.Acquire;
@@ -98,7 +98,7 @@ begin
       AStatus := 503;
       Exit('{"error":"gateway not initialized"}');
     end;
-    Result := GApi.Handle(AMethod, APath, ABody, AStatus);
+    Result := GApi.Handle(AMethod, APath, AQuery, ABody, AStatus);
   finally
     GLock.Release;
   end;

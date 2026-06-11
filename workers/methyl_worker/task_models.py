@@ -1,0 +1,129 @@
+"""Pydantic models for workflow ACTION input_json / output_json payloads."""
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class PipelineCliTaskInput(BaseModel):
+    """Shared input for methyl-* pipeline CLI actions (centroid, detector, mapper, enricher, progression)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    tool: str
+    project: Optional[str] = None
+    projectPath: Optional[str] = None
+    project_path: Optional[str] = None
+    phase: Optional[str] = None
+    runId: Optional[str] = None
+    taskConfig: Optional[Dict[str, Any]] = None
+    group: Optional[str] = None
+    chromosome: Optional[str] = None
+    context: Optional[str] = None
+    comparison: Optional[str] = None
+    outputDir: Optional[str] = None
+    centroid1Dir: Optional[str] = None
+    centroid2Dir: Optional[str] = None
+    orderedComparisonLabels: Optional[List[str]] = None
+
+
+class PipelineCliTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str = "ok"
+    tool: Optional[str] = None
+    stdout_tail: Optional[str] = None
+
+
+class SamplePrepTaskInput(BaseModel):
+    """Per-sample upstream preprocessing task input."""
+
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: Optional[str] = None
+    sampleDir: Optional[str] = None
+    project: Optional[str] = None
+    projectPath: Optional[str] = None
+    reason: Optional[str] = None
+    fastqUri: Optional[str] = None
+
+
+class SampleIdOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: Optional[str] = None
+
+
+class MethylQcTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: str
+    qcPath: str
+    guardrails: Dict[str, Any] = Field(default_factory=dict)
+
+
+class FragmentomicsTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: str
+    outputDir: str
+    summary: Dict[str, Any] = Field(default_factory=dict)
+
+
+class MarkFailedTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: Optional[str] = None
+    sampleDir: Optional[str] = None
+    status: str = "QC_FAILED"
+    reason: str = "alignment_qc_failed"
+
+
+class DownloadFastqTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: Optional[str] = None
+    fastqFiles: List[str] = Field(default_factory=list)
+
+
+class ParabricksTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: Optional[str] = None
+    bamPath: Optional[str] = None
+    metricsJson: Optional[str] = None
+
+
+class DeleteTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: Optional[str] = None
+    deleted: bool = True
+
+
+class MethylExtractTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: Optional[str] = None
+    h5Files: List[str] = Field(default_factory=list)
+
+
+class ValidationPlanTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str = "ok"
+    context_json: Dict[str, Any] = Field(default_factory=dict)
+    iterations: List[Dict[str, Any]] = Field(default_factory=list)
+    n_iterations: int = 0
+    projectPath: Optional[str] = None
+
+
+class TaskErrorOutput(BaseModel):
+    """Worker failure payload on submit with result_code < 0."""
+
+    model_config = ConfigDict(extra="allow")
+
+    error: str
+    capability: Optional[str] = None

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "context_json": {
+      "additionalProperties": true,
+      "title": "Context Json",
+      "type": "object"
+    },
+    "iterations": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Iterations",
+      "type": "array"
+    },
+    "n_iterations": {
+      "default": 0,
+      "title": "N Iterations",
+      "type": "integer"
+    },
+    "projectPath": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Projectpath"
+    },
+    "status": {
+      "default": "ok",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "title": "ValidationPlanTaskOutput",
+  "type": "object"
+}

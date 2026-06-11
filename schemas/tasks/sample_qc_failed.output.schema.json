@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "reason": {
+      "default": "alignment_qc_failed",
+      "title": "Reason",
+      "type": "string"
+    },
+    "sampleDir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sampledir"
+    },
+    "sampleId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sampleid"
+    },
+    "status": {
+      "default": "QC_FAILED",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "title": "MarkFailedTaskOutput",
+  "type": "object"
+}

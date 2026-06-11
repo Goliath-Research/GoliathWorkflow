@@ -13,6 +13,7 @@ uses
   SchemaBranchResolver in 'src\Schema\SchemaBranchResolver.pas',
   SchemaDictionaryResolver in 'src\Schema\SchemaDictionaryResolver.pas',
   SchemaValidator in 'src\Schema\SchemaValidator.pas',
+  RemoteSchemaCatalog in 'src\Schema\RemoteSchemaCatalog.pas',
   JsonPath in 'src\Data\JsonPath.pas',
   JsonArrayOps in 'src\Data\JsonArrayOps.pas',
   JsonDocumentModel in 'src\Data\JsonDocumentModel.pas',

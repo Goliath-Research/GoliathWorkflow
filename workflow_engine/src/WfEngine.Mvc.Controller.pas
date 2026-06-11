@@ -54,6 +54,14 @@ type
     [MVCPath('/workflows/definitions/($WorkflowName)')]
     [MVCHTTPMethod([httpDELETE])]
     procedure DeleteDefinition(const WorkflowName: string);
+
+    [MVCPath('/actions')]
+    [MVCHTTPMethod([httpGET])]
+    procedure ListActions;
+
+    [MVCPath('/actions/($ActionName)/schema')]
+    [MVCHTTPMethod([httpGET])]
+    procedure GetActionSchema(const ActionName: string);
   end;
 
 implementation
@@ -72,6 +80,7 @@ begin
   Payload := HandleGatewayRequest(
     Context.Request.HTTPMethodAsString,
     Context.Request.PathInfo,
+    Context.Request.Query,
     Context.Request.Body,
     Status);
   Context.Response.StatusCode := Status;
@@ -123,6 +132,16 @@ begin
 end;
 
 procedure TWfGatewayController.DeleteDefinition(const WorkflowName: string);
+begin
+  Delegate;
+end;
+
+procedure TWfGatewayController.ListActions;
+begin
+  Delegate;
+end;
+
+procedure TWfGatewayController.GetActionSchema(const ActionName: string);
 begin
   Delegate;
 end;

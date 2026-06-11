@@ -111,6 +111,15 @@ objects:
     - name: wf.wf_repo_set_scope_variable
       kind: procedure
       required: true
+    - name: wf.wf_repo_upsert_action_schema
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_get_action_schema
+      kind: function
+      required: true
+    - name: wf.wf_repo_list_actions
+      kind: function
+      required: true
 
   engine_runtime:
     - name: wf.wf_json_fragment_from_string

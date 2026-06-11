@@ -35,6 +35,26 @@ Custom sorting passes an anonymous comparison function directly to **`IList<T>.S
 4. Complex fields show **Edit…** and open nested editors modally.
 5. **File → Save JSON** writes pretty-printed UTF-8 JSON.
 
+## Workflow action schemas (remote catalog)
+
+When editing workflow task templates (with `${var.*}` placeholders), enable the gateway catalog in `methyl-config-editor.ini` (VCL) or `methyl-config-editor-web.ini` (uniGUI):
+
+```ini
+[Gateway]
+Enabled=true
+BaseUrl=http://localhost:8080/v1
+```
+
+On catalog reload, the editor calls `GET /v1/actions` and fetches each registered schema. Action entries appear in the schema dropdown as `action: pipeline.centroid (input)` etc. Filesystem schemas under **Schemas root** remain available; remote entries use virtual `remote://` paths.
+
+`TSchemaValidator.AllowTemplatePlaceholders` (default **true**) accepts string values matching `${...}` for any declared type so unresolved template tokens validate at edit time.
+
+| Unit | Role |
+|------|------|
+| `Schema/RemoteSchemaCatalog.pas` | HTTP client for gateway action schemas |
+| `App/SchemaCatalog.pas` | Merges filesystem + remote entries |
+| `Schema/SchemaValidator.pas` | Optional `${...}` placeholder tolerance |
+
 ## Architecture
 
 Property editing uses **Spring4D `GlobalContainer`** to resolve an `ISchemaPropertyEditor` by schema shape (or optional title override).
@@ -60,6 +80,7 @@ JSON document        →  PropertyEditorForm (recursive rows)
 | `UI/PropertyEditorForm.pas` | Recursive property grid shell (objects and open maps) |
 | `UI/ArrayEditorForm.pas` | Array list editor |
 | `App/MainForm.pas` | Schema catalog, document load/save |
+| `Schema/RemoteSchemaCatalog.pas` | Fetch action schemas from workflow REST gateway |
 
 ### Nested types via `$ref`
 

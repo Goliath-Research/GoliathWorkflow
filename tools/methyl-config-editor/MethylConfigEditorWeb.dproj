@@ -193,6 +193,7 @@
         <DCCReference Include="src\Schema\SchemaBranchResolver.pas"/>
         <DCCReference Include="src\Schema\SchemaDictionaryResolver.pas"/>
         <DCCReference Include="src\Schema\SchemaValidator.pas"/>
+        <DCCReference Include="src\Schema\RemoteSchemaCatalog.pas"/>
         <DCCReference Include="src\Data\JsonPath.pas"/>
         <DCCReference Include="src\Data\JsonArrayOps.pas"/>
         <DCCReference Include="src\Data\JsonDocumentModel.pas"/>

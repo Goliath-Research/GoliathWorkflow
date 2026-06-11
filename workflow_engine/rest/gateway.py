@@ -25,7 +25,9 @@ from db_client import (
     apply_validation_plan,
     create_workflow_instance,
     delete_workflow_definition,
+    get_action_schema,
     get_workflow_instance,
+    list_workflow_actions,
     pg_dsn,
     start_workflow_instance,
     worker_authenticate,
@@ -40,7 +42,27 @@ class RestGateway:
     def __init__(self, dsn: str) -> None:
         self.dsn = dsn
 
-    def dispatch(self, method: str, path: str, body: dict[str, Any]) -> tuple[int, Any]:
+    def dispatch(
+        self,
+        method: str,
+        path: str,
+        body: dict[str, Any],
+        query: Optional[dict[str, list[str]]] = None,
+    ) -> tuple[int, Any]:
+        q = query or {}
+
+        if method == "GET" and path == "/v1/actions":
+            return 200, {"actions": list_workflow_actions(self.dsn)}
+
+        m = re.fullmatch(r"/v1/actions/([^/]+)/schema", path)
+        if method == "GET" and m:
+            action_name = m.group(1)
+            direction = (q.get("direction") or ["input"])[0]
+            try:
+                return 200, get_action_schema(self.dsn, action_name, direction)
+            except KeyError as exc:
+                return 404, {"error": str(exc)}
+
         if method == "POST" and path == "/v1/workers/authenticate":
             worker_authenticate(self.dsn, int(body["worker_id"]), str(body["worker_token"]))
             return 200, {}
@@ -168,10 +190,14 @@ def make_handler(gateway: RestGateway) -> type[BaseHTTPRequestHandler]:
 
         def do_GET(self) -> None:
             try:
-                status, payload = gateway.dispatch("GET", self.path.split("?", 1)[0], {})
+                parsed = urlparse(self.path)
+                query = parse_qs(parsed.query)
+                status, payload = gateway.dispatch("GET", parsed.path, {}, query)
                 self._send(status, payload)
             except KeyError as exc:
                 self._send(404, {"error": str(exc)})
+            except ValueError as exc:
+                self._send(400, {"error": str(exc)})
             except Exception as exc:
                 self._send(500, {"error": str(exc)})
 

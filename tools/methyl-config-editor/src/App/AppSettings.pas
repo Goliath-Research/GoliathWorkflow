@@ -19,6 +19,10 @@ type
     procedure SetLastSchemaPath(const Value: string);
     function GetLastDocumentPath: string;
     procedure SetLastDocumentPath(const Value: string);
+    function GetGatewayEnabled: Boolean;
+    procedure SetGatewayEnabled(const Value: Boolean);
+    function GetGatewayBaseUrl: string;
+    procedure SetGatewayBaseUrl(const Value: string);
     function DefaultSchemasRoot: string;
   end;
 
@@ -107,6 +111,54 @@ begin
   Ini := TIniFile.Create(FIniPath);
   try
     Ini.WriteString('Recent', 'LastDocument', Value);
+  finally
+    Ini.Free;
+  end;
+end;
+
+function TAppSettings.GetGatewayEnabled: Boolean;
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(FIniPath);
+  try
+    Result := Ini.ReadBool('Gateway', 'Enabled', False);
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TAppSettings.SetGatewayEnabled(const Value: Boolean);
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(FIniPath);
+  try
+    Ini.WriteBool('Gateway', 'Enabled', Value);
+  finally
+    Ini.Free;
+  end;
+end;
+
+function TAppSettings.GetGatewayBaseUrl: string;
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(FIniPath);
+  try
+    Result := Ini.ReadString('Gateway', 'BaseUrl', 'http://localhost:8080/v1');
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TAppSettings.SetGatewayBaseUrl(const Value: string);
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(FIniPath);
+  try
+    Ini.WriteString('Gateway', 'BaseUrl', Value);
   finally
     Ini.Free;
   end;

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "deleted": {
+      "default": true,
+      "title": "Deleted",
+      "type": "boolean"
+    },
+    "sampleId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sampleid"
+    }
+  },
+  "title": "DeleteTaskOutput",
+  "type": "object"
+}

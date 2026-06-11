@@ -35,3 +35,24 @@ def test_run_once_processes_task() -> None:
     args = client.submit_result.call_args[0]
     assert args[0] == 99
     assert args[3] == 0
+
+
+def test_run_once_fails_task_on_input_validation_error() -> None:
+    client = MagicMock(spec=WorkflowRestClient)
+    claim = TaskClaim(
+        node_execution_id=42,
+        workflow_instance_id=1,
+        action_name="pipeline.centroid",
+        capability="methyl-centroid",
+        input_json={"project": "demo"},
+    )
+    client.request_task.return_value = claim
+    runner = WorkerRunner(client, 1, "tok", poll_seconds=0.01, heartbeat_seconds=3600)
+
+    assert runner.run_once() is True
+
+    client.fail_task.assert_called_once()
+    args, kwargs = client.fail_task.call_args
+    assert args[0] == 42
+    assert args[3] == 4001
+    client.submit_result.assert_not_called()

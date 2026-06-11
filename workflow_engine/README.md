@@ -31,6 +31,7 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 16. [`wf_worker_api_contract.sql`](wf_worker_api_contract.sql) — worker submit result-set contract alignment.
 17. [`wf_data_driven_pipeline_seed.sql`](wf_data_driven_pipeline_seed.sql) — **DataDrivenPipeline** (generic; instance `context_json` drives fan-out).
 17a. [`wf_sample_prep_pipeline_seed.sql`](wf_sample_prep_pipeline_seed.sql) — **SamplePrepPipeline** (per-sample FASTQ → HDF5 upstream).
+17b. [`wf_action_schema.sql`](wf_action_schema.sql) — `workflow_action_schema` table + repo procs for action I/O JSON Schemas.
 16. [`wf_pca_two_group_seed.sql`](wf_pca_two_group_seed.sql) — **deprecated** static PCaTwoGroupFlow.
 17. [`wf_pca_ovr_seed.sql`](wf_pca_ovr_seed.sql) — **deprecated** static PCaOvrFlow.
 18. [`wf_pca_two_group_run_example.sql`](wf_pca_two_group_run_example.sql) — optional simulation for legacy seed.
@@ -90,3 +91,16 @@ Python REST worker (poll/submit): [`../workers/WORKER_PROTOCOL.md`](../workers/W
 PostgreSQL parity scripts (`sql_pg/05`–`07`) port runtime resolver, scope write-path, and JSON encoding from the T-SQL parity scripts. FOREACH (`wf_sql_foreach_support.sql`) remains MSSQL-only for now.
 
 Parity harness: `python workflow_engine/tests/parity/run_parity.py` (requires `psql` + Postgres 17).
+
+### Action payload schemas
+
+After deploying `wf_action_schema.sql`:
+
+```bash
+source .venv/bin/activate
+methyl-export-task-schemas              # writes schemas/tasks/*.schema.json
+methyl-export-task-schemas --check      # CI drift gate
+python workflow_engine/sql/seed_action_schemas.py
+```
+
+Gateway routes: `GET /v1/actions`, `GET /v1/actions/{action_name}/schema?direction=input|output` ([`contracts/openapi.yaml`](../contracts/openapi.yaml)). The Config Editor fetches these when `[Gateway] Enabled=true` in its INI file.

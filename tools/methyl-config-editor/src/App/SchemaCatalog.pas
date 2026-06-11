@@ -20,8 +20,10 @@ type
     class var FCurrent: TSchemaCatalog;
     FEntries: IList<TSchemaCatalogEntry>;
     FDocuments: TSchemaDocumentCache;
+    FRemoteJson: IDictionary<string, string>;
     class function CanonicalName(const Value: string): string; static;
     class function EntrySchemaName(const Entry: TSchemaCatalogEntry): string; static;
+    class function IsRemotePath(const Path: string): Boolean; static;
     procedure ScanDirectory(const Root: string; const Relative: string);
     function TryLoadDocument(Index: Integer; out Document: TSchemaDocument): Boolean;
   public
@@ -30,6 +32,8 @@ type
     class function Current: TSchemaCatalog; static;
     class procedure SetCurrent(ACatalog: TSchemaCatalog); static;
     procedure LoadFromRoot(const SchemasRoot: string);
+    procedure RegisterRemoteEntry(const DisplayName, VirtualPath, SchemaJson: string);
+    function LoadDocument(const Path: string): TSchemaDocument;
     function Count: Integer;
     function Entry(Index: Integer): TSchemaCatalogEntry;
     function FindByPath(const Path: string): Integer;
@@ -51,6 +55,7 @@ begin
   inherited Create;
   FEntries := TCollections.CreateList<TSchemaCatalogEntry>;
   FDocuments := TSchemaDocumentCache.Create;
+  FRemoteJson := TCollections.CreateDictionary<string, string>;
 end;
 
 destructor TSchemaCatalog.Destroy;
@@ -127,16 +132,62 @@ begin
   end;
 end;
 
+class function TSchemaCatalog.IsRemotePath(const Path: string): Boolean;
+begin
+  Result := StartsText('remote://', Path);
+end;
+
 procedure TSchemaCatalog.LoadFromRoot(const SchemasRoot: string);
 begin
   FEntries.Clear;
   FDocuments.Clear;
+  FRemoteJson.Clear;
   ScanDirectory(SchemasRoot, '');
   FEntries.Sort(
     function(const Left, Right: TSchemaCatalogEntry): Integer
     begin
       Result := CompareText(Left.DisplayName, Right.DisplayName);
     end);
+end;
+
+procedure TSchemaCatalog.RegisterRemoteEntry(const DisplayName, VirtualPath,
+  SchemaJson: string);
+var
+  Entry: TSchemaCatalogEntry;
+begin
+  Entry.DisplayName := DisplayName;
+  Entry.FilePath := VirtualPath;
+  if FRemoteJson.ContainsKey(VirtualPath) then
+    FRemoteJson[VirtualPath] := SchemaJson
+  else
+    FRemoteJson.Add(VirtualPath, SchemaJson);
+  FEntries.Add(Entry);
+  FEntries.Sort(
+    function(const Left, Right: TSchemaCatalogEntry): Integer
+    begin
+      Result := CompareText(Left.DisplayName, Right.DisplayName);
+    end);
+end;
+
+function TSchemaCatalog.LoadDocument(const Path: string): TSchemaDocument;
+var
+  Loader: TJsonSchemaLoader;
+  JsonText: string;
+begin
+  if Path = '' then
+    Exit(nil);
+  if FDocuments.TryGet(Path, Result) then
+    Exit;
+  Loader := TJsonSchemaLoader.Create;
+  try
+    if IsRemotePath(Path) and FRemoteJson.TryGetValue(Path, JsonText) then
+      Result := Loader.LoadDocumentFromString(JsonText)
+    else
+      Result := Loader.LoadDocumentFromFile(Path);
+    FDocuments.Add(Path, Result);
+  finally
+    Loader.Free;
+  end;
 end;
 
 function TSchemaCatalog.TryGetDocument(const Path: string;
@@ -164,6 +215,11 @@ begin
   Path := FEntries[Index].FilePath;
   if FDocuments.TryGet(Path, Document) then
     Exit(Assigned(Document));
+  if IsRemotePath(Path) and FRemoteJson.ContainsKey(Path) then
+  begin
+    Document := LoadDocument(Path);
+    Exit(Assigned(Document));
+  end;
   Loader := TJsonSchemaLoader.Create;
   try
     Document := Loader.LoadDocumentFromFile(Path);

@@ -14,6 +14,15 @@ Deploy **in order**:
 | 6 | [`01_worker_api.sql`](01_worker_api.sql) | Worker claim/submit/heartbeat |
 | 7 | [`02_repository_api.sql`](02_repository_api.sql) | Middle-tier repository wrappers |
 | 8 | [`04_admin.sql`](04_admin.sql) | Admin (`sp_delete_workflow_def`) |
+| 9 | [`wf_action_schema.sql`](wf_action_schema.sql) | Action I/O JSON Schema storage + repo procs |
+
+After SQL deploy, seed action schemas:
+
+```bash
+source .venv/bin/activate
+methyl-export-task-schemas
+python workflow_engine/sql/seed_action_schemas.py
+```
 
 ## Azure Database for PostgreSQL
 
@@ -68,7 +77,7 @@ After schema deploy, migrate **data** separately (pg_dump/pg_restore or ETL). Th
 
 ```bash
 docker run -d --name methyl-pg -e POSTGRES_PASSWORD=methyl -e POSTGRES_DB=methylpipeline -p 5432:5432 postgres:17
-for f in 00_schema.sql 03_engine_core.sql 05_runtime_parity.sql 06_scope_writepath_parity.sql 07_scope_encoding_parity.sql 01_worker_api.sql 02_repository_api.sql 04_admin.sql; do
+for f in 00_schema.sql 03_engine_core.sql 05_runtime_parity.sql 06_scope_writepath_parity.sql 07_scope_encoding_parity.sql 01_worker_api.sql 02_repository_api.sql 04_admin.sql wf_action_schema.sql; do
   psql "postgresql://postgres:methyl@localhost:5432/methylpipeline" -f "workflow_engine/sql_pg/$f"
 done
 ```

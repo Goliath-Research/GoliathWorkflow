@@ -9,21 +9,30 @@ uses
 
 type
   TSchemaValidator = class
+  private
+    class function IsTemplatePlaceholder(const S: string): Boolean; static;
   public
+    class var AllowTemplatePlaceholders: Boolean;
     class function ValidateValue(ANode: TSchemaNode; AValue: TJSONValue;
-      out ErrorMessage: string): Boolean;
+      out ErrorMessage: string; AAllowPlaceholders: Boolean = False): Boolean;
     class function ValidateObject(ANode: TSchemaNode; AObject: TJSONObject;
-      out ErrorMessage: string): Boolean;
+      out ErrorMessage: string; AAllowPlaceholders: Boolean = False): Boolean;
   end;
 
 implementation
 
 uses
   SchemaBranchResolver,
-  SchemaValueSummary;
+  SchemaValueSummary,
+  System.RegularExpressions;
+
+class function TSchemaValidator.IsTemplatePlaceholder(const S: string): Boolean;
+begin
+  Result := TRegEx.IsMatch(S, '^\$\{[^}]+\}$');
+end;
 
 class function TSchemaValidator.ValidateValue(ANode: TSchemaNode;
-  AValue: TJSONValue; out ErrorMessage: string): Boolean;
+  AValue: TJSONValue; out ErrorMessage: string; AAllowPlaceholders: Boolean): Boolean;
 var
   S: string;
   N: Double;
@@ -33,6 +42,9 @@ begin
   ErrorMessage := '';
   if not Assigned(ANode) then
     Exit;
+  if (AAllowPlaceholders or AllowTemplatePlaceholders) and (AValue is TJSONString) and
+    IsTemplatePlaceholder(TJSONString(AValue).Value) then
+    Exit(True);
   if TSchemaValueSummary.IsNullValue(AValue) then
   begin
     if ANode.Required and not ANode.Nullable then
@@ -124,7 +136,7 @@ begin
         Exit(False);
       end
       else
-        Exit(ValidateObject(ANode, TJSONObject(AValue), ErrorMessage));
+        Exit(ValidateObject(ANode, TJSONObject(AValue), ErrorMessage, AAllowPlaceholders));
     skArray:
       if not (AValue is TJSONArray) then
       begin
@@ -135,7 +147,7 @@ begin
 end;
 
 class function TSchemaValidator.ValidateObject(ANode: TSchemaNode;
-  AObject: TJSONObject; out ErrorMessage: string): Boolean;
+  AObject: TJSONObject; out ErrorMessage: string; AAllowPlaceholders: Boolean): Boolean;
 var
   Effective: TSchemaNode;
   I: Integer;
@@ -158,7 +170,7 @@ begin
       Exit(False);
     end;
     if Assigned(Val) then
-      if not ValidateValue(PropNode, Val, ErrorMessage) then
+      if not ValidateValue(PropNode, Val, ErrorMessage, AAllowPlaceholders) then
       begin
         ErrorMessage := Format('%s: %s', [Prop.Name, ErrorMessage]);
         Exit(False);
@@ -175,5 +187,8 @@ begin
     end;
   end;
 end;
+
+initialization
+  TSchemaValidator.AllowTemplatePlaceholders := True;
 
 end.

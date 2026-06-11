@@ -9,6 +9,12 @@ from typing import Optional
 
 from .client import TaskClaim, WorkflowRestClient
 from .handlers import execute_task
+from .task_validation import (
+    TASK_VALIDATION_ERROR_CODE,
+    TaskValidationError,
+    validate_task_input,
+    validate_task_output,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +66,9 @@ class WorkerRunner:
         hb_thread.start()
 
         try:
+            validate_task_input(claim.action_name, claim.capability, claim.input_json)
             output = execute_task(claim.capability, claim.action_name, claim.input_json)
+            validate_task_output(claim.action_name, claim.capability, output)
             ack = self.client.submit_result(
                 ne_id, self.worker_id, self.worker_token, 0, output
             )
@@ -71,6 +79,15 @@ class WorkerRunner:
                 ack.accepted,
                 ack.instance_status,
                 ack.next_ready_count,
+            )
+        except TaskValidationError as exc:
+            logger.error("Task %s schema validation failed: %s", ne_id, exc)
+            self.client.fail_task(
+                ne_id,
+                self.worker_id,
+                self.worker_token,
+                TASK_VALIDATION_ERROR_CODE,
+                str(exc),
             )
         except Exception as exc:
             logger.exception("Task %s failed", ne_id)

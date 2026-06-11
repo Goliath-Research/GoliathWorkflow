@@ -4,10 +4,13 @@ version = "1.0.0"
 description = "REST workflow worker for MethylPipeline middle-tier"
 readme = "WORKER_PROTOCOL.md"
 requires-python = ">=3.10,<3.13"
-dependencies = []
+dependencies = [
+  "pydantic>=2.6.0,<3.0.0",
+]
 
 [project.scripts]
 methyl-worker = "methyl_worker.__main__:main"
+methyl-export-task-schemas = "methyl_worker.task_schema_export:main"
 
 [build-system]
 requires = ["setuptools>=61"]

@@ -18,6 +18,10 @@ type
     function DefaultSchemasRoot: string;
     function GetPort: Integer;
     procedure SetPort(const Value: Integer);
+    function GetGatewayEnabled: Boolean;
+    procedure SetGatewayEnabled(const Value: Boolean);
+    function GetGatewayBaseUrl: string;
+    procedure SetGatewayBaseUrl(const Value: string);
   end;
 
 implementation
@@ -81,6 +85,54 @@ begin
   Ini := TIniFile.Create(FIniPath);
   try
     Ini.WriteString('Paths', 'SchemasRoot', Value);
+  finally
+    Ini.Free;
+  end;
+end;
+
+function TServerSettings.GetGatewayEnabled: Boolean;
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(FIniPath);
+  try
+    Result := Ini.ReadBool('Gateway', 'Enabled', False);
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TServerSettings.SetGatewayEnabled(const Value: Boolean);
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(FIniPath);
+  try
+    Ini.WriteBool('Gateway', 'Enabled', Value);
+  finally
+    Ini.Free;
+  end;
+end;
+
+function TServerSettings.GetGatewayBaseUrl: string;
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(FIniPath);
+  try
+    Result := Ini.ReadString('Gateway', 'BaseUrl', 'http://localhost:8080/v1');
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TServerSettings.SetGatewayBaseUrl(const Value: string);
+var
+  Ini: TIniFile;
+begin
+  Ini := TIniFile.Create(FIniPath);
+  try
+    Ini.WriteString('Gateway', 'BaseUrl', Value);
   finally
     Ini.Free;
   end;

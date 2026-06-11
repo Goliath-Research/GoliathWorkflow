@@ -43,6 +43,7 @@ implementation
 uses
   UniGUIVars,
   uniGUIApplication,
+  RemoteSchemaCatalog,
   JsonSchemaLoader,
   System.IOUtils;
 
@@ -81,22 +82,17 @@ end;
 procedure TUniMainModule.ReloadCatalog;
 begin
   FCatalog.LoadFromRoot(FSettings.GetSchemasRoot);
+  if FSettings.GetGatewayEnabled then
+    TRemoteSchemaCatalog.MergeInto(FCatalog, FSettings.GetGatewayBaseUrl);
 end;
 
 procedure TUniMainModule.LoadSelectedSchema(const SchemaPath: string);
-var
-  Loader: TJsonSchemaLoader;
 begin
   FSchemaDoc.Free;
   FSchemaDoc := nil;
   if SchemaPath = '' then
     Exit;
-  Loader := TJsonSchemaLoader.Create;
-  try
-    FSchemaDoc := Loader.LoadDocumentFromFile(SchemaPath);
-  finally
-    Loader.Free;
-  end;
+  FSchemaDoc := FCatalog.LoadDocument(SchemaPath);
 end;
 
 function TUniMainModule.SchemaTitle: string;

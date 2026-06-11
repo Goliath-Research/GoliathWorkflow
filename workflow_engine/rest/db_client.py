@@ -201,3 +201,35 @@ def apply_validation_plan(
         "CALL wf.wf_apply_validation_plan("
         f"{workflow_instance_id}, {_sql_literal(context_json)}, {persist_extension});",
     )
+
+
+def list_workflow_actions(dsn: str) -> list[dict[str, Any]]:
+    rows = query_json(dsn, "SELECT * FROM wf.wf_repo_list_actions()")
+    return [
+        {
+            "action_name": row["action_name"],
+            "capability": row.get("capability"),
+            "has_input_schema": bool(row.get("has_input_schema")),
+            "has_output_schema": bool(row.get("has_output_schema")),
+        }
+        for row in rows
+    ]
+
+
+def get_action_schema(dsn: str, action_name: str, direction: str) -> dict[str, Any]:
+    if direction not in ("input", "output"):
+        raise ValueError("direction must be 'input' or 'output'")
+    rows = query_json(
+        dsn,
+        "SELECT * FROM wf.wf_repo_get_action_schema("
+        f"{_sql_literal(action_name)}, {_sql_literal(direction)})",
+    )
+    if not rows:
+        raise KeyError(f"schema not found for action={action_name!r} direction={direction!r}")
+    row = rows[0]
+    return {
+        "action_name": row["action_name"],
+        "direction": row["direction"],
+        "schema_id": row.get("schema_id"),
+        "schema_json": row.get("schema_json") or {},
+    }

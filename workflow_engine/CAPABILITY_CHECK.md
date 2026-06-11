@@ -27,6 +27,7 @@ Branch parity (scope variables for IF/SWITCH/WHILE): [sql/wf_sql_branch_parity.s
 | Concept | Schema object |
 |---------|---------------|
 | Action catalog | `wf.workflow_action` (`action_name`, `capability`, `payload_schema_ref`) |
+| Action I/O schemas | `wf.workflow_action_schema` (`direction` = `input` \| `output`, `schema_json`, `schema_id`) |
 | Input template | `wf.workflow_input_template.template_json` with `${...}` placeholders |
 | Input bindings | `wf.workflow_input_binding` (`target_json_path`, `source_expr`) |
 | Worker poll/claim | `wf.sp_worker_request_task` → `node_execution` WHERE `status = READY` |
@@ -160,3 +161,15 @@ Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contr
 | 10008 | Invalid JSON after template resolution |
 
 Negative `result_code` from workers → instance `FAILED`.
+
+## 6. Action payload schemas (REST + editor)
+
+| Surface | Mechanism |
+|---------|-----------|
+| Storage | `wf.workflow_action_schema` (`input` / `output`, JSON Schema draft 2020-12) |
+| Export | `methyl-export-task-schemas` from `workers/methyl_worker/task_models.py` |
+| Gateway | `GET /v1/actions`, `GET /v1/actions/{name}/schema?direction=` |
+| Config Editor | `RemoteSchemaCatalog` when `[Gateway] Enabled=true` |
+| Enforcement | Workers only (`validate_task_input` / `validate_task_output`; error code `4001`) |
+
+`payload_schema_ref` on `wf.workflow_action` mirrors the seeded input schema `schema_id`.

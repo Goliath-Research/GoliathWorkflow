@@ -133,6 +133,47 @@ paths:
         '204':
           description: Task failed
 
+  /actions:
+    get:
+      tags: [admin]
+      summary: List workflow actions and schema availability (wf.wf_repo_list_actions)
+      operationId: listWorkflowActions
+      responses:
+        '200':
+          description: Action catalog
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionListResponse'
+
+  /actions/{actionName}/schema:
+    get:
+      tags: [admin]
+      summary: Get JSON Schema for action input or output (wf.wf_repo_get_action_schema)
+      operationId: getActionSchema
+      parameters:
+        - name: actionName
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Workflow action name (e.g. pipeline.centroid)
+        - name: direction
+          in: query
+          schema:
+            type: string
+            enum: [input, output]
+            default: input
+      responses:
+        '200':
+          description: JSON Schema document
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionSchemaResponse'
+        '404':
+          description: Schema not registered for this action/direction
+
   /workflows/instances:
     post:
       tags: [admin]
@@ -348,6 +389,45 @@ components:
         status:
           type: string
           enum: [CREATED, RUNNING, COMPLETED, FAILED, CANCELLED]
+
+    ActionSummary:
+      type: object
+      required: [action_name, has_input_schema, has_output_schema]
+      properties:
+        action_name:
+          type: string
+        capability:
+          type: string
+          nullable: true
+        has_input_schema:
+          type: boolean
+        has_output_schema:
+          type: boolean
+
+    ActionListResponse:
+      type: object
+      required: [actions]
+      properties:
+        actions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ActionSummary'
+
+    ActionSchemaResponse:
+      type: object
+      required: [action_name, direction, schema_json]
+      properties:
+        action_name:
+          type: string
+        direction:
+          type: string
+          enum: [input, output]
+        schema_id:
+          type: string
+          nullable: true
+        schema_json:
+          type: object
+          additionalProperties: true
 
   securitySchemes:
     WorkerToken:

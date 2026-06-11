@@ -29,9 +29,10 @@ type
       out AValue: string): Boolean;
     function InstanceSummary(AInstanceId: Int64): TJSONObject;
     function MatchPath(const APath, APattern: string; out AParam: string): Boolean;
+    function QueryParam(const AQuery, AName, ADefault: string): string;
   public
     constructor Create(const ASvc: TWorkflowEngineHostedService);
-    function Handle(const AMethod, APath, ABody: string; out AStatus: Integer): string;
+    function Handle(const AMethod, APath, AQuery, ABody: string; out AStatus: Integer): string;
   end;
 
 implementation
@@ -145,7 +146,38 @@ begin
   end;
 end;
 
-function TRestApiService.Handle(const AMethod, APath, ABody: string; out AStatus: Integer): string;
+function TRestApiService.QueryParam(const AQuery, AName, ADefault: string): string;
+var
+  P, Eq, Amp: Integer;
+  Key, Rest: string;
+begin
+  Result := ADefault;
+  Rest := AQuery;
+  while Rest <> '' do
+  begin
+    Amp := Pos('&', Rest);
+    if Amp > 0 then
+    begin
+      Key := Copy(Rest, 1, Amp - 1);
+      Delete(Rest, 1, Amp);
+    end
+    else
+    begin
+      Key := Rest;
+      Rest := '';
+    end;
+    Eq := Pos('=', Key);
+    if Eq > 0 then
+    begin
+      if SameText(Copy(Key, 1, Eq - 1), AName) then
+        Exit(Copy(Key, Eq + 1, MaxInt));
+    end
+    else if SameText(Key, AName) then
+      Exit('');
+  end;
+end;
+
+function TRestApiService.Handle(const AMethod, APath, AQuery, ABody: string; out AStatus: Integer): string;
 var
   BodyObj: TJSONObject;
   WorkerId, NodeExecId, VersionId, InstanceId: Int64;
@@ -271,6 +303,91 @@ begin
       FSvc.WorkerApi.FailTask(NodeExecId, WorkerId, WorkerToken, ErrCode, ErrMsg);
       AStatus := 204;
       Result := '';
+      Exit;
+    end;
+
+    if SameText(AMethod, 'GET') and SameText(APath, '/v1/actions') then
+    begin
+      Q := TUniQuery.Create(nil);
+      Resp := TJSONObject.Create;
+      try
+        Q.Connection := FConnection;
+        Q.SQL.Text := Format('SELECT * FROM %swf_repo_list_actions()', [WfSchemaDot]);
+        Q.Open;
+        var Arr := TJSONArray.Create;
+        while not Q.Eof do
+        begin
+          var Item := TJSONObject.Create;
+          Item.AddPair('action_name', Q.FieldByName('action_name').AsString);
+          if Q.FieldByName('capability').IsNull then
+            Item.AddPair('capability', TJSONNull.Create)
+          else
+            Item.AddPair('capability', Q.FieldByName('capability').AsString);
+          Item.AddPair('has_input_schema', TJSONBool.Create(Q.FieldByName('has_input_schema').AsBoolean));
+          Item.AddPair('has_output_schema', TJSONBool.Create(Q.FieldByName('has_output_schema').AsBoolean));
+          Arr.AddElement(Item);
+          Q.Next;
+        end;
+        Resp.AddPair('actions', Arr);
+        AStatus := 200;
+        Result := Resp.ToJSON;
+      finally
+        Q.Free;
+        Resp.Free;
+      end;
+      Exit;
+    end;
+
+    if SameText(AMethod, 'GET') and MatchPath(APath, '/v1/actions/*/schema', Param) then
+    begin
+      var Direction := QueryParam(AQuery, 'direction', 'input');
+      if not SameText(Direction, 'input') and not SameText(Direction, 'output') then
+      begin
+        AStatus := 400;
+        Result := '{"error":"direction must be input or output"}';
+        Exit;
+      end;
+      Q := TUniQuery.Create(nil);
+      try
+        Q.Connection := FConnection;
+        if GetWorkflowBackend = wbPostgres then
+          Q.SQL.Text := Format(
+            'SELECT action_name, direction, schema_id, schema_json FROM %swf_repo_get_action_schema(:name, :dir)',
+            [WfSchemaDot])
+        else
+          Q.SQL.Text := Format(
+            'SELECT action_name, direction, schema_id, schema_json FROM %swf_repo_get_action_schema(:name, :dir)',
+            [WfSchemaDot]);
+        Q.ParamByName('name').AsString := Param;
+        Q.ParamByName('dir').AsString := Direction;
+        Q.Open;
+        if Q.Eof then
+        begin
+          AStatus := 404;
+          Result := Format('{"error":"schema not found for %s (%s)"}', [Param, Direction]);
+          Exit;
+        end;
+        Resp := TJSONObject.Create;
+        try
+          Resp.AddPair('action_name', Q.FieldByName('action_name').AsString);
+          Resp.AddPair('direction', Q.FieldByName('direction').AsString);
+          if Q.FieldByName('schema_id').IsNull then
+            Resp.AddPair('schema_id', TJSONNull.Create)
+          else
+            Resp.AddPair('schema_id', Q.FieldByName('schema_id').AsString);
+          var SchemaText := Q.FieldByName('schema_json').AsString;
+          var SchemaVal := TJSONObject.ParseJSONValue(SchemaText);
+          if SchemaVal = nil then
+            SchemaVal := TJSONObject.Create;
+          Resp.AddPair('schema_json', SchemaVal);
+          AStatus := 200;
+          Result := Resp.ToJSON;
+        finally
+          Resp.Free;
+        end;
+      finally
+        Q.Free;
+      end;
       Exit;
     end;
 

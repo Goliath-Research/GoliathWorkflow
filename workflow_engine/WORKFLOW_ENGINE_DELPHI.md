@@ -16,7 +16,7 @@ It uses DMVC's pluggable server backend (`IMVCServer`) with the **HTTP.sys** dri
 | `WfEngine.Mvc.Server.pas` (`TWfGatewayServer`) | Standalone `TMVCEngine` + HTTP.sys `IMVCServer` |
 | `WfEngine.Mvc.Controller.pas` (`TWfGatewayController`) | DMVC routes (`MVCPath` per `contracts/openapi.yaml`) |
 | `WfEngine.GatewayHost.pas` | Shared gateway state; serializes dispatch onto one DB connection |
-| `WfEngine.RestApi.pas` | Contract dispatcher (method + path + body → SQL procs) |
+| `WfEngine.RestApi.pas` | Contract dispatcher (method + path + query + body → SQL procs) |
 | `WfEngine.ServiceLoop.pas` (`TWorkflowEngineHostedService`) | UniDAC connection lifecycle |
 | `WfEngine.GatewayDb.pas` | `wf_repo_create_workflow_instance`, `sp_start_workflow_instance` |
 | `WfEngine.WorkerApiAdapter.pas` | `wf_worker_authenticate`, `sp_worker_*` |
@@ -31,6 +31,7 @@ It uses DMVC's pluggable server backend (`IMVCServer`) with the **HTTP.sys** dri
 3. **Claim** — worker `POST /v1/workers/tasks/request` → `wf.sp_worker_request_task`.
 4. **Submit** — worker `POST /v1/workers/tasks/{id}/submit` → `wf.sp_worker_submit_result` → SQL `wf_engine_on_action_complete` advances the graph.
 5. **Status** — `GET /v1/workflows/instances/{id}` reads `wf.workflow_instance`.
+6. **Action schemas (Config Editor)** — `GET /v1/actions` lists registered actions; `GET /v1/actions/{name}/schema?direction=input|output` returns JSON Schema from `wf.workflow_action_schema` (seeded from `schemas/tasks/`).
 
 All workflow state (`node_execution`, `task_lease`, `scope_variable`) lives in SQL. The gateway is stateless between HTTP calls.
 
@@ -115,3 +116,13 @@ For Linux CI and reference workers, use `workflow_engine/rest/gateway.py` with t
 source .venv/bin/activate
 python workflow_engine/rest/gateway.py --port 8080
 ```
+
+### Action schema deploy order
+
+After `wf_repository_api.sql` / `02_repository_api.sql`:
+
+1. Apply [`sql/wf_action_schema.sql`](sql/wf_action_schema.sql) or [`sql_pg/wf_action_schema.sql`](sql_pg/wf_action_schema.sql).
+2. Export from Pydantic: `methyl-export-task-schemas` (writes `schemas/tasks/*.schema.json`; CI gate: `methyl-export-task-schemas --check`).
+3. Seed DB: `python workflow_engine/sql/seed_action_schemas.py` (PostgreSQL; Azure SQL via equivalent `sqlcmd` calling `wf.wf_repo_upsert_action_schema`).
+
+Workers validate resolved `input_json` / handler output at runtime; the gateway serves schemas read-only for the Config Editor.

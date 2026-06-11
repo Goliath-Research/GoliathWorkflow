@@ -488,6 +488,34 @@ flowchart LR
 
 `step_config` in the project file is an open object: keys name the step; values are merged into each tool’s config at runtime (CLI and workers still override with flags/files).
 
+### Action payload schemas (`schemas/tasks/`)
+
+Workflow **actions** (not project config steps) have separate input/output JSON Schemas stored in `wf.workflow_action_schema` and served by the REST gateway:
+
+::: {.content-visible when-format="html"}
+```mermaid
+flowchart LR
+  PM[Pydantic task models]
+  EXP[methyl-export-task-schemas]
+  DB[wf.workflow_action_schema]
+  GW[GET /v1/actions]
+  ED[Config Editor]
+  WK[Worker runtime]
+  PM --> EXP --> DB --> GW --> ED
+  PM --> WK
+```
+:::
+
+| Artifact | Role |
+|----------|------|
+| `workers/methyl_worker/task_models.py` | Source-of-truth Pydantic I/O models |
+| `methyl-export-task-schemas` | Writes `schemas/tasks/<action>.input\|output.schema.json` |
+| `workflow_engine/sql/seed_action_schemas.py` | Upserts schemas into the database |
+| `GET /v1/actions/{name}/schema` | Config Editor + tooling fetch live schemas |
+| Worker `validate_task_input/output` | Enforces resolved payloads at claim/submit |
+
+Template documents (`workflow_input_template.template_json`) may contain `${var.*}` placeholders. The Config Editor treats `${...}` strings as wildcards during validation; workers validate fully resolved JSON.
+
 ### Constraint enforcement
 
 - **Portal editor:** loads `*.schema.json` and blocks invalid types, missing required fields, and bad enums at edit time ([Section 3](#3-portal-config-editor)).
@@ -505,6 +533,7 @@ There is **no separate React/TypeScript portal** in this repository. JSON editin
 | Desktop (VCL) | [`tools/methyl-config-editor/MethylConfigEditor.dproj`](/home/ubuntu/MethylPipeline/tools/methyl-config-editor/MethylConfigEditor.dproj) |
 | Web (uniGUI) | [`tools/methyl-config-editor/MethylConfigEditorWeb.dproj`](/home/ubuntu/MethylPipeline/tools/methyl-config-editor/MethylConfigEditorWeb.dproj) — default port **8077** |
 | Schema loader | [`src/Schema/JsonSchemaLoader.pas`](/home/ubuntu/MethylPipeline/tools/methyl-config-editor/src/Schema/JsonSchemaLoader.pas) |
+| Remote action schemas | [`src/Schema/RemoteSchemaCatalog.pas`](/home/ubuntu/MethylPipeline/tools/methyl-config-editor/src/Schema/RemoteSchemaCatalog.pas) — `GET /v1/actions` when `[Gateway] Enabled=true` |
 | Web property grid | [`src/Web/SchemaPropertyGrid.pas`](/home/ubuntu/MethylPipeline/tools/methyl-config-editor/src/Web/SchemaPropertyGrid.pas) |
 
 ### Editor flow

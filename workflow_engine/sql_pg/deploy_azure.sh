@@ -59,6 +59,7 @@ SCRIPTS=(
   01_worker_api.sql
   02_repository_api.sql
   04_admin.sql
+  wf_action_schema.sql
 )
 
 echo "Target: host=$PGHOST db=$PGDATABASE user=$PGUSER sslmode=$PGSSLMODE"

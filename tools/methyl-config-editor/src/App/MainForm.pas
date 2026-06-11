@@ -90,6 +90,7 @@ uses
   System.IOUtils,
   ArrayEditorForm,
   PropertyEditorForm,
+  RemoteSchemaCatalog,
   SchemaValueSummary;
 
 {$R *.dfm}
@@ -302,6 +303,8 @@ var
 begin
   FSettings.SetSchemasRoot(edtSchemasRoot.Text);
   FCatalog.LoadFromRoot(edtSchemasRoot.Text);
+  if FSettings.GetGatewayEnabled then
+    TRemoteSchemaCatalog.MergeInto(FCatalog, FSettings.GetGatewayBaseUrl);
   cboSchema.Items.Clear;
   for I := 0 to FCatalog.Count - 1 do
     cboSchema.Items.Add(FCatalog.Entry(I).DisplayName);
@@ -317,20 +320,14 @@ end;
 procedure TMainForm.LoadSelectedSchema;
 var
   Path: string;
-  Loader: TJsonSchemaLoader;
 begin
   FSchemaDoc.Free;
   FSchemaDoc := nil;
   Path := CurrentSchemaPath;
   if Path = '' then
     Exit;
-  Loader := TJsonSchemaLoader.Create;
-  try
-    FSchemaDoc := Loader.LoadDocumentFromFile(Path);
-    FSettings.SetLastSchemaPath(Path);
-  finally
-    Loader.Free;
-  end;
+  FSchemaDoc := FCatalog.LoadDocument(Path);
+  FSettings.SetLastSchemaPath(Path);
 end;
 
 procedure TMainForm.RefreshMemo;
