@@ -226,6 +226,97 @@ def _count_panel_loci_in_index(
     return n_panel
 
 
+def _panel_loci_keys_in_index(
+    dmp_df: pd.DataFrame,
+    feature_order: Sequence[Tuple[str, str, int]],
+    panel: pd.DataFrame,
+    comparison_label: str,
+    region_type: str,
+) -> set[Tuple[str, str, int]]:
+    if dmp_df is None or dmp_df.empty or panel is None or panel.empty:
+        return set()
+    order_index = build_locus_order_index(feature_order)
+    work = _prepare_gene_scored_dmp_work(dmp_df, use_region_weight=True)
+    if work.empty:
+        return set()
+    if "feature_type" in work.columns:
+        work["feature_type"] = work["feature_type"].map(_normalize_structural_feature)
+    else:
+        work["feature_type"] = "unknown"
+    panel_genes = {str(g) for g in panel["gene_name"].astype(str).tolist()}
+    cmp_dmp = work[
+        (work["comparison_label"] == str(comparison_label))
+        & (work["feature_type"] == str(region_type))
+        & work["gene_name"].isin(panel_genes)
+    ]
+    keys: set[Tuple[str, str, int]] = set()
+    for _, row in cmp_dmp.iterrows():
+        key = (str(row["chromosome"]), str(row["context"]), int(row["position"]))
+        if key in order_index:
+            keys.add(key)
+    return keys
+
+
+def compute_structural_scored_partition_coverage(
+    dmp_df: pd.DataFrame,
+    feature_order: Sequence[Tuple[str, str, int]],
+    panels: Dict[ColumnSpec, pd.DataFrame],
+    column_specs: Sequence[ColumnSpec],
+    *,
+    region_types: Optional[Sequence[str]] = None,
+) -> Dict[str, Any]:
+    order_index = build_locus_order_index(feature_order)
+    n_classifier_loci = int(len(order_index))
+    regions = set(normalize_region_directional_region_types(region_types))
+
+    work = _prepare_gene_scored_dmp_work(dmp_df, use_region_weight=True) if dmp_df is not None else pd.DataFrame()
+    if not work.empty and "feature_type" in work.columns:
+        work = work.copy()
+        work["feature_type"] = work["feature_type"].map(_normalize_structural_feature)
+    else:
+        work = pd.DataFrame()
+
+    assigned_keys: set[Tuple[str, str, int]] = set()
+    for spec in column_specs:
+        cmp_label, region = spec
+        panel = panels.get(spec)
+        if panel is None or panel.empty:
+            continue
+        assigned_keys |= _panel_loci_keys_in_index(
+            dmp_df,
+            feature_order,
+            panel,
+            cmp_label,
+            region,
+        )
+
+    n_unknown_or_unmapped = 0
+    if n_classifier_loci > 0 and not work.empty:
+        for key in order_index:
+            chrom, ctx, pos = key
+            rows = work[
+                (work["chromosome"].astype(str) == chrom)
+                & (work["context"].astype(str) == ctx)
+                & (work["position"].astype(int) == int(pos))
+            ]
+            if rows.empty:
+                n_unknown_or_unmapped += 1
+                continue
+            feature_types = {str(x) for x in rows["feature_type"].astype(str).tolist()}
+            if "unknown" in feature_types or not (feature_types & regions):
+                n_unknown_or_unmapped += 1
+
+    n_assigned = int(len(assigned_keys))
+    return {
+        "n_classifier_loci": n_classifier_loci,
+        "n_loci_assigned_to_emitted_regions": n_assigned,
+        "n_unknown_or_unmapped": int(n_unknown_or_unmapped),
+        "partition_fraction": (
+            float(n_assigned / n_classifier_loci) if n_classifier_loci > 0 else 0.0
+        ),
+    }
+
+
 def resolve_structural_scored_column_specs(
     dmp_df: pd.DataFrame,
     feature_order: Sequence[Tuple[str, str, int]],
@@ -371,8 +462,7 @@ def require_structural_scored_columns_emitted(
             )
         elif n_region == 0:
             hints.append(
-                f"no rows match region_directional_region_types={sorted(regions)} "
-                "(gene_body rows are excluded by default)"
+                f"no rows match region_directional_region_types={sorted(regions)}"
             )
 
     detail = "; ".join(hints) if hints else "no structural columns resolved"

@@ -24,7 +24,7 @@ from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 from .classification_metrics import compute_validation_metrics, resolve_class_roles
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
-from .gene_scored_features import family_includes_gene_scored
+from .gene_scored_features import DEFAULT_REGION_DIRECTIONAL_TYPES, family_includes_gene_scored
 from .structural_scored_features import (
     family_includes_structural_scored,
     preflight_structural_scored_training,
@@ -543,7 +543,7 @@ def train_generative_model(
         "structural_scored_contrast_pairs": structural_scored_contrast_pairs,
         "structural_scored_progression_order": structural_scored_progression_order,
         "region_directional_region_types": [
-            str(x) for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
+            str(x) for x in (region_directional_region_types or list(DEFAULT_REGION_DIRECTIONAL_TYPES))
         ],
         "region_directional_min_loci": int(max(1, region_directional_min_loci)),
         "observed_feature_quality_columns": [

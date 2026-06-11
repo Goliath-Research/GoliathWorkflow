@@ -1808,8 +1808,10 @@ def build_observed_hybrid_feature_table(
         }
 
     if include_structural_scored_family:
+        from .gene_scored_features import DEFAULT_REGION_DIRECTIONAL_TYPES
         from .structural_scored_features import (
             compute_structural_scored_matrices,
+            compute_structural_scored_partition_coverage,
             compute_structural_scored_progression_features,
             prepare_structural_scored_panels,
             resolve_structural_scored_column_specs,
@@ -1904,9 +1906,16 @@ def build_observed_hybrid_feature_table(
             "structural_scored_contrast_pairs": structural_scored_contrast_pairs,
             "region_directional_min_loci": int(max(1, region_directional_min_loci)),
             "region_directional_region_types": list(
-                region_directional_region_types or ["promoter", "exon", "intron", "terminator"]
+                region_directional_region_types or list(DEFAULT_REGION_DIRECTIONAL_TYPES)
             ),
             "n_panel_genes_per_spec": {f"{c}::{r}": int(len(panels.get((c, r), []))) for c, r in column_specs},
+            "partition_coverage": compute_structural_scored_partition_coverage(
+                dmp_df,
+                feature_order,
+                panels,
+                column_specs,
+                region_types=region_directional_region_types,
+            ),
         }
 
     non_nan = np.isfinite(X_feat).sum(axis=0).astype(int).tolist()

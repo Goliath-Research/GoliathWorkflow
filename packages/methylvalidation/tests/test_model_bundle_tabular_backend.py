@@ -174,6 +174,113 @@ def test_build_mapper_annotation_cache_deterministic_collapse(tmp_path: Path, mo
     assert row_100.iloc[0]["gene_name"] == "GENE_STRONG"
     assert row_100.iloc[0]["feature_type"] == "promoter"
     assert float(row_100.iloc[0]["region_weight"]) == pytest.approx(2.0)
+    assert cache_info["mapper_annotation_collapse_mode"] == "priority"
+
+
+def test_build_mapper_annotation_cache_priority_intron_beats_gene_body(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    mapper = tmp_path / "mapper" / "healthy" / "pca1"
+    mapper.mkdir(parents=True)
+    intersections = pd.DataFrame(
+        {
+            "dmp_name": ["1:100:CG:eff=0.20", "1:100:CG:eff=0.20"],
+            "feature_chrom": ["chr1", "chr1"],
+            "gene_name": ["G1", "G1"],
+            "feature_type": ["intron", "gene_body"],
+            "region_weight": [0.7, 1.0],
+            "combined_weight": [0.5, 1.8],
+            "effect_size": [0.20, 0.20],
+            "context": ["CG", "CG"],
+        }
+    )
+    intersections.to_csv(mapper / "chr1-intersections.csv", index=False)
+    monkeypatch.setattr(
+        model_bundle,
+        "load_project",
+        lambda _p: _StubProjectWithMapper(det, mapper),
+    )
+    out_csv = tmp_path / "bundle" / "mapper_dmp_annotations.csv"
+    model_bundle.build_mapper_annotation_cache(
+        project_json=tmp_path / "project.json",
+        output_csv=out_csv,
+        collapse_mode="priority",
+    )
+    out_df = pd.read_csv(out_csv)
+    row_100 = out_df[(out_df["chromosome"].astype(str) == "1") & (out_df["position"] == 100)]
+    assert len(row_100) == 1
+    assert row_100.iloc[0]["feature_type"] == "intron"
+
+
+def test_build_mapper_annotation_cache_weight_mode_preserves_gene_body(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    mapper = tmp_path / "mapper" / "healthy" / "pca1"
+    mapper.mkdir(parents=True)
+    intersections = pd.DataFrame(
+        {
+            "dmp_name": ["1:100:CG:eff=0.20", "1:100:CG:eff=0.20"],
+            "feature_chrom": ["chr1", "chr1"],
+            "gene_name": ["G1", "G1"],
+            "feature_type": ["intron", "gene_body"],
+            "region_weight": [0.7, 1.0],
+            "combined_weight": [0.5, 1.8],
+            "effect_size": [0.20, 0.20],
+            "context": ["CG", "CG"],
+        }
+    )
+    intersections.to_csv(mapper / "chr1-intersections.csv", index=False)
+    monkeypatch.setattr(
+        model_bundle,
+        "load_project",
+        lambda _p: _StubProjectWithMapper(det, mapper),
+    )
+    out_csv = tmp_path / "bundle" / "mapper_dmp_annotations.csv"
+    model_bundle.build_mapper_annotation_cache(
+        project_json=tmp_path / "project.json",
+        output_csv=out_csv,
+        collapse_mode="weight",
+    )
+    out_df = pd.read_csv(out_csv)
+    row_100 = out_df[(out_df["chromosome"].astype(str) == "1") & (out_df["position"] == 100)]
+    assert len(row_100) == 1
+    assert row_100.iloc[0]["feature_type"] == "gene_body"
+
+
+def test_build_mapper_annotation_cache_unknown_fallback_to_gene_body(tmp_path: Path, monkeypatch):
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    mapper = tmp_path / "mapper" / "healthy" / "pca1"
+    mapper.mkdir(parents=True)
+    intersections = pd.DataFrame(
+        {
+            "dmp_name": ["1:100:CG:eff=0.20"],
+            "feature_chrom": ["chr1"],
+            "gene_name": ["G1"],
+            "feature_type": ["unknown"],
+            "region_weight": [1.0],
+            "combined_weight": [0.5],
+            "effect_size": [0.20],
+            "context": ["CG"],
+        }
+    )
+    intersections.to_csv(mapper / "chr1-intersections.csv", index=False)
+    monkeypatch.setattr(
+        model_bundle,
+        "load_project",
+        lambda _p: _StubProjectWithMapper(det, mapper),
+    )
+    out_csv = tmp_path / "bundle" / "mapper_dmp_annotations.csv"
+    model_bundle.build_mapper_annotation_cache(
+        project_json=tmp_path / "project.json",
+        output_csv=out_csv,
+        unknown_fallback="gene_body",
+    )
+    out_df = pd.read_csv(out_csv)
+    row_100 = out_df[(out_df["chromosome"].astype(str) == "1") & (out_df["position"] == 100)]
+    assert len(row_100) == 1
+    assert row_100.iloc[0]["feature_type"] == "gene_body"
+    assert float(row_100.iloc[0]["region_weight"]) == pytest.approx(1.0)
 
 
 def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_path: Path, monkeypatch):

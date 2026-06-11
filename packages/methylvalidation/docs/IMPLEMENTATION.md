@@ -124,8 +124,14 @@ Structural-directional score (per sample, per `comparison_label` and `feature_ty
 - Per `(gene, region)`: same locus formula as `gene_scored` over observed panel loci for that gene and region.
 - Pooled: weighted mean of per-gene `dir_g` using `feature_effect_compound` (and optionally `sqrt(n_dmps_in_feature)`).
 - Column emission: a `(comparison, region)` emits four base columns only when at least `region_directional_min_loci` panel loci intersect the classifier DMP index; otherwise the region is omitted (not exported as all-NaN placeholders).
+- Default `region_directional_region_types`: `promoter`, `exon`, `intron`, `gene_body`, `terminator`.
+- Mapper annotation cache (`mapper_dmp_annotations.csv`) collapses multi-feature intersections to one row per classifier locus using **priority** by default (`promoter > exon > intron > gene_body > terminator`), aligned with mapper exclusive assignment. Legacy weight-based collapse is available via `mapper_annotation_collapse_mode: weight`.
+- Classifier loci with unknown/missing `feature_type` after mapper merge are assigned to `gene_body` by default (`mapper_annotation_unknown_fallback`; set `null` to disable).
+- `observed_feature_report.structural_scored.partition_coverage` records classifier locus coverage across emitted region columns.
 
 Additional `structural_scored` columns per emitted `(comparison, region)`: `structural_panel_obs_fraction__*`, `structural_directional_iqr__*`, `structural_weighted_sign_agreement__*`. When **K ≥ 2** comparisons emit base columns for a region, progression features are derived per region from `structural_directional_score__*` only (schema `structural_scored_v1_progression_contrast`).
+
+**Operational note:** changing mapper collapse mode or region defaults requires refreezing `mapper_dmp_annotations.csv`, rebuilding the model feature bundle, deleting cached `tabular_train_dataset.parquet` if present, and retraining.
 
 ### Lean DMP feature profile (`hybrid_feature_v4_lean_dmp`)
 

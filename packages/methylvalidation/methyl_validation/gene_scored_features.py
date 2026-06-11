@@ -49,6 +49,7 @@ DEFAULT_REGION_DIRECTIONAL_TYPES: Tuple[str, ...] = (
     "promoter",
     "exon",
     "intron",
+    "gene_body",
     "terminator",
 )
 _ALLOWED_REGION_DIRECTIONAL_TYPES = frozenset(
