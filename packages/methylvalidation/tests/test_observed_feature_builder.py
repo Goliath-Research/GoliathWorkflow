@@ -1319,6 +1319,51 @@ def test_structural_scored_hand_calculation_and_dynamic_omission():
     assert not np.isfinite(float(directional_iqr[("cmp_a", "promoter")][0]))
 
 
+def test_structural_scored_gene_body_emitted_by_default():
+    from methyl_validation.gene_scored_features import DEFAULT_REGION_DIRECTIONAL_TYPES
+    from methyl_validation.structural_scored_features import (
+        compute_structural_scored_partition_coverage,
+        prepare_structural_scored_panels,
+        resolve_structural_scored_column_specs,
+    )
+
+    assert "gene_body" in DEFAULT_REGION_DIRECTIONAL_TYPES
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a"],
+            "chromosome": ["1"],
+            "context": ["CG"],
+            "position": [100],
+            "effect_size": [1.0],
+            "gene_name": ["G1"],
+            "feature_type": ["gene_body"],
+            "region_weight": [1.0],
+        }
+    )
+    frozen_features = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a"],
+            "gene_name": ["G1"],
+            "feature_type": ["gene_body"],
+            "n_dmps_in_feature": [2],
+            "feature_effect_compound": [1.0],
+        }
+    )
+    feature_order = [("1", "CG", 100)]
+    panels = prepare_structural_scored_panels(frozen_features, min_support_n=2)
+    specs = resolve_structural_scored_column_specs(dmp_df, feature_order, panels, min_loci=1)
+    assert ("cmp_a", "gene_body") in specs
+    coverage = compute_structural_scored_partition_coverage(
+        dmp_df,
+        feature_order,
+        panels,
+        specs,
+    )
+    assert coverage["n_classifier_loci"] == 1
+    assert coverage["n_loci_assigned_to_emitted_regions"] == 1
+    assert coverage["partition_fraction"] == pytest.approx(1.0)
+
+
 def test_structural_scored_progression_k2():
     from methyl_validation.structural_scored_features import (
         compute_structural_scored_progression_features,

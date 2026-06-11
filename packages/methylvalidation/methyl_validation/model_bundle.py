@@ -51,6 +51,16 @@ CORE_MAPPER_ANNOTATION_COLUMNS: List[str] = [
     "mapper_source_csv",
 ]
 
+_MAPPER_FEATURE_PRIORITY: Dict[str, int] = {
+    "promoter": 0,
+    "exon": 1,
+    "intron": 2,
+    "gene_body": 3,
+    "terminator": 4,
+}
+DEFAULT_MAPPER_ANNOTATION_COLLAPSE_MODE = "priority"
+DEFAULT_MAPPER_ANNOTATION_UNKNOWN_FALLBACK = "gene_body"
+
 _FEATURE_ALIASES: Dict[str, str] = {
     "promoter_region": "promoter",
     "terminator_region": "terminator",
@@ -72,6 +82,73 @@ def _normalize_parent_feature(value: Any) -> str:
     token = _FEATURE_ALIASES.get(token, token)
     allowed = {"promoter", "exon", "intron", "gene_body", "terminator"}
     return token if token in allowed else "unknown"
+
+
+def _normalize_mapper_collapse_mode(value: Optional[str]) -> str:
+    token = str(value or DEFAULT_MAPPER_ANNOTATION_COLLAPSE_MODE).strip().lower()
+    if token not in {"priority", "weight"}:
+        raise ValueError("mapper_annotation_collapse_mode must be 'priority' or 'weight'")
+    return token
+
+
+def _normalize_mapper_unknown_fallback(value: Optional[str]) -> Optional[str]:
+    if value is None:
+        return None
+    token = str(value).strip()
+    if not token or token.lower() in {"none", "null"}:
+        return None
+    normalized = _normalize_parent_feature(token)
+    if normalized == "unknown":
+        raise ValueError(f"Invalid mapper_annotation_unknown_fallback: {value!r}")
+    return normalized
+
+
+def _resolve_mapper_annotation_settings(
+    project: Optional["ProjectConfig"] = None,
+    *,
+    collapse_mode: Optional[str] = None,
+    unknown_fallback: Optional[str] = ...,  # type: ignore[assignment]
+) -> Tuple[str, Optional[str]]:
+    resolved_collapse = collapse_mode
+    resolved_fallback: Any = unknown_fallback
+    fallback_explicit = unknown_fallback is not ...
+    if project is not None:
+        try:
+            mb_cfg = project.get_step_config("model_bundle") or {}
+        except Exception:
+            mb_cfg = {}
+        if resolved_collapse is None and isinstance(mb_cfg, dict):
+            resolved_collapse = mb_cfg.get("mapper_annotation_collapse_mode")
+        if not fallback_explicit and isinstance(mb_cfg, dict) and "mapper_annotation_unknown_fallback" in mb_cfg:
+            resolved_fallback = mb_cfg.get("mapper_annotation_unknown_fallback")
+            fallback_explicit = True
+    if not fallback_explicit:
+        resolved_fallback = DEFAULT_MAPPER_ANNOTATION_UNKNOWN_FALLBACK
+    return (
+        _normalize_mapper_collapse_mode(resolved_collapse),
+        _normalize_mapper_unknown_fallback(resolved_fallback),
+    )
+
+
+def _apply_mapper_unknown_fallback(
+    annotations: pd.DataFrame,
+    *,
+    unknown_fallback: Optional[str],
+) -> pd.DataFrame:
+    if annotations.empty or not unknown_fallback:
+        return annotations
+    work = annotations.copy()
+    if "feature_type" not in work.columns:
+        work["feature_type"] = "unknown"
+    if "region_weight" not in work.columns:
+        work["region_weight"] = 1.0
+    normalized = work["feature_type"].map(_normalize_parent_feature).astype(str)
+    unknown_mask = normalized.eq("unknown")
+    if not unknown_mask.any():
+        return work
+    work.loc[unknown_mask, "feature_type"] = str(unknown_fallback)
+    work.loc[unknown_mask, "region_weight"] = 1.0
+    return work
 
 
 @contextmanager
@@ -377,10 +454,16 @@ def _collapse_mapper_annotations(
     annotations: pd.DataFrame,
     *,
     include_columns: Optional[List[str]] = None,
+    collapse_mode: str = DEFAULT_MAPPER_ANNOTATION_COLLAPSE_MODE,
+    unknown_fallback: Optional[str] = DEFAULT_MAPPER_ANNOTATION_UNKNOWN_FALLBACK,
 ) -> pd.DataFrame:
     if annotations.empty:
         return annotations
     work = annotations.copy()
+    if "feature_type" in work.columns:
+        work["feature_type"] = work["feature_type"].map(_normalize_parent_feature).astype(str)
+    else:
+        work["feature_type"] = "unknown"
     combined_series = (
         pd.to_numeric(work["combined_weight"], errors="coerce")
         if "combined_weight" in work.columns
@@ -396,26 +479,47 @@ def _collapse_mapper_annotations(
         if "effect_size" in work.columns
         else pd.Series(np.nan, index=work.index, dtype=float)
     )
-    work["_priority_combined"] = combined_series.fillna(-1.0)
-    work["_priority_region"] = region_series.fillna(-1.0)
-    work["_priority_effect"] = (
-        np.abs(effect_series.fillna(0.0))
-    )
-    work = work.sort_values(
-        [
-            "comparison_label",
-            "chromosome",
-            "position",
-            "context",
-            "_priority_combined",
-            "_priority_region",
-            "_priority_effect",
-            "gene_name",
-            "feature_type",
-            "mapper_source_csv",
-        ],
-        ascending=[True, True, True, True, False, False, False, True, True, True],
-    )
+    mode = _normalize_mapper_collapse_mode(collapse_mode)
+    if mode == "priority":
+        work["_feature_priority"] = (
+            work["feature_type"].map(_MAPPER_FEATURE_PRIORITY).fillna(99).astype(int)
+        )
+        work["_priority_region"] = region_series.fillna(-1.0)
+        work["_priority_effect"] = np.abs(effect_series.fillna(0.0))
+        work = work.sort_values(
+            [
+                "comparison_label",
+                "chromosome",
+                "position",
+                "context",
+                "_feature_priority",
+                "_priority_region",
+                "_priority_effect",
+                "gene_name",
+                "feature_type",
+                "mapper_source_csv",
+            ],
+            ascending=[True, True, True, True, True, False, False, True, True, True],
+        )
+    else:
+        work["_priority_combined"] = combined_series.fillna(-1.0)
+        work["_priority_region"] = region_series.fillna(-1.0)
+        work["_priority_effect"] = np.abs(effect_series.fillna(0.0))
+        work = work.sort_values(
+            [
+                "comparison_label",
+                "chromosome",
+                "position",
+                "context",
+                "_priority_combined",
+                "_priority_region",
+                "_priority_effect",
+                "gene_name",
+                "feature_type",
+                "mapper_source_csv",
+            ],
+            ascending=[True, True, True, True, False, False, False, True, True, True],
+        )
     work = work.drop_duplicates(
         subset=["comparison_label", "chromosome", "position", "context"],
         keep="first",
@@ -424,7 +528,8 @@ def _collapse_mapper_annotations(
     for col in include_columns or []:
         if col in work.columns and col not in selected_columns:
             selected_columns.append(col)
-    return work[selected_columns].copy()
+    out = work[selected_columns].copy()
+    return _apply_mapper_unknown_fallback(out, unknown_fallback=unknown_fallback)
 
 
 def _candidate_mapper_annotation_paths(
@@ -647,10 +752,18 @@ def build_mapper_annotation_cache(
     *,
     project_json: str | Path,
     output_csv: str | Path,
+    collapse_mode: Optional[str] = None,
+    unknown_fallback: Optional[str] = None,
 ) -> Dict[str, Any]:
     project_json_path = Path(project_json).absolute()
     with _project_cwd(project_json_path):
         project: "ProjectConfig" = load_project(project_json_path)
+
+    resolved_collapse, resolved_fallback = _resolve_mapper_annotation_settings(
+        project,
+        collapse_mode=collapse_mode,
+        unknown_fallback=unknown_fallback,
+    )
 
     comparisons = project.get_comparisons()
     mapper_gene_columns = _resolve_mapper_gene_columns(project)
@@ -712,7 +825,11 @@ def build_mapper_annotation_cache(
         }
 
     raw = pd.concat(rows, ignore_index=True)
-    ann = _collapse_mapper_annotations(raw)
+    ann = _collapse_mapper_annotations(
+        raw,
+        collapse_mode=resolved_collapse,
+        unknown_fallback=resolved_fallback,
+    )
     if mapper_gene_columns and gene_rows:
         gene_attrs = pd.concat(gene_rows, ignore_index=True)
         if not gene_attrs.empty:
@@ -728,6 +845,8 @@ def build_mapper_annotation_cache(
             ann = _collapse_mapper_annotations(
                 ann,
                 include_columns=list(effective_mapper_gene_columns),
+                collapse_mode=resolved_collapse,
+                unknown_fallback=resolved_fallback,
             )
     out_path = Path(output_csv).absolute()
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -741,6 +860,8 @@ def build_mapper_annotation_cache(
         "mapper_gene_columns_requested": list(mapper_gene_columns),
         "mapper_gene_columns_effective": list(effective_mapper_gene_columns),
         "comparisons": sorted(set(ann["comparison_label"].astype(str).tolist())),
+        "mapper_annotation_collapse_mode": resolved_collapse,
+        "mapper_annotation_unknown_fallback": resolved_fallback,
     }
 
 
@@ -1043,6 +1164,8 @@ def _load_mapper_annotation_table(path: Path) -> pd.DataFrame:
 def _merge_mapper_annotations(
     dmp_df: pd.DataFrame,
     ann_df: pd.DataFrame,
+    *,
+    unknown_fallback: Optional[str] = DEFAULT_MAPPER_ANNOTATION_UNKNOWN_FALLBACK,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     if ann_df.empty or dmp_df.empty:
         return dmp_df, {
@@ -1076,6 +1199,7 @@ def _merge_mapper_annotations(
     merged["gene_name"] = merged["gene_name"].map(_safe_feature_text)
     merged["feature_type"] = merged["feature_type"].map(_safe_feature_text)
     merged["region_weight"] = pd.to_numeric(merged["region_weight"], errors="coerce").fillna(1.0).astype(float)
+    merged = _apply_mapper_unknown_fallback(merged, unknown_fallback=unknown_fallback)
 
     stats = {
         "n_loci": int(len(merged)),
@@ -1417,6 +1541,8 @@ def build_model_feature_bundle(
     feature_family_set: str = "dmp_scored",
     mapper_annotation_csv: Optional[str | Path] = None,
     require_mapper_annotations: Optional[bool] = None,
+    mapper_annotation_collapse_mode: Optional[str] = None,
+    mapper_annotation_unknown_fallback: Optional[str] = None,
     extra_metadata: Optional[Dict[str, Any]] = None,
 ) -> Path:
     project_json = Path(project_json).absolute()
@@ -1425,6 +1551,11 @@ def build_model_feature_bundle(
 
     with _project_cwd(project_json):
         project: "ProjectConfig" = load_project(project_json)
+    resolved_collapse, resolved_fallback = _resolve_mapper_annotation_settings(
+        project,
+        collapse_mode=mapper_annotation_collapse_mode,
+        unknown_fallback=mapper_annotation_unknown_fallback,
+    )
     comparisons: List["ComparisonSpec"] = project.get_comparisons()
     paths = project.get_derived_paths()
     classes = [str(label) for label, _paths in project.get_resolved_groups()]
@@ -1525,7 +1656,11 @@ def build_model_feature_bundle(
     del weight_column
     dmp_df = pd.concat(rows, ignore_index=True)
     if mapper_ann_path is not None:
-        dmp_df, mapper_lookup_stats = _merge_mapper_annotations(dmp_df, mapper_ann_df)
+        dmp_df, mapper_lookup_stats = _merge_mapper_annotations(
+            dmp_df,
+            mapper_ann_df,
+            unknown_fallback=resolved_fallback,
+        )
     dmp_df = dmp_df.sort_values(
         ["effect_size", "chromosome", "position", "comparison_label"],
         ascending=[False, True, True, True],
@@ -1562,6 +1697,8 @@ def build_model_feature_bundle(
     bundle_metadata: Dict[str, Any] = dict(extra_metadata or {})
     bundle_metadata.setdefault("feature_family_set", family_token)
     bundle_metadata.setdefault("strict_mapper_annotations", bool(strict_mapper))
+    bundle_metadata.setdefault("mapper_annotation_collapse_mode", resolved_collapse)
+    bundle_metadata.setdefault("mapper_annotation_unknown_fallback", resolved_fallback)
     bundle_metadata.setdefault(
         "mapper_annotation",
         {

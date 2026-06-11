@@ -207,7 +207,7 @@ class BackendSharedParams(BaseModel):
         ),
     )
     region_directional_region_types: List[str] = Field(
-        default_factory=lambda: ["promoter", "exon", "intron", "terminator"],
+        default_factory=lambda: ["promoter", "exon", "intron", "gene_body", "terminator"],
         description=(
             "Structural region types considered when building structural_scored features "
             "(feature_family_set structural_scored or dmp_scored+structural_scored)."
@@ -219,6 +219,21 @@ class BackendSharedParams(BaseModel):
         description=(
             "Minimum panel loci in the classifier DMP index required to emit structural_scored "
             "columns for a (comparison, region) pair."
+        ),
+    )
+    mapper_annotation_collapse_mode: str = Field(
+        default="priority",
+        description=(
+            "How to collapse multi-feature mapper intersections to one row per locus in "
+            "mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) "
+            "or weight (legacy highest combined_weight wins)."
+        ),
+    )
+    mapper_annotation_unknown_fallback: Optional[str] = Field(
+        default="gene_body",
+        description=(
+            "Parent feature bucket assigned to classifier loci with unknown or missing "
+            "feature_type after mapper merge. Set null to leave unknown loci uncovered."
         ),
     )
     observed_feature_quality_columns: List[str] = Field(
@@ -321,6 +336,26 @@ class BackendSharedParams(BaseModel):
         if not out:
             raise ValueError("region_directional_region_types cannot be empty")
         return out
+
+    @field_validator("mapper_annotation_collapse_mode")
+    @classmethod
+    def _validate_mapper_annotation_collapse_mode(cls, value: str) -> str:
+        token = str(value or "priority").strip().lower()
+        if token not in {"priority", "weight"}:
+            raise ValueError("mapper_annotation_collapse_mode must be 'priority' or 'weight'")
+        return token
+
+    @field_validator("mapper_annotation_unknown_fallback")
+    @classmethod
+    def _validate_mapper_annotation_unknown_fallback(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        from .gene_scored_features import _normalize_structural_feature
+
+        token = _normalize_structural_feature(value)
+        if token == "unknown":
+            raise ValueError(f"Invalid mapper_annotation_unknown_fallback: {value!r}")
+        return token
 
     @field_validator("mapper_gene_columns")
     @classmethod
@@ -1285,7 +1320,7 @@ class MonteCarloConfig(BaseModel):
         ),
     )
     region_directional_region_types: List[str] = Field(
-        default_factory=lambda: ["promoter", "exon", "intron", "terminator"],
+        default_factory=lambda: ["promoter", "exon", "intron", "gene_body", "terminator"],
         description=(
             "Structural region types considered when building structural_scored features "
             "(feature_family_set structural_scored or dmp_scored+structural_scored)."
@@ -1297,6 +1332,21 @@ class MonteCarloConfig(BaseModel):
         description=(
             "Minimum panel loci in the classifier DMP index required to emit structural_scored "
             "columns for a (comparison, region) pair."
+        ),
+    )
+    mapper_annotation_collapse_mode: str = Field(
+        default="priority",
+        description=(
+            "How to collapse multi-feature mapper intersections to one row per locus in "
+            "mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) "
+            "or weight (legacy highest combined_weight wins)."
+        ),
+    )
+    mapper_annotation_unknown_fallback: Optional[str] = Field(
+        default="gene_body",
+        description=(
+            "Parent feature bucket assigned to classifier loci with unknown or missing "
+            "feature_type after mapper merge. Set null to leave unknown loci uncovered."
         ),
     )
     observed_feature_quality_columns: List[str] = Field(
@@ -1500,6 +1550,8 @@ class MonteCarloConfig(BaseModel):
             "structural_scored_contrast_pairs",
             "region_directional_region_types",
             "region_directional_min_loci",
+            "mapper_annotation_collapse_mode",
+            "mapper_annotation_unknown_fallback",
             "observed_feature_quality_columns",
             "ecdf_second_stage_enabled",
             "covariates_path",
@@ -1637,6 +1689,8 @@ class MonteCarloConfig(BaseModel):
             "structural_scored_contrast_pairs",
             "region_directional_region_types",
             "region_directional_min_loci",
+            "mapper_annotation_collapse_mode",
+            "mapper_annotation_unknown_fallback",
             "observed_feature_quality_columns",
             "covariates_path",
             "covariate_id_column",
@@ -1785,6 +1839,26 @@ class MonteCarloConfig(BaseModel):
         if not out:
             raise ValueError("region_directional_region_types cannot be empty")
         return out
+
+    @field_validator("mapper_annotation_collapse_mode")
+    @classmethod
+    def _validate_mapper_annotation_collapse_mode(cls, value: str) -> str:
+        token = str(value or "priority").strip().lower()
+        if token not in {"priority", "weight"}:
+            raise ValueError("mapper_annotation_collapse_mode must be 'priority' or 'weight'")
+        return token
+
+    @field_validator("mapper_annotation_unknown_fallback")
+    @classmethod
+    def _validate_mapper_annotation_unknown_fallback(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        from .gene_scored_features import _normalize_structural_feature
+
+        token = _normalize_structural_feature(value)
+        if token == "unknown":
+            raise ValueError(f"Invalid mapper_annotation_unknown_fallback: {value!r}")
+        return token
 
     @field_validator("mapper_gene_columns")
     @classmethod
