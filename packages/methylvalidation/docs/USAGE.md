@@ -382,7 +382,9 @@ When `step_config.validation.backend_profiles.<backend>.params.feature_mode` is 
   - `gene`: one feature per mapped gene (`gene::<GENE>`)
   - `structural`: one feature per mapped gene-annotation key (`struct::<GENE>::<FEATURE>`)
   - `gene_scored`: comparison-level features from frozen gene panels: `gene_directional_score__{comparison}`, `gene_panel_obs_fraction__{comparison}`, `gene_directional_iqr__{comparison}`, `gene_weighted_sign_agreement__{comparison}`; when **K ≥ 2** ordered comparisons, also progression contrasts (`gene_directional_contrast__*`, `gene_directional_adjacent_delta__*`, `gene_directional_progression_slope`, `gene_directional_range`) from directional scores only
+  - `structural_scored`: comparison×region pooled features from `frozen_gene_features.csv`: `structural_directional_score__{comparison}__{region}`, `structural_panel_obs_fraction__*`, `structural_directional_iqr__*`, `structural_weighted_sign_agreement__*`; default regions include `gene_body`; progression contrasts per region when **K ≥ 2**; columns omitted when a region has insufficient panel loci in the classifier index; mapper cache uses priority-based locus assignment by default
   - `dmp_scored+gene_scored`: DMP-family metrics plus gene-directional scores (legacy alias: `dmp+gene_scored`)
+  - `dmp_scored+structural_scored`: DMP-family metrics plus structural-directional scores (legacy alias: `dmp+structural_scored`)
   - `dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`: deterministic concatenation of families (legacy aliases: `dmp+gene`, `dmp+structural`)
 
 | Legacy alias | Canonical token |
@@ -391,6 +393,7 @@ When `step_config.validation.backend_profiles.<backend>.params.feature_mode` is 
 | `dmp+gene` | `dmp_scored+gene` |
 | `dmp+structural` | `dmp_scored+structural` |
 | `dmp+gene_scored` | `dmp_scored+gene_scored` |
+| `dmp+structural_scored` | `dmp_scored+structural_scored` |
 
 Project JSON may still use legacy tokens; validators and `methyl-validation-migrate-backend-config` rewrite them to canonical names on load.
 
@@ -405,6 +408,7 @@ Operational notes:
 - Freeze now also writes and wires:
   - `step_config.model_bundle.fixed_gene_panel` -> `production/model_bundle/frozen_genes_production.csv`
   - `step_config.model_bundle.fixed_gene_features` -> `production/model_bundle/frozen_gene_features.csv`
+- After changing `mapper_annotation_collapse_mode`, `mapper_annotation_unknown_fallback`, or `region_directional_region_types`, refreeze mapper annotations, rebuild the model bundle, remove cached tabular train datasets if any, and retrain.
 - `gene_feature_loading` controls gene-family locus selection in observed-hybrid mode:
   - `frozen` (default): only frozen DMP loci are used.
   - `range`: expand to all observed loci inside frozen gene-feature ranges from `fixed_gene_features`.

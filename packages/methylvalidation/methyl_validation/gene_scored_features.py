@@ -49,6 +49,7 @@ DEFAULT_REGION_DIRECTIONAL_TYPES: Tuple[str, ...] = (
     "promoter",
     "exon",
     "intron",
+    "gene_body",
     "terminator",
 )
 _ALLOWED_REGION_DIRECTIONAL_TYPES = frozenset(
@@ -122,19 +123,21 @@ def resolve_gene_scored_progression_order(
     if explicit_order:
         order_tokens = [str(x).strip() for x in explicit_order if str(x).strip()]
     elif project_json is not None:
-        from methyl_utils import load_project
+        project_path = Path(project_json)
+        if project_path.exists():
+            from methyl_utils import load_project
 
-        project = load_project(Path(project_json))
-        progression_cfg = project.get_step_config("progression") or {}
-        cfg_order = progression_cfg.get("ordered_comparison_labels") or progression_cfg.get(
-            "ordered_disease_groups"
-        )
-        if isinstance(cfg_order, list) and cfg_order:
-            order_tokens = [str(x).strip() for x in cfg_order if str(x).strip()]
-        else:
-            get_ordered = getattr(project, "get_ordered_comparison_labels", None)
-            if callable(get_ordered):
-                order_tokens = [str(x).strip() for x in get_ordered() if str(x).strip()]
+            project = load_project(project_path)
+            progression_cfg = project.get_step_config("progression") or {}
+            cfg_order = progression_cfg.get("ordered_comparison_labels") or progression_cfg.get(
+                "ordered_disease_groups"
+            )
+            if isinstance(cfg_order, list) and cfg_order:
+                order_tokens = [str(x).strip() for x in cfg_order if str(x).strip()]
+            else:
+                get_ordered = getattr(project, "get_ordered_comparison_labels", None)
+                if callable(get_ordered):
+                    order_tokens = [str(x).strip() for x in get_ordered() if str(x).strip()]
 
     filtered: List[str] = []
     seen: set[str] = set()

@@ -24,11 +24,16 @@ from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 from .classification_metrics import compute_validation_metrics, resolve_class_roles
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
-from .gene_scored_features import family_includes_gene_scored
+from .gene_scored_features import DEFAULT_REGION_DIRECTIONAL_TYPES, family_includes_gene_scored
+from .structural_scored_features import (
+    family_includes_structural_scored,
+    preflight_structural_scored_training,
+)
 from .model_bundle import (
     load_bundle_dmp_index,
     load_bundle_frozen_gene_panel,
     load_bundle_gene_feature_ranges,
+    resolve_fixed_gene_features_panel,
 )
 from .observed_feature_builder import (
     apply_feature_fill_values,
@@ -204,6 +209,11 @@ def train_generative_model(
     gene_scored_gene_weight: str = "importance_x_sqrt_support",
     gene_scored_ordered_comparison_labels: Optional[List[str]] = None,
     gene_scored_contrast_pairs: Optional[List[List[str]]] = None,
+    structural_scored_min_support_n: int = 2,
+    structural_scored_use_region_weight: bool = True,
+    structural_scored_weight: str = "compound_x_sqrt_support",
+    structural_scored_ordered_comparison_labels: Optional[List[str]] = None,
+    structural_scored_contrast_pairs: Optional[List[List[str]]] = None,
     region_directional_region_types: Optional[List[str]] = None,
     region_directional_min_loci: int = 1,
     observed_feature_quality_columns: Optional[List[str]] = None,
@@ -215,7 +225,18 @@ def train_generative_model(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dmp_df = load_bundle_dmp_index(bundle_h5)
-    fixed_gene_features_df = load_bundle_gene_feature_ranges(bundle_h5)
+    bundle_h5_path = Path(bundle_h5).expanduser().resolve()
+    feature_family_set_norm = normalize_feature_family_set(feature_family_set)
+    if family_includes_structural_scored(feature_family_set_norm):
+        fixed_gene_features_df, _fixed_gene_features_path = resolve_fixed_gene_features_panel(
+            project_json=project_json,
+            bundle_dir=bundle_h5_path.parent,
+            project=project,
+            bundle_h5=bundle_h5_path,
+            auto_rebuild=True,
+        )
+    else:
+        fixed_gene_features_df = load_bundle_gene_feature_ranges(bundle_h5_path)
     frozen_gene_panel_df = pd.DataFrame()
     if family_includes_gene_scored(feature_family_set):
         frozen_gene_panel_df = load_bundle_frozen_gene_panel(
@@ -226,10 +247,25 @@ def train_generative_model(
             raise FileNotFoundError(
                 "feature_family_set includes gene_scored but frozen_genes_production.csv was not found."
             )
+    if family_includes_structural_scored(feature_family_set):
+        if fixed_gene_features_df.empty:
+            raise FileNotFoundError(
+                "feature_family_set includes structural_scored but frozen_gene_features.csv was not found."
+            )
     max_dmps_norm = int(max_dmps) if (max_dmps is not None and int(max_dmps) > 0) else 0
     if max_dmps_norm and len(dmp_df) > max_dmps_norm:
         dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
     refs, feature_order = _build_reference_map(dmp_df)
+    if family_includes_structural_scored(feature_family_set_norm):
+        preflight_structural_scored_training(
+            dmp_df=dmp_df,
+            feature_order=feature_order,
+            fixed_gene_features_df=fixed_gene_features_df,
+            feature_family_set=feature_family_set_norm,
+            structural_scored_min_support_n=int(structural_scored_min_support_n),
+            region_directional_min_loci=int(max(1, region_directional_min_loci)),
+            region_directional_region_types=region_directional_region_types,
+        )
 
     roles = resolve_class_roles(project)
     class_names = list(roles["class_names"])
@@ -247,7 +283,6 @@ def train_generative_model(
         raise ValueError("Need at least 2 training samples to fit generative backend.")
 
     feature_mode_norm = str(feature_mode or "raw_dmp").strip().lower()
-    feature_family_set_norm = normalize_feature_family_set(feature_family_set)
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
     if gene_feature_loading_norm not in {"frozen", "range"}:
         raise ValueError(
@@ -298,6 +333,11 @@ def train_generative_model(
             gene_scored_gene_weight=str(gene_scored_gene_weight),
             gene_scored_ordered_comparison_labels=gene_scored_ordered_comparison_labels,
             gene_scored_contrast_pairs=gene_scored_contrast_pairs,
+            structural_scored_min_support_n=int(structural_scored_min_support_n),
+            structural_scored_use_region_weight=bool(structural_scored_use_region_weight),
+            structural_scored_weight=str(structural_scored_weight),
+            structural_scored_ordered_comparison_labels=structural_scored_ordered_comparison_labels,
+            structural_scored_contrast_pairs=structural_scored_contrast_pairs,
             project_json=project_json,
             region_directional_region_types=region_directional_region_types,
             region_directional_min_loci=int(max(1, region_directional_min_loci)),
@@ -316,11 +356,17 @@ def train_generative_model(
         )
         observed_feature_report = dict(feat.report)
         gene_scored_progression_order = None
+        structural_scored_progression_order = None
         gene_scored_report = observed_feature_report.get("gene_scored")
         if isinstance(gene_scored_report, dict):
             raw_order = gene_scored_report.get("progression_order")
             if isinstance(raw_order, list) and raw_order:
                 gene_scored_progression_order = [str(x) for x in raw_order]
+        structural_scored_report = observed_feature_report.get("structural_scored")
+        if isinstance(structural_scored_report, dict):
+            raw_order = structural_scored_report.get("progression_order")
+            if isinstance(raw_order, list) and raw_order:
+                structural_scored_progression_order = [str(x) for x in raw_order]
         dmp_weights = np.ones((X_methyl.shape[1],), dtype=np.float32)
         observed_feature_quantiles_out = [float(q) for q in (feat.report.get("quantiles") or [])]
         observed_healthy_reference = anchors.healthy_reference_vector.astype(np.float32)
@@ -335,6 +381,7 @@ def train_generative_model(
         observed_feature_order_fingerprint = str(anchors.feature_order_fingerprint)
     else:
         gene_scored_progression_order = None
+        structural_scored_progression_order = None
         X_methyl = _extract_matrix_for_samples(all_paths, refs, feature_order, min_coverage=1)
         X_methyl = np.nan_to_num(np.asarray(X_methyl, dtype=np.float32), nan=0.5, posinf=0.5, neginf=0.5)
 
@@ -485,8 +532,18 @@ def train_generative_model(
         ),
         "gene_scored_contrast_pairs": gene_scored_contrast_pairs,
         "gene_scored_progression_order": gene_scored_progression_order,
+        "structural_scored_min_support_n": int(max(1, structural_scored_min_support_n)),
+        "structural_scored_use_region_weight": bool(structural_scored_use_region_weight),
+        "structural_scored_weight": str(structural_scored_weight).strip().lower(),
+        "structural_scored_ordered_comparison_labels": (
+            [str(x) for x in structural_scored_ordered_comparison_labels]
+            if structural_scored_ordered_comparison_labels
+            else None
+        ),
+        "structural_scored_contrast_pairs": structural_scored_contrast_pairs,
+        "structural_scored_progression_order": structural_scored_progression_order,
         "region_directional_region_types": [
-            str(x) for x in (region_directional_region_types or ["promoter", "exon", "intron", "terminator"])
+            str(x) for x in (region_directional_region_types or list(DEFAULT_REGION_DIRECTIONAL_TYPES))
         ],
         "region_directional_min_loci": int(max(1, region_directional_min_loci)),
         "observed_feature_quality_columns": [
@@ -622,6 +679,14 @@ def predict_generative_model_from_project(
                 or meta.get("gene_scored_ordered_comparison_labels")
             ),
             gene_scored_contrast_pairs=meta.get("gene_scored_contrast_pairs"),
+            structural_scored_min_support_n=int(meta.get("structural_scored_min_support_n", 2)),
+            structural_scored_use_region_weight=bool(meta.get("structural_scored_use_region_weight", True)),
+            structural_scored_weight=str(meta.get("structural_scored_weight", "compound_x_sqrt_support")),
+            structural_scored_ordered_comparison_labels=(
+                meta.get("structural_scored_progression_order")
+                or meta.get("structural_scored_ordered_comparison_labels")
+            ),
+            structural_scored_contrast_pairs=meta.get("structural_scored_contrast_pairs"),
             project_json=project_json,
             region_directional_region_types=meta.get("region_directional_region_types"),
             region_directional_min_loci=int(meta.get("region_directional_min_loci", 1)),
@@ -765,6 +830,8 @@ def predict_generative_model_from_project(
                 {"name": "dmp_scored+gene", "feature_family_set": "dmp_scored+gene"},
                 {"name": "gene_scored", "feature_family_set": "gene_scored"},
                 {"name": "dmp_scored+gene_scored", "feature_family_set": "dmp_scored+gene_scored"},
+                {"name": "structural_scored", "feature_family_set": "structural_scored"},
+                {"name": "dmp_scored+structural_scored", "feature_family_set": "dmp_scored+structural_scored"},
                 {"name": "dmp_scored+structural", "feature_family_set": "dmp_scored+structural"},
                 {"name": "hybrid-all", "feature_family_set": "hybrid-all"},
             ],

@@ -87,8 +87,10 @@ ECDF/Bayesian remains DMP-only by design at the first stage. The optional ECDF s
 - `feature_family_set=gene`: dynamic one-feature-per-mapped-gene keys (`gene::<GENE>`).
 - `feature_family_set=structural`: dynamic one-feature-per-mapped `(gene, feature_type)` keys (`struct::<GENE>::<FEATURE>`).
 - `feature_family_set=gene_scored`: comparison-level `gene_directional_score__{comparison}` features from frozen gene panels (`frozen_genes_production.csv`) and per-comparison DMP effects (no `gene::` columns).
+- `feature_family_set=structural_scored`: comparison×region pooled features from `frozen_gene_features.csv` and per-locus mapper annotations; emits `structural_directional_score__{comparison}__{region}` plus companion columns only for supported `(comparison, region)` pairs (dynamic schema).
 - `feature_family_set=dmp_scored+gene_scored`: DMP-family metrics plus gene-directional scores (recommended when using mapper gene panels without legacy per-gene columns). Legacy alias: `dmp+gene_scored`.
-- combined families (`dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`) concatenate families in deterministic order (`hybrid-all` does not include `gene_scored`; use `dmp_scored+gene_scored` explicitly).
+- `feature_family_set=dmp_scored+structural_scored`: DMP-family metrics plus structural-directional scores. Legacy alias: `dmp+structural_scored`.
+- combined families (`dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`) concatenate families in deterministic order (`hybrid-all` does not include `gene_scored` or `structural_scored`; combine explicitly).
 
 Gene-directional score (per sample, per `comparison_label`):
 
@@ -114,7 +116,22 @@ Order resolution: `gene_scored_ordered_comparison_labels` (backend override) →
 
 NaN rules: contrast/delta NaN when either endpoint is NaN; slope requires ≥2 finite ordered scores; range requires all K scores finite.
 
-Region-directional scores (`region_directional_score__*`) are no longer emitted under `gene_scored`; helpers remain in code for a future `structural_scored` family (frozen-panel-restricted).
+Region-directional scores (`region_directional_score__*`) are no longer emitted under `gene_scored`. Use `feature_family_set=structural_scored` for frozen-panel-restricted region-type pooling (see below).
+
+Structural-directional score (per sample, per `comparison_label` and `feature_type` such as `promoter`):
+
+- Gene-feature panel: rows in `frozen_gene_features.csv` with `n_dmps_in_feature >= structural_scored_min_support_n` (default `2`) and positive `feature_effect_compound`, restricted to configured `region_directional_region_types`.
+- Per `(gene, region)`: same locus formula as `gene_scored` over observed panel loci for that gene and region.
+- Pooled: weighted mean of per-gene `dir_g` using `feature_effect_compound` (and optionally `sqrt(n_dmps_in_feature)`).
+- Column emission: a `(comparison, region)` emits four base columns only when at least `region_directional_min_loci` panel loci intersect the classifier DMP index; otherwise the region is omitted (not exported as all-NaN placeholders).
+- Default `region_directional_region_types`: `promoter`, `exon`, `intron`, `gene_body`, `terminator`.
+- Mapper annotation cache (`mapper_dmp_annotations.csv`) collapses multi-feature intersections to one row per classifier locus using **priority** by default (`promoter > exon > intron > gene_body > terminator`), aligned with mapper exclusive assignment. Legacy weight-based collapse is available via `mapper_annotation_collapse_mode: weight`.
+- Classifier loci with unknown/missing `feature_type` after mapper merge are assigned to `gene_body` by default (`mapper_annotation_unknown_fallback`; set `null` to disable).
+- `observed_feature_report.structural_scored.partition_coverage` records classifier locus coverage across emitted region columns.
+
+Additional `structural_scored` columns per emitted `(comparison, region)`: `structural_panel_obs_fraction__*`, `structural_directional_iqr__*`, `structural_weighted_sign_agreement__*`. When **K ≥ 2** comparisons emit base columns for a region, progression features are derived per region from `structural_directional_score__*` only (schema `structural_scored_v1_progression_contrast`).
+
+**Operational note:** changing mapper collapse mode or region defaults requires refreezing `mapper_dmp_annotations.csv`, rebuilding the model feature bundle, deleting cached `tabular_train_dataset.parquet` if present, and retraining.
 
 ### Lean DMP feature profile (`hybrid_feature_v4_lean_dmp`)
 
