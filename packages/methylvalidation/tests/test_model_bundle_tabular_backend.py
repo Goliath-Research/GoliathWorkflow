@@ -364,6 +364,63 @@ def test_build_frozen_gene_panel_writes_gene_and_feature_outputs(tmp_path: Path,
     assert float(feats_df.iloc[0]["feature_effect_compound"]) == pytest.approx(0.7)
 
 
+def test_resolve_fixed_gene_features_panel_rebuilds_missing_compounds(tmp_path: Path, monkeypatch):
+    mapper = tmp_path / "mapper" / "healthy" / "pca1"
+    mapper.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "gene_name": ["GENE_A"],
+            "gene_id": ["ENSGA"],
+            "gene_importance": [3.0],
+            "unique_dmps": [3],
+            "gene_support_n": [3],
+            "feature_effect_compound_promoter": [0.7],
+        }
+    ).to_csv(mapper / "all-gene_name-combined.csv", index=False)
+    pd.DataFrame(
+        {
+            "dmp_name": ["1:100:CG:eff=0.20", "1:110:CG:eff=0.22"],
+            "feature_chrom": ["chr1", "chr1"],
+            "gene_name": ["GENE_A", "GENE_A"],
+            "feature_type": ["promoter", "promoter"],
+            "feature_start": [90, 90],
+            "feature_end": [130, 130],
+        }
+    ).to_csv(mapper / "chr1-intersections.csv", index=False)
+
+    bundle_dir = tmp_path / "bundle"
+    bundle_dir.mkdir(parents=True)
+    stale = bundle_dir / "frozen_gene_features.csv"
+    pd.DataFrame(
+        {
+            "comparison_label": ["healthy_vs_pca1"],
+            "gene_name": ["GENE_A"],
+            "chromosome": ["1"],
+            "feature_type": ["promoter"],
+            "feature_start": [90],
+            "feature_end": [130],
+            "n_dmps_in_feature": [2],
+            "feature_effect_compound": [0.0],
+        }
+    ).to_csv(stale, index=False)
+
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    monkeypatch.setattr(
+        model_bundle,
+        "load_project",
+        lambda _p: _StubProjectWithMapper(det, mapper),
+    )
+
+    out_df, out_path = model_bundle.resolve_fixed_gene_features_panel(
+        project_json=tmp_path / "project.json",
+        bundle_dir=bundle_dir,
+        auto_rebuild=True,
+    )
+    assert out_path == stale
+    assert float(out_df["feature_effect_compound"].iloc[0]) == pytest.approx(0.7)
+
+
 def test_normalize_mapper_intersections_uses_dmp_fallback_for_nan_keys(tmp_path: Path):
     intersections = pd.DataFrame(
         {

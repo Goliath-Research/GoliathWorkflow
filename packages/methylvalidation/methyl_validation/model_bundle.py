@@ -574,6 +574,75 @@ def _load_fixed_gene_feature_ranges(path: Path) -> pd.DataFrame:
     ].copy()
 
 
+def _frozen_gene_features_missing_compounds(features_df: pd.DataFrame) -> bool:
+    if features_df is None or features_df.empty:
+        return True
+    compound = pd.to_numeric(features_df.get("feature_effect_compound"), errors="coerce").fillna(0.0)
+    return int((compound > 0.0).sum()) == 0
+
+
+def resolve_fixed_gene_features_panel(
+    *,
+    project_json: str | Path,
+    bundle_dir: str | Path,
+    project: Optional["ProjectConfig"] = None,
+    bundle_h5: Optional[str | Path] = None,
+    auto_rebuild: bool = True,
+) -> Tuple[pd.DataFrame, Optional[Path]]:
+    """
+    Load freeze-time gene-feature panel CSV for structural_scored.
+
+    When feature_effect_compound is missing or all zero (stale freeze artifact),
+    rebuild from mapper outputs via build_frozen_gene_panel before training/bundling.
+    """
+    project_json_path = Path(project_json).expanduser().resolve()
+    bundle_dir_path = Path(bundle_dir).expanduser().resolve()
+    if project is None:
+        with _project_cwd(project_json_path):
+            project = load_project(project_json_path)
+
+    fixed_gene_features_path: Optional[Path] = None
+    fixed_gene_features_df = pd.DataFrame()
+    for candidate in _candidate_fixed_gene_feature_paths(
+        project_json=project_json_path,
+        project=project,
+        bundle_dir=bundle_dir_path,
+    ):
+        if candidate.is_file():
+            fixed_gene_features_path = candidate
+            fixed_gene_features_df = _load_fixed_gene_feature_ranges(candidate)
+            break
+
+    if auto_rebuild and _frozen_gene_features_missing_compounds(fixed_gene_features_df):
+        out_dir = fixed_gene_features_path.parent if fixed_gene_features_path is not None else bundle_dir_path
+        stability_gene_panel_path: Optional[Path] = None
+        for panel_candidate in _candidate_frozen_gene_panel_paths(
+            project_json=project_json_path,
+            project=project,
+            bundle_dir=bundle_dir_path,
+        ):
+            if panel_candidate.is_file():
+                stability_gene_panel_path = panel_candidate
+                break
+        build_frozen_gene_panel(
+            project_json=project_json_path,
+            output_dir=out_dir,
+            min_dmps_per_feature=1,
+            stability_gene_panel_path=(
+                str(stability_gene_panel_path) if stability_gene_panel_path is not None else None
+            ),
+        )
+        fixed_gene_features_path = out_dir / FROZEN_GENE_FEATURES_NAME
+        fixed_gene_features_df = _load_fixed_gene_feature_ranges(fixed_gene_features_path)
+
+    if fixed_gene_features_df.empty and bundle_h5 is not None:
+        h5_df = load_bundle_gene_feature_ranges(bundle_h5)
+        if not h5_df.empty:
+            fixed_gene_features_df = h5_df
+
+    return fixed_gene_features_df, fixed_gene_features_path
+
+
 def build_mapper_annotation_cache(
     *,
     project_json: str | Path,
@@ -1446,19 +1515,12 @@ def build_model_feature_bundle(
             "Mapper annotation cache is required for non-dmp feature families but was not found. "
             f"Searched: {[str(p) for p in mapper_candidates]}"
         )
-    fixed_gene_features_path: Optional[Path] = None
-    fixed_gene_features_df = pd.DataFrame()
-    fixed_gene_candidates = _candidate_fixed_gene_feature_paths(
+    fixed_gene_features_df, fixed_gene_features_path = resolve_fixed_gene_features_panel(
         project_json=project_json,
-        project=project,
         bundle_dir=out_dir,
+        project=project,
+        auto_rebuild=family_token in {"structural_scored", "dmp_scored+structural_scored"},
     )
-    for p in fixed_gene_candidates:
-        if p.is_file():
-            fixed_gene_features_path = p
-            break
-    if fixed_gene_features_path is not None:
-        fixed_gene_features_df = _load_fixed_gene_feature_ranges(fixed_gene_features_path)
 
     del weight_column
     dmp_df = pd.concat(rows, ignore_index=True)

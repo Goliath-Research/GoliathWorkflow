@@ -1400,6 +1400,38 @@ def test_observed_feature_builder_structural_scored_family(monkeypatch):
     assert not any(str(n).startswith("region_directional_score__") for n in feat.feature_names)
 
 
+def test_preflight_structural_scored_training_fails_before_extraction():
+    from methyl_validation.structural_scored_features import preflight_structural_scored_training
+
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a"],
+            "chromosome": ["1"],
+            "context": ["CG"],
+            "position": [100],
+            "effect_size": [1.0],
+            "gene_name": ["G1"],
+            "feature_type": ["promoter"],
+        }
+    )
+    frozen_features = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a"],
+            "gene_name": ["G1"],
+            "feature_type": ["promoter"],
+            "n_dmps_in_feature": [2],
+            "feature_effect_compound": [0.0],
+        }
+    )
+    with pytest.raises(ValueError, match="zero training features"):
+        preflight_structural_scored_training(
+            dmp_df=dmp_df,
+            feature_order=[("1", "CG", 100)],
+            fixed_gene_features_df=frozen_features,
+            feature_family_set="structural_scored",
+        )
+
+
 def test_require_structural_scored_columns_emitted_zero_compound():
     from methyl_validation.structural_scored_features import require_structural_scored_columns_emitted
 

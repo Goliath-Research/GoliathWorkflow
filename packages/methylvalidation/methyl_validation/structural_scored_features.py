@@ -248,6 +248,62 @@ def resolve_structural_scored_column_specs(
     return specs
 
 
+def preflight_structural_scored_training(
+    *,
+    dmp_df: pd.DataFrame,
+    feature_order: Sequence[Tuple[str, str, int]],
+    fixed_gene_features_df: pd.DataFrame,
+    feature_family_set: str,
+    structural_scored_min_support_n: int = 2,
+    region_directional_min_loci: int = 1,
+    region_directional_region_types: Optional[Sequence[str]] = None,
+) -> None:
+    """
+    Fail in seconds when structural_scored-only training would emit zero columns.
+
+    Call before sample extraction so long-running feature builds are not started
+    on an unusable panel.
+    """
+    from .observed_feature_builder import _family_flags
+
+    if not family_includes_structural_scored(feature_family_set):
+        return
+    include_dmp, include_gene, include_structural, include_gene_scored, include_structural_scored = (
+        _family_flags(feature_family_set)
+    )
+    structural_scored_only = bool(
+        include_structural_scored
+        and not (include_dmp or include_gene or include_structural or include_gene_scored)
+    )
+    if not structural_scored_only:
+        return
+    if fixed_gene_features_df is None or fixed_gene_features_df.empty:
+        raise ValueError(
+            "feature_family_set=structural_scored requires frozen_gene_features.csv but the panel is empty. "
+            "Run --freeze or ensure production/model_bundle/frozen_gene_features.csv exists."
+        )
+    panels = prepare_structural_scored_panels(
+        fixed_gene_features_df,
+        min_support_n=int(structural_scored_min_support_n),
+        region_types=region_directional_region_types,
+    )
+    column_specs = resolve_structural_scored_column_specs(
+        dmp_df,
+        feature_order,
+        panels,
+        min_loci=int(max(1, region_directional_min_loci)),
+    )
+    require_structural_scored_columns_emitted(
+        fixed_gene_features_df=fixed_gene_features_df,
+        panels=panels,
+        column_specs=column_specs,
+        structural_scored_only=True,
+        structural_scored_min_support_n=int(structural_scored_min_support_n),
+        region_directional_min_loci=int(max(1, region_directional_min_loci)),
+        region_directional_region_types=region_directional_region_types,
+    )
+
+
 def require_structural_scored_columns_emitted(
     *,
     fixed_gene_features_df: pd.DataFrame,

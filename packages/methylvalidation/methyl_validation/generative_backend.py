@@ -25,11 +25,15 @@ from .classification_metrics import compute_validation_metrics, resolve_class_ro
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
 from .gene_scored_features import family_includes_gene_scored
-from .structural_scored_features import family_includes_structural_scored
+from .structural_scored_features import (
+    family_includes_structural_scored,
+    preflight_structural_scored_training,
+)
 from .model_bundle import (
     load_bundle_dmp_index,
     load_bundle_frozen_gene_panel,
     load_bundle_gene_feature_ranges,
+    resolve_fixed_gene_features_panel,
 )
 from .observed_feature_builder import (
     apply_feature_fill_values,
@@ -221,7 +225,18 @@ def train_generative_model(
     out_dir.mkdir(parents=True, exist_ok=True)
 
     dmp_df = load_bundle_dmp_index(bundle_h5)
-    fixed_gene_features_df = load_bundle_gene_feature_ranges(bundle_h5)
+    bundle_h5_path = Path(bundle_h5).expanduser().resolve()
+    feature_family_set_norm = normalize_feature_family_set(feature_family_set)
+    if family_includes_structural_scored(feature_family_set_norm):
+        fixed_gene_features_df, _fixed_gene_features_path = resolve_fixed_gene_features_panel(
+            project_json=project_json,
+            bundle_dir=bundle_h5_path.parent,
+            project=project,
+            bundle_h5=bundle_h5_path,
+            auto_rebuild=True,
+        )
+    else:
+        fixed_gene_features_df = load_bundle_gene_feature_ranges(bundle_h5_path)
     frozen_gene_panel_df = pd.DataFrame()
     if family_includes_gene_scored(feature_family_set):
         frozen_gene_panel_df = load_bundle_frozen_gene_panel(
@@ -241,6 +256,16 @@ def train_generative_model(
     if max_dmps_norm and len(dmp_df) > max_dmps_norm:
         dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
     refs, feature_order = _build_reference_map(dmp_df)
+    if family_includes_structural_scored(feature_family_set_norm):
+        preflight_structural_scored_training(
+            dmp_df=dmp_df,
+            feature_order=feature_order,
+            fixed_gene_features_df=fixed_gene_features_df,
+            feature_family_set=feature_family_set_norm,
+            structural_scored_min_support_n=int(structural_scored_min_support_n),
+            region_directional_min_loci=int(max(1, region_directional_min_loci)),
+            region_directional_region_types=region_directional_region_types,
+        )
 
     roles = resolve_class_roles(project)
     class_names = list(roles["class_names"])
@@ -258,7 +283,6 @@ def train_generative_model(
         raise ValueError("Need at least 2 training samples to fit generative backend.")
 
     feature_mode_norm = str(feature_mode or "raw_dmp").strip().lower()
-    feature_family_set_norm = normalize_feature_family_set(feature_family_set)
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
     if gene_feature_loading_norm not in {"frozen", "range"}:
         raise ValueError(
