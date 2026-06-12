@@ -183,7 +183,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
-        <DCCReference Include="src\WfEngine.Dialect.pas"/>
+        <DCCReference Include="src\WfEngine.Connection.pas"/>
         <DCCReference Include="src\WfEngine.Types.pas"/>
         <DCCReference Include="src\WfEngine.Interfaces.pas"/>
         <DCCReference Include="src\WfEngine.GatewayDb.pas"/>

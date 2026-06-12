@@ -7,7 +7,7 @@ uses
   System.SysUtils,
   WfEngine.GatewayService.Tests in 'tests\WfEngine.GatewayService.Tests.pas',
   WfEngine.Integration.Tests in 'tests\WfEngine.Integration.Tests.pas',
-  WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
+  WfEngine.Connection in 'src\WfEngine.Connection.pas',
   WfEngine.Types in 'src\WfEngine.Types.pas',
   WfEngine.Interfaces in 'src\WfEngine.Interfaces.pas',
   WfEngine.GatewayDb in 'src\WfEngine.GatewayDb.pas',

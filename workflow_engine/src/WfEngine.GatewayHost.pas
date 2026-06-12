@@ -10,13 +10,15 @@ unit WfEngine.GatewayHost;
 interface
 
 uses
+  WfEngine.Connection,
   WfEngine.GatewayService;
 
-procedure InitGatewayHost(const AConnectionString: string);
+procedure InitGatewayHost(const AConnection: TConnectionConfig);
 procedure ShutdownGatewayHost;
 function GatewayHostInitialized: Boolean;
 function GetGatewayService: IGatewayService;
 
+function ResolveGatewayConnectionConfig: TConnectionConfig;
 function ResolveGatewayConnectionString: string;
 function ResolveGatewayPort(const ADefault: Integer = 8080): Integer;
 
@@ -25,7 +27,6 @@ implementation
 uses
   System.SysUtils,
   System.SyncObjs,
-  WfEngine.Dialect,
   WfEngine.ServiceLoop;
 
 var
@@ -33,14 +34,17 @@ var
   GSvc: TWorkflowEngineHostedService;
   GGateway: IGatewayService;
 
-function ResolveGatewayConnectionString: string;
+function ResolveGatewayConnectionConfig: TConnectionConfig;
 begin
-  Result := GetEnvironmentVariable('METHYLPIPELINE_DB');
-  if Result = '' then
-    Result := BuildConnectionStringFromEnv;
-  if Result = '' then
+  Result := ResolveConnectionConfig;
+  if Result.ConnectionString = '' then
     raise Exception.Create(
       'Set METHYLPIPELINE_DB or POSTGRES_*/AZURE_SQL_* environment variables.');
+end;
+
+function ResolveGatewayConnectionString: string;
+begin
+  Result := ResolveGatewayConnectionConfig.ConnectionString;
 end;
 
 function ResolveGatewayPort(const ADefault: Integer): Integer;
@@ -48,7 +52,7 @@ begin
   Result := StrToIntDef(GetEnvironmentVariable('WF_GATEWAY_PORT'), ADefault);
 end;
 
-procedure InitGatewayHost(const AConnectionString: string);
+procedure InitGatewayHost(const AConnection: TConnectionConfig);
 var
   Cfg: TWorkflowEngineServiceConfig;
 begin
@@ -56,7 +60,7 @@ begin
   try
     if GSvc <> nil then
       Exit;
-    Cfg.ConnectionString := AConnectionString;
+    Cfg.Connection := AConnection;
     GSvc := TWorkflowEngineHostedService.Create(Cfg);
     GGateway := TGatewayService.Create(GSvc, GLock);
   finally

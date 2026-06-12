@@ -11,7 +11,7 @@ uses
   System.SysUtils,
   Data.DB,
   Uni,
-  WfEngine.Dialect,
+  WfEngine.Connection,
   WfEngine.GatewayDb,
   WfEngine.Interfaces,
   WfEngine.Types;

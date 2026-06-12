@@ -125,7 +125,7 @@ Maps [`contracts/openapi.yaml`](../contracts/openapi.yaml) to PostgreSQL wf obje
 Provider Name=PostgreSQL;Data Source=localhost;Port=5432;Database=methylpipeline;User ID=postgres;Password=methyl;
 ```
 
-Set `BACKEND_DB=postgres` and `METHYLPIPELINE_DB` (or `POSTGRES_*` env vars — see `WfEngine.Dialect.pas`).
+Set `BACKEND_DB=postgres` and `METHYLPIPELINE_DB` (or `POSTGRES_*` env vars — see `WfEngine.Connection.pas`).
 
 ## Contract validation
 

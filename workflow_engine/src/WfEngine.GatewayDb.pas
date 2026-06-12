@@ -10,7 +10,7 @@ interface
 uses
   System.SysUtils,
   Uni,
-  WfEngine.Dialect,
+  WfEngine.Connection,
   WfEngine.Types;
 
 type

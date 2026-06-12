@@ -9,7 +9,7 @@ unit WfEngine;
 interface
 
 uses
-  WfEngine.Dialect,
+  WfEngine.Connection,
   WfEngine.GatewayDb,
   WfEngine.GatewayDtos,
   WfEngine.GatewayService,

@@ -13,7 +13,7 @@ implementation
 
 uses
   System.SysUtils,
-  WfEngine.Dialect,
+  WfEngine.Connection,
   WfEngine.GatewayDtos,
   WfEngine.GatewayHost,
   WfEngine.GatewayService;
@@ -27,18 +27,16 @@ end;
 procedure TestGetActionSchemaRejectsInvalidDirection;
 var
   Gateway: IGatewayService;
-  ConnStr: string;
+  ConnCfg: TConnectionConfig;
 begin
-  ConnStr := GetEnvironmentVariable('METHYLPIPELINE_DB');
-  if ConnStr = '' then
-    ConnStr := BuildConnectionStringFromEnv;
-  if ConnStr = '' then
+  ConnCfg := ResolveConnectionConfig;
+  if ConnCfg.ConnectionString = '' then
   begin
     Writeln('  SKIP TestGetActionSchemaRejectsInvalidDirection (no DB configured)');
     Exit;
   end;
 
-  InitGatewayHost(ConnStr);
+  InitGatewayHost(ConnCfg);
   try
     Gateway := GetGatewayService;
     try
@@ -58,18 +56,16 @@ procedure TestListActionsReturnsCatalog;
 var
   Gateway: IGatewayService;
   List: TActionListResponse;
-  ConnStr: string;
+  ConnCfg: TConnectionConfig;
 begin
-  ConnStr := GetEnvironmentVariable('METHYLPIPELINE_DB');
-  if ConnStr = '' then
-    ConnStr := BuildConnectionStringFromEnv;
-  if ConnStr = '' then
+  ConnCfg := ResolveConnectionConfig;
+  if ConnCfg.ConnectionString = '' then
   begin
     Writeln('  SKIP TestListActionsReturnsCatalog (no DB configured)');
     Exit;
   end;
 
-  InitGatewayHost(ConnStr);
+  InitGatewayHost(ConnCfg);
   try
     Gateway := GetGatewayService;
     List := Gateway.ListActions;

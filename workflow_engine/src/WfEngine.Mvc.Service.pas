@@ -60,7 +60,7 @@ procedure TMethylWfGatewayService.ServiceStart(Sender: TService; var Started: Bo
 begin
   Started := False;
   try
-    InitGatewayHost(ResolveGatewayConnectionString);
+    InitGatewayHost(ResolveGatewayConnectionConfig);
     // '+' binds all interfaces; LocalSystem holds the HTTP.sys URL ACL.
     FServer := TWfGatewayServer.Create(ResolveGatewayPort, ResolveGatewayHost('+'));
     FServer.Start;

@@ -36,7 +36,7 @@ requires
 contains
   WfEngine.Types in 'src\WfEngine.Types.pas',
   WfEngine.Interfaces in 'src\WfEngine.Interfaces.pas',
-  WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
+  WfEngine.Connection in 'src\WfEngine.Connection.pas',
   WfEngine.GatewayDb in 'src\WfEngine.GatewayDb.pas',
   WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
   WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',

@@ -15,17 +15,21 @@ implementation
 uses
   System.SysUtils,
   Uni,
-  WfEngine.Dialect,
+  WfEngine.Connection,
   WfEngine.ServiceLoop,
   WfEngine.Types;
 
-function TestConnectionString: string;
+function TestConnectionConfig: TConnectionConfig;
 begin
-  Result := GetEnvironmentVariable('METHYLPIPELINE_DB');
-  if Result = '' then
-    Result := BuildConnectionStringFromEnv;
-  if Result = '' then
-    Result := 'Provider Name=SQL Server;Data Source=localhost;Initial Catalog=MethylPipeline;Integrated Security=True';
+  Result := ResolveConnectionConfig;
+  if Result.ConnectionString = '' then
+  begin
+    Result.Backend := dbMssql;
+    Result.ConnectionString :=
+      'Provider Name=SQL Server;Data Source=localhost;Initial Catalog=MethylPipeline;Integrated Security=True';
+    Result.SchemaName := ResolveSchemaName;
+    Result.UseManagedIdentity := False;
+  end;
 end;
 
 procedure AssertTrue(const ACondition: Boolean; const AMessage: string);
@@ -42,17 +46,18 @@ var
   ReadyCount: Integer;
   Conn: TUniConnection;
   Q: TUniQuery;
+  ConnCfg: TConnectionConfig;
 begin
-  Cfg.ConnectionString := TestConnectionString;
+  ConnCfg := TestConnectionConfig;
+  Cfg.Connection := ConnCfg;
   Svc := TWorkflowEngineHostedService.Create(Cfg);
   Conn := TUniConnection.Create(nil);
   try
-    Conn.ConnectString := Cfg.ConnectionString;
-    Conn.Connect;
+    ConnectUniDatabase(Conn, ConnCfg);
     Q := TUniQuery.Create(nil);
     try
       Q.Connection := Conn;
-      if GetWorkflowBackend = wbPostgres then
+      if GetDatabaseBackend = dbPostgres then
         Q.SQL.Text :=
           'SELECT wv.id FROM wf.workflow_version wv ' +
           'INNER JOIN wf.workflow_def wd ON wd.id = wv.workflow_def_id ' +
@@ -77,7 +82,7 @@ begin
       Q.Connection := Conn;
       Q.SQL.Text := Format(
         'SELECT COUNT(*) AS c FROM %snode_execution WHERE workflow_instance_id = :wi AND status = ''READY''',
-        [WfSchemaDot]);
+        [ConnCfg.SchemaDot]);
       Q.ParamByName('wi').AsLargeInt := InstanceId;
       Q.Open;
       ReadyCount := Q.FieldByName('c').AsInteger;
@@ -99,17 +104,18 @@ var
   WorkerId: Int64;
   Conn: TUniConnection;
   Q: TUniQuery;
+  ConnCfg: TConnectionConfig;
 begin
-  Cfg.ConnectionString := TestConnectionString;
+  ConnCfg := TestConnectionConfig;
+  Cfg.Connection := ConnCfg;
   Svc := TWorkflowEngineHostedService.Create(Cfg);
   Conn := TUniConnection.Create(nil);
   try
-    Conn.ConnectString := Cfg.ConnectionString;
-    Conn.Connect;
+    ConnectUniDatabase(Conn, ConnCfg);
     Q := TUniQuery.Create(nil);
     try
       Q.Connection := Conn;
-      if GetWorkflowBackend = wbPostgres then
+      if GetDatabaseBackend = dbPostgres then
         Q.SQL.Text := 'SELECT id FROM wf.worker WHERE status = ''REGISTERED'' ORDER BY id LIMIT 1'
       else
         Q.SQL.Text := 'SELECT TOP 1 id FROM wf.worker WHERE status = ''REGISTERED'' ORDER BY id';
@@ -120,7 +126,7 @@ begin
       Q.SQL.Text := Format(
         'SELECT token_prefix FROM wf.worker_token WHERE worker_id = %d AND status = ''ACTIVE''',
         [WorkerId]);
-      if GetWorkflowBackend = wbPostgres then
+      if GetDatabaseBackend = dbPostgres then
         Q.SQL.Text := Q.SQL.Text + ' LIMIT 1'
       else
         Q.SQL.Text := 'SELECT TOP 1 token_prefix FROM wf.worker_token WHERE worker_id = ' +

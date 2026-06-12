@@ -23,7 +23,7 @@ It uses DMVC's pluggable server backend (`IMVCServer`) with the **HTTP.sys** dri
 | `WfEngine.ServiceLoop.pas` (`TWorkflowEngineHostedService`) | UniDAC connection lifecycle |
 | `WfEngine.GatewayDb.pas` | Sole DB layer: all `wf` contract procs via `TUniStoredProc` (no inline SQL) |
 | `WfEngine.WorkerApiAdapter.pas` | Worker `sp_worker_*` calls; auth/submit via `GatewayDb` |
-| `WfEngine.Dialect.pas` | Azure SQL / PostgreSQL backend selection |
+| `WfEngine.Connection.pas` | Connection config from env; UniDAC provider setup; managed identity (IMDS) |
 
 `WfEnginePkg` (runtime package) contains the SQL gateway core and DTOs/service types; DMVC controller and service host units belong to the `WfEngineSrv` executable, which requires DMVC ≥ 3.5 on the project search path.
 
@@ -104,9 +104,10 @@ WfEngineSrv /startinstance version=<id> [context={}]   one-shot instance start
 
 Environment (system-level for service mode):
 
-- `METHYLPIPELINE_DB` — UniDAC connection string (required), or
-- `POSTGRES_*` / `AZURE_SQL_*` — built by `WfEngine.Dialect.BuildConnectionStringFromEnv`
+- `METHYLPIPELINE_DB` — UniDAC connection string (required for dev), or
+- `POSTGRES_*` / `AZURE_SQL_*` — built by `WfEngine.Connection.BuildConnectionStringFromEnv`
 - `BACKEND_DB` — `mssql` (default) or `postgres`
+- `WF_USE_MANAGED_IDENTITY` — `1` or `true` for Azure Entra ID token auth via IMDS (production)
 - `WF_GATEWAY_PORT` — HTTP port (default 8080)
 - `WF_GATEWAY_HOST` — HTTP.sys binding (service default `+` = all interfaces; console default `localhost`)
 

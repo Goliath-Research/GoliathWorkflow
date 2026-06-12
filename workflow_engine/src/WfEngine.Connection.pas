@@ -1,8 +1,11 @@
-unit WfEngine.Dialect;
+unit WfEngine.Connection;
 
 {
-  Database backend selection and connection helpers for dual-target deployment
-  (Azure SQL Database and PostgreSQL).
+  UniDAC connection configuration for the workflow gateway.
+
+  Resolves settings from environment variables (and optional explicit overrides).
+  Production deployments should set WF_USE_MANAGED_IDENTITY=1 for Azure Entra ID
+  token auth via the VM/ARC IMDS endpoint; local dev may use a plain connection string.
 }
 
 interface
@@ -11,22 +14,29 @@ uses
   Uni;
 
 type
-  TWorkflowBackend = (wbMssql, wbPostgres);
+  TDatabaseBackend = (dbMssql, dbPostgres);
 
-function GetWorkflowBackend: TWorkflowBackend;
+  TConnectionConfig = record
+    Backend: TDatabaseBackend;
+    ConnectionString: string;
+    SchemaName: string;
+    UseManagedIdentity: Boolean;
+    function SchemaDot: string;
+  end;
+
+function GetDatabaseBackend: TDatabaseBackend;
+function ResolveSchemaName: string;
 function WfSchema: string;
 function WfSchemaDot: string;
 function BuildConnectionStringFromEnv: string;
-function GetEntraTokenResource(const ABackend: TWorkflowBackend): string;
-procedure ConfigureUniProvider(AConn: TUniConnection; const ABackend: TWorkflowBackend);
-function TryApplyManagedIdentityToConnection(AConn: TUniConnection; out AError: string;
-  const ABackend: TWorkflowBackend): Boolean;
+function ResolveConnectionConfig(const AConnectionStringOverride: string = ''): TConnectionConfig;
+procedure ConfigureUniConnection(AConn: TUniConnection; const AConfig: TConnectionConfig);
+procedure ConnectUniDatabase(AConn: TUniConnection; const AConfig: TConnectionConfig);
 
 implementation
 
 uses
   System.SysUtils,
-  System.StrUtils,
   System.Net.HttpClient,
   System.Net.URLClient,
   System.NetEncoding,
@@ -37,27 +47,48 @@ begin
   Result := GetEnvironmentVariable(Name);
 end;
 
-function GetWorkflowBackend: TWorkflowBackend;
+function EnvFlagTrue(const Name: string): Boolean;
+var
+  V: string;
+begin
+  V := LowerCase(Trim(GetEnvVar(Name)));
+  Result := (V = '1') or (V = 'true') or (V = 'yes');
+end;
+
+function GetDatabaseBackend: TDatabaseBackend;
 var
   V: string;
 begin
   V := LowerCase(Trim(GetEnvVar('BACKEND_DB')));
   if (V = 'postgres') or (V = 'postgresql') or (V = 'pg') then
-    Result := wbPostgres
+    Result := dbPostgres
   else
-    Result := wbMssql;
+    Result := dbMssql;
 end;
 
-function WfSchema: string;
+function ResolveSchemaName: string;
 begin
   Result := Trim(GetEnvVar('WF_SCHEMA'));
   if Result = '' then
     Result := 'wf';
 end;
 
+function WfSchema: string;
+begin
+  Result := ResolveSchemaName;
+end;
+
 function WfSchemaDot: string;
 begin
-  Result := WfSchema + '.';
+  Result := ResolveSchemaName + '.';
+end;
+
+function TConnectionConfig.SchemaDot: string;
+begin
+  if SchemaName = '' then
+    Result := 'wf.'
+  else
+    Result := SchemaName + '.';
 end;
 
 function BuildConnectionStringFromEnv: string;
@@ -69,7 +100,7 @@ begin
   if MethylDb <> '' then
     Exit(MethylDb);
 
-  if GetWorkflowBackend = wbPostgres then
+  if GetDatabaseBackend = dbPostgres then
   begin
     PgHost := GetEnvVar('POSTGRES_HOST');
     if PgHost = '' then
@@ -101,25 +132,46 @@ begin
   Result := 'Provider Name=SQL Server;Data Source=localhost;Initial Catalog=MethylPipeline;Integrated Security=True';
 end;
 
-function GetEntraTokenResource(const ABackend: TWorkflowBackend): string;
+function ResolveUseManagedIdentity: Boolean;
 begin
-  if ABackend = wbPostgres then
+  Result := EnvFlagTrue('WF_USE_MANAGED_IDENTITY');
+end;
+
+function ResolveConnectionConfig(const AConnectionStringOverride: string): TConnectionConfig;
+begin
+  Result.Backend := GetDatabaseBackend;
+  Result.SchemaName := ResolveSchemaName;
+  Result.UseManagedIdentity := ResolveUseManagedIdentity;
+  if AConnectionStringOverride <> '' then
+    Result.ConnectionString := AConnectionStringOverride
+  else
+  begin
+    Result.ConnectionString := GetEnvVar('METHYLPIPELINE_DB');
+    if Result.ConnectionString = '' then
+      Result.ConnectionString := BuildConnectionStringFromEnv;
+  end;
+end;
+
+function GetEntraTokenResource(const ABackend: TDatabaseBackend): string;
+begin
+  if ABackend = dbPostgres then
     Result := 'https://ossrdbms-aad.database.windows.net'
   else
     Result := 'https://database.windows.net/';
 end;
 
-procedure ConfigureUniProvider(AConn: TUniConnection; const ABackend: TWorkflowBackend);
+procedure ConfigureUniProvider(AConn: TUniConnection; const ABackend: TDatabaseBackend;
+  const ASchemaName: string);
 begin
   if AConn = nil then
     Exit;
   case ABackend of
-    wbPostgres:
+    dbPostgres:
       begin
         AConn.ProviderName := 'PostgreSQL';
-        AConn.SpecificOptions.Values['Schema'] := WfSchema;
+        AConn.SpecificOptions.Values['Schema'] := ASchemaName;
       end;
-    wbMssql:
+    dbMssql:
       AConn.ProviderName := 'SQL Server';
   end;
 end;
@@ -185,7 +237,7 @@ begin
 end;
 
 function TryApplyManagedIdentityToConnection(AConn: TUniConnection; out AError: string;
-  const ABackend: TWorkflowBackend): Boolean;
+  const ABackend: TDatabaseBackend): Boolean;
 var
   Token: string;
   ConnStr: string;
@@ -231,6 +283,28 @@ begin
       Result := False;
     end;
   end;
+end;
+
+procedure ConfigureUniConnection(AConn: TUniConnection; const AConfig: TConnectionConfig);
+begin
+  if AConn = nil then
+    raise Exception.Create('ConfigureUniConnection: AConn is nil');
+  ConfigureUniProvider(AConn, AConfig.Backend, AConfig.SchemaName);
+  AConn.ConnectString := AConfig.ConnectionString;
+end;
+
+procedure ConnectUniDatabase(AConn: TUniConnection; const AConfig: TConnectionConfig);
+var
+  MiError: string;
+begin
+  ConfigureUniConnection(AConn, AConfig);
+  if AConfig.UseManagedIdentity then
+  begin
+    if not TryApplyManagedIdentityToConnection(AConn, MiError, AConfig.Backend) then
+      raise Exception.Create('Managed identity connection failed: ' + MiError);
+  end;
+  if not AConn.Connected then
+    AConn.Connect;
 end;
 
 end.

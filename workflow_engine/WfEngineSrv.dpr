@@ -16,7 +16,7 @@ program WfEngineSrv;
 uses
   Vcl.SvcMgr,
   System.SysUtils,
-  WfEngine.Dialect in 'src\WfEngine.Dialect.pas',
+  WfEngine.Connection in 'src\WfEngine.Connection.pas',
   WfEngine.Types in 'src\WfEngine.Types.pas',
   WfEngine.Interfaces in 'src\WfEngine.Interfaces.pas',
   WfEngine.GatewayDb in 'src\WfEngine.GatewayDb.pas',
@@ -64,6 +64,7 @@ begin
   Writeln('  BACKEND_DB         mssql | postgres (optional)');
   Writeln('  WF_GATEWAY_PORT    HTTP port (default 8080)');
   Writeln('  WF_GATEWAY_HOST    HTTP.sys host binding (service default ''+'', console ''localhost'')');
+  Writeln('  WF_USE_MANAGED_IDENTITY  1 | true for Azure Entra ID via IMDS (production)');
 end;
 
 procedure RunConsole;
@@ -75,7 +76,7 @@ begin
   Port := StrToIntDef(GetArgValue('port', ''), ResolveGatewayPort);
   // 'localhost' needs no HTTP.sys URL ACL; override with WF_GATEWAY_HOST.
   Host := ResolveGatewayHost('localhost');
-  InitGatewayHost(ResolveGatewayConnectionString);
+  InitGatewayHost(ResolveGatewayConnectionConfig);
   Server := TWfGatewayServer.Create(Port, Host);
   try
     Server.Start;
@@ -100,7 +101,7 @@ begin
   if VersionId <= 0 then
     raise Exception.Create('version=<workflow_version_id> is required.');
   Ctx := GetArgValue('context', '{}');
-  Cfg.ConnectionString := ResolveGatewayConnectionString;
+  Cfg.Connection := ResolveGatewayConnectionConfig;
   Svc := TWorkflowEngineHostedService.Create(Cfg);
   try
     InstanceId := Svc.CreateAndStartInstance(VersionId, Ctx);

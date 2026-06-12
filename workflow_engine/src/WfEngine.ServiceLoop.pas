@@ -5,13 +5,14 @@ interface
 uses
   System.SysUtils,
   Uni,
+  WfEngine.Connection,
   WfEngine.GatewayDb,
   WfEngine.Interfaces,
   WfEngine.WorkerApiAdapter;
 
 type
   TWorkflowEngineServiceConfig = record
-    ConnectionString: string;
+    Connection: TConnectionConfig;
   end;
 
   TWorkflowEngineHostedService = class
@@ -39,7 +40,7 @@ begin
   inherited Create;
   FConfig := AConfig;
   FConnection := TUniConnection.Create(nil);
-  FConnection.ConnectString := FConfig.ConnectionString;
+  ConfigureUniConnection(FConnection, FConfig.Connection);
   FWorkerApi := TWorkflowWorkerApi.Create(FConnection);
 end;
 
@@ -52,8 +53,7 @@ end;
 
 procedure TWorkflowEngineHostedService.EnsureConnected;
 begin
-  if not FConnection.Connected then
-    FConnection.Connect;
+  ConnectUniDatabase(FConnection, FConfig.Connection);
 end;
 
 procedure TWorkflowEngineHostedService.StartInstance(const AWorkflowInstanceId: Int64);
