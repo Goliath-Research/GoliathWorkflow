@@ -1,10 +1,10 @@
 unit RemoteSchemaCatalog;
 
-{
-  Fetches workflow action JSON Schemas from the MethylPipeline REST gateway
-  (GET /v1/actions, GET /v1/actions/{name}/schema) and merges them into
-  TSchemaCatalog as remote:// entries for the schema dropdown.
-}
+//{
+//  Fetches workflow action JSON Schemas from the MethylPipeline REST gateway
+//  (GET /v1/actions, GET /v1/actions/{name}/schema) and merges them into
+//  TSchemaCatalog as remote:// entries for the schema dropdown.
+//}
 
 interface
 
@@ -44,7 +44,6 @@ var
   Resp: IHTTPResponse;
   Url, DisplayName, VirtualPath, SchemaText: string;
   Root, SchemaVal: TJSONValue;
-  SchemaObj: TJSONObject;
 begin
   Http := THTTPClient(Client);
   Url := Format('%s/actions/%s/schema?direction=%s',
@@ -84,7 +83,7 @@ var
   HasInput, HasOutput: Boolean;
   Normalized: string;
 begin
-  if (ACatalog = nil) or Trim(BaseUrl) = '' then
+  if (ACatalog = nil) or (Trim(BaseUrl) = '') then
     Exit;
   Normalized := NormalizeBaseUrl(BaseUrl);
   Http := THTTPClient.Create;
