@@ -297,14 +297,15 @@ procedure ConnectUniDatabase(AConn: TUniConnection; const AConfig: TConnectionCo
 var
   MiError: string;
 begin
+  if (AConn <> nil) and AConn.Connected then
+    Exit;
   ConfigureUniConnection(AConn, AConfig);
   if AConfig.UseManagedIdentity then
   begin
     if not TryApplyManagedIdentityToConnection(AConn, MiError, AConfig.Backend) then
       raise Exception.Create('Managed identity connection failed: ' + MiError);
   end;
-  if not AConn.Connected then
-    AConn.Connect;
+  AConn.Connect;
 end;
 
 end.

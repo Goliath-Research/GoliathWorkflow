@@ -53,7 +53,8 @@ end;
 
 procedure TWorkflowEngineHostedService.EnsureConnected;
 begin
-  ConnectUniDatabase(FConnection, FConfig.Connection);
+  if not FConnection.Connected then
+    ConnectUniDatabase(FConnection, FConfig.Connection);
 end;
 
 procedure TWorkflowEngineHostedService.StartInstance(const AWorkflowInstanceId: Int64);
