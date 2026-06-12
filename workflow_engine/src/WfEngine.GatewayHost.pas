@@ -1,23 +1,21 @@
 unit WfEngine.GatewayHost;
 
 {
-  Process-wide gateway state shared by the Windows service host and the
-  DMVC controller (WfEngine.Mvc.Controller).
+  Process-wide gateway state shared by the Windows service host and DMVC controllers.
 
-  Owns the single UniDAC-backed TWorkflowEngineHostedService and the
-  TRestApiService contract dispatcher. DMVC serves requests from a thread
-  pool, while the gateway uses one shared DB connection, so dispatch is
-  serialized with a critical section.
+  Owns the single UniDAC-backed TWorkflowEngineHostedService and IGatewayService.
+  DMVC serves requests from a thread pool; the gateway service serializes DB access.
 }
 
 interface
 
+uses
+  WfEngine.GatewayService;
+
 procedure InitGatewayHost(const AConnectionString: string);
 procedure ShutdownGatewayHost;
 function GatewayHostInitialized: Boolean;
-
-function HandleGatewayRequest(const AMethod, APath, AQuery, ABody: string;
-  out AStatus: Integer): string;
+function GetGatewayService: IGatewayService;
 
 function ResolveGatewayConnectionString: string;
 function ResolveGatewayPort(const ADefault: Integer = 8080): Integer;
@@ -28,13 +26,12 @@ uses
   System.SysUtils,
   System.SyncObjs,
   WfEngine.Dialect,
-  WfEngine.RestApi,
   WfEngine.ServiceLoop;
 
 var
   GLock: TCriticalSection;
   GSvc: TWorkflowEngineHostedService;
-  GApi: TRestApiService;
+  GGateway: IGatewayService;
 
 function ResolveGatewayConnectionString: string;
 begin
@@ -61,7 +58,7 @@ begin
       Exit;
     Cfg.ConnectionString := AConnectionString;
     GSvc := TWorkflowEngineHostedService.Create(Cfg);
-    GApi := TRestApiService.Create(GSvc);
+    GGateway := TGatewayService.Create(GSvc, GLock);
   finally
     GLock.Release;
   end;
@@ -71,7 +68,7 @@ procedure ShutdownGatewayHost;
 begin
   GLock.Acquire;
   try
-    FreeAndNil(GApi);
+    GGateway := nil;
     FreeAndNil(GSvc);
   finally
     GLock.Release;
@@ -88,17 +85,13 @@ begin
   end;
 end;
 
-function HandleGatewayRequest(const AMethod, APath, AQuery, ABody: string;
-  out AStatus: Integer): string;
+function GetGatewayService: IGatewayService;
 begin
   GLock.Acquire;
   try
-    if GApi = nil then
-    begin
-      AStatus := 503;
-      Exit('{"error":"gateway not initialized"}');
-    end;
-    Result := GApi.Handle(AMethod, APath, AQuery, ABody, AStatus);
+    if GGateway = nil then
+      raise Exception.Create('Gateway not initialized');
+    Result := GGateway;
   finally
     GLock.Release;
   end;

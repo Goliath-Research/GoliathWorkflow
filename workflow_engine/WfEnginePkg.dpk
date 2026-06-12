@@ -40,7 +40,8 @@ contains
   WfEngine.GatewayDb in 'src\WfEngine.GatewayDb.pas',
   WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
   WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
-  WfEngine.RestApi in 'src\WfEngine.RestApi.pas',
+  WfEngine.GatewayDtos in 'src\WfEngine.GatewayDtos.pas',
+  WfEngine.GatewayService in 'src\WfEngine.GatewayService.pas',
   WfEngine in 'src\WfEngine.pas';
 
 end.

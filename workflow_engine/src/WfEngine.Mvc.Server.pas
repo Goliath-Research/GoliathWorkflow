@@ -4,15 +4,7 @@ unit WfEngine.Mvc.Server;
   Engine-first DMVC server construction for the workflow gateway.
 
   Uses the pluggable IMVCServer backend (DMVC 3.5+) with the HTTP.sys
-  kernel-mode driver (TMVCServerFactory.CreateHttpSys) instead of the
-  Indy WebBroker bridge. No TWebModule is involved: the TMVCEngine is
-  created standalone and bound directly to the server.
-
-  HTTP.sys URL ACL notes:
-  - host 'localhost' usually needs no privileges (development).
-  - host '+' (all interfaces) requires admin/SYSTEM rights or an explicit
-    reservation: netsh http add urlacl url=http://+:PORT/ user=<account>.
-    The MethylWfGateway service running as LocalSystem has these rights.
+  kernel-mode driver (TMVCServerFactory.CreateHttpSys).
 }
 
 interface
@@ -45,8 +37,13 @@ implementation
 
 uses
   MVCFramework.Commons,
+  MVCFramework.Container,
   MVCFramework.Server.Factory,
-  WfEngine.Mvc.Controller;
+  WfEngine.GatewayHost,
+  WfEngine.GatewayService,
+  WfEngine.Mvc.ActionsController,
+  WfEngine.Mvc.WorkersController,
+  WfEngine.Mvc.WorkflowsController;
 
 function ResolveGatewayHost(const ADefault: string): string;
 begin
@@ -62,6 +59,9 @@ begin
   inherited Create;
   FPort := APort;
   FHost := AHost;
+  if not GatewayHostInitialized then
+    raise Exception.Create('Gateway host must be initialized before starting HTTP server.');
+
   FEngine := TMVCEngine.Create(nil,
     procedure(Config: TMVCConfig)
     begin
@@ -69,7 +69,11 @@ begin
       Config[TMVCConfigKey.DefaultContentCharset] := TMVCCharSet.UTF_8;
       Config[TMVCConfigKey.LoadSystemControllers] := 'false';
     end);
-  FEngine.AddController(TWfGatewayController);
+
+  GlobalContainer.RegisterInstance<IGatewayService>(GetGatewayService);
+  FEngine.AddController(TWorkersController);
+  FEngine.AddController(TWorkflowsController);
+  FEngine.AddController(TActionsController);
   FServer := TMVCServerFactory.CreateHttpSys(FEngine);
 end;
 

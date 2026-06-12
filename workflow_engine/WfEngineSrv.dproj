@@ -188,9 +188,12 @@
         <DCCReference Include="src\WfEngine.Types.pas"/>
         <DCCReference Include="src\WfEngine.Interfaces.pas"/>
         <DCCReference Include="src\WfEngine.WorkerApiAdapter.pas"/>
-        <DCCReference Include="src\WfEngine.RestApi.pas"/>
+        <DCCReference Include="src\WfEngine.GatewayDtos.pas"/>
+        <DCCReference Include="src\WfEngine.GatewayService.pas"/>
         <DCCReference Include="src\WfEngine.GatewayHost.pas"/>
-        <DCCReference Include="src\WfEngine.Mvc.Controller.pas"/>
+        <DCCReference Include="src\WfEngine.Mvc.WorkersController.pas"/>
+        <DCCReference Include="src\WfEngine.Mvc.WorkflowsController.pas"/>
+        <DCCReference Include="src\WfEngine.Mvc.ActionsController.pas"/>
         <DCCReference Include="src\WfEngine.Mvc.Server.pas"/>
         <DCCReference Include="src\WfEngine.Mvc.Service.pas">
             <Form>MethylWfGateway</Form>

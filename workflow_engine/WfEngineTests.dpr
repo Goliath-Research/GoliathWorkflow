@@ -5,12 +5,15 @@ program WfEngineTests;
 
 uses
   System.SysUtils,
+  WfEngine.GatewayService.Tests in 'tests\WfEngine.GatewayService.Tests.pas',
   WfEngine.Integration.Tests in 'tests\WfEngine.Integration.Tests.pas';
 
 begin
   try
-    Writeln('WfEngine integration tests');
+    Writeln('WfEngine tests');
     Writeln('METHYLPIPELINE_DB = ', GetEnvironmentVariable('METHYLPIPELINE_DB'));
+    Writeln;
+    RunGatewayServiceTests;
     Writeln;
     RunAllIntegrationTests;
     Writeln;

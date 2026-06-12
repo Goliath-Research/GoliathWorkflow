@@ -22,9 +22,14 @@ uses
   WfEngine.GatewayDb in 'src\WfEngine.GatewayDb.pas',
   WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
   WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
-  WfEngine.RestApi in 'src\WfEngine.RestApi.pas',
+  WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
+  WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
+  WfEngine.GatewayDtos in 'src\WfEngine.GatewayDtos.pas',
+  WfEngine.GatewayService in 'src\WfEngine.GatewayService.pas',
   WfEngine.GatewayHost in 'src\WfEngine.GatewayHost.pas',
-  WfEngine.Mvc.Controller in 'src\WfEngine.Mvc.Controller.pas',
+  WfEngine.Mvc.WorkersController in 'src\WfEngine.Mvc.WorkersController.pas',
+  WfEngine.Mvc.WorkflowsController in 'src\WfEngine.Mvc.WorkflowsController.pas',
+  WfEngine.Mvc.ActionsController in 'src\WfEngine.Mvc.ActionsController.pas',
   WfEngine.Mvc.Server in 'src\WfEngine.Mvc.Server.pas',
   WfEngine.Mvc.Service in 'src\WfEngine.Mvc.Service.pas' {MethylWfGateway: TService};
 

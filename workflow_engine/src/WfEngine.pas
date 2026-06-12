@@ -11,8 +11,9 @@ interface
 uses
   WfEngine.Dialect,
   WfEngine.GatewayDb,
+  WfEngine.GatewayDtos,
+  WfEngine.GatewayService,
   WfEngine.Interfaces,
-  WfEngine.RestApi,
   WfEngine.ServiceLoop,
   WfEngine.Types,
   WfEngine.WorkerApiAdapter;

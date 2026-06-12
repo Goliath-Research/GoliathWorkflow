@@ -13,16 +13,35 @@ It uses DMVC's pluggable server backend (`IMVCServer`) with the **HTTP.sys** dri
 | Unit | Role |
 |------|------|
 | `WfEngine.Mvc.Service.pas` (`TMethylWfGatewayService`) | Windows service; SCM start/pause/continue/stop |
-| `WfEngine.Mvc.Server.pas` (`TWfGatewayServer`) | Standalone `TMVCEngine` + HTTP.sys `IMVCServer` |
-| `WfEngine.Mvc.Controller.pas` (`TWfGatewayController`) | DMVC routes (`MVCPath` per `contracts/openapi.yaml`) |
-| `WfEngine.GatewayHost.pas` | Shared gateway state; serializes dispatch onto one DB connection |
-| `WfEngine.RestApi.pas` | Contract dispatcher (method + path + query + body → SQL procs) |
+| `WfEngine.Mvc.Server.pas` (`TWfGatewayServer`) | Standalone `TMVCEngine` + HTTP.sys `IMVCServer`; registers `IGatewayService` for DI |
+| `WfEngine.Mvc.WorkersController.pas` | DMVC worker routes (`MVCFromBody`, `IMVCResponse`) |
+| `WfEngine.Mvc.WorkflowsController.pas` | DMVC workflow admin routes |
+| `WfEngine.Mvc.ActionsController.pas` | DMVC action schema catalog routes |
+| `WfEngine.GatewayHost.pas` | Shared `TWorkflowEngineHostedService` + `IGatewayService` lifecycle |
+| `WfEngine.GatewayService.pas` | One method per OpenAPI operation; thread-safe SQL facade |
+| `WfEngine.GatewayDtos.pas` | Request/response DTOs aligned with `contracts/openapi.yaml` |
 | `WfEngine.ServiceLoop.pas` (`TWorkflowEngineHostedService`) | UniDAC connection lifecycle |
 | `WfEngine.GatewayDb.pas` | `wf_repo_create_workflow_instance`, `sp_start_workflow_instance` |
 | `WfEngine.WorkerApiAdapter.pas` | `wf_worker_authenticate`, `sp_worker_*` |
 | `WfEngine.Dialect.pas` | Azure SQL / PostgreSQL backend selection |
 
-`WfEnginePkg` (runtime package) contains only the SQL gateway core; the DMVC/service units belong to the `WfEngineSrv` executable, which requires the DMVC sources on the project search path.
+`WfEnginePkg` (runtime package) contains the SQL gateway core and DTOs/service types; DMVC controller and service host units belong to the `WfEngineSrv` executable, which requires DMVC ≥ 3.5 on the project search path.
+
+## DMVC request flow
+
+```mermaid
+flowchart LR
+  HTTP[HTTP.sys]
+  DMVC[DMVC router]
+  Ctrl[Resource controller]
+  Svc[IGatewayService]
+  SQL[wf SQL procs]
+  HTTP --> DMVC --> Ctrl --> Svc --> SQL
+```
+
+Each controller action is the real handler: path segments bind to Delphi parameters (`NodeExecutionId`, `InstanceId`, …), bodies bind via `[MVCFromBody]`, and responses use `OKResponse` / `CreatedResponse` / `NoContentResponse` / `NotFoundResponse` on typed DTOs. There is no secondary string router.
+
+Controllers receive `IGatewayService` via `[MVCInject]`; `TWfGatewayServer` registers the singleton instance from `GetGatewayService()` after `InitGatewayHost`.
 
 ## End-to-end lifecycle
 

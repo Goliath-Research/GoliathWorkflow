@@ -182,6 +182,7 @@
         <DelphiCompile Include="$(MainSource)">
             <MainSource>MainSource</MainSource>
         </DelphiCompile>
+        <DCCReference Include="tests\WfEngine.GatewayService.Tests.pas"/>
         <DCCReference Include="tests\WfEngine.Integration.Tests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
