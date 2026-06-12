@@ -1,15 +1,15 @@
 program WfEngineSrv;
 
-{
-  MethylPipeline workflow REST gateway (DelphiMVCFramework, HTTP.sys backend).
-
-  Default mode: Windows service (MethylWfGateway). Supports the standard
-  VCL service switches (/install, /uninstall) and SCM start/pause/continue/stop.
-
-  Development modes:
-    WfEngineSrv /console [port=8080]
-    WfEngineSrv /startinstance version=<id> [context={}]
-}
+//{
+//  MethylPipeline workflow REST gateway (DelphiMVCFramework, HTTP.sys backend).
+//
+//  Default mode: Windows service (MethylWfGateway). Supports the standard
+//  VCL service switches (/install, /uninstall) and SCM start/pause/continue/stop.
+//
+//  Development modes:
+//    WfEngineSrv /console [port=8080]
+//    WfEngineSrv /startinstance version=<id> [context={}]
+//}
 
 {$APPTYPE CONSOLE}
 

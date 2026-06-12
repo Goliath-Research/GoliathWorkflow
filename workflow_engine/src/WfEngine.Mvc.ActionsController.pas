@@ -18,8 +18,7 @@ type
   private
     FGateway: IGatewayService;
   public
-    [MVCInject]
-    constructor Create(const Gateway: IGatewayService); reintroduce;
+    constructor Create; override;
 
     [MVCPath('/actions')]
     [MVCHTTPMethod([httpGET])]
@@ -34,14 +33,15 @@ type
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  WfEngine.GatewayHost;
 
 { TActionsController }
 
-constructor TActionsController.Create(const Gateway: IGatewayService);
+constructor TActionsController.Create;
 begin
   inherited Create;
-  FGateway := Gateway;
+  FGateway := GetGatewayService;
 end;
 
 function TActionsController.ListActions: IMVCResponse;

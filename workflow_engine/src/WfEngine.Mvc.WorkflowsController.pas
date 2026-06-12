@@ -14,8 +14,7 @@ type
   private
     FGateway: IGatewayService;
   public
-    [MVCInject]
-    constructor Create(const Gateway: IGatewayService); reintroduce;
+    constructor Create; override;
 
     [MVCPath('/instances')]
     [MVCHTTPMethod([httpPOST])]
@@ -37,10 +36,13 @@ type
 
 implementation
 
-constructor TWorkflowsController.Create(const Gateway: IGatewayService);
+uses
+  WfEngine.GatewayHost;
+
+constructor TWorkflowsController.Create;
 begin
   inherited Create;
-  FGateway := Gateway;
+  FGateway := GetGatewayService;
 end;
 
 function TWorkflowsController.CreateInstance(Body: TCreateInstanceRequest): IMVCResponse;

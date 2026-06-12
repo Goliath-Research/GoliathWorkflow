@@ -37,10 +37,8 @@ implementation
 
 uses
   MVCFramework.Commons,
-  MVCFramework.Container,
   MVCFramework.Server.Factory,
   WfEngine.GatewayHost,
-  WfEngine.GatewayService,
   WfEngine.Mvc.ActionsController,
   WfEngine.Mvc.WorkersController,
   WfEngine.Mvc.WorkflowsController;
@@ -70,7 +68,6 @@ begin
       Config[TMVCConfigKey.LoadSystemControllers] := 'false';
     end);
 
-  GlobalContainer.RegisterInstance<IGatewayService>(GetGatewayService);
   FEngine.AddController(TWorkersController);
   FEngine.AddController(TWorkflowsController);
   FEngine.AddController(TActionsController);

@@ -3,6 +3,7 @@ unit WfEngine.Mvc.WorkersController;
 interface
 
 uses
+  System.JSON,
   MVCFramework,
   MVCFramework.Commons,
   WfEngine.GatewayDtos,
@@ -14,8 +15,7 @@ type
   private
     FGateway: IGatewayService;
   public
-    [MVCInject]
-    constructor Create(const Gateway: IGatewayService); reintroduce;
+    constructor Create; override;
 
     [MVCPath('/authenticate')]
     [MVCHTTPMethod([httpPOST])]
@@ -43,10 +43,13 @@ type
 
 implementation
 
-constructor TWorkersController.Create(const Gateway: IGatewayService);
+uses
+  WfEngine.GatewayHost;
+
+constructor TWorkersController.Create;
 begin
   inherited Create;
-  FGateway := Gateway;
+  FGateway := GetGatewayService;
 end;
 
 function TWorkersController.Authenticate(Body: TWorkerAuthRequest): IMVCResponse;

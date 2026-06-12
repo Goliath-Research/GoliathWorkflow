@@ -135,7 +135,6 @@ var
   JsonObj: TJSONObject;
   EncRes: string;
 begin
-  Result := False;
   AToken := '';
   AError := '';
   try
@@ -194,7 +193,6 @@ var
   AtPos, SemPos: Integer;
   Resource: string;
 begin
-  Result := False;
   AError := '';
   if AConn = nil then
   begin
