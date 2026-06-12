@@ -22,8 +22,6 @@ uses
   WfEngine.GatewayDb in 'src\WfEngine.GatewayDb.pas',
   WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
   WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
-  WfEngine.WorkerApiAdapter in 'src\WfEngine.WorkerApiAdapter.pas',
-  WfEngine.ServiceLoop in 'src\WfEngine.ServiceLoop.pas',
   WfEngine.GatewayDtos in 'src\WfEngine.GatewayDtos.pas',
   WfEngine.GatewayService in 'src\WfEngine.GatewayService.pas',
   WfEngine.GatewayHost in 'src\WfEngine.GatewayHost.pas',

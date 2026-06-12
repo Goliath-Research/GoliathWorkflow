@@ -87,7 +87,6 @@ function TGatewayService.InstanceSummary(const AInstanceId: Int64): TWorkflowIns
 var
   Q: TUniQuery;
 begin
-  Result := TWorkflowInstanceSummary.Create;
   Q := TUniQuery.Create(nil);
   try
     Q.Connection := FSvc.Connection;
@@ -98,6 +97,7 @@ begin
     Q.Open;
     if Q.Eof then
       raise Exception.CreateFmt('Instance %d not found.', [AInstanceId]);
+    Result := TWorkflowInstanceSummary.Create;
     Result.id := Q.FieldByName('id').AsLargeInt;
     Result.workflow_version_id := Q.FieldByName('workflow_version_id').AsLargeInt;
     Result.status := Q.FieldByName('status').AsString;
