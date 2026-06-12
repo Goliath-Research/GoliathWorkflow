@@ -3,6 +3,7 @@ unit WfEngine.GatewayService;
 {
   OpenAPI operation facade for the workflow REST gateway.
   One method per route; no HTTP path matching. Thread-safe via external lock.
+  All database access goes through WfEngine.GatewayDb (stored procedures only).
 }
 
 interface
@@ -62,10 +63,8 @@ type
 implementation
 
 uses
-  Data.DB,
   System.JSON,
-  Uni,
-  WfEngine.Dialect;
+  WfEngine.GatewayDb;
 
 { TGatewayService }
 
@@ -85,44 +84,23 @@ end;
 
 function TGatewayService.InstanceSummary(const AInstanceId: Int64): TWorkflowInstanceSummary;
 var
-  Q: TUniQuery;
+  Row: TGatewayInstanceRow;
 begin
-  Q := TUniQuery.Create(nil);
-  try
-    Q.Connection := FSvc.Connection;
-    Q.SQL.Text := Format(
-      'SELECT id, workflow_version_id, status FROM %sworkflow_instance WHERE id = :id',
-      [WfSchemaDot]);
-    Q.ParamByName('id').AsLargeInt := AInstanceId;
-    Q.Open;
-    if Q.Eof then
-      raise Exception.CreateFmt('Instance %d not found.', [AInstanceId]);
-    Result := TWorkflowInstanceSummary.Create;
-    Result.id := Q.FieldByName('id').AsLargeInt;
-    Result.workflow_version_id := Q.FieldByName('workflow_version_id').AsLargeInt;
-    Result.status := Q.FieldByName('status').AsString;
-  finally
-    Q.Free;
-  end;
+  Row := GatewayGetWorkflowInstance(FSvc.Connection, AInstanceId);
+  if not Row.Found then
+    raise Exception.CreateFmt('Instance %d not found.', [AInstanceId]);
+  Result := TWorkflowInstanceSummary.Create;
+  Result.id := Row.Id;
+  Result.workflow_version_id := Row.WorkflowVersionId;
+  Result.status := Row.Status;
 end;
 
 procedure TGatewayService.WorkerAuthenticate(const ARequest: TWorkerAuthRequest);
-var
-  P: TUniStoredProc;
 begin
   FLock.Acquire;
   try
     EnsureConnected;
-    P := TUniStoredProc.Create(nil);
-    try
-      P.Connection := FSvc.Connection;
-      P.StoredProcName := WfSchemaDot + 'wf_worker_authenticate';
-      P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := ARequest.worker_id;
-      P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := ARequest.worker_token;
-      P.ExecProc;
-    finally
-      P.Free;
-    end;
+    GatewayWorkerAuthenticate(FSvc.Connection, ARequest.worker_id, ARequest.worker_token);
   finally
     FLock.Release;
   end;
@@ -265,54 +243,15 @@ end;
 function TGatewayService.DeleteDefinition(const AWorkflowName: string;
   ADeleteInstances: Boolean): TDeleteDefinitionResponse;
 var
-  P: TUniStoredProc;
-  Q: TUniQuery;
+  Row: TGatewayDeleteDefRow;
 begin
   FLock.Acquire;
   try
     EnsureConnected;
+    Row := GatewayDeleteWorkflowDefinition(FSvc.Connection, AWorkflowName, ADeleteInstances);
     Result := TDeleteDefinitionResponse.Create;
-    Result.deleted_instance_count := 0;
-    Result.deleted_version_count := 0;
-    if GetWorkflowBackend = wbPostgres then
-    begin
-      Q := TUniQuery.Create(nil);
-      try
-        Q.Connection := FSvc.Connection;
-        Q.SQL.Text := Format(
-          'SELECT deleted_instance_count, deleted_version_count FROM %ssp_delete_workflow_def(NULL, :name, :del)',
-          [WfSchemaDot]);
-        Q.ParamByName('name').AsString := AWorkflowName;
-        Q.ParamByName('del').AsBoolean := ADeleteInstances;
-        Q.Open;
-        if not Q.Eof then
-        begin
-          Result.deleted_instance_count := Q.FieldByName('deleted_instance_count').AsInteger;
-          Result.deleted_version_count := Q.FieldByName('deleted_version_count').AsInteger;
-        end;
-      finally
-        Q.Free;
-      end;
-    end
-    else
-    begin
-      P := TUniStoredProc.Create(nil);
-      try
-        P.Connection := FSvc.Connection;
-        P.StoredProcName := WfSchemaDot + 'sp_delete_workflow_def';
-        P.Params.CreateParam(ftLargeint, 'workflow_def_id', ptInput).Clear;
-        P.Params.CreateParam(ftWideString, 'workflow_name', ptInput).AsString := AWorkflowName;
-        P.Params.CreateParam(ftBoolean, 'delete_instances', ptInput).AsBoolean := ADeleteInstances;
-        P.Open;
-        if not P.Eof then
-        begin
-          Result.deleted_instance_count := P.FieldByName('deleted_instance_count').AsInteger;
-          Result.deleted_version_count := P.FieldByName('deleted_version_count').AsInteger;
-        end;
-      finally
-        P.Free;
-      end;
-    end;
+    Result.deleted_instance_count := Row.DeletedInstanceCount;
+    Result.deleted_version_count := Row.DeletedVersionCount;
   finally
     FLock.Release;
   end;
@@ -320,7 +259,7 @@ end;
 
 function TGatewayService.ListActions: TActionListResponse;
 var
-  Q: TUniQuery;
+  Rows: TArray<TGatewayActionRow>;
   Item: TActionSummary;
   Items: TArray<TActionSummary>;
   I: Integer;
@@ -328,32 +267,19 @@ begin
   FLock.Acquire;
   try
     EnsureConnected;
+    Rows := GatewayListActions(FSvc.Connection);
     Result := TActionListResponse.Create;
-    Q := TUniQuery.Create(nil);
-    try
-      Q.Connection := FSvc.Connection;
-      Q.SQL.Text := Format('SELECT * FROM %swf_repo_list_actions()', [WfSchemaDot]);
-      Q.Open;
-      SetLength(Items, 0);
-      while not Q.Eof do
-      begin
-        Item := TActionSummary.Create;
-        Item.action_name := Q.FieldByName('action_name').AsString;
-        if Q.FieldByName('capability').IsNull then
-          Item.capability := ''
-        else
-          Item.capability := Q.FieldByName('capability').AsString;
-        Item.has_input_schema := Q.FieldByName('has_input_schema').AsBoolean;
-        Item.has_output_schema := Q.FieldByName('has_output_schema').AsBoolean;
-        I := Length(Items);
-        SetLength(Items, I + 1);
-        Items[I] := Item;
-        Q.Next;
-      end;
-      Result.actions := Items;
-    finally
-      Q.Free;
+    SetLength(Items, Length(Rows));
+    for I := 0 to High(Rows) do
+    begin
+      Item := TActionSummary.Create;
+      Item.action_name := Rows[I].ActionName;
+      Item.capability := Rows[I].Capability;
+      Item.has_input_schema := Rows[I].HasInputSchema;
+      Item.has_output_schema := Rows[I].HasOutputSchema;
+      Items[I] := Item;
     end;
+    Result.actions := Items;
   finally
     FLock.Release;
   end;
@@ -361,8 +287,7 @@ end;
 
 function TGatewayService.GetActionSchema(const AActionName, ADirection: string): TActionSchemaResponse;
 var
-  Q: TUniQuery;
-  SchemaText: string;
+  Row: TGatewayActionSchemaRow;
   SchemaVal: TJSONValue;
 begin
   if not SameText(ADirection, 'input') and not SameText(ADirection, 'output') then
@@ -371,33 +296,18 @@ begin
   FLock.Acquire;
   try
     EnsureConnected;
-    Q := TUniQuery.Create(nil);
-    try
-      Q.Connection := FSvc.Connection;
-      Q.SQL.Text := Format(
-        'SELECT action_name, direction, schema_id, schema_json FROM %swf_repo_get_action_schema(:name, :dir)',
-        [WfSchemaDot]);
-      Q.ParamByName('name').AsString := AActionName;
-      Q.ParamByName('dir').AsString := ADirection;
-      Q.Open;
-      if Q.Eof then
-        raise EActionSchemaNotFound.CreateFmt('schema not found for %s (%s)', [AActionName, ADirection]);
+    Row := GatewayGetActionSchema(FSvc.Connection, AActionName, ADirection);
+    if not Row.Found then
+      raise EActionSchemaNotFound.CreateFmt('schema not found for %s (%s)', [AActionName, ADirection]);
 
-      Result := TActionSchemaResponse.Create;
-      Result.action_name := Q.FieldByName('action_name').AsString;
-      Result.direction := Q.FieldByName('direction').AsString;
-      if Q.FieldByName('schema_id').IsNull then
-        Result.schema_id := ''
-      else
-        Result.schema_id := Q.FieldByName('schema_id').AsString;
-      SchemaText := Q.FieldByName('schema_json').AsString;
-      SchemaVal := TJSONObject.ParseJSONValue(SchemaText);
-      if SchemaVal = nil then
-        SchemaVal := TJSONObject.Create;
-      Result.schema_json := SchemaVal;
-    finally
-      Q.Free;
-    end;
+    Result := TActionSchemaResponse.Create;
+    Result.action_name := Row.ActionName;
+    Result.direction := Row.Direction;
+    Result.schema_id := Row.SchemaId;
+    SchemaVal := TJSONObject.ParseJSONValue(Row.SchemaJson);
+    if SchemaVal = nil then
+      SchemaVal := TJSONObject.Create;
+    Result.schema_json := SchemaVal;
   finally
     FLock.Release;
   end;

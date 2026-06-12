@@ -126,6 +126,20 @@ AS $$
   LIMIT p_max_count;
 $$;
 
+CREATE OR REPLACE FUNCTION wf.wf_repo_get_workflow_instance(p_instance_id bigint)
+RETURNS TABLE (
+  id bigint,
+  workflow_version_id bigint,
+  status text
+)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT wi.id, wi.workflow_version_id, wi.status
+  FROM wf.workflow_instance wi
+  WHERE wi.id = p_instance_id;
+$$;
+
 CREATE OR REPLACE FUNCTION wf.wf_repo_try_latest_task_result_code(
   p_instance_id bigint,
   p_node_key text

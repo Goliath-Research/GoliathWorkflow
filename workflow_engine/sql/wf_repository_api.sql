@@ -116,6 +116,17 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE wf.wf_repo_get_workflow_instance
+    @instance_id BIGINT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT id, workflow_version_id, status
+    FROM wf.workflow_instance
+    WHERE id = @instance_id;
+END;
+GO
+
 CREATE OR ALTER FUNCTION wf.wf_repo_try_latest_task_result_code(
     @instance_id BIGINT,
     @node_key NVARCHAR(128)

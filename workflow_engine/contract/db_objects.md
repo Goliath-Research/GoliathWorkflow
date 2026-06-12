@@ -79,6 +79,8 @@ Dialect-neutral wrappers used by the REST gateway — see `db_objects.yaml` `rep
 | `wf.wf_repo_upsert_action_schema` | Upsert input/output JSON Schema for a workflow action |
 | `wf.wf_repo_get_action_schema` | Fetch one schema document by action name + direction |
 | `wf.wf_repo_list_actions` | List actions with schema availability flags |
+| `wf.wf_repo_get_workflow_instance` | Fetch instance id, version, and status by instance id |
+| `wf.wf_repo_create_workflow_instance` | Insert instance row; returns `id` |
 
 Action schemas are generated from worker Pydantic models (`methyl-export-task-schemas` → `schemas/tasks/`) and seeded via [`../sql/seed_action_schemas.py`](../sql/seed_action_schemas.py). Runtime validation is enforced in workers, not SQL.
 

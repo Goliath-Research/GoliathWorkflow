@@ -12,6 +12,7 @@ uses
   Data.DB,
   Uni,
   WfEngine.Dialect,
+  WfEngine.GatewayDb,
   WfEngine.Interfaces,
   WfEngine.Types;
 
@@ -45,19 +46,8 @@ begin
 end;
 
 procedure TWorkflowWorkerApi.AuthenticateProc(AWorkerId: Int64; const AWorkerToken: string);
-var
-  P: TUniStoredProc;
 begin
-  P := TUniStoredProc.Create(nil);
-  try
-    P.Connection := FConnection;
-    P.StoredProcName := WfSchemaDot + 'wf_worker_authenticate';
-    P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
-    P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;
-    P.ExecProc;
-  finally
-    P.Free;
-  end;
+  GatewayWorkerAuthenticate(FConnection, AWorkerId, AWorkerToken);
 end;
 
 function TWorkflowWorkerApi.CallRequestTask(AWorkerId: Int64; const AWorkerToken,
@@ -103,64 +93,10 @@ end;
 
 function TWorkflowWorkerApi.SubmitResult(const ANodeExecutionId, AWorkerId: Int64;
   const AWorkerToken: string; AResultCode: Integer; const AOutputJson: string): TSubmitResultAck;
-var
-  P: TUniStoredProc;
-  Q: TUniQuery;
 begin
-  FillChar(Result, SizeOf(Result), 0);
   AuthenticateProc(AWorkerId, AWorkerToken);
-
-  if GetWorkflowBackend = wbPostgres then
-  begin
-    Q := TUniQuery.Create(nil);
-    try
-      Q.Connection := FConnection;
-      Q.SQL.Text := Format(
-        'SELECT accepted, instance_status, next_ready_count FROM %ssp_worker_submit_result(:ne, :wid, :tok, :rc, CAST(:out AS jsonb))',
-        [WfSchemaDot]);
-      Q.ParamByName('ne').AsLargeInt := ANodeExecutionId;
-      Q.ParamByName('wid').AsLargeInt := AWorkerId;
-      Q.ParamByName('tok').AsString := AWorkerToken;
-      Q.ParamByName('rc').AsInteger := AResultCode;
-      if AOutputJson = '' then
-        Q.ParamByName('out').Clear
-      else
-        Q.ParamByName('out').AsString := AOutputJson;
-      Q.Open;
-      if not Q.Eof then
-      begin
-        Result.Accepted := Q.FieldByName('accepted').AsBoolean;
-        Result.InstanceStatus := TWorkflowInstanceStatus.FromDb(Q.FieldByName('instance_status').AsString);
-        Result.NextReadyCount := Q.FieldByName('next_ready_count').AsInteger;
-      end;
-    finally
-      Q.Free;
-    end;
-    Exit;
-  end;
-
-  P := TUniStoredProc.Create(nil);
-  try
-    P.Connection := FConnection;
-    P.StoredProcName := WfSchemaDot + 'sp_worker_submit_result';
-    P.Params.CreateParam(ftLargeint, 'node_execution_id', ptInput).AsLargeInt := ANodeExecutionId;
-    P.Params.CreateParam(ftLargeint, 'worker_id', ptInput).AsLargeInt := AWorkerId;
-    P.Params.CreateParam(ftWideString, 'worker_token', ptInput).AsString := AWorkerToken;
-    P.Params.CreateParam(ftInteger, 'result_code', ptInput).AsInteger := AResultCode;
-    if AOutputJson = '' then
-      P.Params.CreateParam(ftWideMemo, 'output_json', ptInput).Clear
-    else
-      P.Params.CreateParam(ftWideMemo, 'output_json', ptInput).AsString := AOutputJson;
-    P.Open;
-    if not P.Eof then
-    begin
-      Result.Accepted := P.FieldByName('accepted').AsBoolean;
-      Result.InstanceStatus := TWorkflowInstanceStatus.FromDb(P.FieldByName('instance_status').AsString);
-      Result.NextReadyCount := P.FieldByName('next_ready_count').AsInteger;
-    end;
-  finally
-    P.Free;
-  end;
+  Result := GatewayWorkerSubmitResult(FConnection, ANodeExecutionId, AWorkerId,
+    AWorkerToken, AResultCode, AOutputJson);
 end;
 
 function TWorkflowWorkerApi.Heartbeat(const ANodeExecutionId, AWorkerId: Int64;

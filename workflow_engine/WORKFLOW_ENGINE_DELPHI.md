@@ -18,11 +18,11 @@ It uses DMVC's pluggable server backend (`IMVCServer`) with the **HTTP.sys** dri
 | `WfEngine.Mvc.WorkflowsController.pas` | DMVC workflow admin routes |
 | `WfEngine.Mvc.ActionsController.pas` | DMVC action schema catalog routes |
 | `WfEngine.GatewayHost.pas` | Shared `TWorkflowEngineHostedService` + `IGatewayService` lifecycle |
-| `WfEngine.GatewayService.pas` | One method per OpenAPI operation; thread-safe SQL facade |
+| `WfEngine.GatewayService.pas` | One method per OpenAPI operation; delegates all DB access to `GatewayDb` |
 | `WfEngine.GatewayDtos.pas` | Request/response DTOs aligned with `contracts/openapi.yaml` |
 | `WfEngine.ServiceLoop.pas` (`TWorkflowEngineHostedService`) | UniDAC connection lifecycle |
-| `WfEngine.GatewayDb.pas` | `wf_repo_create_workflow_instance`, `sp_start_workflow_instance` |
-| `WfEngine.WorkerApiAdapter.pas` | `wf_worker_authenticate`, `sp_worker_*` |
+| `WfEngine.GatewayDb.pas` | Sole DB layer: all `wf` contract procs via `TUniStoredProc` (no inline SQL) |
+| `WfEngine.WorkerApiAdapter.pas` | Worker `sp_worker_*` calls; auth/submit via `GatewayDb` |
 | `WfEngine.Dialect.pas` | Azure SQL / PostgreSQL backend selection |
 
 `WfEnginePkg` (runtime package) contains the SQL gateway core and DTOs/service types; DMVC controller and service host units belong to the `WfEngineSrv` executable, which requires DMVC ≥ 3.5 on the project search path.
@@ -35,8 +35,9 @@ flowchart LR
   DMVC[DMVC router]
   Ctrl[Resource controller]
   Svc[IGatewayService]
+  Db[WfEngine.GatewayDb]
   SQL[wf SQL procs]
-  HTTP --> DMVC --> Ctrl --> Svc --> SQL
+  HTTP --> DMVC --> Ctrl --> Svc --> Db --> SQL
 ```
 
 Each controller action is the real handler: path segments bind to Delphi parameters (`NodeExecutionId`, `InstanceId`, …), bodies bind via `[MVCFromBody]`, and responses use `OKResponse` / `CreatedResponse` / `NoContentResponse` / `NotFoundResponse` on typed DTOs. There is no secondary string router.
