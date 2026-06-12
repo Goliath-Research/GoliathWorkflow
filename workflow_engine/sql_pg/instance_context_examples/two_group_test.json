@@ -1,0 +1,9 @@
+{
+  "projectPath": "/work/test/prostate-cancer/project_PCa3.json",
+  "context": "CG",
+  "centroid1Dir": "/work/test/PCa3/centroids/controls/healthy/all",
+  "centroid2Dir": "/work/test/PCa3/centroids/diseases/cancer/PCa_Low",
+  "detectOutDir": "/work/test/PCa3/detections/all/PCa_Low",
+  "group1Label": "group1",
+  "group2Label": "group2"
+}

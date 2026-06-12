@@ -71,7 +71,39 @@ export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 ```
 
-After schema deploy, migrate **data** separately (pg_dump/pg_restore or ETL). The scripts above create objects only — no seed workflows or domain tables beyond `wf`.
+After schema deploy, migrate **data** separately (pg_dump/pg_restore or ETL). The scripts above create objects only — use the test bed below for sample workflows.
+
+## Test bed (two-group + MC stability)
+
+Optional PostgreSQL scripts to seed sample workflows and simulate worker execution with task logging (no real `methyl-*` processes).
+
+| Script | Purpose |
+|--------|---------|
+| [`wf_test_bed_schema.sql`](wf_test_bed_schema.sql) | `test_bed_run`, `test_bed_task_log`, `v_test_bed_task_summary` |
+| [`wf_test_bed_worker.sql`](wf_test_bed_worker.sql) | Test worker `simulator-1`, token `test-bed-token` |
+| [`wf_two_group_test_seed.sql`](wf_two_group_test_seed.sql) | **TwoGroupTestFlow** — 2 chromosomes, 6 ACTION tasks |
+| [`wf_mc_two_group_test_seed.sql`](wf_mc_two_group_test_seed.sql) | **McTwoGroupTestFlow** — 10 MC iterations × 6 + 3 post steps |
+| [`wf_test_bed_run.sql`](wf_test_bed_run.sql) | `sp_test_bed_run_workflow`, `sp_test_bed_simulate` |
+
+```bash
+./workflow_engine/sql_pg/deploy_test_bed.sh
+./workflow_engine/sql_pg/deploy_test_bed.sh --run TwoGroupTestFlow
+./workflow_engine/sql_pg/deploy_test_bed.sh --run McTwoGroupTestFlow
+```
+
+Inspect results:
+
+```sql
+SELECT * FROM wf.v_test_bed_task_summary ORDER BY test_bed_run_id DESC;
+SELECT node_key, capability, result_code, output_json
+FROM wf.test_bed_task_log
+WHERE test_bed_run_id = (SELECT max(id) FROM wf.test_bed_run)
+ORDER BY id;
+```
+
+Example `context_json`: [`instance_context_examples/two_group_test.json`](instance_context_examples/two_group_test.json), [`mc_two_group_test.json`](instance_context_examples/mc_two_group_test.json).
+
+Production OvR at scale uses **DataDrivenPipeline** / **ValidationPipeline** on Azure SQL (FOREACH). These test-bed workflows use static nodes + REPEAT so they run on PostgreSQL today without FOREACH.
 
 ## Local container
 
