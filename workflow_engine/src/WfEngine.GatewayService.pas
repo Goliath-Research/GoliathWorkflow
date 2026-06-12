@@ -177,7 +177,7 @@ begin
       ARequest.result_code, OutputJson);
     Result := TWorkerSubmitResultResponse.Create;
     Result.accepted := Ack.Accepted;
-    Result.instance_status := TWorkflowInstanceStatus.ToDb(Ack.InstanceStatus);
+    Result.instance_status := Ack.InstanceStatus.ToDb;
     Result.next_ready_count := Ack.NextReadyCount;
   finally
     FLock.Release;

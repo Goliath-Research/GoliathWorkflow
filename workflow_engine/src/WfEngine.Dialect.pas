@@ -26,6 +26,7 @@ implementation
 
 uses
   System.SysUtils,
+  System.StrUtils,
   System.Net.HttpClient,
   System.Net.URLClient,
   System.NetEncoding,
