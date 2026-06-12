@@ -4,12 +4,12 @@
 # Prerequisites:
 #   - psql (PostgreSQL client 15+)
 #   - Your client IP allowed in Azure PG firewall (or run from Azure VM / Cloud Shell)
-#   - Database created (e.g. epimethyl) and login granted CONNECT on it
+#   - Login granted CONNECT on database postgres (default Azure DB)
 #
 # Native PostgreSQL auth (dba):
 #   export PGHOST=epimethyl.postgres.database.azure.com
 #   export PGPORT=5432
-#   export PGDATABASE=epimethyl
+#   export PGDATABASE=postgres
 #   export PGUSER=dba
 #   export PGPASSWORD='...'
 #   ./deploy_azure.sh
@@ -17,7 +17,7 @@
 # Microsoft Entra ID auth:
 #   export PGHOST=epimethyl.postgres.database.azure.com
 #   export PGPORT=5432
-#   export PGDATABASE=epimethyl
+#   export PGDATABASE=postgres
 #   export PGUSER='you@epimethyl.com'
 #   export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)"
 #   ./deploy_azure.sh
@@ -29,7 +29,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 export PGHOST="${PGHOST:-epimethyl.postgres.database.azure.com}"
 export PGPORT="${PGPORT:-5432}"
-export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-epimethyl}}"
+export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-postgres}}"
 export PGSSLMODE="${PGSSLMODE:-require}"
 
 if [[ -z "${PGUSER:-}" ]]; then

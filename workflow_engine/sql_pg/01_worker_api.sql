@@ -35,7 +35,7 @@ BEGIN
     RAISE EXCEPTION 'worker_token is required' USING ERRCODE = '50002';
   END IF;
 
-  v_hash := digest(v_tok, 'sha256');
+  v_hash := wf.wf_sha256_text(v_tok);
 
   IF NOT EXISTS (
     SELECT 1

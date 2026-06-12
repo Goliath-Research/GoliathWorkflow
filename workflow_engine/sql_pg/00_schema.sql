@@ -1,11 +1,18 @@
 /*
   MethylPipeline wf schema - PostgreSQL (core definition + runtime tables).
-  Deploy first. Requires PostgreSQL 15+ (17+ recommended for SQL/JSON functions).
+  Deploy first. Requires PostgreSQL 15+ (17+ recommended; PG 18+ on Azure).
+  Uses pg_catalog sha256(bytea) — no pgcrypto extension required on Azure Flexible Server.
 */
 
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-
 CREATE SCHEMA IF NOT EXISTS wf;
+
+CREATE OR REPLACE FUNCTION wf.wf_sha256_text(p_text text)
+RETURNS bytea
+LANGUAGE sql
+IMMUTABLE PARALLEL SAFE
+AS $$
+  SELECT sha256(convert_to(coalesce(p_text, ''), 'UTF8'));
+$$;
 
 -- Definition layer
 CREATE TABLE IF NOT EXISTS wf.workflow_def (

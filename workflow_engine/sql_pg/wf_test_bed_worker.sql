@@ -8,7 +8,7 @@ DECLARE
   v_cluster_id bigint;
   v_worker_id bigint;
   v_token text := 'test-bed-token';
-  v_hash bytea := decode(encode(digest(v_token, 'sha256'), 'hex'), 'hex');
+  v_hash bytea := wf.wf_sha256_text(v_token);
 BEGIN
   INSERT INTO wf.cluster (cluster_key, name, status)
   VALUES ('test-bed', 'Workflow test bed', 'ACTIVE')

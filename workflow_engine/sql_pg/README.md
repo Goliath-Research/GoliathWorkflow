@@ -33,7 +33,7 @@ Use [`deploy_azure.sh`](deploy_azure.sh) from a machine whose IP is allowed in t
 ```bash
 export PGHOST=epimethyl.postgres.database.azure.com
 export PGPORT=5432
-export PGDATABASE=epimethyl
+export PGDATABASE=postgres
 export PGUSER=dba
 export PGPASSWORD='...'          # store in Key Vault / env, not in git
 export PGSSLMODE=require
@@ -41,23 +41,19 @@ export PGSSLMODE=require
 ./workflow_engine/sql_pg/deploy_azure.sh
 ```
 
+Server FQDN from Azure Portal is `<server-name>.postgres.database.azure.com` (here **`epimethyl.postgres.database.azure.com`**). Deploy into the default database **`postgres`**.
+
 **Microsoft Entra ID:**
 
 ```bash
 export PGHOST=epimethyl.postgres.database.azure.com
 export PGPORT=5432
-export PGDATABASE=epimethyl
+export PGDATABASE=postgres
 export PGUSER='you@epimethyl.com'
 export PGPASSWORD="$(az account get-access-token --resource https://ossrdbms-aad.database.windows.net --query accessToken --output tsv)"
 export PGSSLMODE=require
 
 ./workflow_engine/sql_pg/deploy_azure.sh
-```
-
-Connect to database **`epimethyl`** (not `postgres`) for the wf schema. If the database does not exist yet, create it as an admin on the `postgres` database first:
-
-```sql
-CREATE DATABASE epimethyl OWNER dba;
 ```
 
 **Middle-tier env (Delphi / REST gateway):**
@@ -66,7 +62,7 @@ CREATE DATABASE epimethyl OWNER dba;
 export BACKEND_DB=postgres
 export POSTGRES_HOST=epimethyl.postgres.database.azure.com
 export POSTGRES_PORT=5432
-export POSTGRES_DB=epimethyl
+export POSTGRES_DB=postgres
 export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 ```

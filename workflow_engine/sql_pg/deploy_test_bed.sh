@@ -2,7 +2,7 @@
 # Deploy wf test-bed seeds + run a smoke simulation (PostgreSQL).
 #
 # Usage (after deploy_azure.sh or local sql_pg core deploy):
-#   export PGHOST=... PGDATABASE=epimethyl PGUSER=... PGPASSWORD=... PGSSLMODE=require
+#   export PGHOST=... PGDATABASE=postgres PGUSER=... PGPASSWORD=... PGSSLMODE=require
 #   ./deploy_test_bed.sh
 #   ./deploy_test_bed.sh --run TwoGroupTestFlow
 #   ./deploy_test_bed.sh --run McTwoGroupTestFlow
@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 export PGHOST="${PGHOST:-epimethyl.postgres.database.azure.com}"
 export PGPORT="${PGPORT:-5432}"
-export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-epimethyl}}"
+export PGDATABASE="${PGDATABASE:-${POSTGRES_DB:-postgres}}"
 export PGSSLMODE="${PGSSLMODE:-require}"
 
 if [[ -z "${PGUSER:-}" ]]; then
@@ -59,7 +59,7 @@ if [[ -n "$RUN_WORKFLOW" ]]; then
   echo "Running smoke simulation for $RUN_WORKFLOW ..."
   psql -q -v ON_ERROR_STOP=1 \
     -v workflow_name="$RUN_WORKFLOW" \
-    -v context_json=@"$CONTEXT_FILE" <<'SQL'
+    -v context_json="$(cat "$CONTEXT_FILE")" <<'SQL'
 SELECT * FROM wf.sp_test_bed_run_workflow(
   :'workflow_name',
   :'context_json'::jsonb

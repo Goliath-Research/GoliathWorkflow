@@ -133,14 +133,14 @@ AS $$
 BEGIN
   DELETE FROM wf.execution_context WHERE node_execution_id = p_node_execution_id;
   INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-  VALUES (p_node_execution_id, 'ctx.iterationNo', to_jsonb(p_iteration_no)::text);
+  VALUES (p_node_execution_id, 'ctx.iterationNo', to_jsonb(p_iteration_no));
   IF p_sequence_index IS NOT NULL THEN
     INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-    VALUES (p_node_execution_id, 'ctx.sequenceIndex', to_jsonb(p_sequence_index)::text);
+    VALUES (p_node_execution_id, 'ctx.sequenceIndex', to_jsonb(p_sequence_index));
   END IF;
   IF p_parallel_index IS NOT NULL THEN
     INSERT INTO wf.execution_context (node_execution_id, context_key, context_value_json)
-    VALUES (p_node_execution_id, 'ctx.parallelIndex', to_jsonb(p_parallel_index)::text);
+    VALUES (p_node_execution_id, 'ctx.parallelIndex', to_jsonb(p_parallel_index));
   END IF;
 END;
 $$;
