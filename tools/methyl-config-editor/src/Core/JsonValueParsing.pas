@@ -51,8 +51,6 @@ end;
 
 class function TJsonValueParsing.ValueToGridString(ANode: TSchemaNode;
   AValue: TJSONValue): string;
-var
-  S: string;
 begin
   if not Assigned(ANode) then
     Exit('');
