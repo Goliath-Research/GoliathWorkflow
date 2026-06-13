@@ -232,20 +232,24 @@ def _compile_action(
     return node_key
 
 
-def _compile_if(ctx: _CompileCtx, step: IfStep, parent_key: str, order: int) -> str:
+def _compile_if(
+    ctx: _CompileCtx, step: IfStep, parent_key: str, order: int, *, branch: str = "SEQUENCE"
+) -> str:
     if_key = ctx.fresh_key("if")
     cond_var = _condition_var_from_expr(step.if_)
     ctx.nodes.append(
         WorkflowNodeSpec(node_key=if_key, node_type="IF", condition_var=cond_var)
     )
-    _link(parent_key, if_key, order, "SEQUENCE", ctx)
+    _link(parent_key, if_key, order, branch, ctx)
     _compile_steps(ctx, step.then, if_key, branch="THEN")
     if step.else_:
         _compile_steps(ctx, step.else_, if_key, branch="ELSE")
     return if_key
 
 
-def _compile_foreach(ctx: _CompileCtx, step: ForeachStep, parent_key: str, order: int) -> str:
+def _compile_foreach(
+    ctx: _CompileCtx, step: ForeachStep, parent_key: str, order: int, *, branch: str = "SEQUENCE"
+) -> str:
     fe_key = ctx.fresh_key("foreach")
     spec = step.spec()
     item = spec.resolved_item()
@@ -259,25 +263,27 @@ def _compile_foreach(ctx: _CompileCtx, step: ForeachStep, parent_key: str, order
             foreach_parallel=spec.parallel,
         )
     )
-    _link(parent_key, fe_key, order, "SEQUENCE", ctx)
+    _link(parent_key, fe_key, order, branch, ctx)
     _compile_steps(ctx, step.body(), fe_key, branch="BODY")
     return fe_key
 
 
-def _compile_parallel(ctx: _CompileCtx, step: ParallelStep, parent_key: str, order: int) -> str:
+def _compile_parallel(
+    ctx: _CompileCtx, step: ParallelStep, parent_key: str, order: int, *, branch: str = "SEQUENCE"
+) -> str:
     par_key = ctx.fresh_key("parallel")
     ctx.nodes.append(WorkflowNodeSpec(node_key=par_key, node_type="PARALLEL"))
-    _link(parent_key, par_key, order, "SEQUENCE", ctx)
+    _link(parent_key, par_key, order, branch, ctx)
     for idx, raw in enumerate(step.parallel):
         child = _parse_step(raw)
         if isinstance(child, ActionStep):
             _compile_action(ctx, child, par_key, idx, branch="PARALLEL")
         elif isinstance(child, IfStep):
-            _compile_if(ctx, child, par_key, idx)
+            _compile_if(ctx, child, par_key, idx, branch="PARALLEL")
         elif isinstance(child, ForeachStep):
-            _compile_foreach(ctx, child, par_key, idx)
+            _compile_foreach(ctx, child, par_key, idx, branch="PARALLEL")
         elif isinstance(child, ParallelStep):
-            _compile_parallel(ctx, child, par_key, idx)
+            _compile_parallel(ctx, child, par_key, idx, branch="PARALLEL")
     return par_key
 
 

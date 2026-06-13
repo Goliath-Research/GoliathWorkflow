@@ -80,6 +80,37 @@ def test_two_group_context_json_minimal():
     }
 
 
+def test_parallel_block_edges_use_parallel_branch():
+    """Direct children of a PARALLEL node must all link with branch_kind PARALLEL."""
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "ParallelBranchKinds",
+            "projectPath": "/work/project.json",
+            "body": [
+                {
+                    "parallel": [
+                        {"do": "pipeline.centroid", "node_key": "centroid_a"},
+                        {"do": "pipeline.centroid", "node_key": "centroid_b"},
+                    ]
+                }
+            ],
+        }
+    )
+    result = compile_domain_program(program)
+    par_nodes = [n.node_key for n in result.workflow.nodes if n.node_type == "PARALLEL"]
+    assert len(par_nodes) == 1
+    par_key = par_nodes[0]
+    child_edges = [
+        e
+        for e in result.workflow.edges
+        if e.parent_node_key == par_key
+        and e.child_node_key in ("centroid_a", "centroid_b")
+    ]
+    assert len(child_edges) == 2
+    assert all(e.branch_kind == "PARALLEL" for e in child_edges)
+
+
 def test_sample_prep_still_compiles():
     result = compile_domain_program(_load("sample_prep.program.json"))
     wf = result.workflow
