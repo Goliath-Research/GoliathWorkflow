@@ -490,6 +490,8 @@ def _build_model_mc_shared_runs(
         elif path.is_dir():
             shutil.rmtree(path)
     completed_iteration_seconds: List[float] = []
+    previous_train_control: Optional[List[str]] = None
+    previous_train_disease: Optional[List[str]] = None
     for i in range(start_iteration_idx, config.n_iterations):
         iteration_t0 = time.perf_counter()
         run_id = f"run_{i + 1:04d}"
@@ -646,6 +648,9 @@ def _build_model_mc_shared_runs(
                 f"in {_format_duration(elapsed)} (ETA {eta})",
                 file=sys.stderr,
             )
+            if layout == "binary":
+                previous_train_control = list(train_control)
+                previous_train_disease = list(train_disease)
             continue
 
         if layout == "binary":
@@ -667,7 +672,11 @@ def _build_model_mc_shared_runs(
                 val_control,
                 val_disease,
                 config.samples_base_path,
+                previous_train_control_paths=previous_train_control,
+                previous_train_disease_paths=previous_train_disease,
             )
+            previous_train_control = list(train_control)
+            previous_train_disease = list(train_disease)
             ok_iter, errors_iter, timings_iter = run_pipeline_for_iteration(
                 project_path,
                 per_cancer_group=per_cancer_group,
@@ -1098,6 +1107,8 @@ def _run_model_mc_backend(
             shutil.rmtree(path)
 
     completed_iteration_seconds: List[float] = []
+    previous_train_control: Optional[List[str]] = None
+    previous_train_disease: Optional[List[str]] = None
 
     for i in range(start_iteration_idx, config.n_iterations):
         iteration_t0 = time.perf_counter()
@@ -1165,7 +1176,11 @@ def _run_model_mc_backend(
                 val_control,
                 val_disease,
                 config.samples_base_path,
+                previous_train_control_paths=previous_train_control,
+                previous_train_disease_paths=previous_train_disease,
             )
+            previous_train_control = list(train_control)
+            previous_train_disease = list(train_disease)
             run_project = load_project(project_path)
             comparisons = run_project.get_comparisons()
             if comparisons:

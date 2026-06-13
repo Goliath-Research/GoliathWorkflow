@@ -17,6 +17,20 @@ if TYPE_CHECKING:
     from .config import MonteCarloConfig
 
 
+def _derive_previous_mc_run_dir(run_dir: Path) -> Optional[Path]:
+    """Return monte_carlo_runs/run_{N-1} when run_dir is monte_carlo_runs/run_N."""
+    name = run_dir.name
+    if not name.startswith("run_"):
+        return None
+    try:
+        run_number = int(name.split("_", 1)[1])
+    except (IndexError, ValueError):
+        return None
+    if run_number <= 1:
+        return None
+    return run_dir.parent / f"run_{run_number - 1:04d}"
+
+
 def _append_gene_stability_steps(
     steps: List[Any],
     *,
@@ -430,6 +444,7 @@ def run_pipeline_for_iteration(
     detector_step_override: Optional[Path] = None,
     skip_centroid: bool = False,
     config: Optional["MonteCarloConfig"] = None,  # reserved; mapper/enricher belong to --freeze, not MC
+    previous_run_dir: Optional[Path] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
     Monte Carlo stability iteration: methyl-centroid → methyl-detector only.
@@ -437,10 +452,22 @@ def run_pipeline_for_iteration(
     Omits methyl-classifier and methyl-predictor (final model is ``--model`` after freeze).
     """
     from .validator_metrics import write_step_timings_csv
+    from .project_gen import prepare_incremental_centroid_baseline
 
     errors: List[str] = []
     step_timings: List[Dict[str, Any]] = []
     steps: List[Tuple[str, Callable[[], tuple[int, str, str]], Optional[str], Optional[str | Path]]] = []
+    run_dir = Path(project_json).resolve().parent
+    if not skip_centroid and centroid_step_overrides:
+        baseline_source = previous_run_dir
+        if baseline_source is None:
+            baseline_source = _derive_previous_mc_run_dir(run_dir)
+        prepare_incremental_centroid_baseline(
+            baseline_source,
+            run_dir,
+            centroid_step_overrides.get("group1"),
+            centroid_step_overrides.get("group2"),
+        )
     if not skip_centroid:
         if centroid_step_overrides:
             steps.extend(

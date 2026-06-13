@@ -6,8 +6,10 @@ import copy
 import csv
 import json
 import re
+import shutil
+import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 
 def _sample_name_from_path(full_path: str, base_path: str) -> str:
@@ -132,6 +134,91 @@ def _build_centroid_step_override(
             "remove_samples": remove_paths,
         }
     }
+
+
+def centroid_override_has_remove_samples(override_path: Optional[Union[str, Path]]) -> bool:
+    """True when a centroid step override requests remove_samples (incremental MC delta)."""
+    if override_path is None:
+        return False
+    path = Path(override_path)
+    if not path.is_file():
+        return False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    base_config = payload.get("base_config")
+    if not isinstance(base_config, dict):
+        return False
+    remove_samples = base_config.get("remove_samples") or []
+    return bool(remove_samples)
+
+
+def incremental_centroid_update_requested(
+    centroid_group1_override: Optional[Union[str, Path]],
+    centroid_group2_override: Optional[Union[str, Path]],
+) -> bool:
+    return (
+        centroid_override_has_remove_samples(centroid_group1_override)
+        or centroid_override_has_remove_samples(centroid_group2_override)
+    )
+
+
+def carry_forward_centroids_from_previous_run(
+    previous_run_dir: Union[str, Path],
+    current_run_dir: Union[str, Path],
+) -> bool:
+    """
+    Copy the previous iteration's centroids tree into the current run directory.
+
+    MethylCentroid incremental updates read samples_used baseline from HDF5 files in the
+    current run's centroid output dir; Monte Carlo iterations use isolated run_XXXX roots.
+    """
+    prev = Path(previous_run_dir)
+    cur = Path(current_run_dir)
+    src = prev / "centroids"
+    dst = cur / "centroids"
+    if not src.is_dir():
+        return False
+    if dst.exists() or dst.is_symlink():
+        if dst.is_symlink():
+            dst.unlink()
+        elif dst.is_file():
+            dst.unlink()
+        else:
+            shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+    return True
+
+
+def prepare_incremental_centroid_baseline(
+    previous_run_dir: Optional[Union[str, Path]],
+    current_run_dir: Union[str, Path],
+    centroid_group1_override: Optional[Union[str, Path]],
+    centroid_group2_override: Optional[Union[str, Path]],
+) -> bool:
+    """Copy prior-run centroids when MC centroid deltas require an on-disk baseline."""
+    if previous_run_dir is None:
+        return False
+    if not incremental_centroid_update_requested(
+        centroid_group1_override,
+        centroid_group2_override,
+    ):
+        return False
+    carried = carry_forward_centroids_from_previous_run(previous_run_dir, current_run_dir)
+    if carried:
+        print(
+            f"[centroid-baseline] Copied centroids from {previous_run_dir} to "
+            f"{Path(current_run_dir) / 'centroids'} for incremental update.",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            f"[centroid-baseline] Warning: incremental centroid deltas requested but no centroids "
+            f"found under {previous_run_dir}; methyl-centroid may build from add_samples only.",
+            file=sys.stderr,
+        )
+    return carried
 
 
 def write_centroid_step_override(
