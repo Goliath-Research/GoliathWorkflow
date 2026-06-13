@@ -790,9 +790,9 @@ sequenceDiagram
 \node[base, fill=green!10, right=1.1cm of client] (db) {Engine (DB)};
 \node[base, fill=purple!10, right=1.1cm of db] (worker) {Worker};
 \draw[arr] (client)--node[above, font=\scriptsize]{POST instance\\projectPath}(db);
-\draw[arr] (db)--node[right, font=\scriptsize]{init scope}(db);
-\draw[arr] (db)--node[right, font=\scriptsize]{resolve bindings}(db);
-\draw[arr] (db)--node[right, font=\scriptsize]{FOREACH / PARALLEL}(db);
+\draw[arr, looseness=2.5] (db) to[bend left=35] node[above, font=\scriptsize]{init scope}(db);
+\draw[arr, looseness=4] (db) to[bend left=55] node[above, font=\scriptsize]{resolve bindings}(db);
+\draw[arr, looseness=5.5] (db) to[bend left=75] node[above, font=\scriptsize]{FOREACH / PARALLEL}(db);
 \draw[arr] (worker)--node[below, font=\scriptsize]{request task}(db);
 \draw[arr] (db)--node[below, font=\scriptsize]{concrete input\_json}(worker);
 \end{tikzpicture}

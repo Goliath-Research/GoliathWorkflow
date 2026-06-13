@@ -18,7 +18,7 @@ for _p in (_DOMAIN, _CONTRACT, _WORKERS):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from compiler import compile_domain_program  # noqa: E402
+from compiler import compile_domain_program, compile_domain_program_file  # noqa: E402
 
 
 def _load(name: str) -> DomainProgram:
@@ -116,3 +116,21 @@ def test_sample_prep_still_compiles():
     wf = result.workflow
     assert wf.name == "SamplePrepPipeline"
     assert any(n.node_type == "FOREACH" for n in wf.nodes)
+
+
+def test_buffy_check_bundle_compiles_full_pipeline():
+    check = Path(__file__).resolve().parents[1] / "domain" / "checks" / "buffy_healthy_vs_pca"
+    program_path = check / "configs" / "buffy_data_driven.program.json"
+    result = compile_domain_program_file(program_path)
+    wf = result.workflow
+
+    assert wf.name == "BuffyHealthyVsPCa"
+    action_names = [n.action_name for n in wf.nodes if n.node_type == "ACTION"]
+    assert action_names.count("pipeline.centroid") == 2
+    assert "pipeline.detector" in action_names
+    assert "pipeline.mapper" in action_names
+    assert "pipeline.enricher" in action_names
+
+    binding_vars = {b.scope_var for b in wf.collection_bindings}
+    assert binding_vars >= {"project", "chromosomes", "contexts", "comparisons"}
+    assert result.context_json["projectPath"].endswith("project_Buffy_healthy_vs_PCa.json")
