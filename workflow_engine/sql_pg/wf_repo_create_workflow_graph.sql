@@ -201,6 +201,28 @@ BEGIN
     VALUES (v_node_id, v_binding->>'var_name', v_binding->>'default_expr');
   END LOOP;
 
+  FOR v_binding IN SELECT value FROM jsonb_array_elements(COALESCE(p_spec->'collection_bindings', '[]'::jsonb))
+  LOOP
+    INSERT INTO wf.workflow_collection_binding (
+      workflow_version_id,
+      bind_order,
+      scope_var,
+      source_kind,
+      path_var,
+      base_var,
+      json_path
+    )
+    VALUES (
+      v_ver_id,
+      COALESCE((v_binding->>'bind_order')::int, 0),
+      v_binding->>'scope_var',
+      v_binding->>'kind',
+      NULLIF(v_binding->>'path_var', ''),
+      NULLIF(v_binding->>'base_var', ''),
+      NULLIF(v_binding->>'json_path', '')
+    );
+  END LOOP;
+
   v_root_node_id := (v_node_ids->>v_root_key)::bigint;
   IF v_root_node_id IS NULL THEN
     RAISE EXCEPTION 'root_node_key % not found among nodes', v_root_key;

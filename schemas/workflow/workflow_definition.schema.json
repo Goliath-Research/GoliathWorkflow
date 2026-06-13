@@ -1,5 +1,69 @@
 {
   "$defs": {
+    "CollectionBindingSpec": {
+      "description": "Generic scope collection resolved by the engine before FOREACH runs.",
+      "properties": {
+        "base_var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Var"
+        },
+        "bind_order": {
+          "default": 0,
+          "title": "Bind Order",
+          "type": "integer"
+        },
+        "json_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Json Path"
+        },
+        "kind": {
+          "enum": [
+            "jsonFile",
+            "jsonPath"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "path_var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path Var"
+        },
+        "scope_var": {
+          "title": "Scope Var",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope_var",
+        "kind"
+      ],
+      "title": "CollectionBindingSpec",
+      "type": "object"
+    },
     "WorkflowEdgeSpec": {
       "properties": {
         "branch_kind": {
@@ -328,6 +392,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Editor output contract for wf_repo_create_workflow_graph.",
   "properties": {
+    "collection_bindings": {
+      "items": {
+        "$ref": "#/$defs/CollectionBindingSpec"
+      },
+      "title": "Collection Bindings",
+      "type": "array"
+    },
     "description": {
       "anyOf": [
         {

@@ -57,20 +57,24 @@ Optional worker adapter: `methyl_domain.helpers.enrich_sample_prep_output()` mer
 
 ## DomainProgram IR and compiler
 
-**IR schema:** `schemas/domain/domain_program.schema.json`
+**IR schema:** `schemas/domain/domain_program.schema.json` (v1 phases + v2 statement `body`)
 
-Clients author a declarative **DomainProgram** (phases, `foreach`, `if`, typed `action` steps). The compiler lowers it to engine artifacts:
+Clients author a declarative **DomainProgram** (`for`, `parallel`, `do`/`with`, `if`). The compiler lowers it to engine artifacts:
 
 ```
 DomainProgram  →  compile_domain_program()
                     ├─ WorkflowDefinitionSpec  (POST /v1/workflows/definitions)
-                    ├─ context_json            (initial scope / instance context)
-                    └─ variable_output_bindings (e.g. qcPass from methyl_qc)
+                    ├─ collection_bindings     (engine resolves project.* → scope arrays)
+                    └─ context_json            (minimal: { projectPath })
 ```
+
+At **`sp_start_workflow_instance`**, the engine runs `wf_resolve_collection_bindings` (generic JSON file + JSONPath extraction) before FOREACH activation. Workers receive concrete `input_json` per chromosome/context/group unit.
 
 Implementation: `workflow_engine/domain/compiler.py`
 
-Example fixture: `workflow_engine/domain/fixtures/sample_prep.program.json` compiles to a graph equivalent to `workflow_engine/sql/wf_sample_prep_pipeline_seed.sql`.
+Example fixtures:
+- `workflow_engine/domain/fixtures/sample_prep.program.json`
+- `workflow_engine/domain/fixtures/two_group_comparison.program.json`
 
 ## Monte Carlo iterations
 

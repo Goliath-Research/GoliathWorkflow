@@ -273,6 +273,8 @@ BEGIN
 
   CALL wf.wf_init_instance_scope_from_context(p_workflow_instance_id);
 
+  CALL wf.wf_resolve_collection_bindings(p_workflow_instance_id);
+
   CALL wf.wf_engine_activate(
     p_workflow_instance_id,
     v_root,

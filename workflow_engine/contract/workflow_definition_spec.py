@@ -93,6 +93,22 @@ class WorkflowScopeDefaultSpec(BaseModel):
     default_expr: str
 
 
+CollectionSourceKind = Literal["jsonFile", "jsonPath"]
+
+
+class CollectionBindingSpec(BaseModel):
+    """Generic scope collection resolved by the engine before FOREACH runs."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    scope_var: str
+    kind: CollectionSourceKind
+    path_var: Optional[str] = None
+    base_var: Optional[str] = None
+    json_path: Optional[str] = None
+    bind_order: int = 0
+
+
 class WorkflowDefinitionSpec(BaseModel):
     """Editor output contract for wf_repo_create_workflow_graph."""
 
@@ -109,6 +125,7 @@ class WorkflowDefinitionSpec(BaseModel):
     input_bindings: List[WorkflowInputBindingSpec] = Field(default_factory=list)
     output_bindings: List[WorkflowOutputBindingSpec] = Field(default_factory=list)
     scope_defaults: List[WorkflowScopeDefaultSpec] = Field(default_factory=list)
+    collection_bindings: List[CollectionBindingSpec] = Field(default_factory=list)
 
     def to_db_spec(self) -> Dict[str, Any]:
         return self.model_dump(mode="json", exclude_none=True)

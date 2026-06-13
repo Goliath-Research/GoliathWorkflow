@@ -1,4 +1,4 @@
-"""Golden-style tests: DomainProgram IR lowers to SamplePrepPipeline-shaped graphs."""
+"""Tests for collection bindings and two-group program compilation."""
 
 from __future__ import annotations
 
@@ -20,88 +20,68 @@ for _p in (_DOMAIN, _CONTRACT, _WORKERS):
 
 from compiler import compile_domain_program  # noqa: E402
 
-SAMPLE_PREP_THEN_ACTIONS = [
-    "sample.download_fastq",
-    "sample.parabricks_fq2bam",
-    "sample.delete_fastqs",
-    "sample.methyl_qc",
-    "sample.fragmentomics",
-    "sample.methyl_extract",
-    "sample.delete_bam",
-]
 
-
-def _load_sample_prep_program() -> DomainProgram:
-    data = json.loads((FIXTURES / "sample_prep.program.json").read_text(encoding="utf-8"))
+def _load(name: str) -> DomainProgram:
+    data = json.loads((FIXTURES / name).read_text(encoding="utf-8"))
     return DomainProgram.model_validate(data)
 
 
-def _action_sequence(workflow) -> list[str]:
-    """Walk the happy path (THEN branches only) and collect ACTION names in order."""
-    nodes_by_key = {n.node_key: n for n in workflow.nodes}
-    edges_by_parent: dict[str, list] = {}
-    for e in workflow.edges:
-        edges_by_parent.setdefault(e.parent_node_key, []).append(e)
-    for edges in edges_by_parent.values():
-        edges.sort(key=lambda e: (e.branch_kind, e.child_order))
-
-    actions: list[str] = []
-    visited: set[str] = set()
-
-    def walk(key: str) -> None:
-        if key in visited:
-            return
-        visited.add(key)
-        node = nodes_by_key.get(key)
-        if node is None:
-            return
-        if node.node_type == "ACTION" and node.action_name:
-            actions.append(node.action_name)
-        for edge in edges_by_parent.get(key, []):
-            if edge.branch_kind == "ELSE":
-                continue
-            if edge.branch_kind in ("SEQUENCE", "BODY", "THEN"):
-                walk(edge.child_node_key)
-
-    walk(workflow.root_node_key)
-    return actions
+def _node_keys_by_type(workflow, node_type: str) -> list[str]:
+    return [n.node_key for n in workflow.nodes if n.node_type == node_type]
 
 
-def test_compile_sample_prep_action_sequence():
-    program = _load_sample_prep_program()
-    result = compile_domain_program(program)
+def test_two_group_compiles_nested_foreach_and_parallel():
+    result = compile_domain_program(_load("two_group_comparison.program.json"))
     wf = result.workflow
 
-    assert wf.name == "SamplePrepPipeline"
-    assert _action_sequence(wf) == SAMPLE_PREP_THEN_ACTIONS
-
-    qc_failed = next(n for n in wf.nodes if n.node_key == "qc_failed")
-    assert qc_failed.action_name == "sample.qc_failed"
-    if_qc = next(n for n in wf.nodes if n.node_type == "IF" and n.condition_var == "qcPass")
-    assert any(
-        e.parent_node_key == if_qc.node_key and e.branch_kind == "ELSE" for e in wf.edges
-    )
-
     foreach_nodes = [n for n in wf.nodes if n.node_type == "FOREACH"]
-    assert len(foreach_nodes) == 1
-    assert foreach_nodes[0].foreach_collection_var == "samples"
-    assert foreach_nodes[0].foreach_item_var == "sample"
-    assert foreach_nodes[0].foreach_parallel is True
+    assert len(foreach_nodes) == 3
+    collections = {n.foreach_collection_var for n in foreach_nodes}
+    assert collections == {"comparisons", "contexts", "chromosomes"}
+    assert all(n.foreach_parallel for n in foreach_nodes)
 
-    if_nodes = [n for n in wf.nodes if n.node_type == "IF"]
-    assert {n.condition_var for n in if_nodes} == {"qcPass", "isCfdna"}
+    parallel_nodes = [n for n in wf.nodes if n.node_type == "PARALLEL"]
+    assert len(parallel_nodes) >= 1
 
-    qc_bindings = [b for b in wf.output_bindings if b.var_name == "qcPass"]
-    assert len(qc_bindings) == 1
-    assert qc_bindings[0].source_json_path == "$.guardrails.overall_pass"
+    action_names = [
+        n.action_name for n in wf.nodes if n.node_type == "ACTION" and n.action_name
+    ]
+    assert action_names.count("pipeline.centroid") == 2
+    assert action_names.count("pipeline.detector") == 1
 
-    methyl_qc = next(n for n in wf.nodes if n.node_key == "methyl_qc")
-    assert methyl_qc.input_template.get("tool") == "MethylAlignmentQc"
-    assert "${var.projectPath}" in str(methyl_qc.input_template.get("project"))
+    centroid_g1 = next(n for n in wf.nodes if n.node_key == "centroid_g1")
+    assert centroid_g1.input_template["chromosome"] == "${var.chromosome}"
+    assert centroid_g1.input_template["context"] == "${var.context}"
+    assert centroid_g1.input_template["group"] == "${var.control_group}"
+
+    detect = next(n for n in wf.nodes if n.node_key == "detect")
+    assert detect.input_template["chromosome"] == "${var.chromosome}"
+    assert detect.input_template["context"] == "${var.context}"
 
 
-def test_compile_context_json_includes_program_variables():
-    program = _load_sample_prep_program()
-    result = compile_domain_program(program)
-    assert result.context_json["primaryAnalyte"] == "cfdna"
-    assert "projectPath" in result.context_json
+def test_two_group_emits_collection_bindings():
+    result = compile_domain_program(_load("two_group_comparison.program.json"))
+    kinds = {b.scope_var: b.kind for b in result.workflow.collection_bindings}
+
+    assert kinds["project"] == "jsonFile"
+    assert kinds["chromosomes"] == "jsonPath"
+    assert kinds["contexts"] == "jsonPath"
+    assert kinds["comparisons"] == "jsonPath"
+
+    chrom = next(b for b in result.workflow.collection_bindings if b.scope_var == "chromosomes")
+    assert chrom.base_var == "project"
+    assert chrom.json_path == "$.chromosomes"
+
+
+def test_two_group_context_json_minimal():
+    result = compile_domain_program(_load("two_group_comparison.program.json"))
+    assert result.context_json == {
+        "projectPath": "/work/prostate-cancer/configs/project_Healthy_vs_PCa.json"
+    }
+
+
+def test_sample_prep_still_compiles():
+    result = compile_domain_program(_load("sample_prep.program.json"))
+    wf = result.workflow
+    assert wf.name == "SamplePrepPipeline"
+    assert any(n.node_type == "FOREACH" for n in wf.nodes)

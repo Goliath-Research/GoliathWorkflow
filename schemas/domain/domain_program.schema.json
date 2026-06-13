@@ -1,10 +1,76 @@
 {
   "$defs": {
+    "CollectionInSpec": {
+      "description": "Reference to a scope collection or project-bound path.",
+      "properties": {
+        "ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ref"
+        },
+        "var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Var"
+        }
+      },
+      "title": "CollectionInSpec",
+      "type": "object"
+    },
     "ForeachSpec": {
       "properties": {
+        "as": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "As"
+        },
         "collection": {
-          "title": "Collection",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Collection"
+        },
+        "in": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "$ref": "#/$defs/CollectionInSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "In"
         },
         "index": {
           "anyOf": [
@@ -19,8 +85,16 @@
           "title": "Index"
         },
         "item": {
-          "title": "Item",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Item"
         },
         "parallel": {
           "default": false,
@@ -28,10 +102,6 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "collection",
-        "item"
-      ],
       "title": "ForeachSpec",
       "type": "object"
     },
@@ -68,6 +138,16 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Client-side program lowered to WorkflowDefinitionSpec + context_json.",
   "properties": {
+    "body": {
+      "items": {},
+      "title": "Body",
+      "type": "array"
+    },
+    "declarations": {
+      "additionalProperties": true,
+      "title": "Declarations",
+      "type": "object"
+    },
     "description": {
       "anyOf": [
         {
