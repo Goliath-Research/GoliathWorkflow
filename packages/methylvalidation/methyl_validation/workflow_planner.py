@@ -29,6 +29,40 @@ from .project_gen import (
 from .split import load_and_resolve_sample_paths, stratified_split, stratified_split_multiclass
 from .storage_layout import mc_config_snapshot_path
 
+
+def _tag_iteration_as_stratified_draw(
+    iteration: Dict[str, Any],
+    *,
+    run_dir: Path,
+    layout: str,
+    cohort_labels: List[str],
+    config: MonteCarloConfig,
+    seed: Optional[int],
+) -> Dict[str, Any]:
+    """Attach tagged ``StratifiedCohortDraw`` fields (backward-compatible with flat keys)."""
+    from methyl_domain.helpers import (
+        build_stratified_cohort_draw,
+        comparisons_from_project_json,
+        groups_from_mc_run_dir,
+    )
+
+    project_path = Path(iteration["projectPath"])
+    groups = groups_from_mc_run_dir(
+        run_dir, project_path, layout=layout, cohort_labels=cohort_labels
+    )
+    comparisons = comparisons_from_project_json(project_path)
+    tagged = build_stratified_cohort_draw(
+        run_id=str(iteration["runId"]),
+        phase=str(iteration["phase"]),
+        project_path=str(project_path.resolve()),
+        groups=groups,
+        comparisons=comparisons,
+        seed=seed,
+        train_fraction=config.train_fraction,
+        task_config=iteration.get("taskConfig"),
+    )
+    return {**iteration, **tagged}
+
 __all__ = [
     "ValidationPlanRequest",
     "plan_validation_context",
@@ -180,7 +214,18 @@ def _materialize_iteration(
             "projectPath": str(project_path.resolve()),
             "taskConfig": task_config,
         }
-        return iteration, previous_train_control, previous_train_disease
+        return (
+            _tag_iteration_as_stratified_draw(
+                iteration,
+                run_dir=run_dir,
+                layout=layout,
+                cohort_labels=cohort_labels,
+                config=config,
+                seed=seed_i,
+            ),
+            previous_train_control,
+            previous_train_disease,
+        )
 
     det_override = write_detector_featurecuts_override(run_dir, config)
     if config.stability_gene_featurecuts_enabled:
@@ -269,7 +314,18 @@ def _materialize_iteration(
         "projectPath": str(project_path.resolve()),
         "taskConfig": task_config,
     }
-    return iteration, previous_train_control, previous_train_disease
+    return (
+        _tag_iteration_as_stratified_draw(
+            iteration,
+            run_dir=run_dir,
+            layout=layout,
+            cohort_labels=cohort_labels,
+            config=config,
+            seed=seed_i,
+        ),
+        previous_train_control,
+        previous_train_disease,
+    )
 
 
 def plan_validation_context(request: ValidationPlanRequest | Dict[str, Any]) -> Dict[str, Any]:

@@ -65,6 +65,9 @@ def test_plan_validation_context_materializes_iterations(tmp_path: Path) -> None
     assert len(context["iterations"]) == 2
     assert context["iterations"][0]["phase"] == "feature"
     assert context["iterations"][0]["runId"] == "feature_run_0001"
+    assert context["iterations"][0]["$type"] == "StratifiedCohortDraw"
+    assert context["iterations"][0]["groups"]
+    assert context["iterations"][0]["groups"][0]["$type"] == "MethylGroup"
     assert "taskConfig" in context["iterations"][0]
     run_project = Path(context["iterations"][0]["projectPath"])
     assert run_project.is_file()

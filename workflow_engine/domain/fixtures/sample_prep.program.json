@@ -1,0 +1,42 @@
+{
+  "programVersion": 1,
+  "name": "SamplePrepPipeline",
+  "description": "Per-sample upstream preprocessing compiled from DomainProgram IR.",
+  "projectPath": "${var.projectPath}",
+  "variables": {
+    "primaryAnalyte": "cfdna"
+  },
+  "phases": [
+    {
+      "name": "sample_prep",
+      "foreach": {
+        "collection": "samples",
+        "item": "sample",
+        "index": "sampleIndex",
+        "parallel": true
+      },
+      "steps": [
+        {"action": "sample.download_fastq", "node_key": "download_fastq"},
+        {"action": "sample.parabricks_fq2bam", "node_key": "parabricks_fq2bam"},
+        {"action": "sample.delete_fastqs", "node_key": "delete_fastqs"},
+        {"action": "sample.methyl_qc", "node_key": "methyl_qc"},
+        {
+          "if": "${qcPass}",
+          "then": [
+            {
+              "if": "${isCfdna}",
+              "then": [
+                {"action": "sample.fragmentomics", "node_key": "methyl_fragmentomics"}
+              ]
+            },
+            {"action": "sample.methyl_extract", "node_key": "methyl_extract"},
+            {"action": "sample.delete_bam", "node_key": "delete_bam"}
+          ],
+          "else": [
+            {"action": "sample.qc_failed", "node_key": "qc_failed"}
+          ]
+        }
+      ]
+    }
+  ]
+}

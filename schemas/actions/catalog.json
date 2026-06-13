@@ -8,6 +8,16 @@
       "context_vars": [],
       "default_node_type": "ACTION",
       "description": "Build per-group methylation centroids (chr\u00d7context HDF5 aggregates).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "MethylGroup"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "MethylCentroidRef"
+        ]
+      },
       "handler": "_handle_pipeline_cli",
       "input_schema_ref": "schemas/tasks/pipeline_centroid.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_centroid.output.schema.json",
@@ -23,6 +33,17 @@
       "context_vars": [],
       "default_node_type": "ACTION",
       "description": "Detect differentially methylated positions between cohort pairs.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "ComparisonSpec",
+          "MethylCentroidRef"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "MethylDetectionRef"
+        ]
+      },
       "handler": "_handle_pipeline_cli",
       "input_schema_ref": "schemas/tasks/pipeline_detector.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_detector.output.schema.json",
@@ -86,6 +107,22 @@
       ],
       "default_node_type": "ACTION",
       "description": "Download sample FASTQ files from external object storage.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.fastqFiles",
+            "scope_field": "fastqFiles"
+          }
+        ],
+        "reads_types": [
+          "MethylIngestRef"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
       "handler": "_handle_stub_external",
       "input_schema_ref": "schemas/tasks/sample_download_fastq.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_download_fastq.output.schema.json",
@@ -105,6 +142,27 @@
       ],
       "default_node_type": "ACTION",
       "description": "Align FASTQs to BAM using NVIDIA Clara Parabricks fq2bam.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.bamPath",
+            "scope_field": "bamPath"
+          },
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.metricsJson",
+            "scope_field": "metricsJson"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
       "handler": "_handle_stub_external",
       "input_schema_ref": "schemas/tasks/sample_parabricks_fq2bam.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_parabricks_fq2bam.output.schema.json",
@@ -142,6 +200,27 @@
       ],
       "default_node_type": "ACTION",
       "description": "Alignment QC metrics (Picard-style) with guardrails JSON export.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.alignmentQc",
+            "scope_field": "alignmentQc"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [
+          {
+            "output_json_path": "$.guardrails.overall_pass",
+            "var_name": "qcPass"
+          }
+        ],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
       "handler": "_handle_methyl_qc",
       "input_schema_ref": "schemas/tasks/sample_methyl_qc.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_methyl_qc.output.schema.json",
@@ -161,6 +240,22 @@
       ],
       "default_node_type": "ACTION",
       "description": "cfDNA fragmentomic analysis (WPS, end motifs) when analyte is cfDNA.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.fragmentomics",
+            "scope_field": "fragmentomics"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
       "handler": "_handle_methyl_fragmentomics",
       "input_schema_ref": "schemas/tasks/sample_fragmentomics.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_fragmentomics.output.schema.json",
@@ -180,6 +275,22 @@
       ],
       "default_node_type": "ACTION",
       "description": "Extract BAM to compressed per-chromosome HDF5 via MethylExtractor.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.methylation",
+            "scope_field": "methylation"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
       "handler": "_handle_stub_external",
       "input_schema_ref": "schemas/tasks/sample_methyl_extract.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_methyl_extract.output.schema.json",
@@ -215,6 +326,22 @@
       ],
       "default_node_type": "ACTION",
       "description": "Mark sample QC_FAILED and skip downstream steps when guardrails fail.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.status",
+            "scope_field": "status"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
       "handler": "_handle_mark_failed",
       "input_schema_ref": "schemas/tasks/sample_qc_failed.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_qc_failed.output.schema.json",
@@ -233,6 +360,21 @@
       ],
       "default_node_type": "ACTION",
       "description": "Monte Carlo planner: stratified per-cohort subsamples and materialize run projects.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "MethylGroup"
+        ],
+        "scope_bindings": [
+          {
+            "output_json_path": "$.iterations",
+            "var_name": "iterations"
+          }
+        ],
+        "writes_types": [
+          "StratifiedCohortDraw"
+        ]
+      },
       "handler": "_handle_validation_plan_iterations",
       "input_schema_ref": "schemas/tasks/validation_plan_iterations.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_plan_iterations.output.schema.json",
