@@ -299,6 +299,12 @@ class MethylCentroid:
             self._original_samples = list(_orig_s)
             self.add_samples = [Path(s) / f"{chrom}-{ctx}.h5" for s in _orig_a]
             self._original_add_samples = list(_orig_a)
+        elif _orig_r:
+            # Incremental update without on-disk baseline yet: empty cohort + explicit deltas.
+            self._original_samples = []
+            self.samples = []
+            self._original_add_samples = list(_orig_a)
+            self.add_samples = [Path(s) / f"{chrom}-{ctx}.h5" for s in _orig_a]
         else:
             self.samples = (
                 [Path(s) / f"{chrom}-{ctx}.h5" for s in _orig_a] if _orig_a else []

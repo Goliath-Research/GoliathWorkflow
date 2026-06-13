@@ -4,7 +4,13 @@ from tempfile import TemporaryDirectory
 
 from methyl_validation import pipeline_runner
 from methyl_validation.pipeline_runner import run_centroid
-from methyl_validation.project_gen import generate_run_project
+from methyl_validation.project_gen import (
+    carry_forward_centroids_from_previous_run,
+    centroid_override_has_remove_samples,
+    generate_run_project,
+    incremental_centroid_update_requested,
+    prepare_incremental_centroid_baseline,
+)
 
 
 def write_base_project(path: Path) -> None:
@@ -179,3 +185,81 @@ def test_run_pipeline_for_iteration_splits_centroid_logs_and_counts(monkeypatch)
         assert (logs_dir / "methyl-centroid-group1.log").is_file()
         assert (logs_dir / "methyl-centroid-group2.log").is_file()
         assert (logs_dir / "methyl-detector.log").is_file()
+
+
+def test_carry_forward_centroids_copies_tree_for_incremental_baseline():
+    with TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        prev = root / "run_0001"
+        cur = root / "run_0002"
+        (prev / "centroids" / "controls" / "all" / "all").mkdir(parents=True)
+        marker = prev / "centroids" / "controls" / "all" / "all" / "1-CG.h5"
+        marker.write_bytes(b"centroid")
+
+        assert carry_forward_centroids_from_previous_run(prev, cur)
+        assert (cur / "centroids" / "controls" / "all" / "all" / "1-CG.h5").is_file()
+
+
+def test_prepare_incremental_centroid_baseline_skips_without_remove_samples():
+    with TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        prev = root / "run_0001"
+        cur = root / "run_0002"
+        (prev / "centroids").mkdir(parents=True)
+        override = root / "centroid_group1_override.json"
+        override.write_text(
+            json.dumps({"base_config": {"add_samples": ["/samples/a"], "remove_samples": []}}),
+            encoding="utf-8",
+        )
+        assert not prepare_incremental_centroid_baseline(prev, cur, override, None)
+        assert not (cur / "centroids").exists()
+
+
+def test_incremental_centroid_update_requested_when_remove_present():
+    with TemporaryDirectory() as temp_dir:
+        override = Path(temp_dir) / "override.json"
+        override.write_text(
+            json.dumps({"base_config": {"add_samples": ["/a"], "remove_samples": ["/b"]}}),
+            encoding="utf-8",
+        )
+        assert centroid_override_has_remove_samples(override)
+        assert incremental_centroid_update_requested(override, None)
+
+
+def test_run_pipeline_for_iteration_prepares_centroid_baseline(monkeypatch):
+    prepared = []
+
+    def fake_prepare(previous_run_dir, current_run_dir, c1, c2):
+        prepared.append((str(previous_run_dir), str(current_run_dir)))
+        return True
+
+    def fake_run_centroid_group(project_json, group, step_override=None):
+        return 0, "ok", ""
+
+    def fake_run_detector(project_json, per_cancer_group=False, detector_step_override=None):
+        return 0, "ok", ""
+
+    monkeypatch.setattr(
+        "methyl_validation.project_gen.prepare_incremental_centroid_baseline",
+        fake_prepare,
+    )
+    monkeypatch.setattr(pipeline_runner, "run_centroid_group", fake_run_centroid_group)
+    monkeypatch.setattr(pipeline_runner, "run_detector", fake_run_detector)
+
+    with TemporaryDirectory() as temp_dir:
+        run_dir = Path(temp_dir) / "run_0002"
+        run_dir.mkdir(parents=True)
+        project_json = run_dir / "project.json"
+        project_json.write_text("{}", encoding="utf-8")
+        ok, errors, _ = pipeline_runner.run_pipeline_for_iteration(
+            project_json,
+            centroid_step_overrides={
+                "group1": Path(temp_dir) / "g1.json",
+                "group2": Path(temp_dir) / "g2.json",
+            },
+        )
+        assert ok
+        assert errors == []
+        assert len(prepared) == 1
+        assert prepared[0][0].endswith("run_0001")
+        assert prepared[0][1].endswith("run_0002")

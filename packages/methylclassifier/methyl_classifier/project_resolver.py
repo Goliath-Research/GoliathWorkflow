@@ -33,6 +33,45 @@ from .models.config_schema import ClassificationConfig
 CLASSIFIER_OUTPUT_FILENAME = "classification_results.csv"
 
 
+def _resolved_training_cohort_paths_by_side(
+    project: ProjectConfig,
+) -> Optional[Tuple[List[str], List[str]]]:
+    """Training cohort (control paths, disease paths) from project train sample lists."""
+    if not project.uses_control_disease():
+        return None
+    control_paths: List[str] = []
+    disease_paths: List[str] = []
+    with_side = project._get_resolved_groups_with_side(expand_subclusters=False)
+    for _label, paths, side in with_side:
+        if side == "control":
+            control_paths.extend(paths)
+        else:
+            disease_paths.extend(paths)
+    if not control_paths or not disease_paths:
+        return None
+    return control_paths, disease_paths
+
+
+def _apply_training_cohort_to_classifier_base(
+    project: ProjectConfig,
+    base: Dict[str, Any],
+) -> None:
+    """
+    Use the project's training cohort for centroid validation when explicit sample lists
+    are not already set (Monte Carlo train CSVs, production cohorts).
+    """
+    if base.get("centroid1_sample_paths") or base.get("centroid2_sample_paths"):
+        return
+    if base.get("samples"):
+        return
+    cohort = _resolved_training_cohort_paths_by_side(project)
+    if cohort is None:
+        return
+    control_paths, disease_paths = cohort
+    base["centroid1_sample_paths"] = list(control_paths)
+    base["centroid2_sample_paths"] = list(disease_paths)
+
+
 def default_ovr_unified_classifier_basename(project: ProjectConfig) -> str:
     """
     Basename MethylDetector writes under each comparison output dir:
@@ -343,6 +382,13 @@ def resolve_classifier_config_per_cancer_group(
                 base["save_classifier_path"] = str(
                     classifier_out_dir / f"{project.project_name}-classifier.pkl"
                 )
+            resolved_map = {lbl: paths for lbl, paths in project.get_resolved_groups()}
+            if not base.get("centroid1_sample_paths"):
+                ctrl_paths = list(resolved_map.get(ctrl_label, []))
+                dis_paths = list(resolved_map.get(dis_label, []))
+                if ctrl_paths and dis_paths:
+                    base["centroid1_sample_paths"] = ctrl_paths
+                    base["centroid2_sample_paths"] = dis_paths
             out.append((ClassificationConfig(**base), comp_label))
         return out
 
@@ -569,5 +615,7 @@ def resolve_classifier_config(
             )
 
     base.pop("ovr_bundle_filename", None)
+
+    _apply_training_cohort_to_classifier_base(project, base)
 
     return ClassificationConfig(**base)
