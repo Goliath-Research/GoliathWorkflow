@@ -123,6 +123,25 @@ objects:
     - name: wf.wf_repo_list_actions
       kind: function
       required: true
+    - name: wf.wf_repo_upsert_workflow_action
+      kind: procedure
+      required: true
+      parameters:
+        - { name: action_name, type: text, direction: in }
+        - { name: capability, type: text, direction: in, nullable: true }
+        - { name: payload_schema_ref, type: text, direction: in, nullable: true }
+    - name: wf.wf_repo_create_workflow_graph
+      kind: function
+      required: true
+      parameters:
+        - { name: spec, type: json, direction: in }
+      result_set:
+        columns:
+          - { name: workflow_def_id, type: bigint }
+          - { name: workflow_version_id, type: bigint }
+          - { name: root_node_id, type: bigint }
+          - { name: name, type: text }
+        cardinality: exactly_one
 
   engine_runtime:
     - name: wf.wf_json_fragment_from_string

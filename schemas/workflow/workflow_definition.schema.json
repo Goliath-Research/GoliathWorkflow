@@ -1,0 +1,409 @@
+{
+  "$defs": {
+    "WorkflowEdgeSpec": {
+      "properties": {
+        "branch_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "SEQUENCE",
+                "PARALLEL",
+                "THEN",
+                "ELSE",
+                "CASE",
+                "DEFAULT",
+                "BODY"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Branch Kind"
+        },
+        "child_node_key": {
+          "title": "Child Node Key",
+          "type": "string"
+        },
+        "child_order": {
+          "default": 0,
+          "title": "Child Order",
+          "type": "integer"
+        },
+        "condition_expr": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition Expr"
+        },
+        "is_default": {
+          "default": false,
+          "title": "Is Default",
+          "type": "boolean"
+        },
+        "parent_node_key": {
+          "title": "Parent Node Key",
+          "type": "string"
+        },
+        "switch_case_value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Switch Case Value"
+        }
+      },
+      "required": [
+        "parent_node_key",
+        "child_node_key"
+      ],
+      "title": "WorkflowEdgeSpec",
+      "type": "object"
+    },
+    "WorkflowInputBindingSpec": {
+      "properties": {
+        "is_required": {
+          "default": false,
+          "title": "Is Required",
+          "type": "boolean"
+        },
+        "node_key": {
+          "title": "Node Key",
+          "type": "string"
+        },
+        "source_expr": {
+          "title": "Source Expr",
+          "type": "string"
+        },
+        "target_json_path": {
+          "title": "Target Json Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_key",
+        "target_json_path",
+        "source_expr"
+      ],
+      "title": "WorkflowInputBindingSpec",
+      "type": "object"
+    },
+    "WorkflowNodeSpec": {
+      "properties": {
+        "action_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action Name"
+        },
+        "condition_ref_node_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition Ref Node Key"
+        },
+        "condition_var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Condition Var"
+        },
+        "foreach_collection_var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Foreach Collection Var"
+        },
+        "foreach_index_var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Foreach Index Var"
+        },
+        "foreach_item_var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Foreach Item Var"
+        },
+        "foreach_parallel": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Foreach Parallel"
+        },
+        "input_template": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Input Template"
+        },
+        "node_key": {
+          "title": "Node Key",
+          "type": "string"
+        },
+        "node_type": {
+          "enum": [
+            "ACTION",
+            "SEQUENCE",
+            "PARALLEL",
+            "IF",
+            "SWITCH",
+            "REPEAT",
+            "WHILE",
+            "FOREACH"
+          ],
+          "title": "Node Type",
+          "type": "string"
+        },
+        "repeat_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Repeat Count"
+        },
+        "switch_ref_node_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Switch Ref Node Key"
+        },
+        "switch_var": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Switch Var"
+        }
+      },
+      "required": [
+        "node_key",
+        "node_type"
+      ],
+      "title": "WorkflowNodeSpec",
+      "type": "object"
+    },
+    "WorkflowOutputBindingSpec": {
+      "properties": {
+        "node_key": {
+          "title": "Node Key",
+          "type": "string"
+        },
+        "source_json_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Json Path"
+        },
+        "source_kind": {
+          "enum": [
+            "output_path",
+            "result_code"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "var_name": {
+          "title": "Var Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_key",
+        "var_name",
+        "source_kind"
+      ],
+      "title": "WorkflowOutputBindingSpec",
+      "type": "object"
+    },
+    "WorkflowScopeDefaultSpec": {
+      "properties": {
+        "default_expr": {
+          "title": "Default Expr",
+          "type": "string"
+        },
+        "node_key": {
+          "title": "Node Key",
+          "type": "string"
+        },
+        "var_name": {
+          "title": "Var Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_key",
+        "var_name",
+        "default_expr"
+      ],
+      "title": "WorkflowScopeDefaultSpec",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Editor output contract for wf_repo_create_workflow_graph.",
+  "properties": {
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "edges": {
+      "items": {
+        "$ref": "#/$defs/WorkflowEdgeSpec"
+      },
+      "title": "Edges",
+      "type": "array"
+    },
+    "input_bindings": {
+      "items": {
+        "$ref": "#/$defs/WorkflowInputBindingSpec"
+      },
+      "title": "Input Bindings",
+      "type": "array"
+    },
+    "is_active": {
+      "default": true,
+      "title": "Is Active",
+      "type": "boolean"
+    },
+    "name": {
+      "title": "Name",
+      "type": "string"
+    },
+    "nodes": {
+      "items": {
+        "$ref": "#/$defs/WorkflowNodeSpec"
+      },
+      "title": "Nodes",
+      "type": "array"
+    },
+    "output_bindings": {
+      "items": {
+        "$ref": "#/$defs/WorkflowOutputBindingSpec"
+      },
+      "title": "Output Bindings",
+      "type": "array"
+    },
+    "root_node_key": {
+      "title": "Root Node Key",
+      "type": "string"
+    },
+    "scope_defaults": {
+      "items": {
+        "$ref": "#/$defs/WorkflowScopeDefaultSpec"
+      },
+      "title": "Scope Defaults",
+      "type": "array"
+    },
+    "version_major": {
+      "default": 1,
+      "title": "Version Major",
+      "type": "integer"
+    },
+    "version_minor": {
+      "default": 0,
+      "title": "Version Minor",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "name",
+    "root_node_key",
+    "nodes"
+  ],
+  "title": "WorkflowDefinitionSpec",
+  "type": "object"
+}

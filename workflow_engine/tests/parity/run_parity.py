@@ -56,6 +56,9 @@ def deploy_postgres(dsn: str) -> None:
         "01_worker_api.sql",
         "02_repository_api.sql",
         "04_admin.sql",
+        "wf_action_schema.sql",
+        "wf_repo_upsert_workflow_action.sql",
+        "wf_repo_create_workflow_graph.sql",
     )
     for name in scripts:
         _run_psql(dsn, SQL_PG / name)

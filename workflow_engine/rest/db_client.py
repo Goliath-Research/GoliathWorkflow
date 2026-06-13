@@ -233,3 +233,34 @@ def get_action_schema(dsn: str, action_name: str, direction: str) -> dict[str, A
         "schema_id": row.get("schema_id"),
         "schema_json": row.get("schema_json") or {},
     }
+
+
+def upsert_workflow_action(
+    dsn: str,
+    action_name: str,
+    capability: Optional[str],
+    payload_schema_ref: Optional[str] = None,
+) -> None:
+    cap = _sql_literal(capability) if capability else "NULL"
+    ref = _sql_literal(payload_schema_ref) if payload_schema_ref else "NULL"
+    exec_sql(
+        dsn,
+        "CALL wf.wf_repo_upsert_workflow_action("
+        f"{_sql_literal(action_name)}, {cap}, {ref});",
+    )
+
+
+def create_workflow_definition(dsn: str, spec: dict[str, Any]) -> dict[str, Any]:
+    raw = query_scalar(
+        dsn,
+        f"SELECT wf.wf_repo_create_workflow_graph({_sql_literal(spec)})::text",
+    )
+    if not raw:
+        raise RuntimeError("wf_repo_create_workflow_graph returned no result")
+    payload = json.loads(raw)
+    return {
+        "workflow_def_id": int(payload["workflow_def_id"]),
+        "workflow_version_id": int(payload["workflow_version_id"]),
+        "root_node_id": int(payload["root_node_id"]),
+        "name": payload.get("name"),
+    }

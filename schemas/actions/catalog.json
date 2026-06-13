@@ -1,0 +1,244 @@
+{
+  "actions": [
+    {
+      "action_name": "pipeline.centroid",
+      "capability": "methyl-centroid",
+      "category": "modeling",
+      "cli_tool": "methyl-centroid",
+      "context_vars": [],
+      "default_node_type": "ACTION",
+      "description": "Build per-group methylation centroids (chr\u00d7context HDF5 aggregates).",
+      "handler": "_handle_pipeline_cli",
+      "input_schema_ref": "schemas/tasks/pipeline_centroid.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_centroid.output.schema.json",
+      "schema_id": "pipeline.centroid",
+      "step_config_key": "centroid",
+      "tool": "MethylCentroid"
+    },
+    {
+      "action_name": "pipeline.detector",
+      "capability": "methyl-detector",
+      "category": "modeling",
+      "cli_tool": "methyl-detector",
+      "context_vars": [],
+      "default_node_type": "ACTION",
+      "description": "Detect differentially methylated positions between cohort pairs.",
+      "handler": "_handle_pipeline_cli",
+      "input_schema_ref": "schemas/tasks/pipeline_detector.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_detector.output.schema.json",
+      "schema_id": "pipeline.detector",
+      "step_config_key": "detection",
+      "tool": "MethylDetector"
+    },
+    {
+      "action_name": "pipeline.mapper",
+      "capability": "methyl-mapper",
+      "category": "modeling",
+      "cli_tool": "methyl-mapper",
+      "context_vars": [],
+      "default_node_type": "ACTION",
+      "description": "Map DMPs to genes and genomic features.",
+      "handler": "_handle_pipeline_cli",
+      "input_schema_ref": "schemas/tasks/pipeline_mapper.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_mapper.output.schema.json",
+      "schema_id": "pipeline.mapper",
+      "step_config_key": "mapper",
+      "tool": "MethylMapper"
+    },
+    {
+      "action_name": "pipeline.enricher",
+      "capability": "methyl-enricher",
+      "category": "modeling",
+      "cli_tool": "methyl-enricher",
+      "context_vars": [],
+      "default_node_type": "ACTION",
+      "description": "Functional enrichment on mapped gene sets.",
+      "handler": "_handle_pipeline_cli",
+      "input_schema_ref": "schemas/tasks/pipeline_enricher.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_enricher.output.schema.json",
+      "schema_id": "pipeline.enricher",
+      "step_config_key": "enricher",
+      "tool": "MethylEnricher"
+    },
+    {
+      "action_name": "pipeline.progression",
+      "capability": "methyl-disease-progression",
+      "category": "modeling",
+      "cli_tool": "methyl-disease-progression",
+      "context_vars": [],
+      "default_node_type": "ACTION",
+      "description": "Ordered disease-stage progression analysis across comparisons.",
+      "handler": "_handle_pipeline_cli",
+      "input_schema_ref": "schemas/tasks/pipeline_progression.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_progression.output.schema.json",
+      "schema_id": "pipeline.progression",
+      "step_config_key": "progression",
+      "tool": "MethylDiseaseProgression"
+    },
+    {
+      "action_name": "sample.download_fastq",
+      "capability": "sample.download-fastq",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "fastqSourceUri"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Download sample FASTQ files from external object storage.",
+      "handler": "_handle_stub_external",
+      "input_schema_ref": "schemas/tasks/sample_download_fastq.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_download_fastq.output.schema.json",
+      "schema_id": "sample.download_fastq",
+      "step_config_key": null,
+      "tool": "SampleDownloadFastq"
+    },
+    {
+      "action_name": "sample.parabricks_fq2bam",
+      "capability": "parabricks.fq2bam",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "referenceFasta",
+        "referenceGtf"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Align FASTQs to BAM using NVIDIA Clara Parabricks fq2bam.",
+      "handler": "_handle_stub_external",
+      "input_schema_ref": "schemas/tasks/sample_parabricks_fq2bam.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_parabricks_fq2bam.output.schema.json",
+      "schema_id": "sample.parabricks_fq2bam",
+      "step_config_key": null,
+      "tool": "ParabricksFq2Bam"
+    },
+    {
+      "action_name": "sample.delete_fastqs",
+      "capability": "sample.delete-fastqs",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Delete FASTQ files after alignment to reclaim storage.",
+      "handler": "_handle_stub_external",
+      "input_schema_ref": "schemas/tasks/sample_delete_fastqs.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_delete_fastqs.output.schema.json",
+      "schema_id": "sample.delete_fastqs",
+      "step_config_key": null,
+      "tool": "SampleDeleteFastqs"
+    },
+    {
+      "action_name": "sample.methyl_qc",
+      "capability": "methyl-qc",
+      "category": "sample_prep",
+      "cli_tool": "methyl-qc",
+      "context_vars": [
+        "projectPath",
+        "sampleId",
+        "sampleDir",
+        "primaryAnalyte"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Alignment QC metrics (Picard-style) with guardrails JSON export.",
+      "handler": "_handle_methyl_qc",
+      "input_schema_ref": "schemas/tasks/sample_methyl_qc.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_methyl_qc.output.schema.json",
+      "schema_id": "sample.methyl_qc",
+      "step_config_key": "alignment_qc",
+      "tool": "MethylAlignmentQc"
+    },
+    {
+      "action_name": "sample.fragmentomics",
+      "capability": "methyl-fragmentomics",
+      "category": "sample_prep",
+      "cli_tool": "methyl-fragmentomics",
+      "context_vars": [
+        "projectPath",
+        "sampleId",
+        "sampleDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "cfDNA fragmentomic analysis (WPS, end motifs) when analyte is cfDNA.",
+      "handler": "_handle_methyl_fragmentomics",
+      "input_schema_ref": "schemas/tasks/sample_fragmentomics.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_fragmentomics.output.schema.json",
+      "schema_id": "sample.fragmentomics",
+      "step_config_key": "fragmentomics",
+      "tool": "MethylFragmentomics"
+    },
+    {
+      "action_name": "sample.methyl_extract",
+      "capability": "methyl-extract",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath",
+        "referenceFasta"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Extract BAM to compressed per-chromosome HDF5 via MethylExtractor.",
+      "handler": "_handle_stub_external",
+      "input_schema_ref": "schemas/tasks/sample_methyl_extract.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_methyl_extract.output.schema.json",
+      "schema_id": "sample.methyl_extract",
+      "step_config_key": null,
+      "tool": "MethylExtract"
+    },
+    {
+      "action_name": "sample.delete_bam",
+      "capability": "sample.delete-bam",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Delete BAM after methylation extraction to reclaim storage.",
+      "handler": "_handle_stub_external",
+      "input_schema_ref": "schemas/tasks/sample_delete_bam.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_delete_bam.output.schema.json",
+      "schema_id": "sample.delete_bam",
+      "step_config_key": null,
+      "tool": "SampleDeleteBam"
+    },
+    {
+      "action_name": "sample.qc_failed",
+      "capability": "sample.mark-failed",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "reason"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Mark sample QC_FAILED and skip downstream steps when guardrails fail.",
+      "handler": "_handle_mark_failed",
+      "input_schema_ref": "schemas/tasks/sample_qc_failed.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_qc_failed.output.schema.json",
+      "schema_id": "sample.qc_failed",
+      "step_config_key": null,
+      "tool": "SampleMarkFailed"
+    },
+    {
+      "action_name": "validation.plan_iterations",
+      "capability": "validation.plan-iterations",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "featureIterations",
+        "qualityIterations"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Monte Carlo planner: stratified per-cohort subsamples and materialize run projects.",
+      "handler": "_handle_validation_plan_iterations",
+      "input_schema_ref": "schemas/tasks/validation_plan_iterations.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_plan_iterations.output.schema.json",
+      "schema_id": "validation.plan_iterations",
+      "step_config_key": "validation"
+    }
+  ],
+  "version": 1
+}

@@ -1,0 +1,64 @@
+"""Tests for the unified action catalog and derived registries."""
+
+from __future__ import annotations
+
+import importlib
+
+import pytest
+
+from methyl_worker.action_catalog import (
+    ACTION_CATALOG,
+    PROJECT_STEP_CONFIG_KEYS,
+    build_capability_handlers,
+    build_tool_cli_map,
+    validate_catalog_linkage,
+)
+from methyl_worker.action_catalog_export import check_action_catalog_drift, export_action_catalog
+from methyl_worker.handlers import CAPABILITY_HANDLERS, TOOL_CLI, execute_task
+from methyl_worker.task_schema_registry import TASK_SCHEMA_SPECS, list_task_schema_specs
+
+
+def test_catalog_linkage_valid() -> None:
+    assert validate_catalog_linkage() == []
+
+
+def test_task_schema_specs_derived_from_catalog() -> None:
+    assert len(TASK_SCHEMA_SPECS) == len(ACTION_CATALOG)
+    assert {s.action_name for s in TASK_SCHEMA_SPECS} == {e.action_name for e in ACTION_CATALOG}
+
+
+def test_capability_handlers_derived_from_catalog() -> None:
+    assert CAPABILITY_HANDLERS == build_capability_handlers()
+    assert len(CAPABILITY_HANDLERS) == len(ACTION_CATALOG)
+
+
+def test_tool_cli_derived_from_catalog() -> None:
+    assert TOOL_CLI == build_tool_cli_map()
+    assert TOOL_CLI["MethylCentroid"] == "methyl-centroid"
+    assert TOOL_CLI["MethylAlignmentQc"] == "methyl-qc"
+
+
+def test_every_catalog_handler_exists_in_handlers_module() -> None:
+    handlers_mod = importlib.import_module("methyl_worker.handlers")
+    for entry in ACTION_CATALOG:
+        assert hasattr(handlers_mod, entry.handler), entry.handler
+
+
+def test_step_config_keys_are_recognized() -> None:
+    for entry in ACTION_CATALOG:
+        if entry.step_config_key is not None:
+            assert entry.step_config_key in PROJECT_STEP_CONFIG_KEYS
+
+
+def test_action_catalog_export_roundtrip(tmp_path) -> None:
+    export_action_catalog(output_root=tmp_path, write=True)
+    assert check_action_catalog_drift(output_root=tmp_path) == []
+
+
+def test_mark_failed_handler() -> None:
+    result = execute_task(
+        "sample.mark-failed",
+        "sample.qc_failed",
+        {"sampleId": "S1", "sampleDir": "/work/samples/S1", "reason": "test"},
+    )
+    assert result["status"] == "QC_FAILED"

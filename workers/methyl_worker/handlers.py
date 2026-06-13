@@ -15,34 +15,13 @@ logger = logging.getLogger(__name__)
 HandlerResult = Dict[str, Any]
 Handler = Callable[[str, str, Dict[str, Any]], HandlerResult]
 
-# input_json "tool" field -> console script name
-TOOL_CLI: Dict[str, str] = {
-    "MethylCentroid": "methyl-centroid",
-    "MethylDetector": "methyl-detector",
-    "MethylMapper": "methyl-mapper",
-    "MethylEnricher": "methyl-enricher",
-    "MethylDiseaseProgression": "methyl-disease-progression",
-    "MethylAlignmentQc": "methyl-qc",
-    "MethylFragmentomics": "methyl-fragmentomics",
-}
+from .action_catalog import build_capability_handlers, build_tool_cli_map
 
-# wf.workflow_action.capability -> handler
-CAPABILITY_HANDLERS: Dict[str, str] = {
-    "methyl-centroid": "_handle_pipeline_cli",
-    "methyl-detector": "_handle_pipeline_cli",
-    "methyl-mapper": "_handle_pipeline_cli",
-    "methyl-enricher": "_handle_pipeline_cli",
-    "methyl-disease-progression": "_handle_pipeline_cli",
-    "methyl-qc": "_handle_methyl_qc",
-    "methyl-fragmentomics": "_handle_methyl_fragmentomics",
-    "sample.download-fastq": "_handle_stub_external",
-    "parabricks.fq2bam": "_handle_stub_external",
-    "sample.delete-fastqs": "_handle_stub_external",
-    "methyl-extract": "_handle_stub_external",
-    "sample.delete-bam": "_handle_stub_external",
-    "sample.mark-failed": "_handle_mark_failed",
-    "validation.plan-iterations": "_handle_validation_plan_iterations",
-}
+# input_json "tool" field -> console script name
+TOOL_CLI: Dict[str, str] = build_tool_cli_map()
+
+# wf.workflow_action.capability -> handler function name
+CAPABILITY_HANDLERS: Dict[str, str] = build_capability_handlers()
 
 
 def _project_path(input_json: Dict[str, Any]) -> Optional[str]:

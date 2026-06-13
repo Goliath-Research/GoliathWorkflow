@@ -15,12 +15,21 @@ Deploy **in order**:
 | 7 | [`02_repository_api.sql`](02_repository_api.sql) | Middle-tier repository wrappers |
 | 8 | [`04_admin.sql`](04_admin.sql) | Admin (`sp_delete_workflow_def`) |
 | 9 | [`wf_action_schema.sql`](wf_action_schema.sql) | Action I/O JSON Schema storage + repo procs |
+| 10 | [`wf_repo_upsert_workflow_action.sql`](wf_repo_upsert_workflow_action.sql) | Upsert action catalog rows |
+| 11 | [`wf_repo_create_workflow_graph.sql`](wf_repo_create_workflow_graph.sql) | Programmatic workflow definition builder |
 
-After SQL deploy, seed action schemas:
+After SQL deploy, seed the action catalog:
 
 ```bash
 source .venv/bin/activate
 methyl-export-task-schemas
+methyl-export-action-catalog
+python workflow_engine/sql/seed_action_catalog.py
+```
+
+Legacy schema-only seed (requires actions already in DB):
+
+```bash
 python workflow_engine/sql/seed_action_schemas.py
 ```
 

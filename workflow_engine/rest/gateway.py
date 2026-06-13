@@ -20,9 +20,11 @@ from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "contract"))
 
 from db_client import (
     apply_validation_plan,
+    create_workflow_definition,
     create_workflow_instance,
     delete_workflow_definition,
     get_action_schema,
@@ -30,12 +32,14 @@ from db_client import (
     list_workflow_actions,
     pg_dsn,
     start_workflow_instance,
+    upsert_workflow_action,
     worker_authenticate,
     worker_fail_task,
     worker_heartbeat,
     worker_request_task,
     worker_submit_result,
 )
+from workflow_definition_spec import WorkflowDefinitionSpec
 
 
 class RestGateway:
@@ -139,6 +143,20 @@ class RestGateway:
             start_workflow_instance(self.dsn, instance_id)
             summary = get_workflow_instance(self.dsn, instance_id)
             return 201, summary
+
+        if method == "POST" and path == "/v1/workflows/definitions":
+            spec = WorkflowDefinitionSpec.model_validate(body).to_db_spec()
+            result = create_workflow_definition(self.dsn, spec)
+            return 201, result
+
+        if method == "POST" and path == "/v1/actions":
+            upsert_workflow_action(
+                self.dsn,
+                str(body["action_name"]),
+                body.get("capability"),
+                body.get("payload_schema_ref"),
+            )
+            return 201, {"action_name": body["action_name"]}
 
         m = re.fullmatch(r"/v1/workflows/instances/(\d+)", path)
         if method == "GET" and m:

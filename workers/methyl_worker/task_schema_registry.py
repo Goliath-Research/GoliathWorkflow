@@ -1,16 +1,18 @@
 """
 Registry of workflow action JSON Schema specs (input/output Pydantic models).
 
-Source of truth for worker payload validation and schemas/tasks/*.schema.json export.
+Derived from the unified action catalog (action_catalog.py).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from importlib import import_module
-from typing import List, Optional, Sequence, Tuple, Type
+from typing import List, Optional, Sequence, Type
 
 from pydantic import BaseModel
+
+from .action_catalog import ACTION_CATALOG, ActionCatalogEntry
 
 
 @dataclass(frozen=True)
@@ -49,92 +51,19 @@ def _load_model(module: str, class_name: str) -> Type[BaseModel]:
     return model
 
 
-_PIPELINE = (
-    "methyl_worker.task_models",
-    "PipelineCliTaskInput",
-    "methyl_worker.task_models",
-    "PipelineCliTaskOutput",
-)
-_SAMPLE_IN = ("methyl_worker.task_models", "SamplePrepTaskInput")
+def _entry_to_task_spec(entry: ActionCatalogEntry) -> TaskSchemaSpec:
+    return TaskSchemaSpec(
+        action_name=entry.action_name,
+        schema_id=entry.schema_id,
+        input_module=entry.input_module,
+        input_class=entry.input_class,
+        output_module=entry.output_module,
+        output_class=entry.output_class,
+    )
 
-TASK_SCHEMA_SPECS: Sequence[TaskSchemaSpec] = (
-    TaskSchemaSpec("pipeline.centroid", "pipeline.centroid", *_PIPELINE),
-    TaskSchemaSpec("pipeline.detector", "pipeline.detector", *_PIPELINE),
-    TaskSchemaSpec("pipeline.mapper", "pipeline.mapper", *_PIPELINE),
-    TaskSchemaSpec("pipeline.enricher", "pipeline.enricher", *_PIPELINE),
-    TaskSchemaSpec("pipeline.progression", "pipeline.progression", *_PIPELINE),
-    TaskSchemaSpec(
-        "sample.download_fastq",
-        "sample.download_fastq",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
-        "methyl_worker.task_models",
-        "DownloadFastqTaskOutput",
-    ),
-    TaskSchemaSpec(
-        "sample.parabricks_fq2bam",
-        "sample.parabricks_fq2bam",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
-        "methyl_worker.task_models",
-        "ParabricksTaskOutput",
-    ),
-    TaskSchemaSpec(
-        "sample.delete_fastqs",
-        "sample.delete_fastqs",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
-        "methyl_worker.task_models",
-        "DeleteTaskOutput",
-    ),
-    TaskSchemaSpec(
-        "sample.methyl_qc",
-        "sample.methyl_qc",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
-        "methyl_worker.task_models",
-        "MethylQcTaskOutput",
-    ),
-    TaskSchemaSpec(
-        "sample.fragmentomics",
-        "sample.fragmentomics",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
-        "methyl_worker.task_models",
-        "FragmentomicsTaskOutput",
-    ),
-    TaskSchemaSpec(
-        "sample.methyl_extract",
-        "sample.methyl_extract",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
-        "methyl_worker.task_models",
-        "MethylExtractTaskOutput",
-    ),
-    TaskSchemaSpec(
-        "sample.delete_bam",
-        "sample.delete_bam",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
-        "methyl_worker.task_models",
-        "DeleteTaskOutput",
-    ),
-    TaskSchemaSpec(
-        "sample.qc_failed",
-        "sample.qc_failed",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
-        "methyl_worker.task_models",
-        "MarkFailedTaskOutput",
-    ),
-    TaskSchemaSpec(
-        "validation.plan_iterations",
-        "validation.plan_iterations",
-        "methyl_validation.workflow_planner",
-        "ValidationPlanRequest",
-        "methyl_worker.task_models",
-        "ValidationPlanTaskOutput",
-    ),
+
+TASK_SCHEMA_SPECS: Sequence[TaskSchemaSpec] = tuple(
+    _entry_to_task_spec(entry) for entry in ACTION_CATALOG
 )
 
 

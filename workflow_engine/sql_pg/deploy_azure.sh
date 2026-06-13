@@ -60,6 +60,8 @@ SCRIPTS=(
   02_repository_api.sql
   04_admin.sql
   wf_action_schema.sql
+  wf_repo_upsert_workflow_action.sql
+  wf_repo_create_workflow_graph.sql
 )
 
 echo "Target: host=$PGHOST db=$PGDATABASE user=$PGUSER sslmode=$PGSSLMODE"

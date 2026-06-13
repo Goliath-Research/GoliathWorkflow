@@ -145,6 +145,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ActionListResponse'
+    post:
+      tags: [admin]
+      summary: Upsert workflow action row (wf.wf_repo_upsert_workflow_action)
+      operationId: upsertWorkflowAction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertActionRequest'
+      responses:
+        '201':
+          description: Action upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpsertActionResponse'
 
   /actions/{actionName}/schema:
     get:
@@ -228,6 +245,25 @@ paths:
       responses:
         '200':
           description: Instance started
+
+  /workflows/definitions:
+    post:
+      tags: [admin]
+      summary: Create workflow definition graph (wf.wf_repo_create_workflow_graph)
+      operationId: createWorkflowDefinition
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowDefinitionSpec'
+      responses:
+        '201':
+          description: Workflow definition created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWorkflowDefinitionResponse'
 
   /workflows/definitions/{name}:
     delete:
@@ -428,6 +464,88 @@ components:
         schema_json:
           type: object
           additionalProperties: true
+
+    UpsertActionRequest:
+      type: object
+      required: [action_name]
+      properties:
+        action_name:
+          type: string
+        capability:
+          type: string
+          nullable: true
+        payload_schema_ref:
+          type: string
+          nullable: true
+
+    UpsertActionResponse:
+      type: object
+      required: [action_name]
+      properties:
+        action_name:
+          type: string
+
+    WorkflowDefinitionSpec:
+      type: object
+      required: [name, root_node_key, nodes]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        version_major:
+          type: integer
+          default: 1
+        version_minor:
+          type: integer
+          default: 0
+        is_active:
+          type: boolean
+          default: true
+        root_node_key:
+          type: string
+        nodes:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        edges:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        input_bindings:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        output_bindings:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        scope_defaults:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    CreateWorkflowDefinitionResponse:
+      type: object
+      required: [workflow_def_id, workflow_version_id, root_node_id, name]
+      properties:
+        workflow_def_id:
+          type: integer
+          format: int64
+        workflow_version_id:
+          type: integer
+          format: int64
+        root_node_id:
+          type: integer
+          format: int64
+        name:
+          type: string
 
   securitySchemes:
     WorkerToken:
