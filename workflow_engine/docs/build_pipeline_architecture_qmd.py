@@ -171,6 +171,20 @@ TIKZ: dict[str, str] = {
 """,
         "JSON Schema reference tree (excerpt).",
     ),
+    "action-schemas": _fig(
+        r"""
+\node[base] (pm) {Pydantic task\\models};
+\node[base, right=0.45cm of pm] (exp) {methyl-export-\\task-schemas};
+\node[base, right=0.45cm of exp] (db) {wf.workflow\_\\action\_schema};
+\node[base, right=0.45cm of db] (gw) {GET /v1/actions};
+\node[base, below=0.75cm of gw] (ed) {Config Editor};
+\node[base, left=0.75cm of ed] (wk) {Worker runtime};
+\draw[arr] (pm)--(exp)--(db)--(gw);
+\draw[arr] (gw)--(ed);
+\draw[arr] (pm)--(wk);
+""",
+        "Action payload schemas: Pydantic models to database and runtime validation.",
+    ),
     "portal-editor": _fig(
         r"""
 \node[base] (user) {Portal user\\(browser)};
@@ -185,6 +199,20 @@ TIKZ: dict[str, str] = {
 \draw[arr] (json)--node[below, font=\scriptsize]{download}(user);
 """,
         "Schema-driven portal config editor flow.",
+    ),
+    "domain-program-compile": _fig(
+        r"""
+\node[base] (client) {Client\\DomainProgram};
+\node[base, fill=green!10, right=1.1cm of client] (db) {Engine (DB)};
+\node[base, fill=purple!10, right=1.1cm of db] (worker) {Worker};
+\draw[arr] (client)--node[above, font=\scriptsize]{POST instance\\projectPath}(db);
+\draw[arr] (db)--node[right, font=\scriptsize]{init scope}(db);
+\draw[arr] (db)--node[right, font=\scriptsize]{resolve bindings}(db);
+\draw[arr] (db)--node[right, font=\scriptsize]{FOREACH / PARALLEL}(db);
+\draw[arr] (worker)--node[below, font=\scriptsize]{request task}(db);
+\draw[arr] (db)--node[below, font=\scriptsize]{concrete input\_json}(worker);
+""",
+        "DomainProgram compile and instance start: collection bindings then concrete worker tasks.",
     ),
     "er-diagram": r"""
 \begin{figure}[htbp]
@@ -296,7 +324,9 @@ FIGURE_ORDER = [
     "sample-prep-pipeline",
     "cohort-hierarchy",
     "schema-tree",
+    "action-schemas",
     "portal-editor",
+    "domain-program-compile",
     "er-diagram",
     "scope-hierarchy",
     "worker-conditions",
@@ -329,6 +359,12 @@ def main() -> None:
     text = MD.read_text(encoding="utf-8")
     # Drop duplicate top-level title; YAML supplies title.
     text = re.sub(r"^# Configurable Methylation Pipeline — Architecture\s*\n+", "", text, count=1)
+
+    n_mermaid = len(re.findall(r"```mermaid\n", text))
+    if n_mermaid != len(FIGURE_ORDER):
+        raise SystemExit(
+            f"Mermaid block count ({n_mermaid}) != FIGURE_ORDER ({len(FIGURE_ORDER)}); update build_pipeline_architecture_qmd.py"
+        )
 
     parts = re.split(r"```mermaid\n", text)
     out = [YAML + parts[0]]

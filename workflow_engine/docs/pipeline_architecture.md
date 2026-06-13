@@ -381,8 +381,11 @@ Typical mapping:
 |----------------|----------------|
 | Resolved comparisons | `comparisons[]` with `label`, `centroid2Dir`, `detectOutDir`, … |
 | `chromosomes` | `chromosomes[]` |
+| `contexts` | `contexts[]` |
 | `output_base` + paths | `centroid1Dir`, `projectPath`, tool name strings |
 | `step_config.progression.ordered_comparison_labels` | `orderedComparisonLabels` |
+
+**Alternative (DomainProgram + collection bindings):** pass only `{ "projectPath": "…" }`; the engine resolves `chromosomes`, `contexts`, and `comparisons` from the project JSON at instance start ([Section 3.5](#35-domain-program-language-and-workflow-compilation)). Pre-expanded arrays in `context_json` remain supported for hand-written seeds such as **DataDrivenPipeline**.
 
 Example instance payload: [`workflow_engine/sql/instance_context_examples/pca_ovr.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql/instance_context_examples/pca_ovr.json).
 
@@ -392,6 +395,144 @@ Starting a run (middle-tier):
 POST /v1/workflows/instances
 { "workflow_version_id": <DataDrivenPipeline version id>, "context_json": { ... } }
 ```
+
+---
+
+## 3.5 Domain program language and workflow compilation
+
+Hand-written SQL seeds (`wf_data_driven_pipeline_seed.sql`, `wf_sample_prep_pipeline_seed.sql`) define fixed workflow graphs. The **domain program layer** lets clients describe *any* pipeline in a small declarative language, compile it to a **`WorkflowDefinitionSpec`**, and deploy it with **`POST /v1/workflows/definitions`** — without per-study node explosion in the database.
+
+**Package:** [`packages/methyldomain/`](/home/ubuntu/MethylPipeline/packages/methyldomain/)  
+**Compiler:** [`workflow_engine/domain/compiler.py`](/home/ubuntu/MethylPipeline/workflow_engine/domain/compiler.py)  
+**Contract:** [`workflow_engine/contract/domain_types.md`](/home/ubuntu/MethylPipeline/workflow_engine/contract/domain_types.md)  
+**Schemas:** [`schemas/domain/`](/home/ubuntu/MethylPipeline/schemas/domain/), [`schemas/workflow/workflow_definition.schema.json`](/home/ubuntu/MethylPipeline/schemas/workflow/workflow_definition.schema.json)
+
+### Three-layer split
+
+| Layer | Knows about | Produces |
+|-------|-------------|----------|
+| **DomainProgram (client language)** | Actions, control flow, `project.chromosomes`, typed domain refs | JSON IR (`for`, `parallel`, `do`/`with`, `if`) |
+| **Compiler** | Action catalog templates, FOREACH/PARALLEL lowering | `WorkflowDefinitionSpec` + `collection_bindings` |
+| **Workflow engine (DB)** | JSON arrays, scope vars, `${var.*}` only | One `node_execution` per concrete unit of work |
+
+The engine never parses methylation semantics. It iterates JSON arrays and resolves templates. Domain types (`MethylSampleRef`, `MethylGroup`, `StratifiedCohortDraw`, …) are **authoring and validation** concerns; runtime scope holds flat JSON.
+
+### Statement-shaped IR (v2)
+
+Programs use statement nodes (JSON AST), not opaque nested config:
+
+```json
+{
+  "programVersion": 2,
+  "name": "TwoGroupComparison",
+  "projectPath": "/work/study/configs/project.json",
+  "body": [
+    {
+      "for": { "in": { "ref": "project.comparisons" }, "as": "comparison", "parallel": true },
+      "do": [
+        {
+          "for": { "in": { "ref": "project.contexts" }, "as": "context", "parallel": true },
+          "do": [
+            {
+              "for": { "in": { "ref": "project.chromosomes" }, "as": "chromosome", "parallel": true },
+              "do": [
+                {
+                  "parallel": [
+                    { "do": "pipeline.centroid", "with": { "group": { "ref": "comparison.control_group" }, "chromosome": { "ref": "chromosome" }, "context": { "ref": "context" } }, "node_key": "centroid_g1" },
+                    { "do": "pipeline.centroid", "with": { "group": { "ref": "comparison.disease_group" }, "chromosome": { "ref": "chromosome" }, "context": { "ref": "context" } }, "node_key": "centroid_g2" }
+                  ]
+                },
+                { "do": "pipeline.detector", "with": { "chromosome": { "ref": "chromosome" }, "context": { "ref": "context" } }, "node_key": "detect" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Example fixture: [`workflow_engine/domain/fixtures/two_group_comparison.program.json`](/home/ubuntu/MethylPipeline/workflow_engine/domain/fixtures/two_group_comparison.program.json). Sample prep equivalent: [`sample_prep.program.json`](/home/ubuntu/MethylPipeline/workflow_engine/domain/fixtures/sample_prep.program.json).
+
+The compiler lowers each construct 1:1 to engine node types:
+
+| IR statement | Engine node | Edge `branch_kind` from parent |
+|--------------|-------------|--------------------------------|
+| `for … in project.X` | `FOREACH` on scope var `X` | `SEQUENCE` or `BODY` |
+| `parallel: [ … ]` | `PARALLEL` + child ACTIONs | `PARALLEL` for all direct children |
+| `do action(with: …)` | `ACTION` + `input_template` | `SEQUENCE` or `PARALLEL` |
+| `if` | `IF` + THEN/ELSE | `SEQUENCE` |
+
+### Deploy and run
+
+```text
+DomainProgram JSON
+  → compile_domain_program()
+      → WorkflowDefinitionSpec (nodes, edges, templates, collection_bindings)
+      → context_json { "projectPath": "..." }   // minimal instance payload
+
+POST /v1/workflows/definitions     → wf.wf_repo_create_workflow_graph
+POST /v1/workflows/instances         → sp_start_workflow_instance
+  → wf_init_instance_scope_from_context
+  → wf_resolve_collection_bindings   // populate chromosomes, contexts, comparisons, …
+  → graph activation → READY tasks with concrete input_json
+```
+
+Workers receive fully bound payloads (e.g. `"chromosome": "7"`, `"context": "CG"`, `"group": "healthy"`) — not a “run whole project” meta-task.
+
+### Collection bindings (engine-side array expansion)
+
+Previously, `chromosomes[]`, `contexts[]`, and `comparisons[]` had to be copied into `context_json` by a portal planner before instance start. **Collection bindings** move that expansion into the **generic engine**, keeping the workflow definition reusable across projects.
+
+**Table:** `wf.workflow_collection_binding` (per `workflow_version_id`, ordered by `bind_order`)
+
+| `source_kind` | Meaning |
+|---------------|---------|
+| `jsonFile` | Read JSON document from filesystem path in scope var `path_var` (typically `projectPath` → scope var `project`); falls back to inline `project` in `context_json` if the file is unreadable |
+| `jsonPath` | Extract fragment from scope var `base_var` at `json_path` (e.g. `$.chromosomes`) into `scope_var` |
+
+**Procedure:** `wf.wf_resolve_collection_bindings` — invoked from `sp_start_workflow_instance` immediately after `wf_init_instance_scope_from_context`, before graph activation.
+
+**SQL:** [`workflow_engine/sql_pg/wf_sql_collection_bindings.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_pg/wf_sql_collection_bindings.sql)
+
+Compiler emits bindings automatically for every `project.*` reference in `for` loops:
+
+```json
+{
+  "collection_bindings": [
+    { "scope_var": "project", "kind": "jsonFile", "path_var": "projectPath", "bind_order": 0 },
+    { "scope_var": "chromosomes", "kind": "jsonPath", "base_var": "project", "json_path": "$.chromosomes", "bind_order": 1 },
+    { "scope_var": "contexts", "kind": "jsonPath", "base_var": "project", "json_path": "$.contexts", "bind_order": 2 },
+    { "scope_var": "comparisons", "kind": "jsonPath", "base_var": "project", "json_path": "$.comparisons", "bind_order": 3 }
+  ]
+}
+```
+
+```mermaid
+sequenceDiagram
+  participant Client
+  participant DB as Engine (DB)
+  participant Worker
+
+  Client->>DB: POST /v1/workflows/instances { projectPath }
+  Client->>DB: sp_start_workflow_instance
+  DB->>DB: init scope from context_json
+  DB->>DB: resolve collection_bindings (project → chromosomes, contexts, comparisons)
+  DB->>DB: FOREACH / PARALLEL activate graph
+  Worker->>DB: sp_worker_request_task(capability)
+  DB-->>Worker: input_json with concrete chr, ctx, group
+```
+
+**Instance `context_json` (minimal):**
+
+```json
+{ "projectPath": "/work/study/configs/project_Healthy_vs_PCa.json" }
+```
+
+The full project file remains authoritative for cohorts, `step_config`, and tool parameters; the engine only materializes **iteration arrays** needed by FOREACH nodes.
+
+**Note:** `jsonFile` uses PostgreSQL `pg_read_file` when the DB host can read the shared `/work/` mount. If not (e.g. Azure SQL without file access), include `"project": { … }` in `context_json` as a snapshot; `jsonPath` bindings still apply.
 
 ---
 
@@ -408,7 +549,7 @@ Deploy scripts:
 
 | Layer | Tables |
 |-------|--------|
-| **Definition** | `workflow_def`, `workflow_version`, `workflow_node`, `workflow_edge`, `workflow_action`, `workflow_input_template`, `workflow_input_binding`, `variable_output_binding`, `node_scope_default` |
+| **Definition** | `workflow_def`, `workflow_version`, `workflow_node`, `workflow_edge`, `workflow_action`, `workflow_input_template`, `workflow_input_binding`, `variable_output_binding`, `node_scope_default`, **`workflow_collection_binding`** |
 | **Runtime** | `workflow_instance`, `node_execution`, `task_lease`, `loop_state`, `execution_context`, `scope_variable`, `instance_cursor` |
 | **Workers / cluster** | `worker`, `worker_token`, `cluster` |
 
@@ -493,6 +634,7 @@ Example from per-comparison nodes in legacy PCa seeds: `centroid2Dir`, `detectOu
 | Mechanism | When | Example |
 |-----------|------|---------|
 | Instance bootstrap | `StartInstance` | Every top-level key in `context_json` → scope `0` |
+| **Collection bindings** | **`StartInstance` (after bootstrap)** | **`projectPath` → load `project`; `$.chromosomes` → `chromosomes[]` for FOREACH** |
 | Scope open | Composite activation | Copy parent scope + apply `node_scope_default` |
 | FOREACH iteration | Each loop body activation | Bind `foreach_item_var` fields and flatten object keys (`runId`, `taskConfig`, …) |
 | REPEAT / WHILE | Loop body | `${ctx.iterationNo}` in `execution_context` |
@@ -671,7 +813,7 @@ From [`workflow_engine/sql/instance_context_examples/pca_ovr.json`](/home/ubuntu
 }
 ```
 
-No per-chromosome nodes are stored in the DB — only **~15 static nodes** in `DataDrivenPipeline`; fan-out is entirely data-driven.
+No per-chromosome nodes are stored in the DB — only **~15 static nodes** in `DataDrivenPipeline`; fan-out is entirely data-driven. The same topology can be **compiled** from a DomainProgram ([Section 3.5](#35-domain-program-language-and-workflow-compilation)) instead of maintained as a SQL seed.
 
 ### 5.3 Workflow tree (`DataDrivenPipeline`)
 
@@ -860,8 +1002,9 @@ flowchart LR
 ```text
 1. User edits project.json in portal (schema-validated)
 2. Planner builds context_json (comparisons[], chromosomes[], dirs)
+   — OR compile DomainProgram and pass { projectPath } with collection_bindings
 3. Portal POST /v1/workflows/instances { workflow_version_id, context_json }
-4. Engine activates DataDrivenPipeline → thousands of READY rows materialized logically
+4. Engine resolves collection bindings (if defined) → activates graph → READY rows
 5. Workers on cluster pull tasks, read/write /work/..., submit results
 6. Instance status → COMPLETED when root SEQUENCE finishes
 ```
@@ -872,7 +1015,9 @@ flowchart LR
 
 | Document | Topic |
 |----------|--------|
+| [`workflow_engine/contract/domain_types.md`](/home/ubuntu/MethylPipeline/workflow_engine/contract/domain_types.md) | Domain types, `$type` convention, compiler pipeline |
 | [`workflow_engine/sql/DataDrivenPipeline.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/DataDrivenPipeline.md) | FOREACH workflow, deploy order |
+| [`workflow_engine/sql_pg/wf_sql_collection_bindings.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_pg/wf_sql_collection_bindings.sql) | Collection binding table and resolver |
 | [`workflow_engine/WORKFLOW_ENGINE_DELPHI.md`](/home/ubuntu/MethylPipeline/workflow_engine/WORKFLOW_ENGINE_DELPHI.md) | Scope variables, IF/SWITCH/WHILE, Monte Carlo bridge |
 | [`workflow_engine/CAPABILITY_CHECK.md`](/home/ubuntu/MethylPipeline/workflow_engine/CAPABILITY_CHECK.md) | Engine capabilities vs gaps |
 | [`docs/theory/chapters/05-methylpredictor-and-validation.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/05-methylpredictor-and-validation.qmd) | Theory: Monte Carlo splits and validation |
@@ -882,4 +1027,4 @@ flowchart LR
 
 ---
 
-*Document version: aligns with `DataDrivenPipeline` seed, `FOREACH` engine support, scoped-variable write-path parity, and Monte Carlo plan/run tables.*
+*Document version: aligns with `DataDrivenPipeline` seed, `FOREACH` engine support, scoped-variable write-path parity, Monte Carlo plan/run tables, **DomainProgram IR + compiler**, and **workflow_collection_binding** resolution at instance start.*
