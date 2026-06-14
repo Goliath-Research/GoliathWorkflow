@@ -379,23 +379,14 @@ class EnrichmentAnalyzer:
 
             sort_by = self._resolve_sort_by(df, sort_by)
             if sort_by:
-                sort_col = sort_by
-                if sort_col not in df.columns:
-                    if sort_col == "total_weight" and "gene_importance" in df.columns:
-                        sort_col = "gene_importance"
-                        print(
-                            "[WARN] sort_by 'total_weight' not found; "
-                            "using 'gene_importance' (mapper canonical schema)."
-                        )
-                    else:
-                        print(f"[WARN] sort_by '{sort_by}' not found; skipping sort")
-                        sort_col = None
-                if sort_col and sort_col in df.columns:
+                if sort_by in df.columns:
                     print(
-                        f"[INFO] Sorting genes by {sort_col} "
+                        f"[INFO] Sorting genes by {sort_by} "
                         f"({'asc' if sort_ascending else 'desc'})"
                     )
-                    df = df.sort_values(by=sort_col, ascending=sort_ascending)
+                    df = df.sort_values(by=sort_by, ascending=sort_ascending)
+                else:
+                    print(f"[WARN] sort_by '{sort_by}' not found; skipping sort")
 
             if len(df) == 0:
                 raise ValueError(
