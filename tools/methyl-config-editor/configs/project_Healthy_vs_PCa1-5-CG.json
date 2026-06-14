@@ -196,7 +196,7 @@
         "indirect",
         "database"
       ],
-      "min_disease_evidence_level": "medium",
+      "min_disease_evidence_level": "low",
       "min_disease_score": 0.0,
       "min_dmp_count": 2,
       "max_gene_q_value": 0.05,

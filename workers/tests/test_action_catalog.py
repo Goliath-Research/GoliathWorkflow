@@ -62,3 +62,21 @@ def test_mark_failed_handler() -> None:
         {"sampleId": "S1", "sampleDir": "/work/samples/S1", "reason": "test"},
     )
     assert result["status"] == "QC_FAILED"
+
+
+def test_sample_prep_actions_have_domain_effects() -> None:
+    sample_prep = [
+        "sample.download_fastq",
+        "sample.parabricks_fq2bam",
+        "sample.methyl_qc",
+        "sample.fragmentomics",
+        "sample.methyl_extract",
+        "sample.qc_failed",
+    ]
+    for action_name in sample_prep:
+        entry = next(e for e in ACTION_CATALOG if e.action_name == action_name)
+        assert entry.domain_effects is not None, action_name
+        assert entry.domain_effects.writes_types
+
+    qc = next(e for e in ACTION_CATALOG if e.action_name == "sample.methyl_qc")
+    assert "qcPass" in [v for v, _ in qc.domain_effects.scope_bindings]

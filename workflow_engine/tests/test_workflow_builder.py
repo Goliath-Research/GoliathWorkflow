@@ -63,6 +63,7 @@ def deploy_builder_procs(dsn: str) -> None:
         pytest.skip("wf schema not deployed; run workflow_engine/sql_pg deploy scripts first")
 
     for name in (
+        "wf_sql_collection_bindings.sql",
         "wf_repo_upsert_workflow_action.sql",
         "wf_repo_create_workflow_graph.sql",
     ):

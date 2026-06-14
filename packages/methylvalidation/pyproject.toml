@@ -23,6 +23,7 @@ methyl_classifier = {path = "../methylclassifier", develop = true}
 methylcentroid = {path = "../methylcentroid", develop = true}
 methyl_cluster = {path = "../methylcluster", develop = true}
 methyl_alignment_qc = {path = "../methylalignmentqc", develop = true}
+methyl_domain = {path = "../methyldomain", develop = true}
 
 [tool.poetry.scripts]
 methyl-validation = "methyl_validation.cli:main"

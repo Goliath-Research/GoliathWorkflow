@@ -41,6 +41,23 @@ PROJECT_STEP_CONFIG_KEYS: FrozenSet[str] = frozenset(
 
 
 @dataclass(frozen=True)
+class DomainOutputBinding:
+    """Maps worker output_json path to a field on a domain type in scope."""
+
+    domain_type: str
+    scope_field: str
+    output_json_path: str
+
+
+@dataclass(frozen=True)
+class DomainEffects:
+    reads_types: Tuple[str, ...] = ()
+    writes_types: Tuple[str, ...] = ()
+    scope_bindings: Tuple[Tuple[str, str], ...] = ()  # (var_name, output_json_path)
+    output_bindings: Tuple[DomainOutputBinding, ...] = ()
+
+
+@dataclass(frozen=True)
 class ActionCatalogEntry:
     action_name: str
     capability: str
@@ -57,6 +74,7 @@ class ActionCatalogEntry:
     tool: Optional[str] = None
     step_config_key: Optional[str] = None
     context_vars: Tuple[str, ...] = field(default_factory=tuple)
+    domain_effects: Optional[DomainEffects] = None
 
     @property
     def input_schema_ref(self) -> str:
@@ -86,12 +104,89 @@ class ActionCatalogEntry:
             payload["cli_tool"] = self.cli_tool
         if self.tool:
             payload["tool"] = self.tool
+        if self.domain_effects:
+            de = self.domain_effects
+            payload["domain_effects"] = {
+                "reads_types": list(de.reads_types),
+                "writes_types": list(de.writes_types),
+                "scope_bindings": [
+                    {"var_name": v, "output_json_path": p} for v, p in de.scope_bindings
+                ],
+                "output_bindings": [
+                    {
+                        "domain_type": b.domain_type,
+                        "scope_field": b.scope_field,
+                        "output_json_path": b.output_json_path,
+                    }
+                    for b in de.output_bindings
+                ],
+            }
         return payload
 
 
 _PIPELINE_IN = ("methyl_worker.task_models", "PipelineCliTaskInput")
 _PIPELINE_OUT = ("methyl_worker.task_models", "PipelineCliTaskOutput")
 _SAMPLE_IN = ("methyl_worker.task_models", "SamplePrepTaskInput")
+
+# Domain effect presets (see workflow_engine/contract/domain_types.md)
+_DE_METHYL_SAMPLE = DomainEffects(reads_types=("MethylSampleRef",), writes_types=("MethylSampleRef",))
+_DE_DOWNLOAD = DomainEffects(
+    reads_types=("MethylIngestRef",),
+    writes_types=("MethylSampleRef",),
+    output_bindings=(
+        DomainOutputBinding("MethylSampleRef", "fastqFiles", "$.fastqFiles"),
+    ),
+)
+_DE_PARABRICKS = DomainEffects(
+    reads_types=("MethylSampleRef",),
+    writes_types=("MethylSampleRef",),
+    output_bindings=(
+        DomainOutputBinding("MethylSampleRef", "bamPath", "$.bamPath"),
+        DomainOutputBinding("MethylSampleRef", "metricsJson", "$.metricsJson"),
+    ),
+)
+_DE_METHYL_QC = DomainEffects(
+    reads_types=("MethylSampleRef",),
+    writes_types=("MethylSampleRef",),
+    scope_bindings=(("qcPass", "$.guardrails.overall_pass"),),
+    output_bindings=(
+        DomainOutputBinding("MethylSampleRef", "alignmentQc", "$.alignmentQc"),
+    ),
+)
+_DE_FRAGMENTOMICS = DomainEffects(
+    reads_types=("MethylSampleRef",),
+    writes_types=("MethylSampleRef",),
+    output_bindings=(
+        DomainOutputBinding("MethylSampleRef", "fragmentomics", "$.fragmentomics"),
+    ),
+)
+_DE_METHYL_EXTRACT = DomainEffects(
+    reads_types=("MethylSampleRef",),
+    writes_types=("MethylSampleRef",),
+    output_bindings=(
+        DomainOutputBinding("MethylSampleRef", "methylation", "$.methylation"),
+    ),
+)
+_DE_QC_FAILED = DomainEffects(
+    reads_types=("MethylSampleRef",),
+    writes_types=("MethylSampleRef",),
+    output_bindings=(
+        DomainOutputBinding("MethylSampleRef", "status", "$.status"),
+    ),
+)
+_DE_CENTROID = DomainEffects(
+    reads_types=("MethylGroup",),
+    writes_types=("MethylCentroidRef",),
+)
+_DE_DETECTOR = DomainEffects(
+    reads_types=("ComparisonSpec", "MethylCentroidRef"),
+    writes_types=("MethylDetectionRef",),
+)
+_DE_PLAN_ITERATIONS = DomainEffects(
+    reads_types=("MethylGroup",),
+    writes_types=("StratifiedCohortDraw",),
+    scope_bindings=(("iterations", "$.iterations"),),
+)
 
 
 def _entry(
@@ -110,6 +205,7 @@ def _entry(
     tool: Optional[str] = None,
     step_config_key: Optional[str] = None,
     context_vars: Tuple[str, ...] = (),
+    domain_effects: Optional[DomainEffects] = None,
 ) -> ActionCatalogEntry:
     return ActionCatalogEntry(
         action_name=action_name,
@@ -126,6 +222,7 @@ def _entry(
         tool=tool,
         step_config_key=step_config_key,
         context_vars=context_vars,
+        domain_effects=domain_effects,
     )
 
 
@@ -142,6 +239,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-centroid",
         tool="MethylCentroid",
         step_config_key="centroid",
+        domain_effects=_DE_CENTROID,
     ),
     _entry(
         "pipeline.detector",
@@ -155,6 +253,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-detector",
         tool="MethylDetector",
         step_config_key="detection",
+        domain_effects=_DE_DETECTOR,
     ),
     _entry(
         "pipeline.mapper",
@@ -208,6 +307,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "DownloadFastqTaskOutput",
         tool="SampleDownloadFastq",
         context_vars=("sampleId", "sampleDir", "fastqSourceUri"),
+        domain_effects=_DE_DOWNLOAD,
     ),
     _entry(
         "sample.parabricks_fq2bam",
@@ -222,6 +322,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "ParabricksTaskOutput",
         tool="ParabricksFq2Bam",
         context_vars=("sampleId", "sampleDir", "referenceFasta", "referenceGtf"),
+        domain_effects=_DE_PARABRICKS,
     ),
     _entry(
         "sample.delete_fastqs",
@@ -252,6 +353,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="MethylAlignmentQc",
         step_config_key="alignment_qc",
         context_vars=("projectPath", "sampleId", "sampleDir", "primaryAnalyte"),
+        domain_effects=_DE_METHYL_QC,
     ),
     _entry(
         "sample.fragmentomics",
@@ -268,6 +370,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="MethylFragmentomics",
         step_config_key="fragmentomics",
         context_vars=("projectPath", "sampleId", "sampleDir"),
+        domain_effects=_DE_FRAGMENTOMICS,
     ),
     _entry(
         "sample.methyl_extract",
@@ -282,6 +385,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "MethylExtractTaskOutput",
         tool="MethylExtract",
         context_vars=("sampleId", "sampleDir", "projectPath", "referenceFasta"),
+        domain_effects=_DE_METHYL_EXTRACT,
     ),
     _entry(
         "sample.delete_bam",
@@ -310,6 +414,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "MarkFailedTaskOutput",
         tool="SampleMarkFailed",
         context_vars=("sampleId", "sampleDir", "reason"),
+        domain_effects=_DE_QC_FAILED,
     ),
     _entry(
         "validation.plan_iterations",
@@ -324,6 +429,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "ValidationPlanTaskOutput",
         step_config_key="validation",
         context_vars=("projectPath", "featureIterations", "qualityIterations"),
+        domain_effects=_DE_PLAN_ITERATIONS,
     ),
 )
 

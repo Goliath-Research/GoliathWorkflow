@@ -217,19 +217,59 @@ def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[s
     )
 
 
+_SAMPLE_PREP_DOMAIN_ACTIONS = frozenset({
+    "sample.download_fastq",
+    "sample.parabricks_fq2bam",
+    "sample.methyl_qc",
+    "sample.fragmentomics",
+    "sample.methyl_extract",
+    "sample.qc_failed",
+})
+
+
+def _attach_domain_sample_ref(
+    action_name: str, input_json: Dict[str, Any], result: HandlerResult
+) -> HandlerResult:
+    """Optional: attach tagged ``MethylSampleRef`` as ``domainSample`` in output_json."""
+    sample_id = input_json.get("sampleId")
+    sample_dir = input_json.get("sampleDir")
+    if not sample_id or not sample_dir:
+        return result
+    try:
+        from methyl_domain.helpers import enrich_sample_prep_output
+        from methyl_domain.types import MethylSampleRef, to_tagged_json
+
+        existing = input_json.get("sample")
+        if isinstance(existing, dict) and existing.get("$type") == "MethylSampleRef":
+            sample = MethylSampleRef.model_validate(existing)
+        else:
+            sample = MethylSampleRef(sampleId=str(sample_id), sampleDir=str(sample_dir))
+        updated = enrich_sample_prep_output(action_name, sample, result)
+        out = dict(result)
+        out["domainSample"] = to_tagged_json(updated)
+        return out
+    except Exception:
+        logger.debug("domain sample enrichment skipped for %s", action_name, exc_info=True)
+        return result
+
+
 def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
     """Run one ACTION and return output_json for sp_worker_submit_result."""
     handler_key = CAPABILITY_HANDLERS.get(capability)
     if handler_key is None:
-        return _handle_pipeline_cli(capability, action_name, input_json)
+        result = _handle_pipeline_cli(capability, action_name, input_json)
+    else:
+        dispatch: Dict[str, Handler] = {
+            "_handle_pipeline_cli": _handle_pipeline_cli,
+            "_handle_methyl_qc": _handle_methyl_qc,
+            "_handle_methyl_fragmentomics": _handle_methyl_fragmentomics,
+            "_handle_mark_failed": _handle_mark_failed,
+            "_handle_validation_plan_iterations": _handle_validation_plan_iterations,
+            "_handle_stub_external": _handle_stub_external,
+        }
+        handler = dispatch[handler_key]
+        result = handler(capability, action_name, input_json)
 
-    dispatch: Dict[str, Handler] = {
-        "_handle_pipeline_cli": _handle_pipeline_cli,
-        "_handle_methyl_qc": _handle_methyl_qc,
-        "_handle_methyl_fragmentomics": _handle_methyl_fragmentomics,
-        "_handle_mark_failed": _handle_mark_failed,
-        "_handle_validation_plan_iterations": _handle_validation_plan_iterations,
-        "_handle_stub_external": _handle_stub_external,
-    }
-    handler = dispatch[handler_key]
-    return handler(capability, action_name, input_json)
+    if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:
+        result = _attach_domain_sample_ref(action_name, input_json, result)
+    return result

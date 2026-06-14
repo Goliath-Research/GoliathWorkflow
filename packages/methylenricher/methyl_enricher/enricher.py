@@ -13,6 +13,8 @@ import pandas as pd
 
 # Evidence level order (higher index = stricter when used as min)
 EVIDENCE_LEVEL_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3}
+# Legacy mapper/enricher config column names -> canonical mapper export columns.
+SORT_BY_ALIASES = {"total_weight": "gene_importance"}
 # Default Enrichr libraries optimized for methylation studies
 DEFAULT_LIBRARIES = [
     "KEGG_2021_Human",
@@ -145,6 +147,19 @@ class EnrichmentAnalyzer:
         self.cisbp = cisbp
         self.cisbp_context = cisbp_context
         self.results = {}
+
+    @staticmethod
+    def _resolve_sort_by(df: pd.DataFrame, sort_by: Optional[str]) -> Optional[str]:
+        """Map legacy sort column names to canonical mapper columns when needed."""
+        if not sort_by:
+            return sort_by
+        if sort_by in df.columns:
+            return sort_by
+        alias = SORT_BY_ALIASES.get(sort_by)
+        if alias and alias in df.columns:
+            print(f"[INFO] sort_by '{sort_by}' mapped to '{alias}' (canonical mapper column)")
+            return alias
+        return sort_by
         
     def _apply_csv_filters(
         self,
@@ -228,13 +243,22 @@ class EnrichmentAnalyzer:
             n_before = len(out)
 
         if min_unique_dmps is not None:
-            if "unique_dmps" not in out.columns:
+            if (
+                min_dmp_count is not None
+                and min_unique_dmps == min_dmp_count
+                and "dmp_count" not in out.columns
+            ):
+                print(
+                    "[INFO] Skip min_unique_dmps filter: same threshold already applied via min_dmp_count"
+                )
+            elif "unique_dmps" not in out.columns:
                 raise ValueError(
                     "Filter min_unique_dmps requested, but mapper column 'unique_dmps' is missing."
                 )
-            out = out[pd.to_numeric(out["unique_dmps"], errors="coerce").fillna(0) >= min_unique_dmps]
-            print(f"[INFO] Filter unique_dmps >= {min_unique_dmps}: {len(out)} genes (was {n_before})")
-            n_before = len(out)
+            else:
+                out = out[pd.to_numeric(out["unique_dmps"], errors="coerce").fillna(0) >= min_unique_dmps]
+                print(f"[INFO] Filter unique_dmps >= {min_unique_dmps}: {len(out)} genes (was {n_before})")
+                n_before = len(out)
 
         if max_gene_q_value is not None and "gene_q_value" in out.columns:
             gene_q = pd.to_numeric(out["gene_q_value"], errors="coerce")
@@ -353,6 +377,7 @@ class EnrichmentAnalyzer:
                 sort_by = "gene_importance"
                 print("[INFO] Sorting genes by gene_importance (auto)")
 
+            sort_by = self._resolve_sort_by(df, sort_by)
             if sort_by:
                 sort_col = sort_by
                 if sort_col not in df.columns:
@@ -494,6 +519,7 @@ class EnrichmentAnalyzer:
             )
         if sort_by is None and "gene_importance" in df.columns:
             sort_by = "gene_importance"
+        sort_by = self._resolve_sort_by(df, sort_by)
         if sort_by and sort_by in df.columns:
             df = df.sort_values(by=sort_by, ascending=sort_ascending)
         # One row per gene: take first occurrence (already sorted) for weight

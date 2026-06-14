@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Pre-download sample ingest descriptor (URIs known, files not yet local).",
+  "properties": {
+    "$type": {
+      "const": "MethylIngestRef",
+      "default": "MethylIngestRef",
+      "title": "$Type",
+      "type": "string"
+    },
+    "fastqSourceUri": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fastqsourceuri"
+    },
+    "fastqUris": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fastquris"
+    },
+    "fileCount": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Filecount"
+    },
+    "sampleDir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sampledir"
+    },
+    "sampleId": {
+      "title": "Sampleid",
+      "type": "string"
+    }
+  },
+  "required": [
+    "sampleId"
+  ],
+  "title": "MethylIngestRef",
+  "type": "object"
+}

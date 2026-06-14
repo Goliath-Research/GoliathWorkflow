@@ -1,0 +1,28 @@
+{
+  "domain_program": "domain_program.schema.json",
+  "schemas": {
+    "AlignmentQcRef": "alignment_qc_ref.schema.json",
+    "ComparisonSpec": "comparison_spec.schema.json",
+    "FragmentomicsRef": "fragmentomics_ref.schema.json",
+    "MethylCentroidRef": "methyl_centroid_ref.schema.json",
+    "MethylDetectionRef": "methyl_detection_ref.schema.json",
+    "MethylGroup": "methyl_group.schema.json",
+    "MethylIngestRef": "methyl_ingest_ref.schema.json",
+    "MethylSampleRef": "methyl_sample_ref.schema.json",
+    "MethylationMatrixRef": "methylation_matrix_ref.schema.json",
+    "StratifiedCohortDraw": "stratified_cohort_draw.schema.json"
+  },
+  "types": [
+    "MethylIngestRef",
+    "MethylSampleRef",
+    "AlignmentQcRef",
+    "FragmentomicsRef",
+    "MethylationMatrixRef",
+    "MethylGroup",
+    "MethylCentroidRef",
+    "MethylDetectionRef",
+    "StratifiedCohortDraw",
+    "ComparisonSpec"
+  ],
+  "version": 1
+}
