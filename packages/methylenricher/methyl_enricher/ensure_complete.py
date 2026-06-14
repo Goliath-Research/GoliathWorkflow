@@ -120,11 +120,35 @@ def run_comparison_enrichment(
         )
         return report, []
 
-    if load_genes_fn is None:
-        analyzer = EnrichmentAnalyzer(libraries=libraries, organism=organism, cutoff=cutoff)
-        genes = analyzer.load_gene_list(input_file)
-    else:
-        genes = load_genes_fn(input_file)
+    try:
+        if load_genes_fn is None:
+            analyzer = EnrichmentAnalyzer(libraries=libraries, organism=organism, cutoff=cutoff)
+            genes = analyzer.load_gene_list(input_file)
+        else:
+            genes = load_genes_fn(input_file)
+    except ValueError as exc:
+        if "No genes left after filters" not in str(exc):
+            raise
+        print(f"[ERROR] {comparison_label}: {exc}")
+        report = CompletenessReport(
+            output_dir=str(output_dir),
+            expected_libraries=libraries,
+            present_libraries=[],
+            missing_libraries=list(libraries),
+            modules_required=modules_enabled,
+            modules_present=False,
+            complete=False,
+        )
+        write_task_status(
+            output_dir,
+            comparison_label=comparison_label,
+            status="failed",
+            libraries_ok=[],
+            libraries_missing=list(libraries),
+            modules_required=modules_enabled,
+            modules_present=False,
+        )
+        return report, []
 
     results: List[LibraryEnrichResult] = []
     for i, lib in enumerate(libraries):
@@ -335,6 +359,8 @@ def run_project_ensure_complete(
         reports[label] = report
         if report.complete:
             print(f"[OK] {label}: complete ({len(report.present_libraries)} libraries)")
+        elif not report.present_libraries:
+            print(f"[WARN] {label}: no genes passed filters or enrichment not started")
         else:
             print(
                 f"[WARN] {label}: incomplete — missing {len(report.missing_libraries)} libraries"

@@ -4,7 +4,7 @@
     "gene_column": "gene_name",
     "disease_only": true,
     "disease_association_type": ["direct", "indirect"],
-    "min_disease_evidence_level": "medium",
+    "min_disease_evidence_level": "low",
     "min_disease_score": 0.2,
     "min_dmp_count": 2,
     "max_gene_q_value": 0.05,
