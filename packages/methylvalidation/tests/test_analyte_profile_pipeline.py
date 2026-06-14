@@ -3,7 +3,6 @@
 from pathlib import Path
 
 from methyl_utils.pipeline_config import ProjectConfig
-from methyl_validation.pipeline_runner import _fragmentomics_settings
 
 
 def test_cfdna_profile_enables_fragmentomics_step(tmp_path: Path):
@@ -24,8 +23,6 @@ def test_cfdna_profile_enables_fragmentomics_step(tmp_path: Path):
         """,
         encoding="utf-8",
     )
-    cfg = _fragmentomics_settings(project_json)
-    assert cfg.get("enabled") is True
 
     project = ProjectConfig.model_validate(
         {
@@ -38,4 +35,5 @@ def test_cfdna_profile_enables_fragmentomics_step(tmp_path: Path):
             },
         }
     )
+    assert project.get_step_config("fragmentomics").get("enabled") is True
     assert project.get_step_config("validation").get("enforce_training_analyte_match") is True
