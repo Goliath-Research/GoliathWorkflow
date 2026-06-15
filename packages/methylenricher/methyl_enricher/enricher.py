@@ -549,7 +549,12 @@ class EnrichmentAnalyzer:
         Returns:
             Merged DataFrame with all enrichment results
         """
-        from .enricher_completeness import RetryPolicy, enrich_one_library, merge_library_results
+        from .enricher_completeness import (
+            RetryPolicy,
+            enrich_one_library,
+            merge_library_results,
+            primary_enrichment_rows,
+        )
         import time
 
         output_dir = Path(output_dir)
@@ -591,9 +596,10 @@ class EnrichmentAnalyzer:
         merged.to_csv(output_dir / "enrichment_merged.csv", index=False)
 
         print(f"\n[INFO] ✓ Merged results saved: {output_dir / 'enrichment_merged.csv'}")
+        ranking = primary_enrichment_rows(merged)
         top_hits = (
-            merged[merged["Adjusted P-value"] <= self.cutoff].copy().head(200)
-            if "Adjusted P-value" in merged.columns
+            ranking[ranking["Adjusted P-value"] <= self.cutoff].copy().head(200)
+            if not ranking.empty and "Adjusted P-value" in ranking.columns
             else pd.DataFrame()
         )
         self.results = {"merged": merged, "significant": top_hits}

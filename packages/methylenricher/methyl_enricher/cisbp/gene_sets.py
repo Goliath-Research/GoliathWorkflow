@@ -13,11 +13,13 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 import pandas as pd
 
+from ..enricher_completeness import sanitize_enrichment_df
 from . import pwm as pwm_mod
 from .download import resolve_bundle
 
@@ -255,21 +257,23 @@ def run_gene_set_ora(
     if background is None:
         background = 20000
 
-    enr = gp.enrich(
-        gene_list=gene_list,
-        gene_sets=gmt,
-        background=background,
-        outdir=None,
-        cutoff=1.0,
-        no_plot=True,
-        verbose=False,
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        enr = gp.enrich(
+            gene_list=gene_list,
+            gene_sets=gmt,
+            background=background,
+            outdir=None,
+            cutoff=1.0,
+            no_plot=True,
+            verbose=False,
+        )
     results = getattr(enr, "results", None)
     if results is None or results.empty:
         logger.warning("[CIS-BP] ORA returned no overlapping terms")
         return 0, out_path
 
-    df = results.copy()
+    df = sanitize_enrichment_df(results.copy())
     for col in _ENRICH_COLUMNS:
         if col not in df.columns:
             df[col] = pd.NA

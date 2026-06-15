@@ -17,15 +17,73 @@ from methyl_enricher.enricher_completeness import (
     classify_enrich_error,
     completeness_manifest_path,
     enrich_one_library,
+    is_cisbp_library_label,
     is_retryable,
     merge_library_results,
+    primary_enrichment_rows,
     production_enricher_root,
+    sanitize_enrichment_df,
     EnrichErrorKind,
 )
 
 
 def test_classify_enrich_error_429():
     assert classify_enrich_error(Exception("status code: 429")) == EnrichErrorKind.RATE_LIMITED
+
+
+def test_is_cisbp_library_label():
+    assert is_cisbp_library_label("CIS-BP")
+    assert is_cisbp_library_label("CIS-BP-annotate")
+    assert is_cisbp_library_label("CIS-BP-motif")
+    assert not is_cisbp_library_label("ChEA_2022")
+
+
+def test_sanitize_enrichment_df_clamps_zero_pvalues():
+    import numpy as np
+
+    df = pd.DataFrame(
+        {
+            "Term": ["a", "b"],
+            "P-value": [0.0, 1e-12],
+            "Adjusted P-value": [0.0, 1e-10],
+            "Odds Ratio": [10.0, 5.0],
+            "Combined Score": [float("inf"), 100.0],
+        }
+    )
+    out = sanitize_enrichment_df(df)
+    assert (out["P-value"] > 0).all()
+    assert (out["Adjusted P-value"] > 0).all()
+    assert np.isfinite(out.loc[0, "Combined Score"])
+
+
+def test_merge_cisbp_appended_after_primary_libraries(tmp_path: Path):
+    kegg = "KEGG_2021_Human"
+    pd.DataFrame(
+        {
+            "Term": ["pathway_a"],
+            "Adjusted P-value": [0.05],
+            "P-value": [0.01],
+            "Odds Ratio": [2.0],
+            "library": [kegg],
+        }
+    ).to_csv(tmp_path / f"enrich_{kegg}.csv", index=False)
+    pd.DataFrame(
+        {
+            "Term": ["MYC"],
+            "Adjusted P-value": [1e-300],
+            "P-value": [1e-300],
+            "Odds Ratio": [100.0],
+            "library": ["CIS-BP"],
+        }
+    ).to_csv(tmp_path / "enrich_CIS-BP.csv", index=False)
+
+    merged = merge_library_results(tmp_path, [kegg, "CIS-BP"], cutoff=0.05)
+    assert merged.iloc[0]["library"] == kegg
+    assert merged.iloc[-1]["library"] == "CIS-BP"
+
+    top = pd.read_csv(tmp_path / "enrichment_top_q0.05.csv")
+    assert (top["library"] != "CIS-BP").all()
+    assert primary_enrichment_rows(merged).iloc[0]["library"] == kegg
 
 
 def test_merge_library_results_from_csvs(tmp_path: Path):

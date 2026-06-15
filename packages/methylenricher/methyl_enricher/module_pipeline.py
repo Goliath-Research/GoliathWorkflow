@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Set, Tuple
 import pandas as pd
 
 from .enricher import EnrichmentAnalyzer
+from .enricher_completeness import is_cisbp_library_label
 from .pathway_normalizer import PathwayNormalizer, load_theme_extras
 from .pathway_graph import canonical_pathway_key, run_pathway_clustering
 from .module_scorer import score_and_rank_modules
@@ -313,6 +314,8 @@ def _reduce_terms_for_clustering(
         return merged_df
 
     work = merged_df.copy()
+    if "library" in work.columns:
+        work = work[~work["library"].map(is_cisbp_library_label)].copy()
     q_col = "Adjusted P-value" if "Adjusted P-value" in work.columns else None
 
     if max_q is not None and q_col is not None:

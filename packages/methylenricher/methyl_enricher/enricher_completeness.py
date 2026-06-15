@@ -8,14 +8,19 @@ import json
 import random
 import re
 import time
+import warnings
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
 import pandas as pd
 
 from .enricher import resolve_enrichr_libraries
+
+# Smallest positive float; avoids log(0) in Combined Score and sort-order ties at 0.
+_PVALUE_FLOOR = float(np.nextafter(0.0, 1.0))
 
 TASK_STATUS_FILENAME = "enricher_task_status.json"
 COMPLETENESS_MANIFEST_FILENAME = "enricher_completeness.json"
@@ -76,6 +81,55 @@ class CompletenessReport:
 
 def library_csv_path(output_dir: Path, library: str) -> Path:
     return output_dir / f"enrich_{library}.csv"
+
+
+def is_cisbp_library_label(name: object) -> bool:
+    """True for CIS-BP merge labels (gene_sets, annotate, motif_scan, ...)."""
+    token = str(name or "").strip().lower().replace("-", "_").replace(" ", "_")
+    return token == "cis_bp" or token.startswith("cis_bp_")
+
+
+def sanitize_enrichment_df(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Clamp zero/negative p-values and recompute Combined Score safely.
+
+    gseapy uses ``-log(p) * odds_ratio``; p=0 yields divide-by-zero warnings and
+    non-finite scores that distort merged rankings.
+    """
+    if df.empty:
+        return df
+    out = df.copy()
+    for col in ("P-value", "Adjusted P-value"):
+        if col in out.columns:
+            vals = pd.to_numeric(out[col], errors="coerce")
+            out[col] = vals.clip(lower=_PVALUE_FLOOR).fillna(1.0)
+    if (
+        "Combined Score" in out.columns
+        and "P-value" in out.columns
+        and "Odds Ratio" in out.columns
+    ):
+        p = pd.to_numeric(out["P-value"], errors="coerce").clip(lower=_PVALUE_FLOOR)
+        oddr = pd.to_numeric(out["Odds Ratio"], errors="coerce").fillna(0.0)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            score = -np.log(p.to_numpy(dtype=float)) * oddr.to_numpy(dtype=float)
+        out["Combined Score"] = np.where(np.isfinite(score), score, np.nan)
+    return out
+
+
+def primary_enrichment_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """Rows from Enrichr libraries only (exclude CIS-BP supporting annotations)."""
+    if df.empty or "library" not in df.columns:
+        return df
+    mask = ~df["library"].map(is_cisbp_library_label)
+    return df.loc[mask].copy()
+
+
+def _sort_enrichment_frame(df: pd.DataFrame) -> pd.DataFrame:
+    sort_cols = [c for c in ("Adjusted P-value", "P-value", "Odds Ratio") if c in df.columns]
+    if not sort_cols:
+        return df
+    asc = [True, True, False][: len(sort_cols)]
+    return df.sort_values(sort_cols, ascending=asc)
 
 
 def is_valid_library_csv(path: Path) -> bool:
@@ -172,16 +226,18 @@ def enrich_one_library(
 
     for attempt in range(1, max_attempts + 1):
         try:
-            enr = gp.enrichr(
-                gene_list=genes,
-                gene_sets=[library],
-                outdir=str(output_dir),
-                cutoff=1.0,
-                background=None,
-                organism=(organism or "Human").strip().lower(),
-            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                enr = gp.enrichr(
+                    gene_list=genes,
+                    gene_sets=[library],
+                    outdir=str(output_dir),
+                    cutoff=1.0,
+                    background=None,
+                    organism=(organism or "Human").strip().lower(),
+                )
             if hasattr(enr, "results") and enr.results is not None and not enr.results.empty:
-                df = enr.results.copy()
+                df = sanitize_enrichment_df(enr.results.copy())
                 df["library"] = library
                 df.to_csv(out_path, index=False)
                 return LibraryEnrichResult(
@@ -222,33 +278,45 @@ def merge_library_results(
     *,
     cutoff: float = 0.05,
 ) -> pd.DataFrame:
-    """Build enrichment_merged.csv from per-library CSVs (no API calls)."""
+    """
+    Build enrichment_merged.csv from per-library CSVs (no API calls).
+
+    Enrichr libraries are ranked first; CIS-BP rows are appended as supporting
+    TF-motif annotations so their scores cannot displace primary library hits.
+    """
     output_dir = Path(output_dir)
-    frames: List[pd.DataFrame] = []
+    primary_frames: List[pd.DataFrame] = []
+    supporting_frames: List[pd.DataFrame] = []
     for lib in libraries:
         path = library_csv_path(output_dir, lib)
         if not is_valid_library_csv(path):
             continue
-        df = pd.read_csv(path)
+        df = sanitize_enrichment_df(pd.read_csv(path))
         if "library" not in df.columns:
             df = df.copy()
             df["library"] = lib
-        frames.append(df)
+        if is_cisbp_library_label(lib):
+            supporting_frames.append(df)
+        else:
+            primary_frames.append(df)
 
-    if not frames:
+    parts: List[pd.DataFrame] = []
+    if primary_frames:
+        parts.append(_sort_enrichment_frame(pd.concat(primary_frames, ignore_index=True)))
+    if supporting_frames:
+        parts.append(_sort_enrichment_frame(pd.concat(supporting_frames, ignore_index=True)))
+
+    if not parts:
         merged = pd.DataFrame()
     else:
-        merged = pd.concat(frames, ignore_index=True)
-        sort_cols = [c for c in ("Adjusted P-value", "P-value", "Odds Ratio") if c in merged.columns]
-        if sort_cols:
-            asc = [True, True, False][: len(sort_cols)]
-            merged.sort_values(sort_cols, ascending=asc, inplace=True)
+        merged = pd.concat(parts, ignore_index=True)
 
     merged_path = output_dir / "enrichment_merged.csv"
     merged.to_csv(merged_path, index=False)
 
-    if not merged.empty and "Adjusted P-value" in merged.columns:
-        top_hits = merged[merged["Adjusted P-value"] <= cutoff].head(200)
+    ranking = parts[0] if parts else merged
+    if not ranking.empty and "Adjusted P-value" in ranking.columns:
+        top_hits = ranking[ranking["Adjusted P-value"] <= cutoff].head(200)
         if not top_hits.empty:
             top_hits.to_csv(output_dir / f"enrichment_top_q{cutoff}.csv", index=False)
 
