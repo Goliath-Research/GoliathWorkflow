@@ -847,6 +847,7 @@ def _run_model_mc_backend_from_shared_runs(
         iteration_t0 = time.perf_counter()
         run_id = str(row["run_id"])
         shared_run_dir = Path(str(row["run_dir"]))
+        backend_run_dir = backend_root / run_id
         project_path = prepare_model_mc_backend_run_from_shared(
             shared_run_dir,
             backend_run_dir,
@@ -854,8 +855,6 @@ def _run_model_mc_backend_from_shared_runs(
         )
         if not project_path.is_file():
             raise FileNotFoundError(f"Backend project.json missing for {run_id}: {project_path}")
-        backend_run_dir = backend_root / run_id
-        backend_run_dir.mkdir(parents=True, exist_ok=True)
 
         if layout == "binary":
             run_project = load_project(project_path)
