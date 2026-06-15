@@ -71,7 +71,9 @@ def _guardrail_value(details: Dict[str, Any], key: str) -> Tuple[Optional[float]
 
 def flatten_qc_json(qc_path: Path) -> Dict[str, Any]:
     payload = json.loads(qc_path.read_text(encoding="utf-8"))
-    row: Dict[str, Any] = {"sample_id": payload.get("sample_id") or qc_path.stem}
+    row: Dict[str, Any] = {
+        "qc_json_sample_id": payload.get("sample_id") or qc_path.stem,
+    }
 
     summary = payload.get("summary_stats") or {}
     for k, v in summary.items():
@@ -116,7 +118,10 @@ def load_group_rows(
             continue
         try:
             flat = flatten_qc_json(qc_path)
-            rows.append({**base, "qc_status": "ok", **flat})
+            row = {**base, "qc_status": "ok", **flat}
+            # Canonical sample_id comes from the group CSV / filename, not JSON payload.
+            row["sample_id"] = sid
+            rows.append(row)
         except (json.JSONDecodeError, OSError) as exc:
             rows.append({**base, "qc_status": f"error:{exc}"})
     return rows
