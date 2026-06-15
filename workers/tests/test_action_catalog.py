@@ -28,8 +28,11 @@ def test_task_schema_specs_derived_from_catalog() -> None:
 
 
 def test_capability_handlers_derived_from_catalog() -> None:
-    assert CAPABILITY_HANDLERS == build_capability_handlers()
-    assert len(CAPABILITY_HANDLERS) == len(ACTION_CATALOG)
+    handlers = build_capability_handlers()
+    in_process = [e for e in ACTION_CATALOG if e.execution_mode == "in_process"]
+    assert len(handlers) == len(in_process)
+    assert CAPABILITY_HANDLERS == handlers
+    assert handlers["methyl-qc"] == "_handle_methyl_qc"
 
 
 def test_tool_cli_derived_from_catalog() -> None:
@@ -38,13 +41,22 @@ def test_tool_cli_derived_from_catalog() -> None:
     assert TOOL_CLI["MethylAlignmentQc"] == "methyl-qc"
 
 
-def test_every_catalog_handler_exists_in_handlers_module() -> None:
+def test_every_in_process_handler_exists_in_handlers_module() -> None:
     handlers_mod = importlib.import_module("methyl_worker.handlers")
     for entry in ACTION_CATALOG:
-        assert hasattr(handlers_mod, entry.handler), entry.handler
+        if entry.execution_mode != "in_process":
+            continue
+        name = entry.resolved_in_process_handler()
+        assert name and hasattr(handlers_mod, name), name
 
 
-def test_step_config_keys_are_recognized() -> None:
+def test_catalog_entries_have_execution_mode() -> None:
+    for entry in ACTION_CATALOG:
+        assert entry.execution_mode in ("cli", "in_process")
+        if entry.execution_mode == "cli":
+            assert entry.cli_tool
+        else:
+            assert entry.resolved_in_process_handler()
     for entry in ACTION_CATALOG:
         if entry.step_config_key is not None:
             assert entry.step_config_key in PROJECT_STEP_CONFIG_KEYS

@@ -56,7 +56,26 @@ class RestGateway:
         q = query or {}
 
         if method == "GET" and path == "/v1/actions":
-            return 200, {"actions": list_workflow_actions(self.dsn)}
+            actions = list_workflow_actions(self.dsn)
+            catalog_path = Path(__file__).resolve().parents[2] / "schemas" / "actions" / "catalog.json"
+            catalog_by_name: dict[str, dict[str, Any]] = {}
+            if catalog_path.is_file():
+                catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+                for entry in catalog.get("actions") or []:
+                    catalog_by_name[str(entry["action_name"])] = entry
+            merged: list[dict[str, Any]] = []
+            for row in actions:
+                meta = catalog_by_name.get(str(row["action_name"]), {})
+                merged.append(
+                    {
+                        **row,
+                        "execution_mode": meta.get("execution_mode"),
+                        "cli_tool": meta.get("cli_tool"),
+                        "argv_map": meta.get("argv_map"),
+                        "in_process_handler": meta.get("in_process_handler"),
+                    }
+                )
+            return 200, {"actions": merged}
 
         m = re.fullmatch(r"/v1/actions/([^/]+)/schema", path)
         if method == "GET" and m:

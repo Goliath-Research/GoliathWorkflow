@@ -404,7 +404,7 @@ Hand-written SQL seeds (`wf_data_driven_pipeline_seed.sql`, `wf_sample_prep_pipe
 
 **Package:** [`packages/methyldomain/`](/home/ubuntu/MethylPipeline/packages/methyldomain/)  
 **Compiler:** [`workflow_engine/domain/compiler.py`](/home/ubuntu/MethylPipeline/workflow_engine/domain/compiler.py)  
-**Contract:** [`workflow_engine/contract/domain_types.md`](/home/ubuntu/MethylPipeline/workflow_engine/contract/domain_types.md)  
+**WorkflowContext:** [`workflow_engine/domain/workflow_context.py`](/home/ubuntu/MethylPipeline/workflow_engine/domain/workflow_context.py) — instance `context_json` enrichment, template resolution helpers, and resolved-payload validation (see [`domain_types.md`](/home/ubuntu/MethylPipeline/workflow_engine/contract/domain_types.md))  
 **Schemas:** [`schemas/domain/`](/home/ubuntu/MethylPipeline/schemas/domain/), [`schemas/workflow/workflow_definition.schema.json`](/home/ubuntu/MethylPipeline/schemas/workflow/workflow_definition.schema.json)
 
 ### Three-layer split

@@ -29,8 +29,7 @@ sequenceDiagram
 ## Capability strings
 
 Map to `wf.workflow_action.capability` (e.g. `methyl-centroid`, `methyl-detector`).
-The reference worker dispatches to local `methyl-*` CLIs based on `action_name` or
-`input_json.workerTool*`.
+The reference worker dispatches via **ActionBase** (`CliAction` / `InProcessAction`) using metadata from `schemas/actions/catalog.json` (`execution_mode`, `cli_tool`, `argv_map`). Fetch live metadata with `GET /v1/actions`.
 
 ## Result codes
 

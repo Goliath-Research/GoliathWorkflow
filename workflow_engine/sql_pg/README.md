@@ -11,12 +11,14 @@ Deploy **in order**:
 | 3 | [`05_runtime_parity.sql`](05_runtime_parity.sql) | `${var.*}` / `${ctx.*}` resolver, input builder |
 | 4 | [`06_scope_writepath_parity.sql`](06_scope_writepath_parity.sql) | Scope open/copy, output bindings, branch vars |
 | 5 | [`07_scope_encoding_parity.sql`](07_scope_encoding_parity.sql) | Canonical JSON scalar encoding |
-| 6 | [`01_worker_api.sql`](01_worker_api.sql) | Worker claim/submit/heartbeat |
-| 7 | [`02_repository_api.sql`](02_repository_api.sql) | Middle-tier repository wrappers |
-| 8 | [`04_admin.sql`](04_admin.sql) | Admin (`sp_delete_workflow_def`) |
-| 9 | [`wf_action_schema.sql`](wf_action_schema.sql) | Action I/O JSON Schema storage + repo procs |
-| 10 | [`wf_repo_upsert_workflow_action.sql`](wf_repo_upsert_workflow_action.sql) | Upsert action catalog rows |
-| 11 | [`wf_repo_create_workflow_graph.sql`](wf_repo_create_workflow_graph.sql) | Programmatic workflow definition builder |
+| 6 | [`08_foreach_support.sql`](08_foreach_support.sql) | FOREACH control-flow (DomainProgram workflows on PostgreSQL) |
+| 7 | [`01_worker_api.sql`](01_worker_api.sql) | Worker claim/submit/heartbeat |
+| 8 | [`02_repository_api.sql`](02_repository_api.sql) | Middle-tier repository wrappers |
+| 9 | [`04_admin.sql`](04_admin.sql) | Admin (`sp_delete_workflow_def`) |
+| 10 | [`wf_action_schema.sql`](wf_action_schema.sql) | Action I/O JSON Schema storage + repo procs |
+| 11 | [`wf_repo_upsert_workflow_action.sql`](wf_repo_upsert_workflow_action.sql) | Upsert action catalog rows |
+| 12 | [`wf_repo_create_workflow_graph.sql`](wf_repo_create_workflow_graph.sql) | Programmatic workflow definition builder |
+| 13 | [`wf_sql_collection_bindings.sql`](wf_sql_collection_bindings.sql) | Collection binding resolution at instance start |
 
 After SQL deploy, seed the action catalog:
 
@@ -108,7 +110,7 @@ ORDER BY id;
 
 Example `context_json`: [`instance_context_examples/two_group_test.json`](instance_context_examples/two_group_test.json), [`mc_two_group_test.json`](instance_context_examples/mc_two_group_test.json).
 
-Production OvR at scale uses **DataDrivenPipeline** / **ValidationPipeline** on Azure SQL (FOREACH). These test-bed workflows use static nodes + REPEAT so they run on PostgreSQL today without FOREACH.
+Production OvR at scale uses **DataDrivenPipeline** / **ValidationPipeline** with FOREACH (deploy `08_foreach_support.sql`). Static test-bed workflows use REPEAT where noted.
 
 ## Local container
 

@@ -113,6 +113,13 @@ BEGIN
     WHERE workflow_version_id = v_version_id
     ORDER BY bind_order ASC, id ASC
   LOOP
+    -- Skip when planner/portal already populated scope from enriched context_json.
+    IF wf.wf_get_scope_variable_json(p_workflow_instance_id, 0, v_binding.scope_var) IS NOT NULL
+       AND btrim(wf.wf_get_scope_variable_json(p_workflow_instance_id, 0, v_binding.scope_var)) NOT IN ('', 'null')
+    THEN
+      CONTINUE;
+    END IF;
+
     IF v_binding.source_kind = 'jsonFile' THEN
       v_path := wf.wf_json_unquote_string(
         wf.wf_get_scope_variable_json(p_workflow_instance_id, 0, v_binding.path_var)

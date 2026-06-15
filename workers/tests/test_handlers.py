@@ -41,7 +41,8 @@ def test_stub_external_dry_run() -> None:
 
 
 def test_pipeline_cli_dispatch() -> None:
-    with patch("methyl_worker.handlers._run_subprocess", return_value="done") as mock_run:
+    with patch("methyl_worker.actions.base.subprocess.run") as mock_run:
+        mock_run.return_value = type("R", (), {"returncode": 0, "stdout": "done", "stderr": ""})()
         out = execute_task(
             "methyl-mapper",
             "pipeline.mapper",

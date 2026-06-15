@@ -44,10 +44,11 @@ class WorkflowRestClient:
         self.base_url = raw.rstrip("/")
         self.timeout_seconds = timeout_seconds
 
-    def _post_json(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    def _request_json(self, path: str, *, method: str = "GET", payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         url = f"{self.base_url}{path}"
-        data = json.dumps(payload).encode("utf-8")
-        req = Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+        data = json.dumps(payload).encode("utf-8") if payload is not None else None
+        headers = {"Content-Type": "application/json"} if payload is not None else {}
+        req = Request(url, data=data, headers=headers, method=method)
         try:
             with urlopen(req, timeout=self.timeout_seconds) as resp:
                 body = resp.read().decode("utf-8")
@@ -59,6 +60,12 @@ class WorkflowRestClient:
             raise RuntimeError(f"HTTP {exc.code} {path}: {detail}") from exc
         except URLError as exc:
             raise RuntimeError(f"Request failed {path}: {exc}") from exc
+
+    def _post_json(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return self._request_json(path, method="POST", payload=payload)
+
+    def _get_json(self, path: str) -> Dict[str, Any]:
+        return self._request_json(path, method="GET")
 
     def authenticate(self, worker_id: int, worker_token: str) -> None:
         self._post_json(
@@ -160,3 +167,27 @@ class WorkflowRestClient:
         if error_message:
             payload["error_message"] = error_message
         self._post_json(f"/workers/tasks/{node_execution_id}/fail", payload)
+
+    def create_workflow_instance(
+        self,
+        workflow_version_id: int,
+        context_json: Optional[Dict[str, Any]] = None,
+        *,
+        start: bool = True,
+    ) -> Dict[str, Any]:
+        body = self._post_json(
+            "/workflows/instances",
+            {
+                "workflow_version_id": workflow_version_id,
+                "context_json": context_json or {},
+                "start": start,
+            },
+        )
+        return body
+
+    def get_workflow_instance(self, instance_id: int) -> Dict[str, Any]:
+        return self._get_json(f"/workflows/instances/{instance_id}")
+
+    def list_actions(self) -> list[Dict[str, Any]]:
+        body = self._get_json("/actions")
+        return list(body.get("actions") or [])

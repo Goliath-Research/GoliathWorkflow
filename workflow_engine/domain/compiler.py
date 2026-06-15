@@ -44,6 +44,8 @@ if str(_WORKERS) not in sys.path:
 
 from methyl_worker.action_catalog import find_catalog_entry  # noqa: E402
 
+from workflow_context import enrich_instance_context  # noqa: E402
+
 
 @dataclass
 class CompileResult:
@@ -179,17 +181,66 @@ def _build_collection_bindings(program: DomainProgram) -> List[CollectionBinding
     return ordered
 
 
+def _group_ref_side(ref: Any) -> Optional[str]:
+    """Return 'control' or 'disease' when step.with group references comparison sides."""
+    if isinstance(ref, dict) and "ref" in ref:
+        ref_s = str(ref["ref"])
+    elif isinstance(ref, str):
+        ref_s = ref
+    else:
+        return None
+    if "control_group" in ref_s:
+        return "control"
+    if "disease_group" in ref_s:
+        return "disease"
+    return None
+
+
 def _action_template(entry, step: ActionStep) -> Dict[str, Any]:
     tool = entry.tool or entry.action_name
     template: Dict[str, Any] = {"tool": tool}
+    template["projectPath"] = "${var.projectPath}"
     if entry.step_config_key:
         template["project"] = "${var.projectPath}"
     for ctx_var in entry.context_vars:
         template[ctx_var] = f"${{var.{ctx_var}}}"
+
     params = step.with_ or step.in_ or {}
     for key, val in params.items():
         template[key] = _placeholder_for_value(val)
+
+    action = entry.action_name
+    if action == "pipeline.centroid":
+        side = _group_ref_side(params.get("group"))
+        if side == "control":
+            template["outputDir"] = "${var.centroid1Dir}"
+        elif side == "disease":
+            template["outputDir"] = "${var.centroid2Dir}"
+    elif action == "pipeline.detector":
+        template["centroid1Dir"] = "${var.centroid1Dir}"
+        template["centroid2Dir"] = "${var.centroid2Dir}"
+        template["outputDir"] = "${var.detectOutDir}"
+        if "comparison" not in template and "label" not in template:
+            template["comparison"] = "${var.label}"
+
     return template
+
+
+def _emit_root_scope_defaults(ctx: _CompileCtx, root_key: str) -> None:
+    ctx.scope_defaults.extend(
+        [
+            WorkflowScopeDefaultSpec(
+                node_key=root_key,
+                var_name="projectPath",
+                default_expr="${var.projectPath}",
+            ),
+            WorkflowScopeDefaultSpec(
+                node_key=root_key,
+                var_name="centroid1Dir",
+                default_expr="${var.centroid1Dir}",
+            ),
+        ]
+    )
 
 
 def _link(parent: str, child: str, order: int, branch: str, ctx: _CompileCtx) -> None:
@@ -311,7 +362,7 @@ def _compile_steps(
     return seq_key
 
 
-def compile_domain_program(program: DomainProgram) -> CompileResult:
+def compile_domain_program(program: DomainProgram, *, enrich_context: bool = False) -> CompileResult:
     ctx = _CompileCtx()
     root_key = "root"
     ctx.nodes.append(WorkflowNodeSpec(node_key=root_key, node_type="SEQUENCE"))
@@ -342,6 +393,13 @@ def compile_domain_program(program: DomainProgram) -> CompileResult:
 
     collection_bindings = _build_collection_bindings(program)
     context_json: Dict[str, Any] = {"projectPath": program.projectPath, **program.variables}
+    if enrich_context:
+        try:
+            context_json = enrich_instance_context(context_json)
+        except (FileNotFoundError, ValueError):
+            pass
+
+    _emit_root_scope_defaults(ctx, root_key)
 
     workflow = WorkflowDefinitionSpec(
         name=program.name,
@@ -357,6 +415,6 @@ def compile_domain_program(program: DomainProgram) -> CompileResult:
     return CompileResult(workflow=workflow, context_json=context_json)
 
 
-def compile_domain_program_file(path: Path) -> CompileResult:
+def compile_domain_program_file(path: Path, *, enrich_context: bool = False) -> CompileResult:
     data = json.loads(path.read_text(encoding="utf-8"))
-    return compile_domain_program(DomainProgram.model_validate(data))
+    return compile_domain_program(DomainProgram.model_validate(data), enrich_context=enrich_context)

@@ -439,6 +439,21 @@ components:
           type: boolean
         has_output_schema:
           type: boolean
+        execution_mode:
+          type: string
+          enum: [cli, in_process]
+          nullable: true
+        cli_tool:
+          type: string
+          nullable: true
+        argv_map:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+        in_process_handler:
+          type: string
+          nullable: true
 
     ActionListResponse:
       type: object

@@ -53,10 +53,21 @@ def test_two_group_compiles_nested_foreach_and_parallel():
     assert centroid_g1.input_template["chromosome"] == "${var.chromosome}"
     assert centroid_g1.input_template["context"] == "${var.context}"
     assert centroid_g1.input_template["group"] == "${var.control_group}"
+    assert centroid_g1.input_template["projectPath"] == "${var.projectPath}"
+    assert centroid_g1.input_template["outputDir"] == "${var.centroid1Dir}"
 
     detect = next(n for n in wf.nodes if n.node_key == "detect")
     assert detect.input_template["chromosome"] == "${var.chromosome}"
     assert detect.input_template["context"] == "${var.context}"
+    assert detect.input_template["centroid1Dir"] == "${var.centroid1Dir}"
+    assert detect.input_template["outputDir"] == "${var.detectOutDir}"
+
+
+def test_compiler_emits_root_scope_defaults():
+    result = compile_domain_program(_load("two_group_comparison.program.json"))
+    defaults = {d.var_name: d.node_key for d in result.workflow.scope_defaults}
+    assert defaults.get("projectPath") == "root"
+    assert defaults.get("centroid1Dir") == "root"
 
 
 def test_two_group_emits_collection_bindings():
@@ -116,6 +127,37 @@ def test_sample_prep_still_compiles():
     wf = result.workflow
     assert wf.name == "SamplePrepPipeline"
     assert any(n.node_type == "FOREACH" for n in wf.nodes)
+
+
+def test_buffy_action_templates_are_self_contained_when_resolved():
+    """Resolved scope should satisfy catalog required keys (parity check helper)."""
+    check = Path(__file__).resolve().parents[1] / "domain" / "checks" / "buffy_healthy_vs_pca"
+    program_path = check / "configs" / "buffy_data_driven.program.json"
+    result = compile_domain_program_file(program_path, enrich_context=True)
+    wf = result.workflow
+
+    _DOMAIN = Path(__file__).resolve().parents[1] / "domain"
+    if str(_DOMAIN) not in sys.path:
+        sys.path.insert(0, str(_DOMAIN))
+    from workflow_context import resolve_input_json_from_template, validate_resolved_input_json
+
+    scope = {
+        "projectPath": result.context_json["projectPath"],
+        "centroid1Dir": result.context_json["centroid1Dir"],
+        "centroid2Dir": "/work/out/centroid2",
+        "detectOutDir": "/work/out/detect",
+        "chromosome": "21",
+        "context": "CG",
+        "control_group": "all",
+        "disease_group": "PCa",
+        "label": "PCa",
+    }
+    for node in wf.nodes:
+        if node.node_type != "ACTION" or not node.input_template or not node.action_name:
+            continue
+        resolved = resolve_input_json_from_template(node.input_template, scope)
+        errors = validate_resolved_input_json(resolved, node.action_name)
+        assert errors == [], f"{node.node_key}: {errors}"
 
 
 def test_buffy_check_bundle_compiles_full_pipeline():

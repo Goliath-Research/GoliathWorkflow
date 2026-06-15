@@ -8,9 +8,22 @@ mapping, task I/O schema models, and project.json step_config linkage.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, FrozenSet, List, Literal, Optional, Sequence, Tuple
+from typing import Any, Dict, FrozenSet, List, Literal, Optional, Sequence, Tuple
 
+ExecutionMode = Literal["cli", "in_process"]
 ActionCategory = Literal["sample_prep", "modeling", "validation"]
+
+DEFAULT_PIPELINE_ARGV_MAP: Tuple[Tuple[str, str], ...] = (
+    ("project", "--project"),
+    ("projectPath", "--project"),
+    ("group", "--group"),
+    ("chromosome", "--chromosome"),
+    ("context", "--context"),
+    ("comparison", "--comparison"),
+    ("outputDir", "--output-dir"),
+    ("centroid1Dir", "--centroid1-dir"),
+    ("centroid2Dir", "--centroid2-dir"),
+)
 NodeType = Literal[
     "ACTION",
     "SEQUENCE",
@@ -61,7 +74,6 @@ class DomainEffects:
 class ActionCatalogEntry:
     action_name: str
     capability: str
-    handler: str
     schema_id: str
     description: str
     category: ActionCategory
@@ -69,12 +81,26 @@ class ActionCatalogEntry:
     input_class: str
     output_module: str
     output_class: str
+    execution_mode: ExecutionMode = "cli"
     default_node_type: NodeType = "ACTION"
     cli_tool: Optional[str] = None
     tool: Optional[str] = None
     step_config_key: Optional[str] = None
     context_vars: Tuple[str, ...] = field(default_factory=tuple)
+    argv_map: Tuple[Tuple[str, str], ...] = DEFAULT_PIPELINE_ARGV_MAP
+    in_process_handler: Optional[str] = None
+    handler: Optional[str] = None  # deprecated alias for in_process_handler
     domain_effects: Optional[DomainEffects] = None
+
+    def resolved_in_process_handler(self) -> Optional[str]:
+        return self.in_process_handler or self.handler
+
+    def build_action(self, handlers_module: Any = None) -> Any:
+        from .actions.base import build_action_from_catalog
+        import methyl_worker.handlers as handlers_mod
+
+        mod = handlers_module if handlers_module is not None else handlers_mod
+        return build_action_from_catalog(self, mod)
 
     @property
     def input_schema_ref(self) -> str:
@@ -90,7 +116,7 @@ class ActionCatalogEntry:
         payload = {
             "action_name": self.action_name,
             "capability": self.capability,
-            "handler": self.handler,
+            "execution_mode": self.execution_mode,
             "schema_id": self.schema_id,
             "description": self.description,
             "category": self.category,
@@ -99,7 +125,10 @@ class ActionCatalogEntry:
             "output_schema_ref": self.output_schema_ref,
             "step_config_key": self.step_config_key,
             "context_vars": list(self.context_vars),
+            "argv_map": {k: v for k, v in self.argv_map},
         }
+        if self.resolved_in_process_handler():
+            payload["in_process_handler"] = self.resolved_in_process_handler()
         if self.cli_tool:
             payload["cli_tool"] = self.cli_tool
         if self.tool:
@@ -192,7 +221,6 @@ _DE_PLAN_ITERATIONS = DomainEffects(
 def _entry(
     action_name: str,
     capability: str,
-    handler: str,
     schema_id: str,
     description: str,
     category: ActionCategory,
@@ -201,16 +229,18 @@ def _entry(
     output_module: str,
     output_class: str,
     *,
+    execution_mode: ExecutionMode = "cli",
     cli_tool: Optional[str] = None,
     tool: Optional[str] = None,
     step_config_key: Optional[str] = None,
     context_vars: Tuple[str, ...] = (),
+    argv_map: Tuple[Tuple[str, str], ...] = DEFAULT_PIPELINE_ARGV_MAP,
+    in_process_handler: Optional[str] = None,
     domain_effects: Optional[DomainEffects] = None,
 ) -> ActionCatalogEntry:
     return ActionCatalogEntry(
         action_name=action_name,
         capability=capability,
-        handler=handler,
         schema_id=schema_id,
         description=description,
         category=category,
@@ -218,19 +248,98 @@ def _entry(
         input_class=input_class,
         output_module=output_module,
         output_class=output_class,
+        execution_mode=execution_mode,
         cli_tool=cli_tool,
         tool=tool,
         step_config_key=step_config_key,
         context_vars=context_vars,
+        argv_map=argv_map,
+        in_process_handler=in_process_handler,
+        domain_effects=domain_effects,
+    )
+
+
+def _cli(
+    action_name: str,
+    capability: str,
+    schema_id: str,
+    description: str,
+    category: ActionCategory,
+    input_module: str,
+    input_class: str,
+    output_module: str,
+    output_class: str,
+    *,
+    cli_tool: str,
+    tool: Optional[str] = None,
+    step_config_key: Optional[str] = None,
+    context_vars: Tuple[str, ...] = (),
+    argv_map: Tuple[Tuple[str, str], ...] = DEFAULT_PIPELINE_ARGV_MAP,
+    domain_effects: Optional[DomainEffects] = None,
+) -> ActionCatalogEntry:
+    return _entry(
+        action_name,
+        capability,
+        schema_id,
+        description,
+        category,
+        input_module,
+        input_class,
+        output_module,
+        output_class,
+        execution_mode="cli",
+        cli_tool=cli_tool,
+        tool=tool,
+        step_config_key=step_config_key,
+        context_vars=context_vars,
+        argv_map=argv_map,
+        domain_effects=domain_effects,
+    )
+
+
+def _in_process(
+    action_name: str,
+    capability: str,
+    schema_id: str,
+    description: str,
+    category: ActionCategory,
+    input_module: str,
+    input_class: str,
+    output_module: str,
+    output_class: str,
+    *,
+    in_process_handler: str,
+    tool: Optional[str] = None,
+    cli_tool: Optional[str] = None,
+    step_config_key: Optional[str] = None,
+    context_vars: Tuple[str, ...] = (),
+    domain_effects: Optional[DomainEffects] = None,
+) -> ActionCatalogEntry:
+    return _entry(
+        action_name,
+        capability,
+        schema_id,
+        description,
+        category,
+        input_module,
+        input_class,
+        output_module,
+        output_class,
+        execution_mode="in_process",
+        in_process_handler=in_process_handler,
+        tool=tool,
+        cli_tool=cli_tool,
+        step_config_key=step_config_key,
+        context_vars=context_vars,
+        argv_map=(),
         domain_effects=domain_effects,
     )
 
 
 ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
-    _entry(
+    _cli(
         "pipeline.centroid",
         "methyl-centroid",
-        "_handle_pipeline_cli",
         "pipeline.centroid",
         "Build per-group methylation centroids (chr×context HDF5 aggregates).",
         "modeling",
@@ -241,10 +350,9 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         step_config_key="centroid",
         domain_effects=_DE_CENTROID,
     ),
-    _entry(
+    _cli(
         "pipeline.detector",
         "methyl-detector",
-        "_handle_pipeline_cli",
         "pipeline.detector",
         "Detect differentially methylated positions between cohort pairs.",
         "modeling",
@@ -255,10 +363,9 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         step_config_key="detection",
         domain_effects=_DE_DETECTOR,
     ),
-    _entry(
+    _cli(
         "pipeline.mapper",
         "methyl-mapper",
-        "_handle_pipeline_cli",
         "pipeline.mapper",
         "Map DMPs to genes and genomic features.",
         "modeling",
@@ -268,10 +375,9 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="MethylMapper",
         step_config_key="mapper",
     ),
-    _entry(
+    _cli(
         "pipeline.enricher",
         "methyl-enricher",
-        "_handle_pipeline_cli",
         "pipeline.enricher",
         "Functional enrichment on mapped gene sets.",
         "modeling",
@@ -281,10 +387,9 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="MethylEnricher",
         step_config_key="enricher",
     ),
-    _entry(
+    _cli(
         "pipeline.progression",
         "methyl-disease-progression",
-        "_handle_pipeline_cli",
         "pipeline.progression",
         "Ordered disease-stage progression analysis across comparisons.",
         "modeling",
@@ -294,10 +399,9 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="MethylDiseaseProgression",
         step_config_key="progression",
     ),
-    _entry(
+    _in_process(
         "sample.download_fastq",
         "sample.download-fastq",
-        "_handle_stub_external",
         "sample.download_fastq",
         "Download sample FASTQ files from external object storage.",
         "sample_prep",
@@ -305,14 +409,14 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _SAMPLE_IN[1],
         "methyl_worker.task_models",
         "DownloadFastqTaskOutput",
+        in_process_handler="_handle_stub_external",
         tool="SampleDownloadFastq",
         context_vars=("sampleId", "sampleDir", "fastqSourceUri"),
         domain_effects=_DE_DOWNLOAD,
     ),
-    _entry(
+    _in_process(
         "sample.parabricks_fq2bam",
         "parabricks.fq2bam",
-        "_handle_stub_external",
         "sample.parabricks_fq2bam",
         "Align FASTQs to BAM using NVIDIA Clara Parabricks fq2bam.",
         "sample_prep",
@@ -320,14 +424,14 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _SAMPLE_IN[1],
         "methyl_worker.task_models",
         "ParabricksTaskOutput",
+        in_process_handler="_handle_stub_external",
         tool="ParabricksFq2Bam",
         context_vars=("sampleId", "sampleDir", "referenceFasta", "referenceGtf"),
         domain_effects=_DE_PARABRICKS,
     ),
-    _entry(
+    _in_process(
         "sample.delete_fastqs",
         "sample.delete-fastqs",
-        "_handle_stub_external",
         "sample.delete_fastqs",
         "Delete FASTQ files after alignment to reclaim storage.",
         "sample_prep",
@@ -335,13 +439,13 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _SAMPLE_IN[1],
         "methyl_worker.task_models",
         "DeleteTaskOutput",
+        in_process_handler="_handle_stub_external",
         tool="SampleDeleteFastqs",
         context_vars=("sampleId", "sampleDir"),
     ),
-    _entry(
+    _in_process(
         "sample.methyl_qc",
         "methyl-qc",
-        "_handle_methyl_qc",
         "sample.methyl_qc",
         "Alignment QC metrics (Picard-style) with guardrails JSON export.",
         "sample_prep",
@@ -349,16 +453,16 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _SAMPLE_IN[1],
         "methyl_worker.task_models",
         "MethylQcTaskOutput",
-        cli_tool="methyl-qc",
+        in_process_handler="_handle_methyl_qc",
         tool="MethylAlignmentQc",
+        cli_tool="methyl-qc",
         step_config_key="alignment_qc",
         context_vars=("projectPath", "sampleId", "sampleDir", "primaryAnalyte"),
         domain_effects=_DE_METHYL_QC,
     ),
-    _entry(
+    _in_process(
         "sample.fragmentomics",
         "methyl-fragmentomics",
-        "_handle_methyl_fragmentomics",
         "sample.fragmentomics",
         "cfDNA fragmentomic analysis (WPS, end motifs) when analyte is cfDNA.",
         "sample_prep",
@@ -366,16 +470,16 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _SAMPLE_IN[1],
         "methyl_worker.task_models",
         "FragmentomicsTaskOutput",
-        cli_tool="methyl-fragmentomics",
+        in_process_handler="_handle_methyl_fragmentomics",
         tool="MethylFragmentomics",
+        cli_tool="methyl-fragmentomics",
         step_config_key="fragmentomics",
         context_vars=("projectPath", "sampleId", "sampleDir"),
         domain_effects=_DE_FRAGMENTOMICS,
     ),
-    _entry(
+    _in_process(
         "sample.methyl_extract",
         "methyl-extract",
-        "_handle_stub_external",
         "sample.methyl_extract",
         "Extract BAM to compressed per-chromosome HDF5 via MethylExtractor.",
         "sample_prep",
@@ -383,14 +487,14 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _SAMPLE_IN[1],
         "methyl_worker.task_models",
         "MethylExtractTaskOutput",
+        in_process_handler="_handle_stub_external",
         tool="MethylExtract",
         context_vars=("sampleId", "sampleDir", "projectPath", "referenceFasta"),
         domain_effects=_DE_METHYL_EXTRACT,
     ),
-    _entry(
+    _in_process(
         "sample.delete_bam",
         "sample.delete-bam",
-        "_handle_stub_external",
         "sample.delete_bam",
         "Delete BAM after methylation extraction to reclaim storage.",
         "sample_prep",
@@ -398,13 +502,13 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _SAMPLE_IN[1],
         "methyl_worker.task_models",
         "DeleteTaskOutput",
+        in_process_handler="_handle_stub_external",
         tool="SampleDeleteBam",
         context_vars=("sampleId", "sampleDir"),
     ),
-    _entry(
+    _in_process(
         "sample.qc_failed",
         "sample.mark-failed",
-        "_handle_mark_failed",
         "sample.qc_failed",
         "Mark sample QC_FAILED and skip downstream steps when guardrails fail.",
         "sample_prep",
@@ -412,14 +516,14 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _SAMPLE_IN[1],
         "methyl_worker.task_models",
         "MarkFailedTaskOutput",
+        in_process_handler="_handle_mark_failed",
         tool="SampleMarkFailed",
         context_vars=("sampleId", "sampleDir", "reason"),
         domain_effects=_DE_QC_FAILED,
     ),
-    _entry(
+    _in_process(
         "validation.plan_iterations",
         "validation.plan-iterations",
-        "_handle_validation_plan_iterations",
         "validation.plan_iterations",
         "Monte Carlo planner: stratified per-cohort subsamples and materialize run projects.",
         "validation",
@@ -427,6 +531,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "ValidationPlanRequest",
         "methyl_worker.task_models",
         "ValidationPlanTaskOutput",
+        in_process_handler="_handle_validation_plan_iterations",
         step_config_key="validation",
         context_vars=("projectPath", "featureIterations", "qualityIterations"),
         domain_effects=_DE_PLAN_ITERATIONS,
@@ -453,7 +558,12 @@ def find_catalog_entry_by_capability(capability: str) -> Optional[ActionCatalogE
 
 
 def build_capability_handlers() -> Dict[str, str]:
-    return {entry.capability: entry.handler for entry in ACTION_CATALOG}
+    """Map capability to in-process handler name (cli actions have no handler)."""
+    return {
+        entry.capability: entry.resolved_in_process_handler()
+        for entry in ACTION_CATALOG
+        if entry.resolved_in_process_handler()
+    }
 
 
 def build_tool_cli_map() -> Dict[str, str]:

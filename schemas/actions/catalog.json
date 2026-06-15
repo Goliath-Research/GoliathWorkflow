@@ -2,6 +2,17 @@
   "actions": [
     {
       "action_name": "pipeline.centroid",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project"
+      },
       "capability": "methyl-centroid",
       "category": "modeling",
       "cli_tool": "methyl-centroid",
@@ -18,7 +29,7 @@
           "MethylCentroidRef"
         ]
       },
-      "handler": "_handle_pipeline_cli",
+      "execution_mode": "cli",
       "input_schema_ref": "schemas/tasks/pipeline_centroid.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_centroid.output.schema.json",
       "schema_id": "pipeline.centroid",
@@ -27,6 +38,17 @@
     },
     {
       "action_name": "pipeline.detector",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project"
+      },
       "capability": "methyl-detector",
       "category": "modeling",
       "cli_tool": "methyl-detector",
@@ -44,7 +66,7 @@
           "MethylDetectionRef"
         ]
       },
-      "handler": "_handle_pipeline_cli",
+      "execution_mode": "cli",
       "input_schema_ref": "schemas/tasks/pipeline_detector.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_detector.output.schema.json",
       "schema_id": "pipeline.detector",
@@ -53,13 +75,24 @@
     },
     {
       "action_name": "pipeline.mapper",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project"
+      },
       "capability": "methyl-mapper",
       "category": "modeling",
       "cli_tool": "methyl-mapper",
       "context_vars": [],
       "default_node_type": "ACTION",
       "description": "Map DMPs to genes and genomic features.",
-      "handler": "_handle_pipeline_cli",
+      "execution_mode": "cli",
       "input_schema_ref": "schemas/tasks/pipeline_mapper.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_mapper.output.schema.json",
       "schema_id": "pipeline.mapper",
@@ -68,13 +101,24 @@
     },
     {
       "action_name": "pipeline.enricher",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project"
+      },
       "capability": "methyl-enricher",
       "category": "modeling",
       "cli_tool": "methyl-enricher",
       "context_vars": [],
       "default_node_type": "ACTION",
       "description": "Functional enrichment on mapped gene sets.",
-      "handler": "_handle_pipeline_cli",
+      "execution_mode": "cli",
       "input_schema_ref": "schemas/tasks/pipeline_enricher.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_enricher.output.schema.json",
       "schema_id": "pipeline.enricher",
@@ -83,13 +127,24 @@
     },
     {
       "action_name": "pipeline.progression",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project"
+      },
       "capability": "methyl-disease-progression",
       "category": "modeling",
       "cli_tool": "methyl-disease-progression",
       "context_vars": [],
       "default_node_type": "ACTION",
       "description": "Ordered disease-stage progression analysis across comparisons.",
-      "handler": "_handle_pipeline_cli",
+      "execution_mode": "cli",
       "input_schema_ref": "schemas/tasks/pipeline_progression.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_progression.output.schema.json",
       "schema_id": "pipeline.progression",
@@ -98,6 +153,7 @@
     },
     {
       "action_name": "sample.download_fastq",
+      "argv_map": {},
       "capability": "sample.download-fastq",
       "category": "sample_prep",
       "context_vars": [
@@ -123,7 +179,8 @@
           "MethylSampleRef"
         ]
       },
-      "handler": "_handle_stub_external",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_stub_external",
       "input_schema_ref": "schemas/tasks/sample_download_fastq.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_download_fastq.output.schema.json",
       "schema_id": "sample.download_fastq",
@@ -132,6 +189,7 @@
     },
     {
       "action_name": "sample.parabricks_fq2bam",
+      "argv_map": {},
       "capability": "parabricks.fq2bam",
       "category": "sample_prep",
       "context_vars": [
@@ -163,7 +221,8 @@
           "MethylSampleRef"
         ]
       },
-      "handler": "_handle_stub_external",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_stub_external",
       "input_schema_ref": "schemas/tasks/sample_parabricks_fq2bam.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_parabricks_fq2bam.output.schema.json",
       "schema_id": "sample.parabricks_fq2bam",
@@ -172,6 +231,7 @@
     },
     {
       "action_name": "sample.delete_fastqs",
+      "argv_map": {},
       "capability": "sample.delete-fastqs",
       "category": "sample_prep",
       "context_vars": [
@@ -180,7 +240,8 @@
       ],
       "default_node_type": "ACTION",
       "description": "Delete FASTQ files after alignment to reclaim storage.",
-      "handler": "_handle_stub_external",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_stub_external",
       "input_schema_ref": "schemas/tasks/sample_delete_fastqs.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_delete_fastqs.output.schema.json",
       "schema_id": "sample.delete_fastqs",
@@ -189,6 +250,7 @@
     },
     {
       "action_name": "sample.methyl_qc",
+      "argv_map": {},
       "capability": "methyl-qc",
       "category": "sample_prep",
       "cli_tool": "methyl-qc",
@@ -221,7 +283,8 @@
           "MethylSampleRef"
         ]
       },
-      "handler": "_handle_methyl_qc",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_methyl_qc",
       "input_schema_ref": "schemas/tasks/sample_methyl_qc.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_methyl_qc.output.schema.json",
       "schema_id": "sample.methyl_qc",
@@ -230,6 +293,7 @@
     },
     {
       "action_name": "sample.fragmentomics",
+      "argv_map": {},
       "capability": "methyl-fragmentomics",
       "category": "sample_prep",
       "cli_tool": "methyl-fragmentomics",
@@ -256,7 +320,8 @@
           "MethylSampleRef"
         ]
       },
-      "handler": "_handle_methyl_fragmentomics",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_methyl_fragmentomics",
       "input_schema_ref": "schemas/tasks/sample_fragmentomics.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_fragmentomics.output.schema.json",
       "schema_id": "sample.fragmentomics",
@@ -265,6 +330,7 @@
     },
     {
       "action_name": "sample.methyl_extract",
+      "argv_map": {},
       "capability": "methyl-extract",
       "category": "sample_prep",
       "context_vars": [
@@ -291,7 +357,8 @@
           "MethylSampleRef"
         ]
       },
-      "handler": "_handle_stub_external",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_stub_external",
       "input_schema_ref": "schemas/tasks/sample_methyl_extract.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_methyl_extract.output.schema.json",
       "schema_id": "sample.methyl_extract",
@@ -300,6 +367,7 @@
     },
     {
       "action_name": "sample.delete_bam",
+      "argv_map": {},
       "capability": "sample.delete-bam",
       "category": "sample_prep",
       "context_vars": [
@@ -308,7 +376,8 @@
       ],
       "default_node_type": "ACTION",
       "description": "Delete BAM after methylation extraction to reclaim storage.",
-      "handler": "_handle_stub_external",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_stub_external",
       "input_schema_ref": "schemas/tasks/sample_delete_bam.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_delete_bam.output.schema.json",
       "schema_id": "sample.delete_bam",
@@ -317,6 +386,7 @@
     },
     {
       "action_name": "sample.qc_failed",
+      "argv_map": {},
       "capability": "sample.mark-failed",
       "category": "sample_prep",
       "context_vars": [
@@ -342,7 +412,8 @@
           "MethylSampleRef"
         ]
       },
-      "handler": "_handle_mark_failed",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_mark_failed",
       "input_schema_ref": "schemas/tasks/sample_qc_failed.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_qc_failed.output.schema.json",
       "schema_id": "sample.qc_failed",
@@ -351,6 +422,7 @@
     },
     {
       "action_name": "validation.plan_iterations",
+      "argv_map": {},
       "capability": "validation.plan-iterations",
       "category": "validation",
       "context_vars": [
@@ -375,7 +447,8 @@
           "StratifiedCohortDraw"
         ]
       },
-      "handler": "_handle_validation_plan_iterations",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_plan_iterations",
       "input_schema_ref": "schemas/tasks/validation_plan_iterations.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_plan_iterations.output.schema.json",
       "schema_id": "validation.plan_iterations",

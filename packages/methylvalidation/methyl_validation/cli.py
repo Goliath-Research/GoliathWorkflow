@@ -7,6 +7,7 @@ import copy
 import csv
 import hashlib
 import json
+import os
 import re
 import shutil
 import sys
@@ -1364,6 +1365,27 @@ def main() -> None:
         sys.exit(biological_readiness_main(sys.argv[2:]))
         return
 
+    if len(sys.argv) > 1 and sys.argv[1] == "plan-workflow-context":
+        from .workflow_planner import ValidationPlanRequest
+        from .workflow_runner import write_planned_context
+
+        plan_parser = argparse.ArgumentParser(description="Build ValidationPipeline context_json")
+        plan_parser.add_argument("--project", "-p", type=Path, required=True)
+        plan_parser.add_argument("--output", "-o", type=Path, required=True)
+        plan_parser.add_argument("--feature-iterations", type=int, default=None)
+        plan_parser.add_argument("--quality-iterations", type=int, default=0)
+        plan_parser.add_argument("--seed", type=int, default=None)
+        plan_args = plan_parser.parse_args(sys.argv[2:])
+        req = ValidationPlanRequest(
+            projectPath=str(plan_args.project),
+            featureIterations=plan_args.feature_iterations,
+            qualityIterations=plan_args.quality_iterations,
+            seed=plan_args.seed,
+        )
+        write_planned_context(req, plan_args.output)
+        print(f"Wrote workflow context: {plan_args.output}")
+        return
+
     if len(sys.argv) > 1 and sys.argv[1] in (
         "plan-runs",
         "run-task",
@@ -1440,6 +1462,24 @@ def main() -> None:
             "rewritten when referenced. Use --samples-base-path to set the sample root explicitly. "
             "Example: --path-remap /lambda/nfs/Work/prostate-cancer=/work/prostate-cancer"
         ),
+    )
+    parser.add_argument(
+        "--via-workflow",
+        action="store_true",
+        help="Run Monte Carlo validation via workflow engine (requires --workflow-version-id unless METHYL_USE_LOCAL_PIPELINE=1).",
+    )
+    parser.add_argument(
+        "--gateway-url",
+        type=str,
+        default=None,
+        help="Workflow REST gateway base URL (default: METHYL_API_BASE or http://localhost:8080/v1).",
+    )
+    parser.add_argument(
+        "--workflow-version-id",
+        type=int,
+        default=None,
+        metavar="ID",
+        help="ValidationPipeline workflow_version_id for --via-workflow.",
     )
     parser.add_argument(
         "--stability",
@@ -2587,6 +2627,40 @@ def main() -> None:
         _print_stability_summary(stability_summary, config)
         print("Done.")
         return
+
+    if args.via_workflow:
+        from .workflow_planner import ValidationPlanRequest
+        from .workflow_runner import run_validation_via_workflow, use_local_pipeline
+
+        if use_local_pipeline():
+            print(
+                "METHYL_USE_LOCAL_PIPELINE=1 — using local pipeline_runner (not workflow gateway).",
+                file=sys.stderr,
+            )
+        else:
+            if args.workflow_version_id is None:
+                print("Error: --via-workflow requires --workflow-version-id.", file=sys.stderr)
+                sys.exit(1)
+            gateway = args.gateway_url or os.environ.get(
+                "METHYL_API_BASE", "http://localhost:8080/v1"
+            )
+            plan_req = ValidationPlanRequest(
+                projectPath=str(base_project),
+                featureIterations=config.n_iterations,
+                seed=config.seed,
+                trainFraction=config.train_fraction,
+            )
+            result = run_validation_via_workflow(
+                gateway_url=gateway,
+                workflow_version_id=int(args.workflow_version_id),
+                plan_request=plan_req,
+            )
+            print(
+                f"ValidationPipeline completed (instance_id={result['instance_id']}, "
+                f"status={result['summary'].get('status')})."
+            )
+            print("Done.")
+            return
 
     cohort_paths_list: List[Tuple[str, List[str]]] = []
     for c in config.cohorts:

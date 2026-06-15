@@ -80,7 +80,7 @@ def compile_program(program_path: Path, project_info: dict) -> tuple[dict, dict]
     _ensure_import_paths()
     from compiler import compile_domain_program_file
 
-    result = compile_domain_program_file(program_path)
+    result = compile_domain_program_file(program_path, enrich_context=True)
     wf = result.workflow
     action_nodes = [n for n in wf.nodes if n.node_type == "ACTION"]
     foreach_nodes = [n for n in wf.nodes if n.node_type == "FOREACH"]
@@ -236,6 +236,33 @@ def main() -> int:
 
     summary, spec = compile_program(paths["program"], project_info)
     print("compile:", json.dumps(summary, indent=2))
+
+    _ensure_import_paths()
+    from workflow_context import resolve_input_json_from_template, validate_resolved_input_json
+
+    scope = {
+        "projectPath": summary["context_json"]["projectPath"],
+        "centroid1Dir": summary["context_json"].get("centroid1Dir", "/work/out/centroid1"),
+        "centroid2Dir": "/work/out/centroid2",
+        "detectOutDir": "/work/out/detect",
+        "chromosome": "21",
+        "context": "CG",
+        "control_group": "all",
+        "disease_group": "PCa",
+        "label": "PCa",
+    }
+    template_errors = []
+    for node in spec.get("nodes") or []:
+        if node.get("node_type") != "ACTION" or not node.get("input_template"):
+            continue
+        resolved = resolve_input_json_from_template(node["input_template"], scope)
+        errs = validate_resolved_input_json(resolved, str(node.get("action_name")))
+        if errs:
+            template_errors.append(f"{node.get('node_key')}: {errs}")
+    if template_errors:
+        print("template validation errors:", template_errors, file=sys.stderr)
+        return 1
+    print("template validation: all ACTION templates resolve for smoke scope")
 
     spec_path = write_compiled_spec(args.write_spec, spec)
     print(f"wrote compiled spec: {spec_path}")
