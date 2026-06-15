@@ -1,20 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": true,
-  "description": "Per-sample upstream preprocessing task input.",
+  "description": "Input for sample.methyl_extract (MethylExtractor \u2192 {chr}-{ctx}.h5 per chromosome).",
   "properties": {
-    "fastqUri": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Fastquri"
-    },
     "project": {
       "anyOf": [
         {
@@ -39,7 +27,7 @@
       "default": null,
       "title": "Projectpath"
     },
-    "reason": {
+    "referenceFasta": {
       "anyOf": [
         {
           "type": "string"
@@ -49,33 +37,26 @@
         }
       ],
       "default": null,
-      "title": "Reason"
+      "title": "Referencefasta"
     },
     "sampleDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Sampledir"
+      "title": "Sampledir",
+      "type": "string"
     },
     "sampleId": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Sampleid"
+      "title": "Sampleid",
+      "type": "string"
+    },
+    "tool": {
+      "default": "MethylExtract",
+      "title": "Tool",
+      "type": "string"
     }
   },
-  "title": "SamplePrepTaskInput",
+  "required": [
+    "sampleId",
+    "sampleDir"
+  ],
+  "title": "MethylExtractTaskInput",
   "type": "object"
 }

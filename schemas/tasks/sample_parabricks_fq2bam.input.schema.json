@@ -1,21 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": true,
-  "description": "Per-sample upstream preprocessing task input.",
+  "description": "Input for sample.parabricks_fq2bam (NVIDIA Clara Parabricks fq2bam).",
   "properties": {
-    "fastqUri": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Fastquri"
+    "referenceFasta": {
+      "title": "Referencefasta",
+      "type": "string"
     },
-    "project": {
+    "referenceGtf": {
       "anyOf": [
         {
           "type": "string"
@@ -25,57 +17,27 @@
         }
       ],
       "default": null,
-      "title": "Project"
-    },
-    "projectPath": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Projectpath"
-    },
-    "reason": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Reason"
+      "title": "Referencegtf"
     },
     "sampleDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Sampledir"
+      "title": "Sampledir",
+      "type": "string"
     },
     "sampleId": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Sampleid"
+      "title": "Sampleid",
+      "type": "string"
+    },
+    "tool": {
+      "default": "ParabricksFq2Bam",
+      "title": "Tool",
+      "type": "string"
     }
   },
-  "title": "SamplePrepTaskInput",
+  "required": [
+    "sampleId",
+    "sampleDir",
+    "referenceFasta"
+  ],
+  "title": "ParabricksFq2bamTaskInput",
   "type": "object"
 }

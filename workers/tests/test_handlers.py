@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import os
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -20,24 +20,34 @@ def test_mark_failed_handler() -> None:
     assert out["sampleId"] == "S1"
 
 
-def test_stub_external_requires_flag() -> None:
-    with patch.dict(os.environ, {"WORKER_STUB_EXTERNAL": ""}, clear=False):
-        with pytest.raises(RuntimeError, match="No local handler"):
-            execute_task(
-                "sample.download-fastq",
-                "sample.download_fastq",
-                {"sampleId": "S1", "sampleDir": "/tmp/S1"},
-            )
-
-
-def test_stub_external_dry_run() -> None:
-    with patch.dict(os.environ, {"WORKER_STUB_EXTERNAL": "1"}, clear=False):
-        out = execute_task(
-            "parabricks.fq2bam",
-            "sample.parabricks_fq2bam",
-            {"sampleId": "S1", "sampleDir": "/work/samples/S1"},
+def test_download_requires_fastq_source_uri() -> None:
+    with pytest.raises(RuntimeError, match="requires fastqSourceUri"):
+        execute_task(
+            "sample.download-fastq",
+            "sample.download_fastq",
+            {"sampleId": "S1", "sampleDir": "/tmp/S1"},
         )
-    assert out["bamPath"] == "/work/samples/S1/S1.bam"
+
+
+def test_parabricks_idempotent_when_outputs_exist(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S1"
+    sample_dir.mkdir()
+    bam = sample_dir / "S1.bam"
+    metrics = sample_dir / "S1.json"
+    bam.write_bytes(b"BAM")
+    metrics.write_text("{}")
+
+    out = execute_task(
+        "parabricks.fq2bam",
+        "sample.parabricks_fq2bam",
+        {
+            "sampleId": "S1",
+            "sampleDir": str(sample_dir),
+            "referenceFasta": "/ref/genome.fa",
+        },
+    )
+    assert out["bamPath"] == str(bam)
+    assert out["metricsJson"] == str(metrics)
 
 
 def test_pipeline_cli_dispatch() -> None:

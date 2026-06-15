@@ -42,7 +42,7 @@ class PipelineCliTaskOutput(BaseModel):
 
 
 class SamplePrepTaskInput(BaseModel):
-    """Per-sample upstream preprocessing task input."""
+    """Shared base for per-sample upstream preprocessing task input."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -52,6 +52,43 @@ class SamplePrepTaskInput(BaseModel):
     projectPath: Optional[str] = None
     reason: Optional[str] = None
     fastqUri: Optional[str] = None
+
+
+class DownloadFastqTaskInput(BaseModel):
+    """Input for sample.download_fastq (SampleDownloadFastq)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    tool: str = "SampleDownloadFastq"
+    sampleId: str
+    sampleDir: str
+    fastqSourceUri: str
+    fastqUri: Optional[str] = None
+
+
+class ParabricksFq2bamTaskInput(BaseModel):
+    """Input for sample.parabricks_fq2bam (NVIDIA Clara Parabricks fq2bam)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    tool: str = "ParabricksFq2Bam"
+    sampleId: str
+    sampleDir: str
+    referenceFasta: str
+    referenceGtf: Optional[str] = None
+
+
+class MethylExtractTaskInput(BaseModel):
+    """Input for sample.methyl_extract (MethylExtractor → {chr}-{ctx}.h5 per chromosome)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    tool: str = "MethylExtract"
+    sampleId: str
+    sampleDir: str
+    project: Optional[str] = None
+    projectPath: Optional[str] = None
+    referenceFasta: Optional[str] = None
 
 
 class SampleIdOutput(BaseModel):
@@ -98,6 +135,7 @@ class ParabricksTaskOutput(BaseModel):
     sampleId: Optional[str] = None
     bamPath: Optional[str] = None
     metricsJson: Optional[str] = None
+    qcMetricsTar: Optional[str] = None
 
 
 class DeleteTaskOutput(BaseModel):

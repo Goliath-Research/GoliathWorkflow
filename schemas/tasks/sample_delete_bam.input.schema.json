@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": true,
-  "description": "Per-sample upstream preprocessing task input.",
+  "description": "Shared base for per-sample upstream preprocessing task input.",
   "properties": {
     "fastqUri": {
       "anyOf": [
