@@ -102,7 +102,7 @@ class CliAction:
                         "remove_samples": list(remove_samples or []),
                     }
                 }
-        if step_override is not None and "stepOverride" not in input_json:
+        if step_override is not None and input_json.get("stepOverride") is None:
             input_json = {**input_json, "stepOverride": step_override}
         for json_key, flag in self.argv_map.items():
             if json_key in self.project_keys:

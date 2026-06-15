@@ -13,8 +13,6 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 HandlerResult = Dict[str, Any]
 Handler = Callable[[str, str, Dict[str, Any]], HandlerResult]
 
