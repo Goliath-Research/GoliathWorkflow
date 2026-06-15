@@ -5,10 +5,10 @@ from __future__ import annotations
 import logging
 import os
 import shutil
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Sequence
+from typing import Any, List, Sequence
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,14 @@ class FastqSource:
     account: str = ""
     prefix: str = ""
     local_root: Path | None = None
+
+
+@dataclass
+class _CloudClients:
+    """Reused authenticated clients for one ``download_fastqs`` invocation."""
+
+    s3: Any = field(default=None, repr=False)
+    azure: Any = field(default=None, repr=False)
 
 
 def _matches_fastq(name: str) -> bool:
@@ -73,11 +81,25 @@ def _basename_from_key(key: str) -> str:
     return key.rstrip("/").rsplit("/", 1)[-1]
 
 
+def _relative_to_prefix(key: str, prefix: str) -> str:
+    """Path of ``key`` relative to a folder listing prefix (preserves subfolders)."""
+    normalized_key = key.rstrip("/")
+    list_prefix = prefix
+    if list_prefix and not list_prefix.endswith("/"):
+        list_prefix += "/"
+    if list_prefix and normalized_key.startswith(list_prefix):
+        relative = normalized_key[len(list_prefix) :]
+        if relative:
+            return relative
+    return _basename_from_key(normalized_key)
+
+
 def download_fastqs(source_uri: str, dest_dir: Path) -> List[str]:
     """Copy or download all FASTQs for one sample into ``dest_dir``."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     source = _parse_source(source_uri)
-    objects = _list_objects(source)
+    clients = _CloudClients()
+    objects = _list_objects(source, clients)
     if not objects:
         raise RuntimeError(f"No FASTQ files found at {source_uri}")
 
@@ -87,7 +109,7 @@ def download_fastqs(source_uri: str, dest_dir: Path) -> List[str]:
         if _should_skip_download(target, obj.size, obj.mtime):
             logger.info("Skipping unchanged FASTQ %s", target)
         else:
-            _fetch_object(source, obj, target)
+            _fetch_object(source, obj, target, clients)
             _touch_mtime(target, obj.mtime)
         paths.append(str(target))
     return paths
@@ -143,13 +165,13 @@ def _parse_azure_uri(parsed) -> tuple[str, str, str]:
     return account, netloc, parsed.path.lstrip("/")
 
 
-def _list_objects(source: FastqSource) -> List[RemoteObject]:
+def _list_objects(source: FastqSource, clients: _CloudClients) -> List[RemoteObject]:
     if source.scheme == "file":
         return _list_local_objects(source)
     if source.scheme == "s3":
-        return _list_s3_objects(source)
+        return _list_s3_objects(source, clients)
     if source.scheme == "az":
-        return _list_azure_objects(source)
+        return _list_azure_objects(source, clients)
     raise RuntimeError(f"Unsupported source scheme {source.scheme!r}")
 
 
@@ -179,7 +201,9 @@ def _list_local_objects(source: FastqSource) -> List[RemoteObject]:
     return objects
 
 
-def _fetch_object(source: FastqSource, obj: RemoteObject, target: Path) -> None:
+def _fetch_object(
+    source: FastqSource, obj: RemoteObject, target: Path, clients: _CloudClients
+) -> None:
     if source.scheme == "file":
         root = source.local_root
         if root is None:
@@ -189,10 +213,10 @@ def _fetch_object(source: FastqSource, obj: RemoteObject, target: Path) -> None:
         shutil.copy2(src, target)
         return
     if source.scheme == "s3":
-        _download_s3_object(source.bucket, obj.locator, target)
+        _download_s3_object(source.bucket, obj.locator, target, clients)
         return
     if source.scheme == "az":
-        _download_azure_object(source.account, source.container, obj.locator, target)
+        _download_azure_object(source.account, source.container, obj.locator, target, clients)
         return
     raise RuntimeError(f"Unsupported source scheme {source.scheme!r}")
 
@@ -232,9 +256,11 @@ def _s3_client():
     return boto3.client("s3", **client_kwargs)
 
 
-def _list_s3_objects(source: FastqSource) -> List[RemoteObject]:
+def _list_s3_objects(source: FastqSource, clients: _CloudClients) -> List[RemoteObject]:
     prefix = source.prefix
-    client = _s3_client()
+    if clients.s3 is None:
+        clients.s3 = _s3_client()
+    client = clients.s3
 
     if not _is_folder_uri(prefix):
         response = client.head_object(Bucket=source.bucket, Key=prefix)
@@ -262,7 +288,7 @@ def _list_s3_objects(source: FastqSource) -> List[RemoteObject]:
                 continue
             objects.append(
                 RemoteObject(
-                    name=_basename_from_key(key),
+                    name=_relative_to_prefix(key, list_prefix),
                     size=int(item["Size"]),
                     mtime=_dt_to_mtime(item["LastModified"]),
                     locator=key,
@@ -271,10 +297,11 @@ def _list_s3_objects(source: FastqSource) -> List[RemoteObject]:
     return objects
 
 
-def _download_s3_object(bucket: str, key: str, target: Path) -> None:
-    client = _s3_client()
+def _download_s3_object(bucket: str, key: str, target: Path, clients: _CloudClients) -> None:
+    if clients.s3 is None:
+        clients.s3 = _s3_client()
     target.parent.mkdir(parents=True, exist_ok=True)
-    client.download_file(bucket, key, str(target))
+    clients.s3.download_file(bucket, key, str(target))
 
 
 def _azure_blob_service(account: str):
@@ -290,8 +317,10 @@ def _azure_blob_service(account: str):
     return BlobServiceClient(account_url, credential=DefaultAzureCredential())
 
 
-def _list_azure_objects(source: FastqSource) -> List[RemoteObject]:
-    service = _azure_blob_service(source.account)
+def _list_azure_objects(source: FastqSource, clients: _CloudClients) -> List[RemoteObject]:
+    if clients.azure is None:
+        clients.azure = _azure_blob_service(source.account)
+    service = clients.azure
     container_client = service.get_container_client(source.container)
     prefix = source.prefix
 
@@ -322,7 +351,7 @@ def _list_azure_objects(source: FastqSource) -> List[RemoteObject]:
             continue
         objects.append(
             RemoteObject(
-                name=_basename_from_key(name),
+                name=_relative_to_prefix(name, list_prefix),
                 size=int(blob.size),
                 mtime=_dt_to_mtime(blob.last_modified),
                 locator=name,
@@ -331,9 +360,12 @@ def _list_azure_objects(source: FastqSource) -> List[RemoteObject]:
     return objects
 
 
-def _download_azure_object(account: str, container: str, blob_name: str, target: Path) -> None:
-    service = _azure_blob_service(account)
-    blob_client = service.get_blob_client(container=container, blob=blob_name)
+def _download_azure_object(
+    account: str, container: str, blob_name: str, target: Path, clients: _CloudClients
+) -> None:
+    if clients.azure is None:
+        clients.azure = _azure_blob_service(account)
+    blob_client = clients.azure.get_blob_client(container=container, blob=blob_name)
     target.parent.mkdir(parents=True, exist_ok=True)
     with open(target, "wb") as handle:
         blob_client.download_blob().readinto(handle)

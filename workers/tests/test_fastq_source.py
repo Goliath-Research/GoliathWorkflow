@@ -98,6 +98,48 @@ def test_s3_folder_download(mock_s3_client: MagicMock, tmp_path: Path) -> None:
 
     assert sorted(Path(p).name for p in files) == ["S1_1.fastq.gz", "S1_2.fastq.gz"]
     assert client.download_file.call_count == 2
+    assert mock_s3_client.call_count == 1
+
+
+@patch("methyl_worker.fastq_source._s3_client")
+def test_s3_preserves_subprefix_paths_when_basenames_collide(
+    mock_s3_client: MagicMock, tmp_path: Path
+) -> None:
+    client = MagicMock()
+    mock_s3_client.return_value = client
+    client.get_paginator.return_value.paginate.return_value = [
+        {
+            "Contents": [
+                {
+                    "Key": "plasma/S1/lane1/S1_1.fastq.gz",
+                    "Size": 5,
+                    "LastModified": datetime(2024, 6, 1, tzinfo=timezone.utc),
+                },
+                {
+                    "Key": "plasma/S1/lane2/S1_1.fastq.gz",
+                    "Size": 6,
+                    "LastModified": datetime(2024, 6, 1, tzinfo=timezone.utc),
+                },
+            ]
+        }
+    ]
+
+    def fake_download(bucket: str, key: str, target: str) -> None:
+        Path(target).write_bytes(key.encode())
+
+    client.download_file.side_effect = fake_download
+
+    dest = tmp_path / "sample"
+    files = download_fastqs("s3://methyl-cohort/plasma/S1/", dest)
+
+    assert sorted(files) == sorted(
+        [
+            str(dest / "lane1" / "S1_1.fastq.gz"),
+            str(dest / "lane2" / "S1_1.fastq.gz"),
+        ]
+    )
+    assert (dest / "lane1" / "S1_1.fastq.gz").read_bytes() == b"plasma/S1/lane1/S1_1.fastq.gz"
+    assert (dest / "lane2" / "S1_1.fastq.gz").read_bytes() == b"plasma/S1/lane2/S1_1.fastq.gz"
 
 
 @patch("methyl_worker.fastq_source._s3_client")
@@ -127,6 +169,7 @@ def test_s3_skips_download_when_size_and_mtime_match(mock_s3_client: MagicMock, 
 
     assert files == [str(target)]
     client.download_file.assert_not_called()
+    assert mock_s3_client.call_count == 1
 
 
 @patch("methyl_worker.fastq_source._azure_blob_service")
@@ -166,6 +209,58 @@ def test_azure_folder_download(mock_azure_service: MagicMock, tmp_path: Path, mo
 
     assert sorted(Path(p).name for p in files) == ["S1_1.fastq.gz", "S1_2.fastq.gz"]
     assert service.get_blob_client.call_count == 2
+    mock_azure_service.assert_called_once_with("methylstore")
+
+
+@patch("methyl_worker.fastq_source._azure_blob_service")
+def test_azure_preserves_subprefix_paths_when_basenames_collide(
+    mock_azure_service: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AZURE_STORAGE_ACCOUNT", "methylstore")
+    service = MagicMock()
+    mock_azure_service.return_value = service
+    container = MagicMock()
+    service.get_container_client.return_value = container
+
+    blob1 = MagicMock()
+    blob1.name = "S1/lane1/S1_1.fastq.gz"
+    blob1.size = 5
+    blob1.last_modified = datetime(2024, 6, 2, tzinfo=timezone.utc)
+    blob2 = MagicMock()
+    blob2.name = "S1/lane2/S1_1.fastq.gz"
+    blob2.size = 6
+    blob2.last_modified = datetime(2024, 6, 2, tzinfo=timezone.utc)
+    container.list_blobs.return_value = [blob1, blob2]
+
+    def make_blob_client(container: str, blob: str) -> MagicMock:
+        blob_client = MagicMock()
+
+        def download_blob():
+            payload = MagicMock()
+
+            def readinto(handle):
+                handle.write(blob.encode())
+
+            payload.readinto = readinto
+            return payload
+
+        blob_client.download_blob.side_effect = download_blob
+        return blob_client
+
+    service.get_blob_client.side_effect = make_blob_client
+
+    dest = tmp_path / "sample"
+    files = download_fastqs("az://plasma/S1/", dest)
+
+    assert sorted(files) == sorted(
+        [
+            str(dest / "lane1" / "S1_1.fastq.gz"),
+            str(dest / "lane2" / "S1_1.fastq.gz"),
+        ]
+    )
+    assert (dest / "lane1" / "S1_1.fastq.gz").read_bytes() == b"S1/lane1/S1_1.fastq.gz"
+    assert (dest / "lane2" / "S1_1.fastq.gz").read_bytes() == b"S1/lane2/S1_1.fastq.gz"
+    mock_azure_service.assert_called_once_with("methylstore")
 
 
 @patch("methyl_worker.fastq_source._azure_blob_service")
