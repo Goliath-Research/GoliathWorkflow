@@ -584,7 +584,7 @@ def _build_model_mc_shared_runs(
                     config.samples_base_path,
                 )
             else:
-                project_path, _val_groups_json = generate_run_project_hierarchical_multiclass(
+                project_path, _val_groups_json, _centroid_overrides = generate_run_project_hierarchical_multiclass(
                     base_project_for_runs,
                     run_dir,
                     run_id,
@@ -705,7 +705,7 @@ def _build_model_mc_shared_runs(
                     config.samples_base_path,
                 )
             else:
-                project_path, _val_groups_json = generate_run_project_hierarchical_multiclass(
+                project_path, _val_groups_json, _centroid_overrides = generate_run_project_hierarchical_multiclass(
                     base_project_for_runs,
                     run_dir,
                     run_id,
@@ -1249,7 +1249,7 @@ def _run_model_mc_backend(
                     config.samples_base_path,
                 )
             else:
-                project_path, _val_groups_json = generate_run_project_hierarchical_multiclass(
+                project_path, _val_groups_json, _centroid_overrides = generate_run_project_hierarchical_multiclass(
                     base_project_for_runs,
                     run_dir,
                     run_id,
@@ -2501,7 +2501,7 @@ def main() -> None:
                             config.samples_base_path,
                         )
                     else:
-                        project_path, val_groups_json = generate_run_project_hierarchical_multiclass(
+                        project_path, val_groups_json, _centroid_overrides = generate_run_project_hierarchical_multiclass(
                             base_project,
                             run_dir,
                             run_id,
@@ -3066,7 +3066,7 @@ def main() -> None:
                     predictor_output_dir = run_dir / "predictors"
                     n_train_samples, n_val_samples = _count_run_samples_from_existing_files(run_dir)
                 else:
-                    project_path, val_groups_json = generate_run_project_hierarchical_multiclass(
+                    project_path, val_groups_json, _centroid_overrides = generate_run_project_hierarchical_multiclass(
                         base_project,
                         run_dir,
                         run_id,

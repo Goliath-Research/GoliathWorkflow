@@ -21,10 +21,14 @@ from .config import MonteCarloConfig
 from .mc_config_load import write_mc_config_snapshot
 from .mc_manifest import write_detector_featurecuts_override, write_mapper_classifier_override
 from .project_gen import (
+    build_group_centroid_scope,
+    carry_forward_centroids_from_previous_run,
+    centroid_override_has_remove_samples,
     generate_run_project,
     generate_run_project_hierarchical_multiclass,
     generate_run_project_multiclass,
     infer_monte_carlo_layout,
+    prepare_incremental_centroid_baseline,
 )
 from .split import load_and_resolve_sample_paths, stratified_split, stratified_split_multiclass
 from .storage_layout import mc_config_snapshot_path
@@ -175,8 +179,16 @@ def _materialize_iteration(
     seed_offset: int,
     previous_train_control: Optional[List[str]],
     previous_train_disease: Optional[List[str]],
+    previous_train_by_label: Optional[Dict[str, List[str]]],
+    previous_run_dir: Optional[Path],
     overwrite: bool,
-) -> Tuple[Dict[str, Any], Optional[List[str]], Optional[List[str]]]:
+) -> Tuple[
+    Dict[str, Any],
+    Optional[List[str]],
+    Optional[List[str]],
+    Optional[Dict[str, List[str]]],
+    Optional[Path],
+]:
     run_dir_name = f"run_{global_run_number:04d}"
     run_dir = monte_carlo_runs_root / run_dir_name
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -225,6 +237,8 @@ def _materialize_iteration(
             ),
             previous_train_control,
             previous_train_disease,
+            previous_train_by_label,
+            previous_run_dir,
         )
 
     det_override = write_detector_featurecuts_override(run_dir, config)
@@ -234,6 +248,7 @@ def _materialize_iteration(
     val_control_csv = None
     val_disease_csv = None
     val_groups_json = None
+    centroid_overrides_by_label: Dict[str, Path] = {}
     c1 = None
     c2 = None
 
@@ -261,6 +276,7 @@ def _materialize_iteration(
         )
         previous_train_control = list(train_control)
         previous_train_disease = list(train_disease)
+        prepare_incremental_centroid_baseline(previous_run_dir, run_dir, c1, c2)
     elif layout == "multiclass":
         project_path, val_groups_json = generate_run_project_multiclass(
             base_project,
@@ -273,7 +289,7 @@ def _materialize_iteration(
             config.samples_base_path,
         )
     else:
-        project_path, val_groups_json = generate_run_project_hierarchical_multiclass(
+        project_path, val_groups_json, centroid_overrides_by_label = generate_run_project_hierarchical_multiclass(
             base_project,
             run_dir,
             run_dir_name,
@@ -282,7 +298,15 @@ def _materialize_iteration(
             val_m,
             cohort_labels,
             config.samples_base_path,
+            previous_train_by_label=previous_train_by_label,
         )
+
+    if layout in {"multiclass", "hierarchical_multiclass"}:
+        needs_baseline = any(
+            centroid_override_has_remove_samples(path) for path in centroid_overrides_by_label.values()
+        )
+        if needs_baseline and previous_run_dir is not None:
+            carry_forward_centroids_from_previous_run(previous_run_dir, run_dir)
 
     task_config = {
         "runId": display_run_id,
@@ -307,13 +331,29 @@ def _materialize_iteration(
         task_config["centroidGroup1Override"] = str(c1)
     if c2 is not None:
         task_config["centroidGroup2Override"] = str(c2)
+    if centroid_overrides_by_label:
+        task_config["centroidOverridesByLabel"] = {
+            lbl: str(path) for lbl, path in centroid_overrides_by_label.items()
+        }
 
     iteration = {
         "runId": display_run_id,
         "phase": phase,
         "projectPath": str(project_path.resolve()),
+        "runDir": str(run_dir.resolve()),
         "taskConfig": task_config,
     }
+    if layout in {"multiclass", "hierarchical_multiclass"}:
+        iteration["centroidGroups"] = build_group_centroid_scope(
+            base_project_path=project_path,
+            cohort_labels=cohort_labels,
+            train_by_label=train_m,
+            previous_train_by_label=previous_train_by_label,
+        )
+        previous_train_by_label = {lbl: list(train_m[lbl]) for lbl in cohort_labels}
+    if previous_run_dir is not None:
+        iteration["previousRunDir"] = str(previous_run_dir.resolve())
+
     return (
         _tag_iteration_as_stratified_draw(
             iteration,
@@ -325,6 +365,8 @@ def _materialize_iteration(
         ),
         previous_train_control,
         previous_train_disease,
+        previous_train_by_label if layout in {"multiclass", "hierarchical_multiclass"} else None,
+        run_dir,
     )
 
 
@@ -358,6 +400,8 @@ def plan_validation_context(request: ValidationPlanRequest | Dict[str, Any]) -> 
     iterations: List[Dict[str, Any]] = []
     previous_train_control: Optional[List[str]] = None
     previous_train_disease: Optional[List[str]] = None
+    previous_train_by_label: Optional[Dict[str, List[str]]] = None
+    previous_run_dir: Optional[Path] = None
     global_run = 0
     seed_offset = 0
 
@@ -366,7 +410,13 @@ def plan_validation_context(request: ValidationPlanRequest | Dict[str, Any]) -> 
             continue
         for phase_index in range(1, count + 1):
             global_run += 1
-            iteration, previous_train_control, previous_train_disease = _materialize_iteration(
+            (
+                iteration,
+                previous_train_control,
+                previous_train_disease,
+                previous_train_by_label,
+                previous_run_dir,
+            ) = _materialize_iteration(
                 config=config,
                 base_project=base_project,
                 monte_carlo_runs_root=monte_carlo_runs_root,
@@ -379,6 +429,8 @@ def plan_validation_context(request: ValidationPlanRequest | Dict[str, Any]) -> 
                 seed_offset=seed_offset,
                 previous_train_control=previous_train_control,
                 previous_train_disease=previous_train_disease,
+                previous_train_by_label=previous_train_by_label,
+                previous_run_dir=previous_run_dir,
                 overwrite=request.overwrite,
             )
             iterations.append(iteration)

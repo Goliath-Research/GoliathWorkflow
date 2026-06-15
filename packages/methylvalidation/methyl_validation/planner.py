@@ -282,7 +282,7 @@ def plan_discovery_runs(
                 n_train = sum(len(train_m[k]) for k in cohort_labels)
                 n_val = sum(len(val_m[k]) for k in cohort_labels)
             else:  # hierarchical
-                project_path, val_groups_json = generate_run_project_hierarchical_multiclass(
+                project_path, val_groups_json, _centroid_overrides = generate_run_project_hierarchical_multiclass(
                     base_project,
                     run_dir,
                     run_id,

@@ -292,7 +292,7 @@ def test_hierarchical_mc_run_project_predictor_points_at_testing_csvs(tmp_path: 
 
     run_dir = tmp_path / "monte_carlo_runs" / "run_0001"
     mc_root = str((tmp_path / "monte_carlo_runs").resolve())
-    project_path, _ = generate_run_project_hierarchical_multiclass(
+    project_path, _, _ = generate_run_project_hierarchical_multiclass(
         base,
         run_dir,
         "run_0001",
@@ -389,7 +389,7 @@ def test_hierarchical_mc_run_project_without_predictor_nested_sides(tmp_path: Pa
 
     run_dir = tmp_path / "monte_carlo_runs" / "run_0002"
     mc_root = str((tmp_path / "monte_carlo_runs").resolve())
-    project_path, _ = generate_run_project_hierarchical_multiclass(
+    project_path, _, _ = generate_run_project_hierarchical_multiclass(
         base,
         run_dir,
         "run_0002",

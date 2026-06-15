@@ -1,0 +1,19 @@
+{
+  "programVersion": 2,
+  "name": "PCa1_5_Model",
+  "description": "Model selection and post-model validation for Healthy_vs_PCa1-5-CG.",
+  "projectPath": "/work/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
+  "variables": {
+    "backends": ["ecdf", "tabular_sklearn", "generative_hybrid"]
+  },
+  "body": [
+    {
+      "do": "validation.select_best_model",
+      "node_key": "select_best_model"
+    },
+    {
+      "do": "validation.post_model_validation",
+      "node_key": "post_model_validation"
+    }
+  ]
+}

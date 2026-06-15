@@ -3,6 +3,21 @@
   "additionalProperties": true,
   "description": "Shared input for methyl-* pipeline CLI actions (centroid, detector, mapper, enricher, progression).",
   "properties": {
+    "addSamples": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Addsamples"
+    },
     "centroid1Dir": {
       "anyOf": [
         {
@@ -62,6 +77,18 @@
       ],
       "default": null,
       "title": "Context"
+    },
+    "fixedDmpPanel": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fixeddmppanel"
     },
     "group": {
       "anyOf": [
@@ -150,6 +177,21 @@
       "default": null,
       "title": "Project Path"
     },
+    "removeSamples": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Removesamples"
+    },
     "runId": {
       "anyOf": [
         {
@@ -161,6 +203,19 @@
       ],
       "default": null,
       "title": "Runid"
+    },
+    "stepOverride": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stepoverride"
     },
     "taskConfig": {
       "anyOf": [

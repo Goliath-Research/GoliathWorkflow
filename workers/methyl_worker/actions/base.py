@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import subprocess
+import tempfile
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
@@ -22,6 +25,8 @@ DEFAULT_PIPELINE_ARGV_MAP: Dict[str, str] = {
     "outputDir": "--output-dir",
     "centroid1Dir": "--centroid1-dir",
     "centroid2Dir": "--centroid2-dir",
+    "stepOverride": "--step-override",
+    "fixedDmpPanel": "--fixed-dmp-panel",
 }
 
 
@@ -61,9 +66,44 @@ class CliAction:
                     return str(val)
         raise RuntimeError("input_json missing project / projectPath")
 
+    def _argv_value(self, json_key: str, val: Any) -> Optional[str]:
+        if val is None or val == "":
+            return None
+        if json_key == "stepOverride" and isinstance(val, dict):
+            add_samples = val.get("base_config", {}).get("add_samples")
+            remove_samples = val.get("base_config", {}).get("remove_samples")
+            if add_samples is None and remove_samples is None:
+                payload = val
+            else:
+                payload = val
+            fd, path = tempfile.mkstemp(suffix=".json", prefix="step-override-")
+            try:
+                with open(fd, "w", encoding="utf-8") as f:
+                    json.dump(payload, f)
+            except Exception:
+                Path(path).unlink(missing_ok=True)
+                raise
+            return path
+        if isinstance(val, (dict, list)):
+            return json.dumps(val)
+        return str(val)
+
     def build_argv(self, input_json: Dict[str, Any]) -> List[str]:
         cmd = [self.cli_tool]
         project_set = False
+        step_override: Optional[Dict[str, Any]] = input_json.get("stepOverride")
+        if step_override is None:
+            add_samples = input_json.get("addSamples")
+            remove_samples = input_json.get("removeSamples")
+            if add_samples is not None or remove_samples is not None:
+                step_override = {
+                    "base_config": {
+                        "add_samples": list(add_samples or []),
+                        "remove_samples": list(remove_samples or []),
+                    }
+                }
+        if step_override is not None and "stepOverride" not in input_json:
+            input_json = {**input_json, "stepOverride": step_override}
         for json_key, flag in self.argv_map.items():
             if json_key in self.project_keys:
                 if project_set:
@@ -73,8 +113,9 @@ class CliAction:
                 project_set = True
                 continue
             val = input_json.get(json_key)
-            if val is not None and str(val) != "":
-                cmd.extend([flag, str(val)])
+            argv_val = self._argv_value(json_key, val)
+            if argv_val is not None:
+                cmd.extend([flag, argv_val])
         if not project_set and any(k in self.argv_map for k in self.project_keys):
             cmd.extend([self.argv_map[self.project_keys[0]], self._project_path(input_json)])
         return cmd

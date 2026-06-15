@@ -117,6 +117,10 @@ def enrich_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
         if control:
             out["centroid1Dir"] = project.get_centroid_dir("control", str(control))
 
+    if not out.get("groups"):
+        resolved = project.get_resolved_groups()
+        out["groups"] = [{"label": label} for label, _ in resolved]
+
     return out
 
 

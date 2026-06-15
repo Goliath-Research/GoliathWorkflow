@@ -1,0 +1,79 @@
+{
+  "programVersion": 2,
+  "name": "PCa1_5_Freeze",
+  "description": "Production freeze for Healthy_vs_PCa1-5-CG: prepare project, full centroids, fixed-panel detectors, mapper, enricher, progression.",
+  "projectPath": "/work/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
+  "body": [
+    {
+      "do": "validation.prepare_freeze_project",
+      "node_key": "prepare_freeze"
+    },
+    {
+      "for": {
+        "in": { "ref": "groups" },
+        "as": "group",
+        "parallel": true
+      },
+      "do": [
+        {
+          "for": {
+            "in": { "ref": "project.chromosomes" },
+            "as": "chromosome",
+            "parallel": true
+          },
+          "do": [
+            {
+              "do": "pipeline.centroid",
+              "with": {
+                "group": { "ref": "group.label" },
+                "chromosome": { "ref": "chromosome" },
+                "context": { "ref": "context" }
+              },
+              "node_key": "freeze_centroid"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "for": {
+        "in": { "ref": "project.comparisons" },
+        "as": "comparison",
+        "parallel": true
+      },
+      "do": [
+        {
+          "for": {
+            "in": { "ref": "project.chromosomes" },
+            "as": "chromosome",
+            "parallel": true
+          },
+          "do": [
+            {
+              "do": "pipeline.detector",
+              "with": {
+                "chromosome": { "ref": "chromosome" },
+                "context": { "ref": "context" },
+                "comparison": { "ref": "comparison.label" },
+                "fixedDmpPanel": "${var.fixedDmpPanel}"
+              },
+              "node_key": "freeze_detect"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "do": "pipeline.mapper",
+      "node_key": "mapper"
+    },
+    {
+      "do": "pipeline.enricher",
+      "node_key": "enricher"
+    },
+    {
+      "do": "pipeline.progression",
+      "node_key": "progression"
+    }
+  ]
+}

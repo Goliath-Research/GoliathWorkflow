@@ -1,9 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": true,
-  "description": "Shared input for methyl-* pipeline CLI actions (centroid, detector, mapper, enricher, progression).",
   "properties": {
-    "addSamples": {
+    "backend": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Backend"
+    },
+    "backends": {
       "anyOf": [
         {
           "items": {
@@ -16,9 +27,9 @@
         }
       ],
       "default": null,
-      "title": "Addsamples"
+      "title": "Backends"
     },
-    "centroid1Dir": {
+    "bundleDir": {
       "anyOf": [
         {
           "type": "string"
@@ -28,9 +39,9 @@
         }
       ],
       "default": null,
-      "title": "Centroid1Dir"
+      "title": "Bundledir"
     },
-    "centroid2Dir": {
+    "bundleH5": {
       "anyOf": [
         {
           "type": "string"
@@ -40,9 +51,21 @@
         }
       ],
       "default": null,
-      "title": "Centroid2Dir"
+      "title": "Bundleh5"
     },
-    "chromosome": {
+    "featureIterations": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Featureiterations"
+    },
+    "modelMcRoot": {
       "anyOf": [
         {
           "type": "string"
@@ -52,9 +75,9 @@
         }
       ],
       "default": null,
-      "title": "Chromosome"
+      "title": "Modelmcroot"
     },
-    "comparison": {
+    "monteCarloRunsRoot": {
       "anyOf": [
         {
           "type": "string"
@@ -64,58 +87,7 @@
         }
       ],
       "default": null,
-      "title": "Comparison"
-    },
-    "context": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Context"
-    },
-    "fixedDmpPanel": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Fixeddmppanel"
-    },
-    "group": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Group"
-    },
-    "orderedComparisonLabels": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Orderedcomparisonlabels"
+      "title": "Montecarlorunsroot"
     },
     "outputDir": {
       "anyOf": [
@@ -129,7 +101,7 @@
       "default": null,
       "title": "Outputdir"
     },
-    "phase": {
+    "productionOutputDir": {
       "anyOf": [
         {
           "type": "string"
@@ -139,7 +111,7 @@
         }
       ],
       "default": null,
-      "title": "Phase"
+      "title": "Productionoutputdir"
     },
     "project": {
       "anyOf": [
@@ -165,7 +137,19 @@
       "default": null,
       "title": "Projectpath"
     },
-    "project_path": {
+    "qualityIterations": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Qualityiterations"
+    },
+    "runDir": {
       "anyOf": [
         {
           "type": "string"
@@ -175,24 +159,9 @@
         }
       ],
       "default": null,
-      "title": "Project Path"
+      "title": "Rundir"
     },
-    "removeSamples": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Removesamples"
-    },
-    "runId": {
+    "selectionMetric": {
       "anyOf": [
         {
           "type": "string"
@@ -202,42 +171,69 @@
         }
       ],
       "default": null,
-      "title": "Runid"
+      "title": "Selectionmetric"
     },
-    "stepOverride": {
+    "selectionStat": {
       "anyOf": [
         {
-          "additionalProperties": true,
-          "type": "object"
+          "type": "string"
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "title": "Stepoverride"
+      "title": "Selectionstat"
     },
-    "taskConfig": {
+    "sourceRunDir": {
       "anyOf": [
         {
-          "additionalProperties": true,
-          "type": "object"
+          "type": "string"
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "title": "Taskconfig"
+      "title": "Sourcerundir"
+    },
+    "stableDmpCsv": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stabledmpcsv"
+    },
+    "targetRunDir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Targetrundir"
     },
     "tool": {
-      "title": "Tool",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool"
     }
   },
-  "required": [
-    "tool"
-  ],
-  "title": "PipelineCliTaskInput",
+  "title": "ValidationTaskInput",
   "type": "object"
 }

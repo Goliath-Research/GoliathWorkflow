@@ -1910,6 +1910,91 @@ def _normalize_production_ecdf_backend(
         params["ecdf_aggregated_enabled"] = False
 
 
+def prepare_freeze_project(
+    base_project: Path,
+    stable_dmp_csv: str,
+    monte_carlo_runs_root: Path,
+    production_output_dir: Optional[str] = None,
+    config: Optional["MonteCarloConfig"] = None,
+) -> Dict[str, Any]:
+    """
+    Write ``production/project.json`` with ``fixed_dmp_panel`` for granular freeze workflows.
+
+    Does not run centroid/detector/mapper/enricher — those are separate workflow ACTION nodes.
+    """
+    if production_output_dir is None:
+        production_output_dir = str(monte_carlo_runs_root / "production")
+    prod_dir = Path(production_output_dir)
+    prod_dir.mkdir(parents=True, exist_ok=True)
+
+    merged_panel = _merge_stable_dmp_panels(stable_dmp_csv, prod_dir)
+
+    with open(base_project, encoding="utf-8") as f:
+        project_dict = json.load(f)
+
+    pr = config.path_remap if config is not None else None
+    pr_dict = dict(pr) if pr else None
+    if pr_dict is not None:
+        from .path_remap import (
+            apply_path_remap_to_nested,
+            remap_cohort_list_files_in_project,
+            remap_path_string,
+        )
+
+        apply_path_remap_to_nested(project_dict, pr_dict)
+    if config is not None and config.samples_base_path:
+        sbp = str(config.samples_base_path).rstrip("/")
+        if pr_dict is not None:
+            sbp = remap_path_string(sbp, pr_dict)
+        project_dict["samples_base_path"] = sbp
+    if pr_dict is not None:
+        remap_cohort_list_files_in_project(project_dict, pr_dict, prod_dir)
+
+    if "step_config" not in project_dict:
+        project_dict["step_config"] = {}
+    if "detection" not in project_dict["step_config"]:
+        project_dict["step_config"]["detection"] = {}
+    project_dict["step_config"]["detection"]["fixed_dmp_panel"] = str(merged_panel)
+    project_dict["project_name"] = "production"
+    if prod_dir.parent.name == "monte_carlo_runs":
+        project_dict["output_base"] = str(prod_dir.parent)
+    else:
+        project_dict["output_base"] = str(prod_dir)
+
+    prod_project_path = prod_dir / "project.json"
+    stable_gene_csv: Optional[Path] = None
+    if config is not None and getattr(config, "freeze_stable_gene_csv", None):
+        stable_gene_csv = Path(str(config.freeze_stable_gene_csv))
+    if stable_gene_csv is None or not stable_gene_csv.is_file():
+        default_gene_csv = monte_carlo_runs_root / "stability" / "stable_genes_production.csv"
+        if default_gene_csv.is_file():
+            stable_gene_csv = default_gene_csv
+
+    bundle_dir = prod_dir / "model_bundle"
+    stability_gene_panel_path: Optional[Path] = None
+    if stable_gene_csv is not None and stable_gene_csv.is_file():
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+        stability_gene_panel_path = bundle_dir / "stable_genes_from_stability.csv"
+        shutil.copy2(stable_gene_csv, stability_gene_panel_path)
+        model_bundle_cfg = project_dict.setdefault("step_config", {}).setdefault("model_bundle", {})
+        model_bundle_cfg["stability_gene_panel"] = str(stability_gene_panel_path)
+
+    _normalize_production_ecdf_backend(
+        project_dict,
+        config=config,
+        stable_gene_csv=stability_gene_panel_path or stable_gene_csv,
+    )
+    with open(prod_project_path, "w", encoding="utf-8") as f:
+        json.dump(project_dict, f, indent=2)
+
+    return {
+        "status": "ok",
+        "productionProject": str(prod_project_path.resolve()),
+        "fixedDmpPanel": str(merged_panel),
+        "outputDir": str(prod_dir.resolve()),
+    }
+
+
 def freeze_production_model(
     base_project: Path,
     stable_dmp_csv: str,

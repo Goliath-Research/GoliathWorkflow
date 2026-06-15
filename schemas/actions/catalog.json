@@ -11,12 +11,21 @@
         "group": "--group",
         "outputDir": "--output-dir",
         "project": "--project",
-        "projectPath": "--project"
+        "projectPath": "--project",
+        "stepOverride": "--step-override"
       },
       "capability": "methyl-centroid",
       "category": "modeling",
       "cli_tool": "methyl-centroid",
-      "context_vars": [],
+      "context_vars": [
+        "group",
+        "chromosome",
+        "context",
+        "outputDir",
+        "addSamples",
+        "removeSamples",
+        "stepOverride"
+      ],
       "default_node_type": "ACTION",
       "description": "Build per-group methylation centroids (chr\u00d7context HDF5 aggregates).",
       "domain_effects": {
@@ -47,12 +56,19 @@
         "group": "--group",
         "outputDir": "--output-dir",
         "project": "--project",
-        "projectPath": "--project"
+        "projectPath": "--project",
+        "stepOverride": "--step-override"
       },
       "capability": "methyl-detector",
       "category": "modeling",
       "cli_tool": "methyl-detector",
-      "context_vars": [],
+      "context_vars": [
+        "chromosome",
+        "context",
+        "comparison",
+        "fixedDmpPanel",
+        "stepOverride"
+      ],
       "default_node_type": "ACTION",
       "description": "Detect differentially methylated positions between cohort pairs.",
       "domain_effects": {
@@ -84,7 +100,8 @@
         "group": "--group",
         "outputDir": "--output-dir",
         "project": "--project",
-        "projectPath": "--project"
+        "projectPath": "--project",
+        "stepOverride": "--step-override"
       },
       "capability": "methyl-mapper",
       "category": "modeling",
@@ -110,7 +127,8 @@
         "group": "--group",
         "outputDir": "--output-dir",
         "project": "--project",
-        "projectPath": "--project"
+        "projectPath": "--project",
+        "stepOverride": "--step-override"
       },
       "capability": "methyl-enricher",
       "category": "modeling",
@@ -136,7 +154,8 @@
         "group": "--group",
         "outputDir": "--output-dir",
         "project": "--project",
-        "projectPath": "--project"
+        "projectPath": "--project",
+        "stepOverride": "--step-override"
       },
       "capability": "methyl-disease-progression",
       "category": "modeling",
@@ -150,6 +169,60 @@
       "schema_id": "pipeline.progression",
       "step_config_key": "progression",
       "tool": "MethylDiseaseProgression"
+    },
+    {
+      "action_name": "pipeline.classifier",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-classifier",
+      "category": "modeling",
+      "cli_tool": "methyl-classifier",
+      "context_vars": [],
+      "default_node_type": "ACTION",
+      "description": "Train production classifier from frozen centroids and DMP panel.",
+      "execution_mode": "cli",
+      "input_schema_ref": "schemas/tasks/pipeline_classifier.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_classifier.output.schema.json",
+      "schema_id": "pipeline.classifier",
+      "step_config_key": "classifier",
+      "tool": "MethylClassifier"
+    },
+    {
+      "action_name": "pipeline.predictor",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-predictor",
+      "category": "modeling",
+      "cli_tool": "methyl-predictor",
+      "context_vars": [],
+      "default_node_type": "ACTION",
+      "description": "Run predictor on holdout samples using trained classifier.",
+      "execution_mode": "cli",
+      "input_schema_ref": "schemas/tasks/pipeline_predictor.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_predictor.output.schema.json",
+      "schema_id": "pipeline.predictor",
+      "step_config_key": "predictor",
+      "tool": "MethylPredictor"
     },
     {
       "action_name": "sample.download_fastq",
@@ -180,11 +253,10 @@
         ]
       },
       "execution_mode": "in_process",
-      "in_process_handler": "_handle_stub_external",
+      "in_process_handler": "_handle_download_fastq",
       "input_schema_ref": "schemas/tasks/sample_download_fastq.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_download_fastq.output.schema.json",
       "schema_id": "sample.download_fastq",
-      "step_config_key": null,
       "tool": "SampleDownloadFastq"
     },
     {
@@ -222,11 +294,10 @@
         ]
       },
       "execution_mode": "in_process",
-      "in_process_handler": "_handle_stub_external",
+      "in_process_handler": "_handle_parabricks_fq2bam",
       "input_schema_ref": "schemas/tasks/sample_parabricks_fq2bam.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_parabricks_fq2bam.output.schema.json",
       "schema_id": "sample.parabricks_fq2bam",
-      "step_config_key": null,
       "tool": "ParabricksFq2Bam"
     },
     {
@@ -241,11 +312,10 @@
       "default_node_type": "ACTION",
       "description": "Delete FASTQ files after alignment to reclaim storage.",
       "execution_mode": "in_process",
-      "in_process_handler": "_handle_stub_external",
+      "in_process_handler": "_handle_delete_fastqs",
       "input_schema_ref": "schemas/tasks/sample_delete_fastqs.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_delete_fastqs.output.schema.json",
       "schema_id": "sample.delete_fastqs",
-      "step_config_key": null,
       "tool": "SampleDeleteFastqs"
     },
     {
@@ -358,11 +428,10 @@
         ]
       },
       "execution_mode": "in_process",
-      "in_process_handler": "_handle_stub_external",
+      "in_process_handler": "_handle_methyl_extract",
       "input_schema_ref": "schemas/tasks/sample_methyl_extract.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_methyl_extract.output.schema.json",
       "schema_id": "sample.methyl_extract",
-      "step_config_key": null,
       "tool": "MethylExtract"
     },
     {
@@ -377,11 +446,10 @@
       "default_node_type": "ACTION",
       "description": "Delete BAM after methylation extraction to reclaim storage.",
       "execution_mode": "in_process",
-      "in_process_handler": "_handle_stub_external",
+      "in_process_handler": "_handle_delete_bam",
       "input_schema_ref": "schemas/tasks/sample_delete_bam.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_delete_bam.output.schema.json",
       "schema_id": "sample.delete_bam",
-      "step_config_key": null,
       "tool": "SampleDeleteBam"
     },
     {
@@ -417,7 +485,6 @@
       "input_schema_ref": "schemas/tasks/sample_qc_failed.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_qc_failed.output.schema.json",
       "schema_id": "sample.qc_failed",
-      "step_config_key": null,
       "tool": "SampleMarkFailed"
     },
     {
@@ -452,6 +519,264 @@
       "input_schema_ref": "schemas/tasks/validation_plan_iterations.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_plan_iterations.output.schema.json",
       "schema_id": "validation.plan_iterations",
+      "step_config_key": "validation"
+    },
+    {
+      "action_name": "validation.stability",
+      "argv_map": {},
+      "capability": "validation.stability",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "monteCarloRunsRoot",
+        "outputDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Aggregate Monte Carlo DMP/gene stability and write production-ready panels.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_stability",
+      "input_schema_ref": "schemas/tasks/validation_stability.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_stability.output.schema.json",
+      "schema_id": "validation.stability",
+      "step_config_key": "validation"
+    },
+    {
+      "action_name": "validation.prepare_freeze_project",
+      "argv_map": {},
+      "capability": "validation.prepare-freeze-project",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "stableDmpCsv",
+        "productionOutputDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Write production/project.json with fixed_dmp_panel for granular freeze workflows.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_prepare_freeze",
+      "input_schema_ref": "schemas/tasks/validation_prepare_freeze_project.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_prepare_freeze_project.output.schema.json",
+      "schema_id": "validation.prepare_freeze_project",
+      "step_config_key": "validation"
+    },
+    {
+      "action_name": "validation.stability_freeze_readiness",
+      "argv_map": {},
+      "capability": "validation.stability-freeze-readiness",
+      "category": "validation",
+      "context_vars": [
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Audit stability, freeze, and progression artifacts before model training.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_stability_freeze_readiness",
+      "input_schema_ref": "schemas/tasks/validation_stability_freeze_readiness.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_stability_freeze_readiness.output.schema.json",
+      "schema_id": "validation.stability_freeze_readiness",
+      "step_config_key": "validation"
+    },
+    {
+      "action_name": "validation.link_artifacts",
+      "argv_map": {},
+      "capability": "validation.link-artifacts",
+      "category": "validation",
+      "context_vars": [
+        "sourceRunDir",
+        "targetRunDir",
+        "runDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Symlink centroids/detections from a source MC run into a model-mc iteration dir.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_link_artifacts",
+      "input_schema_ref": "schemas/tasks/validation_link_artifacts.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_link_artifacts.output.schema.json",
+      "schema_id": "validation.link_artifacts"
+    },
+    {
+      "action_name": "validation.model_bundle",
+      "argv_map": {},
+      "capability": "validation.model-bundle",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "bundleDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Build model feature bundle (tabular/generative) from frozen detections.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_model_bundle",
+      "input_schema_ref": "schemas/tasks/validation_model_bundle.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_model_bundle.output.schema.json",
+      "schema_id": "validation.model_bundle"
+    },
+    {
+      "action_name": "validation.model_train",
+      "argv_map": {},
+      "capability": "validation.model-train",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "backend",
+        "runDir",
+        "bundleH5",
+        "outputDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Train tabular or generative backend model for one MC model iteration.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_model_train",
+      "input_schema_ref": "schemas/tasks/validation_model_train.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_model_train.output.schema.json",
+      "schema_id": "validation.model_train"
+    },
+    {
+      "action_name": "validation.model_predict",
+      "argv_map": {},
+      "capability": "validation.model-predict",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "backend",
+        "runDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Predict with tabular or generative backend for one MC model iteration.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_model_predict",
+      "input_schema_ref": "schemas/tasks/validation_model_predict.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_model_predict.output.schema.json",
+      "schema_id": "validation.model_predict"
+    },
+    {
+      "action_name": "validation.select_best_model",
+      "argv_map": {},
+      "capability": "validation.select-best-model",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "modelMcRoot",
+        "backends",
+        "selectionMetric",
+        "selectionStat"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Rank model-mc backends and build final production model on all data.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_select_best_model",
+      "input_schema_ref": "schemas/tasks/validation_select_best_model.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_select_best_model.output.schema.json",
+      "schema_id": "validation.select_best_model",
+      "step_config_key": "validation"
+    },
+    {
+      "action_name": "validation.post_model_validation",
+      "argv_map": {},
+      "capability": "validation.post-model-validation",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "runDir",
+        "productionOutputDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Holdout evaluation with frozen production artifacts (predictor-only / frozen inference).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_post_model_validation",
+      "input_schema_ref": "schemas/tasks/validation_post_model_validation.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_post_model_validation.output.schema.json",
+      "schema_id": "validation.post_model_validation",
       "step_config_key": "validation"
     }
   ],

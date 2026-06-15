@@ -212,10 +212,11 @@ def _action_template(entry, step: ActionStep) -> Dict[str, Any]:
     action = entry.action_name
     if action == "pipeline.centroid":
         side = _group_ref_side(params.get("group"))
-        if side == "control":
-            template["outputDir"] = "${var.centroid1Dir}"
-        elif side == "disease":
-            template["outputDir"] = "${var.centroid2Dir}"
+        if "outputDir" not in template:
+            if side == "control":
+                template["outputDir"] = "${var.centroid1Dir}"
+            elif side == "disease":
+                template["outputDir"] = "${var.centroid2Dir}"
     elif action == "pipeline.detector":
         template["centroid1Dir"] = "${var.centroid1Dir}"
         template["centroid2Dir"] = "${var.centroid2Dir}"

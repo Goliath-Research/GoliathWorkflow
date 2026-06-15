@@ -171,6 +171,70 @@ def _first_control_and_disease_labels(base: Dict[str, Any]) -> tuple[str, str]:
     return control_label, disease_label
 
 
+def link_run_artifacts_from_source(
+    source_run_dir: Union[str, Path],
+    target_run_dir: Union[str, Path],
+) -> Dict[str, Any]:
+    """Symlink centroids/detections from a prior MC run into a model-mc iteration dir."""
+    src_root = Path(source_run_dir)
+    dst_root = Path(target_run_dir)
+    dst_root.mkdir(parents=True, exist_ok=True)
+    linked: List[str] = []
+
+    def _replace_path(dst: Path) -> None:
+        if dst.is_symlink() or dst.is_file():
+            dst.unlink()
+        elif dst.is_dir():
+            shutil.rmtree(dst)
+
+    for artifact_dir in ("centroids", "detections"):
+        src = src_root / artifact_dir
+        dst = dst_root / artifact_dir
+        if not src.is_dir():
+            continue
+        _replace_path(dst)
+        dst.symlink_to(src.resolve(), target_is_directory=True)
+        linked.append(artifact_dir)
+    for optional_file in ("detector_step_override.json",):
+        srcf = src_root / optional_file
+        dstf = dst_root / optional_file
+        if srcf.is_file():
+            _replace_path(dstf)
+            dstf.symlink_to(srcf.resolve())
+            linked.append(optional_file)
+    return {"linked": linked, "sourceRunDir": str(src_root.resolve()), "targetRunDir": str(dst_root.resolve())}
+
+
+def build_group_centroid_scope(
+    *,
+    base_project_path: Union[str, Path],
+    cohort_labels: List[str],
+    train_by_label: Dict[str, List[str]],
+    previous_train_by_label: Optional[Dict[str, List[str]]] = None,
+) -> List[Dict[str, Any]]:
+    """Build per-group add/remove lists and centroid output dirs for workflow iterations."""
+    from methyl_utils import load_project
+
+    project = load_project(str(base_project_path))
+    with_side = project._get_resolved_groups_with_side(expand_subclusters=True)
+    side_by_label = {label: side for label, _, side in with_side}
+    groups: List[Dict[str, Any]] = []
+    prev_map = previous_train_by_label or {}
+    for label in cohort_labels:
+        train_paths = list(train_by_label[label])
+        override = _build_centroid_step_override(prev_map.get(label), train_paths)
+        side = side_by_label.get(label, "control")
+        groups.append(
+            {
+                "label": label,
+                "addSamples": override["base_config"]["add_samples"],
+                "removeSamples": override["base_config"]["remove_samples"],
+                "centroidDir": project.get_centroid_dir(side, label),
+            }
+        )
+    return groups
+
+
 def _normalize_sample_paths(paths: List[str]) -> List[str]:
     seen = set()
     normalized: List[str] = []
@@ -869,7 +933,8 @@ def generate_run_project_hierarchical_multiclass(
     val_by_label: Dict[str, List[str]],
     cohort_labels: List[str],
     samples_base_path: str,
-) -> Tuple[Path, Path]:
+    previous_train_by_label: Optional[Dict[str, List[str]]] = None,
+) -> Tuple[Path, Path, Dict[str, Path]]:
     """
     Same artifacts as ``generate_run_project_multiclass`` (``training_<label>.csv``, ``testing_<label>.csv``,
     ``val_test_groups.json``) but keeps ``controls`` / ``diseases`` (and optional nested ``stages``) in
@@ -945,4 +1010,15 @@ def generate_run_project_hierarchical_multiclass(
     with open(project_path, "w", encoding="utf-8") as f:
         json.dump(project, f, indent=2)
 
-    return project_path, val_groups_json
+    centroid_overrides: Dict[str, Path] = {}
+    prev_map = previous_train_by_label or {}
+    for lbl in cohort_labels:
+        safe = _safe_cohort_filename_label(lbl)
+        override_path = write_centroid_step_override(
+            run_dir / f"centroid_override_{safe}.json",
+            prev_map.get(lbl),
+            train_by_label[lbl],
+        )
+        centroid_overrides[lbl] = override_path
+
+    return project_path, val_groups_json, centroid_overrides

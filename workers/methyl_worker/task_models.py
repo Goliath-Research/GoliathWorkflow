@@ -27,6 +27,10 @@ class PipelineCliTaskInput(BaseModel):
     centroid1Dir: Optional[str] = None
     centroid2Dir: Optional[str] = None
     orderedComparisonLabels: Optional[List[str]] = None
+    stepOverride: Optional[Dict[str, Any]] = None
+    addSamples: Optional[List[str]] = None
+    removeSamples: Optional[List[str]] = None
+    fixedDmpPanel: Optional[str] = None
 
 
 class PipelineCliTaskOutput(BaseModel):
@@ -118,6 +122,37 @@ class ValidationPlanTaskOutput(BaseModel):
     iterations: List[Dict[str, Any]] = Field(default_factory=list)
     n_iterations: int = 0
     projectPath: Optional[str] = None
+
+
+class ValidationTaskInput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
+    monteCarloRunsRoot: Optional[str] = None
+    outputDir: Optional[str] = None
+    stableDmpCsv: Optional[str] = None
+    productionOutputDir: Optional[str] = None
+    sourceRunDir: Optional[str] = None
+    targetRunDir: Optional[str] = None
+    runDir: Optional[str] = None
+    bundleDir: Optional[str] = None
+    bundleH5: Optional[str] = None
+    backend: Optional[str] = None
+    backends: Optional[List[str]] = None
+    selectionMetric: Optional[str] = None
+    selectionStat: Optional[str] = None
+    modelMcRoot: Optional[str] = None
+    featureIterations: Optional[int] = None
+    qualityIterations: Optional[int] = None
+
+
+class ValidationTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str = "ok"
+    summary: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TaskErrorOutput(BaseModel):
