@@ -8,12 +8,31 @@ mapping, task I/O schema models, and project.json step_config linkage.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, FrozenSet, List, Literal, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, FrozenSet, List, Literal, Mapping, Optional, Sequence, Tuple, TypedDict
+
+if TYPE_CHECKING:
+    from .actions.base import ActionBase
 
 ExecutionMode = Literal["cli", "in_process"]
 ActionCategory = Literal["sample_prep", "modeling", "validation"]
+StepConfigKey = Literal[
+    "centroid",
+    "detection",
+    "mapper",
+    "enricher",
+    "classifier",
+    "predictor",
+    "alignment_qc",
+    "fragmentomics",
+    "validation",
+    "progression",
+    "cluster",
+]
+ArgvMap = Tuple[Tuple[str, str], ...]
+ContextVars = Tuple[str, ...]
+SchemaRef = Tuple[str, str]  # (module, class)
 
-DEFAULT_PIPELINE_ARGV_MAP: Tuple[Tuple[str, str], ...] = (
+DEFAULT_PIPELINE_ARGV_MAP: ArgvMap = (
     ("project", "--project"),
     ("projectPath", "--project"),
     ("group", "--group"),
@@ -36,7 +55,7 @@ NodeType = Literal[
 ]
 
 # Recognized keys under project.json step_config (ProjectConfig.get_step_config).
-PROJECT_STEP_CONFIG_KEYS: FrozenSet[str] = frozenset(
+PROJECT_STEP_CONFIG_KEYS: FrozenSet[StepConfigKey] = frozenset(
     {
         "centroid",
         "detection",
@@ -70,6 +89,25 @@ class DomainEffects:
     output_bindings: Tuple[DomainOutputBinding, ...] = ()
 
 
+class ActionCatalogExport(TypedDict, total=False):
+    action_name: str
+    capability: str
+    execution_mode: ExecutionMode
+    schema_id: str
+    description: str
+    category: ActionCategory
+    default_node_type: NodeType
+    input_schema_ref: str
+    output_schema_ref: str
+    step_config_key: StepConfigKey
+    context_vars: List[str]
+    argv_map: Dict[str, str]
+    in_process_handler: str
+    cli_tool: str
+    tool: str
+    domain_effects: Dict[str, Any]
+
+
 @dataclass(frozen=True)
 class ActionCatalogEntry:
     action_name: str
@@ -85,17 +123,22 @@ class ActionCatalogEntry:
     default_node_type: NodeType = "ACTION"
     cli_tool: Optional[str] = None
     tool: Optional[str] = None
-    step_config_key: Optional[str] = None
-    context_vars: Tuple[str, ...] = field(default_factory=tuple)
-    argv_map: Tuple[Tuple[str, str], ...] = DEFAULT_PIPELINE_ARGV_MAP
+    step_config_key: Optional[StepConfigKey] = None
+    context_vars: ContextVars = field(default_factory=tuple)
+    argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP
     in_process_handler: Optional[str] = None
     handler: Optional[str] = None  # deprecated alias for in_process_handler
     domain_effects: Optional[DomainEffects] = None
 
+    def __post_init__(self) -> None:
+        errors = list(_entry_invariant_errors(self))
+        if errors:
+            raise ValueError("; ".join(errors))
+
     def resolved_in_process_handler(self) -> Optional[str]:
         return self.in_process_handler or self.handler
 
-    def build_action(self, handlers_module: Any = None) -> Any:
+    def build_action(self, handlers_module: Any = None) -> ActionBase:
         from .actions.base import build_action_from_catalog
         import methyl_worker.handlers as handlers_mod
 
@@ -112,8 +155,8 @@ class ActionCatalogEntry:
         safe = self.action_name.replace(".", "_")
         return f"schemas/tasks/{safe}.output.schema.json"
 
-    def to_catalog_dict(self) -> dict:
-        payload = {
+    def to_catalog_dict(self) -> ActionCatalogExport:
+        payload: ActionCatalogExport = {
             "action_name": self.action_name,
             "capability": self.capability,
             "execution_mode": self.execution_mode,
@@ -123,12 +166,14 @@ class ActionCatalogEntry:
             "default_node_type": self.default_node_type,
             "input_schema_ref": self.input_schema_ref,
             "output_schema_ref": self.output_schema_ref,
-            "step_config_key": self.step_config_key,
             "context_vars": list(self.context_vars),
             "argv_map": {k: v for k, v in self.argv_map},
         }
-        if self.resolved_in_process_handler():
-            payload["in_process_handler"] = self.resolved_in_process_handler()
+        if self.step_config_key is not None:
+            payload["step_config_key"] = self.step_config_key
+        handler = self.resolved_in_process_handler()
+        if handler:
+            payload["in_process_handler"] = handler
         if self.cli_tool:
             payload["cli_tool"] = self.cli_tool
         if self.tool:
@@ -153,9 +198,9 @@ class ActionCatalogEntry:
         return payload
 
 
-_PIPELINE_IN = ("methyl_worker.task_models", "PipelineCliTaskInput")
-_PIPELINE_OUT = ("methyl_worker.task_models", "PipelineCliTaskOutput")
-_SAMPLE_IN = ("methyl_worker.task_models", "SamplePrepTaskInput")
+_PIPELINE_IN: SchemaRef = ("methyl_worker.task_models", "PipelineCliTaskInput")
+_PIPELINE_OUT: SchemaRef = ("methyl_worker.task_models", "PipelineCliTaskOutput")
+_SAMPLE_IN: SchemaRef = ("methyl_worker.task_models", "SamplePrepTaskInput")
 
 # Domain effect presets (see workflow_engine/contract/domain_types.md)
 _DE_METHYL_SAMPLE = DomainEffects(reads_types=("MethylSampleRef",), writes_types=("MethylSampleRef",))
@@ -218,6 +263,30 @@ _DE_PLAN_ITERATIONS = DomainEffects(
 )
 
 
+def _entry_invariant_errors(entry: ActionCatalogEntry) -> List[str]:
+    """Cross-field catalog rules enforced at construction and by validate_catalog()."""
+    errors: List[str] = []
+    if entry.execution_mode == "cli":
+        if not entry.cli_tool:
+            errors.append(f"{entry.action_name}: cli actions require cli_tool")
+    elif entry.execution_mode == "in_process":
+        if not entry.resolved_in_process_handler():
+            errors.append(f"{entry.action_name}: in_process actions require in_process_handler")
+    else:
+        errors.append(f"{entry.action_name}: unknown execution_mode {entry.execution_mode!r}")
+
+    if entry.step_config_key is not None:
+        if entry.step_config_key not in PROJECT_STEP_CONFIG_KEYS:
+            errors.append(
+                f"{entry.action_name}: unknown step_config_key {entry.step_config_key!r}"
+            )
+    elif not entry.context_vars:
+        errors.append(
+            f"{entry.action_name}: must set step_config_key or non-empty context_vars"
+        )
+    return errors
+
+
 def _entry(
     action_name: str,
     capability: str,
@@ -232,9 +301,9 @@ def _entry(
     execution_mode: ExecutionMode = "cli",
     cli_tool: Optional[str] = None,
     tool: Optional[str] = None,
-    step_config_key: Optional[str] = None,
-    context_vars: Tuple[str, ...] = (),
-    argv_map: Tuple[Tuple[str, str], ...] = DEFAULT_PIPELINE_ARGV_MAP,
+    step_config_key: Optional[StepConfigKey] = None,
+    context_vars: ContextVars = (),
+    argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     in_process_handler: Optional[str] = None,
     domain_effects: Optional[DomainEffects] = None,
 ) -> ActionCatalogEntry:
@@ -272,9 +341,9 @@ def _cli(
     *,
     cli_tool: str,
     tool: Optional[str] = None,
-    step_config_key: Optional[str] = None,
-    context_vars: Tuple[str, ...] = (),
-    argv_map: Tuple[Tuple[str, str], ...] = DEFAULT_PIPELINE_ARGV_MAP,
+    step_config_key: Optional[StepConfigKey] = None,
+    context_vars: ContextVars = (),
+    argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     domain_effects: Optional[DomainEffects] = None,
 ) -> ActionCatalogEntry:
     return _entry(
@@ -311,8 +380,8 @@ def _in_process(
     in_process_handler: str,
     tool: Optional[str] = None,
     cli_tool: Optional[str] = None,
-    step_config_key: Optional[str] = None,
-    context_vars: Tuple[str, ...] = (),
+    step_config_key: Optional[StepConfigKey] = None,
+    context_vars: ContextVars = (),
     domain_effects: Optional[DomainEffects] = None,
 ) -> ActionCatalogEntry:
     return _entry(
@@ -559,11 +628,12 @@ def find_catalog_entry_by_capability(capability: str) -> Optional[ActionCatalogE
 
 def build_capability_handlers() -> Dict[str, str]:
     """Map capability to in-process handler name (cli actions have no handler)."""
-    return {
-        entry.capability: entry.resolved_in_process_handler()
-        for entry in ACTION_CATALOG
-        if entry.resolved_in_process_handler()
-    }
+    mapping: Dict[str, str] = {}
+    for entry in ACTION_CATALOG:
+        handler = entry.resolved_in_process_handler()
+        if handler:
+            mapping[entry.capability] = handler
+    return mapping
 
 
 def build_tool_cli_map() -> Dict[str, str]:
@@ -574,17 +644,14 @@ def build_tool_cli_map() -> Dict[str, str]:
     return mapping
 
 
-def validate_catalog_linkage() -> List[str]:
-    """Ensure every catalog entry maps to step_config or declares context_vars."""
+def validate_catalog() -> List[str]:
+    """Return all invariant violations across ACTION_CATALOG."""
     errors: List[str] = []
     for entry in ACTION_CATALOG:
-        if entry.step_config_key is not None:
-            if entry.step_config_key not in PROJECT_STEP_CONFIG_KEYS:
-                errors.append(
-                    f"{entry.action_name}: unknown step_config_key {entry.step_config_key!r}"
-                )
-        elif not entry.context_vars:
-            errors.append(
-                f"{entry.action_name}: must set step_config_key or non-empty context_vars"
-            )
+        errors.extend(_entry_invariant_errors(entry))
     return errors
+
+
+def validate_catalog_linkage() -> List[str]:
+    """Backward-compatible alias for validate_catalog()."""
+    return validate_catalog()
