@@ -30,9 +30,12 @@ from methyl_utils import load_project
 from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
 from .classification_metrics import (
+    CLASSIFICATION_RESULTS_FILENAME,
+    classifier_comparison_output_dir,
     compute_validation_metrics,
     resolve_class_roles,
     select_healthy_index_for_labels,
+    write_classification_results_csv,
 )
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
@@ -1308,6 +1311,18 @@ def train_tabular_model(
     }
     with open(out_dir / "tabular-model-metadata.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
+
+    selected_estimator = joblib.load(model_path)
+    train_probs = np.asarray(selected_estimator.predict_proba(X), dtype=np.float64)
+    train_pred = np.asarray(selected_estimator.predict(X), dtype=np.int32)
+    comparison_dir = classifier_comparison_output_dir(project, out_dir)
+    write_classification_results_csv(
+        comparison_dir / CLASSIFICATION_RESULTS_FILENAME,
+        sample_paths=all_paths,
+        y_true=y_arr,
+        y_pred=train_pred,
+        probs=train_probs,
+    )
     return model_path
 
 

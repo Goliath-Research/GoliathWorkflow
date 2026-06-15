@@ -106,6 +106,11 @@ def _write_ecdf_training_metrics(project_json: Path, classifier_output_dir: Path
         return False, f"ECDF training metrics unavailable: {e}"
 
 
+def _classifier_output_dir(project_json: Path, predictor_output_dir: Optional[Path]) -> Path:
+    del predictor_output_dir  # predictor and classifier roots both derive from project_json.parent
+    return project_json.parent / "classifiers"
+
+
 def build_model_backend_steps(
     *,
     project_json: Path,
@@ -119,7 +124,7 @@ def build_model_backend_steps(
     feature_mode = (config.feature_mode if config is not None else "raw_dmp").strip().lower()
     feature_family_set = _normalized_feature_family_set(config)
     if backend == "tabular_sklearn":
-        model_dir = predictor_output_dir.parent / "classifiers" if predictor_output_dir is not None else project_json.parent / "classifiers"
+        model_dir = _classifier_output_dir(project_json, predictor_output_dir)
 
         def _run_tabular_bundle() -> tuple[int, str, str]:
             try:
@@ -311,7 +316,7 @@ def build_model_backend_steps(
         ]
 
     if backend == "generative_hybrid":
-        model_dir = predictor_output_dir.parent / "classifiers" if predictor_output_dir is not None else project_json.parent / "classifiers"
+        model_dir = _classifier_output_dir(project_json, predictor_output_dir)
 
         def _run_generative_bundle() -> tuple[int, str, str]:
             try:
@@ -656,11 +661,7 @@ def build_model_backend_steps(
         ]
 
     def _run_ecdf_second_stage() -> tuple[int, str, str]:
-        classifier_output_dir = (
-            predictor_output_dir.parent / "classifiers"
-            if predictor_output_dir is not None
-            else project_json.parent / "classifiers"
-        )
+        classifier_output_dir = _classifier_output_dir(project_json, predictor_output_dir)
         tm_ok, tm_msg = _write_ecdf_training_metrics(project_json, classifier_output_dir)
         try:
             if config is None or not bool(config.ecdf_second_stage_enabled):
@@ -672,7 +673,7 @@ def build_model_backend_steps(
             out = train_and_apply_ecdf_second_stage(
                 project_json=project_json,
                 predictor_output_dir=(predictor_output_dir or (project_json.parent / "predictors")),
-                classifier_output_dir=(predictor_output_dir.parent / "classifiers" if predictor_output_dir is not None else project_json.parent / "classifiers"),
+                classifier_output_dir=classifier_output_dir,
                 max_dmps=(config.tabular_max_dmps if config is not None else 0),
                 quantiles=(config.observed_feature_quantiles if config is not None else None),
                 min_coverage=(config.observed_feature_min_coverage if config is not None else 1),

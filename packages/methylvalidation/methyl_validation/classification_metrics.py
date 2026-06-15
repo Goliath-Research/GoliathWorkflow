@@ -8,6 +8,7 @@ optional screening_binary block (control vs pooled disease).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple
 
 import numpy as np
@@ -296,3 +297,58 @@ def compute_validation_metrics(
         )
 
     return metrics
+
+
+CLASSIFICATION_RESULTS_FILENAME = "classification_results.csv"
+
+
+def classifier_comparison_output_dir(project: Any, classifier_root: Path) -> Path:
+    """Return ``classifiers/<control>/<disease>`` when comparisons exist, else ``classifier_root``."""
+    root = Path(classifier_root)
+    comparisons = project.get_comparisons()
+    if comparisons:
+        spec = comparisons[0]
+        return root / str(spec.control_group) / str(spec.disease_group)
+    return root
+
+
+def write_classification_results_csv(
+    path: Path,
+    *,
+    sample_paths: Sequence[str],
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    probs: np.ndarray,
+) -> Path:
+    """Write per-sample train/test classification rows (tabular/generative backend layout)."""
+    import csv
+
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    yt = np.asarray(y_true, dtype=int).reshape(-1)
+    yp = np.asarray(y_pred, dtype=int).reshape(-1)
+    pr = np.asarray(probs, dtype=float)
+    if pr.ndim != 2:
+        raise ValueError(f"probs must be 2D, got shape {pr.shape}")
+    if not (len(sample_paths) == len(yt) == len(yp) == pr.shape[0]):
+        raise ValueError(
+            "sample_paths, y_true, y_pred, and probs rows must have the same length "
+            f"({len(sample_paths)}, {len(yt)}, {len(yp)}, {pr.shape[0]})"
+        )
+    fieldnames = ["sample", "sample_path", "expected_class", "prediction"] + [
+        f"prob_class{j}" for j in range(pr.shape[1])
+    ]
+    with open(out, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for i, sample_path in enumerate(sample_paths):
+            row = {
+                "sample": Path(str(sample_path)).name,
+                "sample_path": str(sample_path),
+                "expected_class": int(yt[i]),
+                "prediction": int(yp[i]),
+            }
+            for j in range(pr.shape[1]):
+                row[f"prob_class{j}"] = float(pr[i, j])
+            writer.writerow(row)
+    return out
