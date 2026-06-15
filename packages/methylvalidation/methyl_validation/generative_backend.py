@@ -21,7 +21,13 @@ from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
 from methyl_utils.methyl_centroid_pair import MethylCentroidPair
 
-from .classification_metrics import compute_validation_metrics, resolve_class_roles
+from .classification_metrics import (
+    CLASSIFICATION_RESULTS_FILENAME,
+    classifier_comparison_output_dir,
+    compute_validation_metrics,
+    resolve_class_roles,
+    write_classification_results_csv,
+)
 from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
 from .eval_split_resolver import resolve_eval_paths_and_labels
 from .gene_scored_features import DEFAULT_REGION_DIRECTIONAL_TYPES, family_includes_gene_scored
@@ -472,6 +478,14 @@ def train_generative_model(
     train_metrics["n_train_features"] = int(X.shape[1])
     with open(out_dir / "training_metrics.json", "w", encoding="utf-8") as f:
         json.dump(train_metrics, f, indent=2)
+    comparison_dir = classifier_comparison_output_dir(project, out_dir)
+    write_classification_results_csv(
+        comparison_dir / CLASSIFICATION_RESULTS_FILENAME,
+        sample_paths=all_paths,
+        y_true=y_arr,
+        y_pred=y_pred_train,
+        probs=train_probs,
+    )
 
     model_path = out_dir / "generative-model.npz"
     np.savez_compressed(

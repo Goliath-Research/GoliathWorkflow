@@ -25,6 +25,71 @@ def _sample_name_from_path(full_path: str, base_path: str) -> str:
     return p.name
 
 
+def prepare_model_mc_backend_run_from_shared(
+    shared_run_dir: str | Path,
+    backend_run_dir: str | Path,
+    *,
+    backend_root: str | Path,
+) -> Path:
+    """
+    Materialize a backend-local iteration tree so model artifacts land under
+    ``backend_run_dir`` (not ``model_mc/shared``).
+
+    Copies split CSVs and detector symlinks from the shared iteration, then writes
+    ``project.json`` with ``output_base``/``project_name`` routed to the backend run.
+    """
+    shared_run_dir = Path(shared_run_dir)
+    backend_run_dir = Path(backend_run_dir)
+    backend_root = Path(backend_root)
+    backend_run_dir.mkdir(parents=True, exist_ok=True)
+
+    def _replace_path(dst: Path) -> None:
+        if dst.is_symlink() or dst.is_file():
+            dst.unlink()
+        elif dst.is_dir():
+            shutil.rmtree(dst)
+
+    for name in (
+        "train_control.csv",
+        "train_disease.csv",
+        "val_control.csv",
+        "val_disease.csv",
+        "centroid_group1_override.json",
+        "centroid_group2_override.json",
+    ):
+        src = shared_run_dir / name
+        dst = backend_run_dir / name
+        if not src.is_file():
+            continue
+        if dst.exists():
+            _replace_path(dst)
+        shutil.copy2(src, dst)
+
+    for link_name in ("centroids", "detections", "detector_step_override.json"):
+        src = shared_run_dir / link_name
+        dst = backend_run_dir / link_name
+        if not src.exists():
+            continue
+        if dst.exists() or dst.is_symlink():
+            _replace_path(dst)
+        if src.is_dir():
+            dst.symlink_to(src.resolve(), target_is_directory=True)
+        else:
+            dst.symlink_to(src.resolve())
+
+    shared_project_path = shared_run_dir / "project.json"
+    if not shared_project_path.is_file():
+        raise FileNotFoundError(f"Missing shared project.json: {shared_project_path}")
+    with open(shared_project_path, encoding="utf-8") as f:
+        payload = json.load(f)
+    payload["output_base"] = str(backend_root)
+    payload["project_name"] = backend_run_dir.name
+    backend_project_path = backend_run_dir / "project.json"
+    with open(backend_project_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return backend_project_path
+
+
 def apply_frozen_pipeline_artifacts_to_run_project(
     run_project_path: str | Path,
     frozen_project_path: str | Path,
