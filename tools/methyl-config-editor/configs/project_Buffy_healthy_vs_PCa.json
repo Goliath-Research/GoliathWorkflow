@@ -163,6 +163,11 @@
       "cutoff": 0.05,
       "organism": "Human",
       "library_preset": "cancer-extended",
+      "cisbp": {
+        "enabled": true,
+        "cisbp_modes": ["gene_sets"],
+        "species": "Homo_sapiens"
+      },
       "modules": true,
       "module_cluster_max_q": 0.05,
       "module_cluster_top_terms_per_library": 200,
