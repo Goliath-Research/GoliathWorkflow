@@ -1,5 +1,8 @@
 # Pipeline-level Python requirements (CPU/base).
 # Keep this list in sync with package pyproject.toml files and Dockerfile.
+boto3
+azure-identity
+azure-storage-blob
 click
 colorlog
 cryptography

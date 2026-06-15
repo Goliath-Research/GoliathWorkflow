@@ -16,7 +16,7 @@ QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (
 
 | Capability | Safe to retry when |
 |------------|-------------------|
-| `sample.download-fastq` | Destination FASTQs missing or partial |
+| `sample.download-fastq` | Destination FASTQs missing, or remote size/mtime differ from local |
 | `sample.delete-fastqs` | FASTQs already absent (no-op success) |
 | `sample.delete-bam` | BAM already absent (no-op success) |
 | `parabricks.fq2bam` | Only when BAM/JSON outputs missing |
@@ -41,9 +41,21 @@ QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (
   "tool": "SampleDownloadFastq",
   "sampleId": "DPLST-051425-111148",
   "sampleDir": "/work/samples/DPLST-051425-111148",
-  "fastqSourceUri": "s3://bucket/prefix/ or az://... or file://..."
+  "fastqSourceUri": "s3://bucket/prefix/ or az://container/prefix/ or file://..."
 }
 ```
+
+`fastqSourceUri` points at a **folder prefix** (or single `.fastq.gz` object). All `*.fastq.gz` / `*.fq.gz` objects under that prefix are downloaded into `sampleDir`. Typical layout: `<sample>_1.fastq.gz`, `<sample>_2.fastq.gz`, but any matching extension in the folder is included.
+
+**Idempotency:** for each file, download is skipped when the local copy already exists with the same **size** and **mtime** (±1 s) as the remote object.
+
+### Authentication
+
+| Scheme | Configuration |
+|--------|----------------|
+| `s3://` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, optional `AWS_SESSION_TOKEN` (or `METHYL_S3_*` aliases). S3-compatible: set `METHYL_S3_ENDPOINT_URL` and optional `METHYL_S3_REGION`. Without explicit keys, boto3 uses the instance credential chain (IAM role, etc.). |
+| `az://` | `DefaultAzureCredential` (managed identity on registered HPC nodes, workload identity, Azure CLI for dev). URI forms: `az://container/prefix/` with `AZURE_STORAGE_ACCOUNT`, or `az://account@container/prefix/`. |
+| `file://` | Local path or NFS mount under `/work/...` (no auth). |
 
 ### output_json
 

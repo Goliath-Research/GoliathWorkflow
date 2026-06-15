@@ -9,7 +9,6 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
-from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +145,8 @@ def _handle_mark_failed(_capability: str, _action_name: str, input_json: Dict[st
 
 
 def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+    from .fastq_source import download_fastqs
+
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     source_uri = input_json.get("fastqSourceUri") or input_json.get("fastqUri")
@@ -155,34 +156,7 @@ def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict
         raise RuntimeError("sample.download_fastq requires fastqSourceUri")
 
     dest = Path(str(sample_dir))
-    dest.mkdir(parents=True, exist_ok=True)
-    parsed = urlparse(str(source_uri))
-    scheme = parsed.scheme or "file"
-    fastq_files: List[str] = []
-
-    if scheme in {"file", ""}:
-        src_path = Path(parsed.path if scheme == "file" else str(source_uri))
-        if src_path.is_dir():
-            for pattern in ("*.fastq.gz", "*.fq.gz", "*.fastq", "*.fq"):
-                for match in sorted(src_path.glob(pattern)):
-                    target = dest / match.name
-                    if not target.exists():
-                        shutil.copy2(match, target)
-                    fastq_files.append(str(target))
-        elif src_path.is_file():
-            target = dest / src_path.name
-            if not target.exists():
-                shutil.copy2(src_path, target)
-            fastq_files.append(str(target))
-        else:
-            raise RuntimeError(f"fastq source not found: {source_uri}")
-    else:
-        raise RuntimeError(
-            f"Unsupported fastqSourceUri scheme {scheme!r}; use file:// or a local path."
-        )
-
-    if not fastq_files:
-        raise RuntimeError(f"No FASTQ files downloaded from {source_uri}")
+    fastq_files = download_fastqs(str(source_uri), dest)
     return {"sampleId": sample_id or dest.name, "fastqFiles": fastq_files}
 
 
