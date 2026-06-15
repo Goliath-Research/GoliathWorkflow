@@ -41,10 +41,34 @@ from db_client import (
 )
 from workflow_definition_spec import WorkflowDefinitionSpec
 
+_DEFAULT_CATALOG_PATH = (
+    Path(__file__).resolve().parents[2] / "schemas" / "actions" / "catalog.json"
+)
+
+
+def _load_action_catalog_by_name(
+    catalog_path: Path = _DEFAULT_CATALOG_PATH,
+) -> dict[str, dict[str, Any]]:
+    catalog_by_name: dict[str, dict[str, Any]] = {}
+    if not catalog_path.is_file():
+        return catalog_by_name
+    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+    for entry in catalog.get("actions") or []:
+        catalog_by_name[str(entry["action_name"])] = entry
+    return catalog_by_name
+
 
 class RestGateway:
-    def __init__(self, dsn: str) -> None:
+    def __init__(
+        self,
+        dsn: str,
+        *,
+        catalog_path: Optional[Path] = None,
+    ) -> None:
         self.dsn = dsn
+        self.catalog_by_name = _load_action_catalog_by_name(
+            catalog_path or _DEFAULT_CATALOG_PATH
+        )
 
     def dispatch(
         self,
@@ -57,15 +81,9 @@ class RestGateway:
 
         if method == "GET" and path == "/v1/actions":
             actions = list_workflow_actions(self.dsn)
-            catalog_path = Path(__file__).resolve().parents[2] / "schemas" / "actions" / "catalog.json"
-            catalog_by_name: dict[str, dict[str, Any]] = {}
-            if catalog_path.is_file():
-                catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-                for entry in catalog.get("actions") or []:
-                    catalog_by_name[str(entry["action_name"])] = entry
             merged: list[dict[str, Any]] = []
             for row in actions:
-                meta = catalog_by_name.get(str(row["action_name"]), {})
+                meta = self.catalog_by_name.get(str(row["action_name"]), {})
                 merged.append(
                     {
                         **row,
