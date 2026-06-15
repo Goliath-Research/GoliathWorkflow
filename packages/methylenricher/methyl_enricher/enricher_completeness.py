@@ -314,7 +314,7 @@ def merge_library_results(
     merged_path = output_dir / "enrichment_merged.csv"
     merged.to_csv(merged_path, index=False)
 
-    ranking = parts[0] if parts else merged
+    ranking = primary_enrichment_rows(merged)
     if not ranking.empty and "Adjusted P-value" in ranking.columns:
         top_hits = ranking[ranking["Adjusted P-value"] <= cutoff].head(200)
         if not top_hits.empty:

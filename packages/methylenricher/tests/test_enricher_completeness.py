@@ -86,6 +86,24 @@ def test_merge_cisbp_appended_after_primary_libraries(tmp_path: Path):
     assert primary_enrichment_rows(merged).iloc[0]["library"] == kegg
 
 
+def test_merge_cisbp_only_does_not_write_top_hits(tmp_path: Path):
+    """When all Enrichr libraries fail, CIS-BP must not populate enrichment_top_q*.csv."""
+    pd.DataFrame(
+        {
+            "Term": ["MYC"],
+            "Adjusted P-value": [1e-300],
+            "P-value": [1e-300],
+            "Odds Ratio": [100.0],
+            "library": ["CIS-BP"],
+        }
+    ).to_csv(tmp_path / "enrich_CIS-BP.csv", index=False)
+
+    merged = merge_library_results(tmp_path, ["KEGG_2021_Human", "CIS-BP"], cutoff=0.05)
+    assert len(merged) == 1
+    assert merged.iloc[0]["library"] == "CIS-BP"
+    assert not (tmp_path / "enrichment_top_q0.05.csv").is_file()
+
+
 def test_merge_library_results_from_csvs(tmp_path: Path):
     lib = "KEGG_2021_Human"
     df = pd.DataFrame(
