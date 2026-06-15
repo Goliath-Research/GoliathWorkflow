@@ -37,6 +37,16 @@ EVIDENCE_LEVEL_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3}
 SORT_BY_ALIASES = {"total_weight": "gene_importance"}
 
 
+def _as_str_list(value: object) -> Optional[List[str]]:
+    """Normalize config values that may be a list or a single string."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return [stripped] if stripped else None
+    return [str(v).strip() for v in value if str(v).strip()]
+
+
 def _load_signature_genes(path: Path, top_n: int) -> List[str]:
     df = pd.read_csv(path)
     if "gene" not in df.columns:
@@ -95,8 +105,9 @@ def filter_mapper_genes(
     if disease_only and "disease_associated" in out.columns:
         out = out[out["disease_associated"].astype(str).str.upper().isin(("TRUE", "1", "YES"))]
 
-    if disease_association_types and "disease_association_type" in out.columns:
-        allowed = {s.strip().lower() for s in disease_association_types}
+    association_types = _as_str_list(disease_association_types)
+    if association_types and "disease_association_type" in out.columns:
+        allowed = {s.lower() for s in association_types}
         out = out[
             out["disease_association_type"].astype(str).str.strip().str.lower().isin(allowed)
         ]
@@ -257,7 +268,7 @@ def _enricher_filter_kwargs(project_json: Path) -> Dict[str, Any]:
     return {
         "gene_column": cfg.get("gene_column") or "gene_name",
         "disease_only": bool(cfg.get("disease_only", False)),
-        "disease_association_types": cfg.get("disease_association_type"),
+        "disease_association_types": _as_str_list(cfg.get("disease_association_type")),
         "min_disease_evidence_level": cfg.get("min_disease_evidence_level"),
         "min_disease_score": cfg.get("min_disease_score"),
         "min_dmp_count": cfg.get("min_dmp_count"),
@@ -332,7 +343,7 @@ def _summarize_rows(rows: List[Dict[str, Any]], analyte: str) -> Dict[str, Any]:
         "n_mc_runs_with_ppi_hubs": len(hubs_ok),
         "mc_mapper_dominant_counts": _dominant_counts(mapper_ok, "mapper_"),
         "mc_hubs_dominant_counts": _dominant_counts(hubs_ok, "hubs_"),
-        "expected_dominant_for_analyte": "plasma" if analyte == "cfdna" else "buffy_coat",
+        "expected_dominant_for_analyte": "plasma" if analyte == "cfdna" else "buffy",
     }
 
 

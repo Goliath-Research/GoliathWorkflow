@@ -48,3 +48,20 @@ def test_load_signature_genes(tmp_path: Path):
     hubs = tmp_path / "hubs.csv"
     hubs.write_text("gene,combined_hub_score\nAR,1.0\nKLK3,0.9\n", encoding="utf-8")
     assert _load_signature_genes(hubs, 1) == ["AR"]
+
+
+def test_filter_mapper_genes_association_type_string_not_characters():
+    df = pd.DataFrame(
+        {
+            "gene_name": ["AR", "KLK3", "DMD"],
+            "gene_importance": [10, 8, 50],
+            "disease_association_type": ["direct", "indirect", "direct"],
+        }
+    )
+    genes = filter_mapper_genes(
+        df,
+        disease_association_types="direct",
+        sort_by="gene_importance",
+        top_n=10,
+    )
+    assert genes == ["DMD", "AR"]
