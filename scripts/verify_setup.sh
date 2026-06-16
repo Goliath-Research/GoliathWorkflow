@@ -44,9 +44,12 @@ PACKAGES=(
   "methylmapper"
   "methylclassifier"
   "methylenricher"
+  "methyldiseaseprogression"
   "methylalignmentqc"
   "methylpredictor"
   "methylvalidation"
+  "methyldomain"
+  "methylfragmentomics"
 )
 
 for pkg in "${PACKAGES[@]}"; do
@@ -60,6 +63,25 @@ for pkg in "${PACKAGES[@]}"; do
     fail "packages/$pkg missing"
   fi
 done
+
+echo ""
+echo "Checking workers package..."
+
+if [ -d "$PROJECT_ROOT/workers" ]; then
+  if [ -f "$PROJECT_ROOT/workers/pyproject.toml" ]; then
+    pass "workers/"
+  else
+    warn "workers/ present but missing pyproject.toml"
+  fi
+else
+  fail "workers/ missing"
+fi
+
+if [ -f "$PROJECT_ROOT/scripts/packages.list" ]; then
+  pass "scripts/packages.list"
+else
+  fail "scripts/packages.list missing"
+fi
 
 echo ""
 echo "Checking key docs..."
@@ -87,7 +109,16 @@ SCRIPTS=(
   "scripts/setup_host.sh"
   "scripts/setup_host_conda.sh"
   "scripts/install_all.sh"
+  "scripts/install_packages.sh"
+  "scripts/bootstrap_epimethyl.sh"
+  "scripts/setup_gpu_node.sh"
+  "scripts/detect_platform.sh"
+  "scripts/deploy_workflow_definitions.sh"
+  "scripts/register_worker.sh"
+  "scripts/verify_e2e_node.sh"
   "scripts/verify_setup.sh"
+  "scripts/verify_parabricks.sh"
+  "scripts/verify_methyl_extractor.sh"
   "scripts/setup_dev.sh"
   "scripts/setup_prod.sh"
   "scripts/run_container.sh"
@@ -189,6 +220,15 @@ PY
   python3 - <<'PY' >/dev/null 2>&1 && pass "methyl_validation import" || warn "methyl_validation import failed"
 import methyl_validation
 PY
+  python3 - <<'PY' >/dev/null 2>&1 && pass "methyl_fragmentomics import" || warn "methyl_fragmentomics import failed"
+import methyl_fragmentomics
+PY
+fi
+
+if command -v methyl-worker >/dev/null 2>&1; then
+  pass "methyl-worker CLI"
+else
+  warn "methyl-worker not on PATH; run scripts/install_all.sh or scripts/setup_host.sh"
 fi
 
 echo ""

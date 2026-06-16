@@ -426,34 +426,15 @@ if [ "$GPU_DEPS" -eq 1 ]; then
   fi
 fi
 
-PIP_DEPS_FLAG=("--no-deps")
+# shellcheck source=install_packages.sh
+source "$SCRIPT_DIR/install_packages.sh"
+WITH_DEPS_FLAG=0
 if [ "$WITH_DEPS" -eq 1 ]; then
-  PIP_DEPS_FLAG=()
+  WITH_DEPS_FLAG=1
 fi
 
-PACKAGES=(
-  "methylutils"
-  "methylcentroid"
-  "methyldetector"
-  "methylmapper"
-  "methylclassifier"
-  "methylenricher"
-  "methylcluster"
-  "methylalignmentqc"
-  "methylpredictor"
-  "methylvalidation"
-)
-
-info "Installing local packages (editable mode)..."
-for pkg in "${PACKAGES[@]}"; do
-  PKG_PATH="$PROJECT_ROOT/packages/$pkg"
-  if [ -d "$PKG_PATH" ]; then
-    info "Installing $pkg"
-    "$PYTHON_BIN" -m pip install -e "$PKG_PATH" "${PIP_DEPS_FLAG[@]}"
-  else
-    warn "Skipping $pkg (directory not found)"
-  fi
-done
+info "Installing local packages (editable mode) from scripts/packages.list..."
+install_packages_from_list "$PROJECT_ROOT" "$PYTHON_BIN" "$PROJECT_ROOT/packages" "$WITH_DEPS_FLAG"
 
 verify_methylenricher_deps
 

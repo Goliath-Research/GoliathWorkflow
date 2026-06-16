@@ -103,40 +103,11 @@ if [ "$GPU_REQS" -eq 1 ]; then
     fi
 fi
 
-# Install packages in dependency order
-# MethylUtils must be installed first as it's the core dependency
-PACKAGES=(
-    "methylutils"
-    "methylcentroid"
-    "methylcluster"
-    "methyldetector"
-    "methylmapper"
-    "methylclassifier"
-    "methylenricher"
-    "methyldiseaseprogression"
-    "methylalignmentqc"
-    "methylpredictor"
-    "methylvalidation"
-)
-
-for pkg in "${PACKAGES[@]}"; do
-    PKG_PATH="$PACKAGES_DIR/$pkg"
-    if [ -d "$PKG_PATH" ]; then
-        if [ -f "$PKG_PATH/pyproject.toml" ]; then
-            echo "📦 Installing $pkg..."
-            if [ "$WITH_DEPS" -eq 1 ]; then
-                "$PYTHON_BIN" -m pip install -e "$PKG_PATH" --no-cache-dir 2>&1 | grep -v "WARNING"
-            else
-                "$PYTHON_BIN" -m pip install -e "$PKG_PATH" --no-deps --no-cache-dir 2>&1 | grep -v "WARNING"
-            fi
-            echo "   ✓ $pkg installed"
-        else
-            echo "   ⚠ Skipping $pkg (missing pyproject.toml)"
-        fi
-    else
-        echo "   ⚠ Skipping $pkg (directory not found)"
-    fi
-done
+# Install packages from canonical list (includes workers/)
+# shellcheck source=install_packages.sh
+source "$SCRIPT_DIR/install_packages.sh"
+echo "📦 Installing packages from scripts/packages.list..."
+install_packages_from_list "$PROJECT_ROOT" "$PYTHON_BIN" "$PACKAGES_DIR" "$WITH_DEPS"
 
 echo ""
 echo "🖼️ Presentation tooling..."
@@ -197,6 +168,9 @@ echo "   • methyldiseaseprogression - Cross-stage progression synthesis (methy
 echo "   • methylalignmentqc - Alignment QC extraction (methyl-qc)"
 echo "   • methylpredictor - Prediction and validation metrics (methyl-predictor)"
 echo "   • methylvalidation - Monte Carlo validation workflows (methyl-validation)"
+echo "   • methyldomain    - Domain program types and compiler helpers"
+echo "   • methylfragmentomics - cfDNA fragmentomics (methyl-fragmentomics)"
+echo "   • methyl-worker   - REST workflow worker (methyl-worker)"
 echo "   • marp-cli        - Presentation rendering for docs/presentations/"
 echo ""
 echo "🧪 Test the installation:"

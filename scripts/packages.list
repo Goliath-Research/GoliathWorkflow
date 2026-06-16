@@ -1,0 +1,15 @@
+# Canonical editable package install order for MethylPipeline host/worker nodes.
+# One package name per line; blank lines and # comments are ignored.
+methylutils
+methylcentroid
+methylcluster
+methyldetector
+methylmapper
+methylclassifier
+methylenricher
+methyldiseaseprogression
+methylalignmentqc
+methylpredictor
+methylvalidation
+methyldomain
+methylfragmentomics

@@ -1,0 +1,16 @@
+[Unit]
+Description=MethylPipeline workflow worker (%i capability)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/work/epimethyl/env/worker.env
+EnvironmentFile=-/work/epimethyl/env/parabricks.env
+Environment=WORKER_CAPABILITY=%i
+ExecStart=/work/epimethyl/venv/bin/methyl-worker --api-base ${WORKER_API_BASE}
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

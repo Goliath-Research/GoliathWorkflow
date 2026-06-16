@@ -56,8 +56,10 @@ SCRIPTS=(
   05_runtime_parity.sql
   06_scope_writepath_parity.sql
   07_scope_encoding_parity.sql
+  08_foreach_support.sql
   01_worker_api.sql
   02_repository_api.sql
+  wf_apply_validation_plan.sql
   04_admin.sql
   wf_action_schema.sql
   wf_repo_upsert_workflow_action.sql
@@ -81,6 +83,14 @@ for name in "${SCRIPTS[@]}"; do
 done
 
 echo "Contract check..."
-"$REPO_ROOT/.venv/bin/python" "$REPO_ROOT/workflow_engine/contract/validate_contract.py"
+PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  PYTHON_BIN="$(command -v python3 || true)"
+fi
+if [[ -z "$PYTHON_BIN" ]]; then
+  echo "python3 not found; skipping contract check" >&2
+else
+  "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/contract/validate_contract.py"
+fi
 
 echo "Deployed wf objects on $PGHOST/$PGDATABASE"
