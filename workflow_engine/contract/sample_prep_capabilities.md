@@ -12,6 +12,17 @@ Contract for **SamplePrepPipeline** remote workers. All workers use the standard
 
 QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (boolean), not `result_code`.
 
+After `methyl-qc`, scope also receives **`qcDisposition`**, **`trimFront2`**, **`qcAttemptReason`**, and **`remediateR2Trim`** (boolean) for the remediation branch.
+
+## FASTQ retention
+
+**Do not delete FASTQs before final QC.** `sample.delete-fastqs` runs only after QC pass or final fail (including post-trim retry). Trimming (`sample.trim-fastq`) requires original `*_1.fastq.gz` / `*_2.fastq.gz` still present.
+
+## Audit trail
+
+- QC export: append-only **`qc_history`** on each `{sampleId}.json` in alignment QC output.
+- Sample dir: append-only **`{sampleId}.sample_prep_log.jsonl`** for every prep action (download, align, trim, QC, delete).
+
 ## Idempotency
 
 | Capability | Safe to retry when |
@@ -19,7 +30,8 @@ QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (
 | `sample.download-fastq` | Destination FASTQs missing, or remote size/mtime differ from local |
 | `sample.delete-fastqs` | FASTQs already absent (no-op success) |
 | `sample.delete-bam` | BAM already absent (no-op success) |
-| `parabricks.fq2bam` | Only when BAM missing or QC artifact missing (`{sampleId}.json` or `{sampleId}.qc-metrics.tar`) |
+| `parabricks.fq2bam` | Only when BAM missing or QC artifact missing (`{sampleId}.json` or `{sampleId}.qc-metrics.tar`); pass **`forceRealign: true`** after trim to clear stale outputs |
+| `sample.trim-fastq` | When trimmed FASTQs missing or `trimFront2` changed |
 | `methyl-extract` | When HDF5 outputs missing for `project.chromosomes × extract_contexts` |
 
 ## Lease / retry

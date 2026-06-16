@@ -41,9 +41,10 @@ if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
 fi
 
 SAMPLE_PREP="$REPO_ROOT/workflow_engine/domain/fixtures/sample_prep.program.json"
+REMEDIATE="$REPO_ROOT/workflow_engine/domain/fixtures/sample_prep_remediate.program.json"
 LIFECYCLE="$REPO_ROOT/workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json"
 
-for f in "$SAMPLE_PREP" "$LIFECYCLE"; do
+for f in "$SAMPLE_PREP" "$REMEDIATE" "$LIFECYCLE"; do
   [[ -f "$f" ]] || { echo "Missing $f" >&2; exit 1; }
 done
 
@@ -51,6 +52,7 @@ mkdir -p "$OUTPUT_DIR" "$(dirname "$VERSIONS_OUT")"
 
 COMPILE="$REPO_ROOT/scripts/compile_workflow_program.py"
 "$PYTHON_BIN" "$COMPILE" "$SAMPLE_PREP" -o "$OUTPUT_DIR/sample_prep_compiled.json"
+"$PYTHON_BIN" "$COMPILE" "$REMEDIATE" -o "$OUTPUT_DIR/sample_prep_remediate_compiled.json"
 "$PYTHON_BIN" "$COMPILE" "$LIFECYCLE" -o "$OUTPUT_DIR/study_validation_lifecycle_compiled.json"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then

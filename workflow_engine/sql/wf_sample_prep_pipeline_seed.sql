@@ -1,19 +1,17 @@
 /*
   Workflow Engine (wf schema) - SamplePrepPipeline seed.
 
-  Per-sample upstream preprocessing: FASTQ ingest -> Parabricks -> cleanup ->
-  methyl-qc gate -> conditional cfDNA fragmentomics -> MethylExtractor -> BAM cleanup.
+  Per-sample upstream preprocessing: FASTQ ingest -> Parabricks -> methyl-qc gate (+ optional R2 trim remediation) ->
+  delete_fastqs on terminal paths -> conditional cfDNA fragmentomics -> MethylExtractor -> BAM cleanup.
 
-  Tree (~14 nodes):
+  Tree (~14+ nodes):
     SEQUENCE root
     └─ FOREACH samples (parallel) → SEQUENCE one_sample
-       ├─ ACTION download_fastq, parabricks_fq2bam, delete_fastqs, methyl_qc
+       ├─ ACTION download_fastq, parabricks_fq2bam, methyl_qc
        └─ IF qc_passed (qcPass)
-          ├─ THEN SEQUENCE on_pass
-          │  ├─ IF is_cfdna (isCfdna) → THEN methyl_fragmentomics
-          │  ├─ ACTION methyl_extract
-          │  └─ ACTION delete_bam
-          └─ ELSE ACTION qc_failed
+          ├─ THEN delete_fastqs → [IF is_cfdna → fragmentomics] → extract → delete_bam
+          └─ ELSE IF remediateR2Trim → trim → realign → methyl_qc retry → pass/fail paths with delete_fastqs
+             ELSE delete_fastqs → qc_failed
 
   Instance context_json example:
   - workflow_engine/sql/instance_context_examples/sample_prep_plasma.json

@@ -117,6 +117,19 @@ class MethylQcTaskOutput(BaseModel):
     sampleId: str
     qcPath: str
     guardrails: Dict[str, Any] = Field(default_factory=dict)
+    screening: Dict[str, Any] = Field(default_factory=dict)
+    qcHistory: List[Dict[str, Any]] = Field(default_factory=list)
+    remediateR2Trim: bool = False
+
+
+class TrimFastqTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: str
+    trimFront2: str
+    trimmedR1: str
+    trimmedR2: str
+    logReason: str = ""
 
 
 class FragmentomicsTaskOutput(BaseModel):

@@ -199,7 +199,8 @@ install_system_deps() {
     gnupg \
     apt-transport-https \
     unixodbc-dev \
-    bedtools
+    bedtools \
+    fastp
 
   if ! dpkg -s msodbcsql18 >/dev/null 2>&1; then
     info "Installing Microsoft ODBC Driver 18..."

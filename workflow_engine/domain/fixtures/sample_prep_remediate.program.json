@@ -1,0 +1,61 @@
+{
+  "programVersion": 1,
+  "name": "SamplePrepRemediationPipeline",
+  "description": "Batch remediation: re-download FASTQs, R2 front-trim, realign, and final QC before extract.",
+  "projectPath": "${var.projectPath}",
+  "variables": {
+    "primaryAnalyte": "cfdna"
+  },
+  "phases": [
+    {
+      "name": "sample_prep_remediate",
+      "foreach": {
+        "collection": "samples",
+        "item": "sample",
+        "index": "sampleIndex",
+        "parallel": true
+      },
+      "steps": [
+        {"action": "sample.download_fastq", "node_key": "download_fastq"},
+        {
+          "action": "sample.trim_fastq",
+          "node_key": "trim_fastq",
+          "with": {
+            "trimFront2": "${var.trimFront2}",
+            "remediationReason": "SamplePrepRemediationPipeline manifest trim_front2",
+            "workflowNodeKey": "trim_fastq"
+          }
+        },
+        {"action": "sample.parabricks_fq2bam", "node_key": "parabricks_fq2bam"},
+        {
+          "action": "sample.methyl_qc",
+          "node_key": "methyl_qc",
+          "with": {
+            "qcAttempt": 2,
+            "alignmentPass": "post_trim_realign",
+            "qcAttemptReason": "Remediation cohort rerun after trim_front2",
+            "workflowNodeKey": "methyl_qc"
+          }
+        },
+        {
+          "if": "${qcPass}",
+          "then": [
+            {"action": "sample.delete_fastqs", "node_key": "delete_fastqs"},
+            {
+              "if": "${isCfdna}",
+              "then": [
+                {"action": "sample.fragmentomics", "node_key": "methyl_fragmentomics"}
+              ]
+            },
+            {"action": "sample.methyl_extract", "node_key": "methyl_extract"},
+            {"action": "sample.delete_bam", "node_key": "delete_bam"}
+          ],
+          "else": [
+            {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_fail"},
+            {"action": "sample.qc_failed", "node_key": "qc_failed"}
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "sampleId": { "type": "string" },
+    "sampleDir": { "type": "string" },
+    "trimFront2": { "type": "integer", "minimum": 1 },
+    "remediationReason": { "type": "string" },
+    "qcAttempt": { "type": "integer" },
+    "workflowNodeKey": { "type": "string" }
+  },
+  "required": ["sampleId", "sampleDir", "trimFront2"],
+  "title": "TrimFastqTaskInput",
+  "type": "object"
+}

@@ -272,16 +272,7 @@ def _compile_action(
         )
     )
     _link(parent_key, node_key, order, branch, ctx)
-    if entry.action_name == "sample.methyl_qc":
-        ctx.output_bindings.append(
-            WorkflowOutputBindingSpec(
-                node_key=node_key,
-                var_name="qcPass",
-                source_kind="output_path",
-                source_json_path="$.guardrails.overall_pass",
-            )
-        )
-    elif entry.domain_effects and entry.domain_effects.scope_bindings:
+    if entry.domain_effects and entry.domain_effects.scope_bindings:
         for var_name, json_path in entry.domain_effects.scope_bindings:
             ctx.output_bindings.append(
                 WorkflowOutputBindingSpec(
@@ -289,6 +280,16 @@ def _compile_action(
                     var_name=var_name,
                     source_kind="output_path",
                     source_json_path=json_path,
+                )
+            )
+    if entry.domain_effects and entry.domain_effects.output_bindings:
+        for binding in entry.domain_effects.output_bindings:
+            ctx.output_bindings.append(
+                WorkflowOutputBindingSpec(
+                    node_key=node_key,
+                    var_name=binding.scope_field,
+                    source_kind="output_path",
+                    source_json_path=binding.output_json_path,
                 )
             )
     return node_key

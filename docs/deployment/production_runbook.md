@@ -33,6 +33,21 @@ POST /v1/workflows/instances
 
 Poll until **COMPLETED**. Do not start validation until all samples have per-chromosome HDF5s.
 
+**FASTQ retention:** SamplePrep keeps FASTQs until final QC (pass or final fail after any trim/realign retry). Samples with `REALIGN_READ2_TRIM` run `sample.trim_fastq` → Parabricks `forceRealign` → `methyl_qc` retry before `delete_fastqs`.
+
+**Cohort screening (existing QC JSONs):**
+
+```bash
+source .venv/bin/activate
+python scripts/alignment_qc_cohort_screening.py \
+  --qc-dir /work/AlignmentQC \
+  --group healthy=/path/healthy_samples.csv \
+  --group pca=/path/pca_samples.csv \
+  --out /work/AlignmentQC/screening_report
+```
+
+Review `remediation_manifest.csv` for batch remediation via `SamplePrepRemediationPipeline` (`deploy_workflow_definitions.sh` compiles both programs).
+
 ## Stage 2 — StudyValidationLifecycle
 
 Recommended:

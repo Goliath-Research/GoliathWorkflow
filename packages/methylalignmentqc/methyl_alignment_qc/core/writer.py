@@ -5,6 +5,7 @@ Write per-sample QC JSON files for database storage.
 import json
 import math
 import tarfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -12,10 +13,21 @@ from ..models.sample_qc import ExportedSampleQCPayload, ParabricksMetricsPayload
 from ..models.sample_qc_v2 import ExportedSampleQCV2Payload
 from ..utils.v1_to_v2_migration import v1_model_to_v2
 from . import parser as core_parser
-from ..models.config import BisulfiteConversionConfig, FragmentomicsConfig
+from ..models.config import (
+    BisulfiteConversionConfig,
+    CycleScreeningConfig,
+    FragmentomicsConfig,
+    OptionalGuardrailsConfig,
+)
 from .bisulfite_conversion import apply_bisulfite_conversion_to_payload
+from .cycle_quality_screening import (
+    apply_screening_recommendations,
+    failed_guardrail_keys,
+    screen_cycle_quality,
+)
 from .fragmentomics import apply_fragmentomics_to_payload
-from .wgbs_parabricks_qc import check_wgbs_guardrails
+from .qc_write_context import QcWriteContext
+from .wgbs_parabricks_qc import apply_optional_guardrails, check_wgbs_guardrails
 
 
 def write_sample_qc_json(metrics: Dict[str, Any], output_path: Path) -> None:
@@ -266,12 +278,104 @@ def _normalize_duplication_histogram(histogram: Any) -> Dict[str, Any]:
     }
 
 
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _load_prior_qc_history(output_path: Path) -> List[Dict[str, Any]]:
+    if not output_path.is_file():
+        return []
+    try:
+        prior = json.loads(output_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    history = prior.get("qc_history")
+    if not isinstance(history, list):
+        return []
+    return [entry for entry in history if isinstance(entry, dict)]
+
+
+def _build_qc_attempt_record(
+    *,
+    write_ctx: QcWriteContext,
+    guardrails: Dict[str, Any],
+    screening: Dict[str, Any],
+) -> Dict[str, Any]:
+    trigger = write_ctx.remediation_trigger or {}
+    trigger_action = None
+    if write_ctx.attempt > 1:
+        parts = []
+        if trigger.get("trimFront2"):
+            parts.append("sample.trim_fastq")
+        parts.append("sample.parabricks_fq2bam")
+        trigger_action = " + ".join(parts) if parts else None
+
+    return {
+        "attempt": write_ctx.attempt,
+        "evaluated_at_utc": _utc_now_iso(),
+        "alignment_pass": write_ctx.alignment_pass,
+        "reason": write_ctx.attempt_reason,
+        "trigger_disposition": trigger.get("disposition") if write_ctx.attempt > 1 else None,
+        "trigger_action": trigger_action,
+        "trim_front2": trigger.get("trimFront2") or screening.get("trim_front2"),
+        "overall_pass": bool(guardrails.get("overall_pass")),
+        "disposition": str(screening.get("disposition") or ""),
+        "failed_guardrails": failed_guardrail_keys(guardrails),
+        "workflow_node_key": write_ctx.workflow_node_key,
+    }
+
+
+def _apply_screening_and_audit(
+    payload: Dict[str, Any],
+    *,
+    cycle_screening: Optional[CycleScreeningConfig],
+    optional_guardrails: Optional[OptionalGuardrailsConfig],
+    write_ctx: Optional[QcWriteContext],
+    output_path: Path,
+    sample_dir: Path,
+    sample_name: str,
+) -> None:
+    guardrails = payload.setdefault("guardrails", {})
+    if not isinstance(guardrails, dict):
+        return
+
+    opt = optional_guardrails or OptionalGuardrailsConfig()
+    apply_optional_guardrails(
+        guardrails,
+        payload,
+        duplication_rate_max=opt.duplication_rate_max,
+        min_pf_reads=opt.min_pf_reads,
+    )
+
+    cfg = cycle_screening if cycle_screening is not None else CycleScreeningConfig()
+    screening: Dict[str, Any] = {}
+    if cfg.enabled:
+        screening = screen_cycle_quality(payload, guardrails, cfg)
+        guardrails["screening"] = screening
+        apply_screening_recommendations(guardrails, screening)
+
+    ctx = write_ctx or QcWriteContext()
+    prior_history = ctx.prior_qc_history or _load_prior_qc_history(output_path)
+    attempt_record = _build_qc_attempt_record(
+        write_ctx=ctx,
+        guardrails=guardrails,
+        screening=screening,
+    )
+    payload["qc_history"] = prior_history + [attempt_record]
+
+    log_path = ctx.sample_prep_log_path or str(sample_dir / f"{sample_name}.sample_prep_log.jsonl")
+    payload["sample_prep_log_path"] = log_path
+
+
 def process_samples_to_qc_jsons(
     sample_paths: List[str],
     output_dir: str,
     validate_schema: bool = True,
     fragmentomics: Optional[FragmentomicsConfig] = None,
     bisulfite_conversion: Optional[BisulfiteConversionConfig] = None,
+    cycle_screening: Optional[CycleScreeningConfig] = None,
+    optional_guardrails: Optional[OptionalGuardrailsConfig] = None,
+    write_context: Optional[QcWriteContext] = None,
 ) -> None:
     """
     Parse each sample directory and write one JSON per sample to output_dir.
@@ -356,6 +460,17 @@ def process_samples_to_qc_jsons(
         apply_fragmentomics_to_payload(payload, fragmentomics)
         apply_bisulfite_conversion_to_payload(payload, sample_dir, bisulfite_conversion)
 
+        output_file = out / f"{sample_name}.json"
+        _apply_screening_and_audit(
+            payload,
+            cycle_screening=cycle_screening,
+            optional_guardrails=optional_guardrails,
+            write_ctx=write_context,
+            output_path=output_file,
+            sample_dir=sample_dir,
+            sample_name=sample_name,
+        )
+
         if validate_schema:
             errs = validate_sample_qc_metrics(payload)
             if errs:
@@ -364,5 +479,7 @@ def process_samples_to_qc_jsons(
         v1_model = ExportedSampleQCPayload.model_validate(payload)
         v2_model = v1_model_to_v2(v1_model)
         v2_dict = v2_model.model_dump(mode="python", by_alias=True, exclude_none=True)
+        if write_context is not None:
+            v2_dict.setdefault("metadata", {})["qc_attempt"] = write_context.attempt
         ExportedSampleQCV2Payload.model_validate(v2_dict)
-        write_sample_qc_json(v2_dict, out / f"{sample_name}.json")
+        write_sample_qc_json(v2_dict, output_file)

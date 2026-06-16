@@ -11,6 +11,20 @@
       "title": "Qcpath",
       "type": "string"
     },
+    "screening": {
+      "additionalProperties": true,
+      "title": "Screening",
+      "type": "object"
+    },
+    "qcHistory": {
+      "items": { "type": "object" },
+      "title": "Qchistory",
+      "type": "array"
+    },
+    "remediateR2Trim": {
+      "title": "Remediater2Trim",
+      "type": "boolean"
+    },
     "sampleId": {
       "title": "Sampleid",
       "type": "string"

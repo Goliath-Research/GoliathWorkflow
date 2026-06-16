@@ -311,13 +311,33 @@
         "sampleDir"
       ],
       "default_node_type": "ACTION",
-      "description": "Delete FASTQ files after alignment to reclaim storage.",
+      "description": "Delete FASTQ files after final QC (pass or final fail) to reclaim storage.",
       "execution_mode": "in_process",
       "in_process_handler": "_handle_delete_fastqs",
       "input_schema_ref": "schemas/tasks/sample_delete_fastqs.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_delete_fastqs.output.schema.json",
       "schema_id": "sample.delete_fastqs",
       "tool": "SampleDeleteFastqs"
+    },
+    {
+      "action_name": "sample.trim_fastq",
+      "argv_map": {},
+      "capability": "sample.trim-fastq",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "trimFront2",
+        "remediationReason"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Trim Read 2 front bases with fastp before forced realign.",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_trim_fastq",
+      "input_schema_ref": "schemas/tasks/sample_trim_fastq.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_trim_fastq.output.schema.json",
+      "schema_id": "sample.trim_fastq",
+      "tool": "SampleTrimFastq"
     },
     {
       "action_name": "sample.methyl_qc",
@@ -348,6 +368,22 @@
           {
             "output_json_path": "$.guardrails.overall_pass",
             "var_name": "qcPass"
+          },
+          {
+            "output_json_path": "$.screening.disposition",
+            "var_name": "qcDisposition"
+          },
+          {
+            "output_json_path": "$.screening.trim_front2",
+            "var_name": "trimFront2"
+          },
+          {
+            "output_json_path": "$.screening.message",
+            "var_name": "qcAttemptReason"
+          },
+          {
+            "output_json_path": "$.remediateR2Trim",
+            "var_name": "remediateR2Trim"
           }
         ],
         "writes_types": [

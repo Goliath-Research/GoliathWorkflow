@@ -201,6 +201,8 @@ def v1_model_to_v2(
         guardrails=v1.guardrails,
         fragmentomics_metrics=v1.fragmentomics_metrics,
         bisulfite_conversion_metrics=v1.bisulfite_conversion_metrics,
+        qc_history=v1.qc_history,
+        sample_prep_log_path=v1.sample_prep_log_path,
     )
 
 

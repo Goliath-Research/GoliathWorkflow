@@ -1,7 +1,7 @@
 {
   "programVersion": 1,
   "name": "SamplePrepPipeline",
-  "description": "Per-sample upstream preprocessing compiled from DomainProgram IR.",
+  "description": "Per-sample upstream preprocessing with alignment QC screening and optional R2 trim remediation.",
   "projectPath": "${var.projectPath}",
   "variables": {
     "primaryAnalyte": "cfdna"
@@ -18,11 +18,11 @@
       "steps": [
         {"action": "sample.download_fastq", "node_key": "download_fastq"},
         {"action": "sample.parabricks_fq2bam", "node_key": "parabricks_fq2bam"},
-        {"action": "sample.delete_fastqs", "node_key": "delete_fastqs"},
         {"action": "sample.methyl_qc", "node_key": "methyl_qc"},
         {
           "if": "${qcPass}",
           "then": [
+            {"action": "sample.delete_fastqs", "node_key": "delete_fastqs"},
             {
               "if": "${isCfdna}",
               "then": [
@@ -33,7 +33,68 @@
             {"action": "sample.delete_bam", "node_key": "delete_bam"}
           ],
           "else": [
-            {"action": "sample.qc_failed", "node_key": "qc_failed"}
+            {
+              "if": "${remediateR2Trim}",
+              "then": [
+                {
+                  "action": "sample.trim_fastq",
+                  "node_key": "trim_fastq",
+                  "with": {
+                    "trimFront2": "${var.trimFront2}",
+                    "remediationReason": "${var.qcAttemptReason}",
+                    "workflowNodeKey": "trim_fastq"
+                  }
+                },
+                {
+                  "action": "sample.parabricks_fq2bam",
+                  "node_key": "parabricks_realign",
+                  "with": {
+                    "forceRealign": true,
+                    "alignmentPass": "post_trim_realign",
+                    "remediationReason": "${var.qcAttemptReason}",
+                    "trimFront2": "${var.trimFront2}",
+                    "workflowNodeKey": "parabricks_realign"
+                  }
+                },
+                {
+                  "action": "sample.methyl_qc",
+                  "node_key": "methyl_qc_retry",
+                  "with": {
+                    "qcAttempt": 2,
+                    "alignmentPass": "post_trim_realign",
+                    "qcAttemptReason": "${var.qcAttemptReason}",
+                    "workflowNodeKey": "methyl_qc_retry",
+                    "remediationTrigger": {
+                      "disposition": "${var.qcDisposition}",
+                      "trimFront2": "${var.trimFront2}",
+                      "priorNode": "methyl_qc"
+                    }
+                  }
+                },
+                {
+                  "if": "${qcPass}",
+                  "then": [
+                    {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_after_retry"},
+                    {
+                      "if": "${isCfdna}",
+                      "then": [
+                        {"action": "sample.fragmentomics", "node_key": "methyl_fragmentomics_retry"}
+                      ]
+                    },
+                    {"action": "sample.methyl_extract", "node_key": "methyl_extract_retry"},
+                    {"action": "sample.delete_bam", "node_key": "delete_bam_retry"}
+                  ],
+                  "else": [
+                    {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_retry_fail"},
+                    {"action": "sample.qc_failed", "node_key": "qc_failed_after_retry"}
+                  ]
+                }
+              ],
+              "else": [
+                {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_fail"},
+                {"action": "sample.qc_failed", "node_key": "qc_failed"}
+              ]
+            }
           ]
         }
       ]

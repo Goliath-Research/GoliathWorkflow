@@ -14,6 +14,7 @@ from .sample_qc import (
     GCBiasSummary,
     GuardrailReport,
     InsertSizeMetrics,
+    QcAttemptRecord,
     QualityYield,
     SummaryStats,
 )
@@ -31,6 +32,7 @@ class QCV2Metadata(BaseModel):
     schema_version: str = Field(default="2.0.0")
     exported_at_utc: str = Field(description="ISO-8601 UTC timestamp when V2 export was produced")
     producer: QCV2Producer
+    qc_attempt: Optional[int] = Field(default=None, description="Current QC evaluation attempt number")
 
 
 class MeanQualityByCycleRow(BaseModel):
@@ -167,3 +169,5 @@ class ExportedSampleQCV2Payload(BaseModel):
     guardrails: GuardrailReport
     fragmentomics_metrics: Optional[FragmentomicsMetrics] = None
     bisulfite_conversion_metrics: Optional[BisulfiteConversionMetrics] = None
+    qc_history: Optional[List[QcAttemptRecord]] = None
+    sample_prep_log_path: Optional[str] = None

@@ -40,18 +40,72 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str,
 
     project = input_json.get("project") or input_json.get("projectPath")
     from methyl_alignment_qc.core import process_samples_to_qc_jsons
+    from methyl_alignment_qc.core.qc_write_context import QcWriteContext
+
+    write_ctx = QcWriteContext.from_input_json(input_json)
+    write_ctx.sample_prep_log_path = str(sample_path / f"{sample_path.name}.sample_prep_log.jsonl")
+
+    def _build_result(qc_path: Path) -> HandlerResult:
+        import json
+
+        from .sample_prep_log import append_sample_prep_log
+
+        payload = json.loads(qc_path.read_text(encoding="utf-8"))
+        guardrails = payload.get("guardrails") or {}
+        screening = guardrails.get("screening") or {}
+        qc_history = payload.get("qc_history") or []
+        append_sample_prep_log(
+            sample_path,
+            sample_id=sample_id or sample_path.name,
+            action="sample.methyl_qc",
+            capability=_capability,
+            attempt=write_ctx.attempt,
+            reason=write_ctx.attempt_reason,
+            inputs={
+                "qcAttempt": write_ctx.attempt,
+                "alignmentPass": write_ctx.alignment_pass,
+            },
+            outputs={
+                "qcPath": str(qc_path),
+                "overallPass": guardrails.get("overall_pass"),
+                "disposition": screening.get("disposition"),
+            },
+            workflow_node_key=write_ctx.workflow_node_key or input_json.get("workflowNodeKey"),
+        )
+        return {
+            "sampleId": sample_id or sample_path.name,
+            "qcPath": str(qc_path),
+            "guardrails": guardrails,
+            "screening": screening,
+            "qcHistory": qc_history,
+            "remediateR2Trim": bool(
+                screening.get("disposition") == "REALIGN_READ2_TRIM"
+                and int(screening.get("trim_front2") or 0) > 0
+            ),
+        }
 
     if project:
         from methyl_alignment_qc.project_resolver import resolve_alignment_qc_config
 
         cfg = resolve_alignment_qc_config(str(project))
         out_dir = cfg.output_dir
+        qc_path = Path(out_dir) / f"{sample_path.name}.json"
+        if qc_path.is_file():
+            import json
+
+            prior = json.loads(qc_path.read_text(encoding="utf-8"))
+            history = prior.get("qc_history")
+            if isinstance(history, list):
+                write_ctx.prior_qc_history = [h for h in history if isinstance(h, dict)]
         process_samples_to_qc_jsons(
             [str(sample_path)],
             out_dir,
             validate_schema=cfg.validate_schema,
             fragmentomics=cfg.fragmentomics,
             bisulfite_conversion=cfg.bisulfite_conversion,
+            cycle_screening=cfg.cycle_screening,
+            optional_guardrails=cfg.optional_guardrails,
+            write_context=write_ctx,
         )
         qc_path = Path(out_dir) / f"{sample_path.name}.json"
     else:
@@ -60,28 +114,18 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str,
 
         with tempfile.TemporaryDirectory(prefix="methyl-qc-") as tmp:
             out_dir = tmp
-            process_samples_to_qc_jsons([str(sample_path)], out_dir)
+            process_samples_to_qc_jsons(
+                [str(sample_path)],
+                out_dir,
+                write_context=write_ctx,
+            )
             qc_path = Path(out_dir) / f"{sample_path.name}.json"
-            payload = json.loads(qc_path.read_text(encoding="utf-8"))
-            guardrails = payload.get("guardrails") or {}
-            return {
-                "sampleId": sample_id or sample_path.name,
-                "qcPath": str(qc_path),
-                "guardrails": guardrails,
-            }
+            return _build_result(qc_path)
 
     if not qc_path.is_file():
         raise RuntimeError(f"QC JSON not written: {qc_path}")
 
-    import json
-
-    payload = json.loads(qc_path.read_text(encoding="utf-8"))
-    guardrails = payload.get("guardrails") or {}
-    return {
-        "sampleId": sample_id or sample_path.name,
-        "qcPath": str(qc_path),
-        "guardrails": guardrails,
-    }
+    return _build_result(qc_path)
 
 
 def _handle_methyl_fragmentomics(
@@ -160,8 +204,46 @@ def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict
     return {"sampleId": sample_id or dest.name, "fastqFiles": fastq_files}
 
 
+def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+    from .fastq_trim_runner import run_fastp_trim_front2
+    from .sample_prep_log import append_sample_prep_log
+
+    sample_dir = input_json.get("sampleDir")
+    sample_id = input_json.get("sampleId")
+    trim_front2 = input_json.get("trimFront2")
+    if not sample_dir or not sample_id:
+        raise RuntimeError("sample.trim_fastq requires sampleDir and sampleId")
+    if trim_front2 is None:
+        raise RuntimeError("sample.trim_fastq requires trimFront2")
+    trim_n = int(trim_front2)
+    reason = str(
+        input_json.get("remediationReason")
+        or input_json.get("qcAttemptReason")
+        or f"REALIGN_READ2_TRIM: trim_front2={trim_n}"
+    )
+    result = run_fastp_trim_front2(
+        sample_id=str(sample_id),
+        sample_dir=str(sample_dir),
+        trim_front2=trim_n,
+        input_json=input_json,
+    )
+    append_sample_prep_log(
+        Path(str(sample_dir)),
+        sample_id=str(sample_id),
+        action="sample.trim_fastq",
+        capability=_capability,
+        attempt=int(input_json.get("qcAttempt") or 1),
+        reason=reason,
+        inputs={"trimFront2": trim_n, "sampleDir": str(sample_dir)},
+        outputs=result,
+        workflow_node_key=input_json.get("workflowNodeKey") or "trim_fastq",
+    )
+    return result
+
+
 def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
     from .parabricks_runner import run_fq2bam_meth
+    from .sample_prep_log import append_sample_prep_log
 
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
@@ -171,7 +253,7 @@ def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: D
     if not reference_fasta:
         raise RuntimeError("sample.parabricks_fq2bam requires referenceFasta")
 
-    return run_fq2bam_meth(
+    result = run_fq2bam_meth(
         sample_id=str(sample_id),
         sample_dir=str(sample_dir),
         reference_fasta=str(reference_fasta),
@@ -180,6 +262,24 @@ def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: D
         parabricks_image=input_json.get("parabricksImage"),
         bwa_threads=input_json.get("bwaThreads"),
     )
+    reason = str(input_json.get("remediationReason") or "")
+    if input_json.get("forceRealign"):
+        reason = reason or f"forceRealign after trim_front2={input_json.get('trimFront2', '?')}"
+    append_sample_prep_log(
+        Path(str(sample_dir)),
+        sample_id=str(sample_id),
+        action="sample.parabricks_fq2bam",
+        capability=_capability,
+        attempt=int(input_json.get("qcAttempt") or 1),
+        reason=reason or "Parabricks fq2bam_meth alignment",
+        inputs={
+            "forceRealign": bool(input_json.get("forceRealign")),
+            "alignmentPass": input_json.get("alignmentPass") or "initial",
+        },
+        outputs=result,
+        workflow_node_key=input_json.get("workflowNodeKey") or "parabricks_fq2bam",
+    )
+    return result
 
 
 def _handle_delete_fastqs(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
@@ -510,6 +610,13 @@ def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[s
             }
         if capability == "sample.delete-fastqs":
             return {"sampleId": sample_id, "deleted": True}
+        if capability == "sample.trim-fastq":
+            return {
+                "sampleId": sample_id,
+                "trimFront2": str(input_json.get("trimFront2", 5)),
+                "trimmedR1": f"{sample_dir}/{sample_id}_1.trimmed.fastq.gz",
+                "trimmedR2": f"{sample_dir}/{sample_id}_2.trimmed.fastq.gz",
+            }
         if capability == "sample.delete-bam":
             return {"sampleId": sample_id, "deleted": True}
         if capability == "methyl-extract":
@@ -523,6 +630,7 @@ def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[s
 _SAMPLE_PREP_DOMAIN_ACTIONS = frozenset({
     "sample.download_fastq",
     "sample.parabricks_fq2bam",
+    "sample.trim_fastq",
     "sample.methyl_qc",
     "sample.fragmentomics",
     "sample.methyl_extract",

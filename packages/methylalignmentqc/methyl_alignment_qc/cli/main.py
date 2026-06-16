@@ -82,6 +82,8 @@ Examples:
                 validate_schema=config.validate_schema,
                 fragmentomics=config.fragmentomics,
                 bisulfite_conversion=config.bisulfite_conversion,
+                cycle_screening=config.cycle_screening,
+                optional_guardrails=config.optional_guardrails,
             )
             if args.verbose:
                 print(f"Wrote {len(config.sample_paths)} JSON(s) to {config.output_dir}")

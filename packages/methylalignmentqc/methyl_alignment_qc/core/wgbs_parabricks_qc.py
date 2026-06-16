@@ -154,6 +154,49 @@ def _build_wgbs_guardrail_report(
     }
 
 
+def apply_optional_guardrails(
+    report: Dict[str, Any],
+    payload: Dict[str, Any],
+    *,
+    duplication_rate_max: Optional[float] = None,
+    min_pf_reads: Optional[int] = None,
+) -> None:
+    """Append config-gated guardrails to an existing report dict (mutates in place)."""
+    details = report.setdefault("details", {})
+
+    if duplication_rate_max is not None:
+        summary = payload.get("summary_stats") or {}
+        dup_rate = float(summary.get("duplication_rate", 0.0))
+        passed = dup_rate <= duplication_rate_max
+        details["duplication_rate"] = _make_guardrail_metric(
+            value=round(dup_rate, 4),
+            normal_range=f"<= {duplication_rate_max}",
+            passed=passed,
+            message="Library duplication rate from Picard dedup metrics.",
+        )
+        if not passed:
+            report["overall_pass"] = False
+
+    if min_pf_reads is not None:
+        qy = payload.get("quality_yield") or {}
+        pf_reads = int(qy.get("pf_reads", 0))
+        passed = pf_reads >= min_pf_reads
+        details["min_pf_reads"] = _make_guardrail_metric(
+            value=float(pf_reads),
+            normal_range=f">= {min_pf_reads}",
+            passed=passed,
+            message="Pass-filter read count; critically low depth may invalidate analysis.",
+        )
+        if not passed:
+            report["overall_pass"] = False
+
+    if not report.get("overall_pass"):
+        if report.get("recommendation", "").startswith("PASS"):
+            report["recommendation"] = (
+                "FAIL: Do NOT proceed. Investigate library prep, sequencing, or bisulfite conversion."
+            )
+
+
 def _print_wgbs_guardrail_report(report: Dict[str, Any]) -> None:
     """Pretty print WGBS guardrail report."""
     sample_id = report.get("sample_id", "unknown")

@@ -288,7 +288,13 @@ def enrich_sample_prep_output(
             }
         )
     if action_name == "sample.methyl_qc":
-        guardrails = output_json.get("guardrails") or {}
+        guardrails = dict(output_json.get("guardrails") or {})
+        screening = output_json.get("screening")
+        if screening:
+            guardrails.setdefault("screening", screening)
+        qc_history = output_json.get("qcHistory")
+        if qc_history:
+            guardrails["qc_history"] = qc_history
         return apply_qc_to_sample(
             sample,
             qc_path=str(output_json.get("qcPath", "")),

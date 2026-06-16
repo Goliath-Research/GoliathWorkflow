@@ -57,6 +57,38 @@ Enable in `step_config.alignment_qc.bisulfite_conversion`. Place `bisulfite_conv
 
 `methyl-qc` adds `bisulfite_conversion_metrics` and `guardrails.details.bisulfite_conversion`. With `source: auto`, a missing sidecar uses the Parabricks deamination qscore as a qualitative proxy only.
 
+## Read 2 cycle screening and remediation
+
+When `cycle_screening.enabled` is true (default), each export includes `guardrails.screening` with a disposition:
+
+| Disposition | Meaning |
+|-------------|---------|
+| `USE_CURRENT_ALIGNMENT` | QC passed |
+| `REALIGN_READ2_TRIM` | Fixable Read 2 start dip; see `trim_front2` |
+| `INVESTIGATE_MULTI_REGION` | Multiple low-quality regions |
+| `INVESTIGATE_GUARDRAIL_ONLY` | Cycles OK; check duplication/depth/insert size |
+| `NOT_FIXABLE` | No automated trim path |
+
+Optional config under `step_config.alignment_qc`:
+
+```json
+{
+  "cycle_screening": { "r2_quality_threshold": 30, "max_trim_bases": 8 },
+  "optional_guardrails": { "duplication_rate_max": 0.25, "min_pf_reads": 1000000 }
+}
+```
+
+Each QC run appends to `qc_history` in the export JSON. Retry QC (after `sample.trim_fastq` + forced realign) must pass `qcAttempt`, `qcAttemptReason`, and `remediationTrigger` in the worker task input. SamplePrep actions also append to `{sampleDir}/{sampleId}.sample_prep_log.jsonl`.
+
+Cohort screening without re-align:
+
+```bash
+python scripts/alignment_qc_cohort_screening.py \
+  --qc-dir /work/AlignmentQC \
+  --group healthy=/path/healthy.csv --group pca=/path/pca.csv \
+  --out /work/AlignmentQC/screening_report
+```
+
 ## cfDNA fragmentomics (insert-size)
 
 When `validation.regulatory.primary_analyte` is `cfdna`, the [analyte profile](../../docs/ANALYTE_PROFILES.md) enables cfDNA fragmentomics guardrails automatically (or set `fragmentomics` / `auto_profile_from_analyte` explicitly). Metrics are stored in `fragmentomics_metrics` on each sample JSON. Bisulfite conversion QC is also enabled by default for WGBS analytes.

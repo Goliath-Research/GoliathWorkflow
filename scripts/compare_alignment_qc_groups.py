@@ -90,6 +90,10 @@ def flatten_qc_json(qc_path: Path) -> Dict[str, Any]:
 
     guardrails = payload.get("guardrails") or {}
     row["guardrails_overall_pass"] = guardrails.get("overall_pass")
+    screening = guardrails.get("screening") or {}
+    row["screening_disposition"] = screening.get("disposition")
+    row["trim_front2"] = screening.get("trim_front2")
+    row["screening_message"] = screening.get("message")
     details = guardrails.get("details") or {}
     for key in GUARDRAIL_SCALAR_KEYS:
         val, passed = _guardrail_value(details, key)

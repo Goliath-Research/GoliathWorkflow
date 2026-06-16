@@ -186,6 +186,33 @@ class FragmentomicsGuardrailDetails(BaseModel):
     short_fragment_fraction: GuardrailMetric
 
 
+class QcScreeningReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    disposition: str
+    read_length: int
+    r2_start_cycle: int
+    trim_front2: int = 0
+    r2_start_mean_quality: Optional[float] = None
+    r2_recovery_mean_quality: Optional[float] = None
+    dip_regions: List[Dict[str, int]] = Field(default_factory=list)
+    message: str
+
+
+class QcAttemptRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    attempt: int
+    evaluated_at_utc: str
+    alignment_pass: str
+    reason: str
+    trigger_disposition: Optional[str] = None
+    trigger_action: Optional[str] = None
+    trim_front2: Optional[int] = None
+    overall_pass: bool
+    disposition: str
+    failed_guardrails: List[str] = Field(default_factory=list)
+    workflow_node_key: Optional[str] = None
+
+
 class GuardrailDetails(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pf_percent: GuardrailMetric
@@ -197,6 +224,8 @@ class GuardrailDetails(BaseModel):
     median_insert_bp: GuardrailMetric
     deamination_qscore: GuardrailMetric
     oxog_qscore: GuardrailMetric
+    duplication_rate: Optional[GuardrailMetric] = None
+    min_pf_reads: Optional[GuardrailMetric] = None
     fragmentomics: Optional[FragmentomicsGuardrailDetails] = None
     bisulfite_conversion: Optional[Dict[str, GuardrailMetric]] = None
 
@@ -208,6 +237,7 @@ class GuardrailReport(BaseModel):
     details: GuardrailDetails
     recommendation: str
     next_steps: str
+    screening: Optional[QcScreeningReport] = None
 
 
 class ParabricksMetricsPayload(BaseModel):
@@ -243,3 +273,5 @@ class ExportedSampleQCPayload(ParabricksMetricsPayload):
     guardrails: GuardrailReport
     fragmentomics_metrics: Optional[FragmentomicsMetrics] = None
     bisulfite_conversion_metrics: Optional[BisulfiteConversionMetrics] = None
+    qc_history: Optional[List[QcAttemptRecord]] = None
+    sample_prep_log_path: Optional[str] = None

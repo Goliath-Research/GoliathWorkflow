@@ -5,6 +5,38 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
+class CycleScreeningConfig(BaseModel):
+    """Per-cycle Read 2 start screening for remediation dispositions."""
+
+    enabled: bool = Field(default=True)
+    read_length: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Override read length; default inferred as max_cycle // 2.",
+    )
+    r2_start_window_cycles: int = Field(default=5, ge=1)
+    recovery_cycles: int = Field(default=10, ge=1)
+    r2_quality_threshold: float = Field(default=30.0)
+    max_trim_bases: int = Field(default=8, ge=1)
+    multi_region_min_separate_dips: int = Field(default=2, ge=2)
+
+
+class OptionalGuardrailsConfig(BaseModel):
+    """Config-gated guardrails beyond core WGBS Parabricks checks."""
+
+    duplication_rate_max: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="When set, fail when summary_stats.duplication_rate exceeds this.",
+    )
+    min_pf_reads: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="When set, fail when quality_yield.pf_reads is below this.",
+    )
+
+
 class BisulfiteConversionConfig(BaseModel):
     """Quantitative bisulfite conversion QC (sidecar JSON or deamination proxy)."""
 
@@ -95,6 +127,36 @@ class AlignmentQCConfig(BaseModel):
         default=None,
         description="Optional bisulfite conversion rate QC from per-sample sidecar files.",
     )
+    cycle_screening: Optional[CycleScreeningConfig] = Field(
+        default=None,
+        description="Read 2 start cycle screening for remediation dispositions.",
+    )
+    optional_guardrails: Optional[OptionalGuardrailsConfig] = Field(
+        default=None,
+        description="Additional guardrails (duplication rate, min PF reads).",
+    )
+
+    @field_validator("cycle_screening", mode="before")
+    @classmethod
+    def _coerce_cycle_screening(cls, value):  # noqa: ANN001
+        if value is None:
+            return None
+        if isinstance(value, CycleScreeningConfig):
+            return value
+        if isinstance(value, dict):
+            return CycleScreeningConfig.model_validate(value)
+        return value
+
+    @field_validator("optional_guardrails", mode="before")
+    @classmethod
+    def _coerce_optional_guardrails(cls, value):  # noqa: ANN001
+        if value is None:
+            return None
+        if isinstance(value, OptionalGuardrailsConfig):
+            return value
+        if isinstance(value, dict):
+            return OptionalGuardrailsConfig.model_validate(value)
+        return value
 
     @field_validator("fragmentomics", mode="before")
     @classmethod

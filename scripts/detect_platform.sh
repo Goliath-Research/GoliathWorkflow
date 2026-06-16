@@ -49,8 +49,28 @@ resolve_methyl_extractor_subdir() {
 expand_worker_path() {
   local venv_dir="${1:?venv directory required}"
   local fallback="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  local venv_bin
+  if command -v realpath >/dev/null 2>&1; then
+    venv_bin="$(realpath "$venv_dir")/bin"
+  else
+    venv_bin="$(cd "$venv_dir" && pwd)/bin"
+  fi
   local base="${PATH:-$fallback}"
-  echo "${venv_dir}/bin:${base}"
+  local -a parts=() kept=() p
+  local IFS=:
+  read -ra parts <<< "$base"
+  for p in "${parts[@]}"; do
+    [[ -z "$p" ]] && continue
+    [[ "$p" == "$venv_bin" ]] && continue
+    kept+=("$p")
+  done
+  if ((${#kept[@]} == 0)); then
+    base="$fallback"
+  else
+    IFS=:
+    base="${kept[*]}"
+  fi
+  echo "${venv_bin}:${base}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

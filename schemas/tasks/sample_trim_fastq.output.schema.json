@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "sampleId": { "type": "string" },
+    "trimFront2": { "type": "string" },
+    "trimmedR1": { "type": "string" },
+    "trimmedR2": { "type": "string" },
+    "logReason": { "type": "string" }
+  },
+  "required": ["sampleId", "trimFront2", "trimmedR1", "trimmedR2"],
+  "title": "TrimFastqTaskOutput",
+  "type": "object"
+}

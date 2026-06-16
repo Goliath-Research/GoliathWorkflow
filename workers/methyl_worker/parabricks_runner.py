@@ -199,6 +199,13 @@ def _collect_fastqs(sample_dir: Path) -> List[Path]:
 
 def resolve_paired_fastqs(sample_dir: Path, sample_id: str) -> List[Path]:
     """Return exactly two paired-end FASTQs for a sample."""
+    trimmed = [
+        sample_dir / f"{sample_id}_1.trimmed.fastq.gz",
+        sample_dir / f"{sample_id}_2.trimmed.fastq.gz",
+    ]
+    if all(p.is_file() for p in trimmed):
+        return trimmed
+
     explicit = [
         sample_dir / f"{sample_id}_1.fastq.gz",
         sample_dir / f"{sample_id}_2.fastq.gz",
@@ -223,6 +230,19 @@ def _has_qc_artifact(paths: ParabricksPaths) -> bool:
     if paths.qc_metrics_tar.is_file():
         return True
     return paths.qc_metrics_dir.is_dir() and any(paths.qc_metrics_dir.iterdir())
+
+
+def _clear_alignment_outputs(paths: ParabricksPaths) -> None:
+    for path in (
+        paths.bam_path,
+        paths.metrics_json,
+        paths.qc_metrics_tar,
+        paths.dedup_metrics,
+    ):
+        if path.is_file():
+            path.unlink()
+    if paths.qc_metrics_dir.is_dir():
+        shutil.rmtree(paths.qc_metrics_dir, ignore_errors=True)
 
 
 def alignment_outputs_complete(paths: ParabricksPaths) -> bool:
@@ -337,6 +357,11 @@ def run_fq2bam_meth(
         bwa_threads=bwa_threads,
     )
     paths = _resolve_paths(sample_path, sample_id, reference_path)
+
+    force_realign = _pick_bool(input_json or {}, {}, "forceRealign", "forceRealign", default=False)
+    if force_realign and alignment_outputs_complete(paths):
+        logger.info("forceRealign: clearing existing alignment outputs for %s", sample_id)
+        _clear_alignment_outputs(paths)
 
     if alignment_outputs_complete(paths):
         logger.info("Skipping Parabricks; outputs already present for %s", sample_id)
