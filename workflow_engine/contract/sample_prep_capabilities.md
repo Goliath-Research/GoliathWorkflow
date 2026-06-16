@@ -19,7 +19,7 @@ QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (
 | `sample.download-fastq` | Destination FASTQs missing, or remote size/mtime differ from local |
 | `sample.delete-fastqs` | FASTQs already absent (no-op success) |
 | `sample.delete-bam` | BAM already absent (no-op success) |
-| `parabricks.fq2bam` | Only when BAM/JSON outputs missing |
+| `parabricks.fq2bam` | Only when BAM missing or QC artifact missing (`{sampleId}.json` or `{sampleId}.qc-metrics.tar`) |
 | `methyl-extract` | When HDF5 outputs missing for required chromosomes |
 
 ## Lease / retry
@@ -70,7 +70,31 @@ QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (
 
 ## `parabricks.fq2bam`
 
-**action_name:** `sample.parabricks_fq2bam`
+**action_name:** `sample.parabricks_fq2bam`  
+**Runtime:** Docker GPU container running `pbrun fq2bam_meth` (WGBS/bisulfite alignment).
+
+### Worker environment
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `METHYL_PARABRICKS_IMAGE` | yes | — | Clara Parabricks image (e.g. `nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1`) |
+| `METHYL_PARABRICKS_GPU_FLAGS` | no | `--gpus all` | Passed to `docker run` |
+| `METHYL_PARABRICKS_BWA_THREADS` | no | `16` | `--bwa-cpu-thread-pool` |
+| `METHYL_PARABRICKS_EXTRA_DOCKER_ARGS` | no | — | Extra `docker run` flags (shell-split) |
+| `METHYL_PARABRICKS_CLEANUP_TMP` | no | `1` | Remove `{sampleDir}/tmp` after success |
+
+Operators pre-pull the image on GPU nodes; the worker does not auto-pull. Use `scripts/verify_parabricks.sh` for a smoke test.
+
+### Storage contract (`/work/samples/{sampleId}/`)
+
+| Artifact | Path |
+|----------|------|
+| BAM | `{sampleId}.bam` |
+| QC metrics archive | `{sampleId}.qc-metrics.tar` (from `{sampleId}.qc-metrics/`) |
+| Duplicate metrics | `{sampleId}.deduplicate_metrics.txt` |
+| Alignment log | `{sampleId}.fq2bam_meth.log` |
+
+FASTQ inputs: prefer `{sampleId}_1.fastq.gz` + `{sampleId}_2.fastq.gz`; otherwise exactly two `**/*.fastq.gz` under `sampleDir`.
 
 ### input_json
 
@@ -80,7 +104,9 @@ QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (
   "sampleId": "DPLST-051425-111148",
   "sampleDir": "/work/samples/DPLST-051425-111148",
   "referenceFasta": "/work/genomes/.../Homo_sapiens.GRCh38.dna.primary_assembly.fa",
-  "referenceGtf": "/work/genomes/.../Homo_sapiens.GRCh38.114.gtf"
+  "referenceGtf": "/work/genomes/.../Homo_sapiens.GRCh38.114.gtf",
+  "parabricksImage": null,
+  "bwaThreads": null
 }
 ```
 

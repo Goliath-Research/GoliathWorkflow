@@ -1,8 +1,32 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": true,
-  "description": "Input for sample.parabricks_fq2bam (NVIDIA Clara Parabricks fq2bam).",
+  "description": "Input for sample.parabricks_fq2bam (Parabricks fq2bam_meth via Docker).",
   "properties": {
+    "bwaThreads": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bwathreads"
+    },
+    "parabricksImage": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parabricksimage"
+    },
     "referenceFasta": {
       "title": "Referencefasta",
       "type": "string"

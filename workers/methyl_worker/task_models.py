@@ -67,7 +67,7 @@ class DownloadFastqTaskInput(BaseModel):
 
 
 class ParabricksFq2bamTaskInput(BaseModel):
-    """Input for sample.parabricks_fq2bam (NVIDIA Clara Parabricks fq2bam)."""
+    """Input for sample.parabricks_fq2bam (Parabricks fq2bam_meth via Docker)."""
 
     model_config = ConfigDict(extra="allow")
 
@@ -76,6 +76,8 @@ class ParabricksFq2bamTaskInput(BaseModel):
     sampleDir: str
     referenceFasta: str
     referenceGtf: Optional[str] = None
+    parabricksImage: Optional[str] = None
+    bwaThreads: Optional[int] = None
 
 
 class MethylExtractTaskInput(BaseModel):

@@ -34,18 +34,27 @@ def test_parabricks_idempotent_when_outputs_exist(tmp_path: Path) -> None:
     sample_dir.mkdir()
     bam = sample_dir / "S1.bam"
     metrics = sample_dir / "S1.json"
+    ref = tmp_path / "genome.fa"
+    ref.write_text(">ref\n")
     bam.write_bytes(b"BAM")
     metrics.write_text("{}")
 
-    out = execute_task(
-        "parabricks.fq2bam",
-        "sample.parabricks_fq2bam",
-        {
-            "sampleId": "S1",
-            "sampleDir": str(sample_dir),
-            "referenceFasta": "/ref/genome.fa",
-        },
-    )
+    with patch.dict(
+        "os.environ",
+        {"METHYL_PARABRICKS_IMAGE": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1"},
+    ):
+        with patch("methyl_worker.parabricks_runner.subprocess.run") as mock_run:
+            out = execute_task(
+                "parabricks.fq2bam",
+                "sample.parabricks_fq2bam",
+                {
+                    "sampleId": "S1",
+                    "sampleDir": str(sample_dir),
+                    "referenceFasta": str(ref),
+                },
+            )
+
+    mock_run.assert_not_called()
     assert out["bamPath"] == str(bam)
     assert out["metricsJson"] == str(metrics)
 

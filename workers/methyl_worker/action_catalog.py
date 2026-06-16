@@ -218,6 +218,7 @@ _DE_PARABRICKS = DomainEffects(
     output_bindings=(
         DomainOutputBinding("MethylSampleRef", "bamPath", "$.bamPath"),
         DomainOutputBinding("MethylSampleRef", "metricsJson", "$.metricsJson"),
+        DomainOutputBinding("MethylSampleRef", "qcMetricsTar", "$.qcMetricsTar"),
     ),
 )
 _DE_METHYL_QC = DomainEffects(
@@ -520,7 +521,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "sample.parabricks_fq2bam",
         "parabricks.fq2bam",
         "sample.parabricks_fq2bam",
-        "Align FASTQs to BAM using NVIDIA Clara Parabricks fq2bam.",
+        "Align bisulfite FASTQs to BAM using NVIDIA Clara Parabricks fq2bam_meth (Docker).",
         "sample_prep",
         "methyl_worker.task_models",
         "ParabricksFq2bamTaskInput",

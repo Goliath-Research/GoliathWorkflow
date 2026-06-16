@@ -271,7 +271,7 @@
         "referenceGtf"
       ],
       "default_node_type": "ACTION",
-      "description": "Align FASTQs to BAM using NVIDIA Clara Parabricks fq2bam.",
+      "description": "Align bisulfite FASTQs to BAM using NVIDIA Clara Parabricks fq2bam_meth (Docker).",
       "domain_effects": {
         "output_bindings": [
           {
@@ -283,6 +283,11 @@
             "domain_type": "MethylSampleRef",
             "output_json_path": "$.metricsJson",
             "scope_field": "metricsJson"
+          },
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.qcMetricsTar",
+            "scope_field": "qcMetricsTar"
           }
         ],
         "reads_types": [

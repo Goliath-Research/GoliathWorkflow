@@ -161,6 +161,8 @@ def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict
 
 
 def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+    from .parabricks_runner import run_fq2bam_meth
+
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     reference_fasta = input_json.get("referenceFasta")
@@ -169,49 +171,13 @@ def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: D
     if not reference_fasta:
         raise RuntimeError("sample.parabricks_fq2bam requires referenceFasta")
 
-    sample_path = Path(str(sample_dir))
-    bam_path = sample_path / f"{sample_id}.bam"
-    metrics_json = sample_path / f"{sample_id}.json"
-    if bam_path.is_file() and metrics_json.is_file():
-        return {
-            "sampleId": sample_id,
-            "bamPath": str(bam_path),
-            "metricsJson": str(metrics_json),
-        }
-
-    fastqs = sorted(
-        list(sample_path.glob("*.fastq.gz"))
-        + list(sample_path.glob("*.fq.gz"))
-        + list(sample_path.glob("*.fastq"))
-        + list(sample_path.glob("*.fq"))
+    return run_fq2bam_meth(
+        sample_id=str(sample_id),
+        sample_dir=str(sample_dir),
+        reference_fasta=str(reference_fasta),
+        parabricks_image=input_json.get("parabricksImage"),
+        bwa_threads=input_json.get("bwaThreads"),
     )
-    if not fastqs:
-        raise RuntimeError(f"No FASTQ files under {sample_path}")
-
-    pbrun = shutil.which("pbrun")
-    if pbrun is None:
-        raise RuntimeError("pbrun not found on PATH; install Parabricks or set WORKER_STUB_EXTERNAL=1")
-
-    cmd = [
-        pbrun,
-        "fq2bam",
-        f"--ref={reference_fasta}",
-        f"--in-fq={','.join(str(p) for p in fastqs)}",
-        f"--out-bam={bam_path}",
-        f"--out-json={metrics_json}",
-    ]
-    gtf = input_json.get("referenceGtf")
-    if gtf:
-        cmd.append(f"--ref-gtf={gtf}")
-    logger.info("Running: %s", " ".join(cmd))
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "pbrun fq2bam failed")
-    return {
-        "sampleId": sample_id,
-        "bamPath": str(bam_path),
-        "metricsJson": str(metrics_json),
-    }
 
 
 def _handle_delete_fastqs(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
@@ -548,6 +514,9 @@ def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[s
                 "sampleId": sample_id,
                 "bamPath": bam,
                 "metricsJson": f"{sample_dir}/{sample_id}.json" if sample_dir else f"{sample_id}.json",
+                "qcMetricsTar": (
+                    f"{sample_dir}/{sample_id}.qc-metrics.tar" if sample_dir else f"{sample_id}.qc-metrics.tar"
+                ),
             }
         if capability == "sample.delete-fastqs":
             return {"sampleId": sample_id, "deleted": True}
