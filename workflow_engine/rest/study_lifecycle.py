@@ -15,11 +15,51 @@ def _ensure_import_paths() -> None:
         "workflow_engine/domain",
         "workflow_engine/contract",
         "workers",
+        "packages/methyldomain",
         "packages/methylvalidation",
     ):
         p = _REPO_ROOT / rel
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))
+
+
+def _apply_project_path_scope_default(spec: Dict[str, Any], project_path: str) -> None:
+    """Pin projectPath on the workflow definition for instances started without full context."""
+    resolved = str(Path(str(project_path)).expanduser().resolve())
+    root_key = str(spec.get("root_node_key") or "root")
+    scope_defaults: list[Dict[str, Any]] = list(spec.get("scope_defaults") or [])
+    for item in scope_defaults:
+        if item.get("var_name") == "projectPath":
+            item["default_expr"] = json.dumps(resolved)
+            break
+    else:
+        scope_defaults.append(
+            {
+                "node_key": root_key,
+                "var_name": "projectPath",
+                "default_expr": json.dumps(resolved),
+            }
+        )
+    spec["scope_defaults"] = scope_defaults
+
+
+def _compile_program_spec(program: Path, *, project_path: Optional[str] = None) -> Dict[str, Any]:
+    from compiler import compile_domain_program
+    from methyl_domain.program import DomainProgram
+
+    program_model = DomainProgram.model_validate(
+        json.loads(program.read_text(encoding="utf-8"))
+    )
+    effective_path = project_path or program_model.projectPath
+    if effective_path:
+        program_model = program_model.model_copy(
+            update={"projectPath": str(Path(str(effective_path)).expanduser().resolve())}
+        )
+    result = compile_domain_program(program_model, enrich_context=False)
+    spec = result.workflow.model_dump(mode="json")
+    if effective_path:
+        _apply_project_path_scope_default(spec, effective_path)
+    return spec
 
 
 def _resolve_workflow_version_id(
@@ -37,17 +77,13 @@ def _resolve_workflow_version_id(
         raise ValueError("workflow_version_id or program_path is required")
 
     _ensure_import_paths()
-    from compiler import compile_domain_program_file
 
     program = Path(str(program_path)).expanduser().resolve()
     if not program.is_file():
         raise FileNotFoundError(f"program_path not found: {program}")
 
     project_path = body.get("projectPath")
-    result = compile_domain_program_file(program, enrich_context=False)
-    spec = result.workflow.model_dump(mode="json")
-    if project_path:
-        spec.setdefault("context_defaults", {})
+    spec = _compile_program_spec(program, project_path=project_path)
     created = create_workflow_definition(dsn, spec)
     return int(created["workflow_version_id"])
 
