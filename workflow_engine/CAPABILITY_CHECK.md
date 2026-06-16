@@ -85,7 +85,7 @@ Deploy **after** `wf_sql_runtime_parity.sql` and `wf_sql_branch_parity.sql`.
 | ~~No array indexing in placeholders~~ | **Implemented** — `${var.name[n]}` in `wf_resolve_token` |
 | No expression language in `${...}` | No `(`, `+`, spaces in tokens; object fields use FOREACH flatten or indexed arrays |
 | `payload_schema_ref` is external only | Worker validates JSON shape; DB does not enforce JSON Schema |
-| Detector has no `--chromosome` CLI flag | Single-chromosome worker runs need `step-override` with `"chromosome": ["N"]` |
+| Detector has no `--chromosome` CLI flag | **Mitigated** — worker `DetectorCliAction` maps per-chromosome scope into `--step-override` JSON; `comparison` → `--group` |
 
 See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREACH` enhancement (milestone 3 — data-driven full project without node explosion).
 

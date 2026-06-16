@@ -451,7 +451,14 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="MethylDetector",
         step_config_key="detection",
         context_vars=("chromosome", "context", "comparison", "fixedDmpPanel", "stepOverride"),
-        argv_map=DEFAULT_PIPELINE_ARGV_MAP,
+        argv_map=(
+            ("project", "--project"),
+            ("projectPath", "--project"),
+            ("group", "--group"),
+            ("centroid1Dir", "--centroid1-dir"),
+            ("centroid2Dir", "--centroid2-dir"),
+            ("stepOverride", "--step-override"),
+        ),
         domain_effects=_DE_DETECTOR,
     ),
     _cli(

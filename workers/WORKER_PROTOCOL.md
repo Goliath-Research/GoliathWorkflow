@@ -82,6 +82,44 @@ Modules:
 
 Legacy shim: [`reference_rest_worker.py`](reference_rest_worker.py) delegates to `methyl-worker`.
 
+## Full staged pipeline (SamplePrep + StudyValidation)
+
+The reference worker can execute **every action** in both workflow instances when the node environment is provisioned correctly. See [`../workflow_engine/docs/portal_study_lifecycle.md`](../workflow_engine/docs/portal_study_lifecycle.md) for portal orchestration.
+
+### Install (not `pip install -e workers/` alone)
+
+Handlers import the full monorepo (`methyl_alignment_qc`, `methyl_fragmentomics`, `methyl_validation`, …). Production nodes need editable installs of all packages:
+
+```bash
+source .venv/bin/activate
+./scripts/install_all.sh    # or scripts/setup_host.sh on a fresh HPC image
+pip install -e workers/
+```
+
+Console scripts on `PATH` must include: `methyl-centroid`, `methyl-detector`, `methyl-mapper`, `methyl-enricher`, `methyl-disease-progression`, plus native **`MethylExtractor`** and Docker **Parabricks** for sample prep.
+
+### Capability fleet
+
+`WorkerRunner` filters tasks when `WORKER_CAPABILITY` is set. For the full lifecycle, either:
+
+| Approach | When to use |
+|----------|-------------|
+| **One worker, no `WORKER_CAPABILITY`** | Dev / small cluster; single process polls any task (must have full stack + GPU for Parabricks tasks) |
+| **Per-capability workers** | Production; register multiple worker IDs, each with one capability |
+
+| Stage | Capability | Execution |
+|-------|------------|-----------|
+| Sample prep | `sample.download-fastq`, `parabricks.fq2bam`, `sample.delete-fastqs`, `methyl-qc`, `methyl-fragmentomics`, `methyl-extract`, `sample.delete-bam`, `sample.mark-failed` | in-process |
+| Feature MC / freeze | `methyl-centroid`, `methyl-detector` | CLI subprocess |
+| Biological | `methyl-mapper`, `methyl-enricher`, `methyl-disease-progression` | CLI (`--project`) |
+| Validation | `validation.plan-iterations`, `validation.stability`, `validation.prepare-freeze-project`, `validation.stability-freeze-readiness`, `validation.model-mc`, `validation.select-best-model`, `validation.post-model-validation` | in-process |
+
+`pipeline.detector` uses **`DetectorCliAction`**: workflow `comparison` → `--group`; `chromosome`, `context`, `fixedDmpPanel`, and `outputDir` are folded into `--step-override` JSON (methyl-detector has no per-chromosome CLI flags).
+
+### Dry-run
+
+`WORKER_STUB_EXTERNAL=1` fakes download, Parabricks, extract, and delete only. It does **not** stub pipeline CLI or validation actions.
+
 ## Database contract (middle-tier only)
 
 If implementing a new middle-tier language, call the same DB objects documented in

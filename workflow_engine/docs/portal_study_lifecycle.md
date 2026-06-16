@@ -126,3 +126,18 @@ Portal-facing validation defaults live in `step_config.validation`:
 ```
 
 Parabricks alignment settings: `step_config.parabricks` (`image`, `bwa_threads`, `gpu_flags`, …) with task `input_json` overrides; env vars remain as fallback.
+
+## Worker fleet and node prerequisites
+
+Workers poll `POST /v1/workers/tasks/request` and must **not** connect to the database directly. Full details: [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md).
+
+**Install:** run [`scripts/install_all.sh`](../../scripts/install_all.sh) (or `setup_host.sh`) so all `packages/*` CLIs and validation handlers are on the node, then `pip install -e workers/`.
+
+**Registration options:**
+
+- **Per-capability workers** (recommended in production): register one worker ID per capability (`methyl-centroid`, `methyl-detector`, `validation.model-mc`, …).
+- **Omnibus worker** (dev): omit `WORKER_CAPABILITY` so one process claims any task; the node must have GPU (Parabricks), `MethylExtractor`, and the full Python stack.
+
+**External binaries:** Parabricks Docker image, `MethylExtractor` on `PATH`, cloud credentials for `sample.download-fastq` when using `s3://` or `az://` URIs.
+
+**Data flow:** Instance 2 assumes Instance 1 wrote per-chromosome HDF5s under `samples_base_path`. Model MC and hold-out validation require stability + freeze artifacts on shared storage (`monte_carlo_runs/`).

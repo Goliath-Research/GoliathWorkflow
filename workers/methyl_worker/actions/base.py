@@ -170,4 +170,8 @@ def build_action_from_catalog(entry, handlers_module: Any) -> ActionBase:
         raise RuntimeError(f"Action {entry.action_name!r} has execution_mode=cli but no cli_tool")
 
     argv_map = dict(entry.argv_map) if entry.argv_map else dict(DEFAULT_PIPELINE_ARGV_MAP)
+    if entry.action_name == "pipeline.detector":
+        from .detector import DETECTOR_ARGV_MAP, DetectorCliAction
+
+        return DetectorCliAction(cli_tool=cli, argv_map=DETECTOR_ARGV_MAP)
     return CliAction(cli_tool=cli, argv_map=argv_map)
