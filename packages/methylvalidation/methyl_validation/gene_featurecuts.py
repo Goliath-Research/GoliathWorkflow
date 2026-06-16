@@ -105,6 +105,17 @@ def _load_validation_paths_and_labels(
                     for p in entry.get("paths") or []:
                         samples.append(str(p))
                         y_true.append(int(cls_idx))
+        if not samples:
+            from .split import load_and_resolve_sample_paths
+
+            run_dir = project_json.parent
+            vc = run_dir / "val_control.csv"
+            vd = run_dir / "val_disease.csv"
+            if vc.is_file() and vd.is_file():
+                val_control = load_and_resolve_sample_paths(vc, None)
+                val_disease = load_and_resolve_sample_paths(vd, None)
+                samples = [str(p) for p in val_control] + [str(p) for p in val_disease]
+                y_true = [0] * len(val_control) + [1] * len(val_disease)
 
     if not samples:
         raise ValueError(

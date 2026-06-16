@@ -54,6 +54,7 @@ def prepare_model_mc_backend_run_from_shared(
         "train_disease.csv",
         "val_control.csv",
         "val_disease.csv",
+        "val_test_groups.json",
         "centroid_group1_override.json",
         "centroid_group2_override.json",
     ):
@@ -433,6 +434,13 @@ def generate_run_project(
 
     _patch_step_config_predictor_binary_holdouts(
         project, val_control_csv, val_disease_csv, control_label, disease_label
+    )
+    _write_binary_val_test_groups_json(
+        run_dir,
+        val_control_paths,
+        val_disease_paths,
+        control_label,
+        disease_label,
     )
 
     project_path = run_dir / "project.json"
@@ -895,6 +903,30 @@ def _patch_step_config_predictor_multiclass_holdouts(
             pred[key] = side
 
 
+def _write_binary_val_test_groups_json(
+    run_dir: Path,
+    val_control_paths: List[str],
+    val_disease_paths: List[str],
+    control_label: str,
+    disease_label: str,
+) -> Path:
+    """Write per-run holdout manifest for eval split resolvers and gene FeatureCuts."""
+    payload = [
+        {
+            "label": control_label,
+            "paths": [str(Path(p).resolve()) for p in val_control_paths],
+        },
+        {
+            "label": disease_label,
+            "paths": [str(Path(p).resolve()) for p in val_disease_paths],
+        },
+    ]
+    path = run_dir / "val_test_groups.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return path
+
+
 def _patch_step_config_predictor_binary_holdouts(
     project: Dict[str, Any],
     val_control_csv: Path,
@@ -905,12 +937,14 @@ def _patch_step_config_predictor_binary_holdouts(
     """Set ``step_config.predictor`` control/disease sides to this run's validation CSVs."""
     sc = project.get("step_config")
     if not isinstance(sc, dict):
-        return
+        project["step_config"] = {}
+        sc = project["step_config"]
     project["step_config"] = copy.deepcopy(sc)
     pred = project["step_config"].get("predictor")
     if not isinstance(pred, dict):
-        return
-    pred = copy.deepcopy(pred)
+        pred = {}
+    else:
+        pred = copy.deepcopy(pred)
     project["step_config"]["predictor"] = pred
     v_c = str(val_control_csv.resolve())
     v_d = str(val_disease_csv.resolve())

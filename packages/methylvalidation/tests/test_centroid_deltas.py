@@ -93,6 +93,47 @@ def test_generate_run_project_writes_group_specific_centroid_deltas():
         assert pred["controls"]["groups"][0]["sample_paths"] == [str(_val_control_csv.resolve())]
         assert pred["diseases"]["groups"][0]["sample_paths"] == [str(_val_disease_csv.resolve())]
         assert "wrong_control" not in json.dumps(pred)
+        val_groups = json.loads((run_dir / "val_test_groups.json").read_text(encoding="utf-8"))
+        assert len(val_groups) == 2
+        assert val_groups[0]["paths"] == [str(Path("/samples/val_control").resolve())]
+        assert val_groups[1]["paths"] == [str(Path("/samples/val_disease").resolve())]
+
+
+def test_generate_run_project_creates_predictor_holdouts_when_missing():
+    with TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir)
+        base_project = root / "base_project.json"
+        run_dir = root / "run_0002"
+        payload = {
+            "project_name": "validation-project",
+            "controls": {
+                "label": "healthy",
+                "groups": [{"label": "all", "sample_paths": ["ignored.csv"]}],
+            },
+            "diseases": {
+                "label": "cancer",
+                "groups": [{"label": "PCa", "sample_paths": ["ignored.csv"]}],
+            },
+            "step_config": {"detection": {"alpha": 0.05}},
+        }
+        base_project.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+        project_path, _, _, val_control_csv, val_disease_csv, _, _ = generate_run_project(
+            base_project,
+            run_dir,
+            "run_0002",
+            str(root / "runs"),
+            ["/samples/control_a"],
+            ["/samples/disease_a"],
+            ["/samples/val_control"],
+            ["/samples/val_disease"],
+            "/samples",
+        )
+
+        run_proj = json.loads(project_path.read_text(encoding="utf-8"))
+        pred = run_proj["step_config"]["predictor"]
+        assert pred["controls"]["groups"][0]["sample_paths"] == [str(val_control_csv.resolve())]
+        assert pred["diseases"]["groups"][0]["sample_paths"] == [str(val_disease_csv.resolve())]
 
 
 def test_run_centroid_executes_group_specific_step_overrides(monkeypatch):
