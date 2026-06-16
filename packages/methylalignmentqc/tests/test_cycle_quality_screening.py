@@ -12,6 +12,7 @@ from methyl_alignment_qc.core.cycle_quality_screening import (
     DISPOSITION_MULTI_REGION,
     DISPOSITION_R2_TRIM,
     DISPOSITION_USE_CURRENT,
+    _compute_trim_front2,
     apply_screening_recommendations,
     screen_cycle_quality,
 )
@@ -43,6 +44,27 @@ def test_screen_pass_when_overall_pass():
     screening = screen_cycle_quality(payload, _guardrails(overall_pass=True))
     assert screening["disposition"] == DISPOSITION_USE_CURRENT
     assert screening["trim_front2"] == 0
+
+
+def test_compute_trim_front2_requires_recovery():
+    """No trim when R2 never recovers above threshold after the low-quality run."""
+    cycle_quals = [(c, 25.0) for c in range(152, 170)]
+    assert _compute_trim_front2(cycle_quals, 152, 30.0, recovery_cycles=10, max_trim=8) == 0
+
+    recovering = [(152, 25.0), (153, 25.0), (154, 35.0), (155, 35.0)]
+    assert _compute_trim_front2(recovering, 152, 30.0, recovery_cycles=10, max_trim=8) == 2
+
+
+def test_screen_r2_no_recovery_avoids_realign_trim():
+    cycles = list(range(1, 303))
+    quals = [35.0] * 302
+    for i in range(151, 302):
+        quals[i] = 25.0
+    payload = _cycles_payload(cycles, quals)
+    cfg = CycleScreeningConfig(read_length=151, max_trim_bases=8, recovery_cycles=10)
+    screening = screen_cycle_quality(payload, _guardrails(overall_pass=False), cfg)
+    assert screening["trim_front2"] == 0
+    assert screening["disposition"] != DISPOSITION_R2_TRIM
 
 
 def test_screen_r2_start_dip_only():

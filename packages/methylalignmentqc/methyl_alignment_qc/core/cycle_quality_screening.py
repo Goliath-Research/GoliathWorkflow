@@ -99,9 +99,9 @@ def _compute_trim_front2(
             recovered = True
             break
 
-    if not recovered and trim > 0:
-        return min(trim, max_trim)
-    return min(trim, max_trim) if trim > 0 else 0
+    if not recovered:
+        return 0
+    return min(trim, max_trim)
 
 
 def _cycles_acceptable(guardrails: Dict[str, Any], threshold: float) -> bool:
