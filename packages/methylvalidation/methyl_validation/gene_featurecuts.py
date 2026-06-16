@@ -147,6 +147,49 @@ def _load_mapper_intersections(run_dir: Path) -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
+def _normalize_chromosome_token(chrom: Any) -> str:
+    token = str(chrom or "").strip()
+    if token.lower().startswith("chr"):
+        return token[3:]
+    return token
+
+
+def _parse_intersection_positions(inter: pd.DataFrame) -> pd.Series:
+    """Resolve DMP positions from explicit columns or methyl-mapper ``dmp_name`` tokens."""
+    for candidate in ("position", "dmp_pos", "dmp_position"):
+        if candidate in inter.columns:
+            return pd.to_numeric(inter[candidate], errors="coerce")
+    if "dmp_name" not in inter.columns:
+        return pd.Series(np.nan, index=inter.index)
+
+    def _pos_from_dmp_name(name: Any) -> float:
+        parts = str(name or "").split(":")
+        if len(parts) < 2:
+            return np.nan
+        try:
+            return float(int(parts[1]))
+        except (TypeError, ValueError):
+            return np.nan
+
+    return inter["dmp_name"].map(_pos_from_dmp_name)
+
+
+def _cap_ranked_gene_pool(
+    ranked_genes: List[str],
+    gene_panel: pd.DataFrame,
+    max_genes: Optional[int],
+) -> Tuple[List[str], pd.DataFrame]:
+    if max_genes is None or int(max_genes) <= 0:
+        return ranked_genes, gene_panel
+    capped = ranked_genes[: int(max_genes)]
+    keep = set(capped)
+    panel = gene_panel[gene_panel["gene_name"].astype(str).isin(keep)].copy()
+    rank_map = {g: i for i, g in enumerate(capped)}
+    panel["_rank"] = panel["gene_name"].map(rank_map)
+    panel = panel.sort_values("_rank").drop(columns=["_rank"]).reset_index(drop=True)
+    return capped, panel
+
+
 def _normalize_dmp_frame(dmp_df: pd.DataFrame) -> pd.DataFrame:
     work = dmp_df.copy()
     rename_map: Dict[str, str] = {}
@@ -162,7 +205,7 @@ def _normalize_dmp_frame(dmp_df: pd.DataFrame) -> pd.DataFrame:
         work["effect_size"] = 0.0
     if "region_weight" not in work.columns:
         work["region_weight"] = 1.0
-    work["chromosome"] = work["chromosome"].astype(str)
+    work["chromosome"] = work["chromosome"].map(_normalize_chromosome_token)
     work["context"] = work["context"].astype(str)
     work["position"] = pd.to_numeric(work["position"], errors="coerce").fillna(-1).astype(int)
     work = work[work["position"] >= 0].copy()
@@ -177,16 +220,8 @@ def _annotate_dmps_with_genes(dmp_df: pd.DataFrame, intersections: pd.DataFrame)
     inter = intersections.copy()
     if "feature_chrom" in inter.columns and "chromosome" not in inter.columns:
         inter["chromosome"] = inter["feature_chrom"]
-    inter["chromosome"] = inter["chromosome"].astype(str)
-    pos_col = None
-    for candidate in ("position", "dmp_pos", "dmp_position"):
-        if candidate in inter.columns:
-            pos_col = candidate
-            break
-    if pos_col is None:
-        work["gene_name"] = "unknown"
-        return work
-    inter["position"] = pd.to_numeric(inter[pos_col], errors="coerce")
+    inter["chromosome"] = inter["chromosome"].map(_normalize_chromosome_token)
+    inter["position"] = _parse_intersection_positions(inter)
     if "context" not in inter.columns:
         inter["context"] = "CG"
     inter["context"] = inter["context"].astype(str)
@@ -377,6 +412,14 @@ def run_gene_featurecuts_for_iteration(
     if not ranked_genes:
         return 1, "", "Gene FeatureCuts: empty ranked gene pool from mapper outputs"
 
+    ranked_genes, gene_panel = _cap_ranked_gene_pool(
+        ranked_genes,
+        gene_panel,
+        getattr(config, "stability_gene_featurecuts_max_genes", None),
+    )
+    if not ranked_genes:
+        return 1, "", "Gene FeatureCuts: empty gene pool after max_genes cap"
+
     annotated_dmp = _annotate_dmps_with_genes(dmp_df, intersections)
     panel_for_features = gene_panel.copy()
 
@@ -443,6 +486,9 @@ def run_gene_featurecuts_for_iteration(
         "warnings": warnings,
         "validation_metrics": best_metrics,
         "ranked_gene_pool_size": int(len(ranked_genes)),
+        "stability_gene_featurecuts_max_genes": getattr(
+            config, "stability_gene_featurecuts_max_genes", None
+        ),
     }
     with open(out_dir / GENE_FEATURECUTS_METRICS_JSON, "w", encoding="utf-8") as f:
         json.dump(metrics_payload, f, indent=2)

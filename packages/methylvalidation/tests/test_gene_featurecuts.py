@@ -7,6 +7,8 @@ import pandas as pd
 import pytest
 
 from methyl_validation.gene_featurecuts import (
+    _annotate_dmps_with_genes,
+    _cap_ranked_gene_pool,
     _rank_gene_pool,
     _search_gene_k,
     run_gene_featurecuts_for_iteration,
@@ -25,6 +27,43 @@ def test_rank_gene_pool_orders_by_importance_then_effect():
     ranked, panel = _rank_gene_pool(combined)
     assert ranked == ["GENE_C", "GENE_A", "GENE_B"]
     assert len(panel) == 3
+
+
+def test_cap_ranked_gene_pool_limits_panel():
+    combined = pd.DataFrame(
+        {
+            "gene_name": [f"GENE_{i}" for i in range(5)],
+            "gene_importance": [1.0 - i * 0.1 for i in range(5)],
+            "mean_effect_size": [0.5] * 5,
+            "gene_support_n": [1] * 5,
+        }
+    )
+    ranked, panel = _rank_gene_pool(combined)
+    capped, capped_panel = _cap_ranked_gene_pool(ranked, panel, 2)
+    assert capped == ranked[:2]
+    assert len(capped_panel) == 2
+
+
+def test_annotate_dmps_with_genes_parses_dmp_name_and_chr_prefix():
+    dmp_df = pd.DataFrame(
+        {
+            "chromosome": ["1"],
+            "position": [10577],
+            "context": ["CG"],
+            "effect_size": [0.1],
+            "region_weight": [1.0],
+        }
+    )
+    intersections = pd.DataFrame(
+        {
+            "dmp_name": ["1:10577:CG:eff=0.094"],
+            "feature_chrom": ["chr1"],
+            "gene_name": ["TP53"],
+            "context": ["CG"],
+        }
+    )
+    annotated = _annotate_dmps_with_genes(dmp_df, intersections)
+    assert annotated.iloc[0]["gene_name"] == "TP53"
 
 
 def test_search_gene_k_respects_min_genes_floor(monkeypatch):
@@ -99,6 +138,7 @@ def test_run_gene_featurecuts_for_iteration_exports_panel(tmp_path: Path, monkey
     class _Cfg:
         stability_target_balanced_accuracy = None
         stability_min_selected_genes = 1
+        stability_gene_featurecuts_max_genes = 500
 
     monkeypatch.setattr(
         "methyl_validation.gene_featurecuts._load_train_paths_and_labels",

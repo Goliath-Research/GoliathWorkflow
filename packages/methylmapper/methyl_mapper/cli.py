@@ -9,6 +9,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Optional
 
 from .config import MethylMapperConfig, MapperStepConfig, AzureSQLConfig, StoredProcedureConfig
 from .mapper import DMPMapper
@@ -910,6 +911,18 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.w_unknown = config.w_unknown
 
 
+def _apply_mapper_step_override_to_args(args, step_override_path: Optional[Path]) -> None:
+    """Apply per-run mapper overrides (MC gene stability). Step override wins over project config."""
+    if step_override_path is None or not Path(step_override_path).is_file():
+        return
+    with open(step_override_path, encoding="utf-8") as f:
+        overrides = json.load(f)
+    if not isinstance(overrides, dict):
+        return
+    if "enrich_disease" in overrides:
+        args.enrich_disease = bool(overrides["enrich_disease"])
+
+
 def _grok_api_key_available(args: argparse.Namespace) -> bool:
     """True if Grok will resolve a key (CLI/config arg, env, encrypted file, or Key Vault)."""
     if (getattr(args, "grok_api_key", None) or "").strip():
@@ -1026,6 +1039,26 @@ def main_bedtools():
         if had_explicit_disease_term and not args.enrich_disease:
             args.enrich_disease = True
             logger.info("Disease term set; enabling disease enrichment (Grok/Open Targets) to add gene-disease columns.")
+
+        step_override_path = getattr(args, "step_override", None)
+        if step_override_path:
+            override_path = Path(step_override_path)
+            had_enrich_override = False
+            if override_path.is_file():
+                try:
+                    override_payload = json.loads(override_path.read_text(encoding="utf-8"))
+                    had_enrich_override = isinstance(override_payload, dict) and (
+                        "enrich_disease" in override_payload
+                    )
+                except Exception:
+                    override_payload = {}
+            else:
+                override_payload = {}
+            _apply_mapper_step_override_to_args(args, override_path)
+            if had_enrich_override and not args.enrich_disease:
+                logger.info(
+                    "Mapper step override disabled disease enrichment for this MC iteration."
+                )
 
         logger.info(f"CSV pattern: {args.csv_pattern}")
         logger.info(f"GTF file: {gtf_path}")

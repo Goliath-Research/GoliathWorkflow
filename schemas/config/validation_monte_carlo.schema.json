@@ -2647,6 +2647,33 @@
       "description": "Optional genome-wide cap on classifier DMP loci used for MC gene FeatureCuts (after deduplication). When unset, all FeatureCuts classifier exports are used (typically ~min_selected_dmps per chromosome \u00d7 number of chromosomes).",
       "title": "Stability Gene Featurecuts Max Dmps"
     },
+    "stability_gene_featurecuts_max_genes": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": 500,
+      "description": "Cap the ranked mapper gene pool before MC gene FeatureCuts k-search. Limits feature-matrix width and k-search cost when mapper exports tens of thousands of genes.",
+      "title": "Stability Gene Featurecuts Max Genes"
+    },
+    "stability_mapper_enrich_disease": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": false,
+      "description": "When true, MC methyl-mapper iterations run Grok/OpenTargets disease enrichment. Default false for speed; production --freeze mapper uses project step_config.mapper.enrich_disease.",
+      "title": "Stability Mapper Enrich Disease"
+    },
     "stability_gene_freq": {
       "default": 0.5,
       "description": "Minimum frequency for a gene to be considered stable. When stability_gene_featurecuts_enabled, counts genes from per-run classifier gene panels.",

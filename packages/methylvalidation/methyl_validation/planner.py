@@ -232,7 +232,7 @@ def plan_discovery_runs(
             n_fresh += 1
             det_override = write_detector_featurecuts_override(run_dir, config)
             if config.stability_gene_featurecuts_enabled:
-                write_mapper_classifier_override(run_dir)
+                write_mapper_classifier_override(run_dir, config)
 
             if layout == "binary":
                 (

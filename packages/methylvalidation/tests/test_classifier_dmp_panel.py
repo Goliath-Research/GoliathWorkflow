@@ -17,6 +17,15 @@ def test_write_mapper_classifier_override(tmp_path: Path):
     assert out.is_file()
     payload = out.read_text(encoding="utf-8")
     assert CLASSIFIER_EXTENDED_DMP_CSV_PATTERN in payload
+    assert '"enrich_disease": false' in payload
+
+
+def test_write_mapper_classifier_override_honors_enrich_disease_flag(tmp_path: Path):
+    class _Cfg:
+        stability_mapper_enrich_disease = True
+
+    out = write_mapper_classifier_override(tmp_path / "run_0001", _Cfg())
+    assert '"enrich_disease": true' in out.read_text(encoding="utf-8")
 
 
 def test_load_classifier_dmp_panel_dedupes_and_caps(tmp_path: Path):

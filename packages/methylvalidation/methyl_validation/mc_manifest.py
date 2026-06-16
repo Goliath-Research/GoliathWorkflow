@@ -152,16 +152,29 @@ CLASSIFIER_DMP_CSV_PATTERN = "dmps-*-classifier.csv"
 CLASSIFIER_EXTENDED_DMP_CSV_PATTERN = "dmps-*-classifier-extended.csv"
 
 
-def write_mapper_classifier_override(run_dir: Path) -> Path:
+def write_mapper_classifier_override(
+    run_dir: Path,
+    config: Optional["MonteCarloConfig"] = None,
+) -> Path:
     """
     Force methyl-mapper to consume detector extended classifier panels during MC gene stability.
 
     Without this, projects that default to ``dmps-*-discovery.csv`` map every significant DMP
     (tens of thousands of loci) instead of the smaller classifier exports.
+
+    When ``config`` is provided, also writes ``enrich_disease`` from
+    ``stability_mapper_enrich_disease`` (default false) so MC mapper skips Grok unless requested.
+    Production ``--freeze`` mapper uses the base project mapper config instead.
     """
     out = run_dir / "mapper_step_override.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"csv_filename_pattern": CLASSIFIER_EXTENDED_DMP_CSV_PATTERN}
+    enrich_disease = False
+    if config is not None:
+        enrich_disease = bool(getattr(config, "stability_mapper_enrich_disease", False))
+    payload: Dict[str, Any] = {
+        "csv_filename_pattern": CLASSIFIER_EXTENDED_DMP_CSV_PATTERN,
+        "enrich_disease": enrich_disease,
+    }
     with open(out, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
     return out

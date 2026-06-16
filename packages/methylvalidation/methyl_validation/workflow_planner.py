@@ -243,7 +243,7 @@ def _materialize_iteration(
 
     det_override = write_detector_featurecuts_override(run_dir, config)
     if config.stability_gene_featurecuts_enabled:
-        write_mapper_classifier_override(run_dir)
+        write_mapper_classifier_override(run_dir, config)
 
     val_control_csv = None
     val_disease_csv = None

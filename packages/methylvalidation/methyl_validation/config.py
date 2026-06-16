@@ -856,6 +856,21 @@ class MonteCarloConfig(BaseModel):
             "(typically ~min_selected_dmps per chromosome × number of chromosomes)."
         ),
     )
+    stability_gene_featurecuts_max_genes: Optional[int] = Field(
+        default=500,
+        ge=1,
+        description=(
+            "Cap the ranked mapper gene pool before MC gene FeatureCuts k-search. "
+            "Limits feature-matrix width and k-search cost when mapper exports tens of thousands of genes."
+        ),
+    )
+    stability_mapper_enrich_disease: bool = Field(
+        default=False,
+        description=(
+            "When true, MC methyl-mapper iterations run Grok/OpenTargets disease enrichment. "
+            "Default false for speed; production --freeze mapper uses project step_config.mapper.enrich_disease."
+        ),
+    )
     freeze_stable_gene_csv: Optional[str] = Field(
         default=None,
         description=(
@@ -935,7 +950,7 @@ class MonteCarloConfig(BaseModel):
         le=1.0,
         description=(
             "Optional target BA for detector FeatureCuts: choose minimum top-k DMPs that reach this BA "
-            "on detector validation splits."
+            "on detector validation splits. Also enables binary-search k selection in MC gene FeatureCuts."
         ),
     )
     stability_min_selected_dmps: Optional[int] = Field(

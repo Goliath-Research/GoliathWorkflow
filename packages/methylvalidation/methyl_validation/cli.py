@@ -2803,7 +2803,7 @@ def main() -> None:
             seed_i = (config.seed + i) if config.seed is not None else None
             detector_step_override = write_detector_featurecuts_override(run_dir, config)
             if config.stability_gene_featurecuts_enabled:
-                write_mapper_classifier_override(run_dir)
+                write_mapper_classifier_override(run_dir, config)
 
             if progress is not None:
                 task_steps = progress.add_task("Steps", total=n_step_tasks, completed=0)
