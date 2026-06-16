@@ -415,7 +415,7 @@
         "referenceFasta"
       ],
       "default_node_type": "ACTION",
-      "description": "Extract BAM to compressed per-chromosome HDF5 via MethylExtractor.",
+      "description": "Extract BAM to per-chromosome HDF5 via native MethylExtractor (config from project step_config.methyl_extract).",
       "domain_effects": {
         "output_bindings": [
           {
@@ -437,6 +437,7 @@
       "input_schema_ref": "schemas/tasks/sample_methyl_extract.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_methyl_extract.output.schema.json",
       "schema_id": "sample.methyl_extract",
+      "step_config_key": "methyl_extract",
       "tool": "MethylExtract"
     },
     {

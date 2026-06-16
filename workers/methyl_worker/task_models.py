@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -91,6 +91,18 @@ class MethylExtractTaskInput(BaseModel):
     project: Optional[str] = None
     projectPath: Optional[str] = None
     referenceFasta: Optional[str] = None
+    extractContexts: Optional[List[Literal["CG", "CHG", "CHH"]]] = None
+    threads: Optional[int] = None
+    minMapq: Optional[int] = None
+    minPhred: Optional[int] = None
+    minCov: Optional[int] = None
+    capCov: Optional[int] = None
+    chromMapping: Optional[str] = None
+    compression: Optional[int] = None
+    chunkSize: Optional[int] = None
+    outputFormat: Optional[str] = None
+    split: Optional[bool] = None
+    extractorBin: Optional[str] = None
 
 
 class SampleIdOutput(BaseModel):

@@ -70,6 +70,15 @@
     "alignment_qc": {
       "genome_fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
     },
+    "methyl_extract": {
+      "extract_contexts": ["CG", "CHG", "CHH"],
+      "chrom_mapping": "/work/genomes/human_genome/release-114/chrom_mapping.json",
+      "threads": 10,
+      "min_mapq": 20,
+      "min_phred": 20,
+      "split": true,
+      "output_format": "hdf5"
+    },
     "centroid": {
       "base_config": {
         "min_coverage": 4,

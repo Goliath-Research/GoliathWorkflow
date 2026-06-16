@@ -59,6 +59,33 @@ def test_parabricks_idempotent_when_outputs_exist(tmp_path: Path) -> None:
     assert out["metricsJson"] == str(metrics)
 
 
+def test_methyl_extract_idempotent_when_outputs_exist(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S1"
+    sample_dir.mkdir()
+    for name in ("1-CG.h5", "1-CHG.h5", "1-CHH.h5"):
+        (sample_dir / name).write_bytes(b"h5")
+
+    with patch("methyl_worker.extract_runner.subprocess.run") as mock_run:
+        with patch("methyl_worker.extract_runner.run_methyl_extract") as mock_extract:
+            mock_extract.return_value = {
+                "sampleId": "S1",
+                "h5Files": ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"],
+            }
+            out = execute_task(
+                "methyl-extract",
+                "sample.methyl_extract",
+                {
+                    "sampleId": "S1",
+                    "sampleDir": str(sample_dir),
+                    "project": str(tmp_path / "project.json"),
+                },
+            )
+
+    mock_extract.assert_called_once()
+    mock_run.assert_not_called()
+    assert out["h5Files"] == ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
+
+
 def test_pipeline_cli_dispatch() -> None:
     with patch("methyl_worker.actions.base.subprocess.run") as mock_run:
         mock_run.return_value = type("R", (), {"returncode": 0, "stdout": "done", "stderr": ""})()

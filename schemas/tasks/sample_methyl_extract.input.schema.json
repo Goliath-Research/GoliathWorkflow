@@ -3,6 +3,134 @@
   "additionalProperties": true,
   "description": "Input for sample.methyl_extract (MethylExtractor \u2192 {chr}-{ctx}.h5 per chromosome).",
   "properties": {
+    "capCov": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Capcov"
+    },
+    "chromMapping": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chrommapping"
+    },
+    "chunkSize": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Chunksize"
+    },
+    "compression": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Compression"
+    },
+    "extractContexts": {
+      "anyOf": [
+        {
+          "items": {
+            "enum": [
+              "CG",
+              "CHG",
+              "CHH"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extractcontexts"
+    },
+    "extractorBin": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extractorbin"
+    },
+    "minCov": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Mincov"
+    },
+    "minMapq": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Minmapq"
+    },
+    "minPhred": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Minphred"
+    },
+    "outputFormat": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Outputformat"
+    },
     "project": {
       "anyOf": [
         {
@@ -46,6 +174,30 @@
     "sampleId": {
       "title": "Sampleid",
       "type": "string"
+    },
+    "split": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Split"
+    },
+    "threads": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Threads"
     },
     "tool": {
       "default": "MethylExtract",

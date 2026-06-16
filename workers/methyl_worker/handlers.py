@@ -210,56 +210,22 @@ def _handle_delete_bam(_capability: str, _action_name: str, input_json: Dict[str
 
 
 def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+    from .extract_runner import run_methyl_extract
+
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     project = input_json.get("project") or input_json.get("projectPath")
-    reference_fasta = input_json.get("referenceFasta")
     if not sample_dir or not sample_id:
         raise RuntimeError("sample.methyl_extract requires sampleDir and sampleId")
     if not project:
         raise RuntimeError("sample.methyl_extract requires project")
 
-    sample_path = Path(str(sample_dir))
-    from methyl_utils import load_project
-
-    project_obj = load_project(str(project))
-    chromosomes = list(project_obj.chromosomes or [])
-    contexts = list(getattr(project_obj, "contexts", None) or ["CG"])
-    expected = [f"{chrom}-{ctx}.h5" for chrom in chromosomes for ctx in contexts]
-    existing = [name for name in expected if (sample_path / name).is_file()]
-    if len(existing) == len(expected) and expected:
-        return {"sampleId": sample_id, "h5Files": existing}
-
-    bam_candidates = [
-        sample_path / f"{sample_id}.bam",
-        sample_path / f"{sample_id}.BAM",
-    ]
-    bam_path = next((p for p in bam_candidates if p.is_file()), None)
-    if bam_path is None:
-        raise RuntimeError(f"BAM not found for methyl extract under {sample_path}")
-
-    extract_cli = shutil.which("methyl-extract")
-    if extract_cli is None:
-        raise RuntimeError(
-            "methyl-extract not found on PATH; install MethylExtractor or set WORKER_STUB_EXTERNAL=1"
-        )
-
-    if reference_fasta is None:
-        alignment_cfg = (project_obj.get_step_config("alignment_qc") or {}) if hasattr(project_obj, "get_step_config") else {}
-        reference_fasta = alignment_cfg.get("genome_fasta")
-
-    cmd = [extract_cli, "--project", str(project), "--sample-dir", str(sample_path)]
-    if reference_fasta:
-        cmd.extend(["--reference-fasta", str(reference_fasta)])
-    logger.info("Running: %s", " ".join(cmd))
-    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
-    if proc.returncode != 0:
-        raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "methyl-extract failed")
-
-    h5_files = [name for name in expected if (sample_path / name).is_file()]
-    if not h5_files:
-        h5_files = [p.name for p in sorted(sample_path.glob("*-*.h5"))]
-    return {"sampleId": sample_id, "h5Files": h5_files}
+    return run_methyl_extract(
+        sample_id=str(sample_id),
+        sample_dir=str(sample_dir),
+        project=str(project),
+        input_json=input_json,
+    )
 
 
 def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:

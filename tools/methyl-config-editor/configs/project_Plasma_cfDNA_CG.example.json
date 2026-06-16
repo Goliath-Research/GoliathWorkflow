@@ -28,6 +28,15 @@
     "alignment_qc": {
       "genome_fasta": "/work/ref/hg38/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
     },
+    "methyl_extract": {
+      "extract_contexts": ["CG", "CHG", "CHH"],
+      "chrom_mapping": "/work/ref/hg38/chrom_mapping.json",
+      "threads": 10,
+      "min_mapq": 20,
+      "min_phred": 20,
+      "split": true,
+      "output_format": "hdf5"
+    },
     "mapper": {
       "gtf": "/work/ref/hg38/annotation.gtf"
     },

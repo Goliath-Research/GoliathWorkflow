@@ -20,7 +20,7 @@ QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (
 | `sample.delete-fastqs` | FASTQs already absent (no-op success) |
 | `sample.delete-bam` | BAM already absent (no-op success) |
 | `parabricks.fq2bam` | Only when BAM missing or QC artifact missing (`{sampleId}.json` or `{sampleId}.qc-metrics.tar`) |
-| `methyl-extract` | When HDF5 outputs missing for required chromosomes |
+| `methyl-extract` | When HDF5 outputs missing for `project.chromosomes × extract_contexts` |
 
 ## Lease / retry
 
@@ -217,9 +217,50 @@ Hard QC failure: `result_code < 0` fails the instance; soft fail uses `overall_p
 ## `methyl-extract`
 
 **action_name:** `sample.methyl_extract`  
-**Owner:** External MethylDackel / MethylExtractor fork
+**Owner:** External [MethylExtractor](file:///home/ubuntu/MethylExtractor) (native CLI on worker PATH after `make install`)
 
-### input_json
+Production remote workers are **self-contained per task**: config comes from **`input_json`** plus **`project.json` on shared storage**. Environment variables are **not** required (dev/CLI only).
+
+### Required input_json
+
+| Field | Description |
+|-------|-------------|
+| `sampleId` | Sample identifier |
+| `sampleDir` | Shared storage path (`/work/samples/{id}`) |
+| `project` | Absolute path to project JSON on shared storage |
+| `referenceFasta` | Reference FASTA (workflow instance context; fallback: `step_config.alignment_qc.genome_fasta`) |
+
+Optional per-task overrides: `extractContexts`, `threads`, `minMapq`, `chromMapping`, …
+
+### Project `step_config.methyl_extract` (shared storage)
+
+Production defaults (not env vars):
+
+```json
+"methyl_extract": {
+  "extract_contexts": ["CG", "CHG", "CHH"],
+  "chrom_mapping": "/work/genomes/human_genome/release-114/chrom_mapping.json",
+  "threads": 10,
+  "min_mapq": 20,
+  "min_phred": 20,
+  "split": true,
+  "output_format": "hdf5"
+}
+```
+
+**`extract_contexts`** is independent of root-level `project.contexts` (which controls downstream centroid/detector). Production typically extracts all three contexts so `sample.delete_bam` can run without losing CHG/CHH.
+
+`chromosomes` for idempotency come from `project.chromosomes`.
+
+### Storage contract (`/work/samples/{sampleId}/`)
+
+| Artifact | Path |
+|----------|------|
+| Input BAM | `{sampleId}.bam` |
+| Per-chrom HDF5 | `{chrom}-{ctx}.h5` (e.g. `1-CG.h5`, `1-CHG.h5`, `1-CHH.h5`) |
+| Log | `{sampleId}.methyl_extract.log` |
+
+### input_json example
 
 ```json
 {
@@ -231,14 +272,12 @@ Hard QC failure: `result_code < 0` fails the instance; soft fail uses `overall_p
 }
 ```
 
-Chromosome list comes from worker reading `project.json` `chromosomes`.
-
 ### output_json
 
 ```json
 {
   "sampleId": "DPLST-051425-111148",
-  "h5Files": ["1-CG.h5", "2-CG.h5"]
+  "h5Files": ["1-CG.h5", "1-CHG.h5", "1-CHH.h5", "2-CG.h5", "..."]
 }
 ```
 

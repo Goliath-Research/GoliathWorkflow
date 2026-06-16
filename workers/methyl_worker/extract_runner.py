@@ -1,0 +1,387 @@
+"""MethylExtractor BAM → per-chromosome HDF5 via native CLI."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, List, Mapping, Optional, Sequence
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_EXTRACT_CONTEXTS: tuple[str, ...] = ("CG", "CHG", "CHH")
+ALLOWED_CONTEXTS = frozenset({"CG", "CHG", "CHH"})
+
+
+@dataclass(frozen=True)
+class MethylExtractConfig:
+    sample_id: str
+    sample_dir: Path
+    project_path: Path
+    chromosomes: tuple[str, ...]
+    extract_contexts: tuple[str, ...]
+    reference_fasta: Path
+    chrom_mapping: Path
+    extractor_bin: str
+    threads: Optional[int]
+    min_mapq: Optional[int]
+    min_phred: Optional[int]
+    min_cov: Optional[int]
+    cap_cov: Optional[int]
+    compression: Optional[int]
+    chunk_size: Optional[int]
+    output_format: str
+    split: bool
+
+
+@dataclass(frozen=True)
+class MethylExtractPaths:
+    sample_dir: Path
+    sample_id: str
+    bam_path: Path
+    log_path: Path
+
+
+def _normalize_contexts(raw: Any) -> tuple[str, ...]:
+    if raw is None:
+        return DEFAULT_EXTRACT_CONTEXTS
+    if isinstance(raw, str):
+        parts = [p.strip().upper() for p in raw.replace(",", " ").split() if p.strip()]
+    elif isinstance(raw, (list, tuple)):
+        parts = [str(p).strip().upper() for p in raw if str(p).strip()]
+    else:
+        raise RuntimeError(f"extract_contexts must be a list of CG/CHG/CHH, got {raw!r}")
+    if not parts:
+        return DEFAULT_EXTRACT_CONTEXTS
+    invalid = [p for p in parts if p not in ALLOWED_CONTEXTS]
+    if invalid:
+        raise RuntimeError(f"Unsupported extract contexts: {invalid}")
+    # Preserve order while deduplicating; CG is always implicit in MethylExtractor.
+    seen: set[str] = set()
+    ordered: List[str] = []
+    for ctx in parts:
+        if ctx not in seen:
+            seen.add(ctx)
+            ordered.append(ctx)
+    return tuple(ordered)
+
+
+def _pick(
+    input_json: Mapping[str, Any],
+    step_cfg: Mapping[str, Any],
+    input_key: str,
+    step_key: str,
+) -> Any:
+    if input_key in input_json and input_json[input_key] is not None:
+        return input_json[input_key]
+    return step_cfg.get(step_key)
+
+
+def _pick_int(
+    input_json: Mapping[str, Any],
+    step_cfg: Mapping[str, Any],
+    input_key: str,
+    step_key: str,
+) -> Optional[int]:
+    value = _pick(input_json, step_cfg, input_key, step_key)
+    if value is None:
+        return None
+    return int(value)
+
+
+def _pick_bool(
+    input_json: Mapping[str, Any],
+    step_cfg: Mapping[str, Any],
+    input_key: str,
+    step_key: str,
+    default: bool,
+) -> bool:
+    value = _pick(input_json, step_cfg, input_key, step_key)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no"}
+    return bool(value)
+
+
+def resolve_methyl_extract_config(
+    project_path: str | Path,
+    input_json: Mapping[str, Any],
+) -> MethylExtractConfig:
+    """Resolve production config from project JSON on shared storage + task input_json."""
+    from methyl_utils import load_project
+
+    sample_id = str(input_json.get("sampleId") or "").strip()
+    sample_dir_raw = input_json.get("sampleDir")
+    if not sample_id or not sample_dir_raw:
+        raise RuntimeError("sample.methyl_extract requires sampleId and sampleDir")
+
+    project_file = Path(str(project_path)).expanduser().resolve()
+    if not project_file.is_file():
+        raise RuntimeError(f"project file not found: {project_file}")
+
+    project = load_project(str(project_file))
+    chromosomes = tuple(project.chromosomes or [])
+    if not chromosomes:
+        raise RuntimeError(f"project.chromosomes is required for methyl extract: {project_file}")
+
+    step_cfg: Dict[str, Any] = dict(project.get_step_config("methyl_extract") or {})
+    alignment_cfg = project.get_step_config("alignment_qc") or {}
+
+    reference_raw = (
+        input_json.get("referenceFasta")
+        or step_cfg.get("reference_fasta")
+        or (alignment_cfg.get("genome_fasta") if isinstance(alignment_cfg, dict) else None)
+    )
+    if not reference_raw:
+        raise RuntimeError(
+            "referenceFasta is required (task input_json or project step_config.alignment_qc.genome_fasta)"
+        )
+    reference_fasta = Path(str(reference_raw)).expanduser().resolve()
+    if not reference_fasta.is_file():
+        raise RuntimeError(f"reference FASTA not found: {reference_fasta}")
+
+    chrom_mapping_raw = _pick(input_json, step_cfg, "chromMapping", "chrom_mapping")
+    if not chrom_mapping_raw:
+        raise RuntimeError(
+            "chrom_mapping is required (task input_json.chromMapping or "
+            "project step_config.methyl_extract.chrom_mapping)"
+        )
+    chrom_mapping = Path(str(chrom_mapping_raw)).expanduser().resolve()
+    if not chrom_mapping.is_file():
+        raise RuntimeError(f"chrom_mapping file not found: {chrom_mapping}")
+
+    extract_contexts = _normalize_contexts(
+        _pick(input_json, step_cfg, "extractContexts", "extract_contexts")
+    )
+
+    extractor_bin = str(
+        _pick(input_json, step_cfg, "extractorBin", "extractor_bin") or "MethylExtractor"
+    ).strip()
+
+    return MethylExtractConfig(
+        sample_id=sample_id,
+        sample_dir=Path(str(sample_dir_raw)).expanduser().resolve(),
+        project_path=project_file,
+        chromosomes=chromosomes,
+        extract_contexts=extract_contexts,
+        reference_fasta=reference_fasta,
+        chrom_mapping=chrom_mapping,
+        extractor_bin=extractor_bin,
+        threads=_pick_int(input_json, step_cfg, "threads", "threads"),
+        min_mapq=_pick_int(input_json, step_cfg, "minMapq", "min_mapq"),
+        min_phred=_pick_int(input_json, step_cfg, "minPhred", "min_phred"),
+        min_cov=_pick_int(input_json, step_cfg, "minCov", "min_cov"),
+        cap_cov=_pick_int(input_json, step_cfg, "capCov", "cap_cov"),
+        compression=_pick_int(input_json, step_cfg, "compression", "compression"),
+        chunk_size=_pick_int(input_json, step_cfg, "chunkSize", "chunk_size"),
+        output_format=str(
+            _pick(input_json, step_cfg, "outputFormat", "output_format") or "hdf5"
+        ),
+        split=_pick_bool(input_json, step_cfg, "split", "split", default=True),
+    )
+
+
+def expected_h5_files(chromosomes: Sequence[str], extract_contexts: Sequence[str]) -> List[str]:
+    return [f"{chrom}-{ctx}.h5" for chrom in chromosomes for ctx in extract_contexts]
+
+
+def extract_outputs_complete(sample_dir: Path, expected_names: Sequence[str]) -> bool:
+    if not expected_names:
+        return False
+    return all((sample_dir / name).is_file() for name in expected_names)
+
+
+def resolve_bam_path(sample_dir: Path, sample_id: str) -> Path:
+    candidates = [
+        sample_dir / f"{sample_id}.bam",
+        sample_dir / f"{sample_id}.BAM",
+        sample_dir / f"{sample_id}.clara_parabrics.duplicates_marked.bam",
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path
+    raise RuntimeError(f"BAM not found for methyl extract under {sample_dir}")
+
+
+def _resolve_paths(sample_dir: Path, sample_id: str, bam_path: Path) -> MethylExtractPaths:
+    return MethylExtractPaths(
+        sample_dir=sample_dir,
+        sample_id=sample_id,
+        bam_path=bam_path,
+        log_path=sample_dir / f"{sample_id}.methyl_extract.log",
+    )
+
+
+def _extractor_bin(cfg: MethylExtractConfig) -> str:
+    if Path(cfg.extractor_bin).is_file():
+        return str(Path(cfg.extractor_bin).resolve())
+    found = shutil.which(cfg.extractor_bin)
+    if found is None:
+        raise RuntimeError(
+            f"MethylExtractor binary not found: {cfg.extractor_bin!r}; "
+            "install from /home/ubuntu/MethylExtractor via make install"
+        )
+    return found
+
+
+def build_methyl_extractor_command(cfg: MethylExtractConfig, paths: MethylExtractPaths) -> List[str]:
+    cmd: List[str] = [
+        _extractor_bin(cfg),
+    ]
+    if cfg.threads is not None:
+        cmd.append(f"--threads={cfg.threads}")
+    if cfg.min_mapq is not None:
+        cmd.append(f"--min-mapq={cfg.min_mapq}")
+    if cfg.min_phred is not None:
+        cmd.append(f"--min-phred={cfg.min_phred}")
+    if cfg.min_cov is not None:
+        cmd.append(f"--min-cov={cfg.min_cov}")
+    if cfg.cap_cov is not None:
+        cmd.append(f"--cap-cov={cfg.cap_cov}")
+    if "CHG" in cfg.extract_contexts:
+        cmd.append("--CHG")
+    if "CHH" in cfg.extract_contexts:
+        cmd.append("--CHH")
+    cmd.append(f"--chrom-mapping={cfg.chrom_mapping}")
+    if cfg.compression is not None:
+        cmd.append(f"--compression={cfg.compression}")
+    if cfg.chunk_size is not None:
+        cmd.append(f"--chunk-size={cfg.chunk_size}")
+    cmd.append(f"--output-format={cfg.output_format}")
+    if cfg.split:
+        cmd.append("--split")
+    cmd.append(f"--output-dir={paths.sample_dir}")
+    cmd.append(str(paths.bam_path))
+    cmd.append(str(paths.sample_dir))
+    cmd.append(str(cfg.reference_fasta))
+    return cmd
+
+
+def _append_log(log_path: Path, text: str) -> None:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(log_path, "a", encoding="utf-8") as handle:
+        handle.write(text)
+        if not text.endswith("\n"):
+            handle.write("\n")
+
+
+def run_methyl_extract(
+    *,
+    sample_id: str,
+    sample_dir: str | Path,
+    project: str | Path,
+    input_json: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Extract methylation HDF5s with MethylExtractor."""
+    payload: Dict[str, Any] = dict(input_json or {})
+    payload.setdefault("sampleId", sample_id)
+    payload.setdefault("sampleDir", str(sample_dir))
+    payload.setdefault("project", str(project))
+
+    cfg = resolve_methyl_extract_config(str(project), payload)
+    if not cfg.sample_dir.is_dir():
+        raise RuntimeError(f"sampleDir not found: {cfg.sample_dir}")
+
+    expected = expected_h5_files(cfg.chromosomes, cfg.extract_contexts)
+    if extract_outputs_complete(cfg.sample_dir, expected):
+        logger.info("Skipping MethylExtractor; outputs already present for %s", cfg.sample_id)
+        return {
+            "sampleId": cfg.sample_id,
+            "h5Files": expected,
+        }
+
+    bam_path = resolve_bam_path(cfg.sample_dir, cfg.sample_id)
+    paths = _resolve_paths(cfg.sample_dir, cfg.sample_id, bam_path)
+    cmd = build_methyl_extractor_command(cfg, paths)
+
+    logger.info("Running MethylExtractor for %s", cfg.sample_id)
+    _append_log(paths.log_path, "COMMAND: " + " ".join(shlex.quote(part) for part in cmd))
+
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.stdout:
+        _append_log(paths.log_path, proc.stdout)
+    if proc.stderr:
+        _append_log(paths.log_path, proc.stderr)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            proc.stderr.strip() or proc.stdout.strip() or "MethylExtractor failed"
+        )
+
+    h5_files = [name for name in expected if (cfg.sample_dir / name).is_file()]
+    if not h5_files:
+        h5_files = sorted(p.name for p in cfg.sample_dir.glob("*-*.h5"))
+    if not h5_files:
+        raise RuntimeError(f"MethylExtractor did not produce HDF5 files under {cfg.sample_dir}")
+
+    return {
+        "sampleId": cfg.sample_id,
+        "h5Files": h5_files,
+    }
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="Run MethylExtractor for one sample (local dev / HPC)")
+    parser.add_argument("sample_id", help="Sample identifier")
+    parser.add_argument("--sample-dir", help="Sample directory (default: /work/samples/{sample_id})")
+    parser.add_argument("--project", required=True, help="Pipeline project JSON on shared storage")
+    parser.add_argument("--reference-fasta", help="Override reference FASTA")
+    parser.add_argument("--chrom-mapping", help="Override chrom_mapping.json path")
+    parser.add_argument(
+        "--extract-contexts",
+        help="Comma-separated contexts to extract (default from project step_config or CG,CHG,CHH)",
+    )
+    parser.add_argument("--threads", type=int)
+    parser.add_argument("--min-mapq", type=int)
+    parser.add_argument("--extractor-bin", help="Dev override for MethylExtractor binary path")
+    args = parser.parse_args(list(argv) if argv is not None else None)
+
+    sample_dir = Path(
+        args.sample_dir or os.environ.get("METHYL_SAMPLE_DIR") or f"/work/samples/{args.sample_id}"
+    )
+    input_json: Dict[str, Any] = {
+        "sampleId": args.sample_id,
+        "sampleDir": str(sample_dir),
+        "project": args.project,
+    }
+    if args.reference_fasta:
+        input_json["referenceFasta"] = args.reference_fasta
+    if args.chrom_mapping:
+        input_json["chromMapping"] = args.chrom_mapping
+    if args.extract_contexts:
+        input_json["extractContexts"] = [
+            p.strip() for p in args.extract_contexts.split(",") if p.strip()
+        ]
+    if args.threads is not None:
+        input_json["threads"] = args.threads
+    if args.min_mapq is not None:
+        input_json["minMapq"] = args.min_mapq
+    extractor_bin = args.extractor_bin or os.environ.get("METHYL_EXTRACTOR_BIN")
+    if extractor_bin:
+        input_json["extractorBin"] = extractor_bin
+
+    result = run_methyl_extract(
+        sample_id=args.sample_id,
+        sample_dir=sample_dir,
+        project=args.project,
+        input_json=input_json,
+    )
+    for key, value in result.items():
+        if key == "h5Files":
+            print(f"h5Files={json.dumps(value)}")
+        else:
+            print(f"{key}={value}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
