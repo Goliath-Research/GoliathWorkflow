@@ -94,6 +94,10 @@ def test_build_command_includes_chg_chh_flags(tmp_path: Path) -> None:
     assert f"--threads=10" in cmd
     assert str(bam) in cmd
     assert str(ref) in cmd
+    bam_idx = cmd.index(str(bam))
+    ref_idx = cmd.index(str(ref))
+    assert ref_idx == bam_idx + 1
+    assert str(sample_dir) not in cmd[bam_idx + 1 : ref_idx + 1]
 
 
 def test_build_command_cg_only_skips_chg_chh(tmp_path: Path) -> None:

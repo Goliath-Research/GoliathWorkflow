@@ -262,7 +262,8 @@ def build_methyl_extractor_command(cfg: MethylExtractConfig, paths: MethylExtrac
         cmd.append("--split")
     cmd.append(f"--output-dir={paths.sample_dir}")
     cmd.append(str(paths.bam_path))
-    cmd.append(str(paths.sample_dir))
+    # With --output-dir set, MethylExtractor treats the next positional as ref.fa only
+    # (see MethylExtractor/src/main.c: output_dir positional is skipped when -o is used).
     cmd.append(str(cfg.reference_fasta))
     return cmd
 
