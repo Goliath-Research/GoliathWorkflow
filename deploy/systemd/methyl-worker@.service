@@ -8,6 +8,8 @@ Type=simple
 EnvironmentFile=-/work/epimethyl/env/worker.env
 EnvironmentFile=-/work/epimethyl/env/parabricks.env
 Environment=WORKER_CAPABILITY=%i
+# EnvironmentFile does not expand $PATH; set a literal PATH after env files.
+Environment=PATH=/work/epimethyl/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/work/epimethyl/venv/bin/methyl-worker --api-base ${WORKER_API_BASE}
 Restart=on-failure
 RestartSec=10

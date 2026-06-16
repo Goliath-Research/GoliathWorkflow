@@ -45,6 +45,14 @@ resolve_methyl_extractor_subdir() {
   esac
 }
 
+# Build a literal PATH for worker.env / systemd (no $PATH suffix — EnvironmentFile does not expand).
+expand_worker_path() {
+  local venv_dir="${1:?venv directory required}"
+  local fallback="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+  local base="${PATH:-$fallback}"
+  echo "${venv_dir}/bin:${base}"
+}
+
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   echo "uname: $(detect_uname_arch)"
   echo "arch_key: $(platform_arch_key)"

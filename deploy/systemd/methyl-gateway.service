@@ -7,6 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=/work/epimethyl/repos/MethylPipeline
 EnvironmentFile=-/work/epimethyl/env/worker.env
+Environment=PATH=/work/epimethyl/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=POSTGRES_HOST=epimethyl.postgres.database.azure.com
 Environment=POSTGRES_PORT=5432
 Environment=POSTGRES_DB=postgres

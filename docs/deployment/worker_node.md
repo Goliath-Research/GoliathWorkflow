@@ -68,7 +68,7 @@ source /work/epimethyl/venv/bin/activate
 | `HDF5_PLUGIN_PATH` | Zstd HDF5 plugin from MethylExtractor build |
 | `WORKER_STUB_EXTERNAL=1` | Stub download/Parabricks/extract/delete (smoke tests only) |
 
-Source env before running workers:
+Source env before running workers (interactive shells expand `$PATH`; systemd does not):
 
 ```bash
 set -a
@@ -76,6 +76,8 @@ source /work/epimethyl/env/worker.env
 source /work/epimethyl/env/parabricks.env
 set +a
 ```
+
+`worker.env` contains a **literal** `PATH` (venv prepended to the bootstrap host's PATH). Do not use `PATH=...:$PATH` in env files loaded by systemd `EnvironmentFile=` — variable expansion is not performed.
 
 ## Register worker
 
