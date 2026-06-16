@@ -12,7 +12,7 @@ import sys
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Dict, List, Mapping, Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
@@ -42,36 +42,123 @@ class ParabricksPaths:
     tmp_dir: Path
 
 
-def _load_config(
+def _pick(
+    input_json: Mapping[str, Any],
+    step_cfg: Mapping[str, Any],
+    input_key: str,
+    step_key: str,
+) -> Any:
+    if input_key in input_json and input_json[input_key] is not None:
+        return input_json[input_key]
+    return step_cfg.get(step_key)
+
+
+def _pick_int(
+    input_json: Mapping[str, Any],
+    step_cfg: Mapping[str, Any],
+    input_key: str,
+    step_key: str,
+    default: Optional[int] = None,
+) -> Optional[int]:
+    value = _pick(input_json, step_cfg, input_key, step_key)
+    if value is None:
+        return default
+    return int(value)
+
+
+def _pick_bool(
+    input_json: Mapping[str, Any],
+    step_cfg: Mapping[str, Any],
+    input_key: str,
+    step_key: str,
+    default: bool,
+) -> bool:
+    value = _pick(input_json, step_cfg, input_key, step_key)
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no"}
+    return bool(value)
+
+
+def resolve_parabricks_config(
     *,
+    project_path: str | Path | None = None,
+    input_json: Optional[Mapping[str, Any]] = None,
     parabricks_image: Optional[str] = None,
     bwa_threads: Optional[int] = None,
 ) -> ParabricksConfig:
-    image = (parabricks_image or os.environ.get("METHYL_PARABRICKS_IMAGE", "")).strip()
+    """Resolve Parabricks settings from task input_json, project step_config, then env."""
+    payload = dict(input_json or {})
+    step_cfg: Dict[str, Any] = {}
+    if project_path:
+        from methyl_utils import load_project
+
+        project_file = Path(str(project_path)).expanduser().resolve()
+        if project_file.is_file():
+            project = load_project(str(project_file))
+            step_cfg = dict(project.get_step_config("parabricks") or {})
+
+    image = (
+        parabricks_image
+        or _pick(payload, step_cfg, "parabricksImage", "image")
+        or os.environ.get("METHYL_PARABRICKS_IMAGE", "")
+    ).strip()
     if not image:
         raise RuntimeError(
-            "METHYL_PARABRICKS_IMAGE is required (e.g. nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1)"
+            "Parabricks image is required (task input_json.parabricksImage, "
+            "project step_config.parabricks.image, or METHYL_PARABRICKS_IMAGE)"
         )
 
-    gpu_raw = os.environ.get("METHYL_PARABRICKS_GPU_FLAGS", "--gpus all").strip()
-    gpu_flags = tuple(shlex.split(gpu_raw)) if gpu_raw else ("--gpus", "all")
+    gpu_raw = _pick(payload, step_cfg, "gpuFlags", "gpu_flags")
+    if gpu_raw is None:
+        gpu_raw = os.environ.get("METHYL_PARABRICKS_GPU_FLAGS", "--gpus all")
+    gpu_flags = tuple(shlex.split(str(gpu_raw).strip())) if str(gpu_raw).strip() else ("--gpus", "all")
 
     threads = bwa_threads
     if threads is None:
+        threads = _pick_int(payload, step_cfg, "bwaThreads", "bwa_threads")
+    if threads is None:
         threads = int(os.environ.get("METHYL_PARABRICKS_BWA_THREADS", "16"))
-    extra_raw = os.environ.get("METHYL_PARABRICKS_EXTRA_DOCKER_ARGS", "").strip()
-    extra_docker_args = tuple(shlex.split(extra_raw)) if extra_raw else ()
-    cleanup_tmp = os.environ.get("METHYL_PARABRICKS_CLEANUP_TMP", "1").strip().lower() not in {
+
+    extra_raw = _pick(payload, step_cfg, "extraDockerArgs", "extra_docker_args")
+    if extra_raw is None:
+        extra_raw = os.environ.get("METHYL_PARABRICKS_EXTRA_DOCKER_ARGS", "")
+    if isinstance(extra_raw, list):
+        extra_docker_args = tuple(str(x) for x in extra_raw)
+    else:
+        extra_docker_args = tuple(shlex.split(str(extra_raw).strip())) if str(extra_raw).strip() else ()
+
+    cleanup_default = os.environ.get("METHYL_PARABRICKS_CLEANUP_TMP", "1").strip().lower() not in {
         "0",
         "false",
         "no",
     }
+    cleanup_tmp = _pick_bool(payload, step_cfg, "cleanupTmp", "cleanup_tmp", cleanup_default)
+
     return ParabricksConfig(
         image=image,
         gpu_flags=gpu_flags,
         bwa_threads=threads,
         extra_docker_args=extra_docker_args,
         cleanup_tmp=cleanup_tmp,
+    )
+
+
+def _load_config(
+    *,
+    project_path: str | Path | None = None,
+    input_json: Optional[Mapping[str, Any]] = None,
+    parabricks_image: Optional[str] = None,
+    bwa_threads: Optional[int] = None,
+) -> ParabricksConfig:
+    return resolve_parabricks_config(
+        project_path=project_path,
+        input_json=input_json,
+        parabricks_image=parabricks_image,
+        bwa_threads=bwa_threads,
     )
 
 
@@ -230,6 +317,8 @@ def run_fq2bam_meth(
     sample_id: str,
     sample_dir: str | Path,
     reference_fasta: str | Path,
+    project: str | Path | None = None,
+    input_json: Optional[Mapping[str, Any]] = None,
     parabricks_image: Optional[str] = None,
     bwa_threads: Optional[int] = None,
 ) -> Dict[str, Optional[str]]:
@@ -241,7 +330,12 @@ def run_fq2bam_meth(
     if not reference_path.is_file():
         raise RuntimeError(f"referenceFasta not found: {reference_path}")
 
-    cfg = _load_config(parabricks_image=parabricks_image, bwa_threads=bwa_threads)
+    cfg = _load_config(
+        project_path=project or (input_json or {}).get("projectPath") or (input_json or {}).get("project"),
+        input_json=input_json,
+        parabricks_image=parabricks_image,
+        bwa_threads=bwa_threads,
+    )
     paths = _resolve_paths(sample_path, sample_id, reference_path)
 
     if alignment_outputs_complete(paths):

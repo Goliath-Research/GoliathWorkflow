@@ -21,7 +21,9 @@ Quarto serves the page at `http://localhost:…` and Mermaid renders in your nor
 
 ## Presentation map (four layers)
 
-Two workflow definitions run in sequence: **SamplePrepPipeline** (per-sample FASTQ → HDF5) then **DataDrivenPipeline** (centroid → detector → mapper → enricher).
+Two workflow definitions run in sequence for production studies: **SamplePrepPipeline** (per-sample FASTQ → HDF5), then **StudyValidationLifecycle** (MC stability → freeze → biological outputs → model MC → selection → hold-out). **DataDrivenPipeline** remains the single-pass centroid → enricher path for ad-hoc analysis.
+
+**Staged portal contract:** [`portal_study_lifecycle.md`](portal_study_lifecycle.md) — `POST /v1/studies/validation/start` after SamplePrep completes.
 
 ```mermaid
 flowchart TB
@@ -81,6 +83,8 @@ flowchart TB
 The analysis pipeline ([Section 1](#1-project-configuration) onward) assumes per-chromosome methylation HDF5 files already exist under `samples_base_path`. **SamplePrepPipeline** orchestrates ingest, alignment, QC gating, optional cfDNA fragmentomics, methylation extraction, and cleanup **per sample** before **DataDrivenPipeline** runs.
 
 **Workflow seed:** [`workflow_engine/sql/wf_sample_prep_pipeline_seed.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sample_prep_pipeline_seed.sql)  
+`chrom_mapping` for MethylExtractor is **derived from `project.chromosomes`** at task time (`step_config.methyl_extract.contig_naming`, optional `chromosome_overrides`, or inline `chrom_mapping` object). No shared-storage mapping file is required for standard human builds.
+
 **Operator guide:** [`workflow_engine/sql/SamplePrepFlow.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/SamplePrepFlow.md)  
 **Worker contract:** [`workflow_engine/contract/sample_prep_capabilities.md`](/home/ubuntu/MethylPipeline/workflow_engine/contract/sample_prep_capabilities.md)  
 **Analyte profiles:** [`docs/ANALYTE_PROFILES.md`](/home/ubuntu/MethylPipeline/docs/ANALYTE_PROFILES.md)

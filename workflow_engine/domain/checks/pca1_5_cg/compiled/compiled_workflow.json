@@ -1,6 +1,6 @@
 {
-  "name": "PCa1_5_MC_Stability",
-  "description": "Monte Carlo stability for Healthy_vs_PCa1-5-CG: plan iterations, per-group incremental centroids, detectors, stability.",
+  "name": "PCa1_5_MC_StabilitySmoke",
+  "description": "Smoke: chr 21, 2 MC iterations via smoke project config.",
   "version_major": 1,
   "version_minor": 0,
   "is_active": true,
@@ -280,25 +280,6 @@
         "monteCarloRunsRoot": "${var.monteCarloRunsRoot}",
         "outputDir": "${var.outputDir}"
       }
-    },
-    {
-      "node_key": "readiness",
-      "node_type": "ACTION",
-      "action_name": "validation.stability_freeze_readiness",
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": null,
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": {
-        "tool": "validation.stability_freeze_readiness",
-        "projectPath": "${var.projectPath}",
-        "project": "${var.projectPath}"
-      }
     }
   ],
   "edges": [
@@ -429,15 +410,6 @@
       "is_default": false
     },
     {
-      "parent_node_key": "seq_1",
-      "child_node_key": "readiness",
-      "child_order": 3,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
       "parent_node_key": "root",
       "child_node_key": "seq_1",
       "child_order": 0,
@@ -448,7 +420,14 @@
     }
   ],
   "input_bindings": [],
-  "output_bindings": [],
+  "output_bindings": [
+    {
+      "node_key": "plan_iterations",
+      "var_name": "iterations",
+      "source_kind": "output_path",
+      "source_json_path": "$.iterations"
+    }
+  ],
   "scope_defaults": [
     {
       "node_key": "root",

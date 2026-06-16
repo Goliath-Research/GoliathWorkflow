@@ -175,6 +175,8 @@ def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: D
         sample_id=str(sample_id),
         sample_dir=str(sample_dir),
         reference_fasta=str(reference_fasta),
+        project=input_json.get("projectPath") or input_json.get("project"),
+        input_json=input_json,
         parabricks_image=input_json.get("parabricksImage"),
         bwa_threads=input_json.get("bwaThreads"),
     )
@@ -383,6 +385,28 @@ def _handle_validation_model_predict(
             f"validation.model_predict does not support backend={backend!r}; use pipeline.predictor for ecdf"
         )
     return {"status": "ok", "backend": backend, "summary": summary, "runDir": str(run_dir)}
+
+
+def _handle_validation_model_mc(
+    _capability: str, _action_name: str, input_json: Dict[str, Any]
+) -> HandlerResult:
+    from methyl_validation.model_mc_runner import run_model_mc_all
+
+    config, _base = _load_mc_config(input_json)
+    mc_root = _resolve_monte_carlo_runs_root(input_json)
+    production_dir = Path(
+        input_json.get("productionOutputDir") or config.production_output_dir or mc_root / "production"
+    )
+    production_project = production_dir / "project.json"
+    backends = input_json.get("backends")
+    resume = input_json.get("resume")
+    return run_model_mc_all(
+        production_project=production_project,
+        monte_carlo_runs_root=mc_root,
+        config=config,
+        backends=list(backends) if backends else None,
+        resume=int(resume) if resume is not None else None,
+    )
 
 
 def _handle_validation_select_best_model(

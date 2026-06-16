@@ -39,6 +39,7 @@ from db_client import (
     worker_request_task,
     worker_submit_result,
 )
+from study_lifecycle import start_study_validation
 from workflow_definition_spec import WorkflowDefinitionSpec
 
 _DEFAULT_CATALOG_PATH = (
@@ -170,6 +171,16 @@ class RestGateway:
                 "context_json": context,
                 "n_iterations": len(context.get("iterations", [])),
             }
+
+        if method == "POST" and path == "/v1/studies/validation/start":
+            payload = start_study_validation(
+                self.dsn,
+                body,
+                create_workflow_definition=create_workflow_definition,
+                create_workflow_instance=create_workflow_instance,
+                start_workflow_instance=start_workflow_instance,
+            )
+            return 201, payload
 
         if method == "POST" and path == "/v1/workflows/instances":
             instance_id = create_workflow_instance(

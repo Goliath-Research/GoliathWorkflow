@@ -73,11 +73,13 @@ QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (
 **action_name:** `sample.parabricks_fq2bam`  
 **Runtime:** Docker GPU container running `pbrun fq2bam_meth` (WGBS/bisulfite alignment).
 
-### Worker environment
+### Worker environment (fallback)
+
+Production settings should live in `project.step_config.parabricks` and task `input_json` overrides. Environment variables are used only when project/task values are absent:
 
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
-| `METHYL_PARABRICKS_IMAGE` | yes | — | Clara Parabricks image (e.g. `nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1`) |
+| `METHYL_PARABRICKS_IMAGE` | fallback | — | Clara Parabricks image (e.g. `nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1`) |
 | `METHYL_PARABRICKS_GPU_FLAGS` | no | `--gpus all` | Passed to `docker run` |
 | `METHYL_PARABRICKS_BWA_THREADS` | no | `16` | `--bwa-cpu-thread-pool` |
 | `METHYL_PARABRICKS_EXTRA_DOCKER_ARGS` | no | — | Extra `docker run` flags (shell-split) |
@@ -109,6 +111,19 @@ FASTQ inputs: prefer `{sampleId}_1.fastq.gz` + `{sampleId}_2.fastq.gz`; otherwis
   "bwaThreads": null
 }
 ```
+
+### Project `step_config.parabricks` (shared storage)
+
+```json
+"parabricks": {
+  "image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
+  "bwa_threads": 16,
+  "gpu_flags": "--gpus all",
+  "cleanup_tmp": true
+}
+```
+
+Task `input_json` keys: `parabricksImage`, `bwaThreads`, `gpuFlags`, `extraDockerArgs`, `cleanupTmp`.
 
 ### output_json
 
@@ -239,7 +254,7 @@ Production defaults (not env vars):
 ```json
 "methyl_extract": {
   "extract_contexts": ["CG", "CHG", "CHH"],
-  "chrom_mapping": "/work/genomes/human_genome/release-114/chrom_mapping.json",
+  "contig_naming": "ensembl",
   "threads": 10,
   "min_mapq": 20,
   "min_phred": 20,
@@ -247,6 +262,8 @@ Production defaults (not env vars):
   "output_format": "hdf5"
 }
 ```
+
+**`chrom_mapping`** is optional. When omitted, the worker derives `{reference, chromosomes: [{name, bam, fasta, extract}]}` from `project.chromosomes` and `contig_naming` (`ensembl` | `ucsc_chr` | `custom` with `chromosome_overrides`). Inline objects and file paths remain supported.
 
 **`extract_contexts`** is independent of root-level `project.contexts` (which controls downstream centroid/detector). Production typically extracts all three contexts so `sample.delete_bam` can run without losing CHG/CHH.
 

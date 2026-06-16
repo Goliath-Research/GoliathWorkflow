@@ -15,6 +15,21 @@ For production migration policy, see [`ROLLOUT.md`](ROLLOUT.md).
 
 **Distributed / queue workers:** to pre-generate per-iteration task JSON, run `methyl-validation` subcommands `plan-runs` → `export-queue` → `run-task` (per worker) → `aggregate-results`, see [`DISTRIBUTED_QUEUE.md`](DISTRIBUTED_QUEUE.md).
 
+### Workflow engine parity (StudyValidationLifecycle)
+
+| CLI | Workflow action | Notes |
+|-----|-----------------|-------|
+| `plan-workflow-context` / planner | `validation.plan_iterations` | Portal may pre-plan via `POST /v1/validation/plan-iterations` |
+| `--stability` | `validation.stability` | |
+| `--freeze` (panel prep) | `validation.prepare_freeze_project` | Binds `fixedDmpPanel` into scope |
+| freeze centroids/detectors | `pipeline.centroid` / `pipeline.detector` | Uses `${var.fixedDmpPanel}` |
+| mapper / enricher / progression | `pipeline.mapper` / `pipeline.enricher` / `pipeline.progression` | |
+| `--model-mc --model-mc-all` | `validation.model_mc` | Shared runs + per-backend loops |
+| `--select-best-model` | `validation.select_best_model` | Binds `selectedBackend` |
+| `--post-model-validation` | `validation.post_model_validation` | |
+
+Staged portal orchestration: [`workflow_engine/docs/portal_study_lifecycle.md`](../../../workflow_engine/docs/portal_study_lifecycle.md).
+
 **Hyperparameter search:** objective function over `metrics_summary.json` / optional stability outputs, small-grid driver `methyl-hyperparam-search`, see [`HYPERPARAMETER_SEARCH.md`](HYPERPARAMETER_SEARCH.md).
 
 **Config JSON Schemas:** Pydantic models are the source of truth; committed artifacts live under [`schemas/config/`](../../../schemas/config/) at the repo root. Regenerate after changing any pipeline config model:

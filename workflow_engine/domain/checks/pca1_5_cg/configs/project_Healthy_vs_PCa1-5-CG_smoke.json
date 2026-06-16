@@ -77,7 +77,6 @@
     },
     "methyl_extract": {
       "extract_contexts": ["CG", "CHG", "CHH"],
-      "chrom_mapping": "/work/genomes/human_genome/release-114/chrom_mapping.json",
       "threads": 10,
       "min_mapq": 20,
       "min_phred": 20,

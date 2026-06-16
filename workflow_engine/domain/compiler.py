@@ -281,6 +281,16 @@ def _compile_action(
                 source_json_path="$.guardrails.overall_pass",
             )
         )
+    elif entry.domain_effects and entry.domain_effects.scope_bindings:
+        for var_name, json_path in entry.domain_effects.scope_bindings:
+            ctx.output_bindings.append(
+                WorkflowOutputBindingSpec(
+                    node_key=node_key,
+                    var_name=var_name,
+                    source_kind="output_path",
+                    source_json_path=json_path,
+                )
+            )
     return node_key
 
 

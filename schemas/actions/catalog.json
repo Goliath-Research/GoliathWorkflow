@@ -573,7 +573,12 @@
         "reads_types": [
           "StratifiedCohortDraw"
         ],
-        "scope_bindings": [],
+        "scope_bindings": [
+          {
+            "output_json_path": "$.fixedDmpPanel",
+            "var_name": "fixedDmpPanel"
+          }
+        ],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -744,7 +749,12 @@
         "reads_types": [
           "StratifiedCohortDraw"
         ],
-        "scope_bindings": [],
+        "scope_bindings": [
+          {
+            "output_json_path": "$.selectedBackend",
+            "var_name": "selectedBackend"
+          }
+        ],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -754,6 +764,36 @@
       "input_schema_ref": "schemas/tasks/validation_select_best_model.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_select_best_model.output.schema.json",
       "schema_id": "validation.select_best_model",
+      "step_config_key": "validation"
+    },
+    {
+      "action_name": "validation.model_mc",
+      "argv_map": {},
+      "capability": "validation.model-mc",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "monteCarloRunsRoot",
+        "backends",
+        "productionOutputDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Monte Carlo model training across backends (shared centroid/detector + per-backend model loops).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_model_mc",
+      "input_schema_ref": "schemas/tasks/validation_model_mc.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_model_mc.output.schema.json",
+      "schema_id": "validation.model_mc",
       "step_config_key": "validation"
     },
     {

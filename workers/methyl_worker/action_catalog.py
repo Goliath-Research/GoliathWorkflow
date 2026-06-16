@@ -265,6 +265,16 @@ _DE_PLAN_ITERATIONS = DomainEffects(
     writes_types=("StratifiedCohortDraw",),
     scope_bindings=(("iterations", "$.iterations"),),
 )
+_DE_PREPARE_FREEZE = DomainEffects(
+    reads_types=("StratifiedCohortDraw",),
+    writes_types=("ValidationArtifactRef",),
+    scope_bindings=(("fixedDmpPanel", "$.fixedDmpPanel"),),
+)
+_DE_SELECT_BEST_MODEL = DomainEffects(
+    reads_types=("StratifiedCohortDraw",),
+    writes_types=("ValidationArtifactRef",),
+    scope_bindings=(("selectedBackend", "$.selectedBackend"),),
+)
 _DE_VALIDATION = DomainEffects(
     reads_types=("StratifiedCohortDraw",),
     writes_types=("ValidationArtifactRef",),
@@ -670,7 +680,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         in_process_handler="_handle_validation_prepare_freeze",
         step_config_key="validation",
         context_vars=("projectPath", "stableDmpCsv", "productionOutputDir"),
-        domain_effects=_DE_VALIDATION,
+        domain_effects=_DE_PREPARE_FREEZE,
     ),
     _in_process(
         "validation.stability_freeze_readiness",
@@ -756,6 +766,21 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         in_process_handler="_handle_validation_select_best_model",
         step_config_key="validation",
         context_vars=("projectPath", "modelMcRoot", "backends", "selectionMetric", "selectionStat"),
+        domain_effects=_DE_SELECT_BEST_MODEL,
+    ),
+    _in_process(
+        "validation.model_mc",
+        "validation.model-mc",
+        "validation.model_mc",
+        "Monte Carlo model training across backends (shared centroid/detector + per-backend model loops).",
+        "validation",
+        "methyl_worker.task_models",
+        "ValidationTaskInput",
+        "methyl_worker.task_models",
+        "ValidationTaskOutput",
+        in_process_handler="_handle_validation_model_mc",
+        step_config_key="validation",
+        context_vars=("projectPath", "monteCarloRunsRoot", "backends", "productionOutputDir"),
         domain_effects=_DE_VALIDATION,
     ),
     _in_process(

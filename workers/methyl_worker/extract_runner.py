@@ -113,6 +113,100 @@ def _pick_bool(
     return bool(value)
 
 
+def _contig_triplet(
+    chrom: str,
+    *,
+    contig_naming: str,
+    overrides: Mapping[str, Any],
+) -> tuple[str, str, str]:
+    """Return (name, bam, fasta) for one project chromosome."""
+    override = overrides.get(chrom) if isinstance(overrides, dict) else None
+    if isinstance(override, dict):
+        name = str(override.get("name") or chrom)
+        bam = str(override.get("bam") or name)
+        fasta = str(override.get("fasta") or bam)
+        return name, bam, fasta
+    naming = (contig_naming or "ensembl").strip().lower()
+    if naming == "ucsc_chr":
+        contig = chrom if chrom.startswith("chr") else f"chr{chrom}"
+        return chrom, contig, contig
+    if naming not in {"ensembl", "custom"}:
+        raise RuntimeError(f"unsupported contig_naming: {contig_naming!r}")
+    return chrom, chrom, chrom
+
+
+def _derive_chrom_mapping_object(
+    chromosomes: Sequence[str],
+    reference: str | Path,
+    step_cfg: Mapping[str, Any],
+) -> Dict[str, Any]:
+    contig_naming = str(step_cfg.get("contig_naming") or "ensembl")
+    overrides = step_cfg.get("chromosome_overrides") or {}
+    rows: List[Dict[str, Any]] = []
+    for chrom in chromosomes:
+        name, bam, fasta = _contig_triplet(
+            str(chrom),
+            contig_naming=contig_naming,
+            overrides=overrides,
+        )
+        rows.append({"name": name, "bam": bam, "fasta": fasta, "extract": True})
+    return {"reference": str(reference), "chromosomes": rows}
+
+
+def _validate_chrom_mapping(mapping: Mapping[str, Any], chromosomes: Sequence[str]) -> None:
+    entries = mapping.get("chromosomes")
+    if not isinstance(entries, list) or not entries:
+        raise RuntimeError("chrom_mapping.chromosomes must be a non-empty list")
+    extract_names = {str(e.get("name")) for e in entries if e.get("extract", True)}
+    expected = {str(c) for c in chromosomes}
+    if extract_names != expected:
+        missing = sorted(expected - extract_names)
+        extra = sorted(extract_names - expected)
+        parts: List[str] = []
+        if missing:
+            parts.append(f"missing in mapping: {missing}")
+        if extra:
+            parts.append(f"unexpected in mapping: {extra}")
+        raise RuntimeError(
+            "chrom_mapping extract names must match project.chromosomes "
+            f"({'; '.join(parts)})"
+        )
+
+
+def _materialize_chrom_mapping(
+    sample_dir: Path,
+    chrom_mapping_raw: Any,
+    chromosomes: Sequence[str],
+    reference_fasta: Path,
+    step_cfg: Mapping[str, Any],
+) -> Path:
+    if isinstance(chrom_mapping_raw, dict):
+        mapping = dict(chrom_mapping_raw)
+        _validate_chrom_mapping(mapping, chromosomes)
+        out = sample_dir / ".chrom_mapping.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(mapping, indent=2) + "\n", encoding="utf-8")
+        return out.resolve()
+
+    if chrom_mapping_raw is None or (
+        isinstance(chrom_mapping_raw, str) and not str(chrom_mapping_raw).strip()
+    ):
+        mapping = _derive_chrom_mapping_object(chromosomes, reference_fasta, step_cfg)
+        out = sample_dir / ".chrom_mapping.json"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(mapping, indent=2) + "\n", encoding="utf-8")
+        return out.resolve()
+
+    path = Path(str(chrom_mapping_raw)).expanduser().resolve()
+    if not path.is_file():
+        raise RuntimeError(f"chrom_mapping file not found: {path}")
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(loaded, dict):
+        raise RuntimeError(f"chrom_mapping file must contain a JSON object: {path}")
+    _validate_chrom_mapping(loaded, chromosomes)
+    return path
+
+
 def resolve_methyl_extract_config(
     project_path: str | Path,
     input_json: Mapping[str, Any],
@@ -150,15 +244,15 @@ def resolve_methyl_extract_config(
     if not reference_fasta.is_file():
         raise RuntimeError(f"reference FASTA not found: {reference_fasta}")
 
+    sample_dir = Path(str(sample_dir_raw)).expanduser().resolve()
     chrom_mapping_raw = _pick(input_json, step_cfg, "chromMapping", "chrom_mapping")
-    if not chrom_mapping_raw:
-        raise RuntimeError(
-            "chrom_mapping is required (task input_json.chromMapping or "
-            "project step_config.methyl_extract.chrom_mapping)"
-        )
-    chrom_mapping = Path(str(chrom_mapping_raw)).expanduser().resolve()
-    if not chrom_mapping.is_file():
-        raise RuntimeError(f"chrom_mapping file not found: {chrom_mapping}")
+    chrom_mapping = _materialize_chrom_mapping(
+        sample_dir,
+        chrom_mapping_raw,
+        chromosomes,
+        reference_fasta,
+        step_cfg,
+    )
 
     extract_contexts = _normalize_contexts(
         _pick(input_json, step_cfg, "extractContexts", "extract_contexts")

@@ -33,7 +33,6 @@ def _write_min_project(
     else:
         step_config["methyl_extract"] = {
             "extract_contexts": ["CG", "CHG", "CHH"],
-            "chrom_mapping": str(chrom_mapping),
             "threads": 10,
             "min_mapq": 20,
             "split": True,
@@ -106,7 +105,6 @@ def test_build_command_cg_only_skips_chg_chh(tmp_path: Path) -> None:
         project,
         methyl_extract={
             "extract_contexts": ["CG"],
-            "chrom_mapping": str(project.parent / "chrom_mapping.json"),
         },
     )
     sample_dir = tmp_path / "S2"
@@ -130,17 +128,77 @@ def test_build_command_cg_only_skips_chg_chh(tmp_path: Path) -> None:
     assert "--CHH" not in cmd
 
 
-def test_missing_chrom_mapping_raises(tmp_path: Path) -> None:
+def test_derives_chrom_mapping_from_chromosomes(tmp_path: Path) -> None:
+    project = tmp_path / "project.json"
+    ref = _write_min_project(project, chromosomes=["1", "21"])
+    sample_dir = tmp_path / "S1"
+    sample_dir.mkdir()
+
+    cfg = runner.resolve_methyl_extract_config(
+        project,
+        {"sampleId": "S1", "sampleDir": str(sample_dir), "referenceFasta": str(ref)},
+    )
+    assert cfg.chrom_mapping.is_file()
+    assert cfg.chrom_mapping.name == ".chrom_mapping.json"
+    payload = json.loads(cfg.chrom_mapping.read_text(encoding="utf-8"))
+    names = {row["name"] for row in payload["chromosomes"]}
+    assert names == {"1", "21"}
+
+
+def test_inline_chrom_mapping_object_materialized(tmp_path: Path) -> None:
+    project = tmp_path / "project.json"
+    ref = _write_min_project(project, chromosomes=["1"])
+    inline = {
+        "reference": str(ref),
+        "chromosomes": [{"name": "1", "bam": "1", "fasta": "1", "extract": True}],
+    }
+    project_data = json.loads(project.read_text(encoding="utf-8"))
+    project_data["step_config"]["methyl_extract"]["chrom_mapping"] = inline
+    project.write_text(json.dumps(project_data), encoding="utf-8")
+    sample_dir = tmp_path / "S2"
+    sample_dir.mkdir()
+
+    cfg = runner.resolve_methyl_extract_config(
+        project,
+        {"sampleId": "S2", "sampleDir": str(sample_dir), "referenceFasta": str(ref)},
+    )
+    assert json.loads(cfg.chrom_mapping.read_text(encoding="utf-8")) == inline
+
+
+def test_chrom_mapping_mismatch_raises(tmp_path: Path) -> None:
+    project = tmp_path / "project.json"
+    ref = _write_min_project(project, chromosomes=["1", "2"])
+    sample_dir = tmp_path / "S1"
+    sample_dir.mkdir()
+    with pytest.raises(RuntimeError, match="must match project.chromosomes"):
+        runner._materialize_chrom_mapping(
+            sample_dir,
+            {
+                "reference": str(ref),
+                "chromosomes": [{"name": "1", "bam": "1", "fasta": "1", "extract": True}],
+            },
+            ["1", "2"],
+            ref,
+            {},
+        )
+
+
+def test_ucsc_chr_contig_naming(tmp_path: Path) -> None:
     project = tmp_path / "project.json"
     ref = _write_min_project(
         project,
-        methyl_extract={"extract_contexts": ["CG"]},
+        chromosomes=["1"],
+        methyl_extract={"contig_naming": "ucsc_chr", "extract_contexts": ["CG"]},
     )
-    with pytest.raises(RuntimeError, match="chrom_mapping"):
-        runner.resolve_methyl_extract_config(
-            project,
-            {"sampleId": "S1", "sampleDir": str(tmp_path / "S1"), "referenceFasta": str(ref)},
-        )
+    sample_dir = tmp_path / "S1"
+    sample_dir.mkdir()
+    cfg = runner.resolve_methyl_extract_config(
+        project,
+        {"sampleId": "S1", "sampleDir": str(sample_dir), "referenceFasta": str(ref)},
+    )
+    row = json.loads(cfg.chrom_mapping.read_text(encoding="utf-8"))["chromosomes"][0]
+    assert row["bam"] == "chr1"
+    assert row["name"] == "1"
 
 
 def test_idempotent_skip_when_all_h5_present(tmp_path: Path) -> None:

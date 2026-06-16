@@ -118,6 +118,10 @@ Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contr
 | Enricher | `methyl-enricher` | **2** |
 | Disease progression | `methyl-disease-progression` | **2** |
 | MC validation loop | **ValidationPipeline** + planner | [wf_validation_pipeline_seed.sql](sql/wf_validation_pipeline_seed.sql) |
+| Study validation lifecycle | **StudyValidationLifecycle** | `validation.plan_iterations` → stability → freeze → mapper/enricher/progression → `validation.model_mc` → `validation.select_best_model` → `validation.post_model_validation` |
+| Portal staged start | `POST /v1/studies/validation/start` | [docs/portal_study_lifecycle.md](docs/portal_study_lifecycle.md) |
+| Methyl extract chrom mapping | Derived from `project.chromosomes` | `step_config.methyl_extract.contig_naming` / inline `chrom_mapping` object |
+| Compiler scope bindings | `iterations`, `fixedDmpPanel`, `selectedBackend` | From `action_catalog` `domain_effects.scope_bindings` → `variable_output_binding` |
 
 **Milestone 1:** `PCaTwoGroupFlow` — one control vs one disease, 24 chromosomes.  
 **Milestone 2:** `PCaOvrFlow` — `control_vs_each_disease` (PCa_Low ∥ PCa_High), then mapper → enricher → progression.

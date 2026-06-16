@@ -70,6 +70,26 @@ def test_compiler_emits_root_scope_defaults():
     assert defaults.get("centroid1Dir") == "root"
 
 
+def test_compiler_emits_validation_scope_output_bindings():
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "ValidationBindings",
+            "projectPath": "/work/project.json",
+            "body": [
+                {"do": "validation.plan_iterations", "node_key": "plan"},
+                {"do": "validation.prepare_freeze_project", "node_key": "freeze"},
+                {"do": "validation.select_best_model", "node_key": "select"},
+            ],
+        }
+    )
+    result = compile_domain_program(program)
+    bindings = {(b.node_key, b.var_name, b.source_json_path) for b in result.workflow.output_bindings}
+    assert ("plan", "iterations", "$.iterations") in bindings
+    assert ("freeze", "fixedDmpPanel", "$.fixedDmpPanel") in bindings
+    assert ("select", "selectedBackend", "$.selectedBackend") in bindings
+
+
 def test_two_group_emits_collection_bindings():
     result = compile_domain_program(_load("two_group_comparison.program.json"))
     kinds = {b.scope_var: b.kind for b in result.workflow.collection_bindings}

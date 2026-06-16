@@ -25,6 +25,7 @@ PROJECT_NAME = "project_Healthy_vs_PCa1-5-CG.json"
 PROJECT_SMOKE_NAME = "project_Healthy_vs_PCa1-5-CG_smoke.json"
 PROGRAM_MC = "pca1_5_mc_stability.program.json"
 PROGRAM_MC_SMOKE = "pca1_5_mc_stability_smoke.program.json"
+PROGRAM_LIFECYCLE = "study_validation_lifecycle.program.json"
 
 
 def _ensure_import_paths() -> None:
@@ -46,6 +47,7 @@ def load_bundle_paths() -> dict[str, Path]:
         "project_smoke": CONFIGS / PROJECT_SMOKE_NAME,
         "program_mc": CONFIGS / PROGRAM_MC,
         "program_mc_smoke": CONFIGS / PROGRAM_MC_SMOKE,
+        "program_lifecycle": CONFIGS / PROGRAM_LIFECYCLE,
         "instance_context": INSTANCE / "context.json",
         "instance_context_smoke": INSTANCE / "context_smoke.json",
         "healthy_csv": DATA / "pca_h.csv",
@@ -215,6 +217,19 @@ def main() -> int:
 
     spec_path = write_compiled_spec(args.write_spec, spec)
     print(f"wrote compiled spec: {spec_path}")
+
+    lifecycle_program = CONFIGS / PROGRAM_LIFECYCLE
+    if lifecycle_program.is_file():
+        lifecycle_summary, lifecycle_spec = compile_program(lifecycle_program, args.project)
+        lifecycle_dir = CHECK_ROOT / "compiled" / "study_validation_lifecycle"
+        lifecycle_path = write_compiled_spec(lifecycle_dir, lifecycle_spec)
+        print("lifecycle compile:", json.dumps(lifecycle_summary, indent=2))
+        print(f"wrote lifecycle compiled spec: {lifecycle_path}")
+        output_bindings = lifecycle_spec.get("output_bindings") or []
+        bound_vars = {b.get("var_name") for b in output_bindings}
+        assert bound_vars >= {"iterations", "fixedDmpPanel", "selectedBackend"}, (
+            f"missing lifecycle output bindings: {bound_vars}"
+        )
 
     if args.install:
         install_to_work(force=args.force)
