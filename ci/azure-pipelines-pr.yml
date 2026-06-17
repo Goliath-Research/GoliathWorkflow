@@ -23,7 +23,7 @@ steps:
       versionSpec: $(PYTHON_VERSION)
 
   - script: |
-      python -m pip install -U pip pytest
+      python -m pip install -U pip pytest pytest-cov
     displayName: Install pytest
 
   - script: |
