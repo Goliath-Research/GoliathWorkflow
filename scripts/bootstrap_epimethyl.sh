@@ -100,7 +100,6 @@ VENV_DIR="$ROOT/venv-${ARCH_KEY}"
 ENV_DIR="$ROOT/env"
 DATA_DIR="$ROOT/data"
 RUNS_DIR="$ROOT/runs"
-DOCKER_DATA_ROOT="${DOCKER_DATA_ROOT:-$ROOT/docker}"
 
 info "Bootstrap epimethyl"
 info "  root: $ROOT"
@@ -110,9 +109,11 @@ if [[ -n "$RELEASE_DIR" ]]; then
   info "  mode: production release ($RELEASE_DIR)"
 fi
 
-run mkdir -p "$ENV_DIR" "$DATA_DIR" "$RUNS_DIR" "$DOCKER_DATA_ROOT"
+run mkdir -p "$ENV_DIR" "$DATA_DIR" "$RUNS_DIR"
 
 if [[ -n "$RELEASE_DIR" ]]; then
+  DOCKER_DATA_ROOT="${DOCKER_DATA_ROOT:-$ROOT/docker}"
+  run mkdir -p "$DOCKER_DATA_ROOT"
   [[ -d "$RELEASE_DIR" ]] || die "Release directory not found: $RELEASE_DIR"
   SCRIPTS_DIR="$RELEASE_DIR/runtime-bundle/scripts"
   [[ -d "$SCRIPTS_DIR" ]] || SCRIPTS_DIR="$SCRIPT_DIR"

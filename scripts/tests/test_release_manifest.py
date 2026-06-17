@@ -58,6 +58,15 @@ def test_release_scripts_pass_bash_syntax_check() -> None:
         subprocess.run(["bash", "-n", str(path)], check=True, capture_output=True)
 
 
+def test_bootstrap_docker_data_root_default_only_in_release_mode() -> None:
+    text = (REPO_ROOT / "scripts/bootstrap_epimethyl.sh").read_text(encoding="utf-8")
+    default_line = 'DOCKER_DATA_ROOT="${DOCKER_DATA_ROOT:-$ROOT/docker}"'
+    release_marker = 'if [[ -n "$RELEASE_DIR" ]]; then'
+    pre_release = text.split(release_marker, 1)[0]
+    assert default_line not in pre_release, "DOCKER_DATA_ROOT must not default before release-dir check"
+    assert default_line in text.split(release_marker, 1)[1]
+
+
 def test_write_worker_env_from_manifest(tmp_path: Path) -> None:
     root = tmp_path / "epimethyl"
     release = root / "releases" / "2026.06.1"
