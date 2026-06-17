@@ -1,6 +1,8 @@
 #!/bin/bash
 # Bootstrap MethylPipeline + MethylExtractor on shared storage (/work/epimethyl).
 # Host-native worker provisioning: .venv, Python packages, MethylExtractor build, env files.
+#
+# Production path: use --release-dir to install from a versioned release (no git sources).
 
 set -euo pipefail
 
@@ -10,14 +12,18 @@ Usage: scripts/bootstrap_epimethyl.sh [options]
 
 Options:
   --root PATH              Shared storage root (default: /work/epimethyl)
-  --pipeline-url URL       MethylPipeline git remote
-  --extractor-url URL      MethylExtractor git remote
+  --release-dir PATH       Production release directory (skips git clone/build; uses install_release.sh)
+  --arch KEY               aarch64 or amd64 (default: detect); used with --release-dir
+  --promote-release        Run promote_release.sh (extract, venv, flip current, worker.env)
+  --pipeline-url URL       MethylPipeline git remote (dev/bootstrap path)
+  --extractor-url URL      MethylExtractor git remote (dev/bootstrap path)
   --branch NAME            Git branch for both repos (default: current or main)
   --system-deps            Pass --system-deps to setup_host.sh
   --gpu                    Force GPU Python requirements
   --skip-docker            Skip setup_gpu_node.sh
   --skip-parabricks-pull   Do not docker pull Parabricks image
   --skip-methyl-extractor  Skip MethylExtractor build
+  --docker-data-root PATH  Shared Docker data-root (default: /work/epimethyl/docker with --release-dir)
   --dry-run                Print actions without executing
   -h, --help               Show this help
 
@@ -35,6 +41,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/detect_platform.sh"
 
 ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
+RELEASE_DIR=""
+ARCH=""
+PROMOTE_RELEASE=0
 PIPELINE_URL="${METHYL_PIPELINE_URL:-}"
 EXTRACTOR_URL="${METHYL_EXTRACTOR_URL:-}"
 BRANCH=""
@@ -43,11 +52,15 @@ GPU_FLAG=0
 SKIP_DOCKER=0
 SKIP_PARABRICKS_PULL=0
 SKIP_METHYL_EXTRACTOR=0
+DOCKER_DATA_ROOT=""
 DRY_RUN=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --root) ROOT="${2:-}"; shift 2 ;;
+    --release-dir) RELEASE_DIR="${2:-}"; shift 2 ;;
+    --arch) ARCH="${2:-}"; shift 2 ;;
+    --promote-release) PROMOTE_RELEASE=1; shift ;;
     --pipeline-url) PIPELINE_URL="${2:-}"; shift 2 ;;
     --extractor-url) EXTRACTOR_URL="${2:-}"; shift 2 ;;
     --branch) BRANCH="${2:-}"; shift 2 ;;
@@ -56,6 +69,7 @@ while [[ $# -gt 0 ]]; do
     --skip-docker) SKIP_DOCKER=1; shift ;;
     --skip-parabricks-pull) SKIP_PARABRICKS_PULL=1; shift ;;
     --skip-methyl-extractor) SKIP_METHYL_EXTRACTOR=1; shift ;;
+    --docker-data-root) DOCKER_DATA_ROOT="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
@@ -75,22 +89,76 @@ run() {
 }
 
 UNAME_ARCH="$(detect_uname_arch)"
-ARCH_KEY="$(platform_arch_key "$UNAME_ARCH")"
+ARCH_KEY="${ARCH:-$(platform_arch_key "$UNAME_ARCH")}"
 ME_SUBDIR="$(resolve_methyl_extractor_subdir "$UNAME_ARCH")"
 PARABRICKS_IMAGE="${METHYL_PARABRICKS_IMAGE:-$(resolve_parabricks_image)}"
 
 REPOS="$ROOT/repos"
 PIPELINE_DIR="$REPOS/MethylPipeline"
 EXTRACTOR_DIR="$REPOS/MethylExtractor"
-VENV_DIR="$ROOT/venv"
+VENV_DIR="$ROOT/venv-${ARCH_KEY}"
 ENV_DIR="$ROOT/env"
 DATA_DIR="$ROOT/data"
 RUNS_DIR="$ROOT/runs"
+DOCKER_DATA_ROOT="${DOCKER_DATA_ROOT:-$ROOT/docker}"
 
 info "Bootstrap epimethyl"
 info "  root: $ROOT"
 info "  arch: $UNAME_ARCH ($ARCH_KEY)"
 info "  parabricks: ${PARABRICKS_IMAGE:-<unset>}"
+if [[ -n "$RELEASE_DIR" ]]; then
+  info "  mode: production release ($RELEASE_DIR)"
+fi
+
+run mkdir -p "$ENV_DIR" "$DATA_DIR" "$RUNS_DIR" "$DOCKER_DATA_ROOT"
+
+if [[ -n "$RELEASE_DIR" ]]; then
+  [[ -d "$RELEASE_DIR" ]] || die "Release directory not found: $RELEASE_DIR"
+  SCRIPTS_DIR="$RELEASE_DIR/runtime-bundle/scripts"
+  [[ -d "$SCRIPTS_DIR" ]] || SCRIPTS_DIR="$SCRIPT_DIR"
+
+  if [[ "$SYSTEM_DEPS" -eq 1 ]]; then
+    info "Running setup_host.sh --system-deps (no venv install) ..."
+    SETUP_ARGS=(--system-deps --no-venv)
+    [[ "$GPU_FLAG" -eq 1 ]] && SETUP_ARGS+=(--gpu)
+    run bash "$SCRIPTS_DIR/setup_host.sh" "${SETUP_ARGS[@]}" 2>/dev/null || \
+      run bash "$REPO_ROOT/scripts/setup_host.sh" "${SETUP_ARGS[@]}"
+  fi
+
+  if [[ "$PROMOTE_RELEASE" -eq 1 ]]; then
+    PROMOTE_ARGS=(--root "$ROOT" --release "$RELEASE_DIR" --arch "$ARCH_KEY")
+    [[ "$SKIP_PARABRICKS_PULL" -eq 0 ]] && PROMOTE_ARGS+=(--pull-parabricks) || PROMOTE_ARGS+=(--skip-docker-pull)
+    run bash "$SCRIPTS_DIR/promote_release.sh" "${PROMOTE_ARGS[@]}"
+  else
+    run bash "$SCRIPTS_DIR/install_release.sh" --release-dir "$RELEASE_DIR" --venv "$VENV_DIR"
+    ME_BIN="$ROOT/methyl-extractor-${ARCH_KEY}/bin/MethylExtractor"
+    PLUGIN_DIR="$ROOT/methyl-extractor-${ARCH_KEY}/lib/hdf5_zstd_plugin"
+    if [[ ! -x "$ME_BIN" ]]; then
+      ME_BIN="${METHYL_EXTRACTOR_BIN:-MethylExtractor}"
+      PLUGIN_DIR="${HDF5_PLUGIN_PATH:-/usr/local/hdf5/lib/plugin}"
+      warn "MethylExtractor not at shared path; run promote_release.sh or extract tarball"
+    fi
+    WORKER_API_BASE="${WORKER_API_BASE:-http://localhost:8080/v1}"
+    run bash "$SCRIPTS_DIR/write_worker_env.sh" --root "$ROOT" --manifest "$RELEASE_DIR/manifest.json" \
+      --arch "$ARCH_KEY" --worker-api-base "$WORKER_API_BASE"
+  fi
+
+  if [[ "$SKIP_DOCKER" -eq 0 ]]; then
+    GPU_ARGS=(--docker-data-root "$DOCKER_DATA_ROOT" --env-dir "$ENV_DIR" --skip-docker)
+    if [[ "$SKIP_PARABRICKS_PULL" -eq 0 && "$PROMOTE_RELEASE" -eq 0 ]]; then
+      GPU_ARGS+=(--pull-parabricks)
+    fi
+    run bash "$SCRIPTS_DIR/setup_gpu_node.sh" "${GPU_ARGS[@]}" 2>/dev/null || \
+      run bash "$REPO_ROOT/scripts/setup_gpu_node.sh" "${GPU_ARGS[@]}"
+  fi
+
+  info "Bootstrap (release) complete."
+  info "Next steps:"
+  info "  1. source $ENV_DIR/worker.env"
+  info "  2. Register worker: $SCRIPTS_DIR/register_worker.sh"
+  info "  3. Verify node: $SCRIPTS_DIR/verify_e2e_node.sh"
+  exit 0
+fi
 
 clone_or_update() {
   local url="$1"
@@ -139,11 +207,12 @@ clone_or_update() {
   fi
 }
 
-run mkdir -p "$REPOS" "$ENV_DIR" "$DATA_DIR" "$RUNS_DIR"
+run mkdir -p "$REPOS"
 
 clone_or_update "$PIPELINE_URL" "$PIPELINE_DIR"
 clone_or_update "$EXTRACTOR_URL" "$EXTRACTOR_DIR"
 
+VENV_DIR="$ROOT/venv"
 SETUP_ARGS=(--venv "$VENV_DIR")
 if [[ "$SYSTEM_DEPS" -eq 1 ]]; then
   SETUP_ARGS+=(--system-deps)
@@ -170,7 +239,7 @@ if [[ "$SKIP_METHYL_EXTRACTOR" -eq 0 && -d "$EXTRACTOR_DIR" ]]; then
   info "Building MethylExtractor ($ME_SUBDIR) ..."
   run bash -c "cd '$EXTRACTOR_DIR' && make"
   if [[ "$DRY_RUN" -eq 0 ]]; then
-  ME_BIN="$EXTRACTOR_DIR/build/dynamic/$ME_SUBDIR/MethylExtractor"
+    ME_BIN="$EXTRACTOR_DIR/build/dynamic/$ME_SUBDIR/MethylExtractor"
     if [[ ! -x "$ME_BIN" ]]; then
       die "MethylExtractor binary not found at $ME_BIN"
     fi
@@ -186,6 +255,9 @@ fi
 
 if [[ "$SKIP_DOCKER" -eq 0 ]]; then
   GPU_ARGS=(--env-dir "$ENV_DIR")
+  if [[ -n "$DOCKER_DATA_ROOT" ]]; then
+    GPU_ARGS+=(--docker-data-root "$DOCKER_DATA_ROOT")
+  fi
   if [[ "$SKIP_PARABRICKS_PULL" -eq 0 ]]; then
     GPU_ARGS+=(--pull-parabricks)
   fi

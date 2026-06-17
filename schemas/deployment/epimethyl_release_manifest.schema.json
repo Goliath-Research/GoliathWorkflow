@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://epimethyl.local/schemas/deployment/epimethyl_release_manifest.schema.json",
+  "title": "Epimethyl release manifest",
+  "description": "Single source of truth for a production GPU worker release on shared storage.",
+  "type": "object",
+  "required": [
+    "version",
+    "python",
+    "parabricks_image",
+    "docker_data_root",
+    "artifacts",
+    "requirements_lock"
+  ],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Release identifier (e.g. 2026.06.1 or git tag).",
+      "minLength": 1
+    },
+    "python": {
+      "type": "string",
+      "description": "Python minor series used for venv (e.g. 3.12).",
+      "pattern": "^3\\.[0-9]+$"
+    },
+    "parabricks_image": {
+      "type": "string",
+      "description": "Clara Parabricks container image reference (tag or digest)."
+    },
+    "parabricks_image_digest": {
+      "type": "string",
+      "description": "Optional sha256 digest from docker inspect for pin validation."
+    },
+    "docker_data_root": {
+      "type": "string",
+      "description": "Shared Docker data-root on fast storage (e.g. /work/epimethyl/docker)."
+    },
+    "min_driver_version": {
+      "type": "string",
+      "description": "Minimum tested NVIDIA driver version (informational)."
+    },
+    "requirements_lock": {
+      "type": "string",
+      "description": "Filename of pip lockfile relative to release directory."
+    },
+    "runtime_bundle": {
+      "type": "string",
+      "description": "Optional runtime-bundle subdirectory name (default: runtime-bundle)."
+    },
+    "artifacts": {
+      "type": "object",
+      "description": "Per-CPU-architecture artifact filenames relative to release directory.",
+      "propertyNames": {
+        "enum": ["aarch64", "amd64"]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["methyl_extractor"],
+        "properties": {
+          "methyl_extractor": {
+            "type": "string",
+            "description": "Tarball containing bin/MethylExtractor and lib/hdf5_zstd_plugin/."
+          },
+          "sha256": {
+            "type": "string",
+            "description": "Hex digest of methyl_extractor tarball."
+          },
+          "parabricks_docker_save": {
+            "type": "string",
+            "description": "Optional docker save tarball fallback (parabricks-<ver>-<arch>.docker.tgz)."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

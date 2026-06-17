@@ -1,0 +1,57 @@
+# MethylPipeline production release pipeline (Azure DevOps)
+# Copy to MethylExtractor repo root or reference as template pipeline.
+#
+# Triggers on version tags: v*
+# Publishes wheels, runtime-bundle, and manifest stub to shared storage and Azure Artifacts.
+
+trigger:
+  tags:
+    include:
+      - v*
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  EPIMETHYL_ROOT: /work/epimethyl
+  PYTHON_VERSION: "3.12"
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: $(PYTHON_VERSION)
+
+  - script: |
+      python -m pip install -U pip build wheel pip-tools
+    displayName: Install build tools
+
+  - script: |
+      VERSION="${BUILD_SOURCEBRANCHNAME#v}"
+      bash scripts/build_release.sh \
+        --version "$VERSION" \
+        --output "$(Build.ArtifactStagingDirectory)/release" \
+        --with-gpu-reqs
+    displayName: Build release (wheels + runtime-bundle + manifest)
+
+  - task: PublishPipelineArtifact@1
+    inputs:
+      targetPath: $(Build.ArtifactStagingDirectory)/release
+      artifactName: methyl-pipeline-release
+    displayName: Publish release artifact
+
+  # Phase 2: copy to shared storage (agent must mount /work)
+  - script: |
+      VERSION="${BUILD_SOURCEBRANCHNAME#v}"
+      DEST="$(EPIMETHYL_ROOT)/releases/$VERSION"
+      sudo mkdir -p "$DEST"
+      sudo rsync -a "$(Build.ArtifactStagingDirectory)/release/" "$DEST/"
+      echo "Published to $DEST"
+    displayName: Copy to shared storage (/work/epimethyl)
+    condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
+
+  # Phase 2: Azure Artifacts PyPI feed
+  # - task: TwineAuthenticate@1
+  #   inputs:
+  #     artifactFeed: EpiMethyl/pypi-epimethyl
+  # - script: twine upload --repository pypi-epimethyl $(Build.ArtifactStagingDirectory)/release/wheels/*.whl
+  #   displayName: Upload wheels to Azure Artifacts

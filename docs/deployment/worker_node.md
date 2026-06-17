@@ -2,7 +2,11 @@
 
 Host-native workers on shared storage under `/work/epimethyl`. Docker is used **only** for Parabricks alignment.
 
+**Production releases** (wheels, binary tarballs, shared Docker store): see [`production_release.md`](production_release.md), [`gpu_worker_runbook.md`](gpu_worker_runbook.md), and [`worker_provision.md`](worker_provision.md).
+
 ## Directory layout
+
+Development bootstrap (git clones):
 
 ```
 /work/epimethyl/
@@ -17,7 +21,20 @@ Host-native workers on shared storage under `/work/epimethyl`. Docker is used **
   runs/
 ```
 
-## Bootstrap a new node
+Production release layout (no git on workers):
+
+```
+/work/epimethyl/
+  current -> releases/<ver>/
+  releases/<ver>/manifest.json, wheels/, runtime-bundle/
+  venv-aarch64/  venv-amd64/
+  methyl-extractor-aarch64/  methyl-extractor-amd64/
+  docker/          # shared Docker data-root (Parabricks image layers)
+  env/
+  data/  runs/
+```
+
+## Bootstrap a new node (development)
 
 ```bash
 export METHYL_PIPELINE_URL=<git-url>   # optional if seeding from local checkout
@@ -29,6 +46,24 @@ sudo bash /work/epimethyl/repos/MethylPipeline/scripts/bootstrap_epimethyl.sh \
   --system-deps \
   --gpu
 ```
+
+## Bootstrap from a production release
+
+After CI publishes to `/work/epimethyl/releases/<ver>/`:
+
+```bash
+export WORKER_API_BASE=https://gateway.example.com/v1
+
+bash scripts/bootstrap_epimethyl.sh \
+  --root /work/epimethyl \
+  --release-dir /work/epimethyl/releases/2026.06.1 \
+  --arch aarch64 \
+  --promote-release \
+  --system-deps \
+  --skip-parabricks-pull   # if promote already pulled Parabricks to shared docker/
+```
+
+Or promote and install separately: [`promote_release.sh`](../../scripts/promote_release.sh), [`install_release.sh`](../../scripts/install_release.sh).
 
 Or from a fresh machine before clones exist:
 
@@ -42,11 +77,21 @@ sudo /tmp/MethylPipeline/scripts/bootstrap_epimethyl.sh \
 
 ## GPU / Docker / Parabricks only
 
+Shared Docker data-root (production — all GPU VMs point at `/work/epimethyl/docker`):
+
+```bash
+bash scripts/setup_gpu_node.sh \
+  --docker-data-root /work/epimethyl/docker \
+  --env-dir /work/epimethyl/env
+```
+
+Pull Parabricks once during release promote, or on a single admin node:
+
 ```bash
 bash scripts/setup_gpu_node.sh --pull-parabricks --env-dir /work/epimethyl/env
 ```
 
-## Python packages (canonical list)
+## Python packages (development / editable)
 
 All worker-capable packages install from [`scripts/packages.list`](../../scripts/packages.list) via [`scripts/install_packages.sh`](../../scripts/install_packages.sh) (includes `workers/`).
 
@@ -54,6 +99,8 @@ All worker-capable packages install from [`scripts/packages.list`](../../scripts
 source /work/epimethyl/venv/bin/activate
 ./scripts/install_all.sh --pipeline-reqs --gpu-reqs --skip-marp
 ```
+
+Production installs use [`scripts/install_release.sh`](../../scripts/install_release.sh) from release wheels (non-editable).
 
 ## Environment contract
 
@@ -107,6 +154,13 @@ sudo systemctl enable --now methyl-worker@methyl-qc.service  # per capability
 ```
 
 Adjust paths in unit files if `EPIMETHYL_ROOT` differs from `/work/epimethyl`.
+
+Production workers use **arch-specific venvs** (`venv-aarch64` or `venv-amd64`). Update `Environment=PATH=` and `ExecStart=` in the unit file to match the node architecture, for example:
+
+```
+Environment=PATH=/work/epimethyl/venv-aarch64/bin:...
+ExecStart=/work/epimethyl/venv-aarch64/bin/methyl-worker --api-base ${WORKER_API_BASE}
+```
 
 ## Verification
 

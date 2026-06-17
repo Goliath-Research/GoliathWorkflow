@@ -1,6 +1,6 @@
 #!/bin/bash
 # Install Docker Engine and NVIDIA Container Toolkit on Ubuntu GPU worker nodes.
-# Optionally pull the Clara Parabricks image and write parabricks.env.
+# Optionally configure shared data-root and pull Clara Parabricks.
 
 set -euo pipefail
 
@@ -9,10 +9,11 @@ usage() {
 Usage: scripts/setup_gpu_node.sh [options]
 
 Options:
-  --pull-parabricks   Pull METHYL_PARABRICKS_IMAGE after setup
-  --env-dir PATH      Write parabricks.env (default: /work/epimethyl/env)
-  --skip-docker       Skip Docker / NVIDIA toolkit install (verify only)
-  -h, --help          Show this help
+  --pull-parabricks       Pull METHYL_PARABRICKS_IMAGE after setup (release promote, not node join)
+  --docker-data-root PATH Set Docker data-root to shared storage (e.g. /work/epimethyl/docker)
+  --env-dir PATH          Write parabricks.env (default: /work/epimethyl/env)
+  --skip-docker           Skip Docker / NVIDIA toolkit install (verify only)
+  -h, --help              Show this help
 
 Prerequisites:
   - Ubuntu/Debian with apt-get
@@ -22,6 +23,10 @@ Prerequisites:
 Environment:
   METHYL_PARABRICKS_IMAGE   Override Parabricks image (else platform_matrix.env)
   PLATFORM_MATRIX_FILE      Path to scripts/platform_matrix.env
+
+Notes:
+  - Use --docker-data-root on every GPU VM so all nodes share image layers on fast storage.
+  - Run --pull-parabricks only during release promote (scripts/promote_release.sh), not on each node join.
 EOF
 }
 
@@ -31,11 +36,13 @@ source "$SCRIPT_DIR/detect_platform.sh"
 
 PULL_PARABRICKS=0
 SKIP_DOCKER=0
+DOCKER_DATA_ROOT=""
 ENV_DIR="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --pull-parabricks) PULL_PARABRICKS=1; shift ;;
+    --docker-data-root) DOCKER_DATA_ROOT="${2:-}"; shift 2 ;;
     --env-dir) ENV_DIR="${2:-}"; shift 2 ;;
     --skip-docker) SKIP_DOCKER=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -57,6 +64,42 @@ if [[ "$(id -u)" -ne 0 ]]; then
   command -v sudo >/dev/null 2>&1 || die "sudo required for package installation"
   sudo_cmd="sudo"
 fi
+
+configure_docker_data_root() {
+  local root="${1:?data-root path required}"
+  root="$(readlink -f "$root" 2>/dev/null || echo "$root")"
+  info "Configuring Docker data-root: $root"
+  mkdir -p "$root"
+  local daemon_json="/etc/docker/daemon.json"
+  if [[ -f "$daemon_json" ]]; then
+    if command -v python3 >/dev/null 2>&1; then
+      $sudo_cmd python3 - <<PY "$root" "$daemon_json"
+import json, sys
+root, path = sys.argv[1], sys.argv[2]
+try:
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+except (json.JSONDecodeError, OSError):
+    data = {}
+if data.get("data-root") == root:
+    sys.exit(0)
+data["data-root"] = root
+with open(path, "w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
+PY
+    else
+      warn "python3 not found; writing minimal daemon.json"
+      echo "{\"data-root\": \"$root\"}" | $sudo_cmd tee "$daemon_json" >/dev/null
+    fi
+  else
+    $sudo_cmd mkdir -p /etc/docker
+    echo "{\"data-root\": \"$root\"}" | $sudo_cmd tee "$daemon_json" >/dev/null
+  fi
+  if systemctl is-active docker >/dev/null 2>&1; then
+    $sudo_cmd systemctl restart docker || $sudo_cmd service docker restart || true
+  fi
+}
 
 install_docker() {
   if command -v docker >/dev/null 2>&1; then
@@ -105,9 +148,15 @@ install_nvidia_container_toolkit() {
 
 if [[ "$SKIP_DOCKER" -eq 0 ]]; then
   install_docker
+  if [[ -n "$DOCKER_DATA_ROOT" ]]; then
+    configure_docker_data_root "$DOCKER_DATA_ROOT"
+  fi
   install_nvidia_container_toolkit
 else
   info "Skipping Docker install (--skip-docker)"
+  if [[ -n "$DOCKER_DATA_ROOT" ]]; then
+    configure_docker_data_root "$DOCKER_DATA_ROOT"
+  fi
 fi
 
 IMAGE="${METHYL_PARABRICKS_IMAGE:-$(resolve_parabricks_image)}"
@@ -132,7 +181,7 @@ if [[ "$PULL_PARABRICKS" -eq 1 ]]; then
 fi
 
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-if [[ -x "$REPO_ROOT/scripts/verify_parabricks.sh" && -n "${IMAGE:-}" ]]; then
+if [[ -x "$REPO_ROOT/scripts/verify_parabricks.sh" && -n "${IMAGE:-}" && "$PULL_PARABRICKS" -eq 1 ]]; then
   info "Running verify_parabricks.sh ..."
   export METHYL_PARABRICKS_IMAGE="$IMAGE"
   bash "$REPO_ROOT/scripts/verify_parabricks.sh" || warn "Parabricks verification failed (image may need NGC login)"
