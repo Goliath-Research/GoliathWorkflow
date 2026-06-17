@@ -1,4 +1,6 @@
 # MethylPipeline PR validation — tests + release packaging smoke (no publish)
+#
+# Azure DevOps: New pipeline → this repo → /ci/azure-pipelines-pr.yml
 
 trigger: none
 

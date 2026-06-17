@@ -20,7 +20,7 @@ Output layout inside tarball:
   lib/hdf5_zstd_plugin/
   VERSION.txt
 
-Reference for MethylExtractor repo CI: ci/azure-pipelines-methyl-extractor-release.yml
+Reference for MethylExtractor repo CI: MethylExtractor/ci/azure-pipelines-release.yml
 EOF
 }
 

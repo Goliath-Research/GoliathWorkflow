@@ -1,5 +1,7 @@
-# MethylPipeline production release pipeline
-# Tag trigger: v2026.6.1 — builds wheels, runtime-bundle, publishes to PyPI feed + pipeline artifact.
+# MethylPipeline production release — tag v* (SemVer e.g. v2026.6.1)
+# Builds wheels, runtime-bundle; publishes to PyPI feed + pipeline artifact.
+#
+# Azure DevOps: New pipeline → this repo → /ci/azure-pipelines-release.yml
 
 trigger:
   tags:
