@@ -56,7 +56,7 @@ export WORKER_API_BASE=https://gateway.example.com/v1
 
 bash scripts/bootstrap_epimethyl.sh \
   --root /work/epimethyl \
-  --release-dir /work/epimethyl/releases/2026.06.1 \
+  --release-dir /work/epimethyl/releases/2026.6.1 \
   --arch aarch64 \
   --promote-release \
   --system-deps \

@@ -1,7 +1,7 @@
 # MethylPipeline production release pipeline (Azure DevOps)
 # Copy to MethylExtractor repo root or reference as template pipeline.
 #
-# Triggers on version tags: v*
+# Triggers on version tags: v* (SemVer after v, e.g. v2026.6.1 — no leading zeros)
 # Publishes wheels, runtime-bundle, and manifest stub to shared storage and Azure Artifacts.
 
 trigger:

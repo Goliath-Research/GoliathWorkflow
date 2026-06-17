@@ -32,12 +32,13 @@ BUILD_DIR="${METHYL_EXTRACTOR_ROOT:-.}"
 ARCH=""
 VERSION=""
 OUTPUT=""
+VERSION_EXPLICIT=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --build-dir) BUILD_DIR="${2:-}"; shift 2 ;;
     --arch) ARCH="${2:-}"; shift 2 ;;
-    --version) VERSION="${2:-}"; shift 2 ;;
+    --version) VERSION="${2:-}"; VERSION_EXPLICIT=1; shift 2 ;;
     --output) OUTPUT="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
@@ -74,9 +75,14 @@ PLUGIN_SRC="$BUILD_DIR/build/dynamic/$ME_SUBDIR/hdf5_zstd_plugin"
 if [[ -z "$VERSION" ]]; then
   if git -C "$BUILD_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     VERSION="$(git -C "$BUILD_DIR" describe --tags --always 2>/dev/null || echo manual)"
+    VERSION="$(normalize_release_version "$VERSION")"
   else
     VERSION="manual"
   fi
+fi
+
+if [[ "$VERSION_EXPLICIT" -eq 1 ]]; then
+  require_release_version "$VERSION" "--version" || exit 1
 fi
 
 OUTPUT="${OUTPUT:-methyl-extractor-linux-${ARCH_KEY}.tar.gz}"

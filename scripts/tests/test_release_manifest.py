@@ -19,7 +19,7 @@ def _required_manifest_fields() -> set[str]:
 
 def test_manifest_schema_accepts_build_release_stub() -> None:
     stub = {
-        "version": "2026.06.1",
+        "version": "2026.6.1",
         "python": "3.12",
         "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
         "parabricks_image_digest": "",
@@ -52,6 +52,7 @@ def test_release_scripts_pass_bash_syntax_check() -> None:
         "write_worker_env.sh",
         "package_methyl_extractor.sh",
         "bootstrap_epimethyl.sh",
+        "download_methyl_extractor_artifacts.sh",
     ]
     for name in scripts:
         path = REPO_ROOT / "scripts" / name
@@ -67,12 +68,49 @@ def test_bootstrap_docker_data_root_default_only_in_release_mode() -> None:
     assert default_line in text.split(release_marker, 1)[1]
 
 
+def test_release_version_rejects_leading_zeros() -> None:
+    result = subprocess.run(
+        ["bash", "-c", f"source {REPO_ROOT / 'scripts/detect_platform.sh'} && require_release_version 2026.06.1"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "2026.06.1" in result.stderr
+
+
+def test_release_version_accepts_semver() -> None:
+    result = subprocess.run(
+        ["bash", "-c", f"source {REPO_ROOT / 'scripts/detect_platform.sh'} && require_release_version 2026.6.1"],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+
+
+def test_build_release_rejects_invalid_version() -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/build_release.sh"),
+            "--version",
+            "2026.06.1",
+            "--output",
+            "/tmp/should-not-run",
+            "--skip-wheels",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "2026.06.1" in result.stderr
+
+
 def test_write_worker_env_from_manifest(tmp_path: Path) -> None:
     root = tmp_path / "epimethyl"
-    release = root / "releases" / "2026.06.1"
+    release = root / "releases" / "2026.6.1"
     release.mkdir(parents=True)
     manifest = {
-        "version": "2026.06.1",
+        "version": "2026.6.1",
         "python": "3.12",
         "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
         "docker_data_root": "/work/epimethyl/docker",
@@ -112,7 +150,7 @@ def test_write_worker_env_from_manifest(tmp_path: Path) -> None:
     )
 
     worker_env = (root / "env/worker.env").read_text(encoding="utf-8")
-    assert "EPIMETHYL_RELEASE=2026.06.1" in worker_env
+    assert "EPIMETHYL_RELEASE=2026.6.1" in worker_env
     assert "WORKER_API_BASE=http://test/v1" in worker_env
     assert "METHYL_PARABRICKS_IMAGE=nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1" in worker_env
     assert str(root / "venv-aarch64/bin") in worker_env

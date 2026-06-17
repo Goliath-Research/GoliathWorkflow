@@ -58,12 +58,20 @@ info() { echo "[INFO] $*"; }
 die() { echo "[ERROR] $*" >&2; exit 1; }
 
 ARCH="${ARCH:-$(platform_arch_key "$(detect_uname_arch)")}"
+if [[ -n "$VERSION" ]]; then
+  VERSION="$(normalize_release_version "$VERSION")"
+  require_release_version "$VERSION" "--version" || exit 1
+fi
 if [[ -n "$VERSION" && -z "$RELEASE_DIR" ]]; then
   RELEASE_DIR="$ROOT/releases/$VERSION"
 fi
 [[ -d "$RELEASE_DIR" ]] || die "Release directory not found: $RELEASE_DIR"
 MANIFEST="$RELEASE_DIR/manifest.json"
 [[ -f "$MANIFEST" ]] || die "Missing manifest: $MANIFEST"
+
+MANIFEST_VERSION="$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m.get('version',''))")"
+[[ -n "$MANIFEST_VERSION" ]] || die "manifest.json missing version"
+require_release_version "$MANIFEST_VERSION" "manifest version" || exit 1
 
 TARBALL_NAME="$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m['artifacts']['$ARCH']['methyl_extractor'])")"
 EXPECTED_SHA="$(python3 -c "import json; m=json.load(open('$MANIFEST')); print(m.get('artifacts',{}).get('$ARCH',{}).get('sha256',''))")"

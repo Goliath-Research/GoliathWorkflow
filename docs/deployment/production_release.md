@@ -8,9 +8,9 @@ See also: [worker_node.md](worker_node.md), [gpu_worker_runbook.md](gpu_worker_r
 
 ```
 /work/epimethyl/
-  current -> releases/2026.06.1
+  current -> releases/2026.6.1
   releases/
-    2026.06.1/
+    2026.6.1/
       manifest.json
       requirements-worker.lock
       wheels/*.whl
@@ -38,6 +38,19 @@ See also: [worker_node.md](worker_node.md), [gpu_worker_runbook.md](gpu_worker_r
 | `methyl-extractor-<arch>/` | Yes | Per release × arch |
 | `/etc/docker/daemon.json` | Per VM | Points `data-root` at shared `docker/` |
 
+## Release version (SemVer)
+
+All release identifiers use **SemVer 2.0 without leading zeros** (e.g. `2026.6.1`, not `2026.06.1`). This matches Azure Universal Packages and git tags (`v2026.6.1`).
+
+| Use | Example |
+|-----|---------|
+| Git tag | `v2026.6.1` |
+| `manifest.json` / release folder | `2026.6.1` |
+| Azure Universal Package `--version` | `2026.6.1` |
+| `build_release.sh --version` | `2026.6.1` |
+
+Scripts validate versions via `require_release_version` in [`detect_platform.sh`](../../scripts/detect_platform.sh).
+
 ## manifest.json
 
 Schema: [`schemas/deployment/epimethyl_release_manifest.schema.json`](../../schemas/deployment/epimethyl_release_manifest.schema.json).
@@ -46,7 +59,7 @@ Example:
 
 ```json
 {
-  "version": "2026.06.1",
+  "version": "2026.6.1",
   "python": "3.12",
   "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
   "parabricks_image_digest": "sha256:…",
@@ -74,15 +87,21 @@ From a tagged MethylPipeline checkout:
 ```bash
 source .venv/bin/activate
 bash scripts/build_release.sh \
-  --version 2026.06.1 \
-  --output /work/epimethyl/releases/2026.06.1
+  --version 2026.6.1 \
+  --output /work/epimethyl/releases/2026.6.1
 ```
 
 Produces wheels, `requirements-worker.lock`, runtime-bundle, and a draft `manifest.json`.
 
 MethylPipeline CI template: [`ci/azure-pipelines-methyl-pipeline-release.yml`](../../ci/azure-pipelines-methyl-pipeline-release.yml).
 
-MethylExtractor tarballs are built separately ([`ci/azure-pipelines-methyl-extractor-release.yml`](../../ci/azure-pipelines-methyl-extractor-release.yml)) and copied into the release directory before promote.
+MethylExtractor tarballs are built separately ([`ci/azure-pipelines-methyl-extractor-release.yml`](../../ci/azure-pipelines-methyl-extractor-release.yml)) and copied into the release directory before promote. Download from Azure Artifacts:
+
+```bash
+bash scripts/download_methyl_extractor_artifacts.sh \
+  --version 2026.6.1 \
+  --release-dir /work/epimethyl/releases/2026.6.1
+```
 
 ## Promote a release
 
@@ -91,7 +110,7 @@ Run **once** on shared storage (serializes `docker pull`):
 ```bash
 bash scripts/promote_release.sh \
   --root /work/epimethyl \
-  --release /work/epimethyl/releases/2026.06.1 \
+  --release /work/epimethyl/releases/2026.6.1 \
   --arch aarch64 \
   --pull-parabricks
 ```

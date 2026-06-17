@@ -2,6 +2,7 @@
 # Place this file in the MethylExtractor repository as azure-pipelines-release.yml
 #
 # Builds native binary per architecture and publishes tarball for promote_release.sh
+# Git tags: v2026.6.1 (SemVer without leading zeros after stripping v)
 
 trigger:
   tags:
@@ -69,10 +70,13 @@ stages:
                 displayName: Copy to shared storage (/work/epimethyl)
                 condition: succeeded()
 
-  # Phase 2: Azure Artifacts Universal Package
+  # Phase 2: Azure Artifacts Universal Package (use same SemVer as git tag, e.g. 2026.6.1)
   # - task: UniversalPackages@0
   #   inputs:
   #     command: publish
   #     publishDirectory: $(Build.ArtifactStagingDirectory)
   #     feedsToUsePublish: internal
   #     vstsFeedPublish: EpiMethyl/methyl-extractor
+  #     vstsFeedPackagePublish: methyl-extractor-linux-aarch64
+  #     versionOption: custom
+  #     versionPublish: $(Build.SourceBranchName)  # tag v2026.6.1 -> strip v in script if needed

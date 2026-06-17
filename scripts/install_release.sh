@@ -16,7 +16,7 @@ Options:
   -h, --help           Show this help
 
 Examples:
-  scripts/install_release.sh --release-dir /work/epimethyl/releases/2026.06.1 --venv /work/epimethyl/venv-aarch64
+  scripts/install_release.sh --release-dir /work/epimethyl/releases/2026.6.1 --venv /work/epimethyl/venv-aarch64
   scripts/install_release.sh --release-dir /work/epimethyl/current --index-url "https://pkgs.dev.azure.com/.../pypi/simple/"
 EOF
 }

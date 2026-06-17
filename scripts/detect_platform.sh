@@ -73,6 +73,30 @@ expand_worker_path() {
   echo "${venv_bin}:${base}"
 }
 
+# Strip optional leading "v" from git tags (v2026.6.1 -> 2026.6.1).
+normalize_release_version() {
+  local ver="${1:?version required}"
+  ver="${ver#v}"
+  echo "$ver"
+}
+
+# SemVer 2.0 without build metadata (+suffix). No leading zeros (Azure Universal Packages).
+validate_release_version() {
+  local ver="${1:?version required}"
+  [[ "$ver" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[a-z0-9]+([-.][a-z0-9]+)*)?$ ]]
+}
+
+require_release_version() {
+  local ver="$1"
+  local ctx="${2:-release version}"
+  if ! validate_release_version "$ver"; then
+    echo "[ERROR] Invalid $ctx: '$ver'" >&2
+    echo "[ERROR] Use SemVer 2.0 without leading zeros (e.g. 2026.6.1, not 2026.06.1)." >&2
+    echo "[ERROR] Required for Azure Universal Packages and manifest.json." >&2
+    return 1
+  fi
+}
+
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   echo "uname: $(detect_uname_arch)"
   echo "arch_key: $(platform_arch_key)"

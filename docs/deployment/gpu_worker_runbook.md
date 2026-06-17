@@ -56,7 +56,7 @@ From one admin node with NGC login:
 ```bash
 bash /work/epimethyl/current/runtime-bundle/scripts/promote_release.sh \
   --root /work/epimethyl \
-  --release /work/epimethyl/releases/2026.06.1 \
+  --release /work/epimethyl/releases/2026.6.1 \
   --arch "$(platform_arch_key "$(uname -m)" 2>/dev/null || echo aarch64)" \
   --pull-parabricks
 ```

@@ -8,7 +8,7 @@ usage() {
 Usage: scripts/build_release.sh [options]
 
 Options:
-  --version VER        Release version string (required)
+  --version VER        Release version string (required; SemVer e.g. 2026.6.1)
   --output DIR         Output directory (default: /work/epimethyl/releases/<version>)
   --python BIN         Python for build/venv (default: python3.12)
   --skip-wheels        Only build runtime-bundle and manifest stub
@@ -44,6 +44,8 @@ info() { echo "[INFO] $*"; }
 die() { echo "[ERROR] $*" >&2; exit 1; }
 
 [[ -n "$VERSION" ]] || die "--version is required"
+VERSION="$(normalize_release_version "$VERSION")"
+require_release_version "$VERSION" "--version" || exit 1
 OUTPUT="${OUTPUT:-/work/epimethyl/releases/$VERSION}"
 WHEELS_DIR="$OUTPUT/wheels"
 RUNTIME_DIR="$OUTPUT/runtime-bundle"
@@ -120,7 +122,8 @@ build_runtime_bundle() {
   cp -f "$REPO_ROOT/scripts/platform_matrix.env" "$RUNTIME_DIR/scripts/"
   for s in install_release.sh promote_release.sh write_worker_env.sh setup_gpu_node.sh \
            verify_e2e_node.sh verify_setup.sh verify_parabricks.sh verify_methyl_extractor.sh \
-           register_worker.sh build_release.sh package_methyl_extractor.sh bootstrap_epimethyl.sh; do
+           register_worker.sh build_release.sh package_methyl_extractor.sh \
+           download_methyl_extractor_artifacts.sh bootstrap_epimethyl.sh; do
     [[ -f "$REPO_ROOT/scripts/$s" ]] && cp -f "$REPO_ROOT/scripts/$s" "$RUNTIME_DIR/scripts/"
   done
   chmod +x "$RUNTIME_DIR/scripts/"*.sh 2>/dev/null || true
