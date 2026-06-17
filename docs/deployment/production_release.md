@@ -2,7 +2,39 @@
 
 Production GPU workers consume **versioned releases** on fast shared storage (`/work/epimethyl`). No git checkouts on worker nodes at runtime.
 
-See also: [worker_node.md](worker_node.md), [gpu_worker_runbook.md](gpu_worker_runbook.md), [worker_provision.md](worker_provision.md), [platform_matrix.md](platform_matrix.md).
+See also: [worker_node.md](worker_node.md), [gpu_worker_runbook.md](gpu_worker_runbook.md), [worker_provision.md](worker_provision.md), [platform_matrix.md](platform_matrix.md), [ci/README.md](../../ci/README.md).
+
+## CI/CD overview (primary path)
+
+MethylExtractor and MethylPipeline **version and publish independently** on git tags. A manual **assemble** pipeline composes the deploy bundle; a gated **deploy** pipeline promotes to `/work`.
+
+```mermaid
+flowchart LR
+  MEtag[MethylExtractor_v_tag] --> MEFeed[methyl-extractor_feed]
+  MPtag[MethylPipeline_v_tag] --> PyFeed[pypi-epimethyl]
+  MPtag --> MPArt[methyl-pipeline-release_artifact]
+  MEFeed --> Assemble[Epimethyl-Release-Assemble]
+  MPArt --> Assemble
+  Assemble --> Bundle[epimethyl-release_bundle]
+  Bundle --> Deploy[Epimethyl-Release-Deploy]
+  Deploy --> Work["/work/epimethyl/current"]
+```
+
+| Step | Pipeline | Trigger |
+|------|----------|---------|
+| Build MethylExtractor per arch | MethylExtractor-Release | Tag `v*` |
+| Build MP wheels + runtime-bundle | MethylPipeline-Release | Tag `v*` |
+| Compose manifest + sha256 | Epimethyl-Release-Assemble | Manual |
+| Promote to `/work` | Epimethyl-Release-Deploy | Manual + **production-work** approval |
+
+**Typical release:**
+
+1. Tag MethylExtractor `v2026.5.2` when native code changes.
+2. Tag MethylPipeline `v2026.6.1` when Python/worker code changes.
+3. Run **assemble** with `releaseVersion=2026.6.1`, `methylPipelineVersion=2026.6.1`, `methylExtractorVersion=2026.5.2`.
+4. Approve **deploy** with `releaseVersion=2026.6.1`.
+
+Register pipelines per [`ci/README.md`](../../ci/README.md).
 
 ## Directory layout
 
@@ -32,7 +64,7 @@ See also: [worker_node.md](worker_node.md), [gpu_worker_runbook.md](gpu_worker_r
 
 | Path | Shared? | Updated |
 |------|---------|---------|
-| `releases/<ver>/` | Yes | Per release tag (CI) |
+| `releases/<ver>/` | Yes | Per assemble/deploy |
 | `docker/` | Yes | Once per release promote (`docker pull`) |
 | `venv-<arch>/` | Yes | When lockfile changes |
 | `methyl-extractor-<arch>/` | Yes | Per release × arch |
@@ -45,9 +77,9 @@ All release identifiers use **SemVer 2.0 without leading zeros** (e.g. `2026.6.1
 | Use | Example |
 |-----|---------|
 | Git tag | `v2026.6.1` |
-| `manifest.json` / release folder | `2026.6.1` |
+| Deploy bundle (`manifest.version`) | `2026.6.1` |
 | Azure Universal Package `--version` | `2026.6.1` |
-| `build_release.sh --version` | `2026.6.1` |
+| `components.methyl_pipeline` / `methyl_extractor` | Independent pins |
 
 Scripts validate versions via `require_release_version` in [`detect_platform.sh`](../../scripts/detect_platform.sh).
 
@@ -55,11 +87,15 @@ Scripts validate versions via `require_release_version` in [`detect_platform.sh`
 
 Schema: [`schemas/deployment/epimethyl_release_manifest.schema.json`](../../schemas/deployment/epimethyl_release_manifest.schema.json).
 
-Example:
+Example (assembled release with independent component versions):
 
 ```json
 {
   "version": "2026.6.1",
+  "components": {
+    "methyl_pipeline": "2026.6.1",
+    "methyl_extractor": "2026.5.2"
+  },
   "python": "3.12",
   "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
   "parabricks_image_digest": "sha256:…",
@@ -80,32 +116,26 @@ Example:
 }
 ```
 
-## Build a release (CI or admin)
+## Assemble a release (CI or admin)
 
-From a tagged MethylPipeline checkout:
+[`scripts/assemble_release.sh`](../../scripts/assemble_release.sh) pulls MethylExtractor from Azure Artifacts and merges a MethylPipeline release artifact:
 
 ```bash
-source .venv/bin/activate
-bash scripts/build_release.sh \
-  --version 2026.6.1 \
+bash scripts/assemble_release.sh \
+  --release-version 2026.6.1 \
+  --methyl-pipeline-version 2026.6.1 \
+  --methyl-extractor-version 2026.5.2 \
+  --methyl-pipeline-dir /path/to/methyl-pipeline-release-2026.6.1 \
   --output /work/epimethyl/releases/2026.6.1
 ```
 
-Produces wheels, `requirements-worker.lock`, runtime-bundle, and a draft `manifest.json`.
-
-MethylPipeline CI template: [`ci/azure-pipelines-methyl-pipeline-release.yml`](../../ci/azure-pipelines-methyl-pipeline-release.yml).
-
-MethylExtractor tarballs are built separately ([`ci/azure-pipelines-methyl-extractor-release.yml`](../../ci/azure-pipelines-methyl-extractor-release.yml)) and copied into the release directory before promote. Download from Azure Artifacts:
-
-```bash
-bash scripts/download_methyl_extractor_artifacts.sh \
-  --version 2026.6.1 \
-  --release-dir /work/epimethyl/releases/2026.6.1
-```
+CI: [`ci/azure-pipelines-release-assemble.yml`](../../ci/azure-pipelines-release-assemble.yml).
 
 ## Promote a release
 
-Run **once** on shared storage (serializes `docker pull`):
+**Automated (recommended):** [`ci/azure-pipelines-release-deploy.yml`](../../ci/azure-pipelines-release-deploy.yml) with `production-work` environment approval.
+
+**Manual** on shared storage (serializes `docker pull`):
 
 ```bash
 bash scripts/promote_release.sh \
@@ -113,20 +143,26 @@ bash scripts/promote_release.sh \
   --release /work/epimethyl/releases/2026.6.1 \
   --arch aarch64 \
   --pull-parabricks
+
+bash scripts/promote_release.sh \
+  --root /work/epimethyl \
+  --release /work/epimethyl/releases/2026.6.1 \
+  --arch amd64 \
+  --skip-docker-pull
 ```
 
-This will:
+Promote will:
 
 1. Verify `manifest.json` and tarball checksums
 2. Extract MethylExtractor to `/work/epimethyl/methyl-extractor-<arch>/`
 3. Install or refresh `/work/epimethyl/venv-<arch>/` from release wheels
-4. Optionally `docker pull` Parabricks into shared `docker/`
+4. Optionally `docker pull` Parabricks into shared `docker/` (first arch only)
 5. Update `/work/epimethyl/current` symlink
 6. Write `env/worker.env` and `env/parabricks.env`
 
-Repeat `--arch amd64` when both architectures share the same release version.
-
 ## Rollback
+
+Re-run **deploy** pipeline with a previous `releaseVersion` and approval, or manually:
 
 ```bash
 bash scripts/promote_release.sh \
@@ -138,13 +174,35 @@ bash scripts/promote_release.sh \
 
 Restart workers after rollback: `sudo systemctl restart methyl-worker.service`.
 
-## Phase 2: Azure Artifacts
+## Manual / emergency build (fallback)
 
-Replace local `wheels/` with a PyPI feed URL in `install_release.sh`:
+Use only when DevOps is unavailable:
 
 ```bash
-pip install --index-url "https://pkgs.dev.azure.com/EpiMethyl/_packaging/<feed>/pypi/simple/" \
-  -r requirements-worker.lock
+source .venv/bin/activate
+bash scripts/build_release.sh \
+  --version 2026.6.1 \
+  --output /work/epimethyl/releases/2026.6.1 \
+  --with-gpu-reqs
+
+bash scripts/download_methyl_extractor_artifacts.sh \
+  --version 2026.5.2 \
+  --release-dir /work/epimethyl/releases/2026.6.1
+# Fill manifest sha256 or run assemble_release.sh
 ```
 
-Universal Packages can host MethylExtractor tarballs and optional `docker save` fallbacks with the same manifest filenames.
+## Azure Artifacts feeds
+
+| Feed | Type | Contents |
+|------|------|----------|
+| `methyl-extractor` | Universal Package | Per-arch tarballs |
+| `pypi-epimethyl` | Python | `methyl-*` wheels |
+
+Production venv install from feed ([`install_release.sh`](../../scripts/install_release.sh)):
+
+```bash
+bash scripts/install_release.sh \
+  --release-dir /work/epimethyl/releases/2026.6.1 \
+  --venv /work/epimethyl/venv-aarch64 \
+  --index-url "https://pkgs.dev.azure.com/EpiMethyl/_packaging/pypi-epimethyl/pypi/simple/"
+```

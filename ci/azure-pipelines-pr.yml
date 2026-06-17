@@ -1,0 +1,45 @@
+# MethylPipeline PR validation — tests + release packaging smoke (no publish)
+
+trigger: none
+
+pr:
+  branches:
+    include:
+      - main
+      - master
+      - develop
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  PYTHON_VERSION: "3.12"
+
+steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: $(PYTHON_VERSION)
+
+  - script: |
+      python -m pip install -U pip pytest
+    displayName: Install pytest
+
+  - script: |
+      pytest scripts/tests/test_release_manifest.py -q
+    displayName: Release script contract tests
+
+  - script: |
+      python -m pip install -U pip build wheel
+      bash scripts/build_release.sh \
+        --version 0.0.0-ci \
+        --output "$(Build.ArtifactStagingDirectory)/release-smoke" \
+        --skip-wheels
+    displayName: Runtime-bundle packaging smoke
+
+  - script: |
+      test -d "$(Build.ArtifactStagingDirectory)/release-smoke/runtime-bundle/scripts"
+      test -f "$(Build.ArtifactStagingDirectory)/release-smoke/manifest.json"
+      bash -n scripts/build_release.sh
+      bash -n scripts/assemble_release.sh
+      bash -n scripts/promote_release.sh
+    displayName: Verify release layout

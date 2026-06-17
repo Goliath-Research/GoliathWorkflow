@@ -1,13 +1,19 @@
-# MethylExtractor production release pipeline (Azure DevOps)
-# Place this file in the MethylExtractor repository as azure-pipelines-release.yml
+# MethylExtractor production release pipeline
+# Register in MethylExtractor repo as azure-pipelines-release.yml (or point pipeline YAML here).
 #
-# Builds native binary per architecture and publishes tarball for promote_release.sh
-# Git tags: v2026.6.1 (SemVer without leading zeros after stripping v)
+# Tag trigger: v2026.6.1 (SemVer, no leading zeros). Publishes Universal Packages per arch.
 
 trigger:
   tags:
     include:
       - v*
+
+resources:
+  repositories:
+    - repository: MethylPipeline
+      type: git
+      name: Development/MethylPipeline
+      ref: main
 
 parameters:
   - name: architectures
@@ -16,67 +22,69 @@ parameters:
       - arm64
       - x64
 
+variables:
+  azureDevOpsOrg: https://dev.azure.com/EpiMethyl
+  azureDevOpsProject: Development
+  methylExtractorFeed: methyl-extractor
+
 stages:
   - ${{ each arch in parameters.architectures }}:
       - stage: build_${{ arch }}
-        displayName: Build ${{ arch }}
+        displayName: Release ${{ arch }}
         pool:
           ${{ if eq(arch, 'arm64') }}:
             name: GPU-ARM64
           ${{ else }}:
             name: GPU-x86_64
         jobs:
-          - job: package
+          - job: package_publish
+            displayName: Build, package, publish
             steps:
               - checkout: self
+                persistCredentials: true
+
+              - checkout: MethylPipeline
+                path: s/MethylPipeline
 
               - script: make
                 displayName: Build MethylExtractor
 
-              - script: |
+              - bash: |
+                  set -euo pipefail
                   VERSION="${BUILD_SOURCEBRANCHNAME#v}"
                   ARCH_LABEL="${{ arch }}"
                   case "$ARCH_LABEL" in
                     arm64) KEY=aarch64 ;;
                     x64) KEY=amd64 ;;
                   esac
-                  # Copy packaging script from MethylPipeline release bundle or pin path:
-                  PKG="${METHYL_PIPELINE_SCRIPTS:-../MethylPipeline/scripts/package_methyl_extractor.sh}"
+                  PKG="$(Pipeline.Workspace)/s/MethylPipeline/scripts/package_methyl_extractor.sh"
+                  OUT="$(Build.ArtifactStagingDirectory)/methyl-extractor-linux-${KEY}.tar.gz"
                   bash "$PKG" \
                     --build-dir "$(Build.SourcesDirectory)" \
                     --arch "$KEY" \
                     --version "$VERSION" \
-                    --output "$(Build.ArtifactStagingDirectory)/methyl-extractor-linux-${KEY}.tar.gz"
-                  sha256sum "$(Build.ArtifactStagingDirectory)/methyl-extractor-linux-${KEY}.tar.gz"
+                    --output "$OUT"
+                  mkdir -p "$(Build.ArtifactStagingDirectory)/universal"
+                  cp "$OUT" "$(Build.ArtifactStagingDirectory)/universal/"
+                  sha256sum "$OUT" | tee "$(Build.ArtifactStagingDirectory)/universal/${KEY}.sha256"
+                  echo "##vso[task.setvariable variable=PackageVersion]$VERSION"
+                  echo "##vso[task.setvariable variable=ArchKey]$KEY"
                 displayName: Package tarball
 
               - task: PublishPipelineArtifact@1
                 inputs:
                   targetPath: $(Build.ArtifactStagingDirectory)
-                  artifactName: methyl-extractor-${{ arch }}
+                  artifactName: methyl-extractor-${{ arch }}-$(PackageVersion)
+                displayName: Publish pipeline artifact
 
-              - script: |
-                  VERSION="${BUILD_SOURCEBRANCHNAME#v}"
-                  KEY="${{ arch }}"
-                  case "$KEY" in
-                    arm64) KEY=aarch64 ;;
-                    x64) KEY=amd64 ;;
-                  esac
-                  DEST="/work/epimethyl/releases/$VERSION"
-                  sudo mkdir -p "$DEST"
-                  sudo cp "$(Build.ArtifactStagingDirectory)/methyl-extractor-linux-${KEY}.tar.gz" "$DEST/"
-                  DIGEST="$(sha256sum "$DEST/methyl-extractor-linux-${KEY}.tar.gz" | awk '{print $1}')"
-                  echo "sha256=$DIGEST — update manifest.json artifacts.${KEY}.sha256"
-                displayName: Copy to shared storage (/work/epimethyl)
-                condition: succeeded()
-
-  # Phase 2: Azure Artifacts Universal Package (use same SemVer as git tag, e.g. 2026.6.1)
-  # - task: UniversalPackages@0
-  #   inputs:
-  #     command: publish
-  #     publishDirectory: $(Build.ArtifactStagingDirectory)
-  #     feedsToUsePublish: internal
-  #     vstsFeedPublish: EpiMethyl/methyl-extractor
-  #     vstsFeedPackagePublish: methyl-extractor-linux-aarch64
-  #     versionOption: custom
-  #     versionPublish: $(Build.SourceBranchName)  # tag v2026.6.1 -> strip v in script if needed
+              - task: UniversalPackages@0
+                displayName: Publish Universal Package
+                inputs:
+                  command: publish
+                  publishDirectory: $(Build.ArtifactStagingDirectory)/universal
+                  feedsToUsePublish: internal
+                  vstsFeedPublish: $(azureDevOpsProject)/$(methylExtractorFeed)
+                  vstsFeedPackagePublish: methyl-extractor-linux-$(ArchKey)
+                  versionOption: custom
+                  versionPublish: $(PackageVersion)
+                  packagePublishDescription: MethylExtractor binary tarball ($(ArchKey))

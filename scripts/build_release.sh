@@ -123,7 +123,7 @@ build_runtime_bundle() {
   for s in install_release.sh promote_release.sh write_worker_env.sh setup_gpu_node.sh \
            verify_e2e_node.sh verify_setup.sh verify_parabricks.sh verify_methyl_extractor.sh \
            register_worker.sh build_release.sh package_methyl_extractor.sh \
-           download_methyl_extractor_artifacts.sh bootstrap_epimethyl.sh; do
+           download_methyl_extractor_artifacts.sh assemble_release.sh bootstrap_epimethyl.sh; do
     [[ -f "$REPO_ROOT/scripts/$s" ]] && cp -f "$REPO_ROOT/scripts/$s" "$RUNTIME_DIR/scripts/"
   done
   chmod +x "$RUNTIME_DIR/scripts/"*.sh 2>/dev/null || true

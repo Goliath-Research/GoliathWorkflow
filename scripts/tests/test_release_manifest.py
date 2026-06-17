@@ -44,6 +44,85 @@ def test_manifest_schema_accepts_build_release_stub() -> None:
     assert stub["artifacts"]["aarch64"]["methyl_extractor"].endswith(".tar.gz")
 
 
+def test_manifest_schema_accepts_components_block() -> None:
+    stub = {
+        "version": "2026.6.1",
+        "components": {
+            "methyl_pipeline": "2026.6.1",
+            "methyl_extractor": "2026.5.2",
+        },
+        "python": "3.12",
+        "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
+        "docker_data_root": "/work/epimethyl/docker",
+        "requirements_lock": "requirements-worker.lock",
+        "artifacts": {
+            "aarch64": {
+                "methyl_extractor": "methyl-extractor-linux-aarch64.tar.gz",
+                "sha256": "abc",
+            },
+            "amd64": {
+                "methyl_extractor": "methyl-extractor-linux-amd64.tar.gz",
+                "sha256": "def",
+            },
+        },
+    }
+    required = _required_manifest_fields()
+    assert not (required - stub.keys())
+
+
+def test_assemble_release_local_smoke(tmp_path: Path) -> None:
+    mp_dir = tmp_path / "mp"
+    out = tmp_path / "bundle"
+    wheels = mp_dir / "wheels"
+    wheels.mkdir(parents=True)
+    (wheels / "dummy.whl").write_text("", encoding="utf-8")
+    (mp_dir / "requirements-worker.lock").write_text("# test\n", encoding="utf-8")
+    (mp_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "version": "2026.6.1",
+                "python": "3.12",
+                "parabricks_image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
+                "docker_data_root": "/work/epimethyl/docker",
+                "requirements_lock": "requirements-worker.lock",
+                "artifacts": {
+                    "aarch64": {"methyl_extractor": "methyl-extractor-linux-aarch64.tar.gz", "sha256": ""},
+                    "amd64": {"methyl_extractor": "methyl-extractor-linux-amd64.tar.gz", "sha256": ""},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    for arch in ("aarch64", "amd64"):
+        tb = mp_dir / f"methyl-extractor-linux-{arch}.tar.gz"
+        tb.write_bytes(b"fake tarball")
+
+    subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/assemble_release.sh"),
+            "--release-version",
+            "2026.6.1",
+            "--methyl-pipeline-version",
+            "2026.6.1",
+            "--methyl-extractor-version",
+            "2026.5.2",
+            "--methyl-pipeline-dir",
+            str(mp_dir),
+            "--output",
+            str(out),
+            "--skip-methyl-extractor-download",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["version"] == "2026.6.1"
+    assert manifest["components"]["methyl_extractor"] == "2026.5.2"
+    assert manifest["artifacts"]["aarch64"]["sha256"]
+
+
 def test_release_scripts_pass_bash_syntax_check() -> None:
     scripts = [
         "build_release.sh",
@@ -53,6 +132,7 @@ def test_release_scripts_pass_bash_syntax_check() -> None:
         "package_methyl_extractor.sh",
         "bootstrap_epimethyl.sh",
         "download_methyl_extractor_artifacts.sh",
+        "assemble_release.sh",
     ]
     for name in scripts:
         path = REPO_ROOT / "scripts" / name

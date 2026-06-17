@@ -1,8 +1,5 @@
-# MethylPipeline production release pipeline (Azure DevOps)
-# Copy to MethylExtractor repo root or reference as template pipeline.
-#
-# Triggers on version tags: v* (SemVer after v, e.g. v2026.6.1 — no leading zeros)
-# Publishes wheels, runtime-bundle, and manifest stub to shared storage and Azure Artifacts.
+# MethylPipeline production release pipeline
+# Tag trigger: v2026.6.1 — builds wheels, runtime-bundle, publishes to PyPI feed + pipeline artifact.
 
 trigger:
   tags:
@@ -15,6 +12,8 @@ pool:
 variables:
   EPIMETHYL_ROOT: /work/epimethyl
   PYTHON_VERSION: "3.12"
+  # Azure Artifacts PyPI feed (project-scoped): ProjectName/FeedName
+  pypiFeed: Development/pypi-epimethyl
 
 steps:
   - task: UsePythonVersion@0
@@ -22,11 +21,13 @@ steps:
       versionSpec: $(PYTHON_VERSION)
 
   - script: |
-      python -m pip install -U pip build wheel pip-tools
+      python -m pip install -U pip build wheel pip-tools twine
     displayName: Install build tools
 
-  - script: |
+  - bash: |
+      set -euo pipefail
       VERSION="${BUILD_SOURCEBRANCHNAME#v}"
+      echo "##vso[task.setvariable variable=ReleaseVersion]$VERSION"
       bash scripts/build_release.sh \
         --version "$VERSION" \
         --output "$(Build.ArtifactStagingDirectory)/release" \
@@ -36,22 +37,28 @@ steps:
   - task: PublishPipelineArtifact@1
     inputs:
       targetPath: $(Build.ArtifactStagingDirectory)/release
-      artifactName: methyl-pipeline-release
+      artifactName: methyl-pipeline-release-$(ReleaseVersion)
     displayName: Publish release artifact
 
-  # Phase 2: copy to shared storage (agent must mount /work)
-  - script: |
-      VERSION="${BUILD_SOURCEBRANCHNAME#v}"
-      DEST="$(EPIMETHYL_ROOT)/releases/$VERSION"
+  - task: TwineAuthenticate@1
+    inputs:
+      artifactFeed: $(pypiFeed)
+    displayName: Authenticate to PyPI feed
+
+  - bash: |
+      set -euo pipefail
+      twine upload --non-interactive --repository $(pypiFeed) \
+        "$(Build.ArtifactStagingDirectory)/release/wheels/"*.whl
+    displayName: Upload wheels to Azure Artifacts PyPI feed
+
+  # Optional: copy to shared /work when a self-hosted agent with EPIMETHYL_ROOT is used
+  - bash: |
+      set -euo pipefail
+      DEST="$(EPIMETHYL_ROOT)/releases/$(ReleaseVersion)"
       sudo mkdir -p "$DEST"
-      sudo rsync -a "$(Build.ArtifactStagingDirectory)/release/" "$DEST/"
+      rsync -rl --no-perms --no-owner --no-group \
+        "$(Build.ArtifactStagingDirectory)/release/" "$DEST/"
       echo "Published to $DEST"
     displayName: Copy to shared storage (/work/epimethyl)
     condition: and(succeeded(), eq(variables['Agent.OS'], 'Linux'))
-
-  # Phase 2: Azure Artifacts PyPI feed
-  # - task: TwineAuthenticate@1
-  #   inputs:
-  #     artifactFeed: EpiMethyl/pypi-epimethyl
-  # - script: twine upload --repository pypi-epimethyl $(Build.ArtifactStagingDirectory)/release/wheels/*.whl
-  #   displayName: Upload wheels to Azure Artifacts
+    continueOnError: true
