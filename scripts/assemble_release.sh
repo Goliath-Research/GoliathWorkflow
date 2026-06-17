@@ -88,6 +88,7 @@ info "  output: $OUTPUT"
 rsync_safe=(rsync -rl --delete --no-perms --no-owner --no-group --no-times)
 "${rsync_safe[@]}" \
   --exclude manifest.json \
+  --exclude 'methyl-extractor-linux-*.tar.gz' \
   "$MP_DIR/" "$OUTPUT/"
 
 if [[ "$SKIP_ME_DL" -eq 0 ]]; then

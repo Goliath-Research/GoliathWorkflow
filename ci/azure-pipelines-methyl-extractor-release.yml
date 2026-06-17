@@ -42,16 +42,21 @@ stages:
             steps:
               - checkout: self
                 persistCredentials: true
+                path: s/$(Build.Repository.Name)
 
               - checkout: MethylPipeline
                 path: s/MethylPipeline
 
-              - script: make
+              - bash: |
+                  set -euo pipefail
+                  cd "$(Pipeline.Workspace)/s/$(Build.Repository.Name)"
+                  make
                 displayName: Build MethylExtractor
 
               - bash: |
                   set -euo pipefail
                   VERSION="${BUILD_SOURCEBRANCHNAME#v}"
+                  ME_ROOT="$(Pipeline.Workspace)/s/$(Build.Repository.Name)"
                   ARCH_LABEL="${{ arch }}"
                   case "$ARCH_LABEL" in
                     arm64) KEY=aarch64 ;;
@@ -60,7 +65,7 @@ stages:
                   PKG="$(Pipeline.Workspace)/s/MethylPipeline/scripts/package_methyl_extractor.sh"
                   OUT="$(Build.ArtifactStagingDirectory)/methyl-extractor-linux-${KEY}.tar.gz"
                   bash "$PKG" \
-                    --build-dir "$(Build.SourcesDirectory)" \
+                    --build-dir "$ME_ROOT" \
                     --arch "$KEY" \
                     --version "$VERSION" \
                     --output "$OUT"

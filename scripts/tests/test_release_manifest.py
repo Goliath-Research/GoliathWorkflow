@@ -93,9 +93,9 @@ def test_assemble_release_local_smoke(tmp_path: Path) -> None:
         ),
         encoding="utf-8",
     )
+    out.mkdir()
     for arch in ("aarch64", "amd64"):
-        tb = mp_dir / f"methyl-extractor-linux-{arch}.tar.gz"
-        tb.write_bytes(b"fake tarball")
+        (out / f"methyl-extractor-linux-{arch}.tar.gz").write_bytes(b"fake tarball")
 
     subprocess.run(
         [
@@ -121,6 +121,42 @@ def test_assemble_release_local_smoke(tmp_path: Path) -> None:
     assert manifest["version"] == "2026.6.1"
     assert manifest["components"]["methyl_extractor"] == "2026.5.2"
     assert manifest["artifacts"]["aarch64"]["sha256"]
+
+
+def test_assemble_release_preserves_tarballs_when_skip_download(tmp_path: Path) -> None:
+    mp_dir = tmp_path / "mp"
+    out = tmp_path / "bundle"
+    wheels = mp_dir / "wheels"
+    wheels.mkdir(parents=True)
+    (wheels / "dummy.whl").write_text("", encoding="utf-8")
+    (mp_dir / "requirements-worker.lock").write_text("# test\n", encoding="utf-8")
+    (mp_dir / "manifest.json").write_text("{}", encoding="utf-8")
+    out.mkdir()
+    for arch in ("aarch64", "amd64"):
+        (out / f"methyl-extractor-linux-{arch}.tar.gz").write_bytes(b"preplaced")
+
+    subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts/assemble_release.sh"),
+            "--release-version",
+            "2026.6.1",
+            "--methyl-pipeline-version",
+            "2026.6.1",
+            "--methyl-extractor-version",
+            "2026.5.2",
+            "--methyl-pipeline-dir",
+            str(mp_dir),
+            "--output",
+            str(out),
+            "--skip-methyl-extractor-download",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    for arch in ("aarch64", "amd64"):
+        assert (out / f"methyl-extractor-linux-{arch}.tar.gz").read_bytes() == b"preplaced"
 
 
 def test_release_scripts_pass_bash_syntax_check() -> None:

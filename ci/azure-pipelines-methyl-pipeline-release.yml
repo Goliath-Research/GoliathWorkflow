@@ -12,8 +12,9 @@ pool:
 variables:
   EPIMETHYL_ROOT: /work/epimethyl
   PYTHON_VERSION: "3.12"
-  # Azure Artifacts PyPI feed (project-scoped): ProjectName/FeedName
+  # TwineAuthenticate artifactFeed: ProjectName/FeedName; twine -r uses feed name only
   pypiFeed: Development/pypi-epimethyl
+  pypiFeedName: pypi-epimethyl
 
 steps:
   - task: UsePythonVersion@0
@@ -47,7 +48,9 @@ steps:
 
   - bash: |
       set -euo pipefail
-      twine upload --non-interactive --repository $(pypiFeed) \
+      twine upload --non-interactive \
+        --config-file "$(PYPIRC_PATH)" \
+        --repository "$(pypiFeedName)" \
         "$(Build.ArtifactStagingDirectory)/release/wheels/"*.whl
     displayName: Upload wheels to Azure Artifacts PyPI feed
 
@@ -56,7 +59,7 @@ steps:
       set -euo pipefail
       DEST="$(EPIMETHYL_ROOT)/releases/$(ReleaseVersion)"
       sudo mkdir -p "$DEST"
-      rsync -rl --no-perms --no-owner --no-group \
+      sudo rsync -rl --no-perms --no-owner --no-group \
         "$(Build.ArtifactStagingDirectory)/release/" "$DEST/"
       echo "Published to $DEST"
     displayName: Copy to shared storage (/work/epimethyl)
