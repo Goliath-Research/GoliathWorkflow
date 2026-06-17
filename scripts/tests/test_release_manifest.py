@@ -87,6 +87,21 @@ def test_release_version_accepts_semver() -> None:
     assert result.returncode == 0
 
 
+def test_release_version_accepts_v_prefix_after_normalize() -> None:
+    detect = REPO_ROOT / "scripts/detect_platform.sh"
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{detect}" && v="$(normalize_release_version v2026.6.1)" && require_release_version "$v" "--version"',
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+    assert "2026.6.1" not in result.stderr
+
+
 def test_build_release_rejects_invalid_version() -> None:
     result = subprocess.run(
         [
