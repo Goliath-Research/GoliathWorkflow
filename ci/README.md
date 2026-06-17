@@ -13,7 +13,7 @@ Each YAML lives in **this repository** so Azure DevOps can point pipelines at lo
 
 ## MethylExtractor repo (separate)
 
-MethylExtractor pipelines are in **MethylExtractor** → `ci/` ([`azure-pipelines-release.yml`](https://dev.azure.com/EpiMethyl/Development/_git/MethylExtractor?path=/ci)).
+MethylExtractor pipelines are in **MethylExtractor** → `ci/` (`azure-pipelines-release-arm64.yml`, `azure-pipelines-release-x64.yml`, `azure-pipelines-pr.yml`).
 
 ## Register a pipeline in Azure DevOps
 
@@ -35,7 +35,7 @@ Pipeline **definition names** must match assemble/deploy parameters (`methylPipe
 
 ## Release flow
 
-1. Tag MethylExtractor `v2026.5.2` → **MethylExtractor-Release** (ME repo pipeline).
+1. Tag MethylExtractor `v2026.5.2` → **MethylExtractor-Release-ARM64** and **MethylExtractor-Release-x64** (ME repo).
 2. Tag MethylPipeline `v2026.6.1` → **MethylPipeline-Release** (this repo).
 3. Run **Epimethyl-Release-Assemble** (this repo) with version pins.
 4. Approve **Epimethyl-Release-Deploy** (this repo).

@@ -22,7 +22,7 @@ flowchart LR
 
 | Step | Pipeline | Trigger |
 |------|----------|---------|
-| Build MethylExtractor per arch | MethylExtractor-Release | Tag `v*` |
+| Build MethylExtractor per arch | MethylExtractor-Release-ARM64, MethylExtractor-Release-x64 | Tag `v*` |
 | Build MP wheels + runtime-bundle | MethylPipeline-Release | Tag `v*` |
 | Compose manifest + sha256 | Epimethyl-Release-Assemble | Manual |
 | Promote to `/work` | Epimethyl-Release-Deploy | Manual + **production-work** approval |
