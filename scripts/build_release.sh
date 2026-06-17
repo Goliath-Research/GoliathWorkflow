@@ -108,18 +108,20 @@ warn_fallback_lock() {
 
 build_runtime_bundle() {
   info "Building runtime-bundle in $RUNTIME_DIR"
+  # Shared /work NFS may reject cp/rsync -a permission preservation; copy content only.
+  local rsync_safe=(rsync -rl --delete --no-perms --no-owner --no-group --no-times)
   for sub in schemas scripts deploy; do
     if [[ -d "$REPO_ROOT/$sub" ]]; then
-      rsync -a --delete "$REPO_ROOT/$sub/" "$RUNTIME_DIR/$sub/"
+      "${rsync_safe[@]}" "$REPO_ROOT/$sub/" "$RUNTIME_DIR/$sub/"
     fi
   done
   # Ensure detect_platform and platform_matrix travel with scripts
-  cp -a "$REPO_ROOT/scripts/detect_platform.sh" "$RUNTIME_DIR/scripts/"
-  cp -a "$REPO_ROOT/scripts/platform_matrix.env" "$RUNTIME_DIR/scripts/"
+  cp -f "$REPO_ROOT/scripts/detect_platform.sh" "$RUNTIME_DIR/scripts/"
+  cp -f "$REPO_ROOT/scripts/platform_matrix.env" "$RUNTIME_DIR/scripts/"
   for s in install_release.sh promote_release.sh write_worker_env.sh setup_gpu_node.sh \
            verify_e2e_node.sh verify_setup.sh verify_parabricks.sh verify_methyl_extractor.sh \
-           register_worker.sh build_release.sh package_methyl_extractor.sh; do
-    [[ -f "$REPO_ROOT/scripts/$s" ]] && cp -a "$REPO_ROOT/scripts/$s" "$RUNTIME_DIR/scripts/"
+           register_worker.sh build_release.sh package_methyl_extractor.sh bootstrap_epimethyl.sh; do
+    [[ -f "$REPO_ROOT/scripts/$s" ]] && cp -f "$REPO_ROOT/scripts/$s" "$RUNTIME_DIR/scripts/"
   done
   chmod +x "$RUNTIME_DIR/scripts/"*.sh 2>/dev/null || true
 }
