@@ -81,6 +81,13 @@ class RestGateway:
     ) -> tuple[int, Any]:
         q = query or {}
 
+        if method == "GET" and path in ("/", "/v1", "/v1/health"):
+            return 200, {
+                "status": "ok",
+                "service": "methyl-workflow-gateway",
+                "api_base": "/v1",
+            }
+
         if method == "GET" and path == "/v1/actions":
             actions = list_workflow_actions(self.dsn)
             merged: list[dict[str, Any]] = []
