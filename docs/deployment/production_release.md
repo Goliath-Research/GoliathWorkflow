@@ -2,7 +2,7 @@
 
 Production GPU workers consume **versioned releases** on fast shared storage (`/work/epimethyl`). No git checkouts on worker nodes at runtime.
 
-See also: [worker_node.md](worker_node.md), [gpu_worker_runbook.md](gpu_worker_runbook.md), [worker_provision.md](worker_provision.md), [platform_matrix.md](platform_matrix.md), [ci/README.md](../../ci/README.md).
+See also: [worker_node.md](worker_node.md), [gpu_worker_runbook.md](gpu_worker_runbook.md), [worker_provision.md](worker_provision.md), [platform_matrix.md](platform_matrix.md), [ci/README.md](../../ci/README.md), [implementation plans](../plans/README.md).
 
 ## CI/CD overview (primary path)
 
