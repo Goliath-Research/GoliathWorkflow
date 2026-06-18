@@ -15,7 +15,21 @@ End-to-end operator checklist for real FASTQ → HDF5 → validation on `/work/e
 
 ## Stage 1 — SamplePrepPipeline
 
-See [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md).
+See [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md) and the SamplePrep test bed [`workflow_engine/docs/sample_prep_test_bed.md`](../../workflow_engine/docs/sample_prep_test_bed.md).
+
+**Recommended start:**
+
+```http
+POST /v1/studies/sample-prep/start
+{
+  "projectPath": "/work/epimethyl/data/project_....json",
+  "workflow_version_id": <from workflow_versions.json SamplePrepPipeline>,
+  "fastqBaseUri": "s3://methyl-cohort/plasma/",
+  "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]
+}
+```
+
+**Manual instance** (hand-built `context_json`):
 
 ```http
 POST /v1/workflows/instances
@@ -29,6 +43,13 @@ POST /v1/workflows/instances
     "samples": [ ... ]
   }
 }
+```
+
+**Local smoke (stub worker):**
+
+```bash
+export WORKER_STUB_EXTERNAL=1
+bash scripts/smoke_sample_prep.sh
 ```
 
 Poll until **COMPLETED**. Do not start validation until all samples have per-chromosome HDF5s.

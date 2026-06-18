@@ -4,7 +4,36 @@ Staged orchestration for multi-group studies: **SamplePrep** completes, then the
 
 ## Instance 1 — SamplePrepPipeline
 
-Start when FASTQs are ready. Each sample in `context_json.samples[]` runs download → Parabricks → QC → MethylExtractor.
+Start when FASTQs are ready. Each sample in `context_json.samples[]` runs download → Parabricks → QC (+ optional R2 trim remediation) → MethylExtractor.
+
+### Option A — Gateway helper (recommended)
+
+```http
+POST /v1/studies/sample-prep/start
+{
+  "projectPath": "/work/.../project_Healthy_vs_PCa1-5-CG.json",
+  "workflow_version_id": <sample_prep_version>,
+  "fastqBaseUri": "s3://methyl-cohort/plasma/",
+  "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]
+}
+```
+
+Or pass explicit samples:
+
+```http
+POST /v1/studies/sample-prep/start
+{
+  "projectPath": "/work/.../project.json",
+  "workflow_version_id": <sample_prep_version>,
+  "samples": [
+    { "sampleId": "S1", "sampleDir": "/work/samples/S1", "fastqSourceUri": "s3://..." }
+  ]
+}
+```
+
+See [`sample_prep_test_bed.md`](sample_prep_test_bed.md) for planner fields, smoke script, and QC disposition semantics.
+
+### Option B — Manual context_json
 
 ```http
 POST /v1/workflows/instances

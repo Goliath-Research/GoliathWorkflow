@@ -40,6 +40,7 @@ from db_client import (
     worker_submit_result,
 )
 from study_lifecycle import start_study_validation
+from sample_lifecycle import start_sample_prep
 from workflow_definition_spec import WorkflowDefinitionSpec
 
 _DEFAULT_CATALOG_PATH = (
@@ -174,6 +175,16 @@ class RestGateway:
 
         if method == "POST" and path == "/v1/studies/validation/start":
             payload = start_study_validation(
+                self.dsn,
+                body,
+                create_workflow_definition=create_workflow_definition,
+                create_workflow_instance=create_workflow_instance,
+                start_workflow_instance=start_workflow_instance,
+            )
+            return 201, payload
+
+        if method == "POST" and path == "/v1/studies/sample-prep/start":
+            payload = start_sample_prep(
                 self.dsn,
                 body,
                 create_workflow_definition=create_workflow_definition,

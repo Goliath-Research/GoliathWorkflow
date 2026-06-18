@@ -1,0 +1,26 @@
+{
+  "project_name": "SamplePrep_smoke",
+  "output_base": "/home/ubuntu/MethylPipeline/.smoke/sample_prep/out",
+  "samples_base_path": "/home/ubuntu/MethylPipeline/.smoke/sample_prep/samples",
+  "chromosomes": ["21"],
+  "contexts": ["CG"],
+  "controls": {
+    "label": "healthy",
+    "groups": [{"label": "all", "sample_paths": []}]
+  },
+  "diseases": {
+    "label": "cancer",
+    "groups": [{"label": "PCa", "sample_paths": []}]
+  },
+  "step_config": {
+    "alignment_qc": {
+      "genome_fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+      "output_dir": "/home/ubuntu/MethylPipeline/.smoke/sample_prep/out/alignment_qc"
+    },
+    "methyl_extract": {
+      "extract_contexts": ["CG"],
+      "threads": 1,
+      "output_format": "hdf5"
+    }
+  }
+}

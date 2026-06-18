@@ -1,0 +1,5 @@
+export SMOKE_RUN_ROOT="/home/ubuntu/MethylPipeline/.smoke/sample_prep"
+export SMOKE_SAMPLE_ID="smoke-1"
+export SMOKE_PROJECT_PATH="/home/ubuntu/MethylPipeline/.smoke/sample_prep/project.json"
+export SMOKE_FASTQ_URI="file:///home/ubuntu/MethylPipeline/.smoke/sample_prep/fastq/smoke-1/"
+export SMOKE_SAMPLE_DIR="/home/ubuntu/MethylPipeline/.smoke/sample_prep/samples/smoke-1"

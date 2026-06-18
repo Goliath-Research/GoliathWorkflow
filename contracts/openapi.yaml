@@ -191,6 +191,25 @@ paths:
         '404':
           description: Schema not registered for this action/direction
 
+  /studies/sample-prep/start:
+    post:
+      tags: [admin]
+      summary: Plan sample list and start SamplePrepPipeline
+      operationId: startSamplePrep
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartSamplePrepRequest'
+      responses:
+        '201':
+          description: Sample prep instance created and started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StartSamplePrepResponse'
+
   /workflows/instances:
     post:
       tags: [admin]
@@ -561,6 +580,68 @@ components:
           format: int64
         name:
           type: string
+
+    StartSamplePrepRequest:
+      type: object
+      required: [projectPath]
+      properties:
+        projectPath:
+          type: string
+        workflow_version_id:
+          type: integer
+          format: int64
+        program_path:
+          type: string
+          nullable: true
+        samples:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        sampleCsv:
+          type: string
+          nullable: true
+        sampleCsvs:
+          type: array
+          items:
+            type: string
+        useProjectSamples:
+          type: boolean
+          default: false
+        fastqBaseUri:
+          type: string
+          nullable: true
+        fastqUriTemplate:
+          type: string
+          nullable: true
+        samplesBaseDir:
+          type: string
+          nullable: true
+        referenceFasta:
+          type: string
+          nullable: true
+        referenceGtf:
+          type: string
+          nullable: true
+        primaryAnalyte:
+          type: string
+          nullable: true
+
+    StartSamplePrepResponse:
+      type: object
+      required: [instance_id, workflow_version_id, context_json, n_samples]
+      properties:
+        instance_id:
+          type: integer
+          format: int64
+        workflow_version_id:
+          type: integer
+          format: int64
+        context_json:
+          type: object
+          additionalProperties: true
+        n_samples:
+          type: integer
 
   securitySchemes:
     WorkerToken:
