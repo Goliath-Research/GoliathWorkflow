@@ -8,6 +8,7 @@ Plans in this folder are the **source of truth** for large features. Each plan m
 |-----------|----------|-----------------|-------------------------------------|
 | [`production-gpu-worker-layout.plan.md`](production-gpu-worker-layout.plan.md) | **Epic** | Production GPU worker layout | `define-layout`, `extractor-ci`, `pipeline-ci`, `install-release`, `gpu-node-runbook`, `docker-shared`, `worker-provision` |
 | [`devops-ci-cd-release.plan.md`](devops-ci-cd-release.plan.md) | **Epic** | DevOps CI/CD release pipeline | `me-release-ci`, `mp-release-ci`, `assemble-script`, `assemble-pipeline`, `deploy-pipeline`, `docs-ci-cd` |
+| [`alignment-qc-screening.plan.md`](alignment-qc-screening.plan.md) | **Epic** | Alignment QC screening and remediation | `screening-core`, `guardrail-enhance`, `cohort-report`, `trim-action`, `workflow-remediation`, `validate-docs` |
 
 Create each **Task** under its Epic in Azure DevOps Boards. Copy the task title from the plan `todos[].content` field. Mark tasks **Closed** when the corresponding code is merged.
 
@@ -66,4 +67,6 @@ Plans use YAML frontmatter (`name`, `overview`, `todos`) plus markdown body. The
 ## Related docs
 
 - [`../deployment/production_release.md`](../deployment/production_release.md) — operational release guide
+- [`../deployment/production_runbook.md`](../deployment/production_runbook.md) — operator runbook (includes alignment QC remediation)
+- [`../../packages/methylalignmentqc/docs/USAGE.md`](../../packages/methylalignmentqc/docs/USAGE.md) — MethylAlignmentQC usage
 - [`../../ci/README.md`](../../ci/README.md) — pipeline registration
