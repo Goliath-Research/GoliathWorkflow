@@ -24,7 +24,12 @@ POST /v1/studies/sample-prep/start
 {
   "projectPath": "/work/epimethyl/data/project_....json",
   "workflow_version_id": <from workflow_versions.json SamplePrepPipeline>,
-  "fastqBaseUri": "s3://methyl-cohort/plasma/",
+  "fastqStorage": {
+    "type": "s3",
+    "bucket": "methyl-cohort",
+    "region": "us-east-1",
+    "credentials": { "authMode": "instance_profile" }
+  },
   "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]
 }
 ```

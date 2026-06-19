@@ -17,7 +17,12 @@ POST /v1/studies/sample-prep/start
 {
   "projectPath": "/work/.../project.json",
   "workflow_version_id": 12,
-  "fastqBaseUri": "s3://methyl-cohort/plasma/",
+  "fastqStorage": {
+    "type": "s3",
+    "bucket": "methyl-cohort",
+    "region": "us-east-1",
+    "credentials": { "authMode": "instance_profile" }
+  },
   "sampleCsvs": [
     "/work/.../healthy.csv",
     "/work/.../pca.csv"
@@ -29,7 +34,7 @@ Alternative inputs:
 
 | Field | Purpose |
 |-------|---------|
-| `samples[]` | Explicit `{ sampleId, sampleDir?, fastqSourceUri? }` |
+| `samples[]` | Explicit `{ sampleId, sampleDir?, fastqPrefix?, fastqSource? }` |
 | `sampleCsv` / `sampleCsvs` | One-column CSVs; names resolved with `samples_base_path` |
 | `useProjectSamples: true` | Union cohort CSVs from project `controls` / `diseases` |
 | `program_path` | Compile+register SamplePrep on the fly (defaults to `sample_prep.program.json`) |
@@ -54,7 +59,11 @@ from methyl_validation.sample_prep_planner import plan_sample_prep_context
 
 context = plan_sample_prep_context({
     "projectPath": "/work/.../project.json",
-    "fastqBaseUri": "s3://bucket/prefix/",
+    "fastqStorage": {
+        "type": "s3",
+        "bucket": "bucket",
+        "credentials": {"authMode": "instance_profile"},
+    },
     "sampleCsvs": ["/work/lists/cohort.csv"],
 })
 ```

@@ -48,14 +48,15 @@ Top-level keys become scope-0 variables via `wf_init_instance_scope_from_context
 | `isCfdna` | boolean | yes | Drives **IF** `if_is_cfdna`; set `true` when `primaryAnalyte` is `cfdna` |
 | `referenceFasta` | string | yes | Reference FASTA for Parabricks and MethylExtractor |
 | `referenceGtf` | string | no | GTF for Parabricks (empty string if unused) |
-| `samples` | array of objects | yes | Per-sample fan-out; each object needs `sampleId`, `sampleDir`, `fastqSourceUri` |
+| `fastqStorage` | object | yes | Instance-level file/s3/azure_blob defaults (see `schemas/domain/fastq_storage.schema.json`) |
+| `samples` | array of objects | yes | Per-sample fan-out; each object needs `sampleId`, `sampleDir`, materialized `fastqSource` |
 
 Examples:
 
 - Hand-built: [`instance_context_examples/sample_prep_plasma.json`](instance_context_examples/sample_prep_plasma.json)
 - Planner output: [`instance_context_examples/sample_prep_from_planner.json`](instance_context_examples/sample_prep_from_planner.json)
 
-**Planner:** `POST /v1/studies/sample-prep/start` or `methyl_validation.sample_prep_planner.plan_sample_prep_context()` expands CSVs + cloud URIs into `samples[]`. See [`../docs/sample_prep_test_bed.md`](../docs/sample_prep_test_bed.md).
+**Planner:** `POST /v1/studies/sample-prep/start` or `methyl_validation.sample_prep_planner.plan_sample_prep_context()` merges `fastqStorage` + per-sample `fastqPrefix` into `samples[].fastqSource`. See [`../docs/sample_prep_test_bed.md`](../docs/sample_prep_test_bed.md).
 
 ## Storage contract
 

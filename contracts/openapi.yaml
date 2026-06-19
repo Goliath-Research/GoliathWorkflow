@@ -608,12 +608,10 @@ components:
         useProjectSamples:
           type: boolean
           default: false
-        fastqBaseUri:
-          type: string
-          nullable: true
-        fastqUriTemplate:
-          type: string
-          nullable: true
+        fastqStorage:
+          type: object
+          description: Instance-level FASTQ storage defaults (file, s3, or azure_blob)
+          additionalProperties: true
         samplesBaseDir:
           type: string
           nullable: true

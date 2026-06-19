@@ -53,21 +53,34 @@ After `methyl-qc`, scope also receives **`qcDisposition`**, **`trimFront2`**, **
   "tool": "SampleDownloadFastq",
   "sampleId": "DPLST-051425-111148",
   "sampleDir": "/work/samples/DPLST-051425-111148",
-  "fastqSourceUri": "s3://bucket/prefix/ or az://container/prefix/ or file://..."
+  "fastqSource": {
+    "type": "s3",
+    "bucket": "methyl-cohort",
+    "prefix": "plasma/DPLST-051425-111148/",
+    "region": "us-east-1",
+    "credentials": { "authMode": "instance_profile" }
+  }
 }
 ```
 
-`fastqSourceUri` points at a **folder prefix** (or single `.fastq.gz` object). All `*.fastq.gz` / `*.fq.gz` objects under that prefix are downloaded into `sampleDir`. Typical layout: `<sample>_1.fastq.gz`, `<sample>_2.fastq.gz`, but any matching extension in the folder is included.
+`fastqSource.prefix` points at a **folder prefix** (or single `.fastq.gz` object). All `*.fastq.gz` / `*.fq.gz` objects under that prefix are downloaded into `sampleDir`. Typical layout: `<sample>_1.fastq.gz`, `<sample>_2.fastq.gz`, but any matching extension in the folder is included.
 
 **Idempotency:** for each file, download is skipped when the local copy already exists with the same **size** and **mtime** (±1 s) as the remote object.
 
-### Authentication
+### Authentication (typed JSON only)
 
-| Scheme | Configuration |
-|--------|----------------|
-| `s3://` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, optional `AWS_SESSION_TOKEN` (or `METHYL_S3_*` aliases). S3-compatible: set `METHYL_S3_ENDPOINT_URL` and optional `METHYL_S3_REGION`. Without explicit keys, boto3 uses the instance credential chain (IAM role, etc.). |
-| `az://` | `DefaultAzureCredential` (managed identity on registered HPC nodes, workload identity, Azure CLI for dev). URI forms: `az://container/prefix/` with `AZURE_STORAGE_ACCOUNT`, or `az://account@container/prefix/`. |
-| `file://` | Local path or NFS mount under `/work/...` (no auth). |
+Credentials are supplied in `fastqSource.credentials` — there is **no** env-var fallback on the worker.
+
+| `type` | `credentials.authMode` | Notes |
+|--------|------------------------|-------|
+| `s3` | `explicit_keys` | `accessKeyId`, `secretAccessKey`, optional `sessionToken` |
+| `s3` | `instance_profile` | boto3 default chain (IAM role on worker node) |
+| `azure_blob` | `account_key` | `accountKey` (write-only in Portal schema) |
+| `azure_blob` | `connection_string` | `connectionString` (write-only) |
+| `azure_blob` | `default_credential` | `DefaultAzureCredential` (managed identity, Azure CLI dev) |
+| `file` | — | `basePath` + `prefix` on shared NFS/local storage |
+
+Portal / planner JSON: instance-level `fastqStorage` plus per-sample `fastqPrefix` (materialized into `samples[].fastqSource`). See `schemas/domain/fastq_storage.schema.json`.
 
 ### output_json
 

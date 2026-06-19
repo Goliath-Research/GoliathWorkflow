@@ -108,11 +108,15 @@ prep_ctx = {
     "primaryAnalyte": "buffy_coat",
     "isCfdna": False,
     "referenceFasta": "/work/epimethyl/data/reference.fa",
+    "fastqStorage": {
+        "type": "file",
+        "basePath": "/work/epimethyl/runs/smoke/fastq",
+    },
     "samples": [
         {
             "sampleId": "smoke-1",
             "sampleDir": "/work/epimethyl/runs/smoke/samples/smoke-1",
-            "fastqSourceUri": "file:///work/epimethyl/runs/smoke/fastq/smoke-1/",
+            "fastqPrefix": "smoke-1/",
         }
     ],
 }

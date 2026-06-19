@@ -14,9 +14,10 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Tuple
 
-from pydantic import BaseModel
+from pydantic import BaseModel, TypeAdapter
 
 from .program import DomainProgram
+from .fastq_storage import FastqSourceLocation, FastqStorageDefaults
 from .types import DOMAIN_MODEL_BY_TYPE, DOMAIN_TYPE_NAMES
 
 
@@ -41,6 +42,26 @@ def _filename_for_type(type_name: str) -> str:
         f"_{c.lower()}" if c.isupper() else c for c in type_name
     ).lstrip("_")
     return f"{snake}.schema.json"
+
+
+def generate_fastq_storage_schema_dict() -> Dict[str, Any]:
+    defaults = TypeAdapter(FastqStorageDefaults).json_schema()
+    source = TypeAdapter(FastqSourceLocation).json_schema()
+    defs = {}
+    defs.update(defaults.get("$defs") or {})
+    defs.update(source.get("$defs") or {})
+    schema: Dict[str, Any] = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "FastqStorage",
+        "$defs": defs,
+        "FastqStorageDefaults": {
+            k: v for k, v in defaults.items() if k not in ("$defs",)
+        },
+        "FastqSourceLocation": {
+            k: v for k, v in source.items() if k not in ("$defs",)
+        },
+    }
+    return schema
 
 
 def export_all_domain_schemas(
@@ -81,6 +102,12 @@ def export_all_domain_schemas(
         registry_path.write_text(registry_text, encoding="utf-8")
     written.append(registry_path)
 
+    fastq_path = root / "fastq_storage.schema.json"
+    fastq_text = schema_to_canonical_json(generate_fastq_storage_schema_dict())
+    if write:
+        fastq_path.write_text(fastq_text, encoding="utf-8")
+    written.append(fastq_path)
+
     return written
 
 
@@ -105,6 +132,13 @@ def check_domain_schema_drift(*, schemas_root: Path | None = None) -> List[str]:
         errors.append(f"missing schema artifact: {program_path}")
     elif program_path.read_text(encoding="utf-8") != program_expected:
         errors.append(f"stale schema artifact: {program_path}")
+
+    fastq_path = root / "fastq_storage.schema.json"
+    fastq_expected = schema_to_canonical_json(generate_fastq_storage_schema_dict())
+    if not fastq_path.is_file():
+        errors.append(f"missing schema artifact: {fastq_path}")
+    elif fastq_path.read_text(encoding="utf-8") != fastq_expected:
+        errors.append(f"stale schema artifact: {fastq_path}")
 
     return errors
 

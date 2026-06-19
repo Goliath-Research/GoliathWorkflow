@@ -9,6 +9,25 @@ import pytest
 
 from methyl_validation.sample_prep_planner import plan_sample_prep_context
 
+S3_STORAGE = {
+    "type": "s3",
+    "bucket": "bucket",
+    "region": "us-east-1",
+    "credentials": {"authMode": "instance_profile"},
+}
+
+AZURE_STORAGE = {
+    "type": "azure_blob",
+    "account": "methylstore",
+    "container": "plasma",
+    "credentials": {"authMode": "default_credential"},
+}
+
+FILE_STORAGE = {
+    "type": "file",
+    "basePath": "/data/fastq",
+}
+
 
 def _write_project(tmp_path: Path, *, samples_base: str = "/work/samples") -> Path:
     project = {
@@ -40,25 +59,29 @@ def _write_csv(path: Path, rows: list[str]) -> None:
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
-def test_explicit_samples_with_s3_template(tmp_path: Path) -> None:
+def test_explicit_samples_with_s3_storage(tmp_path: Path) -> None:
     project_path = _write_project(tmp_path)
     ctx = plan_sample_prep_context(
         {
             "projectPath": str(project_path),
             "samples": [{"sampleId": "S1"}, {"sampleId": "S2"}],
-            "fastqBaseUri": "s3://bucket/prefix/",
+            "fastqStorage": S3_STORAGE,
         }
     )
     assert ctx["primaryAnalyte"] == "buffy_coat"
     assert ctx["isCfdna"] is False
+    assert ctx["fastqStorage"]["type"] == "s3"
     assert len(ctx["samples"]) == 2
     s1 = ctx["samples"][0]
     assert s1["sampleId"] == "S1"
-    assert s1["fastqSourceUri"] == "s3://bucket/prefix/S1/"
+    assert s1["fastqPrefix"] == "S1/"
+    assert s1["fastqSource"]["type"] == "s3"
+    assert s1["fastqSource"]["prefix"] == "S1/"
+    assert s1["fastqSource"]["bucket"] == "bucket"
     assert s1["sampleDir"].endswith("/S1")
 
 
-def test_csv_plus_fastq_base_uri(tmp_path: Path) -> None:
+def test_csv_plus_azure_storage(tmp_path: Path) -> None:
     samples_base = tmp_path / "samples"
     samples_base.mkdir()
     csv = tmp_path / "cohort.csv"
@@ -69,30 +92,31 @@ def test_csv_plus_fastq_base_uri(tmp_path: Path) -> None:
         {
             "projectPath": str(project_path),
             "sampleCsv": str(csv),
-            "fastqBaseUri": "az://container/plasma/",
+            "fastqStorage": AZURE_STORAGE,
         }
     )
     assert len(ctx["samples"]) == 2
     ids = {s["sampleId"] for s in ctx["samples"]}
     assert ids == {"alpha", "beta"}
-    assert ctx["samples"][0]["fastqSourceUri"].startswith("az://container/plasma/")
+    assert ctx["samples"][0]["fastqSource"]["type"] == "azure_blob"
+    assert ctx["samples"][0]["fastqSource"]["prefix"] == "alpha/"
 
 
-def test_csv_entry_with_file_uri(tmp_path: Path) -> None:
+def test_csv_rejects_legacy_uri(tmp_path: Path) -> None:
     samples_base = tmp_path / "samples"
     samples_base.mkdir()
     csv = tmp_path / "cohort.csv"
     _write_csv(csv, ["file:///data/fastq/S99/"])
     project_path = _write_project(tmp_path, samples_base=str(samples_base))
 
-    ctx = plan_sample_prep_context(
-        {
-            "projectPath": str(project_path),
-            "sampleCsv": str(csv),
-        }
-    )
-    assert len(ctx["samples"]) == 1
-    assert ctx["samples"][0]["fastqSourceUri"].startswith("file:///data/fastq/S99")
+    with pytest.raises(ValueError, match="legacy FASTQ URI"):
+        plan_sample_prep_context(
+            {
+                "projectPath": str(project_path),
+                "sampleCsv": str(csv),
+                "fastqStorage": FILE_STORAGE,
+            }
+        )
 
 
 def test_use_project_samples(tmp_path: Path) -> None:
@@ -125,7 +149,7 @@ def test_use_project_samples(tmp_path: Path) -> None:
         {
             "projectPath": str(project_path),
             "useProjectSamples": True,
-            "fastqBaseUri": "s3://b/p/",
+            "fastqStorage": S3_STORAGE,
         }
     )
     assert {s["sampleId"] for s in ctx["samples"]} == {"H1", "P1"}
@@ -136,29 +160,31 @@ def test_dedupe_by_sample_id(tmp_path: Path) -> None:
     ctx = plan_sample_prep_context(
         {
             "projectPath": str(project_path),
+            "fastqStorage": S3_STORAGE,
             "samples": [
-                {"sampleId": "S1", "fastqSourceUri": "s3://b/x/S1/"},
-                {"sampleId": "S1", "fastqSourceUri": "s3://b/y/S1/"},
+                {"sampleId": "S1", "fastqPrefix": "x/S1/"},
+                {"sampleId": "S1", "fastqPrefix": "y/S1/"},
             ],
         }
     )
     assert len(ctx["samples"]) == 1
 
 
-def test_missing_fastq_base_uri_raises(tmp_path: Path) -> None:
-    samples_base = tmp_path / "samples"
-    samples_base.mkdir()
-    csv = tmp_path / "cohort.csv"
-    _write_csv(csv, ["local_sample"])
-    project_path = _write_project(tmp_path, samples_base=str(samples_base))
-
-    with pytest.raises(ValueError, match="fastqBaseUri"):
-        plan_sample_prep_context(
-            {
-                "projectPath": str(project_path),
-                "sampleCsv": str(csv),
-            }
-        )
+def test_explicit_fastq_source_override(tmp_path: Path) -> None:
+    project_path = _write_project(tmp_path)
+    override = {
+        "type": "file",
+        "basePath": "/mnt/custom",
+        "prefix": "lane1/S1/",
+    }
+    ctx = plan_sample_prep_context(
+        {
+            "projectPath": str(project_path),
+            "fastqStorage": FILE_STORAGE,
+            "samples": [{"sampleId": "S1", "fastqSource": override}],
+        }
+    )
+    assert ctx["samples"][0]["fastqSource"] == override
 
 
 def test_cfdna_primary_analyte(tmp_path: Path) -> None:
@@ -186,7 +212,8 @@ def test_cfdna_primary_analyte(tmp_path: Path) -> None:
     ctx = plan_sample_prep_context(
         {
             "projectPath": str(project_path),
-            "samples": [{"sampleId": "S1", "fastqSourceUri": "s3://b/S1/"}],
+            "samples": [{"sampleId": "S1"}],
+            "fastqStorage": S3_STORAGE,
         }
     )
     assert ctx["primaryAnalyte"] == "cfdna"

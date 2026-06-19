@@ -20,8 +20,8 @@ def test_mark_failed_handler() -> None:
     assert out["sampleId"] == "S1"
 
 
-def test_download_requires_fastq_source_uri() -> None:
-    with pytest.raises(RuntimeError, match="requires fastqSourceUri"):
+def test_download_requires_fastq_source() -> None:
+    with pytest.raises(Exception):
         execute_task(
             "sample.download-fastq",
             "sample.download_fastq",

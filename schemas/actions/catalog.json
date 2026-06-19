@@ -228,7 +228,7 @@
       "context_vars": [
         "sampleId",
         "sampleDir",
-        "fastqSourceUri"
+        "fastqSource"
       ],
       "default_node_type": "ACTION",
       "description": "Download sample FASTQ files from external object storage.",

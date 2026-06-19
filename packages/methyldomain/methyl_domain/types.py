@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from .fastq_storage import FastqSourceLocation
+
 DomainTypeName = Literal[
     "MethylIngestRef",
     "MethylSampleRef",
@@ -46,12 +48,12 @@ class DomainTaggedModel(BaseModel):
 
 
 class MethylIngestRef(DomainTaggedModel):
-    """Pre-download sample ingest descriptor (URIs known, files not yet local)."""
+    """Pre-download sample ingest descriptor (structured source known, files not yet local)."""
 
     type: Literal["MethylIngestRef"] = Field(alias="$type", default="MethylIngestRef")
     sampleId: str
     sampleDir: Optional[str] = None
-    fastqSourceUri: Optional[str] = None
+    fastqSource: Optional[FastqSourceLocation] = None
     fastqUris: Optional[List[str]] = None
     fileCount: Optional[int] = None
 

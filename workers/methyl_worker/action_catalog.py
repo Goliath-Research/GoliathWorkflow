@@ -539,7 +539,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "DownloadFastqTaskOutput",
         in_process_handler="_handle_download_fastq",
         tool="SampleDownloadFastq",
-        context_vars=("sampleId", "sampleDir", "fastqSourceUri"),
+        context_vars=("sampleId", "sampleDir", "fastqSource"),
         domain_effects=_DE_DOWNLOAD,
     ),
     _in_process(

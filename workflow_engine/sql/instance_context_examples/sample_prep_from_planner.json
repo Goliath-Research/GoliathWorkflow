@@ -4,17 +4,43 @@
   "isCfdna": true,
   "referenceFasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
   "referenceGtf": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.114.gtf",
+  "fastqStorage": {
+    "type": "s3",
+    "bucket": "methyl-cohort",
+    "region": "us-east-1",
+    "credentials": {
+      "authMode": "instance_profile"
+    }
+  },
   "samples": [
     {
       "sampleId": "DPLST-051425-111148",
       "sampleDir": "/work/samples/DPLST-051425-111148",
-      "fastqSourceUri": "s3://methyl-cohort/plasma/DPLST-051425-111148/"
+      "fastqPrefix": "plasma/DPLST-051425-111148/",
+      "fastqSource": {
+        "type": "s3",
+        "bucket": "methyl-cohort",
+        "region": "us-east-1",
+        "prefix": "plasma/DPLST-051425-111148/",
+        "credentials": {
+          "authMode": "instance_profile"
+        }
+      }
     },
     {
       "sampleId": "DPLST-051425-111149",
       "sampleDir": "/work/samples/DPLST-051425-111149",
-      "fastqSourceUri": "s3://methyl-cohort/plasma/DPLST-051425-111149/"
+      "fastqPrefix": "plasma/DPLST-051425-111149/",
+      "fastqSource": {
+        "type": "s3",
+        "bucket": "methyl-cohort",
+        "region": "us-east-1",
+        "prefix": "plasma/DPLST-051425-111149/",
+        "credentials": {
+          "authMode": "instance_profile"
+        }
+      }
     }
   ],
-  "_comment": "Example output shape from plan_sample_prep_context({ projectPath, fastqBaseUri: s3://methyl-cohort/plasma/, sampleCsvs: [...] })"
+  "_comment": "Example output shape from plan_sample_prep_context({ projectPath, fastqStorage: { type: s3, bucket: methyl-cohort, credentials: { authMode: instance_profile } }, sampleCsvs: [...] })"
 }

@@ -161,7 +161,7 @@ BEGIN
 
     INSERT INTO wf.workflow_input_template (workflow_node_id, template_json)
     VALUES
-      (@n_download, N'{"tool":"SampleDownloadFastq","sampleId":"${var.sampleId}","sampleDir":"${var.sampleDir}","fastqSourceUri":"${var.fastqSourceUri}"}'),
+      (@n_download, N'{"tool":"SampleDownloadFastq","sampleId":"${var.sampleId}","sampleDir":"${var.sampleDir}","fastqSource":"${var.fastqSource}"}'),
       (@n_parabricks, N'{"tool":"ParabricksFq2Bam","sampleId":"${var.sampleId}","sampleDir":"${var.sampleDir}","referenceFasta":"${var.referenceFasta}","referenceGtf":"${var.referenceGtf}"}'),
       (@n_delete_fq, N'{"tool":"SampleDeleteFastqs","sampleId":"${var.sampleId}","sampleDir":"${var.sampleDir}"}'),
       (@n_methyl_qc, N'{"tool":"MethylAlignmentQc","project":"${var.projectPath}","sampleId":"${var.sampleId}","sampleDir":"${var.sampleDir}","primaryAnalyte":"${var.primaryAnalyte}"}'),

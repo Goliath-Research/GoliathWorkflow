@@ -110,6 +110,54 @@
       "title": "AzureFastqSource",
       "type": "object"
     },
+    "AzureFastqStorageDefaults": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "title": "Account",
+          "type": "string"
+        },
+        "container": {
+          "title": "Container",
+          "type": "string"
+        },
+        "credentials": {
+          "discriminator": {
+            "mapping": {
+              "account_key": "#/$defs/AzureAccountKeyCredentials",
+              "connection_string": "#/$defs/AzureConnectionStringCredentials",
+              "default_credential": "#/$defs/AzureDefaultCredentialCredentials"
+            },
+            "propertyName": "authMode"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AzureAccountKeyCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureConnectionStringCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureDefaultCredentialCredentials"
+            }
+          ],
+          "title": "Credentials"
+        },
+        "type": {
+          "const": "azure_blob",
+          "default": "azure_blob",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "account",
+        "container",
+        "credentials"
+      ],
+      "title": "AzureFastqStorageDefaults",
+      "type": "object"
+    },
     "FileFastqSource": {
       "additionalProperties": false,
       "properties": {
@@ -133,6 +181,26 @@
         "basePath"
       ],
       "title": "FileFastqSource",
+      "type": "object"
+    },
+    "FileFastqStorageDefaults": {
+      "additionalProperties": false,
+      "properties": {
+        "basePath": {
+          "title": "Basepath",
+          "type": "string"
+        },
+        "type": {
+          "const": "file",
+          "default": "file",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basePath"
+      ],
+      "title": "FileFastqStorageDefaults",
       "type": "object"
     },
     "S3ExplicitKeysCredentials": {
@@ -245,6 +313,69 @@
       "title": "S3FastqSource",
       "type": "object"
     },
+    "S3FastqStorageDefaults": {
+      "additionalProperties": false,
+      "properties": {
+        "bucket": {
+          "title": "Bucket",
+          "type": "string"
+        },
+        "credentials": {
+          "discriminator": {
+            "mapping": {
+              "explicit_keys": "#/$defs/S3ExplicitKeysCredentials",
+              "instance_profile": "#/$defs/S3InstanceProfileCredentials"
+            },
+            "propertyName": "authMode"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/S3ExplicitKeysCredentials"
+            },
+            {
+              "$ref": "#/$defs/S3InstanceProfileCredentials"
+            }
+          ],
+          "title": "Credentials"
+        },
+        "endpointUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpointurl"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        },
+        "type": {
+          "const": "s3",
+          "default": "s3",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bucket",
+        "credentials"
+      ],
+      "title": "S3FastqStorageDefaults",
+      "type": "object"
+    },
     "S3InstanceProfileCredentials": {
       "additionalProperties": false,
       "properties": {
@@ -260,91 +391,47 @@
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Pre-download sample ingest descriptor (structured source known, files not yet local).",
-  "properties": {
-    "$type": {
-      "const": "MethylIngestRef",
-      "default": "MethylIngestRef",
-      "title": "$Type",
-      "type": "string"
+  "FastqSourceLocation": {
+    "discriminator": {
+      "mapping": {
+        "azure_blob": "#/$defs/AzureFastqSource",
+        "file": "#/$defs/FileFastqSource",
+        "s3": "#/$defs/S3FastqSource"
+      },
+      "propertyName": "type"
     },
-    "fastqSource": {
-      "anyOf": [
-        {
-          "discriminator": {
-            "mapping": {
-              "azure_blob": "#/$defs/AzureFastqSource",
-              "file": "#/$defs/FileFastqSource",
-              "s3": "#/$defs/S3FastqSource"
-            },
-            "propertyName": "type"
-          },
-          "oneOf": [
-            {
-              "$ref": "#/$defs/FileFastqSource"
-            },
-            {
-              "$ref": "#/$defs/S3FastqSource"
-            },
-            {
-              "$ref": "#/$defs/AzureFastqSource"
-            }
-          ]
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Fastqsource"
-    },
-    "fastqUris": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Fastquris"
-    },
-    "fileCount": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Filecount"
-    },
-    "sampleDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Sampledir"
-    },
-    "sampleId": {
-      "title": "Sampleid",
-      "type": "string"
-    }
+    "oneOf": [
+      {
+        "$ref": "#/$defs/FileFastqSource"
+      },
+      {
+        "$ref": "#/$defs/S3FastqSource"
+      },
+      {
+        "$ref": "#/$defs/AzureFastqSource"
+      }
+    ]
   },
-  "required": [
-    "sampleId"
-  ],
-  "title": "MethylIngestRef",
-  "type": "object"
+  "FastqStorageDefaults": {
+    "discriminator": {
+      "mapping": {
+        "azure_blob": "#/$defs/AzureFastqStorageDefaults",
+        "file": "#/$defs/FileFastqStorageDefaults",
+        "s3": "#/$defs/S3FastqStorageDefaults"
+      },
+      "propertyName": "type"
+    },
+    "oneOf": [
+      {
+        "$ref": "#/$defs/FileFastqStorageDefaults"
+      },
+      {
+        "$ref": "#/$defs/S3FastqStorageDefaults"
+      },
+      {
+        "$ref": "#/$defs/AzureFastqStorageDefaults"
+      }
+    ]
+  },
+  "title": "FastqStorage"
 }

@@ -82,11 +82,11 @@ cat > "$RUN_ROOT/smoke_env.sh" <<EOF
 export SMOKE_RUN_ROOT="$RUN_ROOT"
 export SMOKE_SAMPLE_ID="$SAMPLE_ID"
 export SMOKE_PROJECT_PATH="$PROJECT_PATH"
-export SMOKE_FASTQ_URI="file://$FASTQ_DIR/"
+export SMOKE_FASTQ_BASE="$RUN_ROOT/fastq"
 export SMOKE_SAMPLE_DIR="$SAMPLE_DIR"
 EOF
 
 echo "Bootstrap OK: run_root=$RUN_ROOT sample=$SAMPLE_ID"
 echo "  project: $PROJECT_PATH"
 echo "  sample dir: $SAMPLE_DIR"
-echo "  fastq uri: file://$FASTQ_DIR/"
+echo "  fastq base: $FASTQ_DIR"

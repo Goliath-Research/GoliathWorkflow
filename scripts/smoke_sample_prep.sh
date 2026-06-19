@@ -72,7 +72,6 @@ remediation = int(sys.argv[6])
 
 project_path = run_root / "project.json"
 sample_id = "smoke-1"
-fastq_uri = f"file://{run_root / 'fastq' / sample_id}/"
 
 def request(method: str, path: str, body: dict | None = None) -> dict:
     data = None if body is None else json.dumps(body).encode("utf-8")
@@ -112,13 +111,16 @@ if not sample_prep_vid:
 body = {
     "projectPath": str(project_path.resolve()),
     "workflow_version_id": int(sample_prep_vid),
-    "samples": [
-        {
-            "sampleId": sample_id,
-            "sampleDir": str((run_root / "samples" / sample_id).resolve()),
-            "fastqSourceUri": fastq_uri,
-        }
-    ],
+            "samples": [
+                {
+                    "sampleId": "S1",
+                    "fastqPrefix": sample_id + "/",
+                }
+            ],
+            "fastqStorage": {
+                "type": "file",
+                "basePath": str(run_root / "fastq"),
+            },
 }
 if remediation:
     print("note: --remediation not yet implemented; running default pass-path smoke")

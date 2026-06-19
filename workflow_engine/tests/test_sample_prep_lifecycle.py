@@ -57,7 +57,12 @@ def test_start_sample_prep_plans_context_and_starts_instance(tmp_path: Path) -> 
         {
             "projectPath": str(project_path),
             "workflow_version_id": 7,
-            "samples": [{"sampleId": "S1", "fastqSourceUri": "s3://b/S1/"}],
+            "samples": [{"sampleId": "S1"}],
+            "fastqStorage": {
+                "type": "s3",
+                "bucket": "b",
+                "credentials": {"authMode": "instance_profile"},
+            },
         },
         create_workflow_definition=MagicMock(),
         create_workflow_instance=fake_create_instance,

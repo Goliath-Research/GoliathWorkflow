@@ -7,27 +7,31 @@
       "title": "Guardrails",
       "type": "object"
     },
+    "qcHistory": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Qchistory",
+      "type": "array"
+    },
     "qcPath": {
       "title": "Qcpath",
       "type": "string"
     },
-    "screening": {
-      "additionalProperties": true,
-      "title": "Screening",
-      "type": "object"
-    },
-    "qcHistory": {
-      "items": { "type": "object" },
-      "title": "Qchistory",
-      "type": "array"
-    },
     "remediateR2Trim": {
+      "default": false,
       "title": "Remediater2Trim",
       "type": "boolean"
     },
     "sampleId": {
       "title": "Sampleid",
       "type": "string"
+    },
+    "screening": {
+      "additionalProperties": true,
+      "title": "Screening",
+      "type": "object"
     }
   },
   "required": [

@@ -1,0 +1,185 @@
+"""
+Structured FASTQ storage locations for Portal JSON and download workers.
+
+Instance-level ``FastqStorageDefaults`` plus per-sample ``prefix`` merge into
+``FastqSourceLocation`` on each download task.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated, Literal, Union
+
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+
+_SECRET_JSON_SCHEMA = {"writeOnly": True}
+
+
+def normalize_sample_prefix(prefix: str) -> str:
+    """Normalize a per-sample folder prefix (trailing slash, no leading slash)."""
+    cleaned = str(prefix).strip().strip("/")
+    return f"{cleaned}/" if cleaned else ""
+
+
+class S3ExplicitKeysCredentials(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    authMode: Literal["explicit_keys"] = "explicit_keys"
+    accessKeyId: str
+    secretAccessKey: SecretStr = Field(json_schema_extra=_SECRET_JSON_SCHEMA)
+    sessionToken: SecretStr | None = Field(default=None, json_schema_extra=_SECRET_JSON_SCHEMA)
+
+
+class S3InstanceProfileCredentials(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    authMode: Literal["instance_profile"] = "instance_profile"
+
+
+S3Credentials = Annotated[
+    Union[S3ExplicitKeysCredentials, S3InstanceProfileCredentials],
+    Field(discriminator="authMode"),
+]
+
+
+class AzureAccountKeyCredentials(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    authMode: Literal["account_key"] = "account_key"
+    accountKey: SecretStr = Field(json_schema_extra=_SECRET_JSON_SCHEMA)
+
+
+class AzureConnectionStringCredentials(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    authMode: Literal["connection_string"] = "connection_string"
+    connectionString: SecretStr = Field(json_schema_extra=_SECRET_JSON_SCHEMA)
+
+
+class AzureDefaultCredentialCredentials(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    authMode: Literal["default_credential"] = "default_credential"
+
+
+AzureCredentials = Annotated[
+    Union[
+        AzureAccountKeyCredentials,
+        AzureConnectionStringCredentials,
+        AzureDefaultCredentialCredentials,
+    ],
+    Field(discriminator="authMode"),
+]
+
+
+class FileFastqStorageDefaults(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["file"] = "file"
+    basePath: str
+
+
+class S3FastqStorageDefaults(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["s3"] = "s3"
+    bucket: str
+    region: str | None = None
+    endpointUrl: str | None = None
+    credentials: S3Credentials
+
+
+class AzureFastqStorageDefaults(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["azure_blob"] = "azure_blob"
+    account: str
+    container: str
+    credentials: AzureCredentials
+
+
+FastqStorageDefaults = Annotated[
+    Union[FileFastqStorageDefaults, S3FastqStorageDefaults, AzureFastqStorageDefaults],
+    Field(discriminator="type"),
+]
+
+
+class FileFastqSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["file"] = "file"
+    basePath: str
+    prefix: str = ""
+
+    @model_validator(mode="after")
+    def _normalize_prefix(self) -> FileFastqSource:
+        if self.prefix:
+            object.__setattr__(self, "prefix", normalize_sample_prefix(self.prefix))
+        return self
+
+
+class S3FastqSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["s3"] = "s3"
+    bucket: str
+    prefix: str
+    region: str | None = None
+    endpointUrl: str | None = None
+    credentials: S3Credentials
+
+    @model_validator(mode="after")
+    def _normalize_prefix(self) -> S3FastqSource:
+        object.__setattr__(self, "prefix", normalize_sample_prefix(self.prefix))
+        return self
+
+
+class AzureFastqSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["azure_blob"] = "azure_blob"
+    account: str
+    container: str
+    prefix: str
+    credentials: AzureCredentials
+
+    @model_validator(mode="after")
+    def _normalize_prefix(self) -> AzureFastqSource:
+        object.__setattr__(self, "prefix", normalize_sample_prefix(self.prefix))
+        return self
+
+
+FastqSourceLocation = Annotated[
+    Union[FileFastqSource, S3FastqSource, AzureFastqSource],
+    Field(discriminator="type"),
+]
+
+
+def merge_fastq_source(defaults: FastqStorageDefaults, prefix: str) -> FastqSourceLocation:
+    """Materialize per-sample source from instance defaults and sample prefix."""
+    norm = normalize_sample_prefix(prefix)
+    if isinstance(defaults, FileFastqStorageDefaults):
+        return FileFastqSource(basePath=defaults.basePath, prefix=norm)
+    if isinstance(defaults, S3FastqStorageDefaults):
+        return S3FastqSource(
+            bucket=defaults.bucket,
+            prefix=norm,
+            region=defaults.region,
+            endpointUrl=defaults.endpointUrl,
+            credentials=defaults.credentials,
+        )
+    if isinstance(defaults, AzureFastqStorageDefaults):
+        return AzureFastqSource(
+            account=defaults.account,
+            container=defaults.container,
+            prefix=norm,
+            credentials=defaults.credentials,
+        )
+    raise TypeError(f"unsupported fastq storage defaults: {type(defaults)!r}")
+
+
+def resolve_file_local_root(source: FileFastqSource) -> Path:
+    base = Path(source.basePath).expanduser()
+    if not source.prefix:
+        return base
+    return base / source.prefix.rstrip("/")

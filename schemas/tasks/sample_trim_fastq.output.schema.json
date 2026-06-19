@@ -2,13 +2,34 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": true,
   "properties": {
-    "sampleId": { "type": "string" },
-    "trimFront2": { "type": "string" },
-    "trimmedR1": { "type": "string" },
-    "trimmedR2": { "type": "string" },
-    "logReason": { "type": "string" }
+    "logReason": {
+      "default": "",
+      "title": "Logreason",
+      "type": "string"
+    },
+    "sampleId": {
+      "title": "Sampleid",
+      "type": "string"
+    },
+    "trimFront2": {
+      "title": "Trimfront2",
+      "type": "string"
+    },
+    "trimmedR1": {
+      "title": "Trimmedr1",
+      "type": "string"
+    },
+    "trimmedR2": {
+      "title": "Trimmedr2",
+      "type": "string"
+    }
   },
-  "required": ["sampleId", "trimFront2", "trimmedR1", "trimmedR2"],
+  "required": [
+    "sampleId",
+    "trimFront2",
+    "trimmedR1",
+    "trimmedR2"
+  ],
   "title": "TrimFastqTaskOutput",
   "type": "object"
 }

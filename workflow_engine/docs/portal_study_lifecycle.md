@@ -13,7 +13,12 @@ POST /v1/studies/sample-prep/start
 {
   "projectPath": "/work/.../project_Healthy_vs_PCa1-5-CG.json",
   "workflow_version_id": <sample_prep_version>,
-  "fastqBaseUri": "s3://methyl-cohort/plasma/",
+  "fastqStorage": {
+    "type": "s3",
+    "bucket": "methyl-cohort",
+    "region": "us-east-1",
+    "credentials": { "authMode": "instance_profile" }
+  },
   "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]
 }
 ```
@@ -26,7 +31,7 @@ POST /v1/studies/sample-prep/start
   "projectPath": "/work/.../project.json",
   "workflow_version_id": <sample_prep_version>,
   "samples": [
-    { "sampleId": "S1", "sampleDir": "/work/samples/S1", "fastqSourceUri": "s3://..." }
+    { "sampleId": "S1", "sampleDir": "/work/samples/S1", "fastqPrefix": "plasma/S1/" }
   ]
 }
 ```
@@ -45,7 +50,7 @@ POST /v1/workflows/instances
     "isCfdna": false,
     "referenceFasta": "/work/genomes/.../Homo_sapiens.GRCh38.dna.primary_assembly.fa",
     "samples": [
-      { "sampleId": "S1", "sampleDir": "/work/samples/S1", "fastqSourceUri": "s3://..." }
+      { "sampleId": "S1", "sampleDir": "/work/samples/S1", "fastqPrefix": "plasma/S1/" }
     ]
   }
 }

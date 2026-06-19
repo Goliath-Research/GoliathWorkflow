@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
+from methyl_domain.fastq_storage import FastqSourceLocation
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -57,13 +58,12 @@ class SamplePrepTaskInput(BaseModel):
 class DownloadFastqTaskInput(BaseModel):
     """Input for sample.download_fastq (SampleDownloadFastq)."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     tool: str = "SampleDownloadFastq"
     sampleId: str
     sampleDir: str
-    fastqSourceUri: str
-    fastqUri: Optional[str] = None
+    fastqSource: FastqSourceLocation
 
 
 class ParabricksFq2bamTaskInput(BaseModel):

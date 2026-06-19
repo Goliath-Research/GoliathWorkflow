@@ -25,7 +25,7 @@ FOREACH flattening and `${var.*}` templates work unchanged: domain objects are o
 
 | `$type` | Purpose |
 |---------|---------|
-| `MethylIngestRef` | Pre-download URIs / file count |
+| `MethylIngestRef` | Pre-download structured `fastqSource` / file count |
 | `MethylSampleRef` | Sample lifecycle handle (grows through prep) |
 | `AlignmentQcRef` | QC JSON path + pass gate |
 | `FragmentomicsRef` | cfDNA fragmentomics artifacts |

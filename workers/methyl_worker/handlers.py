@@ -189,19 +189,13 @@ def _handle_mark_failed(_capability: str, _action_name: str, input_json: Dict[st
 
 
 def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
-    from .fastq_source import download_fastqs
+    from .fastq_source import download_from_source
+    from .task_models import DownloadFastqTaskInput
 
-    sample_dir = input_json.get("sampleDir")
-    sample_id = input_json.get("sampleId")
-    source_uri = input_json.get("fastqSourceUri") or input_json.get("fastqUri")
-    if not sample_dir:
-        raise RuntimeError("sample.download_fastq requires sampleDir")
-    if not source_uri:
-        raise RuntimeError("sample.download_fastq requires fastqSourceUri")
-
-    dest = Path(str(sample_dir))
-    fastq_files = download_fastqs(str(source_uri), dest)
-    return {"sampleId": sample_id or dest.name, "fastqFiles": fastq_files}
+    task = DownloadFastqTaskInput.model_validate(input_json)
+    dest = Path(str(task.sampleDir))
+    fastq_files = download_from_source(task.fastqSource, dest)
+    return {"sampleId": task.sampleId or dest.name, "fastqFiles": fastq_files}
 
 
 def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
