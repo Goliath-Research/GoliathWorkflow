@@ -27,6 +27,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 API_BASE="${WORKER_API_BASE:-http://localhost:8080/v1}"
 RUN_ROOT="$REPO_ROOT/.smoke/sample_prep"
+SAMPLE_ID="${SMOKE_SAMPLE_ID:-smoke-1}"
 POLL=5
 TIMEOUT=600
 REMEDIATION=0
@@ -53,9 +54,9 @@ if [[ ! -f "$VERSIONS_FILE" ]]; then
   VERSIONS_FILE="$REPO_ROOT/.smoke/workflow_versions.json"
 fi
 
-SMOKE_RUN_ROOT="$RUN_ROOT" bash "$SCRIPT_DIR/bootstrap_sample_prep_smoke_fixtures.sh" --run-root "$RUN_ROOT"
+SMOKE_RUN_ROOT="$RUN_ROOT" bash "$SCRIPT_DIR/bootstrap_sample_prep_smoke_fixtures.sh" --run-root "$RUN_ROOT" --sample-id "$SAMPLE_ID"
 
-"$PYTHON_BIN" - <<'PY' "$API_BASE" "$RUN_ROOT" "$VERSIONS_FILE" "$POLL" "$TIMEOUT" "$REMEDIATION"
+"$PYTHON_BIN" - <<'PY' "$API_BASE" "$RUN_ROOT" "$VERSIONS_FILE" "$POLL" "$TIMEOUT" "$REMEDIATION" "$SAMPLE_ID"
 import json
 import sys
 import time
@@ -69,9 +70,9 @@ versions_file = Path(sys.argv[3])
 poll = int(sys.argv[4])
 timeout = int(sys.argv[5])
 remediation = int(sys.argv[6])
+sample_id = sys.argv[7]
 
 project_path = run_root / "project.json"
-sample_id = "smoke-1"
 
 def request(method: str, path: str, body: dict | None = None) -> dict:
     data = None if body is None else json.dumps(body).encode("utf-8")
@@ -111,16 +112,17 @@ if not sample_prep_vid:
 body = {
     "projectPath": str(project_path.resolve()),
     "workflow_version_id": int(sample_prep_vid),
-            "samples": [
-                {
-                    "sampleId": "S1",
-                    "fastqPrefix": sample_id + "/",
-                }
-            ],
-            "fastqStorage": {
-                "type": "file",
-                "basePath": str(run_root / "fastq"),
-            },
+    "samples": [
+        {
+            "sampleId": sample_id,
+            "sampleDir": str((run_root / "samples" / sample_id).resolve()),
+            "fastqPrefix": f"{sample_id}/",
+        }
+    ],
+    "fastqStorage": {
+        "type": "file",
+        "basePath": str(run_root / "fastq"),
+    },
 }
 if remediation:
     print("note: --remediation not yet implemented; running default pass-path smoke")
