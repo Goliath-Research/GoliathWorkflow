@@ -3084,6 +3084,108 @@
       "description": "When true, MC methyl-mapper iterations run Grok/OpenTargets disease enrichment. Default false for speed; production --freeze mapper uses project step_config.mapper.enrich_disease.",
       "title": "Stability Mapper Enrich Disease"
     },
+    "stability_gene_biomarker_filter_enabled": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": false,
+      "description": "If true, apply in-process disease CSV filters and optional STRING PPI hub ranking to narrow the gene pool before MC gene FeatureCuts (no full methyl-enricher step).",
+      "title": "Stability Gene Biomarker Filter Enabled"
+    },
+    "stability_gene_biomarker_mode": {
+      "anyOf": [
+        {
+          "enum": [
+            "disease_only",
+            "ppi_only",
+            "disease_and_ppi"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": "ppi_only",
+      "description": "Biomarker gene pool mode: disease_only (CSV filters only), ppi_only or disease_and_ppi (disease filters then STRING PPI hub ranking).",
+      "title": "Stability Gene Biomarker Mode"
+    },
+    "stability_gene_region_hits": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional region tokens (promoter, exon, intron, gene_body, terminator). Require corresponding mapper hits_* > 0 before biomarker filtering.",
+      "title": "Stability Gene Region Hits"
+    },
+    "stability_gene_biomarker_top_genes": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": 150,
+      "description": "Cap genes entering PPI fetch after disease CSV filters (mirrors enricher top).",
+      "title": "Stability Gene Biomarker Top Genes"
+    },
+    "stability_gene_biomarker_ppi_top_hubs": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": 100,
+      "description": "Max PPI hub genes passed to gene FeatureCuts pool.",
+      "title": "Stability Gene Biomarker Ppi Top Hubs"
+    },
+    "stability_gene_biomarker_min_degree": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": 1,
+      "description": "Drop PPI nodes with degree below this threshold (0 keeps all nodes).",
+      "title": "Stability Gene Biomarker Min Degree"
+    },
+    "stability_gene_biomarker_ppi_cache_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "STRING edge cache directory or file for MC biomarker PPI. Defaults to step_config.enricher.network_refinement.cache_path.",
+      "title": "Stability Gene Biomarker Ppi Cache Path"
+    },
     "stability_gene_freq": {
       "anyOf": [
         {

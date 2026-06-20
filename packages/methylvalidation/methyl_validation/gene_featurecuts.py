@@ -37,6 +37,7 @@ GENE_STABILITY_DIR = "gene_stability"
 GENES_CLASSIFIER_CSV = "genes-classifier.csv"
 GENE_FEATURECUTS_METRICS_JSON = "gene_featurecuts_metrics.json"
 GENE_DMP_LOCI_CSV = "gene-dmp-loci.csv"
+BIOMARKER_PPI_HUBS_CSV = "biomarker_ppi_hubs.csv"
 
 
 def _load_train_paths_and_labels(project_json: Path) -> Tuple[List[str], np.ndarray, List[str]]:
@@ -285,6 +286,72 @@ def _rank_gene_pool(gene_combined: pd.DataFrame) -> Tuple[List[str], pd.DataFram
     return ranked, grouped
 
 
+def _apply_biomarker_gene_pool_filter(
+    gene_combined: pd.DataFrame,
+    *,
+    project_json: Path,
+    config: Any,
+    out_dir: Path,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    from .biomarker_gene_pool import (
+        BIOMARKER_PPI_HUBS_CSV,
+        build_biomarker_gene_pool,
+        load_enricher_config_from_project,
+        resolve_biomarker_ppi_cache_path,
+        resolve_biomarker_ppi_score_threshold,
+    )
+
+    enricher_config = load_enricher_config_from_project(project_json)
+    mode = str(getattr(config, "stability_gene_biomarker_mode", "ppi_only") or "ppi_only")
+    region_hits = getattr(config, "stability_gene_region_hits", None)
+    top_genes = int(getattr(config, "stability_gene_biomarker_top_genes", 150) or 150)
+    ppi_top_hubs = int(getattr(config, "stability_gene_biomarker_ppi_top_hubs", 100) or 100)
+    min_degree = int(getattr(config, "stability_gene_biomarker_min_degree", 1) or 1)
+    cache_path = resolve_biomarker_ppi_cache_path(config, enricher_config)
+    score_threshold = resolve_biomarker_ppi_score_threshold(enricher_config)
+
+    pool_genes, hubs_df, bio_meta = build_biomarker_gene_pool(
+        gene_combined,
+        enricher_config=enricher_config,
+        mode=mode,
+        region_hits=region_hits,
+        top_genes=top_genes,
+        ppi_top_hubs=ppi_top_hubs,
+        min_degree=min_degree,
+        cache_path=cache_path,
+        score_threshold=score_threshold,
+    )
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    if hubs_df is not None and not hubs_df.empty:
+        hubs_df.to_csv(out_dir / BIOMARKER_PPI_HUBS_CSV, index=False)
+
+    biomarker_meta: Dict[str, Any] = {
+        "enabled": True,
+        "mode": mode,
+        "region_hits": list(region_hits) if region_hits else [],
+        "biomarker_pool_size": int(len(pool_genes)),
+        "ppi_cache_path": cache_path,
+        "ppi_score_threshold": float(score_threshold),
+        **bio_meta,
+    }
+
+    if not pool_genes:
+        return gene_combined.iloc[0:0].copy(), biomarker_meta
+
+    pool_set = {str(g).strip().upper() for g in pool_genes}
+    work = gene_combined.copy()
+    work["_gene_upper"] = work["gene_name"].astype(str).str.strip().str.upper()
+    filtered = work[work["_gene_upper"].isin(pool_set)].copy()
+    rank_map = {g.upper(): i for i, g in enumerate(pool_genes)}
+    filtered["_bio_rank"] = filtered["_gene_upper"].map(rank_map)
+    filtered = filtered.sort_values("_bio_rank", na_position="last").drop(
+        columns=["_gene_upper", "_bio_rank"], errors="ignore"
+    )
+    biomarker_meta["n_genes_in_mapper_after_intersect"] = int(len(filtered))
+    return filtered, biomarker_meta
+
+
 def _evaluate_gene_prefix(
     X_train: np.ndarray,
     y_train: np.ndarray,
@@ -419,6 +486,26 @@ def run_gene_featurecuts_for_iteration(
     if gene_combined.empty:
         return 1, "", "Gene FeatureCuts: mapper all-gene_name-combined.csv not found (run methyl-mapper first)"
 
+    biomarker_meta: Dict[str, Any] = {"enabled": False}
+    pre_biomarker_size = int(len(gene_combined))
+    if bool(getattr(config, "stability_gene_biomarker_filter_enabled", False)):
+        out_dir = run_dir / GENE_STABILITY_DIR
+        try:
+            gene_combined, biomarker_meta = _apply_biomarker_gene_pool_filter(
+                gene_combined,
+                project_json=project_json,
+                config=config,
+                out_dir=out_dir,
+            )
+        except ValueError as exc:
+            return 1, "", f"Gene FeatureCuts biomarker filter failed: {exc}"
+        if gene_combined.empty:
+            return 1, "", (
+                "Gene FeatureCuts: biomarker gene pool is empty after disease/PPI filters. "
+                "Relax step_config.enricher filters (disease_only, min_dmp_count) or "
+                "stability_gene_region_hits."
+            )
+
     ranked_genes, gene_panel = _rank_gene_pool(gene_combined)
     if not ranked_genes:
         return 1, "", "Gene FeatureCuts: empty ranked gene pool from mapper outputs"
@@ -500,6 +587,8 @@ def run_gene_featurecuts_for_iteration(
         "stability_gene_featurecuts_max_genes": getattr(
             config, "stability_gene_featurecuts_max_genes", None
         ),
+        "biomarker_filter": biomarker_meta,
+        "n_mapper_genes_before_biomarker_filter": pre_biomarker_size,
     }
     with open(out_dir / GENE_FEATURECUTS_METRICS_JSON, "w", encoding="utf-8") as f:
         json.dump(metrics_payload, f, indent=2)

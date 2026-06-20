@@ -20,6 +20,19 @@ from .utils.migrate_backend_config import (
 )
 
 
+def validate_stability_gene_biomarker_config(config: MonteCarloConfig) -> None:
+    """Ensure biomarker filter is only used with gene FeatureCuts enabled."""
+    if not bool(getattr(config, "stability_gene_biomarker_filter_enabled", False)):
+        return
+    if not bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
+        print(
+            "Error: stability_gene_biomarker_filter_enabled requires "
+            "stability_gene_featurecuts_enabled (or --stability-gene-featurecuts).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def _update_backend_params(config: MonteCarloConfig, backend: str, updates: dict[str, Any]) -> MonteCarloConfig:
     current = config.get_backend_params(backend)
     params_cls = type(current)
@@ -163,6 +176,16 @@ def apply_monte_carlo_config_overrides(
         )
     if getattr(args, "stability_gene_featurecuts", None):
         config = config.model_copy(update={"stability_gene_featurecuts_enabled": True})
+    if getattr(args, "stability_gene_biomarker_filter", None):
+        config = config.model_copy(update={"stability_gene_biomarker_filter_enabled": True})
+    if getattr(args, "stability_gene_biomarker_mode", None) is not None:
+        config = config.model_copy(
+            update={"stability_gene_biomarker_mode": str(args.stability_gene_biomarker_mode)}
+        )
+    if getattr(args, "stability_gene_region_hits", None):
+        config = config.model_copy(
+            update={"stability_gene_region_hits": list(args.stability_gene_region_hits)}
+        )
     if getattr(args, "stability_min_selected_genes", None) is not None:
         config = config.model_copy(
             update={"stability_min_selected_genes": int(args.stability_min_selected_genes)}
@@ -171,6 +194,8 @@ def apply_monte_carlo_config_overrides(
         config = config.model_copy(update={"skip_enricher": True})
     if getattr(args, "predictor_only", None):
         config = config.model_copy(update={"predictor_only": True})
+
+    validate_stability_gene_biomarker_config(config)
 
     if getattr(args, "model_backend", None) and getattr(args, "post_model_backend", None):
         if args.model_backend != args.post_model_backend:

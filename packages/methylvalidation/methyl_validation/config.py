@@ -871,6 +871,49 @@ class MonteCarloConfig(BaseModel):
             "Default false for speed; production --freeze mapper uses project step_config.mapper.enrich_disease."
         ),
     )
+    stability_gene_biomarker_filter_enabled: bool = Field(
+        default=False,
+        description=(
+            "If true, apply in-process disease CSV filters and optional STRING PPI hub ranking "
+            "to narrow the gene pool before MC gene FeatureCuts (no full methyl-enricher step)."
+        ),
+    )
+    stability_gene_biomarker_mode: Literal["disease_only", "ppi_only", "disease_and_ppi"] = Field(
+        default="ppi_only",
+        description=(
+            "Biomarker gene pool mode: disease_only (CSV filters only), ppi_only or disease_and_ppi "
+            "(disease filters then STRING PPI hub ranking)."
+        ),
+    )
+    stability_gene_region_hits: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Optional region tokens (promoter, exon, intron, gene_body, terminator). "
+            "Require corresponding mapper hits_* > 0 before biomarker filtering."
+        ),
+    )
+    stability_gene_biomarker_top_genes: int = Field(
+        default=150,
+        ge=1,
+        description="Cap genes entering PPI fetch after disease CSV filters (mirrors enricher top).",
+    )
+    stability_gene_biomarker_ppi_top_hubs: int = Field(
+        default=100,
+        ge=1,
+        description="Max PPI hub genes passed to gene FeatureCuts pool.",
+    )
+    stability_gene_biomarker_min_degree: int = Field(
+        default=1,
+        ge=0,
+        description="Drop PPI nodes with degree below this threshold (0 keeps all nodes).",
+    )
+    stability_gene_biomarker_ppi_cache_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "STRING edge cache directory or file for MC biomarker PPI. "
+            "Defaults to step_config.enricher.network_refinement.cache_path."
+        ),
+    )
     freeze_stable_gene_csv: Optional[str] = Field(
         default=None,
         description=(

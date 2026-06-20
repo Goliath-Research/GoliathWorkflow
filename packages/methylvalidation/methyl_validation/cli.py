@@ -1541,6 +1541,30 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--stability-gene-biomarker-filter",
+        action="store_true",
+        help=(
+            "During MC stability, apply in-process disease filters and STRING PPI hub ranking "
+            "before gene FeatureCuts (requires --stability-gene-featurecuts)."
+        ),
+    )
+    parser.add_argument(
+        "--stability-gene-biomarker-mode",
+        choices=["disease_only", "ppi_only", "disease_and_ppi"],
+        default=None,
+        help="Biomarker gene pool mode (default from project: ppi_only).",
+    )
+    parser.add_argument(
+        "--stability-gene-region-hits",
+        nargs="+",
+        default=None,
+        metavar="REGION",
+        help=(
+            "Require mapper hits_* > 0 for regions before biomarker filter "
+            "(promoter, exon, intron, gene_body, terminator)."
+        ),
+    )
+    parser.add_argument(
         "--stability-min-selected-genes",
         type=int,
         default=None,

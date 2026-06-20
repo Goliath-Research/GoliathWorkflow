@@ -334,6 +334,39 @@ Detector exports three DMP branches per chromosome: `dmps-{chr}-discovery.csv` (
 
 If gene FeatureCuts is enabled without DMP FeatureCuts, the CLI warns; iterations fail at gene FeatureCuts unless classifier exports exist from a prior detector run.
 
+### Gene stability with biomarker filter (PPI-only)
+
+When `stability_gene_biomarker_filter_enabled` is true (requires `stability_gene_featurecuts_enabled`), each MC iteration applies **in-process** disease CSV filters and optional STRING PPI hub ranking before gene FeatureCuts. This does **not** run full `methyl-enricher` (no Enrichr ORA or module pipeline).
+
+```json
+"validation": {
+  "stability_featurecuts_enabled": true,
+  "stability_gene_featurecuts_enabled": true,
+  "stability_mapper_enrich_disease": true,
+  "stability_gene_biomarker_filter_enabled": true,
+  "stability_gene_biomarker_mode": "ppi_only",
+  "stability_gene_region_hits": ["promoter", "exon"],
+  "stability_gene_biomarker_top_genes": 150,
+  "stability_gene_biomarker_ppi_top_hubs": 100,
+  "stability_gene_freq": 0.6
+},
+"enricher": {
+  "disease_only": true,
+  "min_dmp_count": 2,
+  "network_refinement": {
+    "enabled": true,
+    "cache_path": "/work/cache/methylenricher/string_edges",
+    "score_threshold": 400.0
+  }
+}
+```
+
+CLI: `--stability --stability-featurecuts --stability-gene-featurecuts --stability-gene-biomarker-filter`.
+
+Per iteration: centroid → detector → methyl-mapper (with disease enrichment when `stability_mapper_enrich_disease: true`) → biomarker filter (CSV filters + cached STRING PPI) → gene FeatureCuts. Writes `run_XXXX/gene_stability/biomarker_ppi_hubs.csv` and narrows the ranked gene pool. `stability_summary.json` includes `biomarker_filter` diagnostics (median pool size, empty-pool run counts).
+
+Filter thresholds inherit from `step_config.enricher`. Region focus for **model training** uses `region_directional_region_types` with `feature_family_set: structural_scored` at freeze/model time.
+
 ### Strict stability profile example
 
 Use this profile when you want conservative run filtering and classifier-panel-aligned stability:

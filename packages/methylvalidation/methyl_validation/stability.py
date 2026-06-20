@@ -1780,6 +1780,10 @@ def run_stability_analysis(
     if not gene_df.empty:
         gene_df.to_csv(output_dir / "gene_frequency.csv", index=False)
 
+    from .biomarker_gene_pool import compute_biomarker_stability_diagnostics
+
+    summary["biomarker_filter"] = compute_biomarker_stability_diagnostics(monte_carlo_runs_root)
+
     return summary
 
 

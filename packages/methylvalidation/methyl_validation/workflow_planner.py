@@ -244,6 +244,14 @@ def _materialize_iteration(
     det_override = write_detector_featurecuts_override(run_dir, config)
     if config.stability_gene_featurecuts_enabled:
         write_mapper_classifier_override(run_dir, config)
+    if config.stability_gene_biomarker_filter_enabled and not config.stability_mapper_enrich_disease:
+        import warnings
+
+        warnings.warn(
+            "stability_gene_biomarker_filter_enabled with stability_mapper_enrich_disease=false "
+            "may yield empty pools when enricher.disease_only=true (mapper disease columns missing).",
+            stacklevel=2,
+        )
 
     val_control_csv = None
     val_disease_csv = None
