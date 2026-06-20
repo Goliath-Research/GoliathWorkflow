@@ -96,6 +96,40 @@ def test_build_biomarker_gene_pool_ppi_only_mocked():
     assert meta.get("n_ppi_hubs", 0) >= 1
 
 
+def test_build_biomarker_gene_pool_ppi_min_degree_zero_keeps_isolated_nodes():
+    enricher = {
+        "disease_only": True,
+        "min_dmp_count": 2,
+        "network_refinement": {"score_threshold": 400.0},
+    }
+    edges = pd.DataFrame(columns=["source", "target", "score"])
+    node_metrics = pd.DataFrame(
+        {
+            "gene": ["TP53", "BRCA1"],
+            "degree": [0, 0],
+            "degree_centrality": [0.0, 0.0],
+            "betweenness_centrality": [0.0, 0.0],
+            "closeness_centrality": [0.0, 0.0],
+        }
+    )
+
+    with patch("methyl_enricher.ppi_network.fetch_string_edges", return_value=edges), patch(
+        "methyl_enricher.ppi_network.compute_network_metrics", return_value=node_metrics
+    ):
+        genes, _, meta = build_biomarker_gene_pool(
+            _sample_mapper_df(),
+            enricher_config=enricher,
+            mode="ppi_only",
+            top_genes=10,
+            ppi_top_hubs=2,
+            min_degree=0,
+            cache_path="/tmp/string_cache",
+        )
+
+    assert set(genes) == {"TP53", "BRCA1"}
+    assert meta.get("ppi_skip_reason") != "all_nodes_below_min_degree"
+
+
 def test_compute_biomarker_stability_diagnostics(tmp_path: Path):
     run_dir = tmp_path / "run_0001" / "gene_stability"
     run_dir.mkdir(parents=True)

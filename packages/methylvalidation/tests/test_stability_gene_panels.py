@@ -26,6 +26,20 @@ def _write_classifier_genes(run_dir: Path, genes: list[str]) -> None:
     ).to_csv(out / "genes-classifier.csv", index=False)
 
 
+def _write_gene_featurecuts_metrics(run_dir: Path, *, pool_size: int) -> None:
+    import json
+
+    out = run_dir / "gene_stability"
+    out.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "biomarker_filter": {
+            "enabled": True,
+            "biomarker_pool_size": pool_size,
+        }
+    }
+    (out / "gene_featurecuts_metrics.json").write_text(json.dumps(payload), encoding="utf-8")
+
+
 def test_load_classifier_genes_reads_gene_stability_export(tmp_path: Path):
     run_dir = tmp_path / "run_0001"
     _write_classifier_genes(run_dir, ["BRCA1", "TP53"])
@@ -108,6 +122,41 @@ def test_write_stable_gene_panel_and_stability_analysis(tmp_path: Path):
     stable = pd.read_csv(stable_gene_csv)
     assert set(stable["gene_name"].astype(str)) == {"BRCA1", "TP53"}
     assert (mc_root / "stability" / "gene_frequency.csv").is_file()
+
+
+def test_run_stability_analysis_persists_biomarker_filter_in_summary_json(tmp_path: Path):
+    import json
+
+    mc_root = tmp_path / "monte_carlo_runs"
+    for idx, pool_size in enumerate([40, 42], start=1):
+        run_dir = mc_root / f"run_{idx:04d}"
+        _write_classifier_genes(run_dir, ["BRCA1", "TP53"])
+        _write_gene_featurecuts_metrics(run_dir, pool_size=pool_size)
+        det = run_dir / "detections" / "chr1" / "cmp"
+        det.mkdir(parents=True)
+        pd.DataFrame(
+            {
+                "chromosome": ["1"],
+                "position": [100],
+                "context": ["CG"],
+                "effect_size": [0.5],
+            }
+        ).to_csv(det / "dmps-cmp-classifier.csv", index=False)
+
+    summary = run_stability_analysis(
+        mc_root,
+        dmp_min_freq=0.5,
+        gene_min_freq=0.5,
+        prefer_classifier_panel_dmps=True,
+        prefer_classifier_gene_panels=True,
+    )
+    assert "biomarker_filter" in summary
+    assert summary["biomarker_filter"]["runs_with_biomarker_filter"] == 2
+
+    summary_path = mc_root / "stability" / "stability_summary.json"
+    on_disk = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert "biomarker_filter" in on_disk
+    assert on_disk["biomarker_filter"]["median_pool_size"] == 41.0
 
 
 def test_evaluate_gene_stability_convergence_detects_converged_panel(tmp_path: Path):

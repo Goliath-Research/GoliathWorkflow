@@ -1743,6 +1743,8 @@ def run_stability_analysis(
             min_frequency=gene_min_freq,
         )
 
+    from .biomarker_gene_pool import compute_biomarker_stability_diagnostics
+
     summary = {
         "dmp_stability": dmp_summary,
         "gene_stability": gene_summary,
@@ -1768,6 +1770,7 @@ def run_stability_analysis(
         "dmp_frequency_counts_by_chromosome": dmp_frequency_counts_by_chrom,
         "early_stopping": convergence_diagnostics or {},
         "output_dir": str(output_dir),
+        "biomarker_filter": compute_biomarker_stability_diagnostics(monte_carlo_runs_root),
     }
 
     summary_path = output_dir / "stability_summary.json"
@@ -1779,10 +1782,6 @@ def run_stability_analysis(
         dmp_df.to_csv(output_dir / "dmp_frequency.csv", index=False)
     if not gene_df.empty:
         gene_df.to_csv(output_dir / "gene_frequency.csv", index=False)
-
-    from .biomarker_gene_pool import compute_biomarker_stability_diagnostics
-
-    summary["biomarker_filter"] = compute_biomarker_stability_diagnostics(monte_carlo_runs_root)
 
     return summary
 

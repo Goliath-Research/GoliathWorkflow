@@ -306,7 +306,8 @@ def _apply_biomarker_gene_pool_filter(
     region_hits = getattr(config, "stability_gene_region_hits", None)
     top_genes = int(getattr(config, "stability_gene_biomarker_top_genes", 150) or 150)
     ppi_top_hubs = int(getattr(config, "stability_gene_biomarker_ppi_top_hubs", 100) or 100)
-    min_degree = int(getattr(config, "stability_gene_biomarker_min_degree", 1) or 1)
+    _min_degree = getattr(config, "stability_gene_biomarker_min_degree", 1)
+    min_degree = 1 if _min_degree is None else int(_min_degree)
     cache_path = resolve_biomarker_ppi_cache_path(config, enricher_config)
     score_threshold = resolve_biomarker_ppi_score_threshold(enricher_config)
 
