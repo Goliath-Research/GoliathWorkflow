@@ -2,7 +2,7 @@
 
 import math
 
-from methyl_validation.split import stratified_split
+from methyl_validation.split import load_and_resolve_sample_paths, stratified_split
 from methyl_validation.validator_metrics import (
     build_metrics_table,
     compute_resource_summary,
@@ -28,6 +28,25 @@ def test_stratified_split_is_reproducible_and_exhaustive():
     assert len(val_disease) == 3
     assert sorted(train_control + val_control) == sorted(control_paths)
     assert sorted(train_disease + val_disease) == sorted(disease_paths)
+
+
+def test_load_and_resolve_sample_paths_skips_blank_csv_lines(tmp_path):
+    csv_path = tmp_path / "samples.csv"
+    csv_path.write_text(
+        "sample\n"
+        "S001\n"
+        "\n"
+        "  \n"
+        "S002\n",
+        encoding="utf-8",
+    )
+    base = tmp_path / "data"
+    base.mkdir()
+    (base / "S001").mkdir()
+    (base / "S002").mkdir()
+
+    resolved = load_and_resolve_sample_paths(csv_path, base)
+    assert resolved == [str(base / "S001"), str(base / "S002")]
 
 
 def test_validation_metric_summaries_aggregate_runs():

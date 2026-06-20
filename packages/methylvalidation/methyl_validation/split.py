@@ -49,17 +49,17 @@ def load_and_resolve_sample_paths(csv_path: str | Path, base_path: str | Path) -
             "id",
         ):
             for row in reader:
-                if len(row) > 0:
+                if row and row[0].strip():
                     r = _resolve_entry(row[0], base)
                     if r:
                         out.append(r)
         else:
-            if len(first_row) > 0:
+            if first_row and first_row[0].strip():
                 r = _resolve_entry(first_row[0], base)
                 if r:
                     out.append(r)
             for row in reader:
-                if len(row) > 0:
+                if row and row[0].strip():
                     r = _resolve_entry(row[0], base)
                     if r:
                         out.append(r)

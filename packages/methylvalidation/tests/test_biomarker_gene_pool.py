@@ -96,6 +96,18 @@ def test_build_biomarker_gene_pool_ppi_only_mocked():
     assert meta.get("n_ppi_hubs", 0) >= 1
 
 
+def test_build_biomarker_gene_pool_honors_legacy_unique_dmps_config_key():
+    enricher = {"disease_only": False, "unique_dmps": 4}
+    genes, _, meta = build_biomarker_gene_pool(
+        _sample_mapper_df(),
+        enricher_config=enricher,
+        mode="disease_only",
+        top_genes=10,
+    )
+    assert set(genes) == {"TP53", "BRCA1"}
+    assert meta["n_after_csv_filters"] == 2
+
+
 def test_build_biomarker_gene_pool_ppi_min_degree_zero_keeps_isolated_nodes():
     enricher = {
         "disease_only": True,

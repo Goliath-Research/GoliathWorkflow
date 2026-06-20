@@ -74,6 +74,23 @@ def _resolve_enricher_filter_kwargs(enricher_config: Dict[str, Any]) -> Dict[str
     if assoc is not None and not isinstance(assoc, list):
         assoc = [assoc]
     network = enricher_config.get("network_refinement") or {}
+    min_dmp_count = enricher_config.get("min_dmp_count")
+    min_unique_dmps = enricher_config.get("min_unique_dmps")
+    legacy_unique_dmps = enricher_config.get("unique_dmps")
+    if legacy_unique_dmps is not None:
+        if min_dmp_count is None and min_unique_dmps is None:
+            logger.warning(
+                "step_config.enricher.unique_dmps is not a valid filter key; "
+                "using it as min_unique_dmps=%s. Prefer min_dmp_count or min_unique_dmps.",
+                legacy_unique_dmps,
+            )
+            min_unique_dmps = legacy_unique_dmps
+        else:
+            logger.warning(
+                "Ignoring step_config.enricher.unique_dmps (%s); "
+                "use min_dmp_count or min_unique_dmps instead.",
+                legacy_unique_dmps,
+            )
     return {
         "disease_only": bool(enricher_config.get("disease_only", False)),
         "disease_column": str(enricher_config.get("disease_column") or "disease_associated"),
@@ -81,8 +98,8 @@ def _resolve_enricher_filter_kwargs(enricher_config: Dict[str, Any]) -> Dict[str
         "min_disease_evidence_level": enricher_config.get("min_disease_evidence_level"),
         "min_disease_publications": enricher_config.get("min_disease_publications"),
         "min_disease_score": enricher_config.get("min_disease_score"),
-        "min_dmp_count": enricher_config.get("min_dmp_count"),
-        "min_unique_dmps": enricher_config.get("min_unique_dmps"),
+        "min_dmp_count": min_dmp_count,
+        "min_unique_dmps": min_unique_dmps,
         "max_gene_q_value": enricher_config.get("max_gene_q_value"),
         "min_mean_effect_size": enricher_config.get("min_mean_effect_size"),
         "min_gene_z": enricher_config.get("min_gene_z"),

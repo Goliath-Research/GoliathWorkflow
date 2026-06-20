@@ -1279,17 +1279,17 @@ def _resolve_sample_paths(
                         pass
                     elif first_row and first_row[0].strip().lower() in ("sample", "path", "sample_path", "name", "id"):
                         for row in reader:
-                            if len(row) > 0:
+                            if row and row[0].strip():
                                 r = resolve_entry(row[0])
                                 if r:
                                     out.append(r)
                     else:
-                        if len(first_row) > 0:
+                        if first_row and first_row[0].strip():
                             r = resolve_entry(first_row[0])
                             if r:
                                 out.append(r)
                         for row in reader:
-                            if len(row) > 0:
+                            if row and row[0].strip():
                                 r = resolve_entry(row[0])
                                 if r:
                                     out.append(r)
