@@ -111,7 +111,13 @@ def _load_config_from_project(base_project: Path, request: ValidationPlanRequest
     with open(base_project, encoding="utf-8") as f:
         project_data = json.load(f)
 
-    validation = (project_data.get("step_config") or {}).get("validation")
+    from .utils.migrate_detection_config import migrate_step_config
+
+    step_config = dict(project_data.get("step_config") or {})
+    migrated_sc, _migrate_warnings = migrate_step_config(step_config)
+    project_data["step_config"] = migrated_sc
+
+    validation = migrated_sc.get("validation")
     if not validation:
         raise ValueError(f"Project {base_project} missing step_config.validation")
 

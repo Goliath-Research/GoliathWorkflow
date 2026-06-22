@@ -4,12 +4,15 @@ methylutils
 methylcentroid
 methylcluster
 methyldetector
+methyldmpselect
 methylmapper
 methylclassifier
 methylenricher
 methyldiseaseprogression
 methylalignmentqc
 methylpredictor
+methylgeneselect
+methylgenefeatureselect
 methylvalidation
 methyldomain
 methylfragmentomics

@@ -174,4 +174,12 @@ def build_action_from_catalog(entry, handlers_module: Any) -> ActionBase:
         from .detector import DETECTOR_ARGV_MAP, DetectorCliAction
 
         return DetectorCliAction(cli_tool=cli, argv_map=DETECTOR_ARGV_MAP)
+    if entry.action_name == "pipeline.dmp_select":
+        from .dmp_select import DMP_SELECT_ARGV_MAP, DmpSelectCliAction
+
+        return DmpSelectCliAction(cli_tool=cli, argv_map=DMP_SELECT_ARGV_MAP)
+    if entry.action_name == "pipeline.gene_select":
+        from .gene_select import GENE_SELECT_ARGV_MAP, GeneSelectCliAction
+
+        return GeneSelectCliAction(cli_tool=cli, argv_map=GENE_SELECT_ARGV_MAP)
     return CliAction(cli_tool=cli, argv_map=argv_map)

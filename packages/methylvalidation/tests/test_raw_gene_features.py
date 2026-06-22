@@ -96,7 +96,7 @@ def test_build_raw_gene_feature_table_weighted_aggregate(monkeypatch):
         return np.asarray([[0.2, 0.8]], dtype=np.float32)
 
     monkeypatch.setattr(
-        "methyl_validation.raw_gene_features._extract_matrix_for_samples",
+        "methyl_gene_select.core.sample_matrix._extract_matrix_for_samples",
         _fake_extract,
     )
     feat = build_raw_gene_feature_table(

@@ -498,6 +498,29 @@ class MethylDetector:
         self._final_validation_results = None
         self._classifier_panel_audit = None
         export_mode = getattr(self.config, "dmp_export_mode", "unified")
+        detection_mode = str(getattr(self.config, "detection_mode", "legacy") or "legacy")
+        discovery_only = detection_mode == "discovery_only"
+
+        if discovery_only:
+            selected_dmps_df = sorted_by_importance_df
+            if self.config.output_dir:
+                logger.info("💾 discovery_only: exporting discovery branch only (no classifier selection)")
+                discovery_dmps_df = self._discovery_dmps_from_sorted(sorted_by_importance_df)
+                self._export_unified_csv(discovery_dmps_df, suffix="-discovery")
+                self._write_dmp_branch_metadata(
+                    discovery_dmps_df,
+                    discovery_dmps_df.iloc[0:0].copy(),
+                    discovery_dmps_df.iloc[0:0].copy(),
+                )
+                self._save_validation_results(
+                    n_dmps_exported=len(discovery_dmps_df),
+                    total_statistical_dmps=total_confirmed,
+                    total_biological_dmps=len(bio_dmps_df),
+                )
+            result = self._create_multi_context_result(dmps_df, selected_dmps_df)
+            logger.info("✅ discovery_only complete for chromosome %s", self.chromosome)
+            return result
+
         classifier_dmps_df = self._classifier_dmps_from_sorted(sorted_by_importance_df)
         selected_dmps_df = classifier_dmps_df
 
@@ -543,7 +566,10 @@ class MethylDetector:
                         self.config.min_dmps_for_export,
                     )
                 self._export_unified_csv(export_df, suffix="")
-            self._save_unified_model(None, classifier_dmps_df)
+            if bool(getattr(self.config, "export_classifier", True)):
+                self._save_unified_model(None, classifier_dmps_df)
+            else:
+                logger.info("export_classifier=False; skipping inline classifier pickle (use pipeline.classifier)")
             if getattr(self, '_featurecuts_last_result', None) is not None:
                 self._final_validation_results = self._featurecuts_last_result
             else:
@@ -2475,6 +2501,53 @@ class MethylDetector:
             getattr(self.config, "classifier_export_max_dmps", None),
         )
         return extended
+
+    def run_dmp_panel_selection_from_discovery(
+        self,
+        sorted_by_importance_df: pd.DataFrame,
+        *,
+        export_classifier_pickle: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Select classifier / extended DMP panels from a pre-ranked discovery pool.
+
+        Used by methyl-dmp-select when detection runs in discovery_only mode.
+        """
+        sorted_by_importance_df = sorted_by_importance_df.copy().reset_index(drop=True)
+        self._featurecuts_last_result = None
+        self._classifier_panel_audit = None
+        classifier_dmps_df = self._classifier_dmps_from_sorted(sorted_by_importance_df)
+        extended_dmps_df = self._classifier_extended_dmps_from_core(
+            sorted_by_importance_df,
+            classifier_dmps_df,
+        )
+        if self.config.output_dir:
+            self._export_unified_csv(classifier_dmps_df, suffix="-classifier")
+            self._export_unified_csv(extended_dmps_df, suffix="-classifier-extended")
+            discovery_dmps_df = self._discovery_dmps_from_sorted(sorted_by_importance_df)
+            self._write_dmp_branch_metadata(
+                discovery_dmps_df,
+                classifier_dmps_df,
+                extended_dmps_df,
+            )
+            if export_classifier_pickle:
+                self._save_unified_model(None, classifier_dmps_df)
+        fc_summary = None
+        if getattr(self, "_featurecuts_last_result", None) is not None:
+            r = self._featurecuts_last_result
+            try:
+                fc_summary = {
+                    "balanced_accuracy": float(r.get("balanced_accuracy", 0.0)),
+                    "split_balanced_accuracy_std": float(r.get("split_balanced_accuracy_std", 0.0)),
+                }
+            except (TypeError, ValueError):
+                fc_summary = None
+        return {
+            "n_classifier": int(len(classifier_dmps_df)),
+            "n_extended": int(len(extended_dmps_df)),
+            "classifier_panel_audit": getattr(self, "_classifier_panel_audit", None),
+            "featurecuts_summary": fc_summary,
+        }
 
     def _discovery_dmps_from_sorted(self, sorted_by_importance_df: pd.DataFrame) -> pd.DataFrame:
         """

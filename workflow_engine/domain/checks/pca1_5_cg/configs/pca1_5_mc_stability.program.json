@@ -1,7 +1,7 @@
 {
   "programVersion": 2,
   "name": "PCa1_5_MC_Stability",
-  "description": "Monte Carlo stability for Healthy_vs_PCa1-5-CG: plan iterations, per-group incremental centroids, detectors, stability.",
+  "description": "Monte Carlo stability: centroids, discovery-only detector, dmp_select, mapper, optional biomarker filter, gene_select, stability.",
   "projectPath": "/work/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
   "body": [
     {
@@ -64,11 +64,60 @@
                   "with": {
                     "chromosome": { "ref": "chromosome" },
                     "context": { "ref": "context" },
-                    "comparison": { "ref": "comparison.label" }
+                    "comparison": { "ref": "comparison.label" },
+                    "stepOverride": {
+                      "detection_mode": "discovery_only",
+                      "export_classifier": false
+                    }
                   },
                   "node_key": "detect"
+                },
+                {
+                  "do": "pipeline.dmp_select",
+                  "with": {
+                    "chromosome": { "ref": "chromosome" },
+                    "context": { "ref": "context" },
+                    "comparison": { "ref": "comparison.label" },
+                    "group": { "ref": "comparison.label" }
+                  },
+                  "node_key": "dmp_select"
                 }
               ]
+            },
+            {
+              "do": "pipeline.mapper",
+              "with": {
+                "comparison": { "ref": "comparison.label" },
+                "group": { "ref": "comparison.label" }
+              },
+              "node_key": "mapper"
+            },
+            {
+              "if": {
+                "condition": { "ref": "project.stabilityGeneBiomarkerFilterEnabled" }
+              },
+              "do": {
+                "do": "validation.biomarker_filter",
+                "with": {
+                  "projectPath": { "ref": "iteration.projectPath" },
+                  "runDir": { "ref": "iteration.runDir" }
+                },
+                "node_key": "biomarker_filter"
+              }
+            },
+            {
+              "if": {
+                "condition": { "ref": "project.stabilityGeneFeaturecutsEnabled" }
+              },
+              "do": {
+                "do": "pipeline.gene_select",
+                "with": {
+                  "projectPath": { "ref": "iteration.projectPath" },
+                  "runDir": { "ref": "iteration.runDir" },
+                  "biomarkerFilter": { "ref": "project.stabilityGeneBiomarkerFilterEnabled" }
+                },
+                "node_key": "gene_select"
+              }
             }
           ]
         }

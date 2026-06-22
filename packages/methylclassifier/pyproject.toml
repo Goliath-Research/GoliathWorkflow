@@ -15,11 +15,13 @@ h5py = ">=3.10.0,<4.0.0"
 matplotlib = ">=3.8.0,<4.0.0"
 seaborn = ">=0.13.0,<0.14.0"
 methylutils = {path = "../methylutils", develop = true}
+methyl-detector = {path = "../methyldetector", develop = true}
 scikit-learn = ">=1.3.0,<2.0.0"
 tqdm = ">=4.66.0"
 
 [tool.poetry.scripts]
 methyl-classifier = "methyl_classifier.cli:main"
+methyl-classifier-train = "methyl_classifier.cli.train_main:main"
 methyl_classifier = "methyl_classifier.cli:main"
 
 [tool.poetry.group.dev.dependencies]

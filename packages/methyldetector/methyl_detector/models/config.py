@@ -152,6 +152,17 @@ class MethylDetectorConfig(BaseModel):
         default=None,
         description="Path to a fixed DMP panel CSV (chromosome,position,context,...). If provided, bypasses statistical/biological discovery and uses only these positions (for production freeze).",
     )
+    detection_mode: Literal["legacy", "discovery_only"] = Field(
+        default="legacy",
+        description=(
+            "legacy: run discovery plus inline classifier panel selection and optional pickle export. "
+            "discovery_only: export dmps-{chr}-discovery.csv only; run methyl-dmp-select and pipeline.classifier separately."
+        ),
+    )
+    export_classifier: bool = Field(
+        default=True,
+        description="When True in legacy mode, write classifier pickle after panel selection. Set False when pipeline.classifier trains the model.",
+    )
 
     centroid1_validation_samples: Optional[Union[str, List[str]]] = Field(
         default=None,

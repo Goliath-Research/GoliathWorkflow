@@ -372,6 +372,46 @@ def _handle_validation_stability(_capability: str, _action_name: str, input_json
     return {"status": "ok", "summary": summary, "outputDir": str(output_dir)}
 
 
+def _handle_validation_biomarker_filter(
+    _capability: str, _action_name: str, input_json: Dict[str, Any]
+) -> HandlerResult:
+    """In-process PPI-only biomarker gene pool filter on mapper combined genes."""
+    from pathlib import Path
+
+    import pandas as pd
+
+    from methyl_gene_select.core.gene_featurecuts import _apply_biomarker_gene_pool_filter
+
+    project_path = input_json.get("projectPath") or input_json.get("project")
+    if not project_path:
+        raise RuntimeError("validation.biomarker_filter requires projectPath")
+    run_dir = Path(str(input_json.get("runDir") or project_path)).resolve()
+    config, _base = _load_mc_config(input_json)
+    mapper_dirs = list(run_dir.glob("**/mapper/*/*")) or list(run_dir.glob("mapper/*/*"))
+    gene_df = None
+    for d in mapper_dirs:
+        for csv in d.glob("all-gene_name-combined.csv"):
+            try:
+                gene_df = pd.read_csv(csv)
+                break
+            except Exception:
+                continue
+        if gene_df is not None:
+            break
+    if gene_df is None or gene_df.empty:
+        raise RuntimeError("No mapper all-gene_name-combined.csv found for biomarker filter")
+    out_dir = run_dir / "gene_stability"
+    filtered, meta = _apply_biomarker_gene_pool_filter(
+        gene_df,
+        project_json=Path(str(project_path)),
+        config=config,
+        out_dir=out_dir,
+    )
+    out_csv = out_dir / "biomarker_gene_pool.csv"
+    filtered.to_csv(out_csv, index=False)
+    return {"status": "ok", "n_genes": int(len(filtered)), "biomarker_filter": meta, "outputCsv": str(out_csv)}
+
+
 def _handle_validation_prepare_freeze(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
 ) -> HandlerResult:

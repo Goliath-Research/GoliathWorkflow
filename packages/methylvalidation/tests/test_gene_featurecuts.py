@@ -74,7 +74,7 @@ def test_search_gene_k_respects_min_genes_floor(monkeypatch):
         calls.append(k)
         return float(k) / 10.0, {"balanced_accuracy": float(k) / 10.0}
 
-    monkeypatch.setattr("methyl_validation.gene_featurecuts._evaluate_gene_prefix", _fake_eval)
+    monkeypatch.setattr("methyl_gene_select.core.gene_featurecuts._evaluate_gene_prefix", _fake_eval)
 
     n_features = 5
     X = np.random.default_rng(0).random((8, n_features))
@@ -141,11 +141,11 @@ def test_run_gene_featurecuts_for_iteration_exports_panel(tmp_path: Path, monkey
         stability_gene_featurecuts_max_genes = 500
 
     monkeypatch.setattr(
-        "methyl_validation.gene_featurecuts._load_train_paths_and_labels",
+        "methyl_gene_select.core.gene_featurecuts._load_train_paths_and_labels",
         lambda _p: (["/tmp/t1", "/tmp/t2"], np.array([0, 1], dtype=np.int32), ["healthy", "disease"]),
     )
     monkeypatch.setattr(
-        "methyl_validation.gene_featurecuts._load_validation_paths_and_labels",
+        "methyl_gene_select.core.gene_featurecuts._load_validation_paths_and_labels",
         lambda _p, _c: (["/tmp/v1", "/tmp/v2"], np.array([0, 1], dtype=np.int32)),
     )
 
@@ -155,11 +155,11 @@ def test_run_gene_featurecuts_for_iteration_exports_panel(tmp_path: Path, monkey
             self.feature_names = [f"gene::G{i}" for i in range(n)]
 
     monkeypatch.setattr(
-        "methyl_validation.gene_featurecuts.build_raw_gene_feature_table",
+        "methyl_gene_select.core.gene_featurecuts.build_raw_gene_feature_table",
         lambda *_a, **_k: _Feat(2),
     )
     monkeypatch.setattr(
-        "methyl_validation.gene_featurecuts._search_gene_k",
+        "methyl_gene_select.core.gene_featurecuts._search_gene_k",
         lambda **_k: (2, 0.95, {"balanced_accuracy": 0.95}),
     )
 
