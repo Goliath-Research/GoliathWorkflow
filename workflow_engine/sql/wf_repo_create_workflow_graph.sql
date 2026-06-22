@@ -116,7 +116,7 @@ BEGIN
             condition_var, switch_var,
             foreach_collection_var, foreach_item_var, foreach_index_var, foreach_parallel
         )
-        VALUES (@ver_id, @nt, @nk, @aid, @rc, @crnk, @srnk, @cv, @sv, @fcv, @fiv, @fidx, @fp);
+        VALUES (@ver_id, @nt, @nk, @aid, @rc, @crnk, @srnk, @cv, @sv, @fcv, @fiv, @fidx, ISNULL(@fp, 0));
         SET @nid = SCOPE_IDENTITY();
 
         UPDATE @nodes SET node_id = @nid WHERE node_key = @nk;
