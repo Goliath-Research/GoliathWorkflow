@@ -79,6 +79,7 @@ def build_mssql_conninfo(*, use_managed_identity: bool = False) -> str:
             f"DATABASE={database}",
             "Encrypt=yes",
             "TrustServerCertificate=no",
+            "LongAsMax=Yes",
         ]
         if not use_managed_identity:
             if user:
@@ -90,7 +91,7 @@ def build_mssql_conninfo(*, use_managed_identity: bool = False) -> str:
     return (
         "DRIVER={ODBC Driver 18 for SQL Server};"
         "SERVER=localhost;DATABASE=MethylPipeline;"
-        "Trusted_Connection=yes;Encrypt=yes"
+        "Trusted_Connection=yes;Encrypt=yes;LongAsMax=Yes"
     )
 
 

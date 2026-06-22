@@ -15,9 +15,9 @@ from .base import GatewayDbBase, WorkerAuthError, row_to_dict
 # Required for pyodbc anonymous batches that read OUTPUT params via a trailing SELECT.
 _MSSQL_OUTPUT_BATCH_PREFIX = "SET NOCOUNT ON;\n"
 
-# pyodbc has no JSON ODBC type: Python str binds as Unicode text (NVARCHAR/NTEXT).
-# Bind JSON via DECLARE @var json = CAST(? AS json) batches (not EXEC @p=CAST(? AS json)).
-_JSON_CAST = "CAST(? AS json)"
+# pyodbc binds long Python str as SQL_WLONGVARCHAR → SQL Server ntext, which cannot
+# cast to json. Use NVARCHAR(MAX) intermediate cast + setinputsizes(SQL_WVARCHAR, 0).
+_JSON_CAST = "CAST(CAST(? AS NVARCHAR(MAX)) AS json)"
 
 
 def _json_var(name: str) -> str:
@@ -35,6 +35,20 @@ def _json_text(value: Any | None) -> str | None:
     if isinstance(value, str):
         return value
     return json.dumps(value)
+
+
+def _set_param_types(cur: pyodbc.Cursor, params: tuple[Any, ...]) -> None:
+    """Force string params to NVARCHAR(MAX) so ODBC does not send legacy ntext."""
+    if not params:
+        return
+    sizes: list[Any] = []
+    for param in params:
+        if isinstance(param, str):
+            sizes.append((pyodbc.SQL_WVARCHAR, 0, 0))
+        else:
+            sizes.append(None)
+    if any(size is not None for size in sizes):
+        cur.setinputsizes(sizes)
 
 
 class _OdbcPool:
@@ -134,6 +148,7 @@ class MssqlGatewayDb(GatewayDbBase):
     def _exec_proc(self, sql: str, params: tuple[Any, ...] = ()) -> None:
         try:
             with self._cursor() as cur:
+                _set_param_types(cur, params)
                 cur.execute(sql, params)
         except pyodbc.Error as exc:
             if self._is_auth_error(exc):
@@ -143,6 +158,7 @@ class MssqlGatewayDb(GatewayDbBase):
     def _fetch_all(self, sql: str, params: tuple[Any, ...] = ()) -> list[dict[str, Any]]:
         try:
             with self._cursor() as cur:
+                _set_param_types(cur, params)
                 cur.execute(sql, params)
                 rows: list[dict[str, Any]] = []
                 while True:

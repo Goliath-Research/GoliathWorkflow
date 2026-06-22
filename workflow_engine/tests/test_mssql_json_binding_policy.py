@@ -28,7 +28,11 @@ class MssqlJsonBindingPolicyTests(unittest.TestCase):
         cls.tree = ast.parse(cls.source)
 
     def test_mssql_module_defines_json_cast_constant(self) -> None:
-        self.assertIn('_JSON_CAST = "CAST(? AS json)"', self.source)
+        self.assertIn('_JSON_CAST = "CAST(CAST(? AS NVARCHAR(MAX)) AS json)"', self.source)
+
+    def test_mssql_sets_nvarchar_param_types(self) -> None:
+        self.assertIn("def _set_param_types(", self.source)
+        self.assertIn("pyodbc.SQL_WVARCHAR", self.source)
 
     def test_no_bare_json_parameter_bindings_in_source(self) -> None:
         violations = _BARE_JSON_BINDING.findall(self.source)
