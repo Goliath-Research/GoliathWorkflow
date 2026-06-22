@@ -15,6 +15,19 @@ from .base import GatewayDbBase, WorkerAuthError, row_to_dict
 # Required for pyodbc anonymous batches that read OUTPUT params via a trailing SELECT.
 _MSSQL_OUTPUT_BATCH_PREFIX = "SET NOCOUNT ON;\n"
 
+# pyodbc has no JSON ODBC type: Python str binds as Unicode text (NVARCHAR/NTEXT).
+# All JSON crossing the ODBC boundary must be cast to sql json at the parameter site.
+_JSON_CAST = "CAST(? AS json)"
+
+
+def _json_text(value: Any | None) -> str | None:
+    """Serialize a JSON payload for T-SQL CAST(? AS json) binding."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    return json.dumps(value)
+
 
 class _OdbcPool:
     def __init__(
@@ -168,7 +181,7 @@ class MssqlGatewayDb(GatewayDbBase):
         result_code: int,
         output_json: Optional[dict[str, Any]],
     ) -> dict[str, Any]:
-        out_text = json.dumps(output_json) if output_json is not None else None
+        out_text = _json_text(output_json)
         sql = f"""{_MSSQL_OUTPUT_BATCH_PREFIX}
 DECLARE @accepted bit, @instance_status varchar(32), @next_ready_count int;
 EXEC {self._qual('sp_worker_submit_result')}
@@ -176,7 +189,7 @@ EXEC {self._qual('sp_worker_submit_result')}
     @worker_id=?,
     @worker_token=?,
     @result_code=?,
-    @output_json=?,
+    @output_json={_JSON_CAST},
     @accepted=@accepted OUTPUT,
     @instance_status=@instance_status OUTPUT,
     @next_ready_count=@next_ready_count OUTPUT;
@@ -221,9 +234,10 @@ SELECT @accepted AS accepted, @instance_status AS instance_status, @next_ready_c
         workflow_version_id: int,
         context_json: Optional[dict[str, Any]],
     ) -> int:
-        ctx = json.dumps(context_json or {})
+        ctx = _json_text(context_json or {})
         row = self._fetch_one(
-            f"EXEC {self._qual('wf_repo_create_workflow_instance')} @version_id=?, @context_json=?",
+            f"EXEC {self._qual('wf_repo_create_workflow_instance')} "
+            f"@version_id=?, @context_json={_JSON_CAST}",
             (workflow_version_id, ctx),
         )
         if not row:
@@ -274,8 +288,8 @@ SELECT @deleted_instance_count AS deleted_instance_count,
     ) -> None:
         self._exec_proc(
             f"EXEC {self._qual('wf_apply_validation_plan')} "
-            "@workflow_instance_id=?, @context_json=CAST(? AS json), @persist_extension=?",
-            (workflow_instance_id, json.dumps(context_json), 1 if persist_extension else 0),
+            f"@workflow_instance_id=?, @context_json={_JSON_CAST}, @persist_extension=?",
+            (workflow_instance_id, _json_text(context_json), 1 if persist_extension else 0),
         )
 
     def list_workflow_actions(self) -> list[dict[str, Any]]:
@@ -316,14 +330,14 @@ SELECT @deleted_instance_count AS deleted_instance_count,
             raise ValueError("direction must be 'input' or 'output'")
         self._exec_proc(
             f"EXEC {self._qual('wf_repo_upsert_action_schema')} "
-            "@action_name=?, @direction=?, @schema_json=CAST(? AS json), @schema_id=?",
-            (action_name, direction, json.dumps(schema_json), schema_id),
+            f"@action_name=?, @direction=?, @schema_json={_JSON_CAST}, @schema_id=?",
+            (action_name, direction, _json_text(schema_json), schema_id),
         )
 
     def create_workflow_definition(self, spec: dict[str, Any]) -> dict[str, Any]:
         row = self._fetch_one(
-            f"EXEC {self._qual('wf_repo_create_workflow_graph')} @spec=CAST(? AS json)",
-            (json.dumps(spec),),
+            f"EXEC {self._qual('wf_repo_create_workflow_graph')} @spec={_JSON_CAST}",
+            (_json_text(spec),),
         )
         if not row:
             raise RuntimeError("wf_repo_create_workflow_graph returned no result")

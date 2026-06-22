@@ -13,7 +13,7 @@ CREATE OR ALTER PROCEDURE wf.sp_worker_submit_result
     @worker_id BIGINT,
     @worker_token NVARCHAR(4000),
     @result_code INT,
-    @output_json NVARCHAR(MAX) NULL,
+    @output_json json NULL,
     @accepted BIT = NULL OUTPUT,
     @instance_status VARCHAR(32) = NULL OUTPUT,
     @next_ready_count INT = NULL OUTPUT

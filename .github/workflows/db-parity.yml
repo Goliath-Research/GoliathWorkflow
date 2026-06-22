@@ -27,6 +27,23 @@ jobs:
       - name: Validate DB object contract lockstep
         run: python workflow_engine/contract/validate_contract.py
 
+  gateway-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install gateway package (pyodbc stubbed in tests)
+        run: pip install -e workflow_engine/
+      - name: MSSQL JSON binding policy and gateway unit tests
+        run: |
+          python -m pytest workflow_engine/tests/test_mssql_json_binding_policy.py \
+            workflow_engine/tests/test_mssql_batches.py \
+            workflow_engine/tests/test_connection.py \
+            workflow_engine/tests/test_asgi.py \
+            -q
+
   postgres-parity:
     runs-on: ubuntu-latest
     services:

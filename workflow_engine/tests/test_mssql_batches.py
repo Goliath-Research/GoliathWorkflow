@@ -16,7 +16,11 @@ if "pyodbc" not in sys.modules:
 REST_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REST_DIR))
 
-from rest.db.mssql import MssqlGatewayDb, _MSSQL_OUTPUT_BATCH_PREFIX  # noqa: E402
+from rest.db.mssql import (  # noqa: E402
+    MssqlGatewayDb,
+    _JSON_CAST,
+    _MSSQL_OUTPUT_BATCH_PREFIX,
+)
 
 
 class MssqlOutputBatchTests(unittest.TestCase):
@@ -43,6 +47,41 @@ class MssqlOutputBatchTests(unittest.TestCase):
                 f"expected SET NOCOUNT ON prefix, got: {sql[:80]!r}",
             )
             self.assertIn("SELECT @", sql)
+
+
+class MssqlJsonBindingTests(unittest.TestCase):
+    def test_json_params_use_cast_not_raw_placeholder(self) -> None:
+        db = MssqlGatewayDb("DRIVER={ODBC Driver 18 for SQL Server};SERVER=x", schema_name="wf")
+        captured: list[str] = []
+
+        def fake_fetch_one(_self, sql: str, params=()):
+            captured.append(sql)
+            if "wf_repo_create_workflow_graph" in sql:
+                return {
+                    "workflow_def_id": 1,
+                    "workflow_version_id": 2,
+                    "root_node_id": 3,
+                    "name": "TestFlow",
+                }
+            if "wf_repo_create_workflow_instance" in sql:
+                return {"id": 99}
+            return {"accepted": True, "instance_status": "RUNNING", "next_ready_count": 0}
+
+        def fake_exec_proc(_self, sql: str, params=()):
+            captured.append(sql)
+
+        with mock.patch.object(MssqlGatewayDb, "_fetch_one", fake_fetch_one):
+            with mock.patch.object(MssqlGatewayDb, "_exec_proc", fake_exec_proc):
+                db.create_workflow_definition({"name": "TestFlow", "root_node_key": "root", "nodes": []})
+                db.create_workflow_instance(2, {"projectPath": "/p"})
+                db.worker_submit_result(1, 2, "tok", 0, {"ok": True})
+                db.apply_validation_plan(1, {"iterations": []})
+                db.upsert_action_schema("pipeline.centroid", "input", {"type": "object"}, "pipeline.centroid")
+
+        json_sql = [sql for sql in captured if _JSON_CAST in sql]
+        self.assertGreaterEqual(len(json_sql), 5)
+        for sql in json_sql:
+            self.assertNotRegex(sql, r"@(?:spec|context_json|schema_json|output_json)=\?(?!\s*[,)])")
 
 
 if __name__ == "__main__":

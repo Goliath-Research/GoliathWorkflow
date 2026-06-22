@@ -29,13 +29,13 @@ GO
 
 CREATE OR ALTER PROCEDURE wf.wf_repo_create_workflow_instance
     @version_id BIGINT,
-    @context_json NVARCHAR(MAX) = NULL
+    @context_json json = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
     INSERT INTO wf.workflow_instance (workflow_version_id, status, context_json)
     OUTPUT INSERTED.id
-    VALUES (@version_id, N'CREATED', CASE WHEN @context_json IS NULL THEN NULL ELSE CAST(@context_json AS json) END);
+    VALUES (@version_id, N'CREATED', @context_json);
 END;
 GO
 
@@ -46,7 +46,7 @@ CREATE OR ALTER PROCEDURE wf.wf_repo_insert_node_execution
     @attempt_no INT,
     @parent_node_execution_id BIGINT = NULL,
     @iteration_no INT = 0,
-    @input_json NVARCHAR(MAX) = NULL,
+    @input_json json = NULL,
     @set_available_now BIT = 0,
     @set_started_now BIT = 0
 AS
@@ -60,7 +60,7 @@ BEGIN
     VALUES (
         @workflow_instance_id, @workflow_node_id, @status, @attempt_no,
         @parent_node_execution_id, @iteration_no,
-        CASE WHEN @input_json IS NULL THEN NULL ELSE CAST(@input_json AS json) END,
+        @input_json,
         CASE WHEN @set_available_now = 1 THEN SYSUTCDATETIME() ELSE NULL END,
         CASE WHEN @set_started_now = 1 THEN SYSUTCDATETIME() ELSE NULL END
     );
@@ -70,7 +70,7 @@ GO
 CREATE OR ALTER PROCEDURE wf.wf_repo_update_node_execution_status
     @execution_id BIGINT,
     @status VARCHAR(32),
-    @output_json NVARCHAR(MAX) = NULL,
+    @output_json json = NULL,
     @has_result_code BIT = 0,
     @result_code INT = NULL,
     @engine_error_code INT = 0,
@@ -80,7 +80,7 @@ BEGIN
     SET NOCOUNT ON;
     UPDATE wf.node_execution
     SET status = @status,
-        output_json = CASE WHEN @output_json IS NULL THEN NULL ELSE CAST(@output_json AS json) END,
+        output_json = @output_json,
         ended_at_utc = SYSUTCDATETIME(),
         result_code = CASE WHEN @has_result_code = 1 THEN @result_code ELSE result_code END,
         engine_error_code = CASE WHEN @engine_error_code <> 0 THEN @engine_error_code ELSE engine_error_code END,
