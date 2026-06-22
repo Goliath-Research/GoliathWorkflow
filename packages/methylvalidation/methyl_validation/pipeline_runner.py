@@ -1,7 +1,10 @@
 """
 Orchestrate pipeline CLIs via subprocess.
 
-Monte Carlo iterations run **methyl-centroid** and **methyl-detector** only; **--freeze** runs
+Monte Carlo iterations run **methyl-centroid** and **methyl-detector**; when
+``step_config.detection.detection_mode`` is ``discovery_only``, **methyl-dmp-select**
+runs next. With gene stability enabled, **methyl-mapper** and either **methyl-gene-select**
+(split path) or in-process gene FeatureCuts (legacy) follow. **--freeze** runs
 mapper/enricher; **--model** runs classifier then predictor.
 """
 
@@ -31,12 +34,105 @@ def _derive_previous_mc_run_dir(run_dir: Path) -> Optional[Path]:
     return run_dir.parent / f"run_{run_number - 1:04d}"
 
 
+def _detection_step_config(project_json: str | Path) -> Dict[str, Any]:
+    try:
+        from methyl_utils import load_project
+
+        project = load_project(project_json)
+        return dict(project.get_step_config("detection") or {})
+    except Exception:
+        try:
+            with open(project_json, encoding="utf-8") as f:
+                data = json.load(f)
+            step_config = data.get("step_config") if isinstance(data, dict) else None
+            if isinstance(step_config, dict):
+                detection = step_config.get("detection")
+                if isinstance(detection, dict):
+                    return dict(detection)
+        except Exception:
+            pass
+        return {}
+
+
+def _uses_discovery_only(project_json: str | Path) -> bool:
+    return str(_detection_step_config(project_json).get("detection_mode") or "legacy") == "discovery_only"
+
+
+def _dmp_select_group_labels(project_json: str | Path) -> List[Optional[str]]:
+    """Return comparison labels for methyl-dmp-select (mirrors methyl-detector multi-comparison runs)."""
+    try:
+        from methyl_utils import load_project
+
+        project = load_project(project_json)
+        if project.uses_control_disease():
+            comparisons = project.get_comparisons()
+            if len(comparisons) > 1:
+                return [spec.disease_group for spec in comparisons]
+    except Exception:
+        pass
+    return [None]
+
+
+def run_dmp_select(
+    project_json: str | Path,
+    detector_step_override: Optional[str | Path] = None,
+) -> tuple[int, str, str]:
+    """Run methyl-dmp-select for each comparison × chromosome after discovery-only detection."""
+    try:
+        from methyl_utils import load_project
+
+        project = load_project(project_json)
+        chromosomes = [str(c) for c in (project.chromosomes or ["1"])]
+    except Exception as exc:
+        return -1, "", f"methyl-dmp-select project load failed: {exc}"
+
+    stdout_parts: List[str] = []
+    stderr_parts: List[str] = []
+    for group in _dmp_select_group_labels(project_json):
+        for chrom in chromosomes:
+            label = group or "default"
+            cmd = ["methyl-dmp-select", "--project", str(project_json), "--chromosome", chrom]
+            if group is not None:
+                cmd.extend(["--group", str(group)])
+            if detector_step_override is not None:
+                cmd.extend(["--step-override", str(detector_step_override)])
+            rc, out, err = run_cmd(cmd)
+            stdout_parts.append(f"=== dmp-select {label} chr{chrom} stdout ===\n{out}")
+            stderr_parts.append(f"=== dmp-select {label} chr{chrom} stderr ===\n{err}")
+            if rc != 0:
+                return rc, "\n".join(stdout_parts), "\n".join(stderr_parts)
+    return 0, "\n".join(stdout_parts), "\n".join(stderr_parts)
+
+
+def run_gene_select(
+    project_json: str | Path,
+    config: Optional["MonteCarloConfig"] = None,
+    *,
+    run_dir: Optional[Path] = None,
+) -> tuple[int, str, str]:
+    """Run methyl-gene-select for one MC iteration run directory."""
+    project_json = Path(project_json).resolve()
+    run_dir = Path(run_dir).resolve() if run_dir is not None else project_json.parent
+    cmd = ["methyl-gene-select", "--project", str(project_json), "--run-dir", str(run_dir)]
+    if config is not None:
+        max_genes = getattr(config, "stability_gene_featurecuts_max_genes", None)
+        max_dmps = getattr(config, "stability_gene_featurecuts_max_dmps", None)
+        if max_genes is not None:
+            cmd.extend(["--max-genes", str(int(max_genes))])
+        if max_dmps is not None:
+            cmd.extend(["--max-dmps", str(int(max_dmps))])
+        if bool(getattr(config, "stability_gene_biomarker_filter_enabled", False)):
+            cmd.append("--biomarker-filter")
+    return run_cmd(cmd)
+
+
 def _append_gene_stability_steps(
     steps: List[Any],
     *,
     project_json: Path,
     per_cancer_group: bool,
     config: Optional["MonteCarloConfig"],
+    split_detector: bool = False,
 ) -> None:
     if config is None or not bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
         return
@@ -48,6 +144,25 @@ def _append_gene_stability_steps(
             None,
         )
     )
+
+    if split_detector:
+
+        def _run_gene_select() -> tuple[int, str, str]:
+            return run_gene_select(
+                project_json,
+                config,
+                run_dir=Path(project_json).resolve().parent,
+            )
+
+        steps.append(
+            (
+                "methyl-gene-select",
+                _run_gene_select,
+                None,
+                None,
+            )
+        )
+        return
 
     def _run_gene_fc() -> tuple[int, str, str]:
         from .gene_featurecuts import run_gene_featurecuts_for_iteration
@@ -423,7 +538,8 @@ def run_pipeline_for_iteration(
     previous_run_dir: Optional[Path] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
-    Monte Carlo stability iteration: methyl-centroid → methyl-detector only.
+    Monte Carlo stability iteration: methyl-centroid → methyl-detector
+    (+ methyl-dmp-select when ``detection_mode=discovery_only``).
 
     Omits methyl-classifier and methyl-predictor (final model is ``--model`` after freeze).
     """
@@ -491,11 +607,25 @@ def run_pipeline_for_iteration(
             None,
         )
     )
+    split_detector = _uses_discovery_only(project_json)
+    if split_detector:
+        steps.append(
+            (
+                "methyl-dmp-select",
+                lambda: run_dmp_select(
+                    project_json,
+                    detector_step_override=detector_step_override,
+                ),
+                None,
+                None,
+            )
+        )
     _append_gene_stability_steps(
         steps,
         project_json=project_json,
         per_cancer_group=per_cancer_group,
         config=config,
+        split_detector=split_detector,
     )
     completed_seconds: List[float] = []
     total_steps = len(steps)
@@ -951,6 +1081,15 @@ def run_pipeline_for_production(
         steps.append(
             ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=False))
         )
+        if _uses_discovery_only(project_json) and not _detection_step_config(project_json).get(
+            "fixed_dmp_panel"
+        ):
+            steps.append(
+                (
+                    "methyl-dmp-select",
+                    lambda: run_dmp_select(project_json),
+                )
+            )
     steps.append(
         ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=False))
     )
@@ -1035,7 +1174,8 @@ def run_pipeline_for_iteration_multiclass(
     config: Optional["MonteCarloConfig"] = None,
 ) -> tuple[bool, List[str], List[Dict[str, Any]]]:
     """
-    Monte Carlo stability iteration (multiclass template): methyl-centroid → methyl-detector only.
+    Monte Carlo stability iteration (multiclass template): methyl-centroid → methyl-detector
+    (+ methyl-dmp-select when ``detection_mode=discovery_only``).
 
     """
     from .validator_metrics import write_step_timings_csv
@@ -1057,15 +1197,38 @@ def run_pipeline_for_iteration_multiclass(
             ),
         ),
     )
+    split_detector = _uses_discovery_only(project_json)
+    if split_detector:
+        steps.append(
+            (
+                "methyl-dmp-select",
+                lambda: run_dmp_select(
+                    project_json,
+                    detector_step_override=detector_step_override,
+                ),
+            )
+        )
     if config is not None and bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
         steps.append(("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=per_cancer_group)))
+        if split_detector:
+            steps.append(
+                (
+                    "methyl-gene-select",
+                    lambda: run_gene_select(
+                        project_json,
+                        config,
+                        run_dir=Path(project_json).resolve().parent,
+                    ),
+                )
+            )
+        else:
 
-        def _run_gene_fc_mc() -> tuple[int, str, str]:
-            from .gene_featurecuts import run_gene_featurecuts_for_iteration
+            def _run_gene_fc_mc() -> tuple[int, str, str]:
+                from .gene_featurecuts import run_gene_featurecuts_for_iteration
 
-            return run_gene_featurecuts_for_iteration(project_json, config)
+                return run_gene_featurecuts_for_iteration(project_json, config)
 
-        steps.append(("gene-featurecuts", _run_gene_fc_mc))
+            steps.append(("gene-featurecuts", _run_gene_fc_mc))
     completed_seconds: List[float] = []
     total_steps = len(steps)
     for step_index, (step_name, run_fn) in enumerate(steps):

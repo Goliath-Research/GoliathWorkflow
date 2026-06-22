@@ -25,6 +25,7 @@ methyl_cluster = {path = "../methylcluster", develop = true}
 methyl_alignment_qc = {path = "../methylalignmentqc", develop = true}
 methyl_domain = {path = "../methyldomain", develop = true}
 methyl-gene-select = {path = "../methylgeneselect", develop = true}
+methyl-dmp-select = {path = "../methyldmpselect", develop = true}
 
 [tool.poetry.scripts]
 methyl-validation = "methyl_validation.cli:main"

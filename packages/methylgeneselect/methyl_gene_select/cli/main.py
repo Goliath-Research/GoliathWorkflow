@@ -10,14 +10,7 @@ from typing import Any, Optional
 import click
 
 from ..core.gene_featurecuts import run_gene_featurecuts_for_iteration
-
-
-class _ConfigAdapter:
-    """Minimal config object for run_gene_featurecuts_for_iteration from CLI flags."""
-
-    def __init__(self, **kwargs: Any) -> None:
-        for k, v in kwargs.items():
-            setattr(self, k, v)
+from ..utils.project_config import build_gene_select_config
 
 
 @click.command()
@@ -36,13 +29,14 @@ def main(
     verbose: bool,
 ) -> None:
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
-    cfg = _ConfigAdapter(
-        stability_gene_featurecuts_enabled=True,
-        stability_gene_featurecuts_max_genes=max_genes,
-        stability_gene_featurecuts_max_dmps=max_dmps,
-        stability_gene_biomarker_filter_enabled=biomarker_filter,
-        stability_gene_biomarker_mode="ppi_only",
-    )
+    overrides: dict[str, Any] = {}
+    if max_genes is not None:
+        overrides["stability_gene_featurecuts_max_genes"] = max_genes
+    if max_dmps is not None:
+        overrides["stability_gene_featurecuts_max_dmps"] = max_dmps
+    if biomarker_filter:
+        overrides["stability_gene_biomarker_filter_enabled"] = True
+    cfg = build_gene_select_config(project, **overrides)
     rc, msg, err = run_gene_featurecuts_for_iteration(project, cfg, run_dir=run_dir)
     if rc != 0:
         click.echo(err or msg, err=True)
