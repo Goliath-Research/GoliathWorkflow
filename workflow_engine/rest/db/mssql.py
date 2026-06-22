@@ -305,6 +305,21 @@ SELECT @deleted_instance_count AS deleted_instance_count,
             (action_name, capability, payload_schema_ref),
         )
 
+    def upsert_action_schema(
+        self,
+        action_name: str,
+        direction: str,
+        schema_json: dict[str, Any],
+        schema_id: Optional[str] = None,
+    ) -> None:
+        if direction not in ("input", "output"):
+            raise ValueError("direction must be 'input' or 'output'")
+        self._exec_proc(
+            f"EXEC {self._qual('wf_repo_upsert_action_schema')} "
+            "@action_name=?, @direction=?, @schema_json=CAST(? AS json), @schema_id=?",
+            (action_name, direction, json.dumps(schema_json), schema_id),
+        )
+
     def create_workflow_definition(self, spec: dict[str, Any]) -> dict[str, Any]:
         row = self._fetch_one(
             f"EXEC {self._qual('wf_repo_create_workflow_graph')} @spec=?",

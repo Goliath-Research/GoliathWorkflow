@@ -121,6 +121,14 @@ class GatewayDb(Protocol):
         payload_schema_ref: Optional[str] = None,
     ) -> None: ...
 
+    def upsert_action_schema(
+        self,
+        action_name: str,
+        direction: str,
+        schema_json: dict[str, Any],
+        schema_id: Optional[str] = None,
+    ) -> None: ...
+
     def create_workflow_definition(self, spec: dict[str, Any]) -> dict[str, Any]: ...
 
 

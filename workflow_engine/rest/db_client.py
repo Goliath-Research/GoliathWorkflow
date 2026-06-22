@@ -160,6 +160,17 @@ def upsert_workflow_action(
         db.upsert_workflow_action(action_name, capability, payload_schema_ref)
 
 
+def upsert_action_schema(
+    db_or_dsn: Union[GatewayDb, str],
+    action_name: str,
+    direction: str,
+    schema_json: dict[str, Any],
+    schema_id: Optional[str] = None,
+) -> None:
+    with _use_db(db_or_dsn) as db:
+        db.upsert_action_schema(action_name, direction, schema_json, schema_id)
+
+
 def create_workflow_definition(db_or_dsn: Union[GatewayDb, str], spec: dict[str, Any]) -> dict[str, Any]:
     with _use_db(db_or_dsn) as db:
         return db.create_workflow_definition(spec)
@@ -180,6 +191,7 @@ __all__ = [
     "pg_dsn",
     "resolve_connection_config",
     "start_workflow_instance",
+    "upsert_action_schema",
     "upsert_workflow_action",
     "worker_authenticate",
     "worker_fail_task",
