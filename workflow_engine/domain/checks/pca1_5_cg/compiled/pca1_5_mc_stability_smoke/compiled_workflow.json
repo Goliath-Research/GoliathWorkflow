@@ -420,7 +420,14 @@
     }
   ],
   "input_bindings": [],
-  "output_bindings": [],
+  "output_bindings": [
+    {
+      "node_key": "plan_iterations",
+      "var_name": "iterations",
+      "source_kind": "output_path",
+      "source_json_path": "$.iterations"
+    }
+  ],
   "scope_defaults": [
     {
       "node_key": "root",

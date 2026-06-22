@@ -887,7 +887,26 @@
     }
   ],
   "input_bindings": [],
-  "output_bindings": [],
+  "output_bindings": [
+    {
+      "node_key": "plan_iterations",
+      "var_name": "iterations",
+      "source_kind": "output_path",
+      "source_json_path": "$.iterations"
+    },
+    {
+      "node_key": "prepare_freeze",
+      "var_name": "fixedDmpPanel",
+      "source_kind": "output_path",
+      "source_json_path": "$.fixedDmpPanel"
+    },
+    {
+      "node_key": "select_best_model",
+      "var_name": "selectedBackend",
+      "source_kind": "output_path",
+      "source_json_path": "$.selectedBackend"
+    }
+  ],
   "scope_defaults": [
     {
       "node_key": "root",
