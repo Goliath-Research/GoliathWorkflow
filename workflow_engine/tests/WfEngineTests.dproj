@@ -7,7 +7,7 @@
         <Base>True</Base>
         <Config Condition="'$(Config)'==''">Debug</Config>
         <Platform Condition="'$(Platform)'==''">Win64</Platform>
-        <TargetedPlatforms>1</TargetedPlatforms>
+        <TargetedPlatforms>2</TargetedPlatforms>
         <AppType>Console</AppType>
         <DCC_DcuOutput>..\$(Platform)\$(Config)\tests</DCC_DcuOutput>
         <DCC_ExeOutput>..\bin\$(Platform)\$(Config)\tests</DCC_ExeOutput>
