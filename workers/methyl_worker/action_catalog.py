@@ -544,11 +544,12 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-gene-feature-select",
         tool="MethylGeneFeatureSelect",
         step_config_key="gene_selection",
-        context_vars=("mapperDir", "outputDir", "maxFeatures"),
+        context_vars=("mapperDir", "outputDir", "maxFeatures", "targetBalancedAccuracy"),
         argv_map=(
             ("mapperDir", "--mapper-dir"),
             ("outputDir", "--output-dir"),
             ("maxFeatures", "--max-features"),
+            ("targetBalancedAccuracy", "--target-ba"),
         ),
     ),
     _cli(

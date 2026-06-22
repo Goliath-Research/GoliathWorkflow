@@ -188,7 +188,8 @@
       "argv_map": {
         "mapperDir": "--mapper-dir",
         "maxFeatures": "--max-features",
-        "outputDir": "--output-dir"
+        "outputDir": "--output-dir",
+        "targetBalancedAccuracy": "--target-ba"
       },
       "capability": "methyl-gene-feature-select",
       "category": "modeling",
@@ -196,7 +197,8 @@
       "context_vars": [
         "mapperDir",
         "outputDir",
-        "maxFeatures"
+        "maxFeatures",
+        "targetBalancedAccuracy"
       ],
       "default_node_type": "ACTION",
       "description": "Select structural gene \u00d7 region features for tabular structural_scored backends.",
