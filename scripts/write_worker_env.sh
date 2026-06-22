@@ -23,7 +23,7 @@ source "$SCRIPT_DIR/detect_platform.sh"
 ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
 MANIFEST=""
 ARCH=""
-WORKER_API_BASE="${WORKER_API_BASE:-http://localhost:8080/v1}"
+WORKER_API_BASE="${WORKER_API_BASE:-https://gateway.example.com/v1}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

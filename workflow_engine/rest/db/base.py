@@ -131,6 +131,8 @@ class GatewayDb(Protocol):
 
     def create_workflow_definition(self, spec: dict[str, Any]) -> dict[str, Any]: ...
 
+    def get_worker_cluster_security(self, worker_id: int) -> Optional[dict[str, Any]]: ...
+
 
 class GatewayDbBase(ABC):
     backend: str
@@ -240,6 +242,9 @@ class GatewayDbBase(ABC):
 
     @abstractmethod
     def create_workflow_definition(self, spec: dict[str, Any]) -> dict[str, Any]: ...
+
+    @abstractmethod
+    def get_worker_cluster_security(self, worker_id: int) -> Optional[dict[str, Any]]: ...
 
     def _format_task_claim(self, row: Optional[dict[str, Any]]) -> dict[str, Any]:
         if not row:

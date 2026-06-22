@@ -134,3 +134,70 @@ curl -s http://127.0.0.1:8080/v1/health
 ```
 
 Token refresh is handled inside the gateway (cached ~55 minutes). ODBC Driver 18 for SQL Server must be installed for MSSQL MI.
+
+## Gateway security (mixed worker topology)
+
+Tiered model: **TLS edge** → **Entra JWT for control-plane APIs** → **registered cluster + worker token for workers** → optional **cluster CIDR bind** for public-tier workers → **Azure SQL private endpoint**.
+
+### TLS reverse proxy (phase 1)
+
+1. `methyl-gateway` binds loopback only (`WF_GATEWAY_HOST=127.0.0.1` in [`deploy/env/gateway.security.env.example`](../../deploy/env/gateway.security.env.example)).
+2. Install TLS certs under `/etc/ssl/methyl-gateway/` (`fullchain.pem`, `privkey.pem`).
+3. Run `bash scripts/setup_gateway_nginx.sh --hostname <gateway-fqdn>`.
+4. NSG: **close public 8080**; allow **443** from VPN CIDR and known worker egress only.
+5. Set `WORKER_API_BASE=https://<gateway-fqdn>/v1` on all workers.
+
+### Entra ID on operator routes (phase 2)
+
+Merge [`deploy/env/gateway.security.env.example`](../../deploy/env/gateway.security.env.example) into `gateway.env`:
+
+```bash
+GATEWAY_REQUIRE_ENTRA=1
+AZURE_TENANT_ID=<tenant>
+GATEWAY_ENTRA_AUDIENCE=api://methyl-gateway   # app registration Application ID URI
+# GATEWAY_ENTRA_APP_ROLES=Workflow.Admin      # portal users
+```
+
+Portal and automation must send `Authorization: Bearer <jwt>` on:
+
+- `POST /v1/studies/*`, `POST|DELETE /v1/workflows/*`, `POST /v1/validation/*`, `POST /v1/actions`, `GET /v1/actions`
+
+Worker routes (`POST /v1/workers/*`) continue to use `worker_id` + `worker_token` over HTTPS.
+
+### Cluster registration + Tier C IP bind (phase 3)
+
+Deploy [`workflow_engine/sql/wf_cluster_security_columns.sql`](../../workflow_engine/sql/wf_cluster_security_columns.sql) (Azure SQL) or [`workflow_engine/sql_pg/wf_cluster_security_columns.sql`](../../workflow_engine/sql_pg/wf_cluster_security_columns.sql) (PostgreSQL).
+
+Register workers (both backends via gateway DB env):
+
+```bash
+bash scripts/register_worker.sh --cluster gpu-west --key "$(hostname -s)" \
+  --allowed-cidr 203.0.113.0/24 --allowed-cidr 198.51.100.10/32
+```
+
+On the gateway VM for public-tier clusters:
+
+```bash
+GATEWAY_WORKER_IP_BIND=1
+GATEWAY_TRUSTED_PROXY_CIDRS=127.0.0.1/32
+```
+
+### Azure SQL private endpoint (data plane)
+
+Workers never connect to SQL directly. Lock down the database to the gateway only:
+
+1. Create a **private endpoint** for Azure SQL in the gateway VNet.
+2. Azure portal → SQL server → **Networking** → disable **public network access**.
+3. Remove per-operator IP firewall rules; retain only private-endpoint path.
+4. Confirm gateway MI is the sole Entra SQL principal with `wf` execute rights.
+5. From the gateway VM: `curl -s http://127.0.0.1:8080/v1/health` (gateway) then verify workflow deploy still works.
+
+### Verification
+
+```bash
+bash scripts/test_gateway_remote.sh --ssh-only
+# Operator API without JWT should 401 when GATEWAY_REQUIRE_ENTRA=1:
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://gateway/v1/workflows/instances \
+  -H 'Content-Type: application/json' -d '{"workflow_version_id":1}'
+```
+

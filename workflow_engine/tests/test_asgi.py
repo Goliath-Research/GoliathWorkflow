@@ -23,6 +23,9 @@ class _StubDb:
     def close(self) -> None:
         pass
 
+    def get_worker_cluster_security(self, worker_id: int) -> None:
+        return None
+
 
 class AsgiGatewayTests(unittest.IsolatedAsyncioTestCase):
     async def test_health_route(self) -> None:

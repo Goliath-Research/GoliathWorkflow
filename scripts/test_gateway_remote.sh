@@ -8,7 +8,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SSH_HOST="${GATEWAY_SSH:-ubuntu@48.216.240.121}"
 PUBLIC_HOST="${GATEWAY_PUBLIC:-48.216.240.121}"
 KEY="${GATEWAY_SSH_KEY:-$REPO_ROOT/deploy/gateway_key.pem}"
-API_PORT="${GATEWAY_PORT:-8080}"
+PUBLIC_PORT="${GATEWAY_PORT:-443}"
+LOCAL_PORT="${GATEWAY_LOCAL_PORT:-8080}"
 
 usage() {
   cat <<EOF
@@ -20,7 +21,7 @@ Options:
   --deploy         Also run deploy_workflow_definitions.sh on the gateway VM
   -h, --help       Show this help
 
-Env: GATEWAY_SSH, GATEWAY_PUBLIC, GATEWAY_SSH_KEY, GATEWAY_PORT
+Env: GATEWAY_SSH, GATEWAY_PUBLIC, GATEWAY_SSH_KEY, GATEWAY_PORT (public HTTPS), GATEWAY_LOCAL_PORT (loopback)
 EOF
 }
 
@@ -39,8 +40,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 test_public() {
-  echo "=== public HTTP ${PUBLIC_HOST}:${API_PORT} ==="
-  if curl -sS -m 10 "http://${PUBLIC_HOST}:${API_PORT}/v1/health"; then
+  echo "=== public HTTPS ${PUBLIC_HOST}:${PUBLIC_PORT} ==="
+  if curl -sS -m 10 -k "https://${PUBLIC_HOST}:${PUBLIC_PORT}/v1/health"; then
     echo
   else
     echo "(public endpoint unreachable from this machine — NSG may restrict source IP)" >&2
@@ -54,7 +55,7 @@ test_ssh() {
 
   echo "=== SSH ${SSH_HOST} ==="
   ssh -i "$KEY" -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \
-    "$SSH_HOST" bash -s -- "$API_PORT" "$RUN_DEPLOY" <<'REMOTE'
+    "$SSH_HOST" bash -s -- "$LOCAL_PORT" "$RUN_DEPLOY" <<'REMOTE'
 set -euo pipefail
 API_PORT="$1"
 RUN_DEPLOY="$2"
@@ -72,13 +73,13 @@ curl -sS "${BASE}/health"
 echo
 
 echo "--- actions (first 3 names) ---"
-curl -sS "${BASE}/actions" | python3 - <<'PY'
+curl -sS "${BASE}/actions" | python3 -c '
 import json, sys
 data = json.load(sys.stdin)
 items = data if isinstance(data, list) else data.get("actions", [])
 names = [x.get("name", x) if isinstance(x, dict) else str(x) for x in items[:3]]
 print(f"count={len(items)} sample={names}")
-PY
+'
 
 if [[ "$RUN_DEPLOY" == "1" ]]; then
   echo "--- deploy workflow definitions ---"

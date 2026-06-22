@@ -107,7 +107,7 @@ Production installs use [`scripts/install_release.sh`](../../scripts/install_rel
 | Variable | Purpose |
 |----------|---------|
 | `WORKER_ID`, `WORKER_TOKEN` | PostgreSQL worker auth |
-| `WORKER_API_BASE` | REST gateway (`/v1` suffix) |
+| `WORKER_API_BASE` | REST gateway HTTPS URL (`/v1` suffix) |
 | `WORKER_CAPABILITY` | Optional task filter (omit for omnibus dev worker) |
 | `METHYL_PARABRICKS_IMAGE` | Clara Parabricks image |
 | `METHYL_PARABRICKS_GPU_FLAGS` | Default `--gpus all` |
@@ -128,15 +128,31 @@ set +a
 
 ## Register worker
 
-```bash
-export PGHOST=epimethyl.postgres.database.azure.com
-export PGUSER=dba
-export PGPASSWORD='...'
+Clusters must be registered in `wf.cluster` before workers poll. Use HTTPS `WORKER_API_BASE` in production.
 
+```bash
+# Uses BACKEND_DB / gateway connection env (Azure SQL or PostgreSQL)
 bash scripts/register_worker.sh --key "$(hostname -s)"
+
 # Per-capability (production):
 bash scripts/register_worker.sh --key "gpu-1-methyl-qc" --capability methyl-qc
+
+# Tier C (public NSG): bind cluster to egress CIDR(s)
+bash scripts/register_worker.sh --cluster gpu-public --allowed-cidr 203.0.113.0/24
 ```
+
+Legacy PostgreSQL-only registration via `PGPASSWORD` still works when `BACKEND_DB=postgres` is set in the environment.
+
+## Gateway connectivity tiers
+
+| Tier | Network | `WORKER_API_BASE` | Worker auth |
+|------|---------|-------------------|-------------|
+| A | Azure VNet / internal LB | `https://gateway-internal/v1` | `WORKER_ID` + `WORKER_TOKEN` |
+| B | Site VPN | `https://gateway/v1` (VPN reachable) | same |
+| C | Public NSG | `https://gateway/v1` (HTTPS only) | same + cluster `allowed_source_cidrs` |
+
+Operator APIs (start SamplePrep, deploy definitions) require **Entra ID JWT** at the gateway when `GATEWAY_REQUIRE_ENTRA=1`. See [`production_runbook.md`](production_runbook.md#gateway-security-mixed-worker-topology).
+
 
 ## systemd
 

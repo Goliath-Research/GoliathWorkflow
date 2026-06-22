@@ -8,7 +8,7 @@ Type=simple
 WorkingDirectory=/work/epimethyl/repos/MethylPipeline
 EnvironmentFile=-/work/epimethyl/env/gateway.env
 Environment=PATH=/work/epimethyl/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=/work/epimethyl/venv/bin/methyl-gateway --host 0.0.0.0 --port 8080
+ExecStart=/work/epimethyl/venv/bin/methyl-gateway --host 127.0.0.1 --port 8080
 Restart=on-failure
 RestartSec=5
 

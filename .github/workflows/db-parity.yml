@@ -42,6 +42,7 @@ jobs:
             workflow_engine/tests/test_mssql_batches.py \
             workflow_engine/tests/test_connection.py \
             workflow_engine/tests/test_asgi.py \
+            workflow_engine/tests/test_gateway_auth.py \
             -q
 
   postgres-parity:

@@ -259,7 +259,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     from .asgi import create_app
 
     parser = argparse.ArgumentParser(description="MethylPipeline workflow REST gateway")
-    parser.add_argument("--host", default=os.environ.get("WF_GATEWAY_HOST", os.environ.get("REST_HOST", "0.0.0.0")))
+    parser.add_argument(
+        "--host",
+        default=os.environ.get("WF_GATEWAY_HOST", os.environ.get("REST_HOST", "127.0.0.1")),
+    )
     parser.add_argument(
         "--port",
         type=int,

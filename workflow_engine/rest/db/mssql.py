@@ -376,3 +376,14 @@ SELECT @deleted_instance_count AS deleted_instance_count,
             "root_node_id": int(row["root_node_id"]),
             "name": row.get("name"),
         }
+
+    def get_worker_cluster_security(self, worker_id: int) -> Optional[dict[str, Any]]:
+        return self._fetch_one(
+            f"""
+            SELECT c.allowed_source_cidrs, c.entra_client_id
+            FROM {self._qual('worker')} AS w
+            INNER JOIN {self._qual('cluster')} AS c ON c.id = w.cluster_id
+            WHERE w.id = ?
+            """,
+            (worker_id,),
+        )
