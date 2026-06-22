@@ -29,6 +29,7 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 14a. [`wf_sql_scope_encoding_parity.sql`](wf_sql_scope_encoding_parity.sql) — canonical JSON-value encoding (`wf_json_encode_scalar/openjson`); fixes integer-as-string write-path inconsistency. Deploy immediately after `wf_sql_foreach_support.sql`.
 15. [`wf_repository_api.sql`](wf_repository_api.sql) — middle-tier repository wrappers (dual-database contract).
 15a. [`wf_json_native_params.sql`](wf_json_native_params.sql) — native `json` params for engine/worker submit (deploy before worker contract refresh).
+15b. [`wf_workflow_edge_index_fixup.sql`](wf_workflow_edge_index_fixup.sql) — drop `UQ_we_parent_child_order` (required before programmatic IF workflow deploy).
 16. [`wf_worker_api_contract.sql`](wf_worker_api_contract.sql) — worker submit result-set contract alignment.
 17. [`wf_data_driven_pipeline_seed.sql`](wf_data_driven_pipeline_seed.sql) — **DataDrivenPipeline** (generic; instance `context_json` drives fan-out).
 17a. [`wf_sample_prep_pipeline_seed.sql`](wf_sample_prep_pipeline_seed.sql) — **SamplePrepPipeline** (per-sample FASTQ → HDF5 upstream).
