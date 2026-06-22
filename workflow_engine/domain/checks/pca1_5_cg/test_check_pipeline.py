@@ -64,3 +64,67 @@ def test_mc_stability_program_has_centroid_incremental_actions() -> None:
     template = centroid_nodes[0]["input_template"]
     assert "addSamples" in template
     assert "removeSamples" in template
+
+
+def _find_comparison_for_loops(body: list) -> list[dict]:
+    loops: list[dict] = []
+    for item in body:
+        if not isinstance(item, dict):
+            continue
+        for_loop = item.get("for")
+        if isinstance(for_loop, dict) and for_loop.get("as") == "comparison":
+            loops.append(item)
+        nested = item.get("do")
+        if isinstance(nested, list):
+            loops.extend(_find_comparison_for_loops(nested))
+        elif isinstance(nested, dict):
+            inner = nested.get("do")
+            if isinstance(inner, list):
+                loops.extend(_find_comparison_for_loops(inner))
+    return loops
+
+
+def _collect_step_actions(steps: list) -> list[str]:
+    actions: list[str] = []
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        if "do" in step and isinstance(step["do"], str):
+            actions.append(step["do"])
+        inner = step.get("do")
+        if isinstance(inner, dict) and isinstance(inner.get("do"), str):
+            actions.append(inner["do"])
+    return actions
+
+
+@pytest.mark.parametrize(
+    "program_name",
+    [
+        "pca1_5_mc_stability.program.json",
+        "healthy_pca_mc_stability.program.json",
+    ],
+)
+def test_gene_steps_run_once_per_iteration_not_per_comparison(program_name: str) -> None:
+    """Biomarker filter and gene_select operate on iteration runDir, not per comparison."""
+    program = json.loads((CHECK_ROOT / "configs" / program_name).read_text(encoding="utf-8"))
+    comparison_loops = _find_comparison_for_loops(program.get("body", []))
+    assert comparison_loops, f"expected comparison loop in {program_name}"
+    iteration_only_actions = {"validation.biomarker_filter", "pipeline.gene_select"}
+    for loop in comparison_loops:
+        do_steps = loop.get("do")
+        assert isinstance(do_steps, list)
+        nested_actions = set(_collect_step_actions(do_steps))
+        overlap = nested_actions & iteration_only_actions
+        assert not overlap, (
+            f"{program_name}: {overlap} must run after all comparisons complete, "
+            "not inside the parallel comparison loop"
+        )
+
+    iteration_loop = next(
+        item
+        for item in program["body"]
+        if isinstance(item, dict) and item.get("for", {}).get("as") == "iteration"
+    )
+    iteration_actions = set(_collect_step_actions(iteration_loop["do"]))
+    assert "validation.biomarker_filter" in iteration_actions
+    assert "pipeline.gene_select" in iteration_actions

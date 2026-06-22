@@ -91,35 +91,35 @@
                 "group": { "ref": "comparison.label" }
               },
               "node_key": "mapper"
-            },
-            {
-              "if": {
-                "condition": { "ref": "project.stabilityGeneBiomarkerFilterEnabled" }
-              },
-              "do": {
-                "do": "validation.biomarker_filter",
-                "with": {
-                  "projectPath": { "ref": "iteration.projectPath" },
-                  "runDir": { "ref": "iteration.runDir" }
-                },
-                "node_key": "biomarker_filter"
-              }
-            },
-            {
-              "if": {
-                "condition": { "ref": "project.stabilityGeneFeaturecutsEnabled" }
-              },
-              "do": {
-                "do": "pipeline.gene_select",
-                "with": {
-                  "projectPath": { "ref": "iteration.projectPath" },
-                  "runDir": { "ref": "iteration.runDir" },
-                  "biomarkerFilter": { "ref": "project.stabilityGeneBiomarkerFilterEnabled" }
-                },
-                "node_key": "gene_select"
-              }
             }
           ]
+        },
+        {
+          "if": {
+            "condition": { "ref": "project.stabilityGeneBiomarkerFilterEnabled" }
+          },
+          "do": {
+            "do": "validation.biomarker_filter",
+            "with": {
+              "projectPath": { "ref": "iteration.projectPath" },
+              "runDir": { "ref": "iteration.runDir" }
+            },
+            "node_key": "biomarker_filter"
+          }
+        },
+        {
+          "if": {
+            "condition": { "ref": "project.stabilityGeneFeaturecutsEnabled" }
+          },
+          "do": {
+            "do": "pipeline.gene_select",
+            "with": {
+              "projectPath": { "ref": "iteration.projectPath" },
+              "runDir": { "ref": "iteration.runDir" },
+              "biomarkerFilter": { "ref": "project.stabilityGeneBiomarkerFilterEnabled" }
+            },
+            "node_key": "gene_select"
+          }
         }
       ]
     },
