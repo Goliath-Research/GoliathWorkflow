@@ -80,7 +80,7 @@ BEGIN
         JSON_VALUE(n.value, '$.foreach_collection_var'),
         JSON_VALUE(n.value, '$.foreach_item_var'),
         JSON_VALUE(n.value, '$.foreach_index_var'),
-        TRY_CAST(JSON_VALUE(n.value, '$.foreach_parallel') AS BIT),
+        COALESCE(TRY_CAST(JSON_VALUE(n.value, '$.foreach_parallel') AS BIT), 0),
         JSON_QUERY(n.value, '$.input_template')
     FROM OPENJSON(@spec, '$.nodes') n;
 
