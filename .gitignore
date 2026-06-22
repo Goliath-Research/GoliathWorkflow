@@ -97,6 +97,8 @@ Thumbs.db
 .env
 .env.local
 *.local
+deploy/gateway_key.pem
+deploy/*.pem
 
 # Local methyl-stability-freeze-readiness dumps (checked-in examples live under packages/methylvalidation/docs/examples/)
 /readiness.json
