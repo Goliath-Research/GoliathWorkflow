@@ -1,0 +1,113 @@
+{
+  "$defs": {
+    "BiomarkerFilterSummary": {
+      "additionalProperties": true,
+      "description": "Biomarker filter diagnostics written to gene_stability artifacts.",
+      "properties": {
+        "biomarker_pool_size": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Biomarker Pool Size"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode"
+        },
+        "n_genes_in_mapper_after_intersect": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Genes In Mapper After Intersect"
+        },
+        "ppi_cache_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ppi Cache Path"
+        },
+        "ppi_score_threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ppi Score Threshold"
+        },
+        "region_hits": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Region Hits",
+          "type": "array"
+        }
+      },
+      "title": "BiomarkerFilterSummary",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Output for validation.biomarker_filter.",
+  "properties": {
+    "biomarker_filter": {
+      "$ref": "#/$defs/BiomarkerFilterSummary"
+    },
+    "n_genes": {
+      "title": "N Genes",
+      "type": "integer"
+    },
+    "outputCsv": {
+      "title": "Outputcsv",
+      "type": "string"
+    },
+    "status": {
+      "const": "ok",
+      "default": "ok",
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "n_genes",
+    "outputCsv",
+    "biomarker_filter"
+  ],
+  "title": "BiomarkerFilterTaskOutput",
+  "type": "object"
+}

@@ -381,6 +381,7 @@ def _handle_validation_biomarker_filter(
     import pandas as pd
 
     from methyl_gene_select.core.gene_featurecuts import _apply_biomarker_gene_pool_filter
+    from methyl_worker.split_detector_task_models import BiomarkerFilterSummary, BiomarkerFilterTaskOutput
 
     project_path = input_json.get("projectPath") or input_json.get("project")
     if not project_path:
@@ -409,7 +410,13 @@ def _handle_validation_biomarker_filter(
     )
     out_csv = out_dir / "biomarker_gene_pool.csv"
     filtered.to_csv(out_csv, index=False)
-    return {"status": "ok", "n_genes": int(len(filtered)), "biomarker_filter": meta, "outputCsv": str(out_csv)}
+    summary = BiomarkerFilterSummary.model_validate(meta)
+    return BiomarkerFilterTaskOutput(
+        status="ok",
+        n_genes=int(len(filtered)),
+        outputCsv=str(out_csv),
+        biomarker_filter=summary,
+    ).model_dump()
 
 
 def _handle_validation_prepare_freeze(

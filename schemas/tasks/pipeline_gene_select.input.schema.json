@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Input for pipeline.gene_select (methyl-gene-select).",
+  "properties": {
+    "biomarkerFilter": {
+      "default": false,
+      "title": "Biomarkerfilter",
+      "type": "boolean"
+    },
+    "comparison": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Comparison"
+    },
+    "maxDmps": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Maxdmps"
+    },
+    "maxGenes": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Maxgenes"
+    },
+    "project": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project"
+    },
+    "projectPath": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Projectpath"
+    },
+    "runDir": {
+      "title": "Rundir",
+      "type": "string"
+    },
+    "tool": {
+      "default": "MethylGeneSelect",
+      "title": "Tool",
+      "type": "string"
+    }
+  },
+  "required": [
+    "runDir"
+  ],
+  "title": "GeneSelectTaskInput",
+  "type": "object"
+}

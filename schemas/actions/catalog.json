@@ -86,6 +86,48 @@
       "tool": "MethylDetector"
     },
     {
+      "action_name": "pipeline.dmp_select",
+      "argv_map": {
+        "chromosome": "--chromosome",
+        "discoveryCsv": "--discovery-csv",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-dmp-select",
+      "category": "modeling",
+      "cli_tool": "methyl-dmp-select",
+      "context_vars": [
+        "chromosome",
+        "context",
+        "comparison",
+        "discoveryCsv",
+        "outputDir",
+        "stepOverride"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Select minimal discriminatory DMP panel from discovery exports (FeatureCuts / elbow).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "ComparisonSpec",
+          "MethylCentroidRef"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "MethylDetectionRef"
+        ]
+      },
+      "execution_mode": "cli",
+      "input_schema_ref": "schemas/tasks/pipeline_dmp_select.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_dmp_select.output.schema.json",
+      "schema_id": "pipeline.dmp_select",
+      "step_config_key": "dmp_selection",
+      "tool": "MethylDmpSelect"
+    },
+    {
       "action_name": "pipeline.mapper",
       "argv_map": {
         "centroid1Dir": "--centroid1-dir",
@@ -111,6 +153,59 @@
       "schema_id": "pipeline.mapper",
       "step_config_key": "mapper",
       "tool": "MethylMapper"
+    },
+    {
+      "action_name": "pipeline.gene_select",
+      "argv_map": {
+        "biomarkerFilter": "--biomarker-filter",
+        "maxDmps": "--max-dmps",
+        "maxGenes": "--max-genes",
+        "project": "--project",
+        "projectPath": "--project",
+        "runDir": "--run-dir"
+      },
+      "capability": "methyl-gene-select",
+      "category": "modeling",
+      "cli_tool": "methyl-gene-select",
+      "context_vars": [
+        "comparison",
+        "runDir",
+        "maxGenes",
+        "maxDmps",
+        "biomarkerFilter"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Validation-driven gene panel selection (ECDF OvR FeatureCuts).",
+      "execution_mode": "cli",
+      "input_schema_ref": "schemas/tasks/pipeline_gene_select.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_gene_select.output.schema.json",
+      "schema_id": "pipeline.gene_select",
+      "step_config_key": "gene_selection",
+      "tool": "MethylGeneSelect"
+    },
+    {
+      "action_name": "pipeline.gene_feature_select",
+      "argv_map": {
+        "mapperDir": "--mapper-dir",
+        "maxFeatures": "--max-features",
+        "outputDir": "--output-dir"
+      },
+      "capability": "methyl-gene-feature-select",
+      "category": "modeling",
+      "cli_tool": "methyl-gene-feature-select",
+      "context_vars": [
+        "mapperDir",
+        "outputDir",
+        "maxFeatures"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Select structural gene \u00d7 region features for tabular structural_scored backends.",
+      "execution_mode": "cli",
+      "input_schema_ref": "schemas/tasks/pipeline_gene_feature_select.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_gene_feature_select.output.schema.json",
+      "schema_id": "pipeline.gene_feature_select",
+      "step_config_key": "gene_selection",
+      "tool": "MethylGeneFeatureSelect"
     },
     {
       "action_name": "pipeline.enricher",
@@ -586,6 +681,24 @@
       "input_schema_ref": "schemas/tasks/validation_stability.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_stability.output.schema.json",
       "schema_id": "validation.stability",
+      "step_config_key": "validation"
+    },
+    {
+      "action_name": "validation.biomarker_filter",
+      "argv_map": {},
+      "capability": "validation.biomarker-filter",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "runDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "In-process disease CSV + PPI hub biomarker gene pool filter (MC stability).",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_validation_biomarker_filter",
+      "input_schema_ref": "schemas/tasks/validation_biomarker_filter.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_biomarker_filter.output.schema.json",
+      "schema_id": "validation.biomarker_filter",
       "step_config_key": "validation"
     },
     {

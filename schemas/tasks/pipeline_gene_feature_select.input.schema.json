@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Input for pipeline.gene_feature_select (methyl-gene-feature-select).",
+  "properties": {
+    "mapperDir": {
+      "title": "Mapperdir",
+      "type": "string"
+    },
+    "maxFeatures": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Maxfeatures"
+    },
+    "outputDir": {
+      "title": "Outputdir",
+      "type": "string"
+    },
+    "targetBalancedAccuracy": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Targetbalancedaccuracy"
+    },
+    "tool": {
+      "default": "MethylGeneFeatureSelect",
+      "title": "Tool",
+      "type": "string"
+    }
+  },
+  "required": [
+    "mapperDir",
+    "outputDir"
+  ],
+  "title": "GeneFeatureSelectTaskInput",
+  "type": "object"
+}

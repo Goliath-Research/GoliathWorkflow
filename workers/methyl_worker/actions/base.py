@@ -182,4 +182,8 @@ def build_action_from_catalog(entry, handlers_module: Any) -> ActionBase:
         from .gene_select import GENE_SELECT_ARGV_MAP, GeneSelectCliAction
 
         return GeneSelectCliAction(cli_tool=cli, argv_map=GENE_SELECT_ARGV_MAP)
+    if entry.action_name == "pipeline.gene_feature_select":
+        from .gene_feature_select import GENE_FEATURE_SELECT_ARGV_MAP, GeneFeatureSelectCliAction
+
+        return GeneFeatureSelectCliAction(cli_tool=cli, argv_map=GENE_FEATURE_SELECT_ARGV_MAP)
     return CliAction(cli_tool=cli, argv_map=argv_map)
