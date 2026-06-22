@@ -4,14 +4,15 @@ info:
   description: |
     Cross-language REST contract for workflow workers and admin operations.
     Maps 1:1 to DB objects in `workflow_engine/contract/db_objects.yaml`.
-    First implementation: Delphi middle-tier (`WfEngineSrv` / portal REST layer).
+    Production implementation: Python gateway on Linux (`methyl-gateway`, systemd).
+    Reference implementation: Delphi `WfEngineSrv` Windows service (optional).
   version: 1.0.0
 
 servers:
   - url: https://api.example.com/v1
     description: Production
   - url: http://localhost:8080/v1
-    description: Local Delphi or alternate middle-tier
+    description: Local Python gateway (methyl-gateway)
 
 tags:
   - name: workers
@@ -209,6 +210,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StartSamplePrepResponse'
+
+  /studies/validation/start:
+    post:
+      tags: [admin]
+      summary: Plan validation iterations and start StudyValidationLifecycle
+      operationId: startStudyValidation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [projectPath]
+              additionalProperties: true
+      responses:
+        '201':
+          description: Validation workflow instance created and started
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /validation/plan-iterations:
+    post:
+      tags: [admin]
+      summary: Plan validation iterations (optional persist to instance)
+      operationId: planValidationIterations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Planned context_json
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
 
   /workflows/instances:
     post:

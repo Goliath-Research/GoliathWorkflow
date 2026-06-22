@@ -63,7 +63,7 @@ def _compile_program_spec(program: Path, *, project_path: Optional[str] = None) 
 
 
 def _resolve_workflow_version_id(
-    dsn: str,
+    db: Any,
     body: Dict[str, Any],
     *,
     create_workflow_definition,
@@ -84,12 +84,12 @@ def _resolve_workflow_version_id(
 
     project_path = body.get("projectPath")
     spec = _compile_program_spec(program, project_path=project_path)
-    created = create_workflow_definition(dsn, spec)
+    created = create_workflow_definition(db, spec)
     return int(created["workflow_version_id"])
 
 
 def start_study_validation(
-    dsn: str,
+    db: Any,
     body: Dict[str, Any],
     *,
     create_workflow_definition,
@@ -111,12 +111,12 @@ def start_study_validation(
     context = enrich_instance_context(planned)
 
     version_id = _resolve_workflow_version_id(
-        dsn,
+        db,
         body,
         create_workflow_definition=create_workflow_definition,
     )
-    instance_id = create_workflow_instance(dsn, version_id, context)
-    start_workflow_instance(dsn, instance_id)
+    instance_id = create_workflow_instance(db, version_id, context)
+    start_workflow_instance(db, instance_id)
     return {
         "instance_id": instance_id,
         "workflow_version_id": version_id,

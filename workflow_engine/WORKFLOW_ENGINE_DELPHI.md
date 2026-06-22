@@ -1,6 +1,8 @@
-# Workflow Engine Delphi REST Gateway
+# Workflow Engine Delphi REST Gateway (reference)
 
-The Delphi middle-tier in `workflow_engine/src` is a **thin REST gateway** between workers (and other clients) and the `wf` SQL contract. It mirrors the Python reference gateway in `workflow_engine/rest/gateway.py`.
+> **Production gateway:** Python on Linux — see [`rest/gateway.py`](rest/gateway.py), `methyl-gateway` CLI, and [`deploy/systemd/methyl-gateway.service`](../deploy/systemd/methyl-gateway.service). The Delphi host below is an optional Windows reference implementation with a subset of routes.
+
+The Delphi middle-tier in `workflow_engine/src` is a **thin REST gateway** between workers (and other clients) and the `wf` SQL contract. It mirrors the Python production gateway in `workflow_engine/rest/gateway.py`.
 
 Workflow activation, control flow, scope resolution, and task progression run **in the database** (`sp_start_workflow_instance`, `sp_worker_submit_result`, `wf_engine_activate`, and related procs). Delphi does not embed an inline engine.
 

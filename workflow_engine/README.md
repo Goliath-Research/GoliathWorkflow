@@ -81,12 +81,19 @@ Templates use `${...}` tokens only. Supported references include `ctx.iterationN
 
 OpenAPI contract: [`../contracts/openapi.yaml`](../contracts/openapi.yaml)
 
+Install the production gateway package:
+
+```bash
+source .venv/bin/activate
+pip install -e workflow_engine/
+```
+
 Python REST worker (poll/submit): [`../workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) — install with `pip install -e workers/`, run `methyl-worker`.
 
 | Implementation | Command | Backend |
 |----------------|---------|---------|
-| Delphi (production) | `MethylWfGateway` Windows service (`WfEngineSrv /install`; `/console` for dev) | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |
-| Python (CI / Linux) | `python workflow_engine/rest/gateway.py --port 8080` | PostgreSQL via `psql` |
+| **Python (production)** | `methyl-gateway` via systemd on a dedicated Linux VM; dev: `python workflow_engine/rest/gateway.py` | Azure SQL (`BACKEND_DB=mssql`) or PostgreSQL (`BACKEND_DB=postgres`) via psycopg/pyodbc |
+| Delphi (reference / Windows) | `MethylWfGateway` Windows service (`WfEngineSrv /install`; `/console` for dev) | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |
 
 PostgreSQL parity scripts (`sql_pg/05`–`07`) port runtime resolver, scope write-path, and JSON encoding from the T-SQL parity scripts. FOREACH (`wf_sql_foreach_support.sql`) remains MSSQL-only for now.
 

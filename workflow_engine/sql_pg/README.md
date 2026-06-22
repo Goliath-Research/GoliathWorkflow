@@ -129,14 +129,35 @@ for f in 00_schema.sql 03_engine_core.sql 05_runtime_parity.sql 06_scope_writepa
 done
 ```
 
-## REST gateway (Linux / CI)
+## REST gateway (Linux production)
+
+Install from repo root:
 
 ```bash
-export POSTGRES_PASSWORD=methyl POSTGRES_DB=methylpipeline_parity
-python workflow_engine/rest/gateway.py --port 8080
+source .venv/bin/activate
+pip install -e workflow_engine/
 ```
 
-Maps [`contracts/openapi.yaml`](../contracts/openapi.yaml) to PostgreSQL wf objects. The Delphi `MethylWfGateway` Windows service (`WfEngineSrv`, DMVC-based; `/console` for development) exposes the same routes via UniDAC.
+**Azure SQL (phase 1):**
+
+```bash
+export BACKEND_DB=mssql
+export AZURE_SQL_SERVER=your-server.database.windows.net
+export AZURE_SQL_DB=MethylPipeline
+export AZURE_SQL_USER=...
+export AZURE_SQL_PASSWORD=...
+methyl-gateway --host 0.0.0.0 --port 8080
+```
+
+**PostgreSQL (phase 2 / CI):**
+
+```bash
+export BACKEND_DB=postgres
+export POSTGRES_HOST=localhost POSTGRES_DB=methylpipeline_parity POSTGRES_PASSWORD=methyl
+methyl-gateway --host 0.0.0.0 --port 8080
+```
+
+Maps [`contracts/openapi.yaml`](../contracts/openapi.yaml) to wf contract objects on either backend. The optional Delphi `MethylWfGateway` Windows service (`WfEngineSrv`) exposes a subset of the same worker/admin routes via UniDAC.
 
 ## Connection string (middle-tier)
 

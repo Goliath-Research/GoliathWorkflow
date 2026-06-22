@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """
-OpenAPI workflow REST gateway backed by PostgreSQL wf contract objects.
+OpenAPI workflow REST gateway backed by wf contract stored procedures.
 
-Implements contracts/openapi.yaml for CI parity and reference workers on Linux.
-The Delphi MethylWfGateway Windows service (WfEngineSrv, DMVC-based) provides the
-same routes against UniDAC (MSSQL or PG).
+Production Linux daemon (systemd). Supports Azure SQL (phase 1) and PostgreSQL (phase 2)
+via BACKEND_DB / connection env vars. Delphi WfEngineSrv remains an optional reference host.
 """
 
 from __future__ import annotations
@@ -19,10 +18,16 @@ from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import parse_qs, urlparse
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+if __name__ == "__main__" and __package__ is None:
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    __package__ = "rest"
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "contract"))
 
-from db_client import (
+from .connection import resolve_connection_config
+from .db import open_gateway_db
+from .db.base import GatewayDb, WorkerAuthError
+from .db_client import (
     apply_validation_plan,
     create_workflow_definition,
     create_workflow_instance,
@@ -30,7 +35,6 @@ from db_client import (
     get_action_schema,
     get_workflow_instance,
     list_workflow_actions,
-    pg_dsn,
     start_workflow_instance,
     upsert_workflow_action,
     worker_authenticate,
@@ -39,8 +43,8 @@ from db_client import (
     worker_request_task,
     worker_submit_result,
 )
-from study_lifecycle import start_study_validation
-from sample_lifecycle import start_sample_prep
+from .sample_lifecycle import start_sample_prep
+from .study_lifecycle import start_study_validation
 from workflow_definition_spec import WorkflowDefinitionSpec
 
 _DEFAULT_CATALOG_PATH = (
@@ -63,14 +67,18 @@ def _load_action_catalog_by_name(
 class RestGateway:
     def __init__(
         self,
-        dsn: str,
+        db: GatewayDb,
         *,
         catalog_path: Optional[Path] = None,
     ) -> None:
-        self.dsn = dsn
+        self.db = db
         self.catalog_by_name = _load_action_catalog_by_name(
             catalog_path or _DEFAULT_CATALOG_PATH
         )
+
+    @property
+    def backend(self) -> str:
+        return self.db.backend
 
     def dispatch(
         self,
@@ -85,11 +93,12 @@ class RestGateway:
             return 200, {
                 "status": "ok",
                 "service": "methyl-workflow-gateway",
+                "backend": self.backend,
                 "api_base": "/v1",
             }
 
         if method == "GET" and path == "/v1/actions":
-            actions = list_workflow_actions(self.dsn)
+            actions = list_workflow_actions(self.db)
             merged: list[dict[str, Any]] = []
             for row in actions:
                 meta = self.catalog_by_name.get(str(row["action_name"]), {})
@@ -109,17 +118,17 @@ class RestGateway:
             action_name = m.group(1)
             direction = (q.get("direction") or ["input"])[0]
             try:
-                return 200, get_action_schema(self.dsn, action_name, direction)
+                return 200, get_action_schema(self.db, action_name, direction)
             except KeyError as exc:
                 return 404, {"error": str(exc)}
 
         if method == "POST" and path == "/v1/workers/authenticate":
-            worker_authenticate(self.dsn, int(body["worker_id"]), str(body["worker_token"]))
+            worker_authenticate(self.db, int(body["worker_id"]), str(body["worker_token"]))
             return 200, {}
 
         if method == "POST" and path == "/v1/workers/tasks/request":
             result = worker_request_task(
-                self.dsn,
+                self.db,
                 int(body["worker_id"]),
                 str(body["worker_token"]),
                 body.get("capability"),
@@ -131,7 +140,7 @@ class RestGateway:
         if method == "POST" and m:
             ne_id = int(m.group(1))
             payload = worker_submit_result(
-                self.dsn,
+                self.db,
                 ne_id,
                 int(body["worker_id"]),
                 str(body["worker_token"]),
@@ -143,7 +152,7 @@ class RestGateway:
         m = re.fullmatch(r"/v1/workers/tasks/(\d+)/heartbeat", path)
         if method == "POST" and m:
             payload = worker_heartbeat(
-                self.dsn,
+                self.db,
                 int(m.group(1)),
                 int(body["worker_id"]),
                 str(body["worker_token"]),
@@ -154,7 +163,7 @@ class RestGateway:
         m = re.fullmatch(r"/v1/workers/tasks/(\d+)/fail", path)
         if method == "POST" and m:
             worker_fail_task(
-                self.dsn,
+                self.db,
                 int(m.group(1)),
                 int(body["worker_id"]),
                 str(body["worker_token"]),
@@ -170,7 +179,7 @@ class RestGateway:
             instance_id = body.get("workflow_instance_id")
             if instance_id is not None:
                 apply_validation_plan(
-                    self.dsn,
+                    self.db,
                     int(instance_id),
                     context,
                     persist_extension=bool(body.get("persist_extension", True)),
@@ -182,7 +191,7 @@ class RestGateway:
 
         if method == "POST" and path == "/v1/studies/validation/start":
             payload = start_study_validation(
-                self.dsn,
+                self.db,
                 body,
                 create_workflow_definition=create_workflow_definition,
                 create_workflow_instance=create_workflow_instance,
@@ -192,7 +201,7 @@ class RestGateway:
 
         if method == "POST" and path == "/v1/studies/sample-prep/start":
             payload = start_sample_prep(
-                self.dsn,
+                self.db,
                 body,
                 create_workflow_definition=create_workflow_definition,
                 create_workflow_instance=create_workflow_instance,
@@ -202,22 +211,22 @@ class RestGateway:
 
         if method == "POST" and path == "/v1/workflows/instances":
             instance_id = create_workflow_instance(
-                self.dsn,
+                self.db,
                 int(body["workflow_version_id"]),
                 body.get("context_json"),
             )
-            start_workflow_instance(self.dsn, instance_id)
-            summary = get_workflow_instance(self.dsn, instance_id)
+            start_workflow_instance(self.db, instance_id)
+            summary = get_workflow_instance(self.db, instance_id)
             return 201, summary
 
         if method == "POST" and path == "/v1/workflows/definitions":
             spec = WorkflowDefinitionSpec.model_validate(body).to_db_spec()
-            result = create_workflow_definition(self.dsn, spec)
+            result = create_workflow_definition(self.db, spec)
             return 201, result
 
         if method == "POST" and path == "/v1/actions":
             upsert_workflow_action(
-                self.dsn,
+                self.db,
                 str(body["action_name"]),
                 body.get("capability"),
                 body.get("payload_schema_ref"),
@@ -226,18 +235,18 @@ class RestGateway:
 
         m = re.fullmatch(r"/v1/workflows/instances/(\d+)", path)
         if method == "GET" and m:
-            summary = get_workflow_instance(self.dsn, int(m.group(1)))
+            summary = get_workflow_instance(self.db, int(m.group(1)))
             return 200, summary
 
         m = re.fullmatch(r"/v1/workflows/instances/(\d+)/start", path)
         if method == "POST" and m:
-            start_workflow_instance(self.dsn, int(m.group(1)))
-            return 200, get_workflow_instance(self.dsn, int(m.group(1)))
+            start_workflow_instance(self.db, int(m.group(1)))
+            return 200, get_workflow_instance(self.db, int(m.group(1)))
 
         m = re.fullmatch(r"/v1/workflows/definitions/([^/]+)", path)
         if method == "DELETE" and m:
             payload = delete_workflow_definition(
-                self.dsn,
+                self.db,
                 m.group(1),
                 bool(body.get("delete_instances", True)),
             )
@@ -272,59 +281,65 @@ def make_handler(gateway: RestGateway) -> type[BaseHTTPRequestHandler]:
             self.end_headers()
             self.wfile.write(body)
 
-        def do_GET(self) -> None:
+        def _handle(self, method: str) -> None:
             try:
                 parsed = urlparse(self.path)
                 query = parse_qs(parsed.query)
-                status, payload = gateway.dispatch("GET", parsed.path, {}, query)
+                body: dict[str, Any] = {}
+                if method in ("POST", "DELETE"):
+                    body = self._read_json()
+                if method == "DELETE" and "deleteInstances" in query:
+                    body["delete_instances"] = (
+                        query["deleteInstances"][0].lower() == "true"
+                    )
+                status, payload = gateway.dispatch(method, parsed.path, body, query)
                 self._send(status, payload)
+            except WorkerAuthError as exc:
+                self._send(401, {"error": str(exc)})
             except KeyError as exc:
-                self._send(404, {"error": str(exc)})
+                code = 404 if method == "GET" else 400
+                self._send(code, {"error": str(exc) if method == "GET" else f"missing field: {exc}"})
             except ValueError as exc:
                 self._send(400, {"error": str(exc)})
             except Exception as exc:
                 self._send(500, {"error": str(exc)})
 
+        def do_GET(self) -> None:
+            self._handle("GET")
+
         def do_POST(self) -> None:
-            try:
-                body = self._read_json()
-                status, payload = gateway.dispatch("POST", self.path.split("?", 1)[0], body)
-                self._send(status, payload)
-            except KeyError as exc:
-                self._send(400, {"error": f"missing field: {exc}"})
-            except Exception as exc:
-                self._send(500, {"error": str(exc)})
+            self._handle("POST")
 
         def do_DELETE(self) -> None:
-            try:
-                parsed = urlparse(self.path)
-                delete_instances = True
-                if "deleteInstances" in parse_qs(parsed.query):
-                    delete_instances = parse_qs(parsed.query)["deleteInstances"][0].lower() == "true"
-                status, payload = gateway.dispatch(
-                    "DELETE", parsed.path, {"delete_instances": delete_instances}
-                )
-                self._send(status, payload)
-            except Exception as exc:
-                self._send(500, {"error": str(exc)})
+            self._handle("DELETE")
 
     return Handler
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="MethylPipeline workflow REST gateway (PostgreSQL)")
-    parser.add_argument("--host", default=os.environ.get("REST_HOST", "0.0.0.0"))
-    parser.add_argument("--port", type=int, default=int(os.environ.get("REST_PORT", "8080")))
-    parser.add_argument("--dsn", default=os.environ.get("METHYL_REST_PG_DSN", pg_dsn()))
+    parser = argparse.ArgumentParser(description="MethylPipeline workflow REST gateway")
+    parser.add_argument("--host", default=os.environ.get("WF_GATEWAY_HOST", os.environ.get("REST_HOST", "0.0.0.0")))
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("WF_GATEWAY_PORT", os.environ.get("REST_PORT", "8080"))),
+    )
     args = parser.parse_args(argv)
 
-    gateway = RestGateway(args.dsn)
+    config = resolve_connection_config()
+    db = open_gateway_db(config)
+    gateway = RestGateway(db)
     server = ThreadingHTTPServer((args.host, args.port), make_handler(gateway))
-    print(f"REST gateway on http://{args.host}:{args.port}/v1 (PostgreSQL)", flush=True)
+    print(
+        f"REST gateway on http://{args.host}:{args.port}/v1 (backend={gateway.backend})",
+        flush=True,
+    )
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("Stopped.", flush=True)
+    finally:
+        db.close()
     return 0
 
 

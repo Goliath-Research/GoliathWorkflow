@@ -27,7 +27,7 @@ def _ensure_import_paths() -> None:
 
 
 def start_sample_prep(
-    dsn: str,
+    db: Any,
     body: Dict[str, Any],
     *,
     create_workflow_definition,
@@ -56,12 +56,12 @@ def start_sample_prep(
         version_body["program_path"] = program_path
 
     version_id = _resolve_workflow_version_id(
-        dsn,
+        db,
         version_body,
         create_workflow_definition=create_workflow_definition,
     )
-    instance_id = create_workflow_instance(dsn, version_id, context)
-    start_workflow_instance(dsn, instance_id)
+    instance_id = create_workflow_instance(db, version_id, context)
+    start_workflow_instance(db, instance_id)
     return {
         "instance_id": instance_id,
         "workflow_version_id": version_id,

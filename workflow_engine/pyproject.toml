@@ -1,0 +1,25 @@
+[project]
+name = "methyl-gateway"
+version = "1.0.0"
+description = "MethylPipeline workflow REST gateway (Azure SQL and PostgreSQL)"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+  "psycopg[binary,pool]>=3.1",
+  "pyodbc>=5.0",
+  "pydantic>=2.6.0,<3.0.0",
+]
+
+[project.scripts]
+methyl-gateway = "rest.gateway:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rest*"]
+
+[tool.setuptools.package-dir]
+"" = "."

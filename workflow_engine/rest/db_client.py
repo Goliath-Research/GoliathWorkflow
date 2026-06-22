@@ -1,13 +1,15 @@
-"""PostgreSQL-backed DB client for the workflow REST gateway (parity / CI)."""
+"""Workflow REST gateway database facade (backend-agnostic)."""
 
 from __future__ import annotations
 
-import json
 import os
-import subprocess
-from typing import Any, Optional
+from typing import Any, Optional, Union
 
+from .connection import resolve_connection_config
+from .db import open_gateway_db
+from .db.base import GatewayDb, WorkerAuthError
 
+# Backward-compatible alias for parity scripts that build a PostgreSQL URL.
 def pg_dsn() -> str:
     host = os.environ.get("POSTGRES_HOST", "localhost")
     port = os.environ.get("POSTGRES_PORT", "5432")
@@ -17,250 +19,150 @@ def pg_dsn() -> str:
     return f"postgresql://{user}:{password}@{host}:{port}/{db}"
 
 
-def _sql_literal(value: Any) -> str:
-    if value is None:
-        return "NULL"
-    if isinstance(value, bool):
-        return "true" if value else "false"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, (dict, list)):
-        escaped = json.dumps(value).replace("'", "''")
-        return f"'{escaped}'::jsonb"
-    escaped = str(value).replace("'", "''")
-    return f"'{escaped}'"
+def open_db_from_dsn(dsn: str) -> GatewayDb:
+    """Open a PostgreSQL GatewayDb from a libpq-style connection URL."""
+    from .connection import DatabaseBackend, GatewayConnectionConfig
+    from .db.postgres import PostgresGatewayDb
+
+    return PostgresGatewayDb(dsn, schema_name=resolve_connection_config().schema_name)
 
 
-def query_json(dsn: str, sql: str) -> Any:
-    wrapped = f"SELECT coalesce(json_agg(row_to_json(t)), '[]'::json) FROM ({sql}) t;"
-    proc = subprocess.run(
-        ["psql", dsn, "-t", "-A", "-c", wrapped],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    raw = proc.stdout.strip()
-    if not raw:
-        return []
-    return json.loads(raw)
+def _resolve_db(db_or_dsn: Union[GatewayDb, str]) -> GatewayDb:
+    if isinstance(db_or_dsn, str):
+        return open_db_from_dsn(db_or_dsn)
+    return db_or_dsn
 
 
-def query_scalar(dsn: str, sql: str) -> Optional[str]:
-    proc = subprocess.run(
-        ["psql", dsn, "-t", "-A", "-c", sql],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    out = proc.stdout.strip()
-    return out if out else None
-
-
-def exec_sql(dsn: str, sql: str) -> None:
-    subprocess.run(
-        ["psql", dsn, "-v", "ON_ERROR_STOP=1", "-c", sql],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-
-
-def worker_authenticate(dsn: str, worker_id: int, worker_token: str) -> None:
-    exec_sql(
-        dsn,
-        f"CALL wf.wf_worker_authenticate({worker_id}, {_sql_literal(worker_token)});",
-    )
+def worker_authenticate(db_or_dsn: Union[GatewayDb, str], worker_id: int, worker_token: str) -> None:
+    _resolve_db(db_or_dsn).worker_authenticate(worker_id, worker_token)
 
 
 def worker_request_task(
-    dsn: str,
+    db_or_dsn: Union[GatewayDb, str],
     worker_id: int,
     worker_token: str,
     capability: Optional[str],
     max_lease_seconds: int,
 ) -> dict[str, Any]:
-    cap = _sql_literal(capability) if capability else "NULL"
-    rows = query_json(
-        dsn,
-        f"SELECT * FROM wf.sp_worker_request_task("
-        f"{worker_id}, {_sql_literal(worker_token)}, {cap}, {max_lease_seconds})",
+    return _resolve_db(db_or_dsn).worker_request_task(
+        worker_id, worker_token, capability, max_lease_seconds
     )
-    if not rows:
-        return {"has_task": False}
-    row = rows[0]
-    return {
-        "has_task": True,
-        "node_execution_id": row["node_execution_id"],
-        "workflow_instance_id": row["workflow_instance_id"],
-        "node_key": row["node_key"],
-        "action_name": row["action_name"],
-        "capability": row["capability"],
-        "attempt_no": row["attempt_no"],
-        "input_json": row.get("input_json") or {},
-        "iteration_no": row["iteration_no"],
-    }
 
 
 def worker_submit_result(
-    dsn: str,
+    db_or_dsn: Union[GatewayDb, str],
     node_execution_id: int,
     worker_id: int,
     worker_token: str,
     result_code: int,
     output_json: Optional[dict[str, Any]],
 ) -> dict[str, Any]:
-    out = _sql_literal(output_json) if output_json is not None else "NULL"
-    rows = query_json(
-        dsn,
-        f"SELECT * FROM wf.sp_worker_submit_result("
-        f"{node_execution_id}, {worker_id}, {_sql_literal(worker_token)}, "
-        f"{result_code}, {out})",
+    return _resolve_db(db_or_dsn).worker_submit_result(
+        node_execution_id, worker_id, worker_token, result_code, output_json
     )
-    return rows[0] if rows else {"accepted": False}
 
 
 def worker_heartbeat(
-    dsn: str,
+    db_or_dsn: Union[GatewayDb, str],
     node_execution_id: int,
     worker_id: int,
     worker_token: str,
     extend_seconds: int,
 ) -> dict[str, int]:
-    rows = query_json(
-        dsn,
-        f"SELECT * FROM wf.sp_worker_heartbeat("
-        f"{node_execution_id}, {worker_id}, {_sql_literal(worker_token)}, {extend_seconds})",
+    return _resolve_db(db_or_dsn).worker_heartbeat(
+        node_execution_id, worker_id, worker_token, extend_seconds
     )
-    return {"rows_updated": int(rows[0]["rows_updated"]) if rows else 0}
 
 
 def worker_fail_task(
-    dsn: str,
+    db_or_dsn: Union[GatewayDb, str],
     node_execution_id: int,
     worker_id: int,
     worker_token: str,
     error_code: int,
     error_message: Optional[str],
 ) -> None:
-    msg = _sql_literal(error_message) if error_message else "NULL"
-    exec_sql(
-        dsn,
-        f"CALL wf.sp_worker_fail_task("
-        f"{node_execution_id}, {worker_id}, {_sql_literal(worker_token)}, "
-        f"{error_code}, {msg});",
+    _resolve_db(db_or_dsn).worker_fail_task(
+        node_execution_id, worker_id, worker_token, error_code, error_message
     )
 
 
 def create_workflow_instance(
-    dsn: str, workflow_version_id: int, context_json: Optional[dict[str, Any]]
+    db_or_dsn: Union[GatewayDb, str],
+    workflow_version_id: int,
+    context_json: Optional[dict[str, Any]],
 ) -> int:
-    ctx = _sql_literal(context_json or {})
-    row_id = query_scalar(
-        dsn,
-        f"SELECT id FROM wf.wf_repo_create_workflow_instance({workflow_version_id}, {ctx});",
-    )
-    return int(row_id)
+    return _resolve_db(db_or_dsn).create_workflow_instance(workflow_version_id, context_json)
 
 
-def start_workflow_instance(dsn: str, instance_id: int) -> None:
-    exec_sql(dsn, f"CALL wf.sp_start_workflow_instance({instance_id});")
+def start_workflow_instance(db_or_dsn: Union[GatewayDb, str], instance_id: int) -> None:
+    _resolve_db(db_or_dsn).start_workflow_instance(instance_id)
 
 
-def get_workflow_instance(dsn: str, instance_id: int) -> dict[str, Any]:
-    rows = query_json(
-        dsn,
-        f"SELECT id, workflow_version_id, status FROM wf.workflow_instance WHERE id = {instance_id}",
-    )
-    if not rows:
-        raise KeyError(f"instance {instance_id} not found")
-    return rows[0]
+def get_workflow_instance(db_or_dsn: Union[GatewayDb, str], instance_id: int) -> dict[str, Any]:
+    return _resolve_db(db_or_dsn).get_workflow_instance(instance_id)
 
 
-def delete_workflow_definition(dsn: str, name: str, delete_instances: bool) -> dict[str, int]:
-    rows = query_json(
-        dsn,
-        f"SELECT * FROM wf.sp_delete_workflow_def(NULL, {_sql_literal(name)}, {delete_instances});",
-    )
-    row = rows[0] if rows else {"deleted_instance_count": 0, "deleted_version_count": 0}
-    return {
-        "deleted_instance_count": int(row["deleted_instance_count"]),
-        "deleted_version_count": int(row["deleted_version_count"]),
-    }
+def delete_workflow_definition(
+    db_or_dsn: Union[GatewayDb, str],
+    name: str,
+    delete_instances: bool,
+) -> dict[str, int]:
+    return _resolve_db(db_or_dsn).delete_workflow_definition(name, delete_instances)
 
 
 def apply_validation_plan(
-    dsn: str,
+    db_or_dsn: Union[GatewayDb, str],
     workflow_instance_id: int,
     context_json: dict[str, Any],
     *,
     persist_extension: bool = True,
 ) -> None:
-    """Merge ValidationPipeline planner output into instance context (wf.wf_apply_validation_plan)."""
-    exec_sql(
-        dsn,
-        "CALL wf.wf_apply_validation_plan("
-        f"{workflow_instance_id}, {_sql_literal(context_json)}, {persist_extension});",
+    _resolve_db(db_or_dsn).apply_validation_plan(
+        workflow_instance_id, context_json, persist_extension=persist_extension
     )
 
 
-def list_workflow_actions(dsn: str) -> list[dict[str, Any]]:
-    rows = query_json(dsn, "SELECT * FROM wf.wf_repo_list_actions()")
-    return [
-        {
-            "action_name": row["action_name"],
-            "capability": row.get("capability"),
-            "has_input_schema": bool(row.get("has_input_schema")),
-            "has_output_schema": bool(row.get("has_output_schema")),
-        }
-        for row in rows
-    ]
+def list_workflow_actions(db_or_dsn: Union[GatewayDb, str]) -> list[dict[str, Any]]:
+    return _resolve_db(db_or_dsn).list_workflow_actions()
 
 
-def get_action_schema(dsn: str, action_name: str, direction: str) -> dict[str, Any]:
-    if direction not in ("input", "output"):
-        raise ValueError("direction must be 'input' or 'output'")
-    rows = query_json(
-        dsn,
-        "SELECT * FROM wf.wf_repo_get_action_schema("
-        f"{_sql_literal(action_name)}, {_sql_literal(direction)})",
-    )
-    if not rows:
-        raise KeyError(f"schema not found for action={action_name!r} direction={direction!r}")
-    row = rows[0]
-    return {
-        "action_name": row["action_name"],
-        "direction": row["direction"],
-        "schema_id": row.get("schema_id"),
-        "schema_json": row.get("schema_json") or {},
-    }
+def get_action_schema(db_or_dsn: Union[GatewayDb, str], action_name: str, direction: str) -> dict[str, Any]:
+    return _resolve_db(db_or_dsn).get_action_schema(action_name, direction)
 
 
 def upsert_workflow_action(
-    dsn: str,
+    db_or_dsn: Union[GatewayDb, str],
     action_name: str,
     capability: Optional[str],
     payload_schema_ref: Optional[str] = None,
 ) -> None:
-    cap = _sql_literal(capability) if capability else "NULL"
-    ref = _sql_literal(payload_schema_ref) if payload_schema_ref else "NULL"
-    exec_sql(
-        dsn,
-        "CALL wf.wf_repo_upsert_workflow_action("
-        f"{_sql_literal(action_name)}, {cap}, {ref});",
-    )
+    _resolve_db(db_or_dsn).upsert_workflow_action(action_name, capability, payload_schema_ref)
 
 
-def create_workflow_definition(dsn: str, spec: dict[str, Any]) -> dict[str, Any]:
-    raw = query_scalar(
-        dsn,
-        f"SELECT wf.wf_repo_create_workflow_graph({_sql_literal(spec)})::text",
-    )
-    if not raw:
-        raise RuntimeError("wf_repo_create_workflow_graph returned no result")
-    payload = json.loads(raw)
-    return {
-        "workflow_def_id": int(payload["workflow_def_id"]),
-        "workflow_version_id": int(payload["workflow_version_id"]),
-        "root_node_id": int(payload["root_node_id"]),
-        "name": payload.get("name"),
-    }
+def create_workflow_definition(db_or_dsn: Union[GatewayDb, str], spec: dict[str, Any]) -> dict[str, Any]:
+    return _resolve_db(db_or_dsn).create_workflow_definition(spec)
+
+
+__all__ = [
+    "GatewayDb",
+    "WorkerAuthError",
+    "apply_validation_plan",
+    "create_workflow_definition",
+    "create_workflow_instance",
+    "delete_workflow_definition",
+    "get_action_schema",
+    "get_workflow_instance",
+    "list_workflow_actions",
+    "open_db_from_dsn",
+    "open_gateway_db",
+    "pg_dsn",
+    "resolve_connection_config",
+    "start_workflow_instance",
+    "upsert_workflow_action",
+    "worker_authenticate",
+    "worker_fail_task",
+    "worker_heartbeat",
+    "worker_request_task",
+    "worker_submit_result",
+]

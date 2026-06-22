@@ -1,19 +1,14 @@
 [Unit]
-Description=MethylPipeline Python REST workflow gateway
+Description=MethylPipeline workflow REST gateway (Python)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 WorkingDirectory=/work/epimethyl/repos/MethylPipeline
-EnvironmentFile=-/work/epimethyl/env/worker.env
+EnvironmentFile=-/work/epimethyl/env/gateway.env
 Environment=PATH=/work/epimethyl/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-Environment=POSTGRES_HOST=epimethyl.postgres.database.azure.com
-Environment=POSTGRES_PORT=5432
-Environment=POSTGRES_DB=postgres
-Environment=POSTGRES_USER=dba
-# Set POSTGRES_PASSWORD in an override file or EnvironmentFile (not committed).
-ExecStart=/work/epimethyl/venv/bin/python workflow_engine/rest/gateway.py --host 0.0.0.0 --port 8080
+ExecStart=/work/epimethyl/venv/bin/methyl-gateway --host 0.0.0.0 --port 8080
 Restart=on-failure
 RestartSec=5
 

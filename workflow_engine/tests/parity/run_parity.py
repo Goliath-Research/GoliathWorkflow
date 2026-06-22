@@ -239,7 +239,12 @@ def test_scope_resolver_postgres(dsn: str) -> None:
     assert "hello-scope" in input_json, f"expected resolved greeting in input_json: {input_json}"
 
 
-def test_rest_gateway_postgres(dsn: str) -> None:
+def _run_rest_gateway_smoke(
+    *,
+    env_overrides: dict[str, str],
+    seed_fn,
+    port: int = 18080,
+) -> None:
     import json
     import subprocess
     import time
@@ -247,31 +252,35 @@ def test_rest_gateway_postgres(dsn: str) -> None:
     import urllib.request
     from pathlib import Path
 
-    version_id, worker_id, token = seed_minimal_workflow(dsn)
+    dsn = env_overrides.get("METHYLPIPELINE_DB") or _pg_dsn()
+    version_id, worker_id, token = seed_fn(dsn)
     gateway = Path(__file__).resolve().parents[2] / "rest" / "gateway.py"
     env = os.environ.copy()
-    env["METHYL_REST_PG_DSN"] = dsn
+    env.update(env_overrides)
     proc = subprocess.Popen(
-        [sys.executable, str(gateway), "--host", "127.0.0.1", "--port", "18080"],
+        [sys.executable, str(gateway), "--host", "127.0.0.1", "--port", str(port)],
         env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        cwd=str(gateway.parent.parent),
     )
+    base = f"http://127.0.0.1:{port}/v1"
     try:
         for _ in range(50):
             try:
-                with urllib.request.urlopen("http://127.0.0.1:18080/v1/workflows/instances/1", timeout=1):
-                    pass
-            except urllib.error.HTTPError:
+                with urllib.request.urlopen(f"{base}/health", timeout=1) as resp:
+                    health = json.loads(resp.read().decode())
+                    assert health.get("status") == "ok", health
                 break
             except Exception:
                 time.sleep(0.2)
         else:
-            raise RuntimeError("REST gateway did not start")
+            stderr = proc.stderr.read().decode() if proc.stderr else ""
+            raise RuntimeError(f"REST gateway did not start: {stderr}")
 
         def post(path: str, payload: dict) -> dict:
             req = urllib.request.Request(
-                f"http://127.0.0.1:18080/v1{path}",
+                f"{base}{path}",
                 data=json.dumps(payload).encode(),
                 headers={"Content-Type": "application/json"},
                 method="POST",
@@ -306,6 +315,37 @@ def test_rest_gateway_postgres(dsn: str) -> None:
     finally:
         proc.terminate()
         proc.wait(timeout=5)
+
+
+def test_rest_gateway_postgres(dsn: str) -> None:
+    _run_rest_gateway_smoke(
+        env_overrides={
+            "BACKEND_DB": "postgres",
+            "METHYLPIPELINE_DB": dsn,
+        },
+        seed_fn=seed_minimal_workflow,
+    )
+
+
+def test_rest_gateway_mssql_optional() -> None:
+    conn = os.environ.get("METHYL_TEST_MSSQL_CONN") or os.environ.get("METHYLPIPELINE_DB")
+    if not conn or os.environ.get("BACKEND_DB", "mssql") not in ("mssql", ""):
+        print("Skipping MSSQL REST gateway smoke (set METHYL_TEST_MSSQL_CONN)", file=sys.stderr)
+        return
+    try:
+        import pyodbc  # noqa: F401
+    except ImportError:
+        print("Skipping MSSQL REST gateway smoke (pyodbc not installed)", file=sys.stderr)
+        return
+
+    def _seed_mssql(dsn: str) -> tuple[int, int, str]:
+        raise NotImplementedError(
+            "MSSQL gateway smoke requires a pre-seeded test database; "
+            "deploy wf schema and set METHYL_TEST_MSSQL_CONN with seed data."
+        )
+
+    _ = _seed_mssql
+    print("MSSQL REST gateway smoke: skipped (manual seed not configured)", file=sys.stderr)
 
 
 def main() -> int:
@@ -351,6 +391,7 @@ def main() -> int:
     test_scope_resolver_postgres(dsn)
     print("Running REST gateway smoke test...")
     test_rest_gateway_postgres(dsn)
+    test_rest_gateway_mssql_optional()
 
     print("Validating contract lockstep...")
     proc = subprocess.run([sys.executable, str(CONTRACT_SCRIPT)], capture_output=True, text=True)

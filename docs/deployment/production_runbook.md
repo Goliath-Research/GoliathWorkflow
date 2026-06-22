@@ -6,10 +6,11 @@ End-to-end operator checklist for real FASTQ → HDF5 → validation on `/work/e
 
 - [ ] Shared storage mounted at `/work/epimethyl` on all worker nodes
 - [ ] `bash scripts/verify_e2e_node.sh` passes on GPU workers
-- [ ] Azure PostgreSQL schema deployed (`workflow_engine/sql_pg/deploy_azure.sh`)
+- [ ] Workflow REST gateway running on dedicated Linux VM (`methyl-gateway` systemd unit; see `deploy/env/gateway.*.env.example`)
+- [ ] Database schema deployed (Azure SQL phase 1 or Azure PostgreSQL phase 2)
 - [ ] Action catalog seeded (`seed_action_catalog.py`)
 - [ ] Workflow definitions deployed (`deploy_workflow_definitions.sh`)
-- [ ] Workers registered and systemd units running
+- [ ] Workers registered and systemd units running (`WORKER_API_BASE` → gateway VM)
 - [ ] Reference FASTA and project JSON on shared storage
 - [ ] Portal or API client pointed at `WORKER_API_BASE`
 
