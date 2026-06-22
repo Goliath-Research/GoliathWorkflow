@@ -6,7 +6,9 @@
   After deploying updated workers/packages, also run:
     methyl-export-action-catalog
     python workflow_engine/sql/seed_action_catalog.py --regenerate-catalog
-  (PostgreSQL parity) OR execute the MERGE below on Azure SQL.
+  (PostgreSQL full catalog) OR:
+    psql ... -f workflow_engine/sql_pg/wf_split_detector_actions_seed.sql
+  (PostgreSQL four-action seed) OR execute the MERGE below on Azure SQL.
 */
 
 SET ANSI_NULLS ON;

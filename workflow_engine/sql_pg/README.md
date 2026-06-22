@@ -29,6 +29,14 @@ methyl-export-action-catalog
 python workflow_engine/sql/seed_action_catalog.py
 ```
 
+Split-detector actions only (lightweight; does not seed task I/O schemas):
+
+```bash
+psql "$DSN" -f workflow_engine/sql_pg/wf_split_detector_actions_seed.sql
+```
+
+Azure SQL equivalent: [`../sql/wf_split_detector_actions_seed.sql`](../sql/wf_split_detector_actions_seed.sql).
+
 Legacy schema-only seed (requires actions already in DB):
 
 ```bash
