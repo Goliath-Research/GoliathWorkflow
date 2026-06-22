@@ -17,14 +17,26 @@ GENE_SELECT_ARGV_MAP: Dict[str, str] = {
 }
 
 
+def default_run_dir_for_project(project: str) -> str:
+    """
+    Infer MC run directory from a project path without touching the filesystem.
+
+    Project configs are files (e.g. ``.../configs/project.json``); iteration artifacts
+    live alongside them in the parent directory or an explicit ``runDir``.
+    """
+    project_path = Path(str(project))
+    if project_path.suffix:
+        return str(project_path.parent)
+    return str(project_path)
+
+
 class GeneSelectCliAction(CliAction):
     def build_argv(self, input_json: Dict[str, Any]) -> List[str]:
         payload: Dict[str, Any] = dict(input_json)
         biomarker = payload.pop("biomarkerFilter", None)
         project = payload.get("project") or payload.get("projectPath")
         if project and not payload.get("runDir"):
-            project_path = Path(str(project))
-            payload["runDir"] = str(project_path.parent if project_path.is_file() else project_path)
+            payload["runDir"] = default_run_dir_for_project(str(project))
         cmd = super().build_argv(payload)
         if biomarker:
             cmd.append("--biomarker-filter")
