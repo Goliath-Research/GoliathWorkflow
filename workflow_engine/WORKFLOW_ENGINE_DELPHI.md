@@ -121,7 +121,7 @@ netsh http add urlacl url=http://+:8080/ user=DOMAIN\WfGatewayAccount
 
 Console mode binds `localhost`, which needs no reservation.
 
-Build prerequisite: DMVC ≥ 3.5 (`delphimvcframework/sources`) on the `WfEngineSrv` project search path. The legacy `/run` poll mode and the raw Indy host (`WfEngine.RestHttpServer`) are removed; progression is driven by worker submit and SQL procs.
+Build prerequisite: DMVC ≥ 3.5 (`delphimvcframework/sources`) on the `WfEngineSrv` project search path. Build **Win64 (x64) only** — the gateway uses Windows HTTP.sys and must not be compiled for Win32 or non-Windows targets. In the IDE, select **Win64** before building; from MSBuild: `msbuild WfEngineSrv.dproj /p:Platform=Win64`. The legacy `/run` poll mode and the raw Indy host (`WfEngine.RestHttpServer`) are removed; progression is driven by worker submit and SQL procs.
 
 ## Workflow tree example
 

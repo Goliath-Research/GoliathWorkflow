@@ -21,31 +21,31 @@
         </BorlandProject>
     </ProjectExtensions>
     <Target Name="WfEnginePkg">
-        <MSBuild Projects="WfEnginePkg.dproj"/>
+        <MSBuild Projects="WfEnginePkg.dproj" Properties="Platform=Win64"/>
     </Target>
     <Target Name="WfEnginePkg:Clean">
-        <MSBuild Projects="WfEnginePkg.dproj" Targets="Clean"/>
+        <MSBuild Projects="WfEnginePkg.dproj" Targets="Clean" Properties="Platform=Win64"/>
     </Target>
     <Target Name="WfEnginePkg:Make">
-        <MSBuild Projects="WfEnginePkg.dproj" Targets="Make"/>
+        <MSBuild Projects="WfEnginePkg.dproj" Targets="Make" Properties="Platform=Win64"/>
     </Target>
     <Target Name="WfEngineSrv">
-        <MSBuild Projects="WfEngineSrv.dproj"/>
+        <MSBuild Projects="WfEngineSrv.dproj" Properties="Platform=Win64"/>
     </Target>
     <Target Name="WfEngineSrv:Clean">
-        <MSBuild Projects="WfEngineSrv.dproj" Targets="Clean"/>
+        <MSBuild Projects="WfEngineSrv.dproj" Targets="Clean" Properties="Platform=Win64"/>
     </Target>
     <Target Name="WfEngineSrv:Make">
-        <MSBuild Projects="WfEngineSrv.dproj" Targets="Make"/>
+        <MSBuild Projects="WfEngineSrv.dproj" Targets="Make" Properties="Platform=Win64"/>
     </Target>
     <Target Name="WfEngineTests">
-        <MSBuild Projects="WfEngineTests.dproj"/>
+        <MSBuild Projects="WfEngineTests.dproj" Properties="Platform=Win64"/>
     </Target>
     <Target Name="WfEngineTests:Clean">
-        <MSBuild Projects="WfEngineTests.dproj" Targets="Clean"/>
+        <MSBuild Projects="WfEngineTests.dproj" Targets="Clean" Properties="Platform=Win64"/>
     </Target>
     <Target Name="WfEngineTests:Make">
-        <MSBuild Projects="WfEngineTests.dproj" Targets="Make"/>
+        <MSBuild Projects="WfEngineTests.dproj" Targets="Make" Properties="Platform=Win64"/>
     </Target>
     <Target Name="Build">
         <CallTarget Targets="WfEnginePkg;WfEngineSrv;WfEngineTests"/>
