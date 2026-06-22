@@ -17,16 +17,31 @@ _MSSQL_OUTPUT_BATCH_PREFIX = "SET NOCOUNT ON;\n"
 
 
 class _OdbcPool:
-    def __init__(self, conn_str: str, *, max_size: int = 8) -> None:
+    def __init__(
+        self,
+        conn_str: str,
+        *,
+        use_managed_identity: bool = False,
+        max_size: int = 8,
+    ) -> None:
         self._conn_str = conn_str
+        self._use_managed_identity = use_managed_identity
         self._max_size = max_size
         self._pool: queue.Queue[pyodbc.Connection] = queue.Queue(maxsize=max_size)
         self._lock = threading.Lock()
         self._created = 0
 
     def _new_connection(self) -> pyodbc.Connection:
-        conn = pyodbc.connect(self._conn_str, autocommit=False)
-        return conn
+        if self._use_managed_identity:
+            from ..azure_auth import mssql_access_token_bytes
+
+            token_bytes = mssql_access_token_bytes()
+            return pyodbc.connect(
+                self._conn_str,
+                autocommit=False,
+                attrs_before={1256: token_bytes},
+            )
+        return pyodbc.connect(self._conn_str, autocommit=False)
 
     @contextmanager
     def connection(self) -> Generator[pyodbc.Connection, None, None]:
@@ -70,9 +85,18 @@ class _OdbcPool:
 class MssqlGatewayDb(GatewayDbBase):
     backend = "mssql"
 
-    def __init__(self, conn_str: str, *, schema_name: str = "wf", max_size: int = 8) -> None:
+    def __init__(
+        self,
+        conn_str: str,
+        *,
+        schema_name: str = "wf",
+        use_managed_identity: bool = False,
+        max_size: int = 8,
+    ) -> None:
         super().__init__(schema_name)
-        self._pool = _OdbcPool(conn_str, max_size=max_size)
+        self._pool = _OdbcPool(
+            conn_str, use_managed_identity=use_managed_identity, max_size=max_size
+        )
 
     def close(self) -> None:
         self._pool.close()

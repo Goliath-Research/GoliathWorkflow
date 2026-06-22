@@ -4,8 +4,8 @@ info:
   description: |
     Cross-language REST contract for workflow workers and admin operations.
     Maps 1:1 to DB objects in `workflow_engine/contract/db_objects.yaml`.
-    Production implementation: Python gateway on Linux (`methyl-gateway`, systemd).
-    Reference implementation: Delphi `WfEngineSrv` Windows service (optional).
+    Production implementation: Python gateway on Linux (`methyl-gateway`, systemd, uvicorn).
+    Frozen reference: Delphi `WfEngineSrv` Windows service (no new development).
   version: 1.0.0
 
 servers:

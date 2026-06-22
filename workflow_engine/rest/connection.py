@@ -46,7 +46,7 @@ def resolve_schema_name() -> str:
     return schema or "wf"
 
 
-def build_postgres_conninfo() -> str:
+def build_postgres_conninfo(*, use_managed_identity: bool = False) -> str:
     override = _env("METHYLPIPELINE_DB")
     if override:
         return override
@@ -55,11 +55,14 @@ def build_postgres_conninfo() -> str:
     port = _env("POSTGRES_PORT", "5432")
     db = _env("POSTGRES_DB", "methylpipeline")
     user = _env("POSTGRES_USER", "postgres")
+    if use_managed_identity:
+        # Password is supplied at connect time via Entra token.
+        return f"postgresql://{user}@{host}:{port}/{db}?sslmode=require"
     password = _env("POSTGRES_PASSWORD")
     return f"postgresql://{user}:{password}@{host}:{port}/{db}"
 
 
-def build_mssql_conninfo() -> str:
+def build_mssql_conninfo(*, use_managed_identity: bool = False) -> str:
     override = _env("METHYLPIPELINE_DB")
     if override:
         return override
@@ -77,10 +80,11 @@ def build_mssql_conninfo() -> str:
             "Encrypt=yes",
             "TrustServerCertificate=no",
         ]
-        if user:
-            parts.append(f"UID={user}")
-        if password:
-            parts.append(f"PWD={password}")
+        if not use_managed_identity:
+            if user:
+                parts.append(f"UID={user}")
+            if password:
+                parts.append(f"PWD={password}")
         return ";".join(parts)
 
     return (
@@ -96,16 +100,17 @@ def resolve_connection_config(
     connection_string: Optional[str] = None,
 ) -> GatewayConnectionConfig:
     resolved_backend = backend or get_database_backend()
+    use_mi = _env_flag("WF_USE_MANAGED_IDENTITY")
     conn = connection_string or _env("METHYLPIPELINE_DB")
     if not conn:
         conn = (
-            build_postgres_conninfo()
+            build_postgres_conninfo(use_managed_identity=use_mi)
             if resolved_backend is DatabaseBackend.POSTGRES
-            else build_mssql_conninfo()
+            else build_mssql_conninfo(use_managed_identity=use_mi)
         )
     return GatewayConnectionConfig(
         backend=resolved_backend,
         schema_name=resolve_schema_name(),
         connection_string=conn,
-        use_managed_identity=_env_flag("WF_USE_MANAGED_IDENTITY"),
+        use_managed_identity=use_mi,
     )

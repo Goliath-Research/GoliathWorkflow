@@ -93,7 +93,7 @@ Python REST worker (poll/submit): [`../workers/WORKER_PROTOCOL.md`](../workers/W
 | Implementation | Command | Backend |
 |----------------|---------|---------|
 | **Python (production)** | `methyl-gateway` via systemd on a dedicated Linux VM; dev: `python workflow_engine/rest/gateway.py` | Azure SQL (`BACKEND_DB=mssql`) or PostgreSQL (`BACKEND_DB=postgres`) via psycopg/pyodbc |
-| Delphi (reference / Windows) | `MethylWfGateway` Windows service (`WfEngineSrv /install`; `/console` for dev) | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |
+| Delphi (frozen reference / Windows) | `WfEngineSrv` / `MethylWfGateway` — manual Win64 build only; see [`DELPHI_GATEWAY_STATUS.md`](DELPHI_GATEWAY_STATUS.md) | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |
 
 PostgreSQL parity scripts (`sql_pg/05`–`07`) port runtime resolver, scope write-path, and JSON encoding from the T-SQL parity scripts. FOREACH (`wf_sql_foreach_support.sql`) remains MSSQL-only for now.
 

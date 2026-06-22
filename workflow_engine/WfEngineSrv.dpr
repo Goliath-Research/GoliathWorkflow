@@ -1,6 +1,10 @@
 program WfEngineSrv;
 
 //{
+//  FROZEN REFERENCE (2026-06): Delphi workflow REST gateway (DelphiMVCFramework).
+//  Production gateway is Python methyl-gateway on Linux (see DELPHI_GATEWAY_STATUS.md).
+//  No new routes or OpenAPI parity work is expected on this host.
+//
 //  MethylPipeline workflow REST gateway (DelphiMVCFramework, HTTP.sys backend).
 //
 //  Default mode: Windows service (MethylWfGateway). Supports the standard

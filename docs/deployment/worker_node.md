@@ -173,7 +173,7 @@ bash scripts/verify_e2e_node.sh
 1. [`workflow_engine/sql_pg/deploy_azure.sh`](../../workflow_engine/sql_pg/deploy_azure.sh)
 2. `python workflow_engine/sql/seed_action_catalog.py`
 3. `bash scripts/deploy_workflow_definitions.sh`
-4. Start gateway (Python or Delphi) — see [`workflow_engine/sql_pg/README.md`](../../workflow_engine/sql_pg/README.md)
+4. Start gateway (`methyl-gateway` systemd on Linux) — see [`deploy/systemd/methyl-gateway.service`](../../deploy/systemd/methyl-gateway.service) and [`production_runbook.md`](production_runbook.md)
 
 ## Staged lifecycle smoke
 

@@ -48,13 +48,13 @@
         <MSBuild Projects="WfEngineTests.dproj" Targets="Make" Properties="Platform=Win64"/>
     </Target>
     <Target Name="Build">
-        <CallTarget Targets="WfEnginePkg;WfEngineSrv;WfEngineTests"/>
+        <CallTarget Targets="WfEnginePkg;WfEngineTests"/>
     </Target>
     <Target Name="Clean">
         <CallTarget Targets="WfEnginePkg:Clean;WfEngineSrv:Clean;WfEngineTests:Clean"/>
     </Target>
     <Target Name="Make">
-        <CallTarget Targets="WfEnginePkg:Make;WfEngineSrv:Make;WfEngineTests:Make"/>
+        <CallTarget Targets="WfEnginePkg:Make;WfEngineTests:Make"/>
     </Target>
     <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
 </Project>

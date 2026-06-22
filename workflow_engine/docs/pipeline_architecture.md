@@ -73,7 +73,7 @@ flowchart TB
 |-------|------------|----------------|
 | Portal | uniGUI web app (`MethylConfigEditorWeb`) | Edit `project.json` against JSON Schema; start runs |
 | Database | Azure SQL or Azure PostgreSQL (`wf` schema) | Store workflow tree, instances, executions, leases |
-| Middle-tier | Delphi `WfEngine` + REST (`/v1/*`) | Stateless HTTP proxy; invokes engine stored procedures |
+| Middle-tier | Python `methyl-gateway` on Linux + REST (`/v1/*`, uvicorn) | Stateless HTTP proxy; invokes engine stored procedures (Delphi `WfEngineSrv` frozen) |
 | Workers | Python/CLI on cluster nodes | Poll tasks by capability; read/write shared paths |
 
 ---
@@ -895,9 +895,7 @@ Workers **never connect to the database directly**. They use the REST API (or an
 | `POST` | `/v1/workflows/instances` | Portal / admin |
 | `GET` | `/v1/workflows/instances/{id}` | Portal status |
 
-Implementation: [`workflow_engine/src/WfEngine.GatewayService.pas`](/home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.GatewayService.pas), exposed via DMVC resource controllers (`WfEngine.Mvc.WorkersController`, `WorkflowsController`, `ActionsController`) on HTTP.sys, hosted as Windows service **MethylWfGateway** (default port **8080**, `WF_GATEWAY_PORT`/`WF_GATEWAY_HOST`).
-
-Python gateway (PostgreSQL parity testing): [`workflow_engine/rest/gateway.py`](/home/ubuntu/MethylPipeline/workflow_engine/rest/gateway.py).
+Production implementation: Python [`workflow_engine/rest/gateway.py`](/home/ubuntu/MethylPipeline/workflow_engine/rest/gateway.py) (`methyl-gateway`, uvicorn, systemd on Linux). Frozen Delphi reference: [`WfEngine.GatewayService.pas`](/home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.GatewayService.pas) / `WfEngineSrv` (see [`DELPHI_GATEWAY_STATUS.md`](/home/ubuntu/MethylPipeline/workflow_engine/DELPHI_GATEWAY_STATUS.md)).
 
 ### Request / submit sequence
 

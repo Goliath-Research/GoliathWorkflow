@@ -13,10 +13,8 @@ import json
 import os
 import re
 import sys
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import parse_qs, urlparse
 
 if __name__ == "__main__" and __package__ is None:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -255,68 +253,11 @@ class RestGateway:
         return 404, {"error": "not found", "path": path}
 
 
-def make_handler(gateway: RestGateway) -> type[BaseHTTPRequestHandler]:
-    class Handler(BaseHTTPRequestHandler):
-        def log_message(self, fmt: str, *args: Any) -> None:
-            sys.stderr.write("%s - %s\n" % (self.address_string(), fmt % args))
-
-        def _read_json(self) -> dict[str, Any]:
-            length = int(self.headers.get("Content-Length", "0"))
-            if length == 0:
-                return {}
-            raw = self.rfile.read(length)
-            if not raw:
-                return {}
-            return json.loads(raw.decode("utf-8"))
-
-        def _send(self, status: int, payload: Any) -> None:
-            if status == 204:
-                self.send_response(204)
-                self.end_headers()
-                return
-            body = json.dumps(payload).encode("utf-8")
-            self.send_response(status)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-
-        def _handle(self, method: str) -> None:
-            try:
-                parsed = urlparse(self.path)
-                query = parse_qs(parsed.query)
-                body: dict[str, Any] = {}
-                if method in ("POST", "DELETE"):
-                    body = self._read_json()
-                if method == "DELETE" and "deleteInstances" in query:
-                    body["delete_instances"] = (
-                        query["deleteInstances"][0].lower() == "true"
-                    )
-                status, payload = gateway.dispatch(method, parsed.path, body, query)
-                self._send(status, payload)
-            except WorkerAuthError as exc:
-                self._send(401, {"error": str(exc)})
-            except KeyError as exc:
-                code = 404 if method == "GET" else 400
-                self._send(code, {"error": str(exc) if method == "GET" else f"missing field: {exc}"})
-            except ValueError as exc:
-                self._send(400, {"error": str(exc)})
-            except Exception as exc:
-                self._send(500, {"error": str(exc)})
-
-        def do_GET(self) -> None:
-            self._handle("GET")
-
-        def do_POST(self) -> None:
-            self._handle("POST")
-
-        def do_DELETE(self) -> None:
-            self._handle("DELETE")
-
-    return Handler
-
-
 def main(argv: Optional[list[str]] = None) -> int:
+    import uvicorn
+
+    from .asgi import create_app
+
     parser = argparse.ArgumentParser(description="MethylPipeline workflow REST gateway")
     parser.add_argument("--host", default=os.environ.get("WF_GATEWAY_HOST", os.environ.get("REST_HOST", "0.0.0.0")))
     parser.add_argument(
@@ -329,13 +270,13 @@ def main(argv: Optional[list[str]] = None) -> int:
     config = resolve_connection_config()
     db = open_gateway_db(config)
     gateway = RestGateway(db)
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(gateway))
+    app = create_app(gateway)
     print(
         f"REST gateway on http://{args.host}:{args.port}/v1 (backend={gateway.backend})",
         flush=True,
     )
     try:
-        server.serve_forever()
+        uvicorn.run(app, host=args.host, port=args.port, log_level="info")
     except KeyboardInterrupt:
         print("Stopped.", flush=True)
     finally:

@@ -100,3 +100,37 @@ POST /v1/studies/validation/start
 
 Platform notes: [`platform_matrix.md`](platform_matrix.md).  
 Worker env: [`worker_node.md`](worker_node.md).
+
+## Gateway VM — Azure managed identity
+
+Use managed identity on the dedicated Linux gateway VM so the process never stores SQL passwords.
+
+**Azure SQL (phase 1):**
+
+1. Enable system- or user-assigned managed identity on the gateway VM.
+2. In Azure SQL, add the MI as an Entra ID user (or use a group that includes it) with `db_datareader` / `db_datawriter` / execute on `wf` procedures as required.
+3. Set in `gateway.env`:
+   ```bash
+   BACKEND_DB=mssql
+   WF_USE_MANAGED_IDENTITY=1
+   AZURE_SQL_SERVER=<server>.database.windows.net
+   AZURE_SQL_DB=MethylPipeline
+   # AZURE_CLIENT_ID=<user-assigned MI client id>   # omit for system-assigned
+   ```
+4. Do **not** set `AZURE_SQL_USER` / `AZURE_SQL_PASSWORD` when MI is enabled.
+5. Restart: `sudo systemctl restart methyl-gateway`.
+
+**Azure Database for PostgreSQL (phase 2):**
+
+1. Create an Entra principal for the MI in PostgreSQL (Azure portal → Microsoft Entra ID admins, or `pgaadauth_create_principal`).
+2. Set `POSTGRES_USER` to that principal name and `WF_USE_MANAGED_IDENTITY=1` (see `deploy/env/gateway.postgres.env.example`).
+
+**Verify on the VM:**
+
+```bash
+curl -s http://127.0.0.1:8080/v1/health
+# IMDS (system-assigned): curl -H Metadata:true \
+#   "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://database.windows.net/"
+```
+
+Token refresh is handled inside the gateway (cached ~55 minutes). ODBC Driver 18 for SQL Server must be installed for MSSQL MI.

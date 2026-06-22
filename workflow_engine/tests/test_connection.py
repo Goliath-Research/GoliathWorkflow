@@ -85,6 +85,56 @@ class ConnectionConfigTests(unittest.TestCase):
         cfg = resolve_connection_config(backend=DatabaseBackend.POSTGRES)
         self.assertTrue(cfg.use_managed_identity)
 
+    def test_mssql_conninfo_omits_credentials_when_mi(self) -> None:
+        os.environ.pop("METHYLPIPELINE_DB", None)
+        os.environ.update(
+            {
+                "AZURE_SQL_SERVER": "myserver.database.windows.net",
+                "AZURE_SQL_DB": "MethylPipeline",
+                "AZURE_SQL_USER": "sqladmin",
+                "AZURE_SQL_PASSWORD": "pass",
+            }
+        )
+        conn = build_mssql_conninfo(use_managed_identity=True)
+        self.assertIn("DATABASE=MethylPipeline", conn)
+        self.assertNotIn("UID=", conn)
+        self.assertNotIn("PWD=", conn)
+
+    def test_postgres_conninfo_sslmode_when_mi(self) -> None:
+        os.environ.pop("METHYLPIPELINE_DB", None)
+        os.environ.update(
+            {
+                "POSTGRES_HOST": "pg.example.com",
+                "POSTGRES_PORT": "5432",
+                "POSTGRES_DB": "methyl",
+                "POSTGRES_USER": "mi-principal",
+                "POSTGRES_PASSWORD": "ignored",
+            }
+        )
+        conn = build_postgres_conninfo(use_managed_identity=True)
+        self.assertEqual(
+            conn,
+            "postgresql://mi-principal@pg.example.com:5432/methyl?sslmode=require",
+        )
+        self.assertNotIn("ignored", conn)
+
+    def test_resolve_config_builds_mi_mssql_string(self) -> None:
+        os.environ.pop("METHYLPIPELINE_DB", None)
+        os.environ.update(
+            {
+                "BACKEND_DB": "mssql",
+                "WF_USE_MANAGED_IDENTITY": "1",
+                "AZURE_SQL_SERVER": "srv.database.windows.net",
+                "AZURE_SQL_DB": "MethylPipeline",
+                "AZURE_SQL_USER": "should-not-appear",
+                "AZURE_SQL_PASSWORD": "secret",
+            }
+        )
+        cfg = resolve_connection_config()
+        self.assertTrue(cfg.use_managed_identity)
+        self.assertNotIn("UID=", cfg.connection_string)
+        self.assertNotIn("PWD=", cfg.connection_string)
+
 
 if __name__ == "__main__":
     unittest.main()

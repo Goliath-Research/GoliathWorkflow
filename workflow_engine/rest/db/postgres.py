@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import queue
+import threading
 from contextlib import contextmanager
 from typing import Any, Generator, Optional
 
@@ -10,21 +12,99 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
+from ..azure_auth import get_database_access_token
+from ..connection import DatabaseBackend
 from .base import GatewayDbBase, WorkerAuthError, parse_json_value
+
+
+class _PgPool:
+    """Thread-safe pool; refreshes Entra token on each new connection when MI is enabled."""
+
+    def __init__(
+        self,
+        conninfo: str,
+        *,
+        use_managed_identity: bool = False,
+        max_size: int = 8,
+    ) -> None:
+        self._conninfo = conninfo
+        self._use_managed_identity = use_managed_identity
+        self._max_size = max_size
+        self._pool: queue.Queue[psycopg.Connection] = queue.Queue(maxsize=max_size)
+        self._lock = threading.Lock()
+        self._created = 0
+
+    def _new_connection(self) -> psycopg.Connection:
+        if self._use_managed_identity:
+            token = get_database_access_token(DatabaseBackend.POSTGRES)
+            return psycopg.connect(self._conninfo, password=token, row_factory=dict_row)
+        return psycopg.connect(self._conninfo, row_factory=dict_row)
+
+    @contextmanager
+    def connection(self) -> Generator[psycopg.Connection, None, None]:
+        conn: Optional[psycopg.Connection] = None
+        try:
+            conn = self._pool.get_nowait()
+        except queue.Empty:
+            with self._lock:
+                if self._created < self._max_size:
+                    conn = self._new_connection()
+                    self._created += 1
+                else:
+                    conn = None
+            if conn is None:
+                conn = self._pool.get()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            try:
+                self._pool.put_nowait(conn)
+            except queue.Full:
+                conn.close()
+                with self._lock:
+                    self._created -= 1
+
+    def close(self) -> None:
+        while True:
+            try:
+                conn = self._pool.get_nowait()
+            except queue.Empty:
+                break
+            conn.close()
+        with self._lock:
+            self._created = 0
 
 
 class PostgresGatewayDb(GatewayDbBase):
     backend = "postgres"
 
-    def __init__(self, conninfo: str, *, schema_name: str = "wf", min_size: int = 1, max_size: int = 8) -> None:
+    def __init__(
+        self,
+        conninfo: str,
+        *,
+        schema_name: str = "wf",
+        use_managed_identity: bool = False,
+        min_size: int = 1,
+        max_size: int = 8,
+    ) -> None:
         super().__init__(schema_name)
-        self._pool = ConnectionPool(
-            conninfo,
-            min_size=min_size,
-            max_size=max_size,
-            kwargs={"row_factory": dict_row},
-            open=True,
-        )
+        self._use_managed_identity = use_managed_identity
+        if use_managed_identity:
+            self._pool: ConnectionPool | _PgPool = _PgPool(
+                conninfo, use_managed_identity=True, max_size=max_size
+            )
+        else:
+            self._pool = ConnectionPool(
+                conninfo,
+                min_size=min_size,
+                max_size=max_size,
+                kwargs={"row_factory": dict_row},
+                open=True,
+            )
 
     @contextmanager
     def _connection(self) -> Generator[psycopg.Connection, None, None]:
