@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import struct
 import threading
 import time
 from dataclasses import dataclass
@@ -67,9 +68,15 @@ def get_database_access_token(backend: DatabaseBackend) -> str:
 
 
 def mssql_access_token_bytes(token: Optional[str] = None) -> bytes:
-    """UTF-16-LE encoded token for pyodbc SQL_COPT_SS_ACCESS_TOKEN (1256)."""
+    """Packed access token for pyodbc SQL_COPT_SS_ACCESS_TOKEN (1256).
+
+    msodbcsql expects a 4-byte little-endian length prefix followed by UTF-16-LE
+    token bytes (ACCESSTOKEN struct). Passing raw UTF-16-LE without the prefix
+    causes authentication failures or driver crashes.
+    """
     value = token if token is not None else get_database_access_token(DatabaseBackend.MSSQL)
-    return value.encode("utf-16-le")
+    encoded = value.encode("utf-16-le")
+    return struct.pack("<I", len(encoded)) + encoded
 
 
 def clear_token_cache() -> None:

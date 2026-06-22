@@ -131,10 +131,11 @@ CREATE OR ALTER FUNCTION wf.wf_repo_try_latest_task_result_code(
     @instance_id BIGINT,
     @node_key NVARCHAR(128)
 )
-RETURNS TABLE (found BIT, result_code INT)
+RETURNS TABLE
 AS
-RETURN (
-    SELECT TOP (1) CAST(1 AS BIT), ne.result_code
+RETURN
+(
+    SELECT TOP (1) CAST(1 AS BIT) AS found, ne.result_code
     FROM wf.node_execution AS ne
     INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
     WHERE ne.workflow_instance_id = @instance_id

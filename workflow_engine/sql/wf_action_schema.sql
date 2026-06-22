@@ -2,7 +2,7 @@
   MethylPipeline wf schema - workflow action JSON Schema storage.
 
   Stores input_json / output_json JSON Schema documents per workflow_action.
-  Populated from schemas/tasks/*.schema.json via seed_action_schemas.py.
+  Populated from schemas/tasks/ JSON Schema files via seed_action_schemas.py.
 
   Prerequisites:
   - Base wf schema (workflow_action)

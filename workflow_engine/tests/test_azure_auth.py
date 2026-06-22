@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import struct
 import time
 import unittest
 from pathlib import Path
@@ -72,9 +73,11 @@ class AzureAuthTests(unittest.TestCase):
         self.assertEqual(mock_cred.get_token.call_count, 2)
 
     @patch("rest.azure_auth.get_database_access_token")
-    def test_mssql_token_utf16_le(self, mock_get: MagicMock) -> None:
+    def test_mssql_token_utf16_le_with_length_prefix(self, mock_get: MagicMock) -> None:
         mock_get.return_value = "abc"
-        self.assertEqual(mssql_access_token_bytes(), "abc".encode("utf-16-le"))
+        encoded = "abc".encode("utf-16-le")
+        expected = struct.pack("<I", len(encoded)) + encoded
+        self.assertEqual(mssql_access_token_bytes(), expected)
 
 
 if __name__ == "__main__":
