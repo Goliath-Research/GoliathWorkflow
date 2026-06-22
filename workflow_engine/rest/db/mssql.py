@@ -274,7 +274,7 @@ SELECT @deleted_instance_count AS deleted_instance_count,
     ) -> None:
         self._exec_proc(
             f"EXEC {self._qual('wf_apply_validation_plan')} "
-            "@workflow_instance_id=?, @context_json=?, @persist_extension=?",
+            "@workflow_instance_id=?, @context_json=CAST(? AS json), @persist_extension=?",
             (workflow_instance_id, json.dumps(context_json), 1 if persist_extension else 0),
         )
 
@@ -322,7 +322,7 @@ SELECT @deleted_instance_count AS deleted_instance_count,
 
     def create_workflow_definition(self, spec: dict[str, Any]) -> dict[str, Any]:
         row = self._fetch_one(
-            f"EXEC {self._qual('wf_repo_create_workflow_graph')} @spec=?",
+            f"EXEC {self._qual('wf_repo_create_workflow_graph')} @spec=CAST(? AS json)",
             (json.dumps(spec),),
         )
         if not row:
