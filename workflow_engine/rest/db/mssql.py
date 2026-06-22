@@ -12,6 +12,9 @@ import pyodbc
 
 from .base import GatewayDbBase, WorkerAuthError, row_to_dict
 
+# Required for pyodbc anonymous batches that read OUTPUT params via a trailing SELECT.
+_MSSQL_OUTPUT_BATCH_PREFIX = "SET NOCOUNT ON;\n"
+
 
 class _OdbcPool:
     def __init__(self, conn_str: str, *, max_size: int = 8) -> None:
@@ -96,10 +99,14 @@ class MssqlGatewayDb(GatewayDbBase):
         try:
             with self._cursor() as cur:
                 cur.execute(sql, params)
-                if cur.description is None:
-                    return []
-                columns = [col[0] for col in cur.description]
-                return [row_to_dict(columns, row) for row in cur.fetchall()]
+                rows: list[dict[str, Any]] = []
+                while True:
+                    if cur.description is not None:
+                        columns = [col[0] for col in cur.description]
+                        rows = [row_to_dict(columns, row) for row in cur.fetchall()]
+                    if not cur.nextset():
+                        break
+                return rows
         except pyodbc.Error as exc:
             if self._is_auth_error(exc):
                 raise WorkerAuthError(str(exc)) from exc
@@ -138,7 +145,7 @@ class MssqlGatewayDb(GatewayDbBase):
         output_json: Optional[dict[str, Any]],
     ) -> dict[str, Any]:
         out_text = json.dumps(output_json) if output_json is not None else None
-        sql = f"""
+        sql = f"""{_MSSQL_OUTPUT_BATCH_PREFIX}
 DECLARE @accepted bit, @instance_status varchar(32), @next_ready_count int;
 EXEC {self._qual('sp_worker_submit_result')}
     @node_execution_id=?,
@@ -215,7 +222,7 @@ SELECT @accepted AS accepted, @instance_status AS instance_status, @next_ready_c
         return row
 
     def delete_workflow_definition(self, name: str, delete_instances: bool) -> dict[str, int]:
-        sql = f"""
+        sql = f"""{_MSSQL_OUTPUT_BATCH_PREFIX}
 DECLARE @deleted_instance_count int, @deleted_version_count int;
 EXEC {self._qual('sp_delete_workflow_def')}
     @workflow_def_id=?,
