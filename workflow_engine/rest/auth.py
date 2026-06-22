@@ -92,6 +92,20 @@ def _header_value(headers: Sequence[tuple[bytes, bytes]], name: str) -> Optional
     return None
 
 
+def _is_trusted_proxy(direct_ip: str, trusted_proxy_cidrs: Sequence[str]) -> bool:
+    try:
+        direct_addr = ipaddress.ip_address(direct_ip)
+    except ValueError:
+        return False
+    for cidr in trusted_proxy_cidrs:
+        try:
+            if direct_addr in ipaddress.ip_network(cidr, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 def extract_client_ip(
     scope: Mapping[str, Any],
     headers: Sequence[tuple[bytes, bytes]],
@@ -99,26 +113,32 @@ def extract_client_ip(
 ) -> str:
     remote = scope.get("client")
     direct_ip = remote[0] if remote else "0.0.0.0"
-    forwarded = _header_value(headers, "x-forwarded-for")
-    if not forwarded:
+    if not _is_trusted_proxy(direct_ip, trusted_proxy_cidrs):
         return direct_ip
-    proxy_networks = []
-    for cidr in trusted_proxy_cidrs:
+
+    # nginx sets X-Real-IP from $remote_addr on the upstream request (not client-controlled).
+    real_ip = _header_value(headers, "x-real-ip")
+    if real_ip:
+        candidate = real_ip.strip()
         try:
-            proxy_networks.append(ipaddress.ip_network(cidr, strict=False))
+            ipaddress.ip_address(candidate)
+            return candidate
         except ValueError:
-            continue
-    try:
-        direct_addr = ipaddress.ip_address(direct_ip)
-    except ValueError:
-        return direct_ip
-    if not any(direct_addr in net for net in proxy_networks):
-        return direct_ip
-    # First untrusted hop in X-Forwarded-For chain (rightmost after proxy).
-    parts = [p.strip() for p in forwarded.split(",") if p.strip()]
-    if not parts:
-        return direct_ip
-    return parts[0]
+            pass
+
+    forwarded = _header_value(headers, "x-forwarded-for")
+    if forwarded:
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            # $proxy_add_x_forwarded_for appends the connecting client as the rightmost entry.
+            candidate = parts[-1]
+            try:
+                ipaddress.ip_address(candidate)
+                return candidate
+            except ValueError:
+                pass
+
+    return direct_ip
 
 
 def _bearer_token(headers: Sequence[tuple[bytes, bytes]]) -> Optional[str]:

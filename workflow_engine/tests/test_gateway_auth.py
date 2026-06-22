@@ -49,11 +49,30 @@ class RouteClassificationTests(unittest.TestCase):
 
 
 class ClientIpTests(unittest.TestCase):
-    def test_trusted_proxy_uses_forwarded_for(self) -> None:
+    def test_trusted_proxy_prefers_x_real_ip(self) -> None:
         scope = {"client": ("127.0.0.1", 0)}
-        headers = [(b"x-forwarded-for", b"10.1.2.3, 127.0.0.1")]
+        headers = [
+            (b"x-forwarded-for", b"10.1.2.3, 203.0.113.9"),
+            (b"x-real-ip", b"203.0.113.9"),
+        ]
         ip = extract_client_ip(scope, headers, ("127.0.0.1/32",))
-        self.assertEqual(ip, "10.1.2.3")
+        self.assertEqual(ip, "203.0.113.9")
+
+    def test_trusted_proxy_uses_rightmost_forwarded_for_without_real_ip(self) -> None:
+        scope = {"client": ("127.0.0.1", 0)}
+        headers = [(b"x-forwarded-for", b"10.1.2.3, 203.0.113.9")]
+        ip = extract_client_ip(scope, headers, ("127.0.0.1/32",))
+        self.assertEqual(ip, "203.0.113.9")
+
+    def test_trusted_proxy_ignores_spoofed_leftmost_forwarded_for(self) -> None:
+        scope = {"client": ("127.0.0.1", 0)}
+        headers = [
+            (b"x-forwarded-for", b"10.5.0.1, 203.0.113.9"),
+            (b"x-real-ip", b"203.0.113.9"),
+        ]
+        ip = extract_client_ip(scope, headers, ("127.0.0.1/32",))
+        self.assertNotEqual(ip, "10.5.0.1")
+        self.assertEqual(ip, "203.0.113.9")
 
     def test_untrusted_proxy_uses_direct(self) -> None:
         scope = {"client": ("203.0.113.5", 0)}
@@ -94,7 +113,10 @@ class AuthorizeRequestTests(unittest.TestCase):
     def test_worker_ip_bind_allows_matching_cidr(self) -> None:
         config = GatewayAuthConfig(worker_ip_bind=True, trusted_proxy_cidrs=("127.0.0.1/32",))
         scope = {"client": ("127.0.0.1", 0)}
-        headers = [(b"x-forwarded-for", b"10.5.0.1")]
+        headers = [
+            (b"x-forwarded-for", b"10.5.0.1"),
+            (b"x-real-ip", b"10.5.0.1"),
+        ]
         authorize_request(
             _StubDb(),
             config,
@@ -104,6 +126,24 @@ class AuthorizeRequestTests(unittest.TestCase):
             {"worker_id": 42, "worker_token": "x"},
             scope,
         )
+
+    def test_worker_ip_bind_rejects_spoofed_forwarded_for(self) -> None:
+        config = GatewayAuthConfig(worker_ip_bind=True, trusted_proxy_cidrs=("127.0.0.1/32",))
+        scope = {"client": ("127.0.0.1", 0)}
+        headers = [
+            (b"x-forwarded-for", b"10.5.0.1, 203.0.113.9"),
+            (b"x-real-ip", b"203.0.113.9"),
+        ]
+        with self.assertRaises(AuthForbidden):
+            authorize_request(
+                _StubDb(),
+                config,
+                "POST",
+                "/v1/workers/tasks/request",
+                headers,
+                {"worker_id": 42, "worker_token": "x"},
+                scope,
+            )
 
 
 class AsgiEntraMiddlewareTests(unittest.IsolatedAsyncioTestCase):
