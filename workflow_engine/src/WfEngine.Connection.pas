@@ -11,7 +11,8 @@ unit WfEngine.Connection;
 interface
 
 uses
-  Uni;
+  Uni,
+  SQLServerUniProvider;
 
 type
   TDatabaseBackend = (dbMssql, dbPostgres);
