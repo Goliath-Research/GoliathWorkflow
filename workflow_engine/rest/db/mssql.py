@@ -16,8 +16,16 @@ from .base import GatewayDbBase, WorkerAuthError, row_to_dict
 _MSSQL_OUTPUT_BATCH_PREFIX = "SET NOCOUNT ON;\n"
 
 # pyodbc has no JSON ODBC type: Python str binds as Unicode text (NVARCHAR/NTEXT).
-# All JSON crossing the ODBC boundary must be cast to sql json at the parameter site.
+# Bind JSON via DECLARE @var json = CAST(? AS json) batches (not EXEC @p=CAST(? AS json)).
 _JSON_CAST = "CAST(? AS json)"
+
+
+def _json_var(name: str) -> str:
+    return f"@__json_{name}"
+
+
+def _declare_json(name: str) -> str:
+    return f"DECLARE {_json_var(name)} json = {_JSON_CAST};"
 
 
 def _json_text(value: Any | None) -> str | None:
@@ -183,13 +191,14 @@ class MssqlGatewayDb(GatewayDbBase):
     ) -> dict[str, Any]:
         out_text = _json_text(output_json)
         sql = f"""{_MSSQL_OUTPUT_BATCH_PREFIX}
+{_declare_json("output")}
 DECLARE @accepted bit, @instance_status varchar(32), @next_ready_count int;
 EXEC {self._qual('sp_worker_submit_result')}
     @node_execution_id=?,
     @worker_id=?,
     @worker_token=?,
     @result_code=?,
-    @output_json={_JSON_CAST},
+    @output_json={_json_var("output")},
     @accepted=@accepted OUTPUT,
     @instance_status=@instance_status OUTPUT,
     @next_ready_count=@next_ready_count OUTPUT;
@@ -197,7 +206,7 @@ SELECT @accepted AS accepted, @instance_status AS instance_status, @next_ready_c
 """
         row = self._fetch_one(
             sql,
-            (node_execution_id, worker_id, worker_token, result_code, out_text),
+            (out_text, node_execution_id, worker_id, worker_token, result_code),
         )
         return row if row else {"accepted": False}
 
@@ -236,9 +245,10 @@ SELECT @accepted AS accepted, @instance_status AS instance_status, @next_ready_c
     ) -> int:
         ctx = _json_text(context_json or {})
         row = self._fetch_one(
+            f"{_declare_json('context')}"
             f"EXEC {self._qual('wf_repo_create_workflow_instance')} "
-            f"@version_id=?, @context_json={_JSON_CAST}",
-            (workflow_version_id, ctx),
+            f"@version_id=?, @context_json={_json_var('context')}",
+            (ctx, workflow_version_id),
         )
         if not row:
             raise RuntimeError("wf_repo_create_workflow_instance returned no id")
@@ -287,9 +297,10 @@ SELECT @deleted_instance_count AS deleted_instance_count,
         persist_extension: bool = True,
     ) -> None:
         self._exec_proc(
+            f"{_declare_json('context')}"
             f"EXEC {self._qual('wf_apply_validation_plan')} "
-            f"@workflow_instance_id=?, @context_json={_JSON_CAST}, @persist_extension=?",
-            (workflow_instance_id, _json_text(context_json), 1 if persist_extension else 0),
+            f"@workflow_instance_id=?, @context_json={_json_var('context')}, @persist_extension=?",
+            (_json_text(context_json), workflow_instance_id, 1 if persist_extension else 0),
         )
 
     def list_workflow_actions(self) -> list[dict[str, Any]]:
@@ -329,14 +340,16 @@ SELECT @deleted_instance_count AS deleted_instance_count,
         if direction not in ("input", "output"):
             raise ValueError("direction must be 'input' or 'output'")
         self._exec_proc(
+            f"{_declare_json('schema')}"
             f"EXEC {self._qual('wf_repo_upsert_action_schema')} "
-            f"@action_name=?, @direction=?, @schema_json={_JSON_CAST}, @schema_id=?",
-            (action_name, direction, _json_text(schema_json), schema_id),
+            f"@action_name=?, @direction=?, @schema_json={_json_var('schema')}, @schema_id=?",
+            (_json_text(schema_json), action_name, direction, schema_id),
         )
 
     def create_workflow_definition(self, spec: dict[str, Any]) -> dict[str, Any]:
         row = self._fetch_one(
-            f"EXEC {self._qual('wf_repo_create_workflow_graph')} @spec={_JSON_CAST}",
+            f"{_declare_json('spec')}"
+            f"EXEC {self._qual('wf_repo_create_workflow_graph')} @spec={_json_var('spec')}",
             (_json_text(spec),),
         )
         if not row:

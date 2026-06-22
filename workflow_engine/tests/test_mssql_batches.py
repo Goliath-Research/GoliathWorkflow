@@ -78,9 +78,10 @@ class MssqlJsonBindingTests(unittest.TestCase):
                 db.apply_validation_plan(1, {"iterations": []})
                 db.upsert_action_schema("pipeline.centroid", "input", {"type": "object"}, "pipeline.centroid")
 
-        json_sql = [sql for sql in captured if _JSON_CAST in sql]
+        json_sql = [sql for sql in captured if "@__json_" in sql]
         self.assertGreaterEqual(len(json_sql), 5)
         for sql in json_sql:
+            self.assertIn("DECLARE @__json_", sql)
             self.assertNotRegex(sql, r"@(?:spec|context_json|schema_json|output_json)=\?(?!\s*[,)])")
 
 

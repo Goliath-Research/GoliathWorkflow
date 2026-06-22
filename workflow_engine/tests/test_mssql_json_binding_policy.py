@@ -21,7 +21,6 @@ _BARE_JSON_BINDING = re.compile(
     re.IGNORECASE,
 )
 
-
 class MssqlJsonBindingPolicyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -37,30 +36,20 @@ class MssqlJsonBindingPolicyTests(unittest.TestCase):
             violations,
             [],
             "mssql.py binds JSON proc params with bare '?' (pyodbc sends NTEXT/NVARCHAR). "
-            f"Use {{_JSON_CAST}} instead. Matches: {violations}",
+            "Use DECLARE @__json_* json = CAST(? AS json) batches instead. "
+            f"Matches: {violations}",
         )
 
-    def test_all_json_proc_params_use_json_cast(self) -> None:
-        bindings: list[tuple[str, str]] = []
-        for match in _JSON_PARAM_PATTERN.finditer(self.source):
-            bindings.append((match.group("name").lower(), match.group("binding")))
-
-        self.assertGreater(
-            len(bindings),
-            0,
-            "expected at least one JSON proc parameter binding in mssql.py",
+    def test_all_json_proc_params_use_declare_json_helper(self) -> None:
+        self.assertIn("def _declare_json(", self.source)
+        declare_calls = self.source.count("_declare_json(")
+        # helper definition + one call site per JSON proc path
+        self.assertGreaterEqual(
+            declare_calls,
+            6,
+            "expected _declare_json() for each JSON ODBC binding (helper + >=5 call sites)",
         )
-
-        bad = [
-            f"@{name}={binding}"
-            for name, binding in bindings
-            if binding == "?"
-        ]
-        self.assertEqual(
-            bad,
-            [],
-            "JSON proc parameters must use {_JSON_CAST} or CAST(? AS json), not bare ?",
-        )
+        self.assertIn(f"json = {{_JSON_CAST}}", self.source)
 
     def test_json_dumps_only_in_json_text_helper(self) -> None:
         dumps_sites: list[int] = []
