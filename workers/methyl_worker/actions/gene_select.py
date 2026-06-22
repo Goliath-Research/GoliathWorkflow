@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Dict, List
 
 from .base import CliAction
@@ -22,7 +23,8 @@ class GeneSelectCliAction(CliAction):
         biomarker = payload.pop("biomarkerFilter", None)
         project = payload.get("project") or payload.get("projectPath")
         if project and not payload.get("runDir"):
-            payload["runDir"] = str(project)
+            project_path = Path(str(project))
+            payload["runDir"] = str(project_path.parent if project_path.is_file() else project_path)
         cmd = super().build_argv(payload)
         if biomarker:
             cmd.append("--biomarker-filter")

@@ -30,7 +30,14 @@ def main(argv: Optional[List[str]] = None) -> None:
         from ..project_resolver import resolve_classifier_config_per_cancer_group
 
         pairs = resolve_classifier_config_per_cancer_group(args.project)
-        cfg = next((c for c, label in pairs if label == args.group), pairs[0][0])
+        matches = [(cfg, label) for cfg, label in pairs if label == args.group]
+        if not matches:
+            available = [label for _, label in pairs]
+            parser.error(
+                f"Unknown comparison group {args.group!r}; "
+                f"available: {available or '(none)'}"
+            )
+        cfg = matches[0][0]
     else:
         cfg = resolve_classifier_config(args.project)
     chrom = args.chromosome
