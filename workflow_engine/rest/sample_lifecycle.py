@@ -45,6 +45,21 @@ def start_sample_prep(
 
     planner_payload = dict(body)
     planner_payload.setdefault("projectPath", project_path)
+
+    from methyl_domain.platform_storage import DEFAULT_STORAGE_KEY
+    try:
+        from .platform_storage import apply_platform_sample_storage
+    except ImportError:
+        from platform_storage import apply_platform_sample_storage
+
+    storage_key = str(body.get("storageKey") or DEFAULT_STORAGE_KEY)
+    platform_row = db.get_platform_sample_storage(storage_key)
+    planner_payload = apply_platform_sample_storage(
+        planner_payload,
+        platform_row,
+        storage_key=storage_key,
+    )
+
     context = plan_sample_prep_context(planner_payload)
 
     program_path = body.get("program_path")

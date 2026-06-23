@@ -21,6 +21,23 @@ def normalize_sample_prefix(prefix: str) -> str:
     return f"{cleaned}/" if cleaned else ""
 
 
+def resolve_sample_storage_prefix(
+    *,
+    sample_id: str,
+    prefix_base: str | None = None,
+    explicit_prefix: str | None = None,
+) -> str:
+    """Resolve per-sample object prefix, optionally under a platform base path."""
+    if explicit_prefix:
+        return normalize_sample_prefix(explicit_prefix)
+    if prefix_base:
+        base = str(prefix_base).strip().strip("/")
+        sid = str(sample_id).strip().strip("/")
+        if base:
+            return normalize_sample_prefix(f"{base}/{sid}")
+    return normalize_sample_prefix(sample_id)
+
+
 class S3ExplicitKeysCredentials(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -86,6 +103,7 @@ class S3FastqStorageDefaults(BaseModel):
     bucket: str
     region: str | None = None
     endpointUrl: str | None = None
+    prefixBase: str | None = None
     credentials: S3Credentials
 
 

@@ -326,3 +326,14 @@ class PostgresGatewayDb(GatewayDbBase):
             """,
             (worker_id,),
         )
+
+    def get_platform_sample_storage(self, storage_key: str) -> Optional[dict[str, Any]]:
+        return self._fetch_one(
+            f"""
+            SELECT storage_key, provider_type, bucket, region, endpoint_url,
+                   access_key_id, secret_access_key, base_prefix, status
+            FROM {self._qual('platform_sample_storage')}
+            WHERE storage_key = %s AND status = 'ACTIVE'
+            """,
+            (storage_key,),
+        )

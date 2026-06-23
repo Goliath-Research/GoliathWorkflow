@@ -18,11 +18,14 @@ from methyl_domain.fastq_storage import (
     FastqStorageDefaults,
     merge_fastq_source,
     normalize_sample_prefix,
+    resolve_sample_storage_prefix,
+    S3FastqStorageDefaults,
 )
 from methyl_domain.h5_storage import (
     H5DestinationLocation,
     H5StorageDefaults,
     merge_h5_destination,
+    S3H5StorageDefaults,
 )
 from pydantic import BaseModel, Field, TypeAdapter
 
@@ -64,8 +67,9 @@ def _sample_id_from_resolved_path(path: str) -> str:
     return Path(str(path).rstrip("/")).name
 
 
-def _default_prefix(sample_id: str) -> str:
-    return normalize_sample_prefix(sample_id)
+def _default_prefix(storage: FastqStorageDefaults, sample_id: str) -> str:
+    prefix_base = storage.prefixBase if isinstance(storage, S3FastqStorageDefaults) else None
+    return resolve_sample_storage_prefix(sample_id=sample_id, prefix_base=prefix_base)
 
 
 def _materialize_fastq_source(
@@ -79,7 +83,12 @@ def _materialize_fastq_source(
         source = _FASTQ_SOURCE_ADAPTER.validate_python(fastq_source_override)
         prefix = normalize_sample_prefix(source.prefix or fastq_prefix or sample_id)
         return prefix, source.model_dump(mode="json")
-    prefix = normalize_sample_prefix(fastq_prefix or sample_id)
+    prefix_base = storage.prefixBase if isinstance(storage, S3FastqStorageDefaults) else None
+    prefix = resolve_sample_storage_prefix(
+        sample_id=sample_id,
+        prefix_base=prefix_base,
+        explicit_prefix=fastq_prefix,
+    )
     source = merge_fastq_source(storage, prefix)
     return prefix, source.model_dump(mode="json")
 
@@ -95,7 +104,12 @@ def _materialize_h5_destination(
         dest = _H5_DEST_ADAPTER.validate_python(h5_destination_override)
         prefix = normalize_sample_prefix(dest.prefix or h5_prefix or sample_id)
         return prefix, dest.model_dump(mode="json")
-    prefix = normalize_sample_prefix(h5_prefix or sample_id)
+    prefix_base = storage.prefixBase if isinstance(storage, S3H5StorageDefaults) else None
+    prefix = resolve_sample_storage_prefix(
+        sample_id=sample_id,
+        prefix_base=prefix_base,
+        explicit_prefix=h5_prefix,
+    )
     dest = merge_h5_destination(storage, prefix)
     return prefix, dest.model_dump(mode="json")
 
@@ -201,7 +215,7 @@ def _load_samples_from_csvs(
                     sample_id=sample_id,
                     sample_dir=str(base / sample_id),
                     storage=storage,
-                    fastq_prefix=_default_prefix(sample_id),
+                    fastq_prefix=_default_prefix(storage, sample_id),
                     h5_storage=h5_storage,
                 )
             )

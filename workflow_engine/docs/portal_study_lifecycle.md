@@ -8,6 +8,19 @@ Start when FASTQs are ready. Each sample in `context_json.samples[]` runs downlo
 
 ### Option A — Gateway helper (recommended)
 
+With platform storage configured in `wf.platform_sample_storage` (see [platform_sample_storage.md](../../docs/deployment/platform_sample_storage.md)), omit `fastqStorage` / `h5Storage`:
+
+```http
+POST /v1/studies/sample-prep/start
+{
+  "projectPath": "/work/.../project_Healthy_vs_PCa1-5-CG.json",
+  "workflow_version_id": <sample_prep_version>,
+  "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]
+}
+```
+
+Or pass explicit storage (overrides DB defaults):
+
 ```http
 POST /v1/studies/sample-prep/start
 {

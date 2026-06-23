@@ -25,6 +25,19 @@ POST /v1/studies/sample-prep/start
 {
   "projectPath": "/work/epimethyl/data/project_....json",
   "workflow_version_id": <from workflow_versions.json SamplePrepPipeline>,
+  "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]
+}
+```
+
+Platform long-term storage (myQNAPcloud `epimethyl` / `samples/` prefix) is loaded from `wf.platform_sample_storage` when `fastqStorage` and `h5Storage` are omitted. See [platform_sample_storage.md](platform_sample_storage.md).
+
+Explicit override example:
+
+```http
+POST /v1/studies/sample-prep/start
+{
+  "projectPath": "/work/epimethyl/data/project_....json",
+  "workflow_version_id": <from workflow_versions.json SamplePrepPipeline>,
   "fastqStorage": {
     "type": "s3",
     "bucket": "methyl-cohort",

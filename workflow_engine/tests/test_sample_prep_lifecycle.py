@@ -43,8 +43,10 @@ def test_start_sample_prep_plans_context_and_starts_instance(tmp_path: Path) -> 
     project_path = _minimal_project(tmp_path)
     created: dict = {}
     started: list[int] = []
+    db = MagicMock()
+    db.get_platform_sample_storage.return_value = None
 
-    def fake_create_instance(_dsn: str, version_id: int, context: dict) -> int:
+    def fake_create_instance(_db, version_id: int, context: dict) -> int:
         created["version_id"] = version_id
         created["context"] = context
         return 42
@@ -53,7 +55,7 @@ def test_start_sample_prep_plans_context_and_starts_instance(tmp_path: Path) -> 
         started.append(instance_id)
 
     payload = start_sample_prep(
-        "dsn",
+        db,
         {
             "projectPath": str(project_path),
             "workflow_version_id": 7,
@@ -77,9 +79,10 @@ def test_start_sample_prep_plans_context_and_starts_instance(tmp_path: Path) -> 
 
 
 def test_start_sample_prep_requires_project_path() -> None:
+    db = MagicMock()
     with pytest.raises(ValueError, match="projectPath"):
         start_sample_prep(
-            "dsn",
+            db,
             {"samples": [{"sampleId": "S1"}]},
             create_workflow_definition=MagicMock(),
             create_workflow_instance=MagicMock(),

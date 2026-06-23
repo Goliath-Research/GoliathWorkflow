@@ -16,6 +16,7 @@ from .fastq_storage import (
     AzureCredentials,
     S3Credentials,
     normalize_sample_prefix,
+    resolve_sample_storage_prefix,
 )
 
 # Re-export credential types for object storage symmetry.
@@ -41,6 +42,7 @@ class S3H5StorageDefaults(BaseModel):
     bucket: str
     region: str | None = None
     endpointUrl: str | None = None
+    prefixBase: str | None = None
     credentials: S3Credentials
 
 
