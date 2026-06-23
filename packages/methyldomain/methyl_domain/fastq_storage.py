@@ -8,11 +8,27 @@ Instance-level ``FastqStorageDefaults`` plus per-sample ``prefix`` merge into
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Annotated, Literal, Union
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 _SECRET_JSON_SCHEMA = {"writeOnly": True}
+
+
+def reveal_secrets(value: Any) -> Any:
+    """Recursively expand SecretStr for workflow context_json / worker task payloads."""
+    if isinstance(value, SecretStr):
+        return value.get_secret_value()
+    if isinstance(value, dict):
+        return {key: reveal_secrets(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [reveal_secrets(item) for item in value]
+    return value
+
+
+def dump_storage_model(model: BaseModel) -> dict[str, Any]:
+    """Serialize storage models with credential secrets visible to workers."""
+    return reveal_secrets(model.model_dump(mode="python"))
 
 
 def normalize_sample_prefix(prefix: str) -> str:

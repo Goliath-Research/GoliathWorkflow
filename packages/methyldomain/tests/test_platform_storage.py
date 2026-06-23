@@ -6,6 +6,7 @@ from methyl_domain.platform_storage import (
     DEFAULT_ARCHIVE_PROFILE_KEY,
     normalize_s3_endpoint_url,
     profile_json_to_h5_storage,
+    profile_json_to_h5_storage_dict,
 )
 from methyl_domain.fastq_storage import resolve_sample_storage_prefix
 
@@ -37,3 +38,17 @@ def test_profile_json_builds_myqnap_h5_defaults() -> None:
     prefix = resolve_sample_storage_prefix(sample_id="S1", prefix_base=h5.prefixBase)
     assert prefix == "samples/S1/"
     assert DEFAULT_ARCHIVE_PROFILE_KEY == "epimethyl-samples"
+
+
+def test_profile_json_to_h5_storage_dict_reveals_secrets() -> None:
+    profile_json = {
+        "type": "s3",
+        "bucket": "epimethyl",
+        "credentials": {
+            "authMode": "explicit_keys",
+            "accessKeyId": "AKIATEST",
+            "secretAccessKey": "real-secret",
+        },
+    }
+    dumped = profile_json_to_h5_storage_dict(profile_json)
+    assert dumped["credentials"]["secretAccessKey"] == "real-secret"

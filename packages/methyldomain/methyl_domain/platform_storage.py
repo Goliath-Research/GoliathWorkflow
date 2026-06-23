@@ -37,3 +37,10 @@ def profile_json_to_h5_storage(profile_json: Mapping[str, Any]) -> H5StorageDefa
     if isinstance(endpoint, str) and endpoint:
         data["endpointUrl"] = normalize_s3_endpoint_url(endpoint)
     return _H5_DEFAULTS_ADAPTER.validate_python(data)
+
+
+def profile_json_to_h5_storage_dict(profile_json: Mapping[str, Any]) -> dict[str, Any]:
+    """Validate and dump h5Storage defaults with secrets revealed for workers."""
+    from .fastq_storage import dump_storage_model
+
+    return dump_storage_model(profile_json_to_h5_storage(profile_json))

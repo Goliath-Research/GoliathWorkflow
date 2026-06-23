@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Set
 from methyl_domain.fastq_storage import (
     FastqSourceLocation,
     FastqStorageDefaults,
+    dump_storage_model,
     merge_fastq_source,
     normalize_sample_prefix,
     resolve_sample_storage_prefix,
@@ -82,7 +83,7 @@ def _materialize_fastq_source(
     if fastq_source_override is not None:
         source = _FASTQ_SOURCE_ADAPTER.validate_python(fastq_source_override)
         prefix = normalize_sample_prefix(source.prefix or fastq_prefix or sample_id)
-        return prefix, source.model_dump(mode="json")
+        return prefix, dump_storage_model(source)
     prefix_base = storage.prefixBase if isinstance(storage, S3FastqStorageDefaults) else None
     prefix = resolve_sample_storage_prefix(
         sample_id=sample_id,
@@ -90,7 +91,7 @@ def _materialize_fastq_source(
         explicit_prefix=fastq_prefix,
     )
     source = merge_fastq_source(storage, prefix)
-    return prefix, source.model_dump(mode="json")
+    return prefix, dump_storage_model(source)
 
 
 def _materialize_h5_destination(
@@ -103,7 +104,7 @@ def _materialize_h5_destination(
     if h5_destination_override is not None:
         dest = _H5_DEST_ADAPTER.validate_python(h5_destination_override)
         prefix = normalize_sample_prefix(dest.prefix or h5_prefix or sample_id)
-        return prefix, dest.model_dump(mode="json")
+        return prefix, dump_storage_model(dest)
     prefix_base = storage.prefixBase if isinstance(storage, S3H5StorageDefaults) else None
     prefix = resolve_sample_storage_prefix(
         sample_id=sample_id,
@@ -111,7 +112,7 @@ def _materialize_h5_destination(
         explicit_prefix=h5_prefix,
     )
     dest = merge_h5_destination(storage, prefix)
-    return prefix, dest.model_dump(mode="json")
+    return prefix, dump_storage_model(dest)
 
 
 def _sample_entry(
@@ -362,11 +363,11 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
         "projectPath": str(base_project.resolve()),
         "primaryAnalyte": primary,
         "isCfdna": is_cfdna,
-        "fastqStorage": storage.model_dump(mode="json"),
+        "fastqStorage": dump_storage_model(storage),
         "samples": samples,
     }
     if h5_storage is not None:
-        context["h5Storage"] = h5_storage.model_dump(mode="json")
+        context["h5Storage"] = dump_storage_model(h5_storage)
 
     ref_fasta = request.referenceFasta or _default_reference_fasta(project)
     if ref_fasta:

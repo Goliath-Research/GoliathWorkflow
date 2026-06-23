@@ -80,3 +80,4 @@ def test_resource_profile_reader_parses_json() -> None:
     assert h5 is not None
     assert h5["bucket"] == "epimethyl"
     assert h5["endpointUrl"] == "https://s3.us-east-1.myqnapcloud.io"
+    assert h5["credentials"]["secretAccessKey"] == "secret"

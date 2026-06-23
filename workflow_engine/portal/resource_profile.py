@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Optional, Protocol
 
-from methyl_domain.platform_storage import profile_json_to_h5_storage
+from methyl_domain.platform_storage import profile_json_to_h5_storage_dict
 
 DEFAULT_ARCHIVE_PROFILE_KEY = "epimethyl-samples"
 
@@ -56,4 +56,4 @@ class ResourceProfileReader:
         profile_json = row.get("profile_json")
         if not isinstance(profile_json, dict):
             return None
-        return profile_json_to_h5_storage(profile_json).model_dump(mode="json")
+        return profile_json_to_h5_storage_dict(profile_json)
