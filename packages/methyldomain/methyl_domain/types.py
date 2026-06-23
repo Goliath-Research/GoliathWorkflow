@@ -184,6 +184,7 @@ DOMAIN_MODEL_BY_TYPE: Dict[str, type[DomainTaggedModel]] = {
     "MethylIngestRef": MethylIngestRef,
     "MethylSampleRef": MethylSampleRef,
     "AlignmentQcRef": AlignmentQcRef,
+    "ExtractionQcRef": ExtractionQcRef,
     "FragmentomicsRef": FragmentomicsRef,
     "MethylationMatrixRef": MethylationMatrixRef,
     "MethylGroup": MethylGroup,

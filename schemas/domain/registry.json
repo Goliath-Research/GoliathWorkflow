@@ -3,6 +3,7 @@
   "schemas": {
     "AlignmentQcRef": "alignment_qc_ref.schema.json",
     "ComparisonSpec": "comparison_spec.schema.json",
+    "ExtractionQcRef": "extraction_qc_ref.schema.json",
     "FragmentomicsRef": "fragmentomics_ref.schema.json",
     "MethylCentroidRef": "methyl_centroid_ref.schema.json",
     "MethylDetectionRef": "methyl_detection_ref.schema.json",
@@ -16,6 +17,7 @@
     "MethylIngestRef",
     "MethylSampleRef",
     "AlignmentQcRef",
+    "ExtractionQcRef",
     "FragmentomicsRef",
     "MethylationMatrixRef",
     "MethylGroup",

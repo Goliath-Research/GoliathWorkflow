@@ -38,6 +38,44 @@
       "title": "AlignmentQcRef",
       "type": "object"
     },
+    "ExtractionQcRef": {
+      "description": "Post-extraction QC JSON artifact and pass/fail gate.",
+      "properties": {
+        "$type": {
+          "const": "ExtractionQcRef",
+          "default": "ExtractionQcRef",
+          "title": "$Type",
+          "type": "string"
+        },
+        "guardrails": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Guardrails"
+        },
+        "overallPass": {
+          "title": "Overallpass",
+          "type": "boolean"
+        },
+        "qcPath": {
+          "title": "Qcpath",
+          "type": "string"
+        }
+      },
+      "required": [
+        "qcPath",
+        "overallPass"
+      ],
+      "title": "ExtractionQcRef",
+      "type": "object"
+    },
     "FragmentomicsRef": {
       "description": "cfDNA fragmentomics run artifacts.",
       "properties": {
@@ -102,6 +140,17 @@
           "default": null,
           "title": "Bampath"
         },
+        "extractionQc": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtractionQcRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "fastqFiles": {
           "anyOf": [
             {
@@ -127,6 +176,19 @@
             }
           ],
           "default": null
+        },
+        "h5Archive": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "H5Archive"
         },
         "methylation": {
           "anyOf": [

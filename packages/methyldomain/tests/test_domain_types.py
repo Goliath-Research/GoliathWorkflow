@@ -14,11 +14,30 @@ from methyl_domain.helpers import (
 )
 from methyl_domain.schema_export import check_domain_schema_drift, export_all_domain_schemas
 from methyl_domain.types import (
+    DOMAIN_MODEL_BY_TYPE,
+    DOMAIN_TYPE_NAMES,
+    ExtractionQcRef,
     MethylGroup,
     MethylSampleRef,
     parse_domain_value,
     to_tagged_json,
 )
+
+
+def test_domain_type_names_match_model_registry():
+    assert set(DOMAIN_TYPE_NAMES) == set(DOMAIN_MODEL_BY_TYPE)
+
+
+def test_extraction_qc_ref_parse_roundtrip():
+    payload = {
+        "$type": "ExtractionQcRef",
+        "qcPath": "/work/qc/extraction.json",
+        "overallPass": True,
+    }
+    parsed = parse_domain_value(payload)
+    assert isinstance(parsed, ExtractionQcRef)
+    assert parsed.qcPath == "/work/qc/extraction.json"
+    assert parsed.overallPass is True
 
 
 def test_tagged_json_roundtrip():

@@ -350,6 +350,18 @@
           "default": null,
           "title": "Endpointurl"
         },
+        "prefixBase": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Prefixbase"
+        },
         "region": {
           "anyOf": [
             {
