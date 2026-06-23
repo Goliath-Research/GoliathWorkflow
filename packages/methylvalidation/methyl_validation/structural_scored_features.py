@@ -174,11 +174,29 @@ def prepare_structural_scored_panels(
         pd.to_numeric(work.get("feature_effect_compound"), errors="coerce").fillna(0.0)
     )
     min_n = int(max(1, min_support_n))
+    n_initial = int(len(work))
+    max_support = int(work["n_dmps_in_feature"].max()) if n_initial > 0 else 0
     work = work[work["n_dmps_in_feature"] >= min_n].copy()
+    if work.empty:
+        if n_initial > 0:
+            raise ValueError(
+                f"No gene-feature rows passed structural_scored_min_support_n={min_n} "
+                f"(frozen panel had {n_initial} row(s), max n_dmps_in_feature={max_support}). "
+                "Lower structural_scored_min_support_n or rebuild frozen_gene_features.csv."
+            )
+        return {}
     work = work[work["gene_name"].apply(_is_known_mapped_token)].copy()
+    if work.empty:
+        return {}
     work = work[work["feature_type"].apply(_is_known_mapped_token)].copy()
+    if work.empty:
+        return {}
     work = work[work["feature_type"] != "unknown"].copy()
+    if work.empty:
+        return {}
     work = work[work["feature_type"].isin(regions)].copy()
+    if work.empty:
+        return {}
     work = work[work["feature_effect_compound"] > 0.0].copy()
     if work.empty:
         return {}

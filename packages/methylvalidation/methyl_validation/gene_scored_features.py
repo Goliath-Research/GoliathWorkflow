@@ -612,8 +612,20 @@ def prepare_gene_scored_panels(
     work["gene_support_n"] = pd.to_numeric(work.get("gene_support_n"), errors="coerce").fillna(0).astype(int)
     work["gene_importance"] = pd.to_numeric(work.get("gene_importance"), errors="coerce").fillna(0.0)
     min_n = int(max(1, min_support_n))
+    n_initial = int(len(work))
+    max_support = int(work["gene_support_n"].max()) if n_initial > 0 else 0
     work = work[work["gene_support_n"] >= min_n].copy()
+    if work.empty:
+        if n_initial > 0:
+            raise ValueError(
+                f"No genes passed gene_scored_min_support_n={min_n} "
+                f"(frozen panel had {n_initial} row(s), max gene_support_n={max_support}). "
+                "Lower gene_scored_min_support_n or rebuild frozen_genes_production.csv."
+            )
+        return {}
     work = work[work["gene_name"].apply(_is_known_mapped_token)].copy()
+    if work.empty:
+        return {}
     work = work[work["gene_importance"] > 0.0].copy()
     if work.empty:
         return {}
