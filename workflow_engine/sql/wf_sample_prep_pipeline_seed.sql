@@ -1,5 +1,15 @@
 /*
-  Workflow Engine (wf schema) - SamplePrepPipeline seed.
+  DEPRECATED — use DomainProgram deploy instead.
+
+  SamplePrepPipeline is defined in:
+    workflow_engine/domain/fixtures/sample_prep.program.json
+  Deploy via:
+    bash scripts/deploy_workflow_definitions.sh
+
+  This SQL seed is retained for legacy SQL Server environments only.
+  It does NOT include extraction_qc, upload_h5, or the full fastp remediation graph.
+
+  Workflow Engine (wf schema) - SamplePrepPipeline seed (legacy).
 
   Per-sample upstream preprocessing: FASTQ ingest -> Parabricks -> methyl-qc gate (+ optional R2 trim remediation) ->
   delete_fastqs on terminal paths -> conditional cfDNA fragmentomics -> MethylExtractor -> BAM cleanup.

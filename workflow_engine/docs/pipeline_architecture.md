@@ -82,8 +82,9 @@ flowchart TB
 
 The analysis pipeline ([Section 1](#1-project-configuration) onward) assumes per-chromosome methylation HDF5 files already exist under `samples_base_path`. **SamplePrepPipeline** orchestrates ingest, alignment, QC gating, optional cfDNA fragmentomics, methylation extraction, and cleanup **per sample** before **DataDrivenPipeline** runs.
 
-**Workflow seed:** [`workflow_engine/sql/wf_sample_prep_pipeline_seed.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sample_prep_pipeline_seed.sql)  
-`chrom_mapping` for MethylExtractor is **derived from `project.chromosomes`** at task time (`step_config.methyl_extract.contig_naming`, optional `chromosome_overrides`, or inline `chrom_mapping` object). No shared-storage mapping file is required for standard human builds.
+**Workflow definition:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](/home/ubuntu/MethylPipeline/workflow_engine/domain/fixtures/sample_prep.program.json) — deploy with `bash scripts/deploy_workflow_definitions.sh`.
+
+Legacy SQL seed [`wf_sample_prep_pipeline_seed.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sample_prep_pipeline_seed.sql) is **deprecated**.
 
 **Operator guide:** [`workflow_engine/sql/SamplePrepFlow.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/SamplePrepFlow.md)  
 **Worker contract:** [`workflow_engine/contract/sample_prep_capabilities.md`](/home/ubuntu/MethylPipeline/workflow_engine/contract/sample_prep_capabilities.md)  
@@ -93,40 +94,46 @@ The analysis pipeline ([Section 1](#1-project-configuration) onward) assumes per
 
 ```mermaid
 flowchart TD
-  subgraph perSample [FOREACH sample under /work/samples]
+  subgraph perSample [FOREACH sample parallel]
     dl[download_FASTQs]
-    align[Parabricks_fq2bam]
-    delFq[delete_FASTQs]
-    qc[methyl_qc from Picard/Parabricks metrics]
-    gate{guardrails.overall_pass?}
-    cfdnaCheck{isCfdna?}
-    frag[methyl_fragmentomics]
-    ext[MethylExtractor to chrom-CG.h5]
+    align[Parabricks_fq2bam GPU]
+    qc[methyl_qc alignment guardrail]
+    gateQc{qcPass}
+    delFq[delete_FASTQs after final align QC]
+    frag[methyl_fragmentomics if isCfdna]
+    ext[MethylExtractor GPU]
+    extQc[extraction_qc post-extract guardrail]
+    gateExt{extractionQcPass}
+    upload[upload_h5 optional]
     delBam[delete_BAM]
+    trim[trim_fastq fastp]
+    align2[Parabricks forceRealign]
+    qc2[methyl_qc retry]
     fail[sample_qc_failed]
   end
-  dl --> align --> delFq --> qc --> gate
-  gate -->|no| fail
-  gate -->|yes| cfdnaCheck
-  cfdnaCheck -->|yes| frag --> ext
-  cfdnaCheck -->|no| ext
-  ext --> delBam
+  dl --> align --> qc --> gateQc
+  gateQc -->|pass| delFq --> frag --> ext --> extQc --> gateExt
+  gateExt -->|pass| upload --> delBam
+  gateExt -->|fail| fail
+  gateQc -->|fail| trim --> align2 --> qc2 --> delFq
   delBam --> h5["chrom-CG.h5 in sample dir"]
   h5 --> ddp[DataDrivenPipeline]
 ```
 
 | Step | Capability | Owner | Primary outputs |
 |------|------------|-------|-----------------|
-| Download FASTQs | `sample.download-fastq` | External | `*.fastq.gz` in `/work/samples/{id}/` |
-| Parabricks fq2bam | `parabricks.fq2bam` | External | `{id}.bam`, `{id}.json`, `*.qc-metrics.tar` |
-| Delete FASTQs | `sample.delete-fastqs` | External | FASTQs removed |
-| methyl-qc | `methyl-qc` | In-repo | V2 QC JSON with `guardrails.overall_pass` |
-| QC gate | workflow **IF** (`qcPass`) | Engine | Skip extract on fail |
+| Download FASTQs | `sample.download-fastq` | In-process | `*.fastq.gz` in `/work/samples/{id}/` |
+| Parabricks fq2bam | `parabricks.fq2bam` | External GPU | `{id}.bam`, `{id}.json`, `*.qc-metrics.tar` |
+| methyl-qc | `methyl-qc` | In-repo | V2 QC JSON; `qcPass`, remediation scope vars |
+| Trim FASTQ | `sample.trim-fastq` | In-process fastp | Trimmed FASTQs (remediation branch) |
+| Delete FASTQs | `sample.delete-fastqs` | In-process | FASTQs removed after final alignment QC |
 | methyl-fragmentomics | `methyl-fragmentomics` | In-repo (cfDNA only) | `{project}/fragmentomics/{id}/` |
-| MethylExtractor | `methyl-extract` | External | `{chrom}-CG.h5` per project chromosome |
-| Delete BAM | `sample.delete-bam` | External | BAM removed |
+| MethylExtractor | `methyl-extract` | External GPU | `{chrom}-{ctx}.h5`, extraction manifest |
+| Extraction QC | `methyl-extraction-qc` | In-repo | `{id}.extraction_qc.json`; `extractionQcPass` |
+| Archive HDF5 | `sample.upload-h5` | In-process | Optional remote copy |
+| Delete BAM | `sample.delete-bam` | In-process | BAM removed after extraction QC pass |
 
-**Ordering:** Run **methyl-qc before methyl-fragmentomics** so failed samples do not scan BAMs. Fragmentomics still runs **before** extraction and BAM deletion (both need the aligned BAM). When `primary_analyte` is `cfdna`, the analyte profile enables fragmentomics; `buffy_coat` skips it.
+**Ordering:** Run **methyl-qc before methyl-fragmentomics** so failed samples do not scan BAMs. **extraction_qc** runs after extract and before upload/delete. When `primary_analyte` is `cfdna`, fragmentomics runs; `buffy_coat` skips it.
 
 ### Storage contract (`/work/samples`)
 

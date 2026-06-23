@@ -92,11 +92,17 @@ After `sample.methyl_qc`, scope receives:
 | `trimFront2` | `screening.trim_front2` |
 | `remediateR2Trim` | boolean for R2 trim branch |
 
-**Pass path:** `delete_fastqs` → optional fragmentomics → `methyl_extract` → `delete_bam`.
+After `sample.extraction_qc`, scope receives:
 
-**Remediation:** `REALIGN_READ2_TRIM` → `trim_fastq` → Parabricks `forceRealign` → `methyl_qc` retry.
+| Variable | Source |
+|----------|--------|
+| `extractionQcPass` | `guardrails.overall_pass` |
 
-**Final fail:** `delete_fastqs` → `sample.qc_failed` (instance still **COMPLETED**; per-sample soft fail).
+**Pass path:** `delete_fastqs` → optional fragmentomics → `methyl_extract` → `extraction_qc` → [`extractionQcPass`] optional `upload_h5` → `delete_bam`.
+
+**Remediation:** `REALIGN_READ2_TRIM` → `trim_fastq` (fastp) → Parabricks `forceRealign` → `methyl_qc` retry → same pass path if retry passes.
+
+**Final fail:** alignment or extraction QC fail → `delete_fastqs` (when applicable) → `sample.qc_failed`.
 
 Audit artifacts per sample:
 

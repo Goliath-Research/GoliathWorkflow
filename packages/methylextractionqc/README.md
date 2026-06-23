@@ -24,3 +24,5 @@ methyl-extraction-qc --project project.json
 | Chromosome uniformity | autosomal `CG.mean_coverage` min/median | ≥ 0.5 |
 
 Override thresholds via `project.json` → `step_config.extraction_qc`.
+
+Output artifact JSON Schema: [`schemas/extraction_qc_output.schema.json`](schemas/extraction_qc_output.schema.json) (`methylpipeline.extraction_qc` v1.0.0).

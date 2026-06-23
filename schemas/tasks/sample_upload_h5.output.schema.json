@@ -1,21 +1,44 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": true,
-  "description": "Output for sample.upload_h5.",
   "properties": {
-    "remotePrefix": { "type": "string" },
-    "sampleId": { "type": "string" },
-    "skippedCount": { "type": "integer" },
+    "remotePrefix": {
+      "default": "",
+      "title": "Remoteprefix",
+      "type": "string"
+    },
+    "sampleId": {
+      "title": "Sampleid",
+      "type": "string"
+    },
+    "skippedCount": {
+      "default": 0,
+      "title": "Skippedcount",
+      "type": "integer"
+    },
     "skippedFiles": {
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
+      "title": "Skippedfiles",
       "type": "array"
     },
-    "uploadedCount": { "type": "integer" },
+    "uploadedCount": {
+      "default": 0,
+      "title": "Uploadedcount",
+      "type": "integer"
+    },
     "uploadedFiles": {
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
+      "title": "Uploadedfiles",
       "type": "array"
     }
   },
-  "required": ["sampleId"],
+  "required": [
+    "sampleId"
+  ],
+  "title": "UploadH5TaskOutput",
   "type": "object"
 }

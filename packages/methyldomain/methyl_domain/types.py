@@ -95,7 +95,7 @@ class MethylationMatrixRef(DomainTaggedModel):
     sampleDir: str
     chromosomes: List[str] = Field(default_factory=list)
     contexts: List[str] = Field(default_factory=lambda: ["CG"])
-    h5Pattern: str = "{chr}.{ctx}.h5"
+    h5Pattern: str = "{chr}-{ctx}.h5"
     h5Files: Optional[List[str]] = None
 
 

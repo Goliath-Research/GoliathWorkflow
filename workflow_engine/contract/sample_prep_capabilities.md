@@ -14,6 +14,8 @@ QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (
 
 After `methyl-qc`, scope also receives **`qcDisposition`**, **`trimFront2`**, **`qcAttemptReason`**, and **`remediateR2Trim`** (boolean) for the remediation branch.
 
+After `sample.extraction_qc`, scope receives **`extractionQcPass`** from **`output_json.guardrails.overall_pass`**. Extraction QC runs after `sample.methyl_extract` and before optional `sample.upload_h5` and `sample.delete_bam`.
+
 ## FASTQ retention
 
 **Do not delete FASTQs before final QC.** `sample.delete-fastqs` runs only after QC pass or final fail (including post-trim retry). Trimming (`sample.trim-fastq`) requires original `*_1.fastq.gz` / `*_2.fastq.gz` still present.
@@ -33,6 +35,7 @@ After `methyl-qc`, scope also receives **`qcDisposition`**, **`trimFront2`**, **
 | `parabricks.fq2bam` | Only when BAM missing or QC artifact missing (`{sampleId}.json` or `{sampleId}.qc-metrics.tar`); pass **`forceRealign: true`** after trim to clear stale outputs |
 | `sample.trim-fastq` | When trimmed FASTQs missing or `trimFront2` changed |
 | `methyl-extract` | When HDF5 outputs missing for `project.chromosomes × extract_contexts` |
+| `methyl-extraction-qc` | When `{sampleId}.extraction_qc.json` missing or manifest changed |
 | `sample.upload-h5` | Remote object missing or size/ETag differs from local `{chr}-{ctx}.h5` |
 
 ## Lease / retry
@@ -302,6 +305,8 @@ Production defaults (not env vars):
 | Input BAM | `{sampleId}.bam` |
 | Per-chrom HDF5 | `{chrom}-{ctx}.h5` (e.g. `1-CG.h5`, `1-CHG.h5`, `1-CHH.h5`) |
 | Log | `{sampleId}.methyl_extract.log` |
+| Extraction manifest | `{sampleId}.extraction_manifest.json` |
+| Per-context QC sidecar | `{chrom}-{ctx}.json` (e.g. `1-CG.json`) |
 
 ### input_json example
 
@@ -323,6 +328,66 @@ Production defaults (not env vars):
   "h5Files": ["1-CG.h5", "1-CHG.h5", "1-CHH.h5", "2-CG.h5", "..."]
 }
 ```
+
+---
+
+## `methyl-extraction-qc`
+
+**action_name:** `sample.extraction_qc`  
+**Owner:** In-repo — [`packages/methylextractionqc`](../../packages/methylextractionqc/)  
+**When:** After every successful `sample.methyl_extract` (both direct pass and post-remediation pass paths).
+
+Reads MethylExtractor `{sampleId}.extraction_manifest.json` (schema `methylextractor.extraction_manifest` v1.0.0). Writes `{sampleId}.extraction_qc.json` in `sampleDir` with `guardrails.overall_pass`.
+
+Upstream contract: MethylExtractor [`docs/extraction_qc_contract.md`](file:///home/ubuntu/MethylExtractor/docs/extraction_qc_contract.md).
+
+### input_json
+
+```json
+{
+  "tool": "MethylExtractionQc",
+  "project": "/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
+  "sampleId": "DPLST-051425-111148",
+  "sampleDir": "/work/samples/DPLST-051425-111148"
+}
+```
+
+Optional: `chromosomes` list when `project` is omitted (defaults to full genome expectation from manifest).
+
+### Project `step_config.extraction_qc`
+
+```json
+"extraction_qc": {
+  "guardrails": {
+    "min_cpg_weighted_mean_coverage": 10.0,
+    "max_chh_methylation_level": 0.02,
+    "max_chg_methylation_level": 0.02,
+    "min_autosomal_coverage_uniformity_ratio": 0.5
+  },
+  "expected_chromosomes": ["1", "2", "..."]
+}
+```
+
+When `expected_chromosomes` is omitted, uses `project.chromosomes`.
+
+### output_json
+
+```json
+{
+  "sampleId": "DPLST-051425-111148",
+  "qcPath": "/work/samples/DPLST-051425-111148/DPLST-051425-111148.extraction_qc.json",
+  "guardrails": {
+    "cpg_weighted_mean_coverage": { "value": 15.2, "pass": true },
+    "overall_pass": true
+  },
+  "extractionQc": {
+    "qcPath": "/work/samples/.../DPLST-051425-111148.extraction_qc.json",
+    "overallPass": true
+  }
+}
+```
+
+Path binding: `$.guardrails.overall_pass` → scope variable **`extractionQcPass`**.
 
 ---
 
@@ -433,10 +498,15 @@ Use `result_code = 0` even when marking failed — the sample is intentionally s
 | `sample.download_fastq` | `sample.download-fastq` |
 | `sample.parabricks_fq2bam` | `parabricks.fq2bam` |
 | `sample.delete_fastqs` | `sample.delete-fastqs` |
+| `sample.trim_fastq` | `sample.trim-fastq` |
 | `sample.methyl_qc` | `methyl-qc` |
 | `sample.fragmentomics` | `methyl-fragmentomics` |
 | `sample.methyl_extract` | `methyl-extract` |
+| `sample.extraction_qc` | `methyl-extraction-qc` |
+| `sample.upload_h5` | `sample.upload-h5` |
 | `sample.delete_bam` | `sample.delete-bam` |
 | `sample.qc_failed` | `sample.mark-failed` |
 
-Seed: [`../sql/wf_sample_prep_pipeline_seed.sql`](../sql/wf_sample_prep_pipeline_seed.sql)
+**Workflow source of truth:** [`../domain/fixtures/sample_prep.program.json`](../domain/fixtures/sample_prep.program.json) deployed via `scripts/deploy_workflow_definitions.sh`.
+
+Legacy SQL seed [`../sql/wf_sample_prep_pipeline_seed.sql`](../sql/wf_sample_prep_pipeline_seed.sql) is **deprecated**.

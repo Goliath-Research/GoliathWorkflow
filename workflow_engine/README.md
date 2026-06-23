@@ -36,7 +36,9 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 15f. [`wf_drop_platform_sample_storage.sql`](wf_drop_platform_sample_storage.sql) — drop mistaken wf.platform_sample_storage if deployed.
 16. [`wf_worker_api_contract.sql`](wf_worker_api_contract.sql) — worker submit result-set contract alignment.
 17. [`wf_data_driven_pipeline_seed.sql`](wf_data_driven_pipeline_seed.sql) — **DataDrivenPipeline** (generic; instance `context_json` drives fan-out).
-17a. [`wf_sample_prep_pipeline_seed.sql`](wf_sample_prep_pipeline_seed.sql) — **SamplePrepPipeline** (per-sample FASTQ → HDF5 upstream).
+17a. **Deploy SamplePrepPipeline:** `bash scripts/deploy_workflow_definitions.sh` (compiles [`domain/fixtures/sample_prep.program.json`](domain/fixtures/sample_prep.program.json)).
+
+17b. [`wf_sample_prep_pipeline_seed.sql`](wf_sample_prep_pipeline_seed.sql) — **deprecated** legacy SQL Server seed; prefer DomainProgram deploy above.
 17b. [`wf_action_schema.sql`](wf_action_schema.sql) — `workflow_action_schema` table + repo procs for action I/O JSON Schemas.
 16. [`wf_pca_two_group_seed.sql`](wf_pca_two_group_seed.sql) — **deprecated** static PCaTwoGroupFlow.
 17. [`wf_pca_ovr_seed.sql`](wf_pca_ovr_seed.sql) — **deprecated** static PCaOvrFlow.

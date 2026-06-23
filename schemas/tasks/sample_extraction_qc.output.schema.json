@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "properties": {
+    "extractionQc": {
+      "additionalProperties": true,
+      "title": "Extractionqc",
+      "type": "object"
+    },
+    "guardrails": {
+      "additionalProperties": true,
+      "title": "Guardrails",
+      "type": "object"
+    },
+    "qcPath": {
+      "title": "Qcpath",
+      "type": "string"
+    },
+    "sampleId": {
+      "title": "Sampleid",
+      "type": "string"
+    }
+  },
+  "required": [
+    "sampleId",
+    "qcPath"
+  ],
+  "title": "ExtractionQcTaskOutput",
+  "type": "object"
+}

@@ -18,7 +18,7 @@ This pack uses your project configuration at `/home/ubuntu/Work/prostate-cancer/
 
 ## 1) Raw WGBS -> per-chromosome methylation HDF5
 
-Orchestrated by **SamplePrepPipeline** ([`workflow_engine/sql/SamplePrepFlow.md`](../workflow_engine/sql/SamplePrepFlow.md)). **methyl-qc runs before methyl-fragmentomics** so failed samples skip BAM scanning; cfDNA fragmentomics is conditional on `primary_analyte: cfdna`.
+Orchestrated by **SamplePrepPipeline** ([`workflow_engine/sql/SamplePrepFlow.md`](../workflow_engine/sql/SamplePrepFlow.md), source: [`sample_prep.program.json`](../workflow_engine/domain/fixtures/sample_prep.program.json)). Two QC gates: **alignment** (`methyl-qc`, optional fastp remediation) then **extraction** (`methyl-extraction-qc`). Fragmentomics is conditional on `primary_analyte: cfdna`.
 
 ```mermaid
 flowchart TD

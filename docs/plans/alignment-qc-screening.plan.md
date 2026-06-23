@@ -1,6 +1,9 @@
 ---
 name: Alignment QC screening
 overview: Extend MethylAlignmentQC with read-end-aware cycle screening and structured remediation dispositions, then wire fastp Read-2 trimming and forced realign into SamplePrep (plus a remediation workflow for the existing prostate cohort).
+
+> **Status: IMPLEMENTED.** This plan is historical reference. The live workflow is [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (deploy via `scripts/deploy_workflow_definitions.sh`). Operator guide: [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md).
+
 azure_devops:
   type: Epic
   title: Alignment QC screening and remediation

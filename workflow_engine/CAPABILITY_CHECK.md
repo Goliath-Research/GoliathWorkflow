@@ -100,14 +100,16 @@ See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREA
 | Download FASTQs | `sample.download-fastq` | **SamplePrepPipeline** |
 | Parabricks fq2bam | `parabricks.fq2bam` | **SamplePrepPipeline** |
 | Delete FASTQs | `sample.delete-fastqs` | **SamplePrepPipeline** |
+| Trim FASTQ (fastp) | `sample.trim-fastq` | **SamplePrepPipeline** (alignment remediation) |
 | Alignment QC | `methyl-qc` | **SamplePrepPipeline** |
 | cfDNA fragmentomics | `methyl-fragmentomics` | **SamplePrepPipeline** (cfDNA only) |
 | Methyl extraction | `methyl-extract` | **SamplePrepPipeline** |
+| Extraction QC | `methyl-extraction-qc` | **SamplePrepPipeline** |
 | Archive HDF5 | `sample.upload-h5` | **SamplePrepPipeline** |
 | Delete BAM | `sample.delete-bam` | **SamplePrepPipeline** |
 | QC failed marker | `sample.mark-failed` | **SamplePrepPipeline** (optional) |
 
-Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contract/sample_prep_capabilities.md](contract/sample_prep_capabilities.md).
+Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contract/sample_prep_capabilities.md](contract/sample_prep_capabilities.md). **Deploy workflow:** `scripts/deploy_workflow_definitions.sh` (DomainProgram fixture).
 
 ### Milestone 1–2: Analysis (downstream)
 
@@ -144,7 +146,9 @@ Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contr
 10. **`wf_sql_foreach_support.sql`** (FOREACH node + indexed placeholders)
 11. **`wf_sp_delete_workflow_def.sql`** (delete/rebuild definitions)
 12. **`wf_validation_pipeline_seed.sql`** — **ValidationPipeline** (FOREACH iterations)
-13. **`wf_sample_prep_pipeline_seed.sql`** — **SamplePrepPipeline** (per-sample FASTQ → HDF5)
+13. **DomainProgram deploy** — `scripts/deploy_workflow_definitions.sh` compiles [`domain/fixtures/sample_prep.program.json`](domain/fixtures/sample_prep.program.json) → **SamplePrepPipeline** (per-sample FASTQ → HDF5, two QC gates)
+
+14. **`wf_sample_prep_pipeline_seed.sql`** — **deprecated** legacy SQL Server seed; use DomainProgram deploy above
 14. **`wf_data_driven_pipeline_seed.sql`** — generic DataDrivenPipeline (preferred)
 15. `wf_pca_two_group_seed.sql` / `wf_pca_ovr_seed.sql` — **deprecated** static generators
 16. `workflow_methylvalidation_seed.sql` — **deprecated** MethylValidationFlow

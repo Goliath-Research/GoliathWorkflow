@@ -28,6 +28,7 @@ FOREACH flattening and `${var.*}` templates work unchanged: domain objects are o
 | `MethylIngestRef` | Pre-download structured `fastqSource` / file count |
 | `MethylSampleRef` | Sample lifecycle handle (grows through prep) |
 | `AlignmentQcRef` | QC JSON path + pass gate |
+| `ExtractionQcRef` | Post-extraction QC JSON path + pass gate |
 | `FragmentomicsRef` | cfDNA fragmentomics artifacts |
 | `MethylationMatrixRef` | Post-extract HDF5 matrix handles |
 | `MethylGroup` | Cohort (static project group or MC train/val draw) |
@@ -47,6 +48,7 @@ Actions in `workers/methyl_worker/action_catalog.py` declare **`domain_effects`*
 | `sample.download_fastq` | `MethylIngestRef` | `MethylSampleRef.fastqFiles` |
 | `sample.parabricks_fq2bam` | `MethylSampleRef` | `bamPath`, `metricsJson` |
 | `sample.methyl_qc` | `MethylSampleRef` | `alignmentQc`; binds `qcPass` bool |
+| `sample.extraction_qc` | `MethylSampleRef` | `extractionQc`; binds `extractionQcPass` bool |
 | `sample.fragmentomics` | `MethylSampleRef` | `fragmentomics` |
 | `sample.methyl_extract` | `MethylSampleRef` | `methylation` |
 | `pipeline.centroid` | `MethylGroup` | `MethylCentroidRef` |
@@ -54,6 +56,8 @@ Actions in `workers/methyl_worker/action_catalog.py` declare **`domain_effects`*
 | `validation.plan_iterations` | project groups | `iterations[]` as `StratifiedCohortDraw` |
 
 Optional worker adapter: `methyl_domain.helpers.enrich_sample_prep_output()` merges handler `output_json` into a `MethylSampleRef`.
+
+After successful SamplePrep, downstream code resolves HDF5 paths via `resolve_methylation_h5_path(sample_ref, chromosome, context)` and loads GPU-capable data with `load_methyl_sample_from_ref()` (wraps `MethylSample.load_from_h5` in methylutils).
 
 ## DomainProgram IR and compiler
 

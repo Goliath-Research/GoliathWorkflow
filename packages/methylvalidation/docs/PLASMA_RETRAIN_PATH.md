@@ -32,19 +32,21 @@ Use this workflow when the cohort is **plasma or cell-free DNA**, not buffy-coat
 
 ## 2. Upstream QC and extraction (before HDF5)
 
-Recommended order (SamplePrepPipeline):
+Recommended order (SamplePrepPipeline) — see [`workflow_engine/sql/SamplePrepFlow.md`](../../../workflow_engine/sql/SamplePrepFlow.md):
 
-1. Download FASTQs → sample directory under `/work/samples/{id}/`
-2. Parabricks → BAM + `*.qc-metrics.tar` + `{sample}.json`
-3. Delete FASTQs (reclaim disk)
-4. `methyl-qc --project …` — WGBS guardrails, cfDNA insert-size rules, bisulfite sidecars; **`guardrails.overall_pass`** gates downstream steps
-5. **If QC pass and `primary_analyte` is `cfdna`:** `methyl-fragmentomics --project …` (BAM WPS + end motifs)
-6. MethylDackel / external extractor → `{chrom}-CG.h5`
-7. Delete BAM (reclaim disk)
+1. Download FASTQs → sample directory under `/work/samples/{id}/` (any structured laboratory source)
+2. Parabricks (GPU) → BAM + `*.qc-metrics.tar` + `{sample}.json`
+3. `methyl-qc` — alignment guardrails + cycle screening; **`qcPass`** gates extract; optional fastp remediation
+4. Delete FASTQs (after **final** alignment QC — retained through trim/realign if remediation runs)
+5. **If QC pass and `primary_analyte` is `cfdna`:** `methyl-fragmentomics` (BAM WPS + end motifs)
+6. MethylExtractor (GPU) → `{chrom}-{ctx}.h5` + `{sampleId}.extraction_manifest.json`
+7. `methyl-extraction-qc` — post-extract guardrails; **`extractionQcPass`** gates archive/cleanup
+8. Optional `sample.upload-h5` → durable archive
+9. Delete BAM (after extraction QC pass)
 
-**Why QC before fragmentomics:** failed samples should not spend hours scanning BAMs. Fragmentomics still runs before extraction and BAM deletion (both need the aligned BAM). **buffy_coat** projects skip step 5.
+**Why QC before fragmentomics:** failed samples should not spend hours scanning BAMs. **buffy_coat** projects skip fragmentomics.
 
-Workflow seed: [`workflow_engine/sql/wf_sample_prep_pipeline_seed.sql`](../../../workflow_engine/sql/wf_sample_prep_pipeline_seed.sql).
+**Deploy workflow:** `bash scripts/deploy_workflow_definitions.sh` (DomainProgram [`sample_prep.program.json`](../../../workflow_engine/domain/fixtures/sample_prep.program.json)).
 
 ### Bisulfite conversion sidecar
 

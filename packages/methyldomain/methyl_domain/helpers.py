@@ -160,6 +160,39 @@ def apply_methylation_to_sample(
     )
 
 
+def resolve_methylation_h5_path(
+    sample: MethylSampleRef,
+    chromosome: str,
+    context: str = "CG",
+) -> Path:
+    """Resolve local HDF5 path from post-prep ``MethylSampleRef.methylation``."""
+    if sample.methylation is None:
+        raise ValueError(f"sample {sample.sampleId!r} has no methylation ref")
+    matrix = sample.methylation
+    if matrix.h5Files:
+        suffix = f"{chromosome}-{context}.h5"
+        for name in matrix.h5Files:
+            if name == suffix or name.endswith(f"/{suffix}"):
+                return Path(matrix.sampleDir) / Path(name).name
+    pattern = matrix.h5Pattern or "{chr}-{ctx}.h5"
+    filename = pattern.replace("{chr}", str(chromosome)).replace("{ctx}", str(context))
+    return Path(matrix.sampleDir) / filename
+
+
+def load_methyl_sample_from_ref(
+    sample: MethylSampleRef,
+    chromosome: str,
+    context: str = "CG",
+):
+    """Load GPU-capable ``MethylSample`` from a post-prep sample ref."""
+    from methyl_utils import MethylSample
+
+    path = resolve_methylation_h5_path(sample, chromosome, context)
+    if not path.is_file():
+        raise FileNotFoundError(f"methylation HDF5 not found: {path}")
+    return MethylSample.load_from_h5(path)
+
+
 def build_stratified_cohort_draw(
     *,
     run_id: str,

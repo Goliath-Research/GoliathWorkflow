@@ -96,7 +96,7 @@ source .venv/bin/activate
 pip install -e workers/
 ```
 
-Console scripts on `PATH` must include: `methyl-centroid`, `methyl-detector`, `methyl-mapper`, `methyl-enricher`, `methyl-disease-progression`, plus native **`MethylExtractor`** and Docker **Parabricks** for sample prep.
+Console scripts on `PATH` must include: `methyl-centroid`, `methyl-detector`, `methyl-mapper`, `methyl-enricher`, `methyl-disease-progression`, `methyl-qc`, `methyl-extraction-qc`, plus native **`MethylExtractor`** and Docker **Parabricks** for sample prep.
 
 ### Capability fleet
 
@@ -109,7 +109,7 @@ Console scripts on `PATH` must include: `methyl-centroid`, `methyl-detector`, `m
 
 | Stage | Capability | Execution |
 |-------|------------|-----------|
-| Sample prep | `sample.download-fastq`, `parabricks.fq2bam`, `sample.delete-fastqs`, `methyl-qc`, `methyl-fragmentomics`, `methyl-extract`, `sample.delete-bam`, `sample.mark-failed` | in-process |
+| Sample prep | `sample.download-fastq`, `parabricks.fq2bam`, `sample.trim-fastq`, `sample.delete-fastqs`, `methyl-qc`, `methyl-fragmentomics`, `methyl-extract`, `methyl-extraction-qc`, `sample.upload-h5`, `sample.delete-bam`, `sample.mark-failed` | in-process / external GPU |
 | Feature MC / freeze | `methyl-centroid`, `methyl-detector` | CLI subprocess |
 | Biological | `methyl-mapper`, `methyl-enricher`, `methyl-disease-progression` | CLI (`--project`) |
 | Validation | `validation.plan-iterations`, `validation.stability`, `validation.prepare-freeze-project`, `validation.stability-freeze-readiness`, `validation.model-mc`, `validation.select-best-model`, `validation.post-model-validation` | in-process |

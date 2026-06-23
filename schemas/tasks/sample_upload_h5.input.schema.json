@@ -1,19 +1,324 @@
 {
+  "$defs": {
+    "AzureAccountKeyCredentials": {
+      "additionalProperties": false,
+      "properties": {
+        "accountKey": {
+          "format": "password",
+          "title": "Accountkey",
+          "type": "string",
+          "writeOnly": true
+        },
+        "authMode": {
+          "const": "account_key",
+          "default": "account_key",
+          "title": "Authmode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "accountKey"
+      ],
+      "title": "AzureAccountKeyCredentials",
+      "type": "object"
+    },
+    "AzureConnectionStringCredentials": {
+      "additionalProperties": false,
+      "properties": {
+        "authMode": {
+          "const": "connection_string",
+          "default": "connection_string",
+          "title": "Authmode",
+          "type": "string"
+        },
+        "connectionString": {
+          "format": "password",
+          "title": "Connectionstring",
+          "type": "string",
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "connectionString"
+      ],
+      "title": "AzureConnectionStringCredentials",
+      "type": "object"
+    },
+    "AzureDefaultCredentialCredentials": {
+      "additionalProperties": false,
+      "properties": {
+        "authMode": {
+          "const": "default_credential",
+          "default": "default_credential",
+          "title": "Authmode",
+          "type": "string"
+        }
+      },
+      "title": "AzureDefaultCredentialCredentials",
+      "type": "object"
+    },
+    "AzureH5Destination": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "title": "Account",
+          "type": "string"
+        },
+        "container": {
+          "title": "Container",
+          "type": "string"
+        },
+        "credentials": {
+          "discriminator": {
+            "mapping": {
+              "account_key": "#/$defs/AzureAccountKeyCredentials",
+              "connection_string": "#/$defs/AzureConnectionStringCredentials",
+              "default_credential": "#/$defs/AzureDefaultCredentialCredentials"
+            },
+            "propertyName": "authMode"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/AzureAccountKeyCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureConnectionStringCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureDefaultCredentialCredentials"
+            }
+          ],
+          "title": "Credentials"
+        },
+        "prefix": {
+          "title": "Prefix",
+          "type": "string"
+        },
+        "type": {
+          "const": "azure_blob",
+          "default": "azure_blob",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "account",
+        "container",
+        "prefix",
+        "credentials"
+      ],
+      "title": "AzureH5Destination",
+      "type": "object"
+    },
+    "FileH5Destination": {
+      "additionalProperties": false,
+      "properties": {
+        "basePath": {
+          "title": "Basepath",
+          "type": "string"
+        },
+        "prefix": {
+          "default": "",
+          "title": "Prefix",
+          "type": "string"
+        },
+        "type": {
+          "const": "file",
+          "default": "file",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "basePath"
+      ],
+      "title": "FileH5Destination",
+      "type": "object"
+    },
+    "S3ExplicitKeysCredentials": {
+      "additionalProperties": false,
+      "properties": {
+        "accessKeyId": {
+          "title": "Accesskeyid",
+          "type": "string"
+        },
+        "authMode": {
+          "const": "explicit_keys",
+          "default": "explicit_keys",
+          "title": "Authmode",
+          "type": "string"
+        },
+        "secretAccessKey": {
+          "format": "password",
+          "title": "Secretaccesskey",
+          "type": "string",
+          "writeOnly": true
+        },
+        "sessionToken": {
+          "anyOf": [
+            {
+              "format": "password",
+              "type": "string",
+              "writeOnly": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sessiontoken",
+          "writeOnly": true
+        }
+      },
+      "required": [
+        "accessKeyId",
+        "secretAccessKey"
+      ],
+      "title": "S3ExplicitKeysCredentials",
+      "type": "object"
+    },
+    "S3H5Destination": {
+      "additionalProperties": false,
+      "properties": {
+        "bucket": {
+          "title": "Bucket",
+          "type": "string"
+        },
+        "credentials": {
+          "discriminator": {
+            "mapping": {
+              "explicit_keys": "#/$defs/S3ExplicitKeysCredentials",
+              "instance_profile": "#/$defs/S3InstanceProfileCredentials"
+            },
+            "propertyName": "authMode"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/S3ExplicitKeysCredentials"
+            },
+            {
+              "$ref": "#/$defs/S3InstanceProfileCredentials"
+            }
+          ],
+          "title": "Credentials"
+        },
+        "endpointUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Endpointurl"
+        },
+        "prefix": {
+          "title": "Prefix",
+          "type": "string"
+        },
+        "region": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Region"
+        },
+        "type": {
+          "const": "s3",
+          "default": "s3",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bucket",
+        "prefix",
+        "credentials"
+      ],
+      "title": "S3H5Destination",
+      "type": "object"
+    },
+    "S3InstanceProfileCredentials": {
+      "additionalProperties": false,
+      "properties": {
+        "authMode": {
+          "const": "instance_profile",
+          "default": "instance_profile",
+          "title": "Authmode",
+          "type": "string"
+        }
+      },
+      "title": "S3InstanceProfileCredentials",
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": true,
-  "description": "Input for sample.upload_h5 (archive {chr}-{ctx}.h5 to object storage).",
+  "additionalProperties": false,
+  "description": "Input for sample.upload_h5 (archive methylation HDF5 to object storage).",
   "properties": {
     "h5Destination": {
-      "$ref": "../domain/h5_storage.schema.json#/$defs/S3H5Destination"
+      "discriminator": {
+        "mapping": {
+          "azure_blob": "#/$defs/AzureH5Destination",
+          "file": "#/$defs/FileH5Destination",
+          "s3": "#/$defs/S3H5Destination"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/FileH5Destination"
+        },
+        {
+          "$ref": "#/$defs/S3H5Destination"
+        },
+        {
+          "$ref": "#/$defs/AzureH5Destination"
+        }
+      ],
+      "title": "H5Destination"
     },
     "h5Files": {
-      "items": { "type": "string" },
-      "type": "array"
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "H5Files"
     },
-    "sampleDir": { "type": "string" },
-    "sampleId": { "type": "string" },
-    "tool": { "const": "SampleUploadH5", "default": "SampleUploadH5", "type": "string" }
+    "sampleDir": {
+      "title": "Sampledir",
+      "type": "string"
+    },
+    "sampleId": {
+      "title": "Sampleid",
+      "type": "string"
+    },
+    "tool": {
+      "default": "SampleUploadH5",
+      "title": "Tool",
+      "type": "string"
+    }
   },
-  "required": ["sampleId", "sampleDir", "h5Destination", "tool"],
+  "required": [
+    "sampleId",
+    "sampleDir",
+    "h5Destination"
+  ],
+  "title": "UploadH5TaskInput",
   "type": "object"
 }
