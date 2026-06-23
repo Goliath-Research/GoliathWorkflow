@@ -14,6 +14,8 @@ Options:
   --project NAME         Project name (default: Development)
   --feed NAME            Artifacts feed (default: methyl-extractor)
   --arch KEY             Download one arch only (aarch64 or amd64); default both
+  --install              Extract tarball and configure PATH + HDF5_PLUGIN_PATH
+  --epimethyl-root PATH  Root for install (default: /work/epimethyl)
   -h, --help             Show this help
 
 Requires: az CLI with azure-devops extension; az devops login (PAT with Packaging read).
@@ -21,7 +23,8 @@ Requires: az CLI with azure-devops extension; az devops login (PAT with Packagin
 Example:
   scripts/download_methyl_extractor_artifacts.sh \
     --version 2026.6.1 \
-    --release-dir /work/epimethyl/releases/2026.6.1
+    --release-dir /work/epimethyl/releases/2026.6.1 \
+    --arch aarch64 --install
 EOF
 }
 
@@ -35,6 +38,8 @@ ORG="${AZURE_DEVOPS_ORG:-https://dev.azure.com/EpiMethyl}"
 PROJECT="${AZURE_DEVOPS_PROJECT:-Development}"
 FEED="${METHYL_EXTRACTOR_FEED:-methyl-extractor}"
 ARCH_FILTER=""
+DO_INSTALL=0
+EPIMETHYL_ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -44,6 +49,8 @@ while [[ $# -gt 0 ]]; do
     --project) PROJECT="${2:-}"; shift 2 ;;
     --feed) FEED="${2:-}"; shift 2 ;;
     --arch) ARCH_FILTER="${2:-}"; shift 2 ;;
+    --install) DO_INSTALL=1; shift ;;
+    --epimethyl-root) EPIMETHYL_ROOT="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
   esac
@@ -86,4 +93,19 @@ for arch in aarch64 amd64; do
 done
 
 info "Download complete: $RELEASE_DIR"
-info "Update manifest.json artifacts.*.sha256 then run promote_release.sh"
+
+if [[ "$DO_INSTALL" -eq 1 ]]; then
+  if [[ -z "$ARCH_FILTER" ]]; then
+    ARCH_FILTER="$(platform_arch_key "$(detect_uname_arch)")"
+  fi
+  tb="$RELEASE_DIR/methyl-extractor-linux-${ARCH_FILTER}.tar.gz"
+  [[ -f "$tb" ]] || die "Tarball not found for install: $tb"
+  bash "$SCRIPT_DIR/install_methyl_extractor_tarball.sh" \
+    --tarball "$tb" \
+    --arch "$ARCH_FILTER" \
+    --epimethyl-root "$EPIMETHYL_ROOT"
+else
+  info "Install: scripts/install_methyl_extractor_tarball.sh --tarball <path>"
+  info "Or re-run with --install (and --arch if needed)"
+  info "Full release: assemble manifest.json then promote_release.sh"
+fi

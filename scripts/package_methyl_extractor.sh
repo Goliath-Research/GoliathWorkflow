@@ -96,7 +96,17 @@ if [[ -d "$PLUGIN_SRC" ]]; then
 fi
 echo "$VERSION" >"$STAGING/VERSION.txt"
 
-tar -czf "$OUTPUT" -C "$STAGING" bin lib VERSION.txt
+cat >"$STAGING/env.sh" <<'ENVEOF'
+#!/bin/sh
+# Source after extract: source "$(dirname "$0")/env.sh"  (from install root)
+_ROOT="$(cd "$(dirname "$0")" && pwd)"
+export METHYL_EXTRACTOR_BIN="$_ROOT/bin/MethylExtractor"
+export HDF5_PLUGIN_PATH="$_ROOT/lib/hdf5_zstd_plugin"
+export PATH="$_ROOT/bin:$PATH"
+ENVEOF
+chmod +x "$STAGING/env.sh"
+
+tar -czf "$OUTPUT" -C "$STAGING" bin lib VERSION.txt env.sh
 SHA="$(sha256sum "$OUTPUT" | awk '{print $1}')"
 info "Wrote $OUTPUT (sha256=$SHA)"
 info "Add to manifest.json artifacts.$ARCH_KEY.sha256"
