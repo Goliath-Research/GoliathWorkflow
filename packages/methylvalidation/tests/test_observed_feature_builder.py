@@ -838,6 +838,28 @@ def test_gene_scored_feature_names_and_fingerprint():
     assert gene_weighted_sign_agreement_column("cmp_a") == "gene_weighted_sign_agreement__cmp_a"
 
 
+def test_prepare_gene_scored_panels_raises_when_min_support_filters_all_rows():
+    from methyl_validation.gene_scored_features import prepare_gene_scored_panels
+
+    frozen_panel = pd.DataFrame(
+        {
+            "comparison_label": ["PCa", "PCa"],
+            "gene_name": ["OR11H2", "OR4N2"],
+            "gene_support_n": [2, 2],
+            "gene_importance": [0.7, 0.7],
+            "mean_effect_size": [0.2, 0.2],
+        }
+    )
+    with pytest.raises(ValueError, match="No genes passed gene_scored_min_support_n=5"):
+        prepare_gene_scored_panels(frozen_panel, min_support_n=5)
+
+
+def test_prepare_gene_scored_panels_returns_empty_when_input_empty():
+    from methyl_validation.gene_scored_features import prepare_gene_scored_panels
+
+    assert prepare_gene_scored_panels(pd.DataFrame(), min_support_n=5) == {}
+
+
 def test_gene_weighted_sign_agreement_nan_without_prior():
     from methyl_validation.gene_scored_features import compute_gene_scored_matrices, prepare_gene_scored_panels
 
@@ -1317,6 +1339,22 @@ def test_structural_scored_hand_calculation_and_dynamic_omission():
     assert float(obs_fraction[("cmp_a", "promoter")][0]) == pytest.approx(1.0, rel=1e-5, abs=1e-6)
     assert float(sign_agreement[("cmp_a", "promoter")][0]) == pytest.approx(0.0, rel=1e-5, abs=1e-6)
     assert not np.isfinite(float(directional_iqr[("cmp_a", "promoter")][0]))
+
+
+def test_prepare_structural_scored_panels_raises_when_min_support_filters_all_rows():
+    from methyl_validation.structural_scored_features import prepare_structural_scored_panels
+
+    frozen_features = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a"],
+            "gene_name": ["G1", "G2"],
+            "feature_type": ["promoter", "exon"],
+            "n_dmps_in_feature": [2, 2],
+            "feature_effect_compound": [1.0, 0.5],
+        }
+    )
+    with pytest.raises(ValueError, match="No gene-feature rows passed structural_scored_min_support_n=5"):
+        prepare_structural_scored_panels(frozen_features, min_support_n=5)
 
 
 def test_structural_scored_gene_body_emitted_by_default():
