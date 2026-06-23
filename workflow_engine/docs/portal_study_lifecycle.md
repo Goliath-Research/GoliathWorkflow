@@ -10,7 +10,7 @@ Start when FASTQs are ready. Each sample in `context_json.samples[]` runs downlo
 
 **`fastqStorage` is always required** — initial FASTQs come from **laboratory-owned** storage, not from MethylPipeline archive storage.
 
-HDF5 archive defaults (`h5Storage`) load from `wf.platform_sample_storage` when omitted. See [platform_sample_storage.md](../../docs/deployment/platform_sample_storage.md).
+HDF5 archive defaults (`h5Storage`) load from `portal.resource_profile` when omitted. See [portal_resource_profile.md](../../docs/deployment/portal_resource_profile.md).
 
 ```http
 POST /v1/studies/sample-prep/start

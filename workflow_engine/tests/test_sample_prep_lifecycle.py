@@ -44,7 +44,6 @@ def test_start_sample_prep_plans_context_and_starts_instance(tmp_path: Path) -> 
     created: dict = {}
     started: list[int] = []
     db = MagicMock()
-    db.get_platform_sample_storage.return_value = None
 
     def fake_create_instance(_db, version_id: int, context: dict) -> int:
         created["version_id"] = version_id

@@ -421,6 +421,8 @@ Hand-written SQL seeds (`wf_data_driven_pipeline_seed.sql`, `wf_sample_prep_pipe
 
 The engine never parses methylation semantics. It iterates JSON arrays and resolves templates. Domain types (`MethylSampleRef`, `MethylGroup`, `StratifiedCohortDraw`, …) are **authoring and validation** concerns; runtime scope holds flat JSON.
 
+**Schema boundary:** Domain configuration (archive storage profiles, portal RBAC, cohort metadata) belongs in **`portal`**, **`Meta`**, or **`RBAC`** schemas — not in **`wf`**. The engine stores opaque `context_json` with already-resolved action inputs (e.g. `fastqStorage`, `h5Storage`); middle-tier planners read `portal.resource_profile` before instance creation. See [`docs/deployment/portal_resource_profile.md`](/home/ubuntu/MethylPipeline/docs/deployment/portal_resource_profile.md).
+
 ### Statement-shaped IR (v2)
 
 Programs use statement nodes (JSON AST), not opaque nested config:

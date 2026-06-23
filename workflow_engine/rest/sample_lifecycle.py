@@ -17,6 +17,7 @@ def _ensure_import_paths() -> None:
     for rel in (
         "workflow_engine/domain",
         "workflow_engine/contract",
+        "workflow_engine/portal",
         "workers",
         "packages/methyldomain",
         "packages/methylvalidation",
@@ -40,24 +41,23 @@ def start_sample_prep(
         raise ValueError("projectPath is required")
 
     _ensure_import_paths()
+    from archive_profile_resolver import apply_archive_profile_storage
     from methyl_validation.sample_prep_planner import plan_sample_prep_context
+    from resource_profile import DEFAULT_ARCHIVE_PROFILE_KEY, ResourceProfileReader
     from study_lifecycle import _resolve_workflow_version_id
 
     planner_payload = dict(body)
     planner_payload.setdefault("projectPath", project_path)
 
-    from methyl_domain.platform_storage import DEFAULT_STORAGE_KEY
-    try:
-        from .platform_storage import apply_platform_archive_storage
-    except ImportError:
-        from platform_storage import apply_platform_archive_storage
-
-    storage_key = str(body.get("archiveStorageKey") or body.get("storageKey") or DEFAULT_STORAGE_KEY)
-    platform_row = db.get_platform_sample_storage(storage_key)
-    planner_payload = apply_platform_archive_storage(
+    profile_key = str(
+        body.get("archiveProfileKey") or body.get("archiveStorageKey") or body.get("storageKey")
+        or DEFAULT_ARCHIVE_PROFILE_KEY
+    )
+    profile_reader = ResourceProfileReader(db)
+    planner_payload = apply_archive_profile_storage(
         planner_payload,
-        platform_row,
-        storage_key=storage_key,
+        profile_reader.h5_storage_defaults,
+        profile_key=profile_key,
     )
 
     context = plan_sample_prep_context(planner_payload)

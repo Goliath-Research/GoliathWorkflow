@@ -4,7 +4,7 @@ Canonical contract for middle-tier-to-database access. Both **Azure SQL (T-SQL)*
 
 ## Schema
 
-All workflow-engine objects live in schema **`wf`**. Domain/portal objects may use `dbo`, `Meta`, `RBAC`, `portal`, etc. (Azure SQL only until ported).
+All workflow-engine objects live in schema **`wf`**. Domain/portal objects may use `dbo`, `Meta`, `RBAC`, `portal`, etc. (Azure SQL only until ported). **Do not add process-specific config tables to `wf`** — use `portal.resource_profile` or pass fully materialized JSON in `context_json`.
 
 ## Portability conventions
 

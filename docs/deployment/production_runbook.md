@@ -35,7 +35,7 @@ POST /v1/studies/sample-prep/start
 }
 ```
 
-**Ingress vs retention:** `fastqStorage` must point at **laboratory-owned** storage (never inferred from myQNAPcloud). HDF5 archive (`h5Storage`) defaults from `wf.platform_sample_storage` (myQNAPcloud `epimethyl/samples/`) when omitted. See [platform_sample_storage.md](platform_sample_storage.md).
+**Ingress vs retention:** `fastqStorage` must point at **laboratory-owned** storage (never inferred from myQNAPcloud). HDF5 archive (`h5Storage`) defaults from `portal.resource_profile` when omitted. See [portal_resource_profile.md](portal_resource_profile.md).
 
 **Manual instance** (hand-built `context_json`):
 
