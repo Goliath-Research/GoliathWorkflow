@@ -8,10 +8,12 @@ import pytest
 
 from methyl_validation import cli
 from methyl_validation.cli import (
+    _base_project_step_config,
     _deep_merge_dicts,
     _list_existing_run_numbers,
     _load_existing_step_timings,
     _resolve_resume_start_iteration,
+    _sync_all_run_project_step_configs,
     _sync_run_project_step_config,
 )
 
@@ -122,6 +124,54 @@ def test_sync_run_project_step_config_merges_base_into_existing_run_project(tmp_
     assert payload["step_config"]["detection"]["debug"] is True
     assert "controls" in payload["step_config"]["predictor"]
     assert payload["step_config"]["predictor"]["model_path"] == "/work/model.pkl"
+
+
+def test_sync_run_project_step_config_noop_when_base_none(tmp_path: Path):
+    run_project = tmp_path / "project.json"
+    run_project.write_text('{"step_config": {"detection": {"min_samples_pct": 0.0}}}', encoding="utf-8")
+    assert _sync_run_project_step_config(run_project, None) is False
+    payload = json.loads(run_project.read_text(encoding="utf-8"))
+    assert payload["step_config"]["detection"]["min_samples_pct"] == 0.0
+
+
+def test_base_project_step_config_returns_deep_copy():
+    cfg = SimpleNamespace(
+        step_config={
+            "detection": {"min_samples_pct": 0.2, "min_samples_abs": 4},
+        }
+    )
+    out = _base_project_step_config(cfg)
+    assert out is not None
+    assert out["detection"]["min_samples_pct"] == 0.2
+    out["detection"]["min_samples_pct"] = 0.99
+    assert cfg.step_config["detection"]["min_samples_pct"] == 0.2
+
+
+def test_sync_all_run_project_step_configs_updates_every_run(tmp_path: Path):
+    mc_root = tmp_path / "monte_carlo_runs"
+    for run_id in ("run_0001", "run_0002"):
+        run_dir = mc_root / run_id
+        run_dir.mkdir(parents=True)
+        payload = {
+            "project_name": run_id,
+            "step_config": {
+                "detection": {"min_samples_pct": 0.0, "min_samples_abs": 4},
+                "predictor": {"controls": {"groups": []}, "diseases": {"groups": []}},
+            },
+        }
+        (run_dir / "project.json").write_text(json.dumps(payload), encoding="utf-8")
+
+    base_step_config = {
+        "detection": {"min_samples_pct": 0.2, "min_samples_abs": 4},
+    }
+    n_updated, n_scanned = _sync_all_run_project_step_configs(mc_root, base_step_config)
+    assert n_scanned == 2
+    assert n_updated == 2
+
+    for run_id in ("run_0001", "run_0002"):
+        payload = json.loads((mc_root / run_id / "project.json").read_text(encoding="utf-8"))
+        assert payload["step_config"]["detection"]["min_samples_pct"] == 0.2
+        assert "controls" in payload["step_config"]["predictor"]
 
 
 def test_post_model_validation_requires_production_project(tmp_path: Path, monkeypatch, capsys):

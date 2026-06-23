@@ -300,6 +300,35 @@ def _sync_run_project_step_config(project_path: Path, base_step_config: Optional
     return True
 
 
+def _base_project_step_config(base_project_config: Any) -> Optional[Dict[str, Any]]:
+    """Return a deep copy of step_config from a loaded PipelineProject."""
+    step_cfg = getattr(base_project_config, "step_config", None)
+    if not isinstance(step_cfg, dict) or not step_cfg:
+        return None
+    return copy.deepcopy(step_cfg)
+
+
+def _sync_all_run_project_step_configs(
+    monte_carlo_runs_root: Path,
+    base_step_config: Optional[Dict[str, Any]],
+) -> Tuple[int, int]:
+    """
+    Sync step_config from the base project into every run_XXXX/project.json.
+
+    Returns (n_updated, n_scanned).
+    """
+    if not isinstance(base_step_config, dict) or not base_step_config:
+        return 0, 0
+    n_updated = 0
+    n_scanned = 0
+    for run_num in _list_existing_run_numbers(monte_carlo_runs_root):
+        project_path = monte_carlo_runs_root / f"run_{run_num:04d}" / "project.json"
+        n_scanned += 1
+        if _sync_run_project_step_config(project_path, base_step_config):
+            n_updated += 1
+    return n_updated, n_scanned
+
+
 def _write_model_mc_outputs(
     backend_root: Path,
     rows: List[Dict[str, Any]],
@@ -2759,6 +2788,18 @@ def main() -> None:
             f"starting at run_{start_iteration_idx + 1:04d} through run_{config.n_iterations:04d}",
             file=sys.stderr,
         )
+    if args.skip_centroid:
+        base_step_config = _base_project_step_config(base_project_config)
+        n_updated, n_scanned = _sync_all_run_project_step_configs(
+            monte_carlo_runs_root,
+            base_step_config,
+        )
+        if n_scanned > 0:
+            print(
+                f"Synced step_config from base project into {n_updated}/{n_scanned} "
+                f"run project.json file(s) (--skip-centroid).",
+                file=sys.stderr,
+            )
     previous_train_control: List[str] | None = None
     previous_train_disease: List[str] | None = None
 
@@ -2919,7 +2960,7 @@ def main() -> None:
                         continue
                     _sync_run_project_step_config(
                         project_path,
-                        getattr(base_project, "step_config", None),
+                        _base_project_step_config(base_project_config),
                     )
                     run_project = load_project(project_path)
                     comparisons = run_project.get_comparisons()
@@ -3017,7 +3058,7 @@ def main() -> None:
                         continue
                     _sync_run_project_step_config(
                         project_path,
-                        getattr(base_project, "step_config", None),
+                        _base_project_step_config(base_project_config),
                     )
                     predictor_output_dir = run_dir / "predictors"
                     n_train_samples, n_val_samples = _count_run_samples_from_existing_files(run_dir)
@@ -3084,7 +3125,7 @@ def main() -> None:
                         continue
                     _sync_run_project_step_config(
                         project_path,
-                        getattr(base_project, "step_config", None),
+                        _base_project_step_config(base_project_config),
                     )
                     predictor_output_dir = run_dir / "predictors"
                     n_train_samples, n_val_samples = _count_run_samples_from_existing_files(run_dir)
