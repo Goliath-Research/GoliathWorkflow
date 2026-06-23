@@ -84,7 +84,22 @@ Dialect-neutral wrappers used by the REST gateway — see `db_objects.yaml` `rep
 | `wf.wf_repo_get_workflow_instance` | Fetch instance id, version, and status by instance id |
 | `wf.wf_repo_create_workflow_instance` | Insert instance row; returns `id` |
 
-Action schemas are generated from worker Pydantic models (`methyl-export-task-schemas` → `schemas/tasks/`) and seeded via [`../sql/seed_action_catalog.py`](../sql/seed_action_catalog.py) (actions + schemas) or [`../sql/seed_action_schemas.py`](../sql/seed_action_schemas.py) (schemas only). The unified catalog lives at `schemas/actions/catalog.json` (`methyl-export-action-catalog`). Runtime validation is enforced in workers, not SQL.
+Action schemas are generated from worker Pydantic models (`methyl-export-task-schemas` → `schemas/tasks/`) and seeded via [`../sql/seed_action_catalog.py`](../sql/seed_action_catalog.py) using the **admin gateway** (`POST /v1/admin/catalog/seed`) or direct DB in dev. Runtime validation is enforced in workers; portal graph create rejects unknown actions in SQL.
+
+### 2a. Portal repository API (EpiPortal — database only)
+
+Deploy [`../sql/portal_workflow_api.sql`](../sql/portal_workflow_api.sql) (Azure SQL) or [`../sql_pg/portal_workflow_api.sql`](../sql_pg/portal_workflow_api.sql) (PostgreSQL). The portal **never** calls the REST gateway.
+
+| Object | Purpose |
+|--------|---------|
+| `portal.sp_list_workflow_actions` | Action picker for workflow builder |
+| `portal.sp_get_action_schema` | Schema-driven parameter forms |
+| `portal.sp_list_workflow_definitions` | List defs (filter `source` = `portal` or `system`) |
+| `portal.sp_create_workflow_graph` | Create portal-owned workflow graph; validates actions exist |
+| `portal.sp_create_and_start_instance` | Create instance + `sp_start_workflow_instance` |
+| `portal.sp_get_instance_tasks` | Monitor node executions for results panel |
+
+Portal principals must not execute `wf.wf_repo_upsert_workflow_action` or admin delete procs. Catalog seed and system pipeline deploy use the **admin gateway** (`/v1/admin/*`) from CI/release automation.
 
 ### 3. Engine runtime (SQL-only activation path)
 

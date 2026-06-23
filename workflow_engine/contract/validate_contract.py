@@ -41,8 +41,8 @@ def load_required_objects() -> list[str]:
         text = CONTRACT_YAML.read_text(encoding="utf-8")
         names: list[str] = []
         for line in text.splitlines():
-            if "name:" in line and "wf." in line:
-                m = re.search(r"name:\s*(wf\.[\w.]+|dbo\.\w+)", line)
+            if "name:" in line and ("wf." in line or "portal." in line or "dbo." in line):
+                m = re.search(r"name:\s*((?:wf|portal|dbo)\.[\w.]+)", line)
                 if m:
                     names.append(m.group(1).lower())
         return names
@@ -108,10 +108,13 @@ def main() -> int:
         else:
             print(f"[{dialect}] all required contract objects present ({len(required)} checked)")
 
-    # Cross-dialect wf.* parity (exclude optional dbo)
+    # Cross-dialect wf.* / portal.* parity (exclude optional dbo)
     wf_required = [n for n in required if n.startswith("wf.")]
+    portal_required = [n for n in required if n.startswith("portal.")]
     mssql_wf = {n for n in results["mssql"] if n.startswith("wf.")}
     pg_wf = {n for n in results["postgres"] if n.startswith("wf.")}
+    mssql_portal = {n for n in results["mssql"] if n.startswith("portal.")}
+    pg_portal = {n for n in results["postgres"] if n.startswith("portal.")}
     only_mssql = sorted(mssql_wf - pg_wf)
     only_pg = sorted(pg_wf - mssql_wf)
     for name in wf_required:
@@ -120,6 +123,14 @@ def main() -> int:
             exit_code = 1
         if name not in pg_wf:
             print(f"[postgres] contract requires {name} but not found in sql_pg/")
+            exit_code = 1
+
+    for name in portal_required:
+        if name not in mssql_portal:
+            print(f"[mssql] contract requires {name} but not found in sql/")
+            exit_code = 1
+        if name not in pg_portal:
+            print(f"[postgres] contract requires {name} concept but not found in sql_pg/")
             exit_code = 1
 
     if only_mssql or only_pg:

@@ -20,6 +20,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 API_BASE="${WORKER_API_BASE:-http://localhost:8080/v1}"
 SKIP_DEPLOY=0
 SKIP_SEED=0
+GATEWAY_ONLY=0
 
 usage() {
   cat <<'EOF'
@@ -27,7 +28,12 @@ Usage: scripts/refresh_sample_prep_test_bed.sh [options]
 
 Refreshes action catalog + SamplePrep workflow definition for gateway testing.
 
-Env (Azure SQL, default BACKEND_DB=mssql):
+Prefer admin gateway (no direct DB creds on operator host):
+  export WORKER_API_BASE=http://localhost:8080/v1
+  export GATEWAY_ADMIN_BEARER_TOKEN=<entra-jwt>
+  bash scripts/refresh_sample_prep_test_bed.sh --use-gateway-only
+
+Env (direct DB seed fallback):
   AZURE_SQL_SERVER, AZURE_SQL_DB, AZURE_SQL_USER, AZURE_SQL_PASSWORD
   BACKEND_DB=mssql
 
@@ -39,6 +45,7 @@ Options:
   --api-base URL     REST gateway base (default: WORKER_API_BASE)
   --skip-deploy      Skip deploy_workflow_definitions.sh
   --skip-seed        Skip seed_action_catalog.py
+  --use-gateway-only Require admin gateway token; skip direct DB env check
   -h, --help         Show this help
 EOF
 }
@@ -48,6 +55,7 @@ while [[ $# -gt 0 ]]; do
     --api-base) API_BASE="${2:-}"; shift 2 ;;
     --skip-deploy) SKIP_DEPLOY=1; shift ;;
     --skip-seed) SKIP_SEED=1; shift ;;
+    --use-gateway-only) GATEWAY_ONLY=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
   esac
@@ -59,14 +67,24 @@ PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
 source "$REPO_ROOT/.venv/bin/activate"
 
 BACKEND="${BACKEND_DB:-mssql}"
-if [[ "$BACKEND" == "mssql" || "$BACKEND" == "sql" ]]; then
-  if [[ -z "${AZURE_SQL_SERVER:-}" || -z "${AZURE_SQL_DB:-}" ]]; then
-    echo "Azure SQL env required: AZURE_SQL_SERVER, AZURE_SQL_DB (and credentials or MI)" >&2
-    exit 1
+if [[ "$GATEWAY_ONLY" -eq 0 && "$SKIP_SEED" -eq 0 ]]; then
+  if [[ -n "${GATEWAY_ADMIN_BEARER_TOKEN:-}" || -n "${GATEWAY_ENTRA_BEARER_TOKEN:-}" ]]; then
+    GATEWAY_ONLY=1
   fi
-  echo "Using Azure SQL backend: ${AZURE_SQL_SERVER}/${AZURE_SQL_DB}"
+fi
+
+if [[ "$GATEWAY_ONLY" -eq 0 && "$SKIP_SEED" -eq 0 ]]; then
+  if [[ "$BACKEND" == "mssql" || "$BACKEND" == "sql" ]]; then
+    if [[ -z "${AZURE_SQL_SERVER:-}" || -z "${AZURE_SQL_DB:-}" ]]; then
+      echo "Azure SQL env required for direct DB seed, or set GATEWAY_ADMIN_BEARER_TOKEN" >&2
+      exit 1
+    fi
+    echo "Using Azure SQL backend: ${AZURE_SQL_SERVER}/${AZURE_SQL_DB}"
+  else
+    echo "Using PostgreSQL backend (BACKEND_DB=${BACKEND})"
+  fi
 else
-  echo "Using PostgreSQL backend (BACKEND_DB=${BACKEND})"
+  echo "Using admin gateway for catalog seed/deploy"
 fi
 
 echo "Exporting task schemas and action catalog..."
@@ -75,7 +93,11 @@ methyl-export-action-catalog
 
 if [[ "$SKIP_SEED" -eq 0 ]]; then
   echo "Seeding wf.workflow_action + schemas..."
-  "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql/seed_action_catalog.py"
+  SEED_ARGS=()
+  if [[ -n "${GATEWAY_ADMIN_BEARER_TOKEN:-}" || -n "${GATEWAY_ENTRA_BEARER_TOKEN:-}" ]]; then
+    SEED_ARGS+=(--use-gateway)
+  fi
+  "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql/seed_action_catalog.py" "${SEED_ARGS[@]}"
 fi
 
 if [[ "$SKIP_DEPLOY" -eq 0 ]]; then

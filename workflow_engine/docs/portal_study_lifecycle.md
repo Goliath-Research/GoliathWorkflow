@@ -2,50 +2,63 @@
 
 Staged orchestration for multi-group studies: **SamplePrep** completes, then the portal starts **StudyValidationLifecycle** with a pre-planned `context_json`.
 
+## Architecture (three paths)
+
+| Actor | Transport | Purpose |
+|-------|-----------|---------|
+| **EpiPortal** | **Azure SQL direct** | Plan context, create/start instances, monitor (`portal.sp_*` procs) |
+| **Workers** | Gateway `/v1/workers/*` | Execute READY action tasks |
+| **CI / release admin** | Gateway `/v1/admin/*` | Seed action catalog, deploy system workflow graphs |
+
+The portal **never** calls the REST gateway. Legacy gateway routes under `/v1/studies/*` and `/v1/workflows/*` remain as **admin-only CI aliases** when Entra is enabled.
+
+Deploy portal SQL API: [`../sql/portal_workflow_api.sql`](../sql/portal_workflow_api.sql) (Azure SQL) or [`../sql_pg/portal_workflow_api.sql`](../sql_pg/portal_workflow_api.sql) (PostgreSQL).
+
 ## Instance 1 — SamplePrepPipeline
 
-Start when FASTQs are ready. Each sample in `context_json.samples[]` runs download → Parabricks → QC (+ optional R2 trim remediation) → MethylExtractor.
+Start when FASTQs are ready. Each sample in `context_json.samples[]` runs download → Parabricks → QC (+ optional remediation) → MethylExtractor → extraction QC → archive.
 
-### Option A — Gateway helper (recommended)
+### Option A — Portal database (recommended for EpiPortal)
 
-**`fastqStorage` is always required** — initial FASTQs come from **laboratory-owned** storage, not from MethylPipeline archive storage.
+Middle-tier runs the sample prep planner in-process, then:
 
-HDF5 archive defaults (`h5Storage`) load from `portal.resource_profile` when omitted. See [portal_resource_profile.md](../../docs/deployment/portal_resource_profile.md).
-
-```http
-POST /v1/studies/sample-prep/start
-{
-  "projectPath": "/work/.../project_Healthy_vs_PCa1-5-CG.json",
-  "workflow_version_id": <sample_prep_version>,
-  "fastqStorage": {
-    "type": "s3",
-    "bucket": "lab-cohort-bucket",
-    "region": "us-west-2",
-    "credentials": { "authMode": "instance_profile" }
-  },
-  "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]
-}
+```sql
+-- After planning context_json and resolving workflow_version_id:
+EXEC portal.sp_create_and_start_instance
+  @workflow_version_id = @sample_prep_version_id,
+  @context_json = @planned_context_json;
 ```
 
-Or pass explicit samples:
+Read `portal.resource_profile` for archive defaults when building context (same rules as [`archive_profile_resolver.py`](../portal/archive_profile_resolver.py)).
+
+Monitor:
+
+```sql
+EXEC portal.sp_get_instance_tasks @workflow_instance_id = @instance_id;
+```
+
+### Option B — Admin gateway CI alias (not for portal UI)
+
+**`fastqStorage` is always required** — initial FASTQs come from **laboratory-owned** storage.
 
 ```http
 POST /v1/studies/sample-prep/start
+Authorization: Bearer <admin-jwt>
 {
   "projectPath": "/work/.../project.json",
   "workflow_version_id": <sample_prep_version>,
-  "samples": [
-    { "sampleId": "S1", "sampleDir": "/work/samples/S1", "fastqPrefix": "plasma/S1/" }
-  ]
+  "fastqStorage": { "type": "s3", "bucket": "lab-cohort-bucket", ... },
+  "sampleCsvs": ["/work/.../healthy.csv"]
 }
 ```
 
-See [`sample_prep_test_bed.md`](sample_prep_test_bed.md) for planner fields, smoke script, and QC disposition semantics.
+See [`sample_prep_test_bed.md`](sample_prep_test_bed.md) for smoke scripts and QC semantics.
 
-### Option B — Manual context_json
+### Option C — Manual context_json (admin CI)
 
 ```http
 POST /v1/workflows/instances
+Authorization: Bearer <admin-jwt>
 {
   "workflow_version_id": <sample_prep_version>,
   "context_json": {

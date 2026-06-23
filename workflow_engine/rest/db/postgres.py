@@ -316,6 +316,54 @@ class PostgresGatewayDb(GatewayDbBase):
             "name": payload.get("name"),
         }
 
+    def list_workflow_definitions(self) -> list[dict[str, Any]]:
+        rows = self._fetch_all(
+            f"""
+            SELECT wd.id AS workflow_def_id,
+                   wd.name,
+                   COALESCE(wd.source, 'system') AS source,
+                   wv.id AS workflow_version_id,
+                   wv.version_major,
+                   wv.version_minor
+            FROM {self._qual('workflow_def')} wd
+            LEFT JOIN LATERAL (
+                SELECT id, version_major, version_minor
+                FROM {self._qual('workflow_version')}
+                WHERE workflow_def_id = wd.id AND is_active = true
+                ORDER BY version_major DESC, version_minor DESC
+                LIMIT 1
+            ) wv ON true
+            ORDER BY wd.name
+            """
+        )
+        return rows
+
+    def get_workflow_definition_by_name(self, name: str) -> dict[str, Any]:
+        row = self._fetch_one(
+            f"""
+            SELECT wd.id AS workflow_def_id,
+                   wd.name,
+                   wd.description,
+                   COALESCE(wd.source, 'system') AS source,
+                   wv.id AS workflow_version_id,
+                   wv.version_major,
+                   wv.version_minor
+            FROM {self._qual('workflow_def')} wd
+            LEFT JOIN LATERAL (
+                SELECT id, version_major, version_minor
+                FROM {self._qual('workflow_version')}
+                WHERE workflow_def_id = wd.id AND is_active = true
+                ORDER BY version_major DESC, version_minor DESC
+                LIMIT 1
+            ) wv ON true
+            WHERE wd.name = %s
+            """,
+            (name,),
+        )
+        if not row:
+            raise KeyError(f"workflow definition not found: {name!r}")
+        return row
+
     def get_worker_cluster_security(self, worker_id: int) -> Optional[dict[str, Any]]:
         return self._fetch_one(
             f"""

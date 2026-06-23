@@ -20,6 +20,7 @@ Deploy **in order**:
 | 12 | [`wf_repo_create_workflow_graph.sql`](wf_repo_create_workflow_graph.sql) | Programmatic workflow definition builder |
 | 13 | [`wf_sql_collection_bindings.sql`](wf_sql_collection_bindings.sql) | Collection binding resolution at instance start |
 | 14 | [`portal_resource_profile.sql`](portal_resource_profile.sql) | Portal archive storage profiles (domain config) |
+| 14a | [`portal_workflow_api.sql`](portal_workflow_api.sql) | Portal workflow builder + instance lifecycle (`portal.sp_*`) |
 | 15 | [`wf_drop_platform_sample_storage.sql`](wf_drop_platform_sample_storage.sql) | Drop legacy wf.platform_sample_storage if present |
 
 After SQL deploy, seed the action catalog:

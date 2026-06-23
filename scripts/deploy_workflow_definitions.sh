@@ -62,6 +62,7 @@ fi
 
 "$PYTHON_BIN" - <<'PY' "$OUTPUT_DIR" "$API_BASE" "$VERSIONS_OUT"
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -72,13 +73,19 @@ api_base = sys.argv[2].rstrip("/")
 versions_out = Path(sys.argv[3])
 results = {}
 
+token = os.environ.get("GATEWAY_ADMIN_BEARER_TOKEN") or os.environ.get("GATEWAY_ENTRA_BEARER_TOKEN")
+headers = {"Content-Type": "application/json"}
+if token:
+    headers["Authorization"] = f"Bearer {token}"
+
 for path in sorted(out_dir.glob("*_compiled.json")):
     spec = json.loads(path.read_text(encoding="utf-8"))
     name = spec.get("name") or path.stem
+    body = {"spec": spec, "replace": True, "delete_instances": True}
     req = urllib.request.Request(
-        f"{api_base}/workflows/definitions",
-        data=json.dumps(spec).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        f"{api_base}/admin/workflows/definitions/deploy",
+        data=json.dumps(body).encode("utf-8"),
+        headers=headers,
         method="POST",
     )
     try:

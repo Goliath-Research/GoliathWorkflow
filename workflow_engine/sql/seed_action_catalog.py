@@ -91,6 +91,26 @@ def _upsert_schema_psql(
     )
 
 
+def _seed_via_admin_gateway() -> tuple[int, int]:
+    from rest.admin_client import admin_request, load_catalog_seed_payload
+
+    if not CATALOG_PATH.is_file():
+        raise SystemExit(f"Missing {CATALOG_PATH}; run methyl-export-action-catalog first.")
+    if not TASKS_DIR.is_dir():
+        raise SystemExit(f"Missing {TASKS_DIR}; run methyl-export-task-schemas first.")
+
+    payload = load_catalog_seed_payload(CATALOG_PATH, TASKS_DIR)
+    result = admin_request("POST", "/admin/catalog/seed", payload)
+    action_count = int(result.get("actions_upserted") or 0)
+    schema_count = int(result.get("schemas_upserted") or 0)
+    errors = result.get("errors") or []
+    for err in errors:
+        print(f"Seed warning: {err}", file=sys.stderr)
+    for action in payload["catalog"].get("actions") or []:
+        print(f"Upserted action {action['action_name']}")
+    return action_count, schema_count
+
+
 def _seed_via_gateway() -> tuple[int, int]:
     from rest.connection import resolve_connection_config
     from rest.db import open_gateway_db
@@ -192,13 +212,33 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Run methyl-export-action-catalog before seeding",
     )
+    parser.add_argument(
+        "--use-gateway",
+        action="store_true",
+        help="Seed via admin REST gateway (requires WORKER_API_BASE + GATEWAY_ADMIN_BEARER_TOKEN)",
+    )
+    parser.add_argument(
+        "--use-db",
+        action="store_true",
+        help="Seed via direct DB connection (default when no admin token)",
+    )
     args = parser.parse_args(argv)
 
     if args.regenerate_catalog:
         export_action_catalog(write=True)
 
+    import os
+
+    use_gateway = args.use_gateway or (
+        not args.dsn
+        and not args.use_db
+        and bool(os.environ.get("GATEWAY_ADMIN_BEARER_TOKEN") or os.environ.get("GATEWAY_ENTRA_BEARER_TOKEN"))
+    )
+
     if args.dsn:
         action_count, schema_count = _seed_via_psql(args.dsn)
+    elif use_gateway:
+        action_count, schema_count = _seed_via_admin_gateway()
     else:
         action_count, schema_count = _seed_via_gateway()
 

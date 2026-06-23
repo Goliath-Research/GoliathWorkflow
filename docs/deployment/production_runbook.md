@@ -151,7 +151,7 @@ Tiered model: **TLS edge** → **Entra JWT for control-plane APIs** → **regist
 4. NSG: **close public 8080**; allow **443** from VPN CIDR and known worker egress only.
 5. Set `WORKER_API_BASE=https://<gateway-fqdn>/v1` on all workers.
 
-### Entra ID on operator routes (phase 2)
+### Entra ID — two gateway identities (phase 2)
 
 Merge [`deploy/env/gateway.security.env.example`](../../deploy/env/gateway.security.env.example) into `gateway.env`:
 
@@ -159,14 +159,26 @@ Merge [`deploy/env/gateway.security.env.example`](../../deploy/env/gateway.secur
 GATEWAY_REQUIRE_ENTRA=1
 AZURE_TENANT_ID=<tenant>
 GATEWAY_ENTRA_AUDIENCE=api://methyl-gateway   # app registration Application ID URI
-# GATEWAY_ENTRA_APP_ROLES=Workflow.Admin      # portal users
+GATEWAY_ENTRA_ADMIN_ROLES=WorkflowEngineAdmin   # CI / release operator app role
 ```
 
-Portal and automation must send `Authorization: Bearer <jwt>` on:
+| Identity | Routes | Auth |
+|----------|--------|------|
+| **Worker** | `POST /v1/workers/*` | `worker_id` + `worker_token` over HTTPS |
+| **Admin** | `POST /v1/admin/*` (+ legacy `/v1/studies/*`, `/v1/workflows/*`, `/v1/actions*`) | `Authorization: Bearer <entra-jwt>` with admin app role |
 
-- `POST /v1/studies/*`, `POST|DELETE /v1/workflows/*`, `POST /v1/validation/*`, `POST /v1/actions`, `GET /v1/actions`
+**EpiPortal does not call the gateway.** Portal workflow builder and instance lifecycle use Azure SQL procs (`portal.sp_*`). See [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md).
 
-Worker routes (`POST /v1/workers/*`) continue to use `worker_id` + `worker_token` over HTTPS.
+Release automation (no direct SQL creds on operator laptops):
+
+```bash
+export WORKER_API_BASE=https://<gateway-fqdn>/v1
+export GATEWAY_ADMIN_BEARER_TOKEN=$(az account get-access-token --resource api://methyl-gateway --query accessToken -o tsv)
+bash scripts/deploy_workflow_definitions.sh
+python workflow_engine/sql/seed_action_catalog.py --use-gateway
+```
+
+Legacy operator routes remain as **admin-only CI aliases** when Entra is enabled; they are not for portal UI.
 
 ### Cluster registration + Tier C IP bind (phase 3)
 

@@ -2,8 +2,11 @@
 """
 OpenAPI workflow REST gateway backed by wf contract stored procedures.
 
-Production Linux daemon (systemd). Supports Azure SQL (phase 1) and PostgreSQL (phase 2)
-via BACKEND_DB / connection env vars. Delphi WfEngineSrv remains an optional reference host.
+Two gateway identities:
+- WORKER (/v1/workers/*): task claim/submit for compute workers
+- ADMIN (/v1/admin/* + legacy CI aliases): catalog seed, workflow deploy
+
+Portal (EpiPortal) never uses this HTTP surface — it talks to Azure SQL directly.
 """
 
 from __future__ import annotations
@@ -22,6 +25,13 @@ if __name__ == "__main__" and __package__ is None:
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "contract"))
 
+from .admin_handlers import (
+    compile_domain_program,
+    deploy_workflow_definition,
+    get_workflow_definition_by_name,
+    list_workflow_definitions,
+    seed_action_catalog,
+)
 from .connection import resolve_connection_config
 from .db import open_gateway_db
 from .db.base import GatewayDb, WorkerAuthError
@@ -34,6 +44,7 @@ from .db_client import (
     get_workflow_instance,
     list_workflow_actions,
     start_workflow_instance,
+    upsert_action_schema,
     upsert_workflow_action,
     worker_authenticate,
     worker_fail_task,
@@ -78,6 +89,21 @@ class RestGateway:
     def backend(self) -> str:
         return self.db.backend
 
+    def _merge_action_catalog(self, actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        merged: list[dict[str, Any]] = []
+        for row in actions:
+            meta = self.catalog_by_name.get(str(row["action_name"]), {})
+            merged.append(
+                {
+                    **row,
+                    "execution_mode": meta.get("execution_mode"),
+                    "cli_tool": meta.get("cli_tool"),
+                    "argv_map": meta.get("argv_map"),
+                    "in_process_handler": meta.get("in_process_handler"),
+                }
+            )
+        return merged
+
     def dispatch(
         self,
         method: str,
@@ -93,33 +119,10 @@ class RestGateway:
                 "service": "methyl-workflow-gateway",
                 "backend": self.backend,
                 "api_base": "/v1",
+                "identities": ["worker", "admin"],
             }
 
-        if method == "GET" and path == "/v1/actions":
-            actions = list_workflow_actions(self.db)
-            merged: list[dict[str, Any]] = []
-            for row in actions:
-                meta = self.catalog_by_name.get(str(row["action_name"]), {})
-                merged.append(
-                    {
-                        **row,
-                        "execution_mode": meta.get("execution_mode"),
-                        "cli_tool": meta.get("cli_tool"),
-                        "argv_map": meta.get("argv_map"),
-                        "in_process_handler": meta.get("in_process_handler"),
-                    }
-                )
-            return 200, {"actions": merged}
-
-        m = re.fullmatch(r"/v1/actions/([^/]+)/schema", path)
-        if method == "GET" and m:
-            action_name = m.group(1)
-            direction = (q.get("direction") or ["input"])[0]
-            try:
-                return 200, get_action_schema(self.db, action_name, direction)
-            except KeyError as exc:
-                return 404, {"error": str(exc)}
-
+        # --- Worker tier ---
         if method == "POST" and path == "/v1/workers/authenticate":
             worker_authenticate(self.db, int(body["worker_id"]), str(body["worker_token"]))
             return 200, {}
@@ -136,10 +139,9 @@ class RestGateway:
 
         m = re.fullmatch(r"/v1/workers/tasks/(\d+)/submit", path)
         if method == "POST" and m:
-            ne_id = int(m.group(1))
             payload = worker_submit_result(
                 self.db,
-                ne_id,
+                int(m.group(1)),
                 int(body["worker_id"]),
                 str(body["worker_token"]),
                 int(body["result_code"]),
@@ -169,6 +171,87 @@ class RestGateway:
                 body.get("error_message"),
             )
             return 204, None
+
+        # --- Admin tier (/v1/admin/*) ---
+        if method == "POST" and path == "/v1/admin/catalog/seed":
+            payload = seed_action_catalog(
+                self.db,
+                body,
+                upsert_workflow_action=upsert_workflow_action,
+                upsert_action_schema=upsert_action_schema,
+            )
+            return 200, payload
+
+        m = re.fullmatch(r"/v1/admin/actions/([^/]+)/schema", path)
+        if method == "PUT" and m:
+            upsert_action_schema(
+                self.db,
+                m.group(1),
+                str(body["direction"]),
+                dict(body["schema_json"]),
+                body.get("schema_id"),
+            )
+            return 200, {"action_name": m.group(1), "direction": body["direction"]}
+
+        if method == "POST" and path == "/v1/admin/workflows/compile":
+            return 200, compile_domain_program(body)
+
+        if method == "POST" and path == "/v1/admin/workflows/definitions/deploy":
+            result = deploy_workflow_definition(
+                self.db,
+                body,
+                create_workflow_definition=create_workflow_definition,
+                delete_workflow_definition=delete_workflow_definition,
+            )
+            return 201, result
+
+        if method == "GET" and path == "/v1/admin/workflows/definitions":
+            return 200, list_workflow_definitions(self.db)
+
+        m = re.fullmatch(r"/v1/admin/workflows/definitions/([^/]+)", path)
+        if method == "GET" and m:
+            try:
+                return 200, get_workflow_definition_by_name(self.db, m.group(1))
+            except KeyError as exc:
+                return 404, {"error": str(exc)}
+
+        if method == "DELETE" and m:
+            payload = delete_workflow_definition(
+                self.db,
+                m.group(1),
+                bool(body.get("delete_instances", True)),
+            )
+            return 200, payload
+
+        if method == "POST" and path == "/v1/admin/actions":
+            upsert_workflow_action(
+                self.db,
+                str(body["action_name"]),
+                body.get("capability"),
+                body.get("payload_schema_ref"),
+            )
+            return 201, {"action_name": body["action_name"]}
+
+        # --- Legacy admin aliases (CI smoke; portal must use DB) ---
+        if method == "GET" and path == "/v1/actions":
+            return 200, {"actions": self._merge_action_catalog(list_workflow_actions(self.db))}
+
+        m = re.fullmatch(r"/v1/actions/([^/]+)/schema", path)
+        if method == "GET" and m:
+            direction = (q.get("direction") or ["input"])[0]
+            try:
+                return 200, get_action_schema(self.db, m.group(1), direction)
+            except KeyError as exc:
+                return 404, {"error": str(exc)}
+
+        if method == "POST" and path == "/v1/actions":
+            upsert_workflow_action(
+                self.db,
+                str(body["action_name"]),
+                body.get("capability"),
+                body.get("payload_schema_ref"),
+            )
+            return 201, {"action_name": body["action_name"]}
 
         if method == "POST" and path == "/v1/validation/plan-iterations":
             from methyl_validation.workflow_planner import plan_validation_context
@@ -218,18 +301,13 @@ class RestGateway:
             return 201, summary
 
         if method == "POST" and path == "/v1/workflows/definitions":
-            spec = WorkflowDefinitionSpec.model_validate(body).to_db_spec()
-            result = create_workflow_definition(self.db, spec)
-            return 201, result
-
-        if method == "POST" and path == "/v1/actions":
-            upsert_workflow_action(
+            result = deploy_workflow_definition(
                 self.db,
-                str(body["action_name"]),
-                body.get("capability"),
-                body.get("payload_schema_ref"),
+                {"spec": WorkflowDefinitionSpec.model_validate(body).to_db_spec()},
+                create_workflow_definition=create_workflow_definition,
+                delete_workflow_definition=delete_workflow_definition,
             )
-            return 201, {"action_name": body["action_name"]}
+            return 201, result
 
         m = re.fullmatch(r"/v1/workflows/instances/(\d+)", path)
         if method == "GET" and m:

@@ -377,6 +377,51 @@ SELECT @deleted_instance_count AS deleted_instance_count,
             "name": row.get("name"),
         }
 
+    def list_workflow_definitions(self) -> list[dict[str, Any]]:
+        return self._fetch_all(
+            f"""
+            SELECT wd.id AS workflow_def_id,
+                   wd.name,
+                   COALESCE(wd.source, 'system') AS source,
+                   wv.id AS workflow_version_id,
+                   wv.version_major,
+                   wv.version_minor
+            FROM {self._qual('workflow_def')} wd
+            OUTER APPLY (
+                SELECT TOP 1 id, version_major, version_minor
+                FROM {self._qual('workflow_version')}
+                WHERE workflow_def_id = wd.id AND is_active = 1
+                ORDER BY version_major DESC, version_minor DESC
+            ) wv
+            ORDER BY wd.name
+            """
+        )
+
+    def get_workflow_definition_by_name(self, name: str) -> dict[str, Any]:
+        row = self._fetch_one(
+            f"""
+            SELECT TOP 1 wd.id AS workflow_def_id,
+                   wd.name,
+                   wd.description,
+                   COALESCE(wd.source, 'system') AS source,
+                   wv.id AS workflow_version_id,
+                   wv.version_major,
+                   wv.version_minor
+            FROM {self._qual('workflow_def')} wd
+            OUTER APPLY (
+                SELECT TOP 1 id, version_major, version_minor
+                FROM {self._qual('workflow_version')}
+                WHERE workflow_def_id = wd.id AND is_active = 1
+                ORDER BY version_major DESC, version_minor DESC
+            ) wv
+            WHERE wd.name = ?
+            """,
+            (name,),
+        )
+        if not row:
+            raise KeyError(f"workflow definition not found: {name!r}")
+        return row
+
     def get_worker_cluster_security(self, worker_id: int) -> Optional[dict[str, Any]]:
         return self._fetch_one(
             f"""

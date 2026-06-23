@@ -1,12 +1,21 @@
 openapi: 3.0.3
 info:
-  title: MethylPipeline Workflow API
+  title: MethylPipeline Workflow Gateway API
   description: |
-    Cross-language REST contract for workflow workers and admin operations.
-    Maps 1:1 to DB objects in `workflow_engine/contract/db_objects.yaml`.
-    Production implementation: Python gateway on Linux (`methyl-gateway`, systemd, uvicorn).
-    Frozen reference: Delphi `WfEngineSrv` Windows service (no new development).
-  version: 1.0.0
+    REST contract for the workflow **gateway only** (two identities):
+
+    - **Workers** — `/workers/*` with `worker_id` + `worker_token` (poll, submit, heartbeat, fail).
+    - **Admin** — `/admin/*` with Entra JWT + app role (catalog seed, workflow compile/deploy).
+
+    **EpiPortal never calls this API.** Portal workflow builder, instance create/start, and monitoring
+    use Azure SQL / PostgreSQL procs in `portal.sp_*` (see `workflow_engine/contract/db_objects.yaml`).
+
+    Legacy paths under `/studies/*`, `/workflows/*`, `/actions*` remain as **admin-only CI aliases**
+    when Entra is enabled; they are not for portal UI.
+
+    Maps to DB objects in `workflow_engine/contract/db_objects.yaml`.
+    Production: Python gateway on Linux (`methyl-gateway`, systemd, uvicorn).
+  version: 1.1.0
 
 servers:
   - url: https://api.example.com/v1
@@ -16,11 +25,235 @@ servers:
 
 tags:
   - name: workers
-    description: Remote worker poll/submit protocol
+    description: Remote worker poll/submit protocol (worker token auth)
   - name: admin
-    description: Workflow instance and definition management
+    description: Catalog seed and system workflow deploy (Entra JWT + admin app role)
+  - name: legacy-admin
+    description: Deprecated CI aliases — same admin auth as /admin/*
 
 paths:
+  /health:
+    get:
+      tags: [workers]
+      summary: Gateway health
+      security: []
+      responses:
+        '200':
+          description: OK
+
+  /admin/catalog/seed:
+    post:
+      tags: [admin]
+      summary: Bulk upsert action catalog + JSON Schemas (release operator)
+      operationId: adminSeedCatalog
+      security:
+        - AdminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                catalog:
+                  type: object
+                  properties:
+                    actions:
+                      type: array
+                      items:
+                        type: object
+                        additionalProperties: true
+                schemas:
+                  type: array
+                  items:
+                    type: object
+                    additionalProperties: true
+      responses:
+        '200':
+          description: Seed summary (actions_upserted, schemas_upserted, errors)
+
+  /admin/actions/{actionName}/schema:
+    put:
+      tags: [admin]
+      summary: Upsert one action JSON Schema (wf.wf_repo_upsert_action_schema)
+      operationId: adminUpsertActionSchema
+      security:
+        - AdminBearer: []
+      parameters:
+        - name: actionName
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [direction, schema_json]
+              properties:
+                direction:
+                  type: string
+                  enum: [input, output]
+                schema_json:
+                  type: object
+                  additionalProperties: true
+                schema_id:
+                  type: string
+      responses:
+        '200':
+          description: Schema upserted
+
+  /admin/actions:
+    post:
+      tags: [admin]
+      summary: Upsert workflow action row (wf.wf_repo_upsert_workflow_action)
+      operationId: adminUpsertWorkflowAction
+      security:
+        - AdminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertActionRequest'
+      responses:
+        '201':
+          description: Action upserted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpsertActionResponse'
+
+  /admin/workflows/compile:
+    post:
+      tags: [admin]
+      summary: Compile DomainProgram JSON to WorkflowDefinitionSpec
+      operationId: adminCompileWorkflow
+      security:
+        - AdminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                program_path:
+                  type: string
+                program:
+                  type: object
+                  additionalProperties: true
+                projectPath:
+                  type: string
+      responses:
+        '200':
+          description: Compiled spec
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  spec:
+                    $ref: '#/components/schemas/WorkflowDefinitionSpec'
+
+  /admin/workflows/definitions/deploy:
+    post:
+      tags: [admin]
+      summary: Compile (optional) and deploy workflow graph (wf.wf_repo_create_workflow_graph)
+      operationId: adminDeployWorkflowDefinition
+      security:
+        - AdminBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                spec:
+                  $ref: '#/components/schemas/WorkflowDefinitionSpec'
+                program_path:
+                  type: string
+                program:
+                  type: object
+                  additionalProperties: true
+                replace:
+                  type: boolean
+                  default: false
+      responses:
+        '201':
+          description: Workflow definition deployed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWorkflowDefinitionResponse'
+
+  /admin/workflows/definitions:
+    get:
+      tags: [admin]
+      summary: List workflow definitions
+      operationId: adminListWorkflowDefinitions
+      security:
+        - AdminBearer: []
+      parameters:
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [system, portal]
+      responses:
+        '200':
+          description: Definition list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  definitions:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+
+  /admin/workflows/definitions/{name}:
+    get:
+      tags: [admin]
+      summary: Get workflow definition by name
+      operationId: adminGetWorkflowDefinition
+      security:
+        - AdminBearer: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Definition metadata
+    delete:
+      tags: [admin]
+      summary: Delete workflow definition (wf.sp_delete_workflow_def)
+      operationId: adminDeleteWorkflowDefinition
+      security:
+        - AdminBearer: []
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: deleteInstances
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Definition deleted
+
   /workers/authenticate:
     post:
       tags: [workers]
@@ -136,9 +369,12 @@ paths:
 
   /actions:
     get:
-      tags: [admin]
-      summary: List workflow actions and schema availability (wf.wf_repo_list_actions)
+      tags: [legacy-admin]
+      summary: "[CI alias] List workflow actions"
+      description: Prefer portal DB `portal.sp_list_workflow_actions` for EpiPortal. Admin gateway alias for smoke tests.
       operationId: listWorkflowActions
+      security:
+        - AdminBearer: []
       responses:
         '200':
           description: Action catalog
@@ -147,9 +383,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/ActionListResponse'
     post:
-      tags: [admin]
-      summary: Upsert workflow action row (wf.wf_repo_upsert_workflow_action)
+      tags: [legacy-admin]
+      summary: "[CI alias] Upsert workflow action row"
       operationId: upsertWorkflowAction
+      security:
+        - AdminBearer: []
       requestBody:
         required: true
         content:
@@ -166,9 +404,11 @@ paths:
 
   /actions/{actionName}/schema:
     get:
-      tags: [admin]
-      summary: Get JSON Schema for action input or output (wf.wf_repo_get_action_schema)
+      tags: [legacy-admin]
+      summary: "[CI alias] Get JSON Schema for action"
       operationId: getActionSchema
+      security:
+        - AdminBearer: []
       parameters:
         - name: actionName
           in: path
@@ -194,9 +434,12 @@ paths:
 
   /studies/sample-prep/start:
     post:
-      tags: [admin]
-      summary: Plan sample list and start SamplePrepPipeline
+      tags: [legacy-admin]
+      summary: "[CI alias] Plan sample list and start SamplePrepPipeline"
+      description: EpiPortal should use portal DB procs + in-process planner instead.
       operationId: startSamplePrep
+      security:
+        - AdminBearer: []
       requestBody:
         required: true
         content:
@@ -213,9 +456,11 @@ paths:
 
   /studies/validation/start:
     post:
-      tags: [admin]
-      summary: Plan validation iterations and start StudyValidationLifecycle
+      tags: [legacy-admin]
+      summary: "[CI alias] Start StudyValidationLifecycle"
       operationId: startStudyValidation
+      security:
+        - AdminBearer: []
       requestBody:
         required: true
         content:
@@ -235,9 +480,11 @@ paths:
 
   /validation/plan-iterations:
     post:
-      tags: [admin]
-      summary: Plan validation iterations (optional persist to instance)
+      tags: [legacy-admin]
+      summary: "[CI alias] Plan validation iterations"
       operationId: planValidationIterations
+      security:
+        - AdminBearer: []
       requestBody:
         required: true
         content:
@@ -256,9 +503,12 @@ paths:
 
   /workflows/instances:
     post:
-      tags: [admin]
-      summary: Create and start workflow instance
+      tags: [legacy-admin]
+      summary: "[CI alias] Create and start workflow instance"
+      description: EpiPortal should use `portal.sp_create_and_start_instance`.
       operationId: createWorkflowInstance
+      security:
+        - AdminBearer: []
       requestBody:
         required: true
         content:
@@ -275,9 +525,11 @@ paths:
 
   /workflows/instances/{instanceId}:
     get:
-      tags: [admin]
-      summary: Get workflow instance status
+      tags: [legacy-admin]
+      summary: "[CI alias] Get workflow instance status"
       operationId: getWorkflowInstance
+      security:
+        - AdminBearer: []
       parameters:
         - name: instanceId
           in: path
@@ -295,9 +547,11 @@ paths:
 
   /workflows/instances/{instanceId}/start:
     post:
-      tags: [admin]
-      summary: Start workflow instance (wf.sp_start_workflow_instance)
+      tags: [legacy-admin]
+      summary: "[CI alias] Start workflow instance"
       operationId: startWorkflowInstance
+      security:
+        - AdminBearer: []
       parameters:
         - name: instanceId
           in: path
@@ -311,9 +565,12 @@ paths:
 
   /workflows/definitions:
     post:
-      tags: [admin]
-      summary: Create workflow definition graph (wf.wf_repo_create_workflow_graph)
+      tags: [legacy-admin]
+      summary: "[CI alias] Create workflow definition graph"
+      description: Prefer `POST /admin/workflows/definitions/deploy` for CI releases.
       operationId: createWorkflowDefinition
+      security:
+        - AdminBearer: []
       requestBody:
         required: true
         content:
@@ -330,9 +587,11 @@ paths:
 
   /workflows/definitions/{name}:
     delete:
-      tags: [admin]
-      summary: Delete workflow definition (wf.sp_delete_workflow_def)
+      tags: [legacy-admin]
+      summary: "[CI alias] Delete workflow definition"
       operationId: deleteWorkflowDefinition
+      security:
+        - AdminBearer: []
       parameters:
         - name: name
           in: path
@@ -690,6 +949,11 @@ components:
       type: apiKey
       in: header
       name: X-Worker-Token
+      description: Worker body fields worker_id + worker_token (primary auth)
+    AdminBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Entra ID JWT with GATEWAY_ENTRA_ADMIN_ROLES app role when GATEWAY_REQUIRE_ENTRA=1
 
-security:
-  - WorkerToken: []
+security: []

@@ -15,19 +15,19 @@ from .db.base import GatewayDb
 class RouteTier(Enum):
     PUBLIC = "public"
     WORKER = "worker"
-    OPERATOR = "operator"
+    ADMIN = "admin"
 
 
 class AuthError(Exception):
-  """Authentication failure (401)."""
+    """Authentication failure (401)."""
 
-  def __init__(self, message: str) -> None:
-    super().__init__(message)
-    self.message = message
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 class AuthForbidden(AuthError):
-  """Authorization failure (403)."""
+    """Authorization failure (403)."""
 
 
 @dataclass(frozen=True)
@@ -35,7 +35,7 @@ class GatewayAuthConfig:
     require_entra: bool = False
     tenant_id: str = ""
     audience: str = ""
-    app_roles: tuple[str, ...] = ()
+    admin_roles: tuple[str, ...] = ()
     worker_ip_bind: bool = False
     require_arc_attest: bool = False
     trusted_proxy_cidrs: tuple[str, ...] = ("127.0.0.1/32", "::1/128")
@@ -45,15 +45,17 @@ class GatewayAuthConfig:
         def _truthy(name: str) -> bool:
             return os.environ.get(name, "").strip().lower() in ("1", "true", "yes")
 
-        roles_raw = os.environ.get("GATEWAY_ENTRA_APP_ROLES", "").strip()
-        roles = tuple(r.strip() for r in roles_raw.split(",") if r.strip())
+        admin_raw = os.environ.get("GATEWAY_ENTRA_ADMIN_ROLES", "").strip()
+        if not admin_raw:
+            admin_raw = os.environ.get("GATEWAY_ENTRA_APP_ROLES", "").strip()
+        admin_roles = tuple(r.strip() for r in admin_raw.split(",") if r.strip())
         proxy_raw = os.environ.get("GATEWAY_TRUSTED_PROXY_CIDRS", "127.0.0.1/32,::1/128")
         proxies = tuple(c.strip() for c in proxy_raw.split(",") if c.strip())
         return cls(
             require_entra=_truthy("GATEWAY_REQUIRE_ENTRA"),
             tenant_id=os.environ.get("AZURE_TENANT_ID", "").strip(),
             audience=os.environ.get("GATEWAY_ENTRA_AUDIENCE", "").strip(),
-            app_roles=roles,
+            admin_roles=admin_roles,
             worker_ip_bind=_truthy("GATEWAY_WORKER_IP_BIND"),
             require_arc_attest=_truthy("GATEWAY_REQUIRE_ARC_ATTEST"),
             trusted_proxy_cidrs=proxies,
@@ -61,7 +63,8 @@ class GatewayAuthConfig:
 
 
 _PUBLIC_GET = frozenset({"/", "/v1", "/v1/health"})
-_OPERATOR_PREFIXES = (
+_ADMIN_PREFIX = "/v1/admin/"
+_LEGACY_ADMIN_PREFIXES = (
     "/v1/studies/",
     "/v1/workflows/",
     "/v1/validation/",
@@ -75,14 +78,16 @@ def classify_route(method: str, path: str) -> RouteTier:
         return RouteTier.WORKER
     if method == "GET" and path in _PUBLIC_GET:
         return RouteTier.PUBLIC
+    if path.startswith(_ADMIN_PREFIX):
+        return RouteTier.ADMIN
     if method == "POST" and path == "/v1/actions":
-        return RouteTier.OPERATOR
-    if method == "GET" and (
+        return RouteTier.ADMIN
+    if method in ("GET", "PUT") and (
         path == "/v1/actions" or re.fullmatch(r"/v1/actions/[^/]+/schema", path)
     ):
-        return RouteTier.OPERATOR
-    if any(path.startswith(prefix) for prefix in _OPERATOR_PREFIXES):
-        return RouteTier.OPERATOR
+        return RouteTier.ADMIN
+    if any(path.startswith(prefix) for prefix in _LEGACY_ADMIN_PREFIXES):
+        return RouteTier.ADMIN
     return RouteTier.PUBLIC
 
 
@@ -118,7 +123,6 @@ def extract_client_ip(
     if not _is_trusted_proxy(direct_ip, trusted_proxy_cidrs):
         return direct_ip
 
-    # nginx sets X-Real-IP from $remote_addr on the upstream request (not client-controlled).
     real_ip = _header_value(headers, "x-real-ip")
     if real_ip:
         candidate = real_ip.strip()
@@ -132,7 +136,6 @@ def extract_client_ip(
     if forwarded:
         parts = [p.strip() for p in forwarded.split(",") if p.strip()]
         if parts:
-            # $proxy_add_x_forwarded_for appends the connecting client as the rightmost entry.
             candidate = parts[-1]
             try:
                 ipaddress.ip_address(candidate)
@@ -167,9 +170,16 @@ def _get_jwks_client(tenant_id: str) -> Any:
     return _JWKS_CLIENT
 
 
-def validate_entra_jwt(token: str, config: GatewayAuthConfig) -> dict[str, Any]:
+def validate_entra_jwt(
+    token: str,
+    config: GatewayAuthConfig,
+    *,
+    required_roles: Optional[Sequence[str]] = None,
+) -> dict[str, Any]:
     if not config.tenant_id or not config.audience:
-        raise AuthError("GATEWAY Entra configuration incomplete (AZURE_TENANT_ID, GATEWAY_ENTRA_AUDIENCE)")
+        raise AuthError(
+            "GATEWAY Entra configuration incomplete (AZURE_TENANT_ID, GATEWAY_ENTRA_AUDIENCE)"
+        )
     try:
         import jwt
     except ImportError as exc:
@@ -186,10 +196,11 @@ def validate_entra_jwt(token: str, config: GatewayAuthConfig) -> dict[str, Any]:
         issuer=issuer,
         options={"require": ["exp", "iss", "aud"]},
     )
-    if config.app_roles:
+    roles_to_check = tuple(required_roles or ())
+    if roles_to_check:
         roles = claims.get("roles") or []
-        if not any(role in roles for role in config.app_roles):
-            raise AuthForbidden("missing required app role")
+        if not any(role in roles for role in roles_to_check):
+            raise AuthForbidden("missing required admin app role")
     return claims
 
 
@@ -275,10 +286,12 @@ def authorize_request(
                 check_worker_arc_attest(db, wid, headers)
         return None
 
-    if not config.require_entra:
-        return None
+    if tier == RouteTier.ADMIN:
+        if not config.require_entra:
+            return None
+        token = _bearer_token(headers)
+        if not token:
+            raise AuthError("Bearer token required for admin routes")
+        return validate_entra_jwt(token, config, required_roles=config.admin_roles)
 
-    token = _bearer_token(headers)
-    if not token:
-        raise AuthError("Bearer token required")
-    return validate_entra_jwt(token, config)
+    return None
