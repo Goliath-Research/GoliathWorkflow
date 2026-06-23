@@ -324,6 +324,28 @@ def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict
     )
 
 
+def _handle_upload_h5(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+    from .h5_upload import upload_from_task_input
+    from .sample_prep_log import append_sample_prep_log
+
+    result = upload_from_task_input(input_json)
+    sample_dir = input_json.get("sampleDir")
+    sample_id = result.get("sampleId")
+    if sample_dir and sample_id:
+        append_sample_prep_log(
+            Path(str(sample_dir)),
+            sample_id=str(sample_id),
+            action="sample.upload_h5",
+            capability=_capability,
+            attempt=int(input_json.get("qcAttempt") or 1),
+            reason="Archive methylation HDF5 to durable storage",
+            inputs={"remotePrefix": result.get("remotePrefix")},
+            outputs=result,
+            workflow_node_key=input_json.get("workflowNodeKey") or "upload_h5",
+        )
+    return result
+
+
 def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:
     project_path = input_json.get("projectPath") or input_json.get("project")
     if not project_path:
@@ -662,6 +684,15 @@ def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[s
             return {"sampleId": sample_id, "deleted": True}
         if capability == "methyl-extract":
             return {"sampleId": sample_id, "h5Files": ["1-CG.h5"]}
+        if capability == "sample.upload-h5":
+            return {
+                "sampleId": sample_id,
+                "uploadedFiles": ["1-CG.h5"],
+                "skippedFiles": [],
+                "remotePrefix": "studies/test/",
+                "uploadedCount": 1,
+                "skippedCount": 0,
+            }
     raise RuntimeError(
         f"No local handler for capability {capability!r}. "
         "Implement a domain worker or set WORKER_STUB_EXTERNAL=1 for dry-run."
@@ -675,6 +706,7 @@ _SAMPLE_PREP_DOMAIN_ACTIONS = frozenset({
     "sample.methyl_qc",
     "sample.fragmentomics",
     "sample.methyl_extract",
+    "sample.upload_h5",
     "sample.qc_failed",
 })
 

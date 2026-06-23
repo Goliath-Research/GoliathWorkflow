@@ -103,6 +103,7 @@ See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREA
 | Alignment QC | `methyl-qc` | **SamplePrepPipeline** |
 | cfDNA fragmentomics | `methyl-fragmentomics` | **SamplePrepPipeline** (cfDNA only) |
 | Methyl extraction | `methyl-extract` | **SamplePrepPipeline** |
+| Archive HDF5 | `sample.upload-h5` | **SamplePrepPipeline** |
 | Delete BAM | `sample.delete-bam` | **SamplePrepPipeline** |
 | QC failed marker | `sample.mark-failed` | **SamplePrepPipeline** (optional) |
 

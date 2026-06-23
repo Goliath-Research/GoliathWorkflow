@@ -30,6 +30,7 @@
               ]
             },
             {"action": "sample.methyl_extract", "node_key": "methyl_extract"},
+            {"action": "sample.upload_h5", "node_key": "upload_h5"},
             {"action": "sample.delete_bam", "node_key": "delete_bam"}
           ],
           "else": [
@@ -82,6 +83,7 @@
                       ]
                     },
                     {"action": "sample.methyl_extract", "node_key": "methyl_extract_retry"},
+                    {"action": "sample.upload_h5", "node_key": "upload_h5_retry"},
                     {"action": "sample.delete_bam", "node_key": "delete_bam_retry"}
                   ],
                   "else": [

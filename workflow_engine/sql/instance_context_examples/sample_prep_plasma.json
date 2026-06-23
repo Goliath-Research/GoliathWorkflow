@@ -12,6 +12,14 @@
       "authMode": "instance_profile"
     }
   },
+  "h5Storage": {
+    "type": "s3",
+    "bucket": "methyl-archive",
+    "region": "us-east-1",
+    "credentials": {
+      "authMode": "instance_profile"
+    }
+  },
   "samples": [
     {
       "sampleId": "DPLST-051425-111148",
@@ -20,6 +28,15 @@
       "fastqSource": {
         "type": "s3",
         "bucket": "methyl-cohort",
+        "region": "us-east-1",
+        "prefix": "plasma/DPLST-051425-111148/",
+        "credentials": {
+          "authMode": "instance_profile"
+        }
+      },
+      "h5Destination": {
+        "type": "s3",
+        "bucket": "methyl-archive",
         "region": "us-east-1",
         "prefix": "plasma/DPLST-051425-111148/",
         "credentials": {
@@ -34,6 +51,15 @@
       "fastqSource": {
         "type": "s3",
         "bucket": "methyl-cohort",
+        "region": "us-east-1",
+        "prefix": "plasma/DPLST-051425-111149/",
+        "credentials": {
+          "authMode": "instance_profile"
+        }
+      },
+      "h5Destination": {
+        "type": "s3",
+        "bucket": "methyl-archive",
         "region": "us-east-1",
         "prefix": "plasma/DPLST-051425-111149/",
         "credentials": {

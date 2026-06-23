@@ -5,4 +5,5 @@
 
 ALTER TABLE wf.cluster
   ADD COLUMN IF NOT EXISTS allowed_source_cidrs jsonb NULL,
-  ADD COLUMN IF NOT EXISTS entra_client_id text NULL;
+  ADD COLUMN IF NOT EXISTS entra_client_id text NULL,
+  ADD COLUMN IF NOT EXISTS arc_resource_id text NULL;

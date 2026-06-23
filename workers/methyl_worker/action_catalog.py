@@ -255,6 +255,13 @@ _DE_METHYL_EXTRACT = DomainEffects(
         DomainOutputBinding("MethylSampleRef", "methylation", "$.methylation"),
     ),
 )
+_DE_UPLOAD_H5 = DomainEffects(
+    reads_types=("MethylSampleRef",),
+    writes_types=("MethylSampleRef",),
+    output_bindings=(
+        DomainOutputBinding("MethylSampleRef", "h5Archive", "$.h5Archive"),
+    ),
+)
 _DE_QC_FAILED = DomainEffects(
     reads_types=("MethylSampleRef",),
     writes_types=("MethylSampleRef",),
@@ -707,6 +714,21 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         step_config_key="methyl_extract",
         context_vars=("sampleId", "sampleDir", "projectPath", "referenceFasta"),
         domain_effects=_DE_METHYL_EXTRACT,
+    ),
+    _in_process(
+        "sample.upload_h5",
+        "sample.upload-h5",
+        "sample.upload_h5",
+        "Archive per-chromosome methylation HDF5 files to S3, Azure Blob, or NFS (local copy retained).",
+        "sample_prep",
+        "methyl_worker.task_models",
+        "UploadH5TaskInput",
+        "methyl_worker.task_models",
+        "UploadH5TaskOutput",
+        in_process_handler="_handle_upload_h5",
+        tool="SampleUploadH5",
+        context_vars=("sampleId", "sampleDir", "h5Destination", "h5Files"),
+        domain_effects=_DE_UPLOAD_H5,
     ),
     _in_process(
         "sample.delete_bam",

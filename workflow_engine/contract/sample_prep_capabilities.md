@@ -33,6 +33,7 @@ After `methyl-qc`, scope also receives **`qcDisposition`**, **`trimFront2`**, **
 | `parabricks.fq2bam` | Only when BAM missing or QC artifact missing (`{sampleId}.json` or `{sampleId}.qc-metrics.tar`); pass **`forceRealign: true`** after trim to clear stale outputs |
 | `sample.trim-fastq` | When trimmed FASTQs missing or `trimFront2` changed |
 | `methyl-extract` | When HDF5 outputs missing for `project.chromosomes × extract_contexts` |
+| `sample.upload-h5` | Remote object missing or size/ETag differs from local `{chr}-{ctx}.h5` |
 
 ## Lease / retry
 
@@ -320,6 +321,52 @@ Production defaults (not env vars):
 {
   "sampleId": "DPLST-051425-111148",
   "h5Files": ["1-CG.h5", "1-CHG.h5", "1-CHH.h5", "2-CG.h5", "..."]
+}
+```
+
+---
+
+## `sample.upload-h5`
+
+**action_name:** `sample.upload_h5`  
+**Runs after:** `sample.methyl_extract`, **before** `sample.delete_bam`
+
+Archive-copies per-chromosome HDF5 files to durable object storage. **Local files on `/work/samples/{id}/` are retained** for downstream validation and BAM deletion.
+
+### input_json
+
+Instance-level `h5Storage` (planner) merges with per-sample `fastqPrefix` / `h5Destination.prefix`:
+
+```json
+{
+  "tool": "SampleUploadH5",
+  "sampleId": "DPLST-051425-111148",
+  "sampleDir": "/work/samples/DPLST-051425-111148",
+  "h5Destination": {
+    "type": "s3",
+    "bucket": "methyl-archive",
+    "prefix": "plasma/DPLST-051425-111148/",
+    "region": "us-east-1",
+    "credentials": { "authMode": "instance_profile" }
+  },
+  "h5Files": ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
+}
+```
+
+Optional `h5Files` defaults to all `*.h5` in `sampleDir`. Credential modes mirror [`sample.download-fastq`](#sampledownload-fastq) (`s3`, `azure_blob`, `file`).
+
+**Idempotency:** skip upload when remote size (and ETag/md5 when available) matches local.
+
+### output_json
+
+```json
+{
+  "sampleId": "DPLST-051425-111148",
+  "uploadedFiles": ["1-CG.h5"],
+  "skippedFiles": ["1-CHG.h5", "1-CHH.h5"],
+  "remotePrefix": "plasma/DPLST-051425-111148/",
+  "uploadedCount": 1,
+  "skippedCount": 2
 }
 ```
 

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "Output for sample.upload_h5.",
+  "properties": {
+    "remotePrefix": { "type": "string" },
+    "sampleId": { "type": "string" },
+    "skippedCount": { "type": "integer" },
+    "skippedFiles": {
+      "items": { "type": "string" },
+      "type": "array"
+    },
+    "uploadedCount": { "type": "integer" },
+    "uploadedFiles": {
+      "items": { "type": "string" },
+      "type": "array"
+    }
+  },
+  "required": ["sampleId"],
+  "type": "object"
+}

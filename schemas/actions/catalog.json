@@ -570,6 +570,42 @@
       "tool": "MethylExtract"
     },
     {
+      "action_name": "sample.upload_h5",
+      "argv_map": {},
+      "capability": "sample.upload-h5",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "h5Destination",
+        "h5Files"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Archive per-chromosome methylation HDF5 files to S3, Azure Blob, or NFS (local copy retained).",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.h5Archive",
+            "scope_field": "h5Archive"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_upload_h5",
+      "input_schema_ref": "schemas/tasks/sample_upload_h5.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_upload_h5.output.schema.json",
+      "schema_id": "sample.upload_h5",
+      "tool": "SampleUploadH5"
+    },
+    {
       "action_name": "sample.delete_bam",
       "argv_map": {},
       "capability": "sample.delete-bam",

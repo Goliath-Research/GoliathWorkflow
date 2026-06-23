@@ -14,3 +14,9 @@ BEGIN
     ALTER TABLE wf.cluster ADD entra_client_id nvarchar(64) NULL;
 END
 GO
+
+IF COL_LENGTH('wf.cluster', 'arc_resource_id') IS NULL
+BEGIN
+    ALTER TABLE wf.cluster ADD arc_resource_id nvarchar(256) NULL;
+END
+GO

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": true,
+  "description": "Input for sample.upload_h5 (archive {chr}-{ctx}.h5 to object storage).",
+  "properties": {
+    "h5Destination": {
+      "$ref": "../domain/h5_storage.schema.json#/$defs/S3H5Destination"
+    },
+    "h5Files": {
+      "items": { "type": "string" },
+      "type": "array"
+    },
+    "sampleDir": { "type": "string" },
+    "sampleId": { "type": "string" },
+    "tool": { "const": "SampleUploadH5", "default": "SampleUploadH5", "type": "string" }
+  },
+  "required": ["sampleId", "sampleDir", "h5Destination", "tool"],
+  "type": "object"
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from methyl_domain.fastq_storage import FastqSourceLocation
+from methyl_domain.h5_storage import H5DestinationLocation
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -170,6 +171,29 @@ class DeleteTaskOutput(BaseModel):
 
     sampleId: Optional[str] = None
     deleted: bool = True
+
+
+class UploadH5TaskInput(BaseModel):
+    """Input for sample.upload_h5 (archive methylation HDF5 to object storage)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "SampleUploadH5"
+    sampleId: str
+    sampleDir: str
+    h5Destination: H5DestinationLocation
+    h5Files: Optional[List[str]] = None
+
+
+class UploadH5TaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: str
+    uploadedFiles: List[str] = Field(default_factory=list)
+    skippedFiles: List[str] = Field(default_factory=list)
+    remotePrefix: str = ""
+    uploadedCount: int = 0
+    skippedCount: int = 0
 
 
 class MethylExtractTaskOutput(BaseModel):

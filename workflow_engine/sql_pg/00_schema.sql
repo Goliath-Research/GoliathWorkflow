@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS wf.cluster (
   status varchar(32) NOT NULL DEFAULT 'ACTIVE',
   allowed_source_cidrs jsonb NULL,
   entra_client_id text NULL,
+  arc_resource_id text NULL,
   created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at_utc timestamptz NULL,
   CHECK (status IN ('ACTIVE','DISABLED'))

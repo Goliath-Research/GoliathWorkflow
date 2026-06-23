@@ -218,3 +218,28 @@ def test_cfdna_primary_analyte(tmp_path: Path) -> None:
     )
     assert ctx["primaryAnalyte"] == "cfdna"
     assert ctx["isCfdna"] is True
+
+
+H5_STORAGE = {
+    "type": "s3",
+    "bucket": "methyl-archive",
+    "region": "us-east-1",
+    "credentials": {"authMode": "instance_profile"},
+}
+
+
+def test_h5_storage_materializes_per_sample_destination(tmp_path: Path) -> None:
+    project_path = _write_project(tmp_path)
+    ctx = plan_sample_prep_context(
+        {
+            "projectPath": str(project_path),
+            "samples": [{"sampleId": "S1", "fastqPrefix": "cohort/S1/"}],
+            "fastqStorage": S3_STORAGE,
+            "h5Storage": H5_STORAGE,
+        }
+    )
+    assert ctx["h5Storage"]["bucket"] == "methyl-archive"
+    s1 = ctx["samples"][0]
+    assert s1["h5Destination"]["type"] == "s3"
+    assert s1["h5Destination"]["bucket"] == "methyl-archive"
+    assert s1["h5Destination"]["prefix"] == "S1/"

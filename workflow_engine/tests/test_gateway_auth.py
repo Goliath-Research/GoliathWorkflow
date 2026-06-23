@@ -33,7 +33,11 @@ class _StubDb:
 
     def get_worker_cluster_security(self, worker_id: int) -> dict[str, object] | None:
         if worker_id == 42:
-            return {"allowed_source_cidrs": ["10.0.0.0/8"], "entra_client_id": None}
+            return {
+                "allowed_source_cidrs": ["10.0.0.0/8"],
+                "entra_client_id": None,
+                "arc_resource_id": "/subscriptions/sub/resourceGroups/rg/providers/Microsoft.HybridCompute/machines/gpu-west-01",
+            }
         return None
 
 
@@ -144,6 +148,34 @@ class AuthorizeRequestTests(unittest.TestCase):
                 {"worker_id": 42, "worker_token": "x"},
                 scope,
             )
+
+    def test_worker_arc_attest_denies_mismatch(self) -> None:
+        config = GatewayAuthConfig(require_arc_attest=True)
+        headers = [(b"x-arc-resource-id", b"/subscriptions/wrong")]
+        with self.assertRaises(AuthForbidden):
+            authorize_request(
+                _StubDb(),
+                config,
+                "POST",
+                "/v1/workers/tasks/request",
+                headers,
+                {"worker_id": 42, "worker_token": "x"},
+                {"client": ("10.5.0.1", 0)},
+            )
+
+    def test_worker_arc_attest_allows_match(self) -> None:
+        config = GatewayAuthConfig(require_arc_attest=True)
+        arc_id = b"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.HybridCompute/machines/gpu-west-01"
+        headers = [(b"x-arc-resource-id", arc_id)]
+        authorize_request(
+            _StubDb(),
+            config,
+            "POST",
+            "/v1/workers/tasks/request",
+            headers,
+            {"worker_id": 42, "worker_token": "x"},
+            {"client": ("10.5.0.1", 0)},
+        )
 
 
 class AsgiEntraMiddlewareTests(unittest.IsolatedAsyncioTestCase):

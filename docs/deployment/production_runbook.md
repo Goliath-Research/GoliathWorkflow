@@ -31,6 +31,12 @@ POST /v1/studies/sample-prep/start
     "region": "us-east-1",
     "credentials": { "authMode": "instance_profile" }
   },
+  "h5Storage": {
+    "type": "s3",
+    "bucket": "methyl-archive",
+    "region": "us-east-1",
+    "credentials": { "authMode": "instance_profile" }
+  },
   "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]
 }
 ```
@@ -58,7 +64,9 @@ export WORKER_STUB_EXTERNAL=1
 bash scripts/smoke_sample_prep.sh
 ```
 
-Poll until **COMPLETED**. Do not start validation until all samples have per-chromosome HDF5s.
+Poll until **COMPLETED**. Do not start validation until all samples have per-chromosome HDF5s archived (when `h5Storage` is configured) and present locally under `/work/samples/{id}/`.
+
+**HDF5 archive:** After `sample.methyl_extract`, `sample.upload_h5` copies `{chr}-{ctx}.h5` to S3/Azure/NFS per instance `h5Storage` + per-sample prefix. Local files are retained for validation and BAM deletion.
 
 **FASTQ retention:** SamplePrep keeps FASTQs until final QC (pass or final fail after any trim/realign retry). Samples with `REALIGN_READ2_TRIM` run `sample.trim_fastq` → Parabricks `forceRealign` → `methyl_qc` retry before `delete_fastqs`.
 
@@ -172,7 +180,8 @@ Register workers (both backends via gateway DB env):
 
 ```bash
 bash scripts/register_worker.sh --cluster gpu-west --key "$(hostname -s)" \
-  --allowed-cidr 203.0.113.0/24 --allowed-cidr 198.51.100.10/32
+  --allowed-cidr 203.0.113.0/24 --allowed-cidr 198.51.100.10/32 \
+  --require-arc
 ```
 
 On the gateway VM for public-tier clusters:
@@ -180,6 +189,8 @@ On the gateway VM for public-tier clusters:
 ```bash
 GATEWAY_WORKER_IP_BIND=1
 GATEWAY_TRUSTED_PROXY_CIDRS=127.0.0.1/32
+# Optional Arc attestation:
+# GATEWAY_REQUIRE_ARC_ATTEST=1
 ```
 
 ### Azure SQL private endpoint (data plane)
@@ -200,4 +211,39 @@ bash scripts/test_gateway_remote.sh --ssh-only
 curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://gateway/v1/workflows/instances \
   -H 'Content-Type: application/json' -d '{"workflow_version_id":1}'
 ```
+
+## Arc compliance and incident response
+
+Arc onboarding is a **production prerequisite** for worker VMs. See [arc_worker_runbook.md](arc_worker_runbook.md).
+
+### Defender for Servers
+
+1. Enable **Defender for Servers Plan 2** on all Arc-enabled worker machines.
+2. Route high-severity alerts to the security operations channel (email, Teams, or ticketing).
+3. On **High** or **Critical** malware / compromise findings on a worker Arc machine:
+   - Set `wf.cluster.status = 'DISABLED'` for the bound cluster (or disable the individual worker row).
+   - Stop `methyl-worker.service` on affected nodes: `sudo systemctl stop methyl-worker.service`.
+   - Revoke worker token if needed: re-register or set worker `status` inactive in DB.
+   - Investigate before re-enabling; require clean Defender scan + Arc **Connected** + policy compliance.
+
+### Microsoft Sentinel
+
+1. Connect Arc / AMA logs to a Log Analytics workspace used by Sentinel.
+2. Create analytics rules (or use built-in) for:
+   - Arc agent **Disconnected** > 15 minutes on `phi=true` machines
+   - Guest Configuration **non-compliant** on worker resource groups
+   - Unusual volume of failed `POST /v1/workers/*` (gateway access logs, if forwarded)
+3. Playbook (manual or Logic App): on correlated alert, disable cluster and notify on-call.
+
+### Cluster disable procedure
+
+```sql
+-- PostgreSQL example
+UPDATE wf.cluster SET status = 'DISABLED', updated_at_utc = now() AT TIME ZONE 'utc'
+WHERE cluster_key = 'gpu-west';
+```
+
+Re-enable only after Arc shows **Connected**, policy compliance is green, and security sign-off.
+
+Optional gateway hardening: `GATEWAY_REQUIRE_ARC_ATTEST=1` rejects worker polls when `X-Arc-Resource-Id` does not match `wf.cluster.arc_resource_id`.
 

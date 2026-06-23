@@ -13,6 +13,8 @@ Options:
   --capability NAME    Repeatable capability filter (omit for omnibus worker)
   --allowed-cidr CIDR  Repeatable cluster source CIDR (Tier C public workers)
   --entra-client-id ID Optional Entra application (client) id for cluster
+  --arc-resource-id ID Azure Arc resource id (default: /etc/methyl/arc.env)
+  --require-arc          Fail if Arc agent is not Connected
   --env-file PATH      Append WORKER_ID and WORKER_TOKEN (default: /work/epimethyl/env/worker.env)
   --token TOKEN        Use fixed token (default: random hex)
   --dry-run            Print plan only
@@ -40,6 +42,8 @@ while [[ $# -gt 0 ]]; do
     --capability) ARGS+=(--capability "${2:-}"); shift 2 ;;
     --allowed-cidr) ARGS+=(--allowed-cidr "${2:-}"); shift 2 ;;
     --entra-client-id) ARGS+=(--entra-client-id "${2:-}"); shift 2 ;;
+    --arc-resource-id) ARGS+=(--arc-resource-id "${2:-}"); shift 2 ;;
+    --require-arc) ARGS+=(--require-arc); shift ;;
     --env-file) ARGS+=(--env-file "${2:-}"); shift 2 ;;
     --token) ARGS+=(--token "${2:-}"); shift 2 ;;
     --dry-run) ARGS+=(--dry-run); shift ;;

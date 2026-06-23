@@ -2,6 +2,9 @@
 Description=MethylPipeline workflow worker (omnibus — all capabilities)
 After=network-online.target
 Wants=network-online.target
+# Optional: Azure Arc agent (when installed via install_arc_agent.sh)
+After=azure-arc-agent.service
+Wants=azure-arc-agent.service
 
 [Service]
 Type=simple

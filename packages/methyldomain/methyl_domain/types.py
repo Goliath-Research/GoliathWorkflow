@@ -100,6 +100,7 @@ class MethylSampleRef(DomainTaggedModel):
     alignmentQc: Optional[AlignmentQcRef] = None
     fragmentomics: Optional[FragmentomicsRef] = None
     methylation: Optional[MethylationMatrixRef] = None
+    h5Archive: Optional[Dict[str, Any]] = None
     status: Optional[str] = None
 
 

@@ -37,6 +37,7 @@ class GatewayAuthConfig:
     audience: str = ""
     app_roles: tuple[str, ...] = ()
     worker_ip_bind: bool = False
+    require_arc_attest: bool = False
     trusted_proxy_cidrs: tuple[str, ...] = ("127.0.0.1/32", "::1/128")
 
     @classmethod
@@ -54,6 +55,7 @@ class GatewayAuthConfig:
             audience=os.environ.get("GATEWAY_ENTRA_AUDIENCE", "").strip(),
             app_roles=roles,
             worker_ip_bind=_truthy("GATEWAY_WORKER_IP_BIND"),
+            require_arc_attest=_truthy("GATEWAY_REQUIRE_ARC_ATTEST"),
             trusted_proxy_cidrs=proxies,
         )
 
@@ -231,6 +233,22 @@ def check_worker_ip_bind(
         raise AuthForbidden(f"worker source IP {client_ip} not in cluster allowed CIDRs")
 
 
+def check_worker_arc_attest(
+    db: GatewayDb,
+    worker_id: int,
+    headers: Sequence[tuple[bytes, bytes]],
+) -> None:
+    security = db.get_worker_cluster_security(worker_id)
+    if not security:
+        return
+    expected = security.get("arc_resource_id")
+    if not expected:
+        return
+    header_val = _header_value(headers, "x-arc-resource-id")
+    if not header_val or header_val.strip() != str(expected).strip():
+        raise AuthForbidden("worker Arc resource id does not match cluster registration")
+
+
 def authorize_request(
     db: GatewayDb,
     config: GatewayAuthConfig,
@@ -249,8 +267,12 @@ def authorize_request(
     client_ip = extract_client_ip(scope, headers, config.trusted_proxy_cidrs)
 
     if tier == RouteTier.WORKER:
-        if config.worker_ip_bind and body.get("worker_id") is not None:
-            check_worker_ip_bind(db, int(body["worker_id"]), client_ip)
+        if body.get("worker_id") is not None:
+            wid = int(body["worker_id"])
+            if config.worker_ip_bind:
+                check_worker_ip_bind(db, wid, client_ip)
+            if config.require_arc_attest:
+                check_worker_arc_attest(db, wid, headers)
         return None
 
     if not config.require_entra:

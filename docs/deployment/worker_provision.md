@@ -1,22 +1,63 @@
 # GPU worker provisioning playbook
 
-Step-by-step for joining a **new GPU VM** to an existing production release on shared storage.
+Step-by-step for joining a **new GPU VM** to an existing production release on shared storage, with **Azure Arc** governance before cluster registration.
 
-Related: [production_release.md](production_release.md), [gpu_worker_runbook.md](gpu_worker_runbook.md).
+Related: [production_release.md](production_release.md), [gpu_worker_runbook.md](gpu_worker_runbook.md), [arc_worker_runbook.md](arc_worker_runbook.md).
 
 ## Assumptions
 
 - Release already promoted: `/work/epimethyl/current` → valid `manifest.json`
 - Shared artifacts present: `venv-<arch>/`, `methyl-extractor-<arch>/`, `docker/` (if Parabricks pre-pulled)
-- Gateway and PostgreSQL available for worker registration
+- Gateway (HTTPS) and PostgreSQL available for worker registration
+- Operator has sudo + Azure permissions for Arc onboarding (production)
 
-## 1. Mount shared storage
+## Orchestrated path (recommended)
+
+Single entry point for Arc → bundle → register → systemd:
+
+```bash
+export WORKER_API_BASE=https://gateway.example.com/v1
+export AZ_SUBSCRIPTION_ID=... AZ_RESOURCE_GROUP=... AZURE_TENANT_ID=...
+
+sudo bash /work/epimethyl/current/runtime-bundle/scripts/provision_worker_node.sh \
+  --gpu \
+  --arc-onboard \
+  --require-arc \
+  --register-worker \
+  --enable-systemd \
+  --cluster gpu-west
+```
+
+Second and subsequent VMs on the same cluster (shared venv already on `/work`):
+
+```bash
+sudo bash scripts/provision_worker_node.sh \
+  --gpu --require-arc --skip-promote \
+  --register-worker --enable-systemd --cluster gpu-west
+```
+
+## Manual steps (reference)
+
+### 0. Azure Arc (production)
+
+```bash
+sudo bash scripts/install_arc_agent.sh \
+  --subscription-id "$AZ_SUBSCRIPTION_ID" \
+  --resource-group "$AZ_RESOURCE_GROUP" \
+  --tenant-id "$AZURE_TENANT_ID" \
+  --tags "cluster_key=gpu-west,environment=prod,phi=true,hipaa=true"
+bash scripts/verify_arc_prereqs.sh
+```
+
+See [arc_worker_runbook.md](arc_worker_runbook.md) for Private Link Scope and Guest Configuration policies.
+
+### 1. Mount shared storage
 
 ```bash
 ls /work/epimethyl/current/manifest.json
 ```
 
-## 2. NVIDIA driver
+### 2. NVIDIA driver
 
 ```bash
 nvidia-smi
@@ -24,7 +65,7 @@ nvidia-smi
 
 Install or upgrade driver per [gpu_worker_runbook.md](gpu_worker_runbook.md) before continuing.
 
-## 3. Host system dependencies (once per VM)
+### 3. Host system dependencies (once per VM)
 
 ```bash
 RUNTIME="$(readlink -f /work/epimethyl/current/runtime-bundle)"
@@ -36,7 +77,7 @@ bash "$RUNTIME/scripts/setup_host.sh" \
 
 Use `--no-venv` if venv already exists on shared storage from promote. Omit `--no-venv` only on first environment bootstrap.
 
-## 4. Docker + shared data-root (once per VM)
+### 4. Docker + shared data-root (once per VM)
 
 ```bash
 RUNTIME="$(readlink -f /work/epimethyl/current/runtime-bundle)"
@@ -47,9 +88,19 @@ bash "$RUNTIME/scripts/setup_gpu_node.sh" \
 
 Add user to docker group if prompted: `sudo usermod -aG docker "$USER"`.
 
-## 5. Environment
+### 5. Bootstrap release bundle
 
-If promote already wrote `worker.env`, skip to step 6. Otherwise:
+```bash
+bash /work/epimethyl/current/runtime-bundle/scripts/bootstrap_epimethyl.sh \
+  --root /work/epimethyl \
+  --require-arc
+```
+
+`bootstrap_epimethyl.sh` defaults `WORKER_API_BASE` to HTTPS. Use `--skip-arc-check` only in dev/lab.
+
+### 6. Environment
+
+If promote already wrote `worker.env`, confirm `WORKER_API_BASE=https://<gateway-fqdn>/v1`. Otherwise:
 
 ```bash
 bash /work/epimethyl/current/runtime-bundle/scripts/write_worker_env.sh \
@@ -58,18 +109,20 @@ bash /work/epimethyl/current/runtime-bundle/scripts/write_worker_env.sh \
   --arch aarch64
 ```
 
-Set `WORKER_API_BASE` in `/work/epimethyl/env/worker.env` if not present.
-
-## 6. Register worker (once per VM)
+### 7. Register worker (once per VM)
 
 ```bash
 export PGHOST=… PGUSER=… PGPASSWORD=… PGDATABASE=…
 bash /work/epimethyl/current/runtime-bundle/scripts/register_worker.sh \
+  --cluster gpu-west \
   --key "$(hostname -s)" \
+  --require-arc \
   --env-file /work/epimethyl/env/worker.env
 ```
 
-## 7. Verify
+`register_worker.sh` reads `ARC_RESOURCE_ID` from `/etc/methyl/arc.env` when `--arc-resource-id` is omitted.
+
+### 8. Verify
 
 ```bash
 set -a
@@ -79,9 +132,14 @@ set +a
 bash /work/epimethyl/current/runtime-bundle/scripts/verify_e2e_node.sh
 ```
 
-## 8. systemd
+### 9. systemd
 
-Copy units from runtime bundle and set arch-specific venv in `ExecStart`:
+```bash
+sudo bash /work/epimethyl/current/runtime-bundle/scripts/install_worker_systemd.sh \
+  --root /work/epimethyl
+```
+
+Or manually copy units and set arch-specific venv:
 
 ```bash
 ARCH=$(source /work/epimethyl/current/runtime-bundle/scripts/detect_platform.sh && platform_arch_key "$(uname -m)")
@@ -92,13 +150,15 @@ sudo systemctl enable --now methyl-worker.service
 sudo systemctl status methyl-worker.service
 ```
 
+`methyl-worker.service` uses `After=azure-arc-agent.service` when Arc is installed.
+
 ## Second and subsequent GPU VMs
 
-Skip promote and venv install. Repeat steps **3–8** only (system deps, docker data-root config, register, verify, systemd).
+Skip promote and venv install. Repeat Arc verify (if new VM) and steps **3–9** only.
 
 ## Omnibus vs capability workers
 
 | Mode | register_worker | systemd unit |
 |------|-----------------|--------------|
 | All capabilities | no `--capability` | `methyl-worker.service` |
-| Single capability | `--capability methyl-qc` | `methyl-worker@methyl-qc.service` |
+| Single capability | `--capability methyl-qc` | `methyl-worker@methyl-qc.service` via `install_worker_systemd.sh --capability methyl-qc` |

@@ -25,6 +25,8 @@ Options:
   --skip-methyl-extractor  Skip MethylExtractor build
   --docker-data-root PATH  Shared Docker data-root (default: /work/epimethyl/docker with --release-dir)
   --dry-run                Print actions without executing
+  --require-arc            Fail if Arc agent is not Connected (production workers)
+  --skip-arc-check         Skip Arc prerequisite check even with --require-arc
   -h, --help               Show this help
 
 Environment:
@@ -54,6 +56,8 @@ SKIP_PARABRICKS_PULL=0
 SKIP_METHYL_EXTRACTOR=0
 DOCKER_DATA_ROOT=""
 DRY_RUN=0
+REQUIRE_ARC=0
+SKIP_ARC_CHECK=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -71,6 +75,8 @@ while [[ $# -gt 0 ]]; do
     --skip-methyl-extractor) SKIP_METHYL_EXTRACTOR=1; shift ;;
     --docker-data-root) DOCKER_DATA_ROOT="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --require-arc) REQUIRE_ARC=1; shift ;;
+    --skip-arc-check) SKIP_ARC_CHECK=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
   esac
@@ -111,6 +117,10 @@ fi
 
 run mkdir -p "$ENV_DIR" "$DATA_DIR" "$RUNS_DIR"
 
+if [[ "$REQUIRE_ARC" -eq 1 && "$SKIP_ARC_CHECK" -eq 0 ]]; then
+  run bash "$SCRIPT_DIR/verify_arc_prereqs.sh"
+fi
+
 if [[ -n "$RELEASE_DIR" ]]; then
   DOCKER_DATA_ROOT="${DOCKER_DATA_ROOT:-$ROOT/docker}"
   run mkdir -p "$DOCKER_DATA_ROOT"
@@ -139,7 +149,7 @@ if [[ -n "$RELEASE_DIR" ]]; then
       PLUGIN_DIR="${HDF5_PLUGIN_PATH:-/usr/local/hdf5/lib/plugin}"
       warn "MethylExtractor not at shared path; run promote_release.sh or extract tarball"
     fi
-    WORKER_API_BASE="${WORKER_API_BASE:-http://localhost:8080/v1}"
+    WORKER_API_BASE="${WORKER_API_BASE:-https://gateway.example.com/v1}"
     run bash "$SCRIPTS_DIR/write_worker_env.sh" --root "$ROOT" --manifest "$RELEASE_DIR/manifest.json" \
       --arch "$ARCH_KEY" --worker-api-base "$WORKER_API_BASE"
   fi
@@ -267,7 +277,7 @@ if [[ "$SKIP_DOCKER" -eq 0 ]]; then
   fi
 fi
 
-WORKER_API_BASE="${WORKER_API_BASE:-http://localhost:8080/v1}"
+WORKER_API_BASE="${WORKER_API_BASE:-https://gateway.example.com/v1}"
 WORKER_PATH="$(expand_worker_path "$VENV_DIR")"
 
 if [[ "$DRY_RUN" -eq 0 ]]; then
