@@ -1,5 +1,6 @@
 /*
-  Platform long-term sample object storage (S3-compatible myQNAPcloud One, etc.).
+  Platform sample **archive** storage (S3-compatible myQNAPcloud One).
+  Used for h5Storage / retention uploads — NOT laboratory FASTQ ingress.
   Deploy after wf_cluster_security_columns.sql (Azure SQL wf schema).
 */
 

@@ -8,18 +8,9 @@ Start when FASTQs are ready. Each sample in `context_json.samples[]` runs downlo
 
 ### Option A — Gateway helper (recommended)
 
-With platform storage configured in `wf.platform_sample_storage` (see [platform_sample_storage.md](../../docs/deployment/platform_sample_storage.md)), omit `fastqStorage` / `h5Storage`:
+**`fastqStorage` is always required** — initial FASTQs come from **laboratory-owned** storage, not from MethylPipeline archive storage.
 
-```http
-POST /v1/studies/sample-prep/start
-{
-  "projectPath": "/work/.../project_Healthy_vs_PCa1-5-CG.json",
-  "workflow_version_id": <sample_prep_version>,
-  "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]
-}
-```
-
-Or pass explicit storage (overrides DB defaults):
+HDF5 archive defaults (`h5Storage`) load from `wf.platform_sample_storage` when omitted. See [platform_sample_storage.md](../../docs/deployment/platform_sample_storage.md).
 
 ```http
 POST /v1/studies/sample-prep/start
@@ -28,8 +19,8 @@ POST /v1/studies/sample-prep/start
   "workflow_version_id": <sample_prep_version>,
   "fastqStorage": {
     "type": "s3",
-    "bucket": "methyl-cohort",
-    "region": "us-east-1",
+    "bucket": "lab-cohort-bucket",
+    "region": "us-west-2",
     "credentials": { "authMode": "instance_profile" }
   },
   "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]

@@ -1,8 +1,9 @@
 """
-Resolve platform long-term sample storage from database rows into planner JSON.
+Resolve platform **archive** storage from database rows into planner JSON.
 
-Maps wf.platform_sample_storage rows to fastqStorage / h5Storage defaults
-(S3-compatible endpoints such as myQNAPcloud One).
+Maps ``wf.platform_sample_storage`` rows to ``h5Storage`` (and future retention
+upload actions). Initial FASTQ ingress always uses laboratory ``fastqStorage``
+from the study start request — never from this table.
 """
 
 from __future__ import annotations

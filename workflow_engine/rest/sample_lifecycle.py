@@ -48,13 +48,13 @@ def start_sample_prep(
 
     from methyl_domain.platform_storage import DEFAULT_STORAGE_KEY
     try:
-        from .platform_storage import apply_platform_sample_storage
+        from .platform_storage import apply_platform_archive_storage
     except ImportError:
-        from platform_storage import apply_platform_sample_storage
+        from platform_storage import apply_platform_archive_storage
 
-    storage_key = str(body.get("storageKey") or DEFAULT_STORAGE_KEY)
+    storage_key = str(body.get("archiveStorageKey") or body.get("storageKey") or DEFAULT_STORAGE_KEY)
     platform_row = db.get_platform_sample_storage(storage_key)
-    planner_payload = apply_platform_sample_storage(
+    planner_payload = apply_platform_archive_storage(
         planner_payload,
         platform_row,
         storage_key=storage_key,

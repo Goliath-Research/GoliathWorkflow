@@ -48,7 +48,8 @@ Top-level keys become scope-0 variables via `wf_init_instance_scope_from_context
 | `isCfdna` | boolean | yes | Drives **IF** `if_is_cfdna`; set `true` when `primaryAnalyte` is `cfdna` |
 | `referenceFasta` | string | yes | Reference FASTA for Parabricks and MethylExtractor |
 | `referenceGtf` | string | no | GTF for Parabricks (empty string if unused) |
-| `fastqStorage` | object | yes | Instance-level file/s3/azure_blob defaults (see `schemas/domain/fastq_storage.schema.json`) |
+| `fastqStorage` | object | yes | **Laboratory-owned** ingress storage (file/s3/azure_blob); never inferred from platform archive |
+| `h5Storage` | object | no | Internal archive defaults from `wf.platform_sample_storage` when omitted |
 | `samples` | array of objects | yes | Per-sample fan-out; each object needs `sampleId`, `sampleDir`, materialized `fastqSource` |
 
 Examples:

@@ -1,4 +1,4 @@
-"""Apply platform sample storage from the database to sample-prep request bodies."""
+"""Apply platform archive storage from the database to sample-prep request bodies."""
 
 from __future__ import annotations
 
@@ -6,32 +6,30 @@ from typing import Any, Dict, Mapping, Optional
 
 from methyl_domain.platform_storage import (
     DEFAULT_STORAGE_KEY,
-    platform_row_to_fastq_storage,
     platform_row_to_h5_storage,
 )
 
 
-def apply_platform_sample_storage(
+def apply_platform_archive_storage(
     body: Mapping[str, Any],
     row: Optional[Mapping[str, Any]],
     *,
     storage_key: str = DEFAULT_STORAGE_KEY,
 ) -> Dict[str, Any]:
     """
-    Fill ``fastqStorage`` and ``h5Storage`` from ``wf.platform_sample_storage`` when omitted.
+    Fill ``h5Storage`` from ``wf.platform_sample_storage`` when omitted.
 
-    Explicit values in ``body`` always win. When ``row`` is None and ``fastqStorage`` is
-    missing, raises ``ValueError``.
+    ``fastqStorage`` is never inferred from the platform row — initial FASTQs always
+    come from laboratory-owned storage and must be supplied on each study start request.
     """
     out: Dict[str, Any] = dict(body)
-    if out.get("fastqStorage") is None and row is None:
+    if out.get("fastqStorage") is None:
         raise ValueError(
-            f"fastqStorage is required when platform storage '{storage_key}' is not configured"
+            "fastqStorage is required: initial FASTQs must come from laboratory-owned "
+            "storage, not from platform archive storage"
         )
     if row is None:
         return out
-    if out.get("fastqStorage") is None:
-        out["fastqStorage"] = platform_row_to_fastq_storage(row).model_dump(mode="json")
     if out.get("h5Storage") is None:
         out["h5Storage"] = platform_row_to_h5_storage(row).model_dump(mode="json")
     return out

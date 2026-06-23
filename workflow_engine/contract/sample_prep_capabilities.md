@@ -81,7 +81,7 @@ Credentials are supplied in `fastqSource.credentials` — there is **no** env-va
 | `azure_blob` | `default_credential` | `DefaultAzureCredential` (managed identity, Azure CLI dev) |
 | `file` | — | `basePath` + `prefix` on shared NFS/local storage |
 
-Portal / planner JSON: instance-level `fastqStorage` plus per-sample `fastqPrefix` (materialized into `samples[].fastqSource`). See `schemas/domain/fastq_storage.schema.json`.
+Portal / planner JSON: instance-level `fastqStorage` (laboratory-owned ingress — **required** on every study start) plus per-sample `fastqPrefix` (materialized into `samples[].fastqSource`). Internal HDF5 archive (`h5Storage`) may default from `wf.platform_sample_storage`. See `schemas/domain/fastq_storage.schema.json` and [platform_sample_storage.md](../../docs/deployment/platform_sample_storage.md).
 
 ### output_json
 
