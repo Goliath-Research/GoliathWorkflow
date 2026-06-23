@@ -329,7 +329,7 @@ Production defaults (not env vars):
 ## `sample.upload-h5`
 
 **action_name:** `sample.upload_h5`  
-**Runs after:** `sample.methyl_extract`, **before** `sample.delete_bam`
+**When:** Only when per-sample `h5Destination` is present in instance context (workflow **IF** node; omitted when `h5Storage` is not configured).
 
 Archive-copies per-chromosome HDF5 files to durable object storage. **Local files on `/work/samples/{id}/` are retained** for downstream validation and BAM deletion.
 

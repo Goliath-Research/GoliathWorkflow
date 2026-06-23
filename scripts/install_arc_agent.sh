@@ -138,7 +138,7 @@ fi
 
 echo "Arc onboarding complete; wrote $ARC_ENV"
 
-if [[ "$WITH_AMA" -eq 1 && -n "$resource_id" && command -v az >/dev/null 2>&1 ]]; then
+if [[ "$WITH_AMA" -eq 1 && -n "$resource_id" ]] && command -v az >/dev/null 2>&1; then
   echo "Installing Azure Monitor Agent extension ..."
   run az connectedmachine extension create \
     --machine-name "$MACHINE_NAME" \

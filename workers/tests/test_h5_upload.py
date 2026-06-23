@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from methyl_worker.handlers import execute_task
-from methyl_worker.h5_upload import upload_h5_files
+from methyl_worker.h5_upload import _should_skip_azure, upload_h5_files
 from pydantic import TypeAdapter
 from methyl_domain.h5_storage import H5DestinationLocation
 
@@ -87,6 +87,21 @@ def test_upload_h5_s3_skips_unchanged(tmp_path: Path) -> None:
 
     assert result["skippedCount"] == 1
     mock_client.upload_file.assert_not_called()
+
+
+def test_should_skip_azure_matches_content_md5_bytes(tmp_path: Path) -> None:
+    local = tmp_path / "1-CG.h5"
+    payload = b"azure-md5-payload"
+    local.write_bytes(payload)
+
+    content_settings = MagicMock()
+    content_settings.content_md5 = __import__("hashlib").md5(payload).digest()
+    props = MagicMock(size=len(payload), content_settings=content_settings)
+    blob_client = MagicMock()
+    blob_client.get_blob_properties.return_value = props
+
+    assert _should_skip_azure(blob_client, local) is True
+    blob_client.upload_blob.assert_not_called()
 
 
 def test_upload_h5_missing_files_raises(tmp_path: Path) -> None:

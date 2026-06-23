@@ -62,11 +62,15 @@ def _remote_key(prefix: str, filename: str) -> str:
 
 
 def _file_md5(path: Path) -> str:
+    return _file_md5_digest(path).hex()
+
+
+def _file_md5_digest(path: Path) -> bytes:
     digest = hashlib.md5()
     with open(path, "rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
-    return digest.hexdigest()
+    return digest.digest()
 
 
 def _should_skip_s3(client: Any, bucket: str, key: str, local: Path) -> bool:
@@ -92,10 +96,7 @@ def _should_skip_azure(blob_client: Any, local: Path) -> bool:
         return False
     content_md5 = getattr(props, "content_settings", None)
     if content_md5 and getattr(content_md5, "content_md5", None):
-        import base64
-
-        remote_md5 = base64.b64encode(content_md5.content_md5).decode("ascii")
-        if remote_md5 == _file_md5(local):
+        if content_md5.content_md5 == _file_md5_digest(local):
             return True
     return int(props.size) == local.stat().st_size
 
