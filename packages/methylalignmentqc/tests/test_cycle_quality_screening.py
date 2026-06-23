@@ -46,6 +46,23 @@ def test_screen_pass_when_overall_pass():
     assert screening["trim_front2"] == 0
 
 
+def test_screen_pass_when_overall_pass_despite_low_cycles():
+    """Guardrail pass short-circuits; screening must not recommend realign."""
+    cycles = list(range(1, 303))
+    quals = [35.0] * 302
+    for i in range(5):
+        quals[151 + i] = 25.0
+    payload = _cycles_payload(cycles, quals)
+    screening = screen_cycle_quality(
+        payload,
+        _guardrails(overall_pass=True),
+        CycleScreeningConfig(read_length=151),
+    )
+    assert screening["disposition"] == DISPOSITION_USE_CURRENT
+    assert screening["quality_pattern"] == "READ2_START_LOW_QUALITY"
+    assert screening["trim_front2"] == 0
+
+
 def test_compute_trim_front2_requires_recovery():
     """No trim when R2 never recovers above threshold after the low-quality run."""
     cycle_quals = [(c, 25.0) for c in range(152, 170)]

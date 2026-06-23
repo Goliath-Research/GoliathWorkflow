@@ -68,7 +68,15 @@ def resolve_alignment_qc_config(
         "validate_schema": True,
     }
     if step_cfg:
-        for key in ("sample_paths", "output_dir", "validate_schema", "auto_profile_from_analyte", "bisulfite_conversion"):
+        for key in (
+            "sample_paths",
+            "output_dir",
+            "validate_schema",
+            "auto_profile_from_analyte",
+            "bisulfite_conversion",
+            "optional_guardrails",
+            "cycle_screening",
+        ):
             if key in step_cfg:
                 base[key] = step_cfg[key]
 

@@ -135,8 +135,8 @@ class AlignmentQCConfig(BaseModel):
         description="Read 2 start cycle screening for remediation dispositions.",
     )
     optional_guardrails: Optional[OptionalGuardrailsConfig] = Field(
-        default_factory=lambda: OptionalGuardrailsConfig(duplication_rate_max=0.30),
-        description="Additional guardrails (duplication rate, min PF reads).",
+        default=None,
+        description="Additional guardrails (duplication rate, min PF reads). Opt in via step_config.",
     )
 
     @field_validator("cycle_screening", mode="before")

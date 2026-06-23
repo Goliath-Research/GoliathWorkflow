@@ -369,34 +369,64 @@ def archive_from_task_input(input_json: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
-# Backward-compatible H5-only upload
+# Backward-compatible H5-only upload (flat keys under prefix; does not archive FASTQs/QC).
+def _local_h5_files(sample_dir: Path, h5_files: Sequence[str] | None) -> List[Path]:
+    if h5_files:
+        paths = [sample_dir / name for name in h5_files]
+    else:
+        paths = sorted(sample_dir.glob(f"*{H5_SUFFIX}"))
+    missing = [p for p in paths if not p.is_file()]
+    if missing:
+        raise RuntimeError(f"HDF5 files not found: {', '.join(str(p) for p in missing)}")
+    return paths
+
+
 def upload_h5_files(
     *,
     sample_dir: str | Path,
     h5_destination: SampleDestinationLocation,
     h5_files: Sequence[str] | None = None,
 ) -> dict[str, Any]:
+    """Upload only HDF5 files to the destination prefix (legacy flat layout)."""
     sample_path = Path(sample_dir)
-    sample_id = sample_path.name
-    if h5_files:
-        for name in h5_files:
-            path = sample_path / name
-            if not path.is_file():
-                raise RuntimeError(f"HDF5 file not found: {path}")
-    result = archive_sample(
-        sample_dir=sample_path,
-        sample_id=sample_id,
-        sample_destination=h5_destination,
-        mode="full",
-    )
+    local_files = _local_h5_files(sample_path, h5_files)
+    target = _target_from_model(h5_destination)
+    clients = _CloudClients()
+    uploaded: List[str] = []
+    skipped: List[str] = []
+
+    for local in local_files:
+        rel = local.name
+        if _upload_one(local, rel, target, clients):
+            uploaded.append(rel)
+        else:
+            skipped.append(rel)
+
     return {
-        "uploadedFiles": [f for f in result["uploadedFiles"] if f.startswith("h5/")],
-        "skippedFiles": result["skippedFiles"],
-        "remotePrefix": result["remotePrefix"],
-        "uploadedCount": result["uploadedCount"],
-        "skippedCount": result["skippedCount"],
+        "uploadedFiles": uploaded,
+        "skippedFiles": skipped,
+        "remotePrefix": target.prefix,
+        "uploadedCount": len(uploaded),
+        "skippedCount": len(skipped),
     }
 
 
+def upload_h5_from_task_input(input_json: Mapping[str, Any]) -> dict[str, Any]:
+    sample_dir = input_json.get("sampleDir")
+    if not sample_dir:
+        raise RuntimeError("sample.upload_h5 requires sampleDir")
+    h5_files = input_json.get("h5Files")
+    if isinstance(h5_files, str):
+        h5_files = [h5_files]
+    result = upload_h5_files(
+        sample_dir=str(sample_dir),
+        h5_destination=_resolve_destination(input_json),
+        h5_files=h5_files,
+    )
+    result["sampleId"] = input_json.get("sampleId") or Path(str(sample_dir)).name
+    return result
+
+
 def upload_from_task_input(input_json: Mapping[str, Any]) -> dict[str, Any]:
-    return archive_from_task_input(input_json)
+    """Deprecated alias — use ``upload_h5_from_task_input`` for H5-only uploads."""
+    return upload_h5_from_task_input(input_json)

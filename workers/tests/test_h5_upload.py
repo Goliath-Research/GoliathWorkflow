@@ -89,8 +89,24 @@ def test_upload_h5_handler_file_destination(tmp_path: Path) -> None:
             "h5Files": ["1-CG.h5"],
         },
     )
-    assert out["uploadedCount"] >= 1
-    assert (archive_root / "S1" / "h5" / "1-CG.h5").is_file()
+    assert out["uploadedCount"] == 1
+    assert (archive_root / "S1" / "1-CG.h5").is_file()
+    assert not (archive_root / "S1" / "fastq").exists()
+
+
+def test_upload_h5_files_ignores_fastqs(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S1"
+    sample_dir.mkdir()
+    archive_root = tmp_path / "archive"
+    (sample_dir / "1-CG.h5").write_bytes(b"h5")
+    (sample_dir / "S1_1.fastq.gz").write_bytes(b"fq" * 1000)
+
+    dest = _dest({"type": "file", "basePath": str(archive_root), "prefix": "S1/"})
+    result = upload_h5_files(sample_dir=sample_dir, h5_destination=dest)
+    assert result["uploadedCount"] == 1
+    assert result["uploadedFiles"] == ["1-CG.h5"]
+    assert (archive_root / "S1" / "1-CG.h5").is_file()
+    assert not (archive_root / "S1" / "fastq").exists()
 
 
 def test_upload_h5_s3_skips_unchanged(tmp_path: Path) -> None:
@@ -119,9 +135,9 @@ def test_upload_h5_s3_skips_unchanged(tmp_path: Path) -> None:
         )
         result = upload_h5_files(sample_dir=sample_dir, h5_destination=dest)
 
-    assert result["skippedCount"] >= 1 or result["uploadedCount"] == 1
-    uploaded_keys = [call.args[2] for call in mock_client.upload_file.call_args_list]
-    assert not any("/h5/" in key or key.endswith(".h5") for key in uploaded_keys)
+    assert result["skippedCount"] == 1
+    assert result["uploadedCount"] == 0
+    mock_client.upload_file.assert_not_called()
 
 
 def test_should_skip_azure_matches_content_md5_bytes(tmp_path: Path) -> None:
@@ -143,5 +159,5 @@ def test_upload_h5_missing_files_raises(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()
     dest = _dest({"type": "file", "basePath": str(tmp_path / "archive"), "prefix": "S1/"})
-    with pytest.raises(RuntimeError, match="HDF5 file not found"):
+    with pytest.raises(RuntimeError, match="HDF5 files not found"):
         upload_h5_files(sample_dir=sample_dir, h5_destination=dest, h5_files=["missing.h5"])

@@ -356,7 +356,7 @@ def screen_cycle_quality(
         localized_max_span=localized_max,
     )
 
-    if overall_pass and pattern == PATTERN_NO_LOW:
+    if overall_pass:
         return {
             "disposition": DISPOSITION_USE_CURRENT,
             "quality_pattern": pattern,
@@ -369,7 +369,7 @@ def screen_cycle_quality(
             "trim_spec": None,
             "r2_start_mean_quality": None,
             "r2_recovery_mean_quality": None,
-            "dip_regions": [],
+            "dip_regions": dip_dicts,
             "message": "Alignment QC passed; no remediation required.",
         }
 

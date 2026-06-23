@@ -416,9 +416,25 @@ def _handle_archive_sample(_capability: str, _action_name: str, input_json: Dict
 
 
 def _handle_upload_h5(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
-    merged = dict(input_json)
-    merged.setdefault("mode", "full")
-    return _handle_archive_sample(_capability, "sample.upload_h5", merged)
+    from .sample_archive import upload_h5_from_task_input
+    from .sample_prep_log import append_sample_prep_log
+
+    result = upload_h5_from_task_input(input_json)
+    sample_dir = input_json.get("sampleDir")
+    sample_id = result.get("sampleId")
+    if sample_dir and sample_id:
+        append_sample_prep_log(
+            Path(str(sample_dir)),
+            sample_id=str(sample_id),
+            action="sample.upload_h5",
+            capability=_capability,
+            attempt=int(input_json.get("qcAttempt") or 1),
+            reason="Archive methylation HDF5 to durable storage",
+            inputs={"remotePrefix": result.get("remotePrefix")},
+            outputs=result,
+            workflow_node_key=input_json.get("workflowNodeKey") or "upload_h5",
+        )
+    return result
 
 
 def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:

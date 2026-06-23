@@ -145,7 +145,7 @@ def main() -> int:
         trim = int(screening.get("trim_front2") or 0)
         if trim > 0:
             batch_trim[rec.get("batch_prefix", "other")].append(trim)
-        if disp in ("REALIGN_TRIM", "REALIGN_READ2_TRIM"):
+        if disp in ("REALIGN_TRIM", "REALIGN_READ2_TRIM") and rec.get("overall_pass") is not True:
             remediation_rows.append(
                 {
                     "sample_id": rec["sample_id"],
