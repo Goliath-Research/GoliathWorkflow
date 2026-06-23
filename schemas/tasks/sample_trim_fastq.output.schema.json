@@ -11,8 +11,24 @@
       "title": "Sampleid",
       "type": "string"
     },
+    "trimFront1": {
+      "default": "0",
+      "title": "Trimfront1",
+      "type": "string"
+    },
     "trimFront2": {
+      "default": "0",
       "title": "Trimfront2",
+      "type": "string"
+    },
+    "trimTail1": {
+      "default": "0",
+      "title": "Trimtail1",
+      "type": "string"
+    },
+    "trimTail2": {
+      "default": "0",
+      "title": "Trimtail2",
       "type": "string"
     },
     "trimmedR1": {
@@ -26,7 +42,6 @@
   },
   "required": [
     "sampleId",
-    "trimFront2",
     "trimmedR1",
     "trimmedR2"
   ],

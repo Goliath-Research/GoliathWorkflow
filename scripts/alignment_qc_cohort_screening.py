@@ -145,13 +145,16 @@ def main() -> int:
         trim = int(screening.get("trim_front2") or 0)
         if trim > 0:
             batch_trim[rec.get("batch_prefix", "other")].append(trim)
-        if disp == "REALIGN_READ2_TRIM":
+        if disp in ("REALIGN_TRIM", "REALIGN_READ2_TRIM"):
             remediation_rows.append(
                 {
                     "sample_id": rec["sample_id"],
                     "group": rec["group"],
                     "disposition": disp,
+                    "trim_front1": int(screening.get("trim_front1") or 0),
+                    "trim_tail1": int(screening.get("trim_tail1") or 0),
                     "trim_front2": trim,
+                    "trim_tail2": int(screening.get("trim_tail2") or 0),
                     "qc_path": rec["qc_path"],
                 }
             )

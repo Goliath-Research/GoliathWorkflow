@@ -241,8 +241,9 @@ def test_h5_storage_materializes_per_sample_destination(tmp_path: Path) -> None:
     )
     assert ctx["h5Storage"]["bucket"] == "methyl-archive"
     s1 = ctx["samples"][0]
-    assert s1["h5Destination"]["type"] == "s3"
-    assert s1["h5Destination"]["bucket"] == "methyl-archive"
+    assert s1["sampleDestination"]["type"] == "s3"
+    assert s1["sampleDestination"]["bucket"] == "methyl-archive"
+    assert s1["sampleDestination"]["prefix"] == "archive/S1/"
     assert s1["h5Destination"]["prefix"] == "archive/S1/"
 
 

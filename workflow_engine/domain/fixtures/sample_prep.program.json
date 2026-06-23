@@ -1,7 +1,7 @@
 {
   "programVersion": 1,
   "name": "SamplePrepPipeline",
-  "description": "Per-sample upstream preprocessing with alignment QC screening and optional R2 trim remediation.",
+  "description": "Per-sample upstream preprocessing with alignment QC screening, trim remediation, extraction QC, and sample archive.",
   "projectPath": "${var.projectPath}",
   "variables": {
     "primaryAnalyte": "cfdna"
@@ -22,7 +22,6 @@
         {
           "if": "${qcPass}",
           "then": [
-            {"action": "sample.delete_fastqs", "node_key": "delete_fastqs"},
             {
               "if": "${isCfdna}",
               "then": [
@@ -35,27 +34,47 @@
               "if": "${extractionQcPass}",
               "then": [
                 {
-                  "if": "${h5Destination}",
+                  "if": "${sampleDestination}",
                   "then": [
-                    {"action": "sample.upload_h5", "node_key": "upload_h5"}
+                    {
+                      "action": "sample.archive_sample",
+                      "node_key": "archive_sample",
+                      "with": {"mode": "full"}
+                    }
                   ]
                 },
+                {"action": "sample.delete_fastqs", "node_key": "delete_fastqs"},
                 {"action": "sample.delete_bam", "node_key": "delete_bam"}
               ],
               "else": [
+                {
+                  "if": "${sampleDestination}",
+                  "then": [
+                    {
+                      "action": "sample.archive_sample",
+                      "node_key": "archive_sample_qc_only",
+                      "with": {"mode": "qc_only", "rejectReason": "extraction_qc_failed"}
+                    }
+                  ]
+                },
+                {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_extraction_fail"},
+                {"action": "sample.delete_bam", "node_key": "delete_bam_extraction_fail"},
                 {"action": "sample.qc_failed", "node_key": "extraction_qc_failed", "with": {"reason": "extraction_qc_failed"}}
               ]
             }
           ],
           "else": [
             {
-              "if": "${remediateR2Trim}",
+              "if": "${remediateAlignment}",
               "then": [
                 {
                   "action": "sample.trim_fastq",
                   "node_key": "trim_fastq",
                   "with": {
+                    "trimFront1": "${var.trimFront1}",
+                    "trimTail1": "${var.trimTail1}",
                     "trimFront2": "${var.trimFront2}",
+                    "trimTail2": "${var.trimTail2}",
                     "remediationReason": "${var.qcAttemptReason}",
                     "workflowNodeKey": "trim_fastq"
                   }
@@ -67,7 +86,6 @@
                     "forceRealign": true,
                     "alignmentPass": "post_trim_realign",
                     "remediationReason": "${var.qcAttemptReason}",
-                    "trimFront2": "${var.trimFront2}",
                     "workflowNodeKey": "parabricks_realign"
                   }
                 },
@@ -81,7 +99,10 @@
                     "workflowNodeKey": "methyl_qc_retry",
                     "remediationTrigger": {
                       "disposition": "${var.qcDisposition}",
+                      "trimFront1": "${var.trimFront1}",
+                      "trimTail1": "${var.trimTail1}",
                       "trimFront2": "${var.trimFront2}",
+                      "trimTail2": "${var.trimTail2}",
                       "priorNode": "methyl_qc"
                     }
                   }
@@ -89,7 +110,6 @@
                 {
                   "if": "${qcPass}",
                   "then": [
-                    {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_after_retry"},
                     {
                       "if": "${isCfdna}",
                       "then": [
@@ -102,26 +122,65 @@
                       "if": "${extractionQcPass}",
                       "then": [
                         {
-                          "if": "${h5Destination}",
+                          "if": "${sampleDestination}",
                           "then": [
-                            {"action": "sample.upload_h5", "node_key": "upload_h5_retry"}
+                            {
+                              "action": "sample.archive_sample",
+                              "node_key": "archive_sample_retry",
+                              "with": {"mode": "full"}
+                            }
                           ]
                         },
+                        {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_after_retry"},
                         {"action": "sample.delete_bam", "node_key": "delete_bam_retry"}
                       ],
                       "else": [
+                        {
+                          "if": "${sampleDestination}",
+                          "then": [
+                            {
+                              "action": "sample.archive_sample",
+                              "node_key": "archive_sample_qc_only_retry",
+                              "with": {"mode": "qc_only", "rejectReason": "extraction_qc_failed"}
+                            }
+                          ]
+                        },
+                        {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_extraction_fail_retry"},
+                        {"action": "sample.delete_bam", "node_key": "delete_bam_extraction_fail_retry"},
                         {"action": "sample.qc_failed", "node_key": "extraction_qc_failed_retry", "with": {"reason": "extraction_qc_failed"}}
                       ]
                     }
                   ],
                   "else": [
+                    {
+                      "if": "${sampleDestination}",
+                      "then": [
+                        {
+                          "action": "sample.archive_sample",
+                          "node_key": "archive_sample_qc_only_align_retry",
+                          "with": {"mode": "qc_only", "rejectReason": "alignment_qc_failed_after_retry"}
+                        }
+                      ]
+                    },
                     {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_retry_fail"},
+                    {"action": "sample.delete_bam", "node_key": "delete_bam_retry_fail"},
                     {"action": "sample.qc_failed", "node_key": "qc_failed_after_retry"}
                   ]
                 }
               ],
               "else": [
+                {
+                  "if": "${sampleDestination}",
+                  "then": [
+                    {
+                      "action": "sample.archive_sample",
+                      "node_key": "archive_sample_qc_only_align",
+                      "with": {"mode": "qc_only", "rejectReason": "alignment_qc_failed"}
+                    }
+                  ]
+                },
                 {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_fail"},
+                {"action": "sample.delete_bam", "node_key": "delete_bam_fail"},
                 {"action": "sample.qc_failed", "node_key": "qc_failed"}
               ]
             }

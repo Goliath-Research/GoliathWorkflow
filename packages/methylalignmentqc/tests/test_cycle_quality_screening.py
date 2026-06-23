@@ -10,7 +10,7 @@ import pytest
 from methyl_alignment_qc.core.cycle_quality_screening import (
     DISPOSITION_GUARDRAIL_ONLY,
     DISPOSITION_MULTI_REGION,
-    DISPOSITION_R2_TRIM,
+    DISPOSITION_REALIGN_TRIM,
     DISPOSITION_USE_CURRENT,
     _compute_trim_front2,
     apply_screening_recommendations,
@@ -64,7 +64,7 @@ def test_screen_r2_no_recovery_avoids_realign_trim():
     cfg = CycleScreeningConfig(read_length=151, max_trim_bases=8, recovery_cycles=10)
     screening = screen_cycle_quality(payload, _guardrails(overall_pass=False), cfg)
     assert screening["trim_front2"] == 0
-    assert screening["disposition"] != DISPOSITION_R2_TRIM
+    assert screening["disposition"] != DISPOSITION_REALIGN_TRIM
 
 
 def test_screen_r2_start_dip_only():
@@ -75,7 +75,7 @@ def test_screen_r2_start_dip_only():
     payload = _cycles_payload(cycles, quals)
     cfg = CycleScreeningConfig(read_length=151)
     screening = screen_cycle_quality(payload, _guardrails(overall_pass=False), cfg)
-    assert screening["disposition"] == DISPOSITION_R2_TRIM
+    assert screening["disposition"] == DISPOSITION_REALIGN_TRIM
     assert screening["trim_front2"] >= 1
     guardrails = {"recommendation": "FAIL", "next_steps": "x"}
     apply_screening_recommendations(guardrails, screening)

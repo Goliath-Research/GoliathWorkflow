@@ -376,13 +376,15 @@ def enrich_sample_prep_output(
             contexts=contexts or ["CG"],
             h5_files=output_json.get("h5Files"),
         )
-    if action_name == "sample.upload_h5":
+    if action_name in ("sample.upload_h5", "sample.archive_sample"):
         archive = {
             "remotePrefix": output_json.get("remotePrefix"),
             "uploadedFiles": output_json.get("uploadedFiles") or [],
             "skippedFiles": output_json.get("skippedFiles") or [],
+            "archiveMode": output_json.get("archiveMode"),
+            "sampleArchived": output_json.get("sampleArchived"),
         }
-        return sample.model_copy(update={"h5Archive": archive})
+        return sample.model_copy(update={"h5Archive": archive, "sampleArchive": archive})
     if action_name == "sample.qc_failed":
         return sample.model_copy(update={"status": "QC_FAILED"})
     return sample

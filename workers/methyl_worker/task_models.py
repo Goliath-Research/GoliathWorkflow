@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from methyl_domain.fastq_storage import FastqSourceLocation
-from methyl_domain.h5_storage import H5DestinationLocation
+from methyl_domain.sample_storage import SampleDestinationLocation
+from methyl_domain.h5_storage import H5DestinationLocation  # deprecated alias
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -120,23 +121,18 @@ class MethylQcTaskOutput(BaseModel):
     guardrails: Dict[str, Any] = Field(default_factory=dict)
     screening: Dict[str, Any] = Field(default_factory=dict)
     qcHistory: List[Dict[str, Any]] = Field(default_factory=list)
+    remediateAlignment: bool = False
     remediateR2Trim: bool = False
-
-
-class ExtractionQcTaskOutput(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    sampleId: str
-    qcPath: str
-    guardrails: Dict[str, Any] = Field(default_factory=dict)
-    extractionQc: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TrimFastqTaskOutput(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     sampleId: str
-    trimFront2: str
+    trimFront1: str = "0"
+    trimTail1: str = "0"
+    trimFront2: str = "0"
+    trimTail2: str = "0"
     trimmedR1: str
     trimmedR2: str
     logReason: str = ""
@@ -182,27 +178,56 @@ class DeleteTaskOutput(BaseModel):
     deleted: bool = True
 
 
-class UploadH5TaskInput(BaseModel):
-    """Input for sample.upload_h5 (archive methylation HDF5 to object storage)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    tool: str = "SampleUploadH5"
-    sampleId: str
-    sampleDir: str
-    h5Destination: H5DestinationLocation
-    h5Files: Optional[List[str]] = None
-
-
-class UploadH5TaskOutput(BaseModel):
+class ExtractionQcTaskOutput(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     sampleId: str
+    qcPath: str
+    guardrails: Dict[str, Any] = Field(default_factory=dict)
+    extractionQc: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ArchiveSampleTaskInput(BaseModel):
+    """Input for sample.archive_sample (archive FASTQs, QC JSON, HDF5 to object storage)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "SampleArchive"
+    sampleId: str
+    sampleDir: str
+    sampleDestination: SampleDestinationLocation | None = None
+    h5Destination: SampleDestinationLocation | None = None
+    mode: str = "full"
+    rejectReason: Optional[str] = None
+    alignmentQcPath: Optional[str] = None
+    qcPath: Optional[str] = None
+    projectPath: Optional[str] = None
+    h5Files: Optional[List[str]] = None
+
+
+class ArchiveSampleTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: str
+    archiveMode: str = "full"
+    rejectReason: Optional[str] = None
     uploadedFiles: List[str] = Field(default_factory=list)
     skippedFiles: List[str] = Field(default_factory=list)
     remotePrefix: str = ""
     uploadedCount: int = 0
     skippedCount: int = 0
+    sampleArchived: bool = False
+    archiveManifestPath: Optional[str] = None
+
+
+class UploadH5TaskInput(ArchiveSampleTaskInput):
+    """Deprecated alias — use ArchiveSampleTaskInput."""
+
+    tool: str = "SampleUploadH5"
+
+
+class UploadH5TaskOutput(ArchiveSampleTaskOutput):
+    """Deprecated alias — use ArchiveSampleTaskOutput."""
 
 
 class MethylExtractTaskOutput(BaseModel):

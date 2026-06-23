@@ -7,7 +7,7 @@ Internal **retention** storage for processed sample artifacts (methylation HDF5,
 | Stage | Storage owner | Config source |
 |-------|---------------|---------------|
 | **First processing** — download FASTQs | Laboratory (external S3, Azure Blob, etc.) | **`fastqStorage` required** on every study start |
-| **After extract** — archive `{chr}-{ctx}.h5` | MethylPipeline (myQNAPcloud) | **`h5Storage`** from `portal.resource_profile` when omitted |
+| **After extract** — archive FASTQs, QC JSON, `{chr}-{ctx}.h5` | MethylPipeline (myQNAPcloud) | **`sampleStorage`** from `portal.resource_profile` when omitted (`h5Storage` alias) |
 
 The workflow engine only stores resolved `fastqStorage` / `h5Storage` in `workflow_instance.context_json`. It does not read portal tables.
 
@@ -65,7 +65,7 @@ WHERE profile_key = 'epimethyl-samples';
 
 **Required:** laboratory `fastqStorage` on every start request.
 
-**Optional default:** `h5Storage` from portal profile when omitted (`archiveProfileKey` defaults to `epimethyl-samples`).
+**Optional default:** `sampleStorage` from portal profile when omitted (`archiveProfileKey` defaults to `epimethyl-samples`). Legacy `h5Storage` accepted.
 
 ```http
 POST /v1/studies/sample-prep/start

@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SampleStorage",
+  "$defs": {
+    "AzureAccountKeyCredentials": {
+      "$ref": "fastq_storage.schema.json#/$defs/AzureAccountKeyCredentials"
+    },
+    "AzureConnectionStringCredentials": {
+      "$ref": "fastq_storage.schema.json#/$defs/AzureConnectionStringCredentials"
+    },
+    "AzureDefaultCredentialCredentials": {
+      "$ref": "fastq_storage.schema.json#/$defs/AzureDefaultCredentialCredentials"
+    },
+    "AzureSampleDestination": {
+      "additionalProperties": false,
+      "properties": {
+        "account": { "type": "string" },
+        "container": { "type": "string" },
+        "credentials": {
+          "oneOf": [
+            { "$ref": "#/$defs/AzureAccountKeyCredentials" },
+            { "$ref": "#/$defs/AzureConnectionStringCredentials" },
+            { "$ref": "#/$defs/AzureDefaultCredentialCredentials" }
+          ]
+        },
+        "prefix": { "type": "string" },
+        "type": { "const": "azure_blob", "default": "azure_blob", "type": "string" }
+      },
+      "required": ["account", "container", "prefix", "credentials"],
+      "type": "object"
+    },
+    "AzureSampleStorageDefaults": {
+      "additionalProperties": false,
+      "properties": {
+        "account": { "type": "string" },
+        "container": { "type": "string" },
+        "credentials": {
+          "oneOf": [
+            { "$ref": "#/$defs/AzureAccountKeyCredentials" },
+            { "$ref": "#/$defs/AzureConnectionStringCredentials" },
+            { "$ref": "#/$defs/AzureDefaultCredentialCredentials" }
+          ]
+        },
+        "type": { "const": "azure_blob", "default": "azure_blob", "type": "string" }
+      },
+      "required": ["account", "container", "credentials"],
+      "type": "object"
+    },
+    "FileSampleDestination": {
+      "additionalProperties": false,
+      "properties": {
+        "basePath": { "type": "string" },
+        "prefix": { "default": "", "type": "string" },
+        "type": { "const": "file", "default": "file", "type": "string" }
+      },
+      "required": ["basePath"],
+      "type": "object"
+    },
+    "FileSampleStorageDefaults": {
+      "additionalProperties": false,
+      "properties": {
+        "basePath": { "type": "string" },
+        "type": { "const": "file", "default": "file", "type": "string" }
+      },
+      "required": ["basePath"],
+      "type": "object"
+    },
+    "S3ExplicitKeysCredentials": {
+      "$ref": "fastq_storage.schema.json#/$defs/S3ExplicitKeysCredentials"
+    },
+    "S3SampleDestination": {
+      "additionalProperties": false,
+      "properties": {
+        "bucket": { "type": "string" },
+        "credentials": {
+          "oneOf": [
+            { "$ref": "#/$defs/S3ExplicitKeysCredentials" },
+            { "$ref": "fastq_storage.schema.json#/$defs/S3InstanceProfileCredentials" }
+          ]
+        },
+        "endpointUrl": { "type": ["string", "null"] },
+        "prefix": { "type": "string" },
+        "region": { "type": ["string", "null"] },
+        "type": { "const": "s3", "default": "s3", "type": "string" }
+      },
+      "required": ["bucket", "prefix", "credentials"],
+      "type": "object"
+    },
+    "S3SampleStorageDefaults": {
+      "additionalProperties": false,
+      "properties": {
+        "bucket": { "type": "string" },
+        "credentials": {
+          "oneOf": [
+            { "$ref": "#/$defs/S3ExplicitKeysCredentials" },
+            { "$ref": "fastq_storage.schema.json#/$defs/S3InstanceProfileCredentials" }
+          ]
+        },
+        "endpointUrl": { "type": ["string", "null"] },
+        "prefixBase": { "type": ["string", "null"] },
+        "region": { "type": ["string", "null"] },
+        "type": { "const": "s3", "default": "s3", "type": "string" }
+      },
+      "required": ["bucket", "credentials"],
+      "type": "object"
+    }
+  },
+  "SampleDestinationLocation": {
+    "oneOf": [
+      { "$ref": "#/$defs/FileSampleDestination" },
+      { "$ref": "#/$defs/S3SampleDestination" },
+      { "$ref": "#/$defs/AzureSampleDestination" }
+    ]
+  },
+  "SampleStorageDefaults": {
+    "oneOf": [
+      { "$ref": "#/$defs/FileSampleStorageDefaults" },
+      { "$ref": "#/$defs/S3SampleStorageDefaults" },
+      { "$ref": "#/$defs/AzureSampleStorageDefaults" }
+    ]
+  }
+}

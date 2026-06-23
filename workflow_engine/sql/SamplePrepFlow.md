@@ -33,25 +33,25 @@ SEQUENCE root
       ├─ ACTION download_fastq       ← laboratory fastqSource → local sampleDir
       ├─ ACTION parabricks_fq2bam    ← GPU WGBS align
       ├─ ACTION methyl_qc            ← alignment guardrail #1
-      │     binds: qcPass, qcDisposition, trimFront2, qcAttemptReason, remediateR2Trim
+      │     binds: qcPass, qcDisposition, trimFront1/2, trimTail1/2, remediateAlignment
       └─ IF qcPass
          ├─ THEN (pass path)
-         │    ├─ delete_fastqs
          │    ├─ [IF isCfdna → fragmentomics]
          │    ├─ methyl_extract
          │    ├─ extraction_qc       ← extraction guardrail #2
          │    └─ IF extractionQcPass
-         │         ├─ [IF h5Destination → upload_h5]
+         │         ├─ [IF sampleDestination → archive_sample mode=full]
+         │         ├─ delete_fastqs
          │         └─ delete_bam
-         │       ELSE → qc_failed (extraction_qc_failed)
+         │       ELSE → archive_sample mode=qc_only → delete_fastqs → delete_bam → qc_failed
          └─ ELSE (alignment fail)
-            └─ IF remediateR2Trim
-               ├─ trim_fastq (fastp, trimFront2 from screening)
+            └─ IF remediateAlignment
+               ├─ trim_fastq (fastp, read-end trim from screening)
                ├─ parabricks_fq2bam (forceRealign)
                ├─ methyl_qc retry (attempt 2)
-               └─ IF qcPass → same pass path as above (extract → extraction_qc → …)
-                  ELSE → delete_fastqs → qc_failed
-            ELSE → delete_fastqs → qc_failed
+               └─ IF qcPass → same pass path as above
+                  ELSE → archive_sample mode=qc_only → delete_fastqs → delete_bam → qc_failed
+            ELSE → archive_sample mode=qc_only → delete_fastqs → delete_bam → qc_failed
 ```
 
 ### Two guardrails
@@ -59,9 +59,9 @@ SEQUENCE root
 | Gate | Action | Scope variable | When | Blocks |
 |------|--------|----------------|------|--------|
 | **Alignment** | `sample.methyl_qc` | `qcPass` | After Parabricks, before extract | Extract path (unless fastp remediation) |
-| **Extraction** | `sample.extraction_qc` | `extractionQcPass` | After `sample.methyl_extract` | H5 archive + BAM delete |
+| **Extraction** | `sample.extraction_qc` | `extractionQcPass` | After `sample.methyl_extract` | Full archive + BAM delete |
 
-Alignment QC may recommend **REALIGN_READ2_TRIM** (cycle screening in methylalignmentqc). When `remediateR2Trim` is true, fastp trims Read 2 front bases, Parabricks realigns, and methyl_qc runs again — **FASTQs must remain on disk** until final alignment QC.
+Alignment QC may recommend **REALIGN_TRIM** (cycle screening in methylalignmentqc). When `remediateAlignment` is true, fastp trims Read 1/2 start or end bases per `trimFront1`/`trimTail1`/`trimFront2`/`trimTail2`, Parabricks realigns, and methyl_qc runs again — **FASTQs must remain on disk** until archive (pass or reject).
 
 Extraction QC reads MethylExtractor `{sampleId}.extraction_manifest.json` and writes `{sampleId}.extraction_qc.json`. Failures are **terminal** (no retry loop today).
 
@@ -73,7 +73,7 @@ Extraction QC reads MethylExtractor `{sampleId}.extraction_manifest.json` and wr
 |-----------|----------|
 | **Analyte** | Set `primaryAnalyte` (`cfdna`, `buffy_coat`, …) and `isCfdna` in instance context. Fragmentomics runs only when `isCfdna` is true. Alignment and extraction QC apply to **all** analytes. |
 | **FASTQ ingress** | **Required** `fastqStorage` on study start (laboratory-owned). Planner materializes `samples[].fastqSource` from storage + per-sample prefix. |
-| **HDF5 archive** | Optional `h5Storage` / `h5Destination` from portal profile when omitted. Upload runs only after **extractionQcPass**. |
+| **Sample archive** | Optional `sampleStorage` / `sampleDestination` from portal profile when omitted. **Full** archive (FASTQs + QC + H5) after **extractionQcPass**; **qc_only** archive on any final reject. Legacy keys `h5Storage` / `h5Destination` accepted. |
 
 See [`../../docs/ANALYTE_PROFILES.md`](../../docs/ANALYTE_PROFILES.md) for downstream step profiles.
 
@@ -89,10 +89,12 @@ Top-level keys become scope-0 variables. FOREACH object elements flatten into pe
 | `referenceFasta` | string | yes | Reference FASTA for Parabricks and MethylExtractor |
 | `referenceGtf` | string | no | GTF for Parabricks |
 | `fastqStorage` | object | yes | Laboratory-owned ingress (never inferred from archive profile) |
-| `h5Storage` | object | no | Internal archive defaults from `portal.resource_profile` when omitted |
-| `samples` | array | yes | Each object: `sampleId`, `sampleDir`, materialized `fastqSource`, optional `h5Destination` |
+| `sampleStorage` | object | no | Internal archive defaults from `portal.resource_profile` when omitted (`h5Storage` alias) |
+| `samples` | array | yes | Each object: `sampleId`, `sampleDir`, materialized `fastqSource`, optional `sampleDestination` |
 
-After `sample.methyl_qc`: `qcPass`, `qcDisposition`, `trimFront2`, `qcAttemptReason`, `remediateR2Trim`.
+After `sample.methyl_qc`: `qcPass`, `qcDisposition`, `trimFront1`, `trimTail1`, `trimFront2`, `trimTail2`, `qcAttemptReason`, `remediateAlignment`.
+
+After `sample.archive_sample`: `sampleArchived`.
 
 After `sample.extraction_qc`: `extractionQcPass` ← `guardrails.overall_pass`.
 
@@ -108,8 +110,8 @@ Examples:
 Per sample under `/work/samples/{sample_id}/`:
 
 ```text
-*.fastq.gz                          transient (deleted after final alignment QC)
-{sample_id}.bam                     transient (deleted after extraction_qc pass)
+*.fastq.gz                          retained until archive_sample, then deleted
+{sample_id}.bam                     deleted after archive (pass or reject)
 {sample_id}.json                    Parabricks metrics (retained)
 *.qc-metrics.tar                    optional Parabricks tar (retained)
 {sample_id}.sample_prep_log.jsonl   append-only audit (retained)
@@ -163,7 +165,8 @@ See [pipeline architecture §0](../docs/pipeline_architecture.md).
 | `sample.fragmentomics` | `methyl-fragmentomics` | In-repo (cfDNA only) |
 | `sample.methyl_extract` | `methyl-extract` | External MethylExtractor |
 | `sample.extraction_qc` | `methyl-extraction-qc` | In-repo methylextractionqc |
-| `sample.upload_h5` | `sample.upload-h5` | In-process |
+| `sample.archive_sample` | `sample.archive-sample` | In-process |
+| `sample.upload_h5` | `sample.upload-h5` | In-process (deprecated alias) |
 | `sample.delete_bam` | `sample.delete-bam` | In-process |
 | `sample.qc_failed` | `sample.mark-failed` | In-process |
 

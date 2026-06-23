@@ -2,31 +2,41 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable, Dict, Mapping, Optional
 
 DEFAULT_ARCHIVE_PROFILE_KEY = "epimethyl-samples"
+logger = logging.getLogger(__name__)
 
 
 def apply_archive_profile_storage(
     body: Mapping[str, Any],
-    h5_storage_loader: Callable[[str], Optional[dict[str, Any]]],
+    sample_storage_loader: Callable[[str], Optional[dict[str, Any]]],
     *,
     profile_key: str = DEFAULT_ARCHIVE_PROFILE_KEY,
+    h5_storage_loader: Callable[[str], Optional[dict[str, Any]]] | None = None,
 ) -> Dict[str, Any]:
     """
-    Fill ``h5Storage`` from ``portal.resource_profile`` when omitted.
+    Fill ``sampleStorage`` from ``portal.resource_profile`` when omitted.
 
     ``fastqStorage`` is never inferred — initial FASTQs must come from
     laboratory-owned storage on each study start request.
     """
+    loader = sample_storage_loader if h5_storage_loader is None else h5_storage_loader
     out: Dict[str, Any] = dict(body)
     if out.get("fastqStorage") is None:
         raise ValueError(
             "fastqStorage is required: initial FASTQs must come from laboratory-owned "
             "storage, not from platform archive storage"
         )
-    if out.get("h5Storage") is None:
-        loaded = h5_storage_loader(profile_key)
+    if out.get("sampleStorage") is None and out.get("h5Storage") is None:
+        loaded = loader(profile_key)
         if loaded is not None:
+            out["sampleStorage"] = loaded
             out["h5Storage"] = loaded
+    elif out.get("sampleStorage") is None and out.get("h5Storage") is not None:
+        out["sampleStorage"] = out["h5Storage"]
+        logger.warning("h5Storage is deprecated; use sampleStorage")
+    elif out.get("h5Storage") is None and out.get("sampleStorage") is not None:
+        out["h5Storage"] = out["sampleStorage"]
     return out

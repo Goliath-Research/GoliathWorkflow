@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class CycleScreeningConfig(BaseModel):
-    """Per-cycle Read 2 start screening for remediation dispositions."""
+    """Per-cycle read-end screening for remediation dispositions."""
 
     enabled: bool = Field(default=True)
     read_length: Optional[int] = Field(
@@ -19,6 +19,9 @@ class CycleScreeningConfig(BaseModel):
     r2_quality_threshold: float = Field(default=30.0)
     max_trim_bases: int = Field(default=8, ge=1)
     multi_region_min_separate_dips: int = Field(default=2, ge=2)
+    read_edge_window: int = Field(default=10, ge=1)
+    broad_bad_cycle_count: int = Field(default=8, ge=1)
+    localized_max_span: int = Field(default=6, ge=1)
 
 
 class OptionalGuardrailsConfig(BaseModel):
@@ -132,7 +135,7 @@ class AlignmentQCConfig(BaseModel):
         description="Read 2 start cycle screening for remediation dispositions.",
     )
     optional_guardrails: Optional[OptionalGuardrailsConfig] = Field(
-        default=None,
+        default_factory=lambda: OptionalGuardrailsConfig(duplication_rate_max=0.30),
         description="Additional guardrails (duplication rate, min PF reads).",
     )
 

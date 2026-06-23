@@ -234,8 +234,12 @@ _DE_METHYL_QC = DomainEffects(
     scope_bindings=(
         ("qcPass", "$.guardrails.overall_pass"),
         ("qcDisposition", "$.screening.disposition"),
+        ("trimFront1", "$.screening.trim_front1"),
+        ("trimTail1", "$.screening.trim_tail1"),
         ("trimFront2", "$.screening.trim_front2"),
+        ("trimTail2", "$.screening.trim_tail2"),
         ("qcAttemptReason", "$.screening.message"),
+        ("remediateAlignment", "$.remediateAlignment"),
         ("remediateR2Trim", "$.remediateR2Trim"),
     ),
     output_bindings=(
@@ -266,13 +270,15 @@ _DE_EXTRACTION_QC = DomainEffects(
         DomainOutputBinding("MethylSampleRef", "extractionQc", "$.extractionQc"),
     ),
 )
-_DE_UPLOAD_H5 = DomainEffects(
+_DE_ARCHIVE_SAMPLE = DomainEffects(
     reads_types=("MethylSampleRef",),
     writes_types=("MethylSampleRef",),
+    scope_bindings=(("sampleArchived", "$.sampleArchived"),),
     output_bindings=(
-        DomainOutputBinding("MethylSampleRef", "h5Archive", "$.h5Archive"),
+        DomainOutputBinding("MethylSampleRef", "sampleArchive", "$.sampleArchive"),
     ),
 )
+_DE_UPLOAD_H5 = _DE_ARCHIVE_SAMPLE
 _DE_QC_FAILED = DomainEffects(
     reads_types=("MethylSampleRef",),
     writes_types=("MethylSampleRef",),
@@ -666,7 +672,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "sample.trim_fastq",
         "sample.trim-fastq",
         "sample.trim_fastq",
-        "Trim Read 2 front bases with fastp before forced realign.",
+        "Trim Read 1/2 start or end bases with fastp before forced realign.",
         "sample_prep",
         _SAMPLE_IN[0],
         _SAMPLE_IN[1],
@@ -674,7 +680,15 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "TrimFastqTaskOutput",
         in_process_handler="_handle_trim_fastq",
         tool="SampleTrimFastq",
-        context_vars=("sampleId", "sampleDir", "trimFront2", "remediationReason"),
+        context_vars=(
+            "sampleId",
+            "sampleDir",
+            "trimFront1",
+            "trimTail1",
+            "trimFront2",
+            "trimTail2",
+            "remediationReason",
+        ),
     ),
     _in_process(
         "sample.methyl_qc",
@@ -744,18 +758,42 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         domain_effects=_DE_EXTRACTION_QC,
     ),
     _in_process(
+        "sample.archive_sample",
+        "sample.archive-sample",
+        "sample.archive_sample",
+        "Archive sample bundle (FASTQs, QC JSON, HDF5) or QC-only reject record to durable storage.",
+        "sample_prep",
+        "methyl_worker.task_models",
+        "ArchiveSampleTaskInput",
+        "methyl_worker.task_models",
+        "ArchiveSampleTaskOutput",
+        in_process_handler="_handle_archive_sample",
+        tool="SampleArchive",
+        context_vars=(
+            "sampleId",
+            "sampleDir",
+            "sampleDestination",
+            "h5Destination",
+            "projectPath",
+            "mode",
+            "rejectReason",
+            "qcPath",
+        ),
+        domain_effects=_DE_ARCHIVE_SAMPLE,
+    ),
+    _in_process(
         "sample.upload_h5",
         "sample.upload-h5",
         "sample.upload_h5",
-        "Archive per-chromosome methylation HDF5 files to S3, Azure Blob, or NFS (local copy retained).",
+        "Deprecated alias for sample.archive_sample (full mode).",
         "sample_prep",
         "methyl_worker.task_models",
-        "UploadH5TaskInput",
+        "ArchiveSampleTaskInput",
         "methyl_worker.task_models",
-        "UploadH5TaskOutput",
+        "ArchiveSampleTaskOutput",
         in_process_handler="_handle_upload_h5",
         tool="SampleUploadH5",
-        context_vars=("sampleId", "sampleDir", "h5Destination", "h5Files"),
+        context_vars=("sampleId", "sampleDir", "sampleDestination", "h5Destination", "h5Files"),
         domain_effects=_DE_UPLOAD_H5,
     ),
     _in_process(

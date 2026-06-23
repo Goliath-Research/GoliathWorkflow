@@ -22,13 +22,13 @@ from methyl_domain.fastq_storage import (
     resolve_sample_storage_prefix,
     S3FastqStorageDefaults,
 )
-from methyl_domain.h5_storage import (
-    H5DestinationLocation,
-    H5StorageDefaults,
-    merge_h5_destination,
-    S3H5StorageDefaults,
+from methyl_domain.sample_storage import (
+    SampleDestinationLocation,
+    SampleStorageDefaults,
+    S3SampleStorageDefaults,
+    merge_sample_destination,
 )
-from pydantic import BaseModel, Field, TypeAdapter
+from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
 from .cohort_inference import infer_monte_carlo_cohorts_from_project
 from .workflow_planner import resolve_base_project_json
@@ -40,7 +40,8 @@ __all__ = [
 
 _CLOUD_SCHEMES = ("s3://", "az://", "file://")
 _FASTQ_SOURCE_ADAPTER = TypeAdapter(FastqSourceLocation)
-_H5_DEST_ADAPTER = TypeAdapter(H5DestinationLocation)
+_SAMPLE_DEST_ADAPTER = TypeAdapter(SampleDestinationLocation)
+_H5_DEST_ADAPTER = _SAMPLE_DEST_ADAPTER  # deprecated alias
 
 
 class SamplePrepPlanRequest(BaseModel):
@@ -52,11 +53,22 @@ class SamplePrepPlanRequest(BaseModel):
     sampleCsvs: Optional[List[str]] = None
     useProjectSamples: bool = False
     fastqStorage: FastqStorageDefaults
-    h5Storage: Optional[H5StorageDefaults] = None
+    sampleStorage: Optional[SampleStorageDefaults] = None
+    h5Storage: Optional[SampleStorageDefaults] = Field(default=None, deprecated=True)
     samplesBaseDir: Optional[str] = None
     referenceFasta: Optional[str] = None
     referenceGtf: Optional[str] = None
     primaryAnalyte: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _merge_storage_aliases(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if data.get("sampleStorage") is None and data.get("h5Storage") is not None:
+            data = dict(data)
+            data["sampleStorage"] = data["h5Storage"]
+        return data
 
 
 def _is_legacy_uri(entry: str) -> bool:
@@ -94,25 +106,40 @@ def _materialize_fastq_source(
     return prefix, dump_storage_model(source)
 
 
+def _materialize_sample_destination(
+    storage: SampleStorageDefaults,
+    *,
+    sample_id: str,
+    sample_prefix: Optional[str] = None,
+    destination_override: Any = None,
+) -> tuple[str, Dict[str, Any]]:
+    if destination_override is not None:
+        dest = _SAMPLE_DEST_ADAPTER.validate_python(destination_override)
+        prefix = normalize_sample_prefix(dest.prefix or sample_prefix or sample_id)
+        return prefix, dump_storage_model(dest)
+    prefix_base = storage.prefixBase if isinstance(storage, S3SampleStorageDefaults) else None
+    prefix = resolve_sample_storage_prefix(
+        sample_id=sample_id,
+        prefix_base=prefix_base,
+        explicit_prefix=sample_prefix,
+    )
+    dest = merge_sample_destination(storage, prefix)
+    return prefix, dump_storage_model(dest)
+
+
 def _materialize_h5_destination(
-    storage: H5StorageDefaults,
+    storage: SampleStorageDefaults,
     *,
     sample_id: str,
     h5_prefix: Optional[str] = None,
     h5_destination_override: Any = None,
 ) -> tuple[str, Dict[str, Any]]:
-    if h5_destination_override is not None:
-        dest = _H5_DEST_ADAPTER.validate_python(h5_destination_override)
-        prefix = normalize_sample_prefix(dest.prefix or h5_prefix or sample_id)
-        return prefix, dump_storage_model(dest)
-    prefix_base = storage.prefixBase if isinstance(storage, S3H5StorageDefaults) else None
-    prefix = resolve_sample_storage_prefix(
+    return _materialize_sample_destination(
+        storage,
         sample_id=sample_id,
-        prefix_base=prefix_base,
-        explicit_prefix=h5_prefix,
+        sample_prefix=h5_prefix,
+        destination_override=h5_destination_override,
     )
-    dest = merge_h5_destination(storage, prefix)
-    return prefix, dump_storage_model(dest)
 
 
 def _sample_entry(
@@ -123,9 +150,12 @@ def _sample_entry(
     fastq_prefix: Optional[str] = None,
     fastq_source_override: Any = None,
     trim_front2: Optional[int] = None,
-    h5_storage: Optional[H5StorageDefaults] = None,
+    h5_storage: Optional[SampleStorageDefaults] = None,
     h5_prefix: Optional[str] = None,
     h5_destination_override: Any = None,
+    sample_storage: Optional[SampleStorageDefaults] = None,
+    sample_prefix: Optional[str] = None,
+    sample_destination_override: Any = None,
 ) -> Dict[str, Any]:
     prefix, fastq_source = _materialize_fastq_source(
         storage,
@@ -141,15 +171,20 @@ def _sample_entry(
     }
     if trim_front2 is not None:
         entry["trimFront2"] = trim_front2
-    if h5_storage is not None:
-        h5_pfx, h5_dest = _materialize_h5_destination(
-            h5_storage,
+    storage_defaults = sample_storage or h5_storage
+    dest_override = sample_destination_override or h5_destination_override
+    prefix_override = sample_prefix or h5_prefix
+    if storage_defaults is not None:
+        dest_pfx, dest = _materialize_sample_destination(
+            storage_defaults,
             sample_id=sample_id,
-            h5_prefix=h5_prefix,
-            h5_destination_override=h5_destination_override,
+            sample_prefix=prefix_override,
+            destination_override=dest_override,
         )
-        entry["h5Prefix"] = h5_pfx
-        entry["h5Destination"] = h5_dest
+        entry["samplePrefix"] = dest_pfx
+        entry["sampleDestination"] = dest
+        entry["h5Prefix"] = dest_pfx
+        entry["h5Destination"] = dest
     return entry
 
 
@@ -194,8 +229,10 @@ def _load_samples_from_csvs(
     samples_base: str,
     *,
     storage: FastqStorageDefaults,
-    h5_storage: Optional[H5StorageDefaults] = None,
+    h5_storage: Optional[SampleStorageDefaults] = None,
+    sample_storage: Optional[SampleStorageDefaults] = None,
 ) -> List[Dict[str, Any]]:
+    storage_defaults = sample_storage or h5_storage
     out: List[Dict[str, Any]] = []
     base = Path(samples_base).resolve()
     for csv_path in csv_paths:
@@ -217,7 +254,8 @@ def _load_samples_from_csvs(
                     sample_dir=str(base / sample_id),
                     storage=storage,
                     fastq_prefix=_default_prefix(storage, sample_id),
-                    h5_storage=h5_storage,
+                    h5_storage=storage_defaults,
+                    sample_storage=storage_defaults,
                 )
             )
     return out
@@ -233,8 +271,10 @@ def _merge_explicit_samples(
     samples_base: str,
     *,
     storage: FastqStorageDefaults,
-    h5_storage: Optional[H5StorageDefaults] = None,
+    h5_storage: Optional[SampleStorageDefaults] = None,
+    sample_storage: Optional[SampleStorageDefaults] = None,
 ) -> List[Dict[str, Any]]:
+    storage_defaults = sample_storage or h5_storage
     out: List[Dict[str, Any]] = []
     base = Path(samples_base).resolve()
     for item in explicit:
@@ -262,9 +302,12 @@ def _merge_explicit_samples(
                 fastq_prefix=item.get("fastqPrefix"),
                 fastq_source_override=item.get("fastqSource"),
                 trim_front2=int(trim_front2) if trim_front2 is not None else None,
-                h5_storage=h5_storage,
-                h5_prefix=item.get("h5Prefix"),
-                h5_destination_override=item.get("h5Destination"),
+                h5_storage=storage_defaults,
+                sample_storage=storage_defaults,
+                h5_prefix=item.get("h5Prefix") or item.get("samplePrefix"),
+                h5_destination_override=item.get("h5Destination") or item.get("sampleDestination"),
+                sample_prefix=item.get("samplePrefix") or item.get("h5Prefix"),
+                sample_destination_override=item.get("sampleDestination") or item.get("h5Destination"),
             )
         )
     return out
@@ -326,7 +369,7 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
     samples_base = str(Path(str(samples_base)).expanduser().resolve())
 
     storage = request.fastqStorage
-    h5_storage = request.h5Storage
+    sample_storage = request.sampleStorage or request.h5Storage
 
     merged: List[Dict[str, Any]] = []
     if request.samples:
@@ -335,7 +378,7 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
                 list(request.samples),
                 samples_base,
                 storage=storage,
-                h5_storage=h5_storage,
+                sample_storage=sample_storage,
             )
         )
 
@@ -346,7 +389,7 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
                 csv_paths,
                 samples_base,
                 storage=storage,
-                h5_storage=h5_storage,
+                sample_storage=sample_storage,
             )
         )
 
@@ -366,8 +409,10 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
         "fastqStorage": dump_storage_model(storage),
         "samples": samples,
     }
-    if h5_storage is not None:
-        context["h5Storage"] = dump_storage_model(h5_storage)
+    if sample_storage is not None:
+        dumped = dump_storage_model(sample_storage)
+        context["sampleStorage"] = dumped
+        context["h5Storage"] = dumped
 
     ref_fasta = request.referenceFasta or _default_reference_fasta(project)
     if ref_fasta:

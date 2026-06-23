@@ -424,11 +424,14 @@
       "context_vars": [
         "sampleId",
         "sampleDir",
+        "trimFront1",
+        "trimTail1",
         "trimFront2",
+        "trimTail2",
         "remediationReason"
       ],
       "default_node_type": "ACTION",
-      "description": "Trim Read 2 front bases with fastp before forced realign.",
+      "description": "Trim Read 1/2 start or end bases with fastp before forced realign.",
       "execution_mode": "in_process",
       "in_process_handler": "_handle_trim_fastq",
       "input_schema_ref": "schemas/tasks/sample_trim_fastq.input.schema.json",
@@ -471,12 +474,28 @@
             "var_name": "qcDisposition"
           },
           {
+            "output_json_path": "$.screening.trim_front1",
+            "var_name": "trimFront1"
+          },
+          {
+            "output_json_path": "$.screening.trim_tail1",
+            "var_name": "trimTail1"
+          },
+          {
             "output_json_path": "$.screening.trim_front2",
             "var_name": "trimFront2"
           },
           {
+            "output_json_path": "$.screening.trim_tail2",
+            "var_name": "trimTail2"
+          },
+          {
             "output_json_path": "$.screening.message",
             "var_name": "qcAttemptReason"
+          },
+          {
+            "output_json_path": "$.remediateAlignment",
+            "var_name": "remediateAlignment"
           },
           {
             "output_json_path": "$.remediateR2Trim",
@@ -612,6 +631,51 @@
       "tool": "MethylExtractionQc"
     },
     {
+      "action_name": "sample.archive_sample",
+      "argv_map": {},
+      "capability": "sample.archive-sample",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "sampleDestination",
+        "h5Destination",
+        "projectPath",
+        "mode",
+        "rejectReason",
+        "qcPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Archive sample bundle (FASTQs, QC JSON, HDF5) or QC-only reject record to durable storage.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.sampleArchive",
+            "scope_field": "sampleArchive"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [
+          {
+            "output_json_path": "$.sampleArchived",
+            "var_name": "sampleArchived"
+          }
+        ],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_archive_sample",
+      "input_schema_ref": "schemas/tasks/sample_archive_sample.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_archive_sample.output.schema.json",
+      "schema_id": "sample.archive_sample",
+      "tool": "SampleArchive"
+    },
+    {
       "action_name": "sample.upload_h5",
       "argv_map": {},
       "capability": "sample.upload-h5",
@@ -619,23 +683,29 @@
       "context_vars": [
         "sampleId",
         "sampleDir",
+        "sampleDestination",
         "h5Destination",
         "h5Files"
       ],
       "default_node_type": "ACTION",
-      "description": "Archive per-chromosome methylation HDF5 files to S3, Azure Blob, or NFS (local copy retained).",
+      "description": "Deprecated alias for sample.archive_sample (full mode).",
       "domain_effects": {
         "output_bindings": [
           {
             "domain_type": "MethylSampleRef",
-            "output_json_path": "$.h5Archive",
-            "scope_field": "h5Archive"
+            "output_json_path": "$.sampleArchive",
+            "scope_field": "sampleArchive"
           }
         ],
         "reads_types": [
           "MethylSampleRef"
         ],
-        "scope_bindings": [],
+        "scope_bindings": [
+          {
+            "output_json_path": "$.sampleArchived",
+            "var_name": "sampleArchived"
+          }
+        ],
         "writes_types": [
           "MethylSampleRef"
         ]

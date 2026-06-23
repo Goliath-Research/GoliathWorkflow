@@ -19,6 +19,11 @@
       "title": "Qcpath",
       "type": "string"
     },
+    "remediateAlignment": {
+      "default": false,
+      "title": "Remediatealignment",
+      "type": "boolean"
+    },
     "remediateR2Trim": {
       "default": false,
       "title": "Remediater2Trim",

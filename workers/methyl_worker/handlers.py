@@ -54,6 +54,12 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str,
         guardrails = payload.get("guardrails") or {}
         screening = guardrails.get("screening") or {}
         qc_history = payload.get("qc_history") or []
+        tf1 = int(screening.get("trim_front1") or 0)
+        tt1 = int(screening.get("trim_tail1") or 0)
+        tf2 = int(screening.get("trim_front2") or 0)
+        tt2 = int(screening.get("trim_tail2") or 0)
+        disposition = str(screening.get("disposition") or "")
+        remediate = disposition == "REALIGN_TRIM" and any((tf1, tt1, tf2, tt2))
         append_sample_prep_log(
             sample_path,
             sample_id=sample_id or sample_path.name,
@@ -78,9 +84,9 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str,
             "guardrails": guardrails,
             "screening": screening,
             "qcHistory": qc_history,
+            "remediateAlignment": remediate,
             "remediateR2Trim": bool(
-                screening.get("disposition") == "REALIGN_READ2_TRIM"
-                and int(screening.get("trim_front2") or 0) > 0
+                remediate and tf2 > 0 and tf1 == 0 and tt1 == 0 and tt2 == 0
             ),
         }
 
@@ -261,26 +267,21 @@ def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict
 
 
 def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
-    from .fastq_trim_runner import run_fastp_trim_front2
+    from .fastq_trim_runner import run_fastp_trim
     from .sample_prep_log import append_sample_prep_log
 
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
-    trim_front2 = input_json.get("trimFront2")
     if not sample_dir or not sample_id:
         raise RuntimeError("sample.trim_fastq requires sampleDir and sampleId")
-    if trim_front2 is None:
-        raise RuntimeError("sample.trim_fastq requires trimFront2")
-    trim_n = int(trim_front2)
     reason = str(
         input_json.get("remediationReason")
         or input_json.get("qcAttemptReason")
-        or f"REALIGN_READ2_TRIM: trim_front2={trim_n}"
+        or "REALIGN_TRIM"
     )
-    result = run_fastp_trim_front2(
+    result = run_fastp_trim(
         sample_id=str(sample_id),
         sample_dir=str(sample_dir),
-        trim_front2=trim_n,
         input_json=input_json,
     )
     append_sample_prep_log(
@@ -290,7 +291,13 @@ def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str
         capability=_capability,
         attempt=int(input_json.get("qcAttempt") or 1),
         reason=reason,
-        inputs={"trimFront2": trim_n, "sampleDir": str(sample_dir)},
+        inputs={
+            "trimFront1": result.get("trimFront1"),
+            "trimTail1": result.get("trimTail1"),
+            "trimFront2": result.get("trimFront2"),
+            "trimTail2": result.get("trimTail2"),
+            "sampleDir": str(sample_dir),
+        },
         outputs=result,
         workflow_node_key=input_json.get("workflowNodeKey") or "trim_fastq",
     )
@@ -386,26 +393,32 @@ def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict
     )
 
 
-def _handle_upload_h5(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
-    from .h5_upload import upload_from_task_input
+def _handle_archive_sample(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+    from .sample_archive import archive_from_task_input
     from .sample_prep_log import append_sample_prep_log
 
-    result = upload_from_task_input(input_json)
+    result = archive_from_task_input(input_json)
     sample_dir = input_json.get("sampleDir")
     sample_id = result.get("sampleId")
     if sample_dir and sample_id:
         append_sample_prep_log(
             Path(str(sample_dir)),
             sample_id=str(sample_id),
-            action="sample.upload_h5",
+            action="sample.archive_sample",
             capability=_capability,
             attempt=int(input_json.get("qcAttempt") or 1),
-            reason="Archive methylation HDF5 to durable storage",
-            inputs={"remotePrefix": result.get("remotePrefix")},
+            reason=str(input_json.get("rejectReason") or "Archive sample bundle to durable storage"),
+            inputs={"mode": result.get("archiveMode"), "remotePrefix": result.get("remotePrefix")},
             outputs=result,
-            workflow_node_key=input_json.get("workflowNodeKey") or "upload_h5",
+            workflow_node_key=input_json.get("workflowNodeKey") or "archive_sample",
         )
     return result
+
+
+def _handle_upload_h5(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+    merged = dict(input_json)
+    merged.setdefault("mode", "full")
+    return _handle_archive_sample(_capability, "sample.upload_h5", merged)
 
 
 def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:
@@ -769,6 +782,7 @@ _SAMPLE_PREP_DOMAIN_ACTIONS = frozenset({
     "sample.fragmentomics",
     "sample.methyl_extract",
     "sample.extraction_qc",
+    "sample.archive_sample",
     "sample.upload_h5",
     "sample.qc_failed",
 })

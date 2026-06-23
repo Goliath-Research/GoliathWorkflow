@@ -186,16 +186,31 @@ class FragmentomicsGuardrailDetails(BaseModel):
     short_fragment_fraction: GuardrailMetric
 
 
+class TrimSpec(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    read: int
+    end: str
+    bases: int
+
+
 class QcScreeningReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
     disposition: str
+    quality_pattern: Optional[str] = None
     read_length: int
     r2_start_cycle: int
+    trim_front1: int = 0
+    trim_tail1: int = 0
     trim_front2: int = 0
+    trim_tail2: int = 0
+    trim_spec: Optional[TrimSpec] = None
     r2_start_mean_quality: Optional[float] = None
     r2_recovery_mean_quality: Optional[float] = None
     dip_regions: List[Dict[str, int]] = Field(default_factory=list)
     message: str
+    bad_cycle_start: Optional[int] = None
+    bad_cycle_end: Optional[int] = None
+    n_cycles: Optional[int] = None
 
 
 class QcAttemptRecord(BaseModel):
@@ -206,7 +221,10 @@ class QcAttemptRecord(BaseModel):
     reason: str
     trigger_disposition: Optional[str] = None
     trigger_action: Optional[str] = None
+    trim_front1: Optional[int] = None
+    trim_tail1: Optional[int] = None
     trim_front2: Optional[int] = None
+    trim_tail2: Optional[int] = None
     overall_pass: bool
     disposition: str
     failed_guardrails: List[str] = Field(default_factory=list)
