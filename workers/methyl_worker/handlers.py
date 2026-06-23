@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import shutil
@@ -745,48 +746,101 @@ def _handle_validation_post_model_validation(
     }
 
 
+def _stub_external_enabled() -> bool:
+    return os.environ.get("WORKER_STUB_EXTERNAL", "").lower() in {"1", "true", "yes"}
+
+
+def _write_stub_extract_artifacts(sample_path: Path, sample_id: str) -> list[str]:
+    h5_name = "21-CG.h5"
+    h5_path = sample_path / h5_name
+    if not h5_path.is_file():
+        h5_path.write_bytes(b"stub-h5")
+    manifest_path = sample_path / f"{sample_id}.extraction_manifest.json"
+    if not manifest_path.is_file():
+        manifest_path.write_text(
+            json.dumps(
+                {
+                    "metadata": {
+                        "schema_name": "methylextractor.extraction_manifest",
+                        "schema_version": "1.0.0",
+                        "contexts_extracted": ["CG"],
+                    },
+                    "summary": {"cpg_weighted_mean_coverage": 20.0},
+                    "per_chromosome": {"21": {"CG": {"mean_coverage": 18.0}}},
+                }
+            ),
+            encoding="utf-8",
+        )
+    return [h5_name]
+
+
 def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
-    if os.environ.get("WORKER_STUB_EXTERNAL", "").lower() in {"1", "true", "yes"}:
-        logger.warning("WORKER_STUB_EXTERNAL: faking success for %s", capability)
-        sample_id = input_json.get("sampleId", "unknown")
-        sample_dir = input_json.get("sampleDir", "")
-        if capability == "sample.download-fastq":
-            return {"sampleId": sample_id, "fastqFiles": ["R1.fastq.gz", "R2.fastq.gz"]}
-        if capability == "parabricks.fq2bam":
-            bam = f"{sample_dir}/{sample_id}.bam" if sample_dir else f"{sample_id}.bam"
-            return {
-                "sampleId": sample_id,
-                "bamPath": bam,
-                "metricsJson": f"{sample_dir}/{sample_id}.json" if sample_dir else f"{sample_id}.json",
-                "qcMetricsTar": (
-                    f"{sample_dir}/{sample_id}.qc-metrics.tar" if sample_dir else f"{sample_id}.qc-metrics.tar"
-                ),
-            }
-        if capability == "sample.delete-fastqs":
-            return {"sampleId": sample_id, "deleted": True}
-        if capability == "sample.trim-fastq":
-            return {
-                "sampleId": sample_id,
-                "trimFront2": str(input_json.get("trimFront2", 5)),
-                "trimmedR1": f"{sample_dir}/{sample_id}_1.trimmed.fastq.gz",
-                "trimmedR2": f"{sample_dir}/{sample_id}_2.trimmed.fastq.gz",
-            }
-        if capability == "sample.delete-bam":
-            return {"sampleId": sample_id, "deleted": True}
-        if capability == "methyl-extract":
-            return {"sampleId": sample_id, "h5Files": ["1-CG.h5"]}
-        if capability == "sample.upload-h5":
-            return {
-                "sampleId": sample_id,
-                "uploadedFiles": ["1-CG.h5"],
-                "skippedFiles": [],
-                "remotePrefix": "studies/test/",
-                "uploadedCount": 1,
-                "skippedCount": 0,
-            }
+    if not _stub_external_enabled():
+        raise RuntimeError(
+            f"No local handler for capability {capability!r}. "
+            "Implement a domain worker or set WORKER_STUB_EXTERNAL=1 for dry-run."
+        )
+
+    logger.warning("WORKER_STUB_EXTERNAL: faking success for %s", capability)
+    sample_id = str(input_json.get("sampleId", "unknown"))
+    sample_dir = str(input_json.get("sampleDir", ""))
+    sample_path = Path(sample_dir) if sample_dir else None
+
+    if capability == "sample.download-fastq":
+        if sample_path is not None:
+            sample_path.mkdir(parents=True, exist_ok=True)
+            for suffix in ("_1.fastq.gz", "_2.fastq.gz"):
+                fq = sample_path / f"{sample_id}{suffix}"
+                if not fq.is_file():
+                    fq.touch()
+        return {
+            "sampleId": sample_id,
+            "fastqFiles": [f"{sample_id}_1.fastq.gz", f"{sample_id}_2.fastq.gz"],
+        }
+    if capability == "parabricks.fq2bam":
+        bam = f"{sample_dir}/{sample_id}.bam" if sample_dir else f"{sample_id}.bam"
+        if sample_path is not None:
+            sample_path.mkdir(parents=True, exist_ok=True)
+            Path(bam).touch(exist_ok=True)
+            metrics = sample_path / f"{sample_id}.json"
+            if not metrics.is_file():
+                metrics.write_text('{"guardrails": {"overall_pass": true}}', encoding="utf-8")
+        return {
+            "sampleId": sample_id,
+            "bamPath": bam,
+            "metricsJson": f"{sample_dir}/{sample_id}.json" if sample_dir else f"{sample_id}.json",
+            "qcMetricsTar": (
+                f"{sample_dir}/{sample_id}.qc-metrics.tar" if sample_dir else f"{sample_id}.qc-metrics.tar"
+            ),
+        }
+    if capability == "sample.delete-fastqs":
+        return {"sampleId": sample_id, "deleted": True}
+    if capability == "sample.trim-fastq":
+        return {
+            "sampleId": sample_id,
+            "trimFront2": str(input_json.get("trimFront2", 5)),
+            "trimmedR1": f"{sample_dir}/{sample_id}_1.trimmed.fastq.gz",
+            "trimmedR2": f"{sample_dir}/{sample_id}_2.trimmed.fastq.gz",
+        }
+    if capability == "sample.delete-bam":
+        return {"sampleId": sample_id, "deleted": True}
+    if capability == "methyl-extract":
+        h5_files = ["21-CG.h5"]
+        if sample_path is not None:
+            h5_files = _write_stub_extract_artifacts(sample_path, sample_id)
+        return {"sampleId": sample_id, "h5Files": h5_files}
+    if capability in {"sample.upload-h5", "sample.archive-sample"}:
+        return {
+            "sampleId": sample_id,
+            "archiveMode": str(input_json.get("mode") or "full"),
+            "uploadedFiles": ["21-CG.h5"],
+            "skippedFiles": [],
+            "remotePrefix": "studies/test/",
+            "uploadedCount": 1,
+            "skippedCount": 0,
+        }
     raise RuntimeError(
-        f"No local handler for capability {capability!r}. "
-        "Implement a domain worker or set WORKER_STUB_EXTERNAL=1 for dry-run."
+        f"WORKER_STUB_EXTERNAL=1 has no stub for capability {capability!r}."
     )
 
 
@@ -829,14 +883,28 @@ def _attach_domain_sample_ref(
         return result
 
 
+_STUB_EXTERNAL_CAPABILITIES = frozenset({
+    "sample.download-fastq",
+    "parabricks.fq2bam",
+    "sample.delete-fastqs",
+    "sample.trim-fastq",
+    "sample.delete-bam",
+    "methyl-extract",
+    "sample.upload-h5",
+})
+
+
 def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
     """Run one ACTION and return output_json for sp_worker_submit_result."""
     entry = find_catalog_entry(action_name) or find_catalog_entry_by_capability(capability)
     if entry is None:
         raise RuntimeError(f"Unknown action {action_name!r} / capability {capability!r}")
 
-    action = build_action_from_catalog(entry, sys.modules[__name__])
-    result = action.execute(input_json)
+    if _stub_external_enabled() and capability in _STUB_EXTERNAL_CAPABILITIES:
+        result = _handle_stub_external(capability, action_name, input_json)
+    else:
+        action = build_action_from_catalog(entry, sys.modules[__name__])
+        result = action.execute(input_json)
 
     if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:
         result = _attach_domain_sample_ref(action_name, input_json, result)

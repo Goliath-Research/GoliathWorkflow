@@ -40,7 +40,7 @@ REF_FASTA="${SMOKE_REFERENCE_FASTA:-/work/genomes/human_genome/release-114/Homo_
 
 mkdir -p "$FASTQ_DIR" "$SAMPLE_DIR" "$OUT_BASE/alignment_qc"
 
-# Placeholder FASTQs for download stub (content not read under WORKER_STUB_EXTERNAL).
+# Placeholder FASTQs (download may copy from fastqStorage; stubs also touch these).
 : > "$FASTQ_DIR/${SAMPLE_ID}_1.fastq.gz"
 : > "$FASTQ_DIR/${SAMPLE_ID}_2.fastq.gz"
 
@@ -48,6 +48,26 @@ cp "$FIXTURE_DIR/003772_8C9_3.json" "$SAMPLE_DIR/${SAMPLE_ID}.json"
 if [[ -f "$FIXTURE_DIR/003772_8C9_3.deduplicate_metrics.txt" ]]; then
   cp "$FIXTURE_DIR/003772_8C9_3.deduplicate_metrics.txt" "$SAMPLE_DIR/${SAMPLE_ID}.deduplicate_metrics.txt"
 fi
+
+# Skip Parabricks when WORKER_STUB_EXTERNAL=1 or when outputs already exist.
+: > "$SAMPLE_DIR/${SAMPLE_ID}.bam"
+
+ARCHIVE_ROOT="$RUN_ROOT/archive"
+mkdir -p "$ARCHIVE_ROOT"
+
+cat > "$SAMPLE_DIR/${SAMPLE_ID}.extraction_manifest.json" <<'MANIFEST'
+{
+  "metadata": {
+    "schema_name": "methylextractor.extraction_manifest",
+    "schema_version": "1.0.0",
+    "contexts_extracted": ["CG"]
+  },
+  "summary": {"cpg_weighted_mean_coverage": 20.0},
+  "per_chromosome": {"21": {"CG": {"mean_coverage": 18.0}}}
+}
+MANIFEST
+
+printf 'stub-h5' > "$SAMPLE_DIR/21-CG.h5"
 
 cat > "$PROJECT_PATH" <<EOF
 {
@@ -84,9 +104,11 @@ export SMOKE_SAMPLE_ID="$SAMPLE_ID"
 export SMOKE_PROJECT_PATH="$PROJECT_PATH"
 export SMOKE_FASTQ_BASE="$RUN_ROOT/fastq"
 export SMOKE_SAMPLE_DIR="$SAMPLE_DIR"
+export SMOKE_ARCHIVE_BASE="$ARCHIVE_ROOT"
 EOF
 
 echo "Bootstrap OK: run_root=$RUN_ROOT sample=$SAMPLE_ID"
 echo "  project: $PROJECT_PATH"
 echo "  sample dir: $SAMPLE_DIR"
 echo "  fastq base: $FASTQ_DIR"
+echo "  archive base: $ARCHIVE_ROOT"

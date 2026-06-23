@@ -4,11 +4,27 @@ Standalone integration test bed for **SamplePrepPipeline** (download → align �
 
 ## Prerequisites
 
-- PostgreSQL `wf` schema deployed ([`workflow_engine/sql_pg/deploy_azure.sh`](../sql_pg/deploy_azure.sh) or local core deploy)
-- Action catalog seeded
+- **Azure SQL** `wf` schema deployed (default `BACKEND_DB=mssql`; see [`docs/deployment/production_runbook.md`](../../docs/deployment/production_runbook.md))
+- Action catalog seeded: `bash scripts/refresh_sample_prep_test_bed.sh` (or `python workflow_engine/sql/seed_action_catalog.py` with `AZURE_SQL_*` env)
 - Workflow definitions deployed: `bash scripts/deploy_workflow_definitions.sh`
 - REST gateway running ([`workflow_engine/rest/gateway.py`](../rest/gateway.py))
 - Worker registered with `WORKER_STUB_EXTERNAL=1` for dry-run smoke, or full stack for production FASTQs
+
+## Refresh test bed (Azure SQL)
+
+```bash
+source .venv/bin/activate
+# Same env as the gateway (gateway.env on the gateway VM):
+export BACKEND_DB=mssql
+export AZURE_SQL_SERVER=<server>.database.windows.net
+export AZURE_SQL_DB=MethylPipeline
+export AZURE_SQL_USER=...
+export AZURE_SQL_PASSWORD=...
+
+bash scripts/refresh_sample_prep_test_bed.sh --api-base http://localhost:8080/v1
+```
+
+This exports task schemas, seeds `wf.workflow_action` + JSON schemas, and POSTs compiled SamplePrep to the gateway.
 
 ## Start via gateway (recommended)
 
@@ -21,6 +37,13 @@ POST /v1/studies/sample-prep/start
     "type": "s3",
     "bucket": "methyl-cohort",
     "region": "us-east-1",
+    "credentials": { "authMode": "instance_profile" }
+  },
+  "sampleStorage": {
+    "type": "s3",
+    "bucket": "methyl-archive",
+    "region": "us-east-1",
+    "prefixBase": "studies/plasma/",
     "credentials": { "authMode": "instance_profile" }
   },
   "sampleCsvs": [
@@ -89,8 +112,8 @@ After `sample.methyl_qc`, scope receives:
 |----------|--------|
 | `qcPass` | `guardrails.overall_pass` |
 | `qcDisposition` | `screening.disposition` |
-| `trimFront2` | `screening.trim_front2` |
-| `remediateR2Trim` | boolean for R2 trim branch |
+| `trimFront2` / `trimTail2` | `screening.trim_*` |
+| `remediateAlignment` | true when disposition is `REALIGN_TRIM` with non-zero trim |
 
 After `sample.extraction_qc`, scope receives:
 
@@ -98,11 +121,11 @@ After `sample.extraction_qc`, scope receives:
 |----------|--------|
 | `extractionQcPass` | `guardrails.overall_pass` |
 
-**Pass path:** `delete_fastqs` → optional fragmentomics → `methyl_extract` → `extraction_qc` → [`extractionQcPass`] optional `upload_h5` → `delete_bam`.
+**Pass path:** optional fragmentomics → `methyl_extract` → `extraction_qc` → [`extractionQcPass`] `archive_sample` mode=`full` (when `sampleDestination` set) → `delete_fastqs` → `delete_bam`.
 
-**Remediation:** `REALIGN_READ2_TRIM` → `trim_fastq` (fastp) → Parabricks `forceRealign` → `methyl_qc` retry → same pass path if retry passes.
+**Remediation:** `REALIGN_TRIM` → `trim_fastq` (fastp) → Parabricks `forceRealign` → `methyl_qc` retry → same pass path if retry passes.
 
-**Final fail:** alignment or extraction QC fail → `delete_fastqs` (when applicable) → `sample.qc_failed`.
+**Reject path:** alignment or extraction QC fail → `archive_sample` mode=`qc_only` (when `sampleDestination` set) → `delete_fastqs` → `delete_bam` → `sample.qc_failed`.
 
 Audit artifacts per sample:
 

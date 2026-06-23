@@ -123,6 +123,10 @@ body = {
         "type": "file",
         "basePath": str(run_root / "fastq"),
     },
+    "sampleStorage": {
+        "type": "file",
+        "basePath": str(run_root / "archive"),
+    },
 }
 if remediation:
     print("note: --remediation not yet implemented; running default pass-path smoke")
@@ -134,6 +138,15 @@ print(json.dumps({"planned_samples": started.get("n_samples"), "context_samples"
 status = poll_instance(instance_id)
 if status != "COMPLETED":
     raise SystemExit(f"SamplePrep smoke failed: {status}")
+
+archive_root = run_root / "archive"
+archive_prefix = archive_root / sample_id
+h5_path = archive_prefix / "h5" / "21-CG.h5"
+manifest_path = archive_prefix / "archive_manifest.json"
+if not h5_path.is_file():
+    raise SystemExit(f"archive smoke check failed: missing {h5_path}")
+if not manifest_path.is_file():
+    raise SystemExit(f"archive smoke check failed: missing {manifest_path}")
 
 print("smoke_sample_prep: OK")
 print(json.dumps({"instance_id": instance_id, "status": status}, indent=2))
