@@ -1,17 +1,19 @@
-"""Tests for gateway platform archive storage request merging."""
+"""Tests for portal archive profile resolution."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
-_REST = Path(__file__).resolve().parents[1] / "rest"
-if str(_REST) not in sys.path:
-    sys.path.insert(0, str(_REST))
+_PORTAL = Path(__file__).resolve().parents[1] / "portal"
+if str(_PORTAL) not in sys.path:
+    sys.path.insert(0, str(_PORTAL))
 
-from platform_storage import apply_platform_archive_storage  # noqa: E402
+from archive_profile_resolver import apply_archive_profile_storage  # noqa: E402
+from resource_profile import ResourceProfileReader  # noqa: E402
 
 _LAB_FASTQ = {
     "type": "s3",
@@ -20,35 +22,33 @@ _LAB_FASTQ = {
     "credentials": {"authMode": "instance_profile"},
 }
 
+_PROFILE_JSON = {
+    "type": "s3",
+    "bucket": "epimethyl",
+    "region": "us-east-1",
+    "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
+    "prefixBase": "samples/",
+    "credentials": {
+        "authMode": "explicit_keys",
+        "accessKeyId": "AKIA",
+        "secretAccessKey": "secret",
+    },
+}
 
-def test_apply_archive_storage_fills_h5_only() -> None:
-    row = {
-        "bucket": "epimethyl",
-        "region": "us-east-1",
-        "endpoint_url": "https://s3.us-east-1.myqnapcloud.io",
-        "access_key_id": "AKIA",
-        "secret_access_key": "secret",
-        "base_prefix": "samples/",
-        "provider_type": "s3",
-    }
-    out = apply_platform_archive_storage(
+
+def test_apply_archive_profile_fills_h5_only() -> None:
+    def loader(_key: str) -> dict:
+        return dict(_PROFILE_JSON)
+
+    out = apply_archive_profile_storage(
         {"projectPath": "/work/project.json", "fastqStorage": _LAB_FASTQ},
-        row,
+        loader,
     )
     assert out["fastqStorage"]["bucket"] == "lab-cohort"
     assert out["h5Storage"]["bucket"] == "epimethyl"
-    assert out["h5Storage"]["endpointUrl"] == "https://s3.us-east-1.myqnapcloud.io"
 
 
-def test_apply_archive_storage_preserves_explicit_h5() -> None:
-    row = {
-        "bucket": "epimethyl",
-        "endpoint_url": "https://s3.us-east-1.myqnapcloud.io",
-        "access_key_id": "AKIA",
-        "secret_access_key": "secret",
-        "base_prefix": "samples/",
-        "provider_type": "s3",
-    }
+def test_apply_archive_profile_preserves_explicit_h5() -> None:
     body = {
         "fastqStorage": _LAB_FASTQ,
         "h5Storage": {
@@ -57,18 +57,26 @@ def test_apply_archive_storage_preserves_explicit_h5() -> None:
             "credentials": {"authMode": "instance_profile"},
         },
     }
-    out = apply_platform_archive_storage(body, row)
+    out = apply_archive_profile_storage(body, lambda _k: dict(_PROFILE_JSON))
     assert out["h5Storage"]["bucket"] == "custom-archive"
 
 
-def test_apply_archive_storage_requires_lab_fastq_even_with_platform_row() -> None:
-    row = {
-        "bucket": "epimethyl",
-        "endpoint_url": "https://s3.us-east-1.myqnapcloud.io",
-        "access_key_id": "AKIA",
-        "secret_access_key": "secret",
-        "base_prefix": "samples/",
-        "provider_type": "s3",
-    }
+def test_apply_archive_profile_requires_lab_fastq() -> None:
     with pytest.raises(ValueError, match="laboratory-owned"):
-        apply_platform_archive_storage({}, row)
+        apply_archive_profile_storage({}, lambda _k: dict(_PROFILE_JSON))
+
+
+def test_resource_profile_reader_parses_json() -> None:
+    db = MagicMock()
+    db.backend = "postgres"
+    db._fetch_one.return_value = {
+        "profile_key": "epimethyl-samples",
+        "profile_type": "s3_object_storage",
+        "profile_json": _PROFILE_JSON,
+        "status": "ACTIVE",
+    }
+    reader = ResourceProfileReader(db)
+    h5 = reader.h5_storage_defaults("epimethyl-samples")
+    assert h5 is not None
+    assert h5["bucket"] == "epimethyl"
+    assert h5["endpointUrl"] == "https://s3.us-east-1.myqnapcloud.io"

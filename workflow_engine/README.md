@@ -32,7 +32,8 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 15b. [`wf_workflow_edge_index_fixup.sql`](wf_workflow_edge_index_fixup.sql) — drop `UQ_we_parent_child_order` (required before programmatic IF workflow deploy).
 15c. [`wf_cluster_security_columns.sql`](wf_cluster_security_columns.sql) — cluster `allowed_source_cidrs`, `entra_client_id`, and `arc_resource_id` for gateway tiered auth.
 15d. [`wf_cluster_arc_resource_id.sql`](wf_cluster_arc_resource_id.sql) — idempotent add of `arc_resource_id` when upgrading older deployments.
-15e. [`wf_platform_sample_storage.sql`](wf_platform_sample_storage.sql) — platform long-term sample object storage (myQNAPcloud / S3-compatible).
+15e. [`portal_resource_profile.sql`](portal_resource_profile.sql) — portal archive storage profiles (domain config; not wf).
+15f. [`wf_drop_platform_sample_storage.sql`](wf_drop_platform_sample_storage.sql) — drop mistaken wf.platform_sample_storage if deployed.
 16. [`wf_worker_api_contract.sql`](wf_worker_api_contract.sql) — worker submit result-set contract alignment.
 17. [`wf_data_driven_pipeline_seed.sql`](wf_data_driven_pipeline_seed.sql) — **DataDrivenPipeline** (generic; instance `context_json` drives fan-out).
 17a. [`wf_sample_prep_pipeline_seed.sql`](wf_sample_prep_pipeline_seed.sql) — **SamplePrepPipeline** (per-sample FASTQ → HDF5 upstream).

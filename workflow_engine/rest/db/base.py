@@ -133,8 +133,6 @@ class GatewayDb(Protocol):
 
     def get_worker_cluster_security(self, worker_id: int) -> Optional[dict[str, Any]]: ...
 
-    def get_platform_sample_storage(self, storage_key: str) -> Optional[dict[str, Any]]: ...
-
 
 class GatewayDbBase(ABC):
     backend: str
@@ -247,9 +245,6 @@ class GatewayDbBase(ABC):
 
     @abstractmethod
     def get_worker_cluster_security(self, worker_id: int) -> Optional[dict[str, Any]]: ...
-
-    @abstractmethod
-    def get_platform_sample_storage(self, storage_key: str) -> Optional[dict[str, Any]]: ...
 
     def _format_task_claim(self, row: Optional[dict[str, Any]]) -> dict[str, Any]:
         if not row:
