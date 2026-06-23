@@ -30,13 +30,22 @@
               ]
             },
             {"action": "sample.methyl_extract", "node_key": "methyl_extract"},
+            {"action": "sample.extraction_qc", "node_key": "extraction_qc"},
             {
-              "if": "${h5Destination}",
+              "if": "${extractionQcPass}",
               "then": [
-                {"action": "sample.upload_h5", "node_key": "upload_h5"}
+                {
+                  "if": "${h5Destination}",
+                  "then": [
+                    {"action": "sample.upload_h5", "node_key": "upload_h5"}
+                  ]
+                },
+                {"action": "sample.delete_bam", "node_key": "delete_bam"}
+              ],
+              "else": [
+                {"action": "sample.qc_failed", "node_key": "extraction_qc_failed", "with": {"reason": "extraction_qc_failed"}}
               ]
-            },
-            {"action": "sample.delete_bam", "node_key": "delete_bam"}
+            }
           ],
           "else": [
             {
@@ -88,13 +97,22 @@
                       ]
                     },
                     {"action": "sample.methyl_extract", "node_key": "methyl_extract_retry"},
+                    {"action": "sample.extraction_qc", "node_key": "extraction_qc_retry"},
                     {
-                      "if": "${h5Destination}",
+                      "if": "${extractionQcPass}",
                       "then": [
-                        {"action": "sample.upload_h5", "node_key": "upload_h5_retry"}
+                        {
+                          "if": "${h5Destination}",
+                          "then": [
+                            {"action": "sample.upload_h5", "node_key": "upload_h5_retry"}
+                          ]
+                        },
+                        {"action": "sample.delete_bam", "node_key": "delete_bam_retry"}
+                      ],
+                      "else": [
+                        {"action": "sample.qc_failed", "node_key": "extraction_qc_failed_retry", "with": {"reason": "extraction_qc_failed"}}
                       ]
-                    },
-                    {"action": "sample.delete_bam", "node_key": "delete_bam_retry"}
+                    }
                   ],
                   "else": [
                     {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_retry_fail"},

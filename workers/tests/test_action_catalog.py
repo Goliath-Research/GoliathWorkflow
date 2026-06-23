@@ -83,6 +83,7 @@ def test_sample_prep_actions_have_domain_effects() -> None:
         "sample.methyl_qc",
         "sample.fragmentomics",
         "sample.methyl_extract",
+        "sample.extraction_qc",
         "sample.qc_failed",
     ]
     for action_name in sample_prep:

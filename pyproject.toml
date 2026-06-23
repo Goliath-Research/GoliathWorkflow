@@ -63,6 +63,7 @@ pythonpath = [
     "packages/methylcluster",
     "packages/methylenricher",
     "packages/methylalignmentqc",
+    "packages/methylextractionqc",
     "packages/methyldiseaseprogression",
     "packages/methyldomain",
     "workers",

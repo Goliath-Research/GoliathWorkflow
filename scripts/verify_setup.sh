@@ -46,6 +46,7 @@ PACKAGES=(
   "methylenricher"
   "methyldiseaseprogression"
   "methylalignmentqc"
+  "methylextractionqc"
   "methylpredictor"
   "methylvalidation"
   "methyldomain"

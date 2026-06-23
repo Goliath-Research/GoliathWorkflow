@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Union
 from .types import (
     AlignmentQcRef,
     ComparisonSpecRef,
+    ExtractionQcRef,
     FragmentomicsRef,
     MethylDetectionRef,
     MethylGroup,
@@ -98,6 +99,24 @@ def apply_qc_to_sample(
     return sample.model_copy(
         update={
             "alignmentQc": AlignmentQcRef(
+                qcPath=qc_path,
+                overallPass=overall_pass,
+                guardrails=guardrails,
+            )
+        }
+    )
+
+
+def apply_extraction_qc_to_sample(
+    sample: MethylSampleRef,
+    *,
+    qc_path: str,
+    overall_pass: bool,
+    guardrails: Optional[Dict[str, Any]] = None,
+) -> MethylSampleRef:
+    return sample.model_copy(
+        update={
+            "extractionQc": ExtractionQcRef(
                 qcPath=qc_path,
                 overallPass=overall_pass,
                 guardrails=guardrails,
@@ -296,6 +315,14 @@ def enrich_sample_prep_output(
         if qc_history:
             guardrails["qc_history"] = qc_history
         return apply_qc_to_sample(
+            sample,
+            qc_path=str(output_json.get("qcPath", "")),
+            overall_pass=bool(guardrails.get("overall_pass", False)),
+            guardrails=guardrails,
+        )
+    if action_name == "sample.extraction_qc":
+        guardrails = dict(output_json.get("guardrails") or {})
+        return apply_extraction_qc_to_sample(
             sample,
             qc_path=str(output_json.get("qcPath", "")),
             overall_pass=bool(guardrails.get("overall_pass", False)),

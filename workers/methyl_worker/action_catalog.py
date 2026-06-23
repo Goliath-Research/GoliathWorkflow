@@ -70,6 +70,7 @@ PROJECT_STEP_CONFIG_KEYS: FrozenSet[StepConfigKey] = frozenset(
         "gene_selection",
         "predictor",
         "alignment_qc",
+        "extraction_qc",
         "fragmentomics",
         "methyl_extract",
         "validation",
@@ -253,6 +254,16 @@ _DE_METHYL_EXTRACT = DomainEffects(
     writes_types=("MethylSampleRef",),
     output_bindings=(
         DomainOutputBinding("MethylSampleRef", "methylation", "$.methylation"),
+    ),
+)
+_DE_EXTRACTION_QC = DomainEffects(
+    reads_types=("MethylSampleRef",),
+    writes_types=("MethylSampleRef",),
+    scope_bindings=(
+        ("extractionQcPass", "$.guardrails.overall_pass"),
+    ),
+    output_bindings=(
+        DomainOutputBinding("MethylSampleRef", "extractionQc", "$.extractionQc"),
     ),
 )
 _DE_UPLOAD_H5 = DomainEffects(
@@ -714,6 +725,23 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         step_config_key="methyl_extract",
         context_vars=("sampleId", "sampleDir", "projectPath", "referenceFasta"),
         domain_effects=_DE_METHYL_EXTRACT,
+    ),
+    _in_process(
+        "sample.extraction_qc",
+        "methyl-extraction-qc",
+        "sample.extraction_qc",
+        "Evaluate MethylExtractor manifest guardrails and write extraction QC JSON.",
+        "sample_prep",
+        _SAMPLE_IN[0],
+        _SAMPLE_IN[1],
+        "methyl_worker.task_models",
+        "ExtractionQcTaskOutput",
+        in_process_handler="_handle_methyl_extraction_qc",
+        tool="MethylExtractionQc",
+        cli_tool="methyl-extraction-qc",
+        step_config_key="extraction_qc",
+        context_vars=("projectPath", "sampleId", "sampleDir"),
+        domain_effects=_DE_EXTRACTION_QC,
     ),
     _in_process(
         "sample.upload_h5",

@@ -123,6 +123,15 @@ class MethylQcTaskOutput(BaseModel):
     remediateR2Trim: bool = False
 
 
+class ExtractionQcTaskOutput(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    sampleId: str
+    qcPath: str
+    guardrails: Dict[str, Any] = Field(default_factory=dict)
+    extractionQc: Dict[str, Any] = Field(default_factory=dict)
+
+
 class TrimFastqTaskOutput(BaseModel):
     model_config = ConfigDict(extra="allow")
 

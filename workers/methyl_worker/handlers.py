@@ -128,6 +128,68 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str,
     return _build_result(qc_path)
 
 
+def _handle_methyl_extraction_qc(
+    _capability: str, _action_name: str, input_json: Dict[str, Any]
+) -> HandlerResult:
+    sample_dir = input_json.get("sampleDir")
+    sample_id = input_json.get("sampleId")
+    if not sample_dir or not sample_id:
+        raise RuntimeError("methyl-extraction-qc task requires sampleDir and sampleId in input_json")
+
+    sample_path = Path(str(sample_dir))
+    if not sample_path.is_dir():
+        raise RuntimeError(f"sampleDir not found: {sample_path}")
+
+    from methyl_extraction_qc.core.writer import process_sample_extraction_qc
+    from methyl_extraction_qc.models.config import ExtractionQCConfig
+    from methyl_extraction_qc.project_resolver import resolve_extraction_qc_config
+
+    project = input_json.get("project") or input_json.get("projectPath")
+    chromosomes = input_json.get("chromosomes")
+    if project:
+        config = resolve_extraction_qc_config(project, sample_paths=[str(sample_path)])
+    elif chromosomes:
+        config = ExtractionQCConfig(expected_chromosomes=[str(item) for item in chromosomes])
+    else:
+        config = None
+    qc_path = process_sample_extraction_qc(
+        sample_path,
+        str(sample_id),
+        config=config,
+    )
+
+    import json
+
+    from .sample_prep_log import append_sample_prep_log
+
+    payload = json.loads(qc_path.read_text(encoding="utf-8"))
+    guardrails = payload.get("guardrails") or {}
+    append_sample_prep_log(
+        sample_path,
+        sample_id=str(sample_id),
+        action="sample.extraction_qc",
+        capability=_capability,
+        attempt=int(input_json.get("qcAttempt") or 1),
+        reason="Post-extraction manifest guardrails",
+        inputs={"manifestPath": str(sample_path / f"{sample_id}.extraction_manifest.json")},
+        outputs={
+            "qcPath": str(qc_path),
+            "overallPass": guardrails.get("overall_pass"),
+        },
+        workflow_node_key=input_json.get("workflowNodeKey") or "extraction_qc",
+    )
+    return {
+        "sampleId": str(sample_id),
+        "qcPath": str(qc_path),
+        "guardrails": guardrails,
+        "extractionQc": {
+            "qcPath": str(qc_path),
+            "overallPass": bool(guardrails.get("overall_pass", False)),
+            "guardrails": guardrails,
+        },
+    }
+
+
 def _handle_methyl_fragmentomics(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
 ) -> HandlerResult:
@@ -706,6 +768,7 @@ _SAMPLE_PREP_DOMAIN_ACTIONS = frozenset({
     "sample.methyl_qc",
     "sample.fragmentomics",
     "sample.methyl_extract",
+    "sample.extraction_qc",
     "sample.upload_h5",
     "sample.qc_failed",
 })

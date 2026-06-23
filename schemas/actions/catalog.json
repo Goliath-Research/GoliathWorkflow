@@ -570,6 +570,48 @@
       "tool": "MethylExtract"
     },
     {
+      "action_name": "sample.extraction_qc",
+      "argv_map": {},
+      "capability": "methyl-extraction-qc",
+      "category": "sample_prep",
+      "cli_tool": "methyl-extraction-qc",
+      "context_vars": [
+        "projectPath",
+        "sampleId",
+        "sampleDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Evaluate MethylExtractor manifest guardrails and write extraction QC JSON.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.extractionQc",
+            "scope_field": "extractionQc"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [
+          {
+            "output_json_path": "$.guardrails.overall_pass",
+            "var_name": "extractionQcPass"
+          }
+        ],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_methyl_extraction_qc",
+      "input_schema_ref": "schemas/tasks/sample_extraction_qc.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_extraction_qc.output.schema.json",
+      "schema_id": "sample.extraction_qc",
+      "step_config_key": "extraction_qc",
+      "tool": "MethylExtractionQc"
+    },
+    {
       "action_name": "sample.upload_h5",
       "argv_map": {},
       "capability": "sample.upload-h5",

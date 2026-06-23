@@ -16,6 +16,7 @@ DomainTypeName = Literal[
     "MethylIngestRef",
     "MethylSampleRef",
     "AlignmentQcRef",
+    "ExtractionQcRef",
     "FragmentomicsRef",
     "MethylationMatrixRef",
     "MethylGroup",
@@ -29,6 +30,7 @@ DOMAIN_TYPE_NAMES: tuple[str, ...] = (
     "MethylIngestRef",
     "MethylSampleRef",
     "AlignmentQcRef",
+    "ExtractionQcRef",
     "FragmentomicsRef",
     "MethylationMatrixRef",
     "MethylGroup",
@@ -67,6 +69,15 @@ class AlignmentQcRef(DomainTaggedModel):
     guardrails: Optional[Dict[str, Any]] = None
 
 
+class ExtractionQcRef(DomainTaggedModel):
+    """Post-extraction QC JSON artifact and pass/fail gate."""
+
+    type: Literal["ExtractionQcRef"] = Field(alias="$type", default="ExtractionQcRef")
+    qcPath: str
+    overallPass: bool
+    guardrails: Optional[Dict[str, Any]] = None
+
+
 class FragmentomicsRef(DomainTaggedModel):
     """cfDNA fragmentomics run artifacts."""
 
@@ -98,6 +109,7 @@ class MethylSampleRef(DomainTaggedModel):
     bamPath: Optional[str] = None
     metricsJson: Optional[str] = None
     alignmentQc: Optional[AlignmentQcRef] = None
+    extractionQc: Optional[ExtractionQcRef] = None
     fragmentomics: Optional[FragmentomicsRef] = None
     methylation: Optional[MethylationMatrixRef] = None
     h5Archive: Optional[Dict[str, Any]] = None
