@@ -316,7 +316,9 @@ class PostgresGatewayDb(GatewayDbBase):
             "name": payload.get("name"),
         }
 
-    def list_workflow_definitions(self) -> list[dict[str, Any]]:
+    def list_workflow_definitions(
+        self, *, source_filter: Optional[str] = None
+    ) -> list[dict[str, Any]]:
         rows = self._fetch_all(
             f"""
             SELECT wd.id AS workflow_def_id,
@@ -333,8 +335,10 @@ class PostgresGatewayDb(GatewayDbBase):
                 ORDER BY version_major DESC, version_minor DESC
                 LIMIT 1
             ) wv ON true
+            WHERE (%s IS NULL OR COALESCE(wd.source, 'system') = %s)
             ORDER BY wd.name
-            """
+            """,
+            (source_filter, source_filter),
         )
         return rows
 

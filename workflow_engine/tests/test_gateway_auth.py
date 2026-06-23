@@ -40,7 +40,9 @@ class _StubDb:
             }
         return None
 
-    def list_workflow_definitions(self) -> list[dict[str, object]]:
+    def list_workflow_definitions(
+        self, *, source_filter: str | None = None
+    ) -> list[dict[str, object]]:
         return []
 
     def get_workflow_definition_by_name(self, name: str) -> dict[str, object]:
@@ -105,6 +107,43 @@ class AuthorizeRequestTests(unittest.TestCase):
                 {"worker_id": 42, "worker_token": "x"},
                 scope,
             )
+
+
+class _FilteringStubDb(_StubDb):
+    def list_workflow_definitions(
+        self, *, source_filter: str | None = None
+    ) -> list[dict[str, object]]:
+        rows = [
+            {"name": "SamplePrep", "source": "system"},
+            {"name": "CustomFlow", "source": "portal"},
+        ]
+        if source_filter is None:
+            return rows
+        return [row for row in rows if row["source"] == source_filter]
+
+
+class ListDefinitionsTests(unittest.TestCase):
+    def test_admin_list_definitions_forwards_source_query(self) -> None:
+        gateway = RestGateway(_FilteringStubDb())
+        status, payload = gateway.dispatch(
+            "GET",
+            "/v1/admin/workflows/definitions",
+            {},
+            query={"source": ["portal"]},
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual([row["name"] for row in payload["definitions"]], ["CustomFlow"])
+
+    def test_admin_list_definitions_rejects_invalid_source(self) -> None:
+        gateway = RestGateway(_StubDb())
+        status, payload = gateway.dispatch(
+            "GET",
+            "/v1/admin/workflows/definitions",
+            {},
+            query={"source": ["bogus"]},
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("source must be", payload["error"])
 
 
 class AsgiEntraMiddlewareTests(unittest.IsolatedAsyncioTestCase):

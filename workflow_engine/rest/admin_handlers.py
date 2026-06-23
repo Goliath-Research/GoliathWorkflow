@@ -105,8 +105,12 @@ def deploy_workflow_definition(
     return create_workflow_definition(db, spec)
 
 
-def list_workflow_definitions(db: Any) -> Dict[str, Any]:
-    rows = db.list_workflow_definitions()
+def list_workflow_definitions(
+    db: Any, *, source: Optional[str] = None
+) -> Dict[str, Any]:
+    if source is not None and source not in ("system", "portal"):
+        raise ValueError("source must be 'system' or 'portal'")
+    rows = db.list_workflow_definitions(source_filter=source)
     return {"definitions": rows}
 
 

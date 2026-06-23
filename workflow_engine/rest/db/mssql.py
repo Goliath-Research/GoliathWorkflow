@@ -377,7 +377,9 @@ SELECT @deleted_instance_count AS deleted_instance_count,
             "name": row.get("name"),
         }
 
-    def list_workflow_definitions(self) -> list[dict[str, Any]]:
+    def list_workflow_definitions(
+        self, *, source_filter: Optional[str] = None
+    ) -> list[dict[str, Any]]:
         return self._fetch_all(
             f"""
             SELECT wd.id AS workflow_def_id,
@@ -393,8 +395,10 @@ SELECT @deleted_instance_count AS deleted_instance_count,
                 WHERE workflow_def_id = wd.id AND is_active = 1
                 ORDER BY version_major DESC, version_minor DESC
             ) wv
+            WHERE (? IS NULL OR COALESCE(wd.source, 'system') = ?)
             ORDER BY wd.name
-            """
+            """,
+            (source_filter, source_filter),
         )
 
     def get_workflow_definition_by_name(self, name: str) -> dict[str, Any]:

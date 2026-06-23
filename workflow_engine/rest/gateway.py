@@ -206,7 +206,12 @@ class RestGateway:
             return 201, result
 
         if method == "GET" and path == "/v1/admin/workflows/definitions":
-            return 200, list_workflow_definitions(self.db)
+            source_values = q.get("source") or []
+            source = source_values[0] if source_values else None
+            try:
+                return 200, list_workflow_definitions(self.db, source=source)
+            except ValueError as exc:
+                return 400, {"error": str(exc)}
 
         m = re.fullmatch(r"/v1/admin/workflows/definitions/([^/]+)", path)
         if method == "GET" and m:

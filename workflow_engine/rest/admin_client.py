@@ -43,6 +43,15 @@ def admin_request(
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"{method} {path} failed HTTP {exc.code}: {detail}") from exc
+    except urllib.error.URLError as exc:
+        reason = getattr(exc, "reason", exc)
+        if isinstance(reason, ConnectionRefusedError):
+            raise RuntimeError(
+                f"Cannot reach gateway at {url} (connection refused). "
+                f"Start methyl-gateway locally or set WORKER_API_BASE to the running gateway URL, "
+                f"then retry: curl -s {base}/health"
+            ) from exc
+        raise RuntimeError(f"{method} {path} failed: {reason}") from exc
 
 
 def load_catalog_seed_payload(
