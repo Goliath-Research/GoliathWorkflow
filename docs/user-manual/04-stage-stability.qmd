@@ -40,6 +40,23 @@ Under `step_config.validation`:
   - `stability_target_balanced_accuracy`
   - `stability_min_selected_dmps`
 
+## Composable workflow profiles
+
+DomainProgram workflows support selectable paths via context profiles in `workflow_engine/domain/profiles/`. Use `methyl-validation run-workflow` or `methyl-workflow-run` with `--context-file`.
+
+**Gene stability without DMP FeatureCuts** (discovery DMPs → mapper → enricher → stability on enricher genes):
+
+- Profile: `gene_enricher_stability.profile.json`
+- Program: `mc_gene_enricher_stability.program.json`
+- Set `stability_featurecuts_enabled: false`, `stability_gene_featurecuts_enabled: false`, `stability_gene_freq` as needed
+- Mapper uses `dmps-*-discovery.csv`; enricher applies disease filters from `step_config.enricher`
+
+**DMP panel stability** (split detector + `pipeline.dmp_select`): profile `dmp_panel_stability` or `full_biomarker_gene_fc`.
+
+**Biomarker / PPI pre-filter** (`validation.biomarker_filter`): optional via `${runBiomarkerFilter}`; modes `ppi_only`, `disease_only`, `disease_and_ppi` under `step_config.validation` or `gene_selection`. Can run on mapper gene pools without gene FeatureCuts.
+
+See `docs/domain_program_language.md` for the full profile matrix and IF branch flags (`runDmpSelection`, `runGeneFeaturecuts`, …).
+
 ## Process model
 
 ```{=latex}

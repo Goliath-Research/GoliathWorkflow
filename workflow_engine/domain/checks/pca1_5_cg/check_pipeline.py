@@ -176,6 +176,23 @@ def main() -> int:
         "context": "CG",
         "group": "all",
         "label": "all",
+        "comparison": "PCa",
+        "discoveryCsv": "/work/out/detect/dmps-21-discovery.csv",
+        "runDir": "/work/out/monte_carlo_runs/run_0001",
+        "iteration": {
+            "projectPath": summary["context_json"]["projectPath"],
+            "runDir": "/work/out/monte_carlo_runs/run_0001",
+        },
+        "runDmpSelection": True,
+        "runBiomarkerFilter": True,
+        "runGeneFeaturecuts": True,
+        "runGeneFeatureSelect": False,
+        "biomarkerFilter": True,
+        "maxGenes": 500,
+        "maxDmps": 500,
+        "mapperDir": "/work/out/mapper",
+        "maxFeatures": 200,
+        "targetBalancedAccuracy": 0.9,
         "stepOverride": {
             "base_config": {
                 "add_samples": ["/work/samples/S1"],

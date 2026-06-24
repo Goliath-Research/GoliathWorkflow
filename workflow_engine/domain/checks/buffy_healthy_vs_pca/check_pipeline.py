@@ -250,6 +250,11 @@ def main() -> int:
         "control_group": "all",
         "disease_group": "PCa",
         "label": "PCa",
+        "comparison": "PCa",
+        "discoveryCsv": "/work/out/detect/dmps-21-discovery.csv",
+        "runDmpSelection": False,
+        "outputDir": "/work/out/detect",
+        "group": "PCa",
     }
     template_errors = []
     for node in spec.get("nodes") or []:

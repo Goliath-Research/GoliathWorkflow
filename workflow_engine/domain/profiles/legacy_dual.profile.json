@@ -1,0 +1,10 @@
+{
+  "pipelineProfile": "legacy_dual",
+  "runDmpSelection": false,
+  "runGeneFeaturecuts": false,
+  "runBiomarkerFilter": false,
+  "runGeneFeatureSelect": false,
+  "stabilityFeaturecutsEnabled": true,
+  "stabilityGeneFeaturecutsEnabled": false,
+  "stabilityGeneBiomarkerFilterEnabled": false
+}

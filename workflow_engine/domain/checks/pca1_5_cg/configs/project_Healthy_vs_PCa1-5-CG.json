@@ -99,7 +99,11 @@
       "genome_fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
     },
     "methyl_extract": {
-      "extract_contexts": ["CG", "CHG", "CHH"],
+      "extract_contexts": [
+        "CG",
+        "CHG",
+        "CHH"
+      ],
       "threads": 10,
       "min_mapq": 20,
       "min_phred": 20,
@@ -143,15 +147,9 @@
         "CHG": 0.1,
         "CHH": 0.2
       },
-      "enable_platt_calibration": true,
       "effect_size_weight_power": 3.0,
-      "dynamic_dmp_cutoff_enabled": true,
-      "dynamic_dmp_cutoff_relaxation": 1.0,
-      "classifier_dmp_selection": "featurecuts_validation",
       "validation_split_ratio": 0.2,
       "validation_n_repeats": 5,
-      "target_balanced_accuracy": 0.95,
-      "min_selected_dmps": 1000,
       "filter_funnel_explore": {
         "effect_size_coverage": {
           "min": 0.8,
@@ -269,7 +267,7 @@
       "weight_fit_alpha": 1,
       "weight_fit_l1_ratio": 0.5,
       "temperature": 1,
-      "enable_platt_calibration": false,
+      "enable_platt_calibration": true,
       "trimmed_percentile_low": 0.1,
       "trimmed_percentile_high": 0.01,
       "use_elasticnet_stacking": true,
@@ -509,6 +507,13 @@
           "csv": "/work/prostate-cancer/data/PCa5.csv"
         }
       ]
+    },
+    "dmp_selection": {
+      "dynamic_dmp_cutoff_enabled": true,
+      "dynamic_dmp_cutoff_relaxation": 1.0,
+      "classifier_dmp_selection": "featurecuts_validation",
+      "target_balanced_accuracy": 0.95,
+      "min_selected_dmps": 1000
     }
   }
 }

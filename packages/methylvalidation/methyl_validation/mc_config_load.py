@@ -21,13 +21,16 @@ from .utils.migrate_backend_config import (
 
 
 def validate_stability_gene_biomarker_config(config: MonteCarloConfig) -> None:
-    """Ensure biomarker filter is only used with gene FeatureCuts enabled."""
+    """Validate biomarker filter configuration."""
     if not bool(getattr(config, "stability_gene_biomarker_filter_enabled", False)):
         return
-    if not bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
+    if bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
+        return
+    mode = str(getattr(config, "stability_gene_biomarker_mode", "ppi_only") or "ppi_only")
+    if mode not in ("ppi_only", "disease_only", "disease_and_ppi"):
         print(
-            "Error: stability_gene_biomarker_filter_enabled requires "
-            "stability_gene_featurecuts_enabled (or --stability-gene-featurecuts).",
+            f"Error: invalid stability_gene_biomarker_mode {mode!r}; "
+            "expected ppi_only, disease_only, or disease_and_ppi.",
             file=sys.stderr,
         )
         sys.exit(1)

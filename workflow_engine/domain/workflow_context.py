@@ -121,6 +121,28 @@ def enrich_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
         resolved = project.get_resolved_groups()
         out["groups"] = [{"label": label} for label, _ in resolved]
 
+    step_config = dict(getattr(project, "step_config", None) or {})
+    overrides = out.get("step_config_overrides")
+    if isinstance(overrides, dict):
+        merged = dict(step_config)
+        for section, vals in overrides.items():
+            if isinstance(vals, dict) and isinstance(merged.get(section), dict):
+                merged[section] = {**merged[section], **vals}
+            else:
+                merged[section] = vals
+        step_config = merged
+
+    from pipeline_profiles import PIPELINE_FLAG_DEFAULTS, apply_pipeline_profile, seed_pipeline_scope_flags
+
+    if (
+        out.get("pipelineProfile")
+        or out.get("step_config_overrides")
+        or any(k in out for k in PIPELINE_FLAG_DEFAULTS)
+    ):
+        out = apply_pipeline_profile(out, out)
+    else:
+        out = seed_pipeline_scope_flags(out, step_config=step_config)
+
     return out
 
 

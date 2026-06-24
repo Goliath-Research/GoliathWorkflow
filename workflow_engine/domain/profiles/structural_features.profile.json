@@ -1,0 +1,20 @@
+{
+  "pipelineProfile": "structural_features",
+  "runDmpSelection": false,
+  "runGeneFeaturecuts": false,
+  "runBiomarkerFilter": false,
+  "runGeneFeatureSelect": true,
+  "step_config_overrides": {
+    "detection": {
+      "detection_mode": "discovery_only",
+      "export_classifier": false
+    },
+    "mapper": {
+      "csv_pattern": "dmps-*-discovery.csv"
+    },
+    "gene_selection": {
+      "stability_gene_feature_select_enabled": true,
+      "stability_gene_region_hits": ["promoter", "gene_body", "exon", "intron", "terminator"]
+    }
+  }
+}

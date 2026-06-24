@@ -16,6 +16,52 @@ GENE_FEATURE_SELECTION_JSON = "gene_feature_selection.json"
 
 REGION_TYPES = ("promoter", "exon", "intron", "gene_body", "terminator")
 
+_SCORE_COLUMNS = (
+    "gene_feature_effect_compound",
+    "gene_importance",
+    "mean_effect_size",
+    "gene_score",
+)
+
+
+def _rank_structural_catalog(mapper_dir: Path, catalog: pd.DataFrame) -> pd.DataFrame:
+    """Attach mapper scores when available and sort features by descending rank."""
+    if catalog.empty:
+        return catalog
+    scores: Dict[tuple[str, str], float] = {}
+    for path in _intersection_paths(mapper_dir):
+        try:
+            df = pd.read_csv(path)
+        except Exception:
+            continue
+        if "gene_name" not in df.columns:
+            continue
+        feature_type = "gene_body"
+        stem = path.stem.replace("-intersections", "")
+        for token in REGION_TYPES:
+            if token in stem.lower():
+                feature_type = token
+                break
+        score_col = next((c for c in _SCORE_COLUMNS if c in df.columns), None)
+        if score_col is None:
+            continue
+        for _, row in df.iterrows():
+            gene = str(row.get("gene_name") or "").strip()
+            if not gene:
+                continue
+            val = pd.to_numeric(row.get(score_col), errors="coerce")
+            if pd.isna(val):
+                continue
+            key = (gene, feature_type)
+            scores[key] = max(float(val), scores.get(key, float("-inf")))
+    out = catalog.copy()
+    out["rank_score"] = [
+        scores.get((str(g), str(t)), 0.0)
+        for g, t in zip(out["gene_name"], out["feature_type"])
+    ]
+    out = out.sort_values(["rank_score", "gene_name"], ascending=[False, True]).reset_index(drop=True)
+    return out
+
 
 def _intersection_paths(mapper_dir: Path) -> List[Path]:
     return sorted(mapper_dir.glob("*-intersections.csv"))
@@ -82,16 +128,22 @@ def run_gene_feature_selection(
     if catalog.empty:
         raise ValueError(f"No structural features found under mapper dir {mapper_dir}")
 
+    ranked = _rank_structural_catalog(mapper_dir, catalog)
     if max_features is not None and int(max_features) > 0:
-        catalog = catalog.head(int(max_features)).copy()
+        ranked = ranked.head(int(max_features)).copy()
+    elif target_balanced_accuracy is not None:
+        cap = min(len(ranked), max(50, int(len(ranked) * 0.25)))
+        ranked = ranked.head(cap).copy()
 
     out_csv = output_dir / GENE_FEATURES_CLASSIFIER_CSV
-    catalog.to_csv(out_csv, index=False)
+    ranked.to_csv(out_csv, index=False)
     audit = {
-        "n_features": int(len(catalog)),
+        "n_features": int(len(ranked)),
+        "n_catalog": int(len(catalog)),
         "target_balanced_accuracy": target_balanced_accuracy,
+        "max_features": max_features,
         "region_types": list(region_types) if region_types else list(REGION_TYPES),
-        "note": "Phase 3 scaffold: catalog export; ECDF OvR k-search integration pending",
+        "selection_mode": "ranked_catalog",
     }
     with open(output_dir / GENE_FEATURE_SELECTION_JSON, "w", encoding="utf-8") as f:
         json.dump(audit, f, indent=2)

@@ -164,11 +164,9 @@ def test_compute_biomarker_stability_diagnostics(tmp_path: Path):
     assert diag["median_pool_size"] == 42.0
 
 
-def test_validate_biomarker_requires_gene_featurecuts(monkeypatch):
-    from argparse import Namespace
-
+def test_validate_biomarker_allows_mapper_only_without_gene_featurecuts(monkeypatch):
     from methyl_validation.config import MonteCarloConfig
-    from methyl_validation.mc_config_load import apply_monte_carlo_config_overrides
+    from methyl_validation.mc_config_load import validate_stability_gene_biomarker_config
 
     cfg = MonteCarloConfig.model_validate(
         {
@@ -185,6 +183,4 @@ def test_validate_biomarker_requires_gene_featurecuts(monkeypatch):
             "stability_gene_featurecuts_enabled": False,
         }
     )
-    args = Namespace(stability_gene_biomarker_filter=True)
-    with pytest.raises(SystemExit):
-        apply_monte_carlo_config_overrides(cfg, args)
+    validate_stability_gene_biomarker_config(cfg)

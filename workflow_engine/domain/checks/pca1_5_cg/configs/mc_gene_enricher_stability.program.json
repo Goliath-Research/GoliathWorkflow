@@ -1,8 +1,8 @@
 {
   "programVersion": 2,
-  "name": "Healthy_PCa_MC_Stability",
-  "description": "MC stability for Healthy vs PCa: split detector, optional dmp_select, mapper, optional biomarker filter, gene_select.",
-  "projectPath": "/work/prostate-cancer/configs/project_Healthy_PCa.json",
+  "name": "MC_Gene_Enricher_Stability",
+  "description": "Monte Carlo stability: discovery detector, mapper, enricher per comparison; gene stability from enricher outputs (no DMP/gene FeatureCuts).",
+  "projectPath": "/work/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
   "body": [
     {
       "do": "validation.plan_iterations",
@@ -71,22 +71,6 @@
                     }
                   },
                   "node_key": "detect"
-                },
-                {
-                  "if": "${runDmpSelection}",
-                  "then": [
-                    {
-                      "do": "pipeline.dmp_select",
-                      "with": {
-                        "chromosome": { "ref": "chromosome" },
-                        "context": { "ref": "context" },
-                        "comparison": { "ref": "comparison.label" },
-                        "group": { "ref": "comparison.label" }
-                      },
-                      "node_key": "dmp_select"
-                    }
-                  ],
-                  "else": []
                 }
               ]
             },
@@ -97,37 +81,16 @@
                 "group": { "ref": "comparison.label" }
               },
               "node_key": "mapper"
+            },
+            {
+              "do": "pipeline.enricher",
+              "with": {
+                "comparison": { "ref": "comparison.label" },
+                "group": { "ref": "comparison.label" }
+              },
+              "node_key": "enricher"
             }
           ]
-        },
-        {
-          "if": "${runBiomarkerFilter}",
-          "then": [
-            {
-              "do": "validation.biomarker_filter",
-              "with": {
-                "projectPath": { "ref": "iteration.projectPath" },
-                "runDir": { "ref": "iteration.runDir" }
-              },
-              "node_key": "biomarker_filter"
-            }
-          ],
-          "else": []
-        },
-        {
-          "if": "${runGeneFeaturecuts}",
-          "then": [
-            {
-              "do": "pipeline.gene_select",
-              "with": {
-                "projectPath": { "ref": "iteration.projectPath" },
-                "runDir": { "ref": "iteration.runDir" },
-                "biomarkerFilter": { "ref": "runBiomarkerFilter" }
-              },
-              "node_key": "gene_select"
-            }
-          ],
-          "else": []
         }
       ]
     },

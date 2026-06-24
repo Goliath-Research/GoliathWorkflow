@@ -94,6 +94,10 @@ def _collect_step_actions(steps: list) -> list[str]:
         inner = step.get("do")
         if isinstance(inner, dict) and isinstance(inner.get("do"), str):
             actions.append(inner["do"])
+        for branch in ("then", "else"):
+            nested = step.get(branch)
+            if isinstance(nested, list):
+                actions.extend(_collect_step_actions(nested))
     return actions
 
 
@@ -128,3 +132,16 @@ def test_gene_steps_run_once_per_iteration_not_per_comparison(program_name: str)
     iteration_actions = set(_collect_step_actions(iteration_loop["do"]))
     assert "validation.biomarker_filter" in iteration_actions
     assert "pipeline.gene_select" in iteration_actions
+
+
+def test_mc_gene_enricher_stability_program_compiles() -> None:
+    project = CHECK_ROOT / "configs" / "project_Healthy_vs_PCa1-5-CG_smoke.json"
+    proc = _run_check_pipeline(
+        "--project",
+        str(project),
+        "--program",
+        str(CHECK_ROOT / "configs" / "mc_gene_enricher_stability.program.json"),
+        "--write-spec",
+        str(CHECK_ROOT / "compiled" / "mc_gene_enricher_stability"),
+    )
+    assert proc.returncode == 0, proc.stderr or proc.stdout

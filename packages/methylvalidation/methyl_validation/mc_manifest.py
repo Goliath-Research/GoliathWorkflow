@@ -108,6 +108,12 @@ def write_detector_featurecuts_override(
     run_dir: Path,
     config: "MonteCarloConfig",
 ) -> Optional[Path]:
+    """
+    Write per-run detector overrides when DMP FeatureCuts stability is enabled.
+
+    Skipped when ``stability_featurecuts_enabled`` is false (e.g. gene-enricher-only
+    MC profiles that map discovery DMPs and aggregate enricher gene frequency).
+    """
     enable_featurecuts = bool(config.stability_featurecuts_enabled)
     target_ba = config.stability_target_balanced_accuracy
     min_core_dmps = config.stability_min_core_dmps

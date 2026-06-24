@@ -1745,7 +1745,20 @@ def run_stability_analysis(
 
     from .biomarker_gene_pool import compute_biomarker_stability_diagnostics
 
+    dmp_axis = "classifier" if prefer_classifier_panel_dmps else "discovery"
+    if dmp_min_freq <= 0.0 and dmp_df.empty:
+        dmp_axis = "none"
+    gene_axis = "classifier" if prefer_classifier_gene_panels else "enricher"
+    if gene_min_freq <= 0.0 and gene_df.empty:
+        gene_axis = "none"
+
     summary = {
+        "pipeline_axes": {
+            "dmp_axis": dmp_axis,
+            "gene_axis": gene_axis,
+            "prefer_classifier_panel_dmps": bool(prefer_classifier_panel_dmps),
+            "prefer_classifier_gene_panels": bool(prefer_classifier_gene_panels),
+        },
         "dmp_stability": dmp_summary,
         "gene_stability": gene_summary,
         "detector_parameters": detector_param_summary,

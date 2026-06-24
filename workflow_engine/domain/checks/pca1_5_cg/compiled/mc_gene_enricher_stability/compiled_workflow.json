@@ -1,6 +1,6 @@
 {
-  "name": "PCa1_5_MC_Stability",
-  "description": "Monte Carlo stability: centroids, discovery-only detector, optional dmp_select, mapper, optional biomarker filter, gene_select, stability.",
+  "name": "MC_Gene_Enricher_Stability",
+  "description": "Monte Carlo stability: discovery detector, mapper, enricher per comparison; gene stability from enricher outputs (no DMP/gene FeatureCuts).",
   "version_major": 1,
   "version_minor": 0,
   "is_active": true,
@@ -264,62 +264,6 @@
       }
     },
     {
-      "node_key": "if_12",
-      "node_type": "IF",
-      "action_name": null,
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": "runDmpSelection",
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": null
-    },
-    {
-      "node_key": "seq_13",
-      "node_type": "SEQUENCE",
-      "action_name": null,
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": null,
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": null
-    },
-    {
-      "node_key": "dmp_select",
-      "node_type": "ACTION",
-      "action_name": "pipeline.dmp_select",
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": null,
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": {
-        "tool": "MethylDmpSelect",
-        "projectPath": "${var.projectPath}",
-        "project": "${var.projectPath}",
-        "chromosome": "${var.chromosome}",
-        "context": "${var.context}",
-        "comparison": "${var.label}",
-        "discoveryCsv": "${var.discoveryCsv}",
-        "outputDir": "${var.outputDir}",
-        "stepOverride": "${var.stepOverride}",
-        "group": "${var.label}"
-      }
-    },
-    {
       "node_key": "mapper",
       "node_type": "ACTION",
       "action_name": "pipeline.mapper",
@@ -341,39 +285,9 @@
       }
     },
     {
-      "node_key": "if_14",
-      "node_type": "IF",
-      "action_name": null,
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": "runBiomarkerFilter",
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": null
-    },
-    {
-      "node_key": "seq_15",
-      "node_type": "SEQUENCE",
-      "action_name": null,
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": null,
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": null
-    },
-    {
-      "node_key": "biomarker_filter",
+      "node_key": "enricher",
       "node_type": "ACTION",
-      "action_name": "validation.biomarker_filter",
+      "action_name": "pipeline.enricher",
       "repeat_count": null,
       "condition_ref_node_key": null,
       "switch_ref_node_key": null,
@@ -384,117 +298,11 @@
       "foreach_index_var": null,
       "foreach_parallel": null,
       "input_template": {
-        "tool": "validation.biomarker_filter",
+        "tool": "MethylEnricher",
         "projectPath": "${var.projectPath}",
         "project": "${var.projectPath}",
-        "runDir": "${var.runDir}"
-      }
-    },
-    {
-      "node_key": "if_16",
-      "node_type": "IF",
-      "action_name": null,
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": "runGeneFeaturecuts",
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": null
-    },
-    {
-      "node_key": "seq_17",
-      "node_type": "SEQUENCE",
-      "action_name": null,
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": null,
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": null
-    },
-    {
-      "node_key": "gene_select",
-      "node_type": "ACTION",
-      "action_name": "pipeline.gene_select",
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": null,
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": {
-        "tool": "MethylGeneSelect",
-        "projectPath": "${var.projectPath}",
-        "project": "${var.projectPath}",
-        "comparison": "${var.comparison}",
-        "runDir": "${var.runDir}",
-        "maxGenes": "${var.maxGenes}",
-        "maxDmps": "${var.maxDmps}",
-        "biomarkerFilter": "${var.runBiomarkerFilter}"
-      }
-    },
-    {
-      "node_key": "if_18",
-      "node_type": "IF",
-      "action_name": null,
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": "runGeneFeatureSelect",
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": null
-    },
-    {
-      "node_key": "seq_19",
-      "node_type": "SEQUENCE",
-      "action_name": null,
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": null,
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": null
-    },
-    {
-      "node_key": "gene_feature_select",
-      "node_type": "ACTION",
-      "action_name": "pipeline.gene_feature_select",
-      "repeat_count": null,
-      "condition_ref_node_key": null,
-      "switch_ref_node_key": null,
-      "condition_var": null,
-      "switch_var": null,
-      "foreach_collection_var": null,
-      "foreach_item_var": null,
-      "foreach_index_var": null,
-      "foreach_parallel": null,
-      "input_template": {
-        "tool": "MethylGeneFeatureSelect",
-        "projectPath": "${var.projectPath}",
-        "project": "${var.projectPath}",
-        "mapperDir": "${var.runDir}",
-        "outputDir": "${var.runDir}",
-        "maxFeatures": "${var.maxFeatures}",
-        "targetBalancedAccuracy": "${var.targetBalancedAccuracy}"
+        "comparison": "${var.label}",
+        "group": "${var.label}"
       }
     },
     {
@@ -657,33 +465,6 @@
       "is_default": false
     },
     {
-      "parent_node_key": "seq_11",
-      "child_node_key": "if_12",
-      "child_order": 1,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "if_12",
-      "child_node_key": "seq_13",
-      "child_order": 0,
-      "branch_kind": "THEN",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_13",
-      "child_node_key": "dmp_select",
-      "child_order": 0,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
       "parent_node_key": "seq_9",
       "child_node_key": "mapper",
       "child_order": 1,
@@ -693,81 +474,9 @@
       "is_default": false
     },
     {
-      "parent_node_key": "seq_3",
-      "child_node_key": "if_14",
+      "parent_node_key": "seq_9",
+      "child_node_key": "enricher",
       "child_order": 2,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "if_14",
-      "child_node_key": "seq_15",
-      "child_order": 0,
-      "branch_kind": "THEN",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_15",
-      "child_node_key": "biomarker_filter",
-      "child_order": 0,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_3",
-      "child_node_key": "if_16",
-      "child_order": 3,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "if_16",
-      "child_node_key": "seq_17",
-      "child_order": 0,
-      "branch_kind": "THEN",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_17",
-      "child_node_key": "gene_select",
-      "child_order": 0,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_3",
-      "child_node_key": "if_18",
-      "child_order": 4,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "if_18",
-      "child_node_key": "seq_19",
-      "child_order": 0,
-      "branch_kind": "THEN",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_19",
-      "child_node_key": "gene_feature_select",
-      "child_order": 0,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,

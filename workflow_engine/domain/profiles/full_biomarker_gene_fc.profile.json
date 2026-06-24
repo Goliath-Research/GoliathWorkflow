@@ -1,0 +1,27 @@
+{
+  "pipelineProfile": "full_biomarker_gene_fc",
+  "runDmpSelection": true,
+  "runGeneFeaturecuts": true,
+  "runBiomarkerFilter": true,
+  "runGeneFeatureSelect": false,
+  "stabilityFeaturecutsEnabled": true,
+  "stabilityGeneFeaturecutsEnabled": true,
+  "stabilityGeneBiomarkerFilterEnabled": true,
+  "step_config_overrides": {
+    "detection": {
+      "detection_mode": "discovery_only",
+      "export_classifier": false
+    },
+    "dmp_selection": {
+      "enabled": true
+    },
+    "mapper": {
+      "csv_pattern": "dmps-*-classifier-extended.csv"
+    },
+    "validation": {
+      "stability_featurecuts_enabled": true,
+      "stability_gene_featurecuts_enabled": true,
+      "stability_gene_biomarker_filter_enabled": true
+    }
+  }
+}
