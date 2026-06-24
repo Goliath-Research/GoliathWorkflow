@@ -1393,6 +1393,41 @@ def main() -> None:
         sys.exit(biological_readiness_main(sys.argv[2:]))
         return
 
+    if len(sys.argv) > 1 and sys.argv[1] == "run-workflow":
+        from pathlib import Path as _Path
+
+        wf_parser = argparse.ArgumentParser(description="Run a DomainProgram via local workflow engine")
+        wf_parser.add_argument("--program", type=_Path, required=True, help="DomainProgram JSON path")
+        wf_parser.add_argument("--context", type=str, default=None, help="context_json inline")
+        wf_parser.add_argument("--context-file", type=_Path, default=None, help="context_json file")
+        wf_parser.add_argument("--stub-external", action="store_true")
+        wf_parser.add_argument("--parallel-workers", type=int, default=4)
+        wf_args = wf_parser.parse_args(sys.argv[2:])
+        import json as _json
+        import os as _os
+
+        if wf_args.stub_external:
+            _os.environ["WORKER_STUB_EXTERNAL"] = "1"
+        ctx: dict = {}
+        if wf_args.context_file:
+            ctx = _json.loads(wf_args.context_file.read_text(encoding="utf-8"))
+        if wf_args.context:
+            ctx.update(_json.loads(wf_args.context))
+        repo = _Path(__file__).resolve().parents[2]
+        for rel in ("workflow_engine/local", "workflow_engine/domain", "workflow_engine/contract", "workers"):
+            p = repo / rel
+            if str(p) not in sys.path:
+                sys.path.insert(0, str(p))
+        from local.engine import LocalWorkflowEngine
+        from local.scheduler import SchedulerConfig
+
+        engine = LocalWorkflowEngine(
+            config=SchedulerConfig(parallel_workers=wf_args.parallel_workers)
+        )
+        result = engine.run_program(wf_args.program, ctx)
+        print(_json.dumps({"status": result.status, "actions": result.trace.executed_actions}, indent=2))
+        sys.exit(0 if result.status == "COMPLETED" else 1)
+
     if len(sys.argv) > 1 and sys.argv[1] == "plan-workflow-context":
         from .workflow_planner import ValidationPlanRequest
         from .workflow_runner import write_planned_context
@@ -1494,7 +1529,13 @@ def main() -> None:
     parser.add_argument(
         "--via-workflow",
         action="store_true",
-        help="Run Monte Carlo validation via workflow engine (requires --workflow-version-id unless METHYL_USE_LOCAL_PIPELINE=1).",
+        help="Run Monte Carlo validation via workflow engine (local in-process unless --gateway-url + --workflow-version-id).",
+    )
+    parser.add_argument(
+        "--workflow-program",
+        type=Path,
+        default=None,
+        help="DomainProgram JSON for --via-workflow local run (default: pca1_5_mc_stability smoke program in repo).",
     )
     parser.add_argument(
         "--gateway-url",
@@ -2681,26 +2722,49 @@ def main() -> None:
         return
 
     if args.via_workflow:
-        from .workflow_planner import ValidationPlanRequest
+        from .workflow_planner import ValidationPlanRequest, plan_validation_context
         from .workflow_runner import run_validation_via_workflow, use_local_pipeline
 
-        if use_local_pipeline():
-            print(
-                "METHYL_USE_LOCAL_PIPELINE=1 — using local pipeline_runner (not workflow gateway).",
-                file=sys.stderr,
+        plan_req = ValidationPlanRequest(
+            projectPath=str(base_project),
+            featureIterations=config.n_iterations,
+            seed=config.seed,
+            trainFraction=config.train_fraction,
+        )
+        if use_local_pipeline() or args.workflow_version_id is None:
+            repo = Path(__file__).resolve().parents[3]
+            default_program = (
+                repo
+                / "workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability_smoke.program.json"
             )
-        else:
-            if args.workflow_version_id is None:
-                print("Error: --via-workflow requires --workflow-version-id.", file=sys.stderr)
+            program = args.workflow_program or default_program
+            if not program.is_file():
+                print(f"Error: workflow program not found: {program}", file=sys.stderr)
                 sys.exit(1)
+            for rel in (
+                "workflow_engine/local",
+                "workflow_engine/domain",
+                "workflow_engine/contract",
+                "workers",
+            ):
+                p = repo / rel
+                if str(p) not in sys.path:
+                    sys.path.insert(0, str(p))
+            from local.engine import LocalWorkflowEngine
+            from local.scheduler import SchedulerConfig
+
+            context = plan_validation_context(plan_req)
+            engine = LocalWorkflowEngine(config=SchedulerConfig(parallel_workers=1))
+            result = engine.run_program(program, context)
+            if result.status != "COMPLETED":
+                print(f"Error: workflow ended with {result.status}: {result.error}", file=sys.stderr)
+                sys.exit(1)
+            print(f"Local workflow completed ({len(result.trace.executed_actions)} actions).")
+            print("Done.")
+            return
+        else:
             gateway = args.gateway_url or os.environ.get(
                 "METHYL_API_BASE", "http://localhost:8080/v1"
-            )
-            plan_req = ValidationPlanRequest(
-                projectPath=str(base_project),
-                featureIterations=config.n_iterations,
-                seed=config.seed,
-                trainFraction=config.train_fraction,
             )
             result = run_validation_via_workflow(
                 gateway_url=gateway,

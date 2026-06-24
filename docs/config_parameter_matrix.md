@@ -1,6 +1,8 @@
 # Configuration Parameter Matrix (Active Components)
 
-This matrix is code-backed and scoped to the active canonical production workflow. Deprecated/legacy compatibility surfaces (including `methylcluster`) are out of scope except where explicitly called out as aliases.
+This matrix is code-backed. **Pipeline orchestration** (stage order, conditional branches) belongs in **DomainProgram** JSON — see [`architecture_review.md`](architecture_review.md). `project.json` is the **study manifest** (cohorts, paths, chromosomes); `step_config` supplies per-action defaults until migrated into program `with` blocks.
+
+This matrix is scoped to the active canonical production workflow. Deprecated/legacy compatibility surfaces (including `methylcluster`) are out of scope except where explicitly called out as aliases.
 
 Status legend:
 - `declared`: present in a config schema/model or documented step config contract

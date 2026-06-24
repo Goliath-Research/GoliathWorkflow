@@ -20,7 +20,7 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 8b. [`wf_json_column_alignment.sql`](wf_json_column_alignment.sql) — migrate scope/context JSON columns to native types.
 8c. [`wf_drop_monte_carlo_tables.sql`](wf_drop_monte_carlo_tables.sql) — remove deprecated `wf.monte_carlo_*` tables.
 9. [`wf_sql_branch_parity.sql`](wf_sql_branch_parity.sql) — SQL IF/SWITCH/WHILE variable-branch parity (`condition_var`/`switch_var`) with Delphi runtime behavior.
-10. [`workflow_methylvalidation_seed.sql`](workflow_methylvalidation_seed.sql) — **deprecated** MethylValidationFlow (use ValidationPipeline).
+10. [`sql/deprecated/workflow_methylvalidation_seed.sql`](sql/deprecated/workflow_methylvalidation_seed.sql) — **deprecated** MethylValidationFlow (use ValidationPipeline).
 10a. [`wf_validation_pipeline_seed.sql`](wf_validation_pipeline_seed.sql) — **ValidationPipeline** (FOREACH over `iterations[]`).
 11. [`wf_sql_runtime_parity.sql`](wf_sql_runtime_parity.sql) — SQL-only parity for scope init from context and `${var.*}` resolution.
 12. [`wf_sql_scope_writepath_parity.sql`](wf_sql_scope_writepath_parity.sql) — SQL write-path parity: `wf_apply_output_bindings`, `wf_open_scope`, scope copy for PARALLEL children.
@@ -39,11 +39,11 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 17. [`wf_data_driven_pipeline_seed.sql`](wf_data_driven_pipeline_seed.sql) — **DataDrivenPipeline** (generic; instance `context_json` drives fan-out).
 17a. **Deploy SamplePrepPipeline:** `bash scripts/deploy_workflow_definitions.sh` (compiles [`domain/fixtures/sample_prep.program.json`](domain/fixtures/sample_prep.program.json)).
 
-17b. [`wf_sample_prep_pipeline_seed.sql`](wf_sample_prep_pipeline_seed.sql) — **deprecated** legacy SQL Server seed; prefer DomainProgram deploy above.
+17b. [`sql/deprecated/wf_sample_prep_pipeline_seed.sql`](sql/deprecated/wf_sample_prep_pipeline_seed.sql) — **deprecated** legacy SQL Server seed; prefer DomainProgram deploy above.
 17b. [`wf_action_schema.sql`](wf_action_schema.sql) — `workflow_action_schema` table + repo procs for action I/O JSON Schemas.
-16. [`wf_pca_two_group_seed.sql`](wf_pca_two_group_seed.sql) — **deprecated** static PCaTwoGroupFlow.
-17. [`wf_pca_ovr_seed.sql`](wf_pca_ovr_seed.sql) — **deprecated** static PCaOvrFlow.
-18. [`wf_pca_two_group_run_example.sql`](wf_pca_two_group_run_example.sql) — optional simulation for legacy seed.
+16. [`sql/deprecated/wf_pca_two_group_seed.sql`](sql/deprecated/wf_pca_two_group_seed.sql) — **deprecated** static PCaTwoGroupFlow.
+17. [`sql/deprecated/wf_pca_ovr_seed.sql`](sql/deprecated/wf_pca_ovr_seed.sql) — **deprecated** static PCaOvrFlow.
+18. [`sql/deprecated/wf_pca_two_group_run_example.sql`](sql/deprecated/wf_pca_two_group_run_example.sql) — optional simulation for legacy seed.
 
 See also: [CAPABILITY_CHECK.md](CAPABILITY_CHECK.md), [sql/DataDrivenPipeline.md](sql/DataDrivenPipeline.md), [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md), [docs/pipeline_architecture.md](docs/pipeline_architecture.md) (Quarto HTML/PDF: [docs/pipeline_architecture.qmd](docs/pipeline_architecture.qmd)), [contract/db_objects.md](contract/db_objects.md), [contract/sample_prep_capabilities.md](contract/sample_prep_capabilities.md), [sql_pg/README.md](sql_pg/README.md), [../contracts/openapi.yaml](../contracts/openapi.yaml), [../workers/WORKER_PROTOCOL.md](../workers/WORKER_PROTOCOL.md), [sql/wf_foreach_design.md](sql/wf_foreach_design.md), [sql/instance_context_examples/pca_ovr.json](sql/instance_context_examples/pca_ovr.json), [sql/instance_context_examples/sample_prep_plasma.json](sql/instance_context_examples/sample_prep_plasma.json).
 

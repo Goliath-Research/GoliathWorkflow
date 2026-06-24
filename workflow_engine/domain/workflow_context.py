@@ -124,12 +124,14 @@ def enrich_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def resolve_placeholder(value: Any, scope: Mapping[str, Any]) -> Any:
+def resolve_placeholder(
+    value: Any, scope: Mapping[str, Any], *, missing: str = "error"
+) -> Any:
     """Resolve ``${var.name}`` placeholders (Python mirror of SQL read-path)."""
     if isinstance(value, dict):
-        return {k: resolve_placeholder(v, scope) for k, v in value.items()}
+        return {k: resolve_placeholder(v, scope, missing=missing) for k, v in value.items()}
     if isinstance(value, list):
-        return [resolve_placeholder(v, scope) for v in value]
+        return [resolve_placeholder(v, scope, missing=missing) for v in value]
     if not isinstance(value, str):
         return value
     m = _PLACEHOLDER_RE.match(value.strip())
@@ -137,6 +139,8 @@ def resolve_placeholder(value: Any, scope: Mapping[str, Any]) -> Any:
         return value
     key = m.group(1)
     if key not in scope:
+        if missing == "none":
+            return None
         raise KeyError(f"unresolved scope variable: {key}")
     return scope[key]
 
@@ -145,7 +149,8 @@ def resolve_input_json_from_template(
     template: Mapping[str, Any], scope: Mapping[str, Any]
 ) -> Dict[str, Any]:
     """Resolve an action input_template against a flat scope dict (for tests)."""
-    return resolve_placeholder(dict(template), scope)
+    resolved = resolve_placeholder(dict(template), scope, missing="none")
+    return {k: v for k, v in resolved.items() if v is not None}
 
 
 def list_unresolved_placeholders(value: Any) -> List[str]:
@@ -183,11 +188,24 @@ def action_input_spec_for(action_name: str) -> Optional[ActionInputSpec]:
     if entry is None:
         return None
 
+    optional = {
+        "outputDir",
+        "centroid1Dir",
+        "centroid2Dir",
+        "taskConfig",
+        "phase",
+        "runId",
+        "addSamples",
+        "removeSamples",
+        "stepOverride",
+        "comparison",
+        "fixedDmpPanel",
+    }
     required = ["tool"]
     if entry.step_config_key:
         required.extend(["project", "projectPath"])
-    required.extend(entry.context_vars)
-    optional = ["outputDir", "centroid1Dir", "centroid2Dir", "taskConfig", "phase", "runId"]
+    required.extend(c for c in entry.context_vars if c not in optional)
+    optional_keys = list(optional)
     return ActionInputSpec(
         action_name=action_name,
         required_keys=sorted(set(required)),

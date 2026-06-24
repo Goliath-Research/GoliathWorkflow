@@ -1029,11 +1029,11 @@ class MonteCarloConfig(BaseModel):
     )
     run_mapper_and_enricher: bool = Field(
         default=False,
-        description="If True, run methyl-mapper and methyl-enricher inside each MC iteration (optional; not used for --stability).",
+        description="Deprecated: use DomainProgram workflow for mapper/enricher. If True, run mapper/enricher inside each MC iteration.",
     )
     skip_enricher: bool = Field(
         default=False,
-        description="Skip methyl-enricher step even when run_mapper_and_enricher is true (useful when Grok API calls are too slow).",
+        description="Deprecated: use workflow IF/FOREACH for optional enricher. Skips enricher when run_mapper_and_enricher is true.",
     )
     freeze_stable_dmp_csv: Optional[str] = Field(
         default=None,

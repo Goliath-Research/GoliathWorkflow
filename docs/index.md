@@ -5,6 +5,8 @@ This page maps the documentation system for the monorepo and identifies canonica
 ## Start Here
 
 - Repository landing page: [`../README.md`](../README.md)
+- **Architecture review (workflow-first)**: [`architecture_review.md`](architecture_review.md)
+- **DomainProgram language**: [`domain_program_language.md`](domain_program_language.md)
 - Environment setup: [`DEPLOYMENT.md`](DEPLOYMENT.md)
 - Operational runbook (stage-by-stage): [`user-manual/index.qmd`](user-manual/index.qmd)
 - Theory and reference: [`theory/README.md`](theory/README.md)

@@ -838,7 +838,39 @@ def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[s
             "remotePrefix": "studies/test/",
             "uploadedCount": 1,
             "skippedCount": 0,
+            "sampleArchived": True,
         }
+    if capability == "methyl-qc":
+        qc_path = f"{sample_dir}/{sample_id}.qc.json" if sample_dir else f"{sample_id}.qc.json"
+        return {
+            "sampleId": sample_id,
+            "qcPath": qc_path,
+            "guardrails": {"overall_pass": True},
+            "screening": {
+                "disposition": "PASS",
+                "trim_front1": 0,
+                "trim_tail1": 0,
+                "trim_front2": 0,
+                "trim_tail2": 0,
+                "message": "stub pass",
+            },
+            "remediateAlignment": False,
+            "remediateR2Trim": False,
+        }
+    if capability == "methyl-fragmentomics":
+        return {
+            "sampleId": sample_id,
+            "outputDir": sample_dir or "/tmp",
+            "fragmentomics": {"stub": True},
+        }
+    if capability == "methyl-extraction-qc":
+        return {
+            "sampleId": sample_id,
+            "qcPath": f"{sample_dir}/{sample_id}.extraction_qc.json" if sample_dir else f"{sample_id}.extraction_qc.json",
+            "guardrails": {"overall_pass": True},
+        }
+    if capability == "sample.mark-failed":
+        return {"sampleId": sample_id, "status": "QC_FAILED", "reason": input_json.get("reason")}
     raise RuntimeError(
         f"WORKER_STUB_EXTERNAL=1 has no stub for capability {capability!r}."
     )
@@ -891,6 +923,11 @@ _STUB_EXTERNAL_CAPABILITIES = frozenset({
     "sample.delete-bam",
     "methyl-extract",
     "sample.upload-h5",
+    "sample.archive-sample",
+    "methyl-qc",
+    "methyl-fragmentomics",
+    "methyl-extraction-qc",
+    "sample.mark-failed",
 })
 
 

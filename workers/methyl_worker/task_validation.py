@@ -22,6 +22,21 @@ def _validate(model: type[BaseModel], payload: Dict[str, Any]) -> None:
     model.model_validate(payload)
 
 
+def normalize_task_input(
+    action_name: str,
+    capability: Optional[str],
+    input_json: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Drop template fields not in the task input schema (e.g. projectPath)."""
+    spec = resolve_task_schema_spec(action_name, capability)
+    if spec is None:
+        return input_json
+    model = spec.load_input_model()
+    allowed = set(model.model_fields.keys())
+    filtered = {k: v for k, v in input_json.items() if k in allowed}
+    return model.model_validate(filtered).model_dump(mode="python")
+
+
 def validate_task_input(
     action_name: str,
     capability: Optional[str],

@@ -16,6 +16,7 @@ dependencies = [
 
 [project.scripts]
 methyl-gateway = "rest.gateway:main"
+methyl-workflow-run = "local.runner:main"
 
 [build-system]
 requires = ["setuptools>=61"]
@@ -23,7 +24,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rest*"]
+include = ["rest*", "local*"]
 
 [tool.setuptools.package-dir]
 "" = "."

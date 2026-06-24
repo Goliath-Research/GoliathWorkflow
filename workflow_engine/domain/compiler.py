@@ -109,9 +109,7 @@ def _placeholder_for_value(value: Any) -> Any:
     if isinstance(value, str):
         if value.startswith("${"):
             return value
-        if "." in value:
-            return f"${{var.{_ref_to_var(value)}}}"
-        return f"${{var.{value}}}"
+        return value
     return value
 
 
@@ -212,11 +210,10 @@ def _action_template(entry, step: ActionStep) -> Dict[str, Any]:
     action = entry.action_name
     if action == "pipeline.centroid":
         side = _group_ref_side(params.get("group"))
-        if "outputDir" not in template:
-            if side == "control":
-                template["outputDir"] = "${var.centroid1Dir}"
-            elif side == "disease":
-                template["outputDir"] = "${var.centroid2Dir}"
+        if side == "control":
+            template["outputDir"] = "${var.centroid1Dir}"
+        elif side == "disease":
+            template["outputDir"] = "${var.centroid2Dir}"
     elif action == "pipeline.detector":
         template["centroid1Dir"] = "${var.centroid1Dir}"
         template["centroid2Dir"] = "${var.centroid2Dir}"
