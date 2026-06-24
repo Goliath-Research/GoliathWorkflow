@@ -220,7 +220,7 @@ class InProcessAction:
         raw = self.handler(
             self.entry.capability,
             self.entry.action_name,
-            input_model.model_dump(mode="json"),
+            input_model,
         )
         finished_at, duration_ms = timer.finish()
         if not isinstance(raw, BaseModel):

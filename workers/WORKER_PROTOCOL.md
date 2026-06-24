@@ -50,6 +50,8 @@ CLI tools write JSON manifests under `{output_dir}/.action_results/{action_name}
 
 Sample prep also appends `{sampleDir}/{sampleId}.sample_prep_log.jsonl` for an operator-visible timeline.
 
+Validation / Monte Carlo runs append `{monteCarloRunsRoot}/action_run_log.jsonl` with one line per validation-category ACTION (plan, stability, model_mc, etc.).
+
 ### `sample.methyl_qc` branch codes
 
 | Code | Meaning |

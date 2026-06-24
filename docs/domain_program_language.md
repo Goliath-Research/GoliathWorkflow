@@ -26,6 +26,66 @@ Conditions reference scope variables set by prior ACTION output bindings or inst
 
 Example: `sample.methyl_qc` binds `qcPass` from `$.guardrails.overall_pass` (see `schemas/actions/catalog.json`).
 
+## Result codes and branching
+
+When a worker completes an ACTION, it submits **`result_code`** (integer) with typed **`output_json`**. The engine stores the code on `node_execution.result_code` and resolves it for control flow via `wf_try_task_result_code(workflow_instance_id, node_key)`.
+
+| Code | Meaning |
+|------|---------|
+| `< 0` | Hard failure; workflow instance fails |
+| `0` | Default success / false branch |
+| `1` | True branch (e.g. remediation needed) |
+| `2..N` | Multi-way SWITCH cases (per action) |
+
+See also [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) (worker contract) and the user manual [Artifacts and QA Checks — observability](user-manual/09-artifacts-and-qa-checks.qmd).
+
+### Two branching styles
+
+**1. Boolean scope bindings (preferred for readability)** — catalog `output_bindings` copy fields from `output_json` into scope variables. Use these in IF conditions:
+
+```json
+{ "if": "${qcPass}", "then": [...], "else": [...] }
+```
+
+`sample.methyl_qc` also binds `remediateAlignment`, trim counts, and `qcAttemptReason` so programs can loop on alignment remediation without reading `result_code` directly (see `workflow_engine/domain/fixtures/sample_prep.program.json`):
+
+```json
+{
+  "if": "${remediateAlignment}",
+  "then": [
+    { "action": "sample.trim_fastq", "node_key": "trim_fastq" },
+    { "action": "sample.parabricks_fq2bam", "node_key": "parabricks_realign" },
+    { "action": "sample.methyl_qc", "node_key": "methyl_qc_retry" }
+  ],
+  "else": [{ "action": "sample.qc_failed", "node_key": "qc_failed" }]
+}
+```
+
+**2. Integer `result_code` (SWITCH)** — reference the prior ACTION node by `node_key`. The engine returns that node's stored `result_code` as an integer for SWITCH case matching:
+
+```json
+{
+  "switch": { "ref": "methyl_qc" },
+  "cases": {
+    "0": [{ "action": "sample.methyl_extract", "node_key": "methyl_extract" }],
+    "1": [{ "action": "sample.trim_fastq", "node_key": "trim_fastq" }],
+    "2": [{ "action": "sample.qc_failed", "node_key": "qc_failed" }]
+  }
+}
+```
+
+`sample.methyl_qc` branch codes: `0` = pass, `1` = realign/trim, `2` = permanent fail.
+
+### Observability on `/work`
+
+Workers and CLIs write trace artifacts under shared storage:
+
+- **Per-action manifests:** `{output_dir}/.action_results/{action_name}.{run_key}.json` — typed result snapshots from pipeline CLIs.
+- **Sample prep timeline:** `{sampleDir}/{sampleId}.sample_prep_log.jsonl` — append-only audit log.
+- **Validation / MC timeline:** `{monteCarloRunsRoot}/action_run_log.jsonl` — append-only log for validation-category actions.
+
+Authors do not write these files; they are useful when debugging failed runs on `/work`.
+
 ## Action parameters
 
 ```json

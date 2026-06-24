@@ -1,0 +1,10 @@
+{
+  "fastqSource": {
+    "basePath": "/data/fastq",
+    "prefix": "S1/",
+    "type": "file"
+  },
+  "sampleDir": "/work/samples/S1",
+  "sampleId": "S1",
+  "tool": "SampleDownloadFastq"
+}

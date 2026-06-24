@@ -1,0 +1,27 @@
+{
+  "action_name": null,
+  "artifacts": [],
+  "biomarker_filter": {
+    "biomarker_pool_size": null,
+    "enabled": true,
+    "mode": "ppi",
+    "n_genes_in_mapper_after_intersect": null,
+    "ppi_cache_path": null,
+    "ppi_score_threshold": null,
+    "region_hits": []
+  },
+  "capability": null,
+  "domainSample": null,
+  "duration_ms": null,
+  "exit_code": 0,
+  "finished_at_utc": null,
+  "manifest_path": null,
+  "n_genes": 50,
+  "outputCsv": "/work/p/gene_stability/biomarker_gene_pool.csv",
+  "result_code": 0,
+  "schema_version": "1.0",
+  "started_at_utc": null,
+  "status": "ok",
+  "stdout_tail": null,
+  "tool": null
+}

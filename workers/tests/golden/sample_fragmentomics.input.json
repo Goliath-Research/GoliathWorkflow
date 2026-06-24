@@ -1,0 +1,9 @@
+{
+  "chromosomes": null,
+  "fastqUri": null,
+  "project": null,
+  "projectPath": "/work/p/project.json",
+  "reason": null,
+  "sampleDir": "/work/samples/S1",
+  "sampleId": "S1"
+}

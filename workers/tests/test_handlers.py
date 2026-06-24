@@ -7,7 +7,22 @@ from unittest.mock import patch
 
 import pytest
 
-from methyl_worker.handlers import execute_task
+from methyl_worker.handlers import _handle_download_fastq, execute_task
+from methyl_worker.task_models import DownloadFastqTaskInput
+
+
+def test_download_handler_receives_validated_input_model() -> None:
+    task = DownloadFastqTaskInput.model_validate(
+        {
+            "sampleId": "S1",
+            "sampleDir": "/tmp/S1",
+            "fastqSource": {"type": "file", "basePath": "/data", "prefix": "S1/"},
+        }
+    )
+    with patch("methyl_worker.fastq_source.download_from_source", return_value=["S1_1.fastq.gz"]) as mock_dl:
+        out = _handle_download_fastq("sample.download-fastq", "sample.download_fastq", task)
+    mock_dl.assert_called_once()
+    assert out.n_files == 1
 
 
 def test_mark_failed_handler() -> None:

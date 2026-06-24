@@ -12,6 +12,7 @@ On `/work`, look for:
 
 - **Per-action manifests:** `{output_dir}/.action_results/{action_name}.{run_key}.json` — full typed result written by CLIs (e.g. `pipeline.dmp_select`, `pipeline.mapper`) or reconstructed by the worker collector.
 - **Sample prep timeline:** `{sampleDir}/{sampleId}.sample_prep_log.jsonl` — append-only JSONL audit for download, align, QC, extract, archive steps.
+- **Validation / MC timeline:** `{monteCarloRunsRoot}/action_run_log.jsonl` — append-only log for validation-category actions (plan, stability, model_mc, etc.).
 
 Regenerate JSON Schema artifacts after model changes:
 

@@ -75,3 +75,17 @@ jobs:
           POSTGRES_PASSWORD: methyl
           POSTGRES_DB: methylpipeline_parity
         run: python workflow_engine/tests/parity/run_parity.py
+
+  worker-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install worker package and dependencies
+        run: pip install -e workers/ -e packages/methyldomain/ -e packages/methylutils/
+      - name: Worker unit tests and schema drift check
+        run: |
+          python -m pytest workers/tests/ -q
+          methyl-export-task-schemas --check

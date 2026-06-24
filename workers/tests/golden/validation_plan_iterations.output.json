@@ -1,0 +1,26 @@
+{
+  "action_name": null,
+  "artifacts": [],
+  "capability": null,
+  "domainSample": null,
+  "duration_ms": null,
+  "exit_code": 0,
+  "finished_at_utc": null,
+  "iterations": [
+    {
+      "iteration": 1,
+      "project_json": null,
+      "run_dir": null,
+      "run_id": "run_0001"
+    }
+  ],
+  "manifest_path": null,
+  "n_iterations": 2,
+  "projectPath": "/work/p/project.json",
+  "result_code": 0,
+  "schema_version": "1.0",
+  "started_at_utc": null,
+  "status": "ok",
+  "stdout_tail": null,
+  "tool": null
+}

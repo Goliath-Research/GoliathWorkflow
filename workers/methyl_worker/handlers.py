@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-Handler = Callable[[str, str, Dict[str, Any]], BaseModel]
+Handler = Callable[[str, str, BaseModel], BaseModel]
 
 from .action_execution import ActionExecutionResult, finalize_output
 from .action_catalog import (
@@ -40,7 +40,8 @@ from .handler_helpers import (
 from .task_models.sample_prep_models import MethylQcTaskOutput, SamplePrepTaskInput
 
 
-def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> MethylQcTaskOutput:
+def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> MethylQcTaskOutput:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     if not sample_dir:
@@ -151,10 +152,11 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str,
 
 
 def _handle_methyl_extraction_qc(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ) -> "ExtractionQcTaskOutput":
     from .task_models.sample_prep_models import ExtractionQcTaskOutput
 
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     if not sample_dir or not sample_id:
@@ -215,8 +217,9 @@ def _handle_methyl_extraction_qc(
 
 
 def _handle_methyl_fragmentomics(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from .task_models.sample_prep_models import FragmentomicsTaskOutput
 
     project = input_json.get("project") or input_json.get("projectPath")
@@ -266,8 +269,9 @@ def _handle_methyl_fragmentomics(
 
 
 def _handle_validation_plan_iterations(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.workflow_planner import plan_validation_context
 
     from .task_models.validation_models import ValidationIterationRef, ValidationPlanTaskOutput
@@ -293,8 +297,10 @@ def _handle_validation_plan_iterations(
     )
 
 
-def _handle_mark_failed(_capability: str, _action_name: str, input_json: Dict[str, Any]):
+def _handle_mark_failed(_capability: str, _action_name: str, input: BaseModel):
     from .task_models.sample_prep_models import MarkFailedTaskOutput
+
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
 
     return MarkFailedTaskOutput(
         sampleId=input_json.get("sampleId"),
@@ -304,11 +310,13 @@ def _handle_mark_failed(_capability: str, _action_name: str, input_json: Dict[st
     )
 
 
-def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> DownloadFastqTaskOutput:
+def _handle_download_fastq(_capability: str, _action_name: str, input: BaseModel) -> DownloadFastqTaskOutput:
     from .fastq_source import download_from_source
     from .task_models import DownloadFastqTaskInput, DownloadFastqTaskOutput
 
-    task = DownloadFastqTaskInput.model_validate(input_json)
+    task = input if isinstance(input, DownloadFastqTaskInput) else DownloadFastqTaskInput.model_validate(
+        input.model_dump(mode="json")
+    )
     dest = Path(str(task.sampleDir))
     fastq_files = download_from_source(task.fastqSource, dest)
     sample_id = task.sampleId or dest.name
@@ -320,7 +328,8 @@ def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict
     )
 
 
-def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> TrimFastqTaskOutput:
+def _handle_trim_fastq(_capability: str, _action_name: str, input: BaseModel) -> TrimFastqTaskOutput:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from .fastq_trim_runner import run_fastp_trim
     from .sample_prep_log import append_sample_prep_log
     from .task_models.sample_prep_models import TrimFastqTaskOutput
@@ -359,7 +368,8 @@ def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str
     return TrimFastqTaskOutput(status="ok", **result)
 
 
-def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> ParabricksTaskOutput:
+def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input: BaseModel) -> ParabricksTaskOutput:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from .parabricks_runner import run_fq2bam_meth
     from .sample_prep_log import append_sample_prep_log
     from .task_models.sample_prep_models import ParabricksTaskOutput
@@ -401,7 +411,8 @@ def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: D
     return ParabricksTaskOutput(status="ok", **result)
 
 
-def _handle_delete_fastqs(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> DeleteTaskOutput:
+def _handle_delete_fastqs(_capability: str, _action_name: str, input: BaseModel) -> DeleteTaskOutput:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from .task_models.sample_prep_models import DeleteTaskOutput
 
     sample_dir = input_json.get("sampleDir")
@@ -422,7 +433,8 @@ def _handle_delete_fastqs(_capability: str, _action_name: str, input_json: Dict[
     )
 
 
-def _handle_delete_bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> DeleteTaskOutput:
+def _handle_delete_bam(_capability: str, _action_name: str, input: BaseModel) -> DeleteTaskOutput:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from .task_models.sample_prep_models import DeleteTaskOutput
 
     sample_dir = input_json.get("sampleDir")
@@ -444,9 +456,11 @@ def _handle_delete_bam(_capability: str, _action_name: str, input_json: Dict[str
     )
 
 
-def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict[str, Any]):
+def _handle_methyl_extract(_capability: str, _action_name: str, input: BaseModel):
     from .extract_runner import run_methyl_extract
     from .task_models.sample_prep_models import MethylExtractTaskOutput
+
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
 
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
@@ -471,7 +485,8 @@ def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict
     )
 
 
-def _handle_archive_sample(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> ArchiveSampleTaskOutput:
+def _handle_archive_sample(_capability: str, _action_name: str, input: BaseModel) -> ArchiveSampleTaskOutput:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from .sample_archive import archive_from_task_input
     from .sample_prep_log import append_sample_prep_log
     from .task_models.sample_prep_models import ArchiveSampleTaskOutput
@@ -494,7 +509,8 @@ def _handle_archive_sample(_capability: str, _action_name: str, input_json: Dict
     return ArchiveSampleTaskOutput(status="ok", **result)
 
 
-def _handle_upload_h5(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> UploadH5TaskOutput:
+def _handle_upload_h5(_capability: str, _action_name: str, input: BaseModel) -> UploadH5TaskOutput:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from .sample_archive import upload_h5_from_task_input
     from .sample_prep_log import append_sample_prep_log
     from .task_models.sample_prep_models import UploadH5TaskOutput
@@ -538,8 +554,8 @@ def _load_mc_config(input_json: Dict[str, Any]):
     return _load_config_from_project(base_project, request), base_project
 
 
-def _handle_validation_stability(_capability: str, _action_name: str, input_json: Dict[str, Any]):
-    from methyl_validation.stability import run_stability_analysis
+def _handle_validation_stability(_capability: str, _action_name: str, input: BaseModel):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
 
     from .task_models.validation_models import StabilitySummary, ValidationStabilityOutput
 
@@ -580,9 +596,10 @@ def _handle_validation_stability(_capability: str, _action_name: str, input_json
 
 
 def _handle_validation_biomarker_filter(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
     """In-process PPI-only biomarker gene pool filter on mapper combined genes."""
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from pathlib import Path
 
     import pandas as pd
@@ -627,8 +644,9 @@ def _handle_validation_biomarker_filter(
 
 
 def _handle_validation_prepare_freeze(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.stability import prepare_freeze_project
 
     from .task_models.validation_models import ValidationPrepareFreezeOutput
@@ -655,8 +673,9 @@ def _handle_validation_prepare_freeze(
 
 
 def _handle_validation_stability_freeze_readiness(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.stability_freeze_readiness import analyze_project_root
 
     from .task_models.validation_models import ValidationFreezeReadinessOutput
@@ -683,8 +702,9 @@ def _handle_validation_stability_freeze_readiness(
 
 
 def _handle_validation_link_artifacts(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.project_gen import link_run_artifacts_from_source
 
     from .task_models.validation_models import ValidationLinkArtifactsOutput
@@ -702,8 +722,9 @@ def _handle_validation_link_artifacts(
 
 
 def _handle_validation_model_bundle(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.model_bundle import build_model_feature_bundle
 
     from .task_models.validation_models import ValidationModelBundleOutput
@@ -722,8 +743,9 @@ def _handle_validation_model_bundle(
 
 
 def _handle_validation_model_train(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from .task_models.validation_models import ValidationModelTrainOutput
 
     backend = str(input_json.get("backend") or "tabular_sklearn")
@@ -758,8 +780,9 @@ def _handle_validation_model_train(
 
 
 def _handle_validation_model_predict(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from .task_models.validation_models import ValidationModelPredictOutput
 
     backend = str(input_json.get("backend") or "tabular_sklearn")
@@ -799,8 +822,9 @@ def _handle_validation_model_predict(
 
 
 def _handle_validation_model_mc(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.model_mc_runner import run_model_mc_all
 
     from .task_models.validation_models import ValidationModelMcOutput
@@ -828,8 +852,9 @@ def _handle_validation_model_mc(
 
 
 def _handle_validation_select_best_model(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.cli import _write_backend_ranking
     from methyl_validation.stability import build_production_model
 
@@ -867,8 +892,9 @@ def _handle_validation_select_best_model(
 
 
 def _handle_validation_post_model_validation(
-    _capability: str, _action_name: str, input_json: Dict[str, Any]
+    _capability: str, _action_name: str, input: BaseModel
 ):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     from methyl_validation.pipeline_runner import (
         run_post_model_validation_binary,
         run_post_model_validation_multiclass,
@@ -945,7 +971,8 @@ def _write_stub_extract_artifacts(sample_path: Path, sample_id: str) -> list[str
     return [h5_name]
 
 
-def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[str, Any]) -> BaseModel:
+def _handle_stub_external(capability: str, _action_name: str, input: BaseModel) -> BaseModel:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
     if not _stub_external_enabled():
         raise RuntimeError(
             f"No local handler for capability {capability!r}. "
@@ -1174,9 +1201,7 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
 
         input_model = validate_input(entry, input_json)
         timer = ExecutionTimer()
-        output_model = _handle_stub_external(
-            capability, action_name, input_model.model_dump(mode="json")
-        )
+        output_model = _handle_stub_external(capability, action_name, input_model)
         finished_at, duration_ms = timer.finish()
         output = finalize_output(
             entry,
@@ -1192,4 +1217,38 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
 
     if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:
         result = _attach_domain_sample_ref(entry, action_name, input_json, result)
+    if entry.category == "validation":
+        result = _append_validation_action_log(entry, action_name, input_json, result)
+    return result
+
+
+def _append_validation_action_log(
+    entry,
+    action_name: str,
+    input_json: Dict[str, Any],
+    result: ActionExecutionResult,
+) -> ActionExecutionResult:
+    try:
+        from .action_run_log import append_action_run_log
+
+        mc_root = _resolve_monte_carlo_runs_root(input_json)
+        run_dir = input_json.get("runDir") or input_json.get("targetRunDir")
+        outputs = result.output.model_dump(mode="json")
+        trimmed_inputs = {
+            k: input_json[k]
+            for k in ("projectPath", "project", "runDir", "monteCarloRunsRoot", "outputDir")
+            if k in input_json
+        }
+        append_action_run_log(
+            mc_root,
+            action=action_name,
+            capability=entry.capability,
+            result_code=result.result_code,
+            run_dir=str(run_dir) if run_dir else None,
+            inputs=trimmed_inputs,
+            outputs=outputs,
+            workflow_node_key=input_json.get("workflowNodeKey"),
+        )
+    except Exception:
+        logger.debug("validation action_run_log append skipped for %s", action_name, exc_info=True)
     return result

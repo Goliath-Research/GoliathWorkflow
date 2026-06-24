@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import methyl_validation.model_mc_runner as model_mc_runner
 from methyl_worker import handlers
+from methyl_worker.task_models.validation_models import ValidationTaskInput
 
 
 def test_model_mc_handler_delegates_to_runner(tmp_path: Path) -> None:
@@ -23,6 +24,14 @@ def test_model_mc_handler_delegates_to_runner(tmp_path: Path) -> None:
         "nSharedIterations": 3,
     }
 
+    task_input = ValidationTaskInput.model_validate(
+        {
+            "projectPath": str(tmp_path / "project.json"),
+            "monteCarloRunsRoot": str(mc_root),
+            "productionOutputDir": str(production),
+        }
+    )
+
     with patch.object(model_mc_runner, "run_model_mc_all", return_value=fake_result) as mock_run:
         with patch.object(handlers, "_load_mc_config") as mock_cfg:
             config = MagicMock()
@@ -31,11 +40,7 @@ def test_model_mc_handler_delegates_to_runner(tmp_path: Path) -> None:
             out = handlers._handle_validation_model_mc(
                 "validation.model-mc",
                 "validation.model_mc",
-                {
-                    "projectPath": str(tmp_path / "project.json"),
-                    "monteCarloRunsRoot": str(mc_root),
-                    "productionOutputDir": str(production),
-                },
+                task_input,
             )
 
     mock_run.assert_called_once()

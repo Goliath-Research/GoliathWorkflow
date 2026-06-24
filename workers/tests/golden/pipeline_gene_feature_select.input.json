@@ -1,0 +1,7 @@
+{
+  "mapperDir": "/work/p/mapper",
+  "maxFeatures": null,
+  "outputDir": "/work/p/gene_features",
+  "targetBalancedAccuracy": null,
+  "tool": "MethylGeneFeatureSelect"
+}
