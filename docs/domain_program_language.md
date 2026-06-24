@@ -72,8 +72,8 @@ Named presets live in `workflow_engine/domain/profiles/*.profile.json`. Pass via
 | `gene_enricher_stability` | discovery_only | off | discovery | **gene frequency from enricher** (no DMP FC) |
 | `dmp_panel_stability` | discovery_only | on | classifier-extended | DMP panel MC |
 | `full_biomarker_gene_fc` | discovery + dmp_select | on | classifier-extended | DMP + gene FeatureCuts |
-
-Optional branches in MC programs use correct IF syntax:
+| `discovery_gene_featurecuts` | discovery + dmp_select | on | **discovery** | gene FeatureCuts on **broad mapped gene pool** |
+| `structural_features` | discovery_only | off | discovery + intersections | gene×region ranked catalog |
 
 ```json
 {
@@ -96,5 +96,15 @@ methyl-validation run-workflow \
   --program workflow_engine/domain/checks/pca1_5_cg/configs/mc_gene_enricher_stability.program.json \
   --context-file workflow_engine/domain/profiles/gene_enricher_stability.profile.json
 ```
+
+**Discovery DMPs → broad mapper → gene FeatureCuts (stable gene panel for model):**
+
+```bash
+methyl-validation run-workflow \
+  --program workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json \
+  --context-file workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json
+```
+
+Uses `dmps-*-discovery.csv` for mapper (large gene pool), `pipeline.dmp_select` for classifier DMP exports required by `pipeline.gene_select`, and MC stability on gene classifier panels. Set `"runBiomarkerFilter": true` in context to add PPI/disease shrink before gene FeatureCuts (as in `full_biomarker_gene_fc`).
 
 Stability summaries record active axes in `stability_summary.json` → `pipeline_axes` (`dmp_axis`: `none|discovery|classifier`, `gene_axis`: `enricher|classifier`).

@@ -28,6 +28,16 @@ def test_gene_enricher_stability_profile_flags() -> None:
     assert ctx["stabilityGeneFeaturecutsEnabled"] is False
 
 
+def test_discovery_gene_featurecuts_profile() -> None:
+    profile = load_profile("discovery_gene_featurecuts")
+    ctx = apply_pipeline_profile({"projectPath": "/tmp/project.json"}, profile)
+    assert ctx["runDmpSelection"] is True
+    assert ctx["runGeneFeaturecuts"] is True
+    assert ctx["runBiomarkerFilter"] is False
+    overrides = ctx.get("step_config_overrides") or {}
+    assert overrides.get("mapper", {}).get("csv_pattern") == "dmps-*-discovery.csv"
+
+
 def test_full_biomarker_profile_enables_optional_branches() -> None:
     ctx = apply_pipeline_profile({}, load_profile("full_biomarker_gene_fc"))
     assert ctx["runDmpSelection"] is True
@@ -46,6 +56,19 @@ def test_enrich_instance_context_seeds_flags_from_validation() -> None:
     )
     assert "runDmpSelection" in ctx
     assert ctx["runDmpSelection"] is False
+
+
+def test_enrich_preserves_project_validation_when_single_pipeline_flag_set() -> None:
+    """Regression: one PIPELINE_FLAG in context must not drop project step_config for other flags."""
+    project = DOMAIN / "checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG.json"
+    ctx = enrich_instance_context(
+        {
+            "projectPath": str(project),
+            "runDmpSelection": True,
+        }
+    )
+    assert ctx["runDmpSelection"] is True
+    assert ctx["stabilityFeaturecutsEnabled"] is True
 
 
 @pytest.mark.parametrize(

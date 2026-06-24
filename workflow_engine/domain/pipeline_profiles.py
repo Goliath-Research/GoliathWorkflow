@@ -61,6 +61,15 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "stabilityGeneFeaturecutsEnabled": True,
         "stabilityGeneBiomarkerFilterEnabled": True,
     },
+    "discovery_gene_featurecuts": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": True,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": True,
+        "stabilityGeneBiomarkerFilterEnabled": False,
+    },
     "structural_features": {
         "runDmpSelection": False,
         "runGeneFeaturecuts": False,
@@ -164,7 +173,12 @@ def seed_pipeline_scope_flags(
     return out
 
 
-def apply_pipeline_profile(context: Dict[str, Any], profile: Mapping[str, Any]) -> Dict[str, Any]:
+def apply_pipeline_profile(
+    context: Dict[str, Any],
+    profile: Mapping[str, Any],
+    *,
+    step_config: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
     """Merge a profile dict into workflow instance context (flags + optional step_config overrides)."""
     out = dict(context)
     name = profile.get("pipelineProfile")
@@ -180,7 +194,13 @@ def apply_pipeline_profile(context: Dict[str, Any], profile: Mapping[str, Any]) 
     if isinstance(overrides, dict):
         existing = dict(out.get("step_config_overrides") or {})
         out["step_config_overrides"] = _deep_merge(existing, overrides)
-    return seed_pipeline_scope_flags(out, step_config=out.get("step_config_overrides"))
+
+    effective_step_config: Dict[str, Any] = dict(step_config or {})
+    profile_overrides = out.get("step_config_overrides")
+    if isinstance(profile_overrides, dict):
+        effective_step_config = _deep_merge(effective_step_config, profile_overrides)
+
+    return seed_pipeline_scope_flags(out, step_config=effective_step_config)
 
 
 def apply_profile_by_name(context: Dict[str, Any], profile_name: str) -> Dict[str, Any]:
