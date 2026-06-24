@@ -281,14 +281,35 @@ class DMPMapper:
             logger.info(f"Gene list: {save_stats['json_path']}")
             logger.info("=" * 70)
             
-            return {
+            result = {
                 'success': True,
                 'input_dmps': len(self.dmps_df),
                 'output_genes': save_stats['json_genes'],
                 'output_rows': save_stats['csv_rows'],
                 **save_stats
             }
-            
+            try:
+                from methyl_domain.action_result import atomic_write_json, manifest_path_for
+
+                out_dir = Path(output_csv).parent
+                manifest = manifest_path_for(out_dir, "pipeline.mapper", Path(output_csv).stem)
+                atomic_write_json(
+                    manifest,
+                    {
+                        "schema_version": "1.0",
+                        "status": "ok",
+                        "action_name": "pipeline.mapper",
+                        "output_dir": str(out_dir),
+                        "n_input_dmps": result["input_dmps"],
+                        "n_output_genes": result["output_genes"],
+                        "output_csv": save_stats.get("csv_path") or str(output_csv),
+                        "output_json": save_stats.get("json_path") or str(output_json),
+                        "result_code": 0,
+                    },
+                )
+            except Exception:
+                logger.debug("Could not write mapper action manifest", exc_info=True)
+            return result
         except Exception as e:
             logger.error(f"\n❌ Pipeline failed: {e}")
             raise

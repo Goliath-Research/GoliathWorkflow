@@ -1,0 +1,134 @@
+"""Strict Pydantic models for validation workflow actions."""
+
+from __future__ import annotations
+
+from typing import List, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from .base import ActionOutputBase
+
+
+class ValidationPlanTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
+    featureIterations: Optional[int] = Field(default=None, ge=0)
+    qualityIterations: Optional[int] = Field(default=None, ge=0)
+    monteCarloRunsRoot: Optional[str] = None
+
+
+class ValidationIterationRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    run_id: str
+    iteration: int = 0
+    run_dir: Optional[str] = None
+    project_json: Optional[str] = None
+
+
+class ValidationPlanTaskOutput(ActionOutputBase):
+    projectPath: Optional[str] = None
+    n_iterations: int = 0
+    iterations: List[ValidationIterationRef] = Field(default_factory=list)
+
+
+class ValidationTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
+    monteCarloRunsRoot: Optional[str] = None
+    outputDir: Optional[str] = None
+    stableDmpCsv: Optional[str] = None
+    productionOutputDir: Optional[str] = None
+    sourceRunDir: Optional[str] = None
+    targetRunDir: Optional[str] = None
+    runDir: Optional[str] = None
+    bundleDir: Optional[str] = None
+    bundleH5: Optional[str] = None
+    backend: Optional[str] = None
+    backends: Optional[List[str]] = None
+    selectionMetric: Optional[str] = None
+    selectionStat: Optional[str] = None
+    modelMcRoot: Optional[str] = None
+    featureIterations: Optional[int] = Field(default=None, ge=0)
+    qualityIterations: Optional[int] = Field(default=None, ge=0)
+
+
+class StabilitySummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    n_iterations: Optional[int] = None
+    n_stable_dmps: Optional[int] = None
+    n_stable_genes: Optional[int] = None
+    dmp_min_frequency: Optional[float] = None
+    gene_min_frequency: Optional[float] = None
+    summary_json_path: Optional[str] = None
+
+
+class ValidationStabilityOutput(ActionOutputBase):
+    outputDir: str
+    summary: StabilitySummary
+
+
+class ValidationPrepareFreezeOutput(ActionOutputBase):
+    productionOutputDir: Optional[str] = None
+    sourceRunDir: Optional[str] = None
+    targetRunDir: Optional[str] = None
+    projectPath: Optional[str] = None
+
+
+class ValidationFreezeReadinessOutput(ActionOutputBase):
+    ready: bool = False
+    outputDir: Optional[str] = None
+    missing_artifacts: List[str] = Field(default_factory=list)
+
+
+class ValidationLinkArtifactsOutput(ActionOutputBase):
+    bundleDir: Optional[str] = None
+    linked_files: List[str] = Field(default_factory=list)
+
+
+class ValidationModelBundleOutput(ActionOutputBase):
+    bundleDir: Optional[str] = None
+    bundleH5: Optional[str] = None
+
+
+class ValidationModelTrainOutput(ActionOutputBase):
+    model_path: Optional[str] = None
+    backend: Optional[str] = None
+
+
+class ValidationModelPredictOutput(ActionOutputBase):
+    predictions_path: Optional[str] = None
+    n_samples: Optional[int] = None
+
+
+class ValidationModelMcOutput(ActionOutputBase):
+    modelMcRoot: Optional[str] = None
+    n_iterations: Optional[int] = None
+
+
+class ValidationSelectBestModelOutput(ActionOutputBase):
+    selectedBackend: Optional[str] = None
+    selectionMetric: Optional[str] = None
+    selectionStat: Optional[float] = None
+
+
+class ValidationPostModelValidationOutput(ActionOutputBase):
+    outputDir: Optional[str] = None
+    report_path: Optional[str] = None
+    passed: Optional[bool] = None
+
+
+class TaskErrorOutput(BaseModel):
+    """Worker failure payload on submit with result_code < 0."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    error: str
+    capability: Optional[str] = None

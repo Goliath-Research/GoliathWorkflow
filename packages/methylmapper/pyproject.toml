@@ -17,6 +17,7 @@ pyodbc = ">=4.0.0"
 requests = ">=2.25.0"
 cryptography = ">=3.4.0"
 methylutils = {path = "../methylutils", develop = true}
+methyl-domain = {path = "../methyldomain", develop = true}
 
 [tool.poetry.scripts]
 methyl-mapper = "methyl_mapper.cli:main"

@@ -13,6 +13,7 @@ numpy = ">=2.0.0,<3.0.0"
 pandas = ">=2.1.0,<3.0.0"
 click = ">=8.1.0,<9.0.0"
 methylutils = {path = "../methylutils", develop = true}
+methyl-domain = {path = "../methyldomain", develop = true}
 methyl-detector = {path = "../methyldetector", develop = true}
 
 [tool.poetry.scripts]

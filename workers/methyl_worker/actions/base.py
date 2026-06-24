@@ -1,4 +1,4 @@
-"""ActionBase: execute fully resolved input_json via CLI subprocess or in-process call."""
+"""ActionBase: execute validated input via CLI subprocess or in-process call."""
 
 from __future__ import annotations
 
@@ -9,10 +9,40 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Mapping, Optional, Protocol, runtime_checkable
 
+from pydantic import BaseModel
+
+from ..action_catalog import ActionCatalogEntry
+from ..action_execution import (
+    ActionExecutionResult,
+    ExecutionTimer,
+    execution_result_from_output,
+    finalize_output,
+    validate_input,
+)
+from ..collectors import (
+    ArtifactCollector,
+    CentroidLegacyCollector,
+    DmpSelectLegacyCollector,
+    GeneFeatureSelectLegacyCollector,
+    GeneSelectLegacyCollector,
+    GenericPipelineCollector,
+    ManifestFirstCollector,
+    MapperLegacyCollector,
+    DetectorLegacyCollector,
+    _resolve_dmp_output_dir,
+)
+from ..task_models.pipeline_models import (
+    CentroidTaskOutput,
+    DetectorTaskOutput,
+    DmpSelectTaskOutput,
+    GeneFeatureSelectTaskOutput,
+    GeneSelectTaskOutput,
+    MapperTaskOutput,
+)
+
 logger = logging.getLogger(__name__)
 
-HandlerResult = Dict[str, Any]
-InProcessCallable = Callable[[str, str, Dict[str, Any]], HandlerResult]
+InProcessCallable = Callable[[str, str, BaseModel], BaseModel]
 
 DEFAULT_PIPELINE_ARGV_MAP: Dict[str, str] = {
     "project": "--project",
@@ -33,8 +63,9 @@ DEFAULT_PIPELINE_ARGV_MAP: Dict[str, str] = {
 @runtime_checkable
 class ActionBase(Protocol):
     execution_mode: str
+    entry: ActionCatalogEntry
 
-    def execute(self, input_json: Dict[str, Any]) -> HandlerResult: ...
+    def execute(self, input_json: Mapping[str, Any]) -> ActionExecutionResult: ...
 
 
 class CliAction:
@@ -45,15 +76,19 @@ class CliAction:
     def __init__(
         self,
         *,
+        entry: ActionCatalogEntry,
         cli_tool: str,
         argv_map: Mapping[str, str],
+        collector: Optional[ArtifactCollector] = None,
         project_keys: tuple[str, ...] = ("project", "projectPath", "project_path"),
     ) -> None:
+        self.entry = entry
         self.cli_tool = cli_tool
         self.argv_map = dict(argv_map)
+        self.collector = collector or GenericPipelineCollector()
         self.project_keys = project_keys
 
-    def _project_path(self, input_json: Dict[str, Any]) -> str:
+    def _project_path(self, input_json: Mapping[str, Any]) -> str:
         for key in self.project_keys:
             val = input_json.get(key)
             if val:
@@ -70,16 +105,10 @@ class CliAction:
         if val is None or val == "":
             return None
         if json_key == "stepOverride" and isinstance(val, dict):
-            add_samples = val.get("base_config", {}).get("add_samples")
-            remove_samples = val.get("base_config", {}).get("remove_samples")
-            if add_samples is None and remove_samples is None:
-                payload = val
-            else:
-                payload = val
             fd, path = tempfile.mkstemp(suffix=".json", prefix="step-override-")
             try:
                 with open(fd, "w", encoding="utf-8") as f:
-                    json.dump(payload, f)
+                    json.dump(val, f)
             except Exception:
                 Path(path).unlink(missing_ok=True)
                 raise
@@ -88,13 +117,14 @@ class CliAction:
             return json.dumps(val)
         return str(val)
 
-    def build_argv(self, input_json: Dict[str, Any]) -> List[str]:
+    def build_argv(self, input_json: Mapping[str, Any]) -> List[str]:
+        data = dict(input_json)
         cmd = [self.cli_tool]
         project_set = False
-        step_override: Optional[Dict[str, Any]] = input_json.get("stepOverride")
+        step_override: Optional[Dict[str, Any]] = data.get("stepOverride")  # type: ignore[assignment]
         if step_override is None:
-            add_samples = input_json.get("addSamples")
-            remove_samples = input_json.get("removeSamples")
+            add_samples = data.get("addSamples")
+            remove_samples = data.get("removeSamples")
             if add_samples is not None or remove_samples is not None:
                 step_override = {
                     "base_config": {
@@ -102,22 +132,22 @@ class CliAction:
                         "remove_samples": list(remove_samples or []),
                     }
                 }
-        if step_override is not None and input_json.get("stepOverride") is None:
-            input_json = {**input_json, "stepOverride": step_override}
+        if step_override is not None and data.get("stepOverride") is None:
+            data = {**data, "stepOverride": step_override}
         for json_key, flag in self.argv_map.items():
             if json_key in self.project_keys:
                 if project_set:
                     continue
-                val = self._project_path(input_json)
+                val = self._project_path(data)
                 cmd.extend([flag, val])
                 project_set = True
                 continue
-            val = input_json.get(json_key)
+            val = data.get(json_key)
             argv_val = self._argv_value(json_key, val)
             if argv_val is not None:
                 cmd.extend([flag, argv_val])
         if not project_set and any(k in self.argv_map for k in self.project_keys):
-            cmd.extend([self.argv_map[self.project_keys[0]], self._project_path(input_json)])
+            cmd.extend([self.argv_map[self.project_keys[0]], self._project_path(data)])
         return cmd
 
     @staticmethod
@@ -137,21 +167,38 @@ class CliAction:
             parts.append("no stderr/stdout captured")
         return "\n".join(parts)
 
-    def execute(self, input_json: Dict[str, Any]) -> HandlerResult:
-        cmd = self.build_argv(input_json)
+    def execute(self, input_json: Mapping[str, Any]) -> ActionExecutionResult:
+        input_model = validate_input(self.entry, input_json)
+        payload = input_model.model_dump(mode="json")
+        timer = ExecutionTimer()
+        cmd = self.build_argv(payload)
         logger.info("Running: %s", " ".join(cmd))
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        finished_at, duration_ms = timer.finish()
         if proc.returncode != 0:
             raise RuntimeError(self._format_subprocess_failure(cmd, proc))
-        return {
-            "status": "ok",
-            "tool": self.cli_tool,
-            "stdout_tail": (proc.stdout or "")[-500:],
-        }
+        collected = self.collector.collect(
+            payload,
+            action_name=self.entry.action_name,
+            stdout=proc.stdout or "",
+        )
+        collected.setdefault("tool", self.cli_tool)
+        collected.setdefault("stdout_tail", (proc.stdout or "")[-500:])
+        manifest_path = collected.get("manifest_path")
+        output = finalize_output(
+            self.entry,
+            collected,
+            started_at=timer.started_at,
+            finished_at=finished_at,
+            duration_ms=duration_ms,
+            exit_code=proc.returncode,
+            manifest_path=str(manifest_path) if manifest_path else None,
+        )
+        return execution_result_from_output(output)
 
 
 class InProcessAction:
-    """Invoke a Python handler with (capability, action_name, input_json)."""
+    """Invoke a Python handler with validated input; returns typed output."""
 
     execution_mode = "in_process"
 
@@ -159,48 +206,111 @@ class InProcessAction:
         self,
         handler: InProcessCallable,
         *,
-        capability: str,
-        action_name: str,
+        entry: ActionCatalogEntry,
     ) -> None:
         self.handler = handler
-        self.capability = capability
-        self.action_name = action_name
+        self.entry = entry
 
-    def execute(self, input_json: Dict[str, Any]) -> HandlerResult:
-        return self.handler(self.capability, self.action_name, input_json)
+    def execute(self, input_json: Mapping[str, Any]) -> ActionExecutionResult:
+        input_model = validate_input(self.entry, input_json)
+        timer = ExecutionTimer()
+        raw = self.handler(
+            self.entry.capability,
+            self.entry.action_name,
+            input_model.model_dump(mode="json"),
+        )
+        finished_at, duration_ms = timer.finish()
+        if isinstance(raw, BaseModel):
+            payload = raw.model_dump(mode="json")
+        elif isinstance(raw, dict):
+            payload = dict(raw)
+        else:
+            raise TypeError(
+                f"In-process handler for {self.entry.action_name!r} must return BaseModel or dict"
+            )
+        output = finalize_output(
+            self.entry,
+            payload,
+            started_at=timer.started_at,
+            finished_at=finished_at,
+            duration_ms=duration_ms,
+            exit_code=0,
+            manifest_path=payload.get("manifest_path"),
+        )
+        return execution_result_from_output(output)
 
 
-def build_action_from_catalog(entry, handlers_module: Any) -> ActionBase:
+def _collector_for_entry(entry: ActionCatalogEntry) -> ArtifactCollector:
+    name = entry.action_name
+    if name == "pipeline.dmp_select":
+        return ManifestFirstCollector(
+            output_model=DmpSelectTaskOutput,
+            resolve_output_dir=lambda inp: _resolve_dmp_output_dir(inp),
+            legacy_collect=DmpSelectLegacyCollector(),
+        )
+    if name == "pipeline.gene_select":
+        return ManifestFirstCollector(
+            output_model=GeneSelectTaskOutput,
+            resolve_output_dir=lambda inp: inp.get("runDir"),
+            legacy_collect=GeneSelectLegacyCollector(),
+        )
+    if name == "pipeline.gene_feature_select":
+        return ManifestFirstCollector(
+            output_model=GeneFeatureSelectTaskOutput,
+            resolve_output_dir=lambda inp: inp.get("outputDir"),
+            legacy_collect=GeneFeatureSelectLegacyCollector(),
+        )
+    if name == "pipeline.detector":
+        return ManifestFirstCollector(
+            output_model=DetectorTaskOutput,
+            resolve_output_dir=lambda inp: inp.get("outputDir"),
+            legacy_collect=DetectorLegacyCollector(),
+        )
+    if name == "pipeline.mapper":
+        return ManifestFirstCollector(
+            output_model=MapperTaskOutput,
+            resolve_output_dir=lambda inp: inp.get("outputDir"),
+            legacy_collect=MapperLegacyCollector(),
+        )
+    if name == "pipeline.centroid":
+        return ManifestFirstCollector(
+            output_model=CentroidTaskOutput,
+            resolve_output_dir=lambda inp: inp.get("outputDir"),
+            legacy_collect=CentroidLegacyCollector(),
+        )
+    return GenericPipelineCollector()
+
+
+def build_action_from_catalog(entry: ActionCatalogEntry, handlers_module: Any) -> ActionBase:
     if entry.execution_mode == "in_process":
         handler_name = entry.in_process_handler or entry.handler
         handler = getattr(handlers_module, handler_name, None)
         if handler is None or not callable(handler):
             raise RuntimeError(f"Missing in-process handler {handler_name!r} for {entry.action_name}")
-        return InProcessAction(
-            handler,
-            capability=entry.capability,
-            action_name=entry.action_name,
-        )
+        return InProcessAction(handler, entry=entry)
 
     cli = entry.cli_tool
     if cli is None:
         raise RuntimeError(f"Action {entry.action_name!r} has execution_mode=cli but no cli_tool")
 
     argv_map = dict(entry.argv_map) if entry.argv_map else dict(DEFAULT_PIPELINE_ARGV_MAP)
+    collector = _collector_for_entry(entry)
     if entry.action_name == "pipeline.detector":
         from .detector import DETECTOR_ARGV_MAP, DetectorCliAction
 
-        return DetectorCliAction(cli_tool=cli, argv_map=DETECTOR_ARGV_MAP)
+        return DetectorCliAction(entry=entry, cli_tool=cli, argv_map=DETECTOR_ARGV_MAP, collector=collector)
     if entry.action_name == "pipeline.dmp_select":
         from .dmp_select import DMP_SELECT_ARGV_MAP, DmpSelectCliAction
 
-        return DmpSelectCliAction(cli_tool=cli, argv_map=DMP_SELECT_ARGV_MAP)
+        return DmpSelectCliAction(entry=entry, cli_tool=cli, argv_map=DMP_SELECT_ARGV_MAP, collector=collector)
     if entry.action_name == "pipeline.gene_select":
         from .gene_select import GENE_SELECT_ARGV_MAP, GeneSelectCliAction
 
-        return GeneSelectCliAction(cli_tool=cli, argv_map=GENE_SELECT_ARGV_MAP)
+        return GeneSelectCliAction(entry=entry, cli_tool=cli, argv_map=GENE_SELECT_ARGV_MAP, collector=collector)
     if entry.action_name == "pipeline.gene_feature_select":
         from .gene_feature_select import GENE_FEATURE_SELECT_ARGV_MAP, GeneFeatureSelectCliAction
 
-        return GeneFeatureSelectCliAction(cli_tool=cli, argv_map=GENE_FEATURE_SELECT_ARGV_MAP)
-    return CliAction(cli_tool=cli, argv_map=argv_map)
+        return GeneFeatureSelectCliAction(
+            entry=entry, cli_tool=cli, argv_map=GENE_FEATURE_SELECT_ARGV_MAP, collector=collector
+        )
+    return CliAction(entry=entry, cli_tool=cli, argv_map=argv_map, collector=collector)

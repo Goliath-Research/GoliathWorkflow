@@ -73,7 +73,7 @@ def test_mark_failed_handler() -> None:
         "sample.qc_failed",
         {"sampleId": "S1", "sampleDir": "/work/samples/S1", "reason": "test"},
     )
-    assert result["status"] == "QC_FAILED"
+    assert result.output.model_dump()["status"] == "QC_FAILED"
 
 
 def test_sample_prep_actions_have_domain_effects() -> None:

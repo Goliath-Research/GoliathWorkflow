@@ -1,7 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": true,
-  "description": "Input for sample.parabricks_fq2bam (Parabricks fq2bam_meth via Docker).",
+  "additionalProperties": false,
   "properties": {
     "bwaThreads": {
       "anyOf": [

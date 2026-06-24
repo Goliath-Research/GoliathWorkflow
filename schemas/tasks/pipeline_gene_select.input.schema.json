@@ -1,7 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Input for pipeline.gene_select (methyl-gene-select).",
   "properties": {
     "biomarkerFilter": {
       "default": false,

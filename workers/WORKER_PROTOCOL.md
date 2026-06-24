@@ -33,8 +33,30 @@ The reference worker dispatches via **ActionBase** (`CliAction` / `InProcessActi
 
 ## Result codes
 
-- `result_code >= 0`: success; advances workflow
-- `result_code < 0`: fails the workflow instance
+Branch codes are stored on `node_execution.result_code` and drive IF/SWITCH via `wf_try_task_result_code`:
+
+| Code | Meaning |
+|------|---------|
+| `< 0` | Hard failure; workflow instance fails |
+| `0` | Default success / false branch |
+| `1` | True branch (e.g. `sample.methyl_qc` needs realign/trim) |
+| `2..N` | Multi-way SWITCH cases (document per action) |
+
+Every successful submit includes a **typed** `output_json` (Pydantic `extra="forbid"`, exported under `schemas/tasks/`). Each output carries telemetry: `started_at_utc`, `finished_at_utc`, `duration_ms`, `exit_code`, `manifest_path`, and `artifacts[]`.
+
+### Action result manifests on `/work`
+
+CLI tools write JSON manifests under `{output_dir}/.action_results/{action_name}.{run_key}.json` (see `methyl_domain.action_result`). The worker reads and validates these after subprocess exit; legacy artifact scraping remains as fallback until all tools emit manifests.
+
+Sample prep also appends `{sampleDir}/{sampleId}.sample_prep_log.jsonl` for an operator-visible timeline.
+
+### `sample.methyl_qc` branch codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | QC pass |
+| `1` | Needs realign/trim (`remediateAlignment`) |
+| `2` | Permanent fail → `sample.qc_failed` |
 
 ## Implementing a worker in any language
 

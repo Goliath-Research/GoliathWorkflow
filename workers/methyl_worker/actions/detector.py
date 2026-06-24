@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from .base import CliAction, HandlerResult
+from .base import CliAction
 
 # methyl-detector accepts --project, --group, --step-override, --centroid1-dir, --centroid2-dir.
 # Per-chromosome scope uses step-override JSON (chromosome, contexts, fixed_dmp_panel, output_dir).
@@ -89,6 +89,3 @@ class DetectorCliAction(CliAction):
         ):
             payload.pop(drop_key, None)
         return super().build_argv(payload)
-
-    def execute(self, input_json: Dict[str, Any]) -> HandlerResult:
-        return super().execute(input_json)

@@ -1,7 +1,77 @@
 {
+  "$defs": {
+    "StepOverrideConfig": {
+      "additionalProperties": false,
+      "description": "MC iteration overrides passed as stepOverride JSON.",
+      "properties": {
+        "base_config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Config"
+        },
+        "chromosome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chromosome"
+        },
+        "comparison": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comparison"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context"
+        },
+        "output_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Dir"
+        }
+      },
+      "title": "StepOverrideConfig",
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Input for pipeline.dmp_select (methyl-dmp-select).",
   "properties": {
     "chromosome": {
       "title": "Chromosome",
@@ -100,15 +170,13 @@
     "stepOverride": {
       "anyOf": [
         {
-          "additionalProperties": true,
-          "type": "object"
+          "$ref": "#/$defs/StepOverrideConfig"
         },
         {
           "type": "null"
         }
       ],
-      "default": null,
-      "title": "Stepoverride"
+      "default": null
     },
     "tool": {
       "default": "MethylDmpSelect",

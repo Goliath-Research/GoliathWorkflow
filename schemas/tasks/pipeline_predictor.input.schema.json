@@ -1,95 +1,78 @@
 {
+  "$defs": {
+    "StepOverrideConfig": {
+      "additionalProperties": false,
+      "description": "MC iteration overrides passed as stepOverride JSON.",
+      "properties": {
+        "base_config": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Config"
+        },
+        "chromosome": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chromosome"
+        },
+        "comparison": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Comparison"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context"
+        },
+        "output_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Dir"
+        }
+      },
+      "title": "StepOverrideConfig",
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": true,
-  "description": "Shared input for methyl-* pipeline CLI actions (centroid, detector, mapper, enricher, progression).",
+  "additionalProperties": false,
   "properties": {
-    "addSamples": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Addsamples"
-    },
-    "centroid1Dir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Centroid1Dir"
-    },
-    "centroid2Dir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Centroid2Dir"
-    },
-    "chromosome": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Chromosome"
-    },
-    "comparison": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Comparison"
-    },
-    "context": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Context"
-    },
-    "fixedDmpPanel": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Fixeddmppanel"
-    },
     "group": {
       "anyOf": [
         {
@@ -102,21 +85,6 @@
       "default": null,
       "title": "Group"
     },
-    "orderedComparisonLabels": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Orderedcomparisonlabels"
-    },
     "outputDir": {
       "anyOf": [
         {
@@ -128,18 +96,6 @@
       ],
       "default": null,
       "title": "Outputdir"
-    },
-    "phase": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Phase"
     },
     "project": {
       "anyOf": [
@@ -165,70 +121,16 @@
       "default": null,
       "title": "Projectpath"
     },
-    "project_path": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Project Path"
-    },
-    "removeSamples": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Removesamples"
-    },
-    "runId": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Runid"
-    },
     "stepOverride": {
       "anyOf": [
         {
-          "additionalProperties": true,
-          "type": "object"
+          "$ref": "#/$defs/StepOverrideConfig"
         },
         {
           "type": "null"
         }
       ],
-      "default": null,
-      "title": "Stepoverride"
-    },
-    "taskConfig": {
-      "anyOf": [
-        {
-          "additionalProperties": true,
-          "type": "object"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Taskconfig"
+      "default": null
     },
     "tool": {
       "title": "Tool",
@@ -238,6 +140,6 @@
   "required": [
     "tool"
   ],
-  "title": "PipelineCliTaskInput",
+  "title": "PredictorTaskInput",
   "type": "object"
 }

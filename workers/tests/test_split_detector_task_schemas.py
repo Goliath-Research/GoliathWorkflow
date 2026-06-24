@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from methyl_worker.task_validation import TaskValidationError, validate_task_input, validate_task_output
+from methyl_worker.task_validation import (
+    TaskValidationError,
+    normalize_task_input,
+    validate_task_input,
+    validate_task_output,
+)
 
 
 def test_dmp_select_input_requires_chromosome_and_project() -> None:
@@ -27,18 +32,28 @@ def test_dmp_select_input_requires_chromosome_and_project() -> None:
     )
 
 
-def test_dmp_select_input_rejects_unknown_keys() -> None:
-    with pytest.raises(TaskValidationError):
-        validate_task_input(
-            "pipeline.dmp_select",
-            "methyl-dmp-select",
-            {
-                "tool": "MethylDmpSelect",
-                "projectPath": "/work/demo/project.json",
-                "chromosome": "1",
-                "unexpected": True,
-            },
-        )
+def test_dmp_select_input_strips_unknown_keys_before_validate() -> None:
+    normalized = normalize_task_input(
+        "pipeline.dmp_select",
+        "methyl-dmp-select",
+        {
+            "tool": "MethylDmpSelect",
+            "projectPath": "/work/demo/project.json",
+            "chromosome": "1",
+            "unexpected": True,
+        },
+    )
+    assert "unexpected" not in normalized
+    validate_task_input(
+        "pipeline.dmp_select",
+        "methyl-dmp-select",
+        {
+            "tool": "MethylDmpSelect",
+            "projectPath": "/work/demo/project.json",
+            "chromosome": "1",
+            "unexpected": True,
+        },
+    )
 
 
 def test_gene_select_input_requires_run_dir() -> None:

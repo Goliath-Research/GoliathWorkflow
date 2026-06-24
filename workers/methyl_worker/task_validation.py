@@ -46,7 +46,8 @@ def validate_task_input(
     if spec is None:
         return
     try:
-        _validate(spec.load_input_model(), input_json)
+        normalized = normalize_task_input(action_name, capability, input_json)
+        _validate(spec.load_input_model(), normalized)
     except ValidationError as exc:
         raise TaskValidationError(
             f"input_json failed schema validation for {action_name}: {exc}",

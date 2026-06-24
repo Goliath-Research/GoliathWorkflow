@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+from methyl_worker.action_execution import ActionExecutionResult
 from methyl_worker.client import TaskClaim, WorkflowRestClient
 from methyl_worker.runner import WorkerRunner
+from methyl_worker.task_models.sample_prep_models import MarkFailedTaskOutput
 
 
 def test_run_once_no_task() -> None:
@@ -28,7 +30,13 @@ def test_run_once_processes_task() -> None:
     client.request_task.return_value = claim
     runner = WorkerRunner(client, 1, "tok", poll_seconds=0.01, heartbeat_seconds=3600)
 
-    with patch("methyl_worker.runner.execute_task", return_value={"status": "QC_FAILED"}):
+    with patch(
+        "methyl_worker.runner.execute_task",
+        return_value=ActionExecutionResult(
+            result_code=0,
+            output=MarkFailedTaskOutput(status="QC_FAILED", sampleId="S1"),
+        ),
+    ):
         assert runner.run_once() is True
 
     client.submit_result.assert_called_once()

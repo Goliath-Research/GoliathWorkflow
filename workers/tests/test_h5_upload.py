@@ -88,7 +88,7 @@ def test_upload_h5_handler_file_destination(tmp_path: Path) -> None:
             },
             "h5Files": ["1-CG.h5"],
         },
-    )
+    ).output.model_dump()
     assert out["uploadedCount"] == 1
     assert (archive_root / "S1" / "1-CG.h5").is_file()
     assert not (archive_root / "S1" / "fastq").exists()

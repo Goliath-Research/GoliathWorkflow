@@ -16,6 +16,7 @@ for _p in (_WORKERS, _DOMAIN):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
+from methyl_worker.action_catalog import find_catalog_entry
 from methyl_worker.actions.detector import DETECTOR_ARGV_MAP, DetectorCliAction, merge_detector_step_override
 from workflow_context import resolve_input_json_from_template
 
@@ -70,7 +71,9 @@ def test_detector_build_argv_from_lifecycle_scope() -> None:
         "detectOutDir": "/work/out/detections/healthy/PCa1",
     }
     resolved = resolve_input_json_from_template(_COMPILED_DETECT_TEMPLATE, scope)
-    action = DetectorCliAction(cli_tool="methyl-detector", argv_map=DETECTOR_ARGV_MAP)
+    entry = find_catalog_entry("pipeline.detector")
+    assert entry is not None
+    action = DetectorCliAction(entry=entry, cli_tool="methyl-detector", argv_map=DETECTOR_ARGV_MAP)
     cmd = action.build_argv(resolved)
 
     assert cmd[0] == "methyl-detector"
@@ -114,7 +117,9 @@ def test_detector_argv_accepted_by_methyl_detector_help() -> None:
         "detectOutDir": "/work/detect",
     }
     resolved = resolve_input_json_from_template(_COMPILED_DETECT_TEMPLATE, scope)
-    action = DetectorCliAction(cli_tool="methyl-detector", argv_map=DETECTOR_ARGV_MAP)
+    entry = find_catalog_entry("pipeline.detector")
+    assert entry is not None
+    action = DetectorCliAction(entry=entry, cli_tool="methyl-detector", argv_map=DETECTOR_ARGV_MAP)
     cmd = action.build_argv(resolved)
     proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
     combined = (proc.stderr + proc.stdout).lower()

@@ -1,7 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": true,
-  "description": "Input for sample.methyl_extract (MethylExtractor \u2192 {chr}-{ctx}.h5 per chromosome).",
+  "additionalProperties": false,
   "properties": {
     "capCov": {
       "anyOf": [

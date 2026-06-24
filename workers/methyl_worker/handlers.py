@@ -11,11 +11,13 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
 
-HandlerResult = Dict[str, Any]
-Handler = Callable[[str, str, Dict[str, Any]], HandlerResult]
+Handler = Callable[[str, str, Dict[str, Any]], BaseModel | Dict[str, Any]]
 
+from .action_execution import ActionExecutionResult, finalize_output
 from .action_catalog import (
     ACTION_CATALOG,
     build_capability_handlers,
@@ -29,7 +31,16 @@ TOOL_CLI: Dict[str, str] = build_tool_cli_map()
 CAPABILITY_HANDLERS: Dict[str, str] = build_capability_handlers()
 
 
-def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+from .handler_helpers import (
+    guardrails_from_payload,
+    methyl_qc_result_code,
+    qc_history_from_payload,
+    screening_from_payload,
+)
+from .task_models.sample_prep_models import MethylQcTaskOutput, SamplePrepTaskInput
+
+
+def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> MethylQcTaskOutput:
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     if not sample_dir:
@@ -46,21 +57,23 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str,
     write_ctx = QcWriteContext.from_input_json(input_json)
     write_ctx.sample_prep_log_path = str(sample_path / f"{sample_path.name}.sample_prep_log.jsonl")
 
-    def _build_result(qc_path: Path) -> HandlerResult:
-        import json
-
+    def _build_result(qc_path: Path) -> MethylQcTaskOutput:
         from .sample_prep_log import append_sample_prep_log
 
         payload = json.loads(qc_path.read_text(encoding="utf-8"))
-        guardrails = payload.get("guardrails") or {}
-        screening = guardrails.get("screening") or {}
-        qc_history = payload.get("qc_history") or []
-        tf1 = int(screening.get("trim_front1") or 0)
-        tt1 = int(screening.get("trim_tail1") or 0)
-        tf2 = int(screening.get("trim_front2") or 0)
-        tt2 = int(screening.get("trim_tail2") or 0)
-        disposition = str(screening.get("disposition") or "")
+        guardrails_raw = payload.get("guardrails") or {}
+        guardrails = guardrails_from_payload(guardrails_raw if isinstance(guardrails_raw, dict) else {})
+        screening_raw = guardrails_raw.get("screening") or {}
+        screening = screening_from_payload(screening_raw if isinstance(screening_raw, dict) else {})
+        qc_history = qc_history_from_payload(payload.get("qc_history") or [])
+        tf1 = screening.trim_front1
+        tt1 = screening.trim_tail1
+        tf2 = screening.trim_front2
+        tt2 = screening.trim_tail2
+        disposition = str(screening.disposition or "")
         remediate = disposition == "REALIGN_TRIM" and any((tf1, tt1, tf2, tt2))
+        remediate_r2 = bool(remediate and tf2 > 0 and tf1 == 0 and tt1 == 0 and tt2 == 0)
+        rc = methyl_qc_result_code(remediate=remediate)
         append_sample_prep_log(
             sample_path,
             sample_id=sample_id or sample_path.name,
@@ -74,22 +87,24 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str,
             },
             outputs={
                 "qcPath": str(qc_path),
-                "overallPass": guardrails.get("overall_pass"),
-                "disposition": screening.get("disposition"),
+                "overallPass": guardrails.overall_pass,
+                "disposition": screening.disposition,
+                "result_code": rc,
             },
+            result_code=rc,
             workflow_node_key=write_ctx.workflow_node_key or input_json.get("workflowNodeKey"),
         )
-        return {
-            "sampleId": sample_id or sample_path.name,
-            "qcPath": str(qc_path),
-            "guardrails": guardrails,
-            "screening": screening,
-            "qcHistory": qc_history,
-            "remediateAlignment": remediate,
-            "remediateR2Trim": bool(
-                remediate and tf2 > 0 and tf1 == 0 and tt1 == 0 and tt2 == 0
-            ),
-        }
+        return MethylQcTaskOutput(
+            status="ok",
+            result_code=rc,
+            sampleId=sample_id or sample_path.name,
+            qcPath=str(qc_path),
+            guardrails=guardrails,
+            screening=screening,
+            qcHistory=qc_history,
+            remediateAlignment=remediate,
+            remediateR2Trim=remediate_r2,
+        )
 
     if project:
         from methyl_alignment_qc.project_resolver import resolve_alignment_qc_config
@@ -137,7 +152,7 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str,
 
 def _handle_methyl_extraction_qc(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+) -> Dict[str, Any]:
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     if not sample_dir or not sample_id:
@@ -169,8 +184,12 @@ def _handle_methyl_extraction_qc(
 
     from .sample_prep_log import append_sample_prep_log
 
+    from .handler_helpers import guardrails_from_payload
+    from .task_models.sample_prep_models import ExtractionQcTaskOutput
+
     payload = json.loads(qc_path.read_text(encoding="utf-8"))
-    guardrails = payload.get("guardrails") or {}
+    guardrails_raw = payload.get("guardrails") or {}
+    guardrails = guardrails_from_payload(guardrails_raw if isinstance(guardrails_raw, dict) else {})
     append_sample_prep_log(
         sample_path,
         sample_id=str(sample_id),
@@ -181,25 +200,22 @@ def _handle_methyl_extraction_qc(
         inputs={"manifestPath": str(sample_path / f"{sample_id}.extraction_manifest.json")},
         outputs={
             "qcPath": str(qc_path),
-            "overallPass": guardrails.get("overall_pass"),
+            "overallPass": guardrails.overall_pass,
         },
         workflow_node_key=input_json.get("workflowNodeKey") or "extraction_qc",
     )
-    return {
-        "sampleId": str(sample_id),
-        "qcPath": str(qc_path),
-        "guardrails": guardrails,
-        "extractionQc": {
-            "qcPath": str(qc_path),
-            "overallPass": bool(guardrails.get("overall_pass", False)),
-            "guardrails": guardrails,
-        },
-    }
+    return ExtractionQcTaskOutput(
+        status="ok",
+        sampleId=str(sample_id),
+        qcPath=str(qc_path),
+        guardrails=guardrails,
+        extraction_pass=guardrails.overall_pass,
+    )
 
 
 def _handle_methyl_fragmentomics(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+) -> Dict[str, Any]:
     project = input_json.get("project") or input_json.get("projectPath")
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
@@ -235,29 +251,44 @@ def _handle_methyl_fragmentomics(
 
 def _handle_validation_plan_iterations(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+):
     from methyl_validation.workflow_planner import plan_validation_context
 
+    from .task_models.validation_models import ValidationIterationRef, ValidationPlanTaskOutput
+
     context = plan_validation_context(input_json)
-    return {
-        "status": "ok",
-        "context_json": context,
-        "iterations": context.get("iterations", []),
-        "n_iterations": len(context.get("iterations", [])),
-        "projectPath": context.get("projectPath"),
-    }
+    iterations = []
+    for item in context.get("iterations", []):
+        if not isinstance(item, dict):
+            continue
+        iterations.append(
+            ValidationIterationRef(
+                run_id=str(item.get("run_id") or item.get("runId") or ""),
+                iteration=int(item.get("iteration") or 0),
+                run_dir=item.get("run_dir") or item.get("runDir"),
+                project_json=item.get("project_json") or item.get("projectJson"),
+            )
+        )
+    return ValidationPlanTaskOutput(
+        status="ok",
+        projectPath=context.get("projectPath"),
+        n_iterations=len(iterations),
+        iterations=iterations,
+    )
 
 
-def _handle_mark_failed(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
-    return {
-        "sampleId": input_json.get("sampleId"),
-        "sampleDir": input_json.get("sampleDir"),
-        "status": "QC_FAILED",
-        "reason": input_json.get("reason", "alignment_qc_failed"),
-    }
+def _handle_mark_failed(_capability: str, _action_name: str, input_json: Dict[str, Any]):
+    from .task_models.sample_prep_models import MarkFailedTaskOutput
+
+    return MarkFailedTaskOutput(
+        sampleId=input_json.get("sampleId"),
+        sampleDir=input_json.get("sampleDir"),
+        status="QC_FAILED",
+        reason=input_json.get("reason") or "alignment_qc_failed",
+    )
 
 
-def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
     from .fastq_source import download_from_source
     from .task_models import DownloadFastqTaskInput
 
@@ -267,7 +298,7 @@ def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict
     return {"sampleId": task.sampleId or dest.name, "fastqFiles": fastq_files}
 
 
-def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
     from .fastq_trim_runner import run_fastp_trim
     from .sample_prep_log import append_sample_prep_log
 
@@ -305,7 +336,7 @@ def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str
     return result
 
 
-def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
     from .parabricks_runner import run_fq2bam_meth
     from .sample_prep_log import append_sample_prep_log
 
@@ -346,7 +377,7 @@ def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: D
     return result
 
 
-def _handle_delete_fastqs(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+def _handle_delete_fastqs(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     if not sample_dir:
@@ -360,7 +391,7 @@ def _handle_delete_fastqs(_capability: str, _action_name: str, input_json: Dict[
     return {"sampleId": sample_id or sample_path.name, "deleted": True, "removedCount": removed}
 
 
-def _handle_delete_bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+def _handle_delete_bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     if not sample_dir or not sample_id:
@@ -375,7 +406,7 @@ def _handle_delete_bam(_capability: str, _action_name: str, input_json: Dict[str
     return {"sampleId": sample_id, "deleted": True, "removedCount": removed}
 
 
-def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
     from .extract_runner import run_methyl_extract
 
     sample_dir = input_json.get("sampleDir")
@@ -394,7 +425,7 @@ def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict
     )
 
 
-def _handle_archive_sample(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+def _handle_archive_sample(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
     from .sample_archive import archive_from_task_input
     from .sample_prep_log import append_sample_prep_log
 
@@ -416,7 +447,7 @@ def _handle_archive_sample(_capability: str, _action_name: str, input_json: Dict
     return result
 
 
-def _handle_upload_h5(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+def _handle_upload_h5(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
     from .sample_archive import upload_h5_from_task_input
     from .sample_prep_log import append_sample_prep_log
 
@@ -459,13 +490,15 @@ def _load_mc_config(input_json: Dict[str, Any]):
     return _load_config_from_project(base_project, request), base_project
 
 
-def _handle_validation_stability(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+def _handle_validation_stability(_capability: str, _action_name: str, input_json: Dict[str, Any]):
     from methyl_validation.stability import run_stability_analysis
+
+    from .task_models.validation_models import StabilitySummary, ValidationStabilityOutput
 
     mc_root = _resolve_monte_carlo_runs_root(input_json)
     config, _base = _load_mc_config(input_json)
     output_dir = Path(input_json.get("outputDir") or mc_root / "stability")
-    summary = run_stability_analysis(
+    summary_raw = run_stability_analysis(
         mc_root,
         output_dir=output_dir,
         dmp_min_freq=config.stability_dmp_min_frequency,
@@ -483,12 +516,24 @@ def _handle_validation_stability(_capability: str, _action_name: str, input_json
         tier_exploratory_frequency=config.stability_tier_exploratory_frequency,
         default_freeze_tier=config.stability_default_freeze_tier,
     )
-    return {"status": "ok", "summary": summary, "outputDir": str(output_dir)}
+    summary_path = output_dir / "stability_summary.json"
+    return ValidationStabilityOutput(
+        status="ok",
+        outputDir=str(output_dir),
+        summary=StabilitySummary(
+            n_iterations=summary_raw.get("n_iterations"),
+            n_stable_dmps=summary_raw.get("n_stable_dmps"),
+            n_stable_genes=summary_raw.get("n_stable_genes"),
+            dmp_min_frequency=summary_raw.get("dmp_min_frequency"),
+            gene_min_frequency=summary_raw.get("gene_min_frequency"),
+            summary_json_path=str(summary_path) if summary_path.is_file() else None,
+        ),
+    )
 
 
 def _handle_validation_biomarker_filter(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+) -> Dict[str, Any]:
     """In-process PPI-only biomarker gene pool filter on mapper combined genes."""
     from pathlib import Path
 
@@ -530,17 +575,21 @@ def _handle_validation_biomarker_filter(
         n_genes=int(len(filtered)),
         outputCsv=str(out_csv),
         biomarker_filter=summary,
-    ).model_dump()
+    )
 
 
 def _handle_validation_prepare_freeze(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+):
     from methyl_validation.stability import prepare_freeze_project
+
+    from .task_models.validation_models import ValidationPrepareFreezeOutput
 
     config, base_project = _load_mc_config(input_json)
     mc_root = _resolve_monte_carlo_runs_root(input_json)
-    stable_csv = input_json.get("stableDmpCsv") or config.freeze_stable_dmp_csv or str(mc_root / "stability" / "stable_dmps_production.csv")
+    stable_csv = input_json.get("stableDmpCsv") or config.freeze_stable_dmp_csv or str(
+        mc_root / "stability" / "stable_dmps_production.csv"
+    )
     result = prepare_freeze_project(
         base_project=base_project,
         stable_dmp_csv=str(stable_csv),
@@ -548,13 +597,21 @@ def _handle_validation_prepare_freeze(
         production_output_dir=input_json.get("productionOutputDir") or config.production_output_dir,
         config=config,
     )
-    return result
+    return ValidationPrepareFreezeOutput(
+        status="ok",
+        productionOutputDir=result.get("productionOutputDir") or result.get("production_output_dir"),
+        sourceRunDir=result.get("sourceRunDir"),
+        targetRunDir=result.get("targetRunDir"),
+        projectPath=result.get("projectPath") or str(base_project),
+    )
 
 
 def _handle_validation_stability_freeze_readiness(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+):
     from methyl_validation.stability_freeze_readiness import analyze_project_root
+
+    from .task_models.validation_models import ValidationFreezeReadinessOutput
 
     project_path = input_json.get("projectPath") or input_json.get("project")
     if not project_path:
@@ -564,12 +621,22 @@ def _handle_validation_stability_freeze_readiness(
     project = load_project(str(project_path))
     project_root = Path(project.output_base) / project.project_name
     report = analyze_project_root(project_root)
-    return {"status": "ok", "report": report, "verdict": report.get("verdict", {})}
+    verdict = report.get("verdict", {}) if isinstance(report, dict) else {}
+    missing = verdict.get("missing_artifacts") or verdict.get("missing") or []
+    if not isinstance(missing, list):
+        missing = []
+    ready = str(verdict.get("ready", verdict.get("status", ""))).lower() in {"ready", "pass", "true", "ok"}
+    return ValidationFreezeReadinessOutput(
+        status="ok",
+        ready=ready,
+        outputDir=str(project_root),
+        missing_artifacts=[str(x) for x in missing],
+    )
 
 
 def _handle_validation_link_artifacts(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+) -> Dict[str, Any]:
     from methyl_validation.project_gen import link_run_artifacts_from_source
 
     source = input_json.get("sourceRunDir")
@@ -582,7 +649,7 @@ def _handle_validation_link_artifacts(
 
 def _handle_validation_model_bundle(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+) -> Dict[str, Any]:
     from methyl_validation.model_bundle import build_model_feature_bundle
 
     project_path = input_json.get("projectPath") or input_json.get("project")
@@ -595,7 +662,7 @@ def _handle_validation_model_bundle(
 
 def _handle_validation_model_train(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+) -> Dict[str, Any]:
     backend = str(input_json.get("backend") or "tabular_sklearn")
     project_path = Path(input_json.get("projectPath") or input_json.get("project") or "")
     if not project_path.is_file():
@@ -621,7 +688,7 @@ def _handle_validation_model_train(
 
 def _handle_validation_model_predict(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+) -> Dict[str, Any]:
     backend = str(input_json.get("backend") or "tabular_sklearn")
     project_path = Path(input_json.get("projectPath") or input_json.get("project") or "")
     if not project_path.is_file():
@@ -644,7 +711,7 @@ def _handle_validation_model_predict(
 
 def _handle_validation_model_mc(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+) -> Dict[str, Any]:
     from methyl_validation.model_mc_runner import run_model_mc_all
 
     config, _base = _load_mc_config(input_json)
@@ -666,7 +733,7 @@ def _handle_validation_model_mc(
 
 def _handle_validation_select_best_model(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+) -> Dict[str, Any]:
     from methyl_validation.cli import _write_backend_ranking
     from methyl_validation.stability import build_production_model
 
@@ -705,7 +772,7 @@ def _handle_validation_select_best_model(
 
 def _handle_validation_post_model_validation(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> HandlerResult:
+) -> Dict[str, Any]:
     from methyl_validation.pipeline_runner import (
         run_post_model_validation_binary,
         run_post_model_validation_multiclass,
@@ -774,7 +841,7 @@ def _write_stub_extract_artifacts(sample_path: Path, sample_id: str) -> list[str
     return [h5_name]
 
 
-def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
+def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
     if not _stub_external_enabled():
         raise RuntimeError(
             f"No local handler for capability {capability!r}. "
@@ -841,19 +908,28 @@ def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[s
             "sampleArchived": True,
         }
     if capability == "methyl-qc":
+        from .handler_helpers import guardrails_from_payload, screening_from_payload
+
         qc_path = f"{sample_dir}/{sample_id}.qc.json" if sample_dir else f"{sample_id}.qc.json"
-        return {
-            "sampleId": sample_id,
-            "qcPath": qc_path,
-            "guardrails": {"overall_pass": True},
-            "screening": {
+        guardrails = guardrails_from_payload({"overall_pass": True})
+        screening = screening_from_payload(
+            {
                 "disposition": "PASS",
                 "trim_front1": 0,
                 "trim_tail1": 0,
                 "trim_front2": 0,
                 "trim_tail2": 0,
                 "message": "stub pass",
-            },
+            }
+        )
+        return {
+            "status": "ok",
+            "result_code": 0,
+            "sampleId": sample_id,
+            "qcPath": qc_path,
+            "guardrails": guardrails.model_dump(),
+            "screening": screening.model_dump(),
+            "qcHistory": [],
             "remediateAlignment": False,
             "remediateR2Trim": False,
         }
@@ -890,31 +966,6 @@ _SAMPLE_PREP_DOMAIN_ACTIONS = frozenset({
 })
 
 
-def _attach_domain_sample_ref(
-    action_name: str, input_json: Dict[str, Any], result: HandlerResult
-) -> HandlerResult:
-    sample_id = input_json.get("sampleId")
-    sample_dir = input_json.get("sampleDir")
-    if not sample_id or not sample_dir:
-        return result
-    try:
-        from methyl_domain.helpers import enrich_sample_prep_output
-        from methyl_domain.types import MethylSampleRef, to_tagged_json
-
-        existing = input_json.get("sample")
-        if isinstance(existing, dict) and existing.get("$type") == "MethylSampleRef":
-            sample = MethylSampleRef.model_validate(existing)
-        else:
-            sample = MethylSampleRef(sampleId=str(sample_id), sampleDir=str(sample_dir))
-        updated = enrich_sample_prep_output(action_name, sample, result)
-        out = dict(result)
-        out["domainSample"] = to_tagged_json(updated)
-        return out
-    except Exception:
-        logger.debug("domain sample enrichment skipped for %s", action_name, exc_info=True)
-        return result
-
-
 _STUB_EXTERNAL_CAPABILITIES = frozenset({
     "sample.download-fastq",
     "parabricks.fq2bam",
@@ -931,18 +982,79 @@ _STUB_EXTERNAL_CAPABILITIES = frozenset({
 })
 
 
-def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) -> HandlerResult:
-    """Run one ACTION and return output_json for sp_worker_submit_result."""
+def _attach_domain_sample_ref(
+    entry,
+    action_name: str,
+    input_json: Dict[str, Any],
+    result: ActionExecutionResult,
+) -> ActionExecutionResult:
+    sample_id = input_json.get("sampleId")
+    sample_dir = input_json.get("sampleDir")
+    if not sample_id or not sample_dir:
+        return result
+    try:
+        from methyl_domain.helpers import enrich_sample_prep_output
+        from methyl_domain.types import MethylSampleRef, to_tagged_json
+
+        existing = input_json.get("sample")
+        if isinstance(existing, dict) and existing.get("$type") == "MethylSampleRef":
+            sample = MethylSampleRef.model_validate(existing)
+        else:
+            sample = MethylSampleRef(sampleId=str(sample_id), sampleDir=str(sample_dir))
+        payload = result.output.model_dump(mode="json")
+        updated = enrich_sample_prep_output(action_name, sample, payload)
+        merged = {**payload, "domainSample": to_tagged_json(updated)}
+        from methyl_domain.action_result import utc_now
+
+        started = getattr(result.output, "started_at_utc", None) or utc_now()
+        finished = getattr(result.output, "finished_at_utc", None) or utc_now()
+        duration = getattr(result.output, "duration_ms", None) or 0
+        exit_code = getattr(result.output, "exit_code", None) or 0
+        manifest = getattr(result.output, "manifest_path", None)
+        output = finalize_output(
+            entry,
+            merged,
+            started_at=started,
+            finished_at=finished,
+            duration_ms=duration,
+            exit_code=exit_code,
+            manifest_path=manifest,
+        )
+        return ActionExecutionResult(result_code=result.result_code, output=output)
+    except Exception:
+        logger.debug("domain sample enrichment skipped for %s", action_name, exc_info=True)
+        return result
+
+
+def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) -> ActionExecutionResult:
+    """Run one ACTION and return typed output + branch result_code for sp_worker_submit_result."""
     entry = find_catalog_entry(action_name) or find_catalog_entry_by_capability(capability)
     if entry is None:
         raise RuntimeError(f"Unknown action {action_name!r} / capability {capability!r}")
 
     if _stub_external_enabled() and capability in _STUB_EXTERNAL_CAPABILITIES:
-        result = _handle_stub_external(capability, action_name, input_json)
+        from .action_execution import ExecutionTimer, execution_result_from_output, validate_input
+
+        input_model = validate_input(entry, input_json)
+        timer = ExecutionTimer()
+        raw = _handle_stub_external(capability, action_name, input_model.model_dump(mode="json"))
+        finished_at, duration_ms = timer.finish()
+        if isinstance(raw, BaseModel):
+            payload = raw.model_dump(mode="json")
+        else:
+            payload = dict(raw)
+        output = finalize_output(
+            entry,
+            payload,
+            started_at=timer.started_at,
+            finished_at=finished_at,
+            duration_ms=duration_ms,
+        )
+        result = execution_result_from_output(output)
     else:
         action = build_action_from_catalog(entry, sys.modules[__name__])
         result = action.execute(input_json)
 
     if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:
-        result = _attach_domain_sample_ref(action_name, input_json, result)
+        result = _attach_domain_sample_ref(entry, action_name, input_json, result)
     return result

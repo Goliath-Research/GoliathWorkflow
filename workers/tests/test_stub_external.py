@@ -26,7 +26,8 @@ def test_stub_methyl_extract_writes_manifest(tmp_path: Path, monkeypatch: pytest
         "sample.methyl_extract",
         {"sampleId": "S1", "sampleDir": str(sample_dir), "projectPath": "/tmp/project.json"},
     )
-    assert result["h5Files"] == ["21-CG.h5"]
+    out = result.output.model_dump()
+    assert out["h5Files"] == ["21-CG.h5"]
     assert (sample_dir / "21-CG.h5").is_file()
     manifest = json.loads((sample_dir / "S1.extraction_manifest.json").read_text(encoding="utf-8"))
     assert manifest["summary"]["cpg_weighted_mean_coverage"] == 20.0
@@ -53,5 +54,5 @@ def test_archive_sample_runs_real_handler_with_file_destination(tmp_path: Path) 
             },
         },
     )
-    assert result["archiveMode"] == "full"
+    assert result.output.model_dump()["archiveMode"] == "full"
     assert (archive_root / "S1" / "h5" / "21-CG.h5").read_bytes() == b"h5"

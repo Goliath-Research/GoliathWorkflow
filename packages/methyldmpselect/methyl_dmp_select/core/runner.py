@@ -59,7 +59,29 @@ def run_dmp_selection(
         logger.info("DMP selection outputs already exist for chr %s; skipping", config.chromosome)
         with open(audit_path, encoding="utf-8") as f:
             prior = json.load(f)
-        return {"status": "skipped", "audit": prior}
+        status = "skipped"
+        try:
+            from methyl_domain.action_result import atomic_write_json, manifest_path_for
+
+            manifest = manifest_path_for(out_dir, "pipeline.dmp_select", str(config.chromosome))
+            manifest_payload = {
+                "schema_version": "1.0",
+                "status": status,
+                "action_name": "pipeline.dmp_select",
+                "chromosome": config.chromosome,
+                "n_dmps_discovery": prior.get("n_dmps_discovery"),
+                "n_dmps_classifier": prior.get("n_dmps_classifier"),
+                "n_dmps_extended": prior.get("n_dmps_extended"),
+                "discovery_csv": prior.get("discovery_csv"),
+                "classifier_csv": str(out_dir / f"dmps-{config.chromosome}-classifier.csv"),
+                "extended_csv": str(out_dir / f"dmps-{config.chromosome}-classifier-extended.csv"),
+                "audit_path": str(audit_path),
+                "result_code": 0,
+            }
+            atomic_write_json(manifest, manifest_payload)
+        except Exception:
+            logger.debug("Could not write skipped DMP select manifest", exc_info=True)
+        return {"status": status, "audit": prior}
 
     discovery = _discovery_path(config)
     if not discovery.is_file():
@@ -101,4 +123,27 @@ def run_dmp_selection(
     with open(audit_path, "w", encoding="utf-8") as f:
         json.dump(audit, f, indent=2)
 
-    return {"status": "ok", "audit": audit, **result}
+    status = "ok"
+    manifest_payload = {
+        "schema_version": "1.0",
+        "status": status,
+        "action_name": "pipeline.dmp_select",
+        "chromosome": config.chromosome,
+        "n_dmps_discovery": audit["n_dmps_discovery"],
+        "n_dmps_classifier": audit["n_dmps_classifier"],
+        "n_dmps_extended": audit["n_dmps_extended"],
+        "discovery_csv": audit["discovery_csv"],
+        "classifier_csv": str(out_dir / f"dmps-{config.chromosome}-classifier.csv"),
+        "extended_csv": str(out_dir / f"dmps-{config.chromosome}-classifier-extended.csv"),
+        "audit_path": str(audit_path),
+        "result_code": 0,
+    }
+    try:
+        from methyl_domain.action_result import atomic_write_json, manifest_path_for
+
+        manifest = manifest_path_for(out_dir, "pipeline.dmp_select", str(config.chromosome))
+        atomic_write_json(manifest, manifest_payload)
+    except Exception:
+        logger.debug("Could not write DMP select action manifest", exc_info=True)
+
+    return {"status": status, "audit": audit, **result}

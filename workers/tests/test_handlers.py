@@ -11,11 +11,12 @@ from methyl_worker.handlers import execute_task
 
 
 def test_mark_failed_handler() -> None:
-    out = execute_task(
+    result = execute_task(
         "sample.mark-failed",
         "sample.qc_failed",
         {"sampleId": "S1", "sampleDir": "/work/samples/S1", "reason": "alignment_qc_failed"},
     )
+    out = result.output.model_dump()
     assert out["status"] == "QC_FAILED"
     assert out["sampleId"] == "S1"
 
@@ -44,7 +45,7 @@ def test_parabricks_idempotent_when_outputs_exist(tmp_path: Path) -> None:
         {"METHYL_PARABRICKS_IMAGE": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1"},
     ):
         with patch("methyl_worker.parabricks_runner.subprocess.run") as mock_run:
-            out = execute_task(
+            result = execute_task(
                 "parabricks.fq2bam",
                 "sample.parabricks_fq2bam",
                 {
@@ -55,6 +56,7 @@ def test_parabricks_idempotent_when_outputs_exist(tmp_path: Path) -> None:
             )
 
     mock_run.assert_not_called()
+    out = result.output.model_dump()
     assert out["bamPath"] == str(bam)
     assert out["metricsJson"] == str(metrics)
 
@@ -71,7 +73,7 @@ def test_methyl_extract_idempotent_when_outputs_exist(tmp_path: Path) -> None:
                 "sampleId": "S1",
                 "h5Files": ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"],
             }
-            out = execute_task(
+            result = execute_task(
                 "methyl-extract",
                 "sample.methyl_extract",
                 {
@@ -83,17 +85,18 @@ def test_methyl_extract_idempotent_when_outputs_exist(tmp_path: Path) -> None:
 
     mock_extract.assert_called_once()
     mock_run.assert_not_called()
+    out = result.output.model_dump()
     assert out["h5Files"] == ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
 
 
 def test_pipeline_cli_dispatch() -> None:
     with patch("methyl_worker.actions.base.subprocess.run") as mock_run:
         mock_run.return_value = type("R", (), {"returncode": 0, "stdout": "done", "stderr": ""})()
-        out = execute_task(
+        result = execute_task(
             "methyl-mapper",
             "pipeline.mapper",
             {"tool": "MethylMapper", "project": "/cfg/project.json"},
         )
     mock_run.assert_called_once()
     assert mock_run.call_args[0][0] == ["methyl-mapper", "--project", "/cfg/project.json"]
-    assert out["status"] == "ok"
+    assert result.output.model_dump()["status"] == "ok"

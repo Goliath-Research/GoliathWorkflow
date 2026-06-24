@@ -261,7 +261,6 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Input for sample.archive_sample (archive FASTQs, QC JSON, HDF5 to object storage).",
   "properties": {
     "alignmentQcPath": {
       "anyOf": [

@@ -7,6 +7,9 @@ import threading
 import time
 from typing import Optional
 
+from pydantic import BaseModel
+
+from .action_execution import ActionExecutionResult
 from .client import TaskClaim, WorkflowRestClient
 from .handlers import execute_task
 from .task_validation import (
@@ -67,15 +70,21 @@ class WorkerRunner:
 
         try:
             validate_task_input(claim.action_name, claim.capability, claim.input_json)
-            output = execute_task(claim.capability, claim.action_name, claim.input_json)
-            validate_task_output(claim.action_name, claim.capability, output)
+            execution = execute_task(claim.capability, claim.action_name, claim.input_json)
+            output_payload = _output_payload(execution.output)
+            validate_task_output(claim.action_name, claim.capability, output_payload)
             ack = self.client.submit_result(
-                ne_id, self.worker_id, self.worker_token, 0, output
+                ne_id,
+                self.worker_id,
+                self.worker_token,
+                execution.result_code,
+                output_payload,
             )
             logger.info(
-                "Submitted task %s (%s) accepted=%s instance=%s ready=%s",
+                "Submitted task %s (%s) result_code=%s accepted=%s instance=%s ready=%s",
                 ne_id,
                 claim.capability,
+                execution.result_code,
                 ack.accepted,
                 ack.instance_status,
                 ack.next_ready_count,
@@ -101,3 +110,7 @@ class WorkerRunner:
         finally:
             stop.set()
             hb_thread.join(timeout=1.0)
+
+
+def _output_payload(output: BaseModel) -> dict:
+    return output.model_dump(mode="json")

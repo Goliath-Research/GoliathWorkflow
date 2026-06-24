@@ -29,5 +29,6 @@ def test_methyl_extraction_qc_handler_writes_guardrails(tmp_path: Path) -> None:
         "sample.extraction_qc",
         {"sampleId": "S1", "sampleDir": str(sample_dir), "chromosomes": ["21"]},
     )
-    assert result["guardrails"]["overall_pass"] is True
-    assert Path(result["qcPath"]).name == "S1.extraction_qc.json"
+    out = result.output.model_dump()
+    assert out["guardrails"]["overall_pass"] is True
+    assert Path(out["qcPath"]).name == "S1.extraction_qc.json"
