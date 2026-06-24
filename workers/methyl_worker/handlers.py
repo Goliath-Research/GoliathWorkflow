@@ -557,6 +557,8 @@ def _load_mc_config(input_json: Dict[str, Any]):
 def _handle_validation_stability(_capability: str, _action_name: str, input: BaseModel):
     input_json: Dict[str, Any] = input.model_dump(mode="json")
 
+    from methyl_validation.stability import run_stability_analysis
+
     from .task_models.validation_models import StabilitySummary, ValidationStabilityOutput
 
     mc_root = _resolve_monte_carlo_runs_root(input_json)
