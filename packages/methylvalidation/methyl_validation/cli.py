@@ -1413,7 +1413,7 @@ def main() -> None:
             ctx = _json.loads(wf_args.context_file.read_text(encoding="utf-8"))
         if wf_args.context:
             ctx.update(_json.loads(wf_args.context))
-        repo = _Path(__file__).resolve().parents[2]
+        repo = _Path(__file__).resolve().parents[3]
         for rel in ("workflow_engine/local", "workflow_engine/domain", "workflow_engine/contract", "workers"):
             p = repo / rel
             if str(p) not in sys.path:
