@@ -27,6 +27,18 @@ if str(_WORKERS) not in sys.path:
 ActionHandler = Callable[[str, str, Dict[str, Any]], Dict[str, Any]]
 
 
+class NodeExecutionError(RuntimeError):
+    """Wraps scheduler failures with workflow node context."""
+
+    def __init__(self, node_key: str, node_type: str, action_name: str | None, cause: BaseException):
+        self.node_key = node_key
+        self.node_type = node_type
+        self.action_name = action_name
+        self.cause = cause
+        label = action_name or node_type
+        super().__init__(f"node {node_key!r} ({label}): {cause}")
+
+
 @dataclass
 class SchedulerConfig:
     parallel_workers: int = 4
@@ -65,6 +77,19 @@ class WorkflowScheduler:
         node = self.graph.nodes[node_key]
         apply_scope_defaults(self.spec, scope, node_key)
 
+        try:
+            self._execute_node_inner(node_key, node, scope)
+        except NodeExecutionError:
+            raise
+        except Exception as exc:
+            raise NodeExecutionError(
+                node_key,
+                node.node_type,
+                node.action_name,
+                exc,
+            ) from exc
+
+    def _execute_node_inner(self, node_key: str, node: WorkflowNodeSpec, scope: ScopeFrame) -> None:
         if node.node_type == "SEQUENCE":
             for child in self.graph.child_keys(node_key, "SEQUENCE"):
                 self._execute_node(child, scope)
@@ -79,11 +104,20 @@ class WorkflowScheduler:
                     self._execute_node(child, scope.child())
                 return
             with ThreadPoolExecutor(max_workers=self.config.parallel_workers) as pool:
-                futures = [
-                    pool.submit(self._execute_node, child, scope.child()) for child in children
-                ]
+                futures = {
+                    pool.submit(self._execute_node, child, scope.child()): child for child in children
+                }
                 for fut in as_completed(futures):
-                    fut.result()
+                    try:
+                        fut.result()
+                    except NodeExecutionError as exc:
+                        child_key = futures[fut]
+                        raise NodeExecutionError(
+                            node_key,
+                            "PARALLEL",
+                            None,
+                            RuntimeError(f"parallel child {child_key!r} failed: {exc.cause}"),
+                        ) from exc
             return
 
         if node.node_type == "FOREACH":

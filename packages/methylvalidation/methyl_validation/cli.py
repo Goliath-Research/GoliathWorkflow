@@ -1401,13 +1401,14 @@ def main() -> None:
         wf_parser.add_argument("--context", type=str, default=None, help="context_json inline")
         wf_parser.add_argument("--context-file", type=_Path, default=None, help="context_json file")
         wf_parser.add_argument("--stub-external", action="store_true")
-        wf_parser.add_argument("--parallel-workers", type=int, default=4)
+        wf_parser.add_argument("--parallel-workers", type=int, default=1)
         wf_args = wf_parser.parse_args(sys.argv[2:])
         import json as _json
         import os as _os
 
         if wf_args.stub_external:
             _os.environ["WORKER_STUB_EXTERNAL"] = "1"
+        _os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
         ctx: dict = {}
         if wf_args.context_file:
             ctx = _json.loads(wf_args.context_file.read_text(encoding="utf-8"))

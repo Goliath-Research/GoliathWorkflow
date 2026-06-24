@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -87,6 +88,7 @@ class LocalWorkflowEngine:
         scope_data = resolve_collection_bindings(spec.collection_bindings, context)
         scope = ScopeFrame(scope_data)
         handler = self._handler or self._default_handler()
+        os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
         try:
             scheduler = WorkflowScheduler(

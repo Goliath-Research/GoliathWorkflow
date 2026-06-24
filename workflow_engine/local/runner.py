@@ -36,8 +36,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--parallel-workers",
         type=int,
-        default=4,
-        help="Thread pool size for PARALLEL / parallel FOREACH",
+        default=1,
+        help="Thread pool size for PARALLEL / parallel FOREACH (use 1 on NFS/GPU to avoid lock/OOM races)",
     )
     parser.add_argument(
         "--stub-external",
@@ -54,6 +54,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.stub_external:
         os.environ["WORKER_STUB_EXTERNAL"] = "1"
+
+    # NFS / shared mounts (e.g. /work): avoid HDF5 file-lock failures during parallel centroids.
+    os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
 
     context: dict = {}
     if args.context_file:

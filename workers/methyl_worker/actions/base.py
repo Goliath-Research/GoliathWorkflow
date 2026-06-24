@@ -120,12 +120,29 @@ class CliAction:
             cmd.extend([self.argv_map[self.project_keys[0]], self._project_path(input_json)])
         return cmd
 
+    @staticmethod
+    def _format_subprocess_failure(cmd: List[str], proc: subprocess.CompletedProcess[str]) -> str:
+        parts = [f"{cmd[0]} exited {proc.returncode}"]
+        for label, text in (("stderr", proc.stderr), ("stdout", proc.stdout)):
+            tail = (text or "").strip()
+            if not tail:
+                continue
+            lines = tail.splitlines()
+            if len(lines) > 40:
+                tail = "\n".join(lines[-40:])
+                parts.append(f"{label} (last 40 lines):\n{tail}")
+            else:
+                parts.append(f"{label}:\n{tail}")
+        if len(parts) == 1:
+            parts.append("no stderr/stdout captured")
+        return "\n".join(parts)
+
     def execute(self, input_json: Dict[str, Any]) -> HandlerResult:
         cmd = self.build_argv(input_json)
         logger.info("Running: %s", " ".join(cmd))
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
         if proc.returncode != 0:
-            raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or f"{cmd[0]} failed")
+            raise RuntimeError(self._format_subprocess_failure(cmd, proc))
         return {
             "status": "ok",
             "tool": self.cli_tool,
