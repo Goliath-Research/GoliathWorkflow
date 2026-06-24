@@ -275,6 +275,47 @@ def run_single_processing(
         print("\n✅ Processing completed successfully!")
         print(f"💾 Final centroid: {results.final_centroid_path}")
 
+        try:
+            from methyl_domain.action_result import atomic_write_json, manifest_path_for
+
+            out_dir = Path(str(config.output_dir))
+            run_key_parts = [str(config.chrom), str(config.ctx), str(config.group)]
+            run_key = "_".join(p for p in run_key_parts if p) or "default"
+            manifest = manifest_path_for(out_dir, "pipeline.centroid", run_key)
+            n_positions = None
+            h5_path = Path(results.final_centroid_path)
+            if h5_path.is_file():
+                try:
+                    import h5py
+
+                    with h5py.File(h5_path, "r") as f:
+                        if "positions" in f:
+                            n_positions = int(f["positions"].shape[0])
+                except Exception:
+                    pass
+            atomic_write_json(
+                manifest,
+                {
+                    "schema_version": "1.0",
+                    "status": "ok",
+                    "action_name": "pipeline.centroid",
+                    "group": str(config.group),
+                    "chromosome": str(config.chrom),
+                    "context": str(config.ctx),
+                    "output_dir": str(out_dir),
+                    "centroid_h5_path": str(h5_path),
+                    "n_samples": results.total_samples_processed,
+                    "n_positions": n_positions,
+                    "result_code": 0,
+                },
+            )
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).debug(
+                "Could not write centroid action manifest", exc_info=True
+            )
+
         return results
 
     except Exception as e:

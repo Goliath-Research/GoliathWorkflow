@@ -221,6 +221,36 @@ def write_project_completeness_manifest(
     }
     path = root / COMPLETENESS_MANIFEST_FILENAME
     path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    try:
+        from methyl_domain.action_result import atomic_write_json, manifest_path_for
+
+        comparison = None
+        if len(comparison_reports) == 1:
+            comparison = next(iter(comparison_reports))
+        run_key = str(comparison) if comparison else "default"
+        manifest = manifest_path_for(root, "pipeline.enricher", run_key)
+        atomic_write_json(
+            manifest,
+            {
+                "schema_version": "1.0",
+                "status": "ok",
+                "action_name": "pipeline.enricher",
+                "comparison": comparison,
+                "output_dir": str(root),
+                "all_complete": all_complete,
+                "completeness_manifest_path": str(path),
+                "n_comparisons": len(comparison_reports),
+                "result_code": 0 if all_complete else 1,
+            },
+        )
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).debug(
+            "Could not write enricher action manifest", exc_info=True
+        )
+
     return path
 
 

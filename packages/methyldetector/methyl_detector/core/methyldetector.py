@@ -4391,6 +4391,39 @@ class MethylDetector:
                 summary_lines.append(f"Model Accuracy (centroids): {training_accuracy * 100:.1f}%")
         save_summary_txt(summary_lines, output_dir / f"summary{suffix}.txt")
 
+        try:
+            from methyl_domain.action_result import atomic_write_json, manifest_path_for
+
+            discovery_csv = output_dir / f"dmps-{chrom}-discovery.csv"
+            result_json_path = output_dir / f"result{suffix}.json"
+            group = None
+            if isinstance(result.config_summary, dict):
+                group = result.config_summary.get("group") or result.config_summary.get("comparison")
+            run_key_parts = [str(chrom), str(ctx)]
+            if group:
+                run_key_parts.append(str(group))
+            run_key = "_".join(run_key_parts) or "default"
+            manifest = manifest_path_for(output_dir, "pipeline.detector", run_key)
+            atomic_write_json(
+                manifest,
+                {
+                    "schema_version": "1.0",
+                    "status": "ok",
+                    "action_name": "pipeline.detector",
+                    "group": str(group) if group else None,
+                    "chromosome": str(chrom),
+                    "context": str(ctx),
+                    "output_dir": str(output_dir),
+                    "n_statistical_dmps": result.total_statistical_dmps,
+                    "n_biological_dmps": result.total_biological_dmps,
+                    "discovery_csv": str(discovery_csv) if discovery_csv.is_file() else None,
+                    "result_json_path": str(result_json_path) if result_json_path.is_file() else None,
+                    "result_code": 0,
+                },
+            )
+        except Exception:
+            logger.debug("Could not write detector action manifest", exc_info=True)
+
 
 def _setup_imports_for_direct_execution():
     """Set up imports when running this file directly."""

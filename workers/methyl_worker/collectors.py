@@ -364,6 +364,62 @@ class CentroidLegacyCollector(ArtifactCollector):
         return payload
 
 
+class EnricherLegacyCollector(ArtifactCollector):
+    def collect(
+        self,
+        input_json: Mapping[str, Any],
+        *,
+        action_name: str,
+        stdout: str = "",
+    ) -> Dict[str, Any]:
+        from methyl_enricher.enricher_completeness import (
+            COMPLETENESS_MANIFEST_FILENAME,
+            production_enricher_root,
+        )
+
+        comparison = input_json.get("group") or input_json.get("comparison")
+        payload: Dict[str, Any] = {
+            "status": "ok",
+            "comparison": str(comparison) if comparison else None,
+            "stdout_tail": stdout[-500:] if stdout else None,
+        }
+        project = input_json.get("projectPath") or input_json.get("project")
+        if not project:
+            return payload
+        try:
+            root = production_enricher_root(Path(str(project)))
+            payload["output_dir"] = str(root)
+            manifest_path = root / COMPLETENESS_MANIFEST_FILENAME
+            if manifest_path.is_file():
+                with open(manifest_path, encoding="utf-8") as f:
+                    data = json.load(f)
+                payload["all_complete"] = data.get("all_complete")
+                payload["completeness_manifest_path"] = str(manifest_path)
+                comparisons = data.get("comparisons") or {}
+                if isinstance(comparisons, dict):
+                    payload["n_comparisons"] = len(comparisons)
+                    if comparison and str(comparison) in comparisons:
+                        payload["comparison"] = str(comparison)
+        except Exception:
+            pass
+        return payload
+
+
+def _resolve_enricher_output_dir(input_json: Mapping[str, Any]) -> Optional[str]:
+    explicit = input_json.get("outputDir")
+    if explicit:
+        return str(explicit)
+    project = input_json.get("projectPath") or input_json.get("project")
+    if not project:
+        return None
+    try:
+        from methyl_enricher.enricher_completeness import production_enricher_root
+
+        return str(production_enricher_root(Path(str(project))))
+    except Exception:
+        return None
+
+
 class GenericPipelineCollector(ArtifactCollector):
     """Minimal collector for pipeline tools without bespoke artifact scraping yet."""
 

@@ -20,6 +20,7 @@ def test_model_mc_handler_delegates_to_runner(tmp_path: Path) -> None:
         "status": "ok",
         "modelMcRoot": str(mc_root / "model_mc"),
         "backends": ["ecdf"],
+        "nSharedIterations": 3,
     }
 
     with patch.object(model_mc_runner, "run_model_mc_all", return_value=fake_result) as mock_run:
@@ -38,5 +39,5 @@ def test_model_mc_handler_delegates_to_runner(tmp_path: Path) -> None:
             )
 
     mock_run.assert_called_once()
-    assert out["modelMcRoot"].endswith("model_mc")
-    assert out["backends"] == ["ecdf"]
+    assert out.modelMcRoot.endswith("model_mc")
+    assert out.n_iterations == 3

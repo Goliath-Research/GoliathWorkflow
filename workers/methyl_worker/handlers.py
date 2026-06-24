@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-Handler = Callable[[str, str, Dict[str, Any]], BaseModel | Dict[str, Any]]
+Handler = Callable[[str, str, Dict[str, Any]], BaseModel]
 
 from .action_execution import ActionExecutionResult, finalize_output
 from .action_catalog import (
@@ -152,7 +152,9 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input_json: Dict[str,
 
 def _handle_methyl_extraction_qc(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> Dict[str, Any]:
+) -> "ExtractionQcTaskOutput":
+    from .task_models.sample_prep_models import ExtractionQcTaskOutput
+
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     if not sample_dir or not sample_id:
@@ -185,7 +187,6 @@ def _handle_methyl_extraction_qc(
     from .sample_prep_log import append_sample_prep_log
 
     from .handler_helpers import guardrails_from_payload
-    from .task_models.sample_prep_models import ExtractionQcTaskOutput
 
     payload = json.loads(qc_path.read_text(encoding="utf-8"))
     guardrails_raw = payload.get("guardrails") or {}
@@ -215,7 +216,9 @@ def _handle_methyl_extraction_qc(
 
 def _handle_methyl_fragmentomics(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> Dict[str, Any]:
+):
+    from .task_models.sample_prep_models import FragmentomicsTaskOutput
+
     project = input_json.get("project") or input_json.get("projectPath")
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
@@ -242,11 +245,24 @@ def _handle_methyl_fragmentomics(
     )
 
     sid = sample_id or sample_path.name
-    return {
-        "sampleId": sid,
-        "outputDir": str(Path(out_dir) / sid),
-        "summary": summary.get("samples", {}).get(sid, {}),
-    }
+    sample_summary = summary.get("samples", {}).get(sid, {}) if isinstance(summary, dict) else {}
+    sample_out = Path(out_dir) / sid
+    summary_path = None
+    n_fragments = None
+    for candidate in ("fragmentomics_summary.json", "summary.json"):
+        p = sample_out / candidate
+        if p.is_file():
+            summary_path = str(p)
+            break
+    if isinstance(sample_summary, dict):
+        n_fragments = sample_summary.get("n_fragments")
+    return FragmentomicsTaskOutput(
+        status="ok",
+        sampleId=sid,
+        outputDir=str(sample_out),
+        n_fragments=n_fragments,
+        summary_path=summary_path,
+    )
 
 
 def _handle_validation_plan_iterations(
@@ -288,19 +304,26 @@ def _handle_mark_failed(_capability: str, _action_name: str, input_json: Dict[st
     )
 
 
-def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
+def _handle_download_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> DownloadFastqTaskOutput:
     from .fastq_source import download_from_source
-    from .task_models import DownloadFastqTaskInput
+    from .task_models import DownloadFastqTaskInput, DownloadFastqTaskOutput
 
     task = DownloadFastqTaskInput.model_validate(input_json)
     dest = Path(str(task.sampleDir))
     fastq_files = download_from_source(task.fastqSource, dest)
-    return {"sampleId": task.sampleId or dest.name, "fastqFiles": fastq_files}
+    sample_id = task.sampleId or dest.name
+    return DownloadFastqTaskOutput(
+        status="ok",
+        sampleId=sample_id,
+        fastqFiles=fastq_files,
+        n_files=len(fastq_files),
+    )
 
 
-def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
+def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> TrimFastqTaskOutput:
     from .fastq_trim_runner import run_fastp_trim
     from .sample_prep_log import append_sample_prep_log
+    from .task_models.sample_prep_models import TrimFastqTaskOutput
 
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
@@ -333,12 +356,13 @@ def _handle_trim_fastq(_capability: str, _action_name: str, input_json: Dict[str
         outputs=result,
         workflow_node_key=input_json.get("workflowNodeKey") or "trim_fastq",
     )
-    return result
+    return TrimFastqTaskOutput(status="ok", **result)
 
 
-def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
+def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> ParabricksTaskOutput:
     from .parabricks_runner import run_fq2bam_meth
     from .sample_prep_log import append_sample_prep_log
+    from .task_models.sample_prep_models import ParabricksTaskOutput
 
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
@@ -374,10 +398,12 @@ def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input_json: D
         outputs=result,
         workflow_node_key=input_json.get("workflowNodeKey") or "parabricks_fq2bam",
     )
-    return result
+    return ParabricksTaskOutput(status="ok", **result)
 
 
-def _handle_delete_fastqs(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
+def _handle_delete_fastqs(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> DeleteTaskOutput:
+    from .task_models.sample_prep_models import DeleteTaskOutput
+
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     if not sample_dir:
@@ -388,10 +414,17 @@ def _handle_delete_fastqs(_capability: str, _action_name: str, input_json: Dict[
         for path in sample_path.glob(pattern):
             path.unlink(missing_ok=True)
             removed += 1
-    return {"sampleId": sample_id or sample_path.name, "deleted": True, "removedCount": removed}
+    return DeleteTaskOutput(
+        status="ok",
+        sampleId=sample_id or sample_path.name,
+        deleted=True,
+        n_files_removed=removed,
+    )
 
 
-def _handle_delete_bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
+def _handle_delete_bam(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> DeleteTaskOutput:
+    from .task_models.sample_prep_models import DeleteTaskOutput
+
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
     if not sample_dir or not sample_id:
@@ -403,11 +436,17 @@ def _handle_delete_bam(_capability: str, _action_name: str, input_json: Dict[str
         if path.is_file():
             path.unlink()
             removed += 1
-    return {"sampleId": sample_id, "deleted": True, "removedCount": removed}
+    return DeleteTaskOutput(
+        status="ok",
+        sampleId=sample_id,
+        deleted=True,
+        n_files_removed=removed,
+    )
 
 
-def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
+def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict[str, Any]):
     from .extract_runner import run_methyl_extract
+    from .task_models.sample_prep_models import MethylExtractTaskOutput
 
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
@@ -417,17 +456,25 @@ def _handle_methyl_extract(_capability: str, _action_name: str, input_json: Dict
     if not project:
         raise RuntimeError("sample.methyl_extract requires project")
 
-    return run_methyl_extract(
+    raw = run_methyl_extract(
         sample_id=str(sample_id),
         sample_dir=str(sample_dir),
         project=str(project),
         input_json=input_json,
     )
+    h5_files = list(raw.get("h5Files") or [])
+    return MethylExtractTaskOutput(
+        status="ok",
+        sampleId=str(raw.get("sampleId") or sample_id),
+        h5Files=h5_files,
+        n_h5_files=len(h5_files),
+    )
 
 
-def _handle_archive_sample(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
+def _handle_archive_sample(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> ArchiveSampleTaskOutput:
     from .sample_archive import archive_from_task_input
     from .sample_prep_log import append_sample_prep_log
+    from .task_models.sample_prep_models import ArchiveSampleTaskOutput
 
     result = archive_from_task_input(input_json)
     sample_dir = input_json.get("sampleDir")
@@ -444,12 +491,13 @@ def _handle_archive_sample(_capability: str, _action_name: str, input_json: Dict
             outputs=result,
             workflow_node_key=input_json.get("workflowNodeKey") or "archive_sample",
         )
-    return result
+    return ArchiveSampleTaskOutput(status="ok", **result)
 
 
-def _handle_upload_h5(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
+def _handle_upload_h5(_capability: str, _action_name: str, input_json: Dict[str, Any]) -> UploadH5TaskOutput:
     from .sample_archive import upload_h5_from_task_input
     from .sample_prep_log import append_sample_prep_log
+    from .task_models.sample_prep_models import UploadH5TaskOutput
 
     result = upload_h5_from_task_input(input_json)
     sample_dir = input_json.get("sampleDir")
@@ -466,7 +514,7 @@ def _handle_upload_h5(_capability: str, _action_name: str, input_json: Dict[str,
             outputs=result,
             workflow_node_key=input_json.get("workflowNodeKey") or "upload_h5",
         )
-    return result
+    return UploadH5TaskOutput(status="ok", **result)
 
 
 def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:
@@ -533,7 +581,7 @@ def _handle_validation_stability(_capability: str, _action_name: str, input_json
 
 def _handle_validation_biomarker_filter(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> Dict[str, Any]:
+):
     """In-process PPI-only biomarker gene pool filter on mapper combined genes."""
     from pathlib import Path
 
@@ -636,33 +684,48 @@ def _handle_validation_stability_freeze_readiness(
 
 def _handle_validation_link_artifacts(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> Dict[str, Any]:
+):
     from methyl_validation.project_gen import link_run_artifacts_from_source
+
+    from .task_models.validation_models import ValidationLinkArtifactsOutput
 
     source = input_json.get("sourceRunDir")
     target = input_json.get("targetRunDir") or input_json.get("runDir")
     if not source or not target:
         raise RuntimeError("validation.link_artifacts requires sourceRunDir and targetRunDir")
     linked = link_run_artifacts_from_source(source, target)
-    return {"status": "ok", **linked}
+    return ValidationLinkArtifactsOutput(
+        status="ok",
+        bundleDir=str(linked.get("targetRunDir") or target),
+        linked_files=[str(x) for x in (linked.get("linked") or [])],
+    )
 
 
 def _handle_validation_model_bundle(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> Dict[str, Any]:
+):
     from methyl_validation.model_bundle import build_model_feature_bundle
+
+    from .task_models.validation_models import ValidationModelBundleOutput
 
     project_path = input_json.get("projectPath") or input_json.get("project")
     if not project_path:
         raise RuntimeError("validation.model_bundle requires projectPath")
     bundle_dir = Path(input_json.get("bundleDir") or Path(str(project_path)).parent / "model_bundle")
     manifest = build_model_feature_bundle(str(project_path), bundle_dir)
-    return {"status": "ok", "bundleDir": str(bundle_dir), "manifest": str(manifest)}
+    bundle_h5 = bundle_dir / "model_feature_bundle.h5"
+    return ValidationModelBundleOutput(
+        status="ok",
+        bundleDir=str(bundle_dir),
+        bundleH5=str(bundle_h5) if bundle_h5.is_file() else str(manifest),
+    )
 
 
 def _handle_validation_model_train(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> Dict[str, Any]:
+):
+    from .task_models.validation_models import ValidationModelTrainOutput
+
     backend = str(input_json.get("backend") or "tabular_sklearn")
     project_path = Path(input_json.get("projectPath") or input_json.get("project") or "")
     if not project_path.is_file():
@@ -683,12 +746,22 @@ def _handle_validation_model_train(
         raise RuntimeError(
             f"validation.model_train does not support backend={backend!r}; use pipeline.classifier for ecdf"
         )
-    return {"status": "ok", "backend": backend, "summary": summary, "outputDir": str(output_dir)}
+    model_path = str(summary) if not isinstance(summary, dict) else summary.get("model_path")
+    if model_path is None:
+        candidate = output_dir / "tabular-model.joblib"
+        model_path = str(candidate) if candidate.is_file() else str(output_dir)
+    return ValidationModelTrainOutput(
+        status="ok",
+        model_path=str(model_path),
+        backend=backend,
+    )
 
 
 def _handle_validation_model_predict(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> Dict[str, Any]:
+):
+    from .task_models.validation_models import ValidationModelPredictOutput
+
     backend = str(input_json.get("backend") or "tabular_sklearn")
     project_path = Path(input_json.get("projectPath") or input_json.get("project") or "")
     if not project_path.is_file():
@@ -697,7 +770,8 @@ def _handle_validation_model_predict(
     if backend == "tabular_sklearn":
         from methyl_validation.tabular_backend import predict_tabular_model_from_project
 
-        summary = predict_tabular_model_from_project(project_path, output_dir=run_dir)
+        model_dir = run_dir / "models"
+        summary = predict_tabular_model_from_project(project_path, model_dir, run_dir)
     elif backend == "generative_hybrid":
         from methyl_validation.generative_backend import predict_generative_model_from_project
 
@@ -706,13 +780,30 @@ def _handle_validation_model_predict(
         raise RuntimeError(
             f"validation.model_predict does not support backend={backend!r}; use pipeline.predictor for ecdf"
         )
-    return {"status": "ok", "backend": backend, "summary": summary, "runDir": str(run_dir)}
+    predictions_path = run_dir / "predictions.csv"
+    n_samples = None
+    if isinstance(summary, dict):
+        n_samples = summary.get("n_samples")
+    if n_samples is None and predictions_path.is_file():
+        try:
+            import pandas as pd
+
+            n_samples = len(pd.read_csv(predictions_path))
+        except Exception:
+            n_samples = None
+    return ValidationModelPredictOutput(
+        status="ok",
+        predictions_path=str(predictions_path) if predictions_path.is_file() else None,
+        n_samples=int(n_samples) if n_samples is not None else None,
+    )
 
 
 def _handle_validation_model_mc(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> Dict[str, Any]:
+):
     from methyl_validation.model_mc_runner import run_model_mc_all
+
+    from .task_models.validation_models import ValidationModelMcOutput
 
     config, _base = _load_mc_config(input_json)
     mc_root = _resolve_monte_carlo_runs_root(input_json)
@@ -722,20 +813,27 @@ def _handle_validation_model_mc(
     production_project = production_dir / "project.json"
     backends = input_json.get("backends")
     resume = input_json.get("resume")
-    return run_model_mc_all(
+    raw = run_model_mc_all(
         production_project=production_project,
         monte_carlo_runs_root=mc_root,
         config=config,
         backends=list(backends) if backends else None,
         resume=int(resume) if resume is not None else None,
     )
+    return ValidationModelMcOutput(
+        status="ok",
+        modelMcRoot=str(raw.get("modelMcRoot") or mc_root / "model_mc"),
+        n_iterations=int(raw.get("nSharedIterations") or 0),
+    )
 
 
 def _handle_validation_select_best_model(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> Dict[str, Any]:
+):
     from methyl_validation.cli import _write_backend_ranking
     from methyl_validation.stability import build_production_model
+
+    from .task_models.validation_models import ValidationSelectBestModelOutput
 
     config, _base = _load_mc_config(input_json)
     mc_root = _resolve_monte_carlo_runs_root(input_json)
@@ -752,8 +850,6 @@ def _handle_validation_select_best_model(
     )
     production_dir = Path(summary.get("output_dir") or mc_root / "production")
     selection_path = production_dir / "selected_backend.json"
-    import json
-
     selection_payload = {
         "selected_backend": best_backend,
         "selection_metric": metric,
@@ -761,23 +857,25 @@ def _handle_validation_select_best_model(
         "ranking": ranking,
     }
     selection_path.write_text(json.dumps(selection_payload, indent=2) + "\n", encoding="utf-8")
-    return {
-        "status": "ok",
-        "selectedBackend": best_backend,
-        "ranking": ranking,
-        "productionSummary": summary,
-        "selectionPath": str(selection_path),
-    }
+    selection_stat = ranking[0].get(stat) if ranking else None
+    return ValidationSelectBestModelOutput(
+        status="ok",
+        selectedBackend=best_backend,
+        selectionMetric=metric,
+        selectionStat=float(selection_stat) if selection_stat is not None else None,
+    )
 
 
 def _handle_validation_post_model_validation(
     _capability: str, _action_name: str, input_json: Dict[str, Any]
-) -> Dict[str, Any]:
+):
     from methyl_validation.pipeline_runner import (
         run_post_model_validation_binary,
         run_post_model_validation_multiclass,
     )
     from methyl_validation.project_gen import infer_monte_carlo_layout
+
+    from .task_models.validation_models import ValidationPostModelValidationOutput
 
     config, base_project = _load_mc_config(input_json)
     mc_root = _resolve_monte_carlo_runs_root(input_json)
@@ -804,13 +902,19 @@ def _handle_validation_post_model_validation(
             logs_dir=run_dir / "logs",
             config=config,
         )
-    return {
-        "status": "ok" if success else "failed",
-        "success": success,
-        "errors": errors,
-        "timings": timings,
-        "runDir": str(run_dir),
-    }
+    report_path = run_dir / "post_model_validation_report.json"
+    if not report_path.is_file():
+        report_path.write_text(
+            json.dumps({"success": success, "errors": errors, "timings": timings}, indent=2),
+            encoding="utf-8",
+        )
+    return ValidationPostModelValidationOutput(
+        status="ok" if success else "failed",
+        result_code=0 if success else 1,
+        outputDir=str(run_dir),
+        report_path=str(report_path),
+        passed=success,
+    )
 
 
 def _stub_external_enabled() -> bool:
@@ -841,12 +945,26 @@ def _write_stub_extract_artifacts(sample_path: Path, sample_id: str) -> list[str
     return [h5_name]
 
 
-def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
+def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[str, Any]) -> BaseModel:
     if not _stub_external_enabled():
         raise RuntimeError(
             f"No local handler for capability {capability!r}. "
             "Implement a domain worker or set WORKER_STUB_EXTERNAL=1 for dry-run."
         )
+
+    from .task_models.sample_prep_models import (
+        ArchiveSampleTaskOutput,
+        DeleteTaskOutput,
+        DownloadFastqTaskOutput,
+        ExtractionQcTaskOutput,
+        FragmentomicsTaskOutput,
+        MarkFailedTaskOutput,
+        MethylExtractTaskOutput,
+        MethylQcTaskOutput,
+        ParabricksTaskOutput,
+        TrimFastqTaskOutput,
+        UploadH5TaskOutput,
+    )
 
     logger.warning("WORKER_STUB_EXTERNAL: faking success for %s", capability)
     sample_id = str(input_json.get("sampleId", "unknown"))
@@ -860,10 +978,13 @@ def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[s
                 fq = sample_path / f"{sample_id}{suffix}"
                 if not fq.is_file():
                     fq.touch()
-        return {
-            "sampleId": sample_id,
-            "fastqFiles": [f"{sample_id}_1.fastq.gz", f"{sample_id}_2.fastq.gz"],
-        }
+        files = [f"{sample_id}_1.fastq.gz", f"{sample_id}_2.fastq.gz"]
+        return DownloadFastqTaskOutput(
+            status="ok",
+            sampleId=sample_id,
+            fastqFiles=files,
+            n_files=len(files),
+        )
     if capability == "parabricks.fq2bam":
         bam = f"{sample_dir}/{sample_id}.bam" if sample_dir else f"{sample_id}.bam"
         if sample_path is not None:
@@ -872,41 +993,49 @@ def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[s
             metrics = sample_path / f"{sample_id}.json"
             if not metrics.is_file():
                 metrics.write_text('{"guardrails": {"overall_pass": true}}', encoding="utf-8")
-        return {
-            "sampleId": sample_id,
-            "bamPath": bam,
-            "metricsJson": f"{sample_dir}/{sample_id}.json" if sample_dir else f"{sample_id}.json",
-            "qcMetricsTar": (
+        return ParabricksTaskOutput(
+            status="ok",
+            sampleId=sample_id,
+            bamPath=bam,
+            metricsJson=f"{sample_dir}/{sample_id}.json" if sample_dir else f"{sample_id}.json",
+            qcMetricsTar=(
                 f"{sample_dir}/{sample_id}.qc-metrics.tar" if sample_dir else f"{sample_id}.qc-metrics.tar"
             ),
-        }
+        )
     if capability == "sample.delete-fastqs":
-        return {"sampleId": sample_id, "deleted": True}
+        return DeleteTaskOutput(status="ok", sampleId=sample_id, deleted=True, n_files_removed=0)
     if capability == "sample.trim-fastq":
-        return {
-            "sampleId": sample_id,
-            "trimFront2": str(input_json.get("trimFront2", 5)),
-            "trimmedR1": f"{sample_dir}/{sample_id}_1.trimmed.fastq.gz",
-            "trimmedR2": f"{sample_dir}/{sample_id}_2.trimmed.fastq.gz",
-        }
+        return TrimFastqTaskOutput(
+            status="ok",
+            sampleId=sample_id,
+            trimFront2=str(input_json.get("trimFront2", 5)),
+            trimmedR1=f"{sample_dir}/{sample_id}_1.trimmed.fastq.gz",
+            trimmedR2=f"{sample_dir}/{sample_id}_2.trimmed.fastq.gz",
+        )
     if capability == "sample.delete-bam":
-        return {"sampleId": sample_id, "deleted": True}
+        return DeleteTaskOutput(status="ok", sampleId=sample_id, deleted=True, n_files_removed=0)
     if capability == "methyl-extract":
         h5_files = ["21-CG.h5"]
         if sample_path is not None:
             h5_files = _write_stub_extract_artifacts(sample_path, sample_id)
-        return {"sampleId": sample_id, "h5Files": h5_files}
+        return MethylExtractTaskOutput(
+            status="ok",
+            sampleId=sample_id,
+            h5Files=h5_files,
+            n_h5_files=len(h5_files),
+        )
     if capability in {"sample.upload-h5", "sample.archive-sample"}:
-        return {
-            "sampleId": sample_id,
-            "archiveMode": str(input_json.get("mode") or "full"),
-            "uploadedFiles": ["21-CG.h5"],
-            "skippedFiles": [],
-            "remotePrefix": "studies/test/",
-            "uploadedCount": 1,
-            "skippedCount": 0,
-            "sampleArchived": True,
-        }
+        return UploadH5TaskOutput(
+            status="ok",
+            sampleId=sample_id,
+            archiveMode=str(input_json.get("mode") or "full"),
+            uploadedFiles=["21-CG.h5"],
+            skippedFiles=[],
+            remotePrefix="studies/test/",
+            uploadedCount=1,
+            skippedCount=0,
+            sampleArchived=True,
+        )
     if capability == "methyl-qc":
         from .handler_helpers import guardrails_from_payload, screening_from_payload
 
@@ -922,31 +1051,39 @@ def _handle_stub_external(capability: str, _action_name: str, input_json: Dict[s
                 "message": "stub pass",
             }
         )
-        return {
-            "status": "ok",
-            "result_code": 0,
-            "sampleId": sample_id,
-            "qcPath": qc_path,
-            "guardrails": guardrails.model_dump(),
-            "screening": screening.model_dump(),
-            "qcHistory": [],
-            "remediateAlignment": False,
-            "remediateR2Trim": False,
-        }
+        return MethylQcTaskOutput(
+            status="ok",
+            result_code=0,
+            sampleId=sample_id,
+            qcPath=qc_path,
+            guardrails=guardrails,
+            screening=screening,
+            qcHistory=[],
+            remediateAlignment=False,
+            remediateR2Trim=False,
+        )
     if capability == "methyl-fragmentomics":
-        return {
-            "sampleId": sample_id,
-            "outputDir": sample_dir or "/tmp",
-            "fragmentomics": {"stub": True},
-        }
+        return FragmentomicsTaskOutput(
+            status="ok",
+            sampleId=sample_id,
+            outputDir=sample_dir or "/tmp",
+        )
     if capability == "methyl-extraction-qc":
-        return {
-            "sampleId": sample_id,
-            "qcPath": f"{sample_dir}/{sample_id}.extraction_qc.json" if sample_dir else f"{sample_id}.extraction_qc.json",
-            "guardrails": {"overall_pass": True},
-        }
+        from .handler_helpers import guardrails_from_payload
+
+        return ExtractionQcTaskOutput(
+            status="ok",
+            sampleId=sample_id,
+            qcPath=f"{sample_dir}/{sample_id}.extraction_qc.json" if sample_dir else f"{sample_id}.extraction_qc.json",
+            guardrails=guardrails_from_payload({"overall_pass": True}),
+            extraction_pass=True,
+        )
     if capability == "sample.mark-failed":
-        return {"sampleId": sample_id, "status": "QC_FAILED", "reason": input_json.get("reason")}
+        return MarkFailedTaskOutput(
+            sampleId=sample_id,
+            status="QC_FAILED",
+            reason=str(input_json.get("reason") or "alignment_qc_failed"),
+        )
     raise RuntimeError(
         f"WORKER_STUB_EXTERNAL=1 has no stub for capability {capability!r}."
     )
@@ -1037,15 +1174,13 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
 
         input_model = validate_input(entry, input_json)
         timer = ExecutionTimer()
-        raw = _handle_stub_external(capability, action_name, input_model.model_dump(mode="json"))
+        output_model = _handle_stub_external(
+            capability, action_name, input_model.model_dump(mode="json")
+        )
         finished_at, duration_ms = timer.finish()
-        if isinstance(raw, BaseModel):
-            payload = raw.model_dump(mode="json")
-        else:
-            payload = dict(raw)
         output = finalize_output(
             entry,
-            payload,
+            output_model.model_dump(mode="json"),
             started_at=timer.started_at,
             finished_at=finished_at,
             duration_ms=duration_ms,

@@ -23,6 +23,7 @@ from ..collectors import (
     ArtifactCollector,
     CentroidLegacyCollector,
     DmpSelectLegacyCollector,
+    EnricherLegacyCollector,
     GeneFeatureSelectLegacyCollector,
     GeneSelectLegacyCollector,
     GenericPipelineCollector,
@@ -30,11 +31,13 @@ from ..collectors import (
     MapperLegacyCollector,
     DetectorLegacyCollector,
     _resolve_dmp_output_dir,
+    _resolve_enricher_output_dir,
 )
 from ..task_models.pipeline_models import (
     CentroidTaskOutput,
     DetectorTaskOutput,
     DmpSelectTaskOutput,
+    EnricherTaskOutput,
     GeneFeatureSelectTaskOutput,
     GeneSelectTaskOutput,
     MapperTaskOutput,
@@ -220,22 +223,18 @@ class InProcessAction:
             input_model.model_dump(mode="json"),
         )
         finished_at, duration_ms = timer.finish()
-        if isinstance(raw, BaseModel):
-            payload = raw.model_dump(mode="json")
-        elif isinstance(raw, dict):
-            payload = dict(raw)
-        else:
+        if not isinstance(raw, BaseModel):
             raise TypeError(
-                f"In-process handler for {self.entry.action_name!r} must return BaseModel or dict"
+                f"In-process handler for {self.entry.action_name!r} must return BaseModel, got {type(raw)!r}"
             )
         output = finalize_output(
             self.entry,
-            payload,
+            raw.model_dump(mode="json"),
             started_at=timer.started_at,
             finished_at=finished_at,
             duration_ms=duration_ms,
             exit_code=0,
-            manifest_path=payload.get("manifest_path"),
+            manifest_path=getattr(raw, "manifest_path", None),
         )
         return execution_result_from_output(output)
 
@@ -277,6 +276,12 @@ def _collector_for_entry(entry: ActionCatalogEntry) -> ArtifactCollector:
             output_model=CentroidTaskOutput,
             resolve_output_dir=lambda inp: inp.get("outputDir"),
             legacy_collect=CentroidLegacyCollector(),
+        )
+    if name == "pipeline.enricher":
+        return ManifestFirstCollector(
+            output_model=EnricherTaskOutput,
+            resolve_output_dir=_resolve_enricher_output_dir,
+            legacy_collect=EnricherLegacyCollector(),
         )
     return GenericPipelineCollector()
 

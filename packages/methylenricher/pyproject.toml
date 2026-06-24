@@ -16,6 +16,7 @@ python-louvain = ">=0.16"
 requests = ">=2.28"
 pyfaidx = ">=0.7"
 methylutils = {path = "../methylutils", develop = true}
+methyl-domain = {path = "../methyldomain", develop = true}
 
 [tool.poetry.scripts]
 methyl-enricher = "methyl_enricher.cli:main"
