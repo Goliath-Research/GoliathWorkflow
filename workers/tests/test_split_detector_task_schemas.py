@@ -16,7 +16,25 @@ from methyl_worker.task_validation import (
 )
 
 
-def test_dmp_select_input_requires_chromosome_and_project() -> None:
+def test_detector_input_accepts_discovery_step_override() -> None:
+    normalized = normalize_task_input(
+        "pipeline.detector",
+        "methyl-detector",
+        {
+            "tool": "MethylDetector",
+            "projectPath": "/work/demo/project.json",
+            "chromosome": "21",
+            "context": "CG",
+            "comparison": "healthy_PCa",
+            "stepOverride": {
+                "detection_mode": "discovery_only",
+                "export_classifier": False,
+                "dmp_export_mode": "dual",
+            },
+        },
+    )
+    assert normalized["stepOverride"]["detection_mode"] == "discovery_only"
+    assert normalized["stepOverride"]["export_classifier"] is False
     with pytest.raises(TaskValidationError):
         validate_task_input(
             "pipeline.dmp_select",

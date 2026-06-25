@@ -67,6 +67,9 @@ class DetectorStepOverride(BaseModel):
     output_dir: Optional[str] = None
     comparison: Optional[str] = None
     base_config: Optional[SampleCohortOverride] = None
+    detection_mode: Optional[Literal["legacy", "discovery_only"]] = None
+    export_classifier: Optional[bool] = None
+    dmp_export_mode: Optional[Literal["unified", "dual"]] = None
     classifier_dmp_selection: Optional[Literal["elbow", "featurecuts_validation"]] = None
     target_balanced_accuracy: Optional[float] = None
     min_core_dmps: Optional[int] = None
