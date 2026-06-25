@@ -5,7 +5,16 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 import unittest
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+_WORKERS = _ROOT / "workers"
+if str(_WORKERS) not in sys.path:
+    sys.path.insert(0, str(_WORKERS))
 
 
 def json_fragment(value: object) -> str:
@@ -79,6 +88,30 @@ class ForeachIterationScopeTests(unittest.TestCase):
         scope = flatten_foreach_element(first, index=0)
         self.assertIn("taskConfig", scope)
         self.assertTrue(scope["taskConfig"].startswith("{"))
+
+    def test_gene_select_template_resolves_run_dir(self) -> None:
+        from methyl_worker.task_validation import normalize_task_input
+        from workflow_engine.local.resolver import resolve_input_template
+        from workflow_engine.local.scope import flatten_foreach_element
+
+        iteration = {
+            "runId": "feature_run_0001",
+            "projectPath": "/work/demo/monte_carlo_runs/run_0001/project.json",
+            "runDir": "/work/demo/monte_carlo_runs/run_0001",
+            "taskConfig": {"iteration": 1},
+        }
+        scope = flatten_foreach_element(
+            iteration, item_var="iteration", index_var="iterIndex", index=0
+        )
+        template = {
+            "tool": "MethylGeneSelect",
+            "projectPath": "${var.projectPath}",
+            "runDir": "${var.runDir}",
+            "biomarkerFilter": False,
+        }
+        resolved = resolve_input_template(template, scope)
+        payload = normalize_task_input("pipeline.gene_select", "pipeline.gene_select", resolved)
+        self.assertEqual(payload["runDir"], "/work/demo/monte_carlo_runs/run_0001")
 
 
 if __name__ == "__main__":

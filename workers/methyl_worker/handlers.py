@@ -281,14 +281,10 @@ def _handle_validation_plan_iterations(
     for item in context.get("iterations", []):
         if not isinstance(item, dict):
             continue
-        iterations.append(
-            ValidationIterationRef(
-                run_id=str(item.get("run_id") or item.get("runId") or ""),
-                iteration=int(item.get("iteration") or 0),
-                run_dir=item.get("run_dir") or item.get("runDir"),
-                project_json=item.get("project_json") or item.get("projectJson"),
-            )
-        )
+        payload = dict(item)
+        payload["run_id"] = str(payload.get("run_id") or payload.get("runId") or "")
+        payload["iteration"] = int(payload.get("iteration") or payload.get("phase_index") or 0)
+        iterations.append(ValidationIterationRef.model_validate(payload))
     return ValidationPlanTaskOutput(
         status="ok",
         projectPath=context.get("projectPath"),

@@ -15,6 +15,7 @@ def test_validation_plan_iterations_handler() -> None:
                 "run_id": "feature_run_0001",
                 "runId": "feature_run_0001",
                 "phase": "feature",
+                "runDir": "/work/demo/monte_carlo_runs/run_0001",
                 "projectPath": "/work/demo/monte_carlo_runs/run_0001/project.json",
                 "taskConfig": {"runId": "feature_run_0001", "phase": "feature", "iteration": 1},
             }
@@ -33,3 +34,5 @@ def test_validation_plan_iterations_handler() -> None:
     assert out["status"] == "ok"
     assert out["n_iterations"] == 1
     assert out["iterations"][0]["run_id"] == "feature_run_0001"
+    assert out["iterations"][0]["projectPath"] == "/work/demo/monte_carlo_runs/run_0001/project.json"
+    assert out["iterations"][0]["runDir"] == "/work/demo/monte_carlo_runs/run_0001"

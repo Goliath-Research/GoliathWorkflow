@@ -21,7 +21,9 @@ class ValidationPlanTaskInput(BaseModel):
 
 
 class ValidationIterationRef(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    """One MC iteration in workflow scope (planner fields + workflow template keys)."""
+
+    model_config = ConfigDict(extra="allow")
 
     run_id: str
     iteration: int = 0
