@@ -309,6 +309,10 @@ def build_action_from_catalog(entry: ActionCatalogEntry, handlers_module: Any) -
         from .dmp_select import DMP_SELECT_ARGV_MAP, DmpSelectCliAction
 
         return DmpSelectCliAction(entry=entry, cli_tool=cli, argv_map=DMP_SELECT_ARGV_MAP, collector=collector)
+    if entry.action_name == "pipeline.mapper":
+        from .mapper import MAPPER_ARGV_MAP, MapperCliAction
+
+        return MapperCliAction(entry=entry, cli_tool=cli, argv_map=MAPPER_ARGV_MAP, collector=collector)
     if entry.action_name == "pipeline.gene_select":
         from .gene_select import GENE_SELECT_ARGV_MAP, GeneSelectCliAction
 
