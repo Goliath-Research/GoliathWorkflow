@@ -47,6 +47,11 @@ def resolve_detector_config_per_cancer_group(
     if step_override_path is not None:
         with open(step_override_path) as f:
             overrides = json.load(f)
+        overrides = {
+            k: v
+            for k, v in overrides.items()
+            if v is not None and k not in ("context", "comparison", "base_config")
+        }
         step_cfg = {**step_cfg, **overrides}
     step_cfg = filter_detection_config_for_detector(step_cfg)
 

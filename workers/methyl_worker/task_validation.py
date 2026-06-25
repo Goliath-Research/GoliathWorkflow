@@ -40,7 +40,7 @@ def normalize_task_input(
     model = spec.load_input_model()
     allowed = set(model.model_fields.keys())
     filtered = {k: v for k, v in input_json.items() if k in allowed}
-    return model.model_validate(filtered).model_dump(mode="python")
+    return model.model_validate(filtered).model_dump(mode="python", exclude_none=True, exclude_unset=True)
 
 
 def validate_task_input(

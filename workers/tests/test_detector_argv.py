@@ -55,7 +55,32 @@ def test_merge_detector_step_override_folds_scope_fields() -> None:
     assert merged["contexts"] == ["CG"]
     assert merged["fixed_dmp_panel"] == "/work/out/stable_dmps_genomewide.csv"
     assert merged["output_dir"] == "/work/out/detections/healthy/PCa1"
-    assert merged["base_config"]["add_samples"] == ["/work/samples/S1"]
+    assert "base_config" not in merged
+    assert "context" not in merged
+    assert "comparison" not in merged
+
+
+def test_merge_detector_step_override_strips_null_workflow_keys() -> None:
+    merged = merge_detector_step_override(
+        {
+            "chromosome": "21",
+            "context": "CG",
+            "stepOverride": {
+                "detection_mode": "discovery_only",
+                "export_classifier": False,
+                "context": None,
+                "comparison": None,
+                "base_config": None,
+                "dmp_export_mode": None,
+            },
+        }
+    )
+    assert merged == {
+        "chromosome": "21",
+        "contexts": ["CG"],
+        "detection_mode": "discovery_only",
+        "export_classifier": False,
+    }
 
 
 def test_detector_build_argv_from_lifecycle_scope() -> None:

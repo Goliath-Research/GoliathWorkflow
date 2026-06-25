@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from typing import List, Literal, Optional, Dict, Any
 
 from methyl_classifier.models.config_schema import ClassificationConfig
 from methyl_disease_progression.config import ProgressionStepConfig
@@ -55,6 +55,10 @@ class CentroidStepOverride(BaseModel):
     output_dir: Optional[str] = None
 
 
+# Keys on DetectorStepOverride used only by the workflow engine, not methyl-detector --step-override.
+_DETECTOR_WORKFLOW_ONLY_KEYS = frozenset({"context", "comparison", "base_config"})
+
+
 class DetectorStepOverride(BaseModel):
     """Scope fields and detection-step overrides folded into methyl-detector --step-override."""
 
@@ -76,6 +80,14 @@ class DetectorStepOverride(BaseModel):
     classifier_export_margin_pct: Optional[float] = None
     classifier_export_margin_abs: Optional[int] = None
     classifier_export_max_dmps: Optional[int] = None
+
+    def to_methyl_detector_payload(self) -> Dict[str, Any]:
+        """Export only methyl-detector config keys; omit workflow scope fields and unset nulls."""
+        from methyl_detector.models.config import MethylDetectorConfig
+
+        allowed = set(MethylDetectorConfig.model_fields.keys())
+        raw = self.model_dump(mode="json", exclude_none=True, exclude_unset=True)
+        return {k: v for k, v in raw.items() if k in allowed and k not in _DETECTOR_WORKFLOW_ONLY_KEYS}
 
 
 class MapperStepOverride(MapperStepConfig):

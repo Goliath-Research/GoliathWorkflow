@@ -24,22 +24,31 @@
           "do": [
             {
               "for": {
-                "in": { "ref": "project.chromosomes" },
-                "as": "chromosome",
+                "in": { "ref": "project.contexts" },
+                "as": "context",
                 "parallel": true
               },
               "do": [
                 {
-                  "do": "pipeline.centroid",
-                  "with": {
-                    "group": { "ref": "group.label" },
-                    "chromosome": { "ref": "chromosome" },
-                    "context": { "ref": "context" },
-                    "outputDir": { "ref": "group.centroidDir" },
-                    "addSamples": { "ref": "group.addSamples" },
-                    "removeSamples": { "ref": "group.removeSamples" }
+                  "for": {
+                    "in": { "ref": "project.chromosomes" },
+                    "as": "chromosome",
+                    "parallel": true
                   },
-                  "node_key": "centroid"
+                  "do": [
+                    {
+                      "do": "pipeline.centroid",
+                      "with": {
+                        "group": { "ref": "group.label" },
+                        "chromosome": { "ref": "chromosome" },
+                        "context": { "ref": "context" },
+                        "outputDir": { "ref": "group.centroidDir" },
+                        "addSamples": { "ref": "group.addSamples" },
+                        "removeSamples": { "ref": "group.removeSamples" }
+                      },
+                      "node_key": "centroid"
+                    }
+                  ]
                 }
               ]
             }
@@ -54,39 +63,48 @@
           "do": [
             {
               "for": {
-                "in": { "ref": "project.chromosomes" },
-                "as": "chromosome",
+                "in": { "ref": "project.contexts" },
+                "as": "context",
                 "parallel": true
               },
               "do": [
                 {
-                  "do": "pipeline.detector",
-                  "with": {
-                    "chromosome": { "ref": "chromosome" },
-                    "context": { "ref": "context" },
-                    "comparison": { "ref": "comparison.label" },
-                    "stepOverride": {
-                      "detection_mode": "discovery_only",
-                      "export_classifier": false
-                    }
+                  "for": {
+                    "in": { "ref": "project.chromosomes" },
+                    "as": "chromosome",
+                    "parallel": true
                   },
-                  "node_key": "detect"
-                },
-                {
-                  "if": "${runDmpSelection}",
-                  "then": [
+                  "do": [
                     {
-                      "do": "pipeline.dmp_select",
+                      "do": "pipeline.detector",
                       "with": {
                         "chromosome": { "ref": "chromosome" },
                         "context": { "ref": "context" },
                         "comparison": { "ref": "comparison.label" },
-                        "group": { "ref": "comparison.label" }
+                        "stepOverride": {
+                          "detection_mode": "discovery_only",
+                          "export_classifier": false
+                        }
                       },
-                      "node_key": "dmp_select"
+                      "node_key": "detect"
+                    },
+                    {
+                      "if": "${runDmpSelection}",
+                      "then": [
+                        {
+                          "do": "pipeline.dmp_select",
+                          "with": {
+                            "chromosome": { "ref": "chromosome" },
+                            "context": { "ref": "context" },
+                            "comparison": { "ref": "comparison.label" },
+                            "group": { "ref": "comparison.label" }
+                          },
+                          "node_key": "dmp_select"
+                        }
+                      ],
+                      "else": []
                     }
-                  ],
-                  "else": []
+                  ]
                 }
               ]
             },

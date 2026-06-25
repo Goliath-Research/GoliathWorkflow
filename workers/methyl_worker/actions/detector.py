@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from ..task_models.step_override_models import DetectorStepOverride
 from .base import CliAction
 
 # methyl-detector accepts --project, --group, --step-override, --centroid1-dir, --centroid2-dir.
@@ -20,40 +21,40 @@ DETECTOR_ARGV_MAP: Dict[str, str] = {
 
 
 def merge_detector_step_override(input_json: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Fold workflow scope fields into a methyl-detector step-override object."""
+    """Fold workflow scope fields into a typed methyl-detector step-override payload."""
     raw = input_json.get("stepOverride")
-    merged: Dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
+    if isinstance(raw, DetectorStepOverride):
+        data = raw.model_dump(exclude_none=True, exclude_unset=True)
+    elif isinstance(raw, dict):
+        data = {k: v for k, v in raw.items() if v is not None}
+    else:
+        data = {}
 
     chromosome = input_json.get("chromosome")
     if chromosome not in (None, ""):
-        merged["chromosome"] = chromosome
+        data["chromosome"] = str(chromosome)
 
     context = input_json.get("context")
     if context not in (None, ""):
         if isinstance(context, list):
-            merged["contexts"] = [str(c) for c in context if str(c).strip()]
+            data["contexts"] = [str(c) for c in context if str(c).strip()]
         else:
-            merged["contexts"] = [str(context)]
+            data["contexts"] = [str(context)]
 
     panel = input_json.get("fixedDmpPanel")
     if panel not in (None, ""):
-        merged["fixed_dmp_panel"] = str(panel)
+        data["fixed_dmp_panel"] = str(panel)
 
     output_dir = input_json.get("outputDir")
     if output_dir not in (None, ""):
-        merged["output_dir"] = str(output_dir)
+        data["output_dir"] = str(output_dir)
 
-    add_samples = input_json.get("addSamples")
-    remove_samples = input_json.get("removeSamples")
-    if add_samples is not None or remove_samples is not None:
-        base_cfg = dict(merged.get("base_config") or {})
-        if add_samples is not None:
-            base_cfg["add_samples"] = list(add_samples)
-        if remove_samples is not None:
-            base_cfg["remove_samples"] = list(remove_samples)
-        merged["base_config"] = base_cfg
+    if not data:
+        return None
 
-    return merged or None
+    override = DetectorStepOverride.model_validate(data)
+    payload = override.to_methyl_detector_payload()
+    return payload or None
 
 
 def resolve_detector_group(input_json: Dict[str, Any]) -> Optional[str]:
