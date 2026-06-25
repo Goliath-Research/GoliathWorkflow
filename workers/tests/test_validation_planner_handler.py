@@ -36,3 +36,34 @@ def test_validation_plan_iterations_handler() -> None:
     assert out["iterations"][0]["run_id"] == "feature_run_0001"
     assert out["iterations"][0]["projectPath"] == "/work/demo/monte_carlo_runs/run_0001/project.json"
     assert out["iterations"][0]["runDir"] == "/work/demo/monte_carlo_runs/run_0001"
+    iter_ref = result.output.iterations[0]
+    assert iter_ref.run_dir == "/work/demo/monte_carlo_runs/run_0001"
+    assert iter_ref.project_json == "/work/demo/monte_carlo_runs/run_0001/project.json"
+
+
+def test_validation_plan_iterations_maps_snake_case_fields() -> None:
+    fake_context = {
+        "projectPath": "/work/demo",
+        "iterations": [
+            {
+                "runId": "feature_run_0000",
+                "iteration": 0,
+                "phase_index": 3,
+                "runDir": "/work/demo/monte_carlo_runs/run_0000",
+                "projectPath": "/work/demo/monte_carlo_runs/run_0000/project.json",
+            }
+        ],
+    }
+    with patch(
+        "methyl_validation.workflow_planner.plan_validation_context",
+        return_value=fake_context,
+    ):
+        result = execute_task(
+            "validation.plan-iterations",
+            "validation.plan_iterations",
+            {"projectPath": "/cfg/project.json", "featureIterations": 1},
+        )
+    iter_ref = result.output.iterations[0]
+    assert iter_ref.iteration == 0
+    assert iter_ref.run_dir == "/work/demo/monte_carlo_runs/run_0000"
+    assert iter_ref.project_json == "/work/demo/monte_carlo_runs/run_0000/project.json"

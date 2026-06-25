@@ -268,6 +268,23 @@ def _handle_methyl_fragmentomics(
     )
 
 
+def _normalize_validation_iteration_payload(item: Dict[str, Any]) -> Dict[str, Any]:
+    """Map planner iteration dict onto ValidationIterationRef fields."""
+    payload = dict(item)
+    payload["run_id"] = str(payload.get("run_id") or payload.get("runId") or "")
+    if payload.get("iteration") is not None:
+        payload["iteration"] = int(payload["iteration"])
+    elif payload.get("phase_index") is not None:
+        payload["iteration"] = int(payload["phase_index"])
+    else:
+        payload["iteration"] = 0
+    if payload.get("run_dir") is None:
+        payload["run_dir"] = payload.get("runDir")
+    if payload.get("project_json") is None:
+        payload["project_json"] = payload.get("projectJson") or payload.get("projectPath")
+    return payload
+
+
 def _handle_validation_plan_iterations(
     _capability: str, _action_name: str, input: BaseModel
 ):
@@ -281,10 +298,9 @@ def _handle_validation_plan_iterations(
     for item in context.get("iterations", []):
         if not isinstance(item, dict):
             continue
-        payload = dict(item)
-        payload["run_id"] = str(payload.get("run_id") or payload.get("runId") or "")
-        payload["iteration"] = int(payload.get("iteration") or payload.get("phase_index") or 0)
-        iterations.append(ValidationIterationRef.model_validate(payload))
+        iterations.append(
+            ValidationIterationRef.model_validate(_normalize_validation_iteration_payload(item))
+        )
     return ValidationPlanTaskOutput(
         status="ok",
         projectPath=context.get("projectPath"),
