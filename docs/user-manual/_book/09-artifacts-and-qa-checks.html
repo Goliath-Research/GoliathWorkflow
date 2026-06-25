@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>10&nbsp; Artifacts and QA Checks – MethylPipeline User Manual</title>
+<title>11&nbsp; Artifacts and QA Checks – MethylPipeline User Manual</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -22,6 +22,41 @@ ul.task-list li input[type="checkbox"] {
   width: 0.8em;
   margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
   vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
 }
 </style>
 
@@ -85,7 +120,7 @@ ul.task-list li input[type="checkbox"] {
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html">Part III: Operations and Reliability</a></li><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html">Part III: Operations and Reliability</a></li><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -139,8 +174,14 @@ ul.task-list li input[type="checkbox"] {
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./03-sample-prep-and-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Sample Prep and Quality Control</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./03-package-reference-individual-usage.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Package Reference (Individual Usage)</span></span></a>
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Package Reference (Individual Usage)</span></span></a>
   </div>
 </li>
       </ul>
@@ -157,31 +198,31 @@ ul.task-list li input[type="checkbox"] {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./04-stage-stability.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Stage: Stability</span></span></a>
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Stage: Stability</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./05-stage-freeze.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Stage: Freeze</span></span></a>
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Stage: Freeze</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./06-stage-model.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Stage: Model</span></span></a>
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Stage: Model</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./07-stage-post-model-validation.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Stage: Post-model Validation</span></span></a>
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Stage: Post-model Validation</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./08-stage-blind-prediction.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Stage: Blind Prediction</span></span></a>
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Stage: Blind Prediction</span></span></a>
   </div>
 </li>
       </ul>
@@ -198,31 +239,31 @@ ul.task-list li input[type="checkbox"] {
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./09-artifacts-and-qa-checks.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></span></a>
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./10-troubleshooting-and-recovery.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Troubleshooting and Recovery</span></span></a>
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Troubleshooting and Recovery</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./11-command-cookbook.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Command Cookbook</span></span></a>
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Command Cookbook</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./12-distributed-methyl-validation.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></span></a>
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./13-optional-hyperparameter-search.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Optional hyperparameter search</span></span></a>
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Optional hyperparameter search</span></span></a>
   </div>
 </li>
       </ul>
@@ -237,28 +278,29 @@ ul.task-list li input[type="checkbox"] {
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#purpose" id="toc-purpose" class="nav-link active" data-scroll-target="#purpose"><span class="header-section-number">10.1</span> Purpose</a></li>
-  <li><a href="#artifact-map" id="toc-artifact-map" class="nav-link" data-scroll-target="#artifact-map"><span class="header-section-number">10.2</span> Artifact map</a></li>
-  <li><a href="#handoff-integrity-checks" id="toc-handoff-integrity-checks" class="nav-link" data-scroll-target="#handoff-integrity-checks"><span class="header-section-number">10.3</span> Handoff integrity checks</a></li>
-  <li><a href="#qa-checklist-per-stage" id="toc-qa-checklist-per-stage" class="nav-link" data-scroll-target="#qa-checklist-per-stage"><span class="header-section-number">10.4</span> QA checklist per stage</a>
+  <li><a href="#purpose" id="toc-purpose" class="nav-link active" data-scroll-target="#purpose"><span class="header-section-number">11.1</span> Purpose</a></li>
+  <li><a href="#workflow-action-observability" id="toc-workflow-action-observability" class="nav-link" data-scroll-target="#workflow-action-observability"><span class="header-section-number">11.2</span> Workflow action observability</a></li>
+  <li><a href="#artifact-map" id="toc-artifact-map" class="nav-link" data-scroll-target="#artifact-map"><span class="header-section-number">11.3</span> Artifact map</a></li>
+  <li><a href="#handoff-integrity-checks" id="toc-handoff-integrity-checks" class="nav-link" data-scroll-target="#handoff-integrity-checks"><span class="header-section-number">11.4</span> Handoff integrity checks</a></li>
+  <li><a href="#qa-checklist-per-stage" id="toc-qa-checklist-per-stage" class="nav-link" data-scroll-target="#qa-checklist-per-stage"><span class="header-section-number">11.5</span> QA checklist per stage</a>
   <ul class="collapse">
-  <li><a href="#stability" id="toc-stability" class="nav-link" data-scroll-target="#stability"><span class="header-section-number">10.4.1</span> Stability</a></li>
-  <li><a href="#freeze" id="toc-freeze" class="nav-link" data-scroll-target="#freeze"><span class="header-section-number">10.4.2</span> Freeze</a></li>
-  <li><a href="#model" id="toc-model" class="nav-link" data-scroll-target="#model"><span class="header-section-number">10.4.3</span> Model</a></li>
-  <li><a href="#post-model-validation" id="toc-post-model-validation" class="nav-link" data-scroll-target="#post-model-validation"><span class="header-section-number">10.4.4</span> Post-model validation</a></li>
-  <li><a href="#blind-prediction" id="toc-blind-prediction" class="nav-link" data-scroll-target="#blind-prediction"><span class="header-section-number">10.4.5</span> Blind prediction</a></li>
+  <li><a href="#stability" id="toc-stability" class="nav-link" data-scroll-target="#stability"><span class="header-section-number">11.5.1</span> Stability</a></li>
+  <li><a href="#freeze" id="toc-freeze" class="nav-link" data-scroll-target="#freeze"><span class="header-section-number">11.5.2</span> Freeze</a></li>
+  <li><a href="#model" id="toc-model" class="nav-link" data-scroll-target="#model"><span class="header-section-number">11.5.3</span> Model</a></li>
+  <li><a href="#post-model-validation" id="toc-post-model-validation" class="nav-link" data-scroll-target="#post-model-validation"><span class="header-section-number">11.5.4</span> Post-model validation</a></li>
+  <li><a href="#blind-prediction" id="toc-blind-prediction" class="nav-link" data-scroll-target="#blind-prediction"><span class="header-section-number">11.5.5</span> Blind prediction</a></li>
   </ul></li>
-  <li><a href="#escalation-triggers" id="toc-escalation-triggers" class="nav-link" data-scroll-target="#escalation-triggers"><span class="header-section-number">10.5</span> Escalation triggers</a></li>
-  <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also"><span class="header-section-number">10.6</span> See also</a></li>
+  <li><a href="#escalation-triggers" id="toc-escalation-triggers" class="nav-link" data-scroll-target="#escalation-triggers"><span class="header-section-number">11.6</span> Escalation triggers</a></li>
+  <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also"><span class="header-section-number">11.7</span> See also</a></li>
   </ul>
 </nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html">Part III: Operations and Reliability</a></li><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></a></li></ol></nav>
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html">Part III: Operations and Reliability</a></li><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></a></li></ol></nav>
 <div class="quarto-title">
-<h1 class="title"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></h1>
+<h1 class="title"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></h1>
 </div>
 
 
@@ -275,12 +317,26 @@ ul.task-list li input[type="checkbox"] {
 </header>
 
 
-<section id="purpose" class="level2" data-number="10.1">
-<h2 data-number="10.1" class="anchored" data-anchor-id="purpose"><span class="header-section-number">10.1</span> Purpose</h2>
+<section id="purpose" class="level2" data-number="11.1">
+<h2 data-number="11.1" class="anchored" data-anchor-id="purpose"><span class="header-section-number">11.1</span> Purpose</h2>
 <p>Provide a single checklist for expected files at each stage and quick quality gates before proceeding.</p>
 </section>
-<section id="artifact-map" class="level2" data-number="10.2">
-<h2 data-number="10.2" class="anchored" data-anchor-id="artifact-map"><span class="header-section-number">10.2</span> Artifact map</h2>
+<section id="workflow-action-observability" class="level2" data-number="11.2">
+<h2 data-number="11.2" class="anchored" data-anchor-id="workflow-action-observability"><span class="header-section-number">11.2</span> Workflow action observability</h2>
+<p>Each workflow ACTION executed by <code>methyl-worker</code> submits a typed <code>output_json</code> to the database (validated against <code>schemas/tasks/*.json</code>). Outputs include timing (<code>duration_ms</code>), branch code (<code>result_code</code>), and paths to artifacts on shared storage.</p>
+<p>On <code>/work</code>, look for:</p>
+<ul>
+<li><strong>Per-action manifests:</strong> <code>{output_dir}/.action_results/{action_name}.{run_key}.json</code> — full typed result written by CLIs (e.g.&nbsp;<code>pipeline.dmp_select</code>, <code>pipeline.mapper</code>) or reconstructed by the worker collector.</li>
+<li><strong>Sample prep timeline:</strong> <code>{sampleDir}/{sampleId}.sample_prep_log.jsonl</code> — append-only JSONL audit for download, align, QC, extract, archive steps.</li>
+<li><strong>Validation / MC timeline:</strong> <code>{monteCarloRunsRoot}/action_run_log.jsonl</code> — append-only log for validation-category actions (plan, stability, model_mc, etc.).</li>
+</ul>
+<p>Regenerate JSON Schema artifacts after model changes:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-export-task-schemas</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-export-task-schemas</span> <span class="at">--check</span>   <span class="co"># CI drift gate</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="artifact-map" class="level2" data-number="11.3">
+<h2 data-number="11.3" class="anchored" data-anchor-id="artifact-map"><span class="header-section-number">11.3</span> Artifact map</h2>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 33%">
@@ -296,26 +352,31 @@ ul.task-list li input[type="checkbox"] {
 </thead>
 <tbody>
 <tr class="odd">
+<td>Sample prep</td>
+<td><code>{sample_id}.json</code>, <code>alignment_qc/{sample_id}.json</code>, <code>{sample_id}.extraction_qc.json</code>, <code>{chr}-CG.h5</code></td>
+<td><code>guardrails.overall_pass</code> true for alignment and extraction QC</td>
+</tr>
+<tr class="even">
 <td>Stability</td>
 <td><code>stability/stable_dmps_production.csv</code>, <code>stability_summary.json</code>, <code>all_metrics.csv</code></td>
 <td>Stable panel exists and is non-empty</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Freeze</td>
 <td><code>production/project.json</code>, mapper/enricher outputs</td>
 <td>Production project exists; fixed-panel detector run completed</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Model</td>
 <td><code>production/classifiers/*</code>, <code>production/classifiers/training_metrics.json</code> (all model backends), <code>production/predictors/*</code></td>
 <td>Final classifier/predictor artifacts present</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>Post-model validation</td>
 <td><code>post_model_validation/all_metrics.csv</code>, <code>metrics_summary.json</code>, plotly report</td>
 <td>Distribution summaries generated</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>Blind prediction</td>
 <td>blind prediction report + per-sample probabilities</td>
 <td>All input blind samples receive predictions</td>
@@ -323,50 +384,50 @@ ul.task-list li input[type="checkbox"] {
 </tbody>
 </table>
 </section>
-<section id="handoff-integrity-checks" class="level2" data-number="10.3">
-<h2 data-number="10.3" class="anchored" data-anchor-id="handoff-integrity-checks"><span class="header-section-number">10.3</span> Handoff integrity checks</h2>
+<section id="handoff-integrity-checks" class="level2" data-number="11.4">
+<h2 data-number="11.4" class="anchored" data-anchor-id="handoff-integrity-checks"><span class="header-section-number">11.4</span> Handoff integrity checks</h2>
 
 </section>
-<section id="qa-checklist-per-stage" class="level2" data-number="10.4">
-<h2 data-number="10.4" class="anchored" data-anchor-id="qa-checklist-per-stage"><span class="header-section-number">10.4</span> QA checklist per stage</h2>
-<section id="stability" class="level3" data-number="10.4.1">
-<h3 data-number="10.4.1" class="anchored" data-anchor-id="stability"><span class="header-section-number">10.4.1</span> Stability</h3>
+<section id="qa-checklist-per-stage" class="level2" data-number="11.5">
+<h2 data-number="11.5" class="anchored" data-anchor-id="qa-checklist-per-stage"><span class="header-section-number">11.5</span> QA checklist per stage</h2>
+<section id="stability" class="level3" data-number="11.5.1">
+<h3 data-number="11.5.1" class="anchored" data-anchor-id="stability"><span class="header-section-number">11.5.1</span> Stability</h3>
 <ul>
 <li>Iteration count in metrics roughly matches configured <code>n_iterations</code>.</li>
 <li>Stable panel size is consistent with selected thresholds.</li>
 </ul>
 </section>
-<section id="freeze" class="level3" data-number="10.4.2">
-<h3 data-number="10.4.2" class="anchored" data-anchor-id="freeze"><span class="header-section-number">10.4.2</span> Freeze</h3>
+<section id="freeze" class="level3" data-number="11.5.2">
+<h3 data-number="11.5.2" class="anchored" data-anchor-id="freeze"><span class="header-section-number">11.5.2</span> Freeze</h3>
 <ul>
 <li><code>production/project.json</code> references fixed panel detector mode.</li>
 <li>Mapper/enricher outputs exist for each expected comparison group.</li>
 </ul>
 </section>
-<section id="model" class="level3" data-number="10.4.3">
-<h3 data-number="10.4.3" class="anchored" data-anchor-id="model"><span class="header-section-number">10.4.3</span> Model</h3>
+<section id="model" class="level3" data-number="11.5.3">
+<h3 data-number="11.5.3" class="anchored" data-anchor-id="model"><span class="header-section-number">11.5.3</span> Model</h3>
 <ul>
 <li>Backend used is recorded and consistent with config.</li>
 <li>If selection used, ranking artifacts exist and chosen backend is traceable.</li>
 </ul>
 </section>
-<section id="post-model-validation" class="level3" data-number="10.4.4">
-<h3 data-number="10.4.4" class="anchored" data-anchor-id="post-model-validation"><span class="header-section-number">10.4.4</span> Post-model validation</h3>
+<section id="post-model-validation" class="level3" data-number="11.5.4">
+<h3 data-number="11.5.4" class="anchored" data-anchor-id="post-model-validation"><span class="header-section-number">11.5.4</span> Post-model validation</h3>
 <ul>
 <li>Metrics summary includes required decision metrics.</li>
 <li>Distribution artifacts generated and readable.</li>
 </ul>
 </section>
-<section id="blind-prediction" class="level3" data-number="10.4.5">
-<h3 data-number="10.4.5" class="anchored" data-anchor-id="blind-prediction"><span class="header-section-number">10.4.5</span> Blind prediction</h3>
+<section id="blind-prediction" class="level3" data-number="11.5.5">
+<h3 data-number="11.5.5" class="anchored" data-anchor-id="blind-prediction"><span class="header-section-number">11.5.5</span> Blind prediction</h3>
 <ul>
 <li>Prediction outputs include all requested samples.</li>
 <li>Operational report does not include false accuracy claims.</li>
 </ul>
 </section>
 </section>
-<section id="escalation-triggers" class="level2" data-number="10.5">
-<h2 data-number="10.5" class="anchored" data-anchor-id="escalation-triggers"><span class="header-section-number">10.5</span> Escalation triggers</h2>
+<section id="escalation-triggers" class="level2" data-number="11.6">
+<h2 data-number="11.6" class="anchored" data-anchor-id="escalation-triggers"><span class="header-section-number">11.6</span> Escalation triggers</h2>
 <ul>
 <li>Empty stable panel.</li>
 <li>Missing production project.</li>
@@ -374,8 +435,8 @@ ul.task-list li input[type="checkbox"] {
 <li>Repeated run failures in same step across resumed runs.</li>
 </ul>
 </section>
-<section id="see-also" class="level2" data-number="10.6">
-<h2 data-number="10.6" class="anchored" data-anchor-id="see-also"><span class="header-section-number">10.6</span> See also</h2>
+<section id="see-also" class="level2" data-number="11.7">
+<h2 data-number="11.7" class="anchored" data-anchor-id="see-also"><span class="header-section-number">11.7</span> See also</h2>
 <ul>
 <li><code>packages/methylvalidation/docs/USAGE.md</code></li>
 <li><code>packages/methylvalidation/docs/IMPLEMENTATION.md</code></li>
@@ -788,12 +849,12 @@ ul.task-list li input[type="checkbox"] {
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
       <a href="./08-stage-blind-prediction.html" class="pagination-link" aria-label="Stage: Blind Prediction">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Stage: Blind Prediction</span></span>
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Stage: Blind Prediction</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
       <a href="./10-troubleshooting-and-recovery.html" class="pagination-link" aria-label="Troubleshooting and Recovery">
-        <span class="nav-page-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Troubleshooting and Recovery</span></span> <i class="bi bi-arrow-right-short"></i>
+        <span class="nav-page-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Troubleshooting and Recovery</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

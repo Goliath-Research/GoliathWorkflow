@@ -4,6 +4,8 @@
 
 Summarize each active package as a standalone tool, then map it to staged `methyl-validation` orchestration.
 
+For the full SamplePrep story (Picard metrics, Parabricks JSON, guardrails, remediation, extraction QC), see [Chapter 3 — Sample Prep and Quality Control](03-sample-prep-and-qc.qmd).
+
 ## Package quick map
 
 | Package | CLI | Primary role | Typical standalone output |

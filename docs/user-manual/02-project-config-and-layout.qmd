@@ -31,6 +31,11 @@ Core stage driver:
 
 - `step_config.validation` (parsed into `MonteCarloConfig` by `methyl-validation`).
 
+Upstream sample prep (before stability) uses:
+
+- `step_config.alignment_qc` — guardrails, cycle screening, optional cfDNA fragmentomics ([Chapter 3](03-sample-prep-and-qc.qmd)).
+- `step_config.extraction_qc` — post-extract coverage and conversion thresholds ([Chapter 3](03-sample-prep-and-qc.qmd)).
+
 ## Validation stage keys that matter most
 
 - split policy: `train_fraction`, `n_iterations`, `seed`

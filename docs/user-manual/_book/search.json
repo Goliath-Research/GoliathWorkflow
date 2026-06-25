@@ -24,7 +24,7 @@
     "href": "index.html#reading-paths",
     "title": "MethylPipeline User Manual",
     "section": "1.2 Reading paths",
-    "text": "1.2 Reading paths\n\nFast path (stage execution): Chapters 04 to 08.\nNew project setup: Chapters 01, 02, then 04.\nDaily operations: Chapters 09 to 11.\nScaling MC across machines / optional hyperparameter tuning: Chapters 12 and 13 (shared /work storage, queue subcommands, and the methyl-hyperparam-search grid driver).\nStandalone package usage: Chapter 03.",
+    "text": "1.2 Reading paths\n\nSample prep (FASTQ → HDF5): Chapter 03 (03-sample-prep-and-qc.qmd).\nFast path (stage execution): Chapters 05 to 09 (stability through blind prediction).\nNew project setup: Chapters 01, 02, 03, then 05.\nDaily operations: Chapters 10 to 12.\nScaling MC across machines / optional hyperparameter tuning: Chapters 13 and 14 (shared /work storage, queue subcommands, and the methyl-hyperparam-search grid driver).\nStandalone package usage: Chapter 04 (03-package-reference-individual-usage.qmd).",
     "crumbs": [
       "<span class='chapter-number'>1</span>  <span class='chapter-title'>MethylPipeline User Manual</span>"
     ]
@@ -44,7 +44,7 @@
     "href": "index.html#scope-boundaries",
     "title": "MethylPipeline User Manual",
     "section": "1.4 Scope boundaries",
-    "text": "1.4 Scope boundaries\n\nmethyl-validation orchestrates stability, freeze, model, and post-model validation.\nBlind-only prediction is documented as a standalone methyl-predictor operation.\nPackage behavior is documented from implementation in packages/*.",
+    "text": "1.4 Scope boundaries\n\nSamplePrepPipeline (FASTQ → aligned BAM → methylation HDF5) runs before staged validation; see Chapter 3.\nmethyl-validation orchestrates stability, freeze, model, and post-model validation.\nBlind-only prediction is documented as a standalone methyl-predictor operation.\nPackage behavior is documented from implementation in packages/*.",
     "crumbs": [
       "<span class='chapter-number'>1</span>  <span class='chapter-title'>MethylPipeline User Manual</span>"
     ]
@@ -54,7 +54,7 @@
     "href": "index.html#canonical-references",
     "title": "MethylPipeline User Manual",
     "section": "1.5 Canonical references",
-    "text": "1.5 Canonical references\n\nWorkflow reference: docs/WORKFLOW_DIAGRAM_PACK_Healthy_vs_PCa1-4-CG.md\nValidation orchestration: packages/methylvalidation/docs/USAGE.md\nDistributed queue (shared storage, plan-runs / run-task / aggregate-results): packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md\nHyperparameter search (objective (J), methyl-hyperparam-search): packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md\nValidation flags and config model:\n\npackages/methylvalidation/methyl_validation/cli.py\npackages/methylvalidation/methyl_validation/config.py",
+    "text": "1.5 Canonical references\n\nSample prep workflow: workflow_engine/sql/SamplePrepFlow.md\nWorkflow reference: docs/WORKFLOW_DIAGRAM_PACK_Healthy_vs_PCa1-4-CG.md\nValidation orchestration: packages/methylvalidation/docs/USAGE.md\nDistributed queue (shared storage, plan-runs / run-task / aggregate-results): packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md\nHyperparameter search (objective (J), methyl-hyperparam-search): packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md\nValidation flags and config model:\n\npackages/methylvalidation/methyl_validation/cli.py\npackages/methylvalidation/methyl_validation/config.py",
     "crumbs": [
       "<span class='chapter-number'>1</span>  <span class='chapter-title'>MethylPipeline User Manual</span>"
     ]
@@ -159,11 +159,22 @@
     ]
   },
   {
+    "objectID": "02-project-config-and-layout.html#repository-vs-work-what-goes-where",
+    "href": "02-project-config-and-layout.html#repository-vs-work-what-goes-where",
+    "title": "3  Project Config and Layout",
+    "section": "3.2 Repository vs /work (what goes where)",
+    "text": "3.2 Repository vs /work (what goes where)\n\n\n\n\n\n\n\nRepository (versioned, documented)\n/work/&lt;disease&gt;/ (study-specific)\n\n\n\n\nPipeline profiles (workflow_engine/domain/profiles/)\nproject_*.json — cohorts, comparisons, sample paths, output_base, study step_config\n\n\nDomainPrograms (*.program.json under workflow_engine/domain/)\nSample list CSVs under data/\n\n\nJSON schemas (schemas/config/)\nRun outputs (monte_carlo_runs/, stability/, …)\n\n\nUser manual, theory, docs/domain_program_language.md\n\n\n\n\n\nPoint methyl-workflow-run --program at a repo DomainProgram path.\nPoint --context / projectPath at a project JSON on /work.\nOptional --context-file loads a profile from workflow_engine/domain/profiles/.\nDo not treat repo workflow_engine/domain/checks/*/configs/project_*.json as production configs (CI smoke only).\nDo not copy *.program.json into /work/&lt;disease&gt;/configs/.",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>3</span>  <span class='chapter-title'>Project Config and Layout</span>"
+    ]
+  },
+  {
     "objectID": "02-project-config-and-layout.html#minimum-structure",
     "href": "02-project-config-and-layout.html#minimum-structure",
     "title": "3  Project Config and Layout",
-    "section": "3.2 Minimum structure",
-    "text": "3.2 Minimum structure\nUse one project file containing:\n\nglobal cohort metadata (controls, diseases, comparisons),\nfilesystem anchors (output_base, samples_base_path),\nstep-specific overrides under step_config.\n\nCore stage driver:\n\nstep_config.validation (parsed into MonteCarloConfig by methyl-validation).",
+    "section": "3.3 Minimum structure",
+    "text": "3.3 Minimum structure\nUse one project file containing:\n\nglobal cohort metadata (controls, diseases, comparisons),\nfilesystem anchors (output_base, samples_base_path),\nstep-specific overrides under step_config.\n\nCore stage driver:\n\nstep_config.validation (parsed into MonteCarloConfig by methyl-validation).\n\nUpstream sample prep (before stability) uses:\n\nstep_config.alignment_qc — guardrails, cycle screening, optional cfDNA fragmentomics (Chapter 3).\nstep_config.extraction_qc — post-extract coverage and conversion thresholds (Chapter 3).",
     "crumbs": [
       "Part I: Setup and Package Orientation",
       "<span class='chapter-number'>3</span>  <span class='chapter-title'>Project Config and Layout</span>"
@@ -173,8 +184,8 @@
     "objectID": "02-project-config-and-layout.html#validation-stage-keys-that-matter-most",
     "href": "02-project-config-and-layout.html#validation-stage-keys-that-matter-most",
     "title": "3  Project Config and Layout",
-    "section": "3.3 Validation stage keys that matter most",
-    "text": "3.3 Validation stage keys that matter most\n\nsplit policy: train_fraction, n_iterations, seed\nstability controls:\n\nrun_stability\nstability_dmp_freq\nstability_min_balanced_accuracy\nstability_gene_freq\nstability_featurecuts_enabled\nstability_target_balanced_accuracy\nstability_min_selected_dmps\n\nfreeze/model paths:\n\nfreeze_stable_dmp_csv (optional)\nproduction_output_dir (optional)\n\nbackend/model:\n\nmodel_backend\nfeature_mode\necdf_second_stage_enabled\nbackend-specific tabular_* / generative_* keys",
+    "section": "3.4 Validation stage keys that matter most",
+    "text": "3.4 Validation stage keys that matter most\n\nsplit policy: train_fraction, n_iterations, seed\nstability controls:\n\nrun_stability\nstability_dmp_freq\nstability_min_balanced_accuracy\nstability_gene_freq\nstability_featurecuts_enabled\nstability_target_balanced_accuracy\nstability_min_selected_dmps\n\nfreeze/model paths:\n\nfreeze_stable_dmp_csv (optional)\nproduction_output_dir (optional)\n\nbackend/model:\n\nmodel_backend\nfeature_mode\necdf_second_stage_enabled\nbackend-specific tabular_* / generative_* keys",
     "crumbs": [
       "Part I: Setup and Package Orientation",
       "<span class='chapter-number'>3</span>  <span class='chapter-title'>Project Config and Layout</span>"
@@ -184,8 +195,8 @@
     "objectID": "02-project-config-and-layout.html#output-layout",
     "href": "02-project-config-and-layout.html#output-layout",
     "title": "3  Project Config and Layout",
-    "section": "3.4 Output layout",
-    "text": "3.4 Output layout\nMost runs write to:\n&lt;output_base&gt;/&lt;project_name&gt;/monte_carlo_runs/\nImportant subtrees:\n\nrun_XXXX/ (per-iteration artifacts)\nstability/ (stable panel and summaries)\nproduction/ (freeze and final model outputs)\nmodel_mc/ (backend comparison runs)\npost_model_validation/ (frozen-model descriptive evaluation)",
+    "section": "3.5 Output layout",
+    "text": "3.5 Output layout\nMost runs write to:\n&lt;output_base&gt;/&lt;project_name&gt;/monte_carlo_runs/\nImportant subtrees:\n\nrun_XXXX/ (per-iteration artifacts)\nstability/ (stable panel and summaries)\nproduction/ (freeze and final model outputs)\nmodel_mc/ (backend comparison runs)\npost_model_validation/ (frozen-model descriptive evaluation)",
     "crumbs": [
       "Part I: Setup and Package Orientation",
       "<span class='chapter-number'>3</span>  <span class='chapter-title'>Project Config and Layout</span>"
@@ -195,8 +206,8 @@
     "objectID": "02-project-config-and-layout.html#handoff-model",
     "href": "02-project-config-and-layout.html#handoff-model",
     "title": "3  Project Config and Layout",
-    "section": "3.5 Handoff model",
-    "text": "3.5 Handoff model",
+    "section": "3.6 Handoff model",
+    "text": "3.6 Handoff model",
     "crumbs": [
       "Part I: Setup and Package Orientation",
       "<span class='chapter-number'>3</span>  <span class='chapter-title'>Project Config and Layout</span>"
@@ -206,8 +217,8 @@
     "objectID": "02-project-config-and-layout.html#do-not-do-this",
     "href": "02-project-config-and-layout.html#do-not-do-this",
     "title": "3  Project Config and Layout",
-    "section": "3.6 Do not do this",
-    "text": "3.6 Do not do this\n\nDo not put blind-only predictor config (predictor.blind) into validation-driven runs.\nDo not change samples_base_path between stages without explicit remap.\nDo not run --freeze before stable panel exists.",
+    "section": "3.7 Do not do this",
+    "text": "3.7 Do not do this\n\nDo not put blind-only predictor config (predictor.blind) into validation-driven runs.\nDo not change samples_base_path between stages without explicit remap.\nDo not run --freeze before stable panel exists.",
     "crumbs": [
       "Part I: Setup and Package Orientation",
       "<span class='chapter-number'>3</span>  <span class='chapter-title'>Project Config and Layout</span>"
@@ -217,8 +228,8 @@
     "objectID": "02-project-config-and-layout.html#success-checks",
     "href": "02-project-config-and-layout.html#success-checks",
     "title": "3  Project Config and Layout",
-    "section": "3.7 Success checks",
-    "text": "3.7 Success checks\n\nProject loads in methyl-validation --project ....\nstep_config.validation exists and parses.\nRun directories appear under expected root.",
+    "section": "3.8 Success checks",
+    "text": "3.8 Success checks\n\nProject loads in methyl-validation --project ....\nstep_config.validation exists and parses.\nRun directories appear under expected root.",
     "crumbs": [
       "Part I: Setup and Package Orientation",
       "<span class='chapter-number'>3</span>  <span class='chapter-title'>Project Config and Layout</span>"
@@ -228,990 +239,1144 @@
     "objectID": "02-project-config-and-layout.html#see-also",
     "href": "02-project-config-and-layout.html#see-also",
     "title": "3  Project Config and Layout",
-    "section": "3.8 See also",
-    "text": "3.8 See also\n\ndocs/theory/chapters/11-project-configuration.qmd\ndocs/theory/chapters/13-configuration-reference.qmd",
+    "section": "3.9 See also",
+    "text": "3.9 See also\n\ndocs/theory/chapters/11-project-configuration.qmd\ndocs/theory/chapters/13-configuration-reference.qmd",
     "crumbs": [
       "Part I: Setup and Package Orientation",
       "<span class='chapter-number'>3</span>  <span class='chapter-title'>Project Config and Layout</span>"
     ]
   },
   {
-    "objectID": "03-package-reference-individual-usage.html",
-    "href": "03-package-reference-individual-usage.html",
-    "title": "4  Package Reference (Individual Usage)",
+    "objectID": "03-sample-prep-and-qc.html",
+    "href": "03-sample-prep-and-qc.html",
+    "title": "4  Sample Prep and Quality Control",
     "section": "",
-    "text": "4.1 Purpose\nSummarize each active package as a standalone tool, then map it to staged methyl-validation orchestration.",
+    "text": "4.1 Purpose\nSamplePrepPipeline is the per-sample upstream workflow that turns raw WGBS FASTQs into methylation HDF5 files ({chromosome}-CG.h5) that downstream stages consume. Every sample passes through two automated guardrails before it enters stability, freeze, or discovery workflows:\nWithout these gates, bad alignments would waste GPU extraction time, and under-covered or poorly converted extractions would pollute centroids, DMP discovery, and classifiers.\nWorkflow source of truth: workflow_engine/domain/fixtures/sample_prep.program.json\nOperator reference: workflow_engine/sql/SamplePrepFlow.md",
     "crumbs": [
       "Part I: Setup and Package Orientation",
-      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#purpose",
+    "href": "03-sample-prep-and-qc.html#purpose",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "",
+    "text": "Alignment QC (methyl-qc) — confirms Parabricks alignment and sequencing metrics are acceptable (or fixable via trim/realign).\nExtraction QC (methyl-extraction-qc) — confirms MethylExtractor produced sufficient coverage and conversion-quality signal across chromosomes.",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#end-to-end-flow",
+    "href": "03-sample-prep-and-qc.html#end-to-end-flow",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "4.2 End-to-end flow",
+    "text": "4.2 End-to-end flow\n\n\n\n\n\n\n\n\n\nGate\nScope variable\nWhen\nBlocks\n\n\n\n\nAlignment\nqcPass\nAfter Parabricks, before extract\nExtraction (unless remediation succeeds)\n\n\nExtraction\nextractionQcPass\nAfter MethylExtractor\nFull archive and BAM deletion\n\n\n\nOrdering rationale: alignment QC runs before cfDNA fragmentomics so failed samples skip BAM scanning. Fragmentomics and extraction both need the aligned BAM. FASTQs are retained until QC is fully resolved so fastp can trim and Parabricks can realign on the remediation path.",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#where-artifacts-live",
+    "href": "03-sample-prep-and-qc.html#where-artifacts-live",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "4.3 Where artifacts live",
+    "text": "4.3 Where artifacts live\nPer sample under /work/samples/{sample_id}/:\n\n\n\n\n\n\n\nArtifact\nRole\n\n\n\n\n*deduplicate_metrics.txt\nPicard-style duplication metrics from Parabricks\n\n\n{sample_id}.json\nParabricks WGBS metrics JSON (sequencing + alignment)\n\n\n{sample_id}.qc-metrics.tar\nOptional tar of tabular metrics (used when JSON is absent)\n\n\n{output_base}/{project}/alignment_qc/{sample_id}.json\nNormalized V2 alignment QC export (when run project-scoped)\n\n\n{sample_id}.extraction_manifest.json\nMethylExtractor summary (written at extract time)\n\n\n{sample_id}.extraction_qc.json\nExtraction guardrail report\n\n\n{sample_id}.sample_prep_log.jsonl\nAppend-only audit of every prep action\n\n\n{chr}-CG.h5\nMethylation matrices consumed by methyl-centroid",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#alignment-qc-inputs-and-normalized-json",
+    "href": "03-sample-prep-and-qc.html#alignment-qc-inputs-and-normalized-json",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "4.4 Alignment QC: inputs and normalized JSON",
+    "text": "4.4 Alignment QC: inputs and normalized JSON\nmethyl-qc (packages/methylalignmentqc) combines two upstream metric families into one decision:\n\n4.4.1 Picard-style duplication metrics\nParabricks emits a tab-separated deduplication metrics file (names vary: *deduplicate_metrics.txt or *duplication_metrics.txt). The parser (methyl_alignment_qc/core/parser.py) reads Picard-compatible columns such as:\n\nLIBRARY, UNPAIRED_READS_EXAMINED, READ_PAIRS_EXAMINED\nSECONDARY_OR_SUPPLEMENTARY_RDS, UNMAPPED_READS\nUNPAIRED_READ_DUPLICATES, READ_PAIR_DUPLICATES\nPERCENT_DUPLICATION\n\nThese feed summary_stats on the export JSON (total reads, duplication rate, etc.). Optional config guardrails (step_config.alignment_qc.optional_guardrails.duplication_rate_max) can fail samples with excessive PCR duplication even when cycle quality looks fine.\n\n\n4.4.2 Parabricks WGBS metrics JSON\nEach sample directory should contain {sample_id}.json: Parabricks’ structured report with sections such as:\n\nquality_yield — total/PF reads and Q30 bases\nmean_quality_by_cycle — per-cycle mean Phred (Read 1 then Read 2; for 151+151 cycles, Read 2 starts at cycle 152)\ngc_bias_summary, insert_size_metrics\npre_adapter_summaries — deamination and OxoG artifact qscores\n\nWhen this file is present, guardrails in wgbs_parabricks_qc.py evaluate sequencing and alignment health before methylation extraction.\n\n\n4.4.3 Our equivalent export JSON (V2)\nThe worker writes a normalized V2 row-oriented JSON per sample (schema: schemas/config/alignment_qc/exported_sample_qc_v2.schema.json). Key blocks:\n\n\n\n\n\n\n\nBlock\nContents\n\n\n\n\nsummary_stats\nDuplication rate, read counts from Picard metrics\n\n\nquality_yield, mean_quality_by_cycle, …\nParabricks sections (embedded or referenced)\n\n\nguardrails.details\nPer-metric pass/fail, observed value, normal range, operator message\n\n\nguardrails.screening\nCycle-quality disposition and recommended trim counts\n\n\nguardrails.overall_pass\nSingle boolean bound to workflow qcPass\n\n\nqc_history\nAppend-only list of evaluations (initial + post-remediation retries)\n\n\nfragmentomics_metrics\ncfDNA insert-size guardrails when enabled\n\n\n\nV1-shaped payloads are assembled internally and converted to V2 for export; standalone tools can migrate older files with methyl-qc-migrate-guardrails.",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#alignment-guardrails-what-good-alignment-means",
+    "href": "03-sample-prep-and-qc.html#alignment-guardrails-what-good-alignment-means",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "4.5 Alignment guardrails: what “good alignment” means",
+    "text": "4.5 Alignment guardrails: what “good alignment” means\nCore WGBS guardrails (defaults in wgbs_parabricks_qc.py) include:\n\n\n\nMetric\nDefault expectation\nWhy it matters\n\n\n\n\nPF read percent\n≥ 90%\nRun-level filtering quality\n\n\nQ30 percent\n≥ 85% (configurable)\nBase-call confidence\n\n\nMean quality\n≥ 35\nOverall sequencing noise\n\n\nMin quality after cycle 20\n≥ 30\nLate-cycle degradation\n\n\nAT / GC dropout\n&lt; 3 / &lt; 5\nCoverage bias across genome\n\n\nMedian insert size\n150–300 bp\nLibrary fragmentation sanity\n\n\nDeamination qscore\n≤ 30\nExpected WGBS conversion signal\n\n\nOxoG qscore\n≥ 20\nOxidative damage risk\n\n\n\nEach metric carries a message explaining the biological/operational concern. guardrails.overall_pass is the logical AND of all evaluated checks (including optional and analyte-specific add-ons).\n\n4.5.1 Optional and analyte-specific checks\nConfigure under step_config.alignment_qc in the project JSON:\n{\n  \"alignment_qc\": {\n    \"optional_guardrails\": {\n      \"duplication_rate_max\": 0.25,\n      \"min_pf_reads\": 1000000\n    },\n    \"bisulfite_conversion\": {\n      \"enabled\": true,\n      \"source\": \"auto\",\n      \"min_conversion_rate_pct\": 99.0\n    },\n    \"fragmentomics\": {\n      \"enabled\": true,\n      \"profile\": \"cfdna\"\n    },\n    \"cycle_screening\": {\n      \"enabled\": true,\n      \"r2_quality_threshold\": 30,\n      \"max_trim_bases\": 8\n    }\n  }\n}\n\nBisulfite conversion: reads bisulfite_conversion.json sidecar when present; otherwise may use deamination qscore as a qualitative proxy.\ncfDNA fragmentomics: when primary_analyte is cfdna, insert-size histogram guardrails can flag abnormal fragment profiles before extraction.\n\nSee docs/ANALYTE_PROFILES.md for profile defaults.",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#cycle-screening-and-automated-recovery",
+    "href": "03-sample-prep-and-qc.html#cycle-screening-and-automated-recovery",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "4.6 Cycle screening and automated recovery",
+    "text": "4.6 Cycle screening and automated recovery\nHistorically, a single min(mq[20:]) over the combined cycle series could fail fixable Read-2 start dips with a generic “do not proceed” message. Cycle screening (cycle_quality_screening.py) inspects Read 1 and Read 2 separately and assigns a disposition:\n\n\n\n\n\n\n\n\nDisposition\nMeaning\nSamplePrep action\n\n\n\n\nUSE_CURRENT_ALIGNMENT\nGuardrails pass\nContinue to extract\n\n\nREALIGN_TRIM / REALIGN_READ2_TRIM\nFixable read-end quality dip\nsample.trim_fastq → Parabricks forceRealign → methyl-qc retry\n\n\nINVESTIGATE_MULTI_REGION\nMultiple low-quality regions\nManual review; no auto-trim\n\n\nINVESTIGATE_GUARDRAIL_ONLY\nCycles OK; duplication/depth/insert fail\nManual review\n\n\nNOT_FIXABLE\nNo automated path\nArchive QC-only artifacts, mark failed\n\n\n\nScreening writes guardrails.screening with recommended trim bases (trim_front1, trim_tail1, trim_front2, trim_tail2). SamplePrep binds remediateAlignment when disposition is trim-eligible and FASTQs are still on disk.\nImportant: FASTQs must not be deleted before final alignment QC disposition. The workflow deletes FASTQs only after pass or final reject (including post-remediation retry).\nOffline cohort review (no re-align):\nsource .venv/bin/activate\npython scripts/alignment_qc_cohort_screening.py \\\n  --qc-dir /work/prostate-cancer/alignment_qc \\\n  --group healthy=/work/prostate-cancer/data/healthy.csv \\\n  --group pca=/work/prostate-cancer/data/pca.csv \\\n  --out /work/prostate-cancer/alignment_qc/screening_report",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#extraction-qc-confirming-enough-good-reads",
+    "href": "03-sample-prep-and-qc.html#extraction-qc-confirming-enough-good-reads",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "4.7 Extraction QC: confirming enough good reads",
+    "text": "4.7 Extraction QC: confirming enough good reads\nAlignment QC validates the BAM. Extraction QC validates the methylation call layer MethylExtractor produced.\n\n4.7.1 Input: extraction manifest\nMethylExtractor writes {sample_id}.extraction_manifest.json with:\n\nsummary — genome-wide CpG weighted mean coverage, CHH/CHG methylation levels\nper_chromosome — per-chromosome blocks with CG.mean_coverage and related stats\n\n\n\n4.7.2 Output: extraction QC JSON\nmethyl-extraction-qc reads the manifest and writes {sample_id}.extraction_qc.json. Default guardrails (methylextractionqc/guardrails.py):\n\n\n\n\n\n\n\n\nGuardrail\nDefault\nInterpretation\n\n\n\n\ncpg_weighted_mean_coverage\n≥ 10×\nEnough reads at CpG sites passing minimum coverage\n\n\nchh_methylation_level\n≤ 0.02\nLow non-CpG methylation (conversion sanity) when CHH extracted\n\n\nchg_methylation_level\n≤ 0.02\nSame for CHG\n\n\nchromosome_completeness\nall expected chromosomes\nEvery project chromosome present with CG metrics\n\n\nchromosome_uniformity\nautosomal min/median ≥ 0.5\nNo severe localized dropout\n\n\n\nguardrails.overall_pass maps to workflow extractionQcPass. Failures are terminal today (no automatic retry loop).\nOverride thresholds via step_config.extraction_qc in the project JSON. Schema: schemas/extraction_qc_output.schema.json.\n\n\n4.7.3 Why both gates matter\n\n\n\n\n\n\n\nQuestion\nAnswered by\n\n\n\n\nDid sequencing and alignment produce a usable BAM?\nAlignment QC\n\n\nDid we extract enough confident methylation signal genome-wide?\nExtraction QC\n\n\n\nA sample can pass alignment but fail extraction (e.g., coverage collapse on certain chromosomes). Conversely, remediation after alignment QC prevents spending extract GPU time on BAMs that will never support stable downstream statistics.",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#pass-fail-and-handoff",
+    "href": "03-sample-prep-and-qc.html#pass-fail-and-handoff",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "4.8 Pass, fail, and handoff",
+    "text": "4.8 Pass, fail, and handoff\n\n\n\n\n\n\n\n\n\nOutcome\nAlignment QC\nExtraction QC\nNext step\n\n\n\n\nPass both\nqcPass: true\nextractionQcPass: true\nOptional full archive → delete FASTQs/BAM → sample ready for DataDrivenPipeline\n\n\nFail alignment (not fixable)\nqcPass: false\n—\nQC-only archive, mark failed, skip extract\n\n\nFail after remediation\nqcPass: false (attempt 2)\n—\nSame as above\n\n\nPass alignment, fail extraction\nqcPass: true\nextractionQcPass: false\nQC-only archive, mark failed; H5 may exist but must not enter production cohorts\n\n\n\nWhen SamplePrep instance COMPLETED, start stability or discovery workflows with the same projectPath. Downstream code resolves HDF5 via methyl_domain.helpers.resolve_methylation_h5_path() — do not hard-code sample paths.\nWorkers tag scope with MethylSampleRef including alignmentQc, extractionQc, and methylation refs for traceability.",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#configuration-checklist",
+    "href": "03-sample-prep-and-qc.html#configuration-checklist",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "4.9 Configuration checklist",
+    "text": "4.9 Configuration checklist\nBefore starting SamplePrep, confirm:\n\nproject.json lists samples and samples_base_path / path_remap resolve to /work/samples/...\nstep_config.alignment_qc thresholds match analyte (cfDNA vs buffy coat)\nstep_config.extraction_qc min coverage appropriate for WGBS depth expectations\nvalidation.regulatory.primary_analyte set (drives fragmentomics profile)\nInstance context_json includes fastqStorage, referenceFasta, samples[]",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#commands-standalone-debugging",
+    "href": "03-sample-prep-and-qc.html#commands-standalone-debugging",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "4.10 Commands (standalone debugging)",
+    "text": "4.10 Commands (standalone debugging)\nsource .venv/bin/activate\n\n# Alignment QC for one sample directory\nmethyl-qc --samples /work/samples/SAMPLE_ID --output-dir /work/prostate-cancer/alignment_qc\n\n# Project-scoped (uses step_config.alignment_qc)\nmethyl-qc --project /work/prostate-cancer/configs/project_Example.json\n\n# Extraction QC after MethylExtractor\nmethyl-extraction-qc --sample-dir /work/samples/SAMPLE_ID --sample-id SAMPLE_ID",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-sample-prep-and-qc.html#related-documentation",
+    "href": "03-sample-prep-and-qc.html#related-documentation",
+    "title": "4  Sample Prep and Quality Control",
+    "section": "4.11 Related documentation",
+    "text": "4.11 Related documentation\n\nWorkflow operator guide: workflow_engine/sql/SamplePrepFlow.md\nArchitecture §0: workflow_engine/docs/pipeline_architecture.md\nWorker contract: workflow_engine/contract/sample_prep_capabilities.md\nAlignment QC package: packages/methylalignmentqc/docs/USAGE.md\nExtraction QC package: packages/methylextractionqc/README.md\nHistorical design notes (cycle screening): docs/plans/alignment-qc-screening.plan.md",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Sample Prep and Quality Control</span>"
+    ]
+  },
+  {
+    "objectID": "03-package-reference-individual-usage.html",
+    "href": "03-package-reference-individual-usage.html",
+    "title": "5  Package Reference (Individual Usage)",
+    "section": "",
+    "text": "5.1 Purpose\nSummarize each active package as a standalone tool, then map it to staged methyl-validation orchestration.\nFor the full SamplePrep story (Picard metrics, Parabricks JSON, guardrails, remediation, extraction QC), see Chapter 3 — Sample Prep and Quality Control.",
+    "crumbs": [
+      "Part I: Setup and Package Orientation",
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
     ]
   },
   {
     "objectID": "03-package-reference-individual-usage.html#package-quick-map",
     "href": "03-package-reference-individual-usage.html#package-quick-map",
-    "title": "4  Package Reference (Individual Usage)",
-    "section": "4.2 Package quick map",
-    "text": "4.2 Package quick map\n\n\n\n\n\n\n\n\n\nPackage\nCLI\nPrimary role\nTypical standalone output\n\n\n\n\nmethylalignmentqc\nmethyl-qc\nParse alignment/dup metrics into normalized JSON\nalignment_qc/&lt;sample&gt;.json\n\n\nmethylcentroid\nmethyl-centroid\nBuild cohort centroids from methylation files\ncentroid artifacts per group\n\n\nmethyldetector\nmethyl-detector\nDiscover/classify DMPs\ndmps-*-discovery.csv, result*.json\n\n\nmethylmapper\nmethyl-mapper\nMap DMP loci to genes/features\nall-gene_name-combined.csv\n\n\nmethylenricher\nmethyl-enricher\nEnrichment/module interpretation\nenrichment_merged.csv, modules_ranked.csv\n\n\nmethylclassifier\nmethyl-classifier\nTrain production classifier (ECDF path)\nclassifiers/*.pkl\n\n\nmethylpredictor\nmethyl-predictor\nPredict and report metrics/inference\npredictors/*/validation_metrics.json or blind reports\n\n\nmethylvalidation\nmethyl-validation\nOrchestrate MC/stability/freeze/model workflows\nmonte_carlo_runs/*\n\n\nmethyldiseaseprogression\nmethyl-disease-progression\nCross-stage synthesis from mapper/enricher outputs\nprogression/*.csv, summary.json",
+    "title": "5  Package Reference (Individual Usage)",
+    "section": "5.2 Package quick map",
+    "text": "5.2 Package quick map\n\n\n\n\n\n\n\n\n\nPackage\nCLI\nPrimary role\nTypical standalone output\n\n\n\n\nmethylalignmentqc\nmethyl-qc\nParse alignment/dup metrics into normalized JSON\nalignment_qc/&lt;sample&gt;.json\n\n\nmethylcentroid\nmethyl-centroid\nBuild cohort centroids from methylation files\ncentroid artifacts per group\n\n\nmethyldetector\nmethyl-detector\nDiscover/classify DMPs\ndmps-*-discovery.csv, result*.json\n\n\nmethylmapper\nmethyl-mapper\nMap DMP loci to genes/features\nall-gene_name-combined.csv\n\n\nmethylenricher\nmethyl-enricher\nEnrichment/module interpretation\nenrichment_merged.csv, modules_ranked.csv\n\n\nmethylclassifier\nmethyl-classifier\nTrain production classifier (ECDF path)\nclassifiers/*.pkl\n\n\nmethylpredictor\nmethyl-predictor\nPredict and report metrics/inference\npredictors/*/validation_metrics.json or blind reports\n\n\nmethylvalidation\nmethyl-validation\nOrchestrate MC/stability/freeze/model workflows\nmonte_carlo_runs/*\n\n\nmethyldiseaseprogression\nmethyl-disease-progression\nCross-stage synthesis from mapper/enricher outputs\nprogression/*.csv, summary.json",
     "crumbs": [
       "Part I: Setup and Package Orientation",
-      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
     ]
   },
   {
     "objectID": "03-package-reference-individual-usage.html#standalone-examples",
     "href": "03-package-reference-individual-usage.html#standalone-examples",
-    "title": "4  Package Reference (Individual Usage)",
-    "section": "4.3 Standalone examples",
-    "text": "4.3 Standalone examples\n\n4.3.1 Alignment QC\nsource .venv/bin/activate\nmethyl-qc --metrics-root /data/metrics --output-dir /work/alignment_qc\n\n\n4.3.2 Enrichment from mapper output\nsource .venv/bin/activate\nmethyl-enricher --input /work/project/mapper/pca_pca1/all-gene_name-combined.csv --modules --outdir /work/project/enricher/pca_pca1\n\n\n4.3.3 Blind prediction with frozen model\nsource .venv/bin/activate\nmethyl-predictor --project /work/project/monte_carlo_runs/production/project.json",
+    "title": "5  Package Reference (Individual Usage)",
+    "section": "5.3 Standalone examples",
+    "text": "5.3 Standalone examples\n\n5.3.1 Alignment QC\nsource .venv/bin/activate\nmethyl-qc --metrics-root /data/metrics --output-dir /work/alignment_qc\n\n\n5.3.2 Enrichment from mapper output\nsource .venv/bin/activate\nmethyl-enricher --input /work/project/mapper/pca_pca1/all-gene_name-combined.csv --modules --outdir /work/project/enricher/pca_pca1\n\n\n5.3.3 Blind prediction with frozen model\nsource .venv/bin/activate\nmethyl-predictor --project /work/project/monte_carlo_runs/production/project.json",
     "crumbs": [
       "Part I: Setup and Package Orientation",
-      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
     ]
   },
   {
     "objectID": "03-package-reference-individual-usage.html#orchestrated-equivalents-in-methyl-validation",
     "href": "03-package-reference-individual-usage.html#orchestrated-equivalents-in-methyl-validation",
-    "title": "4  Package Reference (Individual Usage)",
-    "section": "4.4 Orchestrated equivalents in methyl-validation",
-    "text": "4.4 Orchestrated equivalents in methyl-validation\n\nStability stage runs centroid+detector per iteration.\nFreeze stage runs centroid-&gt;detector-&gt;mapper-&gt;enricher (and optional progression).\nModel stage runs:\n\necdf: classifier-&gt;predictor\ntabular_sklearn / generative_hybrid: in-process backend train/predict\n\nPost-model validation runs frozen-model descriptive holdouts.",
+    "title": "5  Package Reference (Individual Usage)",
+    "section": "5.4 Orchestrated equivalents in methyl-validation",
+    "text": "5.4 Orchestrated equivalents in methyl-validation\n\nStability stage runs centroid+detector per iteration.\nFreeze stage runs centroid-&gt;detector-&gt;mapper-&gt;enricher (and optional progression).\nModel stage runs:\n\necdf: classifier-&gt;predictor\ntabular_sklearn / generative_hybrid: in-process backend train/predict\n\nPost-model validation runs frozen-model descriptive holdouts.",
     "crumbs": [
       "Part I: Setup and Package Orientation",
-      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
     ]
   },
   {
     "objectID": "03-package-reference-individual-usage.html#integration-diagram",
     "href": "03-package-reference-individual-usage.html#integration-diagram",
-    "title": "4  Package Reference (Individual Usage)",
-    "section": "4.5 Integration diagram",
-    "text": "4.5 Integration diagram",
+    "title": "5  Package Reference (Individual Usage)",
+    "section": "5.5 Integration diagram",
+    "text": "5.5 Integration diagram",
     "crumbs": [
       "Part I: Setup and Package Orientation",
-      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
     ]
   },
   {
     "objectID": "03-package-reference-individual-usage.html#do-not-do-this",
     "href": "03-package-reference-individual-usage.html#do-not-do-this",
-    "title": "4  Package Reference (Individual Usage)",
-    "section": "4.6 Do not do this",
-    "text": "4.6 Do not do this\n\nDo not assume standalone package defaults match project-orchestrated overrides.\nDo not skip project.json artifact handoff checks when chaining packages manually.",
+    "title": "5  Package Reference (Individual Usage)",
+    "section": "5.6 Do not do this",
+    "text": "5.6 Do not do this\n\nDo not assume standalone package defaults match project-orchestrated overrides.\nDo not skip project.json artifact handoff checks when chaining packages manually.",
     "crumbs": [
       "Part I: Setup and Package Orientation",
-      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
     ]
   },
   {
     "objectID": "03-package-reference-individual-usage.html#see-also",
     "href": "03-package-reference-individual-usage.html#see-also",
-    "title": "4  Package Reference (Individual Usage)",
-    "section": "4.7 See also",
-    "text": "4.7 See also\n\nREADME.md\npackages/*/docs/USAGE.md",
+    "title": "5  Package Reference (Individual Usage)",
+    "section": "5.7 See also",
+    "text": "5.7 See also\n\nREADME.md\npackages/*/docs/USAGE.md",
     "crumbs": [
       "Part I: Setup and Package Orientation",
-      "<span class='chapter-number'>4</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
+      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Package Reference (Individual Usage)</span>"
     ]
   },
   {
     "objectID": "04-stage-stability.html",
     "href": "04-stage-stability.html",
-    "title": "5  Stage: Stability",
+    "title": "6  Stage: Stability",
     "section": "",
-    "text": "5.1 Purpose\nRun repeated train/validation iterations to identify DMPs that recur across runs and materialize a stable production panel.",
+    "text": "6.1 Purpose\nRun repeated train/validation iterations to identify DMPs that recur across runs and materialize a stable production panel.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Stability</span>"
     ]
   },
   {
     "objectID": "04-stage-stability.html#entry-command",
     "href": "04-stage-stability.html#entry-command",
-    "title": "5  Stage: Stability",
-    "section": "5.2 Entry command",
-    "text": "5.2 Entry command\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability\nOptional strict FeatureCuts alignment:\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \\\n  --stability --stability-featurecuts --stability-target-ba 0.95 --stability-min-selected-dmps 1000",
+    "title": "6  Stage: Stability",
+    "section": "6.2 Entry command",
+    "text": "6.2 Entry command\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability\nOptional strict FeatureCuts alignment:\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \\\n  --stability --stability-featurecuts --stability-target-ba 0.95 --stability-min-selected-dmps 1000",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Stability</span>"
     ]
   },
   {
     "objectID": "04-stage-stability.html#required-config-keys",
     "href": "04-stage-stability.html#required-config-keys",
-    "title": "5  Stage: Stability",
-    "section": "5.3 Required config keys",
-    "text": "5.3 Required config keys\nUnder step_config.validation:\n\nn_iterations, train_fraction, seed\nrun_stability\nstability_dmp_freq\nstability_min_balanced_accuracy\nstability_gene_freq\noptional adaptive stop controls:\n\nstability_early_stop_enabled\nstability_min_iterations\nstability_convergence_window\nstability_convergence_jaccard\nstability_convergence_max_size_delta\nstability_convergence_patience\n\noptional FeatureCuts controls:\n\nstability_featurecuts_enabled\nstability_target_balanced_accuracy\nstability_min_selected_dmps",
+    "title": "6  Stage: Stability",
+    "section": "6.3 Required config keys",
+    "text": "6.3 Required config keys\nUnder step_config.validation:\n\nn_iterations, train_fraction, seed\nrun_stability\nstability_dmp_freq\nstability_min_balanced_accuracy\nstability_gene_freq\noptional adaptive stop controls:\n\nstability_early_stop_enabled\nstability_min_iterations\nstability_convergence_window\nstability_convergence_jaccard\nstability_convergence_max_size_delta\nstability_convergence_patience\n\noptional FeatureCuts controls:\n\nstability_featurecuts_enabled\nstability_target_balanced_accuracy\nstability_min_selected_dmps",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Stability</span>"
+    ]
+  },
+  {
+    "objectID": "04-stage-stability.html#composable-workflow-profiles",
+    "href": "04-stage-stability.html#composable-workflow-profiles",
+    "title": "6  Stage: Stability",
+    "section": "6.4 Composable workflow profiles",
+    "text": "6.4 Composable workflow profiles\nDomainProgram workflows support selectable paths via context profiles in workflow_engine/domain/profiles/. Use methyl-validation run-workflow or methyl-workflow-run with --context-file.\nGene stability without DMP FeatureCuts (discovery DMPs → mapper → enricher → stability on enricher genes):\n\nProfile: gene_enricher_stability.profile.json\nProgram: mc_gene_enricher_stability.program.json\nSet stability_featurecuts_enabled: false, stability_gene_featurecuts_enabled: false, stability_gene_freq as needed\nMapper uses dmps-*-discovery.csv; enricher applies disease filters from step_config.enricher\n\nDMP panel stability (split detector + pipeline.dmp_select): profile dmp_panel_stability or full_biomarker_gene_fc.\nDiscovery DMPs → broad mapper → gene FeatureCuts (stable gene panel for model): profile discovery_gene_featurecuts with pca1_5_mc_stability.program.json. Mapper uses dmps-*-discovery.csv; pipeline.dmp_select still runs so pipeline.gene_select has classifier DMP exports for validation. Biomarker/PPI pre-filter is off by default (largest gene pool); enable with \"runBiomarkerFilter\": true in context.\nBiomarker / PPI pre-filter (validation.biomarker_filter): optional via ${runBiomarkerFilter}; modes ppi_only, disease_only, disease_and_ppi under step_config.validation or gene_selection. Can run on mapper gene pools without gene FeatureCuts.\nSee docs/domain_program_language.md for the full profile matrix and IF branch flags (runDmpSelection, runGeneFeaturecuts, …).",
+    "crumbs": [
+      "Part II: Staged Solution Workflow",
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Stability</span>"
     ]
   },
   {
     "objectID": "04-stage-stability.html#process-model",
     "href": "04-stage-stability.html#process-model",
-    "title": "5  Stage: Stability",
-    "section": "5.4 Process model",
-    "text": "5.4 Process model",
+    "title": "6  Stage: Stability",
+    "section": "6.5 Process model",
+    "text": "6.5 Process model",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Stability</span>"
     ]
   },
   {
     "objectID": "04-stage-stability.html#expected-outputs",
     "href": "04-stage-stability.html#expected-outputs",
-    "title": "5  Stage: Stability",
-    "section": "5.5 Expected outputs",
-    "text": "5.5 Expected outputs\n\n&lt;mc_root&gt;/stability/stable_dmps_production.csv\n&lt;mc_root&gt;/stability/stability_summary.json\n&lt;mc_root&gt;/all_metrics.csv\n&lt;mc_root&gt;/metrics_summary.json\n&lt;mc_root&gt;/baseline_manifest.json\n\nWhere &lt;mc_root&gt; is: &lt;output_base&gt;/&lt;project_name&gt;/monte_carlo_runs/",
+    "title": "6  Stage: Stability",
+    "section": "6.6 Expected outputs",
+    "text": "6.6 Expected outputs\n\n&lt;mc_root&gt;/stability/stable_dmps_production.csv\n&lt;mc_root&gt;/stability/stability_summary.json\n&lt;mc_root&gt;/all_metrics.csv\n&lt;mc_root&gt;/metrics_summary.json\n&lt;mc_root&gt;/baseline_manifest.json\n\nWhere &lt;mc_root&gt; is: &lt;output_base&gt;/&lt;project_name&gt;/monte_carlo_runs/",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Stability</span>"
     ]
   },
   {
     "objectID": "04-stage-stability.html#success-checks",
     "href": "04-stage-stability.html#success-checks",
-    "title": "5  Stage: Stability",
-    "section": "5.6 Success checks",
-    "text": "5.6 Success checks\n\nstable_dmps_production.csv exists and is non-empty.\nall_metrics.csv has successful rows near expected run count.\nstability_summary.json reports configured thresholds.\nif adaptive stop is enabled, stability_summary.json includes early_stopping diagnostics (triggered, checkpoint history, and stop iteration when applicable).",
+    "title": "6  Stage: Stability",
+    "section": "6.7 Success checks",
+    "text": "6.7 Success checks\n\nstable_dmps_production.csv exists and is non-empty.\nall_metrics.csv has successful rows near expected run count.\nstability_summary.json reports configured thresholds.\nif adaptive stop is enabled, stability_summary.json includes early_stopping diagnostics (triggered, checkpoint history, and stop iteration when applicable).",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Stability</span>"
     ]
   },
   {
     "objectID": "04-stage-stability.html#do-not-do-this",
     "href": "04-stage-stability.html#do-not-do-this",
-    "title": "5  Stage: Stability",
-    "section": "5.7 Do not do this",
-    "text": "5.7 Do not do this\n\nDo not proceed to freeze when stable panel is missing or empty.\nDo not interpret blind outputs as stability quality evidence.",
+    "title": "6  Stage: Stability",
+    "section": "6.8 Do not do this",
+    "text": "6.8 Do not do this\n\nDo not proceed to freeze when stable panel is missing or empty.\nDo not interpret blind outputs as stability quality evidence.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Stability</span>"
     ]
   },
   {
     "objectID": "04-stage-stability.html#recovery",
     "href": "04-stage-stability.html#recovery",
-    "title": "5  Stage: Stability",
-    "section": "5.8 Recovery",
-    "text": "5.8 Recovery\n\nResume interrupted run:\n\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability --resume\n\nIf panel is too small: lower stability_dmp_freq or increase n_iterations.\nIf run quality is too low: tune detector and/or adjust stability_min_balanced_accuracy.",
+    "title": "6  Stage: Stability",
+    "section": "6.9 Recovery",
+    "text": "6.9 Recovery\n\nResume interrupted run:\n\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability --resume\n\nIf panel is too small: lower stability_dmp_freq or increase n_iterations.\nIf run quality is too low: tune detector and/or adjust stability_min_balanced_accuracy.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Stability</span>"
     ]
   },
   {
     "objectID": "04-stage-stability.html#see-also",
     "href": "04-stage-stability.html#see-also",
-    "title": "5  Stage: Stability",
-    "section": "5.9 See also",
-    "text": "5.9 See also\n\ndocs/theory/chapters/12-two-workflows.qmd\ndocs/theory/chapters/15-model-creation-and-validation.qmd\nIf many MC iterations are split across several hosts, use shared output_base and the distributed queue flow: Distributed MethylValidation on shared storage (12).",
+    "title": "6  Stage: Stability",
+    "section": "6.10 See also",
+    "text": "6.10 See also\n\ndocs/theory/chapters/12-two-workflows.qmd\ndocs/theory/chapters/15-model-creation-and-validation.qmd\nIf many MC iterations are split across several hosts, use shared output_base and the distributed queue flow: Distributed MethylValidation on shared storage (12).",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>5</span>  <span class='chapter-title'>Stage: Stability</span>"
+      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Stability</span>"
     ]
   },
   {
     "objectID": "05-stage-freeze.html",
     "href": "05-stage-freeze.html",
-    "title": "6  Stage: Freeze",
+    "title": "7  Stage: Freeze",
     "section": "",
-    "text": "6.1 Purpose\nCreate frozen production artifacts using the stable panel and generate biological interpretation outputs (mapper/enricher, optional progression).",
+    "text": "7.1 Purpose\nCreate frozen production artifacts using the stable panel and generate biological interpretation outputs (mapper/enricher, optional progression).",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Freeze</span>"
     ]
   },
   {
     "objectID": "05-stage-freeze.html#entry-command",
     "href": "05-stage-freeze.html#entry-command",
-    "title": "6  Stage: Freeze",
-    "section": "6.2 Entry command",
-    "text": "6.2 Entry command\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --freeze",
+    "title": "7  Stage: Freeze",
+    "section": "7.2 Entry command",
+    "text": "7.2 Entry command\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --freeze",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Freeze</span>"
     ]
   },
   {
     "objectID": "05-stage-freeze.html#prerequisites",
     "href": "05-stage-freeze.html#prerequisites",
-    "title": "6  Stage: Freeze",
-    "section": "6.3 Prerequisites",
-    "text": "6.3 Prerequisites\n\nStability stage completed.\nStable panel available at:\n\nconfigured step_config.validation.freeze_stable_dmp_csv, or\ndefault &lt;mc_root&gt;/stability/stable_dmps_production.csv.",
+    "title": "7  Stage: Freeze",
+    "section": "7.3 Prerequisites",
+    "text": "7.3 Prerequisites\n\nStability stage completed.\nStable panel available at:\n\nconfigured step_config.validation.freeze_stable_dmp_csv, or\ndefault &lt;mc_root&gt;/stability/stable_dmps_production.csv.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Freeze</span>"
     ]
   },
   {
     "objectID": "05-stage-freeze.html#process-model",
     "href": "05-stage-freeze.html#process-model",
-    "title": "6  Stage: Freeze",
-    "section": "6.4 Process model",
-    "text": "6.4 Process model",
+    "title": "7  Stage: Freeze",
+    "section": "7.4 Process model",
+    "text": "7.4 Process model",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Freeze</span>"
     ]
   },
   {
     "objectID": "05-stage-freeze.html#expected-outputs",
     "href": "05-stage-freeze.html#expected-outputs",
-    "title": "6  Stage: Freeze",
-    "section": "6.5 Expected outputs",
-    "text": "6.5 Expected outputs\n\n&lt;mc_root&gt;/production/project.json\n&lt;mc_root&gt;/production/production_summary.json\n&lt;mc_root&gt;/production/model_bundle/mapper_dmp_annotations.csv (when mapped-family feature bundles are prepared)\nmapper outputs under production/mapper/...\nenricher outputs under production/enricher/...\noptional progression outputs under production/progression/...",
+    "title": "7  Stage: Freeze",
+    "section": "7.5 Expected outputs",
+    "text": "7.5 Expected outputs\n\n&lt;mc_root&gt;/production/project.json\n&lt;mc_root&gt;/production/production_summary.json\n&lt;mc_root&gt;/production/model_bundle/mapper_dmp_annotations.csv (when mapped-family feature bundles are prepared)\nmapper outputs under production/mapper/...\nenricher outputs under production/enricher/...\noptional progression outputs under production/progression/...",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Freeze</span>"
     ]
   },
   {
     "objectID": "05-stage-freeze.html#success-checks",
     "href": "05-stage-freeze.html#success-checks",
-    "title": "6  Stage: Freeze",
-    "section": "6.6 Success checks",
-    "text": "6.6 Success checks\n\nproduction/project.json exists and includes fixed panel usage for detector.\nexpected mapper and enricher files are present.\nstage-specific logs show successful return codes.\nfor non-dmp observed-hybrid families, production_summary.json includes mapper_annotation_cache metadata.",
+    "title": "7  Stage: Freeze",
+    "section": "7.6 Success checks",
+    "text": "7.6 Success checks\n\nproduction/project.json exists and includes fixed panel usage for detector.\nexpected mapper and enricher files are present.\nstage-specific logs show successful return codes.\nfor non-dmp observed-hybrid families, production_summary.json includes mapper_annotation_cache metadata.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Freeze</span>"
     ]
   },
   {
     "objectID": "05-stage-freeze.html#recommended-post-freeze-gate",
     "href": "05-stage-freeze.html#recommended-post-freeze-gate",
-    "title": "6  Stage: Freeze",
-    "section": "6.7 Recommended post-freeze gate",
-    "text": "6.7 Recommended post-freeze gate\nRun biological readiness before model training:\nsource .venv/bin/activate\nmethyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG\nThis chained gate verifies:\n\nenricher completeness (verify-complete),\nstrict progression input completeness (--strict-missing),\nstability/freeze/progression readiness verdict.\n\nTo include advisory Grok commentary in the readiness section:\nmethyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG --grok-review\nWithout --grok-review, the chain keeps Grok disabled by default and still enforces deterministic checks.",
+    "title": "7  Stage: Freeze",
+    "section": "7.7 Recommended post-freeze gate",
+    "text": "7.7 Recommended post-freeze gate\nRun biological readiness before model training:\nsource .venv/bin/activate\nmethyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG\nThis chained gate verifies:\n\nenricher completeness (verify-complete),\nstrict progression input completeness (--strict-missing),\nstability/freeze/progression readiness verdict.\n\nTo include advisory Grok commentary in the readiness section:\nmethyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG --grok-review\nWithout --grok-review, the chain keeps Grok disabled by default and still enforces deterministic checks.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Freeze</span>"
     ]
   },
   {
     "objectID": "05-stage-freeze.html#do-not-do-this",
     "href": "05-stage-freeze.html#do-not-do-this",
-    "title": "6  Stage: Freeze",
-    "section": "6.8 Do not do this",
-    "text": "6.8 Do not do this\n\nDo not run freeze before stability panel exists.\nDo not delete production/project.json; later model and predictor stages depend on it.",
+    "title": "7  Stage: Freeze",
+    "section": "7.8 Do not do this",
+    "text": "7.8 Do not do this\n\nDo not run freeze before stability panel exists.\nDo not delete production/project.json; later model and predictor stages depend on it.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Freeze</span>"
     ]
   },
   {
     "objectID": "05-stage-freeze.html#recovery",
     "href": "05-stage-freeze.html#recovery",
-    "title": "6  Stage: Freeze",
-    "section": "6.9 Recovery",
-    "text": "6.9 Recovery\n\nIf freeze fails because stable panel missing, rerun stability or set freeze_stable_dmp_csv.\nIf path mismatch occurs across machines, use path_remap or --path-remap.",
+    "title": "7  Stage: Freeze",
+    "section": "7.9 Recovery",
+    "text": "7.9 Recovery\n\nIf freeze fails because stable panel missing, rerun stability or set freeze_stable_dmp_csv.\nIf path mismatch occurs across machines, use path_remap or --path-remap.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Freeze</span>"
     ]
   },
   {
     "objectID": "05-stage-freeze.html#see-also",
     "href": "05-stage-freeze.html#see-also",
-    "title": "6  Stage: Freeze",
-    "section": "6.10 See also",
-    "text": "6.10 See also\n\npackages/methylvalidation/docs/USAGE.md\ndocs/theory/chapters/14-user-guide.qmd",
+    "title": "7  Stage: Freeze",
+    "section": "7.10 See also",
+    "text": "7.10 See also\n\npackages/methylvalidation/docs/USAGE.md\ndocs/theory/chapters/14-user-guide.qmd",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>6</span>  <span class='chapter-title'>Stage: Freeze</span>"
+      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Freeze</span>"
     ]
   },
   {
     "objectID": "06-stage-model.html",
     "href": "06-stage-model.html",
-    "title": "7  Stage: Model",
+    "title": "8  Stage: Model",
     "section": "",
-    "text": "7.1 Purpose\nTrain and select final production model artifacts after freeze and biological-readiness checks.",
+    "text": "8.1 Purpose\nTrain and select final production model artifacts after freeze and biological-readiness checks.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Model</span>"
     ]
   },
   {
     "objectID": "06-stage-model.html#common-execution-patterns",
     "href": "06-stage-model.html#common-execution-patterns",
-    "title": "7  Stage: Model",
-    "section": "7.2 Common execution patterns",
-    "text": "7.2 Common execution patterns\n\n7.2.1 Pattern A: Direct production model build\nsource .venv/bin/activate\nmethyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model\n\n\n7.2.2 Pattern B: Backend model-MC comparison then select best\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model-mc --model-mc-all\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \\\n  --select-best-model --model-mc-all --selection-metric balanced_accuracy --selection-stat median",
+    "title": "8  Stage: Model",
+    "section": "8.2 Common execution patterns",
+    "text": "8.2 Common execution patterns\n\n8.2.1 Pattern A: Direct production model build\nsource .venv/bin/activate\nmethyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model\n\n\n8.2.2 Pattern B: Backend model-MC comparison then select best\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model-mc --model-mc-all\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \\\n  --select-best-model --model-mc-all --selection-metric balanced_accuracy --selection-stat median",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Model</span>"
     ]
   },
   {
     "objectID": "06-stage-model.html#backend-behavior",
     "href": "06-stage-model.html#backend-behavior",
-    "title": "7  Stage: Model",
-    "section": "7.3 Backend behavior",
-    "text": "7.3 Backend behavior\n\necdf: methyl-classifier -&gt; methyl-predictor\ntabular_sklearn: in-process bundle -&gt; train -&gt; predict\ngenerative_hybrid: in-process bundle -&gt; train -&gt; predict\n\nFor ecdf + observed-hybrid mapped families (feature_mode=observed_hybrid, feature_family_set!=dmp), the runtime path is aggregated ECDF OvR package train/predict and skips ECDF second-stage refinement.\nConfigured by step_config.validation.backend_profiles (plus optional CLI backend override).",
+    "title": "8  Stage: Model",
+    "section": "8.3 Backend behavior",
+    "text": "8.3 Backend behavior\n\necdf: methyl-classifier -&gt; methyl-predictor\ntabular_sklearn: in-process bundle -&gt; train -&gt; predict\ngenerative_hybrid: in-process bundle -&gt; train -&gt; predict\n\nFor ecdf + observed-hybrid mapped families (feature_mode=observed_hybrid, feature_family_set!=dmp_scored), the runtime path is aggregated ECDF OvR package train/predict and skips ECDF second-stage refinement.\nConfigured by step_config.validation.backend_profiles (plus optional CLI backend override).",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Model</span>"
     ]
   },
   {
     "objectID": "06-stage-model.html#process-model",
     "href": "06-stage-model.html#process-model",
-    "title": "7  Stage: Model",
-    "section": "7.4 Process model",
-    "text": "7.4 Process model",
+    "title": "8  Stage: Model",
+    "section": "8.4 Process model",
+    "text": "8.4 Process model",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Model</span>"
     ]
   },
   {
     "objectID": "06-stage-model.html#required-config-keys",
     "href": "06-stage-model.html#required-config-keys",
-    "title": "7  Stage: Model",
-    "section": "7.5 Required config keys",
-    "text": "7.5 Required config keys\n\nbackend_profiles\nbackend-specific params under each profile (for example feature_mode, ecdf_second_stage_enabled, tabular_methods, generative_latent_dim)\nobserved-hybrid family contract (when used):\n\nfeature_family_set\nmapper annotation cache from freeze (production/model_bundle/mapper_dmp_annotations.csv)\n\ntabular controls:\n\ntabular_methods\ntabular_method_selection_metric\noptional tabular_max_dmps (null/0 keeps all stable loci)\n\ngenerative controls:\n\ngenerative_latent_dim, generative_epochs, and related keys\n\noptional gate:\n\nrequire_biological_review_for_model\nbiological_review_confirmed\n\n\nLegacy flat backend keys are rejected. Migrate older configs with:\nmethyl-validation-migrate-backend-config /path/to/project.json --in-place",
+    "title": "8  Stage: Model",
+    "section": "8.5 Required config keys",
+    "text": "8.5 Required config keys\n\nbackend_profiles\nbackend-specific params under each profile (for example feature_mode, ecdf_second_stage_enabled, tabular_methods, generative_latent_dim)\nobserved-hybrid family contract (when used):\n\nfeature_family_set\nmapper annotation cache from freeze (production/model_bundle/mapper_dmp_annotations.csv)\n\ntabular controls:\n\ntabular_methods\ntabular_method_selection_metric\noptional tabular_max_dmps (null/0 keeps all stable loci)\n\ngenerative controls:\n\ngenerative_latent_dim, generative_epochs, and related keys\n\noptional gate:\n\nrequire_biological_review_for_model\nbiological_review_confirmed\n\n\nLegacy flat backend keys are rejected. Migrate older configs with:\nmethyl-validation-migrate-backend-config /path/to/project.json --in-place",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Model</span>"
     ]
   },
   {
     "objectID": "06-stage-model.html#expected-outputs",
     "href": "06-stage-model.html#expected-outputs",
-    "title": "7  Stage: Model",
-    "section": "7.6 Expected outputs",
-    "text": "7.6 Expected outputs\n\n&lt;mc_root&gt;/production/classifiers/...\n&lt;mc_root&gt;/production/predictors/...\naggregated ECDF mode writes:\n\n&lt;mc_root&gt;/production/classifiers/ecdf_aggregated_ovr.pkl\n&lt;mc_root&gt;/production/classifiers/ecdf_aggregated_ovr.meta.json\n\nif model-MC:\n\n&lt;mc_root&gt;/model_mc/shared/run_XXXX/...\n&lt;mc_root&gt;/model_mc/&lt;backend&gt;/all_metrics.csv\n&lt;mc_root&gt;/model_mc/backend_ranking.csv\n&lt;mc_root&gt;/production/selected_backend.json (after selection)\n\n\nWhen model-MC reuses primary split artifacts, shared/backend run roots may link centroid/detector directories instead of recomputing them.",
+    "title": "8  Stage: Model",
+    "section": "8.6 Expected outputs",
+    "text": "8.6 Expected outputs\n\n&lt;mc_root&gt;/production/classifiers/...\n&lt;mc_root&gt;/production/predictors/...\naggregated ECDF mode writes:\n\n&lt;mc_root&gt;/production/classifiers/ecdf_aggregated_ovr.pkl\n&lt;mc_root&gt;/production/classifiers/ecdf_aggregated_ovr.meta.json\n\nif model-MC:\n\n&lt;mc_root&gt;/model_mc/shared/run_XXXX/...\n&lt;mc_root&gt;/model_mc/&lt;backend&gt;/all_metrics.csv\n&lt;mc_root&gt;/model_mc/backend_ranking.csv\n&lt;mc_root&gt;/production/selected_backend.json (after selection)\n\n\nWhen model-MC reuses primary split artifacts, shared/backend run roots may link centroid/detector directories instead of recomputing them.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Model</span>"
     ]
   },
   {
     "objectID": "06-stage-model.html#success-checks",
     "href": "06-stage-model.html#success-checks",
-    "title": "7  Stage: Model",
-    "section": "7.7 Success checks",
-    "text": "7.7 Success checks\n\nfinal classifier/predictor artifacts exist in production root.\nselected backend metadata exists when using selection workflow.\nmetrics summaries include expected selection metric fields.\nthe last biological-readiness report is go/go_with_risks and reviewed by humans.",
+    "title": "8  Stage: Model",
+    "section": "8.7 Success checks",
+    "text": "8.7 Success checks\n\nfinal classifier/predictor artifacts exist in production root.\nselected backend metadata exists when using selection workflow.\nmetrics summaries include expected selection metric fields.\nthe last biological-readiness report is go/go_with_risks and reviewed by humans.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Model</span>"
     ]
   },
   {
     "objectID": "06-stage-model.html#do-not-do-this",
     "href": "06-stage-model.html#do-not-do-this",
-    "title": "7  Stage: Model",
-    "section": "7.8 Do not do this",
-    "text": "7.8 Do not do this\n\nDo not run model before freeze.\nDo not skip biological readiness review when production artifacts changed.\nDo not claim backend superiority without model-MC summaries.",
+    "title": "8  Stage: Model",
+    "section": "8.8 Do not do this",
+    "text": "8.8 Do not do this\n\nDo not run model before freeze.\nDo not skip biological readiness review when production artifacts changed.\nDo not claim backend superiority without model-MC summaries.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Model</span>"
     ]
   },
   {
     "objectID": "06-stage-model.html#see-also",
     "href": "06-stage-model.html#see-also",
-    "title": "7  Stage: Model",
-    "section": "7.9 See also",
-    "text": "7.9 See also\n\ndocs/theory/chapters/15-model-creation-and-validation.qmd\npackages/methylvalidation/docs/ROLLOUT.md",
+    "title": "8  Stage: Model",
+    "section": "8.9 See also",
+    "text": "8.9 See also\n\ndocs/theory/chapters/15-model-creation-and-validation.qmd\npackages/methylvalidation/docs/ROLLOUT.md",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>7</span>  <span class='chapter-title'>Stage: Model</span>"
+      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Model</span>"
     ]
   },
   {
     "objectID": "07-stage-post-model-validation.html",
     "href": "07-stage-post-model-validation.html",
-    "title": "8  Stage: Post-model Validation",
+    "title": "9  Stage: Post-model Validation",
     "section": "",
-    "text": "8.1 Purpose\nMeasure descriptive performance distributions using frozen production artifacts without retraining.",
+    "text": "9.1 Purpose\nMeasure descriptive performance distributions using frozen production artifacts without retraining.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
     ]
   },
   {
     "objectID": "07-stage-post-model-validation.html#entry-command",
     "href": "07-stage-post-model-validation.html#entry-command",
-    "title": "8  Stage: Post-model Validation",
-    "section": "8.2 Entry command",
-    "text": "8.2 Entry command\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --post-model-validation\nOptional backend override:\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \\\n  --post-model-validation --post-model-backend ecdf",
+    "title": "9  Stage: Post-model Validation",
+    "section": "9.2 Entry command",
+    "text": "9.2 Entry command\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --post-model-validation\nOptional backend override:\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \\\n  --post-model-validation --post-model-backend ecdf",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
     ]
   },
   {
     "objectID": "07-stage-post-model-validation.html#prerequisites",
     "href": "07-stage-post-model-validation.html#prerequisites",
-    "title": "8  Stage: Post-model Validation",
-    "section": "8.3 Prerequisites",
-    "text": "8.3 Prerequisites\n\nFreeze/model artifacts already built in production root.\nValid production/project.json.",
+    "title": "9  Stage: Post-model Validation",
+    "section": "9.3 Prerequisites",
+    "text": "9.3 Prerequisites\n\nFreeze/model artifacts already built in production root.\nValid production/project.json.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
     ]
   },
   {
     "objectID": "07-stage-post-model-validation.html#process-model",
     "href": "07-stage-post-model-validation.html#process-model",
-    "title": "8  Stage: Post-model Validation",
-    "section": "8.4 Process model",
-    "text": "8.4 Process model",
+    "title": "9  Stage: Post-model Validation",
+    "section": "9.4 Process model",
+    "text": "9.4 Process model",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
     ]
   },
   {
     "objectID": "07-stage-post-model-validation.html#expected-outputs",
     "href": "07-stage-post-model-validation.html#expected-outputs",
-    "title": "8  Stage: Post-model Validation",
-    "section": "8.5 Expected outputs",
-    "text": "8.5 Expected outputs\n\n&lt;mc_root&gt;/post_model_validation/run_XXXX/...\n&lt;mc_root&gt;/post_model_validation/all_metrics.csv\n&lt;mc_root&gt;/post_model_validation/metrics_summary.json\n&lt;mc_root&gt;/post_model_validation/metrics_distributions_plotly.html",
+    "title": "9  Stage: Post-model Validation",
+    "section": "9.5 Expected outputs",
+    "text": "9.5 Expected outputs\n\n&lt;mc_root&gt;/post_model_validation/run_XXXX/...\n&lt;mc_root&gt;/post_model_validation/all_metrics.csv\n&lt;mc_root&gt;/post_model_validation/metrics_summary.json\n&lt;mc_root&gt;/post_model_validation/metrics_distributions_plotly.html",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
     ]
   },
   {
     "objectID": "07-stage-post-model-validation.html#success-checks",
     "href": "07-stage-post-model-validation.html#success-checks",
-    "title": "8  Stage: Post-model Validation",
-    "section": "8.6 Success checks",
-    "text": "8.6 Success checks\n\nrun directories created under post_model_validation.\nmetrics summary includes key metrics (balanced_accuracy, macro_f1, plus available calibration metrics).\ndistribution plot generated.",
+    "title": "9  Stage: Post-model Validation",
+    "section": "9.6 Success checks",
+    "text": "9.6 Success checks\n\nrun directories created under post_model_validation.\nmetrics summary includes key metrics (balanced_accuracy, macro_f1, plus available calibration metrics).\ndistribution plot generated.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
     ]
   },
   {
     "objectID": "07-stage-post-model-validation.html#do-not-do-this",
     "href": "07-stage-post-model-validation.html#do-not-do-this",
-    "title": "8  Stage: Post-model Validation",
-    "section": "8.7 Do not do this",
-    "text": "8.7 Do not do this\n\nDo not treat post-model validation as model training.\nDo not compare candidate and baseline manually without fixed thresholds; use rollout comparison when promoting.",
+    "title": "9  Stage: Post-model Validation",
+    "section": "9.7 Do not do this",
+    "text": "9.7 Do not do this\n\nDo not treat post-model validation as model training.\nDo not compare candidate and baseline manually without fixed thresholds; use rollout comparison when promoting.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
     ]
   },
   {
     "objectID": "07-stage-post-model-validation.html#recovery",
     "href": "07-stage-post-model-validation.html#recovery",
-    "title": "8  Stage: Post-model Validation",
-    "section": "8.8 Recovery",
-    "text": "8.8 Recovery\n\nResume interrupted post-model validation:\n\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \\\n  --post-model-validation --resume",
+    "title": "9  Stage: Post-model Validation",
+    "section": "9.8 Recovery",
+    "text": "9.8 Recovery\n\nResume interrupted post-model validation:\n\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \\\n  --post-model-validation --resume",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
     ]
   },
   {
     "objectID": "07-stage-post-model-validation.html#see-also",
     "href": "07-stage-post-model-validation.html#see-also",
-    "title": "8  Stage: Post-model Validation",
-    "section": "8.9 See also",
-    "text": "8.9 See also\n\npackages/methylvalidation/docs/USAGE.md\npackages/methylvalidation/docs/ROLLOUT.md",
+    "title": "9  Stage: Post-model Validation",
+    "section": "9.9 See also",
+    "text": "9.9 See also\n\npackages/methylvalidation/docs/USAGE.md\npackages/methylvalidation/docs/ROLLOUT.md",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>8</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
+      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Post-model Validation</span>"
     ]
   },
   {
     "objectID": "08-stage-blind-prediction.html",
     "href": "08-stage-blind-prediction.html",
-    "title": "9  Stage: Blind Prediction",
+    "title": "10  Stage: Blind Prediction",
     "section": "",
-    "text": "9.1 Purpose\nRun inference on newly arrived unlabeled samples using frozen model artifacts.",
+    "text": "10.1 Purpose\nRun inference on newly arrived unlabeled samples using frozen model artifacts.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
     ]
   },
   {
     "objectID": "08-stage-blind-prediction.html#important-boundary",
     "href": "08-stage-blind-prediction.html#important-boundary",
-    "title": "9  Stage: Blind Prediction",
-    "section": "9.2 Important boundary",
-    "text": "9.2 Important boundary\nBlind-only prediction is a standalone methyl-predictor operation.\nIt is intentionally outside methyl-validation accuracy workflows.",
+    "title": "10  Stage: Blind Prediction",
+    "section": "10.2 Important boundary",
+    "text": "10.2 Important boundary\nBlind-only prediction is a standalone methyl-predictor operation.\nIt is intentionally outside methyl-validation accuracy workflows.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
     ]
   },
   {
     "objectID": "08-stage-blind-prediction.html#entry-command-standalone",
     "href": "08-stage-blind-prediction.html#entry-command-standalone",
-    "title": "9  Stage: Blind Prediction",
-    "section": "9.3 Entry command (standalone)",
-    "text": "9.3 Entry command (standalone)\nsource .venv/bin/activate\nmethyl-predictor --project /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json",
+    "title": "10  Stage: Blind Prediction",
+    "section": "10.3 Entry command (standalone)",
+    "text": "10.3 Entry command (standalone)\nsource .venv/bin/activate\nmethyl-predictor --project /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
     ]
   },
   {
     "objectID": "08-stage-blind-prediction.html#process-model",
     "href": "08-stage-blind-prediction.html#process-model",
-    "title": "9  Stage: Blind Prediction",
-    "section": "9.4 Process model",
-    "text": "9.4 Process model",
+    "title": "10  Stage: Blind Prediction",
+    "section": "10.4 Process model",
+    "text": "10.4 Process model",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
     ]
   },
   {
     "objectID": "08-stage-blind-prediction.html#required-config-pattern",
     "href": "08-stage-blind-prediction.html#required-config-pattern",
-    "title": "9  Stage: Blind Prediction",
-    "section": "9.5 Required config pattern",
-    "text": "9.5 Required config pattern\nstep_config.predictor should reference blind/test-blind inputs and model paths resolved from frozen production project.",
+    "title": "10  Stage: Blind Prediction",
+    "section": "10.5 Required config pattern",
+    "text": "10.5 Required config pattern\nstep_config.predictor should reference blind/test-blind inputs and model paths resolved from frozen production project.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
     ]
   },
   {
     "objectID": "08-stage-blind-prediction.html#expected-outputs",
     "href": "08-stage-blind-prediction.html#expected-outputs",
-    "title": "9  Stage: Blind Prediction",
-    "section": "9.6 Expected outputs",
-    "text": "9.6 Expected outputs\n\nblind prediction report JSON\nper-sample class probabilities and predicted subgroup labels",
+    "title": "10  Stage: Blind Prediction",
+    "section": "10.6 Expected outputs",
+    "text": "10.6 Expected outputs\n\nblind prediction report JSON\nper-sample class probabilities and predicted subgroup labels",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
     ]
   },
   {
     "objectID": "08-stage-blind-prediction.html#success-checks",
     "href": "08-stage-blind-prediction.html#success-checks",
-    "title": "9  Stage: Blind Prediction",
-    "section": "9.7 Success checks",
-    "text": "9.7 Success checks\n\npredictor completes without missing model-path errors.\nexpected blind report file exists.\nper-sample prediction rows match input sample count.",
+    "title": "10  Stage: Blind Prediction",
+    "section": "10.7 Success checks",
+    "text": "10.7 Success checks\n\npredictor completes without missing model-path errors.\nexpected blind report file exists.\nper-sample prediction rows match input sample count.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
     ]
   },
   {
     "objectID": "08-stage-blind-prediction.html#do-not-do-this",
     "href": "08-stage-blind-prediction.html#do-not-do-this",
-    "title": "9  Stage: Blind Prediction",
-    "section": "9.8 Do not do this",
-    "text": "9.8 Do not do this\n\nDo not use blind-only prediction results as labeled validation accuracy claims.\nDo not run blind-only predictor settings through methyl-validation MC paths.",
+    "title": "10  Stage: Blind Prediction",
+    "section": "10.8 Do not do this",
+    "text": "10.8 Do not do this\n\nDo not use blind-only prediction results as labeled validation accuracy claims.\nDo not run blind-only predictor settings through methyl-validation MC paths.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
     ]
   },
   {
     "objectID": "08-stage-blind-prediction.html#recovery",
     "href": "08-stage-blind-prediction.html#recovery",
-    "title": "9  Stage: Blind Prediction",
-    "section": "9.9 Recovery",
-    "text": "9.9 Recovery\n\nIf model path resolution fails, confirm production/project.json and classifier artifacts exist.\nIf sample-id join fails, verify sample path naming and predictor input lists.",
+    "title": "10  Stage: Blind Prediction",
+    "section": "10.9 Recovery",
+    "text": "10.9 Recovery\n\nIf model path resolution fails, confirm production/project.json and classifier artifacts exist.\nIf sample-id join fails, verify sample path naming and predictor input lists.",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
     ]
   },
   {
     "objectID": "08-stage-blind-prediction.html#see-also",
     "href": "08-stage-blind-prediction.html#see-also",
-    "title": "9  Stage: Blind Prediction",
-    "section": "9.10 See also",
-    "text": "9.10 See also\n\npackages/methylpredictor/docs/USAGE.md\ndocs/theory/chapters/14-user-guide.qmd",
+    "title": "10  Stage: Blind Prediction",
+    "section": "10.10 See also",
+    "text": "10.10 See also\n\npackages/methylpredictor/docs/USAGE.md\ndocs/theory/chapters/14-user-guide.qmd",
     "crumbs": [
       "Part II: Staged Solution Workflow",
-      "<span class='chapter-number'>9</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
+      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Stage: Blind Prediction</span>"
     ]
   },
   {
     "objectID": "09-artifacts-and-qa-checks.html",
     "href": "09-artifacts-and-qa-checks.html",
-    "title": "10  Artifacts and QA Checks",
+    "title": "11  Artifacts and QA Checks",
     "section": "",
-    "text": "10.1 Purpose\nProvide a single checklist for expected files at each stage and quick quality gates before proceeding.",
+    "text": "11.1 Purpose\nProvide a single checklist for expected files at each stage and quick quality gates before proceeding.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
+    ]
+  },
+  {
+    "objectID": "09-artifacts-and-qa-checks.html#workflow-action-observability",
+    "href": "09-artifacts-and-qa-checks.html#workflow-action-observability",
+    "title": "11  Artifacts and QA Checks",
+    "section": "11.2 Workflow action observability",
+    "text": "11.2 Workflow action observability\nEach workflow ACTION executed by methyl-worker submits a typed output_json to the database (validated against schemas/tasks/*.json). Outputs include timing (duration_ms), branch code (result_code), and paths to artifacts on shared storage.\nOn /work, look for:\n\nPer-action manifests: {output_dir}/.action_results/{action_name}.{run_key}.json — full typed result written by CLIs (e.g. pipeline.dmp_select, pipeline.mapper) or reconstructed by the worker collector.\nSample prep timeline: {sampleDir}/{sampleId}.sample_prep_log.jsonl — append-only JSONL audit for download, align, QC, extract, archive steps.\nValidation / MC timeline: {monteCarloRunsRoot}/action_run_log.jsonl — append-only log for validation-category actions (plan, stability, model_mc, etc.).\n\nRegenerate JSON Schema artifacts after model changes:\nsource .venv/bin/activate\nmethyl-export-task-schemas\nmethyl-export-task-schemas --check   # CI drift gate",
+    "crumbs": [
+      "Part III: Operations and Reliability",
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
     ]
   },
   {
     "objectID": "09-artifacts-and-qa-checks.html#artifact-map",
     "href": "09-artifacts-and-qa-checks.html#artifact-map",
-    "title": "10  Artifacts and QA Checks",
-    "section": "10.2 Artifact map",
-    "text": "10.2 Artifact map\n\n\n\n\n\n\n\n\nStage\nRequired artifacts\nGate to proceed\n\n\n\n\nStability\nstability/stable_dmps_production.csv, stability_summary.json, all_metrics.csv\nStable panel exists and is non-empty\n\n\nFreeze\nproduction/project.json, mapper/enricher outputs\nProduction project exists; fixed-panel detector run completed\n\n\nModel\nproduction/classifiers/*, production/classifiers/training_metrics.json (all model backends), production/predictors/*\nFinal classifier/predictor artifacts present\n\n\nPost-model validation\npost_model_validation/all_metrics.csv, metrics_summary.json, plotly report\nDistribution summaries generated\n\n\nBlind prediction\nblind prediction report + per-sample probabilities\nAll input blind samples receive predictions",
+    "title": "11  Artifacts and QA Checks",
+    "section": "11.3 Artifact map",
+    "text": "11.3 Artifact map\n\n\n\n\n\n\n\n\nStage\nRequired artifacts\nGate to proceed\n\n\n\n\nSample prep\n{sample_id}.json, alignment_qc/{sample_id}.json, {sample_id}.extraction_qc.json, {chr}-CG.h5\nguardrails.overall_pass true for alignment and extraction QC\n\n\nStability\nstability/stable_dmps_production.csv, stability_summary.json, all_metrics.csv\nStable panel exists and is non-empty\n\n\nFreeze\nproduction/project.json, mapper/enricher outputs\nProduction project exists; fixed-panel detector run completed\n\n\nModel\nproduction/classifiers/*, production/classifiers/training_metrics.json (all model backends), production/predictors/*\nFinal classifier/predictor artifacts present\n\n\nPost-model validation\npost_model_validation/all_metrics.csv, metrics_summary.json, plotly report\nDistribution summaries generated\n\n\nBlind prediction\nblind prediction report + per-sample probabilities\nAll input blind samples receive predictions",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
     ]
   },
   {
     "objectID": "09-artifacts-and-qa-checks.html#handoff-integrity-checks",
     "href": "09-artifacts-and-qa-checks.html#handoff-integrity-checks",
-    "title": "10  Artifacts and QA Checks",
-    "section": "10.3 Handoff integrity checks",
-    "text": "10.3 Handoff integrity checks",
+    "title": "11  Artifacts and QA Checks",
+    "section": "11.4 Handoff integrity checks",
+    "text": "11.4 Handoff integrity checks",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
     ]
   },
   {
     "objectID": "09-artifacts-and-qa-checks.html#qa-checklist-per-stage",
     "href": "09-artifacts-and-qa-checks.html#qa-checklist-per-stage",
-    "title": "10  Artifacts and QA Checks",
-    "section": "10.4 QA checklist per stage",
-    "text": "10.4 QA checklist per stage\n\n10.4.1 Stability\n\nIteration count in metrics roughly matches configured n_iterations.\nStable panel size is consistent with selected thresholds.\n\n\n\n10.4.2 Freeze\n\nproduction/project.json references fixed panel detector mode.\nMapper/enricher outputs exist for each expected comparison group.\n\n\n\n10.4.3 Model\n\nBackend used is recorded and consistent with config.\nIf selection used, ranking artifacts exist and chosen backend is traceable.\n\n\n\n10.4.4 Post-model validation\n\nMetrics summary includes required decision metrics.\nDistribution artifacts generated and readable.\n\n\n\n10.4.5 Blind prediction\n\nPrediction outputs include all requested samples.\nOperational report does not include false accuracy claims.",
+    "title": "11  Artifacts and QA Checks",
+    "section": "11.5 QA checklist per stage",
+    "text": "11.5 QA checklist per stage\n\n11.5.1 Stability\n\nIteration count in metrics roughly matches configured n_iterations.\nStable panel size is consistent with selected thresholds.\n\n\n\n11.5.2 Freeze\n\nproduction/project.json references fixed panel detector mode.\nMapper/enricher outputs exist for each expected comparison group.\n\n\n\n11.5.3 Model\n\nBackend used is recorded and consistent with config.\nIf selection used, ranking artifacts exist and chosen backend is traceable.\n\n\n\n11.5.4 Post-model validation\n\nMetrics summary includes required decision metrics.\nDistribution artifacts generated and readable.\n\n\n\n11.5.5 Blind prediction\n\nPrediction outputs include all requested samples.\nOperational report does not include false accuracy claims.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
     ]
   },
   {
     "objectID": "09-artifacts-and-qa-checks.html#escalation-triggers",
     "href": "09-artifacts-and-qa-checks.html#escalation-triggers",
-    "title": "10  Artifacts and QA Checks",
-    "section": "10.5 Escalation triggers",
-    "text": "10.5 Escalation triggers\n\nEmpty stable panel.\nMissing production project.\nNo model artifacts after model stage.\nRepeated run failures in same step across resumed runs.",
+    "title": "11  Artifacts and QA Checks",
+    "section": "11.6 Escalation triggers",
+    "text": "11.6 Escalation triggers\n\nEmpty stable panel.\nMissing production project.\nNo model artifacts after model stage.\nRepeated run failures in same step across resumed runs.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
     ]
   },
   {
     "objectID": "09-artifacts-and-qa-checks.html#see-also",
     "href": "09-artifacts-and-qa-checks.html#see-also",
-    "title": "10  Artifacts and QA Checks",
-    "section": "10.6 See also",
-    "text": "10.6 See also\n\npackages/methylvalidation/docs/USAGE.md\npackages/methylvalidation/docs/IMPLEMENTATION.md",
+    "title": "11  Artifacts and QA Checks",
+    "section": "11.7 See also",
+    "text": "11.7 See also\n\npackages/methylvalidation/docs/USAGE.md\npackages/methylvalidation/docs/IMPLEMENTATION.md",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>10</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
+      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Artifacts and QA Checks</span>"
     ]
   },
   {
     "objectID": "10-troubleshooting-and-recovery.html",
     "href": "10-troubleshooting-and-recovery.html",
-    "title": "11  Troubleshooting and Recovery",
+    "title": "12  Troubleshooting and Recovery",
     "section": "",
-    "text": "11.1 Purpose\nStandardize response for common stage failures and reduce ad-hoc debugging.",
+    "text": "12.1 Purpose\nStandardize response for common stage failures and reduce ad-hoc debugging.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
     ]
   },
   {
     "objectID": "10-troubleshooting-and-recovery.html#failure-routing",
     "href": "10-troubleshooting-and-recovery.html#failure-routing",
-    "title": "11  Troubleshooting and Recovery",
-    "section": "11.2 Failure routing",
-    "text": "11.2 Failure routing",
+    "title": "12  Troubleshooting and Recovery",
+    "section": "12.2 Failure routing",
+    "text": "12.2 Failure routing",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
     ]
   },
   {
     "objectID": "10-troubleshooting-and-recovery.html#common-problems",
     "href": "10-troubleshooting-and-recovery.html#common-problems",
-    "title": "11  Troubleshooting and Recovery",
-    "section": "11.3 Common problems",
-    "text": "11.3 Common problems\n\n\n\n\n\n\n\n\nSymptom\nLikely cause\nRecovery\n\n\n\n\ncommand not found: methyl-validation\n.venv inactive or install missing\nActivate .venv, rerun scripts/install_all.sh\n\n\nfreeze fails for missing stable panel\nstability not run or wrong path\nRun --stability or set freeze_stable_dmp_csv\n\n\nmodel fails due to biological review gate\nrequire_biological_review_for_model=true and not confirmed\nset biological_review_confirmed=true after review\n\n\npath file-not-found across hosts\nenvironment path differences\nuse path_remap/--path-remap OLD=NEW\n\n\nblind predictor rejected in validation mode\nblind settings passed to methyl-validation\nrun blind mode with standalone methyl-predictor",
+    "title": "12  Troubleshooting and Recovery",
+    "section": "12.3 Common problems",
+    "text": "12.3 Common problems\n\n\n\n\n\n\n\n\nSymptom\nLikely cause\nRecovery\n\n\n\n\ncommand not found: methyl-validation\n.venv inactive or install missing\nActivate .venv, rerun scripts/install_all.sh\n\n\nfreeze fails for missing stable panel\nstability not run or wrong path\nRun --stability or set freeze_stable_dmp_csv\n\n\nmodel fails due to biological review gate\nrequire_biological_review_for_model=true and not confirmed\nset biological_review_confirmed=true after review\n\n\npath file-not-found across hosts\nenvironment path differences\nuse path_remap/--path-remap OLD=NEW\n\n\nblind predictor rejected in validation mode\nblind settings passed to methyl-validation\nrun blind mode with standalone methyl-predictor",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
     ]
   },
   {
     "objectID": "10-troubleshooting-and-recovery.html#safe-recovery-sequence",
     "href": "10-troubleshooting-and-recovery.html#safe-recovery-sequence",
-    "title": "11  Troubleshooting and Recovery",
-    "section": "11.4 Safe recovery sequence",
-    "text": "11.4 Safe recovery sequence\n\nValidate environment and CLI availability.\nConfirm previous-stage artifacts exist.\nRe-run failed stage only.\nUse resume mode where supported.\nRe-check QA gates before advancing.",
+    "title": "12  Troubleshooting and Recovery",
+    "section": "12.4 Safe recovery sequence",
+    "text": "12.4 Safe recovery sequence\n\nValidate environment and CLI availability.\nConfirm previous-stage artifacts exist.\nRe-run failed stage only.\nUse resume mode where supported.\nRe-check QA gates before advancing.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
     ]
   },
   {
     "objectID": "10-troubleshooting-and-recovery.html#resume-examples",
     "href": "10-troubleshooting-and-recovery.html#resume-examples",
-    "title": "11  Troubleshooting and Recovery",
-    "section": "11.5 Resume examples",
-    "text": "11.5 Resume examples\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability --resume\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --post-model-validation --resume",
+    "title": "12  Troubleshooting and Recovery",
+    "section": "12.5 Resume examples",
+    "text": "12.5 Resume examples\nsource .venv/bin/activate\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability --resume\nmethyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --post-model-validation --resume",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
     ]
   },
   {
     "objectID": "10-troubleshooting-and-recovery.html#operational-guardrails",
     "href": "10-troubleshooting-and-recovery.html#operational-guardrails",
-    "title": "11  Troubleshooting and Recovery",
-    "section": "11.6 Operational guardrails",
-    "text": "11.6 Operational guardrails\n\nKeep original run directories for traceability.\nPrefer additive reruns over manual artifact edits.\nRecord config overrides used in reruns.",
+    "title": "12  Troubleshooting and Recovery",
+    "section": "12.6 Operational guardrails",
+    "text": "12.6 Operational guardrails\n\nKeep original run directories for traceability.\nPrefer additive reruns over manual artifact edits.\nRecord config overrides used in reruns.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
     ]
   },
   {
     "objectID": "10-troubleshooting-and-recovery.html#see-also",
     "href": "10-troubleshooting-and-recovery.html#see-also",
-    "title": "11  Troubleshooting and Recovery",
-    "section": "11.7 See also",
-    "text": "11.7 See also\n\ndocs/code_first_discovery_report.md\ndocs/config_parameter_matrix.md",
+    "title": "12  Troubleshooting and Recovery",
+    "section": "12.7 See also",
+    "text": "12.7 See also\n\ndocs/code_first_discovery_report.md\ndocs/config_parameter_matrix.md",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>11</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
+      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Troubleshooting and Recovery</span>"
     ]
   },
   {
     "objectID": "11-command-cookbook.html",
     "href": "11-command-cookbook.html",
-    "title": "12  Command Cookbook",
+    "title": "13  Command Cookbook",
     "section": "",
-    "text": "12.1 Purpose\nProvide copy-ready command sequences for the full solution lifecycle.",
+    "text": "13.1 Purpose\nProvide copy-ready command sequences for the full solution lifecycle.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Command Cookbook</span>"
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Command Cookbook</span>"
     ]
   },
   {
     "objectID": "11-command-cookbook.html#full-staged-run-strict-profile-example",
     "href": "11-command-cookbook.html#full-staged-run-strict-profile-example",
-    "title": "12  Command Cookbook",
-    "section": "12.2 1) Full staged run (strict profile example)",
-    "text": "12.2 1) Full staged run (strict profile example)\nsource .venv/bin/activate\nPROJECT=\"/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json\"\n\nmethyl-validation --project \"$PROJECT\" --stability\nmethyl-validation --project \"$PROJECT\" --freeze\nmethyl-validation --project \"$PROJECT\" --model\nmethyl-validation --project \"$PROJECT\" --post-model-validation",
+    "title": "13  Command Cookbook",
+    "section": "13.2 1) Full staged run (strict profile example)",
+    "text": "13.2 1) Full staged run (strict profile example)\nsource .venv/bin/activate\nPROJECT=\"/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json\"\n\nmethyl-validation --project \"$PROJECT\" --stability\nmethyl-validation --project \"$PROJECT\" --freeze\nmethyl-validation --project \"$PROJECT\" --model\nmethyl-validation --project \"$PROJECT\" --post-model-validation",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Command Cookbook</span>"
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Command Cookbook</span>"
     ]
   },
   {
     "objectID": "11-command-cookbook.html#backend-comparison-and-selection",
     "href": "11-command-cookbook.html#backend-comparison-and-selection",
-    "title": "12  Command Cookbook",
-    "section": "12.3 2) Backend comparison and selection",
-    "text": "12.3 2) Backend comparison and selection\nsource .venv/bin/activate\nPROJECT=\"/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json\"\n\nmethyl-validation --project \"$PROJECT\" --model-mc --model-mc-all\nmethyl-validation --project \"$PROJECT\" --select-best-model --model-mc-all \\\n  --selection-metric balanced_accuracy --selection-stat median",
+    "title": "13  Command Cookbook",
+    "section": "13.3 2) Backend comparison and selection",
+    "text": "13.3 2) Backend comparison and selection\nsource .venv/bin/activate\nPROJECT=\"/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json\"\n\nmethyl-validation --project \"$PROJECT\" --model-mc --model-mc-all\nmethyl-validation --project \"$PROJECT\" --select-best-model --model-mc-all \\\n  --selection-metric balanced_accuracy --selection-stat median",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Command Cookbook</span>"
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Command Cookbook</span>"
     ]
   },
   {
     "objectID": "11-command-cookbook.html#rollout-comparison-report",
     "href": "11-command-cookbook.html#rollout-comparison-report",
-    "title": "12  Command Cookbook",
-    "section": "12.4 3) Rollout comparison report",
-    "text": "12.4 3) Rollout comparison report\nsource .venv/bin/activate\nPROJECT=\"/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json\"\nBASE=\"/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/model_mc/ecdf/metrics_summary.json\"\nCAND=\"/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/model_mc/tabular_sklearn/metrics_summary.json\"\n\nmethyl-validation --project \"$PROJECT\" --rollout-compare \\\n  --baseline-summary \"$BASE\" --candidate-summary \"$CAND\"",
+    "title": "13  Command Cookbook",
+    "section": "13.4 3) Rollout comparison report",
+    "text": "13.4 3) Rollout comparison report\nsource .venv/bin/activate\nPROJECT=\"/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json\"\nBASE=\"/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/model_mc/ecdf/metrics_summary.json\"\nCAND=\"/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/model_mc/tabular_sklearn/metrics_summary.json\"\n\nmethyl-validation --project \"$PROJECT\" --rollout-compare \\\n  --baseline-summary \"$BASE\" --candidate-summary \"$CAND\"",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Command Cookbook</span>"
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Command Cookbook</span>"
     ]
   },
   {
     "objectID": "11-command-cookbook.html#standalone-enricher-run-from-mapper-output",
     "href": "11-command-cookbook.html#standalone-enricher-run-from-mapper-output",
-    "title": "12  Command Cookbook",
-    "section": "12.5 4) Standalone enricher run from mapper output",
-    "text": "12.5 4) Standalone enricher run from mapper output\nsource .venv/bin/activate\nmethyl-enricher \\\n  --input /work/prostate-cancer/Healthy_vs_PCa1-4-CG/mapper/all/pca_pca1/all-gene_name-combined.csv \\\n  --modules \\\n  --library-preset cancer-extended \\\n  --outdir /work/prostate-cancer/Healthy_vs_PCa1-4-CG/enricher/all/pca_pca1",
+    "title": "13  Command Cookbook",
+    "section": "13.5 4) Standalone enricher run from mapper output",
+    "text": "13.5 4) Standalone enricher run from mapper output\nsource .venv/bin/activate\nmethyl-enricher \\\n  --input /work/prostate-cancer/Healthy_vs_PCa1-4-CG/mapper/all/pca_pca1/all-gene_name-combined.csv \\\n  --modules \\\n  --library-preset cancer-extended \\\n  --outdir /work/prostate-cancer/Healthy_vs_PCa1-4-CG/enricher/all/pca_pca1",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Command Cookbook</span>"
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Command Cookbook</span>"
     ]
   },
   {
     "objectID": "11-command-cookbook.html#standalone-blind-prediction",
     "href": "11-command-cookbook.html#standalone-blind-prediction",
-    "title": "12  Command Cookbook",
-    "section": "12.6 5) Standalone blind prediction",
-    "text": "12.6 5) Standalone blind prediction\nsource .venv/bin/activate\nmethyl-predictor --project /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json",
+    "title": "13  Command Cookbook",
+    "section": "13.6 5) Standalone blind prediction",
+    "text": "13.6 5) Standalone blind prediction\nsource .venv/bin/activate\nmethyl-predictor --project /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Command Cookbook</span>"
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Command Cookbook</span>"
     ]
   },
   {
     "objectID": "11-command-cookbook.html#manual-rendering-commands-this-manual",
     "href": "11-command-cookbook.html#manual-rendering-commands-this-manual",
-    "title": "12  Command Cookbook",
-    "section": "12.7 6) Manual rendering commands (this manual)",
-    "text": "12.7 6) Manual rendering commands (this manual)\nquarto render docs/user-manual --to html\nquarto render docs/user-manual --to pdf",
+    "title": "13  Command Cookbook",
+    "section": "13.7 6) Manual rendering commands (this manual)",
+    "text": "13.7 6) Manual rendering commands (this manual)\nquarto render docs/user-manual --to html\nquarto render docs/user-manual --to pdf",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Command Cookbook</span>"
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Command Cookbook</span>"
     ]
   },
   {
     "objectID": "11-command-cookbook.html#distributed-queue-one-task",
     "href": "11-command-cookbook.html#distributed-queue-one-task",
-    "title": "12  Command Cookbook",
-    "section": "12.8 7) Distributed queue (one task)",
-    "text": "12.8 7) Distributed queue (one task)\nFull workflow: Distributed MethylValidation on shared storage (12). One worker invocation:\nsource .venv/bin/activate\nmethyl-validation run-task --task /work/.../monte_carlo_runs/queue/tasks/run_0001.json",
+    "title": "13  Command Cookbook",
+    "section": "13.8 7) Distributed queue (one task)",
+    "text": "13.8 7) Distributed queue (one task)\nFull workflow: Distributed MethylValidation on shared storage (12). One worker invocation:\nsource .venv/bin/activate\nmethyl-validation run-task --task /work/.../monte_carlo_runs/queue/tasks/run_0001.json",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Command Cookbook</span>"
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Command Cookbook</span>"
     ]
   },
   {
     "objectID": "11-command-cookbook.html#hyperparameter-search-grid-example",
     "href": "11-command-cookbook.html#hyperparameter-search-grid-example",
-    "title": "12  Command Cookbook",
-    "section": "12.9 8) Hyperparameter search grid (example)",
-    "text": "12.9 8) Hyperparameter search grid (example)\nAfter plan-runs / full stability is understood, use the grid driver. Details: Optional hyperparameter search (13).\nsource .venv/bin/activate\nmethyl-hyperparam-search \\\n  --config /work/experiments/my_mc_config.json \\\n  --work-dir /work/experiments/hp_run1 \\\n  --grid '{\"stability_dmp_freq\": [0.6, 0.7]}' \\\n  -- --stability",
+    "title": "13  Command Cookbook",
+    "section": "13.9 8) Hyperparameter search grid (example)",
+    "text": "13.9 8) Hyperparameter search grid (example)\nAfter plan-runs / full stability is understood, use the grid driver. Details: Optional hyperparameter search (13).\nsource .venv/bin/activate\nmethyl-hyperparam-search \\\n  --config /work/experiments/my_mc_config.json \\\n  --work-dir /work/experiments/hp_run1 \\\n  --grid '{\"stability_dmp_freq\": [0.6, 0.7]}' \\\n  -- --stability",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Command Cookbook</span>"
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Command Cookbook</span>"
     ]
   },
   {
     "objectID": "11-command-cookbook.html#execution-notes",
     "href": "11-command-cookbook.html#execution-notes",
-    "title": "12  Command Cookbook",
-    "section": "12.10 Execution notes",
-    "text": "12.10 Execution notes\n\nAlways activate .venv before methyl-* commands.\nUse absolute project paths in production scripts.\nKeep command logs with timestamp and git commit hash for audit.",
+    "title": "13  Command Cookbook",
+    "section": "13.10 Execution notes",
+    "text": "13.10 Execution notes\n\nAlways activate .venv before methyl-* commands.\nUse absolute project paths in production scripts.\nKeep command logs with timestamp and git commit hash for audit.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>12</span>  <span class='chapter-title'>Command Cookbook</span>"
+      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Command Cookbook</span>"
     ]
   },
   {
     "objectID": "12-distributed-methyl-validation.html",
     "href": "12-distributed-methyl-validation.html",
-    "title": "13  Distributed MethylValidation on shared storage",
+    "title": "14  Distributed MethylValidation on shared storage",
     "section": "",
-    "text": "13.1 Purpose\nRun discovery Monte Carlo (and related queue-backed work) on several machines when a single host cannot finish n_iterations in acceptable wall time. Every worker must read and write the same output_base tree (commonly shared NFS under /work/...).",
+    "text": "14.1 Purpose\nRun discovery Monte Carlo (and related queue-backed work) on several machines when a single host cannot finish n_iterations in acceptable wall time. Every worker must read and write the same output_base tree (commonly shared NFS under /work/...).",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
+      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
     ]
   },
   {
     "objectID": "12-distributed-methyl-validation.html#prerequisites",
     "href": "12-distributed-methyl-validation.html#prerequisites",
-    "title": "13  Distributed MethylValidation on shared storage",
-    "section": "13.2 Prerequisites",
-    "text": "13.2 Prerequisites\n\nOne MonteCarloConfig (dedicated mc.json or a project with step_config.validation) with output_base on shared storage\nThe same virtual environment and methyl-* CLIs on each worker\nR/W access to: output_base/&lt;project_name&gt;/monte_carlo_runs/ and the queue/ subtree created by planning",
+    "title": "14  Distributed MethylValidation on shared storage",
+    "section": "14.2 Prerequisites",
+    "text": "14.2 Prerequisites\n\nOne MonteCarloConfig (dedicated mc.json or a project with step_config.validation) with output_base on shared storage\nThe same virtual environment and methyl-* CLIs on each worker\nR/W access to: output_base/&lt;project_name&gt;/monte_carlo_runs/ and the queue/ subtree created by planning",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
+      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
     ]
   },
   {
     "objectID": "12-distributed-methyl-validation.html#layout-under-monte_carlo_runs",
     "href": "12-distributed-methyl-validation.html#layout-under-monte_carlo_runs",
-    "title": "13  Distributed MethylValidation on shared storage",
-    "section": "13.3 Layout (under monte_carlo_runs/)",
-    "text": "13.3 Layout (under monte_carlo_runs/)\n\n\n\n\n\n\n\nPath\nRole\n\n\n\n\nqueue/mc_config.json\nSnapshotted config for workers\n\n\nqueue/plan_runs.json\nPlanned runs and task JSON paths\n\n\nqueue/tasks/run_####.json\nOne task = one run-task invocation\n\n\nqueue/queue_manifest.jsonl / queue/commands.sh\nOptional export for a job scheduler\n\n\nrun_####/queue_task_status.json\nWorker completion status\n\n\nrun_####/queue_local_step_timings.json\nMerged by aggregate-results into step_timings.csv\n\n\n\nFull path reference: packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md.",
+    "title": "14  Distributed MethylValidation on shared storage",
+    "section": "14.3 Layout (under monte_carlo_runs/)",
+    "text": "14.3 Layout (under monte_carlo_runs/)\n\n\n\n\n\n\n\nPath\nRole\n\n\n\n\nqueue/mc_config.json\nSnapshotted config for workers\n\n\nqueue/plan_runs.json\nPlanned runs and task JSON paths\n\n\nqueue/tasks/run_####.json\nOne task = one run-task invocation\n\n\nqueue/queue_manifest.jsonl / queue/commands.sh\nOptional export for a job scheduler\n\n\nrun_####/queue_task_status.json\nWorker completion status\n\n\nrun_####/queue_local_step_timings.json\nMerged by aggregate-results into step_timings.csv\n\n\n\nFull path reference: packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
+      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
     ]
   },
   {
     "objectID": "12-distributed-methyl-validation.html#command-sequence",
     "href": "12-distributed-methyl-validation.html#command-sequence",
-    "title": "13  Distributed MethylValidation on shared storage",
-    "section": "13.4 Command sequence",
-    "text": "13.4 Command sequence\n1) Plan (one process; creates run dirs and task JSON, no heavy steps):\nsource .venv/bin/activate\nmethyl-validation plan-runs --config /work/experiments/my_mc_config.json --overwrite\n# or:  methyl-validation plan-runs --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --overwrite\n--overwrite only replaces queue/tasks/ and regenerates the plan; it does not remove existing run_#### output directories. To delete all run_#### trees before planning, add --wipe-runs (irreversible). Without --overwrite, completed runs (see queue_task_status.json + per-run task under queue/tasks/) are not written over; you can add iterations and only the new run_#### work is planned. run-task skips pipeline work for runs already marked completed unless you pass --force.\n2) Export (optional; for a central queue broker):\nmethyl-validation export-queue --config /work/experiments/my_mc_config.json\n3) Workers (one job per task; repeat until the queue is empty):\nmethyl-validation run-task --task /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/queue/tasks/run_0001.json\n4) Aggregate (after successful tasks, or to refresh from a partial set):\nmethyl-validation aggregate-results --config /work/experiments/my_mc_config.json\n# add --stability to run the same DMP/gene stability pass as monolithic methyl-validation --stability\nIf adaptive stop settings are enabled for monolithic stability runs, remember queue workers do not coordinate global early termination on their own. Keep stability_early_stop_enabled=false for queue-first executions unless your scheduler supports coordinator-side cancellation logic.\nLegacy: a single process may still run methyl-validation --stability without subcommands; behavior is unchanged.",
+    "title": "14  Distributed MethylValidation on shared storage",
+    "section": "14.4 Command sequence",
+    "text": "14.4 Command sequence\n1) Plan (one process; creates run dirs and task JSON, no heavy steps):\nsource .venv/bin/activate\nmethyl-validation plan-runs --config /work/experiments/my_mc_config.json --overwrite\n# or:  methyl-validation plan-runs --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --overwrite\n--overwrite only replaces queue/tasks/ and regenerates the plan; it does not remove existing run_#### output directories. To delete all run_#### trees before planning, add --wipe-runs (irreversible). Without --overwrite, completed runs (see queue_task_status.json + per-run task under queue/tasks/) are not written over; you can add iterations and only the new run_#### work is planned. run-task skips pipeline work for runs already marked completed unless you pass --force.\n2) Export (optional; for a central queue broker):\nmethyl-validation export-queue --config /work/experiments/my_mc_config.json\n3) Workers (one job per task; repeat until the queue is empty):\nmethyl-validation run-task --task /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/queue/tasks/run_0001.json\n4) Aggregate (after successful tasks, or to refresh from a partial set):\nmethyl-validation aggregate-results --config /work/experiments/my_mc_config.json\n# add --stability to run the same DMP/gene stability pass as monolithic methyl-validation --stability\nIf adaptive stop settings are enabled for monolithic stability runs, remember queue workers do not coordinate global early termination on their own. Keep stability_early_stop_enabled=false for queue-first executions unless your scheduler supports coordinator-side cancellation logic.\nLegacy: a single process may still run methyl-validation --stability without subcommands; behavior is unchanged.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
+      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
     ]
   },
   {
     "objectID": "12-distributed-methyl-validation.html#example-paths-work-pattern",
     "href": "12-distributed-methyl-validation.html#example-paths-work-pattern",
-    "title": "13  Distributed MethylValidation on shared storage",
-    "section": "13.5 Example paths (/work pattern)",
-    "text": "13.5 Example paths (/work pattern)\nWith output_base pointing at shared storage, plan-runs / export-queue resolve monte_carlo_runs the same way as the monolithic CLI: output_base / project_name / monte_carlo_runs /.",
+    "title": "14  Distributed MethylValidation on shared storage",
+    "section": "14.5 Example paths (/work pattern)",
+    "text": "14.5 Example paths (/work pattern)\nWith output_base pointing at shared storage, plan-runs / export-queue resolve monte_carlo_runs the same way as the monolithic CLI: output_base / project_name / monte_carlo_runs /.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
+      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
     ]
   },
   {
     "objectID": "12-distributed-methyl-validation.html#recovery",
     "href": "12-distributed-methyl-validation.html#recovery",
-    "title": "13  Distributed MethylValidation on shared storage",
-    "section": "13.6 Recovery",
-    "text": "13.6 Recovery\n\nRe-run a failed run-task for the same --task path.\nqueue_task_status.json records failed vs completed.\naggregate-results skips failed runs (when status files are present) and includes runs with computable per-run metrics.",
+    "title": "14  Distributed MethylValidation on shared storage",
+    "section": "14.6 Recovery",
+    "text": "14.6 Recovery\n\nRe-run a failed run-task for the same --task path.\nqueue_task_status.json records failed vs completed.\naggregate-results skips failed runs (when status files are present) and includes runs with computable per-run metrics.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
+      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
     ]
   },
   {
     "objectID": "12-distributed-methyl-validation.html#see-also",
     "href": "12-distributed-methyl-validation.html#see-also",
-    "title": "13  Distributed MethylValidation on shared storage",
-    "section": "13.7 See also",
-    "text": "13.7 See also\n\npackages/methylvalidation/docs/DISTRIBUTED_QUEUE.md (canonical detail)\ndocs/theory/chapters/15-model-creation-and-validation.qmd (section Distributed Monte Carlo on shared storage)\nOptional hyperparameter search (search trials can use the same shared storage)",
+    "title": "14  Distributed MethylValidation on shared storage",
+    "section": "14.7 See also",
+    "text": "14.7 See also\n\npackages/methylvalidation/docs/DISTRIBUTED_QUEUE.md (canonical detail)\ndocs/theory/chapters/15-model-creation-and-validation.qmd (section Distributed Monte Carlo on shared storage)\nOptional hyperparameter search (search trials can use the same shared storage)",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>13</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
+      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Distributed MethylValidation on shared storage</span>"
     ]
   },
   {
     "objectID": "13-optional-hyperparameter-search.html",
     "href": "13-optional-hyperparameter-search.html",
-    "title": "14  Optional hyperparameter search",
+    "title": "15  Optional hyperparameter search",
     "section": "",
-    "text": "14.1 When to use\nAfter a baseline methyl-validation path is understood, use a controlled outer loop to compare candidate settings—typically Tier A knobs in step_config.validation / MonteCarloConfig (e.g. stability_dmp_freq, n_iterations as budget, stability_min_balanced_accuracy). Tuning detector and model backends (Tier B/C) is a separate, often nested exercise; see the theory chapter on multi-stage search tradeoffs in docs/theory/chapters/15-model-creation-and-validation.qmd (Optional pipeline hyperparameter search).",
+    "text": "15.1 When to use\nAfter a baseline methyl-validation path is understood, use a controlled outer loop to compare candidate settings—typically Tier A knobs in step_config.validation / MonteCarloConfig (e.g. stability_dmp_freq, n_iterations as budget, stability_min_balanced_accuracy). Tuning detector and model backends (Tier B/C) is a separate, often nested exercise; see the theory chapter on multi-stage search tradeoffs in docs/theory/chapters/15-model-creation-and-validation.qmd (Optional pipeline hyperparameter search).",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Optional hyperparameter search</span>"
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Optional hyperparameter search</span>"
     ]
   },
   {
     "objectID": "13-optional-hyperparameter-search.html#what-it-is",
     "href": "13-optional-hyperparameter-search.html#what-it-is",
-    "title": "14  Optional hyperparameter search",
-    "section": "14.2 What it is",
-    "text": "14.2 What it is\n\nA read-only scalar objective (J) is computed from artifacts under monte_carlo_runs/ (mainly metrics_summary.json, optional stability/stability_summary.json).\nThe methyl-hyperparam-search entry point is a small grid driver: for each grid point it writes work_dir/trial_NNNN/mc_config.json with a merged MonteCarloConfig and a distinct output_base, runs methyl-validation (e.g. with --stability), then scores the run.\nIt does not use sklearn.model_selection CV: each evaluation is a subprocess and file read.\n\nFormula and weights: packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md (full (J), ObjectiveWeights, constraint semantics).",
+    "title": "15  Optional hyperparameter search",
+    "section": "15.2 What it is",
+    "text": "15.2 What it is\n\nA read-only scalar objective (J) is computed from artifacts under monte_carlo_runs/ (mainly metrics_summary.json, optional stability/stability_summary.json).\nThe methyl-hyperparam-search entry point is a small grid driver: for each grid point it writes work_dir/trial_NNNN/mc_config.json with a merged MonteCarloConfig and a distinct output_base, runs methyl-validation (e.g. with --stability), then scores the run.\nIt does not use sklearn.model_selection CV: each evaluation is a subprocess and file read.\n\nFormula and weights: packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md (full (J), ObjectiveWeights, constraint semantics).",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Optional hyperparameter search</span>"
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Optional hyperparameter search</span>"
     ]
   },
   {
     "objectID": "13-optional-hyperparameter-search.html#command-example",
     "href": "13-optional-hyperparameter-search.html#command-example",
-    "title": "14  Optional hyperparameter search",
-    "section": "14.3 Command example",
-    "text": "14.3 Command example\nUse a dedicated MC config and a work directory on shared storage if many trials:\nsource .venv/bin/activate\nmethyl-hyperparam-search \\\n  --config /work/experiments/my_mc_config.json \\\n  --work-dir /work/experiments/hp_run1 \\\n  --grid '{\"stability_dmp_freq\": [0.6, 0.7], \"stability_min_balanced_accuracy\": [null, 0.5]}' \\\n  -- \\\n  --stability\n\nJSON null in --grid omits that field so the base config value is kept.\nResults: work-dir/search_summary.json (per-trial rows and best feasible trial, if any).\n--weights-json can point to a file for ObjectiveWeights.\n--baseline-summary /path/to/metrics_summary.json enforces rollout-style feasibility vs a baseline (same idea as methyl-validation --rollout-compare); see packages/methylvalidation/docs/ROLLOUT.md and packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md.\n--dry-run only writes trial configs and paths; no pipeline subprocesses.",
+    "title": "15  Optional hyperparameter search",
+    "section": "15.3 Command example",
+    "text": "15.3 Command example\nUse a dedicated MC config and a work directory on shared storage if many trials:\nsource .venv/bin/activate\nmethyl-hyperparam-search \\\n  --config /work/experiments/my_mc_config.json \\\n  --work-dir /work/experiments/hp_run1 \\\n  --grid '{\"stability_dmp_freq\": [0.6, 0.7], \"stability_min_balanced_accuracy\": [null, 0.5]}' \\\n  -- \\\n  --stability\n\nJSON null in --grid omits that field so the base config value is kept.\nResults: work-dir/search_summary.json (per-trial rows and best feasible trial, if any).\n--weights-json can point to a file for ObjectiveWeights.\n--baseline-summary /path/to/metrics_summary.json enforces rollout-style feasibility vs a baseline (same idea as methyl-validation --rollout-compare); see packages/methylvalidation/docs/ROLLOUT.md and packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md.\n--dry-run only writes trial configs and paths; no pipeline subprocesses.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Optional hyperparameter search</span>"
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Optional hyperparameter search</span>"
     ]
   },
   {
     "objectID": "13-optional-hyperparameter-search.html#pitfalls",
     "href": "13-optional-hyperparameter-search.html#pitfalls",
-    "title": "14  Optional hyperparameter search",
-    "section": "14.4 Pitfalls",
-    "text": "14.4 Pitfalls\n\nDiscovery vs calibration: settings that optimize stability panel size may not optimize NLL, Brier, or ECE; prefer a two-stage strategy or tight constraints, not a single ad hoc weight mix.\nn_iterations: treat primarily as compute budget to stabilize medians, not a dimension to grid-search widely without cost awareness.",
+    "title": "15  Optional hyperparameter search",
+    "section": "15.4 Pitfalls",
+    "text": "15.4 Pitfalls\n\nDiscovery vs calibration: settings that optimize stability panel size may not optimize NLL, Brier, or ECE; prefer a two-stage strategy or tight constraints, not a single ad hoc weight mix.\nn_iterations: treat primarily as compute budget to stabilize medians, not a dimension to grid-search widely without cost awareness.",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Optional hyperparameter search</span>"
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Optional hyperparameter search</span>"
     ]
   },
   {
     "objectID": "13-optional-hyperparameter-search.html#see-also",
     "href": "13-optional-hyperparameter-search.html#see-also",
-    "title": "14  Optional hyperparameter search",
-    "section": "14.5 See also",
-    "text": "14.5 See also\n\npackages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md\npackages/methylvalidation/docs/ROLLOUT.md (promotion / dual-run thinking)\ndocs/theory/chapters/15-model-creation-and-validation.qmd (Optional pipeline hyperparameter search)\nDistributed MethylValidation on shared storage (for parallel execution of a single config’s iterations)",
+    "title": "15  Optional hyperparameter search",
+    "section": "15.5 See also",
+    "text": "15.5 See also\n\npackages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md\npackages/methylvalidation/docs/ROLLOUT.md (promotion / dual-run thinking)\ndocs/theory/chapters/15-model-creation-and-validation.qmd (Optional pipeline hyperparameter search)\nDistributed MethylValidation on shared storage (for parallel execution of a single config’s iterations)",
     "crumbs": [
       "Part III: Operations and Reliability",
-      "<span class='chapter-number'>14</span>  <span class='chapter-title'>Optional hyperparameter search</span>"
+      "<span class='chapter-number'>15</span>  <span class='chapter-title'>Optional hyperparameter search</span>"
     ]
   }
 ]

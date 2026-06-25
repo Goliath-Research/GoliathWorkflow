@@ -1,0 +1,268 @@
+# Sample Prep and Quality Control
+
+## Purpose
+
+**SamplePrepPipeline** is the per-sample upstream workflow that turns raw WGBS FASTQs into methylation HDF5 files (`{chromosome}-CG.h5`) that downstream stages consume. Every sample passes through **two automated guardrails** before it enters stability, freeze, or discovery workflows:
+
+1. **Alignment QC** (`methyl-qc`) — confirms Parabricks alignment and sequencing metrics are acceptable (or fixable via trim/realign).
+2. **Extraction QC** (`methyl-extraction-qc`) — confirms MethylExtractor produced sufficient coverage and conversion-quality signal across chromosomes.
+
+Without these gates, bad alignments would waste GPU extraction time, and under-covered or poorly converted extractions would pollute centroids, DMP discovery, and classifiers.
+
+**Workflow source of truth:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
+
+**Operator reference:** [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md)
+
+## End-to-end flow
+
+```{=latex}
+\begin{center}
+\begin{tikzpicture}[
+  >=Latex,
+  node distance=0.85cm,
+  box/.style={draw, rounded corners, align=center, minimum width=3.4cm, minimum height=0.75cm, font=\small}
+]
+\node[box] (dl) {download FASTQs};
+\node[box, below=of dl] (align) {Parabricks fq2bam};
+\node[box, below=of align] (aqc) {methyl-qc\\(alignment guardrail)};
+\node[box, below=of aqc] (gate1) {qcPass?};
+\node[box, below left=1.0cm and 0.6cm of gate1] (rem) {trim + realign\\(if fixable)};
+\node[box, below right=1.0cm and 0.6cm of gate1] (frag) {fragmentomics\\(cfDNA only)};
+\node[box, below=of frag] (ext) {MethylExtractor};
+\node[box, below=of ext] (eqc) {methyl-extraction-qc};
+\node[box, below=of eqc] (gate2) {extractionQcPass?};
+\node[box, below=of gate2] (h5) {archive H5 + cleanup};
+
+\draw[->] (dl) -- (align) -- (aqc) -- (gate1);
+\draw[->] (gate1) -- node[right, font=\scriptsize] {fail + fixable} (rem);
+\draw[->] (rem) -- (aqc);
+\draw[->] (gate1) -- node[right, font=\scriptsize] {pass} (frag);
+\draw[->] (frag) -- (ext) -- (eqc) -- (gate2) -- (h5);
+\end{tikzpicture}
+\end{center}
+```
+
+| Gate | Scope variable | When | Blocks |
+|------|----------------|------|--------|
+| Alignment | `qcPass` | After Parabricks, **before** extract | Extraction (unless remediation succeeds) |
+| Extraction | `extractionQcPass` | After MethylExtractor | Full archive and BAM deletion |
+
+**Ordering rationale:** alignment QC runs before cfDNA fragmentomics so failed samples skip BAM scanning. Fragmentomics and extraction both need the aligned BAM. FASTQs are retained until QC is fully resolved so **fastp** can trim and Parabricks can realign on the remediation path.
+
+## Where artifacts live
+
+Per sample under `/work/samples/{sample_id}/`:
+
+| Artifact | Role |
+|----------|------|
+| `*deduplicate_metrics.txt` | Picard-style duplication metrics from Parabricks |
+| `{sample_id}.json` | Parabricks WGBS metrics JSON (sequencing + alignment) |
+| `{sample_id}.qc-metrics.tar` | Optional tar of tabular metrics (used when JSON is absent) |
+| `{output_base}/{project}/alignment_qc/{sample_id}.json` | Normalized **V2** alignment QC export (when run project-scoped) |
+| `{sample_id}.extraction_manifest.json` | MethylExtractor summary (written at extract time) |
+| `{sample_id}.extraction_qc.json` | Extraction guardrail report |
+| `{sample_id}.sample_prep_log.jsonl` | Append-only audit of every prep action |
+| `{chr}-CG.h5` | Methylation matrices consumed by `methyl-centroid` |
+
+## Alignment QC: inputs and normalized JSON
+
+`methyl-qc` (`packages/methylalignmentqc`) combines **two upstream metric families** into one decision:
+
+### Picard-style duplication metrics
+
+Parabricks emits a tab-separated **deduplication metrics** file (names vary: `*deduplicate_metrics.txt` or `*duplication_metrics.txt`). The parser (`methyl_alignment_qc/core/parser.py`) reads Picard-compatible columns such as:
+
+- `LIBRARY`, `UNPAIRED_READS_EXAMINED`, `READ_PAIRS_EXAMINED`
+- `SECONDARY_OR_SUPPLEMENTARY_RDS`, `UNMAPPED_READS`
+- `UNPAIRED_READ_DUPLICATES`, `READ_PAIR_DUPLICATES`
+- **`PERCENT_DUPLICATION`**
+
+These feed `summary_stats` on the export JSON (total reads, duplication rate, etc.). Optional config guardrails (`step_config.alignment_qc.optional_guardrails.duplication_rate_max`) can fail samples with excessive PCR duplication even when cycle quality looks fine.
+
+### Parabricks WGBS metrics JSON
+
+Each sample directory should contain **`{sample_id}.json`**: Parabricks' structured report with sections such as:
+
+- `quality_yield` — total/PF reads and Q30 bases
+- `mean_quality_by_cycle` — per-cycle mean Phred (Read 1 then Read 2; for 151+151 cycles, Read 2 starts at cycle 152)
+- `gc_bias_summary`, `insert_size_metrics`
+- `pre_adapter_summaries` — deamination and OxoG artifact qscores
+
+When this file is present, guardrails in `wgbs_parabricks_qc.py` evaluate sequencing and alignment health **before** methylation extraction.
+
+### Our equivalent export JSON (V2)
+
+The worker writes a normalized **V2 row-oriented** JSON per sample (schema: `schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`). Key blocks:
+
+| Block | Contents |
+|-------|----------|
+| `summary_stats` | Duplication rate, read counts from Picard metrics |
+| `quality_yield`, `mean_quality_by_cycle`, … | Parabricks sections (embedded or referenced) |
+| `guardrails.details` | Per-metric pass/fail, observed value, normal range, operator message |
+| `guardrails.screening` | Cycle-quality disposition and recommended trim counts |
+| `guardrails.overall_pass` | **Single boolean** bound to workflow `qcPass` |
+| `qc_history` | Append-only list of evaluations (initial + post-remediation retries) |
+| `fragmentomics_metrics` | cfDNA insert-size guardrails when enabled |
+
+V1-shaped payloads are assembled internally and converted to V2 for export; standalone tools can migrate older files with `methyl-qc-migrate-guardrails`.
+
+## Alignment guardrails: what “good alignment” means
+
+Core WGBS guardrails (defaults in `wgbs_parabricks_qc.py`) include:
+
+| Metric | Default expectation | Why it matters |
+|--------|---------------------|----------------|
+| PF read percent | ≥ 90% | Run-level filtering quality |
+| Q30 percent | ≥ 85% (configurable) | Base-call confidence |
+| Mean quality | ≥ 35 | Overall sequencing noise |
+| Min quality after cycle 20 | ≥ 30 | Late-cycle degradation |
+| AT / GC dropout | < 3 / < 5 | Coverage bias across genome |
+| Median insert size | 150–300 bp | Library fragmentation sanity |
+| Deamination qscore | ≤ 30 | Expected WGBS conversion signal |
+| OxoG qscore | ≥ 20 | Oxidative damage risk |
+
+Each metric carries a **`message`** explaining the biological/operational concern. `guardrails.overall_pass` is the logical AND of all evaluated checks (including optional and analyte-specific add-ons).
+
+### Optional and analyte-specific checks
+
+Configure under `step_config.alignment_qc` in the project JSON:
+
+```json
+{
+  "alignment_qc": {
+    "optional_guardrails": {
+      "duplication_rate_max": 0.25,
+      "min_pf_reads": 1000000
+    },
+    "bisulfite_conversion": {
+      "enabled": true,
+      "source": "auto",
+      "min_conversion_rate_pct": 99.0
+    },
+    "fragmentomics": {
+      "enabled": true,
+      "profile": "cfdna"
+    },
+    "cycle_screening": {
+      "enabled": true,
+      "r2_quality_threshold": 30,
+      "max_trim_bases": 8
+    }
+  }
+}
+```
+
+- **Bisulfite conversion:** reads `bisulfite_conversion.json` sidecar when present; otherwise may use deamination qscore as a qualitative proxy.
+- **cfDNA fragmentomics:** when `primary_analyte` is `cfdna`, insert-size histogram guardrails can flag abnormal fragment profiles before extraction.
+
+See [`docs/ANALYTE_PROFILES.md`](../../docs/ANALYTE_PROFILES.md) for profile defaults.
+
+## Cycle screening and automated recovery
+
+Historically, a single **`min(mq[20:])`** over the combined cycle series could fail fixable Read-2 start dips with a generic “do not proceed” message. **Cycle screening** (`cycle_quality_screening.py`) inspects Read 1 and Read 2 separately and assigns a **disposition**:
+
+| Disposition | Meaning | SamplePrep action |
+|-------------|---------|-------------------|
+| `USE_CURRENT_ALIGNMENT` | Guardrails pass | Continue to extract |
+| `REALIGN_TRIM` / `REALIGN_READ2_TRIM` | Fixable read-end quality dip | `sample.trim_fastq` → Parabricks `forceRealign` → `methyl-qc` retry |
+| `INVESTIGATE_MULTI_REGION` | Multiple low-quality regions | Manual review; no auto-trim |
+| `INVESTIGATE_GUARDRAIL_ONLY` | Cycles OK; duplication/depth/insert fail | Manual review |
+| `NOT_FIXABLE` | No automated path | Archive QC-only artifacts, mark failed |
+
+Screening writes `guardrails.screening` with recommended trim bases (`trim_front1`, `trim_tail1`, `trim_front2`, `trim_tail2`). SamplePrep binds `remediateAlignment` when disposition is trim-eligible and FASTQs are still on disk.
+
+**Important:** FASTQs must **not** be deleted before final alignment QC disposition. The workflow deletes FASTQs only after pass or final reject (including post-remediation retry).
+
+Offline cohort review (no re-align):
+
+```bash
+source .venv/bin/activate
+python scripts/alignment_qc_cohort_screening.py \
+  --qc-dir /work/prostate-cancer/alignment_qc \
+  --group healthy=/work/prostate-cancer/data/healthy.csv \
+  --group pca=/work/prostate-cancer/data/pca.csv \
+  --out /work/prostate-cancer/alignment_qc/screening_report
+```
+
+## Extraction QC: confirming enough good reads
+
+Alignment QC validates the **BAM**. Extraction QC validates the **methylation call layer** MethylExtractor produced.
+
+### Input: extraction manifest
+
+MethylExtractor writes `{sample_id}.extraction_manifest.json` with:
+
+- `summary` — genome-wide CpG weighted mean coverage, CHH/CHG methylation levels
+- `per_chromosome` — per-chromosome blocks with `CG.mean_coverage` and related stats
+
+### Output: extraction QC JSON
+
+`methyl-extraction-qc` reads the manifest and writes `{sample_id}.extraction_qc.json`. Default guardrails (`methylextractionqc/guardrails.py`):
+
+| Guardrail | Default | Interpretation |
+|-----------|---------|----------------|
+| `cpg_weighted_mean_coverage` | ≥ 10× | Enough reads at CpG sites passing minimum coverage |
+| `chh_methylation_level` | ≤ 0.02 | Low non-CpG methylation (conversion sanity) when CHH extracted |
+| `chg_methylation_level` | ≤ 0.02 | Same for CHG |
+| `chromosome_completeness` | all expected chromosomes | Every project chromosome present with CG metrics |
+| `chromosome_uniformity` | autosomal min/median ≥ 0.5 | No severe localized dropout |
+
+`guardrails.overall_pass` maps to workflow **`extractionQcPass`**. Failures are **terminal** today (no automatic retry loop).
+
+Override thresholds via `step_config.extraction_qc` in the project JSON. Schema: `schemas/extraction_qc_output.schema.json`.
+
+### Why both gates matter
+
+| Question | Answered by |
+|----------|-------------|
+| Did sequencing and alignment produce a usable BAM? | Alignment QC |
+| Did we extract enough confident methylation signal genome-wide? | Extraction QC |
+
+A sample can pass alignment but fail extraction (e.g., coverage collapse on certain chromosomes). Conversely, remediation after alignment QC prevents spending extract GPU time on BAMs that will never support stable downstream statistics.
+
+## Pass, fail, and handoff
+
+| Outcome | Alignment QC | Extraction QC | Next step |
+|---------|--------------|---------------|-----------|
+| Pass both | `qcPass: true` | `extractionQcPass: true` | Optional full archive → delete FASTQs/BAM → sample ready for DataDrivenPipeline |
+| Fail alignment (not fixable) | `qcPass: false` | — | QC-only archive, mark failed, skip extract |
+| Fail after remediation | `qcPass: false` (attempt 2) | — | Same as above |
+| Pass alignment, fail extraction | `qcPass: true` | `extractionQcPass: false` | QC-only archive, mark failed; H5 may exist but must not enter production cohorts |
+
+When SamplePrep instance **COMPLETED**, start stability or discovery workflows with the same `projectPath`. Downstream code resolves HDF5 via `methyl_domain.helpers.resolve_methylation_h5_path()` — do not hard-code sample paths.
+
+Workers tag scope with **`MethylSampleRef`** including `alignmentQc`, `extractionQc`, and `methylation` refs for traceability.
+
+## Configuration checklist
+
+Before starting SamplePrep, confirm:
+
+- [ ] `project.json` lists samples and `samples_base_path` / `path_remap` resolve to `/work/samples/...`
+- [ ] `step_config.alignment_qc` thresholds match analyte (cfDNA vs buffy coat)
+- [ ] `step_config.extraction_qc` min coverage appropriate for WGBS depth expectations
+- [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
+- [ ] Instance `context_json` includes `fastqStorage`, `referenceFasta`, `samples[]`
+
+## Commands (standalone debugging)
+
+```bash
+source .venv/bin/activate
+
+# Alignment QC for one sample directory
+methyl-qc --samples /work/samples/SAMPLE_ID --output-dir /work/prostate-cancer/alignment_qc
+
+# Project-scoped (uses step_config.alignment_qc)
+methyl-qc --project /work/prostate-cancer/configs/project_Example.json
+
+# Extraction QC after MethylExtractor
+methyl-extraction-qc --sample-dir /work/samples/SAMPLE_ID --sample-id SAMPLE_ID
+```
+
+## Related documentation
+
+- Workflow operator guide: [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md)
+- Architecture §0: [`workflow_engine/docs/pipeline_architecture.md`](../../workflow_engine/docs/pipeline_architecture.md)
+- Worker contract: [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md)
+- Alignment QC package: [`packages/methylalignmentqc/docs/USAGE.md`](../../packages/methylalignmentqc/docs/USAGE.md)
+- Extraction QC package: [`packages/methylextractionqc/README.md`](../../packages/methylextractionqc/README.md)
+- Historical design notes (cycle screening): [`docs/plans/alignment-qc-screening.plan.md`](../../docs/plans/alignment-qc-screening.plan.md)

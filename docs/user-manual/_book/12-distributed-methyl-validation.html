@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>13&nbsp; Distributed MethylValidation on shared storage – MethylPipeline User Manual</title>
+<title>14&nbsp; Distributed MethylValidation on shared storage – MethylPipeline User Manual</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -120,7 +120,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
       <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
         <i class="bi bi-layout-text-sidebar-reverse"></i>
       </button>
-        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html">Part III: Operations and Reliability</a></li><li class="breadcrumb-item"><a href="./12-distributed-methyl-validation.html"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></a></li></ol></nav>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html">Part III: Operations and Reliability</a></li><li class="breadcrumb-item"><a href="./12-distributed-methyl-validation.html"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></a></li></ol></nav>
         <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
         </a>
       <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
@@ -174,8 +174,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
+  <a href="./03-sample-prep-and-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Sample Prep and Quality Control</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
   <a href="./03-package-reference-individual-usage.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Package Reference (Individual Usage)</span></span></a>
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Package Reference (Individual Usage)</span></span></a>
   </div>
 </li>
       </ul>
@@ -192,31 +198,31 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./04-stage-stability.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Stage: Stability</span></span></a>
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Stage: Stability</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./05-stage-freeze.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Stage: Freeze</span></span></a>
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Stage: Freeze</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./06-stage-model.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Stage: Model</span></span></a>
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Stage: Model</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./07-stage-post-model-validation.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Stage: Post-model Validation</span></span></a>
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Stage: Post-model Validation</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./08-stage-blind-prediction.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Stage: Blind Prediction</span></span></a>
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Stage: Blind Prediction</span></span></a>
   </div>
 </li>
       </ul>
@@ -233,31 +239,31 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./09-artifacts-and-qa-checks.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></span></a>
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./10-troubleshooting-and-recovery.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Troubleshooting and Recovery</span></span></a>
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Troubleshooting and Recovery</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./11-command-cookbook.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Command Cookbook</span></span></a>
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Command Cookbook</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./12-distributed-methyl-validation.html" class="sidebar-item-text sidebar-link active">
- <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></span></a>
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></span></a>
   </div>
 </li>
           <li class="sidebar-item">
   <div class="sidebar-item-container"> 
   <a href="./13-optional-hyperparameter-search.html" class="sidebar-item-text sidebar-link">
- <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Optional hyperparameter search</span></span></a>
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Optional hyperparameter search</span></span></a>
   </div>
 </li>
       </ul>
@@ -272,22 +278,22 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#purpose" id="toc-purpose" class="nav-link active" data-scroll-target="#purpose"><span class="header-section-number">13.1</span> Purpose</a></li>
-  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites"><span class="header-section-number">13.2</span> Prerequisites</a></li>
-  <li><a href="#layout-under-monte_carlo_runs" id="toc-layout-under-monte_carlo_runs" class="nav-link" data-scroll-target="#layout-under-monte_carlo_runs"><span class="header-section-number">13.3</span> Layout (under <code>monte_carlo_runs/</code>)</a></li>
-  <li><a href="#command-sequence" id="toc-command-sequence" class="nav-link" data-scroll-target="#command-sequence"><span class="header-section-number">13.4</span> Command sequence</a></li>
-  <li><a href="#example-paths-work-pattern" id="toc-example-paths-work-pattern" class="nav-link" data-scroll-target="#example-paths-work-pattern"><span class="header-section-number">13.5</span> Example paths (<code>/work</code> pattern)</a></li>
-  <li><a href="#recovery" id="toc-recovery" class="nav-link" data-scroll-target="#recovery"><span class="header-section-number">13.6</span> Recovery</a></li>
-  <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also"><span class="header-section-number">13.7</span> See also</a></li>
+  <li><a href="#purpose" id="toc-purpose" class="nav-link active" data-scroll-target="#purpose"><span class="header-section-number">14.1</span> Purpose</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites"><span class="header-section-number">14.2</span> Prerequisites</a></li>
+  <li><a href="#layout-under-monte_carlo_runs" id="toc-layout-under-monte_carlo_runs" class="nav-link" data-scroll-target="#layout-under-monte_carlo_runs"><span class="header-section-number">14.3</span> Layout (under <code>monte_carlo_runs/</code>)</a></li>
+  <li><a href="#command-sequence" id="toc-command-sequence" class="nav-link" data-scroll-target="#command-sequence"><span class="header-section-number">14.4</span> Command sequence</a></li>
+  <li><a href="#example-paths-work-pattern" id="toc-example-paths-work-pattern" class="nav-link" data-scroll-target="#example-paths-work-pattern"><span class="header-section-number">14.5</span> Example paths (<code>/work</code> pattern)</a></li>
+  <li><a href="#recovery" id="toc-recovery" class="nav-link" data-scroll-target="#recovery"><span class="header-section-number">14.6</span> Recovery</a></li>
+  <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also"><span class="header-section-number">14.7</span> See also</a></li>
   </ul>
 </nav>
     </div>
 <!-- main -->
 <main class="content" id="quarto-document-content">
 
-<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html">Part III: Operations and Reliability</a></li><li class="breadcrumb-item"><a href="./12-distributed-methyl-validation.html"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></a></li></ol></nav>
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./09-artifacts-and-qa-checks.html">Part III: Operations and Reliability</a></li><li class="breadcrumb-item"><a href="./12-distributed-methyl-validation.html"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></a></li></ol></nav>
 <div class="quarto-title">
-<h1 class="title"><span id="sec-distributed-methylvalidation" class="quarto-section-identifier"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></span></h1>
+<h1 class="title"><span id="sec-distributed-methylvalidation" class="quarto-section-identifier"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></span></h1>
 </div>
 
 
@@ -304,20 +310,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </header>
 
 
-<section id="purpose" class="level2" data-number="13.1">
-<h2 data-number="13.1" class="anchored" data-anchor-id="purpose"><span class="header-section-number">13.1</span> Purpose</h2>
+<section id="purpose" class="level2" data-number="14.1">
+<h2 data-number="14.1" class="anchored" data-anchor-id="purpose"><span class="header-section-number">14.1</span> Purpose</h2>
 <p>Run discovery Monte Carlo (and related queue-backed work) on <strong>several machines</strong> when a single host cannot finish <code>n_iterations</code> in acceptable wall time. Every worker must read and write the <strong>same</strong> <code>output_base</code> tree (commonly shared NFS under <code>/work/...</code>).</p>
 </section>
-<section id="prerequisites" class="level2" data-number="13.2">
-<h2 data-number="13.2" class="anchored" data-anchor-id="prerequisites"><span class="header-section-number">13.2</span> Prerequisites</h2>
+<section id="prerequisites" class="level2" data-number="14.2">
+<h2 data-number="14.2" class="anchored" data-anchor-id="prerequisites"><span class="header-section-number">14.2</span> Prerequisites</h2>
 <ul>
 <li>One <strong>MonteCarloConfig</strong> (dedicated <code>mc.json</code> or a project with <code>step_config.validation</code>) with <code>output_base</code> on shared storage</li>
 <li>The same virtual environment and <code>methyl-*</code> CLIs on each worker</li>
 <li>R/W access to: <code>output_base/&lt;project_name&gt;/monte_carlo_runs/</code> and the <code>queue/</code> subtree created by planning</li>
 </ul>
 </section>
-<section id="layout-under-monte_carlo_runs" class="level2" data-number="13.3">
-<h2 data-number="13.3" class="anchored" data-anchor-id="layout-under-monte_carlo_runs"><span class="header-section-number">13.3</span> Layout (under <code>monte_carlo_runs/</code>)</h2>
+<section id="layout-under-monte_carlo_runs" class="level2" data-number="14.3">
+<h2 data-number="14.3" class="anchored" data-anchor-id="layout-under-monte_carlo_runs"><span class="header-section-number">14.3</span> Layout (under <code>monte_carlo_runs/</code>)</h2>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 50%">
@@ -358,8 +364,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </table>
 <p>Full path reference: <code>packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md</code>.</p>
 </section>
-<section id="command-sequence" class="level2" data-number="13.4">
-<h2 data-number="13.4" class="anchored" data-anchor-id="command-sequence"><span class="header-section-number">13.4</span> Command sequence</h2>
+<section id="command-sequence" class="level2" data-number="14.4">
+<h2 data-number="14.4" class="anchored" data-anchor-id="command-sequence"><span class="header-section-number">14.4</span> Command sequence</h2>
 <p><strong>1) Plan</strong> (one process; creates run dirs and task JSON, no heavy steps):</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> plan-runs <span class="at">--config</span> /work/experiments/my_mc_config.json <span class="at">--overwrite</span></span>
@@ -375,20 +381,20 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>If adaptive stop settings are enabled for monolithic stability runs, remember queue workers do not coordinate global early termination on their own. Keep <code>stability_early_stop_enabled=false</code> for queue-first executions unless your scheduler supports coordinator-side cancellation logic.</p>
 <p><strong>Legacy:</strong> a single process may still run <code>methyl-validation --stability</code> without subcommands; behavior is unchanged.</p>
 </section>
-<section id="example-paths-work-pattern" class="level2" data-number="13.5">
-<h2 data-number="13.5" class="anchored" data-anchor-id="example-paths-work-pattern"><span class="header-section-number">13.5</span> Example paths (<code>/work</code> pattern)</h2>
+<section id="example-paths-work-pattern" class="level2" data-number="14.5">
+<h2 data-number="14.5" class="anchored" data-anchor-id="example-paths-work-pattern"><span class="header-section-number">14.5</span> Example paths (<code>/work</code> pattern)</h2>
 <p>With <code>output_base</code> pointing at shared storage, <code>plan-runs</code> / <code>export-queue</code> resolve <code>monte_carlo_runs</code> the same way as the monolithic CLI: <code>output_base / project_name / monte_carlo_runs /</code>.</p>
 </section>
-<section id="recovery" class="level2" data-number="13.6">
-<h2 data-number="13.6" class="anchored" data-anchor-id="recovery"><span class="header-section-number">13.6</span> Recovery</h2>
+<section id="recovery" class="level2" data-number="14.6">
+<h2 data-number="14.6" class="anchored" data-anchor-id="recovery"><span class="header-section-number">14.6</span> Recovery</h2>
 <ul>
 <li>Re-run a failed <code>run-task</code> for the same <code>--task</code> path.</li>
 <li><code>queue_task_status.json</code> records <code>failed</code> vs <code>completed</code>.</li>
 <li><code>aggregate-results</code> skips failed runs (when status files are present) and includes runs with computable per-run metrics.</li>
 </ul>
 </section>
-<section id="see-also" class="level2" data-number="13.7">
-<h2 data-number="13.7" class="anchored" data-anchor-id="see-also"><span class="header-section-number">13.7</span> See also</h2>
+<section id="see-also" class="level2" data-number="14.7">
+<h2 data-number="14.7" class="anchored" data-anchor-id="see-also"><span class="header-section-number">14.7</span> See also</h2>
 <ul>
 <li><code>packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md</code> (canonical detail)</li>
 <li><code>docs/theory/chapters/15-model-creation-and-validation.qmd</code> (section <em>Distributed Monte Carlo on shared storage</em>)</li>
@@ -802,12 +808,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <nav class="page-navigation">
   <div class="nav-page nav-page-previous">
       <a href="./11-command-cookbook.html" class="pagination-link" aria-label="Command Cookbook">
-        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Command Cookbook</span></span>
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Command Cookbook</span></span>
       </a>          
   </div>
   <div class="nav-page nav-page-next">
       <a href="./13-optional-hyperparameter-search.html" class="pagination-link" aria-label="Optional hyperparameter search">
-        <span class="nav-page-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Optional hyperparameter search</span></span> <i class="bi bi-arrow-right-short"></i>
+        <span class="nav-page-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Optional hyperparameter search</span></span> <i class="bi bi-arrow-right-short"></i>
       </a>
   </div>
 </nav>

@@ -26,6 +26,7 @@ methyl-export-task-schemas --check   # CI drift gate
 
 | Stage | Required artifacts | Gate to proceed |
 |---|---|---|
+| Sample prep | `{sample_id}.json`, `alignment_qc/{sample_id}.json`, `{sample_id}.extraction_qc.json`, `{chr}-CG.h5` | `guardrails.overall_pass` true for alignment and extraction QC |
 | Stability | `stability/stable_dmps_production.csv`, `stability_summary.json`, `all_metrics.csv` | Stable panel exists and is non-empty |
 | Freeze | `production/project.json`, mapper/enricher outputs | Production project exists; fixed-panel detector run completed |
 | Model | `production/classifiers/*`, `production/classifiers/training_metrics.json` (all model backends), `production/predictors/*` | Final classifier/predictor artifacts present |
