@@ -185,7 +185,7 @@ def _derive_mapper_gene_effects(
     if gc is None:
         return {}
     effect_col = None
-    for cand in ("mean_effect_size", "gene_effect_size", "gene_effect_abs_wmean"):
+    for cand in ("gene_importance", "gene_effect_abs_wsum", "gene_effect_size"):
         if cand in df.columns:
             effect_col = cand
             break
@@ -593,7 +593,6 @@ def run_module_pipeline(
     min_dmp_count: Optional[int] = None,
     min_unique_dmps: Optional[int] = None,
     max_gene_q_value: Optional[float] = None,
-    min_mean_effect_size: Optional[float] = None,
     min_gene_z: Optional[float] = None,
     min_gene_importance: Optional[float] = None,
     feature_types: Optional[List[str]] = None,
@@ -659,7 +658,6 @@ def run_module_pipeline(
         min_dmp_count=min_dmp_count,
         min_unique_dmps=min_unique_dmps,
         max_gene_q_value=max_gene_q_value,
-        min_mean_effect_size=min_mean_effect_size,
         min_gene_z=min_gene_z,
         min_gene_importance=min_gene_importance,
         feature_types=feature_types,

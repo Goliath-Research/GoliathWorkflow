@@ -135,7 +135,7 @@ def build_gene_panel_feature_weights(
     frozen_gene_panel_df: pd.DataFrame,
     feature_names: Sequence[str],
     *,
-    weight_column: str = "mean_effect_size",
+    weight_column: str = "gene_importance",
 ) -> np.ndarray:
     names = [str(x) for x in feature_names]
     if not names:
@@ -147,8 +147,6 @@ def build_gene_panel_feature_weights(
         col = weight_column if weight_column in panel.columns else None
         if col is None and "gene_importance" in panel.columns:
             col = "gene_importance"
-        if col is None and "mean_effect_size" in panel.columns:
-            col = "mean_effect_size"
         if col is not None:
             panel["gene_key"] = panel["gene_name"].map(_normalize_gene_name)
             panel["w"] = np.abs(
@@ -190,7 +188,7 @@ def build_raw_gene_feature_table(
     *,
     min_coverage: int = 1,
     use_region_weight: bool = True,
-    gene_weight_column: str = "mean_effect_size",
+    gene_weight_column: str = "gene_importance",
     gene_name_order: Optional[Sequence[str]] = None,
 ) -> RawGeneFeatureTable:
     if gene_name_order is not None:

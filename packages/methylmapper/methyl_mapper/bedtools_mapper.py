@@ -24,57 +24,9 @@ from methyl_utils.dmp_export_paths import glob_discovery_dmps_with_unified_fallb
 
 from .gene_disease_enricher import GeneDiseaseEnricher
 from .gtf_regions import build_gene_bodies_bed, build_sp_regions_bed, parse_region_name
+from .config import BiologyWeightConfig
 
 logger = logging.getLogger(__name__)
-
-
-def calculate_biological_importance(delta_mean, std, overlap, min_delta_mean=0.1, max_overlap=0.6):
-    """Calculate bounded biological importance in [0,1].
-
-    Hybrid: abs(delta_mean) / (overlap * std), penalized for noisy positions.
-    Zero overlap = 1.0 max.
-
-    Args:
-        delta_mean: Methylation difference
-        std: Combined standard deviation (variance penalty)
-        overlap: Distribution overlap (can be 0)
-        min_delta_mean: Min threshold (default: 0.1)
-        max_overlap: Max threshold (default: 0.6)
-
-    Returns:
-        importance: [0,1] bounded
-    """
-    # Convert to numpy
-    delta_mean = np.asarray(delta_mean)
-    std = np.asarray(std)
-    overlap = np.asarray(overlap)
-
-    is_scalar = delta_mean.ndim == 0
-
-    if is_scalar:
-        if overlap == 0:
-            return 1.0
-        r = abs(delta_mean) / (overlap * std)
-        c = abs(min_delta_mean) / max_overlap
-        importance = r / (r + c)
-        return float(importance)
-
-    # Array case
-    zero_overlap_mask = overlap == 0
-
-    # Avoid div0 and low variance
-    eps = 1e-8
-    denom = np.maximum(overlap * std, eps)
-    r = np.abs(delta_mean) / denom
-
-    c = abs(min_delta_mean) / max_overlap
-    importance = r / (r + c)
-
-    importance[zero_overlap_mask] = 1.0
-    importance = np.nan_to_num(importance, nan=0.0)
-
-    return importance
-
 
 class BedtoolsMapper:
     """
@@ -187,6 +139,7 @@ class BedtoolsMapper:
         w_exon: float = 1.5,
         w_intron: float = 0.7,
         w_unknown: float = 1.0,
+        biology_weights: Optional[BiologyWeightConfig] = None,
         storey_lambda: Optional[float] = None,
     ):
         """
@@ -245,7 +198,8 @@ class BedtoolsMapper:
             downstream_size: Terminator size in bp when use_sp_regions=True (default: 2000)
             min_intron_size: Minimum intron length when use_sp_regions=True (default: 0)
             max_gap: Max gap for grouping unknown-region DMPs (default: 1)
-            w_promoter, w_terminator, w_gene_body, w_exon,             w_intron, w_unknown: Region weights when use_sp_regions=True
+            w_promoter, w_terminator, w_gene_body, w_exon, w_intron, w_unknown: BED region scores when use_sp_regions=True (Stouffer weighting only)
+            biology_weights: Per (feature × hyper/hypo) weights for canonical gene/feature importance
             storey_lambda: If set, use this single lambda for Storey FDR (for SP parity). If None, use automatic lambda (default).
         """
         self.gene_gtf = Path(gene_gtf)
@@ -336,6 +290,7 @@ class BedtoolsMapper:
         self.w_exon = w_exon
         self.w_intron = w_intron
         self.w_unknown = w_unknown
+        self.biology_weights = biology_weights if biology_weights is not None else BiologyWeightConfig()
         self.storey_lambda = storey_lambda
         self._sp_regions_bed_path: Optional[Path] = None
         self._genes_closest_bed_path: Optional[Path] = None
@@ -974,25 +929,6 @@ class BedtoolsMapper:
                 eff_col = 'effect_size'
             elif 'importance' in merged.columns:
                 eff_col = 'importance'
-            elif 'delta_mean' in merged.columns and 'overlap' in merged.columns:
-                # Compute combined_std from Beta params if available, else approximate
-                if all(col in merged.columns for col in ['alpha1', 'beta1', 'alpha2', 'beta2']):
-                    # Beta variance formula
-                    tau1 = merged['alpha1'] + merged['beta1']
-                    var1 = merged['alpha1'] * merged['beta1'] / (tau1**2 * (tau1 + 1))
-                    tau2 = merged['alpha2'] + merged['beta2']
-                    var2 = merged['alpha2'] * merged['beta2'] / (tau2**2 * (tau2 + 1))
-                    combined_std = np.sqrt(var1 + var2)
-                else:
-                    # Approximate std for methylation (common value)
-                    combined_std = 0.1  # Reasonable default for filtered DMPs
-
-                # Calculate hybrid biological importance: |delta| / (overlap * std)
-                merged['biological_importance'] = calculate_biological_importance(
-                    merged['delta_mean'], combined_std, merged['overlap'],
-                    min_delta_mean=0.1, max_overlap=0.6
-                )
-                eff_col = 'biological_importance'
             elif 'delta_mean' in merged.columns:
                 eff_col = 'delta_mean'
 
@@ -1143,137 +1079,22 @@ class BedtoolsMapper:
         work = work.drop_duplicates(subset=[group_by, "dmp_name"], keep="first")
         return work
 
-    @staticmethod
-    def _directional_effect_from_effect_sizes(effect_sizes: pd.Series) -> tuple[float, float, float, float]:
-        """
-        Convert a list of signed effect sizes into directionalized magnitude.
+    def _biology_feature_bucket(self, feature_norm: str) -> str:
+        bucket = str(feature_norm or "gene_body")
+        if bucket in self._FEATURE_SCORE_ORDER:
+            return bucket
+        return self._parent_bucket_for_feature(bucket)
 
-        Returns:
-            (directional_effect, direction, direction_balance, raw_abs_sum)
-        """
-        values = pd.to_numeric(effect_sizes, errors="coerce").to_numpy(dtype=float)
-        values = values[np.isfinite(values)]
-        if values.size == 0:
-            return 0.0, 0.0, 0.0, 0.0
-        abs_vals = np.abs(values)
-        raw_abs_sum = float(np.sum(abs_vals))
-        if raw_abs_sum <= 0:
-            return 0.0, 0.0, 0.0, 0.0
-        signed_sum = float(np.sum(np.sign(values) * abs_vals))
-        direction_balance = float(np.clip(np.abs(signed_sum) / raw_abs_sum, 0.0, 1.0))
-        directional_effect = float(raw_abs_sum * direction_balance)
-        direction = float(np.sign(signed_sum))
-        return directional_effect, direction, direction_balance, raw_abs_sum
-
-    def _build_feature_effect_scores(self, intersect_df: pd.DataFrame, group_by: str) -> pd.DataFrame:
-        """
-        Build feature-level directional effect scores.
-
-        Uses exclusive-by-priority rows so each (group, DMP) contributes to only one feature.
-        Exon/intron follow segment-first aggregation:
-          1) per-segment directional effect from DMPs
-          2) feature directional effect from segment effects
-        """
-        work = self._exclusive_feature_rows(intersect_df, group_by=group_by)
-        if work.empty or "effect_size" not in work.columns:
-            cols = [group_by]
-            for feature in self._FEATURE_SCORE_ORDER:
-                cols.extend(
-                    [
-                        f"effect_size_{feature}",
-                        f"direction_{feature}",
-                        f"direction_balance_{feature}",
-                    ]
-                )
-            return pd.DataFrame(columns=cols)
-
-        work = work[[c for c in work.columns if c in {group_by, "feature_norm", "effect_size", "feature_start", "feature_end"}]].copy()
-        work["feature_norm"] = work["feature_norm"].astype(str)
-        work["effect_size"] = pd.to_numeric(work["effect_size"], errors="coerce")
-        work = work[np.isfinite(work["effect_size"])]
-        if work.empty:
-            cols = [group_by]
-            for feature in self._FEATURE_SCORE_ORDER:
-                cols.extend(
-                    [
-                        f"effect_size_{feature}",
-                        f"direction_{feature}",
-                        f"direction_balance_{feature}",
-                    ]
-                )
-            return pd.DataFrame(columns=cols)
-
-        rows: List[Dict[str, float | str]] = []
-        for group_value, group_df in work.groupby(group_by):
-            result: Dict[str, float | str] = {group_by: group_value}
-            for feature in self._FEATURE_SCORE_ORDER:
-                feat_df = group_df[group_df["feature_norm"] == feature]
-                effect_col = f"effect_size_{feature}"
-                direction_col = f"direction_{feature}"
-                balance_col = f"direction_balance_{feature}"
-                if feat_df.empty:
-                    result[effect_col] = 0.0
-                    result[direction_col] = 0.0
-                    result[balance_col] = 0.0
-                    continue
-
-                if feature in {"exon", "intron"}:
-                    # Stage A: segment-first directionalization.
-                    segment_df = feat_df.copy()
-                    if "feature_start" in segment_df.columns:
-                        segment_df["feature_start"] = pd.to_numeric(
-                            segment_df["feature_start"], errors="coerce"
-                        ).fillna(-1).astype(int)
-                    else:
-                        segment_df["feature_start"] = -1
-                    if "feature_end" in segment_df.columns:
-                        segment_df["feature_end"] = pd.to_numeric(
-                            segment_df["feature_end"], errors="coerce"
-                        ).fillna(-1).astype(int)
-                    else:
-                        segment_df["feature_end"] = -1
-                    segment_rows: List[Dict[str, float]] = []
-                    for (_, _), seg in segment_df.groupby(["feature_start", "feature_end"]):
-                        seg_effect, seg_direction, _seg_balance, _seg_raw = self._directional_effect_from_effect_sizes(seg["effect_size"])
-                        segment_rows.append({"segment_effect": seg_effect, "segment_direction": seg_direction})
-
-                    if not segment_rows:
-                        result[effect_col] = 0.0
-                        result[direction_col] = 0.0
-                        result[balance_col] = 0.0
-                        continue
-
-                    seg_table = pd.DataFrame(segment_rows)
-                    seg_effect_sum = float(seg_table["segment_effect"].sum())
-                    if seg_effect_sum <= 0:
-                        result[effect_col] = 0.0
-                        result[direction_col] = 0.0
-                        result[balance_col] = 0.0
-                        continue
-                    seg_signed_sum = float((seg_table["segment_effect"] * seg_table["segment_direction"]).sum())
-                    feat_balance = float(np.clip(np.abs(seg_signed_sum) / seg_effect_sum, 0.0, 1.0))
-                    result[effect_col] = float(seg_effect_sum * feat_balance)
-                    result[direction_col] = float(np.sign(seg_signed_sum))
-                    result[balance_col] = feat_balance
-                else:
-                    feat_effect, feat_direction, feat_balance, _feat_raw = self._directional_effect_from_effect_sizes(feat_df["effect_size"])
-                    result[effect_col] = feat_effect
-                    result[direction_col] = feat_direction
-                    result[balance_col] = feat_balance
-
-            rows.append(result)
-
-        out = pd.DataFrame(rows)
-        for feature in self._FEATURE_SCORE_ORDER:
-            for col in (
-                f"effect_size_{feature}",
-                f"direction_{feature}",
-                f"direction_balance_{feature}",
-            ):
-                if col not in out.columns:
-                    out[col] = 0.0
-                out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
-        return out
+    def _row_biology_weight(self, feature_norm: str, effect_sign: float) -> float:
+        bucket = self._biology_feature_bucket(feature_norm)
+        cfg = self.biology_weights
+        if effect_sign > 0:
+            return cfg.weight_for(bucket, hyper=True)
+        if effect_sign < 0:
+            return cfg.weight_for(bucket, hyper=False)
+        hyper_w = cfg.weight_for(bucket, hyper=True)
+        hypo_w = cfg.weight_for(bucket, hyper=False)
+        return (hyper_w + hypo_w) / 2.0
 
     def _build_compound_effect_metrics(
         self,
@@ -1285,11 +1106,17 @@ class BedtoolsMapper:
 
         Gene-level dedup key is (group_by, dmp_name) from score_source_df.
         Feature-level dedup key is (group_by, feature_norm, dmp_name).
+
+        Per-DMP weight: w_i = frequency_i × bio_weight(feature_i, hyper|hypo).
         """
         if score_source_df is None or score_source_df.empty or "effect_size" not in score_source_df.columns:
             return pd.DataFrame(columns=[group_by]), pd.DataFrame(columns=[group_by])
 
-        cols = [c for c in (group_by, "dmp_name", "feature_norm", "effect_size", "delta_mean", "frequency", "region_weight") if c in score_source_df.columns]
+        cols = [
+            c
+            for c in (group_by, "dmp_name", "feature_norm", "effect_size", "delta_mean", "frequency")
+            if c in score_source_df.columns
+        ]
         work = score_source_df[cols].copy()
         if group_by not in work.columns:
             return pd.DataFrame(columns=[group_by]), pd.DataFrame(columns=[group_by])
@@ -1298,6 +1125,9 @@ class BedtoolsMapper:
         work = work[np.isfinite(work["effect_size"])].copy()
         if work.empty:
             return pd.DataFrame(columns=[group_by]), pd.DataFrame(columns=[group_by])
+
+        if "feature_norm" not in work.columns:
+            work["feature_norm"] = "gene_body"
 
         if "frequency" in work.columns:
             freq_raw = pd.to_numeric(work["frequency"], errors="coerce").fillna(1.0)
@@ -1309,15 +1139,6 @@ class BedtoolsMapper:
         work["frequency_weight"] = freq_weight
         work["frequency_support"] = freq_support
 
-        if "region_weight" in work.columns:
-            region_weight = pd.to_numeric(work["region_weight"], errors="coerce").fillna(1.0).clip(lower=0.0)
-        else:
-            region_weight = pd.Series(1.0, index=work.index, dtype=float)
-        work["region_weight_eff"] = region_weight
-
-        work["bio_weight"] = work["frequency_weight"] * work["region_weight_eff"]
-        work["abs_effect"] = np.abs(pd.to_numeric(work["effect_size"], errors="coerce").fillna(0.0))
-
         if "delta_mean" in work.columns:
             sign_vals = np.sign(pd.to_numeric(work["delta_mean"], errors="coerce").fillna(0.0).to_numpy(dtype=float))
             eff_sign = np.sign(pd.to_numeric(work["effect_size"], errors="coerce").fillna(0.0).to_numpy(dtype=float))
@@ -1327,6 +1148,14 @@ class BedtoolsMapper:
         sign_vals = np.where(np.isfinite(sign_vals), sign_vals, 0.0)
         work["effect_sign"] = sign_vals
 
+        work["direction_bio_weight"] = [
+            self._row_biology_weight(fn, float(s))
+            for fn, s in zip(work["feature_norm"].astype(str), work["effect_sign"].to_numpy(dtype=float))
+        ]
+        work["bio_weight"] = work["frequency_weight"] * pd.to_numeric(
+            work["direction_bio_weight"], errors="coerce"
+        ).fillna(1.0)
+        work["abs_effect"] = np.abs(pd.to_numeric(work["effect_size"], errors="coerce").fillna(0.0))
         work["abs_term"] = work["bio_weight"] * work["abs_effect"]
         work["signed_term"] = work["abs_term"] * work["effect_sign"]
 
@@ -1376,10 +1205,10 @@ class BedtoolsMapper:
         feature_metrics = pd.DataFrame(columns=feature_cols)
         if "feature_norm" in work.columns:
             wf = work.copy()
-            wf["feature_norm"] = wf["feature_norm"].astype(str)
-            wf = wf[wf["feature_norm"].isin(self._FEATURE_SCORE_ORDER)].copy()
+            wf["feature_bucket"] = wf["feature_norm"].astype(str).map(self._biology_feature_bucket)
+            wf = wf[wf["feature_bucket"].isin(self._FEATURE_SCORE_ORDER)].copy()
             if not wf.empty:
-                fgrp = wf.groupby([group_by, "feature_norm"], dropna=False).agg(
+                fgrp = wf.groupby([group_by, "feature_bucket"], dropna=False).agg(
                     _sum_weight=("bio_weight", "sum"),
                     _sum_abs_term=("abs_term", "sum"),
                     _sum_signed_term=("signed_term", "sum"),
@@ -1393,11 +1222,6 @@ class BedtoolsMapper:
                 fgrp["feature_direction"] = np.sign(f_sum_signed)
                 fgrp["feature_effect_abs_wmean"] = np.where(f_sum_weight > 0.0, f_sum_abs / f_sum_weight, 0.0)
                 fgrp["feature_direction_coherence"] = np.where(f_sum_abs > 0.0, np.abs(f_sum_signed) / f_sum_abs, 0.0)
-                fgrp["feature_effect_compound"] = (
-                    fgrp["feature_effect_abs_wmean"]
-                    * fgrp["feature_direction_coherence"]
-                    * np.sqrt(f_support)
-                )
                 fgrp["feature_importance"] = (
                     f_sum_abs
                     * fgrp["feature_direction_coherence"]
@@ -1405,14 +1229,13 @@ class BedtoolsMapper:
                 )
                 pivot_frames: List[pd.DataFrame] = []
                 for src_col, out_prefix in (
-                    ("feature_effect_compound", "feature_effect_compound"),
                     ("feature_importance", "feature_importance"),
                     ("feature_direction", "feature_direction"),
                     ("feature_effect_signed_wsum", "feature_effect_signed_wsum"),
                 ):
                     pivot = fgrp.pivot(
                         index=group_by,
-                        columns="feature_norm",
+                        columns="feature_bucket",
                         values=src_col,
                     ).reset_index()
                     pivot.columns = [
@@ -1432,22 +1255,9 @@ class BedtoolsMapper:
             "gene_name",
             "gene_id",
             "unique_dmps",
-            "mean_effect_size",
             "gene_effect_size",
             "gene_direction",
-            "gene_score",
             "gene_effect_signed_wsum",
-            "effect_size_promoter",
-            "effect_size_exon",
-            "effect_size_intron",
-            "effect_size_gene_body",
-            "effect_size_terminator",
-            "direction_promoter",
-            "direction_exon",
-            "direction_intron",
-            "direction_gene_body",
-            "direction_terminator",
-            "gene_feature_importance",
             "gene_importance",
             "gene_effect_abs_wmean",
             "gene_effect_abs_wsum",
@@ -1455,11 +1265,6 @@ class BedtoolsMapper:
             "gene_support_n",
             "gene_support_freq",
             "gene_effect_compound",
-            "feature_effect_compound_promoter",
-            "feature_effect_compound_exon",
-            "feature_effect_compound_intron",
-            "feature_effect_compound_gene_body",
-            "feature_effect_compound_terminator",
             "feature_importance_promoter",
             "feature_importance_exon",
             "feature_importance_intron",
@@ -1475,8 +1280,6 @@ class BedtoolsMapper:
             "feature_effect_signed_wsum_intron",
             "feature_effect_signed_wsum_gene_body",
             "feature_effect_signed_wsum_terminator",
-            "gene_feature_effect_compound",
-            "gene_feature_score",
             "hits_promoter",
             "hits_exon",
             "hits_intron",
@@ -1531,12 +1334,6 @@ class BedtoolsMapper:
         
         if 'q_value' in intersect_df.columns:
             agg_dict['q_value'] = ['min', 'mean']
-        
-        if 'effect_size' in intersect_df.columns:
-            agg_dict['effect_size'] = ['mean', 'max']
-        
-        if 'delta_mean' in intersect_df.columns:
-            agg_dict['delta_mean'] = ['mean', 'max']
 
         if 'importance' in intersect_df.columns:
             agg_dict['importance'] = ['sum', 'mean', 'max']
@@ -1611,37 +1408,6 @@ class BedtoolsMapper:
                 if col not in grouped.columns:
                     grouped[col] = 0
                 grouped[col] = pd.to_numeric(grouped[col], errors="coerce").fillna(0).astype(int)
-            grouped["gene_feature_score"] = (
-                grouped["hits_promoter"] * 2.0
-                + grouped["hits_exon"] * 1.5
-                + grouped["hits_intron"] * 0.7
-                + grouped["hits_gene_body"] * 1.0
-                + grouped["hits_terminator"] * 0.5
-            )
-            feature_effect_df = self._build_feature_effect_scores(intersect_df, group_by=group_by)
-            if not feature_effect_df.empty:
-                grouped = grouped.merge(feature_effect_df, on=group_by, how="left")
-            for feature in self._FEATURE_SCORE_ORDER:
-                eff_col = f"effect_size_{feature}"
-                dir_col = f"direction_{feature}"
-                bal_col = f"direction_balance_{feature}"
-                if eff_col not in grouped.columns:
-                    grouped[eff_col] = 0.0
-                if dir_col not in grouped.columns:
-                    grouped[dir_col] = 0.0
-                if bal_col not in grouped.columns:
-                    grouped[bal_col] = 0.0
-                grouped[eff_col] = pd.to_numeric(grouped[eff_col], errors="coerce").fillna(0.0)
-                grouped[dir_col] = pd.to_numeric(grouped[dir_col], errors="coerce").fillna(0.0)
-                grouped[bal_col] = pd.to_numeric(grouped[bal_col], errors="coerce").fillna(0.0)
-
-            grouped["gene_feature_importance"] = (
-                grouped["effect_size_promoter"] * float(getattr(self, "w_promoter", 2.0))
-                + grouped["effect_size_exon"] * float(getattr(self, "w_exon", 1.5))
-                + grouped["effect_size_intron"] * float(getattr(self, "w_intron", 0.7))
-                + grouped["effect_size_gene_body"] * float(getattr(self, "w_gene_body", 1.0))
-                + grouped["effect_size_terminator"] * float(getattr(self, "w_terminator", 0.5))
-            )
         
         # Add Stouffer aggregated gene p-values (weighted, signed by delta_mean)
         if 'p_value' in intersect_df.columns:
@@ -1765,12 +1531,6 @@ class BedtoolsMapper:
         if 'q_value' in intersect_df.columns:
             stat_aggs.append(('q_value', 'min', 'min_q_value'))
             stat_aggs.append(('q_value', 'mean', 'mean_q_value'))
-        if 'effect_size' in intersect_df.columns:
-            stat_aggs.append(('effect_size', 'mean', 'mean_effect_size'))
-            stat_aggs.append(('effect_size', 'max', 'max_effect_size'))
-        if 'delta_mean' in intersect_df.columns:
-            stat_aggs.append(('delta_mean', 'mean', 'mean_delta_mean'))
-            stat_aggs.append(('delta_mean', 'max', 'max_delta_mean'))
         if stat_aggs:
             for src_col, agg_name, out_col in stat_aggs:
                 if out_col not in grouped.columns:
@@ -1807,59 +1567,29 @@ class BedtoolsMapper:
             metadata = intersect_df.groupby(group_by)[available_metadata].first().reset_index()
             grouped = grouped.merge(metadata, on=group_by, how='left')
 
-        # Domain score for feature ranking:
-        #   gene_score = sum(|effect_size| * frequency * region_weight)
-        # Stability/fixed-panel flows require strict [0,1] frequency.
+        # Biology-weighted compound importance (canonical path).
         score_source_df = self._exclusive_feature_rows(intersect_df, group_by=group_by)
         if score_source_df.empty:
             score_source_df = intersect_df
-        if 'effect_size' in score_source_df.columns:
-            score_df = score_source_df[[group_by, 'effect_size']].copy()
-            score_df['effect_size_abs'] = pd.to_numeric(
-                score_df['effect_size'], errors='coerce'
-            ).fillna(0.0).abs()
+        if "effect_size" in score_source_df.columns:
             is_stability_like = {"count", "n_runs"}.issubset(set(score_source_df.columns))
-            if is_stability_like and 'frequency' not in score_source_df.columns:
+            if is_stability_like and "frequency" not in score_source_df.columns:
                 raise ValueError(
-                    "Stability/fixed-panel input requires 'frequency' for gene_score, but the column is missing."
+                    "Stability/fixed-panel input requires 'frequency' for biological importance, "
+                    "but the column is missing."
                 )
-            if 'frequency' in score_source_df.columns:
-                freq = pd.to_numeric(score_source_df['frequency'], errors='coerce')
-                if is_stability_like:
-                    invalid = (~np.isfinite(freq)) | (freq < 0.0) | (freq > 1.0)
-                    if invalid.any():
-                        bad_cols = [c for c in [group_by, "dmp_name", "frequency"] if c in score_source_df.columns]
-                        bad = score_source_df.loc[invalid, bad_cols].head(5).to_dict(orient="records")
-                        raise ValueError(
-                            "Invalid stability frequency values for gene_score (expected finite values in [0,1]). "
-                            f"Examples: {bad}"
-                        )
-                    score_df['frequency'] = freq.astype(float)
-                else:
-                    score_df['frequency'] = freq.fillna(1.0)
-            else:
-                score_df['frequency'] = 1.0
-            if 'region_weight' in score_source_df.columns:
-                score_df['region_weight'] = pd.to_numeric(
-                    score_source_df['region_weight'], errors='coerce'
-                ).fillna(1.0)
-            else:
-                score_df['region_weight'] = 1.0
-            score_df['gene_score_term'] = (
-                score_df['effect_size_abs']
-                * score_df['frequency']
-                * score_df['region_weight']
-            )
-            gene_score = (
-                score_df.groupby(group_by)['gene_score_term']
-                .sum()
-                .reset_index()
-                .rename(columns={'gene_score_term': 'gene_score'})
-            )
-            grouped = grouped.merge(gene_score, on=group_by, how='left')
-            grouped['gene_score'] = pd.to_numeric(grouped['gene_score'], errors='coerce').fillna(0.0)
+            if "frequency" in score_source_df.columns and is_stability_like:
+                freq = pd.to_numeric(score_source_df["frequency"], errors="coerce")
+                invalid = (~np.isfinite(freq)) | (freq < 0.0) | (freq > 1.0)
+                if invalid.any():
+                    bad_cols = [c for c in [group_by, "dmp_name", "frequency"] if c in score_source_df.columns]
+                    bad = score_source_df.loc[invalid, bad_cols].head(5).to_dict(orient="records")
+                    raise ValueError(
+                        "Invalid stability frequency values for biological importance "
+                        "(expected finite values in [0,1]). "
+                        f"Examples: {bad}"
+                    )
 
-        # Compound DMP-like biological importance metrics (canonical path).
         gene_compound_df, feature_compound_df = self._build_compound_effect_metrics(
             score_source_df=score_source_df,
             group_by=group_by,
@@ -1874,18 +1604,6 @@ class BedtoolsMapper:
                 grouped = grouped.drop(columns=["gene_direction_x", "gene_direction_y"], errors="ignore")
         if not feature_compound_df.empty:
             grouped = grouped.merge(feature_compound_df, on=group_by, how="left")
-        for feature in self._FEATURE_SCORE_ORDER:
-            col = f"feature_effect_compound_{feature}"
-            if col not in grouped.columns:
-                grouped[col] = 0.0
-            grouped[col] = pd.to_numeric(grouped[col], errors="coerce").fillna(0.0)
-        grouped["gene_feature_effect_compound"] = (
-            grouped["feature_effect_compound_promoter"] * float(getattr(self, "w_promoter", 2.0))
-            + grouped["feature_effect_compound_exon"] * float(getattr(self, "w_exon", 1.5))
-            + grouped["feature_effect_compound_intron"] * float(getattr(self, "w_intron", 0.7))
-            + grouped["feature_effect_compound_gene_body"] * float(getattr(self, "w_gene_body", 1.0))
-            + grouped["feature_effect_compound_terminator"] * float(getattr(self, "w_terminator", 0.5))
-        )
         for col in (
             "gene_effect_size",
             "gene_direction",
@@ -1895,7 +1613,6 @@ class BedtoolsMapper:
             "gene_direction_coherence",
             "gene_support_freq",
             "gene_effect_compound",
-            "gene_feature_effect_compound",
         ):
             if col not in grouped.columns:
                 grouped[col] = 0.0
@@ -1913,24 +1630,21 @@ class BedtoolsMapper:
             grouped["gene_support_n"] = 0
         grouped["gene_support_n"] = pd.to_numeric(grouped["gene_support_n"], errors="coerce").fillna(0).astype(int)
 
-        # Canonical importance is count-aware burden:
-        # sum(|effect| weighted by recurrence/region) * directional coherence * sqrt(mean recurrence).
+        # Canonical importance: biology-weighted burden × coherence × sqrt(support).
         grouped["gene_importance"] = (
             pd.to_numeric(grouped.get("gene_effect_abs_wsum"), errors="coerce").fillna(0.0)
             * pd.to_numeric(grouped.get("gene_direction_coherence"), errors="coerce").fillna(0.0)
             * np.sqrt(pd.to_numeric(grouped.get("gene_support_freq"), errors="coerce").fillna(0.0).clip(lower=0.0))
         )
 
-        # Sort by canonical importance first, then stable tie-breakers.
         sort_cols = ["gene_importance"]
         if "unique_dmps" in grouped.columns:
             sort_cols.append("unique_dmps")
-        if "gene_score" in grouped.columns:
-            sort_cols.append("gene_score")
+        if "gene_effect_abs_wsum" in grouped.columns:
+            sort_cols.append("gene_effect_abs_wsum")
         grouped = grouped.sort_values(sort_cols, ascending=False).reset_index(drop=True)
 
-        # Warn when genes have DMPs but all key stats are missing (join likely failed for those rows)
-        stat_check_cols = [c for c in ['min_p_value', 'mean_effect_size'] if c in grouped.columns]
+        stat_check_cols = [c for c in ["min_p_value", "gene_effect_abs_wsum"] if c in grouped.columns]
         support_col = None
         if "unique_dmps" in grouped.columns:
             support_col = "unique_dmps"
@@ -1948,7 +1662,7 @@ class BedtoolsMapper:
             if n_genes_missing > 0:
                 examples = grouped.loc[genes_missing, group_by].head(3).tolist()
                 logger.warning(
-                    "%d %s(s) have DMPs but missing p_value/effect_size (e.g. %s). "
+                    "%d %s(s) have DMPs but missing p_value/effect burden (e.g. %s). "
                     "Check that DMP CSV column names and chromosome/position/context match the BED.",
                     n_genes_missing, group_by, ", ".join(str(g) for g in examples)
                 )
@@ -2136,9 +1850,9 @@ class BedtoolsMapper:
         def _last_gene_strongly_associated(df: pd.DataFrame) -> bool:
             if df.empty or 'disease_associated' not in df.columns:
                 return False
-            sort_col = 'gene_importance' if 'gene_importance' in df.columns else 'gene_score'
+            sort_col = "gene_importance"
             if sort_col not in df.columns:
-                return bool(df['disease_associated'].iloc[-1])
+                return bool(df["disease_associated"].iloc[-1])
             last_row = df.sort_values(sort_col, ascending=True).iloc[0]
             if not last_row.get('disease_associated', False):
                 return False

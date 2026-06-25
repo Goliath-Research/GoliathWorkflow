@@ -4,16 +4,24 @@ import pandas as pd
 import pytest
 
 from methyl_mapper.bedtools_mapper import BedtoolsMapper
+from methyl_mapper.config import BiologyWeightConfig
+
+
+def _mapper(**kwargs) -> BedtoolsMapper:
+    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
+    mapper.storey_lambda = None
+    mapper.biology_weights = kwargs.pop("biology_weights", BiologyWeightConfig())
+    mapper._explicit_feature_labels = kwargs.pop("_explicit_feature_labels", set())
+    return mapper
 
 
 def test_aggregate_by_feature_exports_gene_p_and_q_columns_with_q_only_input():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-
+    mapper = _mapper()
     intersect_df = pd.DataFrame(
         {
             "gene_name": ["G1", "G1", "G2", "G2"],
             "dmp_name": ["d1", "d2", "d3", "d4"],
+            "feature_type": ["promoter", "promoter", "promoter", "promoter"],
             "weight": [1.0, 2.0, 1.5, 2.5],
             "q_value": [0.01, 0.02, 0.05, 0.10],
             "delta_mean": [0.2, -0.3, 0.1, -0.2],
@@ -26,37 +34,28 @@ def test_aggregate_by_feature_exports_gene_p_and_q_columns_with_q_only_input():
     assert grouped["gene_p_value"].notna().any()
 
 
-def test_aggregate_by_feature_exports_frequency_weighted_gene_score():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-
+def test_biology_matrix_weights_promoter_hyper_above_intron_hypo():
+    mapper = _mapper()
     intersect_df = pd.DataFrame(
         {
-            "gene_name": ["G1", "G1", "G2"],
-            "dmp_name": ["d1", "d2", "d3"],
-            "weight": [1.0, 1.0, 1.0],
-            "effect_size": [0.5, -0.2, 0.3],
-            "frequency": [0.8, 0.6, 1.2],
-            "region_weight": [2.0, 1.0, 0.5],
+            "gene_name": ["G1", "G1"],
+            "dmp_name": ["d1", "d2"],
+            "feature_type": ["promoter", "intron"],
+            "effect_size": [0.4, 0.4],
+            "delta_mean": [0.4, -0.4],
+            "frequency": [1.0, 1.0],
         }
     )
-
     grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
-    assert "gene_score" in grouped.columns
-    scores = dict(zip(grouped["gene_name"], grouped["gene_score"]))
-    assert scores["G1"] == pytest.approx((0.5 * 0.8 * 2.0) + (0.2 * 0.6 * 1.0))
-    assert scores["G2"] == pytest.approx(0.3 * 1.2 * 0.5)
+    row = grouped.iloc[0]
+    # promoter hyper: 2.0 * 0.4 = 0.8; intron hypo: 0.7 * 0.4 = 0.28
+    assert row["feature_importance_promoter"] == pytest.approx(0.8)
+    assert row["feature_importance_intron"] == pytest.approx(0.28)
+    assert row["feature_importance_promoter"] > row["feature_importance_intron"]
 
 
-def test_aggregate_by_feature_exports_feature_effect_sizes_and_weighted_gene_importance():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-    mapper.w_promoter = 2.0
-    mapper.w_terminator = 0.5
-    mapper.w_gene_body = 1.0
-    mapper.w_exon = 1.5
-    mapper.w_intron = 0.7
-
+def test_aggregate_by_feature_exports_biology_weighted_gene_importance():
+    mapper = _mapper()
     intersect_df = pd.DataFrame(
         {
             "gene_name": ["G1", "G1", "G1", "G2"],
@@ -66,43 +65,25 @@ def test_aggregate_by_feature_exports_feature_effect_sizes_and_weighted_gene_imp
             "feature_end": [20, 20, 5, 30],
             "weight": [1.0, 1.0, 1.0, 1.0],
             "effect_size": [0.5, -0.2, 0.4, -0.3],
+            "delta_mean": [0.5, -0.2, 0.4, -0.3],
             "frequency": [1.0, 1.0, 1.0, 1.0],
-            "region_weight": [1.5, 1.5, 2.0, 0.7],
         }
     )
 
     grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
     row_g1 = grouped[grouped["gene_name"] == "G1"].iloc[0]
-    # Exon directionalization: raw=0.7, signed=0.3 => balance=3/7 => effect=0.3
-    assert row_g1["effect_size_exon"] == pytest.approx(0.3)
-    assert row_g1["direction_exon"] == pytest.approx(1.0)
-    # Segment-first: one exon segment keeps unit balance after segment-level penalty.
-    assert row_g1["direction_balance_exon"] == pytest.approx(1.0)
-    # Promoter has coherent positive direction.
-    assert row_g1["effect_size_promoter"] == pytest.approx(0.4)
-    assert row_g1["direction_promoter"] == pytest.approx(1.0)
-    # Weighted whole-gene canonical importance.
-    assert row_g1["gene_feature_importance"] == pytest.approx((2.0 * 0.4) + (1.5 * 0.3))
-    assert row_g1["gene_effect_abs_wmean"] == pytest.approx(0.37)
-    assert row_g1["gene_direction_coherence"] == pytest.approx(1.25 / 1.85)
-    assert row_g1["gene_effect_compound"] == pytest.approx(0.25)
-    assert row_g1["gene_effect_signed_wsum"] == pytest.approx(1.25)
+    # exon hyper 1.5*0.5 + exon hypo 1.0*0.2; promoter hyper 2.0*0.4
+    assert row_g1["gene_effect_abs_wsum"] == pytest.approx(0.75 + 0.2 + 0.8)
     assert row_g1["gene_direction"] == pytest.approx(1.0)
     assert row_g1["gene_importance"] == pytest.approx(
         row_g1["gene_effect_abs_wsum"] * row_g1["gene_direction_coherence"] * (row_g1["gene_support_freq"] ** 0.5)
     )
     assert row_g1["feature_direction_promoter"] == pytest.approx(1.0)
-    assert row_g1["feature_direction_exon"] == pytest.approx(1.0)
     assert row_g1["feature_effect_signed_wsum_promoter"] == pytest.approx(0.8)
-    assert row_g1["feature_effect_signed_wsum_exon"] == pytest.approx(0.45)
-    assert row_g1["feature_importance_promoter"] == pytest.approx(0.8)
-    assert row_g1["feature_importance_exon"] == pytest.approx(0.45)
 
 
-def test_aggregate_by_feature_uses_exclusive_feature_priority_for_hits_and_score():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-
+def test_aggregate_by_feature_uses_exclusive_feature_priority_for_hits():
+    mapper = _mapper()
     intersect_df = pd.DataFrame(
         {
             "gene_name": ["G1", "G1", "G1"],
@@ -110,8 +91,8 @@ def test_aggregate_by_feature_uses_exclusive_feature_priority_for_hits_and_score
             "feature_type": ["gene_body", "exon", "intron"],
             "weight": [1.0, 1.0, 1.0],
             "effect_size": [0.5, 0.5, 0.4],
+            "delta_mean": [0.5, 0.5, 0.4],
             "frequency": [0.8, 0.8, 0.9],
-            "region_weight": [1.0, 1.5, 0.7],
         }
     )
 
@@ -120,51 +101,11 @@ def test_aggregate_by_feature_uses_exclusive_feature_priority_for_hits_and_score
     assert row["hits_exon"] == 1
     assert row["hits_intron"] == 1
     assert row["hits_gene_body"] == 0
-    assert row["gene_feature_score"] == pytest.approx((1 * 1.5) + (1 * 0.7))
-    assert row["gene_score"] == pytest.approx((0.5 * 0.8 * 1.5) + (0.4 * 0.9 * 0.7))
-    assert row["effect_size_gene_body"] == pytest.approx(0.0)
-
-
-def test_aggregate_by_feature_segment_first_exon_scoring_penalizes_conflicting_segments():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-    mapper.w_promoter = 2.0
-    mapper.w_terminator = 0.5
-    mapper.w_gene_body = 1.0
-    mapper.w_exon = 1.5
-    mapper.w_intron = 0.7
-
-    intersect_df = pd.DataFrame(
-        {
-            "gene_name": ["G1", "G1", "G1"],
-            "dmp_name": ["d1", "d2", "d3"],
-            "feature_type": ["exon", "exon", "exon"],
-            "feature_start": [10, 10, 100],
-            "feature_end": [20, 20, 120],
-            "weight": [1.0, 1.0, 1.0],
-            "effect_size": [0.6, -0.2, -0.5],
-        }
-    )
-
-    grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
-    row = grouped.iloc[0]
-    # Segment 1 (10-20): raw=0.8, signed=0.4 => seg_effect=0.4, dir=+1
-    # Segment 2 (100-120): raw=0.5, signed=-0.5 => seg_effect=0.5, dir=-1
-    # Feature aggregate: raw=0.9, signed=-0.1 => balance=1/9, effect=0.1, dir=-1
-    assert row["effect_size_exon"] == pytest.approx(0.1, abs=1e-12)
-    assert row["direction_exon"] == pytest.approx(-1.0)
-    assert row["direction_balance_exon"] == pytest.approx(1.0 / 9.0)
+    assert "gene_score" not in grouped.columns
 
 
 def test_aggregate_by_feature_sorts_by_canonical_gene_importance_desc():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-    mapper.w_promoter = 2.0
-    mapper.w_terminator = 0.5
-    mapper.w_gene_body = 1.0
-    mapper.w_exon = 1.5
-    mapper.w_intron = 0.7
-
+    mapper = _mapper()
     intersect_df = pd.DataFrame(
         {
             "gene_name": ["G_low", "G_high"],
@@ -174,6 +115,7 @@ def test_aggregate_by_feature_sorts_by_canonical_gene_importance_desc():
             "feature_end": [10, 10],
             "weight": [1.0, 1.0],
             "effect_size": [0.1, 0.4],
+            "delta_mean": [0.1, 0.4],
         }
     )
 
@@ -183,9 +125,7 @@ def test_aggregate_by_feature_sorts_by_canonical_gene_importance_desc():
 
 
 def test_aggregate_by_feature_gene_importance_scales_with_unique_dmp_support():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-
+    mapper = _mapper()
     intersect_df = pd.DataFrame(
         {
             "gene_name": ["G_many", "G_many", "G_many", "G_one"],
@@ -194,7 +134,6 @@ def test_aggregate_by_feature_gene_importance_scales_with_unique_dmp_support():
             "effect_size": [0.2, 0.2, 0.2, 0.2],
             "delta_mean": [0.2, 0.2, 0.2, 0.2],
             "frequency": [1.0, 1.0, 1.0, 1.0],
-            "region_weight": [1.0, 1.0, 1.0, 1.0],
         }
     )
 
@@ -205,21 +144,11 @@ def test_aggregate_by_feature_gene_importance_scales_with_unique_dmp_support():
     assert row_many["gene_support_n"] == 3
     assert row_one["gene_support_n"] == 1
     assert row_many["gene_effect_abs_wsum"] > row_one["gene_effect_abs_wsum"]
-    assert row_many["gene_effect_signed_wsum"] > row_one["gene_effect_signed_wsum"]
     assert row_many["gene_importance"] > row_one["gene_importance"]
-    assert row_many["gene_direction"] == pytest.approx(1.0)
-    assert row_one["gene_direction"] == pytest.approx(1.0)
 
 
 def test_aggregate_by_feature_exports_compound_columns():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-    mapper.w_promoter = 2.0
-    mapper.w_terminator = 0.5
-    mapper.w_gene_body = 1.0
-    mapper.w_exon = 1.5
-    mapper.w_intron = 0.7
-
+    mapper = _mapper()
     intersect_df = pd.DataFrame(
         {
             "gene_name": ["G1", "G1", "G1"],
@@ -231,32 +160,23 @@ def test_aggregate_by_feature_exports_compound_columns():
             "effect_size": [0.6, 0.2, 0.1],
             "delta_mean": [0.6, 0.2, 0.1],
             "frequency": [1.0, 0.8, 0.9],
-            "region_weight": [2.0, 1.5, 0.7],
         }
     )
 
     grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
     row = grouped.iloc[0]
     assert "gene_effect_abs_wmean" in grouped.columns
-    assert "gene_effect_abs_wsum" in grouped.columns
-    assert "gene_effect_signed_wsum" in grouped.columns
-    assert "gene_direction" in grouped.columns
-    assert "gene_direction_coherence" in grouped.columns
-    assert "gene_support_n" in grouped.columns
-    assert "gene_support_freq" in grouped.columns
-    assert "gene_effect_compound" in grouped.columns
-    assert "gene_feature_effect_compound" in grouped.columns
+    assert "gene_importance" in grouped.columns
     assert "feature_importance_promoter" in grouped.columns
     assert "feature_direction_promoter" in grouped.columns
-    assert "feature_effect_signed_wsum_promoter" in grouped.columns
     assert row["gene_support_n"] == 3
     assert row["gene_effect_compound"] > 0.0
+    assert "mean_effect_size" not in grouped.columns
+    assert "gene_feature_effect_compound" not in grouped.columns
 
 
 def test_aggregate_by_feature_exports_signed_directional_biomarker_columns():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-
+    mapper = _mapper()
     intersect_df = pd.DataFrame(
         {
             "gene_name": ["G_mixed", "G_mixed", "G_pos"],
@@ -265,7 +185,6 @@ def test_aggregate_by_feature_exports_signed_directional_biomarker_columns():
             "effect_size": [0.5, -0.4, 0.3],
             "delta_mean": [0.5, -0.4, 0.3],
             "frequency": [1.0, 1.0, 1.0],
-            "region_weight": [1.0, 1.0, 1.0],
             "weight": [1.0, 1.0, 1.0],
         }
     )
@@ -274,21 +193,13 @@ def test_aggregate_by_feature_exports_signed_directional_biomarker_columns():
     row_mixed = grouped[grouped["gene_name"] == "G_mixed"].iloc[0]
     row_pos = grouped[grouped["gene_name"] == "G_pos"].iloc[0]
 
-    assert row_mixed["gene_effect_signed_wsum"] == pytest.approx(0.1)
-    assert row_mixed["gene_direction"] == pytest.approx(1.0)
-    assert row_mixed["feature_effect_signed_wsum_promoter"] == pytest.approx(0.1)
-    assert row_mixed["feature_direction_promoter"] == pytest.approx(1.0)
-
-    assert row_pos["gene_effect_signed_wsum"] == pytest.approx(0.3)
-    assert row_pos["gene_direction"] == pytest.approx(1.0)
-    assert row_pos["feature_effect_signed_wsum_intron"] == pytest.approx(0.3)
-    assert row_pos["feature_direction_intron"] == pytest.approx(1.0)
+    assert row_mixed["gene_effect_signed_wsum"] == pytest.approx(0.5 * 2.0 - 0.4 * 1.0)
+    assert row_mixed["feature_effect_signed_wsum_promoter"] == pytest.approx(0.5 * 2.0 - 0.4 * 1.0)
+    assert row_pos["feature_effect_signed_wsum_intron"] == pytest.approx(0.3 * 0.5)
 
 
 def test_aggregate_by_feature_rejects_invalid_stability_frequency_values():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-
+    mapper = _mapper()
     intersect_df = pd.DataFrame(
         {
             "gene_name": ["G1"],
@@ -299,7 +210,6 @@ def test_aggregate_by_feature_rejects_invalid_stability_frequency_values():
             "frequency": [1.2],
             "count": [12],
             "n_runs": [10],
-            "region_weight": [2.0],
         }
     )
 
@@ -307,16 +217,8 @@ def test_aggregate_by_feature_rejects_invalid_stability_frequency_values():
         BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
 
 
-def test_aggregate_by_feature_rolls_up_non_exposed_detailed_features_to_parent_buckets():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-    mapper._explicit_feature_labels = set()
-    mapper.w_promoter = 2.0
-    mapper.w_terminator = 0.5
-    mapper.w_gene_body = 1.0
-    mapper.w_exon = 1.5
-    mapper.w_intron = 0.7
-
+def test_aggregate_by_feature_rolls_up_detailed_features_to_parent_buckets():
+    mapper = _mapper(_explicit_feature_labels=set())
     intersect_df = pd.DataFrame(
         {
             "gene_name": ["G1", "G1"],
@@ -326,75 +228,18 @@ def test_aggregate_by_feature_rolls_up_non_exposed_detailed_features_to_parent_b
             "feature_end": [20, 40],
             "weight": [1.0, 1.0],
             "effect_size": [0.6, 0.2],
+            "delta_mean": [0.6, 0.2],
             "frequency": [1.0, 1.0],
-            "region_weight": [1.5, 1.5],
         }
     )
 
     grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
     row = grouped.iloc[0]
     assert row["hits_exon"] == 2
-    assert row["effect_size_exon"] == pytest.approx(0.8)
-    assert row["gene_score"] == pytest.approx((0.6 * 1.0 * 1.5) + (0.2 * 1.0 * 1.5))
+    assert row["feature_importance_exon"] == pytest.approx((0.6 * 1.5) + (0.2 * 1.5))
 
 
-def test_aggregate_by_feature_rolls_up_transcript_to_gene_body_when_not_exposed():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-    mapper._explicit_feature_labels = set()
-    mapper.w_promoter = 2.0
-    mapper.w_terminator = 0.5
-    mapper.w_gene_body = 1.0
-    mapper.w_exon = 1.5
-    mapper.w_intron = 0.7
-
-    intersect_df = pd.DataFrame(
-        {
-            "gene_name": ["G2"],
-            "dmp_name": ["d10"],
-            "feature_type": ["transcript"],
-            "weight": [1.0],
-            "effect_size": [0.4],
-            "frequency": [1.0],
-            "region_weight": [1.0],
-        }
-    )
-
-    grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="gene_name")
-    row = grouped.iloc[0]
-    assert row["hits_gene_body"] == 1
-    assert row["effect_size_gene_body"] == pytest.approx(0.4)
-
-
-def test_aggregate_by_feature_preserves_explicit_detailed_feature_label_for_identity():
-    mapper = BedtoolsMapper.__new__(BedtoolsMapper)
-    mapper.storey_lambda = None
-    mapper._explicit_feature_labels = {"cds"}
-    mapper.w_promoter = 2.0
-    mapper.w_terminator = 0.5
-    mapper.w_gene_body = 1.0
-    mapper.w_exon = 1.5
-    mapper.w_intron = 0.7
-
-    # group_by=feature_type validates that explicit detailed labels stay visible as output identity.
-    intersect_df = pd.DataFrame(
-        {
-            "feature_type": ["CDS"],
-            "gene_name": ["G1"],
-            "dmp_name": ["d1"],
-            "weight": [1.0],
-            "effect_size": [0.6],
-            "frequency": [1.0],
-            "region_weight": [1.5],
-        }
-    )
-
-    grouped = BedtoolsMapper.aggregate_by_feature(mapper, intersect_df, group_by="feature_type")
-    assert grouped.iloc[0]["feature_type"] == "CDS"
-    assert grouped.iloc[0]["gene_score"] == pytest.approx(0.6 * 1.0 * 1.5)
-
-
-def test_pruned_gene_output_drops_total_weight_legacy_column():
+def test_pruned_gene_output_drops_legacy_columns():
     df = pd.DataFrame(
         {
             "gene_name": ["G1"],
@@ -404,10 +249,12 @@ def test_pruned_gene_output_drops_total_weight_legacy_column():
             "gene_effect_size": [0.1],
             "gene_score": [0.4],
             "gene_effect_compound": [0.3],
+            "gene_importance": [0.5],
         }
     )
     pruned = BedtoolsMapper._prune_gene_output_columns(df)
     assert "total_weight" not in pruned.columns
-    assert "gene_effect_size" in pruned.columns
+    assert "mean_effect_size" not in pruned.columns
+    assert "gene_score" not in pruned.columns
+    assert "gene_importance" in pruned.columns
     assert "gene_effect_compound" in pruned.columns
-

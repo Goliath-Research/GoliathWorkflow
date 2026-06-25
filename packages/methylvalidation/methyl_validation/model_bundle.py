@@ -35,10 +35,12 @@ DEFAULT_MAPPER_GENE_COLUMNS: List[str] = [
     "gene_direction",
     "gene_effect_abs_wsum",
     "gene_support_n",
-    "gene_score",
-    "mean_effect_size",
     "gene_effect_compound",
-    "gene_feature_effect_compound",
+    "feature_importance_promoter",
+    "feature_importance_exon",
+    "feature_importance_intron",
+    "feature_importance_gene_body",
+    "feature_importance_terminator",
 ]
 CORE_MAPPER_ANNOTATION_COLUMNS: List[str] = [
     "comparison_label",
@@ -917,7 +919,7 @@ def build_frozen_gene_panel(
             if not gdf.empty and "gene_name" in gdf.columns:
                 gdf = gdf.copy()
                 gdf["comparison_label"] = cmp_label
-                for col in ("gene_importance", "unique_dmps", "gene_support_n", "gene_effect_abs_wsum", "mean_effect_size"):
+                for col in ("gene_importance", "unique_dmps", "gene_support_n", "gene_effect_abs_wsum"):
                     if col not in gdf.columns:
                         gdf[col] = np.nan
                 if "feature_chrom" in gdf.columns:
@@ -1001,14 +1003,17 @@ def build_frozen_gene_panel(
             "unique_dmps",
             "gene_support_n",
             "gene_effect_abs_wsum",
-            "mean_effect_size",
             "hits_promoter",
             "hits_exon",
             "hits_intron",
             "hits_gene_body",
             "hits_terminator",
             "gene_effect_compound",
-            "gene_feature_effect_compound",
+            "feature_importance_promoter",
+            "feature_importance_exon",
+            "feature_importance_intron",
+            "feature_importance_gene_body",
+            "feature_importance_terminator",
         ]
         genes_df = genes_full[[c for c in keep_cols if c in genes_full.columns]].copy()
         genes_df["gene_name"] = genes_df["gene_name"].astype(str)
@@ -1041,7 +1046,6 @@ def build_frozen_gene_panel(
                 "unique_dmps",
                 "gene_support_n",
                 "gene_effect_abs_wsum",
-                "mean_effect_size",
             ]
         )
         feature_compound_map = pd.DataFrame(

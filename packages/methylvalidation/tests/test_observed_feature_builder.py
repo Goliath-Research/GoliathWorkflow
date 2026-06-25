@@ -777,7 +777,7 @@ def test_gene_scored_feature_names_and_fingerprint():
             "gene_name": ["G1", "G2", "G3"],
             "gene_support_n": [2, 2, 1],
             "gene_importance": [1.0, 0.5, 0.9],
-            "mean_effect_size": [1.0, -1.0, 0.5],
+            "gene_effect_signed_wsum": [1.0, -1.0, 0.5],
         }
     )
     names = observed_feature_builder.observed_hybrid_feature_names(
@@ -847,7 +847,7 @@ def test_prepare_gene_scored_panels_raises_when_min_support_filters_all_rows():
             "gene_name": ["OR11H2", "OR4N2"],
             "gene_support_n": [2, 2],
             "gene_importance": [0.7, 0.7],
-            "mean_effect_size": [0.2, 0.2],
+            "gene_effect_signed_wsum": [0.2, 0.2],
         }
     )
     with pytest.raises(ValueError, match="No genes passed gene_scored_min_support_n=5"):
@@ -879,7 +879,7 @@ def test_gene_weighted_sign_agreement_nan_without_prior():
             "gene_name": ["G1"],
             "gene_support_n": [2],
             "gene_importance": [1.0],
-            "mean_effect_size": [0.0],
+            "gene_effect_signed_wsum": [0.0],
         }
     )
     feature_order = [("1", "CG", 100)]
@@ -1008,7 +1008,7 @@ def test_observed_feature_builder_gene_scored_family(monkeypatch):
             "gene_name": ["G1", "G2"],
             "gene_support_n": [2, 2],
             "gene_importance": [1.0, 0.5],
-            "mean_effect_size": [1.0, -1.0],
+            "gene_effect_signed_wsum": [1.0, -1.0],
         }
     )
     sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]
@@ -1206,7 +1206,7 @@ def test_gene_scored_progression_fingerprint_changes_with_order():
             "gene_name": ["G1", "G1"],
             "gene_support_n": [2, 2],
             "gene_importance": [1.0, 1.0],
-            "mean_effect_size": [1.0, -1.0],
+            "gene_effect_signed_wsum": [1.0, -1.0],
         }
     )
     fp_a = observed_feature_builder.observed_hybrid_schema_fingerprint(
@@ -1248,7 +1248,7 @@ def test_observed_feature_builder_gene_scored_progression_k2(monkeypatch):
             "gene_name": ["G1", "G1"],
             "gene_support_n": [2, 2],
             "gene_importance": [1.0, 1.0],
-            "mean_effect_size": [1.0, -1.0],
+            "gene_effect_signed_wsum": [1.0, -1.0],
         }
     )
     sample_paths = ["/tmp/S1", "/tmp/S2", "/tmp/S3", "/tmp/S4"]

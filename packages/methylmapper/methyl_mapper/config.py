@@ -6,9 +6,36 @@ For database models, see models.py which uses SQLModel.
 """
 
 import os
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+class BiologyWeightConfig(BaseModel):
+    """Per (feature × hyper/hypo) weights for biology-aware DMP aggregation in MethylMapper."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    promoter_hyper: float = Field(default=2.0, gt=0.0)
+    promoter_hypo: float = Field(default=1.0, gt=0.0)
+    exon_hyper: float = Field(default=1.5, gt=0.0)
+    exon_hypo: float = Field(default=1.0, gt=0.0)
+    intron_hyper: float = Field(default=0.5, gt=0.0)
+    intron_hypo: float = Field(default=0.7, gt=0.0)
+    gene_body_hyper: float = Field(default=1.0, gt=0.0)
+    gene_body_hypo: float = Field(default=1.0, gt=0.0)
+    terminator_hyper: float = Field(default=0.5, gt=0.0)
+    terminator_hypo: float = Field(default=0.5, gt=0.0)
+
+    def weight_for(self, feature: str, *, hyper: bool) -> float:
+        key = f"{feature}_{'hyper' if hyper else 'hypo'}"
+        return float(getattr(self, key, 1.0))
+
+    @classmethod
+    def from_mapping(cls, data: Optional[Dict[str, float]]) -> "BiologyWeightConfig":
+        if not data:
+            return cls()
+        return cls(**{k: v for k, v in data.items() if k in cls.model_fields})
 
 
 class AzureSQLConfig(BaseModel):
@@ -195,6 +222,7 @@ class MapperStepConfig(BaseModel):
     w_exon: Optional[float] = None
     w_intron: Optional[float] = None
     w_unknown: Optional[float] = None
+    biology_weights: Optional[Dict[str, float]] = None
 
 
 class MethylMapperConfig(BaseModel):

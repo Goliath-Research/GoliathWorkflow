@@ -101,7 +101,6 @@ def _resolve_enricher_filter_kwargs(enricher_config: Dict[str, Any]) -> Dict[str
         "min_dmp_count": min_dmp_count,
         "min_unique_dmps": min_unique_dmps,
         "max_gene_q_value": enricher_config.get("max_gene_q_value"),
-        "min_mean_effect_size": enricher_config.get("min_mean_effect_size"),
         "min_gene_z": enricher_config.get("min_gene_z"),
         "min_gene_importance": enricher_config.get("min_gene_importance"),
         "feature_types": enricher_config.get("feature_types"),
@@ -133,9 +132,9 @@ def _sort_gene_importance(df: pd.DataFrame) -> pd.DataFrame:
     work["gene_importance"] = pd.to_numeric(work["gene_importance"], errors="coerce").fillna(0.0)
     sort_cols = ["gene_importance"]
     ascending = [False]
-    if "mean_effect_size" in work.columns:
-        work["mean_effect_size"] = pd.to_numeric(work["mean_effect_size"], errors="coerce").fillna(0.0)
-        sort_cols.append("mean_effect_size")
+    if "gene_support_n" in work.columns:
+        work["gene_support_n"] = pd.to_numeric(work["gene_support_n"], errors="coerce").fillna(0)
+        sort_cols.append("gene_support_n")
         ascending.append(False)
     if "gene_name" in work.columns:
         sort_cols.append("gene_name")

@@ -174,7 +174,6 @@ class EnrichmentAnalyzer:
         min_dmp_count: Optional[int] = None,
         min_unique_dmps: Optional[int] = None,
         max_gene_q_value: Optional[float] = None,
-        min_mean_effect_size: Optional[float] = None,
         min_gene_z: Optional[float] = None,
         min_gene_importance: Optional[float] = None,
         feature_types: Optional[List[str]] = None,
@@ -271,15 +270,6 @@ class EnrichmentAnalyzer:
             else:
                 print("[INFO] Skip gene_q_value filter: no finite gene_q_value values available.")
 
-        if min_mean_effect_size is not None:
-            if "mean_effect_size" not in out.columns:
-                raise ValueError(
-                    "Filter min_mean_effect_size requested, but mapper column 'mean_effect_size' is missing."
-                )
-            out = out[pd.to_numeric(out["mean_effect_size"], errors="coerce").fillna(0) >= min_mean_effect_size]
-            print(f"[INFO] Filter mean_effect_size >= {min_mean_effect_size}: {len(out)} genes (was {n_before})")
-            n_before = len(out)
-
         if min_gene_z is not None and "gene_z" in out.columns:
             z = pd.to_numeric(out["gene_z"], errors="coerce")
             out = out[z.abs() >= min_gene_z]
@@ -323,7 +313,6 @@ class EnrichmentAnalyzer:
         min_dmp_count: Optional[int] = None,
         min_unique_dmps: Optional[int] = None,
         max_gene_q_value: Optional[float] = None,
-        min_mean_effect_size: Optional[float] = None,
         min_gene_z: Optional[float] = None,
         min_gene_importance: Optional[float] = None,
         feature_types: Optional[List[str]] = None,
@@ -337,7 +326,7 @@ class EnrichmentAnalyzer:
         (from MethylMapper output) can be applied:
         disease_associated, disease_association_type, disease_evidence_level,
         disease_publications, disease_score, dmp_count, unique_dmps, gene_q_value,
-        mean_effect_size, gene_z, gene_importance, feature_type.
+        gene_z, gene_importance, feature_type.
         """
         input_path = Path(input_path)
         
@@ -352,7 +341,7 @@ class EnrichmentAnalyzer:
                 gene_column = "gene_name"
             self._require_mapper_columns(
                 df,
-                [gene_column, "gene_importance", "mean_effect_size", "unique_dmps"],
+                [gene_column, "gene_importance", "unique_dmps"],
                 context=f"Input mapper CSV {input_path}",
             )
 
@@ -367,7 +356,6 @@ class EnrichmentAnalyzer:
                 min_dmp_count=min_dmp_count,
                 min_unique_dmps=min_unique_dmps,
                 max_gene_q_value=max_gene_q_value,
-                min_mean_effect_size=min_mean_effect_size,
                 min_gene_z=min_gene_z,
                 min_gene_importance=min_gene_importance,
                 feature_types=feature_types,
@@ -441,7 +429,6 @@ class EnrichmentAnalyzer:
         min_dmp_count: Optional[int] = None,
         min_unique_dmps: Optional[int] = None,
         max_gene_q_value: Optional[float] = None,
-        min_mean_effect_size: Optional[float] = None,
         min_gene_z: Optional[float] = None,
         min_gene_importance: Optional[float] = None,
         feature_types: Optional[List[str]] = None,
@@ -468,7 +455,6 @@ class EnrichmentAnalyzer:
                 min_dmp_count=min_dmp_count,
                 min_unique_dmps=min_unique_dmps,
                 max_gene_q_value=max_gene_q_value,
-                min_mean_effect_size=min_mean_effect_size,
                 min_gene_z=min_gene_z,
                 min_gene_importance=min_gene_importance,
                 feature_types=feature_types,
@@ -483,7 +469,7 @@ class EnrichmentAnalyzer:
             gc = "gene_name"
         self._require_mapper_columns(
             df,
-            [gc, "gene_importance", "mean_effect_size", "unique_dmps"],
+            [gc, "gene_importance", "unique_dmps"],
             context=f"Input mapper CSV {input_path}",
         )
         df = self._apply_csv_filters(
@@ -497,7 +483,6 @@ class EnrichmentAnalyzer:
             min_dmp_count=min_dmp_count,
             min_unique_dmps=min_unique_dmps,
             max_gene_q_value=max_gene_q_value,
-            min_mean_effect_size=min_mean_effect_size,
             min_gene_z=min_gene_z,
             min_gene_importance=min_gene_importance,
             feature_types=feature_types,
@@ -750,7 +735,6 @@ def run_enrichment(
     min_dmp_count: Optional[int] = None,
     min_unique_dmps: Optional[int] = None,
     max_gene_q_value: Optional[float] = None,
-    min_mean_effect_size: Optional[float] = None,
     min_gene_z: Optional[float] = None,
     min_gene_importance: Optional[float] = None,
     feature_types: Optional[List[str]] = None,
@@ -784,7 +768,6 @@ def run_enrichment(
         min_dmp_count=min_dmp_count,
         min_unique_dmps=min_unique_dmps,
         max_gene_q_value=max_gene_q_value,
-        min_mean_effect_size=min_mean_effect_size,
         min_gene_z=min_gene_z,
         min_gene_importance=min_gene_importance,
         feature_types=feature_types,

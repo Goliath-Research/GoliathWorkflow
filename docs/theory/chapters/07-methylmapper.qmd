@@ -43,9 +43,30 @@ This is a standard meta-analytic construction in form [@stouffer1949], but its i
 
 ## Biological Importance Score
 
-`calculate_biological_importance()` combines detector statistics such as `delta_mean`, `overlap`, and `std` into a bounded gene- or region-level importance score. This is not a likelihood or hypothesis test. It is an engineered prioritization score meant to rank biologically interesting genes after mapping.
+Gene- and feature-level biological importance aggregates detector `effect_size` with a configurable **biology-weight matrix** (feature × hyper/hypo). Per mapped DMP:
 
-Publication text should call this what it is: a heuristic importance score that mixes detector-derived quantities and feature weights.
+$$
+w_i = f_i \cdot b(f_i, s_i), \qquad
+|t_i| = w_i \cdot |e_i|, \qquad
+\tilde t_i = \mathrm{sign}(\Delta\mu_i)\,|t_i|
+$$
+
+where $f_i$ is recurrence `frequency`, $e_i$ is detector `effect_size`, $b$ is the biology weight for feature bucket $f_i$ and direction $s_i$.
+
+Gene-level rank:
+
+$$
+I_{\text{gene}} =
+\left(\sum_i |t_i|\right)
+\cdot
+\frac{\left|\sum_i \tilde t_i\right|}{\sum_i |t_i|}
+\cdot
+\sqrt{\bar f}
+$$
+
+Feature-level columns `feature_importance_{promoter,exon,...}` use the same pattern within each bucket. Full defaults and export columns are documented in `packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md`.
+
+Downstream packages sort and weight genes by `gene_importance`, not row-averaged legacy summaries.
 
 ## Stable Gene Set Optimization
 

@@ -909,6 +909,10 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.w_intron = config.w_intron
     if config.w_unknown is not None:
         args.w_unknown = config.w_unknown
+    if config.biology_weights is not None:
+        from .config import BiologyWeightConfig
+
+        args.biology_weights = BiologyWeightConfig.from_mapping(config.biology_weights)
 
 
 def _apply_mapper_step_override_to_args(args, step_override_path: Optional[Path]) -> None:
@@ -1099,6 +1103,7 @@ def main_bedtools():
             w_exon=getattr(args, 'w_exon', 1.5),
             w_intron=getattr(args, 'w_intron', 0.7),
             w_unknown=getattr(args, 'w_unknown', 1.0),
+            biology_weights=getattr(args, 'biology_weights', None),
             storey_lambda=getattr(args, 'storey_lambda', None),
             use_p_value_weight=not args.no_p_value_weight,
             use_q_value_weight=not args.no_q_value_weight,

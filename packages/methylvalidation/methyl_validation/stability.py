@@ -1220,8 +1220,6 @@ def _compute_gene_stability_from_run_dirs(
     gene_counts: Counter = Counter()
     gene_importance_sum: Dict[str, float] = defaultdict(float)
     gene_importance_runs: Dict[str, int] = defaultdict(int)
-    gene_effect_sum: Dict[str, float] = defaultdict(float)
-    gene_effect_runs: Dict[str, int] = defaultdict(int)
     run_count = 0
     skipped_no_genes = 0
     skipped_low_ba = 0
@@ -1259,11 +1257,6 @@ def _compute_gene_stability_from_run_dirs(
                 if imp.notna().any():
                     gene_importance_sum[gene] += float(imp.mean())
                     gene_importance_runs[gene] += 1
-            if "mean_effect_size" in gene_rows.columns:
-                eff = pd.to_numeric(gene_rows["mean_effect_size"], errors="coerce")
-                if eff.notna().any():
-                    gene_effect_sum[gene] += float(eff.mean())
-                    gene_effect_runs[gene] += 1
 
     if run_count == 0:
         return pd.DataFrame(), {
@@ -1287,8 +1280,6 @@ def _compute_gene_stability_from_run_dirs(
         }
         if gene_importance_runs.get(gene, 0) > 0:
             row["gene_importance"] = gene_importance_sum[gene] / gene_importance_runs[gene]
-        if gene_effect_runs.get(gene, 0) > 0:
-            row["mean_effect_size"] = gene_effect_sum[gene] / gene_effect_runs[gene]
         data.append(row)
 
     df = pd.DataFrame(data).sort_values("frequency", ascending=False)
@@ -1452,13 +1443,13 @@ def write_stable_gene_panel(
     output_dir.mkdir(parents=True, exist_ok=True)
     if gene_freq_df.empty:
         stable = pd.DataFrame(
-            columns=["gene_name", "frequency", "count", "n_runs", "gene_importance", "mean_effect_size"]
+            columns=["gene_name", "frequency", "count", "n_runs", "gene_importance"]
         )
     else:
         stable = gene_freq_df[gene_freq_df["frequency"] >= float(min_frequency)].copy()
         stable = stable.sort_values(
-            ["frequency", "gene_importance", "mean_effect_size", "gene_name"],
-            ascending=[False, False, False, True],
+            ["frequency", "gene_importance", "gene_name"],
+            ascending=[False, False, True],
             na_position="last",
         )
         if top_n is not None and int(top_n) > 0:

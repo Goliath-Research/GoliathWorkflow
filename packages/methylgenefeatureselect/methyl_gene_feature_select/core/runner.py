@@ -16,44 +16,48 @@ GENE_FEATURE_SELECTION_JSON = "gene_feature_selection.json"
 
 REGION_TYPES = ("promoter", "exon", "intron", "gene_body", "terminator")
 
-_SCORE_COLUMNS = (
-    "gene_feature_effect_compound",
-    "gene_importance",
-    "mean_effect_size",
-    "gene_score",
-)
+
+def _gene_summary_paths(mapper_dir: Path) -> List[Path]:
+    candidates = [
+        mapper_dir / "all-gene_name-combined.csv",
+        *sorted(mapper_dir.glob("*-features-gene_name.csv")),
+        *sorted(mapper_dir.glob("chr*-gene_name.csv")),
+    ]
+    return [p for p in candidates if p.is_file()]
+
+
+def _feature_importance_column(feature_type: str) -> str:
+    token = str(feature_type or "gene_body").strip().lower()
+    if token not in REGION_TYPES:
+        token = "gene_body"
+    return f"feature_importance_{token}"
 
 
 def _rank_structural_catalog(mapper_dir: Path, catalog: pd.DataFrame) -> pd.DataFrame:
-    """Attach mapper scores when available and sort features by descending rank."""
+    """Attach mapper feature_importance_* scores and sort features by descending rank."""
     if catalog.empty:
         return catalog
     scores: Dict[tuple[str, str], float] = {}
-    for path in _intersection_paths(mapper_dir):
+    for path in _gene_summary_paths(mapper_dir):
         try:
             df = pd.read_csv(path)
         except Exception:
             continue
         if "gene_name" not in df.columns:
             continue
-        feature_type = "gene_body"
-        stem = path.stem.replace("-intersections", "")
-        for token in REGION_TYPES:
-            if token in stem.lower():
-                feature_type = token
-                break
-        score_col = next((c for c in _SCORE_COLUMNS if c in df.columns), None)
-        if score_col is None:
-            continue
         for _, row in df.iterrows():
             gene = str(row.get("gene_name") or "").strip()
             if not gene:
                 continue
-            val = pd.to_numeric(row.get(score_col), errors="coerce")
-            if pd.isna(val):
-                continue
-            key = (gene, feature_type)
-            scores[key] = max(float(val), scores.get(key, float("-inf")))
+            for feature in REGION_TYPES:
+                col = f"feature_importance_{feature}"
+                if col not in df.columns:
+                    continue
+                val = pd.to_numeric(row.get(col), errors="coerce")
+                if pd.isna(val):
+                    continue
+                key = (gene, feature)
+                scores[key] = max(float(val), scores.get(key, float("-inf")))
     out = catalog.copy()
     out["rank_score"] = [
         scores.get((str(g), str(t)), 0.0)

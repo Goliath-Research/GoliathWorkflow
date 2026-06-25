@@ -15,17 +15,16 @@ from methyl_validation.gene_featurecuts import (
 )
 
 
-def test_rank_gene_pool_orders_by_importance_then_effect():
+def test_rank_gene_pool_orders_by_importance_then_support():
     combined = pd.DataFrame(
         {
             "gene_name": ["GENE_B", "GENE_A", "GENE_C"],
             "gene_importance": [0.5, 0.9, 0.9],
-            "mean_effect_size": [0.2, 0.1, 0.3],
             "gene_support_n": [2, 3, 1],
         }
     )
     ranked, panel = _rank_gene_pool(combined)
-    assert ranked == ["GENE_C", "GENE_A", "GENE_B"]
+    assert ranked == ["GENE_A", "GENE_C", "GENE_B"]
     assert len(panel) == 3
 
 
@@ -34,7 +33,6 @@ def test_cap_ranked_gene_pool_limits_panel():
         {
             "gene_name": [f"GENE_{i}" for i in range(5)],
             "gene_importance": [1.0 - i * 0.1 for i in range(5)],
-            "mean_effect_size": [0.5] * 5,
             "gene_support_n": [1] * 5,
         }
     )

@@ -308,10 +308,8 @@ def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_pat
             "gene_direction": [1.0],
             "gene_effect_abs_wsum": [4.7],
             "gene_support_n": [3],
-            "gene_score": [9.5],
-            "mean_effect_size": [0.42],
             "gene_effect_compound": [1.7],
-            "gene_feature_effect_compound": [1.2],
+            "feature_importance_promoter": [1.2],
         }
     ).to_csv(mapper / "all-gene_name-combined.csv", index=False)
 
@@ -332,29 +330,25 @@ def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_pat
     assert "gene_direction" in out_df.columns
     assert "gene_effect_abs_wsum" in out_df.columns
     assert "gene_support_n" in out_df.columns
-    assert "gene_score" in out_df.columns
-    assert "mean_effect_size" in out_df.columns
     assert "gene_effect_compound" in out_df.columns
-    assert "gene_feature_effect_compound" in out_df.columns
     assert float(out_df.iloc[0]["gene_importance"]) == pytest.approx(3.2)
     assert float(out_df.iloc[0]["gene_effect_signed_wsum"]) == pytest.approx(2.3)
     assert float(out_df.iloc[0]["gene_direction"]) == pytest.approx(1.0)
     assert float(out_df.iloc[0]["gene_effect_abs_wsum"]) == pytest.approx(4.7)
     assert float(out_df.iloc[0]["gene_support_n"]) == pytest.approx(3.0)
-    assert float(out_df.iloc[0]["gene_score"]) == pytest.approx(9.5)
-    assert float(out_df.iloc[0]["mean_effect_size"]) == pytest.approx(0.42)
     assert float(out_df.iloc[0]["gene_effect_compound"]) == pytest.approx(1.7)
-    assert float(out_df.iloc[0]["gene_feature_effect_compound"]) == pytest.approx(1.2)
     assert cache_info["mapper_gene_columns_requested"] == [
         "gene_importance",
         "gene_effect_signed_wsum",
         "gene_direction",
         "gene_effect_abs_wsum",
         "gene_support_n",
-        "gene_score",
-        "mean_effect_size",
         "gene_effect_compound",
-        "gene_feature_effect_compound",
+        "feature_importance_promoter",
+        "feature_importance_exon",
+        "feature_importance_intron",
+        "feature_importance_gene_body",
+        "feature_importance_terminator",
     ]
     assert cache_info["mapper_gene_columns_effective"] == [
         "gene_importance",
@@ -362,10 +356,8 @@ def test_build_mapper_annotation_cache_joins_default_mapper_gene_columns(tmp_pat
         "gene_direction",
         "gene_effect_abs_wsum",
         "gene_support_n",
-        "gene_score",
-        "mean_effect_size",
         "gene_effect_compound",
-        "gene_feature_effect_compound",
+        "feature_importance_promoter",
     ]
 
 

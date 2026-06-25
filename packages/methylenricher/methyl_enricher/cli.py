@@ -123,13 +123,6 @@ For theory and package documentation, see:
         help='Maximum gene_q_value (keep more significant genes)'
     )
     io_group.add_argument(
-        '--min-mean-effect-size',
-        type=float,
-        default=None,
-        metavar='E',
-        help='Minimum mean_effect_size (requires mapper mean_effect_size column)'
-    )
-    io_group.add_argument(
         '--min-gene-z',
         type=float,
         default=None,
@@ -793,8 +786,6 @@ def main():
         print(f"Filter: dmp_count >= {args.min_dmp_count}")
     if args.max_gene_q_value is not None:
         print(f"Filter: gene_q_value <= {args.max_gene_q_value}")
-    if args.min_mean_effect_size is not None:
-        print(f"Filter: mean_effect_size >= {args.min_mean_effect_size}")
     if args.min_gene_importance is not None:
         print(f"Filter: gene_importance >= {args.min_gene_importance}")
     
@@ -872,7 +863,6 @@ def main():
                 min_dmp_count=args.min_dmp_count,
                 min_unique_dmps=args.min_unique_dmps,
                 max_gene_q_value=args.max_gene_q_value,
-                min_mean_effect_size=args.min_mean_effect_size,
                 min_gene_z=args.min_gene_z,
                 min_gene_importance=args.min_gene_importance,
                 sort_by=args.sort_by,

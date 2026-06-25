@@ -659,10 +659,13 @@ def _gene_weight(
 
 
 def _gene_prior_sign(row: pd.Series) -> Optional[float]:
-    effect = float(pd.to_numeric(row.get("mean_effect_size"), errors="coerce") or 0.0)
-    if not np.isfinite(effect) or effect == 0.0:
-        return None
-    return float(np.sign(effect))
+    signed = float(pd.to_numeric(row.get("gene_effect_signed_wsum"), errors="coerce") or 0.0)
+    if np.isfinite(signed) and signed != 0.0:
+        return float(np.sign(signed))
+    direction = float(pd.to_numeric(row.get("gene_direction"), errors="coerce") or 0.0)
+    if np.isfinite(direction) and direction != 0.0:
+        return float(np.sign(direction))
+    return None
 
 
 def _prepare_gene_scored_dmp_work(

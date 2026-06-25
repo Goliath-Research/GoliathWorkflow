@@ -121,7 +121,6 @@ class EnricherStepConfig(BaseModel):
     min_dmp_count: Optional[int] = None
     min_unique_dmps: Optional[int] = None
     max_gene_q_value: Optional[float] = None
-    min_mean_effect_size: Optional[float] = None
     min_gene_z: Optional[float] = None
     min_gene_importance: Optional[float] = None
     feature_types: Optional[List[str]] = None

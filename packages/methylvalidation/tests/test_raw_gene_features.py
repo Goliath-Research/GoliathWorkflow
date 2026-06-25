@@ -19,7 +19,6 @@ def test_resolve_stable_gene_names_deduplicates_and_sorts():
             "gene_name": ["BRCA1", "TP53", "BRCA1"],
             "gene_support_n": [2, 3, 2],
             "gene_importance": [0.9, 0.8, 0.7],
-            "mean_effect_size": [0.1, 0.2, 0.15],
         }
     )
     assert resolve_stable_gene_names(panel) == ["BRCA1", "TP53"]
@@ -49,20 +48,19 @@ def test_build_gene_locus_index_map_links_loci_to_genes():
     assert locus_w[1] > locus_w[0]
 
 
-def test_build_gene_panel_feature_weights_uses_mean_effect_size():
+def test_build_gene_panel_feature_weights_uses_gene_importance():
     panel = pd.DataFrame(
         {
             "comparison_label": ["A", "B"],
             "gene_name": ["GENE1", "GENE1"],
-            "mean_effect_size": [0.4, 0.2],
-            "gene_importance": [1.0, 1.0],
+            "gene_importance": [0.4, 0.2],
             "gene_support_n": [2, 2],
         }
     )
     weights = build_gene_panel_feature_weights(
         panel,
         ["gene::GENE1", "gene::GENE2"],
-        weight_column="mean_effect_size",
+        weight_column="gene_importance",
     )
     assert weights.shape == (2,)
     assert weights[0] == 1.0
@@ -87,7 +85,6 @@ def test_build_raw_gene_feature_table_weighted_aggregate(monkeypatch):
             "gene_name": ["GENE1"],
             "gene_support_n": [2],
             "gene_importance": [1.0],
-            "mean_effect_size": [0.5],
         }
     )
 

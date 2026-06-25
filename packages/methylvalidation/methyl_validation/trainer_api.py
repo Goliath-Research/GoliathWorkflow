@@ -536,7 +536,7 @@ def build_model_backend_steps(
                         config.observed_feature_min_coverage if config is not None else 1
                     ),
                     use_region_weight=True,
-                    gene_weight_column="mean_effect_size",
+                    gene_weight_column="gene_importance",
                     n_bins=(config.ecdf_aggregated_n_bins if config is not None else 100),
                     temperature=1.0,
                 )

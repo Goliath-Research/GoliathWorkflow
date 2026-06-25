@@ -263,22 +263,20 @@ def _rank_gene_pool(gene_combined: pd.DataFrame) -> Tuple[List[str], pd.DataFram
     work = gene_combined.copy()
     work["gene_name"] = work["gene_name"].map(_normalize_gene_name)
     work = work[work["gene_name"] != ""].copy()
-    for col in ("gene_importance", "mean_effect_size", "gene_support_n"):
+    for col in ("gene_importance", "gene_support_n"):
         if col not in work.columns:
             work[col] = np.nan
     work["gene_importance"] = pd.to_numeric(work["gene_importance"], errors="coerce").fillna(0.0)
-    work["mean_effect_size"] = pd.to_numeric(work["mean_effect_size"], errors="coerce").fillna(0.0)
     work["gene_support_n"] = pd.to_numeric(work["gene_support_n"], errors="coerce").fillna(0).astype(int)
     grouped = (
         work.groupby("gene_name", as_index=False)
         .agg(
             gene_importance=("gene_importance", "max"),
-            mean_effect_size=("mean_effect_size", lambda s: float(np.mean(np.abs(s)))),
             gene_support_n=("gene_support_n", "max"),
         )
         .sort_values(
-            ["gene_importance", "mean_effect_size", "gene_support_n", "gene_name"],
-            ascending=[False, False, False, True],
+            ["gene_importance", "gene_support_n", "gene_name"],
+            ascending=[False, False, True],
         )
         .reset_index(drop=True)
     )
@@ -370,7 +368,7 @@ def _evaluate_gene_prefix(
     X_tr = np.asarray(X_train[:, :k], dtype=np.float64)
     X_va = np.asarray(X_val[:, :k], dtype=np.float64)
     names = feature_names[:k]
-    weights = build_gene_panel_feature_weights(gene_panel, names, weight_column="mean_effect_size")
+    weights = build_gene_panel_feature_weights(gene_panel, names, weight_column="gene_importance")
     package = train_aggregated_ecdf_ovr_package(
         X_tr,
         y_train,

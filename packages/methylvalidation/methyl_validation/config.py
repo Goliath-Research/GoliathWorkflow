@@ -96,10 +96,12 @@ DEFAULT_MAPPER_GENE_COLUMNS: List[str] = [
     "gene_direction",
     "gene_effect_abs_wsum",
     "gene_support_n",
-    "gene_score",
-    "mean_effect_size",
     "gene_effect_compound",
-    "gene_feature_effect_compound",
+    "feature_importance_promoter",
+    "feature_importance_exon",
+    "feature_importance_intron",
+    "feature_importance_gene_body",
+    "feature_importance_terminator",
 ]
 
 

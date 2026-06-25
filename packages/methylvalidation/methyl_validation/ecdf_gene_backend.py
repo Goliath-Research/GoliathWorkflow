@@ -37,7 +37,7 @@ def train_ecdf_gene_ovr_model(
     output_dir: str | Path,
     min_coverage: int = 1,
     use_region_weight: bool = True,
-    gene_weight_column: str = "mean_effect_size",
+    gene_weight_column: str = "gene_importance",
     n_bins: int = 100,
     temperature: float = 2.0,
 ) -> Path:
@@ -150,7 +150,7 @@ def predict_ecdf_gene_ovr_from_project(
         frozen_gene_panel,
         min_coverage=int(raw.get("min_coverage", 1)),
         use_region_weight=bool(raw.get("use_region_weight", True)),
-        gene_weight_column=str(raw.get("gene_weight_column") or "mean_effect_size"),
+        gene_weight_column=str(raw.get("gene_weight_column") or "gene_importance"),
     )
     schema_names = [str(x) for x in ((package.get("feature_schema") or {}).get("feature_names") or [])]
     if list(feat.feature_names) != schema_names:
