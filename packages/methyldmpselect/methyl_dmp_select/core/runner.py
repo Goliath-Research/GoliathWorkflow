@@ -95,9 +95,9 @@ def run_dmp_selection(
     det_payload["classifier_dmp_selection"] = sel_mode
     det_payload.pop("discovery_csv", None)
     det_payload.pop("export_classifier_pickle", None)
-    detector_cfg = MethylDetectorConfig(**det_payload)
+    det_payload["chromosome"] = str(config.chromosome)
+    detector_cfg = MethylDetectorConfig.model_validate(det_payload)
     detector = MethylDetector(detector_cfg)
-    detector.chromosome = str(config.chromosome)
 
     sorted_df = pd.read_csv(discovery)
     if sorted_df.empty:
