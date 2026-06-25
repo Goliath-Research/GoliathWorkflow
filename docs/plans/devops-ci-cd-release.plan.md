@@ -1,6 +1,7 @@
 ---
 name: DevOps CI/CD Release
 overview: Move artifact builds fully into Azure DevOps with independent repo versioning (MethylExtractor and MethylPipeline each publish on their own tags), then add a gated release-assembly + promote pipeline that composes a worker release bundle and deploys to `/work/epimethyl` after manual approval.
+status: IMPLEMENTED
 azure_devops:
   type: Epic
   title: DevOps CI/CD release pipeline

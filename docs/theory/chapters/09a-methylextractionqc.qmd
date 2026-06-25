@@ -1,0 +1,52 @@
+# MethylExtractionQC {#sec-methylextractionqc}
+
+## Role
+
+`methylextractionqc` evaluates **MethylExtractor output** after GPU methylation extraction. Alignment QC confirms the BAM; extraction QC confirms the methylation call layer has sufficient coverage and conversion-quality signal before HDF5 files enter downstream cohort analysis.
+
+Operator guide: [User manual ch.03 — Sample Prep and QC](../../user-manual/03-sample-prep-and-qc.qmd).
+
+## Input: extraction manifest
+
+MethylExtractor writes `{sample_id}.extraction_manifest.json` with:
+
+- `summary` — genome-wide CpG weighted mean coverage, CHH/CHG methylation levels
+- `per_chromosome` — per-chromosome `CG.mean_coverage` and related stats
+
+## Guardrails
+
+`methylextractionqc/guardrails.py` evaluates Pass/Fail checks (defaults):
+
+| Guardrail | Default | Interpretation |
+|-----------|---------|----------------|
+| `cpg_weighted_mean_coverage` | ≥ 10× | Sufficient read depth at CpG sites |
+| `chh_methylation_level` | ≤ 0.02 | Conversion sanity (when CHH extracted) |
+| `chg_methylation_level` | ≤ 0.02 | Same for CHG |
+| `chromosome_completeness` | all expected chromosomes | Every project chromosome present with CG block |
+| `chromosome_uniformity` | autosomal min/median ≥ 0.5 | No severe localized dropout |
+
+`guardrails.overall_pass` maps to workflow **`extractionQcPass`**. Failures are terminal in SamplePrep today (no automatic retry).
+
+Output: `{sample_id}.extraction_qc.json` (schema: `schemas/extraction_qc_output.schema.json`).
+
+## Configuration
+
+Override thresholds via `step_config.extraction_qc` in the project JSON on `/work`.
+
+## Why both alignment and extraction QC
+
+| Question | Answered by |
+|----------|-------------|
+| Did sequencing/alignment produce a usable BAM? | Alignment QC (`methyl-qc`) |
+| Did extraction yield enough confident methylation signal? | Extraction QC (`methyl-extraction-qc`) |
+
+A sample may pass alignment but fail extraction (coverage collapse). Conversely, remediation after alignment QC avoids GPU extraction on BAMs that will not support stable statistics.
+
+## Publication guidance
+
+Describe extraction QC as deterministic threshold checks on exporter-reported coverage and non-CpG methylation fractions — not a new methylation estimator.
+
+## Related
+
+- Package usage: `packages/methylextractionqc/docs/USAGE.md`
+- Alignment QC (upstream gate): @sec-methylalignmentqc

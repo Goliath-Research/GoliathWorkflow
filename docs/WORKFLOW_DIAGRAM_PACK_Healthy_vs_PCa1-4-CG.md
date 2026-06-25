@@ -1,6 +1,6 @@
 # Workflow Diagram Pack: `Healthy_vs_PCa1-4-CG`
 
-This pack uses your project configuration at `/home/ubuntu/Work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json` and separates:
+This pack uses your project configuration at `/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json` and separates:
 
 - **External preprocessing** (Parabricks alignment and methyl extraction)
 - **MethylPipeline-native stages** (AlignmentQC onward, MC/stability/freeze/model/predictor)

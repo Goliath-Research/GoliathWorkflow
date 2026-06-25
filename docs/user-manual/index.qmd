@@ -18,8 +18,10 @@ For statistical background, use `docs/theory/`.
 - **Fast path (stage execution):** Chapters `05` to `09` (stability through blind prediction).
 - **New project setup:** Chapters `01`, `02`, `03`, then `05`.
 - **Daily operations:** Chapters `10` to `12`.
-- **Scaling MC across machines / optional hyperparameter tuning:** Chapters `13` and `14` (shared `/work` storage, queue subcommands, and the `methyl-hyperparam-search` grid driver).
-- **Standalone package usage:** Chapter `04` (`03-package-reference-individual-usage.qmd`).
+- **Scaling MC across machines:** Chapter `13` (`13-distributed-methyl-validation.qmd`) — shared `/work` storage and queue subcommands.
+- **Deployment (DB + gateway + workers):** Chapter `14` (`14-deployment-and-distributed-workflow.qmd`).
+- **Optional hyperparameter tuning:** Chapter `15` (`15-optional-hyperparameter-search.qmd`) — `methyl-hyperparam-search` grid driver.
+- **Standalone package usage:** Chapter `04` (`04-package-reference-individual-usage.qmd`).
 
 ## End-to-end workflow map
 
@@ -56,6 +58,7 @@ For statistical background, use `docs/theory/`.
 ## Canonical references
 
 - Sample prep workflow: [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md)
+- Workflow JSON language: [`docs/domain_program_language.md`](../../domain_program_language.md)
 - Workflow reference: `docs/WORKFLOW_DIAGRAM_PACK_Healthy_vs_PCa1-4-CG.md`
 - Validation orchestration: `packages/methylvalidation/docs/USAGE.md`
 - Distributed queue (shared storage, `plan-runs` / `run-task` / `aggregate-results`): `packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`

@@ -20,6 +20,7 @@ book:
         - chapters/07-methylmapper.qmd
         - chapters/08-methylenricher.qmd
         - chapters/09-methylalignmentqc.qmd
+        - chapters/09a-methylextractionqc.qmd
         - chapters/10-limitations-and-open-questions.qmd
     - part: "Part II: Workflows and Production"
       chapters:

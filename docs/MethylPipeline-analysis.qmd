@@ -25,6 +25,12 @@ execute:
   enabled: false
 ---
 
+::: {.callout-warning}
+## Deprecated document
+
+This standalone Quarto analysis predates the current theory book (`docs/theory/`) and user manual (`docs/user-manual/`). Prefer those sources. References to removed packages (e.g. `methylcluster`) are not maintained.
+:::
+
 # Executive Summary
 
 MethylPipeline is a monorepo for DNA methylation analysis that combines:

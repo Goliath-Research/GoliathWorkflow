@@ -84,7 +84,7 @@ The analysis pipeline ([Section 1](#1-project-configuration) onward) assumes per
 
 **Workflow definition:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](/home/ubuntu/MethylPipeline/workflow_engine/domain/fixtures/sample_prep.program.json) — deploy with `bash scripts/deploy_workflow_definitions.sh`.
 
-Legacy SQL seed [`wf_sample_prep_pipeline_seed.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sample_prep_pipeline_seed.sql) is **deprecated**.
+Legacy SQL seed [`workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql`](workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql) is **deprecated**.
 
 **Operator guide:** [`workflow_engine/sql/SamplePrepFlow.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/SamplePrepFlow.md)  
 **Worker contract:** [`workflow_engine/contract/sample_prep_capabilities.md`](/home/ubuntu/MethylPipeline/workflow_engine/contract/sample_prep_capabilities.md)  
@@ -803,7 +803,7 @@ From [`workflow_engine/sql/instance_context_examples/pca_ovr.json`](/home/ubuntu
 
 ```json
 {
-  "projectPath": "/home/ubuntu/Work/prostate-cancer/configs/project_PCa3.json",
+  "projectPath": "/work/prostate-cancer/configs/project_PCa3.json",
   "context": "CG",
   "centroid1Dir": "/work/prostate-cancer/PCa3/centroids/controls/healthy/all",
   "group1Label": "group1",

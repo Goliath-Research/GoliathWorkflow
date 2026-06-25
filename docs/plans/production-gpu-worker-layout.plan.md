@@ -1,6 +1,7 @@
 ---
 name: Production GPU Worker Layout
 overview: "A three-tier production deployment model: host GPU stack (driver + Docker + Parabricks), arch-specific MethylExtractor binaries without sources, and a pinned Python venv with packaged MethylPipeline/worker code—phased from shared-storage releases to Azure Artifacts."
+status: IMPLEMENTED
 azure_devops:
   type: Epic
   title: Production GPU worker layout

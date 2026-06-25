@@ -48,7 +48,7 @@ python workflow_engine/sql/seed_action_schemas.py
 
 ## Azure Database for PostgreSQL
 
-Use [`deploy_azure.sh`](deploy_azure.sh) from a machine whose IP is allowed in the server firewall (Azure Portal → Networking, or run from Azure Cloud Shell / a VM in the same VNet).
+Use [`deploy_azure.sh`](deploy_azure.sh) from a machine whose IP is allowed in the server firewall. The script applies scripts 1–13 from the table above **plus** portal DDL (`portal_resource_profile.sql`, `portal_workflow_api.sql`, `wf_drop_platform_sample_storage.sql`). Run [`wf_cluster_security_columns.sql`](wf_cluster_security_columns.sql) separately when enabling cluster IP binding.
 
 **Native auth (`dba`):**
 

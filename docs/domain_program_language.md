@@ -1,7 +1,74 @@
 # DomainProgram Language Reference
 
-Authoring format for MethylPipeline workflows. Schema: `schemas/domain/domain_program.schema.json`.  
-Compiler: `workflow_engine/domain/compiler.py` → `WorkflowDefinitionSpec`.
+Authoring format for MethylPipeline workflows.
+
+| Artifact | Schema | Location |
+|----------|--------|----------|
+| DomainProgram (authoring IR) | `schemas/domain/domain_program.schema.json` | Repo: `workflow_engine/domain/**/*.program.json` |
+| Compiled engine graph | `schemas/workflow/workflow_definition.schema.json` | Generated at deploy; check harnesses write `compiled/compiled_workflow.json` |
+| Study manifest | `schemas/config/project_config.schema.json` | `/work/<study>/configs/project_*.json` |
+| Instance payload | (context keys + profile) | API / `methyl-workflow-run --context` |
+| Pipeline profile | (profile JSON) | Repo: `workflow_engine/domain/profiles/*.profile.json` |
+
+Compiler: `workflow_engine/domain/compiler.py` → `WorkflowDefinitionSpec` (Pydantic: `workflow_engine/contract/workflow_definition_spec.py`).
+
+**Architecture overview:** [`docs/architecture_review.md`](architecture_review.md)  
+**Operator deployment:** [User manual ch.14](user-manual/14-deployment-and-distributed-workflow.qmd)
+
+## Artifact ladder
+
+```text
+*.program.json          Authoring IR (versioned in repo)
+       │
+       ▼ compile_domain_program / compile_domain_program_file
+WorkflowDefinitionSpec  Engine graph (nodes, FOREACH, templates, bindings)
+       │
+       ▼ POST /v1/workflows/definitions  OR  methyl-workflow-run (local)
+Database + scheduler    Instance execution with context_json + collection bindings
+       │
+       ▼ worker poll/submit
+methyl-worker           Executes catalog actions; writes artifacts on /work
+```
+
+### program.json vs project.json vs context
+
+| File | Contains | Example path |
+|------|----------|--------------|
+| **`*.program.json`** | Control flow: `do`, `for`, `if`, action names | `workflow_engine/domain/fixtures/sample_prep.program.json` |
+| **`project.json`** | Cohorts, chromosomes, `step_config`, `output_base` | `/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json` |
+| **`context_json`** | Instance vars: `projectPath`, profiles, `samples[]` | API body or `--context '{...}'` |
+| **Profile** | Pipeline booleans: `runDmpSelection`, `runGeneFeaturecuts`, … | `workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json` |
+
+The compiler reads **`projectPath`** from context and inlines `project.chromosomes`, `project.comparisons`, etc. via collection bindings before FOREACH runs.
+
+### Worked example: compile and run locally
+
+```bash
+source .venv/bin/activate
+
+# Compile only (inspect graph)
+python scripts/compile_workflow_program.py \
+  workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --context-file workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json \
+  --context '{"projectPath":"/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'
+
+# Run in-process (stub external GPU tools)
+methyl-workflow-run \
+  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --context-file workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json \
+  --context '{"projectPath":"/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
+  --stub-external
+```
+
+### Deploy to gateway
+
+```bash
+export GATEWAY_URL=https://your-gateway.example.com
+export GATEWAY_ADMIN_BEARER_TOKEN='...'
+bash scripts/deploy_workflow_definitions.sh
+```
+
+Writes `workflow_versions.json` with IDs for `POST /v1/workflows/instances` and study-start APIs.
 
 ## Constructs
 
@@ -37,7 +104,7 @@ When a worker completes an ACTION, it submits **`result_code`** (integer) with t
 | `1` | True branch (e.g. remediation needed) |
 | `2..N` | Multi-way SWITCH cases (per action) |
 
-See also [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) (worker contract) and the user manual [Artifacts and QA Checks — observability](user-manual/09-artifacts-and-qa-checks.qmd).
+See also [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) (worker contract) and the user manual [Artifacts and QA Checks — observability](user-manual/10-artifacts-and-qa-checks.qmd).
 
 ### Two branching styles
 
@@ -80,7 +147,7 @@ See also [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) (worker c
 
 Workers and CLIs write trace artifacts under shared storage:
 
-- **Per-action manifests:** `{output_dir}/.action_results/{action_name}.{run_key}.json` — typed result snapshots from pipeline CLIs.
+- **Per-action manifests:** `{output_dir}/.action_results/{action_name}.{run_key}.json` — full typed result snapshots from pipeline CLIs.
 - **Sample prep timeline:** `{sampleDir}/{sampleId}.sample_prep_log.jsonl` — append-only audit log.
 - **Validation / MC timeline:** `{monteCarloRunsRoot}/action_run_log.jsonl` — append-only log for validation-category actions.
 
@@ -98,7 +165,7 @@ Authors do not write these files; they are useful when debugging failed runs on 
 }
 ```
 
-Literal strings in `with` (e.g. `"mode": "full"`) are preserved; use `{ "ref": "..." }` for scope references.
+Literal strings in `with` (e.g. `"mode": "full"`) are preserved; use `{ "ref": "..." }` for scope references. Refs like `iteration.runDir` compile to `${var.iteration.runDir}` for nested FOREACH scope.
 
 ## Instance context
 
@@ -168,3 +235,14 @@ methyl-validation run-workflow \
 Uses `dmps-*-discovery.csv` for mapper (large gene pool), `pipeline.dmp_select` for classifier DMP exports required by `pipeline.gene_select`, and MC stability on gene classifier panels. Set `"runBiomarkerFilter": true` in context to add PPI/disease shrink before gene FeatureCuts (as in `full_biomarker_gene_fc`).
 
 Stability summaries record active axes in `stability_summary.json` → `pipeline_axes` (`dmp_axis`: `none|discovery|classifier`, `gene_axis`: `enricher|classifier`).
+
+## Related JSON schemas
+
+- DomainProgram: `schemas/domain/domain_program.schema.json`
+- WorkflowDefinitionSpec: `schemas/workflow/workflow_definition.schema.json`
+- Action catalog: `schemas/actions/catalog.json`
+- Task I/O: `schemas/tasks/*.schema.json` (regenerate: `methyl-export-task-schemas`)
+
+## Sample prep reference
+
+QC gates and Picard/Parabricks/extraction guardrails: [User manual ch.03](user-manual/03-sample-prep-and-qc.qmd), [`workflow_engine/sql/SamplePrepFlow.md`](../workflow_engine/sql/SamplePrepFlow.md).

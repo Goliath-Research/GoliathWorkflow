@@ -1,5 +1,7 @@
 # PCaOvrFlow — OvR scale-up for project_PCa3.json
 
+> **DEPRECATED.** This static SQL-seed workflow is superseded by **DomainProgram** definitions compiled and deployed via `scripts/deploy_workflow_definitions.sh`. See [`docs/domain_program_language.md`](../../docs/domain_program_language.md) and [`workflow_engine/domain/fixtures/`](../domain/fixtures/). Legacy seed: [`sql/deprecated/wf_pca_ovr_seed.sql`](deprecated/wf_pca_ovr_seed.sql).
+
 Milestone 2 static workflow: **parallel comparisons** (`control_vs_each_disease`), then **sequential** mapper → enricher → disease progression.
 
 ## Tree
@@ -54,7 +56,7 @@ Globals at scope 0 (override seed defaults at instance start):
 
 ```json
 {
-  "projectPath": "/home/ubuntu/Work/prostate-cancer/configs/project_PCa3.json",
+  "projectPath": "/work/prostate-cancer/configs/project_PCa3.json",
   "context": "CG",
   "centroid1Dir": "/work/prostate-cancer/PCa3/centroids/controls/healthy/all",
   "group1Label": "group1",

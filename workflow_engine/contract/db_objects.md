@@ -132,7 +132,7 @@ Control-flow helpers: `wf_sequence_continue`, `wf_parallel_continue`, `wf_repeat
 
 ### 6. Workflow action catalog (SamplePrepPipeline)
 
-Registered by [`../sql/wf_sample_prep_pipeline_seed.sql`](../sql/wf_sample_prep_pipeline_seed.sql). Full I/O contract: [`sample_prep_capabilities.md`](sample_prep_capabilities.md).
+Registered by DomainProgram deploy ([`sample_prep.program.json`](../domain/fixtures/sample_prep.program.json) via `scripts/deploy_workflow_definitions.sh`). Legacy SQL seed: [`../sql/deprecated/wf_sample_prep_pipeline_seed.sql`](../sql/deprecated/wf_sample_prep_pipeline_seed.sql). Full I/O contract: [`sample_prep_capabilities.md`](sample_prep_capabilities.md).
 
 | action_name | capability |
 |-------------|------------|

@@ -2,24 +2,63 @@
 
 ## Role
 
-`methylalignmentqc` is the least inferential package in the repository. It parses alignment and duplication metrics produced by external tools such as Picard and Parabricks, then rewrites them into structured JSON for downstream inspection.
+`methylalignmentqc` parses alignment and duplication metrics from **Picard-style deduplication files** and **Parabricks WGBS JSON**, then writes normalized per-sample JSON with **guardrails** that gate SamplePrep before methylation extraction.
 
-The package therefore belongs in the theory book only so that readers do not over-interpret it. Its main functions are deterministic parsing, normalization, and reporting.
+Operator guide: [User manual ch.03 — Sample Prep and QC](../../user-manual/03-sample-prep-and-qc.qmd).
 
-## Deterministic Metric Extraction
+The package is deterministic: parsing, normalization, threshold checks, and cycle-quality screening — not new statistical inference on methylation.
 
-The parser reads tabular metrics files, histograms, and summary blocks and maps selected fields into a fixed schema. Typical examples include:
+## Input metrics
 
-- total reads,
-- duplicate counts,
-- duplication rate,
-- related read-group or library statistics.
+### Picard-style deduplication metrics
 
-There is no new statistical estimator here beyond whatever upstream alignment tool already computed.
+Parabricks emits tab-separated `*deduplicate_metrics.txt` (or `*duplication_metrics.txt`). The parser (`methyl_alignment_qc/core/parser.py`) reads columns such as `PERCENT_DUPLICATION`, read-pair counts, and unmapped reads. These populate `summary_stats` on the export JSON.
 
-## Summary Statistics
+Optional config guardrails (`step_config.alignment_qc.optional_guardrails.duplication_rate_max`, `min_pf_reads`) can fail samples with excessive PCR duplication even when cycle quality passes.
 
-When the package computes summaries such as duplication rate, it is applying straightforward algebra:
+### Parabricks WGBS metrics JSON
+
+Each sample directory should contain `{sample_id}.json` with sections including:
+
+- `quality_yield` — PF reads, Q30 bases
+- `mean_quality_by_cycle` — per-cycle mean Phred (Read 1 then Read 2)
+- `gc_bias_summary`, `insert_size_metrics`
+- `pre_adapter_summaries` — deamination and OxoG artifact qscores
+
+Guardrails in `wgbs_parabricks_qc.py` evaluate PF%, Q30, mean/min cycle quality, GC/AT dropout, median insert size, and deamination/OxoG scores before extraction proceeds.
+
+## Export JSON (V2)
+
+The worker writes row-oriented JSON validated against `schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`. Key blocks:
+
+| Block | Role |
+|-------|------|
+| `guardrails.details` | Per-metric pass/fail, value, normal range, operator message |
+| `guardrails.overall_pass` | Bound to workflow `qcPass` |
+| `guardrails.screening` | Cycle-quality disposition and recommended trim bases |
+| `qc_history` | Append-only audit (initial + post-remediation retries) |
+
+## Cycle screening and remediation
+
+When `cycle_screening.enabled` is true, `cycle_quality_screening.py` inspects Read 1 and Read 2 separately. Dispositions include:
+
+| Disposition | Meaning |
+|-------------|---------|
+| `USE_CURRENT_ALIGNMENT` | Pass |
+| `REALIGN_TRIM` | Fixable read-end dip; fastp trim + forced realign |
+| `INVESTIGATE_MULTI_REGION` | Manual review |
+| `INVESTIGATE_GUARDRAIL_ONLY` | Cycles OK; check duplication/depth |
+| `NOT_FIXABLE` | Terminal fail |
+
+SamplePrep binds `remediateAlignment` from screening output; FASTQs must remain on disk until final QC disposition.
+
+## cfDNA fragmentomics (optional)
+
+When `primary_analyte` is `cfdna`, insert-size histogram guardrails may run via `fragmentomics.py` after alignment QC passes and before extraction.
+
+## Summary statistics
+
+When the package computes duplication rate, it applies straightforward algebra:
 
 $$
 \operatorname{duplication\ rate}
@@ -27,19 +66,16 @@ $$
 \frac{\text{duplicate reads}}{\text{total reads}}.
 $$ {#eq-dup-rate}
 
-These are useful QC diagnostics, but they do not form a novel methylation model.
+## Publication guidance
 
-## Log Monitoring
-
-The package also contains log-monitoring utilities that infer progress and estimated remaining time by regular-expression matching against subprocess output. Those values are operational heuristics and may change if the upstream log format changes.
-
-## Publication Guidance
-
-In a publication, `methylalignmentqc` should be described as:
+Describe `methylalignmentqc` as:
 
 - a QC ingestion and normalization layer,
-- dependent on upstream Picard or Parabricks metrics,
-- deterministic in its parsing logic, and
-- not responsible for new statistical inference.
+- dependent on upstream Picard/Parabricks metrics,
+- deterministic in parsing and guardrail logic, and
+- gating extraction via SamplePrep workflow bindings.
 
-That framing keeps the package in scope without attributing more theory to it than the code actually implements.
+## Related
+
+- Package usage: `packages/methylalignmentqc/docs/USAGE.md`
+- Extraction QC (downstream gate): @sec-methylextractionqc

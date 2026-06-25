@@ -2,7 +2,7 @@
 name: Alignment QC screening
 overview: Extend MethylAlignmentQC with read-end-aware cycle screening and structured remediation dispositions, then wire fastp Read-2 trimming and forced realign into SamplePrep (plus a remediation workflow for the existing prostate cohort).
 
-> **Status: IMPLEMENTED.** This plan is historical reference. The live workflow is [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (deploy via `scripts/deploy_workflow_definitions.sh`). Operator guide: [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md).
+> **Status: IMPLEMENTED.** This plan is historical reference. The live workflow is [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (deploy via `scripts/deploy_workflow_definitions.sh`). Operator guide: user manual ch.03 [`docs/user-manual/03-sample-prep-and-qc.qmd`](../user-manual/03-sample-prep-and-qc.qmd) and [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md).
 
 azure_devops:
   type: Epic
@@ -273,7 +273,7 @@ Extend [`parabricks_runner.py`](workers/methyl_worker/parabricks_runner.py):
 
 ### 4a. Reorder `delete_fastqs` (prerequisite for trimming)
 
-**Change the canonical step order** in [`sample_prep.program.json`](workflow_engine/domain/fixtures/sample_prep.program.json) and [`wf_sample_prep_pipeline_seed.sql`](workflow_engine/sql/wf_sample_prep_pipeline_seed.sql):
+**Change the canonical step order** in [`sample_prep.program.json`](workflow_engine/domain/fixtures/sample_prep.program.json) (legacy SQL seed [`workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql`](workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql) is deprecated):
 
 | Before (current) | After (required) |
 |------------------|------------------|

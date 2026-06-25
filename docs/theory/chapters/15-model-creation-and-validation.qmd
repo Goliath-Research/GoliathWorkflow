@@ -182,7 +182,7 @@ Use this as a starting point, then tune in this order:
 
 Large `n_iterations` in stability discovery are often limited by **wall time** on a single host, not by statistical need. MethylValidation can **shard** the same Monte Carlo work across many processes or machines, provided every worker has read–write access to the **same** `output_base` tree (for example NFS or another shared mount under `/work/...`). The queue workflow is a **plan → workers → aggregate** pattern: a short planning pass materializes per-iteration task descriptors under `monte_carlo_runs/queue/`; workers each run a single task; a final pass merges metrics and can run the usual stability pass. The legacy monolithic `methyl-validation` loop (one process running all iterations) is unchanged and remains valid when that is fast enough.
 
-Commands, directory layout, recovery, and manifest details are specified in `packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`. The same flow is written for operators in the user manual chapter *Distributed MethylValidation on shared storage* (`docs/user-manual/12-distributed-methyl-validation.qmd`).
+Commands, directory layout, recovery, and manifest details are specified in `packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`. The same flow is written for operators in the user manual chapter *Distributed MethylValidation on shared storage* (`docs/user-manual/13-distributed-methyl-validation.qmd`).
 
 ---
 

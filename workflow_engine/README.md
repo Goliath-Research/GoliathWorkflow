@@ -2,7 +2,7 @@
 
 Delphi runtime implementation notes and control-flow walkthrough: [`WORKFLOW_ENGINE_DELPHI.md`](WORKFLOW_ENGINE_DELPHI.md)
 
-**Azure SQL / bundled engine (`wf` schema):** use [`MethylPipeline_202604291041.sql`](MethylPipeline_202604291041.sql) as the single deploy script. It defines clusters, registered workers (`wf.worker`), bearer tokens (`wf.worker_token`), native `JSON` payload columns, and worker procedures that require `@worker_id BIGINT` (from `wf.worker.id`) plus `@worker_token`.
+**Azure SQL / bundled engine (`wf` schema):** use [`sql/MethylPipeline.sql`](sql/MethylPipeline.sql) as the bundled deploy script. It defines clusters, registered workers (`wf.worker`), bearer tokens (`wf.worker_token`), native `JSON` payload columns, and worker procedures that require `@worker_id BIGINT` (from `wf.worker.id`) plus `@worker_token`.
 
 ---
 
@@ -104,7 +104,7 @@ Python REST worker (poll/submit): [`../workers/WORKER_PROTOCOL.md`](../workers/W
 | **Python (production)** | `methyl-gateway` via systemd on a dedicated Linux VM; dev: `python workflow_engine/rest/gateway.py` | Azure SQL (`BACKEND_DB=mssql`) or PostgreSQL (`BACKEND_DB=postgres`) via psycopg/pyodbc |
 | Delphi (frozen reference / Windows) | `WfEngineSrv` / `MethylWfGateway` — manual Win64 build only; see [`DELPHI_GATEWAY_STATUS.md`](DELPHI_GATEWAY_STATUS.md) | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |
 
-PostgreSQL parity scripts (`sql_pg/05`–`07`) port runtime resolver, scope write-path, and JSON encoding from the T-SQL parity scripts. FOREACH (`wf_sql_foreach_support.sql`) remains MSSQL-only for now.
+PostgreSQL parity scripts (`sql_pg/05`–`08`) port runtime resolver, scope write-path, JSON encoding, and **FOREACH** from the T-SQL parity scripts. Both Azure SQL (`wf_sql_foreach_support.sql`) and PostgreSQL (`sql_pg/08_foreach_support.sql`) support DomainProgram FOREACH workflows.
 
 Parity harness: `python workflow_engine/tests/parity/run_parity.py` (requires `psql` + Postgres 17).
 

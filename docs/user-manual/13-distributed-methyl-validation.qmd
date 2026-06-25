@@ -72,4 +72,4 @@ With `output_base` pointing at shared storage, `plan-runs` / `export-queue` reso
 
 - `packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md` (canonical detail)
 - `docs/theory/chapters/15-model-creation-and-validation.qmd` (section *Distributed Monte Carlo on shared storage*)
-- [Optional hyperparameter search](13-optional-hyperparameter-search.qmd) (search trials can use the same shared storage)
+- [Optional hyperparameter search](15-optional-hyperparameter-search.qmd) (Chapter 15; search trials can use the same shared storage)

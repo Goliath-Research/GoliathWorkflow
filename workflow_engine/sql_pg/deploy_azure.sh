@@ -65,6 +65,9 @@ SCRIPTS=(
   wf_repo_upsert_workflow_action.sql
   wf_repo_create_workflow_graph.sql
   wf_sql_collection_bindings.sql
+  portal_resource_profile.sql
+  portal_workflow_api.sql
+  wf_drop_platform_sample_storage.sql
 )
 
 echo "Target: host=$PGHOST db=$PGDATABASE user=$PGUSER sslmode=$PGSSLMODE"

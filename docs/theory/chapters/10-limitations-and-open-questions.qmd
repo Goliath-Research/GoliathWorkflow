@@ -65,7 +65,7 @@ Any publication using those layers should record service versions, access dates,
 
 The repository still contains legacy components, but their status is now clearer:
 
-- `packages/methylutils/comparison.py` contains a beta-based comparator path that is **not** used by the active detector/classifier production flow.
+- The removed `packages/methylutils/comparison.py` beta-comparator path is **not** used by the active detector/classifier production flow (see §2.10 in Chapter 1).
 - A few package-local docs can lag behind code evolution between releases.
 
 To avoid methodological confusion, interpret these as **historical/auxiliary artifacts**, not active runtime estimators.
@@ -85,7 +85,7 @@ The current docs/code governance already reduces this risk:
 | `methylutils` ECDF core (`core/distribution_views.py`, `ecdf_classifier.py`, centroid pair ECDF comparison path) | active | Safe to cite as current detector/classifier mathematical backbone. |
 | `methylvalidation` model backends (`ecdf`, `tabular_sklearn`, `generative_hybrid`) | active | Safe to cite when backend and key hyperparameters are reported. |
 | `methylmapper`, `methylenricher`, `methyldiseaseprogression` workflow synthesis | active | Safe to cite as downstream interpretation/synthesis layers (with heuristic/external-service caveats). |
-| `methyl_utils/comparison.py` beta-comparator module | legacy-supported | Keep for compatibility/auxiliary use; do not describe as active production detector path. |
+| `methyl_utils/comparison.py` beta-comparator module | removed | Historical; do not describe as active production detector path. |
 | Incomplete/retired experimental branches (historical clustering and partial DP-like ideas) | experimental | Do not cite as validated production methodology. |
 
 ## Publication-Ready Positioning

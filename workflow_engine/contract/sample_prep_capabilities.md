@@ -509,4 +509,4 @@ Use `result_code = 0` even when marking failed — the sample is intentionally s
 
 **Workflow source of truth:** [`../domain/fixtures/sample_prep.program.json`](../domain/fixtures/sample_prep.program.json) deployed via `scripts/deploy_workflow_definitions.sh`.
 
-Legacy SQL seed [`../sql/wf_sample_prep_pipeline_seed.sql`](../sql/wf_sample_prep_pipeline_seed.sql) is **deprecated**.
+Legacy SQL seed [`../sql/deprecated/wf_sample_prep_pipeline_seed.sql`](../sql/deprecated/wf_sample_prep_pipeline_seed.sql) is **deprecated**. Canonical workflow: [`../domain/fixtures/sample_prep.program.json`](../domain/fixtures/sample_prep.program.json).

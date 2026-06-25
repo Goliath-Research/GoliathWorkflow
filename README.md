@@ -22,12 +22,19 @@ MethylPipeline is a multi-package Python monorepo for methylation analysis workf
 
 - Start here for navigation and reading order:
   - [`docs/index.md`](docs/index.md)
+- Documentation audit (coverage, staleness, maintenance):
+  - [`docs/DOCUMENTATION_AUDIT.md`](docs/DOCUMENTATION_AUDIT.md)
 - Environment setup and installation:
   - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Full theory/reference book (Quarto):
   - [`docs/theory/README.md`](docs/theory/README.md)
 - Workflow-first operational manual (Quarto):
   - [`docs/user-manual/index.qmd`](docs/user-manual/index.qmd)
+- DomainProgram workflow language:
+  - [`docs/domain_program_language.md`](docs/domain_program_language.md)
+- Production deployment (DB, gateway, workers):
+  - [`docs/deployment/production_runbook.md`](docs/deployment/production_runbook.md)
+  - User manual ch.14: [`docs/user-manual/14-deployment-and-distributed-workflow.qmd`](docs/user-manual/14-deployment-and-distributed-workflow.qmd)
 - Package-local usage and implementation docs:
   - `packages/*/README.md`
   - `packages/*/docs/{USAGE,IMPLEMENTATION,THEORY}.md`

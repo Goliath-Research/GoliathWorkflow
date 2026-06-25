@@ -5,25 +5,37 @@ This page maps the documentation system for the monorepo and identifies canonica
 ## Start Here
 
 - Repository landing page: [`../README.md`](../README.md)
-- **Architecture review (workflow-first)**: [`architecture_review.md`](architecture_review.md)
-- **DomainProgram language**: [`domain_program_language.md`](domain_program_language.md)
+- **Documentation audit (coverage + staleness):** [`DOCUMENTATION_AUDIT.md`](DOCUMENTATION_AUDIT.md)
+- **Architecture review (workflow-first):** [`architecture_review.md`](architecture_review.md)
+- **DomainProgram language:** [`domain_program_language.md`](domain_program_language.md)
 - Environment setup: [`DEPLOYMENT.md`](DEPLOYMENT.md)
 - Operational runbook (stage-by-stage): [`user-manual/index.qmd`](user-manual/index.qmd)
 - Theory and reference: [`theory/README.md`](theory/README.md)
+- **Production deployment:** [`deployment/production_runbook.md`](deployment/production_runbook.md)
 - Code-backed configuration matrix: [`config_parameter_matrix.md`](config_parameter_matrix.md)
 
 ## Canonical Sources By Purpose
 
-- **Run the pipeline**:
+- **Run sample prep (FASTQ → HDF5):**
+  - [`user-manual/03-sample-prep-and-qc.qmd`](user-manual/03-sample-prep-and-qc.qmd)
+  - [`workflow_engine/sql/SamplePrepFlow.md`](../workflow_engine/sql/SamplePrepFlow.md)
+- **Run the analysis pipeline (stability → model):**
   - [`user-manual/index.qmd`](user-manual/index.qmd)
-- **Understand statistical/method details**:
+- **Deploy database, gateway, workers:**
+  - [`user-manual/14-deployment-and-distributed-workflow.qmd`](user-manual/14-deployment-and-distributed-workflow.qmd)
+  - [`deployment/production_runbook.md`](deployment/production_runbook.md)
+  - [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md)
+  - [`contracts/openapi.yaml`](../contracts/openapi.yaml)
+- **Author workflows in JSON:**
+  - [`domain_program_language.md`](domain_program_language.md)
+- **Understand statistical/method details:**
   - [`theory/index.qmd`](theory/index.qmd)
-- **Package-specific CLI/API behavior**:
+- **Package-specific CLI/API behavior:**
   - `packages/*/README.md`
   - `packages/*/docs/USAGE.md`
-- **Implementation internals**:
+- **Implementation internals:**
   - `packages/*/docs/IMPLEMENTATION.md`
-- **Parameter and schema traceability**:
+- **Parameter and schema traceability:**
   - [`config_parameter_matrix.md`](config_parameter_matrix.md)
 
 ## Current Workflow Contract
@@ -45,11 +57,14 @@ Biological gate (recommended before final model promotion):
 
 ## Reading Order
 
-1. [`user-manual/index.qmd`](user-manual/index.qmd)
-2. [`theory/README.md`](theory/README.md)
-3. Relevant package docs under `packages/*/docs/`
+1. [`user-manual/index.qmd`](user-manual/index.qmd) — operators
+2. [`theory/README.md`](theory/README.md) — methods
+3. [`domain_program_language.md`](domain_program_language.md) — workflow authors
+4. [`deployment/production_runbook.md`](deployment/production_runbook.md) — production deploy
+5. Relevant package docs under `packages/*/docs/`
 
 ## Notes On Documentation Ownership
 
 - Theory book and user manual intentionally overlap, but should not diverge in defaults/CLI semantics.
 - Package docs should hold package-specific operational details; cross-package workflows should live in user manual/theory workflow chapters.
+- Repo vs `/work` layout: user manual ch.02 and [`.cursor/rules/work-config-paths.mdc`](../.cursor/rules/work-config-paths.mdc).
