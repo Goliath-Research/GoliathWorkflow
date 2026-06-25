@@ -2,6 +2,8 @@
 
 DomainProgram fixtures and harness for `Healthy_vs_PCa1-5-CG` (hierarchical multiclass, buffy coat, CG context).
 
+**Layout:** `configs/*.program.json` and profiles under `workflow_engine/domain/profiles/` are **repo** artifacts. Production `project_*.json` and sample CSVs live on **`/work/prostate-cancer/`** only; smoke copies here are for CI.
+
 ## Contents
 
 | Path | Purpose |

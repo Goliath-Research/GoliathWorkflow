@@ -110,12 +110,11 @@ def install_to_work(force: bool) -> None:
     WORK_CONFIGS.mkdir(parents=True, exist_ok=True)
     WORK_DATA.mkdir(parents=True, exist_ok=True)
 
+    # Study manifests and sample lists only — DomainPrograms stay in the repo.
     targets = {
         paths["project"]: WORK_CONFIGS / PROJECT_NAME,
         paths["healthy_csv"]: WORK_DATA / "healthy_b.csv",
         paths["pca_csv"]: WORK_DATA / "pca_b.csv",
-        paths["program"]: WORK_CONFIGS / PROGRAM_NAME,
-        paths["instance_context"]: WORK_CONFIGS / "buffy_instance_context.json",
     }
     for src, dst in targets.items():
         if dst.exists() and not force:
@@ -192,7 +191,7 @@ def main() -> int:
     parser.add_argument(
         "--install",
         action="store_true",
-        help="Copy configs and sample lists to /work/prostate-cancer/",
+        help="Copy project template and sample CSVs to /work (not DomainPrograms)",
     )
     parser.add_argument(
         "--force",

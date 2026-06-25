@@ -20,6 +20,8 @@ MethylPipeline evolved from per-package CLIs with Pydantic JSON configs, through
 | Execution | Action catalog + `methyl_worker.handlers` | CLI / in-process dispatch |
 | Orchestration | DB engine + gateway **or** `LocalWorkflowEngine` | Graph scheduling |
 
+**Storage:** DomainPrograms, profiles, and schemas live in the **git repository** and are documented for users. Study manifests (`project_*.json`), sample CSVs, and run artifacts live on **`/work/<disease>/`** (shared storage). Do not copy `*.program.json` under `/work/.../configs/`.
+
 ## Orchestration path matrix
 
 | Path | Entry | Status |

@@ -4,6 +4,21 @@
 
 Define a project JSON that can run through stability, freeze, model, and evaluation without per-stage schema drift.
 
+## Repository vs `/work` (what goes where)
+
+| **Repository** (versioned, documented) | **`/work/<disease>/`** (study-specific) |
+|----------------------------------------|----------------------------------------|
+| Pipeline profiles (`workflow_engine/domain/profiles/`) | `project_*.json` — cohorts, comparisons, sample paths, `output_base`, study `step_config` |
+| DomainPrograms (`*.program.json` under `workflow_engine/domain/`) | Sample list CSVs under `data/` |
+| JSON schemas (`schemas/config/`) | Run outputs (`monte_carlo_runs/`, `stability/`, …) |
+| User manual, theory, `docs/domain_program_language.md` | |
+
+- Point `methyl-workflow-run --program` at a **repo** DomainProgram path.
+- Point `--context` / `projectPath` at a **project JSON on `/work`**.
+- Optional `--context-file` loads a **profile** from `workflow_engine/domain/profiles/`.
+- Do **not** treat repo `workflow_engine/domain/checks/*/configs/project_*.json` as production configs (CI smoke only).
+- Do **not** copy `*.program.json` into `/work/<disease>/configs/`.
+
 ## Minimum structure
 
 Use one project file containing:

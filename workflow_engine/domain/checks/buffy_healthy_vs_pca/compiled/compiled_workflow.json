@@ -156,10 +156,15 @@
       "foreach_parallel": null,
       "input_template": {
         "tool": "MethylCentroid",
+        "projectPath": "${var.projectPath}",
         "project": "${var.projectPath}",
         "group": "${var.control_group}",
         "chromosome": "${var.chromosome}",
-        "context": "${var.context}"
+        "context": "${var.context}",
+        "outputDir": "${var.centroid1Dir}",
+        "addSamples": "${var.addSamples}",
+        "removeSamples": "${var.removeSamples}",
+        "stepOverride": "${var.stepOverride}"
       }
     },
     {
@@ -177,10 +182,15 @@
       "foreach_parallel": null,
       "input_template": {
         "tool": "MethylCentroid",
+        "projectPath": "${var.projectPath}",
         "project": "${var.projectPath}",
         "group": "${var.disease_group}",
         "chromosome": "${var.chromosome}",
-        "context": "${var.context}"
+        "context": "${var.context}",
+        "outputDir": "${var.centroid2Dir}",
+        "addSamples": "${var.addSamples}",
+        "removeSamples": "${var.removeSamples}",
+        "stepOverride": "${var.stepOverride}"
       }
     },
     {
@@ -198,10 +208,16 @@
       "foreach_parallel": null,
       "input_template": {
         "tool": "MethylDetector",
+        "projectPath": "${var.projectPath}",
         "project": "${var.projectPath}",
         "chromosome": "${var.chromosome}",
         "context": "${var.context}",
-        "comparison": "${var.label}"
+        "comparison": "${var.label}",
+        "fixedDmpPanel": "${var.fixedDmpPanel}",
+        "stepOverride": "${var.stepOverride}",
+        "centroid1Dir": "${var.centroid1Dir}",
+        "centroid2Dir": "${var.centroid2Dir}",
+        "outputDir": "${var.detectOutDir}"
       }
     },
     {
@@ -219,6 +235,7 @@
       "foreach_parallel": null,
       "input_template": {
         "tool": "MethylMapper",
+        "projectPath": "${var.projectPath}",
         "project": "${var.projectPath}"
       }
     },
@@ -237,6 +254,7 @@
       "foreach_parallel": null,
       "input_template": {
         "tool": "MethylEnricher",
+        "projectPath": "${var.projectPath}",
         "project": "${var.projectPath}"
       }
     }
@@ -362,7 +380,18 @@
   ],
   "input_bindings": [],
   "output_bindings": [],
-  "scope_defaults": [],
+  "scope_defaults": [
+    {
+      "node_key": "root",
+      "var_name": "projectPath",
+      "default_expr": "${var.projectPath}"
+    },
+    {
+      "node_key": "root",
+      "var_name": "centroid1Dir",
+      "default_expr": "${var.centroid1Dir}"
+    }
+  ],
   "collection_bindings": [
     {
       "scope_var": "project",

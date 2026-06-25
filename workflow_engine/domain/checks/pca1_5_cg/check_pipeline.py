@@ -117,13 +117,12 @@ def install_to_work(force: bool) -> None:
     WORK_CONFIGS.mkdir(parents=True, exist_ok=True)
     WORK_DATA.mkdir(parents=True, exist_ok=True)
 
+    # Study manifests and sample lists only — DomainPrograms stay in the repo.
     targets = {
         paths["project"]: WORK_CONFIGS / PROJECT_NAME,
         paths["project_smoke"]: WORK_CONFIGS / PROJECT_SMOKE_NAME,
         paths["healthy_csv"]: WORK_DATA / "PCaH.csv",
         paths["pca1_csv"]: WORK_DATA / "PCa1.csv",
-        paths["program_mc"]: WORK_CONFIGS / PROGRAM_MC,
-        paths["instance_context"]: WORK_CONFIGS / "pca1_5_instance_context.json",
     }
     for src, dst in targets.items():
         if dst.exists() and not force:
