@@ -2,6 +2,8 @@
 
 Plans in this folder are the **source of truth** for large features. Each plan maps to Azure DevOps work items.
 
+**Cursor Plan Mode:** When you finish planning in Cursor, copy the plan here (kebab-case filename, e.g. `my-feature.plan.md`). Do not rely on `~/.cursor/plans/` or `.cursor/plans/` alone — those are not committed unless promoted to this folder. See [`.cursor/rules/plan-mode-docs-plans.mdc`](../../.cursor/rules/plan-mode-docs-plans.mdc).
+
 ## Work item mapping
 
 | Plan file | ADO type | Suggested title | Child tasks (from plan frontmatter) |
@@ -9,6 +11,11 @@ Plans in this folder are the **source of truth** for large features. Each plan m
 | [`production-gpu-worker-layout.plan.md`](production-gpu-worker-layout.plan.md) | **Epic** | Production GPU worker layout | `define-layout`, `extractor-ci`, `pipeline-ci`, `install-release`, `gpu-node-runbook`, `docker-shared`, `worker-provision` |
 | [`devops-ci-cd-release.plan.md`](devops-ci-cd-release.plan.md) | **Epic** | DevOps CI/CD release pipeline | `me-release-ci`, `mp-release-ci`, `assemble-script`, `assemble-pipeline`, `deploy-pipeline`, `docs-ci-cd` |
 | [`alignment-qc-screening.plan.md`](alignment-qc-screening.plan.md) | **Epic** | Alignment QC screening and remediation | `screening-core`, `guardrail-enhance`, `cohort-report`, `trim-action`, `workflow-remediation`, `validate-docs` |
+| [`composable-pipeline-flexibility.plan.md`](composable-pipeline-flexibility.plan.md) | **Epic** | Composable pipeline profiles and MC paths | `profiles-config`, `scope-if-fix`, `programs-gene-enricher`, `programs-composable`, `validation-alignment`, `tests-docs`, `phase2-structural` |
+| [`typed-action-observability.plan.md`](typed-action-observability.plan.md) | **Epic** | Typed worker action observability | `infra-action-result`, `runner-result-code`, `cli-manifest-dmp-detector-mapper`, `strict-pipeline-schemas`, `validation-typed-outputs`, `sample-prep-result-codes`, `docs-observability` |
+| [`finish-typed-follow-ups.plan.md`](finish-typed-follow-ups.plan.md) | **Task** | CLI manifests + typed in-process handlers | `deps-methyl-domain`, `detector-manifest`, `centroid-manifest`, `enricher-manifest-collector`, `handlers-sample-prep`, `handlers-validation`, `inprocess-strict`, `tests-manifest-collectors` |
+| [`optional-observability-follow-ups.plan.md`](optional-observability-follow-ups.plan.md) | **Task** | Observability follow-ups (golden fixtures, CI, MC log) | `doc-result-code-dpl`, `golden-fixtures-test`, `ci-worker-tests`, `mc-action-run-log`, `handler-input-model` |
+| [`gene-feature-effect-size.plan.md`](gene-feature-effect-size.plan.md) | **Epic** | Biology-weighted gene/feature importance | `biology-weight-matrix`, `remove-legacy-mapper`, `canonical-gene-feature-formulas`, `fix-downstream-consumers`, `doc-biological-model` |
 
 Create each **Task** under its Epic in Azure DevOps Boards. Copy the task title from the plan `todos[].content` field. Mark tasks **Closed** when the corresponding code is merged.
 
@@ -63,6 +70,8 @@ Complete GPU worker production layout (AB#1100)
 ## Plan file format
 
 Plans use YAML frontmatter (`name`, `overview`, `todos`) plus markdown body. The `todos` list mirrors Azure DevOps Tasks. Update `status: completed` in the plan when merging if you use plans as living records.
+
+Filename convention: `kebab-case-from-plan-name.plan.md` in this directory (not the Cursor hash suffix from `~/.cursor/plans/`).
 
 ## Related docs
 

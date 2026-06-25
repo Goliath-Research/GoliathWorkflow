@@ -1,0 +1,32 @@
+---
+description: Promote Cursor Plan Mode artifacts to docs/plans for git traceability
+alwaysApply: true
+---
+
+# Plan Mode → docs/plans
+
+When using **Plan Mode** (or when the user attaches a `.plan.md` from Cursor):
+
+1. **After the plan is approved** (before or right after Build), copy it to `docs/plans/<kebab-case-name>.plan.md`.
+   - Derive the filename from the plan `name` frontmatter (e.g. `Gene Feature Effect Size` → `gene-feature-effect-size.plan.md`).
+   - Do **not** keep only `~/.cursor/plans/*_<hash>.plan.md` — that path is outside normal commits.
+
+2. **Normalize frontmatter** to match existing plans in `docs/plans/`:
+   - Keep `name`, `overview`, `todos` (with `id`, `content`, `status`).
+   - Add a `> **Status: …**` line under `overview` when implementation starts or finishes.
+   - Remove `isProject: false` (repo-local plans do not need it).
+   - Optionally add `azure_devops:` block for Epics (see `alignment-qc-screening.plan.md`).
+
+3. **Update `docs/plans/README.md`** — add a row to the work-item mapping table when the plan is epic-sized.
+
+4. **On merge / task completion** — set each finished todo to `status: completed` in the plan file in the same commit as the code when practical.
+
+5. **Commit messages** — reference the plan file and todo id (see `docs/plans/README.md`).
+
+Example promotion:
+
+```
+docs/plans/gene-feature-effect-size.plan.md
+```
+
+Reference in PR body: `Implements gene-feature-effect-size plan (biology-weight-matrix, …).`
