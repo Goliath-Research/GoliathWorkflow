@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from pydantic import BaseModel
+
 from workflow_definition_spec import WorkflowDefinitionSpec, WorkflowNodeSpec
 
 from .bindings import apply_catalog_scope_bindings, apply_output_bindings
@@ -23,8 +25,7 @@ _WORKERS = Path(__file__).resolve().parents[2] / "workers"
 if str(_WORKERS) not in sys.path:
     sys.path.insert(0, str(_WORKERS))
 
-
-ActionHandler = Callable[[str, str, Dict[str, Any]], Dict[str, Any]]
+ActionHandler = Callable[[str, str, Dict[str, Any]], BaseModel]
 
 
 class NodeExecutionError(RuntimeError):

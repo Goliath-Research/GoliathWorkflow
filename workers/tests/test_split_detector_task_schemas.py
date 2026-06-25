@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import pytest
 
+from methyl_worker.task_models.pipeline_models import (
+    BiomarkerFilterSummary,
+    BiomarkerFilterTaskOutput,
+)
 from methyl_worker.task_validation import (
     TaskValidationError,
     normalize_task_input,
@@ -77,20 +81,21 @@ def test_gene_select_input_requires_run_dir() -> None:
 
 
 def test_biomarker_filter_output_accepts_structured_payload() -> None:
-    validate_task_output(
+    out = validate_task_output(
         "validation.biomarker_filter",
         "validation.biomarker-filter",
-        {
-            "status": "ok",
-            "n_genes": 42,
-            "outputCsv": "/work/demo/gene_stability/biomarker_gene_pool.csv",
-            "biomarker_filter": {
-                "enabled": True,
-                "mode": "ppi_only",
-                "biomarker_pool_size": 42,
-            },
-        },
+        BiomarkerFilterTaskOutput(
+            status="ok",
+            n_genes=42,
+            outputCsv="/work/demo/gene_stability/biomarker_gene_pool.csv",
+            biomarker_filter=BiomarkerFilterSummary(
+                enabled=True,
+                mode="ppi_only",
+                biomarker_pool_size=42,
+            ),
+        ),
     )
+    assert out.n_genes == 42
 
 
 def test_gene_feature_select_input_strict() -> None:

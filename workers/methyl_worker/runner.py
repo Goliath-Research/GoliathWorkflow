@@ -71,8 +71,8 @@ class WorkerRunner:
         try:
             validate_task_input(claim.action_name, claim.capability, claim.input_json)
             execution = execute_task(claim.capability, claim.action_name, claim.input_json)
+            validate_task_output(claim.action_name, claim.capability, execution.output)
             output_payload = _output_payload(execution.output)
-            validate_task_output(claim.action_name, claim.capability, output_payload)
             ack = self.client.submit_result(
                 ne_id,
                 self.worker_id,

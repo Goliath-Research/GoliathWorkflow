@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
+from pydantic import BaseModel
+
 _DOMAIN = Path(__file__).resolve().parents[1] / "domain"
 _CONTRACT = Path(__file__).resolve().parents[1] / "contract"
 if str(_DOMAIN) not in sys.path:
@@ -26,7 +28,7 @@ from .scope import ScopeFrame, resolve_collection_bindings
 
 logger = logging.getLogger(__name__)
 
-ActionHandler = Callable[[str, str, Dict[str, Any]], Dict[str, Any]]
+ActionHandler = Callable[[str, str, Dict[str, Any]], BaseModel]
 
 
 @dataclass
@@ -60,14 +62,13 @@ class LocalWorkflowEngine:
             validate_task_output,
         )
 
-        def _run(capability: str, action_name: str, input_json: Dict[str, Any]) -> Dict[str, Any]:
+        def _run(capability: str, action_name: str, input_json: Dict[str, Any]) -> BaseModel:
             from methyl_worker.task_validation import normalize_task_input
 
             input_json = normalize_task_input(action_name, capability, input_json)
             validate_task_input(action_name, capability, input_json)
-            output = execute_task(capability, action_name, input_json)
-            validate_task_output(action_name, capability, output)
-            return output
+            execution = execute_task(capability, action_name, input_json)
+            return validate_task_output(action_name, capability, execution.output)
 
         return _run
 

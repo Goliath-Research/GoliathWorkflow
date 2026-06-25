@@ -17,6 +17,8 @@ for rel in ("workflow_engine/local", "workflow_engine/domain", "workflow_engine/
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+from pydantic import BaseModel
+
 from local.conditions import scope_var_truthy  # noqa: E402
 from local.engine import LocalWorkflowEngine  # noqa: E402
 from local.scheduler import SchedulerConfig  # noqa: E402
@@ -66,9 +68,13 @@ def test_if_then_else_branching() -> None:
     )
     executed: list[str] = []
 
-    def handler(_cap: str, action: str, _inp: Dict[str, Any]) -> Dict[str, Any]:
+    class _QcFailedOutput(BaseModel):
+        sampleId: str
+        status: str
+
+    def handler(_cap: str, action: str, _inp: Dict[str, Any]) -> BaseModel:
         executed.append(action)
-        return {"sampleId": "S1", "status": "QC_FAILED"}
+        return _QcFailedOutput(sampleId="S1", status="QC_FAILED")
 
     engine = LocalWorkflowEngine(
         handler=handler,

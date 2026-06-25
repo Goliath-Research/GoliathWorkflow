@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import pytest
+from pydantic import BaseModel
 
+from methyl_worker.task_models.pipeline_models import CentroidTaskOutput
 from methyl_worker.task_validation import (
     TASK_VALIDATION_ERROR_CODE,
     TaskValidationError,
@@ -30,17 +32,33 @@ def test_pipeline_centroid_input_rejects_missing_tool() -> None:
 
 
 def test_pipeline_centroid_output_accepts_minimal() -> None:
-    validate_task_output("pipeline.centroid", "methyl-centroid", {"status": "ok"})
+    out = validate_task_output(
+        "pipeline.centroid",
+        "methyl-centroid",
+        CentroidTaskOutput(status="ok"),
+    )
+    assert isinstance(out, CentroidTaskOutput)
+    assert out.status == "ok"
 
 
-def test_pipeline_centroid_output_rejects_bad_status_type() -> None:
+def test_pipeline_centroid_output_rejects_wrong_output_model() -> None:
+    from methyl_worker.task_models.validation_models import ValidationPlanTaskOutput
+
     with pytest.raises(TaskValidationError):
-        validate_task_output("pipeline.centroid", "methyl-centroid", {"status": 123})
+        validate_task_output(
+            "pipeline.centroid",
+            "methyl-centroid",
+            ValidationPlanTaskOutput(status="ok", n_iterations=1),
+        )
 
 
 def test_unknown_action_skips_validation() -> None:
+    class _AnyOutput(BaseModel):
+        anything: bool = True
+
     validate_task_input("unknown.action", None, {"anything": True})
-    validate_task_output("unknown.action", None, {"anything": True})
+    out = validate_task_output("unknown.action", None, _AnyOutput(anything=True))
+    assert out.anything is True
 
 
 def test_validation_plan_resolves_by_capability() -> None:
@@ -49,6 +67,23 @@ def test_validation_plan_resolves_by_capability() -> None:
         "validation.plan-iterations",
         {"projectPath": "/work/demo/project.json", "featureIterations": 3},
     )
+
+
+def test_validate_task_output_rejects_action_execution_result_wrapper() -> None:
+    from methyl_worker.action_execution import ActionExecutionResult
+    from methyl_worker.task_models.validation_models import ValidationPlanTaskOutput
+
+    wrapped = ActionExecutionResult(
+        result_code=0,
+        output=ValidationPlanTaskOutput(status="ok", n_iterations=0),
+    )
+    with pytest.raises(TaskValidationError) as exc:
+        validate_task_output(
+            "validation.plan_iterations",
+            "validation.plan-iterations",
+            wrapped,  # type: ignore[arg-type]
+        )
+    assert exc.value.direction == "output"
 
 
 def test_try_validate_returns_message() -> None:

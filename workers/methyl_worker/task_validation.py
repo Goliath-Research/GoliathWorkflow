@@ -18,8 +18,14 @@ class TaskValidationError(ValueError):
         self.action_name = action_name
 
 
-def _validate(model: type[BaseModel], payload: Dict[str, Any]) -> None:
+def _validate_input_model(model: type[BaseModel], payload: Dict[str, Any]) -> None:
     model.model_validate(payload)
+
+
+def _coerce_output_model(model: type[BaseModel], output: BaseModel) -> BaseModel:
+    if isinstance(output, model):
+        return output
+    return model.model_validate(output)
 
 
 def normalize_task_input(
@@ -47,7 +53,7 @@ def validate_task_input(
         return
     try:
         normalized = normalize_task_input(action_name, capability, input_json)
-        _validate(spec.load_input_model(), normalized)
+        _validate_input_model(spec.load_input_model(), normalized)
     except ValidationError as exc:
         raise TaskValidationError(
             f"input_json failed schema validation for {action_name}: {exc}",
@@ -59,16 +65,17 @@ def validate_task_input(
 def validate_task_output(
     action_name: str,
     capability: Optional[str],
-    output_json: Dict[str, Any],
-) -> None:
+    output: BaseModel,
+) -> BaseModel:
+    """Validate an ACTION output model; return the coerced registry output type."""
     spec = resolve_task_schema_spec(action_name, capability)
     if spec is None:
-        return
+        return output
     try:
-        _validate(spec.load_output_model(), output_json)
+        return _coerce_output_model(spec.load_output_model(), output)
     except ValidationError as exc:
         raise TaskValidationError(
-            f"output_json failed schema validation for {action_name}: {exc}",
+            f"output failed schema validation for {action_name}: {exc}",
             direction="output",
             action_name=action_name,
         ) from exc
@@ -89,10 +96,10 @@ def try_validate_task_input(
 def try_validate_task_output(
     action_name: str,
     capability: Optional[str],
-    output_json: Dict[str, Any],
+    output: BaseModel,
 ) -> Optional[str]:
     try:
-        validate_task_output(action_name, capability, output_json)
+        validate_task_output(action_name, capability, output)
         return None
     except TaskValidationError as exc:
         return str(exc)
