@@ -292,6 +292,16 @@
       "description": "Coarse pre-statistical gate: before running the statistical test, discard positions where |delta_mean| < delta_mean_reduction. Reduces the test set for expensive contexts (CHH). If null, no coarse gate is applied.",
       "title": "Delta Mean Reduction"
     },
+    "detection_mode": {
+      "default": "legacy",
+      "description": "legacy: run discovery plus inline classifier panel selection and optional pickle export. discovery_only: export dmps-{chr}-discovery.csv only; run methyl-dmp-select and pipeline.classifier separately.",
+      "enum": [
+        "legacy",
+        "discovery_only"
+      ],
+      "title": "Detection Mode",
+      "type": "string"
+    },
     "discovery_dynamic_dmp_cutoff_enabled": {
       "default": false,
       "description": "If True, apply the same effect_size elbow trim to the discovery export in dual mode. Default False: discovery keeps all biologically filtered DMPs sorted by importance.",
@@ -393,6 +403,12 @@
       "title": "Enable Platt Calibration",
       "type": "boolean"
     },
+    "export_classifier": {
+      "default": true,
+      "description": "When True in legacy mode, write classifier pickle after panel selection. Set False when pipeline.classifier trains the model.",
+      "title": "Export Classifier",
+      "type": "boolean"
+    },
     "export_sample_size_estimate": {
       "default": false,
       "description": "If True, add n_estimated_per_group column to DMP CSV: sample size per group needed for target_power (two-sample t-test, Cohen's d from delta_mean and combined variance).",
@@ -461,17 +477,6 @@
       "default": null,
       "description": "Path to a fixed DMP panel CSV (chromosome,position,context,...). If provided, bypasses statistical/biological discovery and uses only these positions (for production freeze).",
       "title": "Fixed Dmp Panel"
-    },
-    "detection_mode": {
-      "type": "string",
-      "enum": ["legacy", "discovery_only"],
-      "default": "legacy",
-      "description": "legacy runs inline classifier selection; discovery_only exports discovery CSV only."
-    },
-    "export_classifier": {
-      "type": "boolean",
-      "default": true,
-      "description": "When true in legacy mode, write classifier pickle after panel selection."
     },
     "lambda_var": {
       "default": 2.0,

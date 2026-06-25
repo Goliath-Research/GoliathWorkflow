@@ -1,21 +1,19 @@
 {
   "$defs": {
-    "StepOverrideConfig": {
+    "DetectorStepOverride": {
       "additionalProperties": false,
-      "description": "MC iteration overrides passed as stepOverride JSON.",
+      "description": "Scope fields and detection-step overrides folded into methyl-detector --step-override.",
       "properties": {
         "base_config": {
           "anyOf": [
             {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/$defs/SampleCohortOverride"
             },
             {
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Base Config"
+          "default": null
         },
         "chromosome": {
           "anyOf": [
@@ -28,6 +26,58 @@
           ],
           "default": null,
           "title": "Chromosome"
+        },
+        "classifier_dmp_selection": {
+          "anyOf": [
+            {
+              "enum": [
+                "elbow",
+                "featurecuts_validation"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Classifier Dmp Selection"
+        },
+        "classifier_export_margin_abs": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Classifier Export Margin Abs"
+        },
+        "classifier_export_margin_pct": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Classifier Export Margin Pct"
+        },
+        "classifier_export_max_dmps": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Classifier Export Max Dmps"
         },
         "comparison": {
           "anyOf": [
@@ -53,6 +103,45 @@
           "default": null,
           "title": "Context"
         },
+        "contexts": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contexts"
+        },
+        "fixed_dmp_panel": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fixed Dmp Panel"
+        },
+        "min_core_dmps": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Core Dmps"
+        },
         "output_dir": {
           "anyOf": [
             {
@@ -64,9 +153,59 @@
           ],
           "default": null,
           "title": "Output Dir"
+        },
+        "target_balanced_accuracy": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Balanced Accuracy"
         }
       },
-      "title": "StepOverrideConfig",
+      "title": "DetectorStepOverride",
+      "type": "object"
+    },
+    "SampleCohortOverride": {
+      "additionalProperties": false,
+      "description": "Incremental sample cohort changes (synthesized by worker or passed in base_config).",
+      "properties": {
+        "add_samples": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Add Samples"
+        },
+        "remove_samples": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remove Samples"
+        }
+      },
+      "title": "SampleCohortOverride",
       "type": "object"
     }
   },
@@ -196,7 +335,7 @@
     "stepOverride": {
       "anyOf": [
         {
-          "$ref": "#/$defs/StepOverrideConfig"
+          "$ref": "#/$defs/DetectorStepOverride"
         },
         {
           "type": "null"

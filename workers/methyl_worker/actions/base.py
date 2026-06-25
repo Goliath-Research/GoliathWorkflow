@@ -42,6 +42,7 @@ from ..task_models.pipeline_models import (
     GeneSelectTaskOutput,
     MapperTaskOutput,
 )
+from ..task_models.step_override_models import CentroidBaseConfigOverride, CentroidStepOverride
 
 logger = logging.getLogger(__name__)
 
@@ -129,12 +130,12 @@ class CliAction:
             add_samples = data.get("addSamples")
             remove_samples = data.get("removeSamples")
             if add_samples is not None or remove_samples is not None:
-                step_override = {
-                    "base_config": {
-                        "add_samples": list(add_samples or []),
-                        "remove_samples": list(remove_samples or []),
-                    }
-                }
+                step_override = CentroidStepOverride(
+                    base_config=CentroidBaseConfigOverride(
+                        add_samples=list(add_samples or []),
+                        remove_samples=list(remove_samples or []),
+                    )
+                ).model_dump(mode="json", exclude_none=True)
         if step_override is not None and data.get("stepOverride") is None:
             data = {**data, "stepOverride": step_override}
         for json_key, flag in self.argv_map.items():

@@ -121,27 +121,6 @@
       },
       "title": "FragmentomicsConfig",
       "type": "object"
-    },
-    "CycleScreeningConfig": {
-      "properties": {
-        "enabled": { "default": true, "type": "boolean" },
-        "read_length": { "minimum": 1, "type": "integer" },
-        "r2_start_window_cycles": { "default": 5, "minimum": 1, "type": "integer" },
-        "recovery_cycles": { "default": 10, "minimum": 1, "type": "integer" },
-        "r2_quality_threshold": { "default": 30.0, "type": "number" },
-        "max_trim_bases": { "default": 8, "minimum": 1, "type": "integer" },
-        "multi_region_min_separate_dips": { "default": 2, "minimum": 2, "type": "integer" }
-      },
-      "title": "CycleScreeningConfig",
-      "type": "object"
-    },
-    "OptionalGuardrailsConfig": {
-      "properties": {
-        "duplication_rate_max": { "maximum": 1.0, "minimum": 0.0, "type": "number" },
-        "min_pf_reads": { "minimum": 1, "type": "integer" }
-      },
-      "title": "OptionalGuardrailsConfig",
-      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -164,22 +143,6 @@
       ],
       "default": null,
       "description": "Optional bisulfite conversion rate QC from per-sample sidecar files."
-    },
-    "cycle_screening": {
-      "anyOf": [
-        { "$ref": "#/$defs/CycleScreeningConfig" },
-        { "type": "null" }
-      ],
-      "default": null,
-      "description": "Read 2 start cycle screening for remediation dispositions."
-    },
-    "optional_guardrails": {
-      "anyOf": [
-        { "$ref": "#/$defs/OptionalGuardrailsConfig" },
-        { "type": "null" }
-      ],
-      "default": null,
-      "description": "Additional guardrails (duplication rate, min PF reads)."
     },
     "fragmentomics": {
       "anyOf": [

@@ -642,41 +642,6 @@
       "title": "GuardrailMetric",
       "type": "object"
     },
-    "QcScreeningReport": {
-      "additionalProperties": false,
-      "properties": {
-        "disposition": { "type": "string" },
-        "read_length": { "type": "integer" },
-        "r2_start_cycle": { "type": "integer" },
-        "trim_front2": { "default": 0, "type": "integer" },
-        "r2_start_mean_quality": { "type": ["number", "null"] },
-        "r2_recovery_mean_quality": { "type": ["number", "null"] },
-        "dip_regions": { "items": { "type": "object" }, "type": "array" },
-        "message": { "type": "string" }
-      },
-      "required": ["disposition", "read_length", "r2_start_cycle", "message"],
-      "title": "QcScreeningReport",
-      "type": "object"
-    },
-    "QcAttemptRecord": {
-      "additionalProperties": false,
-      "properties": {
-        "attempt": { "type": "integer" },
-        "evaluated_at_utc": { "type": "string" },
-        "alignment_pass": { "type": "string" },
-        "reason": { "type": "string" },
-        "trigger_disposition": { "type": ["string", "null"] },
-        "trigger_action": { "type": ["string", "null"] },
-        "trim_front2": { "type": ["integer", "null"] },
-        "overall_pass": { "type": "boolean" },
-        "disposition": { "type": "string" },
-        "failed_guardrails": { "items": { "type": "string" }, "type": "array" },
-        "workflow_node_key": { "type": ["string", "null"] }
-      },
-      "required": ["attempt", "evaluated_at_utc", "alignment_pass", "reason", "overall_pass", "disposition"],
-      "title": "QcAttemptRecord",
-      "type": "object"
-    },
     "GuardrailReport": {
       "additionalProperties": false,
       "properties": {
@@ -698,9 +663,6 @@
         "sample_id": {
           "title": "Sample Id",
           "type": "string"
-        },
-        "screening": {
-          "$ref": "#/$defs/QcScreeningReport"
         }
       },
       "required": [
@@ -1188,15 +1150,6 @@
     "sample_id": {
       "title": "Sample Id",
       "type": "string"
-    },
-    "sample_prep_log_path": {
-      "title": "Sample Prep Log Path",
-      "type": "string"
-    },
-    "qc_history": {
-      "items": { "$ref": "#/$defs/QcAttemptRecord" },
-      "title": "Qc History",
-      "type": "array"
     },
     "summary_stats": {
       "$ref": "#/$defs/SummaryStats"

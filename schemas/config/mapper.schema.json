@@ -1,4 +1,73 @@
 {
+  "$defs": {
+    "BiologyWeightConfig": {
+      "description": "Per (feature \u00d7 hyper/hypo) weights for biology-aware DMP aggregation in MethylMapper.",
+      "properties": {
+        "exon_hyper": {
+          "default": 1.5,
+          "exclusiveMinimum": 0.0,
+          "title": "Exon Hyper",
+          "type": "number"
+        },
+        "exon_hypo": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Exon Hypo",
+          "type": "number"
+        },
+        "gene_body_hyper": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Gene Body Hyper",
+          "type": "number"
+        },
+        "gene_body_hypo": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Gene Body Hypo",
+          "type": "number"
+        },
+        "intron_hyper": {
+          "default": 0.5,
+          "exclusiveMinimum": 0.0,
+          "title": "Intron Hyper",
+          "type": "number"
+        },
+        "intron_hypo": {
+          "default": 0.7,
+          "exclusiveMinimum": 0.0,
+          "title": "Intron Hypo",
+          "type": "number"
+        },
+        "promoter_hyper": {
+          "default": 2.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Promoter Hyper",
+          "type": "number"
+        },
+        "promoter_hypo": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Promoter Hypo",
+          "type": "number"
+        },
+        "terminator_hyper": {
+          "default": 0.5,
+          "exclusiveMinimum": 0.0,
+          "title": "Terminator Hyper",
+          "type": "number"
+        },
+        "terminator_hypo": {
+          "default": 0.5,
+          "exclusiveMinimum": 0.0,
+          "title": "Terminator Hypo",
+          "type": "number"
+        }
+      },
+      "title": "BiologyWeightConfig",
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Pydantic model for step_config.mapper in the pipeline project JSON (and --config).\nAll fields optional; used to validate and access mapper options as config.grok_max_workers etc.",
   "properties": {
@@ -28,6 +97,17 @@
       ],
       "default": null,
       "title": "Azure Key Vault Url"
+    },
+    "biology_weights": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BiologyWeightConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "cache_backend": {
       "anyOf": [
@@ -88,6 +168,18 @@
       ],
       "default": null,
       "title": "Closest Gene Bed"
+    },
+    "csv_filename_pattern": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Csv Filename Pattern"
     },
     "csv_pattern": {
       "anyOf": [

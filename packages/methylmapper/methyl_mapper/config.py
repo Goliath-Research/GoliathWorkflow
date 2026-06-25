@@ -179,6 +179,7 @@ class MapperStepConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     csv_pattern: Optional[str] = None
+    csv_filename_pattern: Optional[str] = None
     output_dir: Optional[str] = None
     gtf: Optional[str] = None
     disease_term: Optional[str] = None
@@ -222,7 +223,7 @@ class MapperStepConfig(BaseModel):
     w_exon: Optional[float] = None
     w_intron: Optional[float] = None
     w_unknown: Optional[float] = None
-    biology_weights: Optional[Dict[str, float]] = None
+    biology_weights: Optional[BiologyWeightConfig] = None
 
 
 class MethylMapperConfig(BaseModel):

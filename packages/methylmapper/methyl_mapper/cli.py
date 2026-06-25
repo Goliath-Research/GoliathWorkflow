@@ -910,9 +910,7 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
     if config.w_unknown is not None:
         args.w_unknown = config.w_unknown
     if config.biology_weights is not None:
-        from .config import BiologyWeightConfig
-
-        args.biology_weights = BiologyWeightConfig.from_mapping(config.biology_weights)
+        args.biology_weights = config.biology_weights
 
 
 def _apply_mapper_step_override_to_args(args, step_override_path: Optional[Path]) -> None:

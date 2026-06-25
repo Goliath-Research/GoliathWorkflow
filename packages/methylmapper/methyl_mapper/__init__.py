@@ -6,7 +6,13 @@ main MethylPipeline run path. Legacy Azure SQL helpers are kept for backward
 compatibility but are not the primary interface.
 """
 
-from .config import MethylMapperConfig, MapperStepConfig, AzureSQLConfig, StoredProcedureConfig
+from .config import (
+    MethylMapperConfig,
+    MapperStepConfig,
+    AzureSQLConfig,
+    StoredProcedureConfig,
+    BiologyWeightConfig,
+)
 from .database import AzureSQLConnection
 from .models import DMPStaging, GeneMappingResult, SampleDMP
 from .mapper import DMPMapper
@@ -20,6 +26,7 @@ __all__ = [
     # Configuration
     "MethylMapperConfig",
     "MapperStepConfig",
+    "BiologyWeightConfig",
     "AzureSQLConfig",
     "StoredProcedureConfig",
     # Database

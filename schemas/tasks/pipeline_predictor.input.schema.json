@@ -1,23 +1,58 @@
 {
   "$defs": {
-    "StepOverrideConfig": {
+    "PredictorStepOverride": {
       "additionalProperties": false,
-      "description": "MC iteration overrides passed as stepOverride JSON.",
+      "description": "Optional predictor step overrides (--step-override).",
       "properties": {
-        "base_config": {
+        "debug": {
           "anyOf": [
             {
-              "additionalProperties": true,
-              "type": "object"
+              "type": "boolean"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Base Config"
+          "title": "Debug"
         },
-        "chromosome": {
+        "decision_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision Enabled"
+        },
+        "decision_min_confidence": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision Min Confidence"
+        },
+        "decision_min_margin": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Decision Min Margin"
+        },
+        "model_dir": {
           "anyOf": [
             {
               "type": "string"
@@ -27,9 +62,9 @@
             }
           ],
           "default": null,
-          "title": "Chromosome"
+          "title": "Model Dir"
         },
-        "comparison": {
+        "model_path": {
           "anyOf": [
             {
               "type": "string"
@@ -39,34 +74,10 @@
             }
           ],
           "default": null,
-          "title": "Comparison"
-        },
-        "context": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Context"
-        },
-        "output_dir": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Output Dir"
+          "title": "Model Path"
         }
       },
-      "title": "StepOverrideConfig",
+      "title": "PredictorStepOverride",
       "type": "object"
     }
   },
@@ -124,7 +135,7 @@
     "stepOverride": {
       "anyOf": [
         {
-          "$ref": "#/$defs/StepOverrideConfig"
+          "$ref": "#/$defs/PredictorStepOverride"
         },
         {
           "type": "null"

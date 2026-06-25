@@ -238,6 +238,25 @@
           "title": "Gene Scored Use Region Weight",
           "type": "boolean"
         },
+        "mapper_annotation_collapse_mode": {
+          "default": "priority",
+          "description": "How to collapse multi-feature mapper intersections to one row per locus in mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) or weight (legacy highest combined_weight wins).",
+          "title": "Mapper Annotation Collapse Mode",
+          "type": "string"
+        },
+        "mapper_annotation_unknown_fallback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "gene_body",
+          "description": "Parent feature bucket assigned to classifier loci with unknown or missing feature_type after mapper merge. Set null to leave unknown loci uncovered.",
+          "title": "Mapper Annotation Unknown Fallback"
+        },
         "mapper_gene_columns": {
           "items": {
             "type": "string"
@@ -671,6 +690,25 @@
           "default": 13,
           "title": "Generative Seed",
           "type": "integer"
+        },
+        "mapper_annotation_collapse_mode": {
+          "default": "priority",
+          "description": "How to collapse multi-feature mapper intersections to one row per locus in mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) or weight (legacy highest combined_weight wins).",
+          "title": "Mapper Annotation Collapse Mode",
+          "type": "string"
+        },
+        "mapper_annotation_unknown_fallback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "gene_body",
+          "description": "Parent feature bucket assigned to classifier loci with unknown or missing feature_type after mapper merge. Set null to leave unknown loci uncovered.",
+          "title": "Mapper Annotation Unknown Fallback"
         },
         "mapper_gene_columns": {
           "items": {
@@ -1340,6 +1378,25 @@
           "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
           "title": "Gene Scored Use Region Weight",
           "type": "boolean"
+        },
+        "mapper_annotation_collapse_mode": {
+          "default": "priority",
+          "description": "How to collapse multi-feature mapper intersections to one row per locus in mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) or weight (legacy highest combined_weight wins).",
+          "title": "Mapper Annotation Collapse Mode",
+          "type": "string"
+        },
+        "mapper_annotation_unknown_fallback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "gene_body",
+          "description": "Parent feature bucket assigned to classifier loci with unknown or missing feature_type after mapper merge. Set null to leave unknown loci uncovered.",
+          "title": "Mapper Annotation Unknown Fallback"
         },
         "mapper_gene_columns": {
           "items": {
@@ -2202,6 +2259,25 @@
       "description": "Legacy: CSV listing control/healthy samples. Use with disease_csv, or use cohorts instead.",
       "title": "Healthy Csv"
     },
+    "mapper_annotation_collapse_mode": {
+      "default": "priority",
+      "description": "How to collapse multi-feature mapper intersections to one row per locus in mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) or weight (legacy highest combined_weight wins).",
+      "title": "Mapper Annotation Collapse Mode",
+      "type": "string"
+    },
+    "mapper_annotation_unknown_fallback": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": "gene_body",
+      "description": "Parent feature bucket assigned to classifier loci with unknown or missing feature_type after mapper merge. Set null to leave unknown loci uncovered.",
+      "title": "Mapper Annotation Unknown Fallback"
+    },
     "mapper_gene_columns": {
       "description": "Per-gene columns to carry from mapper all-gene_name-combined.csv into mapper_dmp_annotations.csv and model bundle mapped-locus rows. Set [] to disable this join.",
       "items": {
@@ -2484,7 +2560,7 @@
     },
     "run_mapper_and_enricher": {
       "default": false,
-      "description": "If True, run methyl-mapper and methyl-enricher inside each MC iteration (optional; not used for --stability).",
+      "description": "Deprecated: use DomainProgram workflow for mapper/enricher. If True, run mapper/enricher inside each MC iteration.",
       "title": "Run Mapper And Enricher",
       "type": "boolean"
     },
@@ -2514,7 +2590,7 @@
     },
     "skip_enricher": {
       "default": false,
-      "description": "Skip methyl-enricher step even when run_mapper_and_enricher is true (useful when Grok API calls are too slow).",
+      "description": "Deprecated: use workflow IF/FOREACH for optional enricher. Skips enricher when run_mapper_and_enricher is true.",
       "title": "Skip Enricher",
       "type": "boolean"
     },
@@ -2627,6 +2703,57 @@
       "title": "Stability Featurecuts Enabled",
       "type": "boolean"
     },
+    "stability_gene_biomarker_filter_enabled": {
+      "default": false,
+      "description": "If true, apply in-process disease CSV filters and optional STRING PPI hub ranking to narrow the gene pool before MC gene FeatureCuts (no full methyl-enricher step).",
+      "title": "Stability Gene Biomarker Filter Enabled",
+      "type": "boolean"
+    },
+    "stability_gene_biomarker_min_degree": {
+      "default": 1,
+      "description": "Drop PPI nodes with degree below this threshold (0 keeps all nodes).",
+      "minimum": 0,
+      "title": "Stability Gene Biomarker Min Degree",
+      "type": "integer"
+    },
+    "stability_gene_biomarker_mode": {
+      "default": "ppi_only",
+      "description": "Biomarker gene pool mode: disease_only (CSV filters only), ppi_only or disease_and_ppi (disease filters then STRING PPI hub ranking).",
+      "enum": [
+        "disease_only",
+        "ppi_only",
+        "disease_and_ppi"
+      ],
+      "title": "Stability Gene Biomarker Mode",
+      "type": "string"
+    },
+    "stability_gene_biomarker_ppi_cache_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "STRING edge cache directory or file for MC biomarker PPI. Defaults to step_config.enricher.network_refinement.cache_path.",
+      "title": "Stability Gene Biomarker Ppi Cache Path"
+    },
+    "stability_gene_biomarker_ppi_top_hubs": {
+      "default": 100,
+      "description": "Max PPI hub genes passed to gene FeatureCuts pool.",
+      "minimum": 1,
+      "title": "Stability Gene Biomarker Ppi Top Hubs",
+      "type": "integer"
+    },
+    "stability_gene_biomarker_top_genes": {
+      "default": 150,
+      "description": "Cap genes entering PPI fetch after disease CSV filters (mirrors enricher top).",
+      "minimum": 1,
+      "title": "Stability Gene Biomarker Top Genes",
+      "type": "integer"
+    },
     "stability_gene_featurecuts_enabled": {
       "default": false,
       "description": "If true, each MC iteration runs methyl-mapper then gene FeatureCuts (ECDF OvR k-search) after detector, and stability aggregates stable genes from genes-classifier exports.",
@@ -2661,35 +2788,13 @@
       "description": "Cap the ranked mapper gene pool before MC gene FeatureCuts k-search. Limits feature-matrix width and k-search cost when mapper exports tens of thousands of genes.",
       "title": "Stability Gene Featurecuts Max Genes"
     },
-    "stability_mapper_enrich_disease": {
-      "anyOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": false,
-      "description": "When true, MC methyl-mapper iterations run Grok/OpenTargets disease enrichment. Default false for speed; production --freeze mapper uses project step_config.mapper.enrich_disease.",
-      "title": "Stability Mapper Enrich Disease"
-    },
-    "stability_gene_biomarker_filter_enabled": {
-      "default": false,
-      "description": "If true, apply in-process disease CSV filters and optional STRING PPI hub ranking to narrow the gene pool before MC gene FeatureCuts (no full methyl-enricher step).",
-      "title": "Stability Gene Biomarker Filter Enabled",
-      "type": "boolean"
-    },
-    "stability_gene_biomarker_mode": {
-      "default": "ppi_only",
-      "description": "Biomarker gene pool mode: disease_only (CSV filters only), ppi_only or disease_and_ppi (disease filters then STRING PPI hub ranking).",
-      "enum": [
-        "disease_only",
-        "ppi_only",
-        "disease_and_ppi"
-      ],
-      "title": "Stability Gene Biomarker Mode",
-      "type": "string"
+    "stability_gene_freq": {
+      "default": 0.5,
+      "description": "Minimum frequency for a gene to be considered stable. When stability_gene_featurecuts_enabled, counts genes from per-run classifier gene panels.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Stability Gene Freq",
+      "type": "number"
     },
     "stability_gene_region_hits": {
       "anyOf": [
@@ -2707,47 +2812,11 @@
       "description": "Optional region tokens (promoter, exon, intron, gene_body, terminator). Require corresponding mapper hits_* > 0 before biomarker filtering.",
       "title": "Stability Gene Region Hits"
     },
-    "stability_gene_biomarker_top_genes": {
-      "default": 150,
-      "description": "Cap genes entering PPI fetch after disease CSV filters (mirrors enricher top).",
-      "minimum": 1,
-      "title": "Stability Gene Biomarker Top Genes",
-      "type": "integer"
-    },
-    "stability_gene_biomarker_ppi_top_hubs": {
-      "default": 100,
-      "description": "Max PPI hub genes passed to gene FeatureCuts pool.",
-      "minimum": 1,
-      "title": "Stability Gene Biomarker Ppi Top Hubs",
-      "type": "integer"
-    },
-    "stability_gene_biomarker_min_degree": {
-      "default": 1,
-      "description": "Drop PPI nodes with degree below this threshold (0 keeps all nodes).",
-      "minimum": 0,
-      "title": "Stability Gene Biomarker Min Degree",
-      "type": "integer"
-    },
-    "stability_gene_biomarker_ppi_cache_path": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "STRING edge cache directory or file for MC biomarker PPI. Defaults to step_config.enricher.network_refinement.cache_path.",
-      "title": "Stability Gene Biomarker Ppi Cache Path"
-    },
-    "stability_gene_freq": {
-      "default": 0.5,
-      "description": "Minimum frequency for a gene to be considered stable. When stability_gene_featurecuts_enabled, counts genes from per-run classifier gene panels.",
-      "maximum": 1.0,
-      "minimum": 0.0,
-      "title": "Stability Gene Freq",
-      "type": "number"
+    "stability_mapper_enrich_disease": {
+      "default": false,
+      "description": "When true, MC methyl-mapper iterations run Grok/OpenTargets disease enrichment. Default false for speed; production --freeze mapper uses project step_config.mapper.enrich_disease.",
+      "title": "Stability Mapper Enrich Disease",
+      "type": "boolean"
     },
     "stability_min_balanced_accuracy": {
       "anyOf": [
@@ -2849,7 +2918,7 @@
         }
       ],
       "default": null,
-      "description": "Optional target BA for detector FeatureCuts: choose minimum top-k DMPs that reach this BA on detector validation splits.",
+      "description": "Optional target BA for detector FeatureCuts: choose minimum top-k DMPs that reach this BA on detector validation splits. Also enables binary-search k selection in MC gene FeatureCuts.",
       "title": "Stability Target Balanced Accuracy"
     },
     "stability_tier_core_freq": {

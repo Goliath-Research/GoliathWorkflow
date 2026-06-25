@@ -2,23 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .base import ActionOutputBase
-
-
-class StepOverrideConfig(BaseModel):
-    """MC iteration overrides passed as stepOverride JSON."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    base_config: Optional[Dict[str, Any]] = None
-    chromosome: Optional[str] = None
-    context: Optional[str] = None
-    comparison: Optional[str] = None
-    output_dir: Optional[str] = None
+from .step_override_models import (
+    CentroidStepOverride,
+    ClassifierStepOverride,
+    ClusterStepOverride,
+    DetectorStepOverride,
+    EnricherStepOverride,
+    MapperStepOverride,
+    PredictorStepOverride,
+    ProgressionStepOverride,
+)
 
 
 class CentroidTaskInput(BaseModel):
@@ -34,7 +32,7 @@ class CentroidTaskInput(BaseModel):
     outputDir: Optional[str] = None
     centroid1Dir: Optional[str] = None
     centroid2Dir: Optional[str] = None
-    stepOverride: Optional[StepOverrideConfig] = None
+    stepOverride: Optional[CentroidStepOverride] = None
     addSamples: Optional[List[str]] = None
     removeSamples: Optional[List[str]] = None
 
@@ -62,7 +60,7 @@ class DetectorTaskInput(BaseModel):
     outputDir: Optional[str] = None
     centroid1Dir: Optional[str] = None
     centroid2Dir: Optional[str] = None
-    stepOverride: Optional[StepOverrideConfig] = None
+    stepOverride: Optional[DetectorStepOverride] = None
     fixedDmpPanel: Optional[str] = None
 
 
@@ -88,7 +86,7 @@ class MapperTaskInput(BaseModel):
     context: Optional[str] = None
     comparison: Optional[str] = None
     outputDir: Optional[str] = None
-    stepOverride: Optional[StepOverrideConfig] = None
+    stepOverride: Optional[MapperStepOverride] = None
 
 
 class MapperTaskOutput(ActionOutputBase):
@@ -111,7 +109,7 @@ class EnricherTaskInput(BaseModel):
     group: Optional[str] = None
     comparison: Optional[str] = None
     outputDir: Optional[str] = None
-    stepOverride: Optional[StepOverrideConfig] = None
+    stepOverride: Optional[EnricherStepOverride] = None
 
 
 class EnricherTaskOutput(ActionOutputBase):
@@ -130,7 +128,7 @@ class ProgressionTaskInput(BaseModel):
     projectPath: Optional[str] = None
     orderedComparisonLabels: Optional[List[str]] = None
     outputDir: Optional[str] = None
-    stepOverride: Optional[StepOverrideConfig] = None
+    stepOverride: Optional[ProgressionStepOverride] = None
 
 
 class ProgressionTaskOutput(ActionOutputBase):
@@ -147,7 +145,7 @@ class ClassifierTaskInput(BaseModel):
     projectPath: Optional[str] = None
     group: Optional[str] = None
     outputDir: Optional[str] = None
-    stepOverride: Optional[StepOverrideConfig] = None
+    stepOverride: Optional[ClassifierStepOverride] = None
     fixedDmpPanel: Optional[str] = None
 
 
@@ -165,7 +163,7 @@ class PredictorTaskInput(BaseModel):
     projectPath: Optional[str] = None
     group: Optional[str] = None
     outputDir: Optional[str] = None
-    stepOverride: Optional[StepOverrideConfig] = None
+    stepOverride: Optional[PredictorStepOverride] = None
 
 
 class PredictorTaskOutput(ActionOutputBase):
@@ -182,7 +180,7 @@ class ClusterTaskInput(BaseModel):
     projectPath: Optional[str] = None
     group: Optional[str] = None
     outputDir: Optional[str] = None
-    stepOverride: Optional[StepOverrideConfig] = None
+    stepOverride: Optional[ClusterStepOverride] = None
 
 
 class ClusterTaskOutput(ActionOutputBase):
@@ -205,7 +203,7 @@ class DmpSelectTaskInput(BaseModel):
     comparison: Optional[str] = None
     discoveryCsv: Optional[str] = None
     outputDir: Optional[str] = None
-    stepOverride: Optional[StepOverrideConfig] = None
+    stepOverride: Optional[DetectorStepOverride] = None
 
     @model_validator(mode="after")
     def _project_required(self) -> "DmpSelectTaskInput":

@@ -1,21 +1,207 @@
 {
   "$defs": {
-    "StepOverrideConfig": {
+    "CentroidBaseConfigOverride": {
       "additionalProperties": false,
-      "description": "MC iteration overrides passed as stepOverride JSON.",
+      "description": "Optional centroid base_config fields merged by methyl-centroid --step-override.",
       "properties": {
-        "base_config": {
+        "add_samples": {
           "anyOf": [
             {
-              "additionalProperties": true,
-              "type": "object"
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Base Config"
+          "title": "Add Samples"
+        },
+        "binned_stats_bins": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Binned Stats Bins"
+        },
+        "cap_coverage": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap Coverage"
+        },
+        "cap_coverage_auto_n_cap": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap Coverage Auto N Cap"
+        },
+        "cap_coverage_n_cap": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap Coverage N Cap"
+        },
+        "cap_coverage_n_cap_iqr_multiplier": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap Coverage N Cap Iqr Multiplier"
+        },
+        "cap_coverage_n_cap_max_positions": {
+          "anyOf": [
+            {
+              "minimum": 1000,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap Coverage N Cap Max Positions"
+        },
+        "cap_coverage_n_cap_method": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap Coverage N Cap Method"
+        },
+        "cap_coverage_seed": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap Coverage Seed"
+        },
+        "max_sample_workers": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Sample Workers"
+        },
+        "min_coverage": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Min Coverage"
+        },
+        "remove_samples": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remove Samples"
+        },
+        "use_gpu": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Use Gpu"
+        },
+        "verbose": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Verbose"
+        }
+      },
+      "title": "CentroidBaseConfigOverride",
+      "type": "object"
+    },
+    "CentroidStepOverride": {
+      "additionalProperties": false,
+      "description": "MC / workflow overrides for methyl-centroid.",
+      "properties": {
+        "base_config": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CentroidBaseConfigOverride"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "chromosome": {
           "anyOf": [
@@ -28,6 +214,21 @@
           ],
           "default": null,
           "title": "Chromosome"
+        },
+        "chromosomes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chromosomes"
         },
         "comparison": {
           "anyOf": [
@@ -53,6 +254,33 @@
           "default": null,
           "title": "Context"
         },
+        "contexts": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contexts"
+        },
+        "continue_on_error": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Continue On Error"
+        },
         "output_dir": {
           "anyOf": [
             {
@@ -64,9 +292,21 @@
           ],
           "default": null,
           "title": "Output Dir"
+        },
+        "save_batch_summary": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Save Batch Summary"
         }
       },
-      "title": "StepOverrideConfig",
+      "title": "CentroidStepOverride",
       "type": "object"
     }
   },
@@ -214,7 +454,7 @@
     "stepOverride": {
       "anyOf": [
         {
-          "$ref": "#/$defs/StepOverrideConfig"
+          "$ref": "#/$defs/CentroidStepOverride"
         },
         {
           "type": "null"

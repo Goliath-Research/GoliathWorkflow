@@ -199,6 +199,25 @@
           "title": "Gene Scored Use Region Weight",
           "type": "boolean"
         },
+        "mapper_annotation_collapse_mode": {
+          "default": "priority",
+          "description": "How to collapse multi-feature mapper intersections to one row per locus in mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) or weight (legacy highest combined_weight wins).",
+          "title": "Mapper Annotation Collapse Mode",
+          "type": "string"
+        },
+        "mapper_annotation_unknown_fallback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "gene_body",
+          "description": "Parent feature bucket assigned to classifier loci with unknown or missing feature_type after mapper merge. Set null to leave unknown loci uncovered.",
+          "title": "Mapper Annotation Unknown Fallback"
+        },
         "mapper_gene_columns": {
           "items": {
             "type": "string"
@@ -632,6 +651,25 @@
           "default": 13,
           "title": "Generative Seed",
           "type": "integer"
+        },
+        "mapper_annotation_collapse_mode": {
+          "default": "priority",
+          "description": "How to collapse multi-feature mapper intersections to one row per locus in mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) or weight (legacy highest combined_weight wins).",
+          "title": "Mapper Annotation Collapse Mode",
+          "type": "string"
+        },
+        "mapper_annotation_unknown_fallback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "gene_body",
+          "description": "Parent feature bucket assigned to classifier loci with unknown or missing feature_type after mapper merge. Set null to leave unknown loci uncovered.",
+          "title": "Mapper Annotation Unknown Fallback"
         },
         "mapper_gene_columns": {
           "items": {
@@ -1180,6 +1218,25 @@
           "description": "Multiply per-locus weights by region_weight when building gene_directional_score features.",
           "title": "Gene Scored Use Region Weight",
           "type": "boolean"
+        },
+        "mapper_annotation_collapse_mode": {
+          "default": "priority",
+          "description": "How to collapse multi-feature mapper intersections to one row per locus in mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) or weight (legacy highest combined_weight wins).",
+          "title": "Mapper Annotation Collapse Mode",
+          "type": "string"
+        },
+        "mapper_annotation_unknown_fallback": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "gene_body",
+          "description": "Parent feature bucket assigned to classifier loci with unknown or missing feature_type after mapper merge. Set null to leave unknown loci uncovered.",
+          "title": "Mapper Annotation Unknown Fallback"
         },
         "mapper_gene_columns": {
           "items": {
