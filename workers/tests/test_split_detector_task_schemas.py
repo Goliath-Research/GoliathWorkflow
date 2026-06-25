@@ -78,13 +78,24 @@ def test_dmp_select_input_strips_unknown_keys_before_validate() -> None:
     )
 
 
-def test_gene_select_input_requires_run_dir() -> None:
+def test_gene_select_input_requires_project_and_defaults_run_dir() -> None:
     with pytest.raises(TaskValidationError):
         validate_task_input(
             "pipeline.gene_select",
             "methyl-gene-select",
-            {"tool": "MethylGeneSelect", "projectPath": "/work/demo/project.json"},
+            {"tool": "MethylGeneSelect"},
         )
+
+    normalized = normalize_task_input(
+        "pipeline.gene_select",
+        "methyl-gene-select",
+        {
+            "tool": "MethylGeneSelect",
+            "projectPath": "/work/demo/monte_carlo_runs/run_0001/project.json",
+            "biomarkerFilter": True,
+        },
+    )
+    assert normalized["runDir"] == "/work/demo/monte_carlo_runs/run_0001"
 
     validate_task_input(
         "pipeline.gene_select",

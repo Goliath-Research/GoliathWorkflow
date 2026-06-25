@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -229,16 +230,20 @@ class GeneSelectTaskInput(BaseModel):
     tool: str = "MethylGeneSelect"
     projectPath: Optional[str] = None
     project: Optional[str] = None
-    runDir: str
+    runDir: Optional[str] = None
     comparison: Optional[str] = None
     maxGenes: Optional[int] = Field(default=None, ge=1)
     maxDmps: Optional[int] = Field(default=None, ge=1)
     biomarkerFilter: bool = False
 
     @model_validator(mode="after")
-    def _project_required(self) -> "GeneSelectTaskInput":
+    def _project_and_run_dir(self) -> "GeneSelectTaskInput":
         if not (self.projectPath or self.project):
             raise ValueError("projectPath or project is required")
+        if not self.runDir:
+            project = self.projectPath or self.project
+            project_path = Path(str(project))
+            self.runDir = str(project_path.parent if project_path.suffix else project_path)
         return self
 
 

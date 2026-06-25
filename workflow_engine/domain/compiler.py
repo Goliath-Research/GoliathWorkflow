@@ -94,9 +94,12 @@ def _condition_var_from_expr(expr: str) -> str:
 
 
 def _ref_to_var(ref: str) -> str:
-    """Map a program ref to a flattened scope variable name."""
+    """Map a program ref to a scope variable name for ``${var.<name>}`` templates."""
     if ref.startswith("${") and ref.endswith("}"):
         return ref[2:-1].replace("var.", "")
+    # FOREACH item refs (iteration.runDir) resolve via nested scope: ${var.iteration.runDir}
+    if ref.startswith("iteration."):
+        return ref
     parts = ref.split(".")
     return parts[-1]
 

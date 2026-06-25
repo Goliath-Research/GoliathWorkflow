@@ -90,28 +90,36 @@ class ForeachIterationScopeTests(unittest.TestCase):
         self.assertTrue(scope["taskConfig"].startswith("{"))
 
     def test_gene_select_template_resolves_run_dir(self) -> None:
+        from methyl_worker.task_models.validation_models import ValidationIterationRef
         from methyl_worker.task_validation import normalize_task_input
+        from workflow_engine.domain.compiler import compile_domain_program_file
         from workflow_engine.local.resolver import resolve_input_template
         from workflow_engine.local.scope import flatten_foreach_element
 
-        iteration = {
-            "runId": "feature_run_0001",
-            "projectPath": "/work/demo/monte_carlo_runs/run_0001/project.json",
-            "runDir": "/work/demo/monte_carlo_runs/run_0001",
-            "taskConfig": {"iteration": 1},
-        }
+        iteration = ValidationIterationRef.model_validate(
+            {
+                "run_id": "feature_run_0001",
+                "project_json": "/work/demo/monte_carlo_runs/run_0001/project.json",
+                "run_dir": "/work/demo/monte_carlo_runs/run_0001",
+                "taskConfig": {"iteration": 1},
+            }
+        ).model_dump()
         scope = flatten_foreach_element(
             iteration, item_var="iteration", index_var="iterIndex", index=0
         )
-        template = {
-            "tool": "MethylGeneSelect",
-            "projectPath": "${var.projectPath}",
-            "runDir": "${var.runDir}",
-            "biomarkerFilter": False,
-        }
-        resolved = resolve_input_template(template, scope)
+        flat = dict(scope)
+        program_path = (
+            Path(__file__).resolve().parents[1]
+            / "domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json"
+        )
+        compiled = compile_domain_program_file(program_path, enrich_context=False)
+        gene_select = next(n for n in compiled.workflow.nodes if n.node_key == "gene_select")
+        resolved = resolve_input_template(gene_select.input_template, flat)
         payload = normalize_task_input("pipeline.gene_select", "pipeline.gene_select", resolved)
         self.assertEqual(payload["runDir"], "/work/demo/monte_carlo_runs/run_0001")
+        self.assertEqual(
+            payload["projectPath"], "/work/demo/monte_carlo_runs/run_0001/project.json"
+        )
 
 
 if __name__ == "__main__":

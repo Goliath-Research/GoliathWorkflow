@@ -70,6 +70,17 @@ def test_compiler_emits_root_scope_defaults():
     assert defaults.get("centroid1Dir") == "root"
 
 
+def test_compiler_preserves_iteration_dotted_refs_for_mc_gene_select():
+    program_path = (
+        Path(__file__).resolve().parents[1]
+        / "domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json"
+    )
+    result = compile_domain_program_file(program_path, enrich_context=False)
+    gene_select = next(n for n in result.workflow.nodes if n.node_key == "gene_select")
+    assert gene_select.input_template["runDir"] == "${var.iteration.runDir}"
+    assert gene_select.input_template["projectPath"] == "${var.iteration.projectPath}"
+
+
 def test_compiler_emits_validation_scope_output_bindings():
     program = DomainProgram.model_validate(
         {

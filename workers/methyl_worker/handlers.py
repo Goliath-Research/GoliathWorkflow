@@ -282,6 +282,14 @@ def _normalize_validation_iteration_payload(item: Dict[str, Any]) -> Dict[str, A
         payload["run_dir"] = payload.get("runDir")
     if payload.get("project_json") is None:
         payload["project_json"] = payload.get("projectJson") or payload.get("projectPath")
+    run_dir = payload.get("run_dir")
+    if run_dir is not None:
+        payload["run_dir"] = run_dir
+        payload["runDir"] = run_dir
+    project_json = payload.get("project_json")
+    if project_json is not None:
+        payload["project_json"] = project_json
+        payload["projectPath"] = project_json
     return payload
 
 

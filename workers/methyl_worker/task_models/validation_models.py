@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -29,6 +29,14 @@ class ValidationIterationRef(BaseModel):
     iteration: int = 0
     run_dir: Optional[str] = None
     project_json: Optional[str] = None
+
+    def model_dump(self, **kwargs: Any) -> Dict[str, Any]:
+        data = super().model_dump(**kwargs)
+        if self.run_dir is not None:
+            data["runDir"] = self.run_dir
+        if self.project_json is not None:
+            data["projectPath"] = self.project_json
+        return data
 
 
 class ValidationPlanTaskOutput(ActionOutputBase):
