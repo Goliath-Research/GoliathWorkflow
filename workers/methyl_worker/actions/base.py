@@ -51,7 +51,7 @@ InProcessCallable = Callable[..., BaseModel]
 
 
 def _handler_accepts_runtime(handler: InProcessCallable) -> bool:
-    """True when the handler declares a fourth positional or ``runtime`` parameter."""
+    """True when the handler can receive ``runtime`` (4th positional or keyword-only)."""
     try:
         sig = inspect.signature(handler)
     except (TypeError, ValueError):
@@ -69,6 +69,36 @@ def _handler_accepts_runtime(handler: InProcessCallable) -> bool:
         p.kind == inspect.Parameter.KEYWORD_ONLY and p.name == "runtime"
         for p in sig.parameters.values()
     )
+
+
+def _call_in_process_handler(
+    handler: InProcessCallable,
+    capability: str,
+    action_name: str,
+    input_model: BaseModel,
+    runtime: Any,
+) -> BaseModel:
+    """Invoke handler with runtime positional or keyword, matching its signature."""
+    if not _handler_accepts_runtime(handler):
+        return handler(capability, action_name, input_model)
+
+    try:
+        sig = inspect.signature(handler)
+    except (TypeError, ValueError):
+        return handler(capability, action_name, input_model, runtime)
+
+    if any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig.parameters.values()):
+        return handler(capability, action_name, input_model, runtime)
+
+    positional = [
+        p
+        for p in sig.parameters.values()
+        if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    ]
+    if len(positional) >= 4:
+        return handler(capability, action_name, input_model, runtime)
+
+    return handler(capability, action_name, input_model, runtime=runtime)
 
 
 DEFAULT_PIPELINE_ARGV_MAP: Dict[str, str] = {
@@ -252,19 +282,13 @@ class InProcessAction:
             input_json,
         )
         timer = ExecutionTimer()
-        if _handler_accepts_runtime(self.handler):
-            raw = self.handler(
-                self.entry.capability,
-                self.entry.action_name,
-                input_model,
-                runtime,
-            )
-        else:
-            raw = self.handler(
-                self.entry.capability,
-                self.entry.action_name,
-                input_model,
-            )
+        raw = _call_in_process_handler(
+            self.handler,
+            self.entry.capability,
+            self.entry.action_name,
+            input_model,
+            runtime,
+        )
         finished_at, duration_ms = timer.finish()
         if not isinstance(raw, BaseModel):
             raise TypeError(

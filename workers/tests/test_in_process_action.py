@@ -6,7 +6,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 from methyl_worker.action_catalog import find_catalog_entry
-from methyl_worker.actions.base import InProcessAction, _handler_accepts_runtime
+from methyl_worker.actions.base import InProcessAction, _call_in_process_handler, _handler_accepts_runtime
 from methyl_worker.task_models.runtime_models import TaskRuntimeContext
 
 
@@ -35,9 +35,64 @@ def _four_arg_handler(
     return _SampleOutput()
 
 
+def _keyword_only_runtime_handler(
+    _cap: str,
+    _name: str,
+    input: BaseModel,
+    *,
+    runtime: TaskRuntimeContext,
+) -> _SampleOutput:
+    return _SampleOutput()
+
+
 def test_handler_accepts_runtime_detects_signatures() -> None:
     assert _handler_accepts_runtime(_three_arg_handler) is False
     assert _handler_accepts_runtime(_four_arg_handler) is True
+    assert _handler_accepts_runtime(_keyword_only_runtime_handler) is True
+
+
+def test_call_in_process_handler_passes_keyword_only_runtime() -> None:
+    captured: dict[str, TaskRuntimeContext] = {}
+
+    def _capture(
+        _cap: str,
+        _name: str,
+        _input: BaseModel,
+        *,
+        runtime: TaskRuntimeContext,
+    ) -> _SampleOutput:
+        captured["runtime"] = runtime
+        return _SampleOutput()
+
+    runtime = TaskRuntimeContext.from_wire({"workflowNodeKey": "kw-only"})
+    _call_in_process_handler(_capture, "cap", "action", _SampleInput(projectPath="/p"), runtime)
+    assert captured["runtime"].workflowNodeKey == "kw-only"
+
+
+def test_in_process_action_supports_keyword_only_runtime_handler() -> None:
+    captured: dict[str, TaskRuntimeContext] = {}
+
+    def _capture(
+        _cap: str,
+        _name: str,
+        _input: BaseModel,
+        *,
+        runtime: TaskRuntimeContext,
+    ) -> _SampleOutput:
+        captured["runtime"] = runtime
+        return _SampleOutput()
+
+    entry = find_catalog_entry("validation.plan_iterations")
+    assert entry is not None
+    action = InProcessAction(_capture, entry=entry)
+    action.execute(
+        {
+            "projectPath": "/work/demo/project.json",
+            "featureIterations": 1,
+            "workflowNodeKey": "plan-kw",
+        }
+    )
+    assert captured["runtime"].workflowNodeKey == "plan-kw"
 
 
 def test_in_process_action_calls_three_arg_handler_without_runtime() -> None:
