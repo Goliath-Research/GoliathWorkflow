@@ -140,3 +140,6 @@ tools/methyl-config-editor/tests/MethylConfigEditorTests.res
 
 # Operator-local migration config (copy from scripts/migrate_work_layout.env.example)
 scripts/migrate_work_layout.env
+
+# Preflight manifest from migrate_work_layout.py --manifest-out (operator runtime output)
+migrate_work_layout.manifest.json

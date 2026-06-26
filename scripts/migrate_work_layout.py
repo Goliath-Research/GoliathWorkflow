@@ -72,10 +72,13 @@ class MigrationConfig:
     @property
     def path_remap(self) -> Dict[str, str]:
         slug = self.disease_slug
+        old = self.path_remap_old.rstrip("/")
+        samples_root = str(self.work_root / "samples")
         return {
-            self.path_remap_old: self.path_remap_new,
+            old: self.path_remap_new,
+            f"{old}/samples": samples_root,
             f"/lambda/nfs/Work/{slug}": self.path_remap_new,
-            f"/lambda/nfs/Work/{slug}/samples": str(self.work_root / "samples"),
+            f"/lambda/nfs/Work/{slug}/samples": samples_root,
         }
 
     @classmethod

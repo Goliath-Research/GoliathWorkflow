@@ -80,8 +80,19 @@ def test_apply_disease_slug_syncs_path_remap_prefixes() -> None:
     assert cfg.path_remap_old == "/work/breast-cancer"
     assert cfg.path_remap_new == "/work/projects/breast-cancer"
     assert cfg.path_remap["/work/breast-cancer"] == "/work/projects/breast-cancer"
+    assert cfg.path_remap["/work/breast-cancer/samples"] == "/work/samples"
     assert cfg.path_remap["/lambda/nfs/Work/breast-cancer"] == "/work/projects/breast-cancer"
     assert cfg.path_remap["/lambda/nfs/Work/breast-cancer/samples"] == "/work/samples"
+
+
+def test_remap_path_samples_under_old_disease_root(layout: MigrationConfig) -> None:
+    """Longest-prefix remap must send old disease /samples to flat /work/samples."""
+    from methyl_validation.path_remap import remap_path_string
+
+    old_samples = f"{layout.path_remap_old}/samples/SAMPLE_ID"
+    assert remap_path_string(old_samples, layout.path_remap) == str(
+        layout.work_root / "samples" / "SAMPLE_ID"
+    )
 
 
 def test_remap_study_manifest_and_artifacts(layout: MigrationConfig) -> None:
