@@ -42,8 +42,9 @@ def tracked_paths() -> list[str]:
 
 
 def main() -> int:
+    paths = tracked_paths()
     violations: list[tuple[str, list[str]]] = []
-    for path in tracked_paths():
+    for path in paths:
         issues = path_issues(path)
         if issues:
             violations.append((path, issues))
@@ -60,7 +61,7 @@ def main() -> int:
         )
         return 1
 
-    print(f"Windows path check passed ({len(tracked_paths())} tracked paths).")
+    print(f"Windows path check passed ({len(paths)} tracked paths).")
     return 0
 
 
