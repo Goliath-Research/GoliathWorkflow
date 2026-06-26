@@ -40,6 +40,45 @@ class OptionalGuardrailsConfig(BaseModel):
     )
 
 
+class AlignmentGuardrailsConfig(BaseModel):
+    """Alignment-layer guardrails from Picard dedup, GC bias, and optional samtools flagstat."""
+
+    enabled: bool = Field(default=False)
+    min_mapping_rate: Optional[float] = Field(
+        default=0.98,
+        ge=0.0,
+        le=1.0,
+        description="Fail when derived mapping_rate from dedup metrics is below this.",
+    )
+    max_secondary_supplementary_rate: Optional[float] = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description="Fail when SECONDARY_OR_SUPPLEMENTARY_RDS / reads_examined exceeds this.",
+    )
+    min_gc_coverage_uniformity: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="When set, fail when min/median NORMALIZED_COVERAGE across GC bins is below this.",
+    )
+    flagstat_enabled: bool = Field(
+        default=True,
+        description="When true and BAM present, run samtools flagstat and evaluate pairing guardrails.",
+    )
+    min_properly_paired_rate: Optional[float] = Field(
+        default=0.90,
+        ge=0.0,
+        le=1.0,
+        description="Fail when flagstat properly_paired_rate is below this.",
+    )
+    max_supplementary_rate_flagstat: Optional[float] = Field(
+        default=0.02,
+        ge=0.0,
+        le=1.0,
+        description="Fail when flagstat supplementary_rate exceeds this.",
+    )
+
+
 class BisulfiteConversionConfig(BaseModel):
     """Quantitative bisulfite conversion QC (sidecar JSON or deamination proxy)."""
 
@@ -138,6 +177,21 @@ class AlignmentQCConfig(BaseModel):
         default=None,
         description="Additional guardrails (duplication rate, min PF reads). Opt in via step_config.",
     )
+    alignment_guardrails: Optional[AlignmentGuardrailsConfig] = Field(
+        default=None,
+        description="Alignment-layer guardrails (mapping rate, GC uniformity, flagstat pairing).",
+    )
+
+    @field_validator("alignment_guardrails", mode="before")
+    @classmethod
+    def _coerce_alignment_guardrails(cls, value):  # noqa: ANN001
+        if value is None:
+            return None
+        if isinstance(value, AlignmentGuardrailsConfig):
+            return value
+        if isinstance(value, dict):
+            return AlignmentGuardrailsConfig.model_validate(value)
+        return value
 
     @field_validator("cycle_screening", mode="before")
     @classmethod

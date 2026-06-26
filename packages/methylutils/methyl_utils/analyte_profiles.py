@@ -58,6 +58,14 @@ def profile_for_analyte(analyte: str) -> Dict[str, Dict[str, Any]]:
                 "auto_profile_from_analyte": True,
                 "fragmentomics": {"enabled": True, "profile": "cfdna"},
                 "bisulfite_conversion": bisulfite_default,
+                "alignment_guardrails": {
+                    "enabled": True,
+                    "min_mapping_rate": 0.98,
+                    "max_secondary_supplementary_rate": 0.05,
+                    "flagstat_enabled": True,
+                    "min_properly_paired_rate": 0.90,
+                    "max_supplementary_rate_flagstat": 0.02,
+                },
             },
             "fragmentomics": {
                 "enabled": True,
@@ -83,6 +91,14 @@ def profile_for_analyte(analyte: str) -> Dict[str, Dict[str, Any]]:
             "alignment_qc": {
                 "auto_profile_from_analyte": False,
                 "bisulfite_conversion": bisulfite_default,
+                "alignment_guardrails": {
+                    "enabled": True,
+                    "min_mapping_rate": 0.98,
+                    "max_secondary_supplementary_rate": 0.05,
+                    "flagstat_enabled": True,
+                    "min_properly_paired_rate": 0.90,
+                    "max_supplementary_rate_flagstat": 0.02,
+                },
             },
             "fragmentomics": {
                 "enabled": False,

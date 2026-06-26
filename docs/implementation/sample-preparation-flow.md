@@ -114,16 +114,30 @@ GPU/Docker setup: [`workers/docs/parabricks.md`](../../workers/docs/parabricks.m
 | `guardrails.overall_pass` | Single boolean bound to workflow `qcPass` |
 | `qc_history` | Append-only list of evaluations (initial + post-remediation retries) |
 | `fragmentomics_metrics` | cfDNA insert-size metrics when enabled |
+| `alignment_stats` | Derived mapping rate, secondary/supplementary rate, GC uniformity |
+| `alignment_flagstat` | samtools flagstat counters and pairing rates (when enabled) |
+
+## QC layers
+
+`methyl-qc` evaluates three complementary layers before extraction:
+
+| Layer | What it gates | Primary source |
+|-------|---------------|----------------|
+| **Sequencing / library** | Q30, cycles, GC dropout, insert size, artifacts | Parabricks `qc-metrics` |
+| **Alignment** | Mapping rate, secondary/supplementary burden, GC coverage uniformity, properly paired rate | Picard dedup + `samtools flagstat` |
+| **Methylation** | CpG depth, conversion, chromosome uniformity | `methyl-extraction-qc` (after extract) |
+
+The workflow variable `qcPass` covers layers 1 and 2. Extraction QC (`extractionQcPass`) covers layer 3.
 
 ## Guardrails reference
 
 ### Guardrail boundary
 
-`guardrails.overall_pass` is the **logical AND** of all evaluated checks in `guardrails.details`. Optional guardrails (`duplication_rate_max`, `min_pf_reads`) are **off by default** until set in `step_config.alignment_qc.optional_guardrails`. When enabled, cfDNA fragmentomics and bisulfite conversion checks add to the AND via [`AlignmentQCConfig`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py) or analyte profiles ([`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md)).
+`guardrails.overall_pass` is the **logical AND** of all evaluated checks in `guardrails.details`. Optional guardrails (`duplication_rate_max`, `min_pf_reads`) are **off by default** until set in `step_config.alignment_qc.optional_guardrails`. **Alignment guardrails** are enabled by default for `cfdna` and `buffy_coat` via analyte profiles (`alignment_guardrails.enabled: true`). cfDNA fragmentomics and bisulfite conversion checks add to the AND when enabled via [`AlignmentQCConfig`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py) or [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md).
 
-Core WGBS thresholds are defined in [`wgbs_parabricks_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py).
+Core sequencing thresholds are defined in [`wgbs_parabricks_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py). Alignment-layer logic lives in [`alignment_derived_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/alignment_derived_qc.py) and [`bam_flagstat.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/bam_flagstat.py).
 
-### Core alignment guardrails
+### Core sequencing / library guardrails
 
 | Metric | Normal range (default) | Source | If fail | Possible fix |
 |--------|------------------------|--------|---------|--------------|
@@ -143,6 +157,26 @@ Core WGBS thresholds are defined in [`wgbs_parabricks_qc.py`](../../packages/met
 |--------|------------|---------|---------|--------------|
 | `duplication_rate` | `optional_guardrails.duplication_rate_max` | Off (e.g. 0.25 when set) | PCR over-amplification | More input DNA; **not fixable by trim** |
 | `min_pf_reads` | `optional_guardrails.min_pf_reads` | Off (e.g. 1_000_000 when set) | Under-sequenced | Re-sequence |
+
+### Alignment-layer guardrails (analyte profile default)
+
+Enabled when `step_config.alignment_qc.alignment_guardrails.enabled` is true (default for `cfdna` and `buffy_coat` via analyte profile).
+
+| Metric | Config key | Profile default | If fail | Possible fix |
+|--------|------------|-----------------|---------|--------------|
+| `mapping_rate` | `min_mapping_rate` | ≥ 0.98 | Low mapped fraction | Check reference, contamination, library quality |
+| `secondary_supplementary_rate` | `max_secondary_supplementary_rate` | ≤ 0.05 | Chimeric/split mappings | Investigate library prep; re-sequence |
+| `gc_coverage_uniformity` | `min_gc_coverage_uniformity` | Off by default (set e.g. 0.5 after cohort calibration) | Localized dropout | Compare to extraction QC |
+| `properly_paired_rate` | `min_properly_paired_rate` | ≥ 0.90 | Pairing failure | Re-align; check insert size and sequencer |
+| `supplementary_rate_flagstat` | `max_supplementary_rate_flagstat` | ≤ 0.02 | Supplementary alignments | Same as secondary/supplementary |
+
+Phase 1 metrics are derived from Picard dedup + GC bias details. Phase 2 runs `samtools flagstat` on `{sample_id}.bam` during `methyl_qc` (requires **samtools** on GPU workers). Calibrate thresholds on a cohort with:
+
+```bash
+python scripts/calibrate_alignment_guardrails.py --qc-dir /work/projects/prostate-cancer/alignment_qc
+```
+
+Disable alignment gates per project: `"alignment_guardrails": {"enabled": false}`.
 
 ### Bisulfite conversion (when enabled)
 
@@ -330,6 +364,15 @@ Example `step_config.alignment_qc` snippet:
       "enabled": true,
       "r2_quality_threshold": 30,
       "max_trim_bases": 8
+    },
+    "alignment_guardrails": {
+      "enabled": true,
+      "min_mapping_rate": 0.98,
+      "max_secondary_supplementary_rate": 0.05,
+      "min_gc_coverage_uniformity": 0.5,
+      "flagstat_enabled": true,
+      "min_properly_paired_rate": 0.90,
+      "max_supplementary_rate_flagstat": 0.02
     }
   }
 }

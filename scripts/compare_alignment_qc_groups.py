@@ -38,6 +38,11 @@ GUARDRAIL_SCALAR_KEYS = (
     "median_insert_bp",
     "deamination_qscore",
     "oxog_qscore",
+    "mapping_rate",
+    "secondary_supplementary_rate",
+    "gc_coverage_uniformity",
+    "properly_paired_rate",
+    "supplementary_rate_flagstat",
 )
 
 
@@ -101,9 +106,24 @@ def flatten_qc_json(qc_path: Path) -> Dict[str, Any]:
         row[f"guardrail_{key}_pass"] = passed
 
     frag = payload.get("fragmentomics_metrics") or {}
-    for k in ("median_insert_bp", "nucleosome_peak_bp", "short_fragment_fraction"):
+    for k in ("median_insert_size", "nucleosome_peak_bp", "short_fragment_fraction"):
         if k in frag:
             row[f"fragmentomics_{k}"] = frag[k]
+
+    align = payload.get("alignment_stats") or {}
+    for k in (
+        "reads_examined",
+        "mapping_rate",
+        "secondary_supplementary_rate",
+        "gc_coverage_uniformity",
+    ):
+        if k in align:
+            row[f"alignment_stats_{k}"] = align[k]
+
+    flagstat = payload.get("alignment_flagstat") or {}
+    for k in ("properly_paired_rate", "supplementary_rate", "mapped_rate"):
+        if k in flagstat:
+            row[f"alignment_flagstat_{k}"] = flagstat[k]
 
     return row
 

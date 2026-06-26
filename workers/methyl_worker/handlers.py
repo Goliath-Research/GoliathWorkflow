@@ -129,6 +129,7 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
             bisulfite_conversion=cfg.bisulfite_conversion,
             cycle_screening=cfg.cycle_screening,
             optional_guardrails=cfg.optional_guardrails,
+            alignment_guardrails=cfg.alignment_guardrails,
             write_context=write_ctx,
         )
         qc_path = Path(out_dir) / f"{sample_path.name}.json"

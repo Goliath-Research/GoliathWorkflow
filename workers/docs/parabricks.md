@@ -8,6 +8,7 @@ Sample prep alignment (`sample.parabricks_fq2bam`) runs **NVIDIA Clara Parabrick
 - [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) so `docker run --gpus all` exposes GPUs
 - Docker CLI on PATH
 - Parabricks image pulled locally (licensed via NGC)
+- **samtools** on the worker host PATH (used by `sample.methyl_qc` for BAM flagstat alignment guardrails when `alignment_guardrails.flagstat_enabled` is true)
 
 ## Configuration
 

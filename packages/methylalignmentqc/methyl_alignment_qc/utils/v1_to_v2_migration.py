@@ -199,6 +199,8 @@ def v1_model_to_v2(
         duplication_histogram=DuplicationHistogramV2(rows=dup_rows),
         summary_stats=v1.summary_stats,
         guardrails=v1.guardrails,
+        alignment_stats=v1.alignment_stats,
+        alignment_flagstat=v1.alignment_flagstat,
         fragmentomics_metrics=v1.fragmentomics_metrics,
         bisulfite_conversion_metrics=v1.bisulfite_conversion_metrics,
         qc_history=v1.qc_history,

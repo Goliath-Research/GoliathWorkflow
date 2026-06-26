@@ -10,6 +10,8 @@ from .sample_qc import (
     ConversionLog,
     DuplicationMetric,
     BisulfiteConversionMetrics,
+    AlignmentFlagstat,
+    AlignmentStats,
     FragmentomicsMetrics,
     GCBiasSummary,
     GuardrailReport,
@@ -167,6 +169,8 @@ class ExportedSampleQCV2Payload(BaseModel):
     duplication_histogram: DuplicationHistogramV2
     summary_stats: SummaryStats
     guardrails: GuardrailReport
+    alignment_stats: Optional[AlignmentStats] = None
+    alignment_flagstat: Optional[AlignmentFlagstat] = None
     fragmentomics_metrics: Optional[FragmentomicsMetrics] = None
     bisulfite_conversion_metrics: Optional[BisulfiteConversionMetrics] = None
     qc_history: Optional[List[QcAttemptRecord]] = None

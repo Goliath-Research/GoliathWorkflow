@@ -73,19 +73,6 @@
           "description": "Human-readable meaning of this cohort or stage (e.g. clinical stage); do not put file paths here.",
           "title": "Description"
         },
-        "order_index": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Optional numeric ordering hint for progression synthesis.",
-          "title": "Order Index"
-        },
         "label": {
           "description": "Group label; used for centroid subdir name (e.g. healthy, pcancer)",
           "title": "Label",
@@ -103,6 +90,19 @@
           "default": null,
           "description": "Optional path to CSV with columns mapping sample_path or sample name to level (path, level). When set, this group is expanded into one centroid dir per level; dir name is {label}_{level}.",
           "title": "Level Labels Path"
+        },
+        "order_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional numeric ordering hint for progression synthesis when JSON order is insufficient.",
+          "title": "Order Index"
         },
         "sample_paths": {
           "description": "List of sample directory paths, or paths to files containing one path per line, JSON array, or (when samples_base_path is set) one sample name per line / single column CSV.",
@@ -239,7 +239,7 @@
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Study manifest for a MethylPipeline project (cohorts, comparisons, paths). Tool parameters belong in pipeline profiles (actionConfig) and site manifest — not step_config.",
+  "description": "Single source of truth for a MethylPipeline project.\n\nPreferred schema:\n- `controls` / `diseases` (or singular `control` / `disease`)\n- explicit `comparisons`\n- shared `chromosomes`, `contexts`, `path_remap`\n- tool parameters live in pipeline profiles (`actionConfig`) and site manifest\n\nBackward compatibility is retained for `group1`/`group2`, flat `groups`,\nand a few historically nested keys that are promoted to the top level at\nload time. ``step_config`` is not accepted (use profiles + site manifest).",
   "properties": {
     "batch": {
       "anyOf": [
@@ -435,10 +435,58 @@
       "description": "Prefix replacement when sample paths moved (e.g. NAS); longest match applied",
       "title": "Path Remap"
     },
+    "progression_labels": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Explicit comparison tokens when progression_order is 'explicit'.",
+      "title": "Progression Labels"
+    },
+    "progression_order": {
+      "anyOf": [
+        {
+          "enum": [
+            "from_stages",
+            "from_comparisons",
+            "explicit"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How to order disease stages for progression synthesis. Default: from_stages when nested stages exist.",
+      "title": "Progression Order"
+    },
     "project_name": {
       "description": "Project identifier for metadata and naming (e.g. PCa_vs_Healthy)",
       "title": "Project Name",
       "type": "string"
+    },
+    "regulatory": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Regulatory / analyte metadata (primary_analyte, stage, intended_use_summary, \u2026).",
+      "title": "Regulatory"
     },
     "samples_base_path": {
       "anyOf": [
@@ -453,36 +501,18 @@
       "description": "Base directory to resolve sample names. When set, group sample_paths that point to files can list only sample folder names (one per line or single-column CSV); each is resolved to this path.",
       "title": "Samples Base Path"
     },
-    "progression_labels": {
-      "anyOf": [
-        {"items": {"type": "string"}, "type": "array"},
-        {"type": "null"}
-      ],
-      "default": null,
-      "title": "Progression Labels"
-    },
-    "progression_order": {
-      "anyOf": [
-        {"enum": ["from_stages", "from_comparisons", "explicit"], "type": "string"},
-        {"type": "null"}
-      ],
-      "default": null,
-      "title": "Progression Order"
-    },
-    "regulatory": {
-      "anyOf": [
-        {"additionalProperties": true, "type": "object"},
-        {"type": "null"}
-      ],
-      "default": null,
-      "title": "Regulatory"
-    },
     "validation_partitions": {
       "anyOf": [
-        {"additionalProperties": true, "type": "object"},
-        {"type": "null"}
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
       ],
       "default": null,
+      "description": "Cohort partition CSV paths for validation governance (development_train, locked_test, \u2026).",
       "title": "Validation Partitions"
     }
   },

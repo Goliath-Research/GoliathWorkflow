@@ -1007,18 +1007,6 @@
       "default": null,
       "title": "Min Gene Z"
     },
-    "min_mean_effect_size": {
-      "anyOf": [
-        {
-          "type": "number"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Min Mean Effect Size"
-    },
     "min_unique_dmps": {
       "anyOf": [
         {

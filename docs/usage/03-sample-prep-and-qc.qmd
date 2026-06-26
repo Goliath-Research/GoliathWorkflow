@@ -147,11 +147,18 @@ Configure under `step_config.alignment_qc` in the project JSON:
       "enabled": true,
       "r2_quality_threshold": 30,
       "max_trim_bases": 8
+    },
+    "alignment_guardrails": {
+      "enabled": true,
+      "min_mapping_rate": 0.98,
+      "flagstat_enabled": true,
+      "min_properly_paired_rate": 0.90
     }
   }
 }
 ```
 
+- **Alignment guardrails:** mapping rate, secondary/supplementary rate, GC uniformity (Picard-derived), and properly paired rate (`samtools flagstat` on the BAM). Enabled by default for `cfdna` and `buffy_coat` via analyte profile. See [implementation guide](../../implementation/sample-preparation-flow.md).
 - **Bisulfite conversion:** reads `bisulfite_conversion.json` sidecar when present; otherwise may use deamination qscore as a qualitative proxy.
 - **cfDNA fragmentomics:** when `primary_analyte` is `cfdna`, insert-size histogram guardrails can flag abnormal fragment profiles before extraction.
 

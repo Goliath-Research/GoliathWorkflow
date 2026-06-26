@@ -74,9 +74,20 @@ Optional config under `step_config.alignment_qc`:
 ```json
 {
   "cycle_screening": { "r2_quality_threshold": 30, "max_trim_bases": 8 },
-  "optional_guardrails": { "duplication_rate_max": 0.25, "min_pf_reads": 1000000 }
+  "optional_guardrails": { "duplication_rate_max": 0.25, "min_pf_reads": 1000000 },
+  "alignment_guardrails": {
+    "enabled": true,
+    "min_mapping_rate": 0.98,
+    "max_secondary_supplementary_rate": 0.05,
+    "min_gc_coverage_uniformity": 0.5,
+    "flagstat_enabled": true,
+    "min_properly_paired_rate": 0.90,
+    "max_supplementary_rate_flagstat": 0.02
+  }
 }
 ```
+
+Alignment guardrails are enabled by default for `cfdna` and `buffy_coat` via the analyte profile. Tune thresholds with `scripts/calibrate_alignment_guardrails.py`. GPU workers need **samtools** on PATH when `flagstat_enabled` is true.
 
 Each QC run appends to `qc_history` in the export JSON. Retry QC (after `sample.trim_fastq` + forced realign) must pass `qcAttempt`, `qcAttemptReason`, and `remediationTrigger` in the worker task input. SamplePrep actions also append to `{sampleDir}/{sampleId}.sample_prep_log.jsonl`.
 

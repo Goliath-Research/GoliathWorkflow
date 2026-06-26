@@ -148,6 +148,29 @@ class SummaryStats(BaseModel):
     optical_duplicates: int
 
 
+class AlignmentStats(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    reads_examined: int
+    unmapped_reads: int
+    secondary_supplementary_reads: int
+    mapping_rate: float
+    secondary_supplementary_rate: float
+    gc_coverage_uniformity: Optional[float] = None
+
+
+class AlignmentFlagstat(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    total_reads: Optional[int] = None
+    mapped_reads: Optional[int] = None
+    properly_paired_reads: Optional[int] = None
+    supplementary_reads: Optional[int] = None
+    secondary_reads: Optional[int] = None
+    duplicate_reads: Optional[int] = None
+    properly_paired_rate: Optional[float] = None
+    supplementary_rate: Optional[float] = None
+    mapped_rate: Optional[float] = None
+
+
 class GuardrailMetric(BaseModel):
     model_config = ConfigDict(extra="forbid")
     value: float
@@ -244,6 +267,11 @@ class GuardrailDetails(BaseModel):
     oxog_qscore: GuardrailMetric
     duplication_rate: Optional[GuardrailMetric] = None
     min_pf_reads: Optional[GuardrailMetric] = None
+    mapping_rate: Optional[GuardrailMetric] = None
+    secondary_supplementary_rate: Optional[GuardrailMetric] = None
+    gc_coverage_uniformity: Optional[GuardrailMetric] = None
+    properly_paired_rate: Optional[GuardrailMetric] = None
+    supplementary_rate_flagstat: Optional[GuardrailMetric] = None
     fragmentomics: Optional[FragmentomicsGuardrailDetails] = None
     bisulfite_conversion: Optional[Dict[str, GuardrailMetric]] = None
 
@@ -289,6 +317,8 @@ class ExportedSampleQCPayload(ParabricksMetricsPayload):
     duplication_histogram: DuplicationHistogram
     summary_stats: SummaryStats
     guardrails: GuardrailReport
+    alignment_stats: Optional[AlignmentStats] = None
+    alignment_flagstat: Optional[AlignmentFlagstat] = None
     fragmentomics_metrics: Optional[FragmentomicsMetrics] = None
     bisulfite_conversion_metrics: Optional[BisulfiteConversionMetrics] = None
     qc_history: Optional[List[QcAttemptRecord]] = None

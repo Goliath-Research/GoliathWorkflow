@@ -1,5 +1,97 @@
 {
   "$defs": {
+    "AlignmentGuardrailsConfig": {
+      "description": "Alignment-layer guardrails from Picard dedup, GC bias, and optional samtools flagstat.",
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "flagstat_enabled": {
+          "default": true,
+          "description": "When true and BAM present, run samtools flagstat and evaluate pairing guardrails.",
+          "title": "Flagstat Enabled",
+          "type": "boolean"
+        },
+        "max_secondary_supplementary_rate": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0.05,
+          "description": "Fail when SECONDARY_OR_SUPPLEMENTARY_RDS / reads_examined exceeds this.",
+          "title": "Max Secondary Supplementary Rate"
+        },
+        "max_supplementary_rate_flagstat": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0.02,
+          "description": "Fail when flagstat supplementary_rate exceeds this.",
+          "title": "Max Supplementary Rate Flagstat"
+        },
+        "min_gc_coverage_uniformity": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When set, fail when min/median NORMALIZED_COVERAGE across GC bins is below this.",
+          "title": "Min Gc Coverage Uniformity"
+        },
+        "min_mapping_rate": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0.98,
+          "description": "Fail when derived mapping_rate from dedup metrics is below this.",
+          "title": "Min Mapping Rate"
+        },
+        "min_properly_paired_rate": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": 0.9,
+          "description": "Fail when flagstat properly_paired_rate is below this.",
+          "title": "Min Properly Paired Rate"
+        }
+      },
+      "title": "AlignmentGuardrailsConfig",
+      "type": "object"
+    },
     "BisulfiteConversionConfig": {
       "description": "Quantitative bisulfite conversion QC (sidecar JSON or deamination proxy).",
       "properties": {
@@ -50,6 +142,79 @@
         }
       },
       "title": "BisulfiteConversionConfig",
+      "type": "object"
+    },
+    "CycleScreeningConfig": {
+      "description": "Per-cycle read-end screening for remediation dispositions.",
+      "properties": {
+        "broad_bad_cycle_count": {
+          "default": 8,
+          "minimum": 1,
+          "title": "Broad Bad Cycle Count",
+          "type": "integer"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "localized_max_span": {
+          "default": 6,
+          "minimum": 1,
+          "title": "Localized Max Span",
+          "type": "integer"
+        },
+        "max_trim_bases": {
+          "default": 8,
+          "minimum": 1,
+          "title": "Max Trim Bases",
+          "type": "integer"
+        },
+        "multi_region_min_separate_dips": {
+          "default": 2,
+          "minimum": 2,
+          "title": "Multi Region Min Separate Dips",
+          "type": "integer"
+        },
+        "r2_quality_threshold": {
+          "default": 30.0,
+          "title": "R2 Quality Threshold",
+          "type": "number"
+        },
+        "r2_start_window_cycles": {
+          "default": 5,
+          "minimum": 1,
+          "title": "R2 Start Window Cycles",
+          "type": "integer"
+        },
+        "read_edge_window": {
+          "default": 10,
+          "minimum": 1,
+          "title": "Read Edge Window",
+          "type": "integer"
+        },
+        "read_length": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Override read length; default inferred as max_cycle // 2.",
+          "title": "Read Length"
+        },
+        "recovery_cycles": {
+          "default": 10,
+          "minimum": 1,
+          "title": "Recovery Cycles",
+          "type": "integer"
+        }
+      },
+      "title": "CycleScreeningConfig",
       "type": "object"
     },
     "FragmentomicsConfig": {
@@ -121,11 +286,59 @@
       },
       "title": "FragmentomicsConfig",
       "type": "object"
+    },
+    "OptionalGuardrailsConfig": {
+      "description": "Config-gated guardrails beyond core WGBS Parabricks checks.",
+      "properties": {
+        "duplication_rate_max": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When set, fail when summary_stats.duplication_rate exceeds this.",
+          "title": "Duplication Rate Max"
+        },
+        "min_pf_reads": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When set, fail when quality_yield.pf_reads is below this.",
+          "title": "Min Pf Reads"
+        }
+      },
+      "title": "OptionalGuardrailsConfig",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Config for alignment QC step: sample paths and output directory.",
   "properties": {
+    "alignment_guardrails": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AlignmentGuardrailsConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Alignment-layer guardrails (mapping rate, GC uniformity, flagstat pairing)."
+    },
     "auto_profile_from_analyte": {
       "default": false,
       "description": "When true, enable fragmentomics profile cfdna if step_config.validation.regulatory.primary_analyte is cfdna.",
@@ -143,6 +356,18 @@
       ],
       "default": null,
       "description": "Optional bisulfite conversion rate QC from per-sample sidecar files."
+    },
+    "cycle_screening": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CycleScreeningConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Read 2 start cycle screening for remediation dispositions."
     },
     "fragmentomics": {
       "anyOf": [
@@ -168,6 +393,18 @@
       "default": null,
       "description": "Path to the reference genome FASTA (e.g. hg38.fa). This is the project's shared genome reference; downstream consumers such as the MethylEnricher CIS-BP promoter scan default to this value.",
       "title": "Genome Fasta"
+    },
+    "optional_guardrails": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OptionalGuardrailsConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Additional guardrails (duplication rate, min PF reads). Opt in via step_config."
     },
     "output_dir": {
       "description": "Output directory; one JSON per sample as {output_dir}/{basename}.json",

@@ -27,6 +27,12 @@ Each sample directory should contain `{sample_id}.json` with sections including:
 
 Guardrails in `wgbs_parabricks_qc.py` evaluate PF%, Q30, mean/min cycle quality, GC/AT dropout, median insert size, and deamination/OxoG scores before extraction proceeds.
 
+### Alignment-layer guardrails
+
+Beyond sequencing/library checks, `alignment_derived_qc.py` derives **mapping rate**, **secondary/supplementary rate**, and **GC coverage uniformity** from Picard dedup and GC bias tables. When `alignment_guardrails.flagstat_enabled` is true, `bam_flagstat.py` runs `samtools flagstat` on the aligned BAM and gates **properly paired rate** and supplementary alignments.
+
+Analyte profiles enable these guardrails by default for `cfdna` and `buffy_coat`. See the [sample preparation flow](../../implementation/sample-preparation-flow.md) for thresholds and operator guidance.
+
 ## Export JSON (V2)
 
 The worker writes row-oriented JSON validated against `schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`. Key blocks:
@@ -37,6 +43,8 @@ The worker writes row-oriented JSON validated against `schemas/config/alignment_
 | `guardrails.overall_pass` | Bound to workflow `qcPass` |
 | `guardrails.screening` | Cycle-quality disposition and recommended trim bases |
 | `qc_history` | Append-only audit (initial + post-remediation retries) |
+| `alignment_stats` | Derived mapping and GC uniformity metrics |
+| `alignment_flagstat` | samtools flagstat summary (when enabled) |
 
 ## Cycle screening and remediation
 

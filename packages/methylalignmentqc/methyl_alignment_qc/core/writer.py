@@ -14,12 +14,15 @@ from ..models.sample_qc_v2 import ExportedSampleQCV2Payload
 from ..utils.v1_to_v2_migration import v1_model_to_v2
 from . import parser as core_parser
 from ..models.config import (
+    AlignmentGuardrailsConfig,
     BisulfiteConversionConfig,
     CycleScreeningConfig,
     FragmentomicsConfig,
     OptionalGuardrailsConfig,
 )
+from .alignment_derived_qc import apply_alignment_derived_guardrails, compute_alignment_stats
 from .bisulfite_conversion import apply_bisulfite_conversion_to_payload
+from .bam_flagstat import apply_flagstat_guardrails, run_flagstat
 from .cycle_quality_screening import (
     apply_screening_recommendations,
     failed_guardrail_keys,
@@ -375,6 +378,7 @@ def process_samples_to_qc_jsons(
     bisulfite_conversion: Optional[BisulfiteConversionConfig] = None,
     cycle_screening: Optional[CycleScreeningConfig] = None,
     optional_guardrails: Optional[OptionalGuardrailsConfig] = None,
+    alignment_guardrails: Optional[AlignmentGuardrailsConfig] = None,
     write_context: Optional[QcWriteContext] = None,
 ) -> None:
     """
@@ -456,6 +460,32 @@ def process_samples_to_qc_jsons(
                 payload["guardrails"] = _build_wgbs_guardrail_report(payload)
         except Exception as e:
             raise RuntimeError(f"Failed to compute guardrails for {sample_name} from {parabricks_json}: {e}") from e
+
+        align_cfg = alignment_guardrails or AlignmentGuardrailsConfig()
+        stats = compute_alignment_stats(payload)
+        if stats is not None:
+            payload["alignment_stats"] = stats
+
+        if align_cfg.enabled:
+            apply_alignment_derived_guardrails(payload["guardrails"], payload, align_cfg)
+            if align_cfg.flagstat_enabled:
+                bam_path = sample_dir / f"{sample_name}.bam"
+                flagstat_error: Optional[str] = None
+                flagstat_metrics: Optional[Dict[str, Any]] = None
+                if bam_path.is_file():
+                    try:
+                        flagstat_metrics = run_flagstat(sample_dir, sample_name)
+                        payload["alignment_flagstat"] = flagstat_metrics
+                    except RuntimeError as exc:
+                        flagstat_error = str(exc)
+                else:
+                    flagstat_error = f"BAM not found for flagstat: {bam_path}"
+                apply_flagstat_guardrails(
+                    payload["guardrails"],
+                    flagstat_metrics,
+                    align_cfg,
+                    error=flagstat_error,
+                )
 
         apply_fragmentomics_to_payload(payload, fragmentomics)
         apply_bisulfite_conversion_to_payload(payload, sample_dir, bisulfite_conversion)

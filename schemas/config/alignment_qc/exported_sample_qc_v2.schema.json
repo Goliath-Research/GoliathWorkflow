@@ -1,5 +1,166 @@
 {
   "$defs": {
+    "AlignmentFlagstat": {
+      "additionalProperties": false,
+      "properties": {
+        "duplicate_reads": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duplicate Reads"
+        },
+        "mapped_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mapped Rate"
+        },
+        "mapped_reads": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mapped Reads"
+        },
+        "properly_paired_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Properly Paired Rate"
+        },
+        "properly_paired_reads": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Properly Paired Reads"
+        },
+        "secondary_reads": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Secondary Reads"
+        },
+        "supplementary_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supplementary Rate"
+        },
+        "supplementary_reads": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Supplementary Reads"
+        },
+        "total_reads": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Reads"
+        }
+      },
+      "title": "AlignmentFlagstat",
+      "type": "object"
+    },
+    "AlignmentStats": {
+      "additionalProperties": false,
+      "properties": {
+        "gc_coverage_uniformity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gc Coverage Uniformity"
+        },
+        "mapping_rate": {
+          "title": "Mapping Rate",
+          "type": "number"
+        },
+        "reads_examined": {
+          "title": "Reads Examined",
+          "type": "integer"
+        },
+        "secondary_supplementary_rate": {
+          "title": "Secondary Supplementary Rate",
+          "type": "number"
+        },
+        "secondary_supplementary_reads": {
+          "title": "Secondary Supplementary Reads",
+          "type": "integer"
+        },
+        "unmapped_reads": {
+          "title": "Unmapped Reads",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reads_examined",
+        "unmapped_reads",
+        "secondary_supplementary_reads",
+        "mapping_rate",
+        "secondary_supplementary_rate"
+      ],
+      "title": "AlignmentStats",
+      "type": "object"
+    },
     "ArtifactSummariesRow": {
       "additionalProperties": false,
       "properties": {
@@ -566,6 +727,17 @@
         "deamination_qscore": {
           "$ref": "#/$defs/GuardrailMetric"
         },
+        "duplication_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "fragmentomics": {
           "anyOf": [
             {
@@ -577,14 +749,47 @@
           ],
           "default": null
         },
+        "gc_coverage_uniformity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "gc_dropout": {
           "$ref": "#/$defs/GuardrailMetric"
+        },
+        "mapping_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "mean_quality": {
           "$ref": "#/$defs/GuardrailMetric"
         },
         "median_insert_bp": {
           "$ref": "#/$defs/GuardrailMetric"
+        },
+        "min_pf_reads": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "min_quality_post20": {
           "$ref": "#/$defs/GuardrailMetric"
@@ -595,8 +800,41 @@
         "pf_percent": {
           "$ref": "#/$defs/GuardrailMetric"
         },
+        "properly_paired_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "q30_percent": {
           "$ref": "#/$defs/GuardrailMetric"
+        },
+        "secondary_supplementary_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "supplementary_rate_flagstat": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -663,6 +901,17 @@
         "sample_id": {
           "title": "Sample Id",
           "type": "string"
+        },
+        "screening": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QcScreeningReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -900,6 +1149,19 @@
         "producer": {
           "$ref": "#/$defs/QCV2Producer"
         },
+        "qc_attempt": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Current QC evaluation attempt number",
+          "title": "Qc Attempt"
+        },
         "schema_name": {
           "default": "methylalignmentqc.sample_qc",
           "title": "Schema Name",
@@ -937,6 +1199,278 @@
         "version"
       ],
       "title": "QCV2Producer",
+      "type": "object"
+    },
+    "QcAttemptRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "alignment_pass": {
+          "title": "Alignment Pass",
+          "type": "string"
+        },
+        "attempt": {
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "disposition": {
+          "title": "Disposition",
+          "type": "string"
+        },
+        "evaluated_at_utc": {
+          "title": "Evaluated At Utc",
+          "type": "string"
+        },
+        "failed_guardrails": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Failed Guardrails",
+          "type": "array"
+        },
+        "overall_pass": {
+          "title": "Overall Pass",
+          "type": "boolean"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "trigger_action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger Action"
+        },
+        "trigger_disposition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trigger Disposition"
+        },
+        "trim_front1": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trim Front1"
+        },
+        "trim_front2": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trim Front2"
+        },
+        "trim_tail1": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trim Tail1"
+        },
+        "trim_tail2": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trim Tail2"
+        },
+        "workflow_node_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workflow Node Key"
+        }
+      },
+      "required": [
+        "attempt",
+        "evaluated_at_utc",
+        "alignment_pass",
+        "reason",
+        "overall_pass",
+        "disposition"
+      ],
+      "title": "QcAttemptRecord",
+      "type": "object"
+    },
+    "QcScreeningReport": {
+      "additionalProperties": false,
+      "properties": {
+        "bad_cycle_end": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bad Cycle End"
+        },
+        "bad_cycle_start": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bad Cycle Start"
+        },
+        "dip_regions": {
+          "items": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "title": "Dip Regions",
+          "type": "array"
+        },
+        "disposition": {
+          "title": "Disposition",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "n_cycles": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Cycles"
+        },
+        "quality_pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quality Pattern"
+        },
+        "r2_recovery_mean_quality": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "R2 Recovery Mean Quality"
+        },
+        "r2_start_cycle": {
+          "title": "R2 Start Cycle",
+          "type": "integer"
+        },
+        "r2_start_mean_quality": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "R2 Start Mean Quality"
+        },
+        "read_length": {
+          "title": "Read Length",
+          "type": "integer"
+        },
+        "trim_front1": {
+          "default": 0,
+          "title": "Trim Front1",
+          "type": "integer"
+        },
+        "trim_front2": {
+          "default": 0,
+          "title": "Trim Front2",
+          "type": "integer"
+        },
+        "trim_spec": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TrimSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "trim_tail1": {
+          "default": 0,
+          "title": "Trim Tail1",
+          "type": "integer"
+        },
+        "trim_tail2": {
+          "default": 0,
+          "title": "Trim Tail2",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "disposition",
+        "read_length",
+        "r2_start_cycle",
+        "message"
+      ],
+      "title": "QcScreeningReport",
       "type": "object"
     },
     "QualityScoreDistributionRow": {
@@ -1067,12 +1601,58 @@
       ],
       "title": "SummaryStats",
       "type": "object"
+    },
+    "TrimSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "bases": {
+          "title": "Bases",
+          "type": "integer"
+        },
+        "end": {
+          "title": "End",
+          "type": "string"
+        },
+        "read": {
+          "title": "Read",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "read",
+        "end",
+        "bases"
+      ],
+      "title": "TrimSpec",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "description": "Row-oriented per-sample QC JSON (V2) for tools and Azure SQL OPENJSON.",
   "properties": {
+    "alignment_flagstat": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AlignmentFlagstat"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "alignment_stats": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AlignmentStats"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "bait_bias_summaries": {
       "$ref": "#/$defs/ArtifactSummariesV2"
     },
@@ -1141,6 +1721,21 @@
     "pre_adapter_summaries": {
       "$ref": "#/$defs/ArtifactSummariesV2"
     },
+    "qc_history": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/QcAttemptRecord"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Qc History"
+    },
     "quality_score_distribution": {
       "$ref": "#/$defs/QualityScoreDistributionV2"
     },
@@ -1150,6 +1745,18 @@
     "sample_id": {
       "title": "Sample Id",
       "type": "string"
+    },
+    "sample_prep_log_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sample Prep Log Path"
     },
     "summary_stats": {
       "$ref": "#/$defs/SummaryStats"

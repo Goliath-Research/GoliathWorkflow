@@ -23,6 +23,14 @@ def test_cfdna_profile_fills_missing_keys():
     assert merged["auto_profile_from_analyte"] is True
     assert merged["fragmentomics"]["profile"] == "cfdna"
     assert merged["bisulfite_conversion"]["enabled"] is True
+    assert merged["alignment_guardrails"]["enabled"] is True
+    assert merged["alignment_guardrails"]["min_mapping_rate"] == 0.98
+
+
+def test_buffy_profile_enables_alignment_guardrails():
+    merged = merge_step_config("alignment_qc", {}, "buffy_coat")
+    assert merged["alignment_guardrails"]["enabled"] is True
+    assert merged["alignment_guardrails"]["flagstat_enabled"] is True
 
 
 def test_user_override_wins_over_profile():

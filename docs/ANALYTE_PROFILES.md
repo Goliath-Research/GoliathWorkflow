@@ -8,7 +8,7 @@ Opt out: `"auto_apply_analyte_profile": false` under `regulatory`.
 
 | Step | `cfdna` | `buffy_coat` |
 |------|---------|--------------|
-| `alignment_qc` | cfDNA fragmentomics guardrails; bisulfite QC | bisulfite QC only (no cfDNA fragmentomics profile) |
+| `alignment_qc` | cfDNA fragmentomics + **alignment guardrails** + bisulfite QC | **alignment guardrails** + bisulfite QC (no cfDNA fragmentomics profile) |
 | `fragmentomics` | `methyl-fragmentomics` enabled (WPS + end motifs) | disabled |
 | `enricher` | `library_preset: cancer-core`; CIS-BP **gene_sets + motif_scan + annotate** | CIS-BP **gene_sets** only |
 | `validation` | `enforce_training_analyte_match: true` | `false` |
