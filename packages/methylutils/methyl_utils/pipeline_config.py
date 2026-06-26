@@ -633,11 +633,17 @@ class ProjectConfig(BaseModel):
             )
 
         removed_total = len(set(ineligible_paths))
-        logger.warning(
-            "Sample QC summary: eligible=%s ineligible=%s (reason=excluded_no_h5).",
-            len(set(eligible_paths)),
-            removed_total,
-        )
+        if removed_total:
+            logger.warning(
+                "Sample QC summary: eligible=%s ineligible=%s (reason=excluded_no_h5).",
+                len(set(eligible_paths)),
+                removed_total,
+            )
+        else:
+            logger.info(
+                "Sample QC summary: eligible=%s ineligible=0 (all samples have required H5 evidence).",
+                len(set(eligible_paths)),
+            )
         self._write_sample_qc_artifacts(ordered_records, eligible_paths, ineligible_paths)
 
         emptied = [f"{side}:{label}" for label, paths, side in filtered if len(paths) == 0]

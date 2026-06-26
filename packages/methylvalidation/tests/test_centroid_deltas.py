@@ -89,10 +89,7 @@ def test_generate_run_project_writes_group_specific_centroid_deltas():
         assert group2_payload["base_config"]["remove_samples"] == ["/samples/disease_x"]
 
         run_proj = json.loads(project_path.read_text(encoding="utf-8"))
-        pred = run_proj["step_config"]["predictor"]
-        assert pred["controls"]["groups"][0]["sample_paths"] == [str(_val_control_csv.resolve())]
-        assert pred["diseases"]["groups"][0]["sample_paths"] == [str(_val_disease_csv.resolve())]
-        assert "wrong_control" not in json.dumps(pred)
+        assert "step_config" not in run_proj
         val_groups = json.loads((run_dir / "val_test_groups.json").read_text(encoding="utf-8"))
         assert len(val_groups) == 2
         assert val_groups[0]["paths"] == [str(Path("/samples/val_control").resolve())]
@@ -131,9 +128,12 @@ def test_generate_run_project_creates_predictor_holdouts_when_missing():
         )
 
         run_proj = json.loads(project_path.read_text(encoding="utf-8"))
-        pred = run_proj["step_config"]["predictor"]
-        assert pred["controls"]["groups"][0]["sample_paths"] == [str(val_control_csv.resolve())]
-        assert pred["diseases"]["groups"][0]["sample_paths"] == [str(val_disease_csv.resolve())]
+        assert "step_config" not in run_proj
+        val_groups = json.loads((run_dir / "val_test_groups.json").read_text(encoding="utf-8"))
+        assert val_groups[0]["paths"] == [str(Path("/samples/val_control").resolve())]
+        assert val_groups[1]["paths"] == [str(Path("/samples/val_disease").resolve())]
+        assert val_control_csv.is_file()
+        assert val_disease_csv.is_file()
 
 
 def test_run_centroid_executes_group_specific_step_overrides(monkeypatch):

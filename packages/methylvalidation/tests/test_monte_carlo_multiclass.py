@@ -249,42 +249,6 @@ def test_hierarchical_mc_run_project_predictor_points_at_testing_csvs(tmp_path: 
                     ],
                 },
                 "comparisons": "control_vs_each_disease",
-                "step_config": {
-                    "predictor": {
-                        "controls": {
-                            "label": "healthy",
-                            "groups": [
-                                {"label": "all", "sample_paths": ["configs/should_not_remain.csv"]}
-                            ],
-                        },
-                        "diseases": {
-                            "label": "cancer",
-                            "groups": [
-                                {
-                                    "label": "prostate_cancer",
-                                    "stages": [
-                                        {
-                                            "label": "pca1",
-                                            "sample_paths": ["configs/pca1.csv"],
-                                        },
-                                        {
-                                            "label": "pca2",
-                                            "sample_paths": ["configs/pca2.csv"],
-                                        },
-                                        {
-                                            "label": "pca3",
-                                            "sample_paths": ["configs/pca3.csv"],
-                                        },
-                                        {
-                                            "label": "pca4",
-                                            "sample_paths": ["configs/pca4.csv"],
-                                        },
-                                    ],
-                                }
-                            ],
-                        },
-                    }
-                },
             }
         ),
         encoding="utf-8",
@@ -304,21 +268,11 @@ def test_hierarchical_mc_run_project_predictor_points_at_testing_csvs(tmp_path: 
     )
 
     run_proj = json.loads(project_path.read_text(encoding="utf-8"))
-    pred = run_proj["step_config"]["predictor"]
-    assert "should_not_remain" not in json.dumps(pred)
-    assert "test_group_paths" in pred
-    assert len(pred["test_group_paths"]) == len(cohort_labels)
-    assert [str(row["label"]) for row in pred["test_group_paths"]] == cohort_labels
-    for row in pred["test_group_paths"]:
-        assert Path(row["paths"][0]).name.startswith("testing_")
-
-    pc = pred["controls"]["groups"][0]["sample_paths"][0]
-    assert Path(pc).name.startswith("testing_")
-    assert pred["diseases"]["groups"][0]["label"] == "prostate_cancer"
-    st = pred["diseases"]["groups"][0]["stages"]
-    assert len(st) == 4
-    for row in st:
-        assert Path(row["sample_paths"][0]).name.startswith("testing_")
+    assert "step_config" not in run_proj
+    val_groups = json.loads((run_dir / "val_test_groups.json").read_text(encoding="utf-8"))
+    assert len(val_groups) == len(cohort_labels)
+    assert [row["label"] for row in val_groups] == cohort_labels
+    assert len(list(run_dir.glob("testing_*.csv"))) == len(cohort_labels)
 
 
 def test_hierarchical_mc_run_project_without_predictor_nested_sides(tmp_path: Path):
@@ -376,12 +330,6 @@ def test_hierarchical_mc_run_project_without_predictor_nested_sides(tmp_path: Pa
                     ],
                 },
                 "comparisons": "control_vs_each_disease",
-                "step_config": {
-                    "predictor": {
-                        "debug": False,
-                        "train_group_paths": [{"label": "legacy", "paths": [], "class_index": 0}],
-                    }
-                },
             }
         ),
         encoding="utf-8",
@@ -401,10 +349,9 @@ def test_hierarchical_mc_run_project_without_predictor_nested_sides(tmp_path: Pa
     )
 
     run_proj = json.loads(project_path.read_text(encoding="utf-8"))
-    pred = run_proj["step_config"]["predictor"]
-    assert "train_group_paths" not in pred
-    assert "test_group_paths" in pred
-    assert len(pred["test_group_paths"]) == len(cohort_labels)
-    assert pred["controls"]["groups"][0]["label"] == "all"
-    assert len(pred["diseases"]["groups"][0]["stages"]) == 4
-    assert Path(pred["diseases"]["groups"][0]["stages"][0]["sample_paths"][0]).name.startswith("testing_")
+    assert "step_config" not in run_proj
+    val_groups = json.loads((run_dir / "val_test_groups.json").read_text(encoding="utf-8"))
+    assert len(val_groups) == len(cohort_labels)
+    assert run_proj["controls"]["groups"][0]["label"] == "all"
+    assert len(run_proj["diseases"]["groups"][0]["stages"]) == 4
+    assert len(list(run_dir.glob("testing_*.csv"))) == len(cohort_labels)

@@ -12,6 +12,16 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 
+def write_run_project_json(project: Dict[str, Any], project_path: Path) -> None:
+    """Write per-iteration ``project.json`` (slim manifest; no embedded ``step_config``)."""
+    payload = copy.deepcopy(project)
+    payload.pop("step_config", None)
+    project_path = Path(project_path)
+    project_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(project_path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+
+
 def _sample_name_from_path(full_path: str, base_path: str) -> str:
     """Return sample folder name (last component) for train CSV format."""
     p = Path(full_path)
@@ -85,6 +95,7 @@ def prepare_model_mc_backend_run_from_shared(
         payload = json.load(f)
     payload["output_base"] = str(backend_root)
     payload["project_name"] = backend_run_dir.name
+    payload.pop("step_config", None)
     backend_project_path = backend_run_dir / "project.json"
     with open(backend_project_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
@@ -432,9 +443,6 @@ def generate_run_project(
         {"control_group": control_label, "disease_group": disease_label}
     ]
 
-    _patch_step_config_predictor_binary_holdouts(
-        project, val_control_csv, val_disease_csv, control_label, disease_label
-    )
     _write_binary_val_test_groups_json(
         run_dir,
         val_control_paths,
@@ -444,8 +452,7 @@ def generate_run_project(
     )
 
     project_path = run_dir / "project.json"
-    with open(project_path, "w", encoding="utf-8") as f:
-        json.dump(project, f, indent=2)
+    write_run_project_json(project, project_path)
 
     group1_override = write_centroid_step_override(
         run_dir / "centroid_group1_override.json",
@@ -620,13 +627,8 @@ def generate_run_project_multiclass(
         new_groups.append(gg)
     project["groups"] = new_groups
 
-    _patch_step_config_predictor_multiclass_holdouts(
-        project, testing_csv_by_label, cohort_labels, embed_test_group_paths=True
-    )
-
     project_path = run_dir / "project.json"
-    with open(project_path, "w", encoding="utf-8") as f:
-        json.dump(project, f, indent=2)
+    write_run_project_json(project, project_path)
 
     return project_path, val_groups_json
 
@@ -1034,15 +1036,8 @@ def generate_run_project_hierarchical_multiclass(
             side["groups"] = _patch_side_groups_for_mc(side["groups"], train_csv_by_label)
             project[key] = side
 
-    # Keep explicit multiclass holdout class paths on per-run projects so backend
-    # evaluation cannot silently fall back to training cohorts.
-    _patch_step_config_predictor_multiclass_holdouts(
-        project, testing_csv_by_label, cohort_labels, embed_test_group_paths=True
-    )
-
     project_path = run_dir / "project.json"
-    with open(project_path, "w", encoding="utf-8") as f:
-        json.dump(project, f, indent=2)
+    write_run_project_json(project, project_path)
 
     centroid_overrides: Dict[str, Path] = {}
     prev_map = previous_train_by_label or {}
