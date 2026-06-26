@@ -58,7 +58,7 @@ def _build_flagstat_metrics(counts: Dict[str, int]) -> Dict[str, Any]:
 
     metrics: Dict[str, Any] = dict(counts)
     if total > 0:
-        metrics["properly_paired_rate"] = round((2 * properly_paired) / total, 6)
+        metrics["properly_paired_rate"] = round(properly_paired / total, 6)
         metrics["supplementary_rate"] = round(supplementary / total, 6)
         metrics["mapped_rate"] = round(mapped / total, 6)
     return metrics

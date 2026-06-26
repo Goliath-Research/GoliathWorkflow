@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from methyl_alignment_qc.core.bam_flagstat import (
+    _build_flagstat_metrics,
     apply_flagstat_guardrails,
     parse_flagstat_text,
 )
@@ -29,6 +30,29 @@ def test_parse_flagstat_text() -> None:
     assert counts["total_reads"] == 1000
     assert counts["properly_paired_reads"] == 850
     assert counts["supplementary_reads"] == 10
+
+
+def test_build_flagstat_metrics_properly_paired_rate() -> None:
+    """samtools counts properly paired per read, not per pair — no 2x multiplier."""
+    counts = parse_flagstat_text(FLAGSTAT_FIXTURE)
+    metrics = _build_flagstat_metrics(counts)
+    assert metrics["properly_paired_rate"] == 0.85
+    assert metrics["supplementary_rate"] == 0.01
+
+
+def test_apply_flagstat_guardrails_fail_low_pairing() -> None:
+    counts = parse_flagstat_text(FLAGSTAT_FIXTURE)
+    metrics = _build_flagstat_metrics(counts)
+    report = {"overall_pass": True, "recommendation": "PASS", "details": {}}
+    cfg = AlignmentGuardrailsConfig(
+        enabled=True,
+        flagstat_enabled=True,
+        min_properly_paired_rate=0.90,
+    )
+    apply_flagstat_guardrails(report, metrics, cfg)
+    assert report["overall_pass"] is False
+    assert report["details"]["properly_paired_rate"]["pass"] is False
+    assert report["details"]["properly_paired_rate"]["value"] == 0.85
 
 
 def test_apply_flagstat_guardrails_pass() -> None:
