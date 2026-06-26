@@ -267,12 +267,12 @@ class RestGateway:
                 apply_validation_plan(
                     self.db,
                     int(instance_id),
-                    context,
+                    context.model_dump(mode="json"),
                     persist_extension=bool(body.get("persist_extension", True)),
                 )
             return 200, {
-                "context_json": context,
-                "n_iterations": len(context.get("iterations", [])),
+                "context_json": context.model_dump(mode="json"),
+                "n_iterations": len(context.iterations),
             }
 
         if method == "POST" and path == "/v1/studies/validation/start":

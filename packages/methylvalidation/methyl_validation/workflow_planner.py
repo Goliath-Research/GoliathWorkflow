@@ -12,13 +12,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .cohort_inference import infer_monte_carlo_cohorts_from_project
-from .config import MonteCarloConfig
-from .mc_config_load import write_mc_config_snapshot
+from .config import MonteCarloConfig, ValidationStepConfig, parse_validation_profile
+from .mc_config_load import apply_project_regulatory_to_mc_dict, write_mc_config_snapshot
 from .mc_manifest import write_detector_featurecuts_override, write_mapper_classifier_override
 from .project_gen import (
     build_group_centroid_scope,
@@ -69,9 +69,52 @@ def _tag_iteration_as_stratified_draw(
 
 __all__ = [
     "ValidationPlanRequest",
+    "ValidationPlanContext",
+    "ValidationPlannedIteration",
+    "ValidationPlanSummary",
     "plan_validation_context",
     "resolve_base_project_json",
 ]
+
+
+class ValidationPlannedIteration(BaseModel):
+    """One planned Monte Carlo iteration (planner output; allows tagged draw fields)."""
+
+    model_config = ConfigDict(extra="allow")
+
+    phase: Optional[str] = None
+    runId: Optional[str] = None
+    run_id: Optional[str] = None
+    projectPath: Optional[str] = None
+    runDir: Optional[str] = None
+    taskConfig: Optional[Dict[str, Any]] = None
+
+
+class ValidationPlanSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    baseProject: str
+    layout: str
+    featureIterations: int
+    qualityIterations: int
+    seed: Optional[int] = None
+    trainFraction: float
+    monteCarloRunsRoot: str
+    iterations: List[ValidationPlannedIteration] = Field(default_factory=list)
+
+
+class ValidationPlanContext(BaseModel):
+    """ValidationPipeline context_json produced by the planner."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    projectPath: str
+    workerToolMapper: str = "MethylMapper"
+    workerToolEnricher: str = "MethylEnricher"
+    workerToolProgression: str = "MethylDiseaseProgression"
+    orderedComparisonLabels: List[str] = Field(default_factory=list)
+    iterations: List[ValidationPlannedIteration] = Field(default_factory=list)
+    validationPlan: ValidationPlanSummary
 
 
 class ValidationPlanRequest(BaseModel):
@@ -107,12 +150,20 @@ def resolve_base_project_json(project_path: str | Path) -> Path:
     raise FileNotFoundError(f"Could not resolve base project.json from projectPath={project_path!r}")
 
 
-def _load_config_from_project(base_project: Path, request: ValidationPlanRequest) -> MonteCarloConfig:
+def _load_config_from_project(
+    base_project: Path,
+    request: ValidationPlanRequest,
+    *,
+    profile_overrides: Optional[ValidationStepConfig] = None,
+) -> MonteCarloConfig:
     from methyl_utils import load_project
     from methyl_utils.action_config_resolver import resolve_for_project
 
     project = load_project(str(base_project))
-    validation = resolve_for_project("validation", project)
+    if profile_overrides is not None:
+        validation = profile_overrides.model_dump(exclude_none=True)
+    else:
+        validation = resolve_for_project("validation", project)
     if not validation:
         raise ValueError(f"Project {base_project} missing resolved validation action config")
 
@@ -125,14 +176,17 @@ def _load_config_from_project(base_project: Path, request: ValidationPlanRequest
             "Could not infer >=2 Monte Carlo cohorts from project controls/diseases sample_paths."
         )
 
-    mc_dict: Dict[str, Any] = {
-        "samples_base_path": project_data.get("samples_base_path", "/work/prostate-cancer/samples"),
-        "base_project": str(base_project),
-        "output_base": project_data.get("output_base", "/work/prostate-cancer"),
-        "path_remap": project_data.get("path_remap"),
-        "cohorts": cohorts,
-        **dict(validation),
-    }
+    mc_dict = apply_project_regulatory_to_mc_dict(
+        {
+            "samples_base_path": project_data.get("samples_base_path", "/work/prostate-cancer/samples"),
+            "base_project": str(base_project),
+            "output_base": project_data.get("output_base", "/work/prostate-cancer"),
+            "path_remap": project_data.get("path_remap"),
+            "cohorts": cohorts,
+            **dict(validation),
+        },
+        project,
+    )
     config = MonteCarloConfig.model_validate(mc_dict)
 
     feature_n = request.featureIterations if request.featureIterations is not None else config.n_iterations
@@ -382,17 +436,31 @@ def _materialize_iteration(
     )
 
 
-def plan_validation_context(request: ValidationPlanRequest | Dict[str, Any]) -> Dict[str, Any]:
+def plan_validation_context(
+    request: ValidationPlanRequest | Mapping[str, Any],
+    *,
+    profile_overrides: Optional[ValidationStepConfig] = None,
+) -> ValidationPlanContext:
     """
     Materialize Monte Carlo run directories and return ValidationPipeline ``context_json``.
 
     Writes per-run ``project.json`` + train/val CSVs under ``output_base/project_name/monte_carlo_runs/``.
     """
-    if not isinstance(request, ValidationPlanRequest):
+    resolved_profile = profile_overrides
+    if isinstance(request, Mapping):
+        raw = dict(request)
+        if resolved_profile is None:
+            resolved_profile = parse_validation_profile(raw.get("resolvedConfig"))
+        request = ValidationPlanRequest.model_validate(
+            {key: value for key, value in raw.items() if key != "resolvedConfig"}
+        )
+    else:
         request = ValidationPlanRequest.model_validate(request)
 
     base_project = resolve_base_project_json(request.projectPath)
-    config = _load_config_from_project(base_project, request)
+    config = _load_config_from_project(
+        base_project, request, profile_overrides=resolved_profile
+    )
     monte_carlo_runs_root, project_root = _monte_carlo_runs_root(config, base_project)
 
     write_mc_config_snapshot(config, mc_config_snapshot_path(monte_carlo_runs_root))
@@ -451,23 +519,23 @@ def plan_validation_context(request: ValidationPlanRequest | Dict[str, Any]) -> 
     if not iterations:
         raise ValueError("No iterations planned (featureIterations and qualityIterations are both zero)")
 
-    plan_summary = {
-        "baseProject": str(base_project),
-        "layout": layout,
-        "featureIterations": feature_n,
-        "qualityIterations": quality_n,
-        "seed": config.seed,
-        "trainFraction": config.train_fraction,
-        "monteCarloRunsRoot": str(monte_carlo_runs_root.resolve()),
-        "iterations": iterations,
-    }
+    plan_summary = ValidationPlanSummary(
+        baseProject=str(base_project),
+        layout=layout,
+        featureIterations=feature_n,
+        qualityIterations=quality_n,
+        seed=config.seed,
+        trainFraction=config.train_fraction,
+        monteCarloRunsRoot=str(monte_carlo_runs_root.resolve()),
+        iterations=[ValidationPlannedIteration.model_validate(item) for item in iterations],
+    )
 
-    return {
-        "projectPath": project_root,
-        "workerToolMapper": request.workerToolMapper,
-        "workerToolEnricher": request.workerToolEnricher,
-        "workerToolProgression": request.workerToolProgression,
-        "orderedComparisonLabels": _comparison_labels(base_project, request),
-        "iterations": iterations,
-        "validationPlan": plan_summary,
-    }
+    return ValidationPlanContext(
+        projectPath=project_root,
+        workerToolMapper=request.workerToolMapper,
+        workerToolEnricher=request.workerToolEnricher,
+        workerToolProgression=request.workerToolProgression,
+        orderedComparisonLabels=_comparison_labels(base_project, request),
+        iterations=[ValidationPlannedIteration.model_validate(item) for item in iterations],
+        validationPlan=plan_summary,
+    )

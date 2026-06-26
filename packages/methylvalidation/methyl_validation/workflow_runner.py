@@ -84,10 +84,11 @@ def run_validation_via_workflow(
     Plan Monte Carlo iterations, start ValidationPipeline instance, wait for completion.
     """
     context = plan_validation_context(plan_request)
+    context_json = context.model_dump(mode="json")
     instance_id = start_workflow_instance(
         gateway_url=gateway_url,
         workflow_version_id=workflow_version_id,
-        context_json=context,
+        context_json=context_json,
     )
     summary = wait_for_instance(
         gateway_url=gateway_url,
@@ -98,7 +99,7 @@ def run_validation_via_workflow(
         raise RuntimeError(
             f"ValidationPipeline instance {instance_id} ended with status {summary.get('status')!r}"
         )
-    return {"instance_id": instance_id, "context_json": context, "summary": summary}
+    return {"instance_id": instance_id, "context_json": context_json, "summary": summary}
 
 
 def write_planned_context(
@@ -106,7 +107,7 @@ def write_planned_context(
     output_path: Path,
 ) -> Dict[str, Any]:
     context = plan_validation_context(plan_request)
-    enriched = enrich_context_for_engine(context)
+    enriched = enrich_context_for_engine(context.model_dump(mode="json"))
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(enriched, indent=2) + "\n", encoding="utf-8")
     return enriched

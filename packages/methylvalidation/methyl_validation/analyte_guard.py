@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
-from methyl_utils.action_config_resolver import resolve_for_project
 
 
 def normalize_analyte(value: Optional[str]) -> Optional[str]:
@@ -64,8 +63,7 @@ def check_training_analyte_match(
         return True, f"analyte check skipped: {exc}"
 
     project = load_project(project_json)
-    val_cfg = resolve_for_project("validation", project)
-    reg = (val_cfg.get("regulatory") or {}) if isinstance(val_cfg, dict) else {}
+    reg = project.get_regulatory_config()
     current = effective_training_analyte(reg)
     if current is None:
         return True, "training analyte not declared on project (no enforcement target)."

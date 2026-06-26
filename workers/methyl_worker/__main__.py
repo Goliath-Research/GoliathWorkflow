@@ -107,7 +107,7 @@ def _run_plan_iterations_cli(args: argparse.Namespace) -> int:
             print("Set PROJECT_PATH or pass --plan-input", file=sys.stderr)
             return 2
     context = plan_validation_context(payload)
-    print(json.dumps(context, indent=2))
+    print(json.dumps(context.model_dump(mode="json"), indent=2))
     return 0
 
 

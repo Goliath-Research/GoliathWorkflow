@@ -69,6 +69,66 @@ def test_validation_plan_resolves_by_capability() -> None:
     )
 
 
+def test_parse_task_envelope_strips_runtime_keys() -> None:
+    from methyl_worker.task_models.runtime_models import TaskRuntimeContext
+    from methyl_worker.task_validation import parse_task_envelope
+
+    task, runtime = parse_task_envelope(
+        "pipeline.detector",
+        None,
+        {
+            "tool": "methyl-detector",
+            "projectPath": "/work/demo/project.json",
+            "chromosome": "1",
+            "context": "CG",
+            "comparison": "healthy_vs_disease",
+            "workflowNodeKey": "detector-1",
+            "resolvedConfig": {"train_fraction": 0.8, "n_iterations": 10},
+        },
+    )
+    assert task.model_dump(mode="json")["projectPath"] == "/work/demo/project.json"
+    assert isinstance(runtime, TaskRuntimeContext)
+    assert runtime.workflowNodeKey == "detector-1"
+    assert runtime.validationProfile is not None
+    assert runtime.validationProfile.n_iterations == 10
+
+
+def test_cli_action_accepts_runtime_keys_on_wire() -> None:
+    from unittest.mock import MagicMock, patch
+
+    from methyl_worker.action_catalog import find_catalog_entry
+    from methyl_worker.actions.base import CliAction, GenericPipelineCollector
+
+    entry = find_catalog_entry("pipeline.detector")
+    assert entry is not None
+    action = CliAction(
+        entry=entry,
+        cli_tool="methyl-detector",
+        argv_map={"projectPath": "--project"},
+        collector=GenericPipelineCollector(),
+    )
+    proc = MagicMock()
+    proc.returncode = 0
+    proc.stdout = ""
+    proc.stderr = ""
+    with patch("methyl_worker.actions.base.subprocess.run", return_value=proc):
+        result = action.execute(
+            {
+                "tool": "methyl-detector",
+                "projectPath": "/work/demo/project.json",
+                "chromosome": "1",
+                "context": "CG",
+                "comparison": "healthy_vs_disease",
+                "centroid1Dir": "/c1",
+                "centroid2Dir": "/c2",
+                "outputDir": "/out",
+                "workflowNodeKey": "detector-1",
+                "resolvedConfig": {"significance_test": "ks_ecdf"},
+            }
+        )
+    assert result.result_code == 0
+
+
 def test_validate_task_output_rejects_action_execution_result_wrapper() -> None:
     from methyl_worker.action_execution import ActionExecutionResult
     from methyl_worker.task_models.validation_models import ValidationPlanTaskOutput

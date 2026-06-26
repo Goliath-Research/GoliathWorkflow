@@ -3,7 +3,7 @@ Runner config schema for Monte Carlo validation.
 """
 
 from pathlib import Path
-from typing import Annotated, Any, ClassVar, Dict, FrozenSet, List, Literal, Optional, Type, Union, cast, get_args, get_origin
+from typing import Annotated, Any, ClassVar, Dict, FrozenSet, List, Literal, Mapping, Optional, Type, Union, cast, get_args, get_origin
 
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
 from pydantic_core import PydanticUndefined
@@ -2172,4 +2172,14 @@ def build_validation_step_config() -> Type[BaseModel]:
 
 
 ValidationStepConfig = build_validation_step_config()
+
+
+def parse_validation_profile(raw: Optional[Mapping[str, Any]]) -> Optional[ValidationStepConfig]:
+    """Parse materialized profile validation slice (e.g. task ``resolvedConfig``)."""
+    if not raw:
+        return None
+    known = {key: value for key, value in raw.items() if key in ValidationStepConfig.model_fields}
+    if not known:
+        return None
+    return ValidationStepConfig.model_validate(known)
 

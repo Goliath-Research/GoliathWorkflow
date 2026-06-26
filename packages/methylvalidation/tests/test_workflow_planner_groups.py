@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -54,21 +55,31 @@ def _minimal_hierarchical_project(tmp_path: Path) -> Path:
         ],
         "chromosomes": ["21"],
         "contexts": ["CG"],
-        "step_config": {
-            "validation": {
-                "n_iterations": 2,
-                "seed": 7,
-                "train_fraction": 0.5,
-                "cohorts": [
-                    {"label": "all", "csv": str(data / "all.csv")},
-                    {"label": "PCa_PCa1", "csv": str(data / "pca1.csv")},
-                    {"label": "PCa_PCa2", "csv": str(data / "pca2.csv")},
-                ],
-            }
-        },
     }
     path = tmp_path / "project.json"
     path.write_text(json.dumps(project, indent=2), encoding="utf-8")
+    profile_path = tmp_path / "hier_mc.profile.json"
+    profile_path.write_text(
+        json.dumps(
+            {
+                "pipelineProfile": "hier_mc",
+                "actionConfig": {
+                    "validation": {
+                        "n_iterations": 2,
+                        "seed": 7,
+                        "train_fraction": 0.5,
+                        "cohorts": [
+                            {"label": "all", "csv": str(data / "all.csv")},
+                            {"label": "PCa_PCa1", "csv": str(data / "pca1.csv")},
+                            {"label": "PCa_PCa2", "csv": str(data / "pca2.csv")},
+                        ],
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.environ["METHYL_PROFILE"] = str(profile_path)
     return path
 
 
@@ -108,12 +119,12 @@ def test_plan_validation_context_hierarchical_groups(tmp_path: Path) -> None:
             overwrite=True,
         )
     )
-    iterations = ctx["iterations"]
+    iterations = ctx.iterations
     assert len(iterations) == 2
-    first = iterations[0]
+    first = iterations[0].model_dump(mode="json")
     assert "centroidGroups" in first
     assert len(first["centroidGroups"]) == 3
     for grp in first["centroidGroups"]:
         assert "addSamples" in grp and "removeSamples" in grp and "centroidDir" in grp
-    second = iterations[1]
+    second = iterations[1].model_dump(mode="json")
     assert second.get("previousRunDir")

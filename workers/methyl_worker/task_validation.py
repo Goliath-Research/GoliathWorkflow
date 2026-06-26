@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from pydantic import BaseModel, ValidationError
 
+from .task_models.runtime_models import TaskRuntimeContext
 from .task_schema_registry import resolve_task_schema_spec
 
 TASK_VALIDATION_ERROR_CODE = 4001
@@ -74,6 +75,34 @@ def normalize_task_input(
         mode="python", exclude_none=True, exclude_unset=True
     )
     return merge_runtime_input(normalized, runtime)
+
+
+def parse_task_envelope(
+    action_name: str,
+    capability: Optional[str],
+    input_json: Mapping[str, Any],
+) -> Tuple[BaseModel, TaskRuntimeContext]:
+    """Validate task input and parse runtime envelope from wire JSON."""
+    payload = dict(input_json)
+    runtime_wire = extract_runtime_input(payload)
+    task_payload = strip_runtime_input(payload)
+    spec = resolve_task_schema_spec(action_name, capability)
+    if spec is None:
+        raise TaskValidationError(
+            f"No input schema registered for {action_name!r}",
+            direction="input",
+            action_name=action_name,
+        )
+    try:
+        task_model = spec.load_input_model().model_validate(task_payload)
+    except ValidationError as exc:
+        raise TaskValidationError(
+            f"input_json failed schema validation for {action_name}: {exc}",
+            direction="input",
+            action_name=action_name,
+        ) from exc
+    runtime = TaskRuntimeContext.from_wire(runtime_wire)
+    return task_model, runtime
 
 
 def validate_task_input(

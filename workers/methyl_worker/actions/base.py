@@ -46,7 +46,7 @@ from ..task_models.step_override_models import CentroidBaseConfigOverride, Centr
 
 logger = logging.getLogger(__name__)
 
-InProcessCallable = Callable[[str, str, BaseModel], BaseModel]
+InProcessCallable = Callable[..., BaseModel]
 
 DEFAULT_PIPELINE_ARGV_MAP: Dict[str, str] = {
     "project": "--project",
@@ -172,17 +172,22 @@ class CliAction:
         return "\n".join(parts)
 
     def execute(self, input_json: Mapping[str, Any]) -> ActionExecutionResult:
-        input_model = validate_input(self.entry, input_json)
-        payload = input_model.model_dump(mode="json")
+        from ..task_validation import extract_runtime_input, strip_runtime_input
+
+        payload = dict(input_json)
+        runtime = extract_runtime_input(payload)
+        task_payload = strip_runtime_input(payload)
+        input_model = validate_input(self.entry, task_payload)
+        argv_payload = {**input_model.model_dump(mode="json"), **runtime}
         timer = ExecutionTimer()
-        cmd = self.build_argv(payload)
+        cmd = self.build_argv(argv_payload)
         logger.info("Running: %s", " ".join(cmd))
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
         finished_at, duration_ms = timer.finish()
         if proc.returncode != 0:
             raise RuntimeError(self._format_subprocess_failure(cmd, proc))
         collected = self.collector.collect(
-            payload,
+            argv_payload,
             action_name=self.entry.action_name,
             stdout=proc.stdout or "",
         )
@@ -216,13 +221,27 @@ class InProcessAction:
         self.entry = entry
 
     def execute(self, input_json: Mapping[str, Any]) -> ActionExecutionResult:
-        input_model = validate_input(self.entry, input_json)
-        timer = ExecutionTimer()
-        raw = self.handler(
-            self.entry.capability,
+        from ..task_validation import parse_task_envelope
+
+        input_model, runtime = parse_task_envelope(
             self.entry.action_name,
-            input_model,
+            self.entry.capability,
+            input_json,
         )
+        timer = ExecutionTimer()
+        try:
+            raw = self.handler(
+                self.entry.capability,
+                self.entry.action_name,
+                input_model,
+                runtime,
+            )
+        except TypeError:
+            raw = self.handler(
+                self.entry.capability,
+                self.entry.action_name,
+                input_model,
+            )
         finished_at, duration_ms = timer.finish()
         if not isinstance(raw, BaseModel):
             raise TypeError(

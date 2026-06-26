@@ -9,7 +9,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from pydantic import BaseModel
 
@@ -37,6 +37,7 @@ from .handler_helpers import (
     qc_history_from_payload,
     screening_from_payload,
 )
+from .task_models.runtime_models import TaskRuntimeContext
 from .task_models.sample_prep_models import MethylQcTaskOutput, SamplePrepTaskInput
 
 
@@ -294,24 +295,33 @@ def _normalize_validation_iteration_payload(item: Dict[str, Any]) -> Dict[str, A
 
 
 def _handle_validation_plan_iterations(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime: TaskRuntimeContext,
 ):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
-    from methyl_validation.workflow_planner import plan_validation_context
+    from methyl_validation.workflow_planner import ValidationPlanRequest, plan_validation_context
 
     from .task_models.validation_models import ValidationIterationRef, ValidationPlanTaskOutput
 
-    context = plan_validation_context(input_json)
+    request = (
+        input
+        if isinstance(input, ValidationPlanRequest)
+        else ValidationPlanRequest.model_validate(input.model_dump(mode="json"))
+    )
+    if not isinstance(runtime, TaskRuntimeContext):
+        runtime = TaskRuntimeContext.from_wire({})
+
+    context = plan_validation_context(request, profile_overrides=runtime.validationProfile)
     iterations = []
-    for item in context.get("iterations", []):
-        if not isinstance(item, dict):
-            continue
+    for item in context.iterations:
+        payload = item.model_dump(mode="json")
         iterations.append(
-            ValidationIterationRef.model_validate(_normalize_validation_iteration_payload(item))
+            ValidationIterationRef.model_validate(_normalize_validation_iteration_payload(payload))
         )
     return ValidationPlanTaskOutput(
         status="ok",
-        projectPath=context.get("projectPath"),
+        projectPath=context.projectPath,
         n_iterations=len(iterations),
         iterations=iterations,
     )
@@ -1252,7 +1262,7 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
         result = execution_result_from_output(output)
     else:
         action = build_action_from_catalog(entry, sys.modules[__name__])
-        result = action.execute(task_input)
+        result = action.execute(skip_input)
 
     record_action_execution(entry, skip_input, input_model, result, skipped=False)
     if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:

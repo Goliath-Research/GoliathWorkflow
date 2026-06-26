@@ -4,23 +4,34 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from methyl_validation.workflow_planner import ValidationPlanContext, ValidationPlannedIteration
 from methyl_worker.handlers import execute_task
 
 
 def test_validation_plan_iterations_handler() -> None:
-    fake_context = {
-        "projectPath": "/work/demo",
-        "iterations": [
-            {
-                "run_id": "feature_run_0001",
-                "runId": "feature_run_0001",
-                "phase": "feature",
-                "runDir": "/work/demo/monte_carlo_runs/run_0001",
-                "projectPath": "/work/demo/monte_carlo_runs/run_0001/project.json",
-                "taskConfig": {"runId": "feature_run_0001", "phase": "feature", "iteration": 1},
-            }
+    fake_context = ValidationPlanContext(
+        projectPath="/work/demo",
+        iterations=[
+            ValidationPlannedIteration.model_validate(
+                {
+                    "run_id": "feature_run_0001",
+                    "runId": "feature_run_0001",
+                    "phase": "feature",
+                    "runDir": "/work/demo/monte_carlo_runs/run_0001",
+                    "projectPath": "/work/demo/monte_carlo_runs/run_0001/project.json",
+                    "taskConfig": {"runId": "feature_run_0001", "phase": "feature", "iteration": 1},
+                }
+            )
         ],
-    }
+        validationPlan={
+            "baseProject": "/cfg/project.json",
+            "layout": "binary",
+            "featureIterations": 1,
+            "qualityIterations": 0,
+            "trainFraction": 0.8,
+            "monteCarloRunsRoot": "/work/demo/monte_carlo_runs",
+        },
+    )
     with patch(
         "methyl_validation.workflow_planner.plan_validation_context",
         return_value=fake_context,
@@ -42,18 +53,28 @@ def test_validation_plan_iterations_handler() -> None:
 
 
 def test_validation_plan_iterations_maps_snake_case_fields() -> None:
-    fake_context = {
-        "projectPath": "/work/demo",
-        "iterations": [
-            {
-                "runId": "feature_run_0000",
-                "iteration": 0,
-                "phase_index": 3,
-                "runDir": "/work/demo/monte_carlo_runs/run_0000",
-                "projectPath": "/work/demo/monte_carlo_runs/run_0000/project.json",
-            }
+    fake_context = ValidationPlanContext(
+        projectPath="/work/demo",
+        iterations=[
+            ValidationPlannedIteration.model_validate(
+                {
+                    "runId": "feature_run_0000",
+                    "iteration": 0,
+                    "phase_index": 3,
+                    "runDir": "/work/demo/monte_carlo_runs/run_0000",
+                    "projectPath": "/work/demo/monte_carlo_runs/run_0000/project.json",
+                }
+            )
         ],
-    }
+        validationPlan={
+            "baseProject": "/cfg/project.json",
+            "layout": "binary",
+            "featureIterations": 1,
+            "qualityIterations": 0,
+            "trainFraction": 0.8,
+            "monteCarloRunsRoot": "/work/demo/monte_carlo_runs",
+        },
+    )
     with patch(
         "methyl_validation.workflow_planner.plan_validation_context",
         return_value=fake_context,

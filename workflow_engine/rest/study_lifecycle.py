@@ -108,7 +108,7 @@ def start_study_validation(
     planner_payload = dict(body)
     planner_payload.setdefault("projectPath", project_path)
     planned = plan_validation_context(planner_payload)
-    context = enrich_instance_context(planned)
+    context = enrich_instance_context(planned.model_dump(mode="json"))
 
     version_id = _resolve_workflow_version_id(
         db,

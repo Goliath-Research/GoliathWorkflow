@@ -2715,7 +2715,7 @@ def main() -> None:
 
             context = plan_validation_context(plan_req)
             engine = LocalWorkflowEngine(config=SchedulerConfig(parallel_workers=1))
-            result = engine.run_program(program, context)
+            result = engine.run_program(program, context.model_dump(mode="json"))
             if result.status != "COMPLETED":
                 print(f"Error: workflow ended with {result.status}: {result.error}", file=sys.stderr)
                 sys.exit(1)

@@ -55,6 +55,20 @@ def _update_backend_params(config: MonteCarloConfig, backend: str, updates: dict
     return updated
 
 
+def apply_project_regulatory_to_mc_dict(
+    mc_config_dict: dict[str, Any],
+    project: Any,
+) -> dict[str, Any]:
+    """Copy study-manifest ``regulatory`` into MonteCarloConfig (not in profile validation slice)."""
+    get_regulatory = getattr(project, "get_regulatory_config", None)
+    if not callable(get_regulatory):
+        return mc_config_dict
+    regulatory = get_regulatory()
+    if not regulatory:
+        return mc_config_dict
+    return {**mc_config_dict, "regulatory": regulatory}
+
+
 def load_monte_carlo_config(
     args: Namespace,
     parser: Union[ArgumentParser, None] = None,
@@ -101,14 +115,17 @@ def load_monte_carlo_config(
                 "Define project controls/diseases sample_paths (or flat groups) with CSVs."
             )
 
-        mc_config_dict = {
-            "samples_base_path": project_data.get("samples_base_path", "/work/prostate-cancer/samples"),
-            "base_project": str(args.project),
-            "output_base": project_data.get("output_base", "/work/prostate-cancer"),
-            "path_remap": project_data.get("path_remap"),
-            "cohorts": cohorts,
-            **validation_settings,
-        }
+        mc_config_dict = apply_project_regulatory_to_mc_dict(
+            {
+                "samples_base_path": project_data.get("samples_base_path", "/work/prostate-cancer/samples"),
+                "base_project": str(args.project),
+                "output_base": project_data.get("output_base", "/work/prostate-cancer"),
+                "path_remap": project_data.get("path_remap"),
+                "cohorts": cohorts,
+                **validation_settings,
+            },
+            project,
+        )
         return MonteCarloConfig.model_validate(mc_config_dict), True
     if args.config is not None:
         return MonteCarloConfig.from_json_file(args.config), False

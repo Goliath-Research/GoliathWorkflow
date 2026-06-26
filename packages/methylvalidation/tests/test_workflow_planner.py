@@ -73,16 +73,17 @@ def test_plan_validation_context_materializes_iterations(tmp_path: Path) -> None
             qualityIterations=0,
         )
     )
-    assert len(context["iterations"]) == 2
-    assert context["iterations"][0]["phase"] == "feature"
-    assert context["iterations"][0]["runId"] == "feature_run_0001"
-    assert context["iterations"][0]["$type"] == "StratifiedCohortDraw"
-    assert context["iterations"][0]["groups"]
-    assert context["iterations"][0]["groups"][0]["$type"] == "MethylGroup"
-    assert "taskConfig" in context["iterations"][0]
-    run_project = Path(context["iterations"][0]["projectPath"])
+    assert len(context.iterations) == 2
+    first = context.iterations[0].model_dump(mode="json")
+    assert first["phase"] == "feature"
+    assert first["runId"] == "feature_run_0001"
+    assert first["$type"] == "StratifiedCohortDraw"
+    assert first["groups"]
+    assert first["groups"][0]["$type"] == "MethylGroup"
+    assert "taskConfig" in first
+    run_project = Path(first["projectPath"])
     assert run_project.is_file()
-    assert context["projectPath"].endswith("demo_mc")
+    assert context.projectPath.endswith("demo_mc")
 
 
 def test_plan_validation_context_requires_validation_block(tmp_path: Path) -> None:
@@ -120,6 +121,6 @@ def test_plan_validation_context_resume_includes_monte_carlo_runs_root(tmp_path:
             overwrite=False,
         )
     )
-    task_config = resumed["iterations"][0]["taskConfig"]
+    task_config = resumed.iterations[0].model_dump(mode="json")["taskConfig"]
     assert "monteCarloRunsRoot" in task_config
     assert Path(task_config["monteCarloRunsRoot"]).is_dir()
