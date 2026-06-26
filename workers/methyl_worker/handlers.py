@@ -1220,15 +1220,20 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
 
     from .action_execution import validate_input
     from .action_skip import maybe_skip_action, record_action_execution
+    from .task_validation import extract_runtime_input, merge_runtime_input, strip_runtime_input
 
-    input_model = validate_input(entry, input_json)
-    skipped_result = maybe_skip_action(entry, input_json)
+    runtime = extract_runtime_input(input_json)
+    task_input = strip_runtime_input(input_json)
+    input_model = validate_input(entry, task_input)
+    skip_input = merge_runtime_input(task_input, runtime)
+
+    skipped_result = maybe_skip_action(entry, skip_input)
     if skipped_result is not None:
         _log_action_execution(
-            entry, action_name, input_json, skipped_result, skipped=True, input_model=input_model
+            entry, action_name, skip_input, skipped_result, skipped=True, input_model=input_model
         )
         if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:
-            skipped_result = _attach_domain_sample_ref(entry, action_name, input_json, skipped_result)
+            skipped_result = _attach_domain_sample_ref(entry, action_name, task_input, skipped_result)
         return skipped_result
 
     if _stub_external_enabled() and capability in _STUB_EXTERNAL_CAPABILITIES:
@@ -1247,12 +1252,12 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
         result = execution_result_from_output(output)
     else:
         action = build_action_from_catalog(entry, sys.modules[__name__])
-        result = action.execute(input_json)
+        result = action.execute(task_input)
 
-    record_action_execution(entry, input_json, input_model, result, skipped=False)
+    record_action_execution(entry, skip_input, input_model, result, skipped=False)
     if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:
-        result = _attach_domain_sample_ref(entry, action_name, input_json, result)
-    _log_action_execution(entry, action_name, input_json, result, skipped=False, input_model=input_model)
+        result = _attach_domain_sample_ref(entry, action_name, task_input, result)
+    _log_action_execution(entry, action_name, skip_input, result, skipped=False, input_model=input_model)
     return result
 
 

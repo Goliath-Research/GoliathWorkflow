@@ -10,6 +10,24 @@ from .task_schema_registry import resolve_task_schema_spec
 
 TASK_VALIDATION_ERROR_CODE = 4001
 
+# Worker/runtime control fields — not part of task I/O schemas; preserved across normalization.
+RUNTIME_INPUT_KEYS = frozenset({"forceRerun", "workflowNodeKey"})
+
+
+def strip_runtime_input(input_json: Dict[str, Any]) -> Dict[str, Any]:
+    """Task payload only (fields accepted by the registered input model)."""
+    return {k: v for k, v in input_json.items() if k not in RUNTIME_INPUT_KEYS}
+
+
+def extract_runtime_input(input_json: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: input_json[k] for k in RUNTIME_INPUT_KEYS if k in input_json}
+
+
+def merge_runtime_input(task_input: Dict[str, Any], runtime: Dict[str, Any]) -> Dict[str, Any]:
+    if not runtime:
+        return task_input
+    return {**task_input, **runtime}
+
 
 class TaskValidationError(ValueError):
     def __init__(self, message: str, *, direction: str, action_name: str) -> None:
@@ -34,13 +52,17 @@ def normalize_task_input(
     input_json: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Drop template fields not in the task input schema (e.g. projectPath)."""
+    runtime = extract_runtime_input(input_json)
     spec = resolve_task_schema_spec(action_name, capability)
     if spec is None:
         return input_json
     model = spec.load_input_model()
     allowed = set(model.model_fields.keys())
     filtered = {k: v for k, v in input_json.items() if k in allowed}
-    return model.model_validate(filtered).model_dump(mode="python", exclude_none=True, exclude_unset=True)
+    normalized = model.model_validate(filtered).model_dump(
+        mode="python", exclude_none=True, exclude_unset=True
+    )
+    return merge_runtime_input(normalized, runtime)
 
 
 def validate_task_input(
@@ -53,7 +75,7 @@ def validate_task_input(
         return
     try:
         normalized = normalize_task_input(action_name, capability, input_json)
-        _validate_input_model(spec.load_input_model(), normalized)
+        _validate_input_model(spec.load_input_model(), strip_runtime_input(normalized))
     except ValidationError as exc:
         raise TaskValidationError(
             f"input_json failed schema validation for {action_name}: {exc}",

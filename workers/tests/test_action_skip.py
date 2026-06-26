@@ -103,6 +103,86 @@ def test_force_rerun_bypasses_skip(tmp_path: Path) -> None:
     assert maybe_skip_action(entry, input_json) is None
 
 
+def test_normalize_task_input_preserves_force_rerun() -> None:
+    from methyl_worker.task_validation import normalize_task_input
+
+    normalized = normalize_task_input(
+        "validation.plan_iterations",
+        "validation.plan-iterations",
+        {
+            "projectPath": "/work/p/project.json",
+            "featureIterations": 10,
+            "forceRerun": True,
+            "workflowNodeKey": "plan_iterations",
+            "extraTemplateField": "dropped",
+        },
+    )
+    assert normalized.get("forceRerun") is True
+    assert normalized.get("workflowNodeKey") == "plan_iterations"
+    assert "extraTemplateField" not in normalized
+
+
+def test_execute_task_honors_force_rerun_after_normalize(tmp_path: Path, monkeypatch) -> None:
+    """Engine path: normalize_task_input must not strip forceRerun before maybe_skip_action."""
+    from methyl_worker.task_validation import normalize_task_input
+
+    entry = find_catalog_entry("validation.stability")
+    assert entry is not None
+    stability_dir = tmp_path / "stability"
+    stability_dir.mkdir(parents=True)
+    project = tmp_path / "project.json"
+    project.write_text("{}", encoding="utf-8")
+
+    revision = compute_action_revision(entry)
+    record = ActionExecutionRecord(
+        action_name=entry.action_name,
+        capability=entry.capability,
+        started_at_utc=datetime.now(timezone.utc).replace(microsecond=0),
+        finished_at_utc=datetime.now(timezone.utc).replace(microsecond=0),
+        duration_ms=1,
+        action_revision=revision,
+        input_signature="sig",
+        output_signature="outsig",
+        task_output={"status": "ok", "outputDir": str(stability_dir), "summary": {}},
+        artifacts=[],
+    )
+    atomic_write_action_result(
+        manifest_path_for(stability_dir, entry.action_name, "default"),
+        record,
+    )
+
+    raw = {
+        "projectPath": str(project),
+        "monteCarloRunsRoot": str(tmp_path / "mc"),
+        "outputDir": str(stability_dir),
+        "forceRerun": True,
+    }
+    normalized = normalize_task_input(entry.action_name, entry.capability, raw)
+    assert normalized.get("forceRerun") is True
+
+    run_calls: list = []
+
+    class FakeAction:
+        def execute(self, _input_json):
+            run_calls.append(1)
+            return execution_result_from_output(
+                ValidationStabilityOutput(
+                    status="ok",
+                    outputDir=str(stability_dir),
+                    summary=StabilitySummary(),
+                )
+            )
+
+    monkeypatch.setattr(
+        "methyl_worker.handlers.build_action_from_catalog",
+        lambda _entry, _mod: FakeAction(),
+    )
+
+    result = execute_task(entry.capability, entry.action_name, normalized)
+    assert run_calls, "forceRerun should bypass skip and execute handler"
+    assert result.output.status == "ok"
+
+
 def test_execute_task_skips_validation_stability_when_manifest_exists(tmp_path: Path, monkeypatch) -> None:
     entry = find_catalog_entry("validation.stability")
     assert entry is not None
