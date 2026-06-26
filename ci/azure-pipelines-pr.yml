@@ -31,6 +31,11 @@ steps:
     displayName: Documentation link guard
 
   - script: |
+      python scripts/check_windows_paths.py
+      pytest scripts/tests/test_check_windows_paths.py -q
+    displayName: Windows-compatible path guard
+
+  - script: |
       bash scripts/render_diagrams.sh --check || echo "Diagram freshness check skipped if SVG placeholders committed"
     displayName: Diagram asset freshness check
 

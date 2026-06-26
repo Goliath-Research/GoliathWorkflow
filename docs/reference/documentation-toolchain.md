@@ -85,7 +85,8 @@ On docs changes:
 
 1. `bash scripts/render_diagrams.sh --check`
 2. `bash scripts/check_doc_links.sh`
-3. `quarto render docs/theory docs/usage --to html` (PDF optional on release)
+3. `python scripts/check_windows_paths.py`
+4. `quarto render docs/theory docs/usage --to html` (PDF optional on release)
 
 ## Related
 

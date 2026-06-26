@@ -59,6 +59,7 @@ This document is the canonical register of documentation coverage, canonical sou
 ## CI hooks
 
 - `bash scripts/check_doc_links.sh` — legacy path guard + required files
+- `python scripts/check_windows_paths.py` — reject tracked paths invalid on Windows
 - `bash scripts/render_diagrams.sh --check` — SVG freshness vs `.mmd` sources
 - `quarto render docs/theory docs/usage --to html` — book smoke (when Quarto available)
 
