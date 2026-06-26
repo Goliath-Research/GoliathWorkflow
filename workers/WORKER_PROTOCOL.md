@@ -46,11 +46,17 @@ Every successful submit includes a **typed** `output_json` (Pydantic `extra="for
 
 ### Action result manifests on `/work`
 
-CLI tools write JSON manifests under `{output_dir}/.action_results/{action_name}.{run_key}.json` (see `methyl_domain.action_result`). The worker reads and validates these after subprocess exit; legacy artifact scraping remains as fallback until all tools emit manifests.
+CLI tools write JSON manifests under `{output_dir}/.action_results/{action_name}.{run_key}.json` (see `methyl_domain.action_result`). Manifest schema **1.1** (`ActionExecutionRecord`) adds idempotency fields: `action_revision`, `input_signature`, `output_signature`, and optional `skipped` / `skip_reason`. Before executing, `execute_task()` compares these signatures against the stored manifest; when they match and output artifacts verify, the worker **replays** the cached result (`status: "skipped"`) instead of re-running.
+
+The worker reads and validates manifests after subprocess exit; legacy artifact scraping remains as fallback until all tools emit manifests.
 
 Sample prep also appends `{sampleDir}/{sampleId}.sample_prep_log.jsonl` for an operator-visible timeline.
 
-Validation / Monte Carlo runs append `{monteCarloRunsRoot}/action_run_log.jsonl` with one line per validation-category ACTION (plan, stability, model_mc, etc.).
+Validation / Monte Carlo runs append `{monteCarloRunsRoot}/action_run_log.jsonl` with one line per validation-category ACTION (plan, stability, model_mc, etc.). Log records include `skipped`, `action_revision`, and signature fields when idempotent skip applies.
+
+**FOREACH:** each action inside an MC iteration skips independently via its own manifest under `{runDir}/.action_results/`; the scheduler does not short-circuit whole iterations.
+
+**Force re-execute:** pass `forceRerun: true` in task input, set context `forceRerun` on local runs, use `methyl-workflow-run --force-rerun`, or export `METHYL_FORCE_RERUN=1`.
 
 ### `sample.methyl_qc` branch codes
 

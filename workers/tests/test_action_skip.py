@@ -1,0 +1,165 @@
+"""Tests for signature-based action skip/replay."""
+
+from __future__ import annotations
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+from methyl_domain.action_result import ActionExecutionRecord, atomic_write_action_result, manifest_path_for
+from pydantic import BaseModel
+
+from methyl_worker.action_catalog import find_catalog_entry
+from methyl_worker.action_execution import execution_result_from_output, validate_input
+from methyl_worker.action_skip import (
+    compute_action_revision,
+    compute_input_signature,
+    maybe_skip_action,
+    record_action_execution,
+    verify_artifacts,
+)
+from methyl_worker.handlers import execute_task
+from methyl_worker.task_models.validation_models import StabilitySummary, ValidationStabilityOutput
+
+
+def test_compute_input_signature_stable_for_same_payload() -> None:
+    entry = find_catalog_entry("validation.stability")
+    assert entry is not None
+
+    class FakeInput(BaseModel):
+        projectPath: str
+
+    model = FakeInput(projectPath="/work/p/project.json")
+    payload = {"projectPath": "/work/p/project.json"}
+    assert compute_input_signature(entry, payload, model) == compute_input_signature(
+        entry, payload, model
+    )
+
+
+def test_verify_artifacts_detects_size_change(tmp_path: Path) -> None:
+    from methyl_domain.action_result import ArtifactRef
+
+    path = tmp_path / "out.json"
+    path.write_text("{}", encoding="utf-8")
+    ref = ArtifactRef(path=str(path), bytes=2)
+    assert verify_artifacts([ref]) is True
+    path.write_text("{}\n", encoding="utf-8")
+    assert verify_artifacts([ref]) is False
+
+
+def test_maybe_skip_replays_when_manifest_matches(tmp_path: Path) -> None:
+    entry = find_catalog_entry("validation.stability")
+    assert entry is not None
+
+    mc_root = tmp_path / "monte_carlo_runs"
+    stability_dir = mc_root / "stability"
+    stability_dir.mkdir(parents=True)
+    summary_path = stability_dir / "stability_summary.json"
+    summary_path.write_text("{}", encoding="utf-8")
+
+    project = tmp_path / "configs" / "project.json"
+    project.parent.mkdir(parents=True)
+    project.write_text(
+        json.dumps(
+            {
+                "output_base": str(tmp_path),
+                "project_name": "Study",
+                "step_config": {"validation": {"n_iterations": 2, "stability_dmp_freq": 0.7}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    input_json = {
+        "projectPath": str(project),
+        "monteCarloRunsRoot": str(mc_root),
+        "outputDir": str(stability_dir),
+    }
+
+    input_model = validate_input(entry, input_json)
+    output = ValidationStabilityOutput(
+        status="ok",
+        outputDir=str(stability_dir),
+        summary=StabilitySummary(summary_json_path=str(summary_path), n_iterations=2),
+    )
+    record_action_execution(entry, input_json, input_model, execution_result_from_output(output))
+
+    assert manifest_path_for(stability_dir, entry.action_name, "default").is_file()
+    skipped = maybe_skip_action(entry, input_json)
+    assert skipped is not None
+    assert skipped.output.status == "skipped"
+
+
+def test_force_rerun_bypasses_skip(tmp_path: Path) -> None:
+    entry = find_catalog_entry("validation.stability")
+    assert entry is not None
+    stability_dir = tmp_path / "stability"
+    stability_dir.mkdir()
+    input_json = {
+        "projectPath": str(tmp_path / "missing.json"),
+        "outputDir": str(stability_dir),
+        "forceRerun": True,
+    }
+    assert maybe_skip_action(entry, input_json) is None
+
+
+def test_execute_task_skips_validation_stability_when_manifest_exists(tmp_path: Path, monkeypatch) -> None:
+    entry = find_catalog_entry("validation.stability")
+    assert entry is not None
+    mc_root = tmp_path / "monte_carlo_runs"
+    stability_dir = mc_root / "stability"
+    stability_dir.mkdir(parents=True)
+    summary_path = stability_dir / "stability_summary.json"
+    summary_path.write_text("{}", encoding="utf-8")
+
+    project = tmp_path / "project.json"
+    project.write_text(
+        json.dumps(
+            {
+                "output_base": str(tmp_path),
+                "project_name": "Study",
+                "step_config": {"validation": {"n_iterations": 1}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    revision = compute_action_revision(entry)
+    input_sig = "abc123"
+    output_sig = "def456"
+    started = datetime.now(timezone.utc).replace(microsecond=0)
+    record = ActionExecutionRecord(
+        action_name=entry.action_name,
+        capability=entry.capability,
+        started_at_utc=started,
+        finished_at_utc=started,
+        duration_ms=1,
+        action_revision=revision,
+        input_signature=input_sig,
+        output_signature=output_sig,
+        task_output={
+            "status": "ok",
+            "outputDir": str(stability_dir),
+            "summary": {"summary_json_path": str(summary_path), "n_iterations": 1},
+        },
+        artifacts=[],
+    )
+    manifest = manifest_path_for(stability_dir, entry.action_name, "default")
+    atomic_write_action_result(manifest, record)
+
+    monkeypatch.setattr(
+        "methyl_worker.action_skip.compute_input_signature",
+        lambda *_args, **_kwargs: input_sig,
+    )
+    monkeypatch.setattr(
+        "methyl_worker.action_skip.compute_output_signature",
+        lambda *_args, **_kwargs: output_sig,
+    )
+    monkeypatch.setattr("methyl_worker.action_skip.verify_artifacts", lambda _arts: True)
+
+    result = execute_task(
+        entry.capability,
+        entry.action_name,
+        {"projectPath": str(project), "monteCarloRunsRoot": str(mc_root), "outputDir": str(stability_dir)},
+    )
+    assert result.output.status == "skipped"

@@ -114,7 +114,21 @@ Where `<mc_root>` is:
 
 ## Recovery
 
-- Resume interrupted run:
+- **Re-run workflow after MC complete (recommended):** re-run the same DomainProgram. Each action inside the MC FOREACH loop skips independently when its `.action_results/` manifest matches; post-MC steps (stability, readiness) skip the same way once they have run successfully once.
+
+```bash
+source .venv/bin/activate
+methyl-workflow-run --program workflow_engine/domain/checks/.../buffy_mc_stability.program.json \
+  --context-file workflow_engine/domain/profiles/your.profile.json
+```
+
+- **Stability-only (CLI, no workflow):** when MC outputs exist but stability never succeeded:
+
+```bash
+methyl-validation --project /work/.../configs/project.json --stability --skip-detection
+```
+
+- Resume interrupted MC iteration loop:
 
 ```bash
 source .venv/bin/activate

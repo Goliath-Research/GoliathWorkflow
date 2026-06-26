@@ -136,6 +136,7 @@ class ActionCatalogEntry:
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP
     in_process_handler: Optional[str] = None
     handler: Optional[str] = None  # deprecated alias for in_process_handler
+    idempotency_enabled: bool = False
     domain_effects: Optional[DomainEffects] = None
 
     def __post_init__(self) -> None:
@@ -358,6 +359,7 @@ def _entry(
     context_vars: ContextVars = (),
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     in_process_handler: Optional[str] = None,
+    idempotency_enabled: bool = False,
     domain_effects: Optional[DomainEffects] = None,
 ) -> ActionCatalogEntry:
     return ActionCatalogEntry(
@@ -377,6 +379,7 @@ def _entry(
         context_vars=context_vars,
         argv_map=argv_map,
         in_process_handler=in_process_handler,
+        idempotency_enabled=idempotency_enabled,
         domain_effects=domain_effects,
     )
 
@@ -398,6 +401,7 @@ def _cli(
     context_vars: ContextVars = (),
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     domain_effects: Optional[DomainEffects] = None,
+    idempotency_enabled: bool = False,
 ) -> ActionCatalogEntry:
     return _entry(
         action_name,
@@ -416,6 +420,7 @@ def _cli(
         context_vars=context_vars,
         argv_map=argv_map,
         domain_effects=domain_effects,
+        idempotency_enabled=idempotency_enabled,
     )
 
 
@@ -436,6 +441,7 @@ def _in_process(
     step_config_key: Optional[StepConfigKey] = None,
     context_vars: ContextVars = (),
     domain_effects: Optional[DomainEffects] = None,
+    idempotency_enabled: bool = False,
 ) -> ActionCatalogEntry:
     return _entry(
         action_name,
@@ -455,6 +461,7 @@ def _in_process(
         context_vars=context_vars,
         argv_map=(),
         domain_effects=domain_effects,
+        idempotency_enabled=idempotency_enabled,
     )
 
 
@@ -1016,6 +1023,27 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         domain_effects=_DE_VALIDATION,
     ),
 )
+
+
+IDEMPOTENT_VALIDATION_ACTIONS: FrozenSet[str] = frozenset(
+    {
+        "validation.plan_iterations",
+        "validation.stability",
+        "validation.stability_freeze_readiness",
+        "validation.prepare_freeze_project",
+    }
+)
+
+
+def idempotency_enabled_for(entry: ActionCatalogEntry) -> bool:
+    """Return True when signature-based skip/replay is active for this catalog entry."""
+    if entry.idempotency_enabled:
+        return True
+    if entry.action_name in IDEMPOTENT_VALIDATION_ACTIONS:
+        return True
+    if entry.action_name.startswith("pipeline."):
+        return True
+    return False
 
 
 def list_action_catalog() -> List[ActionCatalogEntry]:

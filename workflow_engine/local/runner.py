@@ -44,6 +44,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Set WORKER_STUB_EXTERNAL=1 for sample-prep external capabilities",
     )
+    parser.add_argument(
+        "--force-rerun",
+        action="store_true",
+        help="Disable signature-based action skip and re-execute all actions",
+    )
     parser.add_argument("-v", "--verbose", action="store_true")
     args = parser.parse_args(argv)
 
@@ -64,9 +69,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.context:
         context.update(json.loads(args.context))
 
+    if args.force_rerun:
+        context["forceRerun"] = True
+
     config = SchedulerConfig(
         dry_run=args.dry_run,
         parallel_workers=args.parallel_workers,
+        force_rerun=args.force_rerun,
     )
     engine = LocalWorkflowEngine(config=config)
 
@@ -76,7 +85,16 @@ def main(argv: list[str] | None = None) -> int:
         spec = LocalWorkflowEngine.load_spec(args.workflow)
         result = engine.run_spec(spec, context)
 
-    print(json.dumps({"status": result.status, "actions": result.trace.executed_actions}, indent=2))
+    print(
+        json.dumps(
+            {
+                "status": result.status,
+                "actions": result.trace.executed_actions,
+                "skipped_actions": result.trace.skipped_actions,
+            },
+            indent=2,
+        )
+    )
     if result.error:
         print(f"error: {result.error}", file=sys.stderr)
         return 1

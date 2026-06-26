@@ -90,10 +90,16 @@ class LocalWorkflowEngine:
         scope = ScopeFrame(scope_data)
         handler = self._handler or self._default_handler()
         os.environ.setdefault("HDF5_USE_FILE_LOCKING", "FALSE")
+        force_rerun = bool(context.get("forceRerun")) or self.config.force_rerun
+        run_config = SchedulerConfig(
+            parallel_workers=self.config.parallel_workers,
+            dry_run=self.config.dry_run,
+            force_rerun=force_rerun,
+        )
 
         try:
             scheduler = WorkflowScheduler(
-                spec, scope, handler=handler, config=self.config
+                spec, scope, handler=handler, config=run_config
             )
             trace = scheduler.run()
             return RunResult(status="COMPLETED", trace=trace, scope=scope.as_flat_dict())

@@ -26,6 +26,11 @@ def append_action_run_log(
     inputs: Optional[Dict[str, Any]] = None,
     outputs: Optional[Dict[str, Any]] = None,
     workflow_node_key: Optional[str] = None,
+    skipped: bool = False,
+    skip_reason: Optional[str] = None,
+    action_revision: Optional[str] = None,
+    input_signature: Optional[str] = None,
+    output_signature: Optional[str] = None,
 ) -> Path:
     """Append one JSON line to {monteCarloRunsRoot}/action_run_log.jsonl."""
     mc_root = Path(mc_root)
@@ -40,6 +45,11 @@ def append_action_run_log(
         "inputs": inputs or {},
         "outputs": outputs or {},
         "workflow_node_key": workflow_node_key,
+        "skipped": skipped,
+        "skip_reason": skip_reason,
+        "action_revision": action_revision,
+        "input_signature": input_signature,
+        "output_signature": output_signature,
     }
     with open(log_path, "a", encoding="utf-8") as fh:
         fh.write(json.dumps(record, separators=(",", ":")) + "\n")

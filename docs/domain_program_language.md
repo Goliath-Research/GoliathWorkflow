@@ -153,6 +153,32 @@ Workers and CLIs write trace artifacts under shared storage:
 
 Authors do not write these files; they are useful when debugging failed runs on `/work`.
 
+## Idempotent action skip (signature-based)
+
+By default, `execute_task()` **skips** an action when a prior successful manifest exists with matching signatures and verified output artifacts. This makes `methyl-workflow-run` safe to re-run after partial failure (e.g. MC iterations complete, stability failed).
+
+| Field | Location | Purpose |
+|-------|----------|---------|
+| `action_revision` | `.action_results/*.json` | Invalidates skip when catalog or task schema changes |
+| `input_signature` | manifest + `action_run_log.jsonl` | Hash of validated input + relevant `step_config` slice |
+| `output_signature` | manifest + log | Hash of output artifact metadata (size/mtime; not full HDF5 contents) |
+
+**Skip authority:** `{outputDir}/.action_results/{action_name}.{run_key}.json` (`ActionExecutionRecord`, schema 1.1).
+
+**Audit:** validation actions also append `skipped: true` lines to `{monteCarloRunsRoot}/action_run_log.jsonl`.
+
+**FOREACH iterations:** the scheduler always enters each iteration body; **each action** inside (centroid, detector, mapper, gene_select, …) skips independently when its manifest under `{runDir}/.action_results/` matches. No iteration-level marker is required.
+
+**Force re-execute:**
+
+```bash
+methyl-workflow-run --program path/to/program.json --context-file ctx.json --force-rerun
+```
+
+Or set `"forceRerun": true` in instance context / per-action input. Environment: `METHYL_FORCE_RERUN=1`.
+
+Enabled for `validation.plan_iterations`, `validation.stability`, `validation.stability_freeze_readiness`, `validation.prepare_freeze_project`, and all `pipeline.*` actions. Legacy coarse flags (`methyl-validation --skip-detection`, `--resume`) remain available.
+
 ## Action parameters
 
 ```json

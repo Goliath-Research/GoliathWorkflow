@@ -1218,10 +1218,22 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
     if entry is None:
         raise RuntimeError(f"Unknown action {action_name!r} / capability {capability!r}")
 
-    if _stub_external_enabled() and capability in _STUB_EXTERNAL_CAPABILITIES:
-        from .action_execution import ExecutionTimer, execution_result_from_output, validate_input
+    from .action_execution import validate_input
+    from .action_skip import maybe_skip_action, record_action_execution
 
-        input_model = validate_input(entry, input_json)
+    input_model = validate_input(entry, input_json)
+    skipped_result = maybe_skip_action(entry, input_json)
+    if skipped_result is not None:
+        _log_action_execution(
+            entry, action_name, input_json, skipped_result, skipped=True, input_model=input_model
+        )
+        if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:
+            skipped_result = _attach_domain_sample_ref(entry, action_name, input_json, skipped_result)
+        return skipped_result
+
+    if _stub_external_enabled() and capability in _STUB_EXTERNAL_CAPABILITIES:
+        from .action_execution import ExecutionTimer, execution_result_from_output
+
         timer = ExecutionTimer()
         output_model = _handle_stub_external(capability, action_name, input_model)
         finished_at, duration_ms = timer.finish()
@@ -1237,23 +1249,36 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
         action = build_action_from_catalog(entry, sys.modules[__name__])
         result = action.execute(input_json)
 
+    record_action_execution(entry, input_json, input_model, result, skipped=False)
     if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:
         result = _attach_domain_sample_ref(entry, action_name, input_json, result)
-    if entry.category == "validation":
-        result = _append_validation_action_log(entry, action_name, input_json, result)
+    _log_action_execution(entry, action_name, input_json, result, skipped=False, input_model=input_model)
     return result
 
 
-def _append_validation_action_log(
+def _log_action_execution(
     entry,
     action_name: str,
     input_json: Dict[str, Any],
     result: ActionExecutionResult,
-) -> ActionExecutionResult:
+    *,
+    skipped: bool,
+    input_model: Optional[BaseModel] = None,
+) -> None:
+    if entry.category != "validation":
+        return
     try:
         from .action_run_log import append_action_run_log
+        from .action_skip import (
+            compute_action_revision,
+            compute_input_signature,
+            compute_output_signature,
+            artifacts_from_output,
+        )
 
         mc_root = _resolve_monte_carlo_runs_root(input_json)
+        if mc_root is None:
+            return
         run_dir = input_json.get("runDir") or input_json.get("targetRunDir")
         outputs = result.output.model_dump(mode="json")
         trimmed_inputs = {
@@ -1261,6 +1286,11 @@ def _append_validation_action_log(
             for k in ("projectPath", "project", "runDir", "monteCarloRunsRoot", "outputDir")
             if k in input_json
         }
+        if input_model is None:
+            from .action_execution import validate_input
+
+            input_model = validate_input(entry, input_json)
+        artifacts = artifacts_from_output(outputs)
         append_action_run_log(
             mc_root,
             action=action_name,
@@ -1270,7 +1300,11 @@ def _append_validation_action_log(
             inputs=trimmed_inputs,
             outputs=outputs,
             workflow_node_key=input_json.get("workflowNodeKey"),
+            skipped=skipped,
+            skip_reason="signature_match" if skipped else None,
+            action_revision=compute_action_revision(entry),
+            input_signature=compute_input_signature(entry, input_json, input_model),
+            output_signature=compute_output_signature(artifacts),
         )
     except Exception:
         logger.debug("validation action_run_log append skipped for %s", action_name, exc_info=True)
-    return result

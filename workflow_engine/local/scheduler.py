@@ -44,11 +44,13 @@ class NodeExecutionError(RuntimeError):
 class SchedulerConfig:
     parallel_workers: int = 4
     dry_run: bool = False
+    force_rerun: bool = False
 
 
 @dataclass
 class ExecutionTrace:
     executed_actions: List[str] = field(default_factory=list)
+    skipped_actions: List[str] = field(default_factory=list)
     skipped_branches: List[str] = field(default_factory=list)
 
 
@@ -226,6 +228,9 @@ class WorkflowScheduler:
         template = node.input_template or {}
         flat = scope.as_flat_dict()
         input_json = resolve_input_template(template, flat)
+        input_json["workflowNodeKey"] = node.node_key
+        if self.config.force_rerun or flat.get("forceRerun") is True:
+            input_json["forceRerun"] = True
 
         from methyl_worker.action_catalog import find_catalog_entry
 
@@ -241,4 +246,8 @@ class WorkflowScheduler:
         apply_output_bindings(self.spec, node.node_key, output, scope)
         if action_name:
             apply_catalog_scope_bindings(action_name, output, scope)
-        self.trace.executed_actions.append(node.node_key)
+        status = getattr(output, "status", None)
+        if status == "skipped":
+            self.trace.skipped_actions.append(node.node_key)
+        else:
+            self.trace.executed_actions.append(node.node_key)

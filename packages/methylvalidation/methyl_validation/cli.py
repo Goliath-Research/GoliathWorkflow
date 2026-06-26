@@ -1402,6 +1402,11 @@ def main() -> None:
         wf_parser.add_argument("--context-file", type=_Path, default=None, help="context_json file")
         wf_parser.add_argument("--stub-external", action="store_true")
         wf_parser.add_argument("--parallel-workers", type=int, default=1)
+        wf_parser.add_argument(
+            "--force-rerun",
+            action="store_true",
+            help="Disable signature-based action skip and re-execute all actions",
+        )
         wf_args = wf_parser.parse_args(sys.argv[2:])
         import json as _json
         import os as _os
@@ -1414,6 +1419,8 @@ def main() -> None:
             ctx = _json.loads(wf_args.context_file.read_text(encoding="utf-8"))
         if wf_args.context:
             ctx.update(_json.loads(wf_args.context))
+        if wf_args.force_rerun:
+            ctx["forceRerun"] = True
         repo = _Path(__file__).resolve().parents[3]
         for rel in ("workflow_engine/local", "workflow_engine/domain", "workflow_engine/contract", "workers"):
             p = repo / rel
@@ -1423,10 +1430,22 @@ def main() -> None:
         from local.scheduler import SchedulerConfig
 
         engine = LocalWorkflowEngine(
-            config=SchedulerConfig(parallel_workers=wf_args.parallel_workers)
+            config=SchedulerConfig(
+                parallel_workers=wf_args.parallel_workers,
+                force_rerun=wf_args.force_rerun,
+            )
         )
         result = engine.run_program(wf_args.program, ctx)
-        print(_json.dumps({"status": result.status, "actions": result.trace.executed_actions}, indent=2))
+        print(
+            _json.dumps(
+                {
+                    "status": result.status,
+                    "actions": result.trace.executed_actions,
+                    "skipped_actions": result.trace.skipped_actions,
+                },
+                indent=2,
+            )
+        )
         sys.exit(0 if result.status == "COMPLETED" else 1)
 
     if len(sys.argv) > 1 and sys.argv[1] == "plan-workflow-context":

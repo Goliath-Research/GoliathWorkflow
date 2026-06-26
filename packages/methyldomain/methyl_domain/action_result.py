@@ -42,6 +42,29 @@ class ActionTelemetry(BaseModel):
     artifacts: list[ArtifactRef] = Field(default_factory=list)
 
 
+class ActionExecutionRecord(BaseModel):
+    """Persisted idempotency manifest for workflow ACTION skip/replay."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["1.1"] = "1.1"
+    action_name: str
+    capability: str
+    started_at_utc: datetime
+    finished_at_utc: datetime
+    duration_ms: int
+    result_code: int = 0
+    exit_code: int = 0
+    manifest_path: Optional[str] = None
+    artifacts: list[ArtifactRef] = Field(default_factory=list)
+    action_revision: str
+    input_signature: str
+    output_signature: str
+    skipped: bool = False
+    skip_reason: Optional[str] = None
+    task_output: dict = Field(default_factory=dict)
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc).replace(microsecond=0)
 
