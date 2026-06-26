@@ -167,6 +167,7 @@ def main() -> int:
     from workflow_context import resolve_input_json_from_template, validate_resolved_input_json
 
     scope = {
+        **summary["context_json"],
         "projectPath": summary["context_json"]["projectPath"],
         "centroid1Dir": "/work/out/centroid1",
         "centroid2Dir": "/work/out/centroid2",
@@ -186,12 +187,12 @@ def main() -> int:
         "runBiomarkerFilter": True,
         "runGeneFeaturecuts": True,
         "runGeneFeatureSelect": False,
-        "biomarkerFilter": True,
         "maxGenes": 500,
         "maxDmps": 500,
         "mapperDir": "/work/out/mapper",
         "maxFeatures": 200,
         "targetBalancedAccuracy": 0.9,
+        "comparison": "PCa_PCa1",
         "stepOverride": {
             "base_config": {
                 "add_samples": ["/work/samples/S1"],

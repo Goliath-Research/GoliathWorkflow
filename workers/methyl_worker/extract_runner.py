@@ -13,7 +13,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_EXTRACT_CONTEXTS: tuple[str, ...] = ("CG", "CHG", "CHH")
@@ -228,8 +227,13 @@ def resolve_methyl_extract_config(
     if not chromosomes:
         raise RuntimeError(f"project.chromosomes is required for methyl extract: {project_file}")
 
-    step_cfg: Dict[str, Any] = dict(project.get_step_config("methyl_extract") or {})
-    alignment_cfg = project.get_step_config("alignment_qc") or {}
+    from methyl_utils.action_config_resolver import resolve_from_task_input
+
+    regulatory = project.get_regulatory_config()
+    step_cfg: Dict[str, Any] = dict(
+        resolve_from_task_input("methyl_extract", input_json, regulatory=regulatory)
+    )
+    alignment_cfg = resolve_from_task_input("alignment_qc", input_json, regulatory=regulatory)
 
     reference_raw = (
         input_json.get("referenceFasta")

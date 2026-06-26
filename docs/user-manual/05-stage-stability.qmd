@@ -21,7 +21,7 @@ methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa
 
 ## Required config keys
 
-Under `step_config.validation`:
+In the pipeline profile **`actionConfig.validation`** (set `METHYL_PROFILE` or pass `--context-file`):
 
 - `n_iterations`, `train_fraction`, `seed`
 - `run_stability`
@@ -49,13 +49,13 @@ DomainProgram workflows support selectable paths via context profiles in `workfl
 - Profile: `gene_enricher_stability.profile.json`
 - Program: `mc_gene_enricher_stability.program.json`
 - Set `stability_featurecuts_enabled: false`, `stability_gene_featurecuts_enabled: false`, `stability_gene_freq` as needed
-- Mapper uses `dmps-*-discovery.csv`; enricher applies disease filters from `step_config.enricher`
+- Mapper uses `dmps-*-discovery.csv`; enricher disease filters come from profile `actionConfig.enricher`
 
 **DMP panel stability** (split detector + `pipeline.dmp_select`): profile `dmp_panel_stability` or `full_biomarker_gene_fc`.
 
 **Discovery DMPs → broad mapper → gene FeatureCuts** (stable gene panel for model): profile `discovery_gene_featurecuts` with `pca1_5_mc_stability.program.json`. Mapper uses `dmps-*-discovery.csv`; `pipeline.dmp_select` still runs so `pipeline.gene_select` has classifier DMP exports for validation. Biomarker/PPI pre-filter is off by default (largest gene pool); enable with `"runBiomarkerFilter": true` in context.
 
-**Biomarker / PPI pre-filter** (`validation.biomarker_filter`): optional via `${runBiomarkerFilter}`; modes `ppi_only`, `disease_only`, `disease_and_ppi` under `step_config.validation` or `gene_selection`. Can run on mapper gene pools without gene FeatureCuts.
+**Biomarker / PPI pre-filter** (`validation.biomarker_filter`): optional via `${runBiomarkerFilter}`; modes `ppi_only`, `disease_only`, `disease_and_ppi` under profile `actionConfig.validation` or `actionConfig.gene_selection`. Can run on mapper gene pools without gene FeatureCuts.
 
 See `docs/domain_program_language.md` for the full profile matrix and IF branch flags (`runDmpSelection`, `runGeneFeaturecuts`, …).
 

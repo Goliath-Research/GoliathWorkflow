@@ -137,6 +137,10 @@ class GroupConfig(BaseModel):
         default=None,
         description="Human-readable meaning of this cohort or stage (e.g. clinical stage); do not put file paths here.",
     )
+    order_index: Optional[int] = Field(
+        default=None,
+        description="Optional numeric ordering hint for progression synthesis when JSON order is insufficient.",
+    )
 
     @field_validator("description", mode="before")
     @classmethod
@@ -222,12 +226,12 @@ class ProjectConfig(BaseModel):
     Preferred schema:
     - `controls` / `diseases` (or singular `control` / `disease`)
     - explicit `comparisons`
-    - shared `chromosomes`, `contexts`, `path_remap`, and `step_config` at the
-      top level
+    - shared `chromosomes`, `contexts`, `path_remap`
+    - tool parameters live in pipeline profiles (`actionConfig`) and site manifest
 
     Backward compatibility is retained for `group1`/`group2`, flat `groups`,
     and a few historically nested keys that are promoted to the top level at
-    load time.
+    load time. ``step_config`` is not accepted (use profiles + site manifest).
     """
 
     project_name: str = Field(
@@ -297,21 +301,21 @@ class ProjectConfig(BaseModel):
         default=None,
         description="Prefix replacement when sample paths moved (e.g. NAS); longest match applied",
     )
-    step_config: Optional[Dict[str, Dict[str, Any]]] = Field(
+    regulatory: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc, fragmentomics, validation, progression, cluster. "
-        "Use 'predictor' (not 'validator') for prediction/validation; validator is deprecated. "
-        "Values are merged into that step's config (override file / CLI still override these). "
-        "Under 'detection', native multiclass PKL export (not MethylDetector runtime) may set: "
-        "multiclass_train_learned_head, multiclass_learned_logistic_C, multiclass_learned_max_iter, "
-        "multiclass_learned_standardize, multiclass_learned_random_state. "
-        "Under 'predictor', optional multiclass_model_path forces a specific PKL for multiclass runs; "
-        "optional 'panel' adds hierarchical OvR readout during prediction. "
-        "Under 'classifier', optional 'panel' (same shape) applies during classification when using samples_list / centroid validation (OvR pairwise max-contrast only). "
-        "Under 'validation', model-backend settings support hybrid observed features via feature_mode='observed_hybrid' "
-        "and feature_family_set in {dmp_scored,gene,structural,gene_scored,dmp_scored+gene,dmp_scored+structural,dmp_scored+gene_scored,hybrid-all} "
-        "(legacy aliases dmp,dmp+gene,dmp+structural,dmp+gene_scored accepted); "
-        "bundle manifests persist schema and aggregation metadata for reproducible train/inference contracts.",
+        description="Regulatory / analyte metadata (primary_analyte, stage, intended_use_summary, …).",
+    )
+    validation_partitions: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Cohort partition CSV paths for validation governance (development_train, locked_test, …).",
+    )
+    progression_order: Optional[Literal["from_stages", "from_comparisons", "explicit"]] = Field(
+        default=None,
+        description="How to order disease stages for progression synthesis. Default: from_stages when nested stages exist.",
+    )
+    progression_labels: Optional[List[str]] = Field(
+        default=None,
+        description="Explicit comparison tokens when progression_order is 'explicit'.",
     )
     _sample_qc_cache: Dict[str, List[Tuple[str, List[str], Literal["control", "disease"]]]] = PrivateAttr(
         default_factory=dict
@@ -346,6 +350,36 @@ class ProjectConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
+    def reject_step_config(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "step_config" in data:
+            raise ValueError(
+                "step_config was removed from study manifests. "
+                "Use pipeline profile actionConfig + site manifest. "
+                "Run: python scripts/migrate_project_config.py <legacy.json>"
+            )
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def promote_legacy_top_level_keys(cls, data: Any) -> Any:
+        """Promote nested validation.regulatory and validation_partitions from legacy shapes."""
+        if not isinstance(data, dict):
+            return data
+        data = dict(data)
+        if data.get("regulatory") is None:
+            val = data.get("validation")
+            if isinstance(val, dict) and isinstance(val.get("regulatory"), dict):
+                data["regulatory"] = val["regulatory"]
+        if data.get("validation_partitions") is None:
+            val = data.get("validation")
+            if isinstance(val, dict) and isinstance(val.get("validation_partitions"), dict):
+                data["validation_partitions"] = val["validation_partitions"]
+        if data.get("progression_order") is None and data.get("disease") is not None:
+            data.setdefault("progression_order", "from_stages")
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
     def normalize_control_disease_keys(cls, data: Any) -> Any:
         """Normalize accepted project-schema variants.
 
@@ -354,8 +388,6 @@ class ProjectConfig(BaseModel):
         - string `disease` + structured `diseases` -> `disease_name` + `disease`
         - nested project-level keys under `control` or `disease` are promoted to
           the top level when missing there
-        - nested legacy `predictor` blocks under a side are promoted into
-          `step_config.predictor`
         """
         if not isinstance(data, dict):
             return data
@@ -386,37 +418,9 @@ class ProjectConfig(BaseModel):
             side = data.get(side_key)
             if not isinstance(side, dict):
                 continue
-            for key in ("comparisons", "chromosomes", "contexts", "path_remap", "step_config"):
+            for key in ("comparisons", "chromosomes", "contexts", "path_remap", "regulatory", "validation_partitions"):
                 if key in side and (key not in data or data.get(key) is None):
                     data[key] = side[key]
-            if "predictor" in side and side.get("predictor") is not None:
-                sc = data.setdefault("step_config", {})
-                if isinstance(sc, dict) and "predictor" not in sc:
-                    sc = dict(sc)
-                    sc["predictor"] = side["predictor"]
-                    data["step_config"] = sc
-        return data
-
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_predictor_step_key(cls, data: Any) -> Any:
-        """Copy step_config.validator to step_config.predictor when predictor is missing (backward compatibility)."""
-        if not isinstance(data, dict):
-            return data
-        data = dict(data)
-        sc = data.get("step_config")
-        if not isinstance(sc, dict):
-            return data
-        sc = dict(sc)
-        if "predictor" not in sc and "validator" in sc:
-            warnings.warn(
-                "step_config.validator is deprecated and will be removed in a future release. "
-                "Use step_config.predictor instead.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            sc["predictor"] = sc["validator"]
-        data["step_config"] = sc
         return data
 
     @model_validator(mode="after")
@@ -923,14 +927,48 @@ class ProjectConfig(BaseModel):
 
     def get_ordered_comparison_labels(self, expand_subclusters: bool = False) -> List[str]:
         """
-        Ordered comparison tokens for progression / reporting: ``comparison_label`` if set, else ``disease_group``.
+        Ordered comparison tokens for progression / reporting.
 
-        Order matches :meth:`get_comparisons` (i.e. the project ``comparisons`` list or shorthand expansion).
+        Uses ``progression_order`` when set; otherwise ``from_stages`` when nested
+        stages exist, else comparison list order.
         """
-        return [
-            (s.comparison_label or s.disease_group)
-            for s in self.get_comparisons(expand_subclusters=expand_subclusters)
-        ]
+        comparisons = self.get_comparisons(expand_subclusters=expand_subclusters)
+        if not comparisons:
+            return []
+        by_dg = {c.disease_group: (c.comparison_label or c.disease_group) for c in comparisons}
+
+        mode = self.progression_order
+        if mode is None:
+            mode = "from_stages" if self._stage_ordered_disease_leaves() else "from_comparisons"
+
+        if mode == "explicit" and self.progression_labels:
+            return [str(x) for x in self.progression_labels]
+
+        if mode == "from_stages":
+            ordered_leaves = self._stage_ordered_disease_leaves()
+            if ordered_leaves:
+                return [by_dg[leaf] for leaf in ordered_leaves if leaf in by_dg]
+
+        return [(s.comparison_label or s.disease_group) for s in comparisons]
+
+    def _stage_ordered_disease_leaves(self) -> List[str]:
+        """Resolved disease leaf labels in stage order (order_index, then JSON order)."""
+        if self.disease is None:
+            return []
+        leaves: List[tuple[int, int, str]] = []
+        seq = 0
+        for g in self.disease.groups:
+            if g.stages:
+                for st in g.stages:
+                    idx = st.order_index if st.order_index is not None else seq
+                    leaves.append((idx, seq, f"{g.label}_{st.label}"))
+                    seq += 1
+            else:
+                idx = g.order_index if g.order_index is not None else seq
+                leaves.append((idx, seq, g.label))
+                seq += 1
+        leaves.sort(key=lambda t: (t[0], t[1]))
+        return [label for _, _, label in leaves]
 
     def _description_for_disease_group(self, disease_group: str) -> Optional[str]:
         """Return optional ``description`` from the disease ``GroupConfig`` matching this resolved leaf label."""
@@ -1079,47 +1117,14 @@ class ProjectConfig(BaseModel):
         return self._get_resolved_groups(expand_subclusters=expand_subclusters)
 
     def get_regulatory_config(self) -> Dict[str, Any]:
-        """Return raw step_config.validation.regulatory (no analyte profile merge)."""
-        if not self.step_config:
-            return {}
-        val = self.step_config.get("validation") or {}
-        if not isinstance(val, dict):
-            return {}
-        reg = val.get("regulatory")
-        return dict(reg) if isinstance(reg, dict) else {}
+        """Return top-level regulatory metadata (no analyte profile merge)."""
+        return dict(self.regulatory) if isinstance(self.regulatory, dict) else {}
 
     def get_primary_analyte(self) -> Optional[str]:
         """Canonical primary analyte from regulatory config, if set."""
         from .analyte_profiles import normalize_primary_analyte
 
         return normalize_primary_analyte(self.get_regulatory_config().get("primary_analyte"))
-
-    def get_step_config(self, step_name: str) -> Dict[str, Any]:
-        """
-        Return the config dict for a step, or empty dict if not defined.
-        Step names: centroid, detection, mapper, enricher, classifier, predictor,
-        alignment_qc, fragmentomics, validation, progression, cluster.
-        Use 'predictor' (canonical); 'validator' is deprecated but still accepted for backward compatibility.
-
-        When ``validation.regulatory.primary_analyte`` is set and analyte profiles
-        are enabled, missing keys are filled from the analyte profile (cfDNA vs buffy coat).
-        """
-        if not self.step_config:
-            user: Dict[str, Any] = {}
-        else:
-            user = dict(self.step_config.get(step_name) or {})
-
-        from .analyte_profiles import (
-            merge_step_config,
-            normalize_primary_analyte,
-            should_apply_analyte_profile,
-        )
-
-        reg = self.get_regulatory_config()
-        if should_apply_analyte_profile(reg):
-            analyte = normalize_primary_analyte(reg.get("primary_analyte"))
-            return merge_step_config(step_name, user, analyte)
-        return user
 
     def get_project_root(self) -> str:
         """Project root directory: {output_base}/{project_name}."""

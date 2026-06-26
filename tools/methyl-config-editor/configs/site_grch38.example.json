@@ -1,0 +1,13 @@
+{
+  "actionConfig": {},
+  "reference_genome": {
+    "fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+  },
+  "annotation": {
+    "gtf": "/work/ref/hg38/annotation.gtf"
+  },
+  "methyl_mapper_home": "/work/cache/methyl_mapper",
+  "caches": {
+    "string_edges": "/work/cache/methylenricher/string_edges"
+  }
+}

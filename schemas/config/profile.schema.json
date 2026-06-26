@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PipelineProfile",
+  "description": "Versioned pipeline parameter pack for DomainProgram workflows.",
+  "type": "object",
+  "properties": {
+    "pipelineProfile": { "type": "string" },
+    "runDmpSelection": { "type": "boolean" },
+    "runGeneFeaturecuts": { "type": "boolean" },
+    "runBiomarkerFilter": { "type": "boolean" },
+    "runGeneFeatureSelect": { "type": "boolean" },
+    "runProgressionAnalysis": { "type": "boolean" },
+    "stabilityFeaturecutsEnabled": { "type": "boolean" },
+    "stabilityGeneFeaturecutsEnabled": { "type": "boolean" },
+    "stabilityGeneBiomarkerFilterEnabled": { "type": "boolean" },
+    "actionConfig": {
+      "type": "object",
+      "description": "Per-action parameter overrides (detection, mapper, validation, …)",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

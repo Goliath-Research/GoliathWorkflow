@@ -8,12 +8,12 @@ from typing import Any, Dict, Mapping, Optional
 
 _PROFILES_DIR = Path(__file__).resolve().parent / "profiles"
 
-# Scope booleans consumed by IF branches in DomainPrograms.
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
     "runDmpSelection": False,
     "runGeneFeaturecuts": False,
     "runBiomarkerFilter": False,
     "runGeneFeatureSelect": False,
+    "runProgressionAnalysis": False,
     "stabilityFeaturecutsEnabled": False,
     "stabilityGeneFeaturecutsEnabled": False,
     "stabilityGeneBiomarkerFilterEnabled": False,
@@ -76,6 +76,26 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "runBiomarkerFilter": False,
         "runGeneFeatureSelect": True,
     },
+    "staged_ovr_mc": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": True,
+        "runProgressionAnalysis": True,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": True,
+    },
+    "staged_full_lifecycle": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": True,
+        "runProgressionAnalysis": True,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": True,
+    },
+    "buffy_mc_gene_fc": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": True,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": True,
+    },
 }
 
 
@@ -95,6 +115,11 @@ def load_profile(name_or_path: str | Path) -> Dict[str, Any]:
     raise FileNotFoundError(f"Unknown pipeline profile: {name_or_path!r}")
 
 
+def profile_action_config(profile: Mapping[str, Any]) -> Dict[str, Any]:
+    ac = profile.get("actionConfig") or profile.get("step_config_overrides") or {}
+    return dict(ac) if isinstance(ac, dict) else {}
+
+
 def _deep_merge(base: Dict[str, Any], overlay: Mapping[str, Any]) -> Dict[str, Any]:
     out = dict(base)
     for key, val in overlay.items():
@@ -108,13 +133,14 @@ def _deep_merge(base: Dict[str, Any], overlay: Mapping[str, Any]) -> Dict[str, A
 def seed_pipeline_scope_flags(
     context: Dict[str, Any],
     *,
-    step_config: Optional[Mapping[str, Any]] = None,
+    action_config: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Flatten validation / gene_selection / dmp_selection keys into IF-friendly scope booleans."""
     out = dict(context)
-    validation = dict((step_config or {}).get("validation") or {})
-    gene_sel = dict((step_config or {}).get("gene_selection") or {})
-    dmp_sel = dict((step_config or {}).get("dmp_selection") or {})
+    ac = dict(action_config or {})
+    validation = dict(ac.get("validation") or {})
+    gene_sel = dict(ac.get("gene_selection") or {})
+    dmp_sel = dict(ac.get("dmp_selection") or {})
 
     profile_name = out.get("pipelineProfile")
     preset = PROFILE_PRESETS.get(str(profile_name), {}) if profile_name else {}
@@ -148,6 +174,11 @@ def seed_pipeline_scope_flags(
             "stability_gene_biomarker_filter_enabled",
         ),
     )
+    out.setdefault(
+        "runProgressionAnalysis",
+        _flag("runProgressionAnalysis", "enabled")
+        or bool(ac.get("progression", {}).get("enabled") if isinstance(ac.get("progression"), dict) else False),
+    )
     dmp_enabled = dmp_sel.get("enabled")
     if dmp_enabled is None:
         dmp_enabled = out.get("runDmpSelection", preset.get("runDmpSelection"))
@@ -177,30 +208,30 @@ def apply_pipeline_profile(
     context: Dict[str, Any],
     profile: Mapping[str, Any],
     *,
-    step_config: Optional[Mapping[str, Any]] = None,
+    action_config: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Merge a profile dict into workflow instance context (flags + optional step_config overrides)."""
+    """Merge a profile dict into workflow instance context (flags + actionConfig)."""
     out = dict(context)
     name = profile.get("pipelineProfile")
     if name:
         out["pipelineProfile"] = name
     preset = PROFILE_PRESETS.get(str(name), {}) if name else {}
     for key, val in {**preset, **profile}.items():
-        if key in ("pipelineProfile", "step_config_overrides"):
+        if key in ("pipelineProfile", "actionConfig", "step_config_overrides"):
             continue
         if isinstance(val, bool) or key in PIPELINE_FLAG_DEFAULTS:
             out[key] = bool(val)
-    overrides = profile.get("step_config_overrides")
-    if isinstance(overrides, dict):
-        existing = dict(out.get("step_config_overrides") or {})
-        out["step_config_overrides"] = _deep_merge(existing, overrides)
+    profile_ac = profile_action_config(profile)
+    if profile_ac:
+        existing = dict(out.get("actionConfig") or {})
+        out["actionConfig"] = _deep_merge(existing, profile_ac)
 
-    effective_step_config: Dict[str, Any] = dict(step_config or {})
-    profile_overrides = out.get("step_config_overrides")
-    if isinstance(profile_overrides, dict):
-        effective_step_config = _deep_merge(effective_step_config, profile_overrides)
+    effective: Dict[str, Any] = dict(action_config or {})
+    ctx_ac = out.get("actionConfig")
+    if isinstance(ctx_ac, dict):
+        effective = _deep_merge(effective, ctx_ac)
 
-    return seed_pipeline_scope_flags(out, step_config=effective_step_config)
+    return seed_pipeline_scope_flags(out, action_config=effective)
 
 
 def apply_profile_by_name(context: Dict[str, Any], profile_name: str) -> Dict[str, Any]:

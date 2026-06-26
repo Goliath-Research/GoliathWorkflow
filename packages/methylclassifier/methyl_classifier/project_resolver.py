@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from methyl_utils import ProjectConfig, load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 try:
     from methyl_utils.dmp_export_paths import first_classifier_dmps_csv
@@ -127,7 +128,7 @@ def predicted_multiclass_ovr_bundle_path(
     step = dict(
         classifier_step
         if classifier_step is not None
-        else (project.get_step_config("classifier") or {})
+        else (resolve_for_project("classifier", project))
     )
     if not project.uses_control_disease():
         return None
@@ -158,9 +159,9 @@ def merge_project_classifier_step(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
-    """Merged ``step_config.classifier`` dict, including optional JSON overrides."""
+    """Merged classifier config from profile actionConfig, including optional JSON overrides."""
     project = load_project(project_path)
-    step_cfg = dict(project.get_step_config("classifier") or {})
+    step_cfg = dict(resolve_for_project("classifier", project))
     if step_override_path is not None:
         override_path = Path(step_override_path)
         if override_path.exists():
@@ -336,7 +337,7 @@ def resolve_classifier_config_per_cancer_group(
         List of (config, comparison_label) for each comparison.
     """
     project = load_project(project_path)
-    step_cfg = dict(project.get_step_config("classifier") or {})
+    step_cfg = dict(resolve_for_project("classifier", project))
     if step_override_path is not None:
         override_path = Path(step_override_path)
         if override_path.exists():
@@ -344,7 +345,7 @@ def resolve_classifier_config_per_cancer_group(
                 overrides = json.load(f)
             step_cfg = {**step_cfg, **overrides}
 
-    val_cfg_mc = project.get_step_config("validation") or {}
+    val_cfg_mc = resolve_for_project("validation", project)
     if step_cfg.get("calibration_train_fraction") is None and val_cfg_mc.get("train_fraction") is not None:
         step_cfg["calibration_train_fraction"] = float(val_cfg_mc["train_fraction"])
     if step_cfg.get("calibration_seed") is None and val_cfg_mc.get("seed") is not None:
@@ -553,7 +554,7 @@ def resolve_classifier_config(
         base["centroid_path_remap"] = project.path_remap
 
     # Apply project-level step config (classifier) if present
-    step_cfg = project.get_step_config("classifier")
+    step_cfg = resolve_for_project("classifier", project)
     if step_cfg:
         for k, v in step_cfg.items():
             base[k] = v
@@ -566,7 +567,7 @@ def resolve_classifier_config(
             base["panel"] = derived_panel
 
     # Default calibration holdout to MC validation train_fraction/seed when classifier omits them
-    val_cfg = project.get_step_config("validation") or {}
+    val_cfg = resolve_for_project("validation", project)
     if base.get("calibration_train_fraction") is None and val_cfg.get("train_fraction") is not None:
         base["calibration_train_fraction"] = float(val_cfg["train_fraction"])
     if base.get("calibration_seed") is None and val_cfg.get("seed") is not None:
@@ -593,7 +594,7 @@ def resolve_classifier_config(
 
     # Default save path: multiclass OvR → classifiers/<control>/<bundle>.pkl; else classifiers root.
     if not base.get("save_classifier_path"):
-        merged_cls = dict(project.get_step_config("classifier") or {})
+        merged_cls = dict(resolve_for_project("classifier", project))
         for k in _CLASSIFIER_STEP_KEYS_FOR_BUNDLE_PATH:
             if k in base:
                 merged_cls[k] = base[k]

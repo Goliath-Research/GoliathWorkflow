@@ -19,6 +19,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from methyl_utils.action_config_resolver import resolve_action_config_from_env
+
 # Mirror deprecated detector keys rejected by MethylDetectorConfig.model_validator (subset used in configs).
 _REMOVED_DETECTOR_KEYS = frozenset(
     {
@@ -283,12 +285,30 @@ def _load_enricher_completeness(production_dir: Path) -> Dict[str, Any]:
     }
 
 
+def _regulatory_from_project_dict(production_project: Dict[str, Any]) -> Dict[str, Any]:
+    reg = production_project.get("regulatory")
+    return dict(reg) if isinstance(reg, dict) else {}
+
+
+def _validation_partitions_from_project_dict(production_project: Dict[str, Any]) -> Dict[str, Any]:
+    parts = production_project.get("validation_partitions")
+    return dict(parts) if isinstance(parts, dict) else {}
+
+
+def _resolve_action_from_project_dict(
+    production_project: Dict[str, Any],
+    action_key: str,
+) -> Dict[str, Any]:
+    """Resolve action config from raw production project JSON (profile + site via env)."""
+    return resolve_action_config_from_env(
+        action_key,
+        regulatory=_regulatory_from_project_dict(production_project),
+    )
+
+
 def _extract_regulatory_context(production_project: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Extract lifecycle-stage and claim-boundary metadata from step_config.validation.
-    """
-    vcfg = ((production_project.get("step_config") or {}).get("validation")) or {}
-    reg = (vcfg.get("regulatory") or {}) if isinstance(vcfg, dict) else {}
+    """Extract lifecycle-stage and claim-boundary metadata from project regulatory block."""
+    reg = _regulatory_from_project_dict(production_project)
     stage = str(reg.get("stage") or "feasibility").strip().lower()
     allowed = bool(reg.get("allow_clinical_performance_claims", False))
     boundary = str(reg.get("claim_boundary") or "").strip()
@@ -318,10 +338,7 @@ def _extract_regulatory_context(production_project: Dict[str, Any]) -> Dict[str,
 
 
 def _extract_partition_contract(production_project: Dict[str, Any]) -> Dict[str, Any]:
-    vcfg = ((production_project.get("step_config") or {}).get("validation")) or {}
-    parts = (vcfg.get("validation_partitions") or {}) if isinstance(vcfg, dict) else {}
-    if not isinstance(parts, dict):
-        parts = {}
+    parts = _validation_partitions_from_project_dict(production_project)
     role_names = [
         "development_train",
         "internal_validation",
@@ -386,8 +403,8 @@ def analyze_project_root(
     dmp_stab = stability_summary.get("dmp_stability") or {}
     progression_summary = _safe_read_json(progression_summary_path) or {}
 
-    detection_cfg = ((production_project.get("step_config") or {}).get("detection")) or {}
-    fixed_panel = detection_cfg.get("fixed_dmp_panel")
+    detection_cfg = _resolve_action_from_project_dict(production_project, "detection")
+    fixed_panel = detection_cfg.get("fixed_dmp_panel") or production_summary.get("fixed_dmp_panel")
 
     removed_in_production = _scan_removed_detector_keys(detection_cfg if isinstance(detection_cfg, dict) else {})
 
@@ -441,7 +458,7 @@ def analyze_project_root(
         except Exception:
             ordered_stage_narratives = []
 
-    mapper_cfg = ((production_project.get("step_config") or {}).get("mapper")) or {}
+    mapper_cfg = _resolve_action_from_project_dict(production_project, "mapper")
     disease_context = mapper_cfg.get("disease_term")
     if isinstance(disease_context, str):
         disease_context = disease_context.strip() or None
@@ -610,7 +627,7 @@ def _compute_verdict(
             )
         elif not fr.get("fixed_dmp_panel_in_project"):
             freeze_status = "fail"
-            reasons.append("production project missing step_config.detection.fixed_dmp_panel.")
+            reasons.append("production project missing resolved detection.fixed_dmp_panel.")
         else:
             freeze_status = "pass"
 
@@ -637,7 +654,10 @@ def _compute_verdict(
             )
     else:
         prog_status = "skipped"
-        warnings.append("No progression/summary.json — enable step_config.progression on freeze or run progression separately.")
+        warnings.append(
+            "No progression/summary.json — enable profile actionConfig.progression on freeze "
+            "or run progression separately."
+        )
 
     if balance.get("max_chrom_share") is not None and balance["max_chrom_share"] > 0.45:
         warnings.append(
@@ -671,7 +691,7 @@ def _compute_verdict(
         if int(aq.get("n_samples_with_metrics") or 0) == 0:
             warnings.append(
                 "primary_analyte=cfdna but no alignment_qc fragmentomics_metrics found — "
-                "run methyl-qc with step_config.alignment_qc.fragmentomics enabled."
+                "run methyl-qc with profile actionConfig.alignment_qc.fragmentomics enabled."
             )
         elif aq.get("all_fragmentomics_guardrails_pass") is False:
             warnings.append(
@@ -681,7 +701,7 @@ def _compute_verdict(
             bam = frag.get("bam_fragmentomics") or {}
             if not bam.get("summary_present"):
                 warnings.append(
-                    "step_config.fragmentomics.enabled but fragmentomics_summary.json missing — "
+                    "profile actionConfig.fragmentomics.enabled but fragmentomics_summary.json missing — "
                     "run methyl-fragmentomics."
                 )
 
@@ -695,11 +715,11 @@ def _compute_verdict(
     if stage in {"pivotal_validation", "fda_submission"}:
         if not (reg.get("reference_standard") or ""):
             warnings.append(
-                "Pivotal/submission stage configured without reference_standard in step_config.validation.regulatory."
+                "Pivotal/submission stage configured without reference_standard in project regulatory."
             )
         if not (reg.get("target_population") or ""):
             warnings.append(
-                "Pivotal/submission stage configured without target_population in step_config.validation.regulatory."
+                "Pivotal/submission stage configured without target_population in project regulatory."
             )
         if not parts.get("configured"):
             warnings.append(
@@ -1500,8 +1520,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     if prod_json.is_file():
         try:
             from methyl_utils import load_project
+            from methyl_utils.action_config_resolver import resolve_for_project
 
-            val_cfg = load_project(prod_json).get_step_config("validation") or {}
+            prod_project = load_project(prod_json)
+            val_cfg = resolve_for_project("validation", prod_project)
             require_enricher = bool(val_cfg.get("require_complete_enricher", False))
         except Exception:
             require_enricher = False

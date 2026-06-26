@@ -1,87 +1,127 @@
-# Configuration Parameter Matrix (Active Components)
+# Configuration Parameter Matrix (Four-Layer Model)
 
-This matrix is code-backed. **Pipeline orchestration** (stage order, conditional branches) belongs in **DomainProgram** JSON — see [`architecture_review.md`](architecture_review.md). `project.json` is the **study manifest** (cohorts, paths, chromosomes); `step_config` supplies per-action defaults until migrated into program `with` blocks.
+This matrix documents the **new-only** configuration stack. **`step_config` in study manifests is removed** — see [`docs/plans/simplify-study-config.plan.md`](plans/simplify-study-config.plan.md).
 
-This matrix is scoped to the active canonical production workflow. Deprecated/legacy compatibility surfaces (including `methylcluster`) are out of scope except where explicitly called out as aliases.
+Pipeline **topology** (stage order, IF branches) belongs in **DomainProgram** JSON. **Tunable tool parameters** belong in **profile `actionConfig`**, **site manifest**, or program **`with` / `stepOverride`** — not in `project_*.json`.
 
 Status legend:
-- `declared`: present in a config schema/model or documented step config contract
+
+- `declared`: present in a JSON schema or Pydantic model
 - `consumed`: read and used by resolver/runtime logic
-- `inherited`: from top-level project fields (`output_base`, `samples_base_path`, `controls/diseases`, etc.)
-- `alias`: backward-compatible synonym
-- `legacy`: compatibility-only key; avoid in new configs
+- `inherited`: derived from study manifest fields (cohorts, paths, comparisons)
+- `materialized`: merged at plan/claim time into task `resolvedConfig`
 
-Legacy compatibility boundary:
-- entries marked `legacy` are retained for backward compatibility only
-- they are not part of the active canonical production workflow
+## Layer map
 
-## Shared project contract
+| Layer | Artifact | Schema | Owns |
+|-------|----------|--------|------|
+| Study manifest | `/work/<disease>/configs/project_*.json` | `schemas/config/project_config.schema.json` | Cohorts, stages, comparisons, chromosomes, paths, regulatory, validation_partitions, progression_order |
+| Program | `workflow_engine/domain/**/*.program.json` | `schemas/domain/domain_program.schema.json` | Control flow, per-action `with` / `stepOverride` |
+| Profile | `workflow_engine/domain/profiles/*.profile.json` | `schemas/config/profile.schema.json` | Scope booleans + `actionConfig` parameter packs |
+| Site | `/work/site/methyl_site.json` (or `METHYL_SITE_CONFIG`) | `schemas/config/site_manifest.schema.json` | Genomes, GTF, caches, cluster defaults |
+
+**Precedence** (highest wins): instance override → program `with` / `stepOverride` → profile `actionConfig` → analyte defaults (`regulatory.primary_analyte`) → site manifest → package defaults.
+
+## Study manifest (project_*.json)
 
 | Key | Status | Notes | Evidence |
-|---|---|---|---|
-| `controls` / `diseases` | alias + consumed | normalized to `control`/`disease` | `packages/methylutils/methyl_utils/pipeline_config.py` |
-| `step_config.validator` | legacy alias | copied to `step_config.predictor`; warning emitted | `packages/methylutils/methyl_utils/pipeline_config.py` |
-| `output_base`, `project_name` | inherited + consumed | root path for all derived outputs | `packages/methylutils/methyl_utils/pipeline_config.py` |
-| `samples_base_path` | inherited + consumed | used in resolvers/MC path expansion | `packages/*/project_resolver.py` |
-| `comparisons` | inherited + consumed | drives per-comparison output layout | `packages/methylutils/methyl_utils/pipeline_config.py` |
+|-----|--------|-------|----------|
+| `controls` / `diseases` | declared + consumed | Normalized to control/disease cohorts | `packages/methylutils/methyl_utils/pipeline_config.py` |
+| `diseases.groups[].stages[]` | declared + consumed | Staged comparisons; optional `description`, `order_index` | `pipeline_config.py` |
+| `comparisons` | declared + consumed | Drives per-comparison output layout | `pipeline_config.py` |
+| `progression_order` | declared + consumed | `from_stages` \| `from_comparisons` \| `explicit` | `pipeline_config.py` |
+| `progression_labels` | declared + consumed | Required when `progression_order` is `explicit` | `pipeline_config.py` |
+| `regulatory` | declared + consumed | Study-level regulatory metadata; `primary_analyte` seeds analyte defaults | `pipeline_config.py` |
+| `validation_partitions` | declared + consumed | Sample-list partitions for validation/freeze | `pipeline_config.py` |
+| `output_base`, `project_name` | declared + consumed | Root path for derived outputs | `pipeline_config.py` |
+| `samples_base_path` | declared + consumed | MC path expansion, sample resolution | `packages/*/project_resolver.py` |
+| `chromosomes`, `contexts` | declared + consumed | FOREACH bindings in compiled workflows | `workflow_engine/domain/compiler.py` |
+| `path_remap` | declared + consumed | Operator path aliasing on shared storage | `pipeline_config.py` |
+| `step_config` | **rejected** | Schema and `ProjectConfig` reject this key | `project_config.schema.json`, `pipeline_config.py` |
 
-## Per-step summary
+## Profile (actionConfig + scope flags)
 
-| Step | Declared source | Consumed source | Notable aliases / legacy |
-|---|---|---|---|
-| `centroid` | `packages/methylcentroid/methyl_centroid/config.py` | `packages/methylcentroid/methyl_centroid/project_resolver.py` | none |
-| `detection` | `packages/methyldetector/methyl_detector/models/config.py` | `packages/methyldetector/methyl_detector/utils/project_resolver.py` | strict: unknown keys rejected; legacy ECDF grid aliases removed (use `ecdf_grid_size`) |
-| `classifier` | `packages/methylclassifier/methyl_classifier/models/config_schema.py` | `packages/methylclassifier/methyl_classifier/project_resolver.py` | none |
-| `predictor` | `packages/methylpredictor/methyl_predictor/models/config.py` | `packages/methylpredictor/methyl_predictor/project_resolver.py` | `validator` alias (legacy) |
-| `mapper` | `packages/methylmapper/methyl_mapper/config.py` | `packages/methylmapper/methyl_mapper/project_resolver.py` | `csv_filename_pattern` alias in resolvers |
-| `enricher` | `packages/methylenricher/methyl_enricher/config.py` | `packages/methylenricher/methyl_enricher/project_resolver.py` | `input`/`outdir` aliases (legacy) |
-| `validation` | `packages/methylvalidation/methyl_validation/config.py` (`ValidationStepConfig` / `MonteCarloConfig`) | `packages/methylvalidation/methyl_validation/cli.py` + runner/stability | none |
-| `progression` | `packages/methyldiseaseprogression/methyl_disease_progression/config.py` | `packages/methyldiseaseprogression/.../progression.py` + `packages/methylvalidation/.../pipeline_runner.py` | `ordered_disease_groups` alias |
-| `alignment_qc` | `packages/methylalignmentqc/methyl_alignment_qc/models/config.py` | `packages/methylalignmentqc/methyl_alignment_qc/project_resolver.py` | `fragmentomics`, `auto_profile_from_analyte`, `bisulfite_conversion` (sidecar JSON) |
-| `fragmentomics` | `packages/methylfragmentomics/methyl_fragmentomics/config.py` | `packages/methylfragmentomics/methyl_fragmentomics/project_resolver.py` | BAM WPS + end motifs (`methyl-fragmentomics`) |
+Profiles combine **IF-friendly booleans** with **`actionConfig`** slices keyed by catalog action section (same keys historically used under `step_config`):
 
-## Redundancy candidate classification
+| Scope flag | Typical use | Set by |
+|------------|-------------|--------|
+| `runDmpSelection` | Gate `pipeline.dmp_select` | Profile preset or `actionConfig.dmp_selection` |
+| `runGeneFeaturecuts` | Gate gene FeatureCuts branch | Profile preset or validation/gene_selection keys |
+| `runBiomarkerFilter` | PPI/disease shrink before gene FC | Profile preset |
+| `runGeneFeatureSelect` | Structural gene×region selection | Profile preset |
+| `runProgressionAnalysis` | Gate `pipeline.progression` | Profile preset or `actionConfig.progression.enabled` |
+| `stabilityFeaturecutsEnabled` | DMP stability axis in MC | Profile or `actionConfig.validation` |
+| `stabilityGeneFeaturecutsEnabled` | Gene stability axis in MC | Profile or `actionConfig.validation` |
 
-| Candidate | Disposition | Risk | Rationale | Evidence |
-|---|---|---|---|---|
-| `step_config.validator` | deprecate, keep alias | low | still useful for old project files; canonical key is predictor | `packages/methylutils/.../pipeline_config.py`, `packages/methylpredictor/.../project_resolver.py` |
-| Enricher `input`/`outdir` aliases | deprecate, keep alias | low | duplicate semantics with `input_file`/`output_dir`; warnings added | `packages/methylenricher/.../project_resolver.py` |
-| Detector legacy ECDF keys | removed | low | strict config: use `ecdf_grid_size` only | `packages/methyldetector/.../models/config.py` |
-| `disease_subdir` arg in detector per-group resolver | remove | low | unused in runtime; removed | `packages/methyldetector/.../utils/project_resolver.py` |
-| Unused MC iteration runner args (`val_*`, predictor output in stability paths) | remove | low | no behavior effect; CLI calls updated | `packages/methylvalidation/.../pipeline_runner.py`, `cli.py` |
+Named staged/Buffy packs (repo): `staged_ovr_mc`, `staged_full_lifecycle`, `staged_progression_interpretation`, `buffy_mc_gene_fc`. See [`workflow_engine/domain/profiles/`](../../workflow_engine/domain/profiles/).
 
-## Canonical key recommendations
+Loader and flag seeding: `workflow_engine/domain/pipeline_profiles.py`, `workflow_engine/domain/workflow_context.py`.
 
-Use these keys in new/updated `project_*.json` files:
+## Site manifest
 
-- `step_config.predictor` (not `validator`)
-- `step_config.enricher.input_file` / `step_config.enricher.output_dir` (not `input` / `outdir`)
-- `step_config.detection.ecdf_grid_size` (not legacy grid aliases)
-- `step_config.progression.ordered_comparison_labels` (prefer over `ordered_disease_groups`)
+| Key | Status | Notes | Evidence |
+|-----|--------|-------|----------|
+| `reference_genome.fasta` | declared + consumed | Alignment, extraction reference | `action_config_resolver.py` (Phase 2) |
+| `annotation.gtf` | declared + consumed | Mapper annotation | site manifest schema |
+| `methyl_mapper_home` | declared + consumed | Mapper cache root | site manifest schema |
+| `caches.*` | declared + consumed | Shared cache paths (e.g. STRING edges) | `site_grch38.example.json` |
+| `actionConfig.*` | declared + consumed | Optional per-action infra defaults | `site_manifest.schema.json` |
 
-## Recent validation/runtime deltas (2026-05)
+Example: `workflow_engine/domain/profiles/site_grch38.example.json`.
 
-These are the highest-impact keys and behavioral contracts added or changed in recent mono-repo updates.
+## Program overrides
+
+| Mechanism | Status | Notes |
+|-----------|--------|-------|
+| `with.stepOverride` | declared + materialized | Per-invocation action parameter overlay |
+| `with` literal / `{ "ref": "..." }` | declared + consumed | Scope-bound inputs (chromosome, comparison, …) |
+| IF on `${runDmpSelection}` etc. | declared + consumed | Composable branches without manifest edits |
+
+## Per-action actionConfig sections
+
+Parameters resolve into **`resolvedConfig`** on each workflow task (Phase 4). Section keys map from the action catalog (`action_config_key`).
+
+| Section | Config model | Resolver / runner |
+|---------|--------------|-------------------|
+| `centroid` | `packages/methylcentroid/methyl_centroid/config.py` | `methyl_centroid/project_resolver.py` |
+| `detection` | `packages/methyldetector/methyl_detector/models/config.py` | `methyldetector/.../project_resolver.py` |
+| `classifier` | `packages/methylclassifier/methyl_classifier/models/config_schema.py` | `methyl_classifier/project_resolver.py` |
+| `predictor` | `packages/methylpredictor/methyl_predictor/models/config.py` | `methyl_predictor/project_resolver.py` |
+| `mapper` | `packages/methylmapper/methyl_mapper/config.py` | `methyl_mapper/project_resolver.py` |
+| `enricher` | `packages/methylenricher/methyl_enricher/config.py` | `methyl_enricher/project_resolver.py` |
+| `validation` | `packages/methylvalidation/methyl_validation/config.py` | `methyl_validation/cli.py`, runners |
+| `progression` | `packages/methyldiseaseprogression/methyl_disease_progression/config.py` | progression runner (manifest order + profile params) |
+| `alignment_qc` | `packages/methylalignmentqc/methyl_alignment_qc/models/config.py` | `methyl_alignment_qc/project_resolver.py` |
+| `fragmentomics` | `packages/methylfragmentomics/methyl_fragmentomics/config.py` | `methyl_fragmentomics/project_resolver.py` |
+| `methyl_extract` | sample-prep / extraction | workers + site manifest |
+
+## High-impact validation keys (profile actionConfig.validation)
+
+Recent contracts that belong in **profile** `actionConfig.validation`, not the study manifest:
 
 | Key / behavior | Status | Current contract |
-|---|---|---|
-| `stability_early_stop_enabled` + `stability_min_iterations` + `stability_convergence_*` | declared + consumed | Optional adaptive stop during `--stability`; convergence is checked on stable panel overlap/size drift with patience and still bounded by `n_iterations`. |
-| `ecdf_aggregated_enabled` + `ecdf_aggregated_n_bins` | declared + consumed | Aggregated ECDF OvR backend controls for `model_backend=ecdf`; auto-enabled when `feature_mode=observed_hybrid` and `feature_family_set != dmp_scored` unless explicitly overridden. Applies only when `feature_mode=observed_hybrid`. |
-| `feature_family_set` | declared + consumed | Governs observed-hybrid feature schema (only when `feature_mode=observed_hybrid`): canonical tokens `dmp_scored`, `gene`, `structural`, `gene_scored`, `structural_scored`, `dmp_scored+gene`, `dmp_scored+structural`, `dmp_scored+gene_scored`, `dmp_scored+structural_scored`, `hybrid-all`. Legacy aliases `dmp`, `dmp+gene`, `dmp+structural`, `dmp+gene_scored`, `dmp+structural_scored` are accepted and normalized on load. Non-`dmp_scored`-only families require mapper-derived annotations during model build. `gene_scored` / `dmp_scored+gene_scored` require `frozen_genes_production.csv`. `structural_scored` / `dmp_scored+structural_scored` require `frozen_gene_features.csv`. |
-| `gene_scored_min_support_n` | declared + consumed | Minimum `gene_support_n` for genes in the frozen panel when building `gene_scored` features (default `2`). Emits per comparison: `gene_directional_score__*`, `gene_panel_obs_fraction__*`, `gene_directional_iqr__*`, `gene_weighted_sign_agreement__*`. |
-| `gene_scored_use_region_weight` | declared + consumed | When true, multiply per-locus weights by `region_weight` from the bundle DMP index when computing per-gene directional values. |
-| `gene_scored_gene_weight` | declared + consumed | Gene pooling mode for `gene_directional_score__*`: `importance_x_sqrt_support` (default) or `importance_only`. |
-| `gene_scored_ordered_comparison_labels` | declared + consumed | Optional override for progression order when building `gene_scored` derived features. When null, order comes from `step_config.progression.ordered_comparison_labels` or `ProjectConfig.get_ordered_comparison_labels()`. |
-| `gene_scored_contrast_pairs` | declared + consumed | Optional list of `[left, right]` label pairs for extra `gene_directional_contrast__{left}__{right}` columns (= score(right)−score(left)). Auto extreme first→last contrast added when K≥2 unless already listed. |
-| `structural_scored_min_support_n` | declared + consumed | Minimum `n_dmps_in_feature` for gene-feature rows in `frozen_gene_features.csv` when building `structural_scored` (default `2`). |
-| `structural_scored_use_region_weight` | declared + consumed | When true, multiply per-locus weights by `region_weight` when computing structural directional values. |
-| `structural_scored_weight` | declared + consumed | Gene-feature pooling mode for `structural_directional_score__*`: `compound_x_sqrt_support` (default) or `compound_only`. |
-| `structural_scored_ordered_comparison_labels` | declared + consumed | Optional override for `structural_scored` progression order (same resolution chain as `gene_scored`). |
-| `structural_scored_contrast_pairs` | declared + consumed | Optional extra `structural_directional_contrast__{left}__{right}__{region}` pairs per emitted region type. |
-| `region_directional_region_types` + `region_directional_min_loci` | declared + consumed | Consumed by `structural_scored` only: candidate region types (default promoter/exon/intron/gene_body/terminator) and minimum panel loci in the classifier index to emit columns for a `(comparison, region)` pair. Columns are omitted entirely when unsupported (no all-NaN placeholders). |
-| `mapper_annotation_collapse_mode` | declared + consumed | Collapse multi-feature mapper intersections to one row per locus when building `mapper_dmp_annotations.csv`: `priority` (default; promoter>exon>intron>gene_body>terminator) or `weight` (legacy highest combined_weight). |
-| `mapper_annotation_unknown_fallback` | declared + consumed | Parent feature bucket for classifier loci with unknown/missing `feature_type` after mapper merge (default `gene_body`; set `null` to leave uncovered). |
-| `tabular_max_dmps` | declared + consumed | `null`/`0` keeps all stable DMP loci from bundle index; positive values cap by descending effect size. Older docs/examples that imply default `5000` are stale. |
-| model-MC shared reuse (`--model-mc --model-mc-all`) | consumed runtime behavior | When split source is reused, centroid/detector artifacts are symlinked from primary MC runs into `model_mc/shared/run_XXXX` instead of recomputation. |
-| freeze mapper annotation cache | consumed runtime behavior | Freeze builds `production/model_bundle/mapper_dmp_annotations.csv`, wires `step_config.model_bundle.mapper_annotation_csv`, and records `mapper_annotation_cache` in `production_summary.json`. |
+|----------------|--------|------------------|
+| `n_iterations`, `run_stability`, stability early-stop keys | declared + consumed | MC iteration count and adaptive stability stop |
+| `stability_featurecuts_enabled`, `stability_gene_featurecuts_enabled` | declared + consumed | Also surfaced as profile scope booleans |
+| `backend_profiles` (ecdf, tabular_sklearn, generative_hybrid) | declared + consumed | Model-backend parameter packs for MC/freeze |
+| `feature_family_set`, `gene_scored_*`, `structural_scored_*` | declared + consumed | Observed-hybrid feature schema; progression order from manifest when not overridden |
+| `ecdf_aggregated_enabled`, `tabular_max_dmps` | declared + consumed | ECDF/tabular backend tuning |
+| `require_biological_review_for_model`, `biological_review_confirmed` | declared + consumed | Freeze gate flags |
 
+Progression **order** comes from the study manifest (`progression_order`, `progression_labels`, stage `order_index`). Progression **scoring/report options** stay in profile `actionConfig.progression`.
+
+## CI guard
+
+Committed `project*.json` files must not contain `step_config`:
+
+```bash
+python scripts/check_no_step_config.py
+```
+
+Legacy backups use the `*.legacy.bak` suffix and are excluded.
+
+## Related docs
+
+- [DomainProgram language](domain_program_language.md) — profiles, site, instance context
+- [Architecture review](architecture_review.md) — layer map and migration status
+- [Simplify study config plan](plans/simplify-study-config.plan.md) — phased implementation

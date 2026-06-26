@@ -1,6 +1,6 @@
 """Action catalog includes split detector workflow actions."""
 
-from methyl_worker.action_catalog import ACTION_CATALOG, PROJECT_STEP_CONFIG_KEYS
+from methyl_worker.action_catalog import ACTION_CATALOG, PROJECT_ACTION_CONFIG_KEYS
 
 
 def test_split_workflow_actions_registered():
@@ -10,9 +10,9 @@ def test_split_workflow_actions_registered():
     assert "validation.biomarker_filter" in names
 
 
-def test_step_config_keys_include_split_sections():
-    assert "dmp_selection" in PROJECT_STEP_CONFIG_KEYS
-    assert "gene_selection" in PROJECT_STEP_CONFIG_KEYS
+def test_action_config_keys_include_split_sections():
+    assert "dmp_selection" in PROJECT_ACTION_CONFIG_KEYS
+    assert "gene_selection" in PROJECT_ACTION_CONFIG_KEYS
 
 
 def test_split_actions_have_dedicated_task_schema_specs():

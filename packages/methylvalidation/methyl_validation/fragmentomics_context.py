@@ -8,6 +8,23 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from methyl_utils.action_config_resolver import resolve_action_config_from_env
+
+
+def _regulatory_from_project_dict(production_project: Dict[str, Any]) -> Dict[str, Any]:
+    reg = production_project.get("regulatory")
+    return dict(reg) if isinstance(reg, dict) else {}
+
+
+def _resolve_action_from_project_dict(
+    production_project: Dict[str, Any],
+    action_key: str,
+) -> Dict[str, Any]:
+    return resolve_action_config_from_env(
+        action_key,
+        regulatory=_regulatory_from_project_dict(production_project),
+    )
+
 
 def _safe_read_json(path: Path) -> Optional[Dict[str, Any]]:
     if not path.is_file():
@@ -132,14 +149,11 @@ def build_fragmentomics_report(
     production_project: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Combine regulatory analyte, alignment_qc Phase 1, and optional BAM fragmentomics step."""
-    reg = ((production_project.get("step_config") or {}).get("validation") or {}).get("regulatory") or {}
-    if not isinstance(reg, dict):
-        reg = {}
+    reg = _regulatory_from_project_dict(production_project)
     analyte = _normalize_analyte(reg.get("primary_analyte"))
 
-    step_cfg = (production_project.get("step_config") or {}) if isinstance(production_project, dict) else {}
-    frag_step = step_cfg.get("fragmentomics") or {}
-    aq_step = step_cfg.get("alignment_qc") or {}
+    frag_step = _resolve_action_from_project_dict(production_project, "fragmentomics")
+    aq_step = _resolve_action_from_project_dict(production_project, "alignment_qc")
 
     alignment_qc_dir = project_root / "alignment_qc"
     fragmentomics_dir = project_root / "fragmentomics"

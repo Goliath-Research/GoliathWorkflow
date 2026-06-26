@@ -121,6 +121,31 @@ MethylConfigEditorTests.exe
 
 Tests cover schema loading (including `$ref`), JSON path utilities, and array operations.
 
+## Study configuration (four-layer model)
+
+Author pipeline studies with four artifacts (no `step_config` in study manifests):
+
+| Layer | Typical path | Owns |
+|-------|----------------|------|
+| Study manifest | `configs/project_*.json` | Cohorts, comparisons, paths, `regulatory`, `validation_partitions`, `progression_order` |
+| Pipeline profile | `configs/*.profile.json` or repo `workflow_engine/domain/profiles/` | `actionConfig` tool parameters + scope booleans (`runDmpSelection`, …) |
+| Site manifest | `configs/site_grch38.example.json` or `/work/site/methyl_site.json` | Genomes, GTF, caches, cluster defaults |
+| DomainProgram | repo `workflow_engine/domain/**/*.program.json` | Control flow, per-action `with` / `stepOverride` |
+
+**Schemas root** should include:
+
+- `schemas/config/project_config.schema.json` — study manifest
+- `schemas/config/profile.schema.json` — pipeline profile
+- `schemas/config/site_manifest.schema.json` — site manifest
+
+Open each JSON type with the matching schema from the dropdown. Tool tuning belongs in **profile** `actionConfig`, not in the study manifest.
+
+Legacy projects with `step_config` can be converted once:
+
+```bash
+python scripts/migrate_project_config.py --in-place path/to/project_*.json
+```
+
 ## Example configs
 
 The [`configs/`](configs/) folder may contain sample JSON documents for manual testing. They are not part of the tool design.

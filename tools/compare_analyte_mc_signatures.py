@@ -32,6 +32,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 import pandas as pd
+from methyl_utils.action_config_resolver import resolve_for_project
 
 EVIDENCE_LEVEL_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3}
 SORT_BY_ALIASES = {"total_weight": "gene_importance"}
@@ -264,7 +265,7 @@ def _enricher_filter_kwargs(project_json: Path) -> Dict[str, Any]:
     from methyl_utils import load_project
 
     project = load_project(project_json)
-    cfg = project.get_step_config("enricher") or {}
+    cfg = resolve_for_project("enricher", project)
     return {
         "gene_column": cfg.get("gene_column") or "gene_name",
         "disease_only": bool(cfg.get("disease_only", False)),

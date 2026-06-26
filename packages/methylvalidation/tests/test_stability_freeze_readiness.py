@@ -71,17 +71,9 @@ def _write_minimal_project(tree: Path) -> None:
 
     project = {
         "project_name": "production",
-        "step_config": {
-            "detection": {
-                "fixed_dmp_panel": str(prod / "stable_dmps_genomewide.csv"),
-                "alpha": 0.05,
-            },
-            "validation": {
-                "regulatory": {
-                    "sample_type": "whole blood buffy coat",
-                    "primary_analyte": "buffy_coat",
-                }
-            },
+        "regulatory": {
+            "sample_type": "whole blood buffy coat",
+            "primary_analyte": "buffy_coat",
         },
     }
     (prod / "project.json").write_text(json.dumps(project), encoding="utf-8")
@@ -168,14 +160,22 @@ def test_analyze_and_render_go(tmp_path: Path):
     assert "ModA" in md or "module" in md.lower()
 
 
-def test_no_go_on_legacy_detector_keys(tmp_path: Path):
+def test_no_go_on_legacy_detector_keys(tmp_path: Path, monkeypatch):
     root = tmp_path / "Proj"
     root.mkdir()
     _write_minimal_project(root)
     prod = root / "monte_carlo_runs" / "production"
-    proj = json.loads((prod / "project.json").read_text(encoding="utf-8"))
-    proj["step_config"]["detection"]["max_dmps_for_classifier"] = 10000
-    (prod / "project.json").write_text(json.dumps(proj), encoding="utf-8")
+    panel = str(prod / "stable_dmps_genomewide.csv")
+
+    def _fake_resolve(production_project, action_key):
+        if action_key == "detection":
+            return {"fixed_dmp_panel": panel, "max_dmps_for_classifier": 10000}
+        return {}
+
+    monkeypatch.setattr(
+        "methyl_validation.stability_freeze_readiness._resolve_action_from_project_dict",
+        _fake_resolve,
+    )
     report = analyze_project_root(root)
     assert report["verdict"]["freeze"] == "fail"
     assert report["verdict"]["overall"] == "no_go"
@@ -280,9 +280,8 @@ def test_primary_analyte_missing_is_non_blocking(tmp_path: Path):
     _write_minimal_project(root)
     prod_project = root / "monte_carlo_runs" / "production" / "project.json"
     payload = json.loads(prod_project.read_text(encoding="utf-8"))
-    payload.setdefault("step_config", {}).setdefault("validation", {}).setdefault("regulatory", {}).pop(
-        "primary_analyte", None
-    )
+    if isinstance(payload.get("regulatory"), dict):
+        payload["regulatory"].pop("primary_analyte", None)
     prod_project.write_text(json.dumps(payload), encoding="utf-8")
 
     report = analyze_project_root(root)
@@ -409,14 +408,7 @@ def test_ordered_stage_narratives_in_report_grok_payload_and_markdown(tmp_path: 
         "comparisons": "control_vs_each_disease",
         "chromosomes": ["1"],
         "contexts": ["CG"],
-        "step_config": {
-            "detection": {
-                "fixed_dmp_panel": str(prod / "stable_dmps_genomewide.csv"),
-                "alpha": 0.05,
-            },
-            "mapper": {"disease_term": "Prostate adenocarcinoma"},
-            "validation": {"regulatory": {"sample_type": "plasma", "primary_analyte": "cfdna"}},
-        },
+        "regulatory": {"sample_type": "plasma", "primary_analyte": "cfdna"},
     }
     (prod / "project.json").write_text(json.dumps(project_full), encoding="utf-8")
 

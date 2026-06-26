@@ -2,7 +2,7 @@
 Orchestrate pipeline CLIs via subprocess.
 
 Monte Carlo iterations run **methyl-centroid** and **methyl-detector**; when
-``step_config.detection.detection_mode`` is ``discovery_only``, **methyl-dmp-select**
+resolved detection ``detection_mode`` is ``discovery_only``, **methyl-dmp-select**
 runs next. With gene stability enabled, **methyl-mapper** and either **methyl-gene-select**
 (split path) or in-process gene FeatureCuts (legacy) follow. **--freeze** runs
 mapper/enricher; **--model** runs classifier then predictor.
@@ -15,6 +15,7 @@ import time
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Literal, Optional, Tuple
+from methyl_utils.action_config_resolver import resolve_action_config_from_env, resolve_for_project
 
 if TYPE_CHECKING:
     from .config import MonteCarloConfig
@@ -34,28 +35,27 @@ def _derive_previous_mc_run_dir(run_dir: Path) -> Optional[Path]:
     return run_dir.parent / f"run_{run_number - 1:04d}"
 
 
-def _detection_step_config(project_json: str | Path) -> Dict[str, Any]:
+def _detection_config(project_json: str | Path) -> Dict[str, Any]:
     try:
         from methyl_utils import load_project
 
         project = load_project(project_json)
-        return dict(project.get_step_config("detection") or {})
+        return dict(resolve_for_project("detection", project))
     except Exception:
         try:
             with open(project_json, encoding="utf-8") as f:
                 data = json.load(f)
-            step_config = data.get("step_config") if isinstance(data, dict) else None
-            if isinstance(step_config, dict):
-                detection = step_config.get("detection")
-                if isinstance(detection, dict):
-                    return dict(detection)
+            if isinstance(data, dict):
+                reg = data.get("regulatory")
+                regulatory = dict(reg) if isinstance(reg, dict) else {}
+                return dict(resolve_action_config_from_env("detection", regulatory=regulatory))
         except Exception:
             pass
         return {}
 
 
 def _uses_discovery_only(project_json: str | Path) -> bool:
-    return str(_detection_step_config(project_json).get("detection_mode") or "legacy") == "discovery_only"
+    return str(_detection_config(project_json).get("detection_mode") or "legacy") == "discovery_only"
 
 
 def _dmp_select_group_labels(project_json: str | Path) -> List[Optional[str]]:
@@ -411,13 +411,22 @@ def run_mapper(project_json: str | Path, per_cancer_group: bool = False) -> tupl
     return run_cmd(cmd)
 
 
-def _enricher_step_config(project_json: str | Path) -> Dict[str, Any]:
+def _enricher_config(project_json: str | Path) -> Dict[str, Any]:
     try:
         from methyl_utils import load_project
 
         project = load_project(project_json)
-        return dict(project.get_step_config("enricher") or {})
+        return dict(resolve_for_project("enricher", project))
     except Exception:
+        try:
+            with open(project_json, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                reg = data.get("regulatory")
+                regulatory = dict(reg) if isinstance(reg, dict) else {}
+                return dict(resolve_action_config_from_env("enricher", regulatory=regulatory))
+        except Exception:
+            pass
         return {}
 
 
@@ -428,7 +437,7 @@ def run_enricher(
     ensure_complete: Optional[bool] = None,
 ) -> tuple[int, str, str]:
     """Run methyl-enricher --project <project_json> with optional --ensure-complete."""
-    cfg = _enricher_step_config(project_json)
+    cfg = _enricher_config(project_json)
     use_ec = bool(ensure_complete) if ensure_complete is not None else bool(cfg.get("ensure_complete", True))
     cmd = ["methyl-enricher", "--project", str(project_json)]
     if use_ec:
@@ -458,13 +467,13 @@ def _progression_settings(project_json: str | Path) -> Dict[str, Any]:
         return {}
     try:
         project = load_project(project_json)
-        return project.get_step_config("progression") or {}
+        return resolve_for_project("progression", project)
     except Exception:
         return {}
 
 
 def run_progression(project_json: str | Path) -> tuple[int, str, str]:
-    """Run methyl-disease-progression --project <project_json> with optional step_config args."""
+    """Run methyl-disease-progression --project <project_json> with optional progression args."""
     cfg = _progression_settings(project_json)
     cmd = ["methyl-disease-progression", "--project", str(project_json)]
     out_dir = cfg.get("output_dir")
@@ -1081,7 +1090,7 @@ def run_pipeline_for_production(
         steps.append(
             ("methyl-detector", lambda: run_detector(project_json, per_cancer_group=False))
         )
-        if _uses_discovery_only(project_json) and not _detection_step_config(project_json).get(
+        if _uses_discovery_only(project_json) and not _detection_config(project_json).get(
             "fixed_dmp_panel"
         ):
             steps.append(
@@ -1096,7 +1105,7 @@ def run_pipeline_for_production(
     skip_enricher = config.skip_enricher if config is not None else False
     progression_cfg = _progression_settings(project_json)
     progression_enabled = bool(progression_cfg.get("enabled", False))
-    enricher_cfg = _enricher_step_config(project_json)
+    enricher_cfg = _enricher_config(project_json)
     enricher_distributed = bool(enricher_cfg.get("distributed", False))
     if not skip_enricher:
         if enricher_distributed:
@@ -1279,7 +1288,7 @@ def run_predictor_from_project(
     output_dir: Optional[str | Path] = None,
 ) -> tuple[int, str, str]:
     """
-    Run ``methyl-predictor --project`` using cohorts from ``step_config.predictor``.
+    Run ``methyl-predictor --project`` using cohorts from resolved predictor config.
     With control/disease comparisons, the predictor CLI auto-enables per-comparison runs.
     """
     cmd = ["methyl-predictor", "--project", str(project_json)]

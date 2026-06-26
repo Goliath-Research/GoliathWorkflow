@@ -226,28 +226,30 @@ def test_ensure_complete_path_runs_cisbp(tmp_path):
     assert "TF_HIT" in set(merged["Term"])
 
 
-def test_context_defaults_genome_fasta_and_gtf_from_project():
-    """genome_fasta defaults from step_config.alignment_qc; gtf from step_config.mapper."""
+def test_context_defaults_genome_fasta_and_gtf_from_project(monkeypatch):
+    """genome_fasta defaults from alignment_qc action config; gtf from mapper action config."""
     import types
 
+    from methyl_enricher.cisbp import context as cisbp_context
     from methyl_enricher.cli import _build_cisbp_context
 
-    class _FakeProject:
-        def get_step_config(self, name):
-            return {
-                "alignment_qc": {"genome_fasta": "/ref/hg38.fa"},
-                "mapper": {"gtf": "/ref/annotation.gtf"},
-            }.get(name, {})
+    def _fake_resolve(action_key, _project, **_kwargs):
+        return {
+            "alignment_qc": {"genome_fasta": "/ref/hg38.fa"},
+            "mapper": {"gtf": "/ref/annotation.gtf"},
+        }.get(action_key, {})
+
+    monkeypatch.setattr(cisbp_context, "resolve_for_project", _fake_resolve)
 
     args = types.SimpleNamespace(cutoff=0.05)
     cfg = CisbpConfig(enabled=True, mode="gene_sets")  # no genome_fasta/gtf set
-    ctx = _build_cisbp_context(args, cfg, _FakeProject(), project_path=None)
+    ctx = _build_cisbp_context(args, cfg, object(), project_path=None)
     assert ctx.genome_fasta == "/ref/hg38.fa"
     assert ctx.gtf == "/ref/annotation.gtf"
 
     # Explicit cisbp values override the project defaults.
     cfg2 = CisbpConfig(enabled=True, genome_fasta="/custom.fa", gtf="/custom.gtf")
-    ctx2 = _build_cisbp_context(args, cfg2, _FakeProject(), project_path=None)
+    ctx2 = _build_cisbp_context(args, cfg2, object(), project_path=None)
     assert ctx2.genome_fasta == "/custom.fa"
     assert ctx2.gtf == "/custom.gtf"
 

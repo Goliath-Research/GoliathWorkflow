@@ -90,16 +90,29 @@ def resolve_parabricks_config(
     parabricks_image: Optional[str] = None,
     bwa_threads: Optional[int] = None,
 ) -> ParabricksConfig:
-    """Resolve Parabricks settings from task input_json, project step_config, then env."""
+    """Resolve Parabricks settings from task input_json, resolved action config, then env."""
     payload = dict(input_json or {})
     step_cfg: Dict[str, Any] = {}
+    regulatory: Dict[str, Any] = {}
     if project_path:
         from methyl_utils import load_project
 
         project_file = Path(str(project_path)).expanduser().resolve()
         if project_file.is_file():
             project = load_project(str(project_file))
-            step_cfg = dict(project.get_step_config("parabricks") or {})
+            regulatory = dict(project.get_regulatory_config() or {})
+
+    from methyl_utils.action_config_resolver import resolve_from_task_input, resolve_for_project
+
+    if payload:
+        step_cfg = dict(resolve_from_task_input("parabricks", payload, regulatory=regulatory))
+    elif project_path:
+        from methyl_utils import load_project
+
+        project_file = Path(str(project_path)).expanduser().resolve()
+        if project_file.is_file():
+            project = load_project(str(project_file))
+            step_cfg = dict(resolve_for_project("parabricks", project))
 
     image = (
         parabricks_image

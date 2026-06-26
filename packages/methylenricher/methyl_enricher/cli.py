@@ -13,6 +13,7 @@ from .enricher import (
     LIBRARY_PRESETS,
     resolve_enrichr_libraries,
 )
+from methyl_utils.action_config_resolver import resolve_for_project
 from .module_pipeline import run_module_pipeline
 from .queue_cli import QUEUE_SUBCOMMANDS, main_queue
 
@@ -688,7 +689,7 @@ def main():
             print(f"[ERROR] Project config not found: {project_path}")
             sys.exit(1)
         project = load_project(project_path)
-        step_cfg = project.get_step_config("enricher")
+        step_cfg = resolve_for_project("enricher", project)
         if step_cfg:
             enricher_config = EnricherStepConfig.model_validate(step_cfg)
             _apply_enricher_config_to_args(args, enricher_config)

@@ -8,7 +8,7 @@ import pytest
 
 from methyl_worker.action_catalog import (
     ACTION_CATALOG,
-    PROJECT_STEP_CONFIG_KEYS,
+    PROJECT_ACTION_CONFIG_KEYS,
     build_capability_handlers,
     build_tool_cli_map,
     validate_catalog_linkage,
@@ -58,8 +58,8 @@ def test_catalog_entries_have_execution_mode() -> None:
         else:
             assert entry.resolved_in_process_handler()
     for entry in ACTION_CATALOG:
-        if entry.step_config_key is not None:
-            assert entry.step_config_key in PROJECT_STEP_CONFIG_KEYS
+        if entry.action_config_key is not None:
+            assert entry.action_config_key in PROJECT_ACTION_CONFIG_KEYS
 
 
 def test_action_catalog_export_roundtrip(tmp_path) -> None:

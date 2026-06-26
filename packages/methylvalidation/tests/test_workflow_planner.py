@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,23 @@ def _write_minimal_binary_project(tmp_path: Path) -> Path:
     disease = tmp_path / "disease.csv"
     healthy.write_text("sample\nH1\nH2\n", encoding="utf-8")
     disease.write_text("sample\nD1\nD2\n", encoding="utf-8")
+    profile_path = tmp_path / "test_mc.profile.json"
+    profile_path.write_text(
+        json.dumps(
+            {
+                "pipelineProfile": "test_mc",
+                "actionConfig": {
+                    "validation": {
+                        "n_iterations": 2,
+                        "train_fraction": 0.5,
+                        "seed": 7,
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.environ["METHYL_PROFILE"] = str(profile_path)
     payload = {
         "project_name": "demo_mc",
         "output_base": str(tmp_path / "work"),
@@ -40,13 +58,6 @@ def _write_minimal_binary_project(tmp_path: Path) -> Path:
                 "disease_group": "disease",
             }
         ],
-        "step_config": {
-            "validation": {
-                "n_iterations": 2,
-                "train_fraction": 0.5,
-                "seed": 7,
-            }
-        },
     }
     project_json = tmp_path / "project.json"
     project_json.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -76,8 +87,19 @@ def test_plan_validation_context_materializes_iterations(tmp_path: Path) -> None
 
 def test_plan_validation_context_requires_validation_block(tmp_path: Path) -> None:
     project_json = tmp_path / "project.json"
-    project_json.write_text(json.dumps({"project_name": "x"}), encoding="utf-8")
-    with pytest.raises(ValueError, match="step_config.validation"):
+    project_json.write_text(
+        json.dumps(
+            {
+                "project_name": "x",
+                "output_base": str(tmp_path),
+                "group1": {"label": "a", "sample_paths": ["/a"]},
+                "group2": {"label": "b", "sample_paths": ["/b"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    os.environ.pop("METHYL_PROFILE", None)
+    with pytest.raises(ValueError, match="validation action config"):
         plan_validation_context({"projectPath": str(project_json), "featureIterations": 1})
 
 

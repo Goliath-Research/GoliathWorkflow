@@ -3,21 +3,14 @@
 import json
 from pathlib import Path
 
-from methyl_disease_progression.gene_set_metrics import load_gene_set_profile
 from methyl_disease_progression.progression import run_progression_report
 
 
-def _write_project(tmp_path: Path, *, progression_extra: dict | None = None) -> Path:
+def _write_project(tmp_path: Path) -> Path:
     list_dir = tmp_path / "lists"
     list_dir.mkdir(parents=True, exist_ok=True)
     for name in ("healthy.csv", "p1.csv", "p2.csv", "p3.csv"):
         (list_dir / name).write_text("sample\ns1\n", encoding="utf-8")
-
-    step_config = {
-        "enricher": {"combined_csv_name": "all-gene_name-combined.csv"},
-    }
-    if progression_extra:
-        step_config["progression"] = progression_extra
 
     project_path = tmp_path / "project.json"
     project_path.write_text(
@@ -44,13 +37,25 @@ def _write_project(tmp_path: Path, *, progression_extra: dict | None = None) -> 
                     ],
                 },
                 "comparisons": "control_vs_each_disease",
-                "step_config": step_config,
             },
             indent=2,
         ),
         encoding="utf-8",
     )
     return project_path
+
+
+def _run_progression(
+    project_path: Path,
+    *,
+    progression_config: dict | None = None,
+    **kwargs,
+):
+    return run_progression_report(
+        project_path=project_path,
+        resolved_progression_config=progression_config or {},
+        **kwargs,
+    )
 
 
 def _write_stage_outputs(tmp_path: Path) -> None:
@@ -77,14 +82,8 @@ def _write_stage_outputs(tmp_path: Path) -> None:
         (enricher_dir / "enrichment_merged.csv").write_text("\n".join(p_rows) + "\n", encoding="utf-8")
         m_rows = ["Module,Score", f"Module_{stage},0.5"]
         (enricher_dir / "modules_ranked.csv").write_text("\n".join(m_rows) + "\n", encoding="utf-8")
-
-
-def test_load_gene_set_profile_from_path(tmp_path: Path) -> None:
-    p = tmp_path / "g.json"
-    p.write_text(json.dumps({"c1": ["A", "b"]}), encoding="utf-8")
-    prof, src = load_gene_set_profile({"gene_sets_path": str(p)})
-    assert src == str(p)
-    assert prof["c1"] == {"A", "B"}
+        md_rows = ["Module,Score", f"Module_{stage} (M1),0.5"]
+        (enricher_dir / "modules_ranked_detailed.csv").write_text("\n".join(md_rows) + "\n", encoding="utf-8")
 
 
 def test_compute_metrics_custom_profile(tmp_path: Path) -> None:
@@ -93,16 +92,16 @@ def test_compute_metrics_custom_profile(tmp_path: Path) -> None:
         json.dumps({"overlap": ["GENE_A"], "other": ["ZZZ"]}),
         encoding="utf-8",
     )
-    project_path = _write_project(
-        tmp_path,
-        progression_extra={
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    summary = _run_progression(
+        project_path,
+        progression_config={
             "gene_set_metrics_enabled": True,
             "gene_sets_path": str(profile_path.resolve()),
             "gene_set_denominator": "all_genes",
         },
     )
-    _write_stage_outputs(tmp_path)
-    summary = run_progression_report(project_path=project_path)
     mpath = Path(summary["gene_set_metrics_csv"])
     assert mpath.exists()
     text = mpath.read_text(encoding="utf-8")
@@ -134,7 +133,7 @@ def test_cli_enables_metrics_with_bundled_profile(tmp_path: Path) -> None:
 def test_metrics_disabled_by_default(tmp_path: Path) -> None:
     project_path = _write_project(tmp_path)
     _write_stage_outputs(tmp_path)
-    summary = run_progression_report(project_path=project_path)
+    summary = _run_progression(project_path)
     assert "gene_set_metrics_csv" not in summary
     assert summary["gene_set_metrics"]["enabled"] is False
     assert summary["gene_set_fractions"]["enabled"] is False
@@ -142,15 +141,15 @@ def test_metrics_disabled_by_default(tmp_path: Path) -> None:
 
 def test_nested_gene_set_metrics_plan_config(tmp_path: Path) -> None:
     """Nested progression.gene_set_metrics + disease_context writes plan default artifacts."""
-    project_path = _write_project(
-        tmp_path,
-        progression_extra={
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    summary = _run_progression(
+        project_path,
+        progression_config={
             "disease_context": "prostate_cancer",
             "gene_set_metrics": {"enabled": True, "gene_universe": "mapper_all"},
         },
     )
-    _write_stage_outputs(tmp_path)
-    summary = run_progression_report(project_path=project_path)
     assert summary["gene_set_fractions"]["output_basename"] == "stage_gene_set_fractions"
     assert summary["gene_set_fractions"]["gene_universe"] == "mapper_all"
     csv_p = Path(summary["gene_set_fractions_csv"])
@@ -163,9 +162,11 @@ def test_nested_gene_set_metrics_plan_config(tmp_path: Path) -> None:
 
 
 def test_inline_gene_set_profile_categories(tmp_path: Path) -> None:
-    project_path = _write_project(
-        tmp_path,
-        progression_extra={
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    summary = _run_progression(
+        project_path,
+        progression_config={
             "gene_set_metrics": {"enabled": True},
             "gene_set_profile": {
                 "categories": [
@@ -175,8 +176,6 @@ def test_inline_gene_set_profile_categories(tmp_path: Path) -> None:
             },
         },
     )
-    _write_stage_outputs(tmp_path)
-    summary = run_progression_report(project_path=project_path)
     assert summary["gene_set_fractions"]["profile_source"] == "inline:gene_set_profile.categories"
     text = Path(summary["gene_set_fractions_csv"]).read_text(encoding="utf-8")
     assert "overlap" in text and "empty" in text
@@ -189,19 +188,19 @@ def test_gene_set_metrics_skips_stage_with_malformed_mapper_columns(tmp_path: Pa
         json.dumps({"overlap": ["GENE_A"], "other": ["ZZZ"]}),
         encoding="utf-8",
     )
-    project_path = _write_project(
-        tmp_path,
-        progression_extra={
+    project_path = _write_project(tmp_path)
+    _write_stage_outputs(tmp_path)
+    bad_mapper = tmp_path / "out" / "prog" / "mapper" / "all" / "pca_pca2" / "all-gene_name-combined.csv"
+    bad_mapper.write_text("gene_name,total_weight\nGENE_A,1.2\n", encoding="utf-8")
+
+    summary = _run_progression(
+        project_path,
+        progression_config={
             "gene_set_metrics_enabled": True,
             "gene_sets_path": str(profile_path.resolve()),
             "gene_set_denominator": "all_genes",
         },
     )
-    _write_stage_outputs(tmp_path)
-    bad_mapper = tmp_path / "out" / "prog" / "mapper" / "all" / "pca_pca2" / "all-gene_name-combined.csv"
-    bad_mapper.write_text("gene_name,total_weight\nGENE_A,1.2\n", encoding="utf-8")
-
-    summary = run_progression_report(project_path=project_path)
     assert summary["gene_set_metrics"]["enabled"] is True
     # Two categories, but only two valid stages remain => 4 rows.
     assert summary["gene_set_metrics"]["rows"] == 4

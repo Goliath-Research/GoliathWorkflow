@@ -16,6 +16,7 @@ from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
 from .project_resolver import resolve_mapper_paths, resolve_mapper_paths_per_cancer_group
 from .secure_credentials import SecureCredentialManager, persist_secret_if_changed
+from methyl_utils.action_config_resolver import resolve_for_project
 
 
 def normalize_enrich_source(value: str) -> str:
@@ -796,7 +797,7 @@ Examples:
         # Apply project step_config.mapper via Pydantic model
         from methyl_utils import load_project
         project = load_project(project_path)
-        step_cfg = project.get_step_config("mapper")
+        step_cfg = resolve_for_project("mapper", project)
         if step_cfg:
             mapper_config = MapperStepConfig.model_validate(step_cfg)
             _apply_mapper_config_to_args(args, mapper_config)

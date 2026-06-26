@@ -7,8 +7,9 @@ Authoring format for MethylPipeline workflows.
 | DomainProgram (authoring IR) | `schemas/domain/domain_program.schema.json` | Repo: `workflow_engine/domain/**/*.program.json` |
 | Compiled engine graph | `schemas/workflow/workflow_definition.schema.json` | Generated at deploy; check harnesses write `compiled/compiled_workflow.json` |
 | Study manifest | `schemas/config/project_config.schema.json` | `/work/<study>/configs/project_*.json` |
+| Site manifest | `schemas/config/site_manifest.schema.json` | `/work/site/methyl_site.json` (or `METHYL_SITE_CONFIG`) |
 | Instance payload | (context keys + profile) | API / `methyl-workflow-run --context` |
-| Pipeline profile | (profile JSON) | Repo: `workflow_engine/domain/profiles/*.profile.json` |
+| Pipeline profile | `schemas/config/profile.schema.json` | Repo: `workflow_engine/domain/profiles/*.profile.json` |
 
 Compiler: `workflow_engine/domain/compiler.py` → `WorkflowDefinitionSpec` (Pydantic: `workflow_engine/contract/workflow_definition_spec.py`).
 
@@ -35,9 +36,10 @@ methyl-worker           Executes catalog actions; writes artifacts on /work
 | File | Contains | Example path |
 |------|----------|--------------|
 | **`*.program.json`** | Control flow: `do`, `for`, `if`, action names | `workflow_engine/domain/fixtures/sample_prep.program.json` |
-| **`project.json`** | Cohorts, chromosomes, `step_config`, `output_base` | `/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json` |
-| **`context_json`** | Instance vars: `projectPath`, profiles, `samples[]` | API body or `--context '{...}'` |
-| **Profile** | Pipeline booleans: `runDmpSelection`, `runGeneFeaturecuts`, … | `workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json` |
+| **`project.json`** | Study manifest: cohorts, stages, comparisons, paths, regulatory | `/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json` |
+| **`context_json`** | Instance vars: `projectPath`, `pipelineProfile`, `samples[]` | API body or `--context '{...}'` |
+| **Profile** | Scope booleans + `actionConfig` parameter packs | `workflow_engine/domain/profiles/staged_ovr_mc.profile.json` |
+| **Site manifest** | Genomes, GTF, caches, cluster defaults | `/work/site/methyl_site.json` |
 
 The compiler reads **`projectPath`** from context and inlines `project.chromosomes`, `project.comparisons`, etc. via collection bindings before FOREACH runs.
 
@@ -160,7 +162,7 @@ By default, `execute_task()` **skips** an action when a prior successful manifes
 | Field | Location | Purpose |
 |-------|----------|---------|
 | `action_revision` | `.action_results/*.json` | Invalidates skip when catalog or task schema changes |
-| `input_signature` | manifest + `action_run_log.jsonl` | Hash of validated input + relevant `step_config` slice |
+| `input_signature` | manifest + `action_run_log.jsonl` | Hash of validated input + materialized `resolvedConfig` |
 | `output_signature` | manifest + log | Hash of output artifact metadata (size/mtime; not full HDF5 contents) |
 
 **Skip authority:** `{outputDir}/.action_results/{action_name}.{run_key}.json` (`ActionExecutionRecord`, schema 1.1).
@@ -198,8 +200,13 @@ Literal strings in `with` (e.g. `"mode": "full"`) are preserved; use `{ "ref": "
 Minimal validation instance:
 
 ```json
-{ "projectPath": "/work/study/configs/project.json" }
+{
+  "projectPath": "/work/study/configs/project.json",
+  "pipelineProfile": "staged_ovr_mc"
+}
 ```
+
+Pass a profile file with `--context-file workflow_engine/domain/profiles/staged_ovr_mc.profile.json` (merges `actionConfig` and scope flags). Site defaults load from `METHYL_SITE_CONFIG` or `/work/site/methyl_site.json`.
 
 Sample prep adds `samples[]`, `isCfdna`, storage profiles — see `workflow_engine/sql/instance_context_examples/`.
 
@@ -214,19 +221,36 @@ methyl-validation run-workflow --program path/to/program.json --context-file con
 
 Compiler emits bindings for `project.*` references. Engine resolves `projectPath` → inline `project` JSON → `chromosomes`, `comparisons`, etc. before FOREACH runs.
 
-## Pipeline profiles (composable paths)
+## Pipeline profiles and site manifest
 
-Named presets live in `workflow_engine/domain/profiles/*.profile.json`. Pass via `--context-file` or set `pipelineProfile` in instance context. The engine seeds IF-friendly booleans (`runDmpSelection`, `runGeneFeaturecuts`, `runBiomarkerFilter`, `runGeneFeatureSelect`, `stabilityFeaturecutsEnabled`, …) from the profile and from `step_config.validation` / `gene_selection` / `dmp_selection`.
+### Four-layer authoring
 
-| Profile | Detector | dmp_select | Mapper CSV | Stability focus |
-|---------|----------|------------|------------|-----------------|
+New runs combine four artifacts (see [`config_parameter_matrix.md`](config_parameter_matrix.md)):
+
+1. **Study manifest** — cohorts, stages, comparisons, `regulatory`, `validation_partitions`, `progression_order`
+2. **DomainProgram** — topology and optional per-action `stepOverride`
+3. **Profile** — reusable `actionConfig` packs and IF scope booleans
+4. **Site manifest** — shared infra paths (genome, GTF, caches)
+
+**Precedence:** program `with` / `stepOverride` → profile `actionConfig` → analyte defaults → site manifest → package defaults. Study manifests must not contain tool parameters.
+
+### Profile presets
+
+Named presets live in `workflow_engine/domain/profiles/*.profile.json`. Pass via `--context-file` or set `pipelineProfile` in instance context. The engine seeds IF-friendly booleans from the profile preset and from `actionConfig.validation` / `gene_selection` / `dmp_selection`.
+
+| Profile | Detector | dmp_select | Mapper CSV | Stability / progression |
+|---------|----------|------------|------------|-------------------------|
 | `legacy_dual` | legacy inline FeatureCuts | off | discovery | DMP classifier panels |
 | `discovery_interpretation` | discovery_only | off | discovery | single-run mapper/enricher |
-| `gene_enricher_stability` | discovery_only | off | discovery | **gene frequency from enricher** (no DMP FC) |
+| `gene_enricher_stability` | discovery_only | off | discovery | gene frequency from enricher |
 | `dmp_panel_stability` | discovery_only | on | classifier-extended | DMP panel MC |
 | `full_biomarker_gene_fc` | discovery + dmp_select | on | classifier-extended | DMP + gene FeatureCuts |
-| `discovery_gene_featurecuts` | discovery + dmp_select | on | **discovery** | gene FeatureCuts on **broad mapped gene pool** |
+| `discovery_gene_featurecuts` | discovery + dmp_select | on | discovery | gene FeatureCuts on broad mapped pool |
 | `structural_features` | discovery_only | off | discovery + intersections | gene×region ranked catalog |
+| `staged_ovr_mc` | staged OvR + FeatureCuts | on | discovery | MC stability + progression |
+| `staged_full_lifecycle` | staged OvR + FeatureCuts | on | discovery | MC + freeze + model lifecycle |
+| `staged_progression_interpretation` | discovery_only | off | discovery | mapper/enricher + progression (no MC) |
+| `buffy_mc_gene_fc` | Buffy healthy vs PCa MC | on | classifier-extended | gene FeatureCuts stability |
 
 ```json
 {
@@ -235,6 +259,23 @@ Named presets live in `workflow_engine/domain/profiles/*.profile.json`. Pass via
   "else": []
 }
 ```
+
+Profile `actionConfig` example:
+
+```json
+{
+  "pipelineProfile": "staged_ovr_mc",
+  "runDmpSelection": true,
+  "runProgressionAnalysis": true,
+  "actionConfig": {
+    "detection": { "alpha": 0.05, "detection_mode": "discovery_only" },
+    "validation": { "n_iterations": 30, "run_stability": true },
+    "progression": { "enabled": true, "report_md": true }
+  }
+}
+```
+
+Site manifest example: `workflow_engine/domain/profiles/site_grch38.example.json`.
 
 Fixture programs under `workflow_engine/domain/fixtures/` (`detection_discovery_only`, `dmp_select_optional`, `mapper_per_comparison`, `enricher_with_overrides`) compose with study-specific programs.
 

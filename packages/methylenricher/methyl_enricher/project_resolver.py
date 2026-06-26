@@ -16,6 +16,7 @@ import warnings
 from pydantic import BaseModel, Field
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 DEFAULT_METHYL_ENRICHER_HOME = "/work/cache/methyl_enricher"
 
@@ -64,7 +65,7 @@ def resolve_enricher_paths_per_cancer_group(
     kept to avoid breaking older callers.
     """
     project = load_project(project_path)
-    step_cfg = project.get_step_config("enricher") or {}
+    step_cfg = resolve_for_project("enricher", project)
     if step_override_path and step_override_path.exists():
         import json
         with open(step_override_path) as f:
@@ -115,7 +116,7 @@ def resolve_enricher_paths(
     output_dir = paths.enricher_dir
 
     # Apply project-level step config (enricher) if present
-    step_cfg = project.get_step_config("enricher")
+    step_cfg = resolve_for_project("enricher", project)
     if step_cfg:
         _warn_enricher_alias_keys(step_cfg)
         if step_cfg.get("input_file") is not None:
@@ -160,7 +161,7 @@ def resolve_methyl_enricher_home(
       3) default `/work/cache/methyl_enricher`
     """
     project = load_project(project_path)
-    step_cfg = project.get_step_config("enricher") or {}
+    step_cfg = resolve_for_project("enricher", project)
     home = step_cfg.get("methyl_enricher_home")
     if step_override_path and step_override_path.exists():
         import json

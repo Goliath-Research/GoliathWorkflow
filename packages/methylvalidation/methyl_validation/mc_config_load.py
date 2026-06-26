@@ -60,10 +60,10 @@ def load_monte_carlo_config(
     parser: Union[ArgumentParser, None] = None,
 ) -> Tuple[MonteCarloConfig, bool]:
     """
-    Load config from --project (step_config.validation) or --config.
+    Load config from --project (profile actionConfig.validation) or --config.
 
     Returns (config, project_mode) where project_mode is True if loaded from --project.
-    Exits the process on error if parser is provided, else may raise.
+    Exits the process on error if parser is not None, else may raise.
     """
     def _err(msg: str) -> None:
         print(msg, file=sys.stderr)
@@ -72,38 +72,49 @@ def load_monte_carlo_config(
         raise ValueError(msg)
 
     if args.project is not None:
+        from methyl_utils.action_config_resolver import resolve_for_project
+
         with open(args.project, encoding="utf-8") as f:
             project_data = json.load(f)
 
-        if "step_config" in project_data and "validation" in project_data.get("step_config", {}):
-            validation_settings = dict(project_data["step_config"]["validation"])
-            if any(k in validation_settings for k in LEGACY_BACKEND_KEYS):
-                validation_settings, _ = merge_legacy_validation_keys_into_backend_profiles(
-                    validation_settings
-                )
-            cohorts = infer_monte_carlo_cohorts_from_project(project_data, args.project)
-            if len(cohorts) < 2:
-                _err(
-                    "Error: Could not infer >=2 Monte Carlo cohorts from project. "
-                    "Define project controls/diseases sample_paths (or flat groups) with CSVs."
-                )
+        if "step_config" in project_data:
+            _err(
+                f"Error: Project {args.project} still contains step_config; "
+                "run scripts/migrate_project_config.py and set METHYL_PROFILE."
+            )
 
-            mc_config_dict = {
-                "samples_base_path": project_data.get("samples_base_path", "/work/prostate-cancer/samples"),
-                "base_project": str(args.project),
-                "output_base": project_data.get("output_base", "/work/prostate-cancer"),
-                "path_remap": project_data.get("path_remap"),
-                "cohorts": cohorts,
-                **validation_settings
-            }
-            return MonteCarloConfig.model_validate(mc_config_dict), True
-        _err(f"Error: Project {args.project} does not contain step_config.validation")
-    elif args.config is not None:
+        project = load_project(str(args.project))
+        validation_settings = dict(resolve_for_project("validation", project))
+        if not validation_settings:
+            _err(
+                f"Error: Project {args.project} missing resolved validation action config "
+                "(set METHYL_PROFILE or pass --config)."
+            )
+        if any(k in validation_settings for k in LEGACY_BACKEND_KEYS):
+            validation_settings, _ = merge_legacy_validation_keys_into_backend_profiles(
+                validation_settings
+            )
+        cohorts = infer_monte_carlo_cohorts_from_project(project_data, args.project)
+        if len(cohorts) < 2:
+            _err(
+                "Error: Could not infer >=2 Monte Carlo cohorts from project. "
+                "Define project controls/diseases sample_paths (or flat groups) with CSVs."
+            )
+
+        mc_config_dict = {
+            "samples_base_path": project_data.get("samples_base_path", "/work/prostate-cancer/samples"),
+            "base_project": str(args.project),
+            "output_base": project_data.get("output_base", "/work/prostate-cancer"),
+            "path_remap": project_data.get("path_remap"),
+            "cohorts": cohorts,
+            **validation_settings,
+        }
+        return MonteCarloConfig.model_validate(mc_config_dict), True
+    if args.config is not None:
         return MonteCarloConfig.from_json_file(args.config), False
-    else:
-        if parser is not None:
-            parser.error("Either --config or --project must be provided")
-        raise ValueError("Either --config or --project must be provided")
+    if parser is not None:
+        parser.error("Either --config or --project must be provided")
+    raise ValueError("Either --config or --project must be provided")
 
 
 def apply_monte_carlo_config_overrides(

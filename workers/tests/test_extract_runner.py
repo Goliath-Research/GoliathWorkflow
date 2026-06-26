@@ -17,7 +17,7 @@ def _write_min_project(
     chromosomes: list[str] | None = None,
     methyl_extract: dict | None = None,
     genome_fasta: Path | None = None,
-) -> Path:
+) -> tuple[Path, dict]:
     ref = genome_fasta or path.parent / "genome.fa"
     if not ref.is_file():
         ref.write_text(">chr1\n")
@@ -25,18 +25,12 @@ def _write_min_project(
     if not chrom_mapping.is_file():
         chrom_mapping.write_text(json.dumps({"reference": str(ref), "chromosomes": []}))
 
-    step_config: dict = {
-        "alignment_qc": {"genome_fasta": str(ref)},
+    methyl_cfg = methyl_extract if methyl_extract is not None else {
+        "extract_contexts": ["CG", "CHG", "CHH"],
+        "threads": 10,
+        "min_mapq": 20,
+        "split": True,
     }
-    if methyl_extract is not None:
-        step_config["methyl_extract"] = methyl_extract
-    else:
-        step_config["methyl_extract"] = {
-            "extract_contexts": ["CG", "CHG", "CHH"],
-            "threads": 10,
-            "min_mapq": 20,
-            "split": True,
-        }
 
     payload = {
         "project_name": "test",
@@ -45,11 +39,33 @@ def _write_min_project(
         "contexts": ["CG"],
         "group1": {"label": "g1", "sample_paths": [str(path.parent / "samples.csv")]},
         "group2": {"label": "g2", "sample_paths": [str(path.parent / "samples.csv")]},
-        "step_config": step_config,
     }
     (path.parent / "samples.csv").write_text("S1\n")
     path.write_text(json.dumps(payload), encoding="utf-8")
-    return ref
+    action_config = {
+        "alignment_qc": {"genome_fasta": str(ref)},
+        "methyl_extract": methyl_cfg,
+    }
+    return ref, action_config
+
+
+def _task_input(
+    sample_id: str,
+    sample_dir: Path,
+    ref: Path,
+    action_config: dict,
+    *,
+    resolved_methyl_extract: dict | None = None,
+) -> dict:
+    payload = {
+        "sampleId": sample_id,
+        "sampleDir": str(sample_dir),
+        "referenceFasta": str(ref),
+        "actionConfig": action_config,
+    }
+    if resolved_methyl_extract is not None:
+        payload["resolvedConfig"] = resolved_methyl_extract
+    return payload
 
 
 def test_normalize_contexts_default_all_three() -> None:
@@ -62,20 +78,13 @@ def test_normalize_contexts_cg_only() -> None:
 
 def test_build_command_includes_chg_chh_flags(tmp_path: Path) -> None:
     project = tmp_path / "project.json"
-    ref = _write_min_project(project)
+    ref, action_config = _write_min_project(project)
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()
     bam = sample_dir / "S1.bam"
     bam.write_bytes(b"BAM")
 
-    cfg = runner.resolve_methyl_extract_config(
-        project,
-        {
-            "sampleId": "S1",
-            "sampleDir": str(sample_dir),
-            "referenceFasta": str(ref),
-        },
-    )
+    cfg = runner.resolve_methyl_extract_config(project, _task_input("S1", sample_dir, ref, action_config))
     paths = runner.MethylExtractPaths(
         sample_dir=sample_dir,
         sample_id="S1",
@@ -101,7 +110,7 @@ def test_build_command_includes_chg_chh_flags(tmp_path: Path) -> None:
 
 def test_build_command_cg_only_skips_chg_chh(tmp_path: Path) -> None:
     project = tmp_path / "project.json"
-    ref = _write_min_project(
+    ref, action_config = _write_min_project(
         project,
         methyl_extract={
             "extract_contexts": ["CG"],
@@ -112,7 +121,7 @@ def test_build_command_cg_only_skips_chg_chh(tmp_path: Path) -> None:
 
     cfg = runner.resolve_methyl_extract_config(
         project,
-        {"sampleId": "S2", "sampleDir": str(sample_dir), "referenceFasta": str(ref)},
+        _task_input("S2", sample_dir, ref, action_config),
     )
     paths = runner.MethylExtractPaths(
         sample_dir=sample_dir,
@@ -130,14 +139,11 @@ def test_build_command_cg_only_skips_chg_chh(tmp_path: Path) -> None:
 
 def test_derives_chrom_mapping_from_chromosomes(tmp_path: Path) -> None:
     project = tmp_path / "project.json"
-    ref = _write_min_project(project, chromosomes=["1", "21"])
+    ref, action_config = _write_min_project(project, chromosomes=["1", "21"])
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()
 
-    cfg = runner.resolve_methyl_extract_config(
-        project,
-        {"sampleId": "S1", "sampleDir": str(sample_dir), "referenceFasta": str(ref)},
-    )
+    cfg = runner.resolve_methyl_extract_config(project, _task_input("S1", sample_dir, ref, action_config))
     assert cfg.chrom_mapping.is_file()
     assert cfg.chrom_mapping.name == ".chrom_mapping.json"
     payload = json.loads(cfg.chrom_mapping.read_text(encoding="utf-8"))
@@ -147,27 +153,25 @@ def test_derives_chrom_mapping_from_chromosomes(tmp_path: Path) -> None:
 
 def test_inline_chrom_mapping_object_materialized(tmp_path: Path) -> None:
     project = tmp_path / "project.json"
-    ref = _write_min_project(project, chromosomes=["1"])
+    ref, action_config = _write_min_project(project, chromosomes=["1"])
     inline = {
         "reference": str(ref),
         "chromosomes": [{"name": "1", "bam": "1", "fasta": "1", "extract": True}],
     }
-    project_data = json.loads(project.read_text(encoding="utf-8"))
-    project_data["step_config"]["methyl_extract"]["chrom_mapping"] = inline
-    project.write_text(json.dumps(project_data), encoding="utf-8")
+    action_config["methyl_extract"] = {**action_config["methyl_extract"], "chrom_mapping": inline}
     sample_dir = tmp_path / "S2"
     sample_dir.mkdir()
 
     cfg = runner.resolve_methyl_extract_config(
         project,
-        {"sampleId": "S2", "sampleDir": str(sample_dir), "referenceFasta": str(ref)},
+        _task_input("S2", sample_dir, ref, action_config),
     )
     assert json.loads(cfg.chrom_mapping.read_text(encoding="utf-8")) == inline
 
 
 def test_chrom_mapping_mismatch_raises(tmp_path: Path) -> None:
     project = tmp_path / "project.json"
-    ref = _write_min_project(project, chromosomes=["1", "2"])
+    ref, action_config = _write_min_project(project, chromosomes=["1", "2"])
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()
     with pytest.raises(RuntimeError, match="must match project.chromosomes"):
@@ -185,17 +189,14 @@ def test_chrom_mapping_mismatch_raises(tmp_path: Path) -> None:
 
 def test_ucsc_chr_contig_naming(tmp_path: Path) -> None:
     project = tmp_path / "project.json"
-    ref = _write_min_project(
+    ref, action_config = _write_min_project(
         project,
         chromosomes=["1"],
         methyl_extract={"contig_naming": "ucsc_chr", "extract_contexts": ["CG"]},
     )
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()
-    cfg = runner.resolve_methyl_extract_config(
-        project,
-        {"sampleId": "S1", "sampleDir": str(sample_dir), "referenceFasta": str(ref)},
-    )
+    cfg = runner.resolve_methyl_extract_config(project, _task_input("S1", sample_dir, ref, action_config))
     row = json.loads(cfg.chrom_mapping.read_text(encoding="utf-8"))["chromosomes"][0]
     assert row["bam"] == "chr1"
     assert row["name"] == "1"
@@ -203,7 +204,7 @@ def test_ucsc_chr_contig_naming(tmp_path: Path) -> None:
 
 def test_idempotent_skip_when_all_h5_present(tmp_path: Path) -> None:
     project = tmp_path / "project.json"
-    ref = _write_min_project(project, chromosomes=["1"])
+    ref, action_config = _write_min_project(project, chromosomes=["1"])
     sample_dir = tmp_path / "S3"
     sample_dir.mkdir()
     for name in ("1-CG.h5", "1-CHG.h5", "1-CHH.h5"):
@@ -214,7 +215,7 @@ def test_idempotent_skip_when_all_h5_present(tmp_path: Path) -> None:
             sample_id="S3",
             sample_dir=sample_dir,
             project=project,
-            input_json={"referenceFasta": str(ref)},
+            input_json=_task_input("S3", sample_dir, ref, action_config),
         )
 
     mock_run.assert_not_called()
@@ -231,7 +232,7 @@ def test_resolve_bam_legacy_name(tmp_path: Path) -> None:
 
 def test_run_invokes_methyl_extractor(tmp_path: Path) -> None:
     project = tmp_path / "project.json"
-    ref = _write_min_project(project, chromosomes=["1"])
+    ref, action_config = _write_min_project(project, chromosomes=["1"])
     sample_dir = tmp_path / "S5"
     sample_dir.mkdir()
     (sample_dir / "S5.bam").write_bytes(b"BAM")
@@ -247,7 +248,7 @@ def test_run_invokes_methyl_extractor(tmp_path: Path) -> None:
                 sample_id="S5",
                 sample_dir=sample_dir,
                 project=project,
-                input_json={"referenceFasta": str(ref)},
+                input_json=_task_input("S5", sample_dir, ref, action_config),
             )
 
     assert len(out["h5Files"]) == 3

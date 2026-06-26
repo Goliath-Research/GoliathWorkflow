@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 from .core.fragmentomics import resolve_fragmentomics_config
 from .models.config import AlignmentQCConfig
@@ -35,7 +36,7 @@ def resolve_alignment_qc_config(
 
     # Default: all samples from all resolved groups
     sample_paths: List[str] = []
-    step_cfg = project.get_step_config("alignment_qc")
+    step_cfg = resolve_for_project("alignment_qc", project)
     groups = step_cfg.get("groups") if step_cfg else None
     if groups is not None:
         seen = set()
@@ -81,7 +82,7 @@ def resolve_alignment_qc_config(
                 base[key] = step_cfg[key]
 
     reg_cfg: Dict[str, Any] = {}
-    val_cfg = project.get_step_config("validation") or {}
+    val_cfg = resolve_for_project("validation", project)
     if isinstance(val_cfg, dict):
         reg = val_cfg.get("regulatory") or {}
         if isinstance(reg, dict):

@@ -1,0 +1,15 @@
+{
+  "pipelineProfile": "discovery_gene_featurecuts",
+  "actionConfig": {
+    "alignment_qc": {
+      "output_dir": "/home/ubuntu/MethylPipeline/.smoke/sample_prep/out/alignment_qc"
+    },
+    "methyl_extract": {
+      "extract_contexts": [
+        "CG"
+      ],
+      "threads": 1,
+      "output_format": "hdf5"
+    }
+  }
+}

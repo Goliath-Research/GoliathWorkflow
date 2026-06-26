@@ -8,7 +8,7 @@ from methyl_utils.analyte_profiles import (
     resolve_cisbp_modes,
     should_apply_analyte_profile,
 )
-from methyl_utils.pipeline_config import ProjectConfig
+from methyl_utils.pipeline_config import ProjectConfig, load_project
 
 
 def test_normalize_primary_analyte():
@@ -43,24 +43,26 @@ def test_should_apply_opt_out():
     ) is False
 
 
-def test_project_get_step_config_applies_profile():
-    cfg = ProjectConfig.model_validate(
-        {
-            "project_name": "p",
-            "output_base": "/out",
-            "group1": {"label": "g1", "sample_paths": ["/s1"]},
-            "group2": {"label": "g2", "sample_paths": ["/s2"]},
-            "step_config": {
-                "validation": {
-                    "regulatory": {"primary_analyte": "cfdna"},
-                },
-            },
-        }
+def test_resolve_action_config_applies_analyte_profile():
+    from methyl_utils.action_config_resolver import resolve_action_config
+
+    cfg = resolve_action_config(
+        "alignment_qc",
+        profile_action_config={},
+        regulatory={"primary_analyte": "cfdna"},
     )
-    aq = cfg.get_step_config("alignment_qc")
-    assert aq["auto_profile_from_analyte"] is True
-    assert cfg.get_step_config("fragmentomics")["enabled"] is True
-    enr = cfg.get_step_config("enricher")
+    assert cfg["auto_profile_from_analyte"] is True
+    frag = resolve_action_config(
+        "fragmentomics",
+        profile_action_config={},
+        regulatory={"primary_analyte": "cfdna"},
+    )
+    assert frag["enabled"] is True
+    enr = resolve_action_config(
+        "enricher",
+        profile_action_config={},
+        regulatory={"primary_analyte": "cfdna"},
+    )
     assert enr["cisbp"]["enabled"] is True
     assert enr["cisbp"]["cisbp_modes"] == ["gene_sets", "motif_scan", "annotate"]
 

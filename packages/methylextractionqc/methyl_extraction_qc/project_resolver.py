@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Optional, Union
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 from .models.config import DEFAULT_EXPECTED_CHROMOSOMES, ExtractionQCConfig, ExtractionQCGuardrailConfig
 
@@ -21,7 +22,7 @@ def resolve_extraction_qc_config(
     for _, group_paths in resolved:
         default_paths.extend(group_paths)
 
-    step_cfg = project.get_step_config("extraction_qc") or {}
+    step_cfg = resolve_for_project("extraction_qc", project)
     guardrail_cfg = ExtractionQCGuardrailConfig()
     if isinstance(step_cfg.get("guardrails"), dict):
         guardrail_cfg = ExtractionQCGuardrailConfig.model_validate(step_cfg["guardrails"])

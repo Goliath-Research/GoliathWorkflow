@@ -4,7 +4,7 @@
   "runGeneFeaturecuts": false,
   "runBiomarkerFilter": false,
   "runGeneFeatureSelect": false,
-  "step_config_overrides": {
+  "actionConfig": {
     "detection": {
       "detection_mode": "discovery_only",
       "export_classifier": false,

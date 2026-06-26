@@ -54,7 +54,6 @@ def _write_project(tmp_path: Path) -> Path:
                     ],
                 },
                 "comparisons": "control_vs_each_disease",
-                "step_config": {"enricher": {"combined_csv_name": "all-gene_name-combined.csv"}},
             },
             indent=2,
         ),
@@ -269,9 +268,6 @@ def test_progression_gene_score_mode_effect_x_support(tmp_path: Path):
     project_path = _write_project(tmp_path)
     _write_stage_outputs(tmp_path)
     root = tmp_path / "out" / "prog"
-    project_data = json.loads(project_path.read_text(encoding="utf-8"))
-    project_data.setdefault("step_config", {}).setdefault("progression", {})["gene_score_mode"] = "effect_x_support"
-    project_path.write_text(json.dumps(project_data, indent=2), encoding="utf-8")
 
     # Stage pca2: set high gene_importance for G2 but higher effect_x_support for G1.
     mapper_p2 = root / "mapper" / "all" / "pca_pca2" / "all-gene_name-combined.csv"
@@ -287,7 +283,10 @@ def test_progression_gene_score_mode_effect_x_support(tmp_path: Path):
         encoding="utf-8",
     )
 
-    summary = run_progression_report(project_path=project_path)
+    summary = run_progression_report(
+        project_path=project_path,
+        resolved_progression_config={"gene_score_mode": "effect_x_support"},
+    )
     genes_df = pd.read_csv(summary["genes_long_csv"])
     p2 = genes_df[genes_df["comparison"] == "pca_pca2"].sort_values("rank")
     assert p2.iloc[0]["gene"] == "G1"
@@ -295,7 +294,7 @@ def test_progression_gene_score_mode_effect_x_support(tmp_path: Path):
     assert summary["gene_score_mode_by_stage"]["pca_pca2"]["requested_mode"] == "effect_x_support"
 
 
-def test_progression_auto_gleason_ordering(tmp_path: Path):
+def test_progression_uses_project_comparison_order(tmp_path: Path):
     list_dir = tmp_path / "lists"
     list_dir.mkdir(parents=True, exist_ok=True)
     for name in ("healthy.csv", "p1.csv", "p2.csv", "p3.csv"):
@@ -338,10 +337,6 @@ def test_progression_auto_gleason_ordering(tmp_path: Path):
                     ],
                 },
                 "comparisons": "control_vs_each_disease",
-                "step_config": {
-                    "enricher": {"combined_csv_name": "all-gene_name-combined.csv"},
-                    "progression": {"ordering_mode": "auto_gleason"},
-                },
             },
             indent=2,
         ),
@@ -370,17 +365,14 @@ def test_progression_auto_gleason_ordering(tmp_path: Path):
             encoding="utf-8",
         )
     summary = run_progression_report(project_path=project_path)
-    assert summary["ordering_strategy"] == "auto_gleason"
-    assert summary["ordered_disease_groups"] == ["pca_pca1", "pca_pca2", "pca_pca3"]
+    assert summary["ordering_strategy"] == "project_order"
+    assert summary["ordered_disease_groups"] == ["pca_pca3", "pca_pca1", "pca_pca2"]
 
 
 def test_progression_effect_x_support_fallback_to_gene_importance(tmp_path: Path):
     project_path = _write_project(tmp_path)
     _write_stage_outputs(tmp_path)
     root = tmp_path / "out" / "prog"
-    project_data = json.loads(project_path.read_text(encoding="utf-8"))
-    project_data.setdefault("step_config", {}).setdefault("progression", {})["gene_score_mode"] = "effect_x_support"
-    project_path.write_text(json.dumps(project_data, indent=2), encoding="utf-8")
 
     mapper_p1 = root / "mapper" / "all" / "pca_pca1" / "all-gene_name-combined.csv"
     mapper_p1.write_text(
@@ -394,7 +386,10 @@ def test_progression_effect_x_support_fallback_to_gene_importance(tmp_path: Path
         + "\n",
         encoding="utf-8",
     )
-    summary = run_progression_report(project_path=project_path)
+    summary = run_progression_report(
+        project_path=project_path,
+        resolved_progression_config={"gene_score_mode": "effect_x_support"},
+    )
     stage_meta = summary["gene_score_mode_by_stage"]["pca_pca1"]
     assert stage_meta["effective_mode"] == "gene_importance_fallback"
 

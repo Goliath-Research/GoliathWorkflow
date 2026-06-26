@@ -34,7 +34,7 @@ def test_discovery_gene_featurecuts_profile() -> None:
     assert ctx["runDmpSelection"] is True
     assert ctx["runGeneFeaturecuts"] is True
     assert ctx["runBiomarkerFilter"] is False
-    overrides = ctx.get("step_config_overrides") or {}
+    overrides = ctx.get("actionConfig") or {}
     assert overrides.get("mapper", {}).get("csv_pattern") == "dmps-*-discovery.csv"
 
 
@@ -58,13 +58,14 @@ def test_enrich_instance_context_seeds_flags_from_validation() -> None:
     assert ctx["runDmpSelection"] is False
 
 
-def test_enrich_preserves_project_validation_when_single_pipeline_flag_set() -> None:
-    """Regression: one PIPELINE_FLAG in context must not drop project step_config for other flags."""
+def test_enrich_preserves_profile_validation_when_single_pipeline_flag_set() -> None:
+    """Regression: one PIPELINE_FLAG in context must not drop profile actionConfig for other flags."""
     project = DOMAIN / "checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG.json"
     ctx = enrich_instance_context(
         {
             "projectPath": str(project),
             "runDmpSelection": True,
+            "pipelineProfile": "staged_ovr_mc",
         }
     )
     assert ctx["runDmpSelection"] is True

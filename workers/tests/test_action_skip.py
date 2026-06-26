@@ -19,7 +19,26 @@ from methyl_worker.action_skip import (
     verify_artifacts,
 )
 from methyl_worker.handlers import execute_task
+from methyl_worker.task_validation import strip_runtime_input
 from methyl_worker.task_models.validation_models import StabilitySummary, ValidationStabilityOutput
+
+
+def _write_study_project(path: Path, tmp_path: Path) -> None:
+    (tmp_path / "s.csv").write_text("S1\n", encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "output_base": str(tmp_path),
+                "project_name": "Study",
+                "chromosomes": ["1"],
+                "contexts": ["CG"],
+                "group1": {"label": "g1", "sample_paths": [str(tmp_path / "s.csv")]},
+                "group2": {"label": "g2", "sample_paths": [str(tmp_path / "s.csv")]},
+            }
+        ),
+        encoding="utf-8",
+    )
 
 
 def test_compute_input_signature_stable_for_same_payload() -> None:
@@ -58,25 +77,16 @@ def test_maybe_skip_replays_when_manifest_matches(tmp_path: Path) -> None:
     summary_path.write_text("{}", encoding="utf-8")
 
     project = tmp_path / "configs" / "project.json"
-    project.parent.mkdir(parents=True)
-    project.write_text(
-        json.dumps(
-            {
-                "output_base": str(tmp_path),
-                "project_name": "Study",
-                "step_config": {"validation": {"n_iterations": 2, "stability_dmp_freq": 0.7}},
-            }
-        ),
-        encoding="utf-8",
-    )
+    _write_study_project(project, tmp_path)
 
     input_json = {
         "projectPath": str(project),
         "monteCarloRunsRoot": str(mc_root),
         "outputDir": str(stability_dir),
+        "resolvedConfig": {"n_iterations": 2, "stability_dmp_freq": 0.7},
     }
 
-    input_model = validate_input(entry, input_json)
+    input_model = validate_input(entry, strip_runtime_input(input_json))
     output = ValidationStabilityOutput(
         status="ok",
         outputDir=str(stability_dir),
@@ -102,23 +112,15 @@ def test_maybe_skip_works_with_workflow_node_key(tmp_path: Path) -> None:
     summary_path.write_text("{}", encoding="utf-8")
 
     project = tmp_path / "project.json"
-    project.write_text(
-        json.dumps(
-            {
-                "output_base": str(tmp_path),
-                "project_name": "Study",
-                "step_config": {"validation": {"n_iterations": 1}},
-            }
-        ),
-        encoding="utf-8",
-    )
+    _write_study_project(project, tmp_path)
 
     task_input = {
         "projectPath": str(project),
         "monteCarloRunsRoot": str(mc_root),
         "outputDir": str(stability_dir),
+        "resolvedConfig": {"n_iterations": 1},
     }
-    input_model = validate_input(entry, task_input)
+    input_model = validate_input(entry, strip_runtime_input(task_input))
     output = ValidationStabilityOutput(
         status="ok",
         outputDir=str(stability_dir),
@@ -235,16 +237,7 @@ def test_execute_task_skips_validation_stability_when_manifest_exists(tmp_path: 
     summary_path.write_text("{}", encoding="utf-8")
 
     project = tmp_path / "project.json"
-    project.write_text(
-        json.dumps(
-            {
-                "output_base": str(tmp_path),
-                "project_name": "Study",
-                "step_config": {"validation": {"n_iterations": 1}},
-            }
-        ),
-        encoding="utf-8",
-    )
+    _write_study_project(project, tmp_path)
 
     revision = compute_action_revision(entry)
     input_sig = "abc123"
@@ -282,6 +275,11 @@ def test_execute_task_skips_validation_stability_when_manifest_exists(tmp_path: 
     result = execute_task(
         entry.capability,
         entry.action_name,
-        {"projectPath": str(project), "monteCarloRunsRoot": str(mc_root), "outputDir": str(stability_dir)},
+        {
+            "projectPath": str(project),
+            "monteCarloRunsRoot": str(mc_root),
+            "outputDir": str(stability_dir),
+            "resolvedConfig": {"n_iterations": 1},
+        },
     )
     assert result.output.status == "skipped"

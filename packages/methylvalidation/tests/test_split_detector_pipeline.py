@@ -6,27 +6,34 @@ from types import SimpleNamespace
 from methyl_validation import pipeline_runner
 
 
-def test_uses_discovery_only_reads_detection_mode(tmp_path: Path):
+def test_uses_discovery_only_reads_detection_mode(tmp_path: Path, monkeypatch):
     project = tmp_path / "project.json"
-    project.write_text(
-        '{"project_name":"t","step_config":{"detection":{"detection_mode":"discovery_only"}}}',
-        encoding="utf-8",
+    project.write_text('{"project_name":"t","regulatory":{}}', encoding="utf-8")
+
+    def _mode(mode):
+        def _fake(action_key, regulatory=None, **kwargs):
+            if action_key == "detection":
+                return {"detection_mode": mode}
+            return {}
+
+        return _fake
+
+    monkeypatch.setattr(
+        "methyl_validation.pipeline_runner.resolve_action_config_from_env",
+        _mode("discovery_only"),
     )
     assert pipeline_runner._uses_discovery_only(project) is True
 
-    project.write_text(
-        '{"project_name":"t","step_config":{"detection":{"detection_mode":"legacy"}}}',
-        encoding="utf-8",
+    monkeypatch.setattr(
+        "methyl_validation.pipeline_runner.resolve_action_config_from_env",
+        _mode("legacy"),
     )
     assert pipeline_runner._uses_discovery_only(project) is False
 
 
 def test_run_pipeline_for_iteration_inserts_split_steps(monkeypatch, tmp_path: Path):
     project = tmp_path / "project.json"
-    project.write_text(
-        '{"project_name":"t","step_config":{"detection":{"detection_mode":"discovery_only"}}}',
-        encoding="utf-8",
-    )
+    project.write_text('{"project_name":"t","regulatory":{}}', encoding="utf-8")
     captured: list[str] = []
 
     def _fake_run(*_args, **_kwargs):
@@ -45,6 +52,12 @@ def test_run_pipeline_for_iteration_inserts_split_steps(monkeypatch, tmp_path: P
         captured.extend(step[0] for step in steps if isinstance(step, tuple))
 
     monkeypatch.setattr(pipeline_runner, "_append_gene_stability_steps", _spy_append)
+    monkeypatch.setattr(
+        "methyl_validation.pipeline_runner.resolve_action_config_from_env",
+        lambda action_key, regulatory=None, **kwargs: (
+            {"detection_mode": "discovery_only"} if action_key == "detection" else {}
+        ),
+    )
 
     config = SimpleNamespace(stability_gene_featurecuts_enabled=True)
     ok, errors, timings = pipeline_runner.run_pipeline_for_iteration(project, config=config)
@@ -58,10 +71,7 @@ def test_run_pipeline_for_iteration_inserts_split_steps(monkeypatch, tmp_path: P
 
 def test_run_pipeline_for_iteration_legacy_keeps_in_process_gene_fc(monkeypatch, tmp_path: Path):
     project = tmp_path / "project.json"
-    project.write_text(
-        '{"project_name":"t","step_config":{"detection":{"detection_mode":"legacy"}}}',
-        encoding="utf-8",
-    )
+    project.write_text('{"project_name":"t","regulatory":{}}', encoding="utf-8")
     captured: list[str] = []
 
     def _fake_run(*_args, **_kwargs):
@@ -86,6 +96,12 @@ def test_run_pipeline_for_iteration_legacy_keeps_in_process_gene_fc(monkeypatch,
         captured.extend(step[0] for step in steps if isinstance(step, tuple))
 
     monkeypatch.setattr(pipeline_runner, "_append_gene_stability_steps", _spy_append)
+    monkeypatch.setattr(
+        "methyl_validation.pipeline_runner.resolve_action_config_from_env",
+        lambda action_key, regulatory=None, **kwargs: (
+            {"detection_mode": "legacy"} if action_key == "detection" else {}
+        ),
+    )
 
     config = SimpleNamespace(stability_gene_featurecuts_enabled=True)
     ok, errors, timings = pipeline_runner.run_pipeline_for_iteration(project, config=config)
@@ -111,8 +127,7 @@ def test_run_dmp_select_loops_comparisons_and_chromosomes(monkeypatch, tmp_path:
           ]},
           "comparisons": "control_vs_each_disease",
           "chromosomes": ["1", "2"],
-          "contexts": ["CG"],
-          "step_config": {"detection": {"detection_mode": "discovery_only"}}
+          "contexts": ["CG"]
         }
         """.strip(),
         encoding="utf-8",

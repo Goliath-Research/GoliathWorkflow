@@ -4,7 +4,7 @@
   "runGeneFeaturecuts": false,
   "runBiomarkerFilter": false,
   "runGeneFeatureSelect": true,
-  "step_config_overrides": {
+  "actionConfig": {
     "detection": {
       "detection_mode": "discovery_only",
       "export_classifier": false
@@ -14,7 +14,13 @@
     },
     "gene_selection": {
       "stability_gene_feature_select_enabled": true,
-      "stability_gene_region_hits": ["promoter", "gene_body", "exon", "intron", "terminator"]
+      "stability_gene_region_hits": [
+        "promoter",
+        "gene_body",
+        "exon",
+        "intron",
+        "terminator"
+      ]
     }
   }
 }

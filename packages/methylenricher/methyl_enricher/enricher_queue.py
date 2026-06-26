@@ -17,6 +17,7 @@ from .enricher_completeness import (
     read_task_status,
     resolve_expected_libraries,
 )
+from methyl_utils.action_config_resolver import resolve_for_project
 from .ensure_complete import run_project_ensure_complete, verify_project_complete
 from .project_resolver import resolve_enricher_paths_per_cancer_group
 
@@ -62,7 +63,7 @@ def plan_enricher_tasks(
 
     project_path = Path(project_path)
     project = load_project(project_path)
-    step_cfg = dict(project.get_step_config("enricher") or {})
+    step_cfg = dict(resolve_for_project("enricher", project))
     if step_override_path and step_override_path.exists():
         step_cfg = {**step_cfg, **json.loads(step_override_path.read_text())}
     enricher_config = EnricherStepConfig.model_validate(step_cfg)

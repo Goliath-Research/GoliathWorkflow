@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
 from methyl_utils import ProjectConfig, load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 from ..models.config import MethylDetectorConfig
 from .multiclass_export_config import filter_detection_config_for_detector
@@ -43,7 +44,7 @@ def resolve_detector_config_per_cancer_group(
         project_path,
         output_base_override=str(output_base_override) if output_base_override is not None else None,
     )
-    step_cfg = project.get_step_config("detection") or {}
+    step_cfg = resolve_for_project("detection", project)
     if step_override_path is not None:
         with open(step_override_path) as f:
             overrides = json.load(f)
@@ -166,7 +167,7 @@ def resolve_detector_config(
     _attach_samples_base(base, project)
 
     # Apply project-level step config (detection) if present
-    step_cfg = filter_detection_config_for_detector(project.get_step_config("detection") or {})
+    step_cfg = filter_detection_config_for_detector(resolve_for_project("detection", project))
     if step_cfg:
         for k, v in step_cfg.items():
             base[k] = v

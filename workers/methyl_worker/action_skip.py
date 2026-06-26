@@ -82,27 +82,30 @@ def compute_action_revision(entry: ActionCatalogEntry) -> str:
     return "+".join(parts) if parts else "unknown"
 
 
-def _load_step_config_slice(entry: ActionCatalogEntry, input_json: Mapping[str, Any]) -> Optional[dict]:
-    if not entry.step_config_key:
+def _load_action_config_slice(entry: ActionCatalogEntry, input_json: Mapping[str, Any]) -> Optional[dict]:
+    if not entry.action_config_key:
         return None
+    from methyl_utils import load_project
+    from methyl_utils.action_config_resolver import resolve_from_task_input
+
+    regulatory: Optional[Mapping[str, Any]] = None
     project = input_json.get("projectPath") or input_json.get("project")
-    if not project:
-        return None
-    path = Path(str(project))
-    if path.is_dir():
-        candidates = sorted(path.glob("project*.json"))
-        path = candidates[0] if candidates else path / "project.json"
-    if not path.is_file():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    step_config = data.get("step_config") or {}
-    slice_key = entry.step_config_key
-    if slice_key not in step_config:
-        return None
-    return step_config.get(slice_key)
+    if project:
+        path = Path(str(project))
+        if path.is_dir():
+            candidates = sorted(path.glob("project*.json"))
+            path = candidates[0] if candidates else path / "project.json"
+        if path.is_file():
+            try:
+                regulatory = load_project(str(path)).get_regulatory_config()
+            except Exception:
+                regulatory = None
+    slice_cfg = resolve_from_task_input(
+        entry.action_config_key,
+        input_json,
+        regulatory=regulatory,
+    )
+    return slice_cfg if slice_cfg else None
 
 
 def _previous_mc_run_dir(run_dir: Path) -> Optional[Path]:
@@ -168,9 +171,9 @@ def compute_input_signature(
         "action": entry.action_name,
         "input": _normalize_path_strings(input_model.model_dump(mode="json")),
     }
-    step_slice = _load_step_config_slice(entry, input_json)
-    if step_slice is not None:
-        payload["step_config"] = step_slice
+    action_slice = _load_action_config_slice(entry, input_json)
+    if action_slice is not None:
+        payload["action_config"] = action_slice
     if entry.action_name == "pipeline.centroid":
         extra = _incremental_centroid_extra(input_json)
         if extra:
@@ -361,7 +364,7 @@ def maybe_skip_action(
         return None
 
     current_revision = compute_action_revision(entry)
-    current_input_sig = compute_input_signature(entry, task_input, input_model)
+    current_input_sig = compute_input_signature(entry, dict(input_json), input_model)
 
     if record.action_revision != current_revision:
         return None
@@ -438,7 +441,7 @@ def record_action_execution(
         manifest_path=str(manifest_path),
         artifacts=artifacts,
         action_revision=compute_action_revision(entry),
-        input_signature=compute_input_signature(entry, task_input, input_model),
+        input_signature=compute_input_signature(entry, dict(input_json), input_model),
         output_signature=compute_output_signature(artifacts),
         skipped=skipped,
         skip_reason=skip_reason,

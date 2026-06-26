@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 from .config import BatchProcessingConfig, MethylCentroidConfig
 
@@ -132,7 +133,7 @@ def _run_cluster_then_centroids_per_cluster(
     chromosomes = project.chromosomes or ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
         "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"]
     contexts = project.contexts or ["CG"]
-    step_cfg = project.get_step_config("centroid") or {}
+    step_cfg = resolve_for_project("centroid", project)
     if step_override_path is not None:
         with open(step_override_path) as f:
             step_cfg = {**step_cfg, **json.load(f)}
@@ -315,7 +316,7 @@ def resolve_centroid_batch_config(
         base_config=base_config,
     )
     # Apply project-level step config (centroid) if present (never override output_dir)
-    step_cfg = project.get_step_config("centroid")
+    step_cfg = resolve_for_project("centroid", project)
     if step_cfg:
         _forbid_centroid_samples_key(step_cfg, "project step_config.centroid")
         if "base_config" in step_cfg:

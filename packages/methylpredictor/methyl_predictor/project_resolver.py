@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from methyl_utils import DerivedPaths, ProjectConfig, load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 from pydantic import BaseModel
 
 from .models.config import PredictorConfig
@@ -57,7 +58,7 @@ def _resolve_panel_for_predictor(
     p = step_cfg.get("panel")
     if isinstance(p, dict) and p:
         return p
-    cls_step = project.get_step_config("classifier") or {}
+    cls_step = resolve_for_project("classifier", project)
     c = cls_step.get("panel")
     if isinstance(c, dict) and c:
         return c
@@ -747,7 +748,7 @@ def _build_blind_predictor_dict(
         "sample_lineage": lineage,
         "cohort_hierarchy": tree or None,
         "panel": _resolve_panel_for_predictor(project, step_cfg),
-        "classifier_step_snapshot": _classifier_step_snapshot(project.get_step_config("classifier") or {}),
+        "classifier_step_snapshot": _classifier_step_snapshot(resolve_for_project("classifier", project)),
         **_predictor_decision_overrides(step_cfg),
     }
 
@@ -826,7 +827,7 @@ def _get_multiclass_model_path(
         p = Path(explicit)
         if p.is_file():
             return p
-    classifier_step = project.get_step_config("classifier") or {}
+    classifier_step = resolve_for_project("classifier", project)
     classifier_dir = paths.classifier_dir
     # Prefer native merged multiclass PKL (detector export) over validation ECDF OvR bundles.
     if classifier_dir:
@@ -1001,7 +1002,7 @@ def _build_multiclass_predictor_config(
             "cohort_hierarchy": tree or None,
             "panel": _resolve_panel_for_predictor(project, step_cfg),
             "classifier_step_snapshot": _classifier_step_snapshot(
-                project.get_step_config("classifier") or {}
+                resolve_for_project("classifier", project)
             ),
             **_predictor_decision_overrides(step_cfg),
         }
@@ -1023,7 +1024,7 @@ def _build_multiclass_predictor_config(
         "sample_lineage": mc_lineage,
         "cohort_hierarchy": tree or None,
         "panel": _resolve_panel_for_predictor(project, step_cfg),
-        "classifier_step_snapshot": _classifier_step_snapshot(project.get_step_config("classifier") or {}),
+        "classifier_step_snapshot": _classifier_step_snapshot(resolve_for_project("classifier", project)),
         **_predictor_decision_overrides(step_cfg),
     }
     return PredictorConfig(**base_dict)
@@ -1046,9 +1047,9 @@ def resolve_predictor_config(
     they are expanded as flat lists (no nested report shape).
     """
     project = load_project(project_path)
-    step_cfg = (project.get_step_config("predictor") or {}).copy()
+    step_cfg = (resolve_for_project("predictor", project)).copy()
     if not step_cfg:
-        legacy_validator = (project.get_step_config("validator") or {}).copy()
+        legacy_validator = (resolve_for_project("validator", project)).copy()
         if legacy_validator:
             warnings.warn(
                 "step_config.validator is deprecated; use step_config.predictor instead.",
@@ -1056,7 +1057,7 @@ def resolve_predictor_config(
                 stacklevel=2,
             )
             step_cfg = legacy_validator
-    classifier_step = project.get_step_config("classifier") or {}
+    classifier_step = resolve_for_project("classifier", project)
     if step_override_path is not None:
         override_path = Path(step_override_path)
         if override_path.exists():
@@ -1302,9 +1303,9 @@ def resolve_predictor_config_per_comparison(
         )
         return [(config, "validation")]
 
-    step_cfg = (project.get_step_config("predictor") or {}).copy()
+    step_cfg = (resolve_for_project("predictor", project)).copy()
     if not step_cfg:
-        legacy_validator = (project.get_step_config("validator") or {}).copy()
+        legacy_validator = (resolve_for_project("validator", project)).copy()
         if legacy_validator:
             warnings.warn(
                 "step_config.validator is deprecated; use step_config.predictor instead.",
@@ -1312,7 +1313,7 @@ def resolve_predictor_config_per_comparison(
                 stacklevel=2,
             )
             step_cfg = legacy_validator
-    classifier_step = project.get_step_config("classifier") or {}
+    classifier_step = resolve_for_project("classifier", project)
     if step_override_path is not None:
         override_path = Path(step_override_path)
         if override_path.exists():

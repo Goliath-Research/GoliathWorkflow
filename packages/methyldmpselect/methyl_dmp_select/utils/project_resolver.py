@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 from ..models.config import DmpSelectionConfig
 
@@ -64,8 +65,8 @@ def resolve_dmp_selection_config(
         project_path,
         output_base_override=str(output_base_override) if output_base_override else None,
     )
-    step_cfg: Dict[str, Any] = dict(project.get_step_config("dmp_selection") or {})
-    det_cfg: Dict[str, Any] = dict(project.get_step_config("detection") or {})
+    step_cfg: Dict[str, Any] = dict(resolve_for_project("dmp_selection", project))
+    det_cfg: Dict[str, Any] = dict(resolve_for_project("detection", project))
     for legacy_key in (
         "classifier_dmp_selection",
         "target_balanced_accuracy",

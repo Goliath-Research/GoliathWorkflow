@@ -11,7 +11,18 @@ from .task_schema_registry import resolve_task_schema_spec
 TASK_VALIDATION_ERROR_CODE = 4001
 
 # Worker/runtime control fields — not part of task I/O schemas; preserved across normalization.
-RUNTIME_INPUT_KEYS = frozenset({"forceRerun", "workflowNodeKey"})
+RUNTIME_INPUT_KEYS = frozenset({
+    "forceRerun",
+    "workflowNodeKey",
+    "actionConfig",
+    "profileActionConfig",
+    "resolvedConfig",
+    "siteConfig",
+    "siteConfigPath",
+    "pipelineProfile",
+    "profilePath",
+    "stepOverride",
+})
 
 
 def strip_runtime_input(input_json: Dict[str, Any]) -> Dict[str, Any]:

@@ -38,17 +38,24 @@ def test_summarize_alignment_qc_fragmentomics(tmp_path: Path):
     assert summary["cohort_median_insert_size"] == 167
 
 
-def test_build_fragmentomics_report_cfdna_expected(tmp_path: Path):
+def test_build_fragmentomics_report_cfdna_expected(tmp_path: Path, monkeypatch):
     root = tmp_path / "proj"
     root.mkdir()
     production = {
-        "step_config": {
-            "validation": {
-                "regulatory": {"primary_analyte": "cfdna", "sample_type": "plasma"},
-            },
-            "fragmentomics": {"enabled": True},
-        }
+        "regulatory": {"primary_analyte": "cfdna", "sample_type": "plasma"},
     }
+
+    def _fake_resolve(production_project, action_key):
+        if action_key == "fragmentomics":
+            return {"enabled": True}
+        if action_key == "mapper":
+            return {"disease_term": "Prostate adenocarcinoma"}
+        return {}
+
+    monkeypatch.setattr(
+        "methyl_validation.fragmentomics_context._resolve_action_from_project_dict",
+        _fake_resolve,
+    )
     report = build_fragmentomics_report(project_root=root, production_project=production)
     assert report["expected_for_analyte"] is True
     assert report["fragmentomics_step_enabled"] is True

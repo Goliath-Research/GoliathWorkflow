@@ -155,7 +155,7 @@ def test_run_fq2bam_meth_invokes_docker(tmp_path: Path) -> None:
     assert out["qcMetricsTar"] == str(sample_dir / "S7.qc-metrics.tar")
 
 
-def test_resolve_parabricks_from_project_step_config(tmp_path: Path) -> None:
+def test_resolve_parabricks_from_project_action_config(tmp_path: Path) -> None:
     import json
 
     project = tmp_path / "project.json"
@@ -168,18 +168,22 @@ def test_resolve_parabricks_from_project_step_config(tmp_path: Path) -> None:
                 "contexts": ["CG"],
                 "group1": {"label": "g1", "sample_paths": [str(tmp_path / "s.csv")]},
                 "group2": {"label": "g2", "sample_paths": [str(tmp_path / "s.csv")]},
-                "step_config": {
-                    "parabricks": {
-                        "image": "custom/parabricks:1.0",
-                        "bwa_threads": 4,
-                    }
-                },
             }
         ),
         encoding="utf-8",
     )
     (tmp_path / "s.csv").write_text("S1\n")
 
-    cfg = runner.resolve_parabricks_config(project_path=project, input_json={})
+    cfg = runner.resolve_parabricks_config(
+        project_path=project,
+        input_json={
+            "actionConfig": {
+                "parabricks": {
+                    "image": "custom/parabricks:1.0",
+                    "bwa_threads": 4,
+                }
+            }
+        },
+    )
     assert cfg.image == "custom/parabricks:1.0"
     assert cfg.bwa_threads == 4

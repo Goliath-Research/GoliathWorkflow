@@ -27,6 +27,7 @@ from rich.progress import (
 )
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 from .config import MonteCarloConfig, assert_production_model_build_allowed
 from .predictor_policy import assert_validation_predictor_accuracy_mode
@@ -92,7 +93,7 @@ def _resolve_single_backend(config: MonteCarloConfig, override_backend: Optional
         raise ValueError(f"Unsupported backend: {backend}")
     if backend not in config.get_enabled_backends():
         raise ValueError(
-            f"Backend '{backend}' is not enabled in step_config.validation.backend_profiles. "
+            f"Backend '{backend}' is not enabled in profile actionConfig.validation.backend_profiles. "
             f"Enabled backends: {config.get_enabled_backends()}"
         )
     return backend
@@ -104,7 +105,7 @@ def _resolve_model_mc_backends(config: MonteCarloConfig, run_all: bool) -> List[
         if not enabled:
             raise ValueError(
                 "No enabled backend profiles found for --model-mc-all. "
-                "Set step_config.validation.backend_profiles.<backend>.enabled=true."
+                "Set profile actionConfig.validation.backend_profiles.<backend>.enabled=true."
             )
         return enabled
     return [_resolve_single_backend(config)]
@@ -266,67 +267,6 @@ def _deep_merge_dicts(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str
         else:
             merged[key] = copy.deepcopy(value)
     return merged
-
-
-def _sync_run_project_step_config(project_path: Path, base_step_config: Optional[Dict[str, Any]]) -> bool:
-    """
-    Update an existing run project.json step_config using current base project settings.
-
-    This keeps run-local additions (e.g. predictor controls/diseases for holdouts) while
-    refreshing values provided by the latest base project.
-    """
-    if not project_path.is_file():
-        return False
-    if not isinstance(base_step_config, dict) or not base_step_config:
-        return False
-
-    try:
-        payload = json.loads(project_path.read_text(encoding="utf-8"))
-    except Exception:
-        return False
-    if not isinstance(payload, dict):
-        return False
-
-    run_step_cfg = payload.get("step_config")
-    if not isinstance(run_step_cfg, dict):
-        run_step_cfg = {}
-
-    merged_step_cfg = _deep_merge_dicts(run_step_cfg, base_step_config)
-    if merged_step_cfg == run_step_cfg:
-        return False
-
-    payload["step_config"] = merged_step_cfg
-    project_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-    return True
-
-
-def _base_project_step_config(base_project_config: Any) -> Optional[Dict[str, Any]]:
-    """Return a deep copy of step_config from a loaded PipelineProject."""
-    step_cfg = getattr(base_project_config, "step_config", None)
-    if not isinstance(step_cfg, dict) or not step_cfg:
-        return None
-    return copy.deepcopy(step_cfg)
-
-
-def _sync_all_run_project_step_configs(
-    monte_carlo_runs_root: Path,
-    base_step_config: Optional[Dict[str, Any]],
-) -> Tuple[int, int]:
-    """
-    Sync step_config from the base project into every run_XXXX/project.json.
-
-    Returns (n_updated, n_scanned).
-    """
-    if not isinstance(base_step_config, dict) or not base_step_config:
-        return 0, 0
-    n_updated = 0
-    n_scanned = 0
-    for run_num in _list_existing_run_numbers(monte_carlo_runs_root):
-        project_path = monte_carlo_runs_root / f"run_{run_num:04d}" / "project.json"
-        n_scanned += 1
-        if _sync_run_project_step_config(project_path, base_step_config):
-            n_updated += 1
-    return n_updated, n_scanned
 
 
 def _write_model_mc_outputs(
@@ -1503,7 +1443,7 @@ def main() -> None:
         type=Path,
         required=False,
         default=None,
-        help="Path to pipeline project config JSON containing step_config.validation (alternative to --config).",
+        help="Path to pipeline project config JSON (alternative to --config; validation from profile).",
     )
     parser.add_argument(
         "--iterations",
@@ -1697,7 +1637,7 @@ def main() -> None:
     parser.add_argument(
         "--freeze",
         action="store_true",
-        help="Run production freeze: centroid→detector(fixed panel)→mapper→enricher; optional progression via step_config.progression.enabled (no classifier/predictor).",
+        help="Run production freeze: centroid→detector(fixed panel)→mapper→enricher; optional progression via profile actionConfig.progression.enabled (no classifier/predictor).",
     )
     parser.add_argument(
         "--model",
@@ -1782,7 +1722,7 @@ def main() -> None:
         default=None,
         help=(
             "Select backend for --model, --model-mc, and --post-model-validation. "
-            "Backend must exist and be enabled in step_config.validation.backend_profiles."
+            "Backend must exist and be enabled in profile actionConfig.validation.backend_profiles."
         ),
     )
     parser.add_argument(
@@ -2058,7 +1998,7 @@ def main() -> None:
 
     try:
         assert_validation_predictor_accuracy_mode(
-            base_project_config.get_step_config("predictor") or {}
+            resolve_for_project("predictor", base_project_config)
         )
     except ValueError as e:
         print(f"Error: {e}", file=sys.stderr)
@@ -2873,17 +2813,7 @@ def main() -> None:
             file=sys.stderr,
         )
     if args.skip_centroid:
-        base_step_config = _base_project_step_config(base_project_config)
-        n_updated, n_scanned = _sync_all_run_project_step_configs(
-            monte_carlo_runs_root,
-            base_step_config,
-        )
-        if n_scanned > 0:
-            print(
-                f"Synced step_config from base project into {n_updated}/{n_scanned} "
-                f"run project.json file(s) (--skip-centroid).",
-                file=sys.stderr,
-            )
+        pass  # step_config sync removed: run projects no longer embed step_config
     previous_train_control: List[str] | None = None
     previous_train_disease: List[str] | None = None
 
@@ -3042,10 +2972,6 @@ def main() -> None:
                             progress.remove_task(task_current)
                             progress.advance(task_iter, 1)
                         continue
-                    _sync_run_project_step_config(
-                        project_path,
-                        _base_project_step_config(base_project_config),
-                    )
                     run_project = load_project(project_path)
                     comparisons = run_project.get_comparisons()
                     if comparisons:
@@ -3140,10 +3066,6 @@ def main() -> None:
                             progress.remove_task(task_current)
                             progress.advance(task_iter, 1)
                         continue
-                    _sync_run_project_step_config(
-                        project_path,
-                        _base_project_step_config(base_project_config),
-                    )
                     predictor_output_dir = run_dir / "predictors"
                     n_train_samples, n_val_samples = _count_run_samples_from_existing_files(run_dir)
                 else:
@@ -3207,10 +3129,6 @@ def main() -> None:
                             progress.remove_task(task_current)
                             progress.advance(task_iter, 1)
                         continue
-                    _sync_run_project_step_config(
-                        project_path,
-                        _base_project_step_config(base_project_config),
-                    )
                     predictor_output_dir = run_dir / "predictors"
                     n_train_samples, n_val_samples = _count_run_samples_from_existing_files(run_dir)
                 else:

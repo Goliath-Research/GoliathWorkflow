@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 from .config import FragmentomicsStepConfig
 
@@ -27,11 +28,11 @@ def resolve_fragmentomics_step_config(
     step_override_path: Optional[Union[str, Path]] = None,
 ) -> tuple[FragmentomicsStepConfig, List[str], str]:
     """
-    Return (config, sample_dirs, output_dir).
+    Return (config, sample_dirs, output_dir) from profile actionConfig.fragmentomics.
     """
     project = load_project(project_path)
     paths = project.get_derived_paths()
-    step_cfg: Dict[str, Any] = dict(project.get_step_config("fragmentomics") or {})
+    step_cfg: Dict[str, Any] = dict(resolve_for_project("fragmentomics", project))
 
     if step_override_path is not None:
         override_path = Path(step_override_path)
@@ -43,7 +44,7 @@ def resolve_fragmentomics_step_config(
 
     cfg = FragmentomicsStepConfig.model_validate(step_cfg)
     if not cfg.genome_fasta:
-        aq = project.get_step_config("alignment_qc") or {}
+        aq = resolve_for_project("alignment_qc", project)
         if isinstance(aq, dict) and aq.get("genome_fasta"):
             cfg = cfg.model_copy(update={"genome_fasta": aq["genome_fasta"]})
 

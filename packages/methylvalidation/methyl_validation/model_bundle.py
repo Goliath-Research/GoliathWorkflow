@@ -18,6 +18,7 @@ import pandas as pd
 from pydantic import BaseModel, Field
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 if TYPE_CHECKING:
     from methyl_utils import ComparisonSpec, ProjectConfig
@@ -116,7 +117,7 @@ def _resolve_mapper_annotation_settings(
     fallback_explicit = unknown_fallback is not ...
     if project is not None:
         try:
-            mb_cfg = project.get_step_config("model_bundle") or {}
+            mb_cfg = resolve_for_project("model_bundle", project)
         except Exception:
             mb_cfg = {}
         if resolved_collapse is None and isinstance(mb_cfg, dict):
@@ -388,11 +389,11 @@ def _normalize_mapper_intersections(
 def _resolve_mapper_gene_columns(project: "ProjectConfig") -> List[str]:
     requested: Any = None
     try:
-        mb_cfg = project.get_step_config("model_bundle") or {}
+        mb_cfg = resolve_for_project("model_bundle", project)
     except Exception:
         mb_cfg = {}
     try:
-        mapper_cfg = project.get_step_config("mapper") or {}
+        mapper_cfg = resolve_for_project("mapper", project)
     except Exception:
         mapper_cfg = {}
     if isinstance(mb_cfg, dict) and "mapper_gene_columns" in mb_cfg:
@@ -548,7 +549,7 @@ def _candidate_mapper_annotation_paths(
             p = (project_json.parent / p).resolve()
         candidates.append(p)
     try:
-        mb_cfg = project.get_step_config("model_bundle") or {}
+        mb_cfg = resolve_for_project("model_bundle", project)
     except Exception:
         mb_cfg = {}
     cfg_path = mb_cfg.get("mapper_annotation_csv")
@@ -579,7 +580,7 @@ def _candidate_frozen_gene_panel_paths(
 ) -> List[Path]:
     candidates: List[Path] = []
     try:
-        mb_cfg = project.get_step_config("model_bundle") or {}
+        mb_cfg = resolve_for_project("model_bundle", project)
     except Exception:
         mb_cfg = {}
     cfg_path = mb_cfg.get("fixed_gene_panel")
@@ -609,7 +610,7 @@ def _candidate_fixed_gene_feature_paths(
 ) -> List[Path]:
     candidates: List[Path] = []
     try:
-        mb_cfg = project.get_step_config("model_bundle") or {}
+        mb_cfg = resolve_for_project("model_bundle", project)
     except Exception:
         mb_cfg = {}
     cfg_path = mb_cfg.get("fixed_gene_features")

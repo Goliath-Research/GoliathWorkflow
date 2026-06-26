@@ -1,6 +1,7 @@
 {
   "actions": [
     {
+      "action_config_key": "centroid",
       "action_name": "pipeline.centroid",
       "argv_map": {
         "centroid1Dir": "--centroid1-dir",
@@ -42,10 +43,10 @@
       "input_schema_ref": "schemas/tasks/pipeline_centroid.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_centroid.output.schema.json",
       "schema_id": "pipeline.centroid",
-      "step_config_key": "centroid",
       "tool": "MethylCentroid"
     },
     {
+      "action_config_key": "detection",
       "action_name": "pipeline.detector",
       "argv_map": {
         "centroid1Dir": "--centroid1-dir",
@@ -82,10 +83,10 @@
       "input_schema_ref": "schemas/tasks/pipeline_detector.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_detector.output.schema.json",
       "schema_id": "pipeline.detector",
-      "step_config_key": "detection",
       "tool": "MethylDetector"
     },
     {
+      "action_config_key": "dmp_selection",
       "action_name": "pipeline.dmp_select",
       "argv_map": {
         "chromosome": "--chromosome",
@@ -124,10 +125,10 @@
       "input_schema_ref": "schemas/tasks/pipeline_dmp_select.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_dmp_select.output.schema.json",
       "schema_id": "pipeline.dmp_select",
-      "step_config_key": "dmp_selection",
       "tool": "MethylDmpSelect"
     },
     {
+      "action_config_key": "mapper",
       "action_name": "pipeline.mapper",
       "argv_map": {
         "centroid1Dir": "--centroid1-dir",
@@ -151,10 +152,10 @@
       "input_schema_ref": "schemas/tasks/pipeline_mapper.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_mapper.output.schema.json",
       "schema_id": "pipeline.mapper",
-      "step_config_key": "mapper",
       "tool": "MethylMapper"
     },
     {
+      "action_config_key": "gene_selection",
       "action_name": "pipeline.gene_select",
       "argv_map": {
         "biomarkerFilter": "--biomarker-filter",
@@ -180,10 +181,10 @@
       "input_schema_ref": "schemas/tasks/pipeline_gene_select.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_gene_select.output.schema.json",
       "schema_id": "pipeline.gene_select",
-      "step_config_key": "gene_selection",
       "tool": "MethylGeneSelect"
     },
     {
+      "action_config_key": "gene_selection",
       "action_name": "pipeline.gene_feature_select",
       "argv_map": {
         "mapperDir": "--mapper-dir",
@@ -206,10 +207,10 @@
       "input_schema_ref": "schemas/tasks/pipeline_gene_feature_select.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_gene_feature_select.output.schema.json",
       "schema_id": "pipeline.gene_feature_select",
-      "step_config_key": "gene_selection",
       "tool": "MethylGeneFeatureSelect"
     },
     {
+      "action_config_key": "enricher",
       "action_name": "pipeline.enricher",
       "argv_map": {
         "centroid1Dir": "--centroid1-dir",
@@ -233,10 +234,10 @@
       "input_schema_ref": "schemas/tasks/pipeline_enricher.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_enricher.output.schema.json",
       "schema_id": "pipeline.enricher",
-      "step_config_key": "enricher",
       "tool": "MethylEnricher"
     },
     {
+      "action_config_key": "progression",
       "action_name": "pipeline.progression",
       "argv_map": {
         "centroid1Dir": "--centroid1-dir",
@@ -260,10 +261,10 @@
       "input_schema_ref": "schemas/tasks/pipeline_progression.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_progression.output.schema.json",
       "schema_id": "pipeline.progression",
-      "step_config_key": "progression",
       "tool": "MethylDiseaseProgression"
     },
     {
+      "action_config_key": "classifier",
       "action_name": "pipeline.classifier",
       "argv_map": {
         "centroid1Dir": "--centroid1-dir",
@@ -287,10 +288,10 @@
       "input_schema_ref": "schemas/tasks/pipeline_classifier.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_classifier.output.schema.json",
       "schema_id": "pipeline.classifier",
-      "step_config_key": "classifier",
       "tool": "MethylClassifier"
     },
     {
+      "action_config_key": "predictor",
       "action_name": "pipeline.predictor",
       "argv_map": {
         "centroid1Dir": "--centroid1-dir",
@@ -314,7 +315,6 @@
       "input_schema_ref": "schemas/tasks/pipeline_predictor.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_predictor.output.schema.json",
       "schema_id": "pipeline.predictor",
-      "step_config_key": "predictor",
       "tool": "MethylPredictor"
     },
     {
@@ -440,6 +440,7 @@
       "tool": "SampleTrimFastq"
     },
     {
+      "action_config_key": "alignment_qc",
       "action_name": "sample.methyl_qc",
       "argv_map": {},
       "capability": "methyl-qc",
@@ -511,10 +512,10 @@
       "input_schema_ref": "schemas/tasks/sample_methyl_qc.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_methyl_qc.output.schema.json",
       "schema_id": "sample.methyl_qc",
-      "step_config_key": "alignment_qc",
       "tool": "MethylAlignmentQc"
     },
     {
+      "action_config_key": "fragmentomics",
       "action_name": "sample.fragmentomics",
       "argv_map": {},
       "capability": "methyl-fragmentomics",
@@ -548,10 +549,10 @@
       "input_schema_ref": "schemas/tasks/sample_fragmentomics.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_fragmentomics.output.schema.json",
       "schema_id": "sample.fragmentomics",
-      "step_config_key": "fragmentomics",
       "tool": "MethylFragmentomics"
     },
     {
+      "action_config_key": "methyl_extract",
       "action_name": "sample.methyl_extract",
       "argv_map": {},
       "capability": "methyl-extract",
@@ -585,10 +586,10 @@
       "input_schema_ref": "schemas/tasks/sample_methyl_extract.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_methyl_extract.output.schema.json",
       "schema_id": "sample.methyl_extract",
-      "step_config_key": "methyl_extract",
       "tool": "MethylExtract"
     },
     {
+      "action_config_key": "extraction_qc",
       "action_name": "sample.extraction_qc",
       "argv_map": {},
       "capability": "methyl-extraction-qc",
@@ -627,7 +628,6 @@
       "input_schema_ref": "schemas/tasks/sample_extraction_qc.input.schema.json",
       "output_schema_ref": "schemas/tasks/sample_extraction_qc.output.schema.json",
       "schema_id": "sample.extraction_qc",
-      "step_config_key": "extraction_qc",
       "tool": "MethylExtractionQc"
     },
     {
@@ -771,6 +771,7 @@
       "tool": "SampleMarkFailed"
     },
     {
+      "action_config_key": "validation",
       "action_name": "validation.plan_iterations",
       "argv_map": {},
       "capability": "validation.plan-iterations",
@@ -801,10 +802,10 @@
       "in_process_handler": "_handle_validation_plan_iterations",
       "input_schema_ref": "schemas/tasks/validation_plan_iterations.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_plan_iterations.output.schema.json",
-      "schema_id": "validation.plan_iterations",
-      "step_config_key": "validation"
+      "schema_id": "validation.plan_iterations"
     },
     {
+      "action_config_key": "validation",
       "action_name": "validation.stability",
       "argv_map": {},
       "capability": "validation.stability",
@@ -830,10 +831,10 @@
       "in_process_handler": "_handle_validation_stability",
       "input_schema_ref": "schemas/tasks/validation_stability.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_stability.output.schema.json",
-      "schema_id": "validation.stability",
-      "step_config_key": "validation"
+      "schema_id": "validation.stability"
     },
     {
+      "action_config_key": "validation",
       "action_name": "validation.biomarker_filter",
       "argv_map": {},
       "capability": "validation.biomarker-filter",
@@ -848,10 +849,10 @@
       "in_process_handler": "_handle_validation_biomarker_filter",
       "input_schema_ref": "schemas/tasks/validation_biomarker_filter.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_biomarker_filter.output.schema.json",
-      "schema_id": "validation.biomarker_filter",
-      "step_config_key": "validation"
+      "schema_id": "validation.biomarker_filter"
     },
     {
+      "action_config_key": "validation",
       "action_name": "validation.prepare_freeze_project",
       "argv_map": {},
       "capability": "validation.prepare-freeze-project",
@@ -882,10 +883,10 @@
       "in_process_handler": "_handle_validation_prepare_freeze",
       "input_schema_ref": "schemas/tasks/validation_prepare_freeze_project.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_prepare_freeze_project.output.schema.json",
-      "schema_id": "validation.prepare_freeze_project",
-      "step_config_key": "validation"
+      "schema_id": "validation.prepare_freeze_project"
     },
     {
+      "action_config_key": "validation",
       "action_name": "validation.stability_freeze_readiness",
       "argv_map": {},
       "capability": "validation.stability-freeze-readiness",
@@ -909,8 +910,7 @@
       "in_process_handler": "_handle_validation_stability_freeze_readiness",
       "input_schema_ref": "schemas/tasks/validation_stability_freeze_readiness.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_stability_freeze_readiness.output.schema.json",
-      "schema_id": "validation.stability_freeze_readiness",
-      "step_config_key": "validation"
+      "schema_id": "validation.stability_freeze_readiness"
     },
     {
       "action_name": "validation.link_artifacts",
@@ -1026,6 +1026,7 @@
       "schema_id": "validation.model_predict"
     },
     {
+      "action_config_key": "validation",
       "action_name": "validation.select_best_model",
       "argv_map": {},
       "capability": "validation.select-best-model",
@@ -1058,10 +1059,10 @@
       "in_process_handler": "_handle_validation_select_best_model",
       "input_schema_ref": "schemas/tasks/validation_select_best_model.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_select_best_model.output.schema.json",
-      "schema_id": "validation.select_best_model",
-      "step_config_key": "validation"
+      "schema_id": "validation.select_best_model"
     },
     {
+      "action_config_key": "validation",
       "action_name": "validation.model_mc",
       "argv_map": {},
       "capability": "validation.model-mc",
@@ -1088,10 +1089,10 @@
       "in_process_handler": "_handle_validation_model_mc",
       "input_schema_ref": "schemas/tasks/validation_model_mc.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_model_mc.output.schema.json",
-      "schema_id": "validation.model_mc",
-      "step_config_key": "validation"
+      "schema_id": "validation.model_mc"
     },
     {
+      "action_config_key": "validation",
       "action_name": "validation.post_model_validation",
       "argv_map": {},
       "capability": "validation.post-model-validation",
@@ -1117,8 +1118,7 @@
       "in_process_handler": "_handle_validation_post_model_validation",
       "input_schema_ref": "schemas/tasks/validation_post_model_validation.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_post_model_validation.output.schema.json",
-      "schema_id": "validation.post_model_validation",
-      "step_config_key": "validation"
+      "schema_id": "validation.post_model_validation"
     }
   ],
   "version": 1

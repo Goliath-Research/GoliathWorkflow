@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any, Dict, Optional, Union
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 _GENE_SELECTION_ALIASES: Dict[str, str] = {
     "target_balanced_accuracy": "stability_target_balanced_accuracy",
@@ -42,18 +43,18 @@ def build_gene_select_config(
     **overrides: Any,
 ) -> SimpleNamespace:
     """
-    Merge ``step_config.gene_selection`` and validation MC keys into a config object
+    Merge profile ``actionConfig.gene_selection`` and validation MC keys into a config object
     suitable for ``run_gene_featurecuts_for_iteration``.
     """
     project = load_project(project_path)
     payload: Dict[str, Any] = {"stability_gene_featurecuts_enabled": True}
 
-    gene_sel = dict(project.get_step_config("gene_selection") or {})
+    gene_sel = dict(resolve_for_project("gene_selection", project))
     for src, dst in _GENE_SELECTION_ALIASES.items():
         if src in gene_sel and gene_sel[src] is not None:
             payload[dst] = gene_sel[src]
 
-    validation = dict(project.get_step_config("validation") or {})
+    validation = dict(resolve_for_project("validation", project))
     for key in _VALIDATION_GENE_KEYS:
         if key in validation and validation[key] is not None:
             payload[key] = validation[key]

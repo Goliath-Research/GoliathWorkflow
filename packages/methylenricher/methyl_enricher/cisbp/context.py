@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from .runner import CisbpContext
+from methyl_utils.action_config_resolver import resolve_for_project
 
 _GENOME_FASTA_ENV = ("CISBP_GENOME_FASTA", "GENOME_FASTA")
 
@@ -100,7 +101,7 @@ def resolve_cisbp_context(
     gtf = getattr(cisbp_config, "gtf", None)
     if not gtf and project is not None:
         try:
-            gtf = (project.get_step_config("mapper") or {}).get("gtf")
+            gtf = (resolve_for_project("mapper", project)).get("gtf")
         except Exception:
             gtf = None
     if not gtf:
@@ -111,7 +112,7 @@ def resolve_cisbp_context(
     genome_fasta = getattr(cisbp_config, "genome_fasta", None)
     if not genome_fasta and project is not None:
         try:
-            genome_fasta = (project.get_step_config("alignment_qc") or {}).get("genome_fasta")
+            genome_fasta = (resolve_for_project("alignment_qc", project)).get("genome_fasta")
         except Exception:
             genome_fasta = None
     if not genome_fasta:

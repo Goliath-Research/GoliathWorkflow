@@ -109,7 +109,25 @@ def test_get_ordered_stage_narratives_and_description_field(tmp_path):
     assert narr[2]["description"] is None
 
 
-def test_project_config_normalizes_comparisons_and_predictor_alias(tmp_path):
+def test_project_config_rejects_step_config(tmp_path):
+    config_path = tmp_path / "project.json"
+    config_path.write_text(
+        json.dumps(
+            {
+                "project_name": "Contract Test",
+                "output_base": "/work",
+                "group1": {"label": "g1", "sample_paths": ["/s1"]},
+                "group2": {"label": "g2", "sample_paths": ["/s2"]},
+                "step_config": {"detection": {"alpha": 0.05}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="step_config was removed"):
+        load_project(str(config_path))
+
+
+def test_regulatory_top_level(tmp_path):
     config_path = tmp_path / "project.json"
     config_path.write_text(
         json.dumps(
@@ -119,33 +137,20 @@ def test_project_config_normalizes_comparisons_and_predictor_alias(tmp_path):
                 "samples_base_path": "/samples",
                 "controls": {
                     "label": "controls",
-                    "groups": [{"label": "healthy", "sample_paths": ["ctrl_a", "ctrl_b"]}],
+                    "groups": [{"label": "healthy", "sample_paths": ["ctrl_a"]}],
                 },
                 "diseases": {
                     "label": "diseases",
-                    "groups": [{"label": "pca", "sample_paths": ["pca_a", "pca_b"]}],
+                    "groups": [{"label": "pca", "sample_paths": ["pca_a"]}],
                 },
                 "comparisons": [{"control_group": "healthy", "disease_group": "pca"}],
-                "step_config": {
-                    "validator": {"debug": True},
-                },
+                "regulatory": {"primary_analyte": "buffy_coat"},
             }
         ),
         encoding="utf-8",
     )
-
-    with pytest.warns(DeprecationWarning, match="step_config.validator"):
-        project = load_project(str(config_path))
-
-    comparison = project.get_comparisons()[0]
-    assert comparison.control_group == "healthy"
-    assert comparison.disease_group == "pca"
-    assert comparison.comparison_label == "pca"
-
-    assert project.get_step_config("predictor")["debug"] is True
-
-    resolved = project.get_group_sample_paths_by_label("healthy")
-    assert resolved == ["/samples/ctrl_a", "/samples/ctrl_b"]
+    project = load_project(str(config_path))
+    assert project.get_primary_analyte() == "buffy_coat"
 
 
 def test_sample_list_csv_resolves_from_samples_base_parent(tmp_path, monkeypatch):

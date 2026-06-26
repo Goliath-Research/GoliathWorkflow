@@ -237,6 +237,10 @@ class WorkflowScheduler:
         entry = find_catalog_entry(action_name)
         capability = entry.capability if entry else action_name
 
+        from workflow_context import materialize_action_input
+
+        input_json = materialize_action_input(input_json, action_name, flat)
+
         if self.config.dry_run:
             logger.info("dry-run ACTION %s: %s", action_name, input_json)
             self.trace.executed_actions.append(node.node_key)

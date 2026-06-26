@@ -99,6 +99,14 @@ def enrich_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
     project_path = _resolve_project_path(out)
 
     from methyl_utils import load_project
+    from methyl_utils.action_config_resolver import load_site_manifest
+    from pipeline_profiles import (
+        PIPELINE_FLAG_DEFAULTS,
+        apply_pipeline_profile,
+        load_profile,
+        profile_action_config,
+        seed_pipeline_scope_flags,
+    )
 
     project = load_project(str(project_path))
 
@@ -121,29 +129,50 @@ def enrich_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
         resolved = project.get_resolved_groups()
         out["groups"] = [{"label": label} for label, _ in resolved]
 
-    project_step_config = dict(getattr(project, "step_config", None) or {})
-    overrides = out.get("step_config_overrides")
-    merged_step_config = project_step_config
-    if isinstance(overrides, dict):
-        merged_step_config = dict(project_step_config)
-        for section, vals in overrides.items():
-            if isinstance(vals, dict) and isinstance(merged_step_config.get(section), dict):
-                merged_step_config[section] = {**merged_step_config[section], **vals}
-            else:
-                merged_step_config[section] = vals
+    if not out.get("siteConfig"):
+        site_path = out.get("siteConfigPath")
+        out["siteConfig"] = load_site_manifest(site_path) if site_path else load_site_manifest()
 
-    from pipeline_profiles import PIPELINE_FLAG_DEFAULTS, apply_pipeline_profile, seed_pipeline_scope_flags
+    if not out.get("regulatory"):
+        out["regulatory"] = project.get_regulatory_config()
 
-    if (
-        out.get("pipelineProfile")
-        or out.get("step_config_overrides")
-        or any(k in out for k in PIPELINE_FLAG_DEFAULTS)
-    ):
-        out = apply_pipeline_profile(out, out, step_config=project_step_config)
-    else:
-        out = seed_pipeline_scope_flags(out, step_config=merged_step_config)
+    profile_name = out.get("pipelineProfile")
+    profile_file = out.get("profilePath")
+    if profile_file or profile_name:
+        profile = load_profile(profile_file or profile_name)
+        out = apply_pipeline_profile(out, profile)
+    elif out.get("actionConfig"):
+        out = seed_pipeline_scope_flags(out, action_config=out.get("actionConfig"))
+    elif any(k in out for k in PIPELINE_FLAG_DEFAULTS):
+        out = seed_pipeline_scope_flags(out, action_config=profile_action_config(out))
 
     return out
+
+
+def _lookup_scope_path(scope: Mapping[str, Any], path: str) -> Any:
+    """Resolve dotted scope paths such as ``iteration.runDir``."""
+    cur: Any = scope
+    for part in path.split("."):
+        if isinstance(cur, Mapping) and part in cur:
+            cur = cur[part]
+        else:
+            raise KeyError(path)
+    return cur
+
+
+def _resolve_template_value(value: Any, scope: Mapping[str, Any], *, missing: str = "error") -> Any:
+    if isinstance(value, dict):
+        if set(value.keys()) == {"ref"} and isinstance(value.get("ref"), str):
+            try:
+                return _lookup_scope_path(scope, str(value["ref"]))
+            except KeyError:
+                if missing == "none":
+                    return None
+                raise
+        return {k: _resolve_template_value(v, scope, missing=missing) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_resolve_template_value(v, scope, missing=missing) for v in value]
+    return resolve_placeholder(value, scope, missing=missing)
 
 
 def resolve_placeholder(
@@ -160,18 +189,23 @@ def resolve_placeholder(
     if not m:
         return value
     key = m.group(1)
-    if key not in scope:
+    if key in scope:
+        return scope[key]
+    try:
+        return _lookup_scope_path(scope, key)
+    except KeyError:
         if missing == "none":
             return None
-        raise KeyError(f"unresolved scope variable: {key}")
-    return scope[key]
+        raise KeyError(f"unresolved scope variable: {key}") from None
 
 
 def resolve_input_json_from_template(
     template: Mapping[str, Any], scope: Mapping[str, Any]
 ) -> Dict[str, Any]:
     """Resolve an action input_template against a flat scope dict (for tests)."""
-    resolved = resolve_placeholder(dict(template), scope, missing="none")
+    resolved = _resolve_template_value(dict(template), scope, missing="none")
+    if not isinstance(resolved, dict):
+        return {}
     return {k: v for k, v in resolved.items() if v is not None}
 
 
@@ -224,7 +258,7 @@ def action_input_spec_for(action_name: str) -> Optional[ActionInputSpec]:
         "fixedDmpPanel",
     }
     required = ["tool"]
-    if entry.step_config_key:
+    if entry.action_config_key:
         required.extend(["project", "projectPath"])
     required.extend(c for c in entry.context_vars if c not in optional)
     optional_keys = list(optional)
@@ -233,6 +267,46 @@ def action_input_spec_for(action_name: str) -> Optional[ActionInputSpec]:
         required_keys=sorted(set(required)),
         optional_keys=optional,
     )
+
+
+def materialize_action_input(
+    input_json: Dict[str, Any],
+    action_name: str,
+    scope: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Inject resolvedConfig for workflow ACTION nodes when catalog defines action_config_key."""
+    import sys
+    from pathlib import Path as _Path
+
+    workers = _Path(__file__).resolve().parents[2] / "workers"
+    if str(workers) not in sys.path:
+        sys.path.insert(0, str(workers))
+
+    from methyl_worker.action_catalog import find_catalog_entry
+    from methyl_utils.action_config_resolver import resolve_action_config
+
+    entry = find_catalog_entry(action_name)
+    if entry is None or not entry.action_config_key:
+        return input_json
+
+    out = dict(input_json)
+    if isinstance(out.get("resolvedConfig"), dict):
+        return out
+
+    ac = scope.get("actionConfig")
+    profile_ac = dict(ac) if isinstance(ac, dict) else {}
+    site = scope.get("siteConfig") if isinstance(scope.get("siteConfig"), dict) else {}
+    override = out.get("stepOverride") if isinstance(out.get("stepOverride"), dict) else None
+    reg = scope.get("regulatory") if isinstance(scope.get("regulatory"), dict) else {}
+
+    out["resolvedConfig"] = resolve_action_config(
+        entry.action_config_key,
+        site=site,
+        profile_action_config=profile_ac,
+        program_override=override,
+        regulatory=reg,
+    )
+    return out
 
 
 def validate_resolved_input_json(input_json: Mapping[str, Any], action_name: str) -> List[str]:

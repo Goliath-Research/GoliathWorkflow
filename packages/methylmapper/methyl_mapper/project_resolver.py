@@ -22,6 +22,7 @@ from typing import List, Optional, Tuple
 from pydantic import BaseModel, Field
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 # MethylDetector exports: dmps-{chr}-biological-sorted.csv (biological filter only) and dmps-{chr}.csv (optimized subset).
 # Default to biological-only so mapper maps all biologically significant DMPs, not every CSV in the detection dir.
@@ -62,7 +63,7 @@ def resolve_mapper_paths_per_cancer_group(
     kept to avoid breaking older callers.
     """
     project = load_project(project_path)
-    step_cfg = project.get_step_config("mapper") or {}
+    step_cfg = resolve_for_project("mapper", project)
     if step_override_path and step_override_path.exists():
         import json
         with open(step_override_path) as f:
@@ -147,7 +148,7 @@ def resolve_mapper_paths(
 
     csv_pattern = _resolve_csv_pattern(csv_filename_pattern, use_comparison_layout)
 
-    step_cfg = project.get_step_config("mapper")
+    step_cfg = resolve_for_project("mapper", project)
     if step_cfg:
         if step_cfg.get("csv_filename_pattern") is not None:
             csv_pattern = _resolve_csv_pattern(step_cfg["csv_filename_pattern"], use_comparison_layout)

@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 ExecutionMode = Literal["cli", "in_process"]
 ActionCategory = Literal["sample_prep", "modeling", "validation"]
-StepConfigKey = Literal[
+ActionConfigKey = Literal[
     "centroid",
     "detection",
     "dmp_selection",
@@ -58,8 +58,8 @@ NodeType = Literal[
     "FOREACH",
 ]
 
-# Recognized keys under project.json step_config (ProjectConfig.get_step_config).
-PROJECT_STEP_CONFIG_KEYS: FrozenSet[StepConfigKey] = frozenset(
+# Recognized action catalog keys resolved via action_config_resolver.
+PROJECT_ACTION_CONFIG_KEYS: FrozenSet[ActionConfigKey] = frozenset(
     {
         "centroid",
         "detection",
@@ -107,7 +107,7 @@ class ActionCatalogExport(TypedDict, total=False):
     default_node_type: NodeType
     input_schema_ref: str
     output_schema_ref: str
-    step_config_key: StepConfigKey
+    action_config_key: ActionConfigKey
     context_vars: List[str]
     argv_map: Dict[str, str]
     in_process_handler: str
@@ -131,7 +131,7 @@ class ActionCatalogEntry:
     default_node_type: NodeType = "ACTION"
     cli_tool: Optional[str] = None
     tool: Optional[str] = None
-    step_config_key: Optional[StepConfigKey] = None
+    action_config_key: Optional[ActionConfigKey] = None
     context_vars: ContextVars = field(default_factory=tuple)
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP
     in_process_handler: Optional[str] = None
@@ -178,8 +178,8 @@ class ActionCatalogEntry:
             "context_vars": list(self.context_vars),
             "argv_map": {k: v for k, v in self.argv_map},
         }
-        if self.step_config_key is not None:
-            payload["step_config_key"] = self.step_config_key
+        if self.action_config_key is not None:
+            payload["action_config_key"] = self.action_config_key
         handler = self.resolved_in_process_handler()
         if handler:
             payload["in_process_handler"] = handler
@@ -329,14 +329,14 @@ def _entry_invariant_errors(entry: ActionCatalogEntry) -> List[str]:
     else:
         errors.append(f"{entry.action_name}: unknown execution_mode {entry.execution_mode!r}")
 
-    if entry.step_config_key is not None:
-        if entry.step_config_key not in PROJECT_STEP_CONFIG_KEYS:
+    if entry.action_config_key is not None:
+        if entry.action_config_key not in PROJECT_ACTION_CONFIG_KEYS:
             errors.append(
-                f"{entry.action_name}: unknown step_config_key {entry.step_config_key!r}"
+                f"{entry.action_name}: unknown action_config_key {entry.action_config_key!r}"
             )
     elif not entry.context_vars:
         errors.append(
-            f"{entry.action_name}: must set step_config_key or non-empty context_vars"
+            f"{entry.action_name}: must set action_config_key or non-empty context_vars"
         )
     return errors
 
@@ -355,7 +355,7 @@ def _entry(
     execution_mode: ExecutionMode = "cli",
     cli_tool: Optional[str] = None,
     tool: Optional[str] = None,
-    step_config_key: Optional[StepConfigKey] = None,
+    action_config_key: Optional[ActionConfigKey] = None,
     context_vars: ContextVars = (),
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     in_process_handler: Optional[str] = None,
@@ -375,7 +375,7 @@ def _entry(
         execution_mode=execution_mode,
         cli_tool=cli_tool,
         tool=tool,
-        step_config_key=step_config_key,
+        action_config_key=action_config_key,
         context_vars=context_vars,
         argv_map=argv_map,
         in_process_handler=in_process_handler,
@@ -397,7 +397,7 @@ def _cli(
     *,
     cli_tool: str,
     tool: Optional[str] = None,
-    step_config_key: Optional[StepConfigKey] = None,
+    action_config_key: Optional[ActionConfigKey] = None,
     context_vars: ContextVars = (),
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     domain_effects: Optional[DomainEffects] = None,
@@ -416,7 +416,7 @@ def _cli(
         execution_mode="cli",
         cli_tool=cli_tool,
         tool=tool,
-        step_config_key=step_config_key,
+        action_config_key=action_config_key,
         context_vars=context_vars,
         argv_map=argv_map,
         domain_effects=domain_effects,
@@ -438,7 +438,7 @@ def _in_process(
     in_process_handler: str,
     tool: Optional[str] = None,
     cli_tool: Optional[str] = None,
-    step_config_key: Optional[StepConfigKey] = None,
+    action_config_key: Optional[ActionConfigKey] = None,
     context_vars: ContextVars = (),
     domain_effects: Optional[DomainEffects] = None,
     idempotency_enabled: bool = False,
@@ -457,7 +457,7 @@ def _in_process(
         in_process_handler=in_process_handler,
         tool=tool,
         cli_tool=cli_tool,
-        step_config_key=step_config_key,
+        action_config_key=action_config_key,
         context_vars=context_vars,
         argv_map=(),
         domain_effects=domain_effects,
@@ -478,7 +478,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "CentroidTaskOutput",
         cli_tool="methyl-centroid",
         tool="MethylCentroid",
-        step_config_key="centroid",
+        action_config_key="centroid",
         context_vars=("group", "chromosome", "context", "outputDir", "addSamples", "removeSamples", "stepOverride"),
         argv_map=DEFAULT_PIPELINE_ARGV_MAP,
         domain_effects=_DE_CENTROID,
@@ -495,7 +495,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "DetectorTaskOutput",
         cli_tool="methyl-detector",
         tool="MethylDetector",
-        step_config_key="detection",
+        action_config_key="detection",
         context_vars=("chromosome", "context", "comparison", "fixedDmpPanel", "stepOverride"),
         argv_map=(
             ("project", "--project"),
@@ -519,7 +519,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "DmpSelectTaskOutput",
         cli_tool="methyl-dmp-select",
         tool="MethylDmpSelect",
-        step_config_key="dmp_selection",
+        action_config_key="dmp_selection",
         context_vars=("chromosome", "context", "comparison", "discoveryCsv", "outputDir", "stepOverride"),
         argv_map=(
             ("project", "--project"),
@@ -544,7 +544,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "MapperTaskOutput",
         cli_tool="methyl-mapper",
         tool="MethylMapper",
-        step_config_key="mapper",
+        action_config_key="mapper",
     ),
     _cli(
         "pipeline.gene_select",
@@ -558,7 +558,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "GeneSelectTaskOutput",
         cli_tool="methyl-gene-select",
         tool="MethylGeneSelect",
-        step_config_key="gene_selection",
+        action_config_key="gene_selection",
         context_vars=("comparison", "runDir", "maxGenes", "maxDmps", "biomarkerFilter"),
         argv_map=(
             ("project", "--project"),
@@ -581,7 +581,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "GeneFeatureSelectTaskOutput",
         cli_tool="methyl-gene-feature-select",
         tool="MethylGeneFeatureSelect",
-        step_config_key="gene_selection",
+        action_config_key="gene_selection",
         context_vars=("mapperDir", "outputDir", "maxFeatures", "targetBalancedAccuracy"),
         argv_map=(
             ("mapperDir", "--mapper-dir"),
@@ -602,7 +602,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "EnricherTaskOutput",
         cli_tool="methyl-enricher",
         tool="MethylEnricher",
-        step_config_key="enricher",
+        action_config_key="enricher",
     ),
     _cli(
         "pipeline.progression",
@@ -616,7 +616,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "ProgressionTaskOutput",
         cli_tool="methyl-disease-progression",
         tool="MethylDiseaseProgression",
-        step_config_key="progression",
+        action_config_key="progression",
     ),
     _cli(
         "pipeline.classifier",
@@ -630,7 +630,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "ClassifierTaskOutput",
         cli_tool="methyl-classifier",
         tool="MethylClassifier",
-        step_config_key="classifier",
+        action_config_key="classifier",
     ),
     _cli(
         "pipeline.predictor",
@@ -644,7 +644,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "PredictorTaskOutput",
         cli_tool="methyl-predictor",
         tool="MethylPredictor",
-        step_config_key="predictor",
+        action_config_key="predictor",
     ),
     _in_process(
         "sample.download_fastq",
@@ -725,7 +725,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         in_process_handler="_handle_methyl_qc",
         tool="MethylAlignmentQc",
         cli_tool="methyl-qc",
-        step_config_key="alignment_qc",
+        action_config_key="alignment_qc",
         context_vars=("projectPath", "sampleId", "sampleDir", "primaryAnalyte"),
         domain_effects=_DE_METHYL_QC,
     ),
@@ -742,7 +742,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         in_process_handler="_handle_methyl_fragmentomics",
         tool="MethylFragmentomics",
         cli_tool="methyl-fragmentomics",
-        step_config_key="fragmentomics",
+        action_config_key="fragmentomics",
         context_vars=("projectPath", "sampleId", "sampleDir"),
         domain_effects=_DE_FRAGMENTOMICS,
     ),
@@ -758,7 +758,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "MethylExtractTaskOutput",
         in_process_handler="_handle_methyl_extract",
         tool="MethylExtract",
-        step_config_key="methyl_extract",
+        action_config_key="methyl_extract",
         context_vars=("sampleId", "sampleDir", "projectPath", "referenceFasta"),
         domain_effects=_DE_METHYL_EXTRACT,
     ),
@@ -775,7 +775,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         in_process_handler="_handle_methyl_extraction_qc",
         tool="MethylExtractionQc",
         cli_tool="methyl-extraction-qc",
-        step_config_key="extraction_qc",
+        action_config_key="extraction_qc",
         context_vars=("projectPath", "sampleId", "sampleDir"),
         domain_effects=_DE_EXTRACTION_QC,
     ),
@@ -858,7 +858,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _VALIDATION_MODULE,
         "ValidationPlanTaskOutput",
         in_process_handler="_handle_validation_plan_iterations",
-        step_config_key="validation",
+        action_config_key="validation",
         context_vars=("projectPath", "featureIterations", "qualityIterations"),
         domain_effects=_DE_PLAN_ITERATIONS,
     ),
@@ -873,7 +873,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _VALIDATION_MODULE,
         "ValidationStabilityOutput",
         in_process_handler="_handle_validation_stability",
-        step_config_key="validation",
+        action_config_key="validation",
         context_vars=("projectPath", "monteCarloRunsRoot", "outputDir"),
         domain_effects=_DE_VALIDATION,
     ),
@@ -888,7 +888,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _PIPELINE_MODULE,
         "BiomarkerFilterTaskOutput",
         in_process_handler="_handle_validation_biomarker_filter",
-        step_config_key="validation",
+        action_config_key="validation",
         context_vars=("projectPath", "runDir"),
     ),
     _in_process(
@@ -902,7 +902,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _VALIDATION_MODULE,
         "ValidationPrepareFreezeOutput",
         in_process_handler="_handle_validation_prepare_freeze",
-        step_config_key="validation",
+        action_config_key="validation",
         context_vars=("projectPath", "stableDmpCsv", "productionOutputDir"),
         domain_effects=_DE_PREPARE_FREEZE,
     ),
@@ -917,7 +917,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _VALIDATION_MODULE,
         "ValidationFreezeReadinessOutput",
         in_process_handler="_handle_validation_stability_freeze_readiness",
-        step_config_key="validation",
+        action_config_key="validation",
         context_vars=("projectPath",),
         domain_effects=_DE_VALIDATION,
     ),
@@ -988,7 +988,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _VALIDATION_MODULE,
         "ValidationSelectBestModelOutput",
         in_process_handler="_handle_validation_select_best_model",
-        step_config_key="validation",
+        action_config_key="validation",
         context_vars=("projectPath", "modelMcRoot", "backends", "selectionMetric", "selectionStat"),
         domain_effects=_DE_SELECT_BEST_MODEL,
     ),
@@ -1003,7 +1003,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _VALIDATION_MODULE,
         "ValidationModelMcOutput",
         in_process_handler="_handle_validation_model_mc",
-        step_config_key="validation",
+        action_config_key="validation",
         context_vars=("projectPath", "monteCarloRunsRoot", "backends", "productionOutputDir"),
         domain_effects=_DE_VALIDATION,
     ),
@@ -1018,7 +1018,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         _VALIDATION_MODULE,
         "ValidationPostModelValidationOutput",
         in_process_handler="_handle_validation_post_model_validation",
-        step_config_key="validation",
+        action_config_key="validation",
         context_vars=("projectPath", "runDir", "productionOutputDir"),
         domain_effects=_DE_VALIDATION,
     ),

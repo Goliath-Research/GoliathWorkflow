@@ -201,7 +201,7 @@ def _action_template(entry, step: ActionStep) -> Dict[str, Any]:
     tool = entry.tool or entry.action_name
     template: Dict[str, Any] = {"tool": tool}
     template["projectPath"] = "${var.projectPath}"
-    if entry.step_config_key:
+    if entry.action_config_key:
         template["project"] = "${var.projectPath}"
     for ctx_var in entry.context_vars:
         template[ctx_var] = f"${{var.{ctx_var}}}"

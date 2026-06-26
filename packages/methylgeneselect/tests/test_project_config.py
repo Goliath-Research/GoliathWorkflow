@@ -5,7 +5,7 @@ from pathlib import Path
 from methyl_gene_select.utils.project_config import build_gene_select_config
 
 
-def test_build_gene_select_config_merges_gene_selection_and_validation(tmp_path: Path):
+def test_build_gene_select_config_merges_gene_selection_and_validation(tmp_path: Path, monkeypatch):
     project = tmp_path / "project.json"
     project.write_text(
         """
@@ -16,22 +16,30 @@ def test_build_gene_select_config_merges_gene_selection_and_validation(tmp_path:
           "diseases": {"label": "cancer", "groups": [{"label": "PCa", "sample_paths": ["/b.csv"]}]},
           "comparisons": "control_vs_each_disease",
           "chromosomes": ["1"],
-          "contexts": ["CG"],
-          "step_config": {
-            "gene_selection": {
-              "target_balanced_accuracy": 0.95,
-              "min_selected_genes": 200,
-              "biomarker_filter_enabled": true,
-              "biomarker_mode": "ppi_only"
-            },
-            "validation": {
-              "stability_gene_featurecuts_max_genes": 500,
-              "stability_gene_region_hits": ["promoter"]
-            }
-          }
+          "contexts": ["CG"]
         }
         """.strip(),
         encoding="utf-8",
+    )
+
+    def _fake_resolve(action_key, project, **kwargs):
+        if action_key == "gene_selection":
+            return {
+                "target_balanced_accuracy": 0.95,
+                "min_selected_genes": 200,
+                "biomarker_filter_enabled": True,
+                "biomarker_mode": "ppi_only",
+            }
+        if action_key == "validation":
+            return {
+                "stability_gene_featurecuts_max_genes": 500,
+                "stability_gene_region_hits": ["promoter"],
+            }
+        return {}
+
+    monkeypatch.setattr(
+        "methyl_gene_select.utils.project_config.resolve_for_project",
+        _fake_resolve,
     )
     cfg = build_gene_select_config(project)
     assert cfg.stability_target_balanced_accuracy == 0.95

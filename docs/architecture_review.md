@@ -7,16 +7,19 @@ Status: canonical reference for workflow-first migration
 
 MethylPipeline evolved from per-package CLIs with Pydantic JSON configs, through a monolithic `project.json` + `step_config` orchestration layer (`pipeline_runner.py`), to a **DomainProgram** workflow language executed by a database workflow engine and remote workers. The local **`methyl-workflow-run`** engine now executes the same compiled graphs in-process.
 
-**Target:** DomainProgram JSON defines pipeline architecture (actions, control flow, per-action parameters). `project.json` is a **study manifest** (cohorts, paths, chromosomes)—not a hard-coded pipeline blueprint.
+**Target:** DomainProgram JSON defines pipeline architecture (actions, control flow, per-action parameters). `project.json` is a **study manifest** (cohorts, paths, chromosomes, regulatory metadata)—not a hard-coded pipeline blueprint and **not** a tool-parameter store.
 
 ## Layer map
 
 | Layer | Artifact | Role |
 |-------|----------|------|
-| Study manifest | `project.json` / `ProjectConfig` | Cohorts, sample paths, chromosomes, `output_base` |
+| Study manifest | `project.json` / `ProjectConfig` | Cohorts, sample paths, chromosomes, comparisons, stages, `regulatory`, `validation_partitions`, `progression_order` |
+| Site manifest | `/work/site/methyl_site.json` | Genomes, GTF, caches, cluster defaults |
+| Pipeline profile | `*.profile.json` | Reusable `actionConfig` packs + scope booleans (`runDmpSelection`, `runProgressionAnalysis`, …) |
 | Workflow IR | `*.program.json` / `DomainProgram` | `for`, `if`, `parallel`, `do` — pipeline structure |
 | Deploy spec | `WorkflowDefinitionSpec` / `compiled_workflow.json` | Nodes, edges, templates, bindings for engine |
-| Instance | `context_json` | `projectPath`, `samples[]`, `isCfdna`, … |
+| Instance | `context_json` | `projectPath`, `pipelineProfile`, `samples[]`, … |
+| Task input | `resolvedConfig` (materialized) | Merged action parameters at worker claim time |
 | Execution | Action catalog + `methyl_worker.handlers` | CLI / in-process dispatch |
 | Orchestration | DB engine + gateway **or** `LocalWorkflowEngine` | Graph scheduling |
 
@@ -46,13 +49,21 @@ Deploy compiled specs: `scripts/deploy_workflow_definitions.sh`
 
 Marked deprecated in `workflow_engine/README.md`: `workflow_methylvalidation_seed.sql`, `wf_pca_*`, `wf_sample_prep_pipeline_seed.sql`. Use DomainProgram compile + deploy.
 
-## project.json slim-down
+## Study manifest slim-down (four-layer model)
 
-**Keep:** `control`/`disease`, `comparisons`, `chromosomes`, `contexts`, `output_base`, `path_remap`  
-**Move to programs:** stage ordering, conditional algorithm branches, per-action `stepOverride`  
-**Deprecate:** `step_config.validation.run_mapper_and_enricher`, `skip_enricher`, `step_config.validator` alias
+**Keep in study manifest:** `controls`/`diseases`, staged `comparisons`, `chromosomes`, `contexts`, `output_base`, `path_remap`, `regulatory`, `validation_partitions`, `progression_order`, `progression_labels`
 
-Parameter precedence: program `with` > `step_config` > analyte profile defaults.
+**Move to profiles (`actionConfig`):** detection, mapper, enricher, validation MC settings, classifier/predictor tuning, progression scoring options
+
+**Move to site manifest:** genome FASTA, GTF, mapper home, shared cache paths
+
+**Move to programs:** stage ordering, conditional algorithm branches, per-action `stepOverride`
+
+**Removed:** `step_config` on study manifests (schema rejection + CI guard). Legacy files migrate via `scripts/migrate_project_config.py`.
+
+Parameter precedence: instance override → program `with` / `stepOverride` → profile `actionConfig` → analyte defaults (`regulatory.primary_analyte`) → site manifest → package defaults.
+
+See [`docs/plans/simplify-study-config.plan.md`](plans/simplify-study-config.plan.md) for phased rollout.
 
 ## Purge register
 

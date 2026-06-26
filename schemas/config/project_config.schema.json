@@ -73,6 +73,19 @@
           "description": "Human-readable meaning of this cohort or stage (e.g. clinical stage); do not put file paths here.",
           "title": "Description"
         },
+        "order_index": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional numeric ordering hint for progression synthesis.",
+          "title": "Order Index"
+        },
         "label": {
           "description": "Group label; used for centroid subdir name (e.g. healthy, pcancer)",
           "title": "Label",
@@ -226,7 +239,7 @@
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "description": "Single source of truth for a MethylPipeline project.\n\nPreferred schema:\n- `controls` / `diseases` (or singular `control` / `disease`)\n- explicit `comparisons`\n- shared `chromosomes`, `contexts`, `path_remap`, and `step_config` at the\n  top level\n\nBackward compatibility is retained for `group1`/`group2`, flat `groups`,\nand a few historically nested keys that are promoted to the top level at\nload time.",
+  "description": "Study manifest for a MethylPipeline project (cohorts, comparisons, paths). Tool parameters belong in pipeline profiles (actionConfig) and site manifest — not step_config.",
   "properties": {
     "batch": {
       "anyOf": [
@@ -440,22 +453,37 @@
       "description": "Base directory to resolve sample names. When set, group sample_paths that point to files can list only sample folder names (one per line or single-column CSV); each is resolved to this path.",
       "title": "Samples Base Path"
     },
-    "step_config": {
+    "progression_labels": {
       "anyOf": [
-        {
-          "additionalProperties": {
-            "additionalProperties": true,
-            "type": "object"
-          },
-          "type": "object"
-        },
-        {
-          "type": "null"
-        }
+        {"items": {"type": "string"}, "type": "array"},
+        {"type": "null"}
       ],
       "default": null,
-      "description": "Optional per-step configuration. Keys: centroid, detection, mapper, enricher, classifier, predictor, alignment_qc, fragmentomics, validation, progression, cluster. Use 'predictor' (not 'validator') for prediction/validation; validator is deprecated. Values are merged into that step's config (override file / CLI still override these). Under 'detection', native multiclass PKL export (not MethylDetector runtime) may set: multiclass_train_learned_head, multiclass_learned_logistic_C, multiclass_learned_max_iter, multiclass_learned_standardize, multiclass_learned_random_state. Under 'predictor', optional multiclass_model_path forces a specific PKL for multiclass runs; optional 'panel' adds hierarchical OvR readout during prediction. Under 'classifier', optional 'panel' (same shape) applies during classification when using samples_list / centroid validation (OvR pairwise max-contrast only). Under 'validation', model-backend settings support hybrid observed features via feature_mode='observed_hybrid' and feature_family_set in {dmp_scored,gene,structural,gene_scored,dmp_scored+gene,dmp_scored+structural,dmp_scored+gene_scored,hybrid-all} (legacy aliases dmp,dmp+gene,dmp+structural,dmp+gene_scored accepted); bundle manifests persist schema and aggregation metadata for reproducible train/inference contracts.",
-      "title": "Step Config"
+      "title": "Progression Labels"
+    },
+    "progression_order": {
+      "anyOf": [
+        {"enum": ["from_stages", "from_comparisons", "explicit"], "type": "string"},
+        {"type": "null"}
+      ],
+      "default": null,
+      "title": "Progression Order"
+    },
+    "regulatory": {
+      "anyOf": [
+        {"additionalProperties": true, "type": "object"},
+        {"type": "null"}
+      ],
+      "default": null,
+      "title": "Regulatory"
+    },
+    "validation_partitions": {
+      "anyOf": [
+        {"additionalProperties": true, "type": "object"},
+        {"type": "null"}
+      ],
+      "default": null,
+      "title": "Validation Partitions"
     }
   },
   "required": [

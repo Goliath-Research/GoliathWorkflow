@@ -43,13 +43,14 @@ def test_pca1_5_programs_compile(program_name: str) -> None:
     assert proc.returncode == 0, proc.stderr or proc.stdout
 
 
-def test_smoke_project_has_explicit_cohorts() -> None:
-    raw = json.loads((CHECK_ROOT / "configs" / "project_Healthy_vs_PCa1-5-CG.json").read_text())
-    cohorts = raw.get("step_config", {}).get("validation", {}).get("cohorts")
-    assert isinstance(cohorts, list)
-    assert len(cohorts) == 6
-    labels = [c["label"] for c in cohorts]
-    assert labels == ["all", "PCa_PCa1", "PCa_PCa2", "PCa_PCa3", "PCa_PCa4", "PCa_PCa5"]
+def test_smoke_project_has_resolved_stage_groups() -> None:
+    from methyl_utils import load_project
+
+    project = load_project(CHECK_ROOT / "configs" / "project_Healthy_vs_PCa1-5-CG.json")
+    labels = [label for label, _ in project.get_resolved_groups()]
+    assert "all" in labels
+    assert "PCa_PCa1" in labels
+    assert "PCa_PCa5" in labels
 
 
 def test_mc_stability_program_has_centroid_incremental_actions() -> None:

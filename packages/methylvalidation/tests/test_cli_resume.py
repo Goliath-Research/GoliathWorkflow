@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -8,14 +9,40 @@ import pytest
 
 from methyl_validation import cli
 from methyl_validation.cli import (
-    _base_project_step_config,
     _deep_merge_dicts,
     _list_existing_run_numbers,
     _load_existing_step_timings,
     _resolve_resume_start_iteration,
-    _sync_all_run_project_step_configs,
-    _sync_run_project_step_config,
 )
+
+_DEFAULT_VALIDATION_PROFILE = {
+    "train_fraction": 0.8,
+    "n_iterations": 2,
+    "backend_profiles": {
+        "ecdf": {"enabled": True, "params": {}},
+        "tabular_sklearn": {
+            "enabled": True,
+            "params": {"tabular_methods": [{"method": "random_forest", "params": {}}]},
+        },
+        "generative_hybrid": {"enabled": True, "params": {}},
+    },
+}
+
+
+def _write_mc_profile(tmp_path: Path, validation: dict | None = None) -> Path:
+    payload = {**_DEFAULT_VALIDATION_PROFILE, **(validation or {})}
+    profile_path = tmp_path / "mc.profile.json"
+    profile_path.write_text(
+        json.dumps({"pipelineProfile": "mc_test", "actionConfig": {"validation": payload}}),
+        encoding="utf-8",
+    )
+    os.environ["METHYL_PROFILE"] = str(profile_path)
+    return profile_path
+
+
+@pytest.fixture(autouse=True)
+def _mc_profile_env(tmp_path: Path) -> None:
+    _write_mc_profile(tmp_path)
 
 
 def _valid_production_project_text(
@@ -31,20 +58,6 @@ def _valid_production_project_text(
                 {"label": "healthy", "sample_paths": [str(healthy_csv)]},
                 {"label": "disease", "sample_paths": [str(disease_csv)]},
             ],
-            "step_config": {
-                "validation": {
-                    "train_fraction": 0.8,
-                    "n_iterations": 2,
-                    "backend_profiles": {
-                        "ecdf": {"enabled": True, "params": {}},
-                        "tabular_sklearn": {
-                            "enabled": True,
-                            "params": {"tabular_methods": [{"method": "random_forest", "params": {}}]},
-                        },
-                        "generative_hybrid": {"enabled": True, "params": {}},
-                    },
-                }
-            },
         }
     )
 
@@ -98,82 +111,6 @@ def test_deep_merge_dicts_prefers_updates_and_preserves_other_keys():
     assert merged["predictor"]["model_path"] == "/tmp/m.pkl"
 
 
-def test_sync_run_project_step_config_merges_base_into_existing_run_project(tmp_path: Path):
-    run_project = tmp_path / "project.json"
-    run_project.write_text(
-        json.dumps(
-            {
-                "project_name": "run_0001",
-                "step_config": {
-                    "detection": {"min_samples_pct": 0.8, "min_samples_abs": 1, "debug": True},
-                    "predictor": {"controls": {"groups": []}, "diseases": {"groups": []}},
-                },
-            }
-        ),
-        encoding="utf-8",
-    )
-    base_step_config = {
-        "detection": {"min_samples_pct": 0.0, "min_samples_abs": 5},
-        "predictor": {"model_path": "/work/model.pkl"},
-    }
-    changed = _sync_run_project_step_config(run_project, base_step_config)
-    assert changed is True
-    payload = json.loads(run_project.read_text(encoding="utf-8"))
-    assert payload["step_config"]["detection"]["min_samples_pct"] == 0.0
-    assert payload["step_config"]["detection"]["min_samples_abs"] == 5
-    assert payload["step_config"]["detection"]["debug"] is True
-    assert "controls" in payload["step_config"]["predictor"]
-    assert payload["step_config"]["predictor"]["model_path"] == "/work/model.pkl"
-
-
-def test_sync_run_project_step_config_noop_when_base_none(tmp_path: Path):
-    run_project = tmp_path / "project.json"
-    run_project.write_text('{"step_config": {"detection": {"min_samples_pct": 0.0}}}', encoding="utf-8")
-    assert _sync_run_project_step_config(run_project, None) is False
-    payload = json.loads(run_project.read_text(encoding="utf-8"))
-    assert payload["step_config"]["detection"]["min_samples_pct"] == 0.0
-
-
-def test_base_project_step_config_returns_deep_copy():
-    cfg = SimpleNamespace(
-        step_config={
-            "detection": {"min_samples_pct": 0.2, "min_samples_abs": 4},
-        }
-    )
-    out = _base_project_step_config(cfg)
-    assert out is not None
-    assert out["detection"]["min_samples_pct"] == 0.2
-    out["detection"]["min_samples_pct"] = 0.99
-    assert cfg.step_config["detection"]["min_samples_pct"] == 0.2
-
-
-def test_sync_all_run_project_step_configs_updates_every_run(tmp_path: Path):
-    mc_root = tmp_path / "monte_carlo_runs"
-    for run_id in ("run_0001", "run_0002"):
-        run_dir = mc_root / run_id
-        run_dir.mkdir(parents=True)
-        payload = {
-            "project_name": run_id,
-            "step_config": {
-                "detection": {"min_samples_pct": 0.0, "min_samples_abs": 4},
-                "predictor": {"controls": {"groups": []}, "diseases": {"groups": []}},
-            },
-        }
-        (run_dir / "project.json").write_text(json.dumps(payload), encoding="utf-8")
-
-    base_step_config = {
-        "detection": {"min_samples_pct": 0.2, "min_samples_abs": 4},
-    }
-    n_updated, n_scanned = _sync_all_run_project_step_configs(mc_root, base_step_config)
-    assert n_scanned == 2
-    assert n_updated == 2
-
-    for run_id in ("run_0001", "run_0002"):
-        payload = json.loads((mc_root / run_id / "project.json").read_text(encoding="utf-8"))
-        assert payload["step_config"]["detection"]["min_samples_pct"] == 0.2
-        assert "controls" in payload["step_config"]["predictor"]
-
-
 def test_post_model_validation_requires_production_project(tmp_path: Path, monkeypatch, capsys):
     project = tmp_path / "project.json"
     project.write_text(
@@ -185,15 +122,7 @@ def test_post_model_validation_requires_production_project(tmp_path: Path, monke
   "groups": [
     {"label": "healthy", "sample_paths": ["healthy.csv"]},
     {"label": "disease", "sample_paths": ["disease.csv"]}
-  ],
-  "step_config": {
-    "validation": {
-      "samples_base_path": "/tmp/samples",
-      "train_fraction": 0.8,
-      "n_iterations": 2
-    }
-  }
-}
+  ]}
 """.strip(),
         encoding="utf-8",
     )
@@ -223,19 +152,7 @@ def test_model_mc_all_requires_model_mc(tmp_path: Path, monkeypatch, capsys):
   "groups": [
     {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
     {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
-  ],
-  "step_config": {{
-    "validation": {{
-      "train_fraction": 0.8,
-      "n_iterations": 2,
-      "backend_profiles": {{
-        "ecdf": {{"enabled": true, "params": {{}}}},
-        "tabular_sklearn": {{"enabled": true, "params": {{"tabular_methods": [{{"method": "random_forest", "params": {{}}}}]}}}},
-        "generative_hybrid": {{"enabled": true, "params": {{}}}}
-      }}
-    }}
-  }}
-}}
+  ]}}
 """.strip(),
         encoding="utf-8",
     )
@@ -266,18 +183,7 @@ def test_skip_detection_runs_stability_only(tmp_path: Path, monkeypatch):
   "groups": [
     {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
     {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
-  ],
-  "step_config": {{
-    "validation": {{
-      "train_fraction": 0.8,
-      "n_iterations": 2,
-      "backend_profiles": {{
-        "ecdf": {{"enabled": true, "params": {{}}}},
-        "generative_hybrid": {{"enabled": true, "params": {{}}}}
-      }}
-    }}
-  }}
-}}
+  ]}}
 """.strip(),
         encoding="utf-8",
     )
@@ -349,6 +255,19 @@ def test_skip_detection_allowed_for_freeze_and_forwarded(tmp_path: Path, monkeyp
 
 
 def test_stability_early_stop_breaks_loop_and_writes_diagnostics(tmp_path: Path, monkeypatch):
+    _write_mc_profile(
+        tmp_path,
+        {
+            "n_iterations": 6,
+            "run_stability": True,
+            "stability_early_stop_enabled": True,
+            "stability_min_iterations": 2,
+            "stability_convergence_window": 1,
+            "stability_convergence_jaccard": 0.95,
+            "stability_convergence_max_size_delta": 0.2,
+            "stability_convergence_patience": 2,
+        },
+    )
     h = tmp_path / "healthy.csv"
     d = tmp_path / "disease.csv"
     h.write_text("sample\nH1\nH2\n", encoding="utf-8")
@@ -364,26 +283,7 @@ def test_stability_early_stop_breaks_loop_and_writes_diagnostics(tmp_path: Path,
   "groups": [
     {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
     {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
-  ],
-  "step_config": {{
-    "validation": {{
-      "train_fraction": 0.8,
-      "n_iterations": 6,
-      "run_stability": true,
-      "stability_early_stop_enabled": true,
-      "stability_min_iterations": 2,
-      "stability_convergence_window": 1,
-      "stability_convergence_jaccard": 0.95,
-      "stability_convergence_max_size_delta": 0.2,
-      "stability_convergence_patience": 2,
-      "backend_profiles": {{
-        "ecdf": {{"enabled": true, "params": {{}}}},
-        "tabular_sklearn": {{"enabled": true, "params": {{"tabular_methods": [{{"method": "random_forest", "params": {{}}}}]}}}},
-        "generative_hybrid": {{"enabled": true, "params": {{}}}}
-      }}
-    }}
-  }}
-}}
+  ]}}
 """.strip(),
         encoding="utf-8",
     )
@@ -461,6 +361,14 @@ def test_stability_early_stop_breaks_loop_and_writes_diagnostics(tmp_path: Path,
 
 
 def test_stability_early_stop_disabled_keeps_full_iteration_budget(tmp_path: Path, monkeypatch):
+    _write_mc_profile(
+        tmp_path,
+        {
+            "n_iterations": 3,
+            "run_stability": True,
+            "stability_early_stop_enabled": False,
+        },
+    )
     h = tmp_path / "healthy.csv"
     d = tmp_path / "disease.csv"
     h.write_text("sample\nH1\nH2\n", encoding="utf-8")
@@ -476,21 +384,7 @@ def test_stability_early_stop_disabled_keeps_full_iteration_budget(tmp_path: Pat
   "groups": [
     {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
     {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
-  ],
-  "step_config": {{
-    "validation": {{
-      "train_fraction": 0.8,
-      "n_iterations": 3,
-      "run_stability": true,
-      "stability_early_stop_enabled": false,
-      "backend_profiles": {{
-        "ecdf": {{"enabled": true, "params": {{}}}},
-        "tabular_sklearn": {{"enabled": true, "params": {{"tabular_methods": [{{"method": "random_forest", "params": {{}}}}]}}}},
-        "generative_hybrid": {{"enabled": true, "params": {{}}}}
-      }}
-    }}
-  }}
-}}
+  ]}}
 """.strip(),
         encoding="utf-8",
     )
@@ -573,19 +467,7 @@ def test_model_mc_all_uses_shared_stage(tmp_path: Path, monkeypatch):
   "groups": [
     {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
     {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
-  ],
-  "step_config": {{
-    "validation": {{
-      "train_fraction": 0.8,
-      "n_iterations": 2,
-      "backend_profiles": {{
-        "ecdf": {{"enabled": true, "params": {{}}}},
-        "tabular_sklearn": {{"enabled": true, "params": {{"tabular_methods": [{{"method": "random_forest", "params": {{}}}}]}}}},
-        "generative_hybrid": {{"enabled": true, "params": {{}}}}
-      }}
-    }}
-  }}
-}}
+  ]}}
 """.strip(),
         encoding="utf-8",
     )
@@ -649,18 +531,7 @@ def test_select_best_model_ignores_shared_directory(tmp_path: Path, monkeypatch)
   "groups": [
     {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
     {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
-  ],
-  "step_config": {{
-    "validation": {{
-      "train_fraction": 0.8,
-      "n_iterations": 2,
-      "backend_profiles": {{
-        "ecdf": {{"enabled": true, "params": {{}}}},
-        "generative_hybrid": {{"enabled": true, "params": {{}}}}
-      }}
-    }}
-  }}
-}}
+  ]}}
 """.strip(),
         encoding="utf-8",
     )
@@ -711,18 +582,7 @@ def test_model_mc_single_backend_reuses_existing_shared_runs(tmp_path: Path, mon
   "groups": [
     {{"label": "healthy", "sample_paths": ["{h.as_posix()}"]}},
     {{"label": "disease", "sample_paths": ["{d.as_posix()}"]}}
-  ],
-  "step_config": {{
-    "validation": {{
-      "train_fraction": 0.8,
-      "n_iterations": 2,
-      "backend_profiles": {{
-        "ecdf": {{"enabled": true, "params": {{}}}},
-        "generative_hybrid": {{"enabled": true, "params": {{}}}}
-      }}
-    }}
-  }}
-}}
+  ]}}
 """.strip(),
         encoding="utf-8",
     )
@@ -867,6 +727,7 @@ def test_run_model_mc_backend_reuses_primary_centroid_detector_artifacts(tmp_pat
         val_control,
         val_disease,
         samples_base_path,
+        **kwargs,
     ):
         calls["generated_project"] += 1
         run_dir = Path(run_dir)

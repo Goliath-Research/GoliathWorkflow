@@ -22,6 +22,7 @@ from methyl_domain.fastq_storage import (
     resolve_sample_storage_prefix,
     S3FastqStorageDefaults,
 )
+from methyl_utils.action_config_resolver import resolve_for_project
 from methyl_domain.sample_storage import (
     SampleDestinationLocation,
     SampleStorageDefaults,
@@ -326,7 +327,7 @@ def _dedupe_samples(samples: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _default_reference_fasta(project) -> Optional[str]:
-    aq = project.get_step_config("alignment_qc") or {}
+    aq = resolve_for_project("alignment_qc", project)
     for key in ("genome_fasta", "reference_fasta", "referenceFasta"):
         val = aq.get(key)
         if val:
@@ -335,7 +336,7 @@ def _default_reference_fasta(project) -> Optional[str]:
 
 
 def _default_reference_gtf(project) -> Optional[str]:
-    aq = project.get_step_config("alignment_qc") or {}
+    aq = resolve_for_project("alignment_qc", project)
     for key in ("reference_gtf", "referenceGtf", "gtf"):
         val = aq.get(key)
         if val:
@@ -419,7 +420,7 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
         context["referenceFasta"] = str(ref_fasta)
     else:
         raise ValueError(
-            "referenceFasta is required; set referenceFasta in request or step_config.alignment_qc.genome_fasta"
+            "referenceFasta is required; set referenceFasta in request or profile actionConfig.alignment_qc.genome_fasta"
         )
 
     ref_gtf = request.referenceGtf or _default_reference_gtf(project)

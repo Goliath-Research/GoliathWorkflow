@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional, List, Union
 
 import click
+from methyl_utils.action_config_resolver import resolve_for_project
 
 # Handle imports for both direct execution and module execution
 try:
@@ -225,7 +226,7 @@ def main(
                 weights_column="weight",
                 output_base_override=str(output_base) if output_base else None,
             )
-            det_step = proj.get_step_config("detection") or {}
+            det_step = resolve_for_project("detection", proj)
             cfg.update(multiclass_build_overrides_from_detection_step(det_step))
             if learned_multiclass_head:
                 cfg["train_learned_multiclass"] = True

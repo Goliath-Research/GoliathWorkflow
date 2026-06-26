@@ -23,6 +23,7 @@ from .enricher_completeness import (
     resolve_expected_libraries,
     write_task_status,
 )
+from methyl_utils.action_config_resolver import resolve_for_project
 from .module_pipeline import run_module_pipeline
 
 
@@ -272,7 +273,7 @@ def run_project_ensure_complete(
 
     project_path = Path(project_path)
     project = load_project(project_path)
-    step_cfg = dict(project.get_step_config("enricher") or {})
+    step_cfg = dict(resolve_for_project("enricher", project))
     if step_override_path and step_override_path.exists():
         import json as _json
 

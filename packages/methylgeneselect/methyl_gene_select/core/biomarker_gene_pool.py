@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import pandas as pd
+from methyl_utils.action_config_resolver import resolve_for_project
 
 logger = logging.getLogger(__name__)
 
@@ -312,7 +313,7 @@ def load_enricher_config_from_project(project_json: Any) -> Dict[str, Any]:
     path = project_json
     with _project_cwd(path):
         project = load_project(path)
-    return dict(project.get_step_config("enricher") or {})
+    return dict(resolve_for_project("enricher", project))
 
 
 def compute_biomarker_stability_diagnostics(monte_carlo_runs_root: Any) -> Dict[str, Any]:

@@ -9,11 +9,12 @@ import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 
 @dataclass
@@ -36,86 +37,25 @@ def _pick_existing_path(candidates: Sequence[Path]) -> Optional[Path]:
     return None
 
 
-def _normalized_label_for_ordering(comp: Any) -> str:
-    return str(getattr(comp, "comparison_label", None) or getattr(comp, "disease_group", None) or "").strip()
-
-
-def _comparison_text_fields(comp: Any) -> List[str]:
-    vals: List[str] = []
-    for attr in (
-        "comparison_label",
-        "disease_group",
-        "description",
-        "disease_description",
-        "stage_description",
-    ):
-        raw = getattr(comp, attr, None)
-        if raw is None:
-            continue
-        txt = str(raw).strip()
-        if txt:
-            vals.append(txt)
-    return vals
-
-
-def _parse_gleason_rank(text: str) -> Optional[Tuple[int, int, int]]:
-    pairs = re.findall(r"(\d)\s*\+\s*(\d)", str(text or ""))
-    if not pairs:
-        return None
-    ranks: List[Tuple[int, int, int]] = []
-    for a, b in pairs:
-        pa = int(a)
-        pb = int(b)
-        ranks.append((pa + pb, pa, pb))
-    return min(ranks)
-
-
-def _parse_stage_index_hint(text: str) -> Optional[int]:
-    txt = str(text or "").lower()
-    m = re.search(r"\bpca[_\- ]?(\d+)\b", txt)
-    if m:
-        return int(m.group(1))
-    m = re.search(r"\bstage[_\- ]?(\d+)\b", txt)
-    if m:
-        return int(m.group(1))
-    return None
-
-
-def _comparison_order_key_auto_gleason(comp: Any) -> Tuple[Any, ...]:
-    texts = _comparison_text_fields(comp)
-    gleason_rank: Optional[Tuple[int, int, int]] = None
-    stage_hint: Optional[int] = None
-    for txt in texts:
-        if gleason_rank is None:
-            gleason_rank = _parse_gleason_rank(txt)
-        if stage_hint is None:
-            stage_hint = _parse_stage_index_hint(txt)
-    has_gleason = 0 if gleason_rank is not None else 1
-    total, primary, secondary = gleason_rank if gleason_rank is not None else (10**9, 10**9, 10**9)
-    hint = int(stage_hint) if stage_hint is not None else 10**9
-    return (
-        has_gleason,
-        total,
-        primary,
-        secondary,
-        hint,
-        _normalized_label_for_ordering(comp).lower(),
-    )
-
-
 def resolve_stage_specs(
     project_path: Path,
     ordered_comparison_labels: Optional[Sequence[str]] = None,
+    *,
+    resolved_progression_config: Optional[Mapping[str, Any]] = None,
+    resolved_enricher_config: Optional[Mapping[str, Any]] = None,
 ) -> Tuple[List[StageSpec], Dict[str, Any]]:
     """
     Resolve ordered per-stage inputs from project comparisons.
 
-    Default stage order matches ``ProjectConfig.get_ordered_comparison_labels()`` in methylutils
-    (i.e. ``comparisons`` list order or shorthand expansion) when neither CLI nor
-    ``step_config.progression.ordered_comparison_labels`` / ``ordered_disease_groups`` is set.
+    Default stage order uses ``ProjectConfig.get_ordered_comparison_labels()`` when
+    neither CLI nor resolved progression config supplies explicit order.
     """
     project = load_project(project_path)
-    progression_cfg = project.get_step_config("progression") or {}
+    progression_cfg = (
+        dict(resolved_progression_config)
+        if resolved_progression_config is not None
+        else resolve_for_project("progression", project)
+    )
     comparisons = list(project.get_comparisons())
     if not comparisons:
         raise ValueError("No project comparisons found; disease progression needs comparison-based outputs.")
@@ -125,7 +65,6 @@ def resolve_stage_specs(
         (c.comparison_label or c.disease_group): c for c in comparisons
     }
 
-    selected: List[Any] = []
     ordering_strategy = "project_order"
     ordered_labels = list(ordered_comparison_labels or [])
     if ordered_labels:
@@ -137,36 +76,24 @@ def resolve_stage_specs(
         if isinstance(cfg_order, list):
             ordered_labels = [str(x) for x in cfg_order]
             ordering_strategy = "explicit_config"
-    ordering_mode = str(progression_cfg.get("ordering_mode") or "").strip().lower()
-    if not ordered_labels and ordering_mode == "auto_gleason":
-        selected = sorted(comparisons, key=_comparison_order_key_auto_gleason)
-        ordering_strategy = "auto_gleason"
     if not ordered_labels:
-        if not selected:
-            # Backward-compatible fallback: older methyl_utils ProjectConfig versions may not
-            # expose get_ordered_comparison_labels(), so use comparison iteration order.
-            get_ordered = getattr(project, "get_ordered_comparison_labels", None)
-            if callable(get_ordered):
-                resolved_order = get_ordered()
-                if isinstance(resolved_order, list):
-                    ordered_labels = [str(x) for x in resolved_order]
-                elif isinstance(resolved_order, tuple):
-                    ordered_labels = [str(x) for x in resolved_order]
-            else:
-                ordered_labels = [str(c.comparison_label or c.disease_group) for c in comparisons]
-    if ordered_labels:
-        for token in ordered_labels:
-            c = by_disease_group.get(token) or by_label.get(token)
-            if c is None:
-                known = sorted(set(by_disease_group.keys()) | set(by_label.keys()))
-                raise ValueError(
-                    f"Unknown ordered comparison label {token!r}. Known labels/groups: {known}"
-                )
-            selected.append(c)
-    elif not selected:
-        selected = comparisons
+        ordered_labels = [str(x) for x in project.get_ordered_comparison_labels()]
 
-    enricher_cfg = project.get_step_config("enricher") or {}
+    selected: List[Any] = []
+    for token in ordered_labels:
+        c = by_disease_group.get(token) or by_label.get(token)
+        if c is None:
+            known = sorted(set(by_disease_group.keys()) | set(by_label.keys()))
+            raise ValueError(
+                f"Unknown ordered comparison label {token!r}. Known labels/groups: {known}"
+            )
+        selected.append(c)
+
+    enricher_cfg = (
+        dict(resolved_enricher_config)
+        if resolved_enricher_config is not None
+        else resolve_for_project("enricher", project)
+    )
     combined_csv_name = str(enricher_cfg.get("combined_csv_name") or "all-gene_name-combined.csv")
 
     specs: List[StageSpec] = []
@@ -909,11 +836,18 @@ def run_progression_report(
     gene_sets_path: Optional[Path] = None,
     disease_profile: Optional[str] = None,
     gene_set_profile: Optional[Path] = None,
+    resolved_progression_config: Optional[Mapping[str, Any]] = None,
+    resolved_enricher_config: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Main entrypoint for progression synthesis.
     """
-    stage_specs, meta = resolve_stage_specs(project_path, ordered_comparison_labels=ordered_comparison_labels)
+    stage_specs, meta = resolve_stage_specs(
+        project_path,
+        ordered_comparison_labels=ordered_comparison_labels,
+        resolved_progression_config=resolved_progression_config,
+        resolved_enricher_config=resolved_enricher_config,
+    )
     out_dir = output_dir or (Path(meta["project_root"]) / "progression")
     out_dir.mkdir(parents=True, exist_ok=True)
 

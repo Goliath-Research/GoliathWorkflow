@@ -31,6 +31,11 @@ steps:
     displayName: Release script contract tests
 
   - script: |
+      python scripts/check_no_step_config.py
+      pytest workflow_engine/tests/test_no_step_config_in_projects.py -q
+    displayName: Guard against step_config in project manifests
+
+  - script: |
       python -m pip install -U pip build wheel
       bash scripts/build_release.sh \
         --version 0.0.0-ci \

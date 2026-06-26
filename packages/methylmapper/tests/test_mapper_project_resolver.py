@@ -1,6 +1,7 @@
 """Regression tests for comparison-aware mapper path resolution."""
 
 import json
+import os
 from pathlib import Path
 
 from methyl_mapper.project_resolver import (
@@ -10,7 +11,13 @@ from methyl_mapper.project_resolver import (
 )
 
 
-def _write_project(tmp_path: Path) -> Path:
+def _write_project(tmp_path: Path, *, csv_pattern: str = "dmps-*.csv") -> Path:
+    profile_path = tmp_path / "mapper.profile.json"
+    profile_path.write_text(
+        json.dumps({"pipelineProfile": "mapper_test", "actionConfig": {"mapper": {"csv_pattern": csv_pattern}}}),
+        encoding="utf-8",
+    )
+    os.environ["METHYL_PROFILE"] = str(profile_path)
     project_path = tmp_path / "project.json"
     project_path.write_text(
         json.dumps(
@@ -26,7 +33,6 @@ def _write_project(tmp_path: Path) -> Path:
                     "groups": [{"label": "pca", "sample_paths": ["d1"]}],
                 },
                 "comparisons": [{"control_group": "healthy", "disease_group": "pca"}],
-                "step_config": {"mapper": {"csv_pattern": "dmps-*.csv"}},
             }
         ),
         encoding="utf-8",
@@ -84,7 +90,7 @@ def test_resolve_mapper_paths_per_comparison_honors_step_override_output_dir(tmp
 
 
 def test_resolve_mapper_paths_per_comparison_output_dir_base_appends_each_comparison(tmp_path):
-    project_path = tmp_path / "project_multi.json"
+    project_path = _write_project(tmp_path)
     project_path.write_text(
         json.dumps(
             {
@@ -131,7 +137,8 @@ def test_resolve_mapper_paths_per_comparison_output_dir_base_appends_each_compar
 
 def test_resolve_mapper_paths_per_comparison_falls_back_to_existing_case_variant(tmp_path):
     out_base = tmp_path / "out"
-    project_path = tmp_path / "project_case.json"
+    _write_project(tmp_path, csv_pattern="dmps-*-discovery.csv")
+    project_path = tmp_path / "project.json"
     project_path.write_text(
         json.dumps(
             {
@@ -146,7 +153,6 @@ def test_resolve_mapper_paths_per_comparison_falls_back_to_existing_case_variant
                     "groups": [{"label": "PCa_PCa1", "sample_paths": ["d1"]}],
                 },
                 "comparisons": [{"control_group": "all", "disease_group": "PCa_PCa1"}],
-                "step_config": {"mapper": {"csv_pattern": "dmps-*-discovery.csv"}},
             }
         ),
         encoding="utf-8",

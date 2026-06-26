@@ -126,6 +126,36 @@
       "switch_ref_node_key": null,
       "condition_var": null,
       "switch_var": null,
+      "foreach_collection_var": "contexts",
+      "foreach_item_var": "context",
+      "foreach_index_var": "contextIndex",
+      "foreach_parallel": true,
+      "input_template": null
+    },
+    {
+      "node_key": "seq_7",
+      "node_type": "SEQUENCE",
+      "action_name": null,
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
+      "foreach_collection_var": null,
+      "foreach_item_var": null,
+      "foreach_index_var": null,
+      "foreach_parallel": null,
+      "input_template": null
+    },
+    {
+      "node_key": "foreach_8",
+      "node_type": "FOREACH",
+      "action_name": null,
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
       "foreach_collection_var": "chromosomes",
       "foreach_item_var": "chromosome",
       "foreach_index_var": "chromosomeIndex",
@@ -133,7 +163,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_7",
+      "node_key": "seq_9",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -174,7 +204,7 @@
       }
     },
     {
-      "node_key": "foreach_8",
+      "node_key": "foreach_10",
       "node_type": "FOREACH",
       "action_name": null,
       "repeat_count": null,
@@ -189,7 +219,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_9",
+      "node_key": "seq_11",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -204,7 +234,37 @@
       "input_template": null
     },
     {
-      "node_key": "foreach_10",
+      "node_key": "foreach_12",
+      "node_type": "FOREACH",
+      "action_name": null,
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
+      "foreach_collection_var": "contexts",
+      "foreach_item_var": "context",
+      "foreach_index_var": "contextIndex",
+      "foreach_parallel": true,
+      "input_template": null
+    },
+    {
+      "node_key": "seq_13",
+      "node_type": "SEQUENCE",
+      "action_name": null,
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
+      "foreach_collection_var": null,
+      "foreach_item_var": null,
+      "foreach_index_var": null,
+      "foreach_parallel": null,
+      "input_template": null
+    },
+    {
+      "node_key": "foreach_14",
       "node_type": "FOREACH",
       "action_name": null,
       "repeat_count": null,
@@ -219,7 +279,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_11",
+      "node_key": "seq_15",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -264,7 +324,7 @@
       }
     },
     {
-      "node_key": "if_12",
+      "node_key": "if_16",
       "node_type": "IF",
       "action_name": null,
       "repeat_count": null,
@@ -279,7 +339,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_13",
+      "node_key": "seq_17",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -341,7 +401,7 @@
       }
     },
     {
-      "node_key": "if_14",
+      "node_key": "if_18",
       "node_type": "IF",
       "action_name": null,
       "repeat_count": null,
@@ -356,7 +416,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_15",
+      "node_key": "seq_19",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -385,13 +445,13 @@
       "foreach_parallel": null,
       "input_template": {
         "tool": "validation.biomarker_filter",
-        "projectPath": "${var.projectPath}",
+        "projectPath": "${var.iteration.projectPath}",
         "project": "${var.projectPath}",
-        "runDir": "${var.runDir}"
+        "runDir": "${var.iteration.runDir}"
       }
     },
     {
-      "node_key": "if_16",
+      "node_key": "if_20",
       "node_type": "IF",
       "action_name": null,
       "repeat_count": null,
@@ -406,7 +466,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_17",
+      "node_key": "seq_21",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -435,17 +495,17 @@
       "foreach_parallel": null,
       "input_template": {
         "tool": "MethylGeneSelect",
-        "projectPath": "${var.projectPath}",
+        "projectPath": "${var.iteration.projectPath}",
         "project": "${var.projectPath}",
         "comparison": "${var.comparison}",
-        "runDir": "${var.runDir}",
+        "runDir": "${var.iteration.runDir}",
         "maxGenes": "${var.maxGenes}",
         "maxDmps": "${var.maxDmps}",
         "biomarkerFilter": "${var.runBiomarkerFilter}"
       }
     },
     {
-      "node_key": "if_18",
+      "node_key": "if_22",
       "node_type": "IF",
       "action_name": null,
       "repeat_count": null,
@@ -460,7 +520,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_19",
+      "node_key": "seq_23",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -491,8 +551,8 @@
         "tool": "MethylGeneFeatureSelect",
         "projectPath": "${var.projectPath}",
         "project": "${var.projectPath}",
-        "mapperDir": "${var.runDir}",
-        "outputDir": "${var.runDir}",
+        "mapperDir": "${var.iteration.runDir}",
+        "outputDir": "${var.iteration.runDir}",
         "maxFeatures": "${var.maxFeatures}",
         "targetBalancedAccuracy": "${var.targetBalancedAccuracy}"
       }
@@ -604,17 +664,8 @@
     },
     {
       "parent_node_key": "seq_7",
-      "child_node_key": "centroid",
-      "child_order": 0,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_3",
       "child_node_key": "foreach_8",
-      "child_order": 1,
+      "child_order": 0,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -631,8 +682,17 @@
     },
     {
       "parent_node_key": "seq_9",
-      "child_node_key": "foreach_10",
+      "child_node_key": "centroid",
       "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_3",
+      "child_node_key": "foreach_10",
+      "child_order": 1,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -649,6 +709,42 @@
     },
     {
       "parent_node_key": "seq_11",
+      "child_node_key": "foreach_12",
+      "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "foreach_12",
+      "child_node_key": "seq_13",
+      "child_order": 0,
+      "branch_kind": "BODY",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_13",
+      "child_node_key": "foreach_14",
+      "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "foreach_14",
+      "child_node_key": "seq_15",
+      "child_order": 0,
+      "branch_kind": "BODY",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_15",
       "child_node_key": "detect",
       "child_order": 0,
       "branch_kind": "SEQUENCE",
@@ -657,72 +753,9 @@
       "is_default": false
     },
     {
-      "parent_node_key": "seq_11",
-      "child_node_key": "if_12",
-      "child_order": 1,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "if_12",
-      "child_node_key": "seq_13",
-      "child_order": 0,
-      "branch_kind": "THEN",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_13",
-      "child_node_key": "dmp_select",
-      "child_order": 0,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_9",
-      "child_node_key": "mapper",
-      "child_order": 1,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_3",
-      "child_node_key": "if_14",
-      "child_order": 2,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "if_14",
-      "child_node_key": "seq_15",
-      "child_order": 0,
-      "branch_kind": "THEN",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
       "parent_node_key": "seq_15",
-      "child_node_key": "biomarker_filter",
-      "child_order": 0,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_3",
       "child_node_key": "if_16",
-      "child_order": 3,
+      "child_order": 1,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -739,8 +772,17 @@
     },
     {
       "parent_node_key": "seq_17",
-      "child_node_key": "gene_select",
+      "child_node_key": "dmp_select",
       "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_11",
+      "child_node_key": "mapper",
+      "child_order": 1,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -749,7 +791,7 @@
     {
       "parent_node_key": "seq_3",
       "child_node_key": "if_18",
-      "child_order": 4,
+      "child_order": 2,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -766,6 +808,60 @@
     },
     {
       "parent_node_key": "seq_19",
+      "child_node_key": "biomarker_filter",
+      "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_3",
+      "child_node_key": "if_20",
+      "child_order": 3,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "if_20",
+      "child_node_key": "seq_21",
+      "child_order": 0,
+      "branch_kind": "THEN",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_21",
+      "child_node_key": "gene_select",
+      "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_3",
+      "child_node_key": "if_22",
+      "child_order": 4,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "if_22",
+      "child_node_key": "seq_23",
+      "child_order": 0,
+      "branch_kind": "THEN",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_23",
       "child_node_key": "gene_feature_select",
       "child_order": 0,
       "branch_kind": "SEQUENCE",
@@ -846,6 +942,14 @@
       "base_var": "project",
       "json_path": "$.chromosomes",
       "bind_order": 2
+    },
+    {
+      "scope_var": "contexts",
+      "kind": "jsonPath",
+      "path_var": null,
+      "base_var": "project",
+      "json_path": "$.contexts",
+      "bind_order": 3
     }
   ]
 }

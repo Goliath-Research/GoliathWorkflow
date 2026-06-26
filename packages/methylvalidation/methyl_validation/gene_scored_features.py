@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
+from methyl_utils.action_config_resolver import resolve_for_project
 
 def _normalize_feature_key(value: object) -> str:
     text = str(value or "").strip()
@@ -128,7 +129,7 @@ def resolve_gene_scored_progression_order(
             from methyl_utils import load_project
 
             project = load_project(project_path)
-            progression_cfg = project.get_step_config("progression") or {}
+            progression_cfg = resolve_for_project("progression", project)
             cfg_order = progression_cfg.get("ordered_comparison_labels") or progression_cfg.get(
                 "ordered_disease_groups"
             )

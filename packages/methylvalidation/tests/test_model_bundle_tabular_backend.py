@@ -63,13 +63,6 @@ class _StubProjectWithMapper(_StubProject):
         assert disease_group == "pca1"
         return str(self._mapper)
 
-    def get_step_config(self, step_name: str):
-        if step_name == "model_bundle":
-            return self._model_bundle_cfg
-        if step_name == "mapper":
-            return self._mapper_cfg
-        return {}
-
 
 class _StubProjectWithModelBundleConfig(_StubProject):
     def __init__(
@@ -80,21 +73,30 @@ class _StubProjectWithModelBundleConfig(_StubProject):
         fixed_gene_panel_csv: Optional[Path] = None,
     ):
         super().__init__(detection_dir)
-        self._mapper_annotation_csv = mapper_annotation_csv
-        self._fixed_gene_features_csv = fixed_gene_features_csv
-        self._fixed_gene_panel_csv = fixed_gene_panel_csv
+        self._model_bundle_cfg: dict = {}
+        if mapper_annotation_csv is not None:
+            self._model_bundle_cfg["mapper_annotation_csv"] = str(mapper_annotation_csv)
+        if fixed_gene_features_csv is not None:
+            self._model_bundle_cfg["fixed_gene_features"] = str(fixed_gene_features_csv)
+        if fixed_gene_panel_csv is not None:
+            self._model_bundle_cfg["fixed_gene_panel"] = str(fixed_gene_panel_csv)
 
-    def get_step_config(self, step_name: str):
-        if step_name == "model_bundle":
-            out = {}
-            if self._mapper_annotation_csv is not None:
-                out["mapper_annotation_csv"] = str(self._mapper_annotation_csv)
-            if self._fixed_gene_features_csv is not None:
-                out["fixed_gene_features"] = str(self._fixed_gene_features_csv)
-            if self._fixed_gene_panel_csv is not None:
-                out["fixed_gene_panel"] = str(self._fixed_gene_panel_csv)
-            return out
-        return {}
+
+def _resolve_for_project_stub(action_key: str, project, **_kwargs):
+    if action_key == "model_bundle" and hasattr(project, "_model_bundle_cfg"):
+        return dict(project._model_bundle_cfg)
+    if action_key == "mapper" and hasattr(project, "_mapper_cfg"):
+        return dict(project._mapper_cfg)
+    return {}
+
+
+def _patch_model_bundle_resolver(monkeypatch) -> None:
+    monkeypatch.setattr(model_bundle, "resolve_for_project", _resolve_for_project_stub)
+
+
+@pytest.fixture(autouse=True)
+def _autouse_resolve_for_project_stub(monkeypatch):
+    _patch_model_bundle_resolver(monkeypatch)
 
 
 def test_build_model_feature_bundle_and_load(tmp_path: Path, monkeypatch):

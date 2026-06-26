@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
 
 from methyl_utils import load_project
+from methyl_utils.action_config_resolver import resolve_for_project
 
 from .config import MethylClusterConfig, ClusteringMethod, ClusterMetric
 
@@ -107,7 +108,7 @@ def resolve_cluster_config_for_group(
     )
 
     # Apply project step_config.cluster if present
-    step_cfg = project.get_step_config("cluster") or {}
+    step_cfg = resolve_for_project("cluster", project)
     if step_override:
         step_cfg = {**step_cfg, **step_override}
     valid_fields = set(MethylClusterConfig.model_fields.keys())

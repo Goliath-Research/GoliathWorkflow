@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SiteManifest",
+  "description": "Site-wide infrastructure defaults for MethylPipeline (genomes, caches, cluster settings). Not study-specific.",
+  "type": "object",
+  "properties": {
+    "reference_genome": {
+      "type": "object",
+      "properties": {
+        "fasta": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "annotation": {
+      "type": "object",
+      "properties": {
+        "gtf": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "methyl_mapper_home": { "type": "string" },
+    "caches": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "parabricks": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "methyl_extract": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "actionConfig": {
+      "type": "object",
+      "description": "Optional per-action defaults keyed by catalog action_config_key",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}
