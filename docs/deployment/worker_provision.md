@@ -77,6 +77,8 @@ bash "$RUNTIME/scripts/setup_host.sh" \
 
 Use `--no-venv` if venv already exists on shared storage from promote. Omit `--no-venv` only on first environment bootstrap.
 
+This installs host tools including **bedtools** (MethylMapper), **samtools** (alignment QC flagstat on GPU workers), and **fastp** (SamplePrep trim remediation).
+
 ### 4. Docker + shared data-root (once per VM)
 
 ```bash

@@ -186,6 +186,18 @@ else
   warn "bedtools not found; required for methyl-mapper"
 fi
 
+if command -v samtools >/dev/null 2>&1; then
+  pass "samtools"
+else
+  warn "samtools not found; required for alignment QC flagstat on GPU workers"
+fi
+
+if command -v fastp >/dev/null 2>&1; then
+  pass "fastp"
+else
+  warn "fastp not found; required for SamplePrep trim remediation"
+fi
+
 if command -v docker >/dev/null 2>&1; then
   pass "docker"
   if docker compose version >/dev/null 2>&1; then

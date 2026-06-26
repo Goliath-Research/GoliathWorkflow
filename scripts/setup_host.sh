@@ -30,7 +30,8 @@ Libraries in use (for verification):
   - Visualization: dash and dash-cytoscape (for optional Cytoscape-style interactive views).
   - GPU: requirements-gpu-cuda12.txt (cupy-cuda12x, cudf-cu12, pylibcudf-cu12, rmm-cu12).
   - System (--system-deps): Python dev, build-essential, hdf5-tools, libhdf5-dev,
-    libzstd-dev, ODBC, bedtools (for MethylMapper); with GPU, libnvrtc{N} for NVRTC.
+    libzstd-dev, ODBC, bedtools (for MethylMapper), samtools (for alignment QC flagstat),
+    fastp (for SamplePrep trim remediation); with GPU, libnvrtc{N} for NVRTC.
 EOF
 }
 
@@ -200,6 +201,7 @@ install_system_deps() {
     apt-transport-https \
     unixodbc-dev \
     bedtools \
+    samtools \
     fastp
 
   if ! dpkg -s msodbcsql18 >/dev/null 2>&1; then

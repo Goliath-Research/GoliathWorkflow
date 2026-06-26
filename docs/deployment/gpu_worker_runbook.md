@@ -11,6 +11,7 @@ Related: [production_release.md](production_release.md), [worker_provision.md](w
 | Shared `/work` mounted | `ls /work/epimethyl/current/manifest.json` |
 | NVIDIA driver | `nvidia-smi` |
 | Architecture | `uname -m` → `aarch64` or `x86_64` |
+| Host samtools | `samtools --version` (alignment QC flagstat; from `setup_host.sh --system-deps`) |
 
 ## Driver and CUDA matrix (per architecture)
 

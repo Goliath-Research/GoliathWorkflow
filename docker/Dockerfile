@@ -5,6 +5,7 @@ FROM nvidia/cuda:13.0.0-devel-ubuntu22.04
 RUN apt-get update && apt-get install -y \
     build-essential \
     bedtools \
+    samtools \
     git \
     hdf5-tools \
     libhdf5-dev \

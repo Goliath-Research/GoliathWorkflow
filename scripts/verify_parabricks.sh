@@ -38,6 +38,12 @@ else
   fail "nvidia-smi not found; GPU driver required for Parabricks"
 fi
 
+if command -v samtools >/dev/null 2>&1; then
+  pass "samtools found: $(command -v samtools)"
+else
+  fail "samtools not found on host; required for alignment QC flagstat (install via setup_host.sh --system-deps)"
+fi
+
 IMAGE="${METHYL_PARABRICKS_IMAGE:-}"
 if [[ -z "$IMAGE" ]]; then
   fail "METHYL_PARABRICKS_IMAGE is not set (try nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1)"
