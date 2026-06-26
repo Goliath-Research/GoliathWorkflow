@@ -23,7 +23,7 @@
 
 - Summary present: True
 - Success: True
-- Fixed panel path: `/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/stable_dmps_genomewide.csv`
+- Fixed panel path: `/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/stable_dmps_genomewide.csv`
 - Merged panel rows: 11303
 
 | Step | Seconds | RC |

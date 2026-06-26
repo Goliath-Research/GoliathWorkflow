@@ -2,7 +2,7 @@
   "project_name": "Plasma_healthy_vs_PCa",
   "laboratory": "psomagen",
   "batch": "Plasma healthy vs PCa (paired cohort, CG)",
-  "output_base": "/work/prostate-cancer",
+  "output_base": "/work/projects/prostate-cancer",
   "samples_base_path": "/work/samples",
   "controls": {
     "label": "healthy",
@@ -10,7 +10,7 @@
       {
         "label": "all",
         "sample_paths": [
-          "/work/prostate-cancer/data/healthy_p.csv"
+          "/work/projects/prostate-cancer/data/healthy_p.csv"
         ]
       }
     ]
@@ -21,7 +21,7 @@
       {
         "label": "PCa",
         "sample_paths": [
-          "/work/prostate-cancer/data/pca_p.csv"
+          "/work/projects/prostate-cancer/data/pca_p.csv"
         ]
       }
     ]
@@ -29,7 +29,7 @@
   "comparisons": "control_vs_each_disease",
   "path_remap": {
     "/lambda/nfs/Work/prostate-cancer/samples": "/work/samples",
-    "/lambda/nfs/Work/prostate-cancer": "/work/prostate-cancer"
+    "/lambda/nfs/Work/prostate-cancer": "/work/projects/prostate-cancer"
   },
   "chromosomes": [
     "1",

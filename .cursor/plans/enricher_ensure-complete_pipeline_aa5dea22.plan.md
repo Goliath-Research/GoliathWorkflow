@@ -298,6 +298,6 @@ methyl-enricher verify-complete --project .../production/project.json
 
 # Biological confirmation chain
 methyl-disease-progression --project .../production/project.json --strict-missing --report-md
-methyl-stability-freeze-readiness /work/prostate-cancer/Healthy_vs_PCa1-5-CG
+methyl-stability-freeze-readiness /work/projects/prostate-cancer/Healthy_vs_PCa1-5-CG
 # then set biological_review_confirmed: true and run --model
 ```

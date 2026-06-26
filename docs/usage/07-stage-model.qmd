@@ -10,16 +10,16 @@ Train and select final production model artifacts after freeze and biological-re
 
 ```bash
 source .venv/bin/activate
-methyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model
+methyl-validation biological-readiness /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model
 ```
 
 ### Pattern B: Backend model-MC comparison then select best
 
 ```bash
 source .venv/bin/activate
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model-mc --model-mc-all
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --model-mc --model-mc-all
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
   --select-best-model --model-mc-all --selection-metric balanced_accuracy --selection-stat median
 ```
 

@@ -142,8 +142,8 @@ BEGIN
         group2_label NVARCHAR(128) NOT NULL
     );
     INSERT INTO @comparisons (ord, label, centroid2_dir, detect_out_dir, group2_label) VALUES
-      (0, N'PCa_Low',  N'/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low',  N'/work/prostate-cancer/PCa3/detections/all/PCa_Low',  N'group2'),
-      (1, N'PCa_High', N'/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_High', N'/work/prostate-cancer/PCa3/detections/all/PCa_High', N'group2');
+      (0, N'PCa_Low',  N'/work/projects/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low',  N'/work/projects/prostate-cancer/PCa3/detections/all/PCa_Low',  N'group2'),
+      (1, N'PCa_High', N'/work/projects/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_High', N'/work/projects/prostate-cancer/PCa3/detections/all/PCa_High', N'group2');
 
     DECLARE @chromosomes TABLE (ord INT NOT NULL PRIMARY KEY, chr NVARCHAR(8) NOT NULL);
     INSERT INTO @chromosomes (ord, chr) VALUES

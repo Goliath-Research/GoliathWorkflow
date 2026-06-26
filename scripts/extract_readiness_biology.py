@@ -10,8 +10,8 @@ def _pick(src: dict[str, Any], keys: list[str]) -> dict[str, Any]:
 
 
 def main() -> None:
-    readiness_path = Path("/work/prostate-cancer/Healthy_vs_PCa1-4-CG/readiness/readiness.json")
-    out_path = Path("/work/prostate-cancer/Healthy_vs_PCa1-4-CG/model_family_analysis/reports/biological_coherence_baseline.json")
+    readiness_path = Path("/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/readiness/readiness.json")
+    out_path = Path("/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/model_family_analysis/reports/biological_coherence_baseline.json")
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
     payload = json.loads(readiness_path.read_text(encoding="utf-8"))

@@ -117,7 +117,7 @@ Node count: **O(comparisons + chromosomes)** composite nodes, not **O(comparison
 ## Migration path
 
 1. Ship milestone 1 with static `PCaTwoGroupFlow` (validates worker contracts + SQL write-path).
-2. Ship milestone 2 with static `PCaOvrFlow` ([deprecated/wf_pca_ovr_seed.sql](deprecated/wf_pca_ovr_seed.sql)) — parallel `control_vs_each_disease` comparisons + post mapper/enricher/progression for [project_PCa3.json](/work/prostate-cancer/configs/project_PCa3.json).
+2. Ship milestone 2 with static `PCaOvrFlow` ([deprecated/wf_pca_ovr_seed.sql](deprecated/wf_pca_ovr_seed.sql)) — parallel `control_vs_each_disease` comparisons + post mapper/enricher/progression for [project_PCa3.json](/work/projects/prostate-cancer/configs/project_PCa3.json).
 3. Implement FOREACH + indexing in SQL parity scripts (milestone 3 — **done**).
 4. Validation / MC via **ValidationPipeline** + `context_json.iterations[]` ([wf_validation_pipeline_seed.sql](wf_validation_pipeline_seed.sql)); see [validation_planner_capabilities.md](../contract/validation_planner_capabilities.md).
 

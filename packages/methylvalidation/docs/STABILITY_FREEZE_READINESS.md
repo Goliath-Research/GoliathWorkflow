@@ -25,7 +25,7 @@ From the repo root (venv active):
 methyl-stability-freeze-readiness /path/to/<project_name>
 ```
 
-`<project_name>` is the directory that **contains** `monte_carlo_runs/` (e.g. `/work/prostate-cancer/Healthy_vs_PCa1-4-CG`). Do **not** pass a `*.json` config path — the CLI requires the **folder** (otherwise you get `no_go` with missing artifacts or exit **2** if that path is an existing file).
+`<project_name>` is the directory that **contains** `monte_carlo_runs/` (e.g. `/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG`). Do **not** pass a `*.json` config path — the CLI requires the **folder** (otherwise you get `no_go` with missing artifacts or exit **2** if that path is an existing file).
 
 **Outputs (default):** JSON and markdown are written next to your Monte Carlo tree under **` <project_name>/readiness/readiness.json`** and **` <project_name>/readiness/readiness.md`**. Markdown is also printed to stdout. Override destinations with **`--json-out`** / **`--markdown-out`** (absolute paths are used as-is; **relative paths are resolved under `readiness/`**, not the shell cwd). Use **`--stdout-only`** to skip writing files (pipe-friendly).
 

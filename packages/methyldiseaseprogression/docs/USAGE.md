@@ -78,7 +78,7 @@ In the standard `methyl-validation --freeze` stage, progression can run automati
 
 ```bash
 methyl-disease-progression \
-  --project /work/prostate-cancer/Healthy_vs_PCa1-5-CG/monte_carlo_runs/production/project.json \
+  --project /work/projects/prostate-cancer/Healthy_vs_PCa1-5-CG/monte_carlo_runs/production/project.json \
   --strict-missing \
   --report-md
 ```

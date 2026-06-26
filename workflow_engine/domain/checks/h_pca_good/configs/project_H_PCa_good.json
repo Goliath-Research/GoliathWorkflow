@@ -2,7 +2,7 @@
   "project_name": "H_PCa_good",
   "laboratory": "psomagen",
   "batch": "Prostate cancer samples (good cohort)",
-  "output_base": "/work/prostate-cancer",
+  "output_base": "/work/projects/prostate-cancer",
   "samples_base_path": "/work/samples",
   "controls": {
     "label": "healthy",
@@ -10,7 +10,7 @@
       {
         "label": "all",
         "sample_paths": [
-          "/work/prostate-cancer/data/healthy_good.csv"
+          "/work/projects/prostate-cancer/data/healthy_good.csv"
         ]
       }
     ]
@@ -21,7 +21,7 @@
       {
         "label": "PCa",
         "sample_paths": [
-          "/work/prostate-cancer/data/pca_good.csv"
+          "/work/projects/prostate-cancer/data/pca_good.csv"
         ]
       }
     ]
@@ -35,7 +35,7 @@
   ],
   "path_remap": {
     "/lambda/nfs/Work/prostate-cancer/samples": "/work/samples",
-    "/lambda/nfs/Work/prostate-cancer": "/work/prostate-cancer"
+    "/lambda/nfs/Work/prostate-cancer": "/work/projects/prostate-cancer"
   },
   "chromosomes": [
     "1",

@@ -2,7 +2,7 @@
   "programVersion": 2,
   "name": "MC_Gene_Enricher_Stability",
   "description": "Monte Carlo stability: discovery detector, mapper, enricher per comparison; gene stability from enricher outputs (no DMP/gene FeatureCuts).",
-  "projectPath": "/work/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
+  "projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
   "body": [
     {
       "do": "validation.plan_iterations",

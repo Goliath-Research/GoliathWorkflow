@@ -6,10 +6,10 @@ Binary **healthy vs PCa** projects (~15 samples per arm, paired subjects) for cr
 
 | File | Analyte | Sample lists |
 |------|---------|----------------|
-| `project_Plasma_healthy_vs_PCa.json` | `cfdna` (fragmentomics on) | `/work/prostate-cancer/data/healthy_p.csv`, `/work/prostate-cancer/data/pca_p.csv` |
-| `project_Buffy_healthy_vs_PCa.json` | `buffy_coat` (fragmentomics off) | `/work/prostate-cancer/data/healthy_b.csv`, `/work/prostate-cancer/data/pca_b.csv` |
+| `project_Plasma_healthy_vs_PCa.json` | `cfdna` (fragmentomics on) | `/work/projects/prostate-cancer/data/healthy_p.csv`, `/work/projects/prostate-cancer/data/pca_p.csv` |
+| `project_Buffy_healthy_vs_PCa.json` | `buffy_coat` (fragmentomics off) | `/work/projects/prostate-cancer/data/healthy_b.csv`, `/work/projects/prostate-cancer/data/pca_b.csv` |
 
-Cluster copies: `/work/prostate-cancer/configs/` (same content).
+Cluster copies: `/work/projects/prostate-cancer/configs/` (same content).
 
 Comparison resolved: **all vs PCa** → artifacts under `detections/all/PCa/` and `mapper/all/PCa/`.
 
@@ -26,7 +26,7 @@ source /path/to/MethylPipeline/.venv/bin/activate
 ### Plasma
 
 ```bash
-PROJ=/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json
+PROJ=/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json
 
 # One command builds both cohort centroids (healthy + PCa):
 methyl-centroid --project "$PROJ" --group all
@@ -45,7 +45,7 @@ methyl-qc --project "$PROJ"
 ### Buffy-coat
 
 ```bash
-PROJ=/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json
+PROJ=/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json
 
 methyl-centroid --project "$PROJ" --group all
 
@@ -58,7 +58,7 @@ Do **not** run `methyl-validation --stability`, `--freeze`, or `--model` for the
 
 ## Key artifact paths
 
-For each project `{output_base}/{project_name}/` (default `/work/prostate-cancer/Plasma_healthy_vs_PCa/`):
+For each project `{output_base}/{project_name}/` (default `/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/`):
 
 | Artifact | Path |
 |----------|------|
@@ -73,18 +73,18 @@ After both projects finish, compare overlap with:
 ```bash
 # Discovery DMPs (default; broad biology panel)
 python tools/compare_analyte_outputs.py \
-  --plasma-root /work/prostate-cancer/Plasma_healthy_vs_PCa \
-  --buffy-root /work/prostate-cancer/Buffy_healthy_vs_PCa \
+  --plasma-root /work/projects/prostate-cancer/Plasma_healthy_vs_PCa \
+  --buffy-root /work/projects/prostate-cancer/Buffy_healthy_vs_PCa \
   --comparison all/PCa \
-  --out /work/prostate-cancer/analyte_comparison/all_vs_PCa/discovery
+  --out /work/projects/prostate-cancer/analyte_comparison/all_vs_PCa/discovery
 
 # Classifier DMPs (model candidates; same methyl-detector run, no re-run)
 python tools/compare_analyte_outputs.py \
-  --plasma-root /work/prostate-cancer/Plasma_healthy_vs_PCa \
-  --buffy-root /work/prostate-cancer/Buffy_healthy_vs_PCa \
+  --plasma-root /work/projects/prostate-cancer/Plasma_healthy_vs_PCa \
+  --buffy-root /work/projects/prostate-cancer/Buffy_healthy_vs_PCa \
   --comparison all/PCa \
   --dmp-source classifier \
-  --out /work/prostate-cancer/analyte_comparison/all_vs_PCa/classifier
+  --out /work/projects/prostate-cancer/analyte_comparison/all_vs_PCa/classifier
 ```
 
 `--dmp-source` accepts `discovery` (default), `classifier`, or `classifier-extended`.
@@ -99,8 +99,8 @@ Detection does not need re-running. Re-map from classifier DMPs into a **separat
 source .venv/bin/activate
 
 # Project config JSON (not the output directory)
-PLASMA_PROJ=/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json
-BUFFY_PROJ=/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json
+PLASMA_PROJ=/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json
+BUFFY_PROJ=/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json
 
 # Optional: derive output root from config (unique per analyte)
 # PLASMA_ROOT=$(python -c "from methyl_utils import load_project; print(load_project('$PLASMA_PROJ').get_derived_paths().output_base)")
@@ -122,20 +122,20 @@ If you prefer explicit CLI paths, use the **full detection glob** (not a bare fi
 
 ```bash
 methyl-mapper --project "$PLASMA_PROJ" \
-  --csv-pattern "/work/prostate-cancer/Plasma_healthy_vs_PCa/detections/all/PCa/dmps-*-classifier.csv" \
-  --output-dir "/work/prostate-cancer/Plasma_healthy_vs_PCa/mapper_classifier/all/PCa"
+  --csv-pattern "/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/detections/all/PCa/dmps-*-classifier.csv" \
+  --output-dir "/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/mapper_classifier/all/PCa"
 ```
 
 Compare genes:
 
 ```bash
 python tools/compare_analyte_outputs.py \
-  --plasma-root /work/prostate-cancer/Plasma_healthy_vs_PCa \
-  --buffy-root /work/prostate-cancer/Buffy_healthy_vs_PCa \
+  --plasma-root /work/projects/prostate-cancer/Plasma_healthy_vs_PCa \
+  --buffy-root /work/projects/prostate-cancer/Buffy_healthy_vs_PCa \
   --comparison all/PCa \
   --dmp-source classifier \
   --mapper-subdir mapper_classifier \
-  --out /work/prostate-cancer/analyte_comparison/all_vs_PCa/classifier
+  --out /work/projects/prostate-cancer/analyte_comparison/all_vs_PCa/classifier
 ```
 
 ### Enricher on classifier mapper genes (optional)
@@ -156,7 +156,7 @@ Outputs: `dmp_overlap_summary.json`, `gene_overlap_summary.json`, and CSV lists 
 
 ### Pre-flight QC (paired cohort)
 
-Verify 1:1 patient pairing across analytes before interpreting biology, e.g. a manifest at `/work/prostate-cancer/data/plasma_buffy_pairing.csv` with columns `patient_id`, `plasma_sample`, `buffy_sample`, `group`.
+Verify 1:1 patient pairing across analytes before interpreting biology, e.g. a manifest at `/work/projects/prostate-cancer/data/plasma_buffy_pairing.csv` with columns `patient_id`, `plasma_sample`, `buffy_sample`, `group`.
 
 ## Config validation
 

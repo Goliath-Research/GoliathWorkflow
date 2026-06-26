@@ -8,14 +8,14 @@ Measure descriptive performance distributions using frozen production artifacts 
 
 ```bash
 source .venv/bin/activate
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --post-model-validation
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --post-model-validation
 ```
 
 Optional backend override:
 
 ```bash
 source .venv/bin/activate
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
   --post-model-validation --post-model-backend ecdf
 ```
 
@@ -75,7 +75,7 @@ methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa
 
 ```bash
 source .venv/bin/activate
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
   --post-model-validation --resume
 ```
 

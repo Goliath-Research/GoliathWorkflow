@@ -178,7 +178,7 @@ Example:
 ```bash
 methyl-enricher-network-discovery \
   --project /path/to/project.json \
-  --scan-root /work/prostate-cancer/Healthy_vs_PCa1-4-CG/enricher
+  --scan-root /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/enricher
 ```
 
 ## Project step config mapping

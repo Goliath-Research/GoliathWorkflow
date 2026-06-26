@@ -5,7 +5,7 @@ Debug empty_align warnings for one sample/chrom/context.
 Example:
   source .venv/bin/activate && \
   python scripts/debug_empty_align_sample.py \
-    --project-json /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json \
+    --project-json /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json \
     --sample 004560_7D15_63 \
     --chromosomes 4 5 \
     --contexts CG

@@ -8,7 +8,7 @@ Validates **DomainProgram → compiler → collection bindings → instance cont
 |----------|-----------|
 | **Repo** (this bundle) | `configs/*.program.json`, `instance/*.json` examples, smoke `project_*.json`, `data/*.csv` for CI |
 | **Repo** (`workflow_engine/domain/profiles/`) | Named pipeline profiles (`discovery_gene_featurecuts`, …) |
-| **`/work/prostate-cancer/`** | `configs/project_Buffy_healthy_vs_PCa.json`, `data/healthy_b.csv`, `pca_b.csv`, run outputs |
+| **`/work/projects/prostate-cancer/`** | `configs/project_Buffy_healthy_vs_PCa.json`, `data/healthy_b.csv`, `pca_b.csv`, run outputs |
 
 Edit the **study manifest** on `/work` only. Programs and profiles stay in the repository.
 
@@ -36,7 +36,7 @@ Or validate against the live `/work` project (program still from repo):
 
 ```bash
 python workflow_engine/domain/checks/buffy_healthy_vs_pca/check_pipeline.py \
-  --project /work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json \
+  --project /work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_data_driven.program.json
 ```
 
@@ -49,7 +49,7 @@ From repo root with `.venv` activated. Paths below are relative to repo root.
 ```bash
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_data_driven.program.json \
-  --context '{"projectPath":"/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
   --parallel-workers 1
 ```
 
@@ -59,11 +59,11 @@ methyl-workflow-run \
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json \
-  --context '{"projectPath":"/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
   --parallel-workers 1
 ```
 
-Outputs: `/work/prostate-cancer/Buffy_healthy_vs_PCa/monte_carlo_runs/` → `stability/stability_summary.json`.
+Outputs: `/work/projects/prostate-cancer/Buffy_healthy_vs_PCa/monte_carlo_runs/` → `stability/stability_summary.json`.
 
 ## Bootstrap sample lists on `/work` (optional)
 

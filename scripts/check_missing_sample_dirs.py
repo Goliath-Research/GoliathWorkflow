@@ -2,7 +2,7 @@
 """
 Print sample IDs from a CSV that do not exist under /work/samples/<sample>.
 
-Default input CSV: /work/prostate-cancer/data/test.csv
+Default input CSV: /work/projects/prostate-cancer/data/test.csv
 Default samples base: /work/samples
 """
 
@@ -20,8 +20,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument(
         "--csv",
-        default="/work/prostate-cancer/data/test.csv",
-        help="CSV file with a sample column (default: /work/prostate-cancer/data/test.csv)",
+        default="/work/projects/prostate-cancer/data/test.csv",
+        help="CSV file with a sample column (default: /work/projects/prostate-cancer/data/test.csv)",
     )
     p.add_argument(
         "--samples-base",

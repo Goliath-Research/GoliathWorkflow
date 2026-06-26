@@ -17,7 +17,7 @@ Project configurations should follow a **single source of truth** principle:
 ```json
 {
   "project_name": "Healthy_vs_PCa1-4-CG",
-  "samples_base_path": "/work/prostate-cancer/samples",
+  "samples_base_path": "/work/projects/prostate-cancer/samples",
   "controls": { ... },           // Define once
   "diseases": { ... },           // Define once
   "step_config": {

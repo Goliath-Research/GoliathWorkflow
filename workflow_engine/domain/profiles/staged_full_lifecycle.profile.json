@@ -219,12 +219,12 @@
       },
       "validation_partitions": {
         "development_train": [
-          "/work/prostate-cancer/data/PCaH.csv",
-          "/work/prostate-cancer/data/PCa1.csv",
-          "/work/prostate-cancer/data/PCa2.csv",
-          "/work/prostate-cancer/data/PCa3.csv",
-          "/work/prostate-cancer/data/PCa4.csv",
-          "/work/prostate-cancer/data/PCa5.csv"
+          "/work/projects/prostate-cancer/data/PCaH.csv",
+          "/work/projects/prostate-cancer/data/PCa1.csv",
+          "/work/projects/prostate-cancer/data/PCa2.csv",
+          "/work/projects/prostate-cancer/data/PCa3.csv",
+          "/work/projects/prostate-cancer/data/PCa4.csv",
+          "/work/projects/prostate-cancer/data/PCa5.csv"
         ],
         "internal_validation": [],
         "locked_test": [],

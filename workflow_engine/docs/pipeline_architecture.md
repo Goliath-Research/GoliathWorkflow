@@ -179,7 +179,7 @@ Only **`project_name`** and **`output_base`** are required. Everything else is o
 | Field | Role |
 |-------|------|
 | `project_name` | Identifier; output lives under `{output_base}/{project_name}/` |
-| `output_base` | Global output root (e.g. `/work/prostate-cancer`) |
+| `output_base` | Global output root (e.g. `/work/projects/prostate-cancer`) |
 | `controls` / `disease` | Two-sided layout: control vs disease cohorts |
 | `comparisons` | Shorthand string or explicit list of control vs disease pairs |
 | `chromosomes` | Shared list (`"1"`…`"22"`, `"X"`, `"Y"`) |
@@ -229,10 +229,10 @@ External reference project (not in repo): `project_PCa3.json` with one control (
 ```json
 {
   "project_name": "Healthy_vs_PCa1-4-CG",
-  "output_base": "/work/prostate-cancer",
+  "output_base": "/work/projects/prostate-cancer",
   "controls": {
     "label": "healthy",
-    "groups": [{ "label": "all", "sample_paths": ["/work/prostate-cancer/data/healthy.csv"] }]
+    "groups": [{ "label": "all", "sample_paths": ["/work/projects/prostate-cancer/data/healthy.csv"] }]
   },
   "diseases": {
     "label": "cancer",
@@ -791,7 +791,7 @@ This section ties **one control vs two disease groups** (OvR-style) to the **`Da
 | Chromosomes | 24 (`1`–`22`, `X`, `Y`) |
 | Comparisons shorthand | `control_vs_each_disease` |
 
-Resolved directories (under `/work/prostate-cancer/PCa3/`):
+Resolved directories (under `/work/projects/prostate-cancer/PCa3/`):
 
 - Centroids control: `centroids/controls/healthy/all`
 - Centroids disease: `centroids/diseases/cancer/{PCa_Low|PCa_High}`
@@ -803,23 +803,23 @@ From [`workflow_engine/sql/instance_context_examples/pca_ovr.json`](/home/ubuntu
 
 ```json
 {
-  "projectPath": "/work/prostate-cancer/configs/project_PCa3.json",
+  "projectPath": "/work/projects/prostate-cancer/configs/project_PCa3.json",
   "context": "CG",
-  "centroid1Dir": "/work/prostate-cancer/PCa3/centroids/controls/healthy/all",
+  "centroid1Dir": "/work/projects/prostate-cancer/PCa3/centroids/controls/healthy/all",
   "group1Label": "group1",
   "orderedComparisonLabels": ["PCa_Low", "PCa_High"],
   "chromosomes": ["1", "2", "...", "22", "X", "Y"],
   "comparisons": [
     {
       "label": "PCa_Low",
-      "centroid2Dir": "/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low",
-      "detectOutDir": "/work/prostate-cancer/PCa3/detections/all/PCa_Low",
+      "centroid2Dir": "/work/projects/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low",
+      "detectOutDir": "/work/projects/prostate-cancer/PCa3/detections/all/PCa_Low",
       "group2Label": "group2"
     },
     {
       "label": "PCa_High",
-      "centroid2Dir": "/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_High",
-      "detectOutDir": "/work/prostate-cancer/PCa3/detections/all/PCa_High",
+      "centroid2Dir": "/work/projects/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_High",
+      "detectOutDir": "/work/projects/prostate-cancer/PCa3/detections/all/PCa_High",
       "group2Label": "group2"
     }
   ]

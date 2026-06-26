@@ -178,10 +178,10 @@ Offline cohort review (no re-align):
 ```bash
 source .venv/bin/activate
 python scripts/alignment_qc_cohort_screening.py \
-  --qc-dir /work/prostate-cancer/alignment_qc \
-  --group healthy=/work/prostate-cancer/data/healthy.csv \
-  --group pca=/work/prostate-cancer/data/pca.csv \
-  --out /work/prostate-cancer/alignment_qc/screening_report
+  --qc-dir /work/projects/prostate-cancer/alignment_qc \
+  --group healthy=/work/projects/prostate-cancer/data/healthy.csv \
+  --group pca=/work/projects/prostate-cancer/data/pca.csv \
+  --out /work/projects/prostate-cancer/alignment_qc/screening_report
 ```
 
 ## Extraction QC: confirming enough good reads
@@ -249,10 +249,10 @@ Before starting SamplePrep, confirm:
 source .venv/bin/activate
 
 # Alignment QC for one sample directory
-methyl-qc --samples /work/samples/SAMPLE_ID --output-dir /work/prostate-cancer/alignment_qc
+methyl-qc --samples /work/samples/SAMPLE_ID --output-dir /work/projects/prostate-cancer/alignment_qc
 
 # Project-scoped (uses step_config.alignment_qc)
-methyl-qc --project /work/prostate-cancer/configs/project_Example.json
+methyl-qc --project /work/projects/prostate-cancer/configs/project_Example.json
 
 # Extraction QC after MethylExtractor
 methyl-extraction-qc --sample-dir /work/samples/SAMPLE_ID --sample-id SAMPLE_ID

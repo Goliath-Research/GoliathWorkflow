@@ -1,6 +1,6 @@
 # Workflow Diagram Pack: `Healthy_vs_PCa1-4-CG`
 
-This pack uses your project configuration at `/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json` and separates:
+This pack uses your project configuration at `/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json` and separates:
 
 - **External preprocessing** (Parabricks alignment and methyl extraction)
 - **MethylPipeline-native stages** (AlignmentQC onward, MC/stability/freeze/model/predictor)
@@ -191,7 +191,7 @@ flowchart TD
 
 ## Project-specific path map (as used by diagrams)
 
-- Base output: `/work/prostate-cancer/Healthy_vs_PCa1-4-CG/`
-- Monte Carlo runs: `/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/`
-- Production freeze/model root: `/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/`
+- Base output: `/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/`
+- Monte Carlo runs: `/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/`
+- Production freeze/model root: `/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/`
 

@@ -8,7 +8,7 @@ Buffy-coat **healthy vs PCa** using `healthy_good.csv` / `pca_good.csv`. Same MC
 |----------|-----------|
 | **Repo** (this bundle) | `configs/h_pca_good_mc_stability.program.json`, smoke `project_H_PCa_good.json` |
 | **Repo** (`workflow_engine/domain/profiles/`) | `full_biomarker_gene_fc.profile.json` |
-| **`/work/prostate-cancer/`** | `configs/project_H_PCa_good.json`, `data/healthy_good.csv`, `pca_good.csv`, run outputs |
+| **`/work/projects/prostate-cancer/`** | `configs/project_H_PCa_good.json`, `data/healthy_good.csv`, `pca_good.csv`, run outputs |
 
 | Repo path | Role |
 |-----------|------|
@@ -30,11 +30,11 @@ From repo root with `.venv` activated:
 methyl-workflow-run \
   --program workflow_engine/domain/checks/h_pca_good/configs/h_pca_good_mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/full_biomarker_gene_fc.profile.json \
-  --context '{"projectPath":"/work/prostate-cancer/configs/project_H_PCa_good.json"}' \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_H_PCa_good.json"}' \
   --parallel-workers 1
 ```
 
-Outputs: `/work/prostate-cancer/H_PCa_good/monte_carlo_runs/`.
+Outputs: `/work/projects/prostate-cancer/H_PCa_good/monte_carlo_runs/`.
 
 ## Config notes (on `/work` project JSON)
 

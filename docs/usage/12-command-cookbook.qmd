@@ -8,7 +8,7 @@ Provide copy-ready command sequences for the full solution lifecycle.
 
 ```bash
 source .venv/bin/activate
-PROJECT="/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json"
+PROJECT="/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json"
 
 methyl-validation --project "$PROJECT" --stability
 methyl-validation --project "$PROJECT" --freeze
@@ -20,7 +20,7 @@ methyl-validation --project "$PROJECT" --post-model-validation
 
 ```bash
 source .venv/bin/activate
-PROJECT="/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json"
+PROJECT="/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json"
 
 methyl-validation --project "$PROJECT" --model-mc --model-mc-all
 methyl-validation --project "$PROJECT" --select-best-model --model-mc-all \
@@ -31,9 +31,9 @@ methyl-validation --project "$PROJECT" --select-best-model --model-mc-all \
 
 ```bash
 source .venv/bin/activate
-PROJECT="/work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json"
-BASE="/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/model_mc/ecdf/metrics_summary.json"
-CAND="/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/model_mc/tabular_sklearn/metrics_summary.json"
+PROJECT="/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json"
+BASE="/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/model_mc/ecdf/metrics_summary.json"
+CAND="/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/model_mc/tabular_sklearn/metrics_summary.json"
 
 methyl-validation --project "$PROJECT" --rollout-compare \
   --baseline-summary "$BASE" --candidate-summary "$CAND"
@@ -44,17 +44,17 @@ methyl-validation --project "$PROJECT" --rollout-compare \
 ```bash
 source .venv/bin/activate
 methyl-enricher \
-  --input /work/prostate-cancer/Healthy_vs_PCa1-4-CG/mapper/all/pca_pca1/all-gene_name-combined.csv \
+  --input /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/mapper/all/pca_pca1/all-gene_name-combined.csv \
   --modules \
   --library-preset cancer-extended \
-  --outdir /work/prostate-cancer/Healthy_vs_PCa1-4-CG/enricher/all/pca_pca1
+  --outdir /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/enricher/all/pca_pca1
 ```
 
 ## 5) Standalone blind prediction
 
 ```bash
 source .venv/bin/activate
-methyl-predictor --project /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json
+methyl-predictor --project /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json
 ```
 
 ## 6) Manual rendering commands (this manual)

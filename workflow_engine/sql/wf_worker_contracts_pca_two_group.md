@@ -12,9 +12,9 @@ Seeded by `wf.wf_init_instance_scope_from_context` at `sp_start_workflow_instanc
 |----------|------|---------|-------------|
 | `projectPath` | string | `/home/ubuntu/Work/prostate-cancer/configs/project_PCa3.json` | Pipeline project JSON |
 | `context` | string | `"CG"` | Methylation context |
-| `centroid1Dir` | string | `/work/prostate-cancer/PCa3/centroids/controls/healthy/all` | Control group centroid output |
-| `centroid2Dir` | string | `/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low` | Disease group centroid output |
-| `detectOutDir` | string | `/work/prostate-cancer/PCa3/detections/all/PCa_Low` | Detection output for comparison |
+| `centroid1Dir` | string | `/work/projects/prostate-cancer/PCa3/centroids/controls/healthy/all` | Control group centroid output |
+| `centroid2Dir` | string | `/work/projects/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low` | Disease group centroid output |
+| `detectOutDir` | string | `/work/projects/prostate-cancer/PCa3/detections/all/PCa_Low` | Detection output for comparison |
 | `group1Label` | string | `"group1"` | `methyl-centroid --group` for control |
 | `group2Label` | string | `"group2"` | `methyl-centroid --group` for disease |
 
@@ -24,9 +24,9 @@ Example:
 {
   "projectPath": "/home/ubuntu/Work/prostate-cancer/configs/project_PCa3.json",
   "context": "CG",
-  "centroid1Dir": "/work/prostate-cancer/PCa3/centroids/controls/healthy/all",
-  "centroid2Dir": "/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low",
-  "detectOutDir": "/work/prostate-cancer/PCa3/detections/all/PCa_Low",
+  "centroid1Dir": "/work/projects/prostate-cancer/PCa3/centroids/controls/healthy/all",
+  "centroid2Dir": "/work/projects/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low",
+  "detectOutDir": "/work/projects/prostate-cancer/PCa3/detections/all/PCa_Low",
   "group1Label": "group1",
   "group2Label": "group2"
 }
@@ -76,7 +76,7 @@ Example:
 ```json
 {
   "ok": true,
-  "h5": "/work/prostate-cancer/PCa3/centroids/controls/healthy/all/1-CG.h5",
+  "h5": "/work/projects/prostate-cancer/PCa3/centroids/controls/healthy/all/1-CG.h5",
   "chromosome": "1",
   "context": "CG"
 }
@@ -135,7 +135,7 @@ Example:
 ```json
 {
   "ok": true,
-  "dmpsCsv": "/work/prostate-cancer/PCa3/detections/all/PCa_Low/dmps-1.csv",
+  "dmpsCsv": "/work/projects/prostate-cancer/PCa3/detections/all/PCa_Low/dmps-1.csv",
   "chromosome": "1",
   "nDmps": 42
 }

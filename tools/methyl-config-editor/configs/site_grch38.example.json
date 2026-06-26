@@ -4,7 +4,7 @@
     "fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   },
   "annotation": {
-    "gtf": "/work/ref/hg38/annotation.gtf"
+    "gtf": "/work/genomes/human_genome/gencode.v49.annotation.gtf"
   },
   "methyl_mapper_home": "/work/cache/methyl_mapper",
   "caches": {

@@ -152,7 +152,7 @@ Why:
 Example:
 
 ```bash
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
   --select-best-model --model-mc-all \
   --selection-metric balanced_accuracy --selection-stat median
 ```

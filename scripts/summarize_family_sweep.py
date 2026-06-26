@@ -51,7 +51,7 @@ def _load_method_counts(path: Path) -> str:
 
 
 def main() -> None:
-    analysis_root = Path("/work/prostate-cancer/Healthy_vs_PCa1-4-CG/model_family_analysis")
+    analysis_root = Path("/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/model_family_analysis")
     candidates_root = analysis_root / "candidates"
     out_root = analysis_root / "reports"
     out_root.mkdir(parents=True, exist_ok=True)

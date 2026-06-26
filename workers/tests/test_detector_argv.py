@@ -85,7 +85,7 @@ def test_merge_detector_step_override_strips_null_workflow_keys() -> None:
 
 def test_detector_build_argv_from_lifecycle_scope() -> None:
     scope = {
-        "projectPath": "/work/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
+        "projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
         "chromosome": "21",
         "context": "CG",
         "label": "PCa_PCa1",

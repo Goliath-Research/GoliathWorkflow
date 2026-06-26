@@ -30,7 +30,7 @@ Full path reference: `packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`.
 ```bash
 source .venv/bin/activate
 methyl-validation plan-runs --config /work/experiments/my_mc_config.json --overwrite
-# or:  methyl-validation plan-runs --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --overwrite
+# or:  methyl-validation plan-runs --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --overwrite
 ```
 
 `--overwrite` only replaces `queue/tasks/` and regenerates the plan; it does **not** remove existing `run_####` output directories. To delete all `run_####` trees before planning, add `--wipe-runs` (irreversible). Without `--overwrite`, completed runs (see `queue_task_status.json` + per-run task under `queue/tasks/`) are not written over; you can add iterations and only the new `run_####` work is planned. `run-task` skips pipeline work for runs already marked completed unless you pass `--force`.
@@ -44,7 +44,7 @@ methyl-validation export-queue --config /work/experiments/my_mc_config.json
 **3) Workers** (one job per task; repeat until the queue is empty):
 
 ```bash
-methyl-validation run-task --task /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/queue/tasks/run_0001.json
+methyl-validation run-task --task /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/queue/tasks/run_0001.json
 ```
 
 **4) Aggregate** (after successful tasks, or to refresh from a partial set):

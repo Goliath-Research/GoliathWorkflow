@@ -198,7 +198,7 @@ Script [`scripts/migrate_project_config.py`](scripts/migrate_project_config.py):
 ```json
 {
   "project_name": "Healthy_vs_PCa1-5-CG",
-  "output_base": "/work/prostate-cancer",
+  "output_base": "/work/projects/prostate-cancer",
   "samples_base_path": "/work/samples",
   "controls": { "label": "healthy", "groups": [{ "label": "all", "sample_paths": ["..."] }] },
   "diseases": {

@@ -56,9 +56,9 @@ Globals at scope 0 (override seed defaults at instance start):
 
 ```json
 {
-  "projectPath": "/work/prostate-cancer/configs/project_PCa3.json",
+  "projectPath": "/work/projects/prostate-cancer/configs/project_PCa3.json",
   "context": "CG",
-  "centroid1Dir": "/work/prostate-cancer/PCa3/centroids/controls/healthy/all",
+  "centroid1Dir": "/work/projects/prostate-cancer/PCa3/centroids/controls/healthy/all",
   "group1Label": "group1",
   "orderedComparisonLabels": ["PCa_Low", "PCa_High"]
 }

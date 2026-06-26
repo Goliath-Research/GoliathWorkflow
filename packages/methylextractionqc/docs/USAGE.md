@@ -12,7 +12,7 @@ Operator guide: [Usage ch.03 — Sample Prep and QC](../../docs/usage/03-sample-
 
 ```bash
 methyl-extraction-qc --sample-dir /work/samples/S1 --sample-id S1
-methyl-extraction-qc --project /work/prostate-cancer/configs/project_Example.json
+methyl-extraction-qc --project /work/projects/prostate-cancer/configs/project_Example.json
 ```
 
 ## Guardrails (defaults)

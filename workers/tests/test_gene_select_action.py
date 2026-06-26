@@ -38,9 +38,9 @@ def test_gene_select_keeps_explicit_run_dir():
     action = _gene_select_action()
     cmd = action.build_argv(
         {
-            "projectPath": "/work/prostate-cancer/configs/project_H_PCa.json",
-            "runDir": "/work/prostate-cancer/monte_carlo_runs/run_0001",
+            "projectPath": "/work/projects/prostate-cancer/configs/project_H_PCa.json",
+            "runDir": "/work/projects/prostate-cancer/monte_carlo_runs/run_0001",
         }
     )
     run_dir_idx = cmd.index("--run-dir")
-    assert cmd[run_dir_idx + 1] == "/work/prostate-cancer/monte_carlo_runs/run_0001"
+    assert cmd[run_dir_idx + 1] == "/work/projects/prostate-cancer/monte_carlo_runs/run_0001"

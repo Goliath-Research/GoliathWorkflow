@@ -1,4 +1,4 @@
 {
-  "input_file": "/work/prostate-cancer/Plasma_healthy_vs_PCa/mapper_classifier/all/PCa/all-gene_name-combined.csv",
-  "output_dir": "/work/prostate-cancer/Plasma_healthy_vs_PCa/enricher_classifier/all/PCa"
+  "input_file": "/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/mapper_classifier/all/PCa/all-gene_name-combined.csv",
+  "output_dir": "/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/enricher_classifier/all/PCa"
 }

@@ -1,5 +1,5 @@
 {
-  "projectPath": "/work/prostate-cancer/Plasma_healthy_vs_PCa",
+  "projectPath": "/work/projects/prostate-cancer/Plasma_healthy_vs_PCa",
   "workerToolMapper": "MethylMapper",
   "workerToolEnricher": "MethylEnricher",
   "workerToolProgression": "MethylDiseaseProgression",
@@ -8,7 +8,7 @@
     {
       "runId": "feature_run_0001",
       "phase": "feature",
-      "projectPath": "/work/prostate-cancer/Plasma_healthy_vs_PCa/monte_carlo_runs/run_0001",
+      "projectPath": "/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/monte_carlo_runs/run_0001",
       "taskConfig": {
         "runId": "feature_run_0001",
         "phase": "feature",
@@ -21,7 +21,7 @@
     {
       "runId": "feature_run_0002",
       "phase": "feature",
-      "projectPath": "/work/prostate-cancer/Plasma_healthy_vs_PCa/monte_carlo_runs/run_0002",
+      "projectPath": "/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/monte_carlo_runs/run_0002",
       "taskConfig": {
         "runId": "feature_run_0002",
         "phase": "feature",

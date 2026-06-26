@@ -16,10 +16,10 @@ Example (Plasma project, signatures from discovery ppi_hubs):
 
   source .venv/bin/activate
   python tools/compare_analyte_mc_signatures.py \\
-    --project /work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json \\
-    --plasma-hubs /work/prostate-cancer/Plasma_healthy_vs_PCa/enricher/all/PCa/ppi_hubs.csv \\
-    --buffy-hubs /work/prostate-cancer/Buffy_healthy_vs_PCa/enricher/all/PCa/ppi_hubs.csv \\
-    --out /work/prostate-cancer/analyte_comparison/signature_recurrence/plasma
+    --project /work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json \\
+    --plasma-hubs /work/projects/prostate-cancer/Plasma_healthy_vs_PCa/enricher/all/PCa/ppi_hubs.csv \\
+    --buffy-hubs /work/projects/prostate-cancer/Buffy_healthy_vs_PCa/enricher/all/PCa/ppi_hubs.csv \\
+    --out /work/projects/prostate-cancer/analyte_comparison/signature_recurrence/plasma
 """
 
 from __future__ import annotations

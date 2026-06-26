@@ -202,7 +202,7 @@ Task `input_json` keys: `parabricksImage`, `bwaThreads`, `gpuFlags`, `extraDocke
 ```json
 {
   "tool": "MethylAlignmentQc",
-  "project": "/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
+  "project": "/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
   "sampleId": "DPLST-051425-111148",
   "sampleDir": "/work/samples/DPLST-051425-111148",
   "primaryAnalyte": "cfdna"
@@ -241,7 +241,7 @@ Hard QC failure: `result_code < 0` fails the instance; soft fail uses `overall_p
 ```json
 {
   "tool": "MethylFragmentomics",
-  "project": "/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
+  "project": "/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
   "sampleId": "DPLST-051425-111148",
   "sampleDir": "/work/samples/DPLST-051425-111148"
 }
@@ -252,7 +252,7 @@ Hard QC failure: `result_code < 0` fails the instance; soft fail uses `overall_p
 ```json
 {
   "sampleId": "DPLST-051425-111148",
-  "outputDir": "/work/prostate-cancer/Plasma_healthy_vs_PCa/fragmentomics/DPLST-051425-111148"
+  "outputDir": "/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/fragmentomics/DPLST-051425-111148"
 }
 ```
 
@@ -315,7 +315,7 @@ Production defaults (not env vars):
   "tool": "MethylExtract",
   "sampleId": "DPLST-051425-111148",
   "sampleDir": "/work/samples/DPLST-051425-111148",
-  "project": "/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
+  "project": "/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
   "referenceFasta": "/work/genomes/.../Homo_sapiens.GRCh38.dna.primary_assembly.fa"
 }
 ```
@@ -346,7 +346,7 @@ Upstream contract: MethylExtractor [`docs/extraction_qc_contract.md`](file:///ho
 ```json
 {
   "tool": "MethylExtractionQc",
-  "project": "/work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
+  "project": "/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
   "sampleId": "DPLST-051425-111148",
   "sampleDir": "/work/samples/DPLST-051425-111148"
 }

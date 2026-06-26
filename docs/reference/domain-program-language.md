@@ -36,7 +36,7 @@ methyl-worker           Executes catalog actions; writes artifacts on /work
 | File | Contains | Example path |
 |------|----------|--------------|
 | **`*.program.json`** | Control flow: `do`, `for`, `if`, action names | `workflow_engine/domain/fixtures/sample_prep.program.json` |
-| **`project.json`** | Study manifest: cohorts, stages, comparisons, paths, regulatory | `/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json` |
+| **`project.json`** | Study manifest: cohorts, stages, comparisons, paths, regulatory | `/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json` |
 | **`context_json`** | Instance vars: `projectPath`, `pipelineProfile`, `samples[]` | API body or `--context '{...}'` |
 | **Profile** | Scope booleans + `actionConfig` parameter packs | `workflow_engine/domain/profiles/staged_ovr_mc.profile.json` |
 | **Site manifest** | Genomes, GTF, caches, cluster defaults | `/work/site/methyl_site.json` |
@@ -52,13 +52,13 @@ source .venv/bin/activate
 python scripts/compile_workflow_program.py \
   workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json \
-  --context '{"projectPath":"/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'
 
 # Run in-process (stub external GPU tools)
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json \
-  --context '{"projectPath":"/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
   --stub-external
 ```
 

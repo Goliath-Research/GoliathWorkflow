@@ -147,8 +147,8 @@ The following is an annotated excerpt from `configs/project_Healthy_vs_PCa1-4-CG
   "project_name": "Healthy_vs_PCa1-4-CG",      ← output under output_base/Healthy_vs_PCa1-4-CG/
   "laboratory": "psomagen",
   "batch": "Second batch of prostate cancer samples",
-  "output_base": "/work/prostate-cancer",        ← all outputs go here
-  "samples_base_path": "/work/prostate-cancer/samples",
+  "output_base": "/work/projects/prostate-cancer",        ← all outputs go here
+  "samples_base_path": "/work/projects/prostate-cancer/samples",
   "chromosomes": ["1", "2", ..., "22", "X", "Y"],
   "contexts": ["CG"],
   "comparisons": "control_vs_each_disease",      ← healthy vs each pca stage
@@ -214,10 +214,10 @@ The following is an annotated excerpt from `configs/project_Healthy_vs_PCa1-4-CG
 
 ## Output Directory Layout
 
-Given `output_base = "/work/prostate-cancer"` and `project_name = "Healthy_vs_PCa1-4-CG"`, the top-level output structure is:
+Given `output_base = "/work/projects/prostate-cancer"` and `project_name = "Healthy_vs_PCa1-4-CG"`, the top-level output structure is:
 
 ```
-/work/prostate-cancer/
+/work/projects/prostate-cancer/
 └── Healthy_vs_PCa1-4-CG/
     ├── centroids/
     │   ├── controls/healthy/all/<chrom>-CG.h5

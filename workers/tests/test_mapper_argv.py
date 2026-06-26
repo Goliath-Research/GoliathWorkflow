@@ -36,7 +36,7 @@ def test_mapper_build_argv_omits_comparison_flag() -> None:
     cmd = action.build_argv(
         {
             "tool": "MethylMapper",
-            "projectPath": "/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json",
+            "projectPath": "/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json",
             "group": "PCa",
             "comparison": "PCa",
         }

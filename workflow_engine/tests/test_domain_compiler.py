@@ -118,7 +118,7 @@ def test_two_group_emits_collection_bindings():
 def test_two_group_context_json_minimal():
     result = compile_domain_program(_load("two_group_comparison.program.json"))
     assert result.context_json == {
-        "projectPath": "/work/prostate-cancer/configs/project_Healthy_vs_PCa.json"
+        "projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa.json"
     }
 
 

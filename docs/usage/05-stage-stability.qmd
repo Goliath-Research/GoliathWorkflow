@@ -8,14 +8,14 @@ Run repeated train/validation iterations to identify DMPs that recur across runs
 
 ```bash
 source .venv/bin/activate
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability
 ```
 
 Optional strict FeatureCuts alignment:
 
 ```bash
 source .venv/bin/activate
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
   --stability --stability-featurecuts --stability-target-ba 0.95 --stability-min-selected-dmps 1000
 ```
 
@@ -132,7 +132,7 @@ methyl-validation --project /work/.../configs/project.json --stability --skip-de
 
 ```bash
 source .venv/bin/activate
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability --resume
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability --resume
 ```
 
 - If panel is too small: lower `stability_dmp_freq` or increase `n_iterations`.

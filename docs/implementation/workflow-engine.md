@@ -17,8 +17,8 @@ The workflow engine schedules DomainProgram graphs either **in-process** (`Local
 ```bash
 methyl-workflow-run \
   --program workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
-  --context-file workflow_engine/domain/profiles/default.profile.json \
-  --context '{"projectPath": "/work/prostate-cancer/configs/project_*.json"}'
+  --context-file workflow_engine/domain/profiles/staged_ovr_mc.profile.json \
+  --context '{"projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json"}'
 ```
 
 `LocalWorkflowEngine` materializes the same compiled graph as production without DB leases.

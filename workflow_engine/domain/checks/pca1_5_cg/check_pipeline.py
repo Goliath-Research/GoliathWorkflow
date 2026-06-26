@@ -17,7 +17,7 @@ CONFIGS = CHECK_ROOT / "configs"
 INSTANCE = CHECK_ROOT / "instance"
 DATA = CHECK_ROOT / "data"
 
-WORK_ROOT = Path("/work/prostate-cancer")
+WORK_ROOT = Path("/work/projects/prostate-cancer")
 WORK_CONFIGS = WORK_ROOT / "configs"
 WORK_DATA = WORK_ROOT / "data"
 

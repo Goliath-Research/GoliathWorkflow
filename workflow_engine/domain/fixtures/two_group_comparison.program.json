@@ -2,7 +2,7 @@
   "programVersion": 2,
   "name": "TwoGroupComparison",
   "description": "Control vs disease: centroids and detector per comparison, context, and chromosome.",
-  "projectPath": "/work/prostate-cancer/configs/project_Healthy_vs_PCa.json",
+  "projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa.json",
   "body": [
     {
       "for": {

@@ -8,7 +8,7 @@ Create frozen production artifacts using the stable panel and generate biologica
 
 ```bash
 source .venv/bin/activate
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --freeze
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --freeze
 ```
 
 ## Prerequisites
@@ -69,7 +69,7 @@ Run biological readiness before model training:
 
 ```bash
 source .venv/bin/activate
-methyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG
+methyl-validation biological-readiness /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG
 ```
 
 This chained gate verifies:
@@ -81,7 +81,7 @@ This chained gate verifies:
 To include advisory Grok commentary in the readiness section:
 
 ```bash
-methyl-validation biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG --grok-review
+methyl-validation biological-readiness /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG --grok-review
 ```
 
 Without `--grok-review`, the chain keeps Grok disabled by default and still enforces deterministic checks.

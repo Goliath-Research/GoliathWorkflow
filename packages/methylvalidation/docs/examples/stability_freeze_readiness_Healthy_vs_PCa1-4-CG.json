@@ -54,7 +54,7 @@
         "return_code": 0
       }
     ],
-    "fixed_dmp_panel_in_project": "/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/stable_dmps_genomewide.csv",
+    "fixed_dmp_panel_in_project": "/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/stable_dmps_genomewide.csv",
     "merged_panel_rows": 11303,
     "removed_detector_keys_in_production_project": []
   },
@@ -73,7 +73,7 @@
       "modules": 30
     },
     "module_trajectory": {
-      "modules_csv": "/work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/progression/modules_long.csv",
+      "modules_csv": "/work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/progression/modules_long.csv",
       "n_rows": 30,
       "n_unique_entities": 17,
       "entities_all_stages": 2,

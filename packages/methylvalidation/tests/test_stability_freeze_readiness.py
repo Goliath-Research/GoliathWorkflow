@@ -137,6 +137,9 @@ def test_default_methyl_mapper_home_follows_project_mount_root():
     assert _default_methyl_mapper_home_for_project(Path("/work/prostate-cancer/MyProject")) == Path(
         "/work/cache/methyl_mapper"
     )
+    assert _default_methyl_mapper_home_for_project(
+        Path("/work/projects/prostate-cancer/MyProject")
+    ) == Path("/work/cache/methyl_mapper")
     assert _default_methyl_mapper_home_for_project(Path("/tmp/MyProject")) == Path(
         "/tmp/cache/methyl_mapper"
     )

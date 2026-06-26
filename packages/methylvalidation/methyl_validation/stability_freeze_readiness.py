@@ -1372,7 +1372,8 @@ def _default_methyl_mapper_home_for_project(project_root: Path) -> Path:
     Derive default MethylMapper home from the project mount root.
 
     Examples:
-      - /work/prostate-cancer/MyProject -> /work/cache/methyl_mapper
+      - /work/projects/prostate-cancer/MyProject -> /work/cache/methyl_mapper
+      - /work/projects/prostate-cancer/MyProject -> /work/cache/methyl_mapper
       - /tmp/Proj -> /tmp/cache/methyl_mapper
 
     Falls back to ~/.methyl_mapper when mount-root inference is not possible.
@@ -1380,7 +1381,10 @@ def _default_methyl_mapper_home_for_project(project_root: Path) -> Path:
     p = project_root.expanduser().absolute()
     parts = p.parts
     if len(parts) >= 2 and parts[0] == os.sep:
-        return (Path(parts[0]) / parts[1] / "cache" / "methyl_mapper").absolute()
+        mount = parts[1]
+        if mount == "projects" and len(parts) >= 3:
+            return (Path(parts[0]) / "cache" / "methyl_mapper").absolute()
+        return (Path(parts[0]) / mount / "cache" / "methyl_mapper").absolute()
     anchor = str(p.anchor or "").strip()
     if anchor and anchor != os.sep:
         return (Path(anchor) / "cache" / "methyl_mapper").absolute()

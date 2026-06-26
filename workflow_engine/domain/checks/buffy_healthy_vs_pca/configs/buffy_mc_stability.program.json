@@ -2,7 +2,7 @@
   "programVersion": 2,
   "name": "BuffyHealthyVsPCa_MC_Stability",
   "description": "Buffy-coat healthy vs PCa: MC stability with split detector, dmp_select, mapper, gene FeatureCuts (balanced-accuracy tuning).",
-  "projectPath": "/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json",
+  "projectPath": "/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json",
   "body": [
     {
       "do": "validation.plan_iterations",

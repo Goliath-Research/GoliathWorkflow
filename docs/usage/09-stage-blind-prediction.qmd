@@ -13,7 +13,7 @@ It is intentionally outside `methyl-validation` accuracy workflows.
 
 ```bash
 source .venv/bin/activate
-methyl-predictor --project /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json
+methyl-predictor --project /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json
 ```
 
 ## Process model

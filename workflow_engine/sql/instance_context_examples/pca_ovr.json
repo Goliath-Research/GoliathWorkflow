@@ -1,7 +1,7 @@
 {
   "projectPath": "/home/ubuntu/Work/prostate-cancer/configs/project_PCa3.json",
   "context": "CG",
-  "centroid1Dir": "/work/prostate-cancer/PCa3/centroids/controls/healthy/all",
+  "centroid1Dir": "/work/projects/prostate-cancer/PCa3/centroids/controls/healthy/all",
   "group1Label": "group1",
   "orderedComparisonLabels": ["PCa_Low", "PCa_High"],
   "workerToolCentroid": "MethylCentroid",
@@ -17,14 +17,14 @@
   "comparisons": [
     {
       "label": "PCa_Low",
-      "centroid2Dir": "/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low",
-      "detectOutDir": "/work/prostate-cancer/PCa3/detections/all/PCa_Low",
+      "centroid2Dir": "/work/projects/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_Low",
+      "detectOutDir": "/work/projects/prostate-cancer/PCa3/detections/all/PCa_Low",
       "group2Label": "group2"
     },
     {
       "label": "PCa_High",
-      "centroid2Dir": "/work/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_High",
-      "detectOutDir": "/work/prostate-cancer/PCa3/detections/all/PCa_High",
+      "centroid2Dir": "/work/projects/prostate-cancer/PCa3/centroids/diseases/cancer/PCa_High",
+      "detectOutDir": "/work/projects/prostate-cancer/PCa3/detections/all/PCa_High",
       "group2Label": "group2"
     }
   ]

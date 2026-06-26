@@ -62,8 +62,8 @@ Standardize response for common stage failures and reduce ad-hoc debugging.
 
 ```bash
 source .venv/bin/activate
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability --resume
-methyl-validation --project /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --post-model-validation --resume
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability --resume
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --post-model-validation --resume
 ```
 
 ## Operational guardrails

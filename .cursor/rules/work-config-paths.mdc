@@ -3,7 +3,7 @@ description: Study manifests and data on /work; profiles, schemas, and DomainPro
 alwaysApply: true
 ---
 
-# Repo vs `/work/<disease>/`
+# Repo vs `/work` (four-layer config)
 
 ## Repository (versioned, documented, default for users)
 
@@ -15,25 +15,34 @@ alwaysApply: true
 
 Point `methyl-workflow-run --program` at **repo paths** (or a released install of the repo). Point `--context-file` at a **profile** under `workflow_engine/domain/profiles/` when using named presets.
 
-## `/work/<disease>/` (operator / study-specific, not git)
+## `/work` layout (operator / cluster storage, not git)
 
 ```
-/work/<disease>/configs/     # project_*.json (study manifest only)
-/work/<disease>/data/        # sample list CSVs
-/work/<disease>/<project>/   # pipeline outputs (centroids, monte_carlo_runs, …)
+/work/epimethyl/              # deployed runtime (releases, venv, env, docker)
+/work/site/methyl_site.json   # site manifest (genomes, GTF, caches) — METHYL_SITE_CONFIG
+/work/genomes/                # reference genomes by species
+/work/cache/                   # shared mapper/enricher caches
+/work/samples/{sample_id}/    # flat sample archive (not by laboratory)
+/work/projects/<disease>/      # study-specific science
+  configs/project_*.json       # study manifests only
+  data/                        # cohort CSVs
+  <project_name>/              # outputs (monte_carlo_runs, …)
 ```
 
 Examples for prostate cancer:
 
-- `/work/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json`
-- `/work/prostate-cancer/data/healthy_b.csv`, `pca_b.csv`
+- `/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json`
+- `/work/projects/prostate-cancer/data/healthy_b.csv`, `pca_b.csv`
 
-Optional: a small instance context JSON on `/work` that only sets `projectPath` (and study-only overrides). **Do not** copy `*.program.json` to `/work/configs/`.
+Optional: a small instance context JSON on `/work` that only sets `projectPath` (and study-only overrides). **Do not** copy `*.program.json` to `/work/projects/.../configs/`.
 
 ## When implementing or documenting runs
 
-- **Do** read and edit **study manifests** (`project_*.json`) under `/work/<disease>/configs/`.
+- **Do** read and edit **study manifests** (`project_*.json`) under `/work/projects/<disease>/configs/`.
 - **Do** keep **profiles, schemas, and DomainPrograms** in the repo and document them for users.
-- **Do** pass `projectPath` in `--context` pointing at `/work/.../project_*.json`.
+- **Do** pass `projectPath` in `--context` pointing at `/work/projects/.../project_*.json`.
+- **Do** set `METHYL_SITE_CONFIG` (or install site manifest under `/work/site/`).
 - **Do not** treat repo `project_*.json` smoke copies or `tools/methyl-config-editor/configs/` as production source of truth.
-- **Do not** ship or document `*.program.json` under `/work/<disease>/configs/` as canonical.
+- **Do not** ship or document `*.program.json` under `/work/projects/<disease>/configs/` as canonical.
+
+Migration: `docs/deployment/work_layout_migration.md`, `scripts/migrate_work_layout.py`.

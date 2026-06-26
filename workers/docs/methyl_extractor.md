@@ -41,7 +41,7 @@ Extracting all contexts lets `sample.delete_bam` reclaim space without losing CH
 
 ```bash
 ./scripts/methyl_extract.sh DPLST-051425-111148 \
-  --project /work/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json \
+  --project /work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json \
   --sample-dir /work/samples/DPLST-051425-111148
 ```
 
