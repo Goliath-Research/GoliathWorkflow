@@ -1,0 +1,22 @@
+{
+  "plugins": {
+    "agent-compatibility": {
+      "enabled": true
+    },
+    "orchestrate": {
+      "enabled": true
+    },
+    "azure": {
+      "enabled": true
+    },
+    "browse": {
+      "enabled": true
+    },
+    "continual-learning": {
+      "enabled": true
+    },
+    "thermos": {
+      "enabled": true
+    }
+  }
+}
