@@ -121,7 +121,7 @@ Important subtrees:
 
 ## See also
 
-- `docs/config_parameter_matrix.md`
-- `docs/domain_program_language.md`
+- `docs/reference/config-parameter-matrix.md`
+- `docs/reference/domain-program-language.md`
 - `docs/theory/chapters/11-project-configuration.qmd`
-- `docs/theory/chapters/13-configuration-reference.qmd`
+- `docs/reference/configuration-reference.qmd`

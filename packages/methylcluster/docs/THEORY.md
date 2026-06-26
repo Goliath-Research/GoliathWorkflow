@@ -1,6 +1,8 @@
 # MethylCluster Theoretical Foundation
 
-The legacy workflow note for this package is documented in the root canonical guide: [`README.md`](../../../README.md). The theory book also records the clustering-doc retirement in [`docs/theory/README.md`](../../../docs/theory/README.md).
+> **ARCHIVED (2026-06):** `methylcluster` is deprecated and not on the ECDF supervised production path. Use mapper/enricher interpretation instead. Package retained for archaeology only.
+
+The legacy workflow note for this package is documented in the root canonical guide: [`README.md`](../../../README.md).
 
 This local page is intentionally brief so that it does not drift from the code.
 

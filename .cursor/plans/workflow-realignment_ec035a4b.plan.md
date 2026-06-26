@@ -60,7 +60,7 @@ Adopt this workflow:
 - Update workflow narrative and command examples in:
   - [/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md](/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md)
   - [/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/IMPLEMENTATION.md](/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/IMPLEMENTATION.md)
-  - [/home/ubuntu/MethylPipeline/docs/theory/chapters/14-user-guide.qmd](/home/ubuntu/MethylPipeline/docs/theory/chapters/14-user-guide.qmd)
+  - [/home/ubuntu/MethylPipeline/docs/usage/index.qmd](/home/ubuntu/MethylPipeline/docs/usage/index.qmd)
 - Clarify distinction between:
   - Step 3: **model-selection MC retraining** (primary)
   - Optional frozen descriptive validation (secondary)

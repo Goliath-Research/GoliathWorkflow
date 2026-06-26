@@ -1,0 +1,22 @@
+# Package Implementation Index
+
+Thin index linking each package's `IMPLEMENTATION.md`. Apply [`_TEMPLATE.md`](_TEMPLATE.md) when adding or refreshing package docs.
+
+| Package | Implementation | Theory stub | Usage |
+|---------|----------------|-------------|-------|
+| methylutils | [IMPLEMENTATION.md](../../../packages/methylutils/docs/IMPLEMENTATION.md) | [THEORY.md](../../../packages/methylutils/docs/THEORY.md) | [USAGE.md](../../../packages/methylutils/docs/USAGE.md) |
+| methylcentroid | [IMPLEMENTATION.md](../../../packages/methylcentroid/docs/IMPLEMENTATION.md) | [THEORY ch.02](../../../docs/theory/chapters/02-methylcentroid.qmd) | [USAGE.md](../../../packages/methylcentroid/docs/USAGE.md) |
+| methyldetector | [IMPLEMENTATION.md](../../../packages/methyldetector/docs/IMPLEMENTATION.md) | [THEORY ch.03](../../../docs/theory/chapters/03-methyldetector.qmd) | [USAGE.md](../../../packages/methyldetector/docs/USAGE.md) |
+| methylclassifier | [IMPLEMENTATION.md](../../../packages/methylclassifier/docs/IMPLEMENTATION.md) | [THEORY ch.04](../../../docs/theory/chapters/04-methylclassifier.qmd) | [USAGE.md](../../../packages/methylclassifier/docs/USAGE.md) |
+| methylpredictor | [IMPLEMENTATION.md](../../../packages/methylpredictor/docs/IMPLEMENTATION.md) | [THEORY ch.05](../../../docs/theory/chapters/05-methylpredictor-and-validation.qmd) | [USAGE.md](../../../packages/methylpredictor/docs/USAGE.md) |
+| methylvalidation | [IMPLEMENTATION.md](../../../packages/methylvalidation/docs/IMPLEMENTATION.md) | [THEORY ch.05/15](../../../docs/theory/chapters/05-methylpredictor-and-validation.qmd) | [USAGE.md](../../../packages/methylvalidation/docs/USAGE.md) |
+| methylmapper | [IMPLEMENTATION.md](../../../packages/methylmapper/docs/IMPLEMENTATION.md) | [THEORY ch.07](../../../docs/theory/chapters/07-methylmapper.qmd) | [USAGE.md](../../../packages/methylmapper/docs/USAGE.md) |
+| methylenricher | [IMPLEMENTATION.md](../../../packages/methylenricher/docs/IMPLEMENTATION.md) | [THEORY ch.08](../../../docs/theory/chapters/08-methylenricher.qmd) | [USAGE.md](../../../packages/methylenricher/docs/USAGE.md) |
+| methylalignmentqc | [IMPLEMENTATION.md](../../../packages/methylalignmentqc/docs/IMPLEMENTATION.md) | [THEORY ch.09](../../../docs/theory/chapters/09-methylalignmentqc.qmd) | [USAGE.md](../../../packages/methylalignmentqc/docs/USAGE.md) |
+| methylextractionqc | — | [THEORY ch.09a](../../../docs/theory/chapters/09a-methylextractionqc.qmd) | [USAGE.md](../../../packages/methylextractionqc/docs/USAGE.md) |
+| methyldiseaseprogression | [IMPLEMENTATION.md](../../../packages/methyldiseaseprogression/docs/IMPLEMENTATION.md) | [THEORY ch.05](../../../docs/theory/chapters/05-methylpredictor-and-validation.qmd) | [USAGE.md](../../../packages/methyldiseaseprogression/docs/USAGE.md) |
+| methylcluster | **archived** — see below | [THEORY.md](../../../packages/methylcluster/docs/THEORY.md) | [USAGE.md](../../../packages/methylcluster/docs/USAGE.md) |
+
+## methylcluster (archived)
+
+Exploratory clustering — **not** on the ECDF supervised path. Interpretation flows through mapper/enricher instead. Package docs retained with archive banner only.

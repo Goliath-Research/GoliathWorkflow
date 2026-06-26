@@ -1,6 +1,6 @@
 ---
 name: user manual quaro plan
-overview: Build a separate, self-referenced Quarto user manual under docs/user-manual with full stage-by-stage operational guidance, package usage, diagrams, and checklists for stability, freeze, model, post-model validation, and blind prediction.
+overview: Build a separate, self-referenced Quarto user manual under docs/usage with full stage-by-stage operational guidance, package usage, diagrams, and checklists for stability, freeze, model, post-model validation, and blind prediction.
 todos: []
 isProject: false
 ---
@@ -14,12 +14,12 @@ Create a **new, standalone Quarto manual** focused on practical operation (not t
 - full final-solution stages: `stability`, `freeze`, `model`, `post-model validation`, and `blind prediction`.
 
 Manual location:
-- [`/home/ubuntu/MethylPipeline/docs/user-manual/`](/home/ubuntu/MethylPipeline/docs/user-manual/)
+- [`/home/ubuntu/MethylPipeline/docs/usage/`](/home/ubuntu/MethylPipeline/docs/usage/)
 
 ## Why Separate Project
 A sibling Quarto project avoids disrupting the current theory book and keeps responsibilities clear:
 - theory/reference remains in [`/home/ubuntu/MethylPipeline/docs/theory/`](/home/ubuntu/MethylPipeline/docs/theory/),
-- operations/how-to manual lives in `docs/user-manual`.
+- operations/how-to manual lives in `docs/usage`.
 
 ## Source-of-Truth Inputs
 Use these as canonical references while authoring:
@@ -31,8 +31,8 @@ Use these as canonical references while authoring:
 - [`/home/ubuntu/MethylPipeline/README.md`](/home/ubuntu/MethylPipeline/README.md)
 - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/11-project-configuration.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/11-project-configuration.qmd)
 - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/12-two-workflows.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/12-two-workflows.qmd)
-- [`/home/ubuntu/MethylPipeline/docs/theory/chapters/13-configuration-reference.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/13-configuration-reference.qmd)
-- [`/home/ubuntu/MethylPipeline/docs/theory/chapters/14-user-guide.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/14-user-guide.qmd)
+- [`/home/ubuntu/MethylPipeline/docs/reference/configuration-reference.qmd`](/home/ubuntu/MethylPipeline/docs/reference/configuration-reference.qmd)
+- [`/home/ubuntu/MethylPipeline/docs/usage/index.qmd`](/home/ubuntu/MethylPipeline/docs/usage/index.qmd)
 - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/15-model-creation-and-validation.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/15-model-creation-and-validation.qmd)
 
 ## Information Architecture (Full Manual)
@@ -78,14 +78,14 @@ Per-stage diagrams will show:
 - optional branches (`model_backend`, `model-mc-all`, `predictor-only` constraints).
 
 ## Authoring and Build Setup
-- Add a new Quarto config file at `docs/user-manual/_quarto.yml` with:
+- Add a new Quarto config file at `docs/usage/_quarto.yml` with:
   - `project.type: book`,
-  - output to `docs/user-manual/_book/`,
+  - output to `docs/usage/_book/`,
   - HTML + PDF formats,
   - chapter navigation order matching the architecture above.
 - Keep rendering independent from theory book:
-  - `quarto render docs/user-manual --to html`
-  - `quarto render docs/user-manual --to pdf`
+  - `quarto render docs/usage --to html`
+  - `quarto render docs/usage --to pdf`
 
 ## Cross-Link and Discoverability Updates
 After authoring manual chapters, add discoverability links:

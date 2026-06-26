@@ -71,7 +71,7 @@ isProject: false
 - Update canonical docs and examples to show minimal, non-duplicated config authoring:
   - [`/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md`](/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md)
   - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/11-project-configuration.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/11-project-configuration.qmd)
-  - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/14-user-guide.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/14-user-guide.qmd)
+  - [`/home/ubuntu/MethylPipeline/docs/usage/index.qmd`](/home/ubuntu/MethylPipeline/docs/usage/index.qmd)
 - Add a “legacy compatibility” note documenting precedence rules and de-dup defaults.
 
 ### 6) Tests and validation

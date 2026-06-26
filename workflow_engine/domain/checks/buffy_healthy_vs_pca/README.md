@@ -78,5 +78,5 @@ Edit `project_Buffy_healthy_vs_PCa.json` on `/work` after bootstrap.
 ## Related
 
 - [`../h_pca_good/README.md`](../h_pca_good/README.md) — `project_H_PCa_good.json` MC run
-- [`docs/domain_program_language.md`](../../../docs/domain_program_language.md) — profiles and programs
+- [`docs/reference/domain-program-language.md`](../../../docs/reference/domain-program-language.md) — profiles and programs
 - [`workflow_engine/docs/pipeline_architecture.md`](../../docs/pipeline_architecture.md)

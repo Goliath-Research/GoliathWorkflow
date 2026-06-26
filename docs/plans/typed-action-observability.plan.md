@@ -236,8 +236,8 @@ Add CI test: for each catalog action, golden fixture input → execute (or mock 
 - `methyl_qc` emits `result_code` 0/1/2; update sample prep program IF nodes
 
 ### Phase 4 — Docs + portal
-- Update [`workers/WORKER_PROTOCOL.md`](workers/WORKER_PROTOCOL.md) and [`docs/domain_program_language.md`](docs/domain_program_language.md) with result_code table and manifest convention
-- User manual: where to find `.action_results/` and `action_run_log.jsonl` on `/work`
+- Update [`workers/WORKER_PROTOCOL.md`](workers/WORKER_PROTOCOL.md) and [`docs/reference/domain-program-language.md`](docs/reference/domain-program-language.md) with result_code table and manifest convention
+- Usage manual: where to find `.action_results/` and `action_run_log.jsonl` on `/work`
 
 ---
 

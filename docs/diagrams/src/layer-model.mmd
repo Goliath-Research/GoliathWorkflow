@@ -1,0 +1,37 @@
+flowchart TB
+  subgraph manifest ["Study manifest"]
+    project["project.json / ProjectConfig"]
+  end
+  subgraph site ["Site manifest"]
+    sitejson["/work/site/methyl_site.json"]
+  end
+  subgraph profile ["Pipeline profile"]
+    prof["*.profile.json actionConfig"]
+  end
+  subgraph program ["Workflow IR"]
+    dp["*.program.json DomainProgram"]
+  end
+  subgraph deploy ["Deploy spec"]
+    compiled["compiled_workflow.json"]
+  end
+  subgraph instance ["Instance"]
+    ctx["context_json projectPath pipelineProfile samples"]
+  end
+  subgraph task ["Task input"]
+    resolved["resolvedConfig materialized"]
+  end
+  subgraph exec ["Execution"]
+    catalog["Action catalog + methyl_worker.handlers"]
+  end
+  subgraph orch ["Orchestration"]
+    engine["DB engine + gateway OR LocalWorkflowEngine"]
+  end
+
+  project --> ctx
+  sitejson --> resolved
+  prof --> resolved
+  dp --> compiled
+  compiled --> engine
+  ctx --> engine
+  resolved --> catalog
+  engine --> catalog

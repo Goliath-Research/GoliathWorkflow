@@ -24,7 +24,7 @@ todos:
     content: "Phase 6: migrate_project_config.py one-way converter (step_config → site + profile + slim manifest); replace repo and /work reference projects"
     status: completed
   - id: editor-manual
-    content: "Phase 7: methyl-config-editor + user-manual/theory for new-only workflow (program + profile + site + manifest)"
+    content: "Phase 7: methyl-config-editor + usage/theory for new-only workflow (program + profile + site + manifest)"
     status: completed
 ---
 
@@ -113,7 +113,7 @@ Update [`pipeline_profiles.py`](workflow_engine/domain/pipeline_profiles.py) and
 - Add top-level study fields: `regulatory`, `validation_partitions`, `progression_order`, `progression_labels[]`, `order_index` on stage entries.
 - Add [`schemas/config/site_manifest.schema.json`](schemas/config/site_manifest.schema.json).
 - Add [`schemas/config/profile.schema.json`](schemas/config/profile.schema.json) with `actionConfig` (optional JSON Schema export for editor).
-- Rewrite [docs/domain_program_language.md](docs/domain_program_language.md), [docs/config_parameter_matrix.md](docs/config_parameter_matrix.md), [docs/architecture_review.md](docs/architecture_review.md) — **new-only** config model.
+- Rewrite [docs/reference/domain-program-language.md](docs/reference/domain-program-language.md), [docs/reference/config-parameter-matrix.md](docs/reference/config-parameter-matrix.md), [docs/architecture/index.md](docs/architecture/index.md) — **new-only** config model.
 - Slim manifest target ~60–80 lines ([project_Healthy_vs_PCa1-5-CG.json](tools/methyl-config-editor/configs/project_Healthy_vs_PCa1-5-CG.json) reference).
 
 ---
@@ -189,7 +189,7 @@ Script [`scripts/migrate_project_config.py`](scripts/migrate_project_config.py):
 ## Phase 7 — Config editor and manual
 
 - [methyl-config-editor](tools/methyl-config-editor/): Study | Profile | Site | Program picker; **no step_config editor**.
-- User manual + theory chapters: new-only authoring path; remove step_config tables.
+- Usage manual + theory chapters: new-only authoring path; remove step_config tables.
 
 ---
 

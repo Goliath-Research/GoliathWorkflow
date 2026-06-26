@@ -45,7 +45,7 @@ Introduce named Enrichr library presets (including `cancer-extended`) for Methyl
   - Reuse existing config propagation path (`_apply_enricher_config_to_args`) so `step_config.enricher.library_preset` works with `--project`.
 
 - Update docs and examples:
-  - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/13-configuration-reference.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/13-configuration-reference.qmd): document `library_preset`, precedence, and align the `libraries` default list with actual code.
+  - [`/home/ubuntu/MethylPipeline/docs/reference/configuration-reference.qmd`](/home/ubuntu/MethylPipeline/docs/reference/configuration-reference.qmd): document `library_preset`, precedence, and align the `libraries` default list with actual code.
   - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/08-methylenricher.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/08-methylenricher.qmd): mention preset usage and reproducibility guidance.
   - [`/home/ubuntu/MethylPipeline/packages/methylenricher/configs/PCa_vs_Healthy_enricher_config.json`](/home/ubuntu/MethylPipeline/packages/methylenricher/configs/PCa_vs_Healthy_enricher_config.json): set `"library_preset": "cancer-extended"` (or keep explicit list plus comment-equivalent in docs if preserving strict reproducibility style).
 

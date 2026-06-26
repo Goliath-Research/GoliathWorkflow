@@ -99,4 +99,4 @@ Without `--grok-review`, the chain keeps Grok disabled by default and still enfo
 ## See also
 
 - `packages/methylvalidation/docs/USAGE.md`
-- `docs/theory/chapters/14-user-guide.qmd`
+- `docs/usage/index.qmd`

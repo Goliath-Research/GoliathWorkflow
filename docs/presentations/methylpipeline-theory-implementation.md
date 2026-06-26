@@ -239,7 +239,7 @@ Implications:
 
 - `docs/theory/chapters/05-methylpredictor-and-validation.qmd`
 - `docs/theory/chapters/12-two-workflows.qmd`
-- `docs/theory/chapters/13-configuration-reference.qmd`
+- `docs/reference/configuration-reference.qmd`
 - `packages/methylvalidation/docs/IMPLEMENTATION.md`
 
 ---

@@ -66,7 +66,7 @@ Rendered output is written to `docs/theory/_book/`.
 
 The Quarto book is the canonical theory reference. Package-local `docs/THEORY.md` files should stay concise and point back to the corresponding Quarto chapter instead of becoming competing sources.
 
-For workflow-first operations, command runbooks, and stage checklists, use the separate user manual at `docs/user-manual/`.
+For workflow-first operations, command runbooks, and stage checklists, use the separate user manual at `docs/usage/`.
 
 ## Migration Note: Clustering Docs Retirement
 

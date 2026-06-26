@@ -1,68 +1,13 @@
-# MethylPipeline User Manual
+# User Manual (moved)
 
-## What this manual is
+The MethylPipeline user manual was renamed to **Usage** during the documentation IA revision (2026-06).
 
-This is the operational companion to the theory book. It is designed for execution teams who need:
+**New location:** [`docs/usage/`](../usage/index.qmd)
 
-- exact commands,
-- required config keys,
-- expected output artifacts,
-- stage handoff checks,
-- recovery actions when a run fails.
+Quarto book:
 
-For statistical background, use `docs/theory/`.
-
-## Reading paths
-
-- **Sample prep (FASTQ → HDF5):** Chapter `03` (`03-sample-prep-and-qc.qmd`).
-- **Fast path (stage execution):** Chapters `05` to `09` (stability through blind prediction).
-- **New project setup:** Chapters `01`, `02`, `03`, then `05`.
-- **Daily operations:** Chapters `10` to `12`.
-- **Scaling MC across machines:** Chapter `13` (`13-distributed-methyl-validation.qmd`) — shared `/work` storage and queue subcommands.
-- **Deployment (DB + gateway + workers):** Chapter `14` (`14-deployment-and-distributed-workflow.qmd`).
-- **Optional hyperparameter tuning:** Chapter `15` (`15-optional-hyperparameter-search.qmd`) — `methyl-hyperparam-search` grid driver.
-- **Standalone package usage:** Chapter `04` (`04-package-reference-individual-usage.qmd`).
-
-## End-to-end workflow map
-
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=1.9cm,
-  stage/.style={draw, rounded corners, align=center, minimum width=2.6cm, minimum height=0.9cm}
-]
-\node[stage] (setup) {Setup};
-\node[stage, right=of setup] (stability) {Stability};
-\node[stage, right=of stability] (freeze) {Freeze};
-\node[stage, right=of freeze] (model) {Model};
-\node[stage, right=of model] (postmodel) {Post-model\\Validation};
-\node[stage, below=1.2cm of model] (blind) {Blind\\Prediction};
-
-\draw[->] (setup) -- (stability);
-\draw[->] (stability) -- (freeze);
-\draw[->] (freeze) -- (model);
-\draw[->] (model) -- (postmodel);
-\draw[->] (model) -- (blind);
-\end{tikzpicture}
-\end{center}
+```bash
+quarto render docs/usage
 ```
 
-## Scope boundaries
-
-- **SamplePrepPipeline** (FASTQ → aligned BAM → methylation HDF5) runs before staged validation; see Chapter 3.
-- `methyl-validation` orchestrates stability, freeze, model, and post-model validation.
-- Blind-only prediction is documented as a standalone `methyl-predictor` operation.
-- Package behavior is documented from implementation in `packages/*`.
-
-## Canonical references
-
-- Sample prep workflow: [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md)
-- Workflow JSON language: [`docs/domain_program_language.md`](../../domain_program_language.md)
-- Workflow reference: `docs/WORKFLOW_DIAGRAM_PACK_Healthy_vs_PCa1-4-CG.md`
-- Validation orchestration: `packages/methylvalidation/docs/USAGE.md`
-- Distributed queue (shared storage, `plan-runs` / `run-task` / `aggregate-results`): `packages/methylvalidation/docs/DISTRIBUTED_QUEUE.md`
-- Hyperparameter search (objective \(J\), `methyl-hyperparam-search`): `packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md`
-- Validation flags and config model:
-  - `packages/methylvalidation/methyl_validation/cli.py`
-  - `packages/methylvalidation/methyl_validation/config.py`
+See also [`docs/index.md`](../index.md) for audience-based navigation.

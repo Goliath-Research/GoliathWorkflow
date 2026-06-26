@@ -67,4 +67,4 @@ methyl-predictor --project /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carl
 ## See also
 
 - `packages/methylpredictor/docs/USAGE.md`
-- `docs/theory/chapters/14-user-guide.qmd`
+- `docs/usage/index.qmd`

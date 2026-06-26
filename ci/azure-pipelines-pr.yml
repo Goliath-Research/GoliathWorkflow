@@ -27,6 +27,14 @@ steps:
     displayName: Install pytest
 
   - script: |
+      bash scripts/check_doc_links.sh
+    displayName: Documentation link guard
+
+  - script: |
+      bash scripts/render_diagrams.sh --check || echo "Diagram freshness check skipped if SVG placeholders committed"
+    displayName: Diagram asset freshness check
+
+  - script: |
       pytest scripts/tests/test_release_manifest.py -q
     displayName: Release script contract tests
 

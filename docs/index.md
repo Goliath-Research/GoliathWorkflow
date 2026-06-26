@@ -1,70 +1,75 @@
 # MethylPipeline Documentation
 
-This page maps the documentation system for the monorepo and identifies canonical sources for each audience and task.
+Navigation hub for the three documentation pillars (Theory, Usage, Implementation) plus cross-cutting reference, architecture, and deployment.
 
-## Start Here
+**Interactive hub:** [methylpipeline-docs canvas](/home/ubuntu/.cursor/projects/home-ubuntu-MethylPipeline/canvases/methylpipeline-docs.canvas.tsx)
 
-- Repository landing page: [`../README.md`](../README.md)
-- **Documentation audit (coverage + staleness):** [`DOCUMENTATION_AUDIT.md`](DOCUMENTATION_AUDIT.md)
-- **Architecture review (workflow-first):** [`architecture_review.md`](architecture_review.md)
-- **DomainProgram language:** [`domain_program_language.md`](domain_program_language.md)
-- Environment setup: [`DEPLOYMENT.md`](DEPLOYMENT.md)
-- Operational runbook (stage-by-stage): [`user-manual/index.qmd`](user-manual/index.qmd)
-- Theory and reference: [`theory/README.md`](theory/README.md)
-- **Production deployment:** [`deployment/production_runbook.md`](deployment/production_runbook.md)
-- Code-backed configuration matrix: [`config_parameter_matrix.md`](config_parameter_matrix.md)
+## Start here by role
 
-## Canonical Sources By Purpose
+| Role | Start |
+|------|-------|
+| **Operator** — run a study end-to-end | [Usage manual](usage/index.qmd) Part II (ch.05–09) |
+| **Statistician** — methods and assumptions | [Theory book](theory/index.qmd) — e.g. ch.03 DMP detection |
+| **Developer** — engine, workers, compiler | [Implementation guide](implementation/index.md) |
+| **Workflow author** — DomainPrograms | [DomainProgram language](reference/domain-program-language.md) + [Architecture: layer model](architecture/layer-model.md) |
+| **DevOps** — DB, gateway, workers | [Usage ch.14](usage/14-deployment-and-distributed-workflow.qmd) + [Deployment runbook](deployment/production_runbook.md) |
 
-- **Run sample prep (FASTQ → HDF5):**
-  - [`user-manual/03-sample-prep-and-qc.qmd`](user-manual/03-sample-prep-and-qc.qmd)
-  - [`workflow_engine/sql/SamplePrepFlow.md`](../workflow_engine/sql/SamplePrepFlow.md)
-- **Run the analysis pipeline (stability → model):**
-  - [`user-manual/index.qmd`](user-manual/index.qmd)
-- **Deploy database, gateway, workers:**
-  - [`user-manual/14-deployment-and-distributed-workflow.qmd`](user-manual/14-deployment-and-distributed-workflow.qmd)
-  - [`deployment/production_runbook.md`](deployment/production_runbook.md)
-  - [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md)
-  - [`contracts/openapi.yaml`](../contracts/openapi.yaml)
-- **Author workflows in JSON:**
-  - [`domain_program_language.md`](domain_program_language.md)
-- **Understand statistical/method details:**
-  - [`theory/index.qmd`](theory/index.qmd)
-- **Package-specific CLI/API behavior:**
-  - `packages/*/README.md`
-  - `packages/*/docs/USAGE.md`
-- **Implementation internals:**
-  - `packages/*/docs/IMPLEMENTATION.md`
-- **Parameter and schema traceability:**
-  - [`config_parameter_matrix.md`](config_parameter_matrix.md)
+## Five navigation lenses
 
-## Current Workflow Contract
+### By audience
 
-- `methyl-validation --stability`
-  - Per-iteration MC path: `methyl-centroid` -> `methyl-detector`
-  - Followed by stability aggregation (optional adaptive stop via `stability_early_stop_*`).
-- `methyl-validation --freeze`
-  - Production path: `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`
-  - Optional `methyl-disease-progression` if enabled in project config.
-  - Freeze may also prepare mapper annotation cache artifacts for observed-hybrid mapped-family model builds.
-- `methyl-validation --model` / model-selection flow
-  - Final model build/selection after freeze artifacts are ready.
-  - `ecdf` backend includes aggregated observed-hybrid OvR mode when configured (`ecdf_aggregated_*` + `feature_family_set`).
+See table above. Package maintainers: [implementation/packages/](implementation/packages/index.md).
 
-Biological gate (recommended before final model promotion):
+### By pipeline stage
 
-- `methyl-validation biological-readiness <project_root>`
+[Architecture: pipeline stages](architecture/pipeline-stages.md) ↔ [Usage ch.03–09](usage/index.qmd)
 
-## Reading Order
+### By system layer
 
-1. [`user-manual/index.qmd`](user-manual/index.qmd) — operators
-2. [`theory/README.md`](theory/README.md) — methods
-3. [`domain_program_language.md`](domain_program_language.md) — workflow authors
-4. [`deployment/production_runbook.md`](deployment/production_runbook.md) — production deploy
-5. Relevant package docs under `packages/*/docs/`
+[Architecture: layer model](architecture/layer-model.md) — manifest → profile → program → instance → worker
 
-## Notes On Documentation Ownership
+### By package
 
-- Theory book and user manual intentionally overlap, but should not diverge in defaults/CLI semantics.
-- Package docs should hold package-specific operational details; cross-package workflows should live in user manual/theory workflow chapters.
-- Repo vs `/work` layout: user manual ch.02 and [`.cursor/rules/work-config-paths.mdc`](../.cursor/rules/work-config-paths.mdc).
+[Package implementation index](implementation/packages/index.md) + `packages/*/docs/{THEORY,IMPLEMENTATION,USAGE}.md`
+
+### By execution mode
+
+[Architecture: orchestration paths](architecture/orchestration-paths.md) — local vs gateway vs legacy CLI
+
+## Three pillars
+
+| Pillar | Location | Owns |
+|--------|----------|------|
+| **Theory** | [`theory/`](theory/index.qmd) | Math, statistics, assumptions, citations |
+| **Usage** | [`usage/`](usage/index.qmd) | Commands, artifacts, troubleshooting, deploy |
+| **Implementation** | [`implementation/`](implementation/index.md) | Engine, workers, compiler, code paths |
+
+## Cross-cutting
+
+| Area | Location |
+|------|----------|
+| Architecture | [`architecture/`](architecture/index.md) |
+| Reference lookup | [`reference/`](reference/documentation-toolchain.md) |
+| Deployment | [`deployment/`](deployment/production_runbook.md) |
+| Plans | [`plans/`](plans/README.md) |
+| Audit registry | [`DOCUMENTATION_AUDIT.md`](DOCUMENTATION_AUDIT.md) |
+
+## Canonical workflow (DomainProgram-first)
+
+```bash
+methyl-workflow-run \
+  --program workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  --context '{"projectPath": "/work/<disease>/configs/project_*.json"}'
+```
+
+Legacy monolithic path (`methyl-validation --stability/--freeze/--model`) remains documented in Usage for transitional studies.
+
+## Repository layout
+
+- **Repo:** profiles, DomainPrograms, schemas, docs
+- **`/work/<disease>/`:** study manifests, sample CSVs, run artifacts — see [work-config-paths rule](../.cursor/rules/work-config-paths.mdc)
+
+## Related
+
+- [`README.md`](../README.md) — repository landing
+- [`DEPLOYMENT.md`](DEPLOYMENT.md) — dev environment setup

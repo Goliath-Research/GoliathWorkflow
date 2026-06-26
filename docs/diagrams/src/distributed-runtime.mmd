@@ -1,0 +1,38 @@
+flowchart TB
+  subgraph portal ["Company Portal"]
+    editor["Schema config editor Web :8077"]
+    runPrep["Start SamplePrepPipeline"]
+    runDdp["Start DataDrivenPipeline"]
+  end
+  subgraph database ["Backend Database"]
+    wfPrep["SamplePrepPipeline"]
+    wfDef["DataDrivenPipeline"]
+    inst["workflow_instance + context_json"]
+    nexec["node_execution + scope_variable"]
+  end
+  subgraph mt ["Middle-Tier"]
+    rest["WfEngine REST :8080"]
+    engine["Engine procs T-SQL / PL/pgSQL"]
+  end
+  subgraph workers ["Remote Workers"]
+    w0["download / Parabricks / QC / extract"]
+    w1["methyl-centroid / detector"]
+    w3["mapper / enricher / progression"]
+  end
+  storage[("Shared storage NFS / Azure Files /work/...")]
+
+  editor --> runPrep
+  runPrep --> wfPrep
+  wfPrep -->|"HDF5 ready"| runDdp
+  runDdp --> wfDef
+  wfDef --> inst
+  inst --> nexec
+  rest --> engine
+  engine --> nexec
+  w0 --> rest
+  w1 --> rest
+  w3 --> rest
+  w0 --> storage
+  w1 --> storage
+  w3 --> storage
+  nexec -.->|"input paths"| storage

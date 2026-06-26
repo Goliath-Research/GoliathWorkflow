@@ -61,7 +61,7 @@ Use these as initial targets, with verification tests before any removal:
 - Extract all declared fields (name, type, default, constraints) from each package config model.
 - Extract all actually-consumed fields from resolvers/CLI merge paths.
 - Produce a single matrix: `declared`, `consumed`, `inherited`, `alias`, `legacy`, `unused_candidate`, `confidence`, `evidence_file`.
-- Store under docs (e.g. `docs/theory/chapters/13-configuration-reference.qmd` companion section + package docs links).
+- Store under docs (e.g. `docs/reference/configuration-reference.qmd` companion section + package docs links).
 
 ### Phase 2 — Classify and triage
 

@@ -67,7 +67,7 @@ Remove MethylDetector config and code paths that are no longer useful for the cu
   - [`/home/ubuntu/MethylPipeline/packages/methyldetector/QUICKSTART.md`](/home/ubuntu/MethylPipeline/packages/methyldetector/QUICKSTART.md)
   - [`/home/ubuntu/MethylPipeline/packages/methyldetector/CONTEXT_SELECTION_GUIDE.md`](/home/ubuntu/MethylPipeline/packages/methyldetector/CONTEXT_SELECTION_GUIDE.md)
   - [`/home/ubuntu/MethylPipeline/packages/methylclassifier/docs/USAGE.md`](/home/ubuntu/MethylPipeline/packages/methylclassifier/docs/USAGE.md)
-  - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/13-configuration-reference.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/13-configuration-reference.qmd)
+  - [`/home/ubuntu/MethylPipeline/docs/reference/configuration-reference.qmd`](/home/ubuntu/MethylPipeline/docs/reference/configuration-reference.qmd)
 - Replace obsolete names (`min_delta_mean`, `max_bc`, `biological_filters`, `max_dmps_for_classifier`, legacy ECDF alias keys) with current detector parameters.
 
 ### 6) Clean sample project config and add regression tests

@@ -9,7 +9,7 @@ todos:
     content: Align packages/methylvalidation/docs/IMPLEMENTATION.md with pipeline_runner stage mapping
     status: pending
   - id: theory-ch14
-    content: Add explicit CLI/backend names to docs/theory/chapters/14-user-guide.qmd stage bullets
+    content: Add explicit CLI/backend names to docs/usage/index.qmd stage bullets
     status: pending
   - id: cli-help-optional
     content: "Optional: tighten --model/--freeze help in methyl_validation/cli.py for discoverability"
@@ -70,7 +70,7 @@ The theory book `[docs/theory/chapters/12-two-workflows.qmd](docs/theory/chapter
   - Optionally expand the **CLI Flags** table with a second column “Main subprocesses” (one line each) to match user mental model (MethylCentroid ↔ `methyl-centroid`, etc.).
 2. `**[packages/methylvalidation/docs/IMPLEMENTATION.md](packages/methylvalidation/docs/IMPLEMENTATION.md)`** (if present and used as dev reference)
   - Mirror the same bullet list and point to `run_pipeline_for_iteration`, `run_pipeline_for_production`, `run_pipeline_for_model` for maintainers.
-3. `**[docs/theory/chapters/14-user-guide.qmd](docs/theory/chapters/14-user-guide.qmd)**` (stage-oriented checklist)
+3. `**[docs/usage/index.qmd](docs/usage/index.qmd)**` (stage-oriented checklist)
   - Add one sentence under each stage explicitly naming **CLI** tools (or “in-process bundle/train/predict” for non-ecdf `--model`) so readers who skip Chapter 12 still see the mapping.
 4. **Optional micro-tweak** `[packages/methylvalidation/methyl_validation/cli.py](packages/methylvalidation/methyl_validation/cli.py)` `--help` strings for `--freeze` / `--model` if you want the binary’s help to match the docs (still accurate: freeze already mentions centroid→detector; model could add “no detector; not MC—use --predictor-only for repeated predictor runs”).
 

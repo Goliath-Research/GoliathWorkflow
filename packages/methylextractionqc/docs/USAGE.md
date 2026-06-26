@@ -6,7 +6,7 @@ MethylExtractor exports metrics at extraction time; this package owns post-extra
 
 Upstream contract: MethylExtractor `docs/extraction_qc_contract.md` (when available in the extractor repo).
 
-Operator guide: [User manual ch.03 — Sample Prep and QC](../../docs/user-manual/03-sample-prep-and-qc.qmd).
+Operator guide: [Usage ch.03 — Sample Prep and QC](../../docs/usage/03-sample-prep-and-qc.qmd).
 
 ## CLI
 

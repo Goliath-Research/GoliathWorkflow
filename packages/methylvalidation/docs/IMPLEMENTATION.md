@@ -233,7 +233,7 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 | **trainer_api.py** | Backend step abstraction for `--model`. Builds backend-specific step lists (ECDF, aggregated ECDF observed-hybrid, tabular, generative) so orchestration can be extracted into a future `methylmodeltrainer` package without changing workflow CLI semantics. |
 | **validator_metrics.py** | `iteration_scalar_metrics_from_run_dir`: predictor `validation_metrics.json` if present, else mean detector `balanced_accuracy` from `detections/**/result*.json`. Also exports aggregated Plotly KDE+ECDF chart (`metrics_distributions_plotly.html`) for post-model validation summaries. |
 
-Config-contract audit and redundancy classification are tracked in [../../../docs/config_parameter_matrix.md](../../../docs/config_parameter_matrix.md). Use canonical keys (`predictor`, `input_file`, `output_dir`, `ecdf_grid_size`) in new project files; legacy aliases are compatibility-only.
+Config-contract audit and redundancy classification are tracked in [../../../docs/reference/config-parameter-matrix.md](../../../docs/reference/config-parameter-matrix.md). Use canonical keys (`predictor`, `input_file`, `output_dir`, `ecdf_grid_size`) in new project files; legacy aliases are compatibility-only.
 
 ## Data flow (CLI)
 

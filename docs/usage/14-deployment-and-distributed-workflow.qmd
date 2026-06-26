@@ -118,7 +118,7 @@ Canonical programs (repo):
 - SamplePrep: [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
 - Study validation: check-specific `*.program.json` under `workflow_engine/domain/checks/`
 
-Authoring language: [`docs/domain_program_language.md`](../../domain_program_language.md)
+Authoring language: [`docs/reference/domain-program-language.md`](../../reference/domain-program-language.md)
 
 ## Gateway configuration
 

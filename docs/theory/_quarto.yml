@@ -3,9 +3,9 @@ project:
   output-dir: _book
 
 book:
-  title: "MethylPipeline: Theory, Workflows, and Reference"
-  output-file: "MethylPipeline Theory - Implementation - Usage"
-  subtitle: "Mathematical foundations, operational workflows, and complete configuration reference"
+  title: "MethylPipeline Theory"
+  output-file: "MethylPipeline Theory"
+  subtitle: "Mathematical foundations, assumptions, and limitations"
   author: "MethylPipeline Team"
   date: last-modified
   chapters:
@@ -22,18 +22,10 @@ book:
         - chapters/09-methylalignmentqc.qmd
         - chapters/09a-methylextractionqc.qmd
         - chapters/10-limitations-and-open-questions.qmd
-    - part: "Part II: Workflows and Production"
+    - part: "Part II: Configuration Semantics and Workflow Theory"
       chapters:
         - chapters/11-project-configuration.qmd
         - chapters/12-two-workflows.qmd
-    - part: "Part III: Configuration Reference"
-      chapters:
-        - chapters/13-configuration-reference.qmd
-    - part: "Part IV: User Guide"
-      chapters:
-        - chapters/14-user-guide.qmd
-    - part: "Part V: Model Training and Validation"
-      chapters:
         - chapters/15-model-creation-and-validation.qmd
 bibliography: references.bib
 link-citations: true
@@ -61,8 +53,7 @@ format:
       text: |
         \usepackage{amsmath,amssymb,mathtools}
         \usepackage{microtype}
-        \usepackage{tikz}
-        \usetikzlibrary{arrows.meta,positioning,calc,fit}
+        \usepackage{graphicx}
     geometry:
       - margin=1in
 

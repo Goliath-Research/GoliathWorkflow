@@ -120,7 +120,7 @@ $$
 {\sum_{r=1}^K \exp(\beta_r^\top z(x)+b_r)}.
 $$
 
-This layer is controlled by `multiclass_train_learned_head` and related hyperparameters in `step_config.detection` (see @sec-configuration-reference). It is especially useful when the raw histogram scores have good ranking behavior but imperfect class boundaries.
+This layer is controlled by `multiclass_train_learned_head` and related hyperparameters in `step_config.detection` (see reference/configuration-reference). It is especially useful when the raw histogram scores have good ranking behavior but imperfect class boundaries.
 
 ### Isotonic and Stacking Layers
 
@@ -144,7 +144,7 @@ Without these details, two runs with the same DMP panel can still produce materi
 
 ## Multiclass Learned Head: Class Weighting {#sec-classifier-class-weight}
 
-When the native multiclass histogram classifier is extended with a learned logistic head (`multiclass_train_learned_head: true`), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a `class_weight` parameter (exposed as `multiclass_learned_class_weight` in `step_config.detection`; see @sec-configuration-reference).
+When the native multiclass histogram classifier is extended with a learned logistic head (`multiclass_train_learned_head: true`), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a `class_weight` parameter (exposed as `multiclass_learned_class_weight` in `step_config.detection`; see reference/configuration-reference).
 
 With `multiclass_learned_class_weight: "balanced"`, sklearn computes inverse-frequency weights:
 

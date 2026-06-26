@@ -1,4 +1,4 @@
-> **DEPRECATED.** Superseded by DomainProgram deploy (`scripts/deploy_workflow_definitions.sh`). Legacy seed: [`sql/deprecated/wf_pca_two_group_seed.sql`](deprecated/wf_pca_two_group_seed.sql). See [`docs/domain_program_language.md`](../../docs/domain_program_language.md).
+> **DEPRECATED.** Superseded by DomainProgram deploy (`scripts/deploy_workflow_definitions.sh`). Legacy seed: [`sql/deprecated/wf_pca_two_group_seed.sql`](deprecated/wf_pca_two_group_seed.sql). See [`docs/reference/domain-program-language.md`](../../docs/reference/domain-program-language.md).
 
 Yes — that understanding is correct (for the legacy SQL-seed model).
 

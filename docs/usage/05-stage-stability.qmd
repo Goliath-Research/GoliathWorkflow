@@ -57,7 +57,7 @@ DomainProgram workflows support selectable paths via context profiles in `workfl
 
 **Biomarker / PPI pre-filter** (`validation.biomarker_filter`): optional via `${runBiomarkerFilter}`; modes `ppi_only`, `disease_only`, `disease_and_ppi` under profile `actionConfig.validation` or `actionConfig.gene_selection`. Can run on mapper gene pools without gene FeatureCuts.
 
-See `docs/domain_program_language.md` for the full profile matrix and IF branch flags (`runDmpSelection`, `runGeneFeaturecuts`, …).
+See `docs/reference/domain-program-language.md` for the full profile matrix and IF branch flags (`runDmpSelection`, `runGeneFeaturecuts`, …).
 
 ## Process model
 

@@ -1,0 +1,15 @@
+# Relationship to Theory and Implementation
+
+This usage manual owns **operator commands**, stage handoffs, artifact gates, and deployment checklists. It does not derive statistical methods or document compiler internals.
+
+| Need | Read |
+|------|------|
+| DMP detection math, assumptions, limitations | [Theory book](../theory/index.qmd) — start with ch.03 |
+| DomainProgram language and schemas | [Reference: domain-program-language](../reference/domain-program-language.md) |
+| Parameter keys and defaults | [Reference: configuration-reference](../reference/configuration-reference.qmd) |
+| Workflow engine, workers, compiler | [Implementation guide](../implementation/index.md) |
+| System layers and orchestration paths | [Architecture](../architecture/index.md) |
+
+**Canonical orchestration:** `methyl-workflow-run` with repo DomainPrograms and `/work` study manifests. Legacy `methyl-validation --stability/--freeze/--model` remains documented where operators still use it; prefer DomainProgram paths for new studies.
+
+**Repo vs `/work`:** profiles and programs live in the git repo; `project_*.json` and run artifacts live under `/work/<disease>/`. See ch.02 and [work-config-paths rule](../../.cursor/rules/work-config-paths.mdc).

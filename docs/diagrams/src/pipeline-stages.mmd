@@ -1,0 +1,10 @@
+flowchart LR
+  prep["Sample prep FASTQ to HDF5"]
+  qc["Alignment + extraction QC"]
+  stability["MC stability centroid detector"]
+  freeze["Freeze fixed panel mapper enricher"]
+  model["Model train + predictor"]
+  validation["Post-model validation"]
+  blind["Blind prediction"]
+
+  prep --> qc --> stability --> freeze --> model --> validation --> blind

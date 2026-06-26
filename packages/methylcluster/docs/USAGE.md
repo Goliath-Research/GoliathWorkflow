@@ -1,5 +1,7 @@
 # MethylCluster Usage
 
+> **ARCHIVED (2026-06):** `methylcluster` is deprecated. Canonical interpretation: [mapper → enricher pipeline](../../../docs/architecture/pipeline-stages.md).
+
 > Status: legacy/deprecated package. Not part of the active canonical production workflow.
 
 ## Canonical References

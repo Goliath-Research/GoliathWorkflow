@@ -225,7 +225,7 @@ Update any handler tests that assert on raw dict keys to assert `isinstance(resu
 
 ## Out of scope (optional later)
 
-- [`docs/domain_program_language.md`](docs/domain_program_language.md) result_code section (WORKER_PROTOCOL + user manual already updated)
+- [`docs/reference/domain-program-language.md`](docs/reference/domain-program-language.md) result_code section (WORKER_PROTOCOL + user manual already updated)
 - CI golden-fixture test per catalog action
 - `action_run_log.jsonl` for MC run dirs
 - Passing validated `InputModel` directly to handlers instead of `model_dump()`

@@ -4,7 +4,7 @@
 
 `methylextractionqc` evaluates **MethylExtractor output** after GPU methylation extraction. Alignment QC confirms the BAM; extraction QC confirms the methylation call layer has sufficient coverage and conversion-quality signal before HDF5 files enter downstream cohort analysis.
 
-Operator guide: [User manual ch.03 — Sample Prep and QC](../../user-manual/03-sample-prep-and-qc.qmd).
+Operator guide: [Usage ch.03 — Sample Prep and QC](../../usage/03-sample-prep-and-qc.qmd).
 
 ## Input: extraction manifest
 

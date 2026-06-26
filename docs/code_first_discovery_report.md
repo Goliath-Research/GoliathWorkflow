@@ -25,7 +25,7 @@ Classification policy used:
 | File | Evidence | Classification | Reason |
 |---|---|---|---|
 | `README.md` | Package list includes `methylcluster` as active package | Remove from main workflow | Canonical docs should exclude it from active path |
-| `docs/MethylPipeline-overview.qmd` | Narrative + diagrams include `methylcluster` node | Remove from main workflow | Conflicts with deprecation direction |
+| `docs/architecture/index.md` | Narrative + diagrams include `methylcluster` node | Remove from main workflow | Conflicts with deprecation direction |
 | `docs/Next Steps.md` | Section `MethylCluster (Deprecated)` | Move to appendix | Keep historical context only |
 | `docs/theory/DOCUMENTATION_PLAN.md` | Mentions `chapters/06-methylcluster.qmd` | Remove | Stale plan (chapter file absent) |
 | `docs/theory/chapters/11-project-configuration.qmd` | Table row for `cluster` -> `methyl-cluster` | Move to appendix | Keep only as legacy compatibility note |
@@ -33,7 +33,7 @@ Classification policy used:
 | `packages/methylcluster/docs/THEORY.md` | Canonical chapter link points to missing file | Move to appendix + fix broken link | Broken reference and deprecated narrative |
 | `packages/methylcluster/docs/IMPLEMENTATION.md` | Active-style implementation narrative | Move to appendix | Keep only as legacy technical reference |
 | `docs/theory/README.md` | Explicit migration note says MethylCluster removed | Retain | Already aligned with target state |
-| `docs/config_parameter_matrix.md` | Explicitly excludes `methylcluster` | Retain | Already aligned with target state |
+| `docs/reference/config-parameter-matrix.md` | Explicitly excludes `methylcluster` | Retain | Already aligned with target state |
 
 ### 1.2 Compatibility references that must remain (for now)
 

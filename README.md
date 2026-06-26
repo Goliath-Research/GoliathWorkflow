@@ -2,60 +2,43 @@
 
 MethylPipeline is a multi-package Python monorepo for methylation analysis workflows, from cohort centroid construction through DMP discovery, biological interpretation, and model validation/deployment.
 
+## Primary workflow (DomainProgram-first)
+
+Studies are orchestrated with **DomainProgram JSON** and the workflow engine:
+
+```bash
+source .venv/bin/activate
+methyl-workflow-run \
+  --program workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  --context '{"projectPath": "/work/<disease>/configs/project_*.json"}'
+```
+
+- **Programs and profiles** live in this repository (`workflow_engine/domain/`).
+- **Study manifests and artifacts** live on shared storage (`/work/<disease>/`).
+
+Legacy monolithic CLI (`methyl-validation --stability/--freeze/--model`) is still supported; see [Usage manual](docs/usage/index.qmd).
+
 ## What This Repository Includes
 
-- Core statistical path:
-  - `methylcentroid`
-  - `methyldetector`
-  - `methylclassifier`
-  - `methylpredictor`
-  - `methylvalidation` (workflow orchestrator)
-- Biological interpretation:
-  - `methylmapper`
-  - `methylenricher`
-  - `methyldiseaseprogression`
-- QC and shared infrastructure:
-  - `methylalignmentqc`
-  - `methylutils`
+- Core statistical path: `methylcentroid`, `methyldetector`, `methylclassifier`, `methylpredictor`, `methylvalidation`
+- Biological interpretation: `methylmapper`, `methylenricher`, `methyldiseaseprogression`
+- QC and shared infrastructure: `methylalignmentqc`, `methylutils`
+- Workflow engine: `workflow_engine/`, `workers/`, `methyl-gateway`
 
-## Canonical Documentation Map
+## Documentation map
 
-- Start here for navigation and reading order:
-  - [`docs/index.md`](docs/index.md)
-- Documentation audit (coverage, staleness, maintenance):
-  - [`docs/DOCUMENTATION_AUDIT.md`](docs/DOCUMENTATION_AUDIT.md)
-- Environment setup and installation:
-  - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
-- Full theory/reference book (Quarto):
-  - [`docs/theory/README.md`](docs/theory/README.md)
-- Workflow-first operational manual (Quarto):
-  - [`docs/user-manual/index.qmd`](docs/user-manual/index.qmd)
-- DomainProgram workflow language:
-  - [`docs/domain_program_language.md`](docs/domain_program_language.md)
-- Production deployment (DB, gateway, workers):
-  - [`docs/deployment/production_runbook.md`](docs/deployment/production_runbook.md)
-  - User manual ch.14: [`docs/user-manual/14-deployment-and-distributed-workflow.qmd`](docs/user-manual/14-deployment-and-distributed-workflow.qmd)
-- Package-local usage and implementation docs:
-  - `packages/*/README.md`
-  - `packages/*/docs/{USAGE,IMPLEMENTATION,THEORY}.md`
+| Audience | Start here |
+|----------|------------|
+| Everyone | [`docs/index.md`](docs/index.md) — five navigation lenses |
+| Operators | [`docs/usage/index.qmd`](docs/usage/index.qmd) |
+| Statisticians | [`docs/theory/index.qmd`](docs/theory/index.qmd) |
+| Developers | [`docs/implementation/index.md`](docs/implementation/index.md) |
+| System design | [`docs/architecture/index.md`](docs/architecture/index.md) |
+| Workflow authors | [`docs/reference/domain-program-language.md`](docs/reference/domain-program-language.md) |
 
-## Primary Workflow Stages
-
-1. `methyl-validation --stability`
-   - Monte Carlo centroid+detector iterations
-   - Stability aggregation and stable panel generation
-   - Optional adaptive early stop via `stability_early_stop_*` convergence settings
-2. `methyl-validation --freeze`
-   - All-sample rerun with fixed panel
-   - Mapper, Enricher, optional DiseaseProgression
-   - Mapper annotation cache for observed-hybrid mapped-family model bundles
-3. `methyl-validation --model` (or model-MC selection flow)
-   - Final model build and predictor validation artifacts
-   - Includes aggregated ECDF OvR mode for observed-hybrid `ecdf` backends
-
-Recommended biological gate before final model promotion:
-
-- `methyl-validation biological-readiness <project_root>`
+- Documentation audit: [`docs/DOCUMENTATION_AUDIT.md`](docs/DOCUMENTATION_AUDIT.md)
+- Environment setup: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- Production deployment: [`docs/deployment/production_runbook.md`](docs/deployment/production_runbook.md)
 
 ## Quick Start (Host / `.venv`)
 
@@ -66,13 +49,14 @@ source .venv/bin/activate
 pip install -e packages/methylutils
 ```
 
-Install additional packages as needed (or all pipeline packages for full workflows), then run:
+Install additional packages as needed, then:
 
 ```bash
+methyl-workflow-run --help
 methyl-validation --help
 ```
 
 ## Notes
 
-- This repository expects commands/tests to run in the local `.venv`.
-- Many docs overlap by design (theory vs runbook vs package docs); [`docs/index.md`](docs/index.md) identifies which document is the source of truth for each purpose.
+- Commands and tests must run in the local `.venv`.
+- Package docs: `packages/*/docs/{THEORY,IMPLEMENTATION,USAGE}.md` — theory stubs link to the theory book.

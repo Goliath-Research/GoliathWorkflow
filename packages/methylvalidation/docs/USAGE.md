@@ -261,7 +261,7 @@ Rather than a separate Monte Carlo config file, embed the validation settings di
 }
 ```
 
-All `step_config.validation` fields are documented in the configuration reference (see `docs/theory/chapters/13-configuration-reference.qmd` or the Quarto book at `docs/theory/`).
+All `step_config.validation` fields are documented in the configuration reference (see `docs/reference/configuration-reference.qmd` or the Quarto book at `docs/theory/`).
 
 ### Stability + freeze controls (operationally important)
 
@@ -677,6 +677,6 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 
 - **Theory and algorithms:** `docs/theory/` (Quarto book)
 - **Two workflows in depth:** `docs/theory/chapters/12-two-workflows.qmd`
-- **Full configuration reference:** `docs/theory/chapters/13-configuration-reference.qmd`
-- **User guide:** `docs/theory/chapters/14-user-guide.qmd`
+- **Full configuration reference:** `docs/reference/configuration-reference.qmd`
+- **User guide:** `docs/usage/index.qmd`
 - **Implementation notes:** `packages/methylvalidation/docs/IMPLEMENTATION.md`

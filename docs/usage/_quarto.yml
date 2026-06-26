@@ -3,13 +3,14 @@ project:
   output-dir: _book
 
 book:
-  title: "MethylPipeline User Manual"
-  output-file: "MethylPipeline User Manual"
-  subtitle: "Operational runbook for package usage and staged workflows"
+  title: "MethylPipeline Usage Manual"
+  output-file: "MethylPipeline Usage Manual"
+  subtitle: "Operational runbook for DomainProgram workflows and staged validation"
   author: "MethylPipeline Team"
   date: last-modified
   chapters:
     - index.qmd
+    - 00-relationship-to-theory-and-implementation.qmd
     - part: "Part I: Setup and Package Orientation"
       chapters:
         - 01-prerequisites-and-environment.qmd
@@ -46,8 +47,7 @@ format:
     pdf-engine: lualatex
     include-in-header:
       text: |
-        \usepackage{tikz}
-        \usetikzlibrary{arrows.meta,positioning,shapes.geometric}
+        \usepackage{graphicx}
     geometry:
       - margin=1in
 

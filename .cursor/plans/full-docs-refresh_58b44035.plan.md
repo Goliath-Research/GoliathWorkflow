@@ -6,7 +6,7 @@ todos:
     content: Refresh/create monorepo landing docs (`README.md`, `docs/index.md`, top-level orientation docs) and align with current package/workflow reality.
     status: completed
   - id: quarto-sync
-    content: Synchronize overlapping content between theory chapters and user-manual runbooks with consistent defaults, commands, and caveats.
+    content: Synchronize overlapping content between theory chapters and usage runbooks with consistent defaults, commands, and caveats.
     status: completed
   - id: package-docs-normalize
     content: Normalize package docs; add missing `docs/USAGE.md`, `docs/IMPLEMENTATION.md`, `docs/THEORY.md` for `methyldiseaseprogression`.
@@ -36,8 +36,8 @@ isProject: false
   - [`/home/ubuntu/MethylPipeline/docs/theory/index.qmd`](/home/ubuntu/MethylPipeline/docs/theory/index.qmd)
   - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/`](/home/ubuntu/MethylPipeline/docs/theory/chapters/)
 - Operational runbook source:
-  - [`/home/ubuntu/MethylPipeline/docs/user-manual/index.qmd`](/home/ubuntu/MethylPipeline/docs/user-manual/index.qmd)
-  - [`/home/ubuntu/MethylPipeline/docs/user-manual/`](/home/ubuntu/MethylPipeline/docs/user-manual/)
+  - [`/home/ubuntu/MethylPipeline/docs/usage/index.qmd`](/home/ubuntu/MethylPipeline/docs/usage/index.qmd)
+  - [`/home/ubuntu/MethylPipeline/docs/usage/`](/home/ubuntu/MethylPipeline/docs/usage/)
 - Package-local specifics:
   - `packages/*/README.md` + `packages/*/docs/{USAGE,IMPLEMENTATION,THEORY}.md`
 
@@ -52,10 +52,10 @@ isProject: false
 - Align workflow narrative between:
   - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/11-workflow-runbook.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/11-workflow-runbook.qmd)
   - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/12-distributed-workflows.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/12-distributed-workflows.qmd)
-  - [`/home/ubuntu/MethylPipeline/docs/theory/chapters/14-user-guide.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/14-user-guide.qmd)
-  - [`/home/ubuntu/MethylPipeline/docs/user-manual/04-stability-runbook.qmd`](/home/ubuntu/MethylPipeline/docs/user-manual/04-stability-runbook.qmd)
-  - [`/home/ubuntu/MethylPipeline/docs/user-manual/05-freeze-runbook.qmd`](/home/ubuntu/MethylPipeline/docs/user-manual/05-freeze-runbook.qmd)
-  - [`/home/ubuntu/MethylPipeline/docs/user-manual/06-model-training-runbook.qmd`](/home/ubuntu/MethylPipeline/docs/user-manual/06-model-training-runbook.qmd)
+  - [`/home/ubuntu/MethylPipeline/docs/usage/index.qmd`](/home/ubuntu/MethylPipeline/docs/usage/index.qmd)
+  - [`/home/ubuntu/MethylPipeline/docs/usage/04-stability-runbook.qmd`](/home/ubuntu/MethylPipeline/docs/usage/04-stability-runbook.qmd)
+  - [`/home/ubuntu/MethylPipeline/docs/usage/05-freeze-runbook.qmd`](/home/ubuntu/MethylPipeline/docs/usage/05-freeze-runbook.qmd)
+  - [`/home/ubuntu/MethylPipeline/docs/usage/06-model-training-runbook.qmd`](/home/ubuntu/MethylPipeline/docs/usage/06-model-training-runbook.qmd)
 - Ensure defaults and caveats are consistent (e.g., biological readiness behavior, Grok advisory defaults, enricher completeness semantics, stability/freeze expectations).
 
 ### Phase 3: Package docs normalization
@@ -85,15 +85,15 @@ isProject: false
 
 ## Key High-Risk Files To Prioritize Early
 - [`/home/ubuntu/MethylPipeline/docs/index.md`](/home/ubuntu/MethylPipeline/docs/index.md)
-- [`/home/ubuntu/MethylPipeline/docs/config_parameter_matrix.md`](/home/ubuntu/MethylPipeline/docs/config_parameter_matrix.md)
-- [`/home/ubuntu/MethylPipeline/docs/MethylPipeline-overview.qmd`](/home/ubuntu/MethylPipeline/docs/MethylPipeline-overview.qmd)
+- [`/home/ubuntu/MethylPipeline/docs/reference/config-parameter-matrix.md`](/home/ubuntu/MethylPipeline/docs/reference/config-parameter-matrix.md)
+- [`/home/ubuntu/MethylPipeline/docs/architecture/index.md`](/home/ubuntu/MethylPipeline/docs/architecture/index.md)
 - [`/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/STABILITY_FREEZE_READINESS.md`](/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/STABILITY_FREEZE_READINESS.md)
 - [`/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md`](/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md)
 - [`/home/ubuntu/MethylPipeline/packages/methylenricher/docs/USAGE.md`](/home/ubuntu/MethylPipeline/packages/methylenricher/docs/USAGE.md)
 
 ## Deliverables
 - Updated root landing docs and deployment guidance.
-- Synchronized theory/user-manual workflow docs.
+- Synchronized theory/usage workflow docs.
 - Standardized package docs across all packages, including newly added docs for `methyldiseaseprogression`.
 - Cleaned cross-links and reduced duplication with explicit canonical-source pointers.
 - Final docs consistency pass completed.

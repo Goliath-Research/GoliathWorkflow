@@ -21,7 +21,7 @@ todos:
     content: Align mc_manifest and methyl-validation CLI with profile booleans; document stability axis metadata
     status: completed
   - id: tests-docs
-    content: Compiler/integration tests + update domain_program_language.md and user-manual pipeline profile section
+    content: Compiler/integration tests + update reference/domain-program-language.md and usage pipeline profile section
     status: completed
   - id: phase2-structural
     content: "Phase 2: complete gene_feature_select ECDF k-search; decouple biomarker_filter from gene FeatureCuts requirement"
@@ -229,7 +229,7 @@ Not required for initial gene-enricher stability, but completes “maximum flexi
 
 ## Documentation and user manual
 
-Update [docs/domain_program_language.md](docs/domain_program_language.md) and user-manual chapters:
+Update [docs/reference/domain-program-language.md](docs/reference/domain-program-language.md) and usage chapters:
 
 - **Pipeline profile matrix** (table above).
 - **When to use discovery vs classifier CSVs** for mapper.

@@ -4,7 +4,7 @@
 
 `methylalignmentqc` parses alignment and duplication metrics from **Picard-style deduplication files** and **Parabricks WGBS JSON**, then writes normalized per-sample JSON with **guardrails** that gate SamplePrep before methylation extraction.
 
-Operator guide: [User manual ch.03 — Sample Prep and QC](../../user-manual/03-sample-prep-and-qc.qmd).
+Operator guide: [Usage ch.03 — Sample Prep and QC](../../usage/03-sample-prep-and-qc.qmd).
 
 The package is deterministic: parsing, normalization, threshold checks, and cycle-quality screening — not new statistical inference on methylation.
 

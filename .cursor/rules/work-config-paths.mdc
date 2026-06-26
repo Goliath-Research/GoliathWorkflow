@@ -10,7 +10,7 @@ alwaysApply: true
 - **Pipeline profiles:** `workflow_engine/domain/profiles/*.profile.json`
 - **DomainPrograms:** `workflow_engine/domain/fixtures/*.program.json`, `workflow_engine/domain/checks/*/configs/*.program.json`
 - **JSON schemas:** `schemas/config/`, generated `*.schema.json` under packages
-- **Documentation:** `docs/`, `docs/user-manual/`, `docs/domain_program_language.md`
+- **Documentation:** `docs/`, `docs/usage/`, `docs/reference/domain-program-language.md`
 - **CI smoke mirrors:** `workflow_engine/domain/checks/*/configs/project_*.json` (validate compile/bindings only — not production)
 
 Point `methyl-workflow-run --program` at **repo paths** (or a released install of the repo). Point `--context-file` at a **profile** under `workflow_engine/domain/profiles/` when using named presets.

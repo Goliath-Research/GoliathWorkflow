@@ -18,7 +18,7 @@ This folder contains two Markdown slide decks for a mixed scientific and technic
 Slides are aligned with the updated documentation in:
 
 - `docs/theory/chapters/`
-- `docs/user-manual/`
+- `docs/usage/`
 - `packages/methylvalidation/docs/`
 - selected package `docs/IMPLEMENTATION.md` and `docs/THEORY.md`
 
@@ -62,5 +62,5 @@ quarto render your-wrapper.qmd --to revealjs
 ## Usage Guidance
 
 - Keep command examples synchronized with `packages/methylvalidation/docs/USAGE.md`.
-- Keep configuration defaults synchronized with `docs/theory/chapters/13-configuration-reference.qmd`.
+- Keep configuration defaults synchronized with `docs/reference/configuration-reference.qmd`.
 - If workflow semantics change, update both decks in the same PR.

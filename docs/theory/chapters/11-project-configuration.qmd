@@ -80,7 +80,7 @@ For flat two-class binary projects (one control group, one disease group, no sta
 | `validation` | `methyl-validation` | Monte Carlo settings embedded in the project. |
 | `alignment_qc` | `methyl-alignment-qc` | Schema validation, group filtering. |
 
-The exhaustive list of parameters for each key is in @sec-configuration-reference.
+The exhaustive list of parameters for each key is in reference/configuration-reference.
 
 `step_config.cluster` is a legacy compatibility key for deprecated clustering workflows and is intentionally excluded from the active canonical workflow.
 

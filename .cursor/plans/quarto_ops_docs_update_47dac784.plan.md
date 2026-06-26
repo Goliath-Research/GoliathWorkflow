@@ -28,7 +28,7 @@ Implementation and CLI details live in the package and should be **summarized** 
 
 **Anchor:** Add explicit `{#sec-...}` labels on the two new sections in ch. 15 for crossrefs from ch. 12 and the user manual.
 
-## User manual ([docs/user-manual/](docs/user-manual/))
+## Usage manual ([docs/usage/](docs/usage/))
 
 **New chapters in Part III (Operations and Reliability),** after the command cookbook:
 
@@ -52,23 +52,23 @@ Implementation and CLI details live in the package and should be **summarized** 
    - Pitfalls: discovery vs calibration, `n_iterations` as budget
    - **See also:** `HYPERPARAMETER_SEARCH.md`, `rollout` / ROLLOUT (for promotion thinking), theory ch. 15
 
-**Edits to** [docs/user-manual/_quarto.yml](docs/user-manual/_quarto.yml):
+**Edits to** [docs/usage/_quarto.yml](docs/usage/_quarto.yml):
 
 - Under **Part III**, append the two new `.qmd` files in order (after `11-command-cookbook.qmd`).
 
-**Edits to** [docs/user-manual/index.qmd](docs/user-manual/index.qmd):
+**Edits to** [docs/usage/index.qmd](docs/usage/index.qmd):
 
 - **Reading paths:** e.g. add a bullet for “Scaling MC across machines / optional tuning” → chapters 12–13
 - **Canonical references:** add `DISTRIBUTED_QUEUE.md` and `HYPERPARAMETER_SEARCH.md` next to `USAGE.md`
 
 **Light cross-links (optional but recommended):**
 
-- [docs/user-manual/04-stage-stability.qmd](docs/user-manual/04-stage-stability.qmd): in **See also**, add a line: if iterations are sharded across hosts, use ch. 12
-- [docs/user-manual/11-command-cookbook.qmd](docs/user-manual/11-command-cookbook.qmd): add a small subsection or two one-liner blocks for `plan-runs` and `methyl-hyperparam-search` pointing to ch. 12–13 (avoids duplicating long blocks)
+- [docs/usage/04-stage-stability.qmd](docs/usage/04-stage-stability.qmd): in **See also**, add a line: if iterations are sharded across hosts, use ch. 12
+- [docs/usage/11-command-cookbook.qmd](docs/usage/11-command-cookbook.qmd): add a small subsection or two one-liner blocks for `plan-runs` and `methyl-hyperparam-search` pointing to ch. 12–13 (avoids duplicating long blocks)
 
 ## Verification
 
-- `quarto render` for `docs/user-manual` and `docs/theory` (PDF and/or HTML) to catch broken internal links and LaTeX issues; fix any unescaped special characters in new markdown.
+- `quarto render` for `docs/usage` and `docs/theory` (PDF and/or HTML) to catch broken internal links and LaTeX issues; fix any unescaped special characters in new markdown.
 
 ## Out of scope
 

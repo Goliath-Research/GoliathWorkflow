@@ -107,8 +107,8 @@ Update docs to describe strict new format and migration workflow:
 - [`/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md`](/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md)
 - [`/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/IMPLEMENTATION.md`](/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/IMPLEMENTATION.md)
 - [`/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/THEORY.md`](/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/THEORY.md)
-- [`/home/ubuntu/MethylPipeline/docs/theory/chapters/14-user-guide.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/14-user-guide.qmd)
-- [`/home/ubuntu/MethylPipeline/docs/user-manual/06-stage-model.qmd`](/home/ubuntu/MethylPipeline/docs/user-manual/06-stage-model.qmd)
+- [`/home/ubuntu/MethylPipeline/docs/usage/index.qmd`](/home/ubuntu/MethylPipeline/docs/usage/index.qmd)
+- [`/home/ubuntu/MethylPipeline/docs/usage/06-stage-model.qmd`](/home/ubuntu/MethylPipeline/docs/usage/06-stage-model.qmd)
 
 Include:
 - canonical `backend_profiles` examples

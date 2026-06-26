@@ -1,6 +1,8 @@
 # Centroid-Based Clustering Implementation
 
-> Legacy note: this document is retained for historical/technical reference. `methylcluster` is deprecated and excluded from the active canonical production workflow.
+> **ARCHIVED (2026-06):** `methylcluster` is deprecated. See [Architecture: pipeline stages](../../../docs/architecture/pipeline-stages.md) for the canonical interpretation path (mapper → enricher).
+
+> Legacy note: this document is retained for historical/technical reference only.
 
 ## Overview
 

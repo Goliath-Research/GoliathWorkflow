@@ -60,8 +60,8 @@ methyl-predictor --project /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carl
 ## 6) Manual rendering commands (this manual)
 
 ```bash
-quarto render docs/user-manual --to html
-quarto render docs/user-manual --to pdf
+quarto render docs/usage --to html
+quarto render docs/usage --to pdf
 ```
 
 ## 7) Distributed queue (one task)

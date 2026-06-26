@@ -18,7 +18,7 @@ todos:
     content: Update methyl-gene-select, methyl-gene-feature-select, methyl-enricher, methylvalidation tests/config to use gene_importance and feature_importance_* only; remove mean_effect_size fallbacks
     status: completed
   - id: doc-biological-model
-    content: Rewrite BIOLOGICAL_IMPORTANCE_AUDIT, IMPLEMENTATION, theory/user-manual with single propagation story DMP effect_size → biology-weighted gene/feature importance and hyper/hypo matrix glossary
+    content: Rewrite BIOLOGICAL_IMPORTANCE_AUDIT, IMPLEMENTATION, theory/usage with single propagation story DMP effect_size → biology-weighted gene/feature importance and hyper/hypo matrix glossary
     status: completed
 ---
 
@@ -224,7 +224,7 @@ No downstream package should reference removed column names. CI grep check recom
 ### Phase 4 — Documentation
 
 - Rewrite [`BIOLOGICAL_IMPORTANCE_AUDIT.md`](packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md) as the canonical spec (not “audit of legacy”).
-- Update [`IMPLEMENTATION.md`](packages/methylmapper/docs/IMPLEMENTATION.md), theory config reference, and user-manual artifact glossary: one propagation story from CpG → DMP `effect_size` → biology-weighted gene/feature importance.
+- Update [`IMPLEMENTATION.md`](packages/methylmapper/docs/IMPLEMENTATION.md), theory config reference, and usage artifact glossary: one propagation story from CpG → DMP `effect_size` → biology-weighted gene/feature importance.
 
 ---
 

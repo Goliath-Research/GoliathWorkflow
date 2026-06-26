@@ -6,7 +6,7 @@ overview: "Plan for the four deferred items from typed action observability: aut
 
 todos:
   - id: doc-result-code-dpl
-    content: Add result_code / branching section to docs/domain_program_language.md with IF vs SWITCH examples and cross-links
+    content: Add result_code / branching section to docs/reference/domain-program-language.md with IF vs SWITCH examples and cross-links
     status: completed
   - id: golden-fixtures-test
     content: Create workers/tests/golden/*.json fixtures and parametrized test_golden_task_outputs.py validating all catalog I/O models
@@ -29,7 +29,7 @@ The core plan (CLI manifests, typed handlers, collector tests) is **already impl
 ```mermaid
 flowchart TB
   subgraph docs [Docs]
-    DPL[domain_program_language.md]
+    DPL[reference/domain-program-language.md]
     WP[WORKER_PROTOCOL.md - done]
     UM[user manual 09 - done]
   end
@@ -52,9 +52,9 @@ flowchart TB
 
 ---
 
-## 1. `docs/domain_program_language.md` — result_code section
+## 1. `docs/reference/domain-program-language.md` — result_code section
 
-**Gap:** [`docs/domain_program_language.md`](docs/domain_program_language.md) documents IF on boolean scope vars (`qcPass`, `runDmpSelection`) but not integer **`result_code`** branching. [`workers/WORKER_PROTOCOL.md`](workers/WORKER_PROTOCOL.md) and [`docs/user-manual/09-artifacts-and-qa-checks.qmd`](docs/user-manual/09-artifacts-and-qa-checks.qmd) already cover worker/operator view.
+**Gap:** [`docs/reference/domain-program-language.md`](docs/reference/domain-program-language.md) documents IF on boolean scope vars (`qcPass`, `runDmpSelection`) but not integer **`result_code`** branching. [`workers/WORKER_PROTOCOL.md`](workers/WORKER_PROTOCOL.md) and [`docs/usage/09-artifacts-and-qa-checks.qmd`](docs/usage/09-artifacts-and-qa-checks.qmd) already cover worker/operator view.
 
 **Add (~40 lines) after the "Conditions (IF)" section:**
 
