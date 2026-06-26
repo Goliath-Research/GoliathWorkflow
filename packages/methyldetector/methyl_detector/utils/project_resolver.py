@@ -4,7 +4,7 @@ Uses centroid1_dir and centroid2_dir (first two groups). For N-group multi-class
 run detection one-vs-rest or pairwise and merge DMPs; then use the merged DMP CSV
 with the classifier multiclass builder (see build_multiclass_config_from_project).
 
-Merged ``step_config.detection`` keys and overrides are validated with
+Merged profile ``actionConfig.detection`` (via ``resolve_for_project``) and overrides are validated with
 ``MethylDetectorConfig`` (``extra='forbid'``) and explicit errors for removed
 legacy keys (see ``reject_legacy_distribution_keys`` in ``config.py``).
 """
