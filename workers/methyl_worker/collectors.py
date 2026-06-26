@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
-from methyl_domain.action_result import manifest_path_for, read_action_result
+from methyl_domain.action_result import manifest_path_for
 from pydantic import BaseModel
 
 
@@ -43,7 +43,13 @@ def _try_read_manifest(
     path = manifest_path_for(output_dir, action_name, _run_key(input_json))
     if not path.is_file():
         return None
-    model = read_action_result(path, output_model)
+    with open(path, encoding="utf-8") as fh:
+        raw = json.load(fh)
+    # Worker idempotency envelopes (1.1) wrap task_output for skip/replay; CLIs write
+    # flat 1.0 manifests. After a fresh CLI run, fall back to legacy artifact scan.
+    if raw.get("schema_version") == "1.1":
+        return None
+    model = output_model.model_validate(raw)
     data = model.model_dump(mode="json")
     data["manifest_path"] = str(path)
     return data

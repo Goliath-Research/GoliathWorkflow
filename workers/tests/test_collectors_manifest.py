@@ -12,12 +12,14 @@ from methyl_worker.collectors import (
     CentroidLegacyCollector,
     DetectorLegacyCollector,
     EnricherLegacyCollector,
+    GeneSelectLegacyCollector,
     ManifestFirstCollector,
 )
 from methyl_worker.task_models.pipeline_models import (
     CentroidTaskOutput,
     DetectorTaskOutput,
     EnricherTaskOutput,
+    GeneSelectTaskOutput,
 )
 
 
@@ -97,3 +99,46 @@ def test_enricher_legacy_collector_reads_completeness_manifest(tmp_path: Path, m
     )
     assert payload["all_complete"] is True
     assert payload["n_comparisons"] == 1
+
+
+def test_manifest_first_collector_ignores_worker_idempotency_envelope(tmp_path: Path) -> None:
+    """Schema 1.1 manifests are checking skip/replay are not CLI task manifests."""
+    run_dir = tmp_path / "run_0001"
+    stability = run_dir / "gene_stability"
+    stability.mkdir(parents=True)
+    (stability / "gene_featurecuts_metrics.json").write_text(
+        json.dumps({"selected_k": 50, "balanced_accuracy": 0.8333}),
+        encoding="utf-8",
+    )
+    (stability / "genes-classifier.csv").write_text("gene\n", encoding="utf-8")
+    manifest = manifest_path_for(run_dir, "pipeline.gene_select", "default")
+    atomic_write_json(
+        manifest,
+        {
+            "schema_version": "1.1",
+            "action_name": "pipeline.gene_select",
+            "capability": "methyl-gene-select",
+            "started_at_utc": "2026-06-26T00:30:27Z",
+            "finished_at_utc": "2026-06-26T00:32:52Z",
+            "duration_ms": 1,
+            "result_code": 0,
+            "exit_code": 0,
+            "manifest_path": str(manifest),
+            "artifacts": [],
+            "action_revision": "abc",
+            "input_signature": "in",
+            "output_signature": "out",
+            "skipped": False,
+            "skip_reason": None,
+            "task_output": {"selected_k": 99, "run_dir": str(run_dir)},
+        },
+    )
+    input_json = {"projectPath": str(run_dir / "project.json"), "runDir": str(run_dir)}
+    collector = ManifestFirstCollector(
+        output_model=GeneSelectTaskOutput,
+        resolve_output_dir=lambda inp: inp.get("runDir"),
+        legacy_collect=GeneSelectLegacyCollector(),
+    )
+    payload = collector.collect(input_json, action_name="pipeline.gene_select")
+    assert payload["selected_k"] == 50
+    assert payload.get("manifest_path") is None
