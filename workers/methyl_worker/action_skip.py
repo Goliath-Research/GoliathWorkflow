@@ -32,6 +32,7 @@ from .action_execution import (
 )
 from .collectors import _run_key
 from .task_schema_registry import resolve_task_schema_spec
+from .task_validation import strip_runtime_input
 
 logger = logging.getLogger(__name__)
 
@@ -353,13 +354,14 @@ def maybe_skip_action(
     if record is None or record.result_code != 0:
         return None
 
+    task_input = strip_runtime_input(dict(input_json))
     try:
-        input_model = validate_input(entry, input_json)
+        input_model = validate_input(entry, task_input)
     except Exception:
         return None
 
     current_revision = compute_action_revision(entry)
-    current_input_sig = compute_input_signature(entry, input_json, input_model)
+    current_input_sig = compute_input_signature(entry, task_input, input_model)
 
     if record.action_revision != current_revision:
         return None
@@ -397,6 +399,7 @@ def record_action_execution(
     run_key = _run_key(input_json)
     manifest_path = manifest_path_for(output_dir, entry.action_name, run_key)
     output_dict = result.output.model_dump(mode="json")
+    task_input = strip_runtime_input(dict(input_json))
 
     telemetry_keys = {
         "schema_version",
@@ -435,7 +438,7 @@ def record_action_execution(
         manifest_path=str(manifest_path),
         artifacts=artifacts,
         action_revision=compute_action_revision(entry),
-        input_signature=compute_input_signature(entry, input_json, input_model),
+        input_signature=compute_input_signature(entry, task_input, input_model),
         output_signature=compute_output_signature(artifacts),
         skipped=skipped,
         skip_reason=skip_reason,

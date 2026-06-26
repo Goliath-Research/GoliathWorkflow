@@ -90,6 +90,48 @@ def test_maybe_skip_replays_when_manifest_matches(tmp_path: Path) -> None:
     assert skipped.output.status == "skipped"
 
 
+def test_maybe_skip_works_with_workflow_node_key(tmp_path: Path) -> None:
+    """workflowNodeKey is runtime-only; must not break validate_input inside maybe_skip_action."""
+    entry = find_catalog_entry("validation.stability")
+    assert entry is not None
+
+    mc_root = tmp_path / "monte_carlo_runs"
+    stability_dir = mc_root / "stability"
+    stability_dir.mkdir(parents=True)
+    summary_path = stability_dir / "stability_summary.json"
+    summary_path.write_text("{}", encoding="utf-8")
+
+    project = tmp_path / "project.json"
+    project.write_text(
+        json.dumps(
+            {
+                "output_base": str(tmp_path),
+                "project_name": "Study",
+                "step_config": {"validation": {"n_iterations": 1}},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    task_input = {
+        "projectPath": str(project),
+        "monteCarloRunsRoot": str(mc_root),
+        "outputDir": str(stability_dir),
+    }
+    input_model = validate_input(entry, task_input)
+    output = ValidationStabilityOutput(
+        status="ok",
+        outputDir=str(stability_dir),
+        summary=StabilitySummary(summary_json_path=str(summary_path), n_iterations=1),
+    )
+    record_action_execution(entry, task_input, input_model, execution_result_from_output(output))
+
+    skip_input = {**task_input, "workflowNodeKey": "stability", "forceRerun": False}
+    skipped = maybe_skip_action(entry, skip_input)
+    assert skipped is not None
+    assert skipped.output.status == "skipped"
+
+
 def test_force_rerun_bypasses_skip(tmp_path: Path) -> None:
     entry = find_catalog_entry("validation.stability")
     assert entry is not None
