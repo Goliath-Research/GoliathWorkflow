@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.36">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>16&nbsp; Deployment and Distributed Workflow – MethylPipeline Usage Manual</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./15-optional-hyperparameter-search.html" rel="next">
+<link href="./13-distributed-methyl-validation.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-845c23b38eaddc0f92fda52bfe77a8c8.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-dc6ca2cd4fc154dd9d00f02dacb9d42f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./10-artifacts-and-qa-checks.html">Part III: Operations and Reliability</a></li><li class="breadcrumb-item"><a href="./14-deployment-and-distributed-workflow.html"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Deployment and Distributed Workflow</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">MethylPipeline Usage Manual</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">MethylPipeline Usage Manual</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./00-relationship-to-theory-and-implementation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Relationship to Theory and Implementation</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I: Setup and Package Orientation</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./01-prerequisites-and-environment.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Prerequisites and Environment</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-project-config-and-layout.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Project Config and Layout</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-sample-prep-and-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Sample Prep and Quality Control</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-package-reference-individual-usage.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Package Reference (Individual Usage)</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II: Staged Solution Workflow</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-stage-stability.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Stage: Stability</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-stage-freeze.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Stage: Freeze</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-stage-model.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Stage: Model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-stage-post-model-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Stage: Post-model Validation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-stage-blind-prediction.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Stage: Blind Prediction</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III: Operations and Reliability</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-artifacts-and-qa-checks.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-troubleshooting-and-recovery.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Troubleshooting and Recovery</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-command-cookbook.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Command Cookbook</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-distributed-methyl-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-deployment-and-distributed-workflow.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Deployment and Distributed Workflow</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-optional-hyperparameter-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Optional hyperparameter search</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#purpose" id="toc-purpose" class="nav-link active" data-scroll-target="#purpose"><span class="header-section-number">16.1</span> Purpose</a></li>
+  <li><a href="#architecture" id="toc-architecture" class="nav-link" data-scroll-target="#architecture"><span class="header-section-number">16.2</span> Architecture</a></li>
+  <li><a href="#greenfield-checklist" id="toc-greenfield-checklist" class="nav-link" data-scroll-target="#greenfield-checklist"><span class="header-section-number">16.3</span> Greenfield checklist</a></li>
+  <li><a href="#database-deploy-dual-backend" id="toc-database-deploy-dual-backend" class="nav-link" data-scroll-target="#database-deploy-dual-backend"><span class="header-section-number">16.4</span> Database deploy (dual-backend)</a>
+  <ul class="collapse">
+  <li><a href="#postgresql-recommended-for-new-deployments" id="toc-postgresql-recommended-for-new-deployments" class="nav-link" data-scroll-target="#postgresql-recommended-for-new-deployments"><span class="header-section-number">16.4.1</span> PostgreSQL (recommended for new deployments)</a></li>
+  <li><a href="#azure-sql-legacy-phase-1" id="toc-azure-sql-legacy-phase-1" class="nav-link" data-scroll-target="#azure-sql-legacy-phase-1"><span class="header-section-number">16.4.2</span> Azure SQL (legacy / phase-1)</a></li>
+  </ul></li>
+  <li><a href="#action-catalog-and-workflow-definitions" id="toc-action-catalog-and-workflow-definitions" class="nav-link" data-scroll-target="#action-catalog-and-workflow-definitions"><span class="header-section-number">16.5</span> Action catalog and workflow definitions</a></li>
+  <li><a href="#gateway-configuration" id="toc-gateway-configuration" class="nav-link" data-scroll-target="#gateway-configuration"><span class="header-section-number">16.6</span> Gateway configuration</a></li>
+  <li><a href="#worker-configuration" id="toc-worker-configuration" class="nav-link" data-scroll-target="#worker-configuration"><span class="header-section-number">16.7</span> Worker configuration</a></li>
+  <li><a href="#end-to-end-operator-flow" id="toc-end-to-end-operator-flow" class="nav-link" data-scroll-target="#end-to-end-operator-flow"><span class="header-section-number">16.8</span> End-to-end operator flow</a>
+  <ul class="collapse">
+  <li><a href="#samplepreppipeline" id="toc-samplepreppipeline" class="nav-link" data-scroll-target="#samplepreppipeline"><span class="header-section-number">16.8.1</span> 1. SamplePrepPipeline</a></li>
+  <li><a href="#study-validation-mc" id="toc-study-validation-mc" class="nav-link" data-scroll-target="#study-validation-mc"><span class="header-section-number">16.8.2</span> 2. Study validation / MC</a></li>
+  <li><a href="#local-workflow-no-gateway" id="toc-local-workflow-no-gateway" class="nav-link" data-scroll-target="#local-workflow-no-gateway"><span class="header-section-number">16.8.3</span> 3. Local workflow (no gateway)</a></li>
+  </ul></li>
+  <li><a href="#related-documentation" id="toc-related-documentation" class="nav-link" data-scroll-target="#related-documentation"><span class="header-section-number">16.9</span> Related documentation</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./10-artifacts-and-qa-checks.html">Part III: Operations and Reliability</a></li><li class="breadcrumb-item"><a href="./14-deployment-and-distributed-workflow.html"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Deployment and Distributed Workflow</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Deployment and Distributed Workflow</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="purpose" class="level2" data-number="16.1">
+<h2 data-number="16.1" class="anchored" data-anchor-id="purpose"><span class="header-section-number">16.1</span> Purpose</h2>
+<p>Deploy the <strong>control plane</strong> (database, REST gateway) and <strong>GPU workers</strong> that execute SamplePrep and validation workflows. This chapter consolidates the dual-backend story (Azure SQL and PostgreSQL) and links to detailed runbooks.</p>
+<p><strong>Deep dive:</strong> <a href="../../deployment/production_runbook.md"><code>docs/deployment/production_runbook.md</code></a><br>
+<strong>Worker protocol:</strong> <a href="../../workers/WORKER_PROTOCOL.md"><code>workers/WORKER_PROTOCOL.md</code></a><br>
+<strong>REST contract:</strong> <a href="../../contracts/openapi.yaml"><code>contracts/openapi.yaml</code></a></p>
+</section>
+<section id="architecture" class="level2" data-number="16.2">
+<h2 data-number="16.2" class="anchored" data-anchor-id="architecture"><span class="header-section-number">16.2</span> Architecture</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 64%">
+<col style="width: 35%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Database</strong></td>
+<td>Stores workflow definitions, instances, scope, task queue</td>
+</tr>
+<tr class="even">
+<td><strong>Portal SQL</strong> (<code>portal.sp_*</code>)</td>
+<td>Middle-tier orchestration; starts instances from study metadata</td>
+</tr>
+<tr class="odd">
+<td><strong>Gateway</strong> (<code>methyl-gateway</code>)</td>
+<td>REST API for workers (poll/submit) and admin (deploy definitions)</td>
+</tr>
+<tr class="even">
+<td><strong>Workers</strong> (<code>methyl-worker</code>)</td>
+<td>Execute capabilities (Parabricks, methyl-qc, detector, …)</td>
+</tr>
+<tr class="odd">
+<td><strong><code>/work</code> storage</strong></td>
+<td>Shared FASTQs, BAMs, HDF5, MC outputs</td>
+</tr>
+</tbody>
+</table>
+<p>The portal does <strong>not</strong> call the gateway for routine worker dispatch in production; workers poll the gateway directly. Operator/admin routes may require Entra ID JWT when <code>GATEWAY_REQUIRE_ENTRA=1</code>.</p>
+</section>
+<section id="greenfield-checklist" class="level2" data-number="16.3">
+<h2 data-number="16.3" class="anchored" data-anchor-id="greenfield-checklist"><span class="header-section-number">16.3</span> Greenfield checklist</h2>
+<p>Use this ordered checklist once per environment:</p>
+<ol type="1">
+<li><label><input type="checkbox">Mount shared storage at <code>/work/epimethyl</code> (or study-specific <code>/work/&lt;disease&gt;/</code>)</label></li>
+<li><label><input type="checkbox">Deploy database schema (PostgreSQL <strong>or</strong> Azure SQL — see below)</label></li>
+<li><label><input type="checkbox">Run portal SQL scripts (<code>portal_resource_profile.sql</code>, <code>portal_workflow_api.sql</code>, cluster security if used)</label></li>
+<li><label><input type="checkbox">Seed action catalog: <code>methyl-export-task-schemas &amp;&amp; methyl-export-action-catalog &amp;&amp; python workflow_engine/sql/seed_action_catalog.py</code></label></li>
+<li><label><input type="checkbox">Deploy workflow definitions: <code>bash scripts/deploy_workflow_definitions.sh</code></label></li>
+<li><label><input type="checkbox">Install and configure gateway (<code>deploy/env/gateway.postgres.env.example</code> or <code>gateway.mssql.env.example</code> → <code>/work/epimethyl/env/gateway.env</code>)</label></li>
+<li><label><input type="checkbox">Enable <code>methyl-gateway</code> systemd + nginx TLS (see <a href="../../deployment/production_runbook.md"><code>production_runbook.md</code></a>)</label></li>
+<li><label><input type="checkbox">Provision GPU workers: <a href="../../deployment/worker_provision.md"><code>worker_provision.md</code></a>, <a href="../../deployment/gpu_worker_runbook.md"><code>gpu_worker_runbook.md</code></a></label></li>
+<li><label><input type="checkbox">Register workers: <code>scripts/register_worker.sh</code></label></li>
+<li><label><input type="checkbox">Smoke test: <code>scripts/smoke_sample_prep.sh</code>, <code>scripts/smoke_study_lifecycle.sh</code></label></li>
+</ol>
+</section>
+<section id="database-deploy-dual-backend" class="level2" data-number="16.4">
+<h2 data-number="16.4" class="anchored" data-anchor-id="database-deploy-dual-backend"><span class="header-section-number">16.4</span> Database deploy (dual-backend)</h2>
+<p>Both backends implement the same <strong><code>wf</code></strong> schema contract. Choose one primary backend per environment; CI and local dev often use PostgreSQL.</p>
+<section id="postgresql-recommended-for-new-deployments" class="level3" data-number="16.4.1">
+<h3 data-number="16.4.1" class="anchored" data-anchor-id="postgresql-recommended-for-new-deployments"><span class="header-section-number">16.4.1</span> PostgreSQL (recommended for new deployments)</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>Command / doc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Schema scripts</td>
+<td><a href="../../workflow_engine/sql_pg/README.md"><code>workflow_engine/sql_pg/README.md</code></a></td>
+</tr>
+<tr class="even">
+<td>Automated deploy</td>
+<td><code>./workflow_engine/sql_pg/deploy_azure.sh</code> (core engine + portal DDL)</td>
+</tr>
+<tr class="odd">
+<td>Cluster IP binding</td>
+<td>Optional: <code>wf_cluster_security_columns.sql</code> (run manually when using IP-bound clusters)</td>
+</tr>
+<tr class="even">
+<td>FOREACH support</td>
+<td>Included in <code>08_foreach_support.sql</code></td>
+</tr>
+</tbody>
+</table>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">PGHOST</span><span class="op">=</span>your-server.postgres.database.azure.com</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">PGDATABASE</span><span class="op">=</span>postgres</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">PGUSER</span><span class="op">=</span>dba</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">PGPASSWORD</span><span class="op">=</span><span class="st">'...'</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">PGSSLMODE</span><span class="op">=</span>require</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="ex">./workflow_engine/sql_pg/deploy_azure.sh</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Optional: cluster IP binding columns (when using wf.cluster security features)</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="ex">psql</span> <span class="at">-f</span> workflow_engine/sql_pg/wf_cluster_security_columns.sql</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="azure-sql-legacy-phase-1" class="level3" data-number="16.4.2">
+<h3 data-number="16.4.2" class="anchored" data-anchor-id="azure-sql-legacy-phase-1"><span class="header-section-number">16.4.2</span> Azure SQL (legacy / phase-1)</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Step</th>
+<th>Command / doc</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Script order</td>
+<td><a href="../../workflow_engine/README.md"><code>workflow_engine/README.md</code></a></td>
+</tr>
+<tr class="even">
+<td>Bundled schema</td>
+<td><code>workflow_engine/sql/MethylPipeline.sql</code></td>
+</tr>
+<tr class="odd">
+<td>FOREACH</td>
+<td><code>wf_sql_foreach_support.sql</code> (both backends)</td>
+</tr>
+</tbody>
+</table>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Example: sqlcmd against Azure SQL with scripts 1–18 from workflow_engine/README.md</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><strong>Note:</strong> <code>deploy_azure.sh</code> applies core engine scripts plus portal DDL (<code>portal_resource_profile.sql</code>, <code>portal_workflow_api.sql</code>, <code>wf_drop_platform_sample_storage.sql</code>). Run <code>wf_cluster_security_columns.sql</code> separately when enabling cluster IP binding.</p>
+</section>
+</section>
+<section id="action-catalog-and-workflow-definitions" class="level2" data-number="16.5">
+<h2 data-number="16.5" class="anchored" data-anchor-id="action-catalog-and-workflow-definitions"><span class="header-section-number">16.5</span> Action catalog and workflow definitions</h2>
+<p>After schema deploy:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-export-task-schemas</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-export-action-catalog</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> workflow_engine/sql/seed_action_catalog.py</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Deploy SamplePrep + StudyValidation DomainPrograms to gateway:</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">GATEWAY_URL</span><span class="op">=</span>https://your-gateway.example.com</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="bu">export</span> <span class="va">GATEWAY_ADMIN_BEARER_TOKEN</span><span class="op">=</span><span class="st">'...'</span>   <span class="co"># when Entra required</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> scripts/deploy_workflow_definitions.sh</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Output: <code>workflow_versions.json</code> with <code>workflow_version_id</code> values for API calls.</p>
+<p>Canonical programs (repo):</p>
+<ul>
+<li>SamplePrep: <a href="../../workflow_engine/domain/fixtures/sample_prep.program.json"><code>workflow_engine/domain/fixtures/sample_prep.program.json</code></a></li>
+<li>Study validation: check-specific <code>*.program.json</code> under <code>workflow_engine/domain/checks/</code></li>
+</ul>
+<p>Authoring language: <a href="../../reference/domain-program-language.md"><code>docs/reference/domain-program-language.md</code></a></p>
+</section>
+<section id="gateway-configuration" class="level2" data-number="16.6">
+<h2 data-number="16.6" class="anchored" data-anchor-id="gateway-configuration"><span class="header-section-number">16.6</span> Gateway configuration</h2>
+<p>Install from repo root:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-e</span> workflow_engine/</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Copy and edit an example env file:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Backend</th>
+<th>Template</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>PostgreSQL</td>
+<td><a href="../../deploy/env/gateway.postgres.env.example"><code>deploy/env/gateway.postgres.env.example</code></a></td>
+</tr>
+<tr class="even">
+<td>Azure SQL</td>
+<td><a href="../../deploy/env/gateway.mssql.env.example"><code>deploy/env/gateway.mssql.env.example</code></a></td>
+</tr>
+</tbody>
+</table>
+<p>Install systemd unit <a href="../../deploy/systemd/methyl-gateway.service"><code>deploy/systemd/methyl-gateway.service</code></a> and nginx config <a href="../../deploy/nginx/methyl-gateway.conf"><code>deploy/nginx/methyl-gateway.conf</code></a>.</p>
+<p>Key variables (see <code>workflow_engine/rest/connection.py</code>):</p>
+<ul>
+<li><code>BACKEND_DB</code> — <code>postgres</code> or <code>mssql</code></li>
+<li><code>POSTGRES_*</code> or <code>AZURE_SQL_*</code> — connection targets</li>
+<li><code>WF_USE_MANAGED_IDENTITY</code> — Azure Entra token auth for DB</li>
+<li><code>GATEWAY_REQUIRE_ENTRA</code> — require JWT on admin/operator routes</li>
+<li><code>GATEWAY_ENTRA_AUDIENCE</code>, <code>AZURE_TENANT_ID</code> — Entra validation</li>
+</ul>
+</section>
+<section id="worker-configuration" class="level2" data-number="16.7">
+<h2 data-number="16.7" class="anchored" data-anchor-id="worker-configuration"><span class="header-section-number">16.7</span> Worker configuration</h2>
+<p>Each GPU worker runs one or more <code>methyl-worker</code> systemd units (see <a href="../../deploy/systemd/methyl-worker@.service"><code>deploy/systemd/methyl-worker@.service</code></a>).</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 52%">
+<col style="width: 47%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Variable</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>WORKER_ID</code></td>
+<td>Unique worker name</td>
+</tr>
+<tr class="even">
+<td><code>WORKER_TOKEN</code></td>
+<td>Auth token from registration</td>
+</tr>
+<tr class="odd">
+<td><code>WORKER_CAPABILITY</code></td>
+<td>e.g.&nbsp;<code>parabricks.fq2bam</code>, <code>methyl-qc</code>, <code>pipeline.detector</code></td>
+</tr>
+<tr class="even">
+<td><code>WORKER_API_BASE</code></td>
+<td>Gateway URL (<code>https://gateway.example.com</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Registration and provisioning:</p>
+<ul>
+<li><a href="../../deployment/worker_provision.md"><code>docs/deployment/worker_provision.md</code></a></li>
+<li><a href="../../deployment/worker_node.md"><code>docs/deployment/worker_node.md</code></a></li>
+<li><code>scripts/register_worker.sh</code>, <code>scripts/provision_worker_node.sh</code></li>
+</ul>
+<p>Worker poll/submit contract: <a href="../../workers/WORKER_PROTOCOL.md"><code>workers/WORKER_PROTOCOL.md</code></a></p>
+</section>
+<section id="end-to-end-operator-flow" class="level2" data-number="16.8">
+<h2 data-number="16.8" class="anchored" data-anchor-id="end-to-end-operator-flow"><span class="header-section-number">16.8</span> End-to-end operator flow</h2>
+<section id="samplepreppipeline" class="level3" data-number="16.8.1">
+<h3 data-number="16.8.1" class="anchored" data-anchor-id="samplepreppipeline"><span class="header-section-number">16.8.1</span> 1. SamplePrepPipeline</h3>
+<pre class="http"><code>POST /v1/studies/sample-prep/start
+{
+  "projectPath": "/work/epimethyl/data/project_Example.json",
+  "workflow_version_id": &lt;from workflow_versions.json&gt;,
+  "fastqStorage": { "type": "s3", "bucket": "...", "region": "us-west-2" },
+  "sampleCsvs": ["/work/.../samples.csv"]
+}</code></pre>
+<p>See <a href="./03-sample-prep-and-qc.html">Sample Prep and Quality Control</a> for QC gates.</p>
+</section>
+<section id="study-validation-mc" class="level3" data-number="16.8.2">
+<h3 data-number="16.8.2" class="anchored" data-anchor-id="study-validation-mc"><span class="header-section-number">16.8.2</span> 2. Study validation / MC</h3>
+<p>After SamplePrep <strong>COMPLETED</strong>, start validation via portal SQL or:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-workflow-run</span> <span class="dt">\</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--program</span> workflow_engine/domain/checks/.../configs/your_mc.program.json <span class="dt">\</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--context-file</span> workflow_engine/domain/profiles/your.profile.json <span class="dt">\</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--context</span> <span class="st">'{"projectPath":"/work/.../configs/project.json"}'</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Or staged CLI: <a href="./05-stage-stability.html">Stage: Stability</a>.</p>
+</section>
+<section id="local-workflow-no-gateway" class="level3" data-number="16.8.3">
+<h3 data-number="16.8.3" class="anchored" data-anchor-id="local-workflow-no-gateway"><span class="header-section-number">16.8.3</span> 3. Local workflow (no gateway)</h3>
+<p>For development without database:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-workflow-run</span> <span class="at">--program</span> path/to/program.json <span class="dt">\</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--context-file</span> profile.json <span class="dt">\</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--context</span> <span class="st">'{"projectPath":"/work/.../project.json"}'</span> <span class="dt">\</span></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--stub-external</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+</section>
+<section id="related-documentation" class="level2" data-number="16.9">
+<h2 data-number="16.9" class="anchored" data-anchor-id="related-documentation"><span class="header-section-number">16.9</span> Related documentation</h2>
+<ul>
+<li>Production runbook: <a href="../../deployment/production_runbook.md"><code>docs/deployment/production_runbook.md</code></a></li>
+<li>Release layout: <a href="../../deployment/production_release.md"><code>docs/deployment/production_release.md</code></a></li>
+<li>Portal lifecycle: <a href="../../workflow_engine/docs/portal_study_lifecycle.md"><code>workflow_engine/docs/portal_study_lifecycle.md</code></a></li>
+<li>SamplePrep operator guide: <a href="../../workflow_engine/sql/SamplePrepFlow.md"><code>workflow_engine/sql/SamplePrepFlow.md</code></a></li>
+<li>Documentation audit: <a href="../../DOCUMENTATION_AUDIT.md"><code>docs/DOCUMENTATION_AUDIT.md</code></a></li>
+</ul>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./13-distributed-methyl-validation.html" class="pagination-link" aria-label="Distributed MethylValidation on shared storage">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./15-optional-hyperparameter-search.html" class="pagination-link" aria-label="Optional hyperparameter search">
+        <span class="nav-page-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Optional hyperparameter search</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

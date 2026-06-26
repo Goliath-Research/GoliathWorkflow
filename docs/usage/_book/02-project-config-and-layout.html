@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.36">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>4&nbsp; Project Config and Layout – MethylPipeline Usage Manual</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./03-sample-prep-and-qc.html" rel="next">
+<link href="./01-prerequisites-and-environment.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-845c23b38eaddc0f92fda52bfe77a8c8.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-dc6ca2cd4fc154dd9d00f02dacb9d42f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./01-prerequisites-and-environment.html">Part I: Setup and Package Orientation</a></li><li class="breadcrumb-item"><a href="./02-project-config-and-layout.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Project Config and Layout</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">MethylPipeline Usage Manual</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">MethylPipeline Usage Manual</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./00-relationship-to-theory-and-implementation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">Relationship to Theory and Implementation</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I: Setup and Package Orientation</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./01-prerequisites-and-environment.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Prerequisites and Environment</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./02-project-config-and-layout.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Project Config and Layout</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./03-sample-prep-and-qc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Sample Prep and Quality Control</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./04-package-reference-individual-usage.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">Package Reference (Individual Usage)</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II: Staged Solution Workflow</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./05-stage-stability.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Stage: Stability</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./06-stage-freeze.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">Stage: Freeze</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./07-stage-model.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">Stage: Model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./08-stage-post-model-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Stage: Post-model Validation</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./09-stage-blind-prediction.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Stage: Blind Prediction</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part III: Operations and Reliability</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./10-artifacts-and-qa-checks.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Artifacts and QA Checks</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./11-troubleshooting-and-recovery.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Troubleshooting and Recovery</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./12-command-cookbook.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Command Cookbook</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./13-distributed-methyl-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Distributed MethylValidation on shared storage</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./14-deployment-and-distributed-workflow.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">Deployment and Distributed Workflow</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./15-optional-hyperparameter-search.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">Optional hyperparameter search</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#purpose" id="toc-purpose" class="nav-link active" data-scroll-target="#purpose"><span class="header-section-number">4.1</span> Purpose</a></li>
+  <li><a href="#four-layer-configuration" id="toc-four-layer-configuration" class="nav-link" data-scroll-target="#four-layer-configuration"><span class="header-section-number">4.2</span> Four-layer configuration</a></li>
+  <li><a href="#repository-vs-work-what-goes-where" id="toc-repository-vs-work-what-goes-where" class="nav-link" data-scroll-target="#repository-vs-work-what-goes-where"><span class="header-section-number">4.3</span> Repository vs <code>/work</code> (what goes where)</a></li>
+  <li><a href="#minimum-study-manifest" id="toc-minimum-study-manifest" class="nav-link" data-scroll-target="#minimum-study-manifest"><span class="header-section-number">4.4</span> Minimum study manifest</a></li>
+  <li><a href="#validation-monte-carlo-keys-profile-actionconfig.validation" id="toc-validation-monte-carlo-keys-profile-actionconfig.validation" class="nav-link" data-scroll-target="#validation-monte-carlo-keys-profile-actionconfig.validation"><span class="header-section-number">4.5</span> Validation / Monte Carlo keys (profile <code>actionConfig.validation</code>)</a></li>
+  <li><a href="#output-layout" id="toc-output-layout" class="nav-link" data-scroll-target="#output-layout"><span class="header-section-number">4.6</span> Output layout</a></li>
+  <li><a href="#handoff-model" id="toc-handoff-model" class="nav-link" data-scroll-target="#handoff-model"><span class="header-section-number">4.7</span> Handoff model</a></li>
+  <li><a href="#do-not-do-this" id="toc-do-not-do-this" class="nav-link" data-scroll-target="#do-not-do-this"><span class="header-section-number">4.8</span> Do not do this</a></li>
+  <li><a href="#success-checks" id="toc-success-checks" class="nav-link" data-scroll-target="#success-checks"><span class="header-section-number">4.9</span> Success checks</a></li>
+  <li><a href="#see-also" id="toc-see-also" class="nav-link" data-scroll-target="#see-also"><span class="header-section-number">4.10</span> See also</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./01-prerequisites-and-environment.html">Part I: Setup and Package Orientation</a></li><li class="breadcrumb-item"><a href="./02-project-config-and-layout.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Project Config and Layout</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">Project Config and Layout</span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="purpose" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="purpose"><span class="header-section-number">4.1</span> Purpose</h2>
+<p>Define a <strong>study manifest</strong> (slim project JSON) plus reusable <strong>profile</strong>, <strong>site</strong>, and <strong>program</strong> artifacts so stability, freeze, model, and evaluation run without per-stage schema drift.</p>
+</section>
+<section id="four-layer-configuration" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="four-layer-configuration"><span class="header-section-number">4.2</span> Four-layer configuration</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 24%">
+<col style="width: 55%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Layer</th>
+<th>Typical path</th>
+<th>Owns</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Study manifest</td>
+<td><code>/work/&lt;disease&gt;/configs/project_*.json</code></td>
+<td>Cohorts, stages, comparisons, paths, <code>regulatory</code>, <code>validation_partitions</code>, <code>progression_order</code></td>
+</tr>
+<tr class="even">
+<td>Pipeline profile</td>
+<td><code>workflow_engine/domain/profiles/*.profile.json</code></td>
+<td><code>actionConfig</code> tool parameters + scope booleans (<code>runDmpSelection</code>, …)</td>
+</tr>
+<tr class="odd">
+<td>Site manifest</td>
+<td><code>/work/site/methyl_site.json</code> (or <code>METHYL_SITE_CONFIG</code>)</td>
+<td>Genomes, GTF, caches, cluster defaults</td>
+</tr>
+<tr class="even">
+<td>DomainProgram</td>
+<td>repo <code>workflow_engine/domain/**/*.program.json</code></td>
+<td>Control flow, per-action <code>with</code> / <code>stepOverride</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Precedence</strong> (highest wins): program/instance override → profile <code>actionConfig</code> → analyte defaults (<code>regulatory.primary_analyte</code>) → site manifest → package defaults.</p>
+<p>Study manifests <strong>must not</strong> contain <code>step_config</code>. Legacy projects: <code>python scripts/migrate_project_config.py --in-place path/to/project.json</code>.</p>
+</section>
+<section id="repository-vs-work-what-goes-where" class="level2" data-number="4.3">
+<h2 data-number="4.3" class="anchored" data-anchor-id="repository-vs-work-what-goes-where"><span class="header-section-number">4.3</span> Repository vs <code>/work</code> (what goes where)</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th><strong>Repository</strong> (versioned, documented)</th>
+<th><strong><code>/work/&lt;disease&gt;/</code></strong> (study-specific)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Pipeline profiles (<code>workflow_engine/domain/profiles/</code>)</td>
+<td><code>project_*.json</code> — cohorts, comparisons, sample paths, <code>output_base</code>, <code>regulatory</code></td>
+</tr>
+<tr class="even">
+<td>DomainPrograms (<code>*.program.json</code> under <code>workflow_engine/domain/</code>)</td>
+<td>Sample list CSVs under <code>data/</code></td>
+</tr>
+<tr class="odd">
+<td>JSON schemas (<code>schemas/config/</code>)</td>
+<td>Run outputs (<code>monte_carlo_runs/</code>, <code>stability/</code>, …)</td>
+</tr>
+<tr class="even">
+<td>Site example (<code>tools/methyl-config-editor/configs/site_grch38.example.json</code>)</td>
+<td><code>/work/site/methyl_site.json</code> (operator copy)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Point <code>methyl-workflow-run --program</code> at a <strong>repo</strong> DomainProgram path.</li>
+<li>Point <code>--context</code> / <code>projectPath</code> at a <strong>study manifest on <code>/work</code></strong>.</li>
+<li>Pass <strong><code>--context-file</code></strong> with a profile from <code>workflow_engine/domain/profiles/</code>, or set <code>METHYL_PROFILE</code>.</li>
+<li>Set <strong><code>METHYL_SITE_CONFIG</code></strong> (or install site manifest under <code>/work/site/</code>).</li>
+<li>Do <strong>not</strong> treat repo <code>workflow_engine/domain/checks/*/configs/project_*.json</code> as production configs (CI smoke only).</li>
+<li>Do <strong>not</strong> copy <code>*.program.json</code> into <code>/work/&lt;disease&gt;/configs/</code>.</li>
+</ul>
+</section>
+<section id="minimum-study-manifest" class="level2" data-number="4.4">
+<h2 data-number="4.4" class="anchored" data-anchor-id="minimum-study-manifest"><span class="header-section-number">4.4</span> Minimum study manifest</h2>
+<p>Use one slim project file containing:</p>
+<ul>
+<li>global cohort metadata (<code>controls</code>, <code>diseases</code>, <code>comparisons</code>, optional <code>stages[]</code> / <code>progression_order</code>),</li>
+<li>filesystem anchors (<code>output_base</code>, <code>samples_base_path</code>),</li>
+<li>optional <code>regulatory</code>, <code>validation_partitions</code>, <code>chromosomes</code>, <code>contexts</code>.</li>
+</ul>
+<p>Tool parameters live in the <strong>profile</strong> <code>actionConfig</code> sections (<code>detection</code>, <code>validation</code>, <code>mapper</code>, …), not in the study manifest.</p>
+</section>
+<section id="validation-monte-carlo-keys-profile-actionconfig.validation" class="level2" data-number="4.5">
+<h2 data-number="4.5" class="anchored" data-anchor-id="validation-monte-carlo-keys-profile-actionconfig.validation"><span class="header-section-number">4.5</span> Validation / Monte Carlo keys (profile <code>actionConfig.validation</code>)</h2>
+<p>Resolved into <code>MonteCarloConfig</code> by <code>methyl-validation --project</code> (via <code>METHYL_PROFILE</code>):</p>
+<ul>
+<li>split policy: <code>train_fraction</code>, <code>n_iterations</code>, <code>seed</code></li>
+<li>stability controls:
+<ul>
+<li><code>run_stability</code></li>
+<li><code>stability_dmp_freq</code></li>
+<li><code>stability_min_balanced_accuracy</code></li>
+<li><code>stability_gene_freq</code></li>
+<li><code>stability_featurecuts_enabled</code></li>
+<li><code>stability_target_balanced_accuracy</code></li>
+<li><code>stability_min_selected_dmps</code></li>
+</ul></li>
+<li>freeze/model paths:
+<ul>
+<li><code>freeze_stable_dmp_csv</code> (optional)</li>
+<li><code>production_output_dir</code> (optional)</li>
+</ul></li>
+<li>backend/model:
+<ul>
+<li><code>model_backend</code></li>
+<li><code>feature_mode</code></li>
+<li><code>ecdf_second_stage_enabled</code></li>
+<li>backend-specific <code>tabular_*</code> / <code>generative_*</code> keys</li>
+</ul></li>
+</ul>
+<p>Sample prep uses profile <code>actionConfig.alignment_qc</code> and <code>actionConfig.extraction_qc</code> (<a href="./03-sample-prep-and-qc.html">Chapter 3</a>).</p>
+</section>
+<section id="output-layout" class="level2" data-number="4.6">
+<h2 data-number="4.6" class="anchored" data-anchor-id="output-layout"><span class="header-section-number">4.6</span> Output layout</h2>
+<p>Most runs write to:</p>
+<p><code>&lt;output_base&gt;/&lt;project_name&gt;/monte_carlo_runs/</code></p>
+<p>Important subtrees:</p>
+<ul>
+<li><code>run_XXXX/</code> (per-iteration artifacts)</li>
+<li><code>stability/</code> (stable panel and summaries)</li>
+<li><code>production/</code> (freeze and final model outputs)</li>
+<li><code>model_mc/</code> (backend comparison runs)</li>
+<li><code>post_model_validation/</code> (frozen-model descriptive evaluation)</li>
+</ul>
+</section>
+<section id="handoff-model" class="level2" data-number="4.7">
+<h2 data-number="4.7" class="anchored" data-anchor-id="handoff-model"><span class="header-section-number">4.7</span> Handoff model</h2>
+
+</section>
+<section id="do-not-do-this" class="level2" data-number="4.8">
+<h2 data-number="4.8" class="anchored" data-anchor-id="do-not-do-this"><span class="header-section-number">4.8</span> Do not do this</h2>
+<ul>
+<li>Do not embed tool parameters in the study manifest (<code>step_config</code> is rejected at load).</li>
+<li>Do not put blind-only predictor config into validation-driven runs.</li>
+<li>Do not change <code>samples_base_path</code> between stages without explicit remap.</li>
+<li>Do not run <code>--freeze</code> before stable panel exists.</li>
+</ul>
+</section>
+<section id="success-checks" class="level2" data-number="4.9">
+<h2 data-number="4.9" class="anchored" data-anchor-id="success-checks"><span class="header-section-number">4.9</span> Success checks</h2>
+<ul>
+<li>Study manifest loads via <code>methyl-utils</code> / <code>methyl-validation --project ...</code>.</li>
+<li><code>METHYL_PROFILE</code> resolves <code>actionConfig.validation</code> (or pass <code>--config mc.json</code>).</li>
+<li>Run directories appear under expected root.</li>
+</ul>
+</section>
+<section id="see-also" class="level2" data-number="4.10">
+<h2 data-number="4.10" class="anchored" data-anchor-id="see-also"><span class="header-section-number">4.10</span> See also</h2>
+<ul>
+<li><code>docs/reference/config-parameter-matrix.md</code></li>
+<li><code>docs/reference/domain-program-language.md</code></li>
+<li><code>docs/theory/chapters/11-project-configuration.qmd</code></li>
+<li><code>docs/reference/configuration-reference.qmd</code></li>
+</ul>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./01-prerequisites-and-environment.html" class="pagination-link" aria-label="Prerequisites and Environment">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">Prerequisites and Environment</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./03-sample-prep-and-qc.html" class="pagination-link" aria-label="Sample Prep and Quality Control">
+        <span class="nav-page-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Sample Prep and Quality Control</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

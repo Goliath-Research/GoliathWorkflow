@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.36">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>4&nbsp; MethylDetector – MethylPipeline Theory</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="../site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="../site_libs/quarto-nav/headroom.min.js"></script>
+<script src="../site_libs/clipboard/clipboard.min.js"></script>
+<script src="../site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="../site_libs/quarto-search/fuse.min.js"></script>
+<script src="../site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="../">
+<link href="../chapters/04-methylclassifier.html" rel="next">
+<link href="../chapters/02-methylcentroid.html" rel="prev">
+<script src="../site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="../site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="../site_libs/quarto-html/popper.min.js"></script>
+<script src="../site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="../site_libs/quarto-html/anchor.min.js"></script>
+<link href="../site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="../site_libs/quarto-html/quarto-syntax-highlighting-845c23b38eaddc0f92fda52bfe77a8c8.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="../site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="../site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="../site_libs/bootstrap/bootstrap-dc6ca2cd4fc154dd9d00f02dacb9d42f.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/03-methyldetector.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="../">MethylPipeline Theory</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Scope, Traceability, and Notation</span></span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part I: Mathematical and Statistical Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/01-methylutils.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">MethylUtils</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/02-methylcentroid.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/03-methyldetector.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/04-methylclassifier.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/05-methylpredictor-and-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">MethylPredictor, MethylValidation, and MethylDiseaseProgression</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/07-methylmapper.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">MethylMapper</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/08-methylenricher.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">MethylEnricher</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09-methylalignmentqc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">MethylAlignmentQC</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/09a-methylextractionqc.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">MethylExtractionQC</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/10-limitations-and-open-questions.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">Limitations and Open Questions</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Part II: Configuration Semantics and Workflow Theory</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/11-project-configuration.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">The Project Configuration File</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/12-two-workflows.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">The Two Workflows</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="../chapters/15-model-creation-and-validation.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">Model Creation and Validation</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#role" id="toc-role" class="nav-link active" data-scroll-target="#role"><span class="header-section-number">4.1</span> Role</a></li>
+  <li><a href="#alignment-and-candidate-set" id="toc-alignment-and-candidate-set" class="nav-link" data-scroll-target="#alignment-and-candidate-set"><span class="header-section-number">4.2</span> Alignment And Candidate Set</a></li>
+  <li><a href="#statistical-screening" id="toc-statistical-screening" class="nav-link" data-scroll-target="#statistical-screening"><span class="header-section-number">4.3</span> Statistical Screening</a></li>
+  <li><a href="#biological-ranking" id="toc-biological-ranking" class="nav-link" data-scroll-target="#biological-ranking"><span class="header-section-number">4.4</span> Biological Ranking</a></li>
+  <li><a href="#cumulative-effect-coverage" id="toc-cumulative-effect-coverage" class="nav-link" data-scroll-target="#cumulative-effect-coverage"><span class="header-section-number">4.5</span> Cumulative Effect Coverage</a></li>
+  <li><a href="#context-and-chromosome-granularity" id="toc-context-and-chromosome-granularity" class="nav-link" data-scroll-target="#context-and-chromosome-granularity"><span class="header-section-number">4.6</span> Context And Chromosome Granularity</a></li>
+  <li><a href="#exported-classifier-artifacts" id="toc-exported-classifier-artifacts" class="nav-link" data-scroll-target="#exported-classifier-artifacts"><span class="header-section-number">4.7</span> Exported Classifier Artifacts</a></li>
+  <li><a href="#discovery-versus-prediction-exports" id="toc-discovery-versus-prediction-exports" class="nav-link" data-scroll-target="#discovery-versus-prediction-exports"><span class="header-section-number">4.8</span> Discovery versus prediction exports</a></li>
+  <li><a href="#sec-detector-fixed-panel" id="toc-sec-detector-fixed-panel" class="nav-link" data-scroll-target="#sec-detector-fixed-panel"><span class="header-section-number">4.9</span> Production Freeze Panel</a></li>
+  <li><a href="#sec-detector-coverage" id="toc-sec-detector-coverage" class="nav-link" data-scroll-target="#sec-detector-coverage"><span class="header-section-number">4.10</span> DMP Coverage in New Samples</a></li>
+  <li><a href="#publication-guidance" id="toc-publication-guidance" class="nav-link" data-scroll-target="#publication-guidance"><span class="header-section-number">4.11</span> Publication Guidance</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="../chapters/01-methylutils.html">Part I: Mathematical and Statistical Foundations</a></li><li class="breadcrumb-item"><a href="../chapters/03-methyldetector.html"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></a></li></ol></nav>
+<div class="quarto-title">
+<h1 class="title"><span id="sec-methyldetector" class="quarto-section-identifier"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">MethylDetector</span></span></h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="role" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="role"><span class="header-section-number">4.1</span> Role</h2>
+<p><code>methyldetector</code> turns aligned centroids into a filtered set of differential methylation positions (DMPs) and exports the classifier artifacts used downstream. The main implementation is <code>packages/methyldetector/methyl_detector/core/methyldetector.py</code>.</p>
+<p>Conceptually, the detector is a two-stage pipeline:</p>
+<ol type="1">
+<li>statistical screening of loci, and</li>
+<li>biological prioritization and export.</li>
+</ol>
+<p>That split is important. The code does not rely on a single monolithic significance score.</p>
+</section>
+<section id="alignment-and-candidate-set" class="level2" data-number="4.2">
+<h2 data-number="4.2" class="anchored" data-anchor-id="alignment-and-candidate-set"><span class="header-section-number">4.2</span> Alignment And Candidate Set</h2>
+<p>The detector starts from aligned centroid pairs, typically one control centroid and one disease centroid for a given chromosome and context. The alignment step reduces both centroids to the common set of genomic positions and propagates the empirical summaries described in <a href="01-methylutils.html" class="quarto-xref"><span>Chapter 2</span></a> and <a href="02-methylcentroid.html" class="quarto-xref"><span>Chapter 3</span></a>.</p>
+<p>Let <span class="math inline">\(\mathcal{I}\)</span> denote the set of aligned loci under consideration for one comparison.</p>
+</section>
+<section id="statistical-screening" class="level2" data-number="4.3">
+<h2 data-number="4.3" class="anchored" data-anchor-id="statistical-screening"><span class="header-section-number">4.3</span> Statistical Screening</h2>
+<p>The detector supports two closely related statistical paths:</p>
+<ul>
+<li>a histogram-based path through <code>MethylCentroidPair.compare_centroids()</code>, and</li>
+<li>a more precise ECDF path that recomputes KS statistics directly from reconstructed empirical distributions.</li>
+</ul>
+<p>In both cases the active workflow is:</p>
+<ol type="1">
+<li>compute one p-value <span class="math inline">\(p_i\)</span> per locus <span class="math inline">\(i \in \mathcal{I}\)</span>,</li>
+<li>adjust all p-values to q-values using Storey q-values,</li>
+<li>keep loci satisfying the configured q-value threshold and any minimum effect thresholds.</li>
+</ol>
+<p>At the theory level this is</p>
+<p><span id="eq-detector-statset"><span class="math display">\[
+\mathcal{D}_{\text{stat}} =
+\left\{ i \in \mathcal{I} : q_i \le \alpha,\ |\Delta\mu_i| \ge \delta_{\min} \right\},
+\tag{4.1}\]</span></span></p>
+<p>with the exact choice of <span class="math inline">\(\alpha\)</span> and <span class="math inline">\(\delta_{\min}\)</span> coming from configuration rather than mathematical derivation.</p>
+</section>
+<section id="biological-ranking" class="level2" data-number="4.4">
+<h2 data-number="4.4" class="anchored" data-anchor-id="biological-ranking"><span class="header-section-number">4.4</span> Biological Ranking</h2>
+<p>Once a statistically filtered set exists, the detector ranks loci using the canonical effect score introduced in <a href="01-methylutils.html#eq-effect-size" class="quarto-xref">Eq.&nbsp;<span>2.10</span></a>. This gives a second set of priorities that is explicitly biological or practical rather than inferential.</p>
+<p>The central design choice is that a locus can be:</p>
+<ul>
+<li>statistically strong but biologically modest,</li>
+<li>biologically large but not significant after multiplicity correction, or</li>
+<li>both.</li>
+</ul>
+<p>The detector keeps these notions separate instead of compressing them into one scalar.</p>
+</section>
+<section id="cumulative-effect-coverage" class="level2" data-number="4.5">
+<h2 data-number="4.5" class="anchored" data-anchor-id="cumulative-effect-coverage"><span class="header-section-number">4.5</span> Cumulative Effect Coverage</h2>
+<p>One of the package’s characteristic filters is cumulative effect-mass selection. After sorting retained loci by decreasing effect size, the detector may keep only the smallest prefix whose cumulative effect mass reaches a specified fraction <span class="math inline">\(\gamma\)</span> of the total:</p>
+<p><span id="eq-effect-coverage"><span class="math display">\[
+\sum_{i \in S_\gamma} e_i
+\ge
+\gamma \sum_{i \in \mathcal{D}_{\text{stat}}} e_i,
+\tag{4.2}\]</span></span></p>
+<p>where <span class="math inline">\(e_i\)</span> is the per-locus effect score.</p>
+<p>This is a useful way to compress large DMP sets, but it is a heuristic summarization rule rather than a statistical decision boundary with a formal optimality guarantee.</p>
+</section>
+<section id="context-and-chromosome-granularity" class="level2" data-number="4.6">
+<h2 data-number="4.6" class="anchored" data-anchor-id="context-and-chromosome-granularity"><span class="header-section-number">4.6</span> Context And Chromosome Granularity</h2>
+<p>The detector is designed to run at chromosome and context granularity. In practical terms this means:</p>
+<ul>
+<li>each classifier artifact is tied to a specific chromosome,</li>
+<li>contexts such as <code>CG</code>, <code>CHG</code>, and <code>CHH</code> can be modeled separately or together, and</li>
+<li>any final multiclass or multi-chromosome system is assembled later by <code>methylclassifier</code>.</li>
+</ul>
+<p>That architecture keeps detection local and composable, but it also means that downstream fusion is not part of the detector’s statistical test itself.</p>
+</section>
+<section id="exported-classifier-artifacts" class="level2" data-number="4.7">
+<h2 data-number="4.7" class="anchored" data-anchor-id="exported-classifier-artifacts"><span class="header-section-number">4.7</span> Exported Classifier Artifacts</h2>
+<p>The detector does more than report DMPs. It also packages the information needed by the ECDF classifier:</p>
+<ul>
+<li>the filtered DMP positions,</li>
+<li>per-class centroid histograms over those positions,</li>
+<li>directions of methylation change, and</li>
+<li>feature weights such as effect size.</li>
+</ul>
+<p>Mathematically, this means the detector defines the feature space and the feature weighting scheme for the classifier. The classifier is therefore downstream of detector choices even when its own scoring rule is fixed.</p>
+</section>
+<section id="discovery-versus-prediction-exports" class="level2" data-number="4.8">
+<h2 data-number="4.8" class="anchored" data-anchor-id="discovery-versus-prediction-exports"><span class="header-section-number">4.8</span> Discovery versus prediction exports</h2>
+<p>Interpretation workflows (mapping DMPs to genes, pathway enrichment, comparing stages) benefit from <strong>broader, biologically coherent</strong> DMP lists. Predictive modeling benefits from <strong>smaller, stable</strong> feature sets chosen without conflating biological narrative with classification utility.</p>
+<p>The implementation therefore supports two coordinated outputs when <code>dmp_export_mode=dual</code> (default in project configs):</p>
+<ul>
+<li><code>dmps-{chrom}-discovery.csv</code>: all biologically filtered loci after importance ranking, <strong>without</strong> the effect-size elbow used to trim the classifier panel (unless <code>discovery_dynamic_dmp_cutoff_enabled</code> is turned on).</li>
+<li><code>dmps-{chrom}-classifier.csv</code>: the <strong>prediction panel</strong> after the same elbow heuristic as before, or after optional validation balanced-accuracy optimization (<code>classifier_dmp_selection=featurecuts_validation</code>) when validation samples are configured.</li>
+</ul>
+<p>The saved ECDF classifier pickle always uses the <strong>classifier</strong> panel, not the discovery table. MethylMapper and MethylEnricher should read the <strong>discovery</strong> glob (for example <code>dmps-*-discovery.csv</code>). Multiclass merge utilities resolve <code>dmps-*-classifier.csv</code> automatically when present.</p>
+<p>For strict evaluation of a deployed classifier, feature selection must be performed <strong>inside</strong> each outer training fold (for example by running detection on fold-specific centroids, as in Monte Carlo train splits); discovery lists built on all samples may still be reported for mechanism, but they must not be the sole basis for performance claims unless that design is stated explicitly.</p>
+</section>
+<section id="sec-detector-fixed-panel" class="level2" data-number="4.9">
+<h2 data-number="4.9" class="anchored" data-anchor-id="sec-detector-fixed-panel"><span class="header-section-number">4.9</span> Production Freeze Panel</h2>
+<p>In the production workflow (<a href="12-two-workflows.html" class="quarto-xref"><span>Chapter 13</span></a>), the detector can bypass statistical and biological discovery entirely and instead operate from a fixed list of pre-selected loci. This is configured via the <code>fixed_dmp_panel</code> parameter in <code>step_config.detection</code>.</p>
+<p>When <code>fixed_dmp_panel</code> is set to a path pointing at a CSV file that contains at minimum the columns <code>chromosome</code> and <code>position</code>, the <code>_run_multi_context</code> method short-circuits the entire discovery pipeline. No centroids are compared, no KS statistics are computed, and no biological filtering is applied. The columns <code>context</code>, <code>effect_size</code>, <code>statistical_dmp</code>, and <code>biological_dmp</code> are inferred or set to unit defaults for any that are missing from the file. The result object is constructed directly from the loaded rows, with <code>biological_retention_rate = 1.0</code> and <code>n_statistical_dmps = n_biological_dmps = n_classifier_dmps</code> all equal to the CSV row count.</p>
+<p>This mechanism serves the production workflow where:</p>
+<ol type="1">
+<li>DMP positions were already validated across many Monte Carlo splits (stability analysis),</li>
+<li>only the most reliably recurring positions are retained in the stable panel, and</li>
+<li>the final model must use exactly those positions on the full dataset without re-running discovery.</li>
+</ol>
+<p>The code path is:</p>
+<pre><code>MethylDetector._run_multi_context()
+  ↓ if config.fixed_dmp_panel is not None
+  ↓ pd.read_csv(fixed_path)
+  ↓ validate columns {"chromosome", "position"} ⊆ columns
+  ↓ infer missing context / effect_size / flags
+  ↓ export CSV + save classifier model
+  ↓ return MethylDetectorResult (no discovery performed)</code></pre>
+<p>The exported classifier model (PKL) is identical in structure to one built through normal discovery; downstream tools (<code>methylclassifier</code>, <code>methylpredictor</code>) are unaware of whether the positions came from live detection or a fixed panel.</p>
+<p><strong>Theoretical note.</strong> Using a fixed panel from a previous analysis is a form of transfer. The panel was selected on a different (possibly overlapping) set of samples. The validity of downstream statistical claims depends on whether the panel samples and the inference samples are from the same population. This is an operational design choice, not a statistical guarantee; it should be stated explicitly in any publication that uses the freeze workflow.</p>
+</section>
+<section id="sec-detector-coverage" class="level2" data-number="4.10">
+<h2 data-number="4.10" class="anchored" data-anchor-id="sec-detector-coverage"><span class="header-section-number">4.10</span> DMP Coverage in New Samples</h2>
+<p>A frequently encountered diagnostic problem is low DMP coverage in validation or prediction samples: the classifier reports that only 10–30% of DMP positions have usable observations in a given sample. The root cause is almost always a mismatch between coverage thresholds <strong>at centroid construction / DMP discovery</strong> and <strong>at MethylClassifier inference</strong>:</p>
+<ul>
+<li><code>min_coverage</code> in <code>step_config.centroid.base_config</code> and matching <code>min_coverage</code> in <code>step_config.detection</code> — minimum reads per locus when building centroids and when calling DMPs.</li>
+<li><strong><code>min_coverage</code> (or equivalent) in <code>step_config.classifier</code> / MethylClassifier JSON</strong> — minimum reads required to treat a locus as observed in a <em>new</em> sample.</li>
+</ul>
+<p>If centroids and detection used <code>min_coverage = 4</code> but the classifier requires a higher per-locus depth, loci with 4–9 reads in a test sample are dropped from the feature matrix even though they were part of the DMP panel.</p>
+<p>The observable symptom is:</p>
+<pre><code>sample_dmp_coverage.dmps_used_fraction_median &lt; 0.5</code></pre>
+<p>in <code>validation_metrics.json</code>. Values below 0.3 indicate severe coverage mismatch and nearly always lead to prediction dominated by the majority class.</p>
+<p><strong>Recommended practice:</strong> Set <strong>MethylClassifier</strong> <code>min_coverage</code> (see classifier docs / schema) to match the centroid/detector <code>min_coverage</code> used during training (commonly <code>4</code>). Raise it only when test samples are known to be much deeper than training and locus-level precision is paramount.</p>
+</section>
+<section id="publication-guidance" class="level2" data-number="4.11">
+<h2 data-number="4.11" class="anchored" data-anchor-id="publication-guidance"><span class="header-section-number">4.11</span> Publication Guidance</h2>
+<p>The most accurate publication description is:</p>
+<ul>
+<li><code>methyldetector</code> performs nonparametric locus-wise screening,</li>
+<li>applies FDR control through Storey q-values,</li>
+<li>supplements significance with heuristic biological ranking,</li>
+<li>and exports a reduced, weighted empirical-distribution feature set.</li>
+</ul>
+<p>When the <code>fixed_dmp_panel</code> path is used, the package should be described as applying a pre-specified position set rather than performing novel discovery.</p>
+<p>The package should <strong>not</strong> be described as a pure hypothesis-testing engine if the effect-coverage filters are active, because those filters are explicitly post-test prioritization rules.</p>
+
+
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="../chapters/02-methylcentroid.html" class="pagination-link" aria-label="MethylCentroid">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">MethylCentroid</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="../chapters/04-methylclassifier.html" class="pagination-link" aria-label="MethylClassifier">
+        <span class="nav-page-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">MethylClassifier</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
