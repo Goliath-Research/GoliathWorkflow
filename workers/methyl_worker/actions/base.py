@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import logging
 import subprocess
@@ -47,6 +48,28 @@ from ..task_models.step_override_models import CentroidBaseConfigOverride, Centr
 logger = logging.getLogger(__name__)
 
 InProcessCallable = Callable[..., BaseModel]
+
+
+def _handler_accepts_runtime(handler: InProcessCallable) -> bool:
+    """True when the handler declares a fourth positional or ``runtime`` parameter."""
+    try:
+        sig = inspect.signature(handler)
+    except (TypeError, ValueError):
+        return False
+    if any(p.kind == inspect.Parameter.VAR_POSITIONAL for p in sig.parameters.values()):
+        return True
+    positional = [
+        p
+        for p in sig.parameters.values()
+        if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+    ]
+    if len(positional) >= 4:
+        return True
+    return any(
+        p.kind == inspect.Parameter.KEYWORD_ONLY and p.name == "runtime"
+        for p in sig.parameters.values()
+    )
+
 
 DEFAULT_PIPELINE_ARGV_MAP: Dict[str, str] = {
     "project": "--project",
@@ -229,14 +252,14 @@ class InProcessAction:
             input_json,
         )
         timer = ExecutionTimer()
-        try:
+        if _handler_accepts_runtime(self.handler):
             raw = self.handler(
                 self.entry.capability,
                 self.entry.action_name,
                 input_model,
                 runtime,
             )
-        except TypeError:
+        else:
             raw = self.handler(
                 self.entry.capability,
                 self.entry.action_name,
