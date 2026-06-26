@@ -72,6 +72,18 @@ def test_preflight_lists_source(layout: MigrationConfig) -> None:
     assert "configs" in report.source_children
 
 
+def test_apply_disease_slug_syncs_path_remap_prefixes() -> None:
+    cfg = MigrationConfig(work_root=Path("/work"))
+    cfg.apply_disease_slug("breast-cancer")
+    assert cfg.old_disease_root == Path("/work/breast-cancer")
+    assert cfg.new_disease_root == Path("/work/projects/breast-cancer")
+    assert cfg.path_remap_old == "/work/breast-cancer"
+    assert cfg.path_remap_new == "/work/projects/breast-cancer"
+    assert cfg.path_remap["/work/breast-cancer"] == "/work/projects/breast-cancer"
+    assert cfg.path_remap["/lambda/nfs/Work/breast-cancer"] == "/work/projects/breast-cancer"
+    assert cfg.path_remap["/lambda/nfs/Work/breast-cancer/samples"] == "/work/samples"
+
+
 def test_remap_study_manifest_and_artifacts(layout: MigrationConfig) -> None:
     import shutil
 

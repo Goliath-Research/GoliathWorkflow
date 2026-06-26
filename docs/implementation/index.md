@@ -4,6 +4,7 @@ Developer-facing documentation for the workflow engine, workers, DomainProgram c
 
 | Document | Topic |
 |----------|-------|
+| [Sample preparation flow](sample-preparation-flow.md) | download → Parabricks → alignment QC → remediation → extract → extraction QC |
 | [Workflow engine](workflow-engine.md) | local engine, REST gateway, SQL schema |
 | [Workers and gateway](workers-and-gateway.md) | poll/submit protocol, capabilities |
 | [DomainProgram compiler](domain-program-compiler.md) | compile, bind, deploy |

@@ -11,13 +11,16 @@ from methyl_validation.path_remap import (
 
 def test_stale_samples_base_from_config_remapped_like_freeze():
     """CLI copies samples_base_path from JSON before --path-remap; freeze must not restore OLD prefix."""
-    pr = {"/lambda/nfs/Work/prostate-cancer": "/work/projects/prostate-cancer"}
+    pr = {
+        "/lambda/nfs/Work/prostate-cancer/samples": "/work/samples",
+        "/lambda/nfs/Work/prostate-cancer": "/work/projects/prostate-cancer",
+    }
     d = {"samples_base_path": "/lambda/nfs/Work/prostate-cancer/samples"}
     apply_path_remap_to_nested(d, pr)
-    assert d["samples_base_path"] == "/work/projects/prostate-cancer/samples"
+    assert d["samples_base_path"] == "/work/samples"
     stale_from_config = "/lambda/nfs/Work/prostate-cancer/samples"
     d["samples_base_path"] = remap_path_string(stale_from_config.rstrip("/"), pr)
-    assert d["samples_base_path"] == "/work/projects/prostate-cancer/samples"
+    assert d["samples_base_path"] == "/work/samples"
 
 
 def test_remap_path_string_longest_prefix():

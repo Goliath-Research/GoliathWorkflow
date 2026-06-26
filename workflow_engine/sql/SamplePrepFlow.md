@@ -4,6 +4,8 @@
 
 **Source of truth (workflow graph):** [`../domain/fixtures/sample_prep.program.json`](../domain/fixtures/sample_prep.program.json)
 
+**Implementation detail:** [`docs/implementation/sample-preparation-flow.md`](../../docs/implementation/sample-preparation-flow.md) — guardrail boundaries, focused FASTP remediation, extraction filtering, cfDNA fragmentomics.
+
 **Deploy:** `bash scripts/deploy_workflow_definitions.sh` → `POST /v1/workflows/definitions`
 
 **Legacy SQL seed** [`sql/deprecated/wf_sample_prep_pipeline_seed.sql`](deprecated/wf_sample_prep_pipeline_seed.sql) is **deprecated**; use DomainProgram deploy above.

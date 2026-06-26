@@ -260,6 +260,7 @@ methyl-extraction-qc --sample-dir /work/samples/SAMPLE_ID --sample-id SAMPLE_ID
 
 ## Related documentation
 
+- **Implementation guide (guardrail boundaries, remediation, extraction filtering, cfDNA fragmentomics):** [`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md)
 - Workflow operator guide: [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md)
 - Architecture §0: [`workflow_engine/docs/pipeline_architecture.md`](../../workflow_engine/docs/pipeline_architecture.md)
 - Worker contract: [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md)

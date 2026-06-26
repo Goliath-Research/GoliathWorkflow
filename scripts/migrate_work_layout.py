@@ -61,11 +61,21 @@ class MigrationConfig:
     worker_env: Path = Path("/work/epimethyl/env/worker.env")
     disease_slug: str = "prostate-cancer"
 
+    def apply_disease_slug(self, slug: str) -> None:
+        """Sync disease roots and path-remap prefixes (used by --disease CLI override)."""
+        self.disease_slug = slug
+        self.old_disease_root = self.work_root / slug
+        self.new_disease_root = self.work_root / "projects" / slug
+        self.path_remap_old = str(self.old_disease_root)
+        self.path_remap_new = str(self.new_disease_root)
+
     @property
     def path_remap(self) -> Dict[str, str]:
+        slug = self.disease_slug
         return {
             self.path_remap_old: self.path_remap_new,
-            "/lambda/nfs/Work/prostate-cancer": self.path_remap_new,
+            f"/lambda/nfs/Work/{slug}": self.path_remap_new,
+            f"/lambda/nfs/Work/{slug}/samples": str(self.work_root / "samples"),
         }
 
     @classmethod
@@ -527,7 +537,12 @@ def apply_db(cfg: MigrationConfig, engine: str, *, dry_run: bool) -> int:
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--disease", default="prostate-cancer", help="Disease slug (default: prostate-cancer)")
-    parser.add_argument("--env-file", type=Path, default=REPO_ROOT / "scripts/migrate_work_layout.env")
+    parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Operator env file (default: scripts/migrate_work_layout.env if present, else .example)",
+    )
     parser.add_argument("--manifest-out", type=Path, default=Path("migrate_work_layout.manifest.json"))
     parser.add_argument("--verify", action="store_true", help="Post-migration verification only")
     parser.add_argument("--apply-fs", action="store_true", help="Rsync disease tree to /work/projects/...")
@@ -538,11 +553,14 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--no-dry-run", action="store_true", help="Actually write changes")
     args = parser.parse_args(argv)
 
-    cfg = MigrationConfig.from_env_file(args.env_file)
+    env_file = args.env_file
+    if env_file is None:
+        local_env = REPO_ROOT / "scripts/migrate_work_layout.env"
+        env_file = local_env if local_env.is_file() else REPO_ROOT / "scripts/migrate_work_layout.env.example"
+
+    cfg = MigrationConfig.from_env_file(env_file)
     if args.disease and cfg.disease_slug != args.disease:
-        cfg.disease_slug = args.disease
-        cfg.old_disease_root = cfg.work_root / args.disease
-        cfg.new_disease_root = cfg.work_root / "projects" / args.disease
+        cfg.apply_disease_slug(args.disease)
 
     dry_run = not args.no_dry_run
 

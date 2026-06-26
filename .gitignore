@@ -137,3 +137,6 @@ packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.aux
 workflow_engine/WfEngineSrv.exe
 tools/methyl-config-editor/tests/MethylConfigEditorTests.res
 /tools/methyl-config-editor/*.rsm
+
+# Operator-local migration config (copy from scripts/migrate_work_layout.env.example)
+scripts/migrate_work_layout.env

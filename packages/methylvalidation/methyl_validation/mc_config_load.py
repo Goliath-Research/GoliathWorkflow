@@ -117,7 +117,7 @@ def load_monte_carlo_config(
 
         mc_config_dict = apply_project_regulatory_to_mc_dict(
             {
-                "samples_base_path": project_data.get("samples_base_path", "/work/projects/prostate-cancer/samples"),
+                "samples_base_path": project_data.get("samples_base_path", "/work/samples"),
                 "base_project": str(args.project),
                 "output_base": project_data.get("output_base", "/work/projects/prostate-cancer"),
                 "path_remap": project_data.get("path_remap"),

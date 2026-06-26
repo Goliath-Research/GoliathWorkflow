@@ -247,7 +247,7 @@ def _validate_project_payload(project_data: Dict[str, Any], project_path: Path) 
         raise ValueError("project.json does not contain step_config.validation object")
     cohorts = infer_monte_carlo_cohorts_from_project(project_data, project_path)
     payload = {
-        "samples_base_path": project_data.get("samples_base_path", "/work/projects/prostate-cancer/samples"),
+        "samples_base_path": project_data.get("samples_base_path", "/work/samples"),
         "base_project": str(project_path),
         "output_base": project_data.get("output_base", "/work/projects/prostate-cancer"),
         "path_remap": project_data.get("path_remap"),

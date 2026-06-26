@@ -78,4 +78,5 @@ Describe `methylalignmentqc` as:
 ## Related
 
 - Package usage: `packages/methylalignmentqc/docs/USAGE.md`
+- Implementation guide (remediation, extraction filtering, cfDNA fragmentomics): [Sample preparation flow](../../implementation/sample-preparation-flow.md)
 - Extraction QC (downstream gate): @sec-methylextractionqc
