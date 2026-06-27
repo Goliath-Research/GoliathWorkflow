@@ -72,8 +72,9 @@ pythonpath = [
     "workflow_engine/local",
     "workflow_engine/domain",
     "workflow_engine/contract",
+    "tools",
 ]
-testpaths = ["packages/*/tests", "workflow_engine/tests", "workers/tests"]
+testpaths = ["packages/*/tests", "workflow_engine/tests", "workers/tests", "tools/tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
