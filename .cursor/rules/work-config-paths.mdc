@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Repo vs `/work` (four-layer config)
 
-## Repository (versioned, documented, default for users)
+## Repository (versioned, documented, default for developers)
 
 - **Pipeline profiles:** `workflow_engine/domain/profiles/*.profile.json`
 - **DomainPrograms:** `workflow_engine/domain/fixtures/*.program.json`, `workflow_engine/domain/checks/*/configs/*.program.json`
@@ -13,7 +13,34 @@ alwaysApply: true
 - **Documentation:** `docs/`, `docs/usage/`, `docs/reference/domain-program-language.md`
 - **CI smoke mirrors:** `workflow_engine/domain/checks/*/configs/project_*.json` (validate compile/bindings only — not production)
 
-Point `methyl-workflow-run --program` at **repo paths** (or a released install of the repo). Point `--context-file` at a **profile** under `workflow_engine/domain/profiles/` when using named presets.
+Developers point `methyl-workflow-run --program` at repo paths. In **production**, the same JSON is shipped inside the release **runtime-bundle** (see below) — workers and operators must not depend on a git checkout.
+
+## Production release bundle (workers + operators, no git)
+
+Each promoted release under `/work/epimethyl/current/` includes:
+
+```
+/work/epimethyl/current/runtime-bundle/
+  domain/profiles/*.profile.json     # version-pinned with release
+  domain/fixtures/*.program.json
+  domain/checks/*/configs/*.program.json
+  schemas/  scripts/  deploy/
+```
+
+`METHYL_PROFILE_DIR` defaults to `…/runtime-bundle/domain/profiles` via `env/worker.env`.
+
+**Production run examples** (no repo paths):
+
+```bash
+methyl-workflow-run \
+  --program /work/epimethyl/current/runtime-bundle/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json","pipelineProfile":"mc_gene_fc"}' \
+  --parallel-workers 1 -v
+```
+
+Or set `METHYL_PROFILE=mc_gene_fc` (name resolves under `METHYL_PROFILE_DIR`).
+
+**Distributed workers** receive `resolvedConfig` in task payloads from instance `actionConfig`; they do not read profiles or programs at claim time when the gateway enriched context at start.
 
 ## `/work` layout (operator / cluster storage, not git)
 

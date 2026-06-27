@@ -46,7 +46,7 @@ Register pipelines per [`ci/README.md`](../../ci/README.md).
       manifest.json
       requirements-worker.lock
       wheels/*.whl
-      runtime-bundle/          # schemas, verify scripts, systemd units
+      runtime-bundle/          # schemas, domain programs/profiles, verify scripts, systemd units
       methyl-extractor-linux-aarch64.tar.gz
       methyl-extractor-linux-amd64.tar.gz
   docker/                      # shared Docker data-root (all GPU VMs)
@@ -158,7 +158,15 @@ Promote will:
 3. Install or refresh `/work/epimethyl/venv-<arch>/` from release wheels
 4. Optionally `docker pull` Parabricks into shared `docker/` (first arch only)
 5. Update `/work/epimethyl/current` symlink
-6. Write `env/worker.env` and `env/parabricks.env`
+6. Write `env/worker.env` and `env/parabricks.env` (includes `METHYL_PROFILE_DIR` → `current/runtime-bundle/domain/profiles`)
+
+### Domain programs and profiles (no git on workers)
+
+The runtime-bundle ships `workflow_engine/domain/` (profiles, DomainPrograms, compiler inputs) at:
+
+`/work/epimethyl/current/runtime-bundle/domain/`
+
+Use these paths for operator CLI runs and for `METHYL_PROFILE=<name>` resolution. GPU workers executing gateway-dispatched tasks rely on **materialized `resolvedConfig`** in task input, not on reading profile files at runtime.
 
 ## Rollback
 

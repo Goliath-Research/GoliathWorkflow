@@ -62,20 +62,13 @@ def load_profile_action_config(name_or_path: str | Path | None = None) -> Dict[s
         name_or_path = os.environ.get(PROFILE_ENV)
     if not name_or_path:
         return {}
-    p = Path(str(name_or_path)).expanduser()
-    if p.is_file():
-        data = json.loads(p.read_text(encoding="utf-8"))
-    else:
-        try:
-            from workflow_engine.domain.pipeline_profiles import load_profile
-        except ImportError:
-            repo_profile = Path(__file__).resolve().parents[3] / "workflow_engine" / "domain" / "profiles"
-            candidate = repo_profile / f"{name_or_path}.profile.json"
-            if not candidate.is_file():
-                return {}
-            data = json.loads(candidate.read_text(encoding="utf-8"))
-        else:
-            data = load_profile(name_or_path)
+    from .profile_paths import resolve_profile_path
+
+    try:
+        profile_path = resolve_profile_path(name_or_path)
+    except FileNotFoundError:
+        return {}
+    data = json.loads(profile_path.read_text(encoding="utf-8"))
     action = data.get("actionConfig") or data.get("step_config_overrides") or {}
     return dict(action) if isinstance(action, dict) else {}
 

@@ -117,6 +117,9 @@ build_runtime_bundle() {
       "${rsync_safe[@]}" "$REPO_ROOT/$sub/" "$RUNTIME_DIR/$sub/"
     fi
   done
+  if [[ -d "$REPO_ROOT/workflow_engine/domain" ]]; then
+    "${rsync_safe[@]}" "$REPO_ROOT/workflow_engine/domain/" "$RUNTIME_DIR/domain/"
+  fi
   # Ensure detect_platform and platform_matrix travel with scripts
   cp -f "$REPO_ROOT/scripts/detect_platform.sh" "$RUNTIME_DIR/scripts/"
   cp -f "$REPO_ROOT/scripts/platform_matrix.env" "$RUNTIME_DIR/scripts/"

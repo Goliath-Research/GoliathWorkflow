@@ -6,8 +6,6 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional
 
-_PROFILES_DIR = Path(__file__).resolve().parent / "profiles"
-
 # Deprecated profile names → canonical file (preset flags also aliased in PROFILE_PRESETS).
 _PROFILE_ALIASES: Dict[str, str] = {
     "buffy_mc_gene_fc": "mc_gene_fc",
@@ -116,18 +114,20 @@ def load_profile_file(path: Path) -> Dict[str, Any]:
 
 
 def load_profile(name_or_path: str | Path) -> Dict[str, Any]:
+    from methyl_utils.profile_paths import resolve_profile_path
+
     p = Path(name_or_path)
     if p.is_file():
         return load_profile_file(p)
     key = str(name_or_path)
     if key in _PROFILE_ALIASES:
         return load_profile(_PROFILE_ALIASES[key])
-    candidate = _PROFILES_DIR / f"{key}.profile.json"
-    if candidate.is_file():
-        return load_profile_file(candidate)
-    if key in PROFILE_PRESETS:
-        return {"pipelineProfile": key, **PROFILE_PRESETS[key]}
-    raise FileNotFoundError(f"Unknown pipeline profile: {name_or_path!r}")
+    try:
+        return load_profile_file(resolve_profile_path(key))
+    except FileNotFoundError:
+        if key in PROFILE_PRESETS:
+            return {"pipelineProfile": key, **PROFILE_PRESETS[key]}
+        raise FileNotFoundError(f"Unknown pipeline profile: {name_or_path!r}") from None
 
 
 def profile_action_config(profile: Mapping[str, Any]) -> Dict[str, Any]:
