@@ -188,3 +188,55 @@ def test_plan_validation_context_resume_includes_monte_carlo_runs_root(tmp_path:
     task_config = resumed.iterations[0].model_dump(mode="json")["taskConfig"]
     assert "monteCarloRunsRoot" in task_config
     assert Path(task_config["monteCarloRunsRoot"]).is_dir()
+
+
+def test_plan_validation_context_binary_centroid_groups(tmp_path: Path) -> None:
+    """Binary MC iterations must expose centroidGroups and run-scoped detect dirs."""
+    project_json = _write_minimal_binary_project(tmp_path)
+    context = plan_validation_context(
+        ValidationPlanRequest(
+            projectPath=str(project_json),
+            featureIterations=2,
+            qualityIterations=0,
+            overwrite=True,
+        )
+    )
+    first = context.iterations[0].model_dump(mode="json")
+    assert "centroidGroups" in first
+    assert len(first["centroidGroups"]) == 2
+    for grp in first["centroidGroups"]:
+        assert "addSamples" in grp and "removeSamples" in grp and "centroidDir" in grp
+        assert grp["centroidDir"].startswith(str(tmp_path / "work" / "demo_mc" / "monte_carlo_runs"))
+    run_project_path = Path(first["projectPath"])
+    run_root = run_project_path.parent
+    assert first["centroid1Dir"] == str(run_root / "centroids" / "controls" / "healthy" / "healthy")
+    assert first["centroid2Dir"] == str(run_root / "centroids" / "diseases" / "disease" / "disease")
+    assert first["detectOutDir"] == str(run_root / "detections" / "healthy" / "disease")
+    second = context.iterations[1].model_dump(mode="json")
+    assert second.get("previousRunDir")
+    assert "centroidGroups" in second
+
+
+def test_plan_validation_context_binary_resume_rehydrates_centroid_groups(tmp_path: Path) -> None:
+    project_json = _write_minimal_binary_project(tmp_path)
+    plan_validation_context(
+        ValidationPlanRequest(
+            projectPath=str(project_json),
+            featureIterations=1,
+            qualityIterations=0,
+        )
+    )
+    resumed = plan_validation_context(
+        ValidationPlanRequest(
+            projectPath=str(project_json),
+            featureIterations=1,
+            qualityIterations=0,
+            overwrite=False,
+        )
+    )
+    first = resumed.iterations[0].model_dump(mode="json")
+    assert "centroidGroups" in first
+    assert len(first["centroidGroups"]) == 2
+    assert first["centroid1Dir"]
+    assert first["centroid2Dir"]
+    assert first["detectOutDir"]

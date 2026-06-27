@@ -35,6 +35,7 @@ from .project_gen import (
     run_project_needs_regeneration,
     prepare_incremental_centroid_baseline,
 )
+from .reuse_splits import try_load_binary_split_from_run_dir, try_load_multiclass_split_from_run_dir
 from .split import load_and_resolve_sample_paths, stratified_split, stratified_split_multiclass
 from .storage_layout import mc_config_snapshot_path
 
@@ -220,6 +221,100 @@ def _monte_carlo_runs_root(config: MonteCarloConfig, base_project: Path) -> Tupl
     return runs_root, project_root
 
 
+def _attach_iteration_centroid_scope(
+    iteration: Dict[str, Any],
+    *,
+    layout: str,
+    project_path: Path,
+    cohort_labels: List[str],
+    train_by_label: Dict[str, List[str]],
+    previous_train_by_label: Optional[Dict[str, List[str]]] = None,
+) -> None:
+    """Attach per-group centroid scope and run-scoped detect dirs for workflow iterations."""
+    iteration["centroidGroups"] = build_group_centroid_scope(
+        base_project_path=project_path,
+        cohort_labels=cohort_labels,
+        train_by_label=train_by_label,
+        previous_train_by_label=previous_train_by_label,
+    )
+    if layout == "binary" and len(cohort_labels) >= 2:
+        from methyl_utils import load_project
+
+        run_project = load_project(str(project_path))
+        control_label, disease_label = cohort_labels[0], cohort_labels[1]
+        iteration["centroid1Dir"] = run_project.get_centroid_dir("control", control_label)
+        iteration["centroid2Dir"] = run_project.get_centroid_dir("disease", disease_label)
+        iteration["detectOutDir"] = run_project.get_detection_output_dir(control_label, disease_label)
+
+
+def _rehydrate_iteration_centroid_scope(
+    iteration: Dict[str, Any],
+    *,
+    layout: str,
+    run_dir: Path,
+    project_path: Path,
+    cohort_paths_list: List[Tuple[str, List[str]]],
+    cohort_labels: List[str],
+    samples_base_path: str,
+    previous_run_dir: Optional[Path],
+) -> None:
+    """Rebuild centroidGroups (and binary detect dirs) when reusing an existing run directory."""
+    train_by_label: Dict[str, List[str]]
+    previous_train_by_label: Optional[Dict[str, List[str]]] = None
+
+    if layout == "binary":
+        train_by_label = {cohort_labels[0]: [], cohort_labels[1]: []}
+        split = try_load_binary_split_from_run_dir(
+            run_dir,
+            cohort_paths_list[0][1],
+            cohort_paths_list[1][1],
+            samples_base_path,
+        )
+        if split is not None:
+            train_control, train_disease, _, _ = split
+            train_by_label = {
+                cohort_labels[0]: list(train_control),
+                cohort_labels[1]: list(train_disease),
+            }
+            if previous_run_dir is not None:
+                prev_split = try_load_binary_split_from_run_dir(
+                    previous_run_dir,
+                    cohort_paths_list[0][1],
+                    cohort_paths_list[1][1],
+                    samples_base_path,
+                )
+                if prev_split is not None:
+                    previous_train_by_label = {
+                        cohort_labels[0]: list(prev_split[0]),
+                        cohort_labels[1]: list(prev_split[1]),
+                    }
+    elif layout in {"multiclass", "hierarchical_multiclass"}:
+        train_by_label = {lbl: [] for lbl in cohort_labels}
+        loaded = try_load_multiclass_split_from_run_dir(
+            run_dir, cohort_paths_list, cohort_labels, samples_base_path
+        )
+        if loaded is not None:
+            train_m, _ = loaded
+            train_by_label = {lbl: list(train_m[lbl]) for lbl in cohort_labels}
+            if previous_run_dir is not None:
+                prev_loaded = try_load_multiclass_split_from_run_dir(
+                    previous_run_dir, cohort_paths_list, cohort_labels, samples_base_path
+                )
+                if prev_loaded is not None:
+                    previous_train_by_label = {lbl: list(prev_loaded[0][lbl]) for lbl in cohort_labels}
+    else:
+        return
+
+    _attach_iteration_centroid_scope(
+        iteration,
+        layout=layout,
+        project_path=project_path,
+        cohort_labels=cohort_labels,
+        train_by_label=train_by_label,
+        previous_train_by_label=previous_train_by_label,
+    )
+
+
 def _comparison_labels(base_project: Path, request: ValidationPlanRequest) -> List[str]:
     if request.orderedComparisonLabels:
         return list(request.orderedComparisonLabels)
@@ -292,8 +387,21 @@ def _materialize_iteration(
             "runId": display_run_id,
             "phase": phase,
             "projectPath": str(project_path.resolve()),
+            "runDir": str(run_dir.resolve()),
             "taskConfig": task_config,
         }
+        _rehydrate_iteration_centroid_scope(
+            iteration,
+            layout=layout,
+            run_dir=run_dir,
+            project_path=project_path,
+            cohort_paths_list=cohort_paths_list,
+            cohort_labels=cohort_labels,
+            samples_base_path=config.samples_base_path,
+            previous_run_dir=previous_run_dir,
+        )
+        if previous_run_dir is not None:
+            iteration["previousRunDir"] = str(previous_run_dir.resolve())
         return (
             _tag_iteration_as_stratified_draw(
                 iteration,
@@ -419,14 +527,32 @@ def _materialize_iteration(
         "runDir": str(run_dir.resolve()),
         "taskConfig": task_config,
     }
-    if layout in {"multiclass", "hierarchical_multiclass"}:
-        iteration["centroidGroups"] = build_group_centroid_scope(
-            base_project_path=project_path,
-            cohort_labels=cohort_labels,
-            train_by_label=train_m,
-            previous_train_by_label=previous_train_by_label,
-        )
+    train_by_label_for_scope: Optional[Dict[str, List[str]]] = None
+    previous_train_by_label_for_scope: Optional[Dict[str, List[str]]] = None
+    if layout == "binary":
+        train_by_label_for_scope = {
+            cohort_labels[0]: list(train_control),
+            cohort_labels[1]: list(train_disease),
+        }
+        if previous_train_control is not None or previous_train_disease is not None:
+            previous_train_by_label_for_scope = {
+                cohort_labels[0]: list(previous_train_control or []),
+                cohort_labels[1]: list(previous_train_disease or []),
+            }
+    elif layout in {"multiclass", "hierarchical_multiclass"}:
+        train_by_label_for_scope = {lbl: list(train_m[lbl]) for lbl in cohort_labels}
+        previous_train_by_label_for_scope = previous_train_by_label
         previous_train_by_label = {lbl: list(train_m[lbl]) for lbl in cohort_labels}
+
+    if train_by_label_for_scope is not None:
+        _attach_iteration_centroid_scope(
+            iteration,
+            layout=layout,
+            project_path=project_path,
+            cohort_labels=cohort_labels,
+            train_by_label=train_by_label_for_scope,
+            previous_train_by_label=previous_train_by_label_for_scope,
+        )
     if previous_run_dir is not None:
         iteration["previousRunDir"] = str(previous_run_dir.resolve())
 
