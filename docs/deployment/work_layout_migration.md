@@ -63,7 +63,7 @@ bash scripts/migrate_work_layout_fs.sh \
 ```bash
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/buffy_mc_gene_fc.profile.json \
+  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'
 ```
 

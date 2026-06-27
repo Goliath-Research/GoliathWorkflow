@@ -250,7 +250,8 @@ Named presets live in `workflow_engine/domain/profiles/*.profile.json`. Pass via
 | `staged_ovr_mc` | staged OvR + FeatureCuts | on | discovery | MC stability + progression |
 | `staged_full_lifecycle` | staged OvR + FeatureCuts | on | discovery | MC + freeze + model lifecycle |
 | `staged_progression_interpretation` | discovery_only | off | discovery | mapper/enricher + progression (no MC) |
-| `buffy_mc_gene_fc` | Buffy healthy vs PCa MC | on | classifier-extended | gene FeatureCuts stability |
+| `mc_gene_fc` | Binary cohort MC + stability (analyte-agnostic; use manifest `regulatory`) | on | classifier-extended | gene FeatureCuts stability |
+| `buffy_mc_gene_fc` | *(deprecated alias → `mc_gene_fc`)* | | | |
 
 ```json
 {

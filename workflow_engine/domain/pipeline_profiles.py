@@ -8,6 +8,11 @@ from typing import Any, Dict, Mapping, Optional
 
 _PROFILES_DIR = Path(__file__).resolve().parent / "profiles"
 
+# Deprecated profile names → canonical file (preset flags also aliased in PROFILE_PRESETS).
+_PROFILE_ALIASES: Dict[str, str] = {
+    "buffy_mc_gene_fc": "mc_gene_fc",
+}
+
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
     "runDmpSelection": False,
     "runGeneFeaturecuts": False,
@@ -90,6 +95,13 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "stabilityFeaturecutsEnabled": True,
         "stabilityGeneFeaturecutsEnabled": True,
     },
+    "mc_gene_fc": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": True,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": True,
+    },
+    # Deprecated alias — use mc_gene_fc
     "buffy_mc_gene_fc": {
         "runDmpSelection": True,
         "runGeneFeaturecuts": True,
@@ -107,11 +119,14 @@ def load_profile(name_or_path: str | Path) -> Dict[str, Any]:
     p = Path(name_or_path)
     if p.is_file():
         return load_profile_file(p)
-    candidate = _PROFILES_DIR / f"{name_or_path}.profile.json"
+    key = str(name_or_path)
+    if key in _PROFILE_ALIASES:
+        return load_profile(_PROFILE_ALIASES[key])
+    candidate = _PROFILES_DIR / f"{key}.profile.json"
     if candidate.is_file():
         return load_profile_file(candidate)
-    if name_or_path in PROFILE_PRESETS:
-        return {"pipelineProfile": name_or_path, **PROFILE_PRESETS[name_or_path]}
+    if key in PROFILE_PRESETS:
+        return {"pipelineProfile": key, **PROFILE_PRESETS[key]}
     raise FileNotFoundError(f"Unknown pipeline profile: {name_or_path!r}")
 
 

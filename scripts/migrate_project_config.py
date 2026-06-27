@@ -96,10 +96,21 @@ def _has_stages(data: Dict[str, Any]) -> bool:
     return False
 
 
+def _uses_mc_gene_fc_profile(data: Dict[str, Any]) -> bool:
+    """MC + DMP/gene FeatureCuts stability (analyte-agnostic; regulatory lives in manifest)."""
+    sc = data.get("step_config")
+    if isinstance(sc, dict):
+        val = sc.get("validation")
+        if isinstance(val, dict) and val.get("run_stability") and val.get("stability_gene_featurecuts_enabled"):
+            return True
+    name = str(data.get("project_name", ""))
+    return name in ("Buffy_healthy_vs_PCa", "Plasma_healthy_vs_PCa")
+
+
 def suggest_profile_name(data: Dict[str, Any]) -> str:
+    if _uses_mc_gene_fc_profile(data):
+        return "mc_gene_fc"
     name = str(data.get("project_name", "study"))
-    if "Buffy" in name or "buffy" in name.lower():
-        return "buffy_mc_gene_fc"
     if "PCa1" in name or "Healthy_vs_PCa" in name:
         return "staged_ovr_mc"
     return "discovery_gene_featurecuts"

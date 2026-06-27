@@ -1,5 +1,12 @@
 {
-  "pipelineProfile": "buffy_mc_gene_fc",
+  "pipelineProfile": "mc_gene_fc",
+  "runDmpSelection": true,
+  "runGeneFeaturecuts": true,
+  "runBiomarkerFilter": false,
+  "runGeneFeatureSelect": false,
+  "stabilityFeaturecutsEnabled": true,
+  "stabilityGeneFeaturecutsEnabled": true,
+  "stabilityGeneBiomarkerFilterEnabled": false,
   "actionConfig": {
     "alignment_qc": {},
     "methyl_extract": {
@@ -173,15 +180,6 @@
             "feature_family_set": "gene"
           }
         }
-      },
-      "regulatory": {
-        "stage": "feasibility",
-        "primary_analyte": "buffy_coat",
-        "model_training_analyte": "buffy_coat",
-        "sample_type": "Buffy-coat WGBS (CG)",
-        "intended_use_summary": "MC stability: DMP and gene FeatureCuts balanced-accuracy tuning (buffy-coat healthy vs PCa).",
-        "claim_boundary": "Feasibility evidence only; not for clinical claims.",
-        "auto_apply_analyte_profile": true
       }
     }
   }

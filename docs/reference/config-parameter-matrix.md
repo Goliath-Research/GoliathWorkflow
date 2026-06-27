@@ -53,7 +53,7 @@ Profiles combine **IF-friendly booleans** with **`actionConfig`** slices keyed b
 | `stabilityFeaturecutsEnabled` | DMP stability axis in MC | Profile or `actionConfig.validation` |
 | `stabilityGeneFeaturecutsEnabled` | Gene stability axis in MC | Profile or `actionConfig.validation` |
 
-Named staged/Buffy packs (repo): `staged_ovr_mc`, `staged_full_lifecycle`, `staged_progression_interpretation`, `buffy_mc_gene_fc`. See [`workflow_engine/domain/profiles/`](../../workflow_engine/domain/profiles/).
+Named staged/MC packs (repo): `staged_ovr_mc`, `staged_full_lifecycle`, `staged_progression_interpretation`, `mc_gene_fc` (`buffy_mc_gene_fc` is a deprecated alias). See [`workflow_engine/domain/profiles/`](../../workflow_engine/domain/profiles/).
 
 Loader and flag seeding: `workflow_engine/domain/pipeline_profiles.py`, `workflow_engine/domain/workflow_context.py`.
 
