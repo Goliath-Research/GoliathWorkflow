@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from methyl_validation.config import parse_validation_profile
 from methyl_validation.workflow_planner import ValidationPlanRequest, plan_validation_context
 
 
@@ -102,6 +103,37 @@ def test_plan_validation_context_requires_validation_block(tmp_path: Path) -> No
     os.environ.pop("METHYL_PROFILE", None)
     with pytest.raises(ValueError, match="validation action config"):
         plan_validation_context({"projectPath": str(project_json), "featureIterations": 1})
+
+
+def test_plan_validation_context_profile_overrides_exclude_legacy_defaults(tmp_path: Path) -> None:
+    """Workflow resolvedConfig must not re-expand flat backend defaults on dump."""
+    project_json = _write_minimal_binary_project(tmp_path)
+    resolved = {
+        "train_fraction": 0.8,
+        "n_iterations": 1,
+        "seed": 42,
+        "run_stability": True,
+        "backend_profiles": {
+            "ecdf": {
+                "enabled": True,
+                "params": {
+                    "feature_mode": "raw_gene",
+                    "feature_family_set": "gene",
+                },
+            }
+        },
+    }
+    profile = parse_validation_profile(resolved)
+    assert profile is not None
+    context = plan_validation_context(
+        ValidationPlanRequest(
+            projectPath=str(project_json),
+            featureIterations=1,
+            qualityIterations=0,
+        ),
+        profile_overrides=profile,
+    )
+    assert len(context.iterations) == 1
 
 
 def test_plan_validation_context_resume_includes_monte_carlo_runs_root(tmp_path: Path) -> None:

@@ -19,6 +19,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from .cohort_inference import infer_monte_carlo_cohorts_from_project
 from .config import MonteCarloConfig, ValidationStepConfig, parse_validation_profile
 from .mc_config_load import apply_project_regulatory_to_mc_dict, write_mc_config_snapshot
+from .utils.migrate_backend_config import (
+    LEGACY_BACKEND_KEYS,
+    merge_legacy_validation_keys_into_backend_profiles,
+)
 from .mc_manifest import write_detector_featurecuts_override, write_mapper_classifier_override
 from .project_gen import (
     build_group_centroid_scope,
@@ -161,7 +165,9 @@ def _load_config_from_project(
 
     project = load_project(str(base_project))
     if profile_overrides is not None:
-        validation = profile_overrides.model_dump(exclude_none=True)
+        # Only materialized profile fields — do not re-expand MonteCarloConfig defaults
+        # (legacy flat backend keys) from ValidationStepConfig.
+        validation = profile_overrides.model_dump(exclude_none=True, exclude_unset=True)
     else:
         validation = resolve_for_project("validation", project)
     if not validation:
@@ -175,6 +181,9 @@ def _load_config_from_project(
         raise ValueError(
             "Could not infer >=2 Monte Carlo cohorts from project controls/diseases sample_paths."
         )
+
+    if any(k in validation for k in LEGACY_BACKEND_KEYS):
+        validation, _ = merge_legacy_validation_keys_into_backend_profiles(validation)
 
     mc_dict = apply_project_regulatory_to_mc_dict(
         {
