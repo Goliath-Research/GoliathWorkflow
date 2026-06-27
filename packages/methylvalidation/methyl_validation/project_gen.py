@@ -37,6 +37,17 @@ def run_project_needs_regeneration(project_path: Path) -> bool:
     return "step_config" in data
 
 
+def monte_carlo_runs_have_legacy_projects(monte_carlo_runs_root: Path) -> bool:
+    """True when any ``run_*/project.json`` under the MC root embeds legacy ``step_config``."""
+    root = Path(monte_carlo_runs_root)
+    if not root.is_dir():
+        return False
+    for project_path in sorted(root.glob("run_*/project.json")):
+        if run_project_needs_regeneration(project_path):
+            return True
+    return False
+
+
 def _sample_name_from_path(full_path: str, base_path: str) -> str:
     """Return sample folder name (last component) for train CSV format."""
     p = Path(full_path)

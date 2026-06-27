@@ -375,6 +375,20 @@ def maybe_skip_action(
     if record.output_signature != compute_output_signature(record.artifacts):
         return None
 
+    if entry.action_name == "validation.plan_iterations" and output_dir is not None:
+        try:
+            from methyl_validation.project_gen import monte_carlo_runs_have_legacy_projects
+
+            if monte_carlo_runs_have_legacy_projects(output_dir):
+                logger.info(
+                    "Not skipping %s: legacy step_config found under %s",
+                    entry.action_name,
+                    output_dir,
+                )
+                return None
+        except Exception:
+            logger.debug("legacy MC run scan failed for %s", output_dir, exc_info=True)
+
     logger.info(
         "Skipping %s (signature match, manifest %s)",
         entry.action_name,

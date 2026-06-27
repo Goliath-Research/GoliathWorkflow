@@ -147,6 +147,37 @@ def test_force_rerun_bypasses_skip(tmp_path: Path) -> None:
     assert maybe_skip_action(entry, input_json) is None
 
 
+def test_plan_iterations_skip_blocked_by_legacy_mc_run_project(tmp_path: Path) -> None:
+    from methyl_worker.task_models.validation_models import ValidationPlanTaskOutput
+
+    entry = find_catalog_entry("validation.plan_iterations")
+    assert entry is not None
+
+    mc_root = tmp_path / "Study" / "monte_carlo_runs"
+    legacy_run = mc_root / "run_0002"
+    legacy_run.mkdir(parents=True)
+    (legacy_run / "project.json").write_text(
+        json.dumps({"project_name": "run_0002", "step_config": {"detection": {"alpha": 0.05}}}),
+        encoding="utf-8",
+    )
+
+    project = tmp_path / "configs" / "project.json"
+    _write_study_project(project, tmp_path)
+
+    input_json = {
+        "projectPath": str(project),
+        "featureIterations": 10,
+        "resolvedConfig": {"n_iterations": 10},
+    }
+    input_model = validate_input(entry, strip_runtime_input(input_json))
+    output = ValidationPlanTaskOutput(status="ok", n_iterations=10, iterations=[])
+    record_action_execution(entry, input_json, input_model, execution_result_from_output(output))
+
+    assert manifest_path_for(mc_root, entry.action_name, "default").is_file()
+    skipped = maybe_skip_action(entry, input_json)
+    assert skipped is None
+
+
 def test_normalize_task_input_preserves_force_rerun() -> None:
     from methyl_worker.task_validation import normalize_task_input
 
