@@ -32,6 +32,7 @@ from .project_gen import (
     generate_run_project_hierarchical_multiclass,
     generate_run_project_multiclass,
     infer_monte_carlo_layout,
+    run_project_needs_regeneration,
     prepare_incremental_centroid_baseline,
 )
 from .split import load_and_resolve_sample_paths, stratified_split, stratified_split_multiclass
@@ -275,7 +276,7 @@ def _materialize_iteration(
         )
 
     project_path = run_dir / "project.json"
-    if project_path.is_file() and not overwrite:
+    if project_path.is_file() and not overwrite and not run_project_needs_regeneration(project_path):
         task_config = {
             "runId": display_run_id,
             "phase": phase,

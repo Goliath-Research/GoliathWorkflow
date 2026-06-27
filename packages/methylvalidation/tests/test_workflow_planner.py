@@ -136,6 +136,38 @@ def test_plan_validation_context_profile_overrides_exclude_legacy_defaults(tmp_p
     assert len(context.iterations) == 1
 
 
+def test_plan_validation_context_regenerates_legacy_step_config_run_project(tmp_path: Path) -> None:
+    """Pre-migration MC run dirs with embedded step_config must be rewritten."""
+    project_json = _write_minimal_binary_project(tmp_path)
+    work = tmp_path / "work"
+    runs_root = work / "demo_mc" / "monte_carlo_runs" / "run_0001"
+    runs_root.mkdir(parents=True)
+    legacy = runs_root / "project.json"
+    legacy.write_text(
+        json.dumps(
+            {
+                "project_name": "run_0001",
+                "output_base": str(work / "demo_mc" / "monte_carlo_runs"),
+                "step_config": {"detection": {"alpha": 0.05}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    context = plan_validation_context(
+        ValidationPlanRequest(
+            projectPath=str(project_json),
+            featureIterations=1,
+            qualityIterations=0,
+        )
+    )
+    run_project = Path(context.iterations[0].projectPath)
+    assert run_project == legacy.resolve()
+    payload = json.loads(run_project.read_text(encoding="utf-8"))
+    assert "step_config" not in payload
+    assert payload.get("controls")
+    assert payload.get("diseases")
+
+
 def test_plan_validation_context_resume_includes_monte_carlo_runs_root(tmp_path: Path) -> None:
     project_json = _write_minimal_binary_project(tmp_path)
     plan_validation_context(

@@ -22,6 +22,21 @@ def write_run_project_json(project: Dict[str, Any], project_path: Path) -> None:
         json.dump(payload, f, indent=2)
 
 
+def run_project_needs_regeneration(project_path: Path) -> bool:
+    """True when an on-disk MC run project must be rewritten (legacy or invalid)."""
+    project_path = Path(project_path)
+    if not project_path.is_file():
+        return True
+    try:
+        with open(project_path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return True
+    if not isinstance(data, dict):
+        return True
+    return "step_config" in data
+
+
 def _sample_name_from_path(full_path: str, base_path: str) -> str:
     """Return sample folder name (last component) for train CSV format."""
     p = Path(full_path)
@@ -424,6 +439,7 @@ def generate_run_project(
 
     # Build project: same structure as pipeline expects (controls/diseases plural ok per pipeline normalizer)
     project = dict(base)
+    project.pop("step_config", None)
     project["output_base"] = output_base.rstrip("/")
     project["project_name"] = run_id
     project["samples_base_path"] = samples_base_path
@@ -614,6 +630,7 @@ def generate_run_project_multiclass(
         json.dump(val_payload, f, indent=2)
 
     project = dict(base)
+    project.pop("step_config", None)
     project["output_base"] = output_base.rstrip("/")
     project["project_name"] = run_id
     project["samples_base_path"] = samples_base_path
@@ -1019,6 +1036,7 @@ def generate_run_project_hierarchical_multiclass(
         json.dump(val_payload, f, indent=2)
 
     project = dict(base)
+    project.pop("step_config", None)
     project["output_base"] = output_base.rstrip("/")
     project["project_name"] = run_id
     project["samples_base_path"] = samples_base_path
