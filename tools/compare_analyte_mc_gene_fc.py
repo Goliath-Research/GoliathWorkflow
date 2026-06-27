@@ -111,20 +111,35 @@ def _score_analytes(
     buffy_recurrence = recurrence_score(len(buffy_recurrent), buffy_n_runs, expected)
     plasma_recurrence = recurrence_score(len(plasma_recurrent), plasma_n_runs, expected)
 
-    concordance = _jaccard(buffy_recurrent, plasma_recurrent)
-    concordance_score = max(1.0, min(5.0, 1.0 + concordance * 4.0))
+    recurrent_jaccard = _jaccard(buffy_recurrent, plasma_recurrent)
+
+    def concordance_score(recurrent: Set[str]) -> float:
+        """Per-analyte overlap fraction: share of recurrent genes also recurrent in the other analyte."""
+        if not recurrent:
+            return 1.0
+        overlap_frac = len(shared_recurrent) / len(recurrent)
+        return max(1.0, min(5.0, 1.0 + overlap_frac * 4.0))
+
+    buffy_concordance = concordance_score(buffy_recurrent)
+    plasma_concordance = concordance_score(plasma_recurrent)
 
     scores = {
         "buffy_coat": {
             "mc_gene_recurrence": round(buffy_recurrence, 2),
-            "cross_analyte_concordance": round(concordance_score, 2),
+            "cross_analyte_concordance": round(buffy_concordance, 2),
+            "cross_analyte_overlap_fraction": round(
+                len(shared_recurrent) / len(buffy_recurrent) if buffy_recurrent else 1.0, 4
+            ),
             "mean_balanced_accuracy_mc": mean_ba_buffy,
             "recurrent_gene_count": len(buffy_recurrent),
             "mc_runs_with_panels": buffy_n_runs,
         },
         "cfdna": {
             "mc_gene_recurrence": round(plasma_recurrence, 2),
-            "cross_analyte_concordance": round(concordance_score, 2),
+            "cross_analyte_concordance": round(plasma_concordance, 2),
+            "cross_analyte_overlap_fraction": round(
+                len(shared_recurrent) / len(plasma_recurrent) if plasma_recurrent else 1.0, 4
+            ),
             "mean_balanced_accuracy_mc": mean_ba_plasma,
             "recurrent_gene_count": len(plasma_recurrent),
             "mc_runs_with_panels": plasma_n_runs,
@@ -155,7 +170,7 @@ def _score_analytes(
         "weights": weights,
         "scores": scores,
         "shared_recurrent_genes": len(shared_recurrent),
-        "recurrent_jaccard": concordance,
+        "recurrent_jaccard": recurrent_jaccard,
         "weighted_total": {"buffy_coat": round(buffy_total, 3), "cfdna": round(plasma_total, 3)},
         "recommended_analyte": recommendation,
         "small_n_warning": (
