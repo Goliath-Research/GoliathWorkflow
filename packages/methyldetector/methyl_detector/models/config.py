@@ -405,6 +405,13 @@ class MethylDetectorConfig(BaseModel):
             "Use only to avoid trivially tiny panels; does not apply a large fixed export floor."
         ),
     )
+    fail_if_below_target: bool = Field(
+        default=False,
+        description=(
+            "Strict FeatureCuts: fail when target BA is unmet or selected k is below min_core_dmps "
+            "instead of expanding the panel into worse held-out performance."
+        ),
+    )
     classifier_export_margin_pct: float = Field(
         default=0.10,
         ge=0.0,

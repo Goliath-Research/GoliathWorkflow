@@ -29,8 +29,6 @@ from .raw_gene_features import (
     build_gene_panel_feature_weights,
     build_raw_gene_feature_table,
 )
-from .dmp_panel import load_classifier_dmp_panel, load_discovery_dmp_panel
-
 logger = logging.getLogger(__name__)
 
 GENE_STABILITY_DIR = "gene_stability"
@@ -60,15 +58,34 @@ def _load_dmp_panel_for_gene_featurecuts(
     run_dir: Path,
     config: Any,
 ) -> tuple[Optional[pd.DataFrame], str]:
-    """Resolve DMP panel for gene features: discovery (default for MC) or classifier."""
+    """Resolve DMP panel for gene features: discovery, selected/classifier, or stable panel."""
+    from .dmp_panel import (
+        load_classifier_dmp_panel,
+        load_discovery_dmp_panel,
+        load_selected_dmp_panel,
+        load_stable_dmp_panel,
+    )
+
     max_dmps = getattr(config, "stability_gene_featurecuts_max_dmps", None)
-    source = str(getattr(config, "stability_gene_featurecuts_dmp_source", "discovery") or "discovery").strip().lower()
-    if source == "classifier":
+    loci = getattr(config, "gene_featurecuts_loci_source", None)
+    source = str(
+        loci
+        or getattr(config, "stability_gene_featurecuts_dmp_source", "discovery")
+        or "discovery"
+    ).strip().lower()
+    if source in ("stable", "stable_panel"):
+        stable_csv = getattr(config, "freeze_stable_dmp_csv", None)
+        dmp_df = load_stable_dmp_panel(run_dir, stable_csv=stable_csv, max_dmps=max_dmps)
+        if dmp_df is not None and not dmp_df.empty:
+            return dmp_df, "stable"
+    if source in ("classifier", "featurecuts_selected", "selected"):
+        dmp_df = load_selected_dmp_panel(run_dir, max_dmps=max_dmps)
+        if dmp_df is not None and not dmp_df.empty:
+            return dmp_df, "classifier"
         return load_classifier_dmp_panel(run_dir, max_dmps=max_dmps), "classifier"
     dmp_df = load_discovery_dmp_panel(run_dir, max_dmps=max_dmps)
     if dmp_df is not None and not dmp_df.empty:
         return dmp_df, "discovery"
-    # Backward-compatible fallback when discovery exports are missing.
     return load_classifier_dmp_panel(run_dir, max_dmps=max_dmps), "classifier"
 
 
@@ -556,7 +573,9 @@ def run_gene_featurecuts_for_iteration(
     if feat_train.X.shape[1] == 0:
         return 1, "", "Gene FeatureCuts: no gene features could be built from DMP/mapper annotations"
 
-    target_ba = getattr(config, "stability_target_balanced_accuracy", None)
+    target_ba = getattr(config, "gene_featurecuts_target_ba", None)
+    if target_ba is None:
+        target_ba = getattr(config, "stability_target_balanced_accuracy", None)
     min_genes = getattr(config, "stability_min_selected_genes", None)
     best_k, best_ba, best_metrics = _search_gene_k(
         X_train=np.asarray(feat_train.X, dtype=np.float64),

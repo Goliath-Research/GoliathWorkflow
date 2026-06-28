@@ -28,9 +28,10 @@ def selection_outputs_exist(config: DmpSelectionConfig) -> bool:
     out = Path(config.output_dir)
     chrom = config.chromosome
     core = out / f"dmps-{chrom}-classifier.csv"
+    selected = out / f"dmps-{chrom}-selected.csv"
     ext = out / f"dmps-{chrom}-classifier-extended.csv"
     audit = _audit_path(config)
-    return core.is_file() and ext.is_file() and audit.is_file()
+    return core.is_file() and selected.is_file() and ext.is_file() and audit.is_file()
 
 
 def _config_hash(config: DmpSelectionConfig) -> str:
@@ -74,6 +75,7 @@ def run_dmp_selection(
                 "n_dmps_extended": prior.get("n_dmps_extended"),
                 "discovery_csv": prior.get("discovery_csv"),
                 "classifier_csv": str(out_dir / f"dmps-{config.chromosome}-classifier.csv"),
+                "selected_csv": str(out_dir / f"dmps-{config.chromosome}-selected.csv"),
                 "extended_csv": str(out_dir / f"dmps-{config.chromosome}-classifier-extended.csv"),
                 "audit_path": str(audit_path),
                 "result_code": 0,
@@ -134,6 +136,7 @@ def run_dmp_selection(
         "n_dmps_extended": audit["n_dmps_extended"],
         "discovery_csv": audit["discovery_csv"],
         "classifier_csv": str(out_dir / f"dmps-{config.chromosome}-classifier.csv"),
+        "selected_csv": str(out_dir / f"dmps-{config.chromosome}-selected.csv"),
         "extended_csv": str(out_dir / f"dmps-{config.chromosome}-classifier-extended.csv"),
         "audit_path": str(audit_path),
         "result_code": 0,

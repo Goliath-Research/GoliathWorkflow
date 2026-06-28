@@ -61,6 +61,7 @@ from .validator_metrics import (
     write_step_timings_csv,
     write_summary_json,
 )
+from .modeling_modes import resolve_gene_stability_preferences
 from .stability import (
     evaluate_dmp_stability_convergence,
     evaluate_gene_stability_convergence,
@@ -2666,7 +2667,7 @@ def main() -> None:
             gene_min_freq=config.stability_gene_freq,
             min_balanced_accuracy=config.stability_min_balanced_accuracy,
             prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
-            prefer_classifier_gene_panels=bool(config.stability_gene_featurecuts_enabled),
+            **resolve_gene_stability_preferences(config.model_dump(mode="python")),
             dual_cutoff_enabled=bool(config.stability_dual_cutoff_enabled),
             relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
             relaxed_multiplier=config.stability_relaxed_multiplier,
@@ -3208,7 +3209,7 @@ def main() -> None:
                         monte_carlo_runs_root=monte_carlo_runs_root,
                         min_frequency=float(config.stability_gene_freq),
                         min_balanced_accuracy=config.stability_min_balanced_accuracy,
-                        prefer_classifier_gene_panels=bool(config.stability_gene_featurecuts_enabled),
+                        **resolve_gene_stability_preferences(config.model_dump(mode="python")),
                         min_iterations=int(config.stability_min_iterations),
                         convergence_window=int(config.stability_convergence_window),
                         convergence_jaccard=float(config.stability_convergence_jaccard),
@@ -3283,7 +3284,7 @@ def main() -> None:
             gene_min_freq=config.stability_gene_freq,
             min_balanced_accuracy=config.stability_min_balanced_accuracy,
             prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
-            prefer_classifier_gene_panels=bool(config.stability_gene_featurecuts_enabled),
+            **resolve_gene_stability_preferences(config.model_dump(mode="python")),
             dual_cutoff_enabled=bool(config.stability_dual_cutoff_enabled),
             relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
             relaxed_multiplier=config.stability_relaxed_multiplier,

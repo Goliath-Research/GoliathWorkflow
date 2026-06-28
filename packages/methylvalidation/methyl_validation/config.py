@@ -866,12 +866,83 @@ class MonteCarloConfig(BaseModel):
             "Limits feature-matrix width and k-search cost when mapper exports tens of thousands of genes."
         ),
     )
-    stability_gene_featurecuts_dmp_source: Literal["discovery", "classifier"] = Field(
+    dmp_modeling_mode: Optional[Literal["raw_pool", "featurecuts", "stable_panel"]] = Field(
+        default=None,
+        description=(
+            "Statistical DMP axis: raw_pool (discovery only), featurecuts (BA-gated panel), "
+            "or stable_panel (frozen consensus from prior phase). Seeds legacy stability flags when set."
+        ),
+    )
+    gene_modeling_mode: Optional[
+        Literal["none", "mapper_ranked", "featurecuts", "from_stable_dmp_panel"]
+    ] = Field(
+        default=None,
+        description=(
+            "Statistical gene axis: none, mapper_ranked (annotation stability), featurecuts (BA-gated gene panel), "
+            "or from_stable_dmp_panel (map stable loci then optional gene FC)."
+        ),
+    )
+    dmp_featurecuts_target_ba: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Held-out BA gate for DMP FeatureCuts (separate from gene FC).",
+    )
+    gene_featurecuts_target_ba: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Held-out BA gate for gene FeatureCuts (separate from DMP FC).",
+    )
+    dmp_featurecuts_min_dmps: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Minimum DMP panel size after FC; fail/exclude run when unmet (no BA-diluting expansion).",
+    )
+    dmp_featurecuts_max_dmps: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Upper cap on DMP FeatureCuts k-search / export.",
+    )
+    dmp_featurecuts_fail_if_below_target: bool = Field(
+        default=False,
+        description=(
+            "Strict DMP FC: exclude iteration when BA target unmet or panel below min_dmps "
+            "(do not expand into worse BA)."
+        ),
+    )
+    gene_featurecuts_min_genes: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Minimum gene panel size after gene FC (alias for stability_min_selected_genes).",
+    )
+    gene_featurecuts_max_genes: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Cap ranked mapper gene pool before gene FC k-search.",
+    )
+    gene_featurecuts_loci_source: Optional[
+        Literal["raw_pool", "featurecuts_selected", "stable_panel"]
+    ] = Field(
+        default=None,
+        description=(
+            "Loci fed into gene FC: raw_pool (discovery), featurecuts_selected (classifier), "
+            "or stable_panel (Phase B two-stage workflows)."
+        ),
+    )
+    stability_gene_recurrence_source: Optional[Literal["enricher", "mapper", "classifier"]] = Field(
+        default=None,
+        description=(
+            "Gene stability aggregation source: enricher genes, mapper-ranked genes, or gene FC panels."
+        ),
+    )
+    stability_gene_featurecuts_dmp_source: Literal["discovery", "classifier", "stable"] = Field(
         default="discovery",
         description=(
             "DMP CSV layer used to build gene FeatureCuts features. "
             "'discovery' maps all biologically filtered loci to genes (recommended for discovery_gene_featurecuts). "
-            "'classifier' uses FeatureCuts-selected DMP panels only."
+            "'classifier' uses FeatureCuts-selected DMP panels only. "
+            "'stable' uses a frozen stable DMP panel CSV (two-phase mode 5)."
         ),
     )
     stability_mapper_enrich_disease: bool = Field(
@@ -1676,6 +1747,32 @@ class MonteCarloConfig(BaseModel):
                 "Monte Carlo config needs at least two cohorts: set cohorts: [{label, csv}, ...] "
                 "or legacy healthy_csv and disease_csv."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _apply_modeling_modes(self) -> "MonteCarloConfig":
+        from .modeling_modes import apply_modeling_modes_to_validation_dict
+
+        derived = apply_modeling_modes_to_validation_dict(self.model_dump(mode="python"))
+        updates: Dict[str, Any] = {}
+        for key in (
+            "dmp_modeling_mode",
+            "gene_modeling_mode",
+            "stability_featurecuts_enabled",
+            "stability_gene_featurecuts_enabled",
+            "stability_target_balanced_accuracy",
+            "stability_min_core_dmps",
+            "stability_classifier_export_max_dmps",
+            "stability_min_selected_genes",
+            "stability_gene_featurecuts_max_genes",
+            "gene_featurecuts_loci_source",
+            "stability_gene_featurecuts_dmp_source",
+            "stability_gene_recurrence_source",
+        ):
+            if key in derived and derived[key] != getattr(self, key, None):
+                updates[key] = derived[key]
+        if updates:
+            return self.model_copy(update=updates)
         return self
 
     @model_validator(mode="after")

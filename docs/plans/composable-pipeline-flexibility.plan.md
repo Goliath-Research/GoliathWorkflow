@@ -275,3 +275,19 @@ Expect: discovery CSVs, mapper outputs, enricher gene tables, `stability/gene_fr
 4. **Fix existing mc_stability programs** — full FeatureCuts path as optional profile.
 5. **Docs + tests**.
 6. **Phase 2**: gene_feature_select + biomarker decoupling.
+
+---
+
+## Statistical modeling modes (implemented)
+
+Process-agnostic DMP/gene axes live in `MonteCarloConfig` (`dmp_modeling_mode`, `gene_modeling_mode`) and generic profiles under `workflow_engine/domain/profiles/mc_*.profile.json`. See [`docs/reference/domain-program-language.md`](../reference/domain-program-language.md) for the five-mode matrix and two-phase (`phase_a_dmp_stability` / `phase_b_gene_from_stable_dmps`) wiring via `stableDmpCsv` in instance context.
+
+| Mode | Profile | Notes |
+|------|---------|-------|
+| 1 | `mc_dmp_discovery` | Discovery pool + enricher gene stability |
+| 2 | `mc_dmp_featurecuts` | DMP FC with separate `dmp_featurecuts_target_ba` |
+| 3 | `mc_gene_mapper` | `stability_gene_recurrence_source: mapper` |
+| 4 | `mc_gene_featurecuts` | Gene FC on discovery-mapped loci; split BA targets |
+| 5 | `phase_a_*` → `phase_b_*` | Artifact-driven stable panel for Phase B gene FC |
+
+Downstream DMP consumers should read `dmps-*-selected.csv` (written alongside legacy classifier exports).

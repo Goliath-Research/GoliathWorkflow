@@ -9,6 +9,8 @@ from typing import Any, Dict, Mapping, Optional
 # Deprecated profile names → canonical file (preset flags also aliased in PROFILE_PRESETS).
 _PROFILE_ALIASES: Dict[str, str] = {
     "buffy_mc_gene_fc": "mc_gene_fc",
+    "gene_enricher_stability": "mc_dmp_discovery",
+    "dmp_panel_stability": "mc_dmp_featurecuts",
 }
 
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
@@ -106,7 +108,92 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "stabilityFeaturecutsEnabled": True,
         "stabilityGeneFeaturecutsEnabled": True,
     },
+    # Statistical-mode profiles (process-agnostic; study facts live in project.json)
+    "mc_dmp_discovery": {
+        "runDmpSelection": False,
+        "runGeneFeaturecuts": False,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": False,
+        "stabilityGeneFeaturecutsEnabled": False,
+        "stabilityGeneBiomarkerFilterEnabled": False,
+    },
+    "mc_dmp_featurecuts": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": False,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": False,
+    },
+    "mc_gene_mapper": {
+        "runDmpSelection": False,
+        "runGeneFeaturecuts": False,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": False,
+        "stabilityGeneFeaturecutsEnabled": False,
+        "stabilityGeneBiomarkerFilterEnabled": False,
+    },
+    "mc_gene_featurecuts": {
+        "runDmpSelection": False,
+        "runGeneFeaturecuts": True,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": False,
+        "stabilityGeneFeaturecutsEnabled": True,
+        "stabilityGeneBiomarkerFilterEnabled": False,
+    },
+    "mc_two_phase_dmp_then_gene": {
+        "runDmpSelection": False,
+        "runGeneFeaturecuts": True,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": False,
+        "stabilityGeneFeaturecutsEnabled": True,
+    },
+    "phase_a_dmp_stability": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": False,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": False,
+    },
+    "phase_b_gene_from_stable_dmps": {
+        "runDmpSelection": False,
+        "runGeneFeaturecuts": True,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": False,
+        "stabilityGeneFeaturecutsEnabled": True,
+    },
 }
+
+
+def _derive_scope_from_modeling_modes(validation: Mapping[str, Any]) -> Dict[str, bool]:
+    """Map dmp_modeling_mode / gene_modeling_mode to pipeline IF booleans."""
+    dmp_mode = str(validation.get("dmp_modeling_mode") or "").strip().lower()
+    gene_mode = str(validation.get("gene_modeling_mode") or "").strip().lower()
+    if not dmp_mode and bool(validation.get("stability_featurecuts_enabled")):
+        dmp_mode = "featurecuts"
+    if not dmp_mode:
+        dmp_mode = "raw_pool"
+    if not gene_mode:
+        if bool(validation.get("stability_gene_featurecuts_enabled")):
+            gene_mode = "featurecuts"
+        elif validation.get("stability_gene_recurrence_source") == "mapper":
+            gene_mode = "mapper_ranked"
+        else:
+            gene_mode = "none"
+    run_dmp = dmp_mode == "featurecuts"
+    run_gene_fc = gene_mode in ("featurecuts", "from_stable_dmp_panel")
+    return {
+        "runDmpSelection": run_dmp,
+        "runGeneFeaturecuts": run_gene_fc,
+        "stabilityFeaturecutsEnabled": dmp_mode == "featurecuts",
+        "stabilityGeneFeaturecutsEnabled": run_gene_fc,
+    }
 
 
 def load_profile_file(path: Path) -> Dict[str, Any]:
@@ -216,6 +303,29 @@ def seed_pipeline_scope_flags(
         "runGeneFeatureSelect",
         _flag("runGeneFeatureSelect", "stability_gene_feature_select_enabled"),
     )
+
+    mode_flags = _derive_scope_from_modeling_modes({**validation, **gene_sel, **dmp_sel})
+    if validation.get("dmp_modeling_mode") or validation.get("gene_modeling_mode"):
+        for key, val in mode_flags.items():
+            out[key] = bool(val)
+
+    stable_csv = out.get("stableDmpCsv") or validation.get("freeze_stable_dmp_csv")
+    if stable_csv and out.get("pipelineProfile") in (
+        "phase_b_gene_from_stable_dmps",
+        "mc_two_phase_dmp_then_gene",
+    ):
+        ac = dict(out.get("actionConfig") or {})
+        val = dict(ac.get("validation") or {})
+        val.setdefault("freeze_stable_dmp_csv", str(stable_csv))
+        val.setdefault("gene_modeling_mode", "from_stable_dmp_panel")
+        val.setdefault("gene_featurecuts_loci_source", "stable_panel")
+        val.setdefault("dmp_modeling_mode", "stable_panel")
+        ac["validation"] = val
+        mapper = dict(ac.get("mapper") or {})
+        mapper.setdefault("csv_pattern", "stable_dmps*.csv")
+        ac["mapper"] = mapper
+        out["actionConfig"] = ac
+
     return out
 
 

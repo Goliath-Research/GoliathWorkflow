@@ -40,6 +40,10 @@ class DmpSelectionConfig(BaseModel):
     target_balanced_accuracy: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     min_core_dmps: Optional[int] = Field(default=None, ge=1)
     min_selected_dmps: Optional[int] = Field(default=None, ge=1)
+    fail_if_below_target: bool = Field(
+        default=False,
+        description="Strict mode: reject selection when BA target or min panel size is unmet.",
+    )
     classifier_export_margin_pct: float = Field(default=0.10, ge=0.0)
     classifier_export_margin_abs: int = Field(default=0, ge=0)
     classifier_export_max_dmps: Optional[int] = Field(default=None, ge=1)

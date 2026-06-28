@@ -234,7 +234,36 @@ New runs combine four artifacts (see [`reference/config-parameter-matrix.md`](re
 
 **Precedence:** program `with` / `stepOverride` → profile `actionConfig` → analyte defaults → site manifest → package defaults. Study manifests must not contain tool parameters.
 
-### Profile presets
+### Statistical modeling modes (process-agnostic)
+
+Five reusable **statistical alternatives** for methylation MC validation are encoded as generic profiles—not tied to any cohort or analyte. Study facts (groups, comparisons, paths, regulatory metadata) stay in **`project.json`**; profiles select **which statistical branch** runs.
+
+| Mode | Profile | `dmp_modeling_mode` | `gene_modeling_mode` | Regulatory intent |
+|------|---------|---------------------|----------------------|-------------------|
+| 1 | `mc_dmp_discovery` | `raw_pool` | `none` | Exploratory locus recurrence |
+| 2 | `mc_dmp_featurecuts` | `featurecuts` | `none` | BA-gated DMP panel stability |
+| 3 | `mc_gene_mapper` | `raw_pool` | `mapper_ranked` | Mapper gene recurrence (no gene k-search) |
+| 4 | `mc_gene_featurecuts` | `raw_pool` | `featurecuts` | Independent gene-axis BA gate on discovery-mapped loci |
+| 5 | `phase_a_dmp_stability` → `phase_b_gene_from_stable_dmps` | `featurecuts` → `stable_panel` | `none` → `from_stable_dmp_panel` | Two-stage panel lock before gene modeling |
+
+**Artifact ladder:** DomainProgram (topology) → Profile (statistical procedure + `actionConfig`) → Study manifest (cohort/paths) → Instance context (`projectPath`, `pipelineProfile`, optional `stableDmpCsv` for Phase B).
+
+**DMP export simplification:** downstream consumers should prefer `dmps-*-selected.csv` (FeatureCuts panel). Legacy `dmps-*-classifier.csv` / `-classifier-extended.csv` remain for one release.
+
+**Two-phase mode 5:** run Phase A with `phase_a_dmp_stability`; pass `stable_dmps_production.csv` via context `stableDmpCsv` (or `freeze_stable_dmp_csv` in validation overrides) for Phase B `phase_b_gene_from_stable_dmps`.
+
+```bash
+# Mode 4 example (fixture paths only)
+methyl-workflow-run \
+  --program workflow_engine/domain/fixtures/dmp_select_optional.program.json \
+  --context-file workflow_engine/domain/profiles/mc_gene_featurecuts.profile.json \
+  --context '{"projectPath":"workflow_engine/domain/fixtures/project_smoke.json"}' \
+  --stub-external
+```
+
+Deprecated profile names (`gene_enricher_stability`, `dmp_panel_stability`, `discovery_gene_featurecuts`) alias to the statistical presets above.
+
+### Profile presets (legacy names)
 
 Named presets live in `workflow_engine/domain/profiles/*.profile.json`. Pass via `--context-file` or set `pipelineProfile` in instance context. The engine seeds IF-friendly booleans from the profile preset and from `actionConfig.validation` / `gene_selection` / `dmp_selection`.
 

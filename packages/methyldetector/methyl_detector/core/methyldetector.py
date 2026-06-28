@@ -2352,6 +2352,18 @@ class MethylDetector:
                     "FeatureCuts: full ECDF validation merge failed (%s); using prefix log-likelihood metrics",
                     e,
                 )
+            if target_ba is not None and bool(getattr(self.config, "fail_if_below_target", False)):
+                try:
+                    achieved = float((best_result or {}).get("balanced_accuracy", 0.0))
+                except (TypeError, ValueError):
+                    achieved = 0.0
+                if achieved < float(target_ba):
+                    logger.warning(
+                        "FeatureCuts strict mode: BA %.4f below target %.4f — rejecting panel",
+                        achieved,
+                        float(target_ba),
+                    )
+                    return None, best_result
             return sel, best_result
         except Exception as e:
             logger.warning("FeatureCuts error: %s", e)
@@ -2388,7 +2400,17 @@ class MethylDetector:
                 k_after_target_and_effect = int(final_k)
 
                 min_core = self._resolve_min_core_dmps()
+                strict = bool(getattr(self.config, "fail_if_below_target", False))
                 if min_core is not None and len(selected) < int(min_core):
+                    if strict:
+                        logger.warning(
+                            "FeatureCuts strict mode: selected %s DMPs below min_core_dmps=%s — rejecting panel",
+                            len(selected),
+                            min_core,
+                        )
+                        raise ValueError(
+                            f"FeatureCuts selected {len(selected)} DMPs below min_core_dmps={min_core}"
+                        )
                     logger.info(
                         "FeatureCuts selected %s but min_core_dmps=%s — expanding core classifier panel",
                         len(selected),
@@ -2523,6 +2545,7 @@ class MethylDetector:
         )
         if self.config.output_dir:
             self._export_unified_csv(classifier_dmps_df, suffix="-classifier")
+            self._export_unified_csv(classifier_dmps_df, suffix="-selected")
             self._export_unified_csv(extended_dmps_df, suffix="-classifier-extended")
             discovery_dmps_df = self._discovery_dmps_from_sorted(sorted_by_importance_df)
             self._write_dmp_branch_metadata(

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from .config import MonteCarloConfig
+from .modeling_modes import resolve_gene_stability_preferences
 from .stability import run_stability_analysis
 from .validator_metrics import (
     build_metrics_table,
@@ -97,7 +98,7 @@ def aggregate_discovery_monte_carlo(
             gene_min_freq=config.stability_gene_freq,
             min_balanced_accuracy=config.stability_min_balanced_accuracy,
             prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
-            prefer_classifier_gene_panels=bool(config.stability_gene_featurecuts_enabled),
+            **resolve_gene_stability_preferences(config.model_dump(mode="python")),
             dual_cutoff_enabled=bool(config.stability_dual_cutoff_enabled),
             relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
             relaxed_multiplier=config.stability_relaxed_multiplier,

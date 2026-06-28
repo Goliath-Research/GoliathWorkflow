@@ -193,6 +193,27 @@ def load_enricher_genes(run_dir: Path) -> Optional[pd.DataFrame]:
     return None
 
 
+def load_mapper_genes(run_dir: Path) -> Optional[pd.DataFrame]:
+    """Load mapper-ranked genes from all-gene_name-combined.csv exports."""
+    mapper_dirs = list(run_dir.glob("**/mapper/*/*")) or list(run_dir.glob("mapper/*/*"))
+    for d in mapper_dirs:
+        for csv in sorted(d.glob("*all-gene_name-combined.csv")):
+            try:
+                df = pd.read_csv(csv)
+                if "gene_name" in df.columns:
+                    return df
+            except Exception:
+                continue
+        for csv in sorted(d.glob("*gene_name*.csv")):
+            try:
+                df = pd.read_csv(csv)
+                if "gene_name" in df.columns and "gene_importance" in df.columns:
+                    return df
+            except Exception:
+                continue
+    return None
+
+
 def load_classifier_genes(run_dir: Path) -> Optional[pd.DataFrame]:
     """Load gene FeatureCuts classifier panel from a MC run directory."""
     csv_path = run_dir / "gene_stability" / "genes-classifier.csv"
@@ -1208,12 +1229,37 @@ def evaluate_dmp_stability_convergence(
     }
 
 
+def _load_gene_panel_for_run(
+    run_dir: Path,
+    *,
+    gene_recurrence_source: str = "enricher",
+    prefer_classifier_gene_panels: bool = False,
+    prefer_mapper_gene_panels: bool = False,
+) -> Optional[pd.DataFrame]:
+    source = str(gene_recurrence_source or "enricher").strip().lower()
+    if prefer_mapper_gene_panels or source == "mapper":
+        df = load_mapper_genes(run_dir)
+        if df is not None:
+            return df
+    if prefer_classifier_gene_panels or source == "classifier":
+        df = load_classifier_genes(run_dir)
+        if df is not None:
+            return df
+        return load_enricher_genes(run_dir)
+    df = load_enricher_genes(run_dir)
+    if df is not None:
+        return df
+    return load_mapper_genes(run_dir)
+
+
 def _compute_gene_stability_from_run_dirs(
     run_dirs: Sequence[Path],
     min_frequency: float = 0.5,
     *,
     min_balanced_accuracy: Optional[float] = None,
     prefer_classifier_gene_panels: bool = False,
+    prefer_mapper_gene_panels: bool = False,
+    gene_recurrence_source: str = "enricher",
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """Count gene appearance frequency across an explicit list of MC run dirs."""
     runs = list(run_dirs)
@@ -1225,12 +1271,12 @@ def _compute_gene_stability_from_run_dirs(
     skipped_low_ba = 0
 
     for run_dir in runs:
-        if prefer_classifier_gene_panels:
-            df = load_classifier_genes(run_dir)
-            if df is None:
-                df = load_enricher_genes(run_dir)
-        else:
-            df = load_enricher_genes(run_dir)
+        df = _load_gene_panel_for_run(
+            run_dir,
+            gene_recurrence_source=gene_recurrence_source,
+            prefer_classifier_gene_panels=prefer_classifier_gene_panels,
+            prefer_mapper_gene_panels=prefer_mapper_gene_panels,
+        )
         if df is None or "gene_name" not in df.columns:
             skipped_no_genes += 1
             continue
@@ -1267,6 +1313,8 @@ def _compute_gene_stability_from_run_dirs(
             "skipped_no_gene_panel": skipped_no_genes,
             "skipped_low_balanced_accuracy": skipped_low_ba,
             "prefer_classifier_gene_panels": bool(prefer_classifier_gene_panels),
+            "prefer_mapper_gene_panels": bool(prefer_mapper_gene_panels),
+            "gene_recurrence_source": gene_recurrence_source,
         }
 
     data = []
@@ -1293,6 +1341,8 @@ def _compute_gene_stability_from_run_dirs(
         "skipped_no_gene_panel": skipped_no_genes,
         "skipped_low_balanced_accuracy": skipped_low_ba,
         "prefer_classifier_gene_panels": bool(prefer_classifier_gene_panels),
+        "prefer_mapper_gene_panels": bool(prefer_mapper_gene_panels),
+        "gene_recurrence_source": gene_recurrence_source,
     }
 
     return df, summary
@@ -1304,6 +1354,8 @@ def compute_gene_stability(
     *,
     min_balanced_accuracy: Optional[float] = None,
     prefer_classifier_gene_panels: bool = False,
+    prefer_mapper_gene_panels: bool = False,
+    gene_recurrence_source: str = "enricher",
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """Count gene appearance frequency across MC runs."""
     runs = _list_monte_carlo_run_dirs(monte_carlo_runs_root)
@@ -1312,6 +1364,8 @@ def compute_gene_stability(
         min_frequency=min_frequency,
         min_balanced_accuracy=min_balanced_accuracy,
         prefer_classifier_gene_panels=prefer_classifier_gene_panels,
+        prefer_mapper_gene_panels=prefer_mapper_gene_panels,
+        gene_recurrence_source=gene_recurrence_source,
     )
 
 
@@ -1333,6 +1387,8 @@ def evaluate_gene_stability_convergence(
     min_frequency: float = 0.5,
     min_balanced_accuracy: Optional[float] = None,
     prefer_classifier_gene_panels: bool = False,
+    prefer_mapper_gene_panels: bool = False,
+    gene_recurrence_source: str = "enricher",
     min_iterations: int = 20,
     convergence_window: int = 5,
     convergence_jaccard: float = 0.98,
@@ -1352,12 +1408,12 @@ def evaluate_gene_stability_convergence(
     skipped_no_genes = 0
     skipped_low_ba = 0
     for run_dir in all_runs:
-        if prefer_classifier_gene_panels:
-            df = load_classifier_genes(run_dir)
-            if df is None:
-                df = load_enricher_genes(run_dir)
-        else:
-            df = load_enricher_genes(run_dir)
+        df = _load_gene_panel_for_run(
+            run_dir,
+            gene_recurrence_source=gene_recurrence_source,
+            prefer_classifier_gene_panels=prefer_classifier_gene_panels,
+            prefer_mapper_gene_panels=prefer_mapper_gene_panels,
+        )
         if df is None or "gene_name" not in df.columns:
             skipped_no_genes += 1
             continue
@@ -1393,12 +1449,16 @@ def evaluate_gene_stability_convergence(
         min_frequency=min_frequency,
         min_balanced_accuracy=None,
         prefer_classifier_gene_panels=prefer_classifier_gene_panels,
+        prefer_mapper_gene_panels=prefer_mapper_gene_panels,
+        gene_recurrence_source=gene_recurrence_source,
     )
     previous_df, _ = _compute_gene_stability_from_run_dirs(
         run_dirs=qualifying_runs[: k - int(convergence_window)],
         min_frequency=min_frequency,
         min_balanced_accuracy=None,
         prefer_classifier_gene_panels=prefer_classifier_gene_panels,
+        prefer_mapper_gene_panels=prefer_mapper_gene_panels,
+        gene_recurrence_source=gene_recurrence_source,
     )
     stable_current = _stable_gene_key_set(current_df, min_frequency=min_frequency)
     stable_previous = _stable_gene_key_set(previous_df, min_frequency=min_frequency)
@@ -1591,6 +1651,8 @@ def run_stability_analysis(
     min_balanced_accuracy: Optional[float] = None,
     prefer_classifier_panel_dmps: bool = False,
     prefer_classifier_gene_panels: bool = False,
+    prefer_mapper_gene_panels: bool = False,
+    gene_recurrence_source: str = "enricher",
     dual_cutoff_enabled: bool = False,
     relaxed_cutoff_mode: str = "elbow_log_score",
     relaxed_multiplier: float = 0.5,
@@ -1617,6 +1679,8 @@ def run_stability_analysis(
         gene_min_freq,
         min_balanced_accuracy=min_balanced_accuracy,
         prefer_classifier_gene_panels=prefer_classifier_gene_panels,
+        prefer_mapper_gene_panels=prefer_mapper_gene_panels,
+        gene_recurrence_source=gene_recurrence_source,
     )
     detector_param_summary = compute_detector_parameter_stability(monte_carlo_runs_root)
 
@@ -1727,7 +1791,7 @@ def run_stability_analysis(
             dmp_df, selected_dmp_df, output_dir
         )
 
-    if prefer_classifier_gene_panels or not gene_df.empty:
+    if prefer_classifier_gene_panels or prefer_mapper_gene_panels or not gene_df.empty:
         stable_gene_path = write_stable_gene_panel(
             gene_df,
             output_dir,
@@ -1739,7 +1803,12 @@ def run_stability_analysis(
     dmp_axis = "classifier" if prefer_classifier_panel_dmps else "discovery"
     if dmp_min_freq <= 0.0 and dmp_df.empty:
         dmp_axis = "none"
-    gene_axis = "classifier" if prefer_classifier_gene_panels else "enricher"
+    if prefer_mapper_gene_panels or gene_recurrence_source == "mapper":
+        gene_axis = "mapper"
+    elif prefer_classifier_gene_panels or gene_recurrence_source == "classifier":
+        gene_axis = "classifier"
+    else:
+        gene_axis = "enricher"
     if gene_min_freq <= 0.0 and gene_df.empty:
         gene_axis = "none"
 
@@ -1749,6 +1818,8 @@ def run_stability_analysis(
             "gene_axis": gene_axis,
             "prefer_classifier_panel_dmps": bool(prefer_classifier_panel_dmps),
             "prefer_classifier_gene_panels": bool(prefer_classifier_gene_panels),
+            "prefer_mapper_gene_panels": bool(prefer_mapper_gene_panels),
+            "gene_recurrence_source": gene_recurrence_source,
         },
         "dmp_stability": dmp_summary,
         "gene_stability": gene_summary,

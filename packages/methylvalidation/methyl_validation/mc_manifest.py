@@ -115,13 +115,20 @@ def write_detector_featurecuts_override(
     MC profiles that map discovery DMPs and aggregate enricher gene frequency).
     """
     enable_featurecuts = bool(config.stability_featurecuts_enabled)
-    target_ba = config.stability_target_balanced_accuracy
-    min_core_dmps = config.stability_min_core_dmps
+    target_ba = config.dmp_featurecuts_target_ba
+    if target_ba is None:
+        target_ba = config.stability_target_balanced_accuracy
+    min_core_dmps = config.dmp_featurecuts_min_dmps
+    if min_core_dmps is None:
+        min_core_dmps = config.stability_min_core_dmps
     if min_core_dmps is None:
         min_core_dmps = config.stability_min_selected_dmps
     margin_pct = config.stability_classifier_export_margin_pct
     margin_abs = config.stability_classifier_export_margin_abs
-    margin_max = config.stability_classifier_export_max_dmps
+    margin_max = config.dmp_featurecuts_max_dmps
+    if margin_max is None:
+        margin_max = config.stability_classifier_export_max_dmps
+    fail_if_below = bool(getattr(config, "dmp_featurecuts_fail_if_below_target", False))
     if (
         not enable_featurecuts
         and target_ba is None
@@ -129,6 +136,7 @@ def write_detector_featurecuts_override(
         and margin_pct is None
         and margin_abs is None
         and margin_max is None
+        and not fail_if_below
     ):
         return None
 
@@ -145,6 +153,8 @@ def write_detector_featurecuts_override(
         payload["classifier_export_margin_abs"] = int(margin_abs)
     if margin_max is not None:
         payload["classifier_export_max_dmps"] = int(margin_max)
+    if fail_if_below:
+        payload["fail_if_below_target"] = True
     if not payload:
         return None
     out = run_dir / "detector_step_override.json"
@@ -156,7 +166,9 @@ def write_detector_featurecuts_override(
 
 CLASSIFIER_DMP_CSV_PATTERN = "dmps-*-classifier.csv"
 CLASSIFIER_EXTENDED_DMP_CSV_PATTERN = "dmps-*-classifier-extended.csv"
+SELECTED_DMP_CSV_PATTERN = "dmps-*-selected.csv"
 DISCOVERY_DMP_CSV_PATTERN = "dmps-*-discovery.csv"
+STABLE_DMP_CSV_PATTERN = "stable_dmps*.csv"
 
 
 def write_mapper_classifier_override(
@@ -179,9 +191,20 @@ def write_mapper_classifier_override(
     csv_pattern = DISCOVERY_DMP_CSV_PATTERN
     if config is not None:
         enrich_disease = bool(getattr(config, "stability_mapper_enrich_disease", False))
-        dmp_source = str(getattr(config, "stability_gene_featurecuts_dmp_source", "discovery") or "discovery").strip().lower()
-        if dmp_source == "classifier":
-            csv_pattern = CLASSIFIER_EXTENDED_DMP_CSV_PATTERN
+        from .modeling_modes import infer_dmp_modeling_mode, mapper_csv_pattern_for_dmp_mode
+
+        dmp_mode = infer_dmp_modeling_mode(config.model_dump(mode="python"))
+        csv_pattern = mapper_csv_pattern_for_dmp_mode(dmp_mode)
+        loci = getattr(config, "gene_featurecuts_loci_source", None)
+        dmp_source = str(
+            loci or getattr(config, "stability_gene_featurecuts_dmp_source", "discovery") or "discovery"
+        ).strip().lower()
+        if dmp_source in ("classifier", "featurecuts_selected", "selected"):
+            csv_pattern = SELECTED_DMP_CSV_PATTERN
+        elif dmp_source in ("stable", "stable_panel"):
+            csv_pattern = STABLE_DMP_CSV_PATTERN
+        elif dmp_mode == "featurecuts":
+            csv_pattern = SELECTED_DMP_CSV_PATTERN
     payload: Dict[str, Any] = {
         "csv_filename_pattern": csv_pattern,
         "enrich_disease": enrich_disease,
