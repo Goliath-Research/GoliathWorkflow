@@ -2363,15 +2363,20 @@ class MethylDetector:
                         achieved,
                         float(target_ba),
                     )
-                    return None, best_result
+                    raise ValueError(
+                        f"FeatureCuts balanced accuracy {achieved:.4f} below target "
+                        f"{float(target_ba):.4f}"
+                    )
             return sel, best_result
+        except ValueError:
+            raise
         except Exception as e:
             logger.warning("FeatureCuts error: %s", e)
             return None, None
 
     def _classifier_dmps_from_sorted(self, sorted_by_importance_df: pd.DataFrame) -> pd.DataFrame:
         """
-        Build the prediction-panel DMP table: elbow trim and/or FeatureCuts on validation BA.
+        Build the prediction-panel DMP table via FeatureCuts validation BA or legacy elbow trim.
         """
         selection = getattr(self.config, "classifier_dmp_selection", "elbow")
         if selection == "featurecuts_validation":
@@ -2379,83 +2384,69 @@ class MethylDetector:
             cap = getattr(self.config, "featurecuts_max_k_cap", None)
             if cap is not None and len(pool) > int(cap):
                 pool = pool.iloc[: int(cap)].copy().reset_index(drop=True)
-            effect_size_pool = pool
-            if bool(getattr(self.config, "dynamic_dmp_cutoff_enabled", True)) and len(pool) > 0:
-                effect_size_pool = self._effect_size_elbow_trim(pool, enabled=True)
-            target_ba = getattr(self.config, "target_balanced_accuracy", None)
-            # For target-BA mode, search over the full ranked pool and then keep at least
-            # the effect-size-elbow count so final export is max(effect-size, BA-required).
-            search_pool = pool if target_ba is not None else effect_size_pool
-            selected, res = self._featurecuts_select_k(search_pool)
-            if selected is not None and len(selected) > 0:
-                self._featurecuts_last_result = res
-                selected_k_target = int(len(selected))
-                final_k = selected_k_target
-                k_effect_size = int(len(effect_size_pool))
-                k_after_target_and_effect = final_k
-                if target_ba is not None:
-                    final_k = max(final_k, k_effect_size)
-                    if final_k != len(selected):
-                        selected = pool.iloc[:final_k].copy().reset_index(drop=True)
-                k_after_target_and_effect = int(final_k)
+            selected, res = self._featurecuts_select_k(pool)
+            if selected is None or len(selected) == 0:
+                raise ValueError(
+                    "FeatureCuts did not produce a classifier panel; "
+                    "elbow fallback is disabled for classifier_dmp_selection=featurecuts_validation"
+                )
 
-                min_core = self._resolve_min_core_dmps()
-                strict = bool(getattr(self.config, "fail_if_below_target", False))
-                if min_core is not None and len(selected) < int(min_core):
-                    if strict:
-                        logger.warning(
-                            "FeatureCuts strict mode: selected %s DMPs below min_core_dmps=%s — rejecting panel",
-                            len(selected),
-                            min_core,
-                        )
-                        raise ValueError(
-                            f"FeatureCuts selected {len(selected)} DMPs below min_core_dmps={min_core}"
-                        )
-                    logger.info(
-                        "FeatureCuts selected %s but min_core_dmps=%s — expanding core classifier panel",
+            self._featurecuts_last_result = res
+            selected_k_target = int(len(selected))
+            final_k = selected_k_target
+
+            min_core = self._resolve_min_core_dmps()
+            strict = bool(getattr(self.config, "fail_if_below_target", False))
+            if min_core is not None and len(selected) < int(min_core):
+                if strict:
+                    logger.warning(
+                        "FeatureCuts strict mode: selected %s DMPs below min_core_dmps=%s — rejecting panel",
                         len(selected),
                         min_core,
                     )
-                    selected = sorted_by_importance_df.iloc[: int(min_core)].copy().reset_index(drop=True)
-
-                final_k = int(len(selected))
-                ba_text = "n/a"
-                if isinstance(res, dict):
-                    try:
-                        ba_text = f"{float(res.get('balanced_accuracy')):.4f}"
-                    except (TypeError, ValueError):
-                        ba_text = "n/a"
-                self._classifier_panel_audit = {
-                    "k_target_ba": int(selected_k_target),
-                    "k_effect_size": int(k_effect_size),
-                    "k_core": int(final_k),
-                    "balanced_accuracy_at_k_target": ba_text,
-                    "min_core_dmps": (int(min_core) if min_core is not None else None),
-                }
+                    raise ValueError(
+                        f"FeatureCuts selected {len(selected)} DMPs below min_core_dmps={min_core}"
+                    )
                 logger.info(
-                    "📋 Classifier panel audit (FeatureCuts): k_target_ba=%s (BA=%s), "
-                    "k_effect_size=%s, k_after_max=%s, min_core_dmps=%s, k_core=%s",
-                    selected_k_target,
-                    ba_text,
-                    k_effect_size,
-                    k_after_target_and_effect,
-                    (str(min_core) if min_core is not None else "none"),
-                    final_k,
+                    "FeatureCuts selected %s but min_core_dmps=%s — expanding core classifier panel",
+                    len(selected),
+                    min_core,
                 )
-                logger.info("📋 Classifier panel: FeatureCuts selected k=%s DMPs", final_k)
+                selected = sorted_by_importance_df.iloc[: int(min_core)].copy().reset_index(drop=True)
 
-                # Dual diagnostic: contrast discriminatory minimum against final exported panel.
-                selected_target_panel = search_pool.iloc[:selected_k_target].copy().reset_index(drop=True)
-                self._check_centroid_self_classification(
-                    selected_target_panel,
-                    check_name=f"featurecuts-target-k={selected_k_target}",
-                )
-                self._check_centroid_self_classification(
-                    selected,
-                    check_name=f"featurecuts-final-k={final_k}",
-                )
-                return selected
-            logger.warning("FeatureCuts failed or empty; falling back to elbow-only classifier panel")
+            final_k = int(len(selected))
+            ba_text = "n/a"
+            if isinstance(res, dict):
+                try:
+                    ba_text = f"{float(res.get('balanced_accuracy')):.4f}"
+                except (TypeError, ValueError):
+                    ba_text = "n/a"
+            self._classifier_panel_audit = {
+                "k_target_ba": int(selected_k_target),
+                "k_core": int(final_k),
+                "balanced_accuracy_at_k_target": ba_text,
+                "min_core_dmps": (int(min_core) if min_core is not None else None),
+            }
+            logger.info(
+                "📋 Classifier panel audit (FeatureCuts): k_target_ba=%s (BA=%s), "
+                "min_core_dmps=%s, k_core=%s",
+                selected_k_target,
+                ba_text,
+                (str(min_core) if min_core is not None else "none"),
+                final_k,
+            )
+            logger.info("📋 Classifier panel: FeatureCuts selected k=%s DMPs", final_k)
+
+            selected_target_panel = pool.iloc[:selected_k_target].copy().reset_index(drop=True)
+            self._check_centroid_self_classification(
+                selected_target_panel,
+                check_name=f"featurecuts-target-k={selected_k_target}",
+            )
+            self._check_centroid_self_classification(
+                selected,
+                check_name=f"featurecuts-final-k={final_k}",
+            )
+            return selected
 
         out = self._effect_size_elbow_trim(sorted_by_importance_df.copy(), enabled=True)
         self._classifier_panel_audit = {

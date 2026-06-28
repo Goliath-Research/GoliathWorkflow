@@ -378,7 +378,6 @@ def test_featurecuts_logs_dual_self_check_panels(monkeypatch):
             classifier_dmp_selection="featurecuts_validation",
             target_balanced_accuracy=0.95,
             min_core_dmps=10,
-            dynamic_dmp_cutoff_enabled=True,
         )
         sorted_df = pd.DataFrame(
             {
@@ -395,11 +394,6 @@ def test_featurecuts_logs_dual_self_check_panels(monkeypatch):
             "_featurecuts_select_k",
             lambda pool: (pool.iloc[:4].copy().reset_index(drop=True), {"balanced_accuracy": 0.9783}),
         )
-        monkeypatch.setattr(
-            detector,
-            "_effect_size_elbow_trim",
-            lambda pool, enabled=True: pool.iloc[:7].copy().reset_index(drop=True),
-        )
 
         check_calls = []
 
@@ -414,3 +408,110 @@ def test_featurecuts_logs_dual_self_check_panels(monkeypatch):
             (4, "featurecuts-target-k=4"),
             (10, "featurecuts-final-k=10"),
         ]
+
+
+def test_featurecuts_strict_ba_rejection_raises(monkeypatch):
+    with TemporaryDirectory() as temp_dir:
+        detector = build_detector(
+            temp_dir,
+            classifier_dmp_selection="featurecuts_validation",
+            target_balanced_accuracy=0.95,
+            fail_if_below_target=True,
+        )
+        sorted_df = pd.DataFrame(
+            {
+                "position": np.arange(1000, 1005, dtype=np.uint32),
+                "context": ["CG"] * 5,
+                "effect_size": np.linspace(1.0, 0.5, 5),
+            }
+        )
+
+        monkeypatch.setattr(
+            detector,
+            "_featurecuts_select_k",
+            lambda pool: (_ for _ in ()).throw(
+                ValueError("FeatureCuts balanced accuracy 0.8000 below target 0.9500")
+            ),
+        )
+        elbow_called = {"n": 0}
+
+        def _elbow_should_not_run(*args, **kwargs):
+            elbow_called["n"] += 1
+            return sorted_df
+
+        monkeypatch.setattr(detector, "_effect_size_elbow_trim", _elbow_should_not_run)
+
+        with pytest.raises(ValueError, match="below target 0.9500"):
+            detector._classifier_dmps_from_sorted(sorted_df)
+        assert elbow_called["n"] == 0
+
+
+def test_featurecuts_select_k_strict_ba_raises_not_swallowed(monkeypatch):
+    with TemporaryDirectory() as temp_dir:
+        detector = build_detector(
+            temp_dir,
+            classifier_dmp_selection="featurecuts_validation",
+            target_balanced_accuracy=0.95,
+            fail_if_below_target=True,
+        )
+        pool = pd.DataFrame(
+            {
+                "position": np.arange(1000, 1005, dtype=np.uint32),
+                "context": ["CG"] * 5,
+                "effect_size": np.linspace(1.0, 0.5, 5),
+            }
+        )
+
+        monkeypatch.setattr(
+            detector,
+            "_load_validation_samples_multicontext",
+            lambda df: (np.zeros((2, 5)), np.array([0, 1]), None, None),
+        )
+        monkeypatch.setattr(detector, "_prepare_validation_splits", lambda y, require_holdout=True: [(0, 1)])
+        monkeypatch.setattr(
+            detector,
+            "_build_validation_prefix_cache",
+            lambda *args, **kwargs: {},
+        )
+        monkeypatch.setattr(detector, "_optimize_dmps_binary_search", lambda *args, **kwargs: 3)
+        monkeypatch.setattr(
+            detector,
+            "_evaluate_prefix_subset",
+            lambda cache, k: {"balanced_accuracy": 0.80},
+        )
+        monkeypatch.setattr(
+            detector,
+            "_full_validation_merge_for_selected_panel",
+            lambda *args, **kwargs: None,
+        )
+
+        with pytest.raises(ValueError, match="below target 0.9500"):
+            detector._featurecuts_select_k(pool)
+
+
+def test_featurecuts_failure_does_not_fall_back_to_elbow(monkeypatch):
+    with TemporaryDirectory() as temp_dir:
+        detector = build_detector(
+            temp_dir,
+            classifier_dmp_selection="featurecuts_validation",
+        )
+        sorted_df = pd.DataFrame(
+            {
+                "position": np.arange(1000, 1010, dtype=np.uint32),
+                "context": ["CG"] * 10,
+                "effect_size": np.linspace(1.0, 0.1, 10),
+            }
+        )
+
+        monkeypatch.setattr(detector, "_featurecuts_select_k", lambda pool: (None, None))
+        elbow_called = {"n": 0}
+
+        def _elbow_should_not_run(*args, **kwargs):
+            elbow_called["n"] += 1
+            return sorted_df.iloc[:3].copy().reset_index(drop=True)
+
+        monkeypatch.setattr(detector, "_effect_size_elbow_trim", _elbow_should_not_run)
+
+        with pytest.raises(ValueError, match="FeatureCuts did not produce a classifier panel"):
+            detector._classifier_dmps_from_sorted(sorted_df)
+        assert elbow_called["n"] == 0
