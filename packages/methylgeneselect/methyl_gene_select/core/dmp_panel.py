@@ -9,6 +9,54 @@ import pandas as pd
 
 DISCOVERY_DMP_CSV_PATTERN = "dmps-*-discovery.csv"
 CLASSIFIER_DMP_CSV_PATTERN = "dmps-*-classifier.csv"
+CLASSIFIER_EXTENDED_DMP_CSV_PATTERN = "dmps-*-classifier-extended.csv"
+
+
+def _iter_detection_dirs(run_dir: Path) -> list:
+    detection_dirs = list(run_dir.glob("**/detections/*/*"))
+    if not detection_dirs:
+        detection_dirs = list(run_dir.glob("detections/*/*"))
+    return detection_dirs
+
+
+def _read_csv_frames(csv_paths: list) -> list:
+    frames: list = []
+    for csv in csv_paths:
+        try:
+            frames.append(pd.read_csv(csv))
+        except Exception:
+            continue
+    return frames
+
+
+def _collect_dmp_csv_frames(
+    run_dir: Path,
+    *,
+    glob_pattern: str,
+    exclude_extended: bool = False,
+) -> list:
+    frames: list = []
+    for d in _iter_detection_dirs(run_dir):
+        csvs = sorted(d.glob(glob_pattern))
+        if exclude_extended:
+            csvs = [p for p in csvs if not p.stem.endswith("-classifier-extended")]
+        frames.extend(_read_csv_frames(csvs))
+    return frames
+
+
+def _collect_classifier_dmp_csv_frames(run_dir: Path) -> list:
+    """Collect classifier DMP CSVs, preferring extended exports per detection directory."""
+    frames: list = []
+    for d in _iter_detection_dirs(run_dir):
+        csvs = sorted(d.glob(CLASSIFIER_EXTENDED_DMP_CSV_PATTERN))
+        if not csvs:
+            csvs = sorted(
+                p
+                for p in d.glob(CLASSIFIER_DMP_CSV_PATTERN)
+                if not p.stem.endswith("-classifier-extended")
+            )
+        frames.extend(_read_csv_frames(csvs))
+    return frames
 
 
 def _dmp_key_from_row(row: Any) -> Tuple[Any, int]:
@@ -18,28 +66,6 @@ def _dmp_key_from_row(row: Any) -> Tuple[Any, int]:
     except (TypeError, ValueError):
         chrom_n = str(chrom).strip()
     return (chrom_n, int(row["position"]))
-
-
-def _collect_dmp_csv_frames(
-    run_dir: Path,
-    *,
-    glob_pattern: str,
-    exclude_extended: bool = False,
-) -> list:
-    detection_dirs = list(run_dir.glob("**/detections/*/*"))
-    if not detection_dirs:
-        detection_dirs = list(run_dir.glob("detections/*/*"))
-    frames: list = []
-    for d in detection_dirs:
-        csvs = sorted(d.glob(glob_pattern))
-        if exclude_extended:
-            csvs = [p for p in csvs if not p.stem.endswith("-classifier-extended")]
-        for csv in csvs:
-            try:
-                frames.append(pd.read_csv(csv))
-            except Exception:
-                continue
-    return frames
 
 
 def _dedupe_dmp_frame(df: pd.DataFrame, *, max_dmps: Optional[int] = None) -> pd.DataFrame:
@@ -92,15 +118,10 @@ def load_classifier_dmp_panel(
     """
     Load detector classifier DMP panel for gene-axis work.
 
-    Prefers ``dmps-*-classifier-extended.csv``, else core classifier CSV.
+    Prefers ``dmps-*-classifier-extended.csv`` per detection directory, else core
+    classifier CSV for that directory.
     """
-    frames = _collect_dmp_csv_frames(run_dir, glob_pattern="dmps-*-classifier-extended.csv")
-    if not frames:
-        frames = _collect_dmp_csv_frames(
-            run_dir,
-            glob_pattern=CLASSIFIER_DMP_CSV_PATTERN,
-            exclude_extended=True,
-        )
+    frames = _collect_classifier_dmp_csv_frames(run_dir)
     if not frames:
         return None
     df = pd.concat(frames, ignore_index=True)
