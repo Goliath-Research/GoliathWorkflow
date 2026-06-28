@@ -156,6 +156,7 @@ def write_detector_featurecuts_override(
 
 CLASSIFIER_DMP_CSV_PATTERN = "dmps-*-classifier.csv"
 CLASSIFIER_EXTENDED_DMP_CSV_PATTERN = "dmps-*-classifier-extended.csv"
+DISCOVERY_DMP_CSV_PATTERN = "dmps-*-discovery.csv"
 
 
 def write_mapper_classifier_override(
@@ -175,10 +176,14 @@ def write_mapper_classifier_override(
     out = run_dir / "mapper_step_override.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     enrich_disease = False
+    csv_pattern = DISCOVERY_DMP_CSV_PATTERN
     if config is not None:
         enrich_disease = bool(getattr(config, "stability_mapper_enrich_disease", False))
+        dmp_source = str(getattr(config, "stability_gene_featurecuts_dmp_source", "discovery") or "discovery").strip().lower()
+        if dmp_source == "classifier":
+            csv_pattern = CLASSIFIER_EXTENDED_DMP_CSV_PATTERN
     payload: Dict[str, Any] = {
-        "csv_filename_pattern": CLASSIFIER_EXTENDED_DMP_CSV_PATTERN,
+        "csv_filename_pattern": csv_pattern,
         "enrich_disease": enrich_disease,
     }
     with open(out, "w", encoding="utf-8") as f:

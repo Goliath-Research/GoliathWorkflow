@@ -113,6 +113,15 @@ def test_run_gene_featurecuts_for_iteration_exports_panel(tmp_path: Path, monkey
             "region_weight": [1.0, 1.0],
         }
     ).to_csv(det_dir / "dmps-Healthy_vs_Disease-classifier.csv", index=False)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1"],
+            "position": [100, 200],
+            "context": ["CG", "CG"],
+            "effect_size": [0.5, 0.3],
+            "region_weight": [1.0, 1.0],
+        }
+    ).to_csv(det_dir / "dmps-Healthy_vs_Disease-discovery.csv", index=False)
 
     mapper_dir = run_dir / "mapper" / "Healthy_vs_Disease"
     mapper_dir.mkdir(parents=True)
@@ -137,6 +146,7 @@ def test_run_gene_featurecuts_for_iteration_exports_panel(tmp_path: Path, monkey
         stability_target_balanced_accuracy = None
         stability_min_selected_genes = 1
         stability_gene_featurecuts_max_genes = 500
+        stability_gene_featurecuts_dmp_source = "discovery"
 
     monkeypatch.setattr(
         "methyl_gene_select.core.gene_featurecuts._load_train_paths_and_labels",

@@ -29,7 +29,7 @@ from .raw_gene_features import (
     build_gene_panel_feature_weights,
     build_raw_gene_feature_table,
 )
-from .dmp_panel import load_classifier_dmp_panel
+from .dmp_panel import load_classifier_dmp_panel, load_discovery_dmp_panel
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +54,22 @@ def _load_train_paths_and_labels(project_json: Path) -> Tuple[List[str], np.ndar
     if not paths:
         raise ValueError(f"No training samples resolved from {project_json}")
     return paths, np.asarray(labels, dtype=np.int32), class_names
+
+
+def _load_dmp_panel_for_gene_featurecuts(
+    run_dir: Path,
+    config: Any,
+) -> tuple[Optional[pd.DataFrame], str]:
+    """Resolve DMP panel for gene features: discovery (default for MC) or classifier."""
+    max_dmps = getattr(config, "stability_gene_featurecuts_max_dmps", None)
+    source = str(getattr(config, "stability_gene_featurecuts_dmp_source", "discovery") or "discovery").strip().lower()
+    if source == "classifier":
+        return load_classifier_dmp_panel(run_dir, max_dmps=max_dmps), "classifier"
+    dmp_df = load_discovery_dmp_panel(run_dir, max_dmps=max_dmps)
+    if dmp_df is not None and not dmp_df.empty:
+        return dmp_df, "discovery"
+    # Backward-compatible fallback when discovery exports are missing.
+    return load_classifier_dmp_panel(run_dir, max_dmps=max_dmps), "classifier"
 
 
 def _load_validation_paths_and_labels(
@@ -472,14 +488,11 @@ def run_gene_featurecuts_for_iteration(
     run_dir = Path(run_dir).resolve() if run_dir is not None else project_json.parent
     warnings: List[str] = []
 
-    dmp_df = load_classifier_dmp_panel(
-        run_dir,
-        max_dmps=getattr(config, "stability_gene_featurecuts_max_dmps", None),
-    )
+    dmp_df, dmp_source = _load_dmp_panel_for_gene_featurecuts(run_dir, config)
     if dmp_df is None or dmp_df.empty:
         return 1, "", (
-            "Gene FeatureCuts: no classifier DMP exports found in run directory "
-            "(run detector with FeatureCuts first; discovery DMPs are not used)"
+            "Gene FeatureCuts: no DMP exports found in run directory "
+            "(expected dmps-*-discovery.csv for discovery mode, or classifier exports as fallback)"
         )
 
     gene_combined = _load_mapper_gene_combined_tables(run_dir)
@@ -590,6 +603,8 @@ def run_gene_featurecuts_for_iteration(
         ),
         "biomarker_filter": biomarker_meta,
         "n_mapper_genes_before_biomarker_filter": pre_biomarker_size,
+        "dmp_panel_source": dmp_source,
+        "n_dmp_loci_for_features": int(len(dmp_df)),
     }
     with open(out_dir / GENE_FEATURECUTS_METRICS_JSON, "w", encoding="utf-8") as f:
         json.dump(metrics_payload, f, indent=2)

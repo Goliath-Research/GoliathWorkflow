@@ -13,15 +13,20 @@
       "export_classifier": false
     },
     "dmp_selection": {
-      "enabled": true
+      "enabled": true,
+      "classifier_dmp_selection": "featurecuts_validation",
+      "target_balanced_accuracy": 0.95
     },
     "mapper": {
-      "csv_pattern": "dmps-*-classifier-extended.csv"
+      "csv_pattern": "dmps-*-discovery.csv"
     },
     "validation": {
       "stability_featurecuts_enabled": true,
       "stability_gene_featurecuts_enabled": true,
-      "stability_gene_biomarker_filter_enabled": true
+      "stability_gene_biomarker_filter_enabled": true,
+      "stability_target_balanced_accuracy": 0.95,
+      "stability_min_balanced_accuracy": 0.95,
+      "stability_gene_featurecuts_dmp_source": "discovery"
     }
   }
 }

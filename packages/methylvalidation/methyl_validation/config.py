@@ -866,6 +866,14 @@ class MonteCarloConfig(BaseModel):
             "Limits feature-matrix width and k-search cost when mapper exports tens of thousands of genes."
         ),
     )
+    stability_gene_featurecuts_dmp_source: Literal["discovery", "classifier"] = Field(
+        default="discovery",
+        description=(
+            "DMP CSV layer used to build gene FeatureCuts features. "
+            "'discovery' maps all biologically filtered loci to genes (recommended for discovery_gene_featurecuts). "
+            "'classifier' uses FeatureCuts-selected DMP panels only."
+        ),
+    )
     stability_mapper_enrich_disease: bool = Field(
         default=False,
         description=(

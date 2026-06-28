@@ -1,4 +1,4 @@
-"""Load classifier DMP panels from MC run directories."""
+"""Load DMP panels from MC run directories."""
 
 from __future__ import annotations
 
@@ -6,6 +6,9 @@ from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
 import pandas as pd
+
+DISCOVERY_DMP_CSV_PATTERN = "dmps-*-discovery.csv"
+CLASSIFIER_DMP_CSV_PATTERN = "dmps-*-classifier.csv"
 
 
 def _dmp_key_from_row(row: Any) -> Tuple[Any, int]:
@@ -17,36 +20,29 @@ def _dmp_key_from_row(row: Any) -> Tuple[Any, int]:
     return (chrom_n, int(row["position"]))
 
 
-def load_classifier_dmp_panel(
+def _collect_dmp_csv_frames(
     run_dir: Path,
     *,
-    max_dmps: Optional[int] = None,
-) -> Optional[pd.DataFrame]:
-    """
-    Load detector classifier DMP panel for gene-axis work.
-
-    Prefers ``dmps-*-classifier-extended.csv``, else core classifier CSV.
-    """
+    glob_pattern: str,
+    exclude_extended: bool = False,
+) -> list:
     detection_dirs = list(run_dir.glob("**/detections/*/*"))
     if not detection_dirs:
         detection_dirs = list(run_dir.glob("detections/*/*"))
     frames: list = []
     for d in detection_dirs:
-        csvs = sorted(d.glob("dmps-*-classifier-extended.csv"))
-        if not csvs:
-            csvs = sorted(
-                p
-                for p in d.glob("dmps-*-classifier.csv")
-                if not p.stem.endswith("-classifier-extended")
-            )
+        csvs = sorted(d.glob(glob_pattern))
+        if exclude_extended:
+            csvs = [p for p in csvs if not p.stem.endswith("-classifier-extended")]
         for csv in csvs:
             try:
                 frames.append(pd.read_csv(csv))
             except Exception:
                 continue
-    if not frames:
-        return None
-    df = pd.concat(frames, ignore_index=True)
+    return frames
+
+
+def _dedupe_dmp_frame(df: pd.DataFrame, *, max_dmps: Optional[int] = None) -> pd.DataFrame:
     if df.empty:
         return df
     if "chromosome" not in df.columns or "position" not in df.columns:
@@ -69,3 +65,43 @@ def load_classifier_dmp_panel(
     if max_dmps is not None and int(max_dmps) > 0 and len(work) > int(max_dmps):
         work = work.head(int(max_dmps)).copy()
     return work.drop(columns=["_abs_effect", "_dmp_key"], errors="ignore")
+
+
+def load_discovery_dmp_panel(
+    run_dir: Path,
+    *,
+    max_dmps: Optional[int] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Load detector discovery DMP exports for gene-axis feature building.
+
+    Uses ``dmps-*-discovery.csv`` from each comparison/chromosome under ``run_dir``.
+    """
+    frames = _collect_dmp_csv_frames(run_dir, glob_pattern=DISCOVERY_DMP_CSV_PATTERN)
+    if not frames:
+        return None
+    df = pd.concat(frames, ignore_index=True)
+    return _dedupe_dmp_frame(df, max_dmps=max_dmps)
+
+
+def load_classifier_dmp_panel(
+    run_dir: Path,
+    *,
+    max_dmps: Optional[int] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Load detector classifier DMP panel for gene-axis work.
+
+    Prefers ``dmps-*-classifier-extended.csv``, else core classifier CSV.
+    """
+    frames = _collect_dmp_csv_frames(run_dir, glob_pattern="dmps-*-classifier-extended.csv")
+    if not frames:
+        frames = _collect_dmp_csv_frames(
+            run_dir,
+            glob_pattern=CLASSIFIER_DMP_CSV_PATTERN,
+            exclude_extended=True,
+        )
+    if not frames:
+        return None
+    df = pd.concat(frames, ignore_index=True)
+    return _dedupe_dmp_frame(df, max_dmps=max_dmps)

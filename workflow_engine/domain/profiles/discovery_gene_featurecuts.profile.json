@@ -14,7 +14,9 @@
       "dmp_export_mode": "dual"
     },
     "dmp_selection": {
-      "enabled": true
+      "enabled": true,
+      "classifier_dmp_selection": "featurecuts_validation",
+      "target_balanced_accuracy": 0.95
     },
     "mapper": {
       "csv_pattern": "dmps-*-discovery.csv",
@@ -26,7 +28,10 @@
       "stability_gene_featurecuts_enabled": true,
       "stability_gene_biomarker_filter_enabled": false,
       "stability_dmp_freq": 0.8,
-      "stability_gene_freq": 0.7
+      "stability_gene_freq": 0.7,
+      "stability_target_balanced_accuracy": 0.95,
+      "stability_min_balanced_accuracy": 0.95,
+      "stability_gene_featurecuts_dmp_source": "discovery"
     }
   }
 }
