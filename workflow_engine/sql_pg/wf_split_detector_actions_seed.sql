@@ -11,10 +11,8 @@
     pipeline.gene_feature_select → methyl-gene-feature-select
     validation.biomarker_filter  → validation.biomarker-filter
 
-  Prefer full catalog + task schemas (recommended after package deploy):
-    methyl-export-task-schemas
-    methyl-export-action-catalog
-    python workflow_engine/sql/seed_action_catalog.py --regenerate-catalog
+  Prefer full catalog + task schemas (recommended for distributed workers):
+    bash scripts/bootstrap_distributed_workers.sh --skip-schema --use-gateway-only
 
   This script is a lightweight alternative when you only need these four rows
   (Azure SQL equivalent: workflow_engine/sql/wf_split_detector_actions_seed.sql).

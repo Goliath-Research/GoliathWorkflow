@@ -307,6 +307,10 @@ BEGIN
     EXEC wf.wf_init_instance_scope_from_context
       @workflow_instance_id = @workflow_instance_id;
 
+    IF OBJECT_ID(N'wf.wf_resolve_collection_bindings', N'P') IS NOT NULL
+        EXEC wf.wf_resolve_collection_bindings
+            @workflow_instance_id = @workflow_instance_id;
+
     EXEC wf.wf_engine_activate
         @workflow_instance_id = @workflow_instance_id,
         @workflow_node_id = @root,

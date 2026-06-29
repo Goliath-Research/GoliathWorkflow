@@ -169,6 +169,22 @@ BEGIN
     FROM OPENJSON(@spec, '$.scope_defaults') b
     INNER JOIN @nodes n ON n.node_key = JSON_VALUE(b.value, '$.node_key');
 
+    IF OBJECT_ID(N'wf.workflow_collection_binding', N'U') IS NOT NULL
+    BEGIN
+        INSERT INTO wf.workflow_collection_binding (
+            workflow_version_id, bind_order, scope_var, source_kind, path_var, base_var, json_path
+        )
+        SELECT
+            @ver_id,
+            COALESCE(TRY_CAST(JSON_VALUE(b.value, '$.bind_order') AS INT), 0),
+            JSON_VALUE(b.value, '$.scope_var'),
+            JSON_VALUE(b.value, '$.kind'),
+            NULLIF(JSON_VALUE(b.value, '$.path_var'), N''),
+            NULLIF(JSON_VALUE(b.value, '$.base_var'), N''),
+            NULLIF(JSON_VALUE(b.value, '$.json_path'), N'')
+        FROM OPENJSON(@spec, '$.collection_bindings') b;
+    END
+
     SELECT @root_node_id = node_id FROM @nodes WHERE node_key = @root_key;
     IF @root_node_id IS NULL
         THROW 50013, N'root_node_key not found among nodes', 1;

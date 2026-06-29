@@ -23,13 +23,20 @@ Deploy **in order**:
 | 14a | [`portal_workflow_api.sql`](portal_workflow_api.sql) | Portal workflow builder + instance lifecycle (`portal.sp_*`) |
 | 15 | [`wf_drop_platform_sample_storage.sql`](wf_drop_platform_sample_storage.sql) | Drop legacy wf.platform_sample_storage if present |
 
-After SQL deploy, seed the action catalog:
+After SQL deploy, seed the action catalog and deploy workflows:
 
 ```bash
 source .venv/bin/activate
+bash scripts/bootstrap_distributed_workers.sh --skip-schema
+```
+
+Or manually:
+
+```bash
 methyl-export-task-schemas
 methyl-export-action-catalog
 python workflow_engine/sql/seed_action_catalog.py
+bash scripts/deploy_workflow_definitions.sh
 ```
 
 Split-detector actions only (lightweight; does not seed task I/O schemas):

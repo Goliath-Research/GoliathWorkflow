@@ -1,14 +1,13 @@
 /*
   Register split-detector workflow actions (run once per wf database).
 
-  Prerequisites: wf schema deployed (MethylPipeline_*.sql or sql_pg deploy).
-
-  After deploying updated workers/packages, also run:
+  **Prefer full catalog seed for distributed workers:**
+    source .venv/bin/activate
+    methyl-export-task-schemas
     methyl-export-action-catalog
-    python workflow_engine/sql/seed_action_catalog.py --regenerate-catalog
-  (PostgreSQL full catalog) OR:
-    psql ... -f workflow_engine/sql_pg/wf_split_detector_actions_seed.sql
-  (PostgreSQL four-action seed) OR execute the MERGE below on Azure SQL.
+    python workflow_engine/sql/seed_action_catalog.py
+
+  This script upserts four actions only (legacy lightweight path).
 */
 
 SET ANSI_NULLS ON;
