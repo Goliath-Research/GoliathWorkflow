@@ -1,21 +1,10 @@
 {
-  "backend": null,
   "backends": null,
-  "bundleDir": null,
-  "bundleH5": null,
   "featureIterations": null,
   "modelMcRoot": null,
   "monteCarloRunsRoot": "/work/p/monte_carlo_runs",
-  "outputDir": null,
-  "productionOutputDir": null,
   "project": null,
   "projectPath": "/work/p/project.json",
   "qualityIterations": null,
-  "runDir": null,
-  "selectionMetric": null,
-  "selectionStat": null,
-  "sourceRunDir": null,
-  "stableDmpCsv": null,
-  "targetRunDir": null,
   "tool": null
 }

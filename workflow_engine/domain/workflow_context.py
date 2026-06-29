@@ -306,20 +306,6 @@ def materialize_action_input(
         program_override=override,
         regulatory=reg,
     )
-    if entry.action_config_key == "gene_selection":
-        validation = resolve_action_config(
-            "validation",
-            site=site,
-            profile_action_config=profile_ac,
-            program_override=override,
-            regulatory=reg,
-        )
-        rc = dict(out["resolvedConfig"])
-        if rc.get("max_genes") is None:
-            rc["max_genes"] = validation.get("stability_gene_featurecuts_max_genes")
-        if rc.get("max_dmps") is None:
-            rc["max_dmps"] = validation.get("stability_gene_featurecuts_max_dmps")
-        out["resolvedConfig"] = rc
     return out
 
 

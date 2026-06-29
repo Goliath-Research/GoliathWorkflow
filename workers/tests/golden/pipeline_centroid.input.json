@@ -1,5 +1,4 @@
 {
-  "addSamples": null,
   "centroid1Dir": null,
   "centroid2Dir": null,
   "chromosome": null,
@@ -9,7 +8,6 @@
   "outputDir": null,
   "project": null,
   "projectPath": "/work/p/project.json",
-  "removeSamples": null,
   "stepOverride": null,
   "tool": "MethylCentroid"
 }

@@ -110,7 +110,7 @@ Recent contracts that belong in **profile** `actionConfig.validation`, not the s
 
 Progression **order** comes from the study manifest (`progression_order`, `progression_labels`, stage `order_index`). Progression **scoring/report options** stay in profile `actionConfig.progression`.
 
-## CI guard
+## CI guards
 
 Committed `project*.json` files must not contain `step_config`:
 
@@ -118,10 +118,33 @@ Committed `project*.json` files must not contain `step_config`:
 python scripts/check_no_step_config.py
 ```
 
+Task wire payloads must not duplicate `actionConfig` schema keys:
+
+```bash
+python scripts/check_task_input_config_boundary.py
+```
+
 Legacy backups use the `*.legacy.bak` suffix and are excluded.
+
+## Canonical parameter homes (post-streamline)
+
+Use **one key per knob**. Duplicated mirror keys in `actionConfig.validation` are migrated to canonical sections via `scripts/migrate_profile_action_config.py`.
+
+| Knob | Canonical home | Removed from |
+|------|----------------|--------------|
+| Gene FeatureCuts caps | `actionConfig.gene_selection.max_genes`, `max_dmps` | Wire `maxGenes`/`maxDmps`; duplicate `validation.stability_gene_featurecuts_max_*` |
+| DMP FeatureCuts BA/panel | `actionConfig.dmp_selection.*` (`target_balanced_accuracy`, `min_core_dmps`, export margins) | Duplicate `validation.stability_*` mirror keys |
+| Scope IF booleans | Profile top-level flags derived from `actionConfig` | Hand-edited dual copies in profiles |
+| MC backend params | `actionConfig.validation.backend_profiles` | Flat legacy backend keys on profile |
+| Reference genome | Site `reference_genome.fasta` → resolver slice | Wire `referenceFasta` (except explicit program override) |
+| Parabricks image/threads | Site/profile `actionConfig.parabricks` | Wire `parabricksImage`, `bwaThreads` |
+| Methyl extract filters | Profile/site `actionConfig.methyl_extract` | Wire `minMapq`, `minPhred`, `extractContexts`, … |
+
+See also [action parameter contract](action-parameter-contract.md).
 
 ## Related docs
 
-- [DomainProgram language](reference/domain-program-language.md) — profiles, site, instance context
+- [DomainProgram language](domain-program-language.md) — profiles, site, instance context
+- [Action parameter contract](action-parameter-contract.md) — per-action wire vs resolvedConfig boundary
 - [Architecture review](architecture/index.md) — layer map and migration status
 - [Simplify study config plan](plans/simplify-study-config.plan.md) — phased implementation

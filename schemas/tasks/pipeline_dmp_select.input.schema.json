@@ -1,32 +1,9 @@
 {
   "$defs": {
-    "DetectorStepOverride": {
+    "DmpSelectStepOverride": {
       "additionalProperties": false,
-      "description": "Scope fields and detection-step overrides folded into methyl-detector --step-override.",
+      "description": "Per-invocation overrides for methyl-dmp-select --step-override.",
       "properties": {
-        "base_config": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SampleCohortOverride"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "chromosome": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Chromosome"
-        },
         "classifier_dmp_selection": {
           "anyOf": [
             {
@@ -79,56 +56,17 @@
           "default": null,
           "title": "Classifier Export Max Dmps"
         },
-        "comparison": {
+        "fail_if_below_target": {
           "anyOf": [
             {
-              "type": "string"
+              "type": "boolean"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Comparison"
-        },
-        "context": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Context"
-        },
-        "contexts": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Contexts"
-        },
-        "fixed_dmp_panel": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Fixed Dmp Panel"
+          "title": "Fail If Below Target"
         },
         "min_core_dmps": {
           "anyOf": [
@@ -167,45 +105,7 @@
           "title": "Target Balanced Accuracy"
         }
       },
-      "title": "DetectorStepOverride",
-      "type": "object"
-    },
-    "SampleCohortOverride": {
-      "additionalProperties": false,
-      "description": "Incremental sample cohort changes (synthesized by worker or passed in base_config).",
-      "properties": {
-        "add_samples": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Add Samples"
-        },
-        "remove_samples": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Remove Samples"
-        }
-      },
-      "title": "SampleCohortOverride",
+      "title": "DmpSelectStepOverride",
       "type": "object"
     }
   },
@@ -309,7 +209,7 @@
     "stepOverride": {
       "anyOf": [
         {
-          "$ref": "#/$defs/DetectorStepOverride"
+          "$ref": "#/$defs/DmpSelectStepOverride"
         },
         {
           "type": "null"

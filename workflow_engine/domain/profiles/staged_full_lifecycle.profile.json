@@ -204,7 +204,6 @@
       "stability_min_balanced_accuracy": 0.9,
       "stability_gene_freq": 0.8,
       "stability_featurecuts_enabled": true,
-      "stability_target_balanced_accuracy": 0.95,
       "stability_min_selected_dmps": 500,
       "abort_on_step_failure": true,
       "regulatory": {
@@ -389,6 +388,10 @@
           }
         }
       }
-    }
+    },
+    "dmp_selection": {
+      "target_balanced_accuracy": 0.95
+    },
+    "gene_selection": {}
   }
 }

@@ -22,15 +22,8 @@ from ..action_execution import (
 )
 from ..collectors import (
     ArtifactCollector,
-    CentroidLegacyCollector,
-    DmpSelectLegacyCollector,
-    EnricherLegacyCollector,
-    GeneFeatureSelectLegacyCollector,
-    GeneSelectLegacyCollector,
     GenericPipelineCollector,
     ManifestFirstCollector,
-    MapperLegacyCollector,
-    DetectorLegacyCollector,
     _resolve_dmp_output_dir,
     _resolve_enricher_output_dir,
 )
@@ -312,43 +305,36 @@ def _collector_for_entry(entry: ActionCatalogEntry) -> ArtifactCollector:
         return ManifestFirstCollector(
             output_model=DmpSelectTaskOutput,
             resolve_output_dir=lambda inp: _resolve_dmp_output_dir(inp),
-            legacy_collect=DmpSelectLegacyCollector(),
         )
     if name == "pipeline.gene_select":
         return ManifestFirstCollector(
             output_model=GeneSelectTaskOutput,
             resolve_output_dir=lambda inp: inp.get("runDir"),
-            legacy_collect=GeneSelectLegacyCollector(),
         )
     if name == "pipeline.gene_feature_select":
         return ManifestFirstCollector(
             output_model=GeneFeatureSelectTaskOutput,
             resolve_output_dir=lambda inp: inp.get("outputDir"),
-            legacy_collect=GeneFeatureSelectLegacyCollector(),
         )
     if name == "pipeline.detector":
         return ManifestFirstCollector(
             output_model=DetectorTaskOutput,
             resolve_output_dir=lambda inp: inp.get("outputDir"),
-            legacy_collect=DetectorLegacyCollector(),
         )
     if name == "pipeline.mapper":
         return ManifestFirstCollector(
             output_model=MapperTaskOutput,
             resolve_output_dir=lambda inp: inp.get("outputDir"),
-            legacy_collect=MapperLegacyCollector(),
         )
     if name == "pipeline.centroid":
         return ManifestFirstCollector(
             output_model=CentroidTaskOutput,
             resolve_output_dir=lambda inp: inp.get("outputDir"),
-            legacy_collect=CentroidLegacyCollector(),
         )
     if name == "pipeline.enricher":
         return ManifestFirstCollector(
             output_model=EnricherTaskOutput,
             resolve_output_dir=_resolve_enricher_output_dir,
-            legacy_collect=EnricherLegacyCollector(),
         )
     return GenericPipelineCollector()
 

@@ -46,13 +46,14 @@
     },
     "ValidationIterationRef": {
       "additionalProperties": false,
+      "description": "One MC iteration in workflow scope.",
       "properties": {
         "iteration": {
           "default": 0,
           "title": "Iteration",
           "type": "integer"
         },
-        "project_json": {
+        "projectPath": {
           "anyOf": [
             {
               "type": "string"
@@ -62,9 +63,9 @@
             }
           ],
           "default": null,
-          "title": "Project Json"
+          "title": "Projectpath"
         },
-        "run_dir": {
+        "runDir": {
           "anyOf": [
             {
               "type": "string"
@@ -74,7 +75,7 @@
             }
           ],
           "default": null,
-          "title": "Run Dir"
+          "title": "Rundir"
         },
         "run_id": {
           "title": "Run Id",

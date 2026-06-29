@@ -6,13 +6,15 @@ on:
       - 'workflow_engine/**'
       - 'contracts/**'
       - 'workers/**'
-      - '.github/workflows/db-parity.yml'
+      - 'scripts/check_task_input_config_boundary.py'
+      - 'scripts/migrate_profile_action_config.py'
   pull_request:
     paths:
       - 'workflow_engine/**'
       - 'contracts/**'
       - 'workers/**'
-      - '.github/workflows/db-parity.yml'
+      - 'scripts/check_task_input_config_boundary.py'
+      - 'scripts/migrate_profile_action_config.py'
 
 jobs:
   contract-validate:
@@ -89,3 +91,4 @@ jobs:
         run: |
           python -m pytest workers/tests/ -q
           methyl-export-task-schemas --check
+          python scripts/check_task_input_config_boundary.py

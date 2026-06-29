@@ -29,7 +29,6 @@ ActionConfigKey = Literal[
     "methyl_extract",
     "validation",
     "progression",
-    "cluster",
     "parabricks",
 ]
 
@@ -169,7 +168,7 @@ def resolve_from_task_input(
             return deep_merge(base, override)
         return base
 
-    ctx = input_json.get("actionConfig") or input_json.get("profileActionConfig")
+    ctx = input_json.get("actionConfig")
     site = input_json.get("siteConfig")
     if isinstance(ctx, dict) and action_key in ctx:
         profile_slice = {action_key: ctx[action_key]}

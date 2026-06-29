@@ -38,7 +38,27 @@ from .handler_helpers import (
     screening_from_payload,
 )
 from .task_models.runtime_models import TaskRuntimeContext
-from .task_models.sample_prep_models import MethylQcTaskOutput, SamplePrepTaskInput
+from .task_models.sample_prep_models import MethylQcTaskOutput
+
+
+def _resolve_reference_fasta(input_json: Dict[str, Any]) -> str:
+    from methyl_utils.action_config_resolver import resolve_from_task_input
+
+    project = input_json.get("projectPath") or input_json.get("project")
+    regulatory: Dict[str, Any] = {}
+    if project:
+        from methyl_utils import load_project
+
+        regulatory = load_project(str(project)).get_regulatory_config()
+    alignment_cfg = resolve_from_task_input("alignment_qc", input_json, regulatory=regulatory)
+    methyl_cfg = resolve_from_task_input("methyl_extract", input_json, regulatory=regulatory)
+    reference_raw = methyl_cfg.get("reference_fasta") or alignment_cfg.get("genome_fasta")
+    if not reference_raw:
+        raise RuntimeError(
+            "reference genome is required in site reference_genome.fasta or "
+            "profile/site actionConfig.alignment_qc / methyl_extract"
+        )
+    return str(reference_raw)
 
 
 def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> MethylQcTaskOutput:
@@ -173,20 +193,30 @@ def _handle_methyl_extraction_qc(
     from methyl_extraction_qc.project_resolver import resolve_extraction_qc_config
 
     project = input_json.get("project") or input_json.get("projectPath")
-    chromosomes = input_json.get("chromosomes")
     if project:
         config = resolve_extraction_qc_config(project, sample_paths=[str(sample_path)])
-    elif chromosomes:
-        config = ExtractionQCConfig(expected_chromosomes=[str(item) for item in chromosomes])
     else:
-        config = None
+        resolved = input_json.get("resolvedConfig")
+        if isinstance(resolved, dict) and resolved.get("expected_chromosomes"):
+            config = ExtractionQCConfig(
+                expected_chromosomes=[str(item) for item in resolved["expected_chromosomes"]]
+            )
+        else:
+            manifest_path = sample_path / f"{sample_id}.extraction_manifest.json"
+            if manifest_path.is_file():
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                per_chr = manifest.get("per_chromosome") or {}
+                if isinstance(per_chr, dict) and per_chr:
+                    config = ExtractionQCConfig(expected_chromosomes=[str(k) for k in per_chr.keys()])
+                else:
+                    config = None
+            else:
+                config = None
     qc_path = process_sample_extraction_qc(
         sample_path,
         str(sample_id),
         config=config,
     )
-
-    import json
 
     from .sample_prep_log import append_sample_prep_log
 
@@ -280,19 +310,18 @@ def _normalize_validation_iteration_payload(item: Dict[str, Any]) -> Dict[str, A
         payload["iteration"] = int(payload["phase_index"])
     else:
         payload["iteration"] = 0
-    if payload.get("run_dir") is None:
-        payload["run_dir"] = payload.get("runDir")
-    if payload.get("project_json") is None:
-        payload["project_json"] = payload.get("projectJson") or payload.get("projectPath")
-    run_dir = payload.get("run_dir")
+    run_dir = payload.get("runDir") or payload.get("run_dir")
     if run_dir is not None:
-        payload["run_dir"] = run_dir
-        payload["runDir"] = run_dir
-    project_json = payload.get("project_json")
-    if project_json is not None:
-        payload["project_json"] = project_json
-        payload["projectPath"] = project_json
-    return payload
+        payload["runDir"] = str(run_dir)
+    project_path = payload.get("projectPath") or payload.get("projectJson")
+    if project_path is not None:
+        payload["projectPath"] = str(project_path)
+    return {
+        "run_id": payload["run_id"],
+        "iteration": int(payload.get("iteration") or 0),
+        "runDir": str(run_dir) if run_dir is not None else None,
+        "projectPath": str(project_path) if project_path is not None else None,
+    }
 
 
 def _handle_validation_plan_iterations(
@@ -407,20 +436,16 @@ def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input: BaseMo
 
     sample_dir = input_json.get("sampleDir")
     sample_id = input_json.get("sampleId")
-    reference_fasta = input_json.get("referenceFasta")
     if not sample_dir or not sample_id:
         raise RuntimeError("sample.parabricks_fq2bam requires sampleDir and sampleId")
-    if not reference_fasta:
-        raise RuntimeError("sample.parabricks_fq2bam requires referenceFasta")
+    reference_fasta = _resolve_reference_fasta(input_json)
 
     result = run_fq2bam_meth(
         sample_id=str(sample_id),
         sample_dir=str(sample_dir),
-        reference_fasta=str(reference_fasta),
+        reference_fasta=reference_fasta,
         project=input_json.get("projectPath") or input_json.get("project"),
         input_json=input_json,
-        parabricks_image=input_json.get("parabricksImage"),
-        bwa_threads=input_json.get("bwaThreads"),
     )
     reason = str(input_json.get("remediationReason") or "")
     if input_json.get("forceRealign"):
@@ -538,30 +563,6 @@ def _handle_archive_sample(_capability: str, _action_name: str, input: BaseModel
             workflow_node_key=input_json.get("workflowNodeKey") or "archive_sample",
         )
     return ArchiveSampleTaskOutput(status="ok", **result)
-
-
-def _handle_upload_h5(_capability: str, _action_name: str, input: BaseModel) -> UploadH5TaskOutput:
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
-    from .sample_archive import upload_h5_from_task_input
-    from .sample_prep_log import append_sample_prep_log
-    from .task_models.sample_prep_models import UploadH5TaskOutput
-
-    result = upload_h5_from_task_input(input_json)
-    sample_dir = input_json.get("sampleDir")
-    sample_id = result.get("sampleId")
-    if sample_dir and sample_id:
-        append_sample_prep_log(
-            Path(str(sample_dir)),
-            sample_id=str(sample_id),
-            action="sample.upload_h5",
-            capability=_capability,
-            attempt=int(input_json.get("qcAttempt") or 1),
-            reason="Archive methylation HDF5 to durable storage",
-            inputs={"remotePrefix": result.get("remotePrefix")},
-            outputs=result,
-            workflow_node_key=input_json.get("workflowNodeKey") or "upload_h5",
-        )
-    return UploadH5TaskOutput(status="ok", **result)
 
 
 def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:
@@ -1023,7 +1024,6 @@ def _handle_stub_external(capability: str, _action_name: str, input: BaseModel) 
         MethylQcTaskOutput,
         ParabricksTaskOutput,
         TrimFastqTaskOutput,
-        UploadH5TaskOutput,
     )
 
     logger.warning("WORKER_STUB_EXTERNAL: faking success for %s", capability)
@@ -1084,8 +1084,8 @@ def _handle_stub_external(capability: str, _action_name: str, input: BaseModel) 
             h5Files=h5_files,
             n_h5_files=len(h5_files),
         )
-    if capability in {"sample.upload-h5", "sample.archive-sample"}:
-        return UploadH5TaskOutput(
+    if capability == "sample.archive-sample":
+        return ArchiveSampleTaskOutput(
             status="ok",
             sampleId=sample_id,
             archiveMode=str(input_json.get("mode") or "full"),
@@ -1158,7 +1158,6 @@ _SAMPLE_PREP_DOMAIN_ACTIONS = frozenset({
     "sample.methyl_extract",
     "sample.extraction_qc",
     "sample.archive_sample",
-    "sample.upload_h5",
     "sample.qc_failed",
 })
 
@@ -1170,7 +1169,6 @@ _STUB_EXTERNAL_CAPABILITIES = frozenset({
     "sample.trim-fastq",
     "sample.delete-bam",
     "methyl-extract",
-    "sample.upload-h5",
     "sample.archive-sample",
     "methyl-qc",
     "methyl-fragmentomics",

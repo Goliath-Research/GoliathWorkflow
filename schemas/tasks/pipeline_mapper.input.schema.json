@@ -69,7 +69,7 @@
     },
     "MapperStepOverride": {
       "additionalProperties": false,
-      "description": "Flat mapper overrides (e.g. mapper_step_override.json during MC gene stability).",
+      "description": "Flat mapper overrides from program stepOverride or resolvedConfig.",
       "properties": {
         "auxiliary_bed_paths": {
           "anyOf": [
@@ -622,42 +622,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "chromosome": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Chromosome"
-    },
-    "comparison": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Comparison"
-    },
-    "context": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Context"
-    },
     "group": {
       "anyOf": [
         {
@@ -669,18 +633,6 @@
       ],
       "default": null,
       "title": "Group"
-    },
-    "outputDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Outputdir"
     },
     "project": {
       "anyOf": [

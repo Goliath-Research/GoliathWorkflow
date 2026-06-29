@@ -2,19 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "bwaThreads": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Bwathreads"
-    },
-    "parabricksImage": {
+    "projectPath": {
       "anyOf": [
         {
           "type": "string"
@@ -24,23 +12,7 @@
         }
       ],
       "default": null,
-      "title": "Parabricksimage"
-    },
-    "referenceFasta": {
-      "title": "Referencefasta",
-      "type": "string"
-    },
-    "referenceGtf": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Referencegtf"
+      "title": "Projectpath"
     },
     "sampleDir": {
       "title": "Sampledir",
@@ -58,8 +30,7 @@
   },
   "required": [
     "sampleId",
-    "sampleDir",
-    "referenceFasta"
+    "sampleDir"
   ],
   "title": "ParabricksFq2bamTaskInput",
   "type": "object"

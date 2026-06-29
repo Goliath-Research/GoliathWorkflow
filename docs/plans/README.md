@@ -17,6 +17,7 @@ Plans in this folder are the **source of truth** for large features. Each plan m
 | [`optional-observability-follow-ups.plan.md`](optional-observability-follow-ups.plan.md) | **Task** | Observability follow-ups (golden fixtures, CI, MC log) | `doc-result-code-dpl`, `golden-fixtures-test`, `ci-worker-tests`, `mc-action-run-log`, `handler-input-model` |
 | [`gene-feature-effect-size.plan.md`](gene-feature-effect-size.plan.md) | **Epic** | Biology-weighted gene/feature importance | `biology-weight-matrix`, `remove-legacy-mapper`, `canonical-gene-feature-formulas`, `fix-downstream-consumers`, `doc-biological-model` |
 | [`simplify-study-config.plan.md`](simplify-study-config.plan.md) | **Epic** | Simplify study config (four-layer model) | `contract-docs`, `site-resolver`, `profiles-progression`, `materialize-input`, `purge-step-config`, `migrate-manifests`, `editor-manual` |
+| [`streamline-action-parameters.plan.md`](streamline-action-parameters.plan.md) | **Epic** | Streamline workflow action parameters | `contract-audit-ci`, `canonical-config-keys`, `retire-mc-sidecars`, `slim-sample-prep-inputs`, `slim-pipeline-inputs`, `slim-validation-inputs`, `slim-implementations`, `docs-promote-plan` |
 
 Create each **Task** under its Epic in Azure DevOps Boards. Copy the task title from the plan `todos[].content` field. Mark tasks **Closed** when the corresponding code is merged.
 

@@ -16,17 +16,20 @@ from methyl_worker.action_catalog import find_catalog_entry
 from methyl_worker.actions.mapper import MAPPER_ARGV_MAP, MapperCliAction, merge_mapper_step_override
 
 
-def test_merge_mapper_step_override_maps_scope_output_dir() -> None:
+def test_merge_mapper_step_override_merges_resolved_mapper_slice() -> None:
     merged = merge_mapper_step_override(
         {
-            "outputDir": "/work/out/mapper/healthy/PCa",
-            "stepOverride": {"csv_pattern": "dmps-*-discovery.csv"},
+            "resolvedConfig": {
+                "mapper": {
+                    "csv_pattern": "dmps-*-discovery.csv",
+                    "csv_filename_pattern": "dmps-*-selected.csv",
+                }
+            },
         }
     )
     assert merged is not None
-    assert merged["output_dir"] == "/work/out/mapper/healthy/PCa"
     assert merged["csv_pattern"] == "dmps-*-discovery.csv"
-    assert "comparison" not in merged
+    assert merged["csv_filename_pattern"] == "dmps-*-selected.csv"
 
 
 def test_mapper_build_argv_omits_comparison_flag() -> None:

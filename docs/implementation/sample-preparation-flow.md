@@ -100,7 +100,7 @@ GPU/Docker setup: [`workers/docs/parabricks.md`](../../workers/docs/parabricks.m
 | V2 row-oriented export | [`packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc_v2.py`](../../packages/methylalignmentqc/methyl_alignment_qc/models/sample_qc_v2.py) |
 | Alignment QC config | [`packages/methylalignmentqc/methyl_alignment_qc/models/config.py`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py) |
 | V2 export JSON Schema | [`schemas/config/alignment_qc/exported_sample_qc_v2.schema.json`](../../schemas/config/alignment_qc/exported_sample_qc_v2.schema.json) |
-| Project `step_config.alignment_qc` schema | [`schemas/config/alignment_qc.schema.json`](../../schemas/config/alignment_qc.schema.json) |
+| Profile `actionConfig.alignment_qc` schema | [`schemas/config/alignment_qc.schema.json`](../../schemas/config/alignment_qc.schema.json) |
 | Schema export utility | `methyl_alignment_qc/utils/schema_export.py` |
 
 ### Key export blocks
@@ -133,7 +133,7 @@ The workflow variable `qcPass` covers layers 1 and 2. Extraction QC (`extraction
 
 ### Guardrail boundary
 
-`guardrails.overall_pass` is the **logical AND** of all evaluated checks in `guardrails.details`. Optional guardrails (`duplication_rate_max`, `min_pf_reads`) are **off by default** until set in `step_config.alignment_qc.optional_guardrails`. **Alignment guardrails** are enabled by default for `cfdna` and `buffy_coat` via analyte profiles (`alignment_guardrails.enabled: true`). cfDNA fragmentomics and bisulfite conversion checks add to the AND when enabled via [`AlignmentQCConfig`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py) or [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md).
+`guardrails.overall_pass` is the **logical AND** of all evaluated checks in `guardrails.details`. Optional guardrails (`duplication_rate_max`, `min_pf_reads`) are **off by default** until set in profile `actionConfig.alignment_qc.optional_guardrails`. **Alignment guardrails** are enabled by default for `cfdna` and `buffy_coat` via analyte profiles (`alignment_guardrails.enabled: true`). cfDNA fragmentomics and bisulfite conversion checks add to the AND when enabled via [`AlignmentQCConfig`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py) or [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md).
 
 Core sequencing thresholds are defined in [`wgbs_parabricks_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py). Alignment-layer logic lives in [`alignment_derived_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/alignment_derived_qc.py) and [`bam_flagstat.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/bam_flagstat.py).
 
@@ -160,7 +160,7 @@ Core sequencing thresholds are defined in [`wgbs_parabricks_qc.py`](../../packag
 
 ### Alignment-layer guardrails (analyte profile default)
 
-Enabled when `step_config.alignment_qc.alignment_guardrails.enabled` is true (default for `cfdna` and `buffy_coat` via analyte profile).
+Enabled when profile `actionConfig.alignment_qc.alignment_guardrails.enabled` is true (default for `cfdna` and `buffy_coat` via analyte profile).
 
 | Metric | Config key | Profile default | If fail | Possible fix |
 |--------|------------|-----------------|---------|--------------|
@@ -242,14 +242,14 @@ Alignment QC validates the **BAM**. Extraction applies additional **read- and ba
 
 ### Filters at extraction (MethylExtractor)
 
-Configured in `step_config.methyl_extract` (production profiles default both to **20**):
+Configured in profile/site `actionConfig.methyl_extract` (production profiles default both to **20**):
 
 | Parameter | CLI flag | Effect |
 |-----------|----------|--------|
 | `min_mapq` | `--min-mapq` | Excludes poorly aligned reads from methylation calling |
 | `min_phred` | `--min-phred` | Excludes bases below Phred threshold during calling |
 
-Wired in [`extract_runner.py`](../../workers/methyl_worker/extract_runner.py). Raising these values protects against low-quality reads but reduces effective coverage; lowering them without cause risks noisy methylation calls.
+Wired in [`extract_runner.py`](../../workers/methyl_worker/extract_runner.py) via `resolvedConfig.methyl_extract` only (no wire tunables). Raising these values protects against low-quality reads but reduces effective coverage; lowering them without cause risks noisy methylation calls.
 
 There is **no** standalone "discard rate" guardrail in alignment or extraction QC today.
 
@@ -336,13 +336,13 @@ Project-scoped alignment QC export: `{output_base}/{project}/alignment_qc/{sampl
 Before starting SamplePrep, confirm:
 
 - [ ] `project.json` lists samples and paths resolve to `/work/samples/...`
-- [ ] `step_config.alignment_qc` thresholds match analyte (cfDNA vs buffy coat)
-- [ ] `step_config.extraction_qc` min coverage appropriate for WGBS depth expectations
-- [ ] `step_config.methyl_extract.min_mapq` / `min_phred` reviewed for analyte
+- [ ] Profile `actionConfig.alignment_qc` thresholds match analyte (cfDNA vs buffy coat)
+- [ ] Profile `actionConfig.extraction_qc` min coverage appropriate for WGBS depth expectations
+- [ ] Profile `actionConfig.methyl_extract.min_mapq` / `min_phred` reviewed for analyte
 - [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
-- [ ] Instance `context_json` includes `fastqStorage`, `referenceFasta`, `samples[]`
+- [ ] Instance `context_json` includes `fastqStorage`, `samples[]`; reference genome on site manifest
 
-Example `step_config.alignment_qc` snippet:
+Example profile `actionConfig.alignment_qc` snippet:
 
 ```json
 {
@@ -386,7 +386,7 @@ source .venv/bin/activate
 # Alignment QC for one sample directory
 methyl-qc --samples /work/samples/SAMPLE_ID --output-dir /work/projects/prostate-cancer/alignment_qc
 
-# Project-scoped (uses step_config.alignment_qc)
+# Project-scoped (resolves profile/site actionConfig.alignment_qc)
 methyl-qc --project /work/projects/prostate-cancer/configs/project_Example.json
 
 # Extraction QC after MethylExtractor

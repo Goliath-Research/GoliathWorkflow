@@ -55,7 +55,14 @@
                 {
                   "if": "${h5Destination}",
                   "then": [
-                    {"action": "sample.upload_h5", "node_key": "upload_h5"}
+                    {
+                      "action": "sample.archive_sample",
+                      "node_key": "archive_sample",
+                      "with": {
+                        "mode": "full",
+                        "h5Destination": "${h5Destination}"
+                      }
+                    }
                   ]
                 },
                 {"action": "sample.delete_bam", "node_key": "delete_bam"}

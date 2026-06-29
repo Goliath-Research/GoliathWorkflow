@@ -2,7 +2,8 @@
 Unified catalog of all workflow ACTION definitions.
 
 Single source of truth for action_name, capability, handler dispatch, CLI/tool
-mapping, task I/O schema models, and project.json step_config linkage.
+mapping, and task I/O schema models. Tool parameters resolve via profile/site
+``actionConfig`` into task ``resolvedConfig`` (not study manifest step_config).
 """
 
 from __future__ import annotations
@@ -25,11 +26,12 @@ ActionConfigKey = Literal[
     "gene_selection",
     "predictor",
     "alignment_qc",
+    "extraction_qc",
     "fragmentomics",
     "methyl_extract",
     "validation",
     "progression",
-    "cluster",
+    "parabricks",
 ]
 ArgvMap = Tuple[Tuple[str, str], ...]
 ContextVars = Tuple[str, ...]
@@ -75,7 +77,7 @@ PROJECT_ACTION_CONFIG_KEYS: FrozenSet[ActionConfigKey] = frozenset(
         "methyl_extract",
         "validation",
         "progression",
-        "cluster",
+        "parabricks",
     }
 )
 
@@ -137,6 +139,7 @@ class ActionCatalogEntry:
     in_process_handler: Optional[str] = None
     handler: Optional[str] = None  # deprecated alias for in_process_handler
     idempotency_enabled: bool = False
+    internal: bool = False
     domain_effects: Optional[DomainEffects] = None
 
     def __post_init__(self) -> None:
@@ -210,8 +213,6 @@ class ActionCatalogEntry:
 _PIPELINE_MODULE = "methyl_worker.task_models.pipeline_models"
 _SAMPLE_MODULE = "methyl_worker.task_models.sample_prep_models"
 _VALIDATION_MODULE = "methyl_worker.task_models.validation_models"
-_SAMPLE_IN: SchemaRef = (_SAMPLE_MODULE, "SamplePrepTaskInput")
-
 # Domain effect presets (see workflow_engine/contract/domain_types.md)
 _DE_METHYL_SAMPLE = DomainEffects(reads_types=("MethylSampleRef",), writes_types=("MethylSampleRef",))
 _DE_DOWNLOAD = DomainEffects(
@@ -280,7 +281,6 @@ _DE_ARCHIVE_SAMPLE = DomainEffects(
         DomainOutputBinding("MethylSampleRef", "sampleArchive", "$.sampleArchive"),
     ),
 )
-_DE_UPLOAD_H5 = _DE_ARCHIVE_SAMPLE
 _DE_QC_FAILED = DomainEffects(
     reads_types=("MethylSampleRef",),
     writes_types=("MethylSampleRef",),
@@ -361,6 +361,7 @@ def _entry(
     in_process_handler: Optional[str] = None,
     idempotency_enabled: bool = False,
     domain_effects: Optional[DomainEffects] = None,
+    internal: bool = False,
 ) -> ActionCatalogEntry:
     return ActionCatalogEntry(
         action_name=action_name,
@@ -381,6 +382,7 @@ def _entry(
         in_process_handler=in_process_handler,
         idempotency_enabled=idempotency_enabled,
         domain_effects=domain_effects,
+        internal=internal,
     )
 
 
@@ -402,6 +404,7 @@ def _cli(
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     domain_effects: Optional[DomainEffects] = None,
     idempotency_enabled: bool = False,
+    internal: bool = False,
 ) -> ActionCatalogEntry:
     return _entry(
         action_name,
@@ -421,6 +424,7 @@ def _cli(
         argv_map=argv_map,
         domain_effects=domain_effects,
         idempotency_enabled=idempotency_enabled,
+        internal=internal,
     )
 
 
@@ -442,6 +446,7 @@ def _in_process(
     context_vars: ContextVars = (),
     domain_effects: Optional[DomainEffects] = None,
     idempotency_enabled: bool = False,
+    internal: bool = False,
 ) -> ActionCatalogEntry:
     return _entry(
         action_name,
@@ -462,6 +467,7 @@ def _in_process(
         argv_map=(),
         domain_effects=domain_effects,
         idempotency_enabled=idempotency_enabled,
+        internal=internal,
     )
 
 
@@ -479,7 +485,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-centroid",
         tool="MethylCentroid",
         action_config_key="centroid",
-        context_vars=("group", "chromosome", "context", "outputDir", "addSamples", "removeSamples", "stepOverride"),
+        context_vars=("group", "chromosome", "context", "outputDir", "stepOverride"),
         argv_map=DEFAULT_PIPELINE_ARGV_MAP,
         domain_effects=_DE_CENTROID,
     ),
@@ -559,13 +565,11 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-gene-select",
         tool="MethylGeneSelect",
         action_config_key="gene_selection",
-        context_vars=("comparison", "runDir", "maxGenes", "maxDmps", "biomarkerFilter"),
+        context_vars=("comparison", "runDir", "biomarkerFilter"),
         argv_map=(
             ("project", "--project"),
             ("projectPath", "--project"),
             ("runDir", "--run-dir"),
-            ("maxGenes", "--max-genes"),
-            ("maxDmps", "--max-dmps"),
             ("biomarkerFilter", "--biomarker-filter"),
         ),
     ),
@@ -582,12 +586,10 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-gene-feature-select",
         tool="MethylGeneFeatureSelect",
         action_config_key="gene_selection",
-        context_vars=("mapperDir", "outputDir", "maxFeatures", "targetBalancedAccuracy"),
+        context_vars=("mapperDir", "outputDir"),
         argv_map=(
             ("mapperDir", "--mapper-dir"),
             ("outputDir", "--output-dir"),
-            ("maxFeatures", "--max-features"),
-            ("targetBalancedAccuracy", "--target-ba"),
         ),
     ),
     _cli(
@@ -673,8 +675,9 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "ParabricksTaskOutput",
         in_process_handler="_handle_parabricks_fq2bam",
         tool="ParabricksFq2Bam",
-        context_vars=("sampleId", "sampleDir", "referenceFasta", "referenceGtf"),
+        context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_PARABRICKS,
+        action_config_key="parabricks",
     ),
     _in_process(
         "sample.delete_fastqs",
@@ -682,8 +685,8 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "sample.delete_fastqs",
         "Delete FASTQ files after final QC (pass or final fail) to reclaim storage.",
         "sample_prep",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
+        _SAMPLE_MODULE,
+        "DeleteFastqsTaskInput",
         _SAMPLE_MODULE,
         "DeleteTaskOutput",
         in_process_handler="_handle_delete_fastqs",
@@ -696,8 +699,8 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "sample.trim_fastq",
         "Trim Read 1/2 start or end bases with fastp before forced realign.",
         "sample_prep",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
+        _SAMPLE_MODULE,
+        "TrimFastqTaskInput",
         _SAMPLE_MODULE,
         "TrimFastqTaskOutput",
         in_process_handler="_handle_trim_fastq",
@@ -718,8 +721,8 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "sample.methyl_qc",
         "Alignment QC metrics (Picard-style) with guardrails JSON export.",
         "sample_prep",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
+        _SAMPLE_MODULE,
+        "MethylQcTaskInput",
         _SAMPLE_MODULE,
         "MethylQcTaskOutput",
         in_process_handler="_handle_methyl_qc",
@@ -735,8 +738,8 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "sample.fragmentomics",
         "cfDNA fragmentomic analysis (WPS, end motifs) when analyte is cfDNA.",
         "sample_prep",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
+        _SAMPLE_MODULE,
+        "FragmentomicsTaskInput",
         _SAMPLE_MODULE,
         "FragmentomicsTaskOutput",
         in_process_handler="_handle_methyl_fragmentomics",
@@ -750,7 +753,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "sample.methyl_extract",
         "methyl-extract",
         "sample.methyl_extract",
-        "Extract BAM to per-chromosome HDF5 via native MethylExtractor (config from project step_config.methyl_extract).",
+        "Extract BAM to per-chromosome HDF5 via native MethylExtractor (resolvedConfig.methyl_extract).",
         "sample_prep",
         _SAMPLE_MODULE,
         "MethylExtractTaskInput",
@@ -759,7 +762,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         in_process_handler="_handle_methyl_extract",
         tool="MethylExtract",
         action_config_key="methyl_extract",
-        context_vars=("sampleId", "sampleDir", "projectPath", "referenceFasta"),
+        context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_METHYL_EXTRACT,
     ),
     _in_process(
@@ -768,8 +771,8 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "sample.extraction_qc",
         "Evaluate MethylExtractor manifest guardrails and write extraction QC JSON.",
         "sample_prep",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
+        _SAMPLE_MODULE,
+        "ExtractionQcTaskInput",
         _SAMPLE_MODULE,
         "ExtractionQcTaskOutput",
         in_process_handler="_handle_methyl_extraction_qc",
@@ -804,28 +807,13 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         domain_effects=_DE_ARCHIVE_SAMPLE,
     ),
     _in_process(
-        "sample.upload_h5",
-        "sample.upload-h5",
-        "sample.upload_h5",
-        "Deprecated alias for sample.archive_sample (full mode).",
-        "sample_prep",
-        _SAMPLE_MODULE,
-        "ArchiveSampleTaskInput",
-        _SAMPLE_MODULE,
-        "ArchiveSampleTaskOutput",
-        in_process_handler="_handle_upload_h5",
-        tool="SampleUploadH5",
-        context_vars=("sampleId", "sampleDir", "sampleDestination", "h5Destination", "h5Files"),
-        domain_effects=_DE_UPLOAD_H5,
-    ),
-    _in_process(
         "sample.delete_bam",
         "sample.delete-bam",
         "sample.delete_bam",
         "Delete BAM after methylation extraction to reclaim storage.",
         "sample_prep",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
+        _SAMPLE_MODULE,
+        "DeleteBamTaskInput",
         _SAMPLE_MODULE,
         "DeleteTaskOutput",
         in_process_handler="_handle_delete_bam",
@@ -838,8 +826,8 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "sample.qc_failed",
         "Mark sample QC_FAILED and skip downstream steps when guardrails fail.",
         "sample_prep",
-        _SAMPLE_IN[0],
-        _SAMPLE_IN[1],
+        _SAMPLE_MODULE,
+        "QcFailedTaskInput",
         _SAMPLE_MODULE,
         "MarkFailedTaskOutput",
         in_process_handler="_handle_mark_failed",
@@ -869,7 +857,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "Aggregate Monte Carlo DMP/gene stability and write production-ready panels.",
         "validation",
         _VALIDATION_MODULE,
-        "ValidationTaskInput",
+        "StabilityTaskInput",
         _VALIDATION_MODULE,
         "ValidationStabilityOutput",
         in_process_handler="_handle_validation_stability",
@@ -898,7 +886,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "Write production/project.json with fixed_dmp_panel for granular freeze workflows.",
         "validation",
         _VALIDATION_MODULE,
-        "ValidationTaskInput",
+        "PrepareFreezeTaskInput",
         _VALIDATION_MODULE,
         "ValidationPrepareFreezeOutput",
         in_process_handler="_handle_validation_prepare_freeze",
@@ -913,7 +901,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "Audit stability, freeze, and progression artifacts before model training.",
         "validation",
         _VALIDATION_MODULE,
-        "ValidationTaskInput",
+        "FreezeReadinessTaskInput",
         _VALIDATION_MODULE,
         "ValidationFreezeReadinessOutput",
         in_process_handler="_handle_validation_stability_freeze_readiness",
@@ -928,12 +916,13 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "Symlink centroids/detections from a source MC run into a model-mc iteration dir.",
         "validation",
         _VALIDATION_MODULE,
-        "ValidationTaskInput",
+        "LinkArtifactsTaskInput",
         _VALIDATION_MODULE,
         "ValidationLinkArtifactsOutput",
         in_process_handler="_handle_validation_link_artifacts",
         context_vars=("sourceRunDir", "targetRunDir", "runDir"),
         domain_effects=_DE_VALIDATION,
+        internal=True,
     ),
     _in_process(
         "validation.model_bundle",
@@ -942,12 +931,13 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "Build model feature bundle (tabular/generative) from frozen detections.",
         "validation",
         _VALIDATION_MODULE,
-        "ValidationTaskInput",
+        "ModelBundleTaskInput",
         _VALIDATION_MODULE,
         "ValidationModelBundleOutput",
         in_process_handler="_handle_validation_model_bundle",
         context_vars=("projectPath", "bundleDir"),
         domain_effects=_DE_VALIDATION,
+        internal=True,
     ),
     _in_process(
         "validation.model_train",
@@ -956,12 +946,13 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "Train tabular or generative backend model for one MC model iteration.",
         "validation",
         _VALIDATION_MODULE,
-        "ValidationTaskInput",
+        "ModelTrainTaskInput",
         _VALIDATION_MODULE,
         "ValidationModelTrainOutput",
         in_process_handler="_handle_validation_model_train",
         context_vars=("projectPath", "backend", "runDir", "bundleH5", "outputDir"),
         domain_effects=_DE_VALIDATION,
+        internal=True,
     ),
     _in_process(
         "validation.model_predict",
@@ -970,12 +961,13 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "Predict with tabular or generative backend for one MC model iteration.",
         "validation",
         _VALIDATION_MODULE,
-        "ValidationTaskInput",
+        "ModelPredictTaskInput",
         _VALIDATION_MODULE,
         "ValidationModelPredictOutput",
         in_process_handler="_handle_validation_model_predict",
         context_vars=("projectPath", "backend", "runDir"),
         domain_effects=_DE_VALIDATION,
+        internal=True,
     ),
     _in_process(
         "validation.select_best_model",
@@ -984,7 +976,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "Rank model-mc backends and build final production model on all data.",
         "validation",
         _VALIDATION_MODULE,
-        "ValidationTaskInput",
+        "SelectBestModelTaskInput",
         _VALIDATION_MODULE,
         "ValidationSelectBestModelOutput",
         in_process_handler="_handle_validation_select_best_model",
@@ -999,7 +991,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "Monte Carlo model training across backends (shared centroid/detector + per-backend model loops).",
         "validation",
         _VALIDATION_MODULE,
-        "ValidationTaskInput",
+        "ModelMcTaskInput",
         _VALIDATION_MODULE,
         "ValidationModelMcOutput",
         in_process_handler="_handle_validation_model_mc",
@@ -1014,7 +1006,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "Holdout evaluation with frozen production artifacts (predictor-only / frozen inference).",
         "validation",
         _VALIDATION_MODULE,
-        "ValidationTaskInput",
+        "PostModelValidationTaskInput",
         _VALIDATION_MODULE,
         "ValidationPostModelValidationOutput",
         in_process_handler="_handle_validation_post_model_validation",

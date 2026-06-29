@@ -57,15 +57,16 @@ def _task_input(
     *,
     resolved_methyl_extract: dict | None = None,
 ) -> dict:
-    payload = {
+    methyl_cfg = resolved_methyl_extract if resolved_methyl_extract is not None else action_config["methyl_extract"]
+    return {
         "sampleId": sample_id,
         "sampleDir": str(sample_dir),
-        "referenceFasta": str(ref),
-        "actionConfig": action_config,
+        "resolvedConfig": {
+            **methyl_cfg,
+            "reference_fasta": str(ref),
+            "genome_fasta": str(ref),
+        },
     }
-    if resolved_methyl_extract is not None:
-        payload["resolvedConfig"] = resolved_methyl_extract
-    return payload
 
 
 def test_normalize_contexts_default_all_three() -> None:

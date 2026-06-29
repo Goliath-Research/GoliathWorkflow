@@ -413,15 +413,48 @@ def run_mapper(project_json: str | Path, per_cancer_group: bool = False) -> tupl
     Per-comparison layout is resolved automatically from the project; methyl-mapper
     does not accept --per-cancer-group (unlike methyl-detector/classifier).
 
-    When ``mapper_step_override.json`` exists beside the iteration ``project.json``
-    (written during MC gene stability), it is passed as ``--step-override``.
+    Mapper overrides come from ``resolvedConfig.mapper`` (profile/site/mc_config),
+    not from sidecar JSON beside iteration ``project.json``.
     """
+    import json
+    import tempfile
+
     del per_cancer_group  # kept for call-site compatibility
     cmd = ["methyl-mapper", "--project", str(project_json)]
-    mapper_override = Path(project_json).resolve().parent / "mapper_step_override.json"
-    if mapper_override.is_file():
-        cmd.extend(["--step-override", str(mapper_override)])
+    override = _mapper_override_dict(project_json)
+    if override:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as handle:
+            json.dump(override, handle)
+            cmd.extend(["--step-override", handle.name])
     return run_cmd(cmd)
+
+
+def _mapper_override_dict(project_json: str | Path) -> Dict[str, Any]:
+    from methyl_utils.action_config_resolver import resolve_for_project
+
+    merged: Dict[str, Any] = {}
+    try:
+        from methyl_utils import load_project
+
+        project = load_project(project_json)
+        merged = dict(resolve_for_project("mapper", project))
+    except Exception:
+        pass
+
+    run_dir = Path(project_json).resolve().parent
+    mc_root = run_dir.parent if run_dir.name.startswith("run_") else None
+    mc_config_path = (mc_root / "queue" / "mc_config.json") if mc_root else None
+    if mc_config_path is not None and mc_config_path.is_file():
+        try:
+            from methyl_validation.config import MonteCarloConfig
+            from methyl_validation.mc_manifest import build_mapper_classifier_override
+
+            mc = MonteCarloConfig.model_validate(json.loads(mc_config_path.read_text(encoding="utf-8")))
+            if mc.stability_gene_featurecuts_enabled:
+                merged.update(build_mapper_classifier_override(mc))
+        except Exception:
+            pass
+    return merged
 
 
 def _enricher_config(project_json: str | Path) -> Dict[str, Any]:

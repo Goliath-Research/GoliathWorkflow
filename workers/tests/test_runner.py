@@ -25,7 +25,7 @@ def test_run_once_processes_task() -> None:
         workflow_instance_id=1,
         action_name="sample.qc_failed",
         capability="sample.mark-failed",
-        input_json={"sampleId": "S1"},
+        input_json={"sampleId": "S1", "sampleDir": "/work/samples/S1"},
     )
     client.request_task.return_value = claim
     runner = WorkerRunner(client, 1, "tok", poll_seconds=0.01, heartbeat_seconds=3600)

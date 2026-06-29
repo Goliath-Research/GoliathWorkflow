@@ -1,20 +1,6 @@
 {
-  "capCov": null,
-  "chromMapping": null,
-  "chunkSize": null,
-  "compression": null,
-  "extractContexts": null,
-  "extractorBin": null,
-  "minCov": null,
-  "minMapq": null,
-  "minPhred": null,
-  "outputFormat": null,
-  "project": null,
   "projectPath": "/work/p/project.json",
-  "referenceFasta": null,
   "sampleDir": "/work/samples/S1",
   "sampleId": "S1",
-  "split": null,
-  "threads": null,
   "tool": "MethylExtract"
 }

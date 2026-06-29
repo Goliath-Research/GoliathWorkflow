@@ -2,94 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "chromosomes": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Chromosomes"
-    },
-    "fastqUri": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Fastquri"
-    },
-    "project": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Project"
-    },
-    "projectPath": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Projectpath"
-    },
-    "reason": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Reason"
-    },
     "sampleDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Sampledir"
+      "title": "Sampledir",
+      "type": "string"
     },
     "sampleId": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Sampleid"
+      "title": "Sampleid",
+      "type": "string"
+    },
+    "tool": {
+      "default": "SampleDeleteBam",
+      "title": "Tool",
+      "type": "string"
     }
   },
-  "title": "SamplePrepTaskInput",
+  "required": [
+    "sampleId",
+    "sampleDir"
+  ],
+  "title": "DeleteBamTaskInput",
   "type": "object"
 }

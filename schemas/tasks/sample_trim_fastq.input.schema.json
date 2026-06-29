@@ -2,22 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "chromosomes": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Chromosomes"
-    },
-    "fastqUri": {
+    "remediationReason": {
       "anyOf": [
         {
           "type": "string"
@@ -27,69 +12,74 @@
         }
       ],
       "default": null,
-      "title": "Fastquri"
-    },
-    "project": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Project"
-    },
-    "projectPath": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Projectpath"
-    },
-    "reason": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Reason"
+      "title": "Remediationreason"
     },
     "sampleDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Sampledir"
+      "title": "Sampledir",
+      "type": "string"
     },
     "sampleId": {
+      "title": "Sampleid",
+      "type": "string"
+    },
+    "tool": {
+      "default": "SampleTrimFastq",
+      "title": "Tool",
+      "type": "string"
+    },
+    "trimFront1": {
       "anyOf": [
         {
-          "type": "string"
+          "type": "integer"
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "title": "Sampleid"
+      "title": "Trimfront1"
+    },
+    "trimFront2": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trimfront2"
+    },
+    "trimTail1": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trimtail1"
+    },
+    "trimTail2": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Trimtail2"
     }
   },
-  "title": "SamplePrepTaskInput",
+  "required": [
+    "sampleId",
+    "sampleDir"
+  ],
+  "title": "TrimFastqTaskInput",
   "type": "object"
 }

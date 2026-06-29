@@ -16,7 +16,6 @@ RUNTIME_INPUT_KEYS = frozenset({
     "forceRerun",
     "workflowNodeKey",
     "actionConfig",
-    "profileActionConfig",
     "resolvedConfig",
     "siteConfig",
     "siteConfigPath",

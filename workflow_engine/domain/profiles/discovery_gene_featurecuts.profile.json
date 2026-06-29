@@ -29,9 +29,9 @@
       "stability_gene_biomarker_filter_enabled": false,
       "stability_dmp_freq": 0.8,
       "stability_gene_freq": 0.7,
-      "stability_target_balanced_accuracy": 0.95,
       "stability_min_balanced_accuracy": 0.95,
       "stability_gene_featurecuts_dmp_source": "discovery"
-    }
+    },
+    "gene_selection": {}
   }
 }

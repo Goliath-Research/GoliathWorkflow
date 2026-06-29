@@ -376,7 +376,7 @@ def enrich_sample_prep_output(
             contexts=contexts or ["CG"],
             h5_files=output_json.get("h5Files"),
         )
-    if action_name in ("sample.upload_h5", "sample.archive_sample"):
+    if action_name == "sample.archive_sample":
         archive = {
             "remotePrefix": output_json.get("remotePrefix"),
             "uploadedFiles": output_json.get("uploadedFiles") or [],

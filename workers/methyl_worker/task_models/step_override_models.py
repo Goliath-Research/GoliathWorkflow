@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Literal, Optional, Dict, Any
+from typing import List, Literal, Optional
 
 from methyl_classifier.models.config_schema import ClassificationConfig
 from methyl_disease_progression.config import ProgressionStepConfig
@@ -55,7 +55,6 @@ class CentroidStepOverride(BaseModel):
     output_dir: Optional[str] = None
 
 
-# Keys on DetectorStepOverride used only by the workflow engine, not methyl-detector --step-override.
 _DETECTOR_WORKFLOW_ONLY_KEYS = frozenset({"context", "comparison", "base_config"})
 
 
@@ -81,7 +80,7 @@ class DetectorStepOverride(BaseModel):
     classifier_export_margin_abs: Optional[int] = None
     classifier_export_max_dmps: Optional[int] = None
 
-    def to_methyl_detector_payload(self) -> Dict[str, Any]:
+    def to_methyl_detector_payload(self) -> dict[str, object]:
         """Export only methyl-detector config keys; omit workflow scope fields and unset nulls."""
         from methyl_detector.models.config import MethylDetectorConfig
 
@@ -90,8 +89,23 @@ class DetectorStepOverride(BaseModel):
         return {k: v for k, v in raw.items() if k in allowed and k not in _DETECTOR_WORKFLOW_ONLY_KEYS}
 
 
+class DmpSelectStepOverride(BaseModel):
+    """Per-invocation overrides for methyl-dmp-select --step-override."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    classifier_dmp_selection: Optional[Literal["elbow", "featurecuts_validation"]] = None
+    target_balanced_accuracy: Optional[float] = None
+    min_core_dmps: Optional[int] = None
+    classifier_export_margin_pct: Optional[float] = None
+    classifier_export_margin_abs: Optional[int] = None
+    classifier_export_max_dmps: Optional[int] = None
+    fail_if_below_target: Optional[bool] = None
+    output_dir: Optional[str] = None
+
+
 class MapperStepOverride(MapperStepConfig):
-    """Flat mapper overrides (e.g. mapper_step_override.json during MC gene stability)."""
+    """Flat mapper overrides from program stepOverride or resolvedConfig."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -119,16 +133,3 @@ class PredictorStepOverride(BaseModel):
     decision_enabled: Optional[bool] = None
     decision_min_margin: Optional[float] = None
     decision_min_confidence: Optional[float] = None
-
-
-class ClusterStepOverride(BaseModel):
-    """Optional cluster step overrides (legacy step_config.cluster)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    clustering_method: Optional[str] = None
-    metric: Optional[str] = None
-    min_cluster_size: Optional[int] = Field(default=None, ge=1)
-    force_k: Optional[int] = Field(default=None, ge=1)
-    use_gpu: Optional[bool] = None
-    cache_distance_matrix: Optional[bool] = None

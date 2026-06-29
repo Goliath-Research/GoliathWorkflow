@@ -1,8 +1,5 @@
 {
-  "bwaThreads": null,
-  "parabricksImage": null,
-  "referenceFasta": "/ref/genome.fa",
-  "referenceGtf": null,
+  "projectPath": "/work/p/project.json",
   "sampleDir": "/work/samples/S1",
   "sampleId": "S1",
   "tool": "ParabricksFq2Bam"

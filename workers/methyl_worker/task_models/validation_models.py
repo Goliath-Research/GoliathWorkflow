@@ -2,41 +2,22 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from .base import ActionOutputBase
 
 
-class ValidationPlanTaskInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    tool: Optional[str] = None
-    projectPath: Optional[str] = None
-    project: Optional[str] = None
-    featureIterations: Optional[int] = Field(default=None, ge=0)
-    qualityIterations: Optional[int] = Field(default=None, ge=0)
-    monteCarloRunsRoot: Optional[str] = None
-
-
 class ValidationIterationRef(BaseModel):
-    """One MC iteration in workflow scope (planner fields + workflow template keys)."""
+    """One MC iteration in workflow scope."""
 
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     run_id: str
     iteration: int = 0
-    run_dir: Optional[str] = None
-    project_json: Optional[str] = None
-
-    def model_dump(self, **kwargs: Any) -> Dict[str, Any]:
-        data = super().model_dump(**kwargs)
-        if self.run_dir is not None:
-            data["runDir"] = self.run_dir
-        if self.project_json is not None:
-            data["projectPath"] = self.project_json
-        return data
+    runDir: Optional[str] = None
+    projectPath: Optional[str] = None
 
 
 class ValidationPlanTaskOutput(ActionOutputBase):
@@ -45,7 +26,7 @@ class ValidationPlanTaskOutput(ActionOutputBase):
     iterations: List[ValidationIterationRef] = Field(default_factory=list)
 
 
-class ValidationTaskInput(BaseModel):
+class StabilityTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     tool: Optional[str] = None
@@ -53,20 +34,101 @@ class ValidationTaskInput(BaseModel):
     project: Optional[str] = None
     monteCarloRunsRoot: Optional[str] = None
     outputDir: Optional[str] = None
+
+
+class PrepareFreezeTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
+    monteCarloRunsRoot: Optional[str] = None
     stableDmpCsv: Optional[str] = None
     productionOutputDir: Optional[str] = None
     sourceRunDir: Optional[str] = None
     targetRunDir: Optional[str] = None
+
+
+class FreezeReadinessTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
+    outputDir: Optional[str] = None
+
+
+class LinkArtifactsTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    sourceRunDir: Optional[str] = None
+    targetRunDir: Optional[str] = None
     runDir: Optional[str] = None
+
+
+class ModelBundleTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
     bundleDir: Optional[str] = None
     bundleH5: Optional[str] = None
+
+
+class ModelTrainTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
     backend: Optional[str] = None
-    backends: Optional[List[str]] = None
-    selectionMetric: Optional[str] = None
-    selectionStat: Optional[str] = None
+    bundleDir: Optional[str] = None
+
+
+class ModelPredictTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
+    backend: Optional[str] = None
+    bundleDir: Optional[str] = None
+
+
+class ModelMcTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
+    monteCarloRunsRoot: Optional[str] = None
     modelMcRoot: Optional[str] = None
+    backends: Optional[List[str]] = None
     featureIterations: Optional[int] = Field(default=None, ge=0)
     qualityIterations: Optional[int] = Field(default=None, ge=0)
+
+
+class SelectBestModelTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
+    monteCarloRunsRoot: Optional[str] = None
+    modelMcRoot: Optional[str] = None
+    selectionMetric: Optional[str] = None
+
+
+class PostModelValidationTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
+    monteCarloRunsRoot: Optional[str] = None
+    outputDir: Optional[str] = None
 
 
 class StabilitySummary(BaseModel):

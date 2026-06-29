@@ -9,8 +9,8 @@
   "iterations": [
     {
       "iteration": 1,
-      "project_json": null,
-      "run_dir": null,
+      "projectPath": null,
+      "runDir": null,
       "run_id": "run_0001"
     }
   ],

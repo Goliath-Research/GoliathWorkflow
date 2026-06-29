@@ -11,18 +11,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from .base import ActionOutputBase
 
 
-class SamplePrepTaskInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    sampleId: Optional[str] = None
-    sampleDir: Optional[str] = None
-    project: Optional[str] = None
-    projectPath: Optional[str] = None
-    reason: Optional[str] = None
-    fastqUri: Optional[str] = None
-    chromosomes: Optional[List[str]] = None
-
-
 class DownloadFastqTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -38,10 +26,38 @@ class ParabricksFq2bamTaskInput(BaseModel):
     tool: str = "ParabricksFq2Bam"
     sampleId: str
     sampleDir: str
-    referenceFasta: str
-    referenceGtf: Optional[str] = None
-    parabricksImage: Optional[str] = None
-    bwaThreads: Optional[int] = None
+    projectPath: Optional[str] = None
+
+
+class TrimFastqTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "SampleTrimFastq"
+    sampleId: str
+    sampleDir: str
+    trimFront1: Optional[int] = None
+    trimTail1: Optional[int] = None
+    trimFront2: Optional[int] = None
+    trimTail2: Optional[int] = None
+    remediationReason: Optional[str] = None
+
+
+class MethylQcTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "MethylAlignmentQc"
+    sampleId: str
+    sampleDir: str
+    projectPath: Optional[str] = None
+
+
+class FragmentomicsTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "MethylFragmentomics"
+    sampleId: str
+    sampleDir: str
+    projectPath: Optional[str] = None
 
 
 class MethylExtractTaskInput(BaseModel):
@@ -50,21 +66,41 @@ class MethylExtractTaskInput(BaseModel):
     tool: str = "MethylExtract"
     sampleId: str
     sampleDir: str
-    project: Optional[str] = None
+    projectPath: str
+
+
+class ExtractionQcTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "MethylExtractionQc"
+    sampleId: str
+    sampleDir: str
     projectPath: Optional[str] = None
-    referenceFasta: Optional[str] = None
-    extractContexts: Optional[List[Literal["CG", "CHG", "CHH"]]] = None
-    threads: Optional[int] = None
-    minMapq: Optional[int] = None
-    minPhred: Optional[int] = None
-    minCov: Optional[int] = None
-    capCov: Optional[int] = None
-    chromMapping: Optional[str] = None
-    compression: Optional[int] = None
-    chunkSize: Optional[int] = None
-    outputFormat: Optional[str] = None
-    split: Optional[bool] = None
-    extractorBin: Optional[str] = None
+
+
+class DeleteFastqsTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "SampleDeleteFastqs"
+    sampleId: str
+    sampleDir: str
+
+
+class DeleteBamTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "SampleDeleteBam"
+    sampleId: str
+    sampleDir: str
+
+
+class QcFailedTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "SampleMarkFailed"
+    sampleId: str
+    sampleDir: str
+    reason: Optional[str] = None
 
 
 class ArchiveSampleTaskInput(BaseModel):
@@ -81,10 +117,6 @@ class ArchiveSampleTaskInput(BaseModel):
     qcPath: Optional[str] = None
     projectPath: Optional[str] = None
     h5Files: Optional[List[str]] = None
-
-
-class UploadH5TaskInput(ArchiveSampleTaskInput):
-    tool: str = "SampleUploadH5"
 
 
 class QcHistoryEntry(BaseModel):
@@ -190,10 +222,6 @@ class ArchiveSampleTaskOutput(ActionOutputBase):
     skippedCount: int = 0
     sampleArchived: bool = False
     archiveManifestPath: Optional[str] = None
-
-
-class UploadH5TaskOutput(ArchiveSampleTaskOutput):
-    pass
 
 
 class MethylExtractTaskOutput(ActionOutputBase):

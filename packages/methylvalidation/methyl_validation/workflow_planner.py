@@ -504,7 +504,7 @@ def _materialize_iteration(
         "monteCarloRunsRoot": str(monte_carlo_runs_root.resolve()),
     }
     if det_override is not None:
-        task_config["detectorStepOverride"] = str(det_override)
+        task_config["detectorStepOverride"] = det_override
     if val_control_csv is not None:
         task_config["valControlCsv"] = str(val_control_csv)
     if val_disease_csv is not None:

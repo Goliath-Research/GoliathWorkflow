@@ -7,25 +7,24 @@ import pytest
 
 from methyl_validation.mc_manifest import (
     CLASSIFIER_EXTENDED_DMP_CSV_PATTERN,
+    DISCOVERY_DMP_CSV_PATTERN,
     write_mapper_classifier_override,
 )
 from methyl_validation.stability import load_classifier_dmp_panel
 
 
 def test_write_mapper_classifier_override(tmp_path: Path):
-    out = write_mapper_classifier_override(tmp_path / "run_0001")
-    assert out.is_file()
-    payload = out.read_text(encoding="utf-8")
-    assert CLASSIFIER_EXTENDED_DMP_CSV_PATTERN in payload
-    assert '"enrich_disease": false' in payload
+    payload = write_mapper_classifier_override(tmp_path / "run_0001")
+    assert CLASSIFIER_EXTENDED_DMP_CSV_PATTERN in payload["csv_filename_pattern"] or DISCOVERY_DMP_CSV_PATTERN in payload["csv_filename_pattern"]
+    assert payload["enrich_disease"] is False
 
 
 def test_write_mapper_classifier_override_honors_enrich_disease_flag(tmp_path: Path):
     class _Cfg:
         stability_mapper_enrich_disease = True
 
-    out = write_mapper_classifier_override(tmp_path / "run_0001", _Cfg())
-    assert '"enrich_disease": true' in out.read_text(encoding="utf-8")
+    payload = write_mapper_classifier_override(tmp_path / "run_0001", _Cfg())
+    assert payload["enrich_disease"] is True
 
 
 def test_load_classifier_dmp_panel_dedupes_and_caps(tmp_path: Path):

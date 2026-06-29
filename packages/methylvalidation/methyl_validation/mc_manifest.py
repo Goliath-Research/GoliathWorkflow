@@ -104,15 +104,14 @@ def write_baseline_manifest(
     return out
 
 
-def write_detector_featurecuts_override(
-    run_dir: Path,
+def build_detector_featurecuts_override(
     config: "MonteCarloConfig",
-) -> Optional[Path]:
+) -> Optional[Dict[str, Any]]:
     """
-    Write per-run detector overrides when DMP FeatureCuts stability is enabled.
+    Build per-run detector overrides when DMP FeatureCuts stability is enabled.
 
-    Skipped when ``stability_featurecuts_enabled`` is false (e.g. gene-enricher-only
-    MC profiles that map discovery DMPs and aggregate enricher gene frequency).
+    Returns a dict suitable for workflow ``stepOverride`` / task ``resolvedConfig`` merge —
+    not written to sidecar files beside iteration ``project.json``.
     """
     enable_featurecuts = bool(config.stability_featurecuts_enabled)
     target_ba = config.dmp_featurecuts_target_ba
@@ -157,11 +156,16 @@ def write_detector_featurecuts_override(
         payload["fail_if_below_target"] = True
     if not payload:
         return None
-    out = run_dir / "detector_step_override.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
-    return out
+    return payload
+
+
+def write_detector_featurecuts_override(
+    run_dir: Path,
+    config: "MonteCarloConfig",
+) -> Optional[Dict[str, Any]]:
+    """Deprecated alias — returns override dict; does not write sidecar JSON."""
+    del run_dir
+    return build_detector_featurecuts_override(config)
 
 
 CLASSIFIER_DMP_CSV_PATTERN = "dmps-*-classifier.csv"
@@ -171,30 +175,25 @@ DISCOVERY_DMP_CSV_PATTERN = "dmps-*-discovery.csv"
 STABLE_DMP_CSV_PATTERN = "stable_dmps*.csv"
 
 
-def write_mapper_classifier_override(
-    run_dir: Path,
+def build_mapper_classifier_override(
     config: Optional["MonteCarloConfig"] = None,
-) -> Path:
+) -> Dict[str, Any]:
     """
-    Force methyl-mapper to consume detector extended classifier panels during MC gene stability.
+    Build mapper overrides for MC gene stability (CSV pattern + enrich_disease).
 
-    Without this, projects that default to ``dmps-*-discovery.csv`` map every significant DMP
-    (tens of thousands of loci) instead of the smaller classifier exports.
-
-    When ``config`` is provided, also writes ``enrich_disease`` from
-    ``stability_mapper_enrich_disease`` (default false) so MC mapper skips Grok unless requested.
-    Production ``--freeze`` mapper uses the base project mapper config instead.
+    Returned dict is merged into ``resolvedConfig.mapper`` at task materialization —
+    not written to ``mapper_step_override.json`` beside iteration ``project.json``.
     """
-    out = run_dir / "mapper_step_override.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
     enrich_disease = False
     csv_pattern = DISCOVERY_DMP_CSV_PATTERN
     if config is not None:
         enrich_disease = bool(getattr(config, "stability_mapper_enrich_disease", False))
         from .modeling_modes import infer_dmp_modeling_mode, mapper_csv_pattern_for_dmp_mode
 
-        dmp_mode = infer_dmp_modeling_mode(config.model_dump(mode="python"))
-        csv_pattern = mapper_csv_pattern_for_dmp_mode(dmp_mode)
+        model_dump = getattr(config, "model_dump", None)
+        if callable(model_dump):
+            dmp_mode = infer_dmp_modeling_mode(model_dump(mode="python"))
+            csv_pattern = mapper_csv_pattern_for_dmp_mode(dmp_mode)
         loci = getattr(config, "gene_featurecuts_loci_source", None)
         dmp_source = str(
             loci or getattr(config, "stability_gene_featurecuts_dmp_source", "discovery") or "discovery"
@@ -211,6 +210,13 @@ def write_mapper_classifier_override(
         "csv_filename_pattern": csv_pattern,
         "enrich_disease": enrich_disease,
     }
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(payload, f, indent=2)
-    return out
+    return payload
+
+
+def write_mapper_classifier_override(
+    run_dir: Path,
+    config: Optional["MonteCarloConfig"] = None,
+) -> Dict[str, Any]:
+    """Deprecated alias — returns override dict; does not write sidecar JSON."""
+    del run_dir
+    return build_mapper_classifier_override(config)

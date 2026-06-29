@@ -27,7 +27,7 @@ def test_methyl_extraction_qc_handler_writes_guardrails(tmp_path: Path) -> None:
     result = execute_task(
         "methyl-extraction-qc",
         "sample.extraction_qc",
-        {"sampleId": "S1", "sampleDir": str(sample_dir), "chromosomes": ["21"]},
+        {"tool": "MethylExtractionQc", "sampleId": "S1", "sampleDir": str(sample_dir)},
     )
     out = result.output.model_dump()
     assert out["guardrails"]["overall_pass"] is True

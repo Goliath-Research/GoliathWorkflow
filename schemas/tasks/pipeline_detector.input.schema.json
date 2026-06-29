@@ -118,6 +118,50 @@
           "default": null,
           "title": "Contexts"
         },
+        "detection_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "legacy",
+                "discovery_only"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detection Mode"
+        },
+        "dmp_export_mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "unified",
+                "dual"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dmp Export Mode"
+        },
+        "export_classifier": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Export Classifier"
+        },
         "fixed_dmp_panel": {
           "anyOf": [
             {

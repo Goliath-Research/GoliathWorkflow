@@ -40,8 +40,8 @@ class GeneSelectCliAction(CliAction):
         if project and not payload.get("runDir"):
             payload["runDir"] = default_run_dir_for_project(str(project))
         max_genes, max_dmps = resolve_gene_featurecuts_caps(
-            max_genes=payload.get("maxGenes"),
-            max_dmps=payload.get("maxDmps"),
+            max_genes=None,
+            max_dmps=None,
             resolved_config=payload.get("resolvedConfig")
             if isinstance(payload.get("resolvedConfig"), dict)
             else None,
@@ -49,12 +49,8 @@ class GeneSelectCliAction(CliAction):
         )
         if max_genes is not None:
             payload["maxGenes"] = max_genes
-        else:
-            payload.pop("maxGenes", None)
         if max_dmps is not None:
             payload["maxDmps"] = max_dmps
-        else:
-            payload.pop("maxDmps", None)
         cmd = super().build_argv(payload)
         if biomarker:
             cmd.append("--biomarker-filter")

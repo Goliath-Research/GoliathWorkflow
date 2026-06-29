@@ -11,7 +11,7 @@ from .base import ActionOutputBase
 from .step_override_models import (
     CentroidStepOverride,
     ClassifierStepOverride,
-    ClusterStepOverride,
+    DmpSelectStepOverride,
     DetectorStepOverride,
     EnricherStepOverride,
     MapperStepOverride,
@@ -34,8 +34,6 @@ class CentroidTaskInput(BaseModel):
     centroid1Dir: Optional[str] = None
     centroid2Dir: Optional[str] = None
     stepOverride: Optional[CentroidStepOverride] = None
-    addSamples: Optional[List[str]] = None
-    removeSamples: Optional[List[str]] = None
 
 
 class CentroidTaskOutput(ActionOutputBase):
@@ -83,10 +81,6 @@ class MapperTaskInput(BaseModel):
     project: Optional[str] = None
     projectPath: Optional[str] = None
     group: Optional[str] = None
-    chromosome: Optional[str] = None
-    context: Optional[str] = None
-    comparison: Optional[str] = None
-    outputDir: Optional[str] = None
     stepOverride: Optional[MapperStepOverride] = None
 
 
@@ -107,7 +101,6 @@ class EnricherTaskInput(BaseModel):
     tool: str
     project: Optional[str] = None
     projectPath: Optional[str] = None
-    group: Optional[str] = None
     comparison: Optional[str] = None
     outputDir: Optional[str] = None
     stepOverride: Optional[EnricherStepOverride] = None
@@ -173,25 +166,6 @@ class PredictorTaskOutput(ActionOutputBase):
     balanced_accuracy: Optional[float] = None
 
 
-class ClusterTaskInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    tool: str
-    project: Optional[str] = None
-    projectPath: Optional[str] = None
-    group: Optional[str] = None
-    outputDir: Optional[str] = None
-    stepOverride: Optional[ClusterStepOverride] = None
-
-
-class ClusterTaskOutput(ActionOutputBase):
-    group: Optional[str] = None
-    output_dir: Optional[str] = None
-    n_clusters: Optional[int] = None
-    n_noise: Optional[int] = None
-    manifest_path: Optional[str] = None
-
-
 class DmpSelectTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -204,7 +178,7 @@ class DmpSelectTaskInput(BaseModel):
     comparison: Optional[str] = None
     discoveryCsv: Optional[str] = None
     outputDir: Optional[str] = None
-    stepOverride: Optional[DetectorStepOverride] = None
+    stepOverride: Optional[DmpSelectStepOverride] = None
 
     @model_validator(mode="after")
     def _project_required(self) -> "DmpSelectTaskInput":
@@ -232,8 +206,6 @@ class GeneSelectTaskInput(BaseModel):
     project: Optional[str] = None
     runDir: Optional[str] = None
     comparison: Optional[str] = None
-    maxGenes: Optional[int] = Field(default=None, ge=1)
-    maxDmps: Optional[int] = Field(default=None, ge=1)
     biomarkerFilter: bool = False
 
     @model_validator(mode="after")
@@ -262,8 +234,6 @@ class GeneFeatureSelectTaskInput(BaseModel):
     tool: str = "MethylGeneFeatureSelect"
     mapperDir: str
     outputDir: str
-    maxFeatures: Optional[int] = Field(default=None, ge=1)
-    targetBalancedAccuracy: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 class GeneFeatureSelectTaskOutput(ActionOutputBase):

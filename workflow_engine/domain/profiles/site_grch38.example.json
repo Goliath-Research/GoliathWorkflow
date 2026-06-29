@@ -1,9 +1,5 @@
 {
   "actionConfig": {
-    "validation": {
-      "stability_gene_featurecuts_max_dmps": 1000,
-      "stability_gene_featurecuts_max_genes": 200
-    },
     "gene_selection": {
       "max_dmps": 1000,
       "max_genes": 200

@@ -14,21 +14,6 @@
       "default": null,
       "title": "Backend"
     },
-    "backends": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Backends"
-    },
     "bundleDir": {
       "anyOf": [
         {
@@ -40,79 +25,6 @@
       ],
       "default": null,
       "title": "Bundledir"
-    },
-    "bundleH5": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Bundleh5"
-    },
-    "featureIterations": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Featureiterations"
-    },
-    "modelMcRoot": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Modelmcroot"
-    },
-    "monteCarloRunsRoot": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Montecarlorunsroot"
-    },
-    "outputDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Outputdir"
-    },
-    "productionOutputDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Productionoutputdir"
     },
     "project": {
       "anyOf": [
@@ -138,91 +50,6 @@
       "default": null,
       "title": "Projectpath"
     },
-    "qualityIterations": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Qualityiterations"
-    },
-    "runDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Rundir"
-    },
-    "selectionMetric": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Selectionmetric"
-    },
-    "selectionStat": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Selectionstat"
-    },
-    "sourceRunDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Sourcerundir"
-    },
-    "stableDmpCsv": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Stabledmpcsv"
-    },
-    "targetRunDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Targetrundir"
-    },
     "tool": {
       "anyOf": [
         {
@@ -236,6 +63,6 @@
       "title": "Tool"
     }
   },
-  "title": "ValidationTaskInput",
+  "title": "ModelTrainTaskInput",
   "type": "object"
 }

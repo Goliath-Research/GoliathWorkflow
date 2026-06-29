@@ -35,9 +35,8 @@ def test_write_detector_featurecuts_override(tmp_path: Path):
             stability_classifier_export_max_dmps=200,
         )
     )
-    out = write_detector_featurecuts_override(tmp_path / "run_0001", cfg)
-    assert out is not None and out.is_file()
-    payload = json.loads(out.read_text(encoding="utf-8"))
+    payload = write_detector_featurecuts_override(tmp_path / "run_0001", cfg)
+    assert payload is not None
     assert payload["classifier_dmp_selection"] == "featurecuts_validation"
     assert payload["target_balanced_accuracy"] == 0.95
     assert payload["min_core_dmps"] == 50

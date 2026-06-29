@@ -2,169 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
-    "capCov": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Capcov"
-    },
-    "chromMapping": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Chrommapping"
-    },
-    "chunkSize": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Chunksize"
-    },
-    "compression": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Compression"
-    },
-    "extractContexts": {
-      "anyOf": [
-        {
-          "items": {
-            "enum": [
-              "CG",
-              "CHG",
-              "CHH"
-            ],
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Extractcontexts"
-    },
-    "extractorBin": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Extractorbin"
-    },
-    "minCov": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Mincov"
-    },
-    "minMapq": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Minmapq"
-    },
-    "minPhred": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Minphred"
-    },
-    "outputFormat": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Outputformat"
-    },
-    "project": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Project"
-    },
     "projectPath": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Projectpath"
-    },
-    "referenceFasta": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Referencefasta"
+      "title": "Projectpath",
+      "type": "string"
     },
     "sampleDir": {
       "title": "Sampledir",
@@ -174,30 +14,6 @@
       "title": "Sampleid",
       "type": "string"
     },
-    "split": {
-      "anyOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Split"
-    },
-    "threads": {
-      "anyOf": [
-        {
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Threads"
-    },
     "tool": {
       "default": "MethylExtract",
       "title": "Tool",
@@ -206,7 +22,8 @@
   },
   "required": [
     "sampleId",
-    "sampleDir"
+    "sampleDir",
+    "projectPath"
   ],
   "title": "MethylExtractTaskInput",
   "type": "object"

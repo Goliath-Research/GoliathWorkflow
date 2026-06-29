@@ -5,7 +5,7 @@ JSON task descriptors for distributed queue workers (Pydantic).
 from __future__ import annotations
 
 from enum import Enum
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -43,7 +43,7 @@ class DiscoveryRunTaskV1(BaseModel):
     val_groups_json: Optional[str] = None
     centroid_group1_override: Optional[str] = None
     centroid_group2_override: Optional[str] = None
-    detector_step_override: Optional[str] = None
+    detector_step_override: Optional[Dict[str, Any]] = None
     # Worker loads full config
     mc_config_path: str = Field(..., description="Path to mc_config.json snapshot in queue/")
 

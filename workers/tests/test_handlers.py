@@ -8,6 +8,7 @@ from unittest.mock import patch
 import pytest
 
 from methyl_worker.handlers import _handle_download_fastq, execute_task
+from methyl_worker import parabricks_runner as runner
 from methyl_worker.task_models import DownloadFastqTaskInput
 
 
@@ -54,21 +55,35 @@ def test_parabricks_idempotent_when_outputs_exist(tmp_path: Path) -> None:
     ref.write_text(">ref\n")
     bam.write_bytes(b"BAM")
     metrics.write_text("{}")
+    project = tmp_path / "project.json"
+    project.write_text("{}", encoding="utf-8")
 
     with patch.dict(
         "os.environ",
         {"METHYL_PARABRICKS_IMAGE": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1"},
     ):
-        with patch("methyl_worker.parabricks_runner.subprocess.run") as mock_run:
-            result = execute_task(
-                "parabricks.fq2bam",
-                "sample.parabricks_fq2bam",
-                {
-                    "sampleId": "S1",
-                    "sampleDir": str(sample_dir),
-                    "referenceFasta": str(ref),
-                },
-            )
+        with patch("methyl_worker.handlers._resolve_reference_fasta", return_value=str(ref)):
+            with patch(
+                "methyl_worker.parabricks_runner.resolve_parabricks_config",
+                return_value=runner.ParabricksConfig(
+                    image="nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
+                    gpu_flags=("--gpus", "all"),
+                    bwa_threads=16,
+                    extra_docker_args=(),
+                    cleanup_tmp=True,
+                ),
+            ):
+                with patch("methyl_worker.parabricks_runner.subprocess.run") as mock_run:
+                    result = execute_task(
+                    "parabricks.fq2bam",
+                    "sample.parabricks_fq2bam",
+                    {
+                        "tool": "ParabricksFq2Bam",
+                        "sampleId": "S1",
+                        "sampleDir": str(sample_dir),
+                        "projectPath": str(project),
+                    },
+                )
 
     mock_run.assert_not_called()
     out = result.output.model_dump()
@@ -92,9 +107,10 @@ def test_methyl_extract_idempotent_when_outputs_exist(tmp_path: Path) -> None:
                 "methyl-extract",
                 "sample.methyl_extract",
                 {
+                    "tool": "MethylExtract",
                     "sampleId": "S1",
                     "sampleDir": str(sample_dir),
-                    "project": str(tmp_path / "project.json"),
+                    "projectPath": str(tmp_path / "project.json"),
                 },
             )
 

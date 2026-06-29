@@ -48,8 +48,8 @@ def test_validation_plan_iterations_handler() -> None:
     assert out["iterations"][0]["projectPath"] == "/work/demo/monte_carlo_runs/run_0001/project.json"
     assert out["iterations"][0]["runDir"] == "/work/demo/monte_carlo_runs/run_0001"
     iter_ref = result.output.iterations[0]
-    assert iter_ref.run_dir == "/work/demo/monte_carlo_runs/run_0001"
-    assert iter_ref.project_json == "/work/demo/monte_carlo_runs/run_0001/project.json"
+    assert iter_ref.runDir == "/work/demo/monte_carlo_runs/run_0001"
+    assert iter_ref.projectPath == "/work/demo/monte_carlo_runs/run_0001/project.json"
 
 
 def test_validation_plan_iterations_maps_snake_case_fields() -> None:
@@ -86,5 +86,5 @@ def test_validation_plan_iterations_maps_snake_case_fields() -> None:
         )
     iter_ref = result.output.iterations[0]
     assert iter_ref.iteration == 0
-    assert iter_ref.run_dir == "/work/demo/monte_carlo_runs/run_0000"
-    assert iter_ref.project_json == "/work/demo/monte_carlo_runs/run_0000/project.json"
+    assert iter_ref.runDir == "/work/demo/monte_carlo_runs/run_0000"
+    assert iter_ref.projectPath == "/work/demo/monte_carlo_runs/run_0000/project.json"

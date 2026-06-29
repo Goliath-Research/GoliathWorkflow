@@ -23,8 +23,6 @@
         "chromosome",
         "context",
         "outputDir",
-        "addSamples",
-        "removeSamples",
         "stepOverride"
       ],
       "default_node_type": "ACTION",
@@ -159,8 +157,6 @@
       "action_name": "pipeline.gene_select",
       "argv_map": {
         "biomarkerFilter": "--biomarker-filter",
-        "maxDmps": "--max-dmps",
-        "maxGenes": "--max-genes",
         "project": "--project",
         "projectPath": "--project",
         "runDir": "--run-dir"
@@ -171,8 +167,6 @@
       "context_vars": [
         "comparison",
         "runDir",
-        "maxGenes",
-        "maxDmps",
         "biomarkerFilter"
       ],
       "default_node_type": "ACTION",
@@ -188,18 +182,14 @@
       "action_name": "pipeline.gene_feature_select",
       "argv_map": {
         "mapperDir": "--mapper-dir",
-        "maxFeatures": "--max-features",
-        "outputDir": "--output-dir",
-        "targetBalancedAccuracy": "--target-ba"
+        "outputDir": "--output-dir"
       },
       "capability": "methyl-gene-feature-select",
       "category": "modeling",
       "cli_tool": "methyl-gene-feature-select",
       "context_vars": [
         "mapperDir",
-        "outputDir",
-        "maxFeatures",
-        "targetBalancedAccuracy"
+        "outputDir"
       ],
       "default_node_type": "ACTION",
       "description": "Select structural gene \u00d7 region features for tabular structural_scored backends.",
@@ -353,6 +343,7 @@
       "tool": "SampleDownloadFastq"
     },
     {
+      "action_config_key": "parabricks",
       "action_name": "sample.parabricks_fq2bam",
       "argv_map": {},
       "capability": "parabricks.fq2bam",
@@ -360,8 +351,7 @@
       "context_vars": [
         "sampleId",
         "sampleDir",
-        "referenceFasta",
-        "referenceGtf"
+        "projectPath"
       ],
       "default_node_type": "ACTION",
       "description": "Align bisulfite FASTQs to BAM using NVIDIA Clara Parabricks fq2bam_meth (Docker).",
@@ -560,11 +550,10 @@
       "context_vars": [
         "sampleId",
         "sampleDir",
-        "projectPath",
-        "referenceFasta"
+        "projectPath"
       ],
       "default_node_type": "ACTION",
-      "description": "Extract BAM to per-chromosome HDF5 via native MethylExtractor (config from project step_config.methyl_extract).",
+      "description": "Extract BAM to per-chromosome HDF5 via native MethylExtractor (resolvedConfig.methyl_extract).",
       "domain_effects": {
         "output_bindings": [
           {
@@ -674,48 +663,6 @@
       "output_schema_ref": "schemas/tasks/sample_archive_sample.output.schema.json",
       "schema_id": "sample.archive_sample",
       "tool": "SampleArchive"
-    },
-    {
-      "action_name": "sample.upload_h5",
-      "argv_map": {},
-      "capability": "sample.upload-h5",
-      "category": "sample_prep",
-      "context_vars": [
-        "sampleId",
-        "sampleDir",
-        "sampleDestination",
-        "h5Destination",
-        "h5Files"
-      ],
-      "default_node_type": "ACTION",
-      "description": "Deprecated alias for sample.archive_sample (full mode).",
-      "domain_effects": {
-        "output_bindings": [
-          {
-            "domain_type": "MethylSampleRef",
-            "output_json_path": "$.sampleArchive",
-            "scope_field": "sampleArchive"
-          }
-        ],
-        "reads_types": [
-          "MethylSampleRef"
-        ],
-        "scope_bindings": [
-          {
-            "output_json_path": "$.sampleArchived",
-            "var_name": "sampleArchived"
-          }
-        ],
-        "writes_types": [
-          "MethylSampleRef"
-        ]
-      },
-      "execution_mode": "in_process",
-      "in_process_handler": "_handle_upload_h5",
-      "input_schema_ref": "schemas/tasks/sample_upload_h5.input.schema.json",
-      "output_schema_ref": "schemas/tasks/sample_upload_h5.output.schema.json",
-      "schema_id": "sample.upload_h5",
-      "tool": "SampleUploadH5"
     },
     {
       "action_name": "sample.delete_bam",

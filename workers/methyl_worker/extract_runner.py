@@ -235,21 +235,18 @@ def resolve_methyl_extract_config(
     )
     alignment_cfg = resolve_from_task_input("alignment_qc", input_json, regulatory=regulatory)
 
-    reference_raw = (
-        input_json.get("referenceFasta")
-        or step_cfg.get("reference_fasta")
-        or (alignment_cfg.get("genome_fasta") if isinstance(alignment_cfg, dict) else None)
-    )
+    reference_raw = step_cfg.get("reference_fasta") or alignment_cfg.get("genome_fasta")
     if not reference_raw:
         raise RuntimeError(
-            "referenceFasta is required (task input_json or project step_config.alignment_qc.genome_fasta)"
+            "reference genome is required in site reference_genome.fasta or "
+            "profile/site actionConfig.alignment_qc / methyl_extract"
         )
     reference_fasta = Path(str(reference_raw)).expanduser().resolve()
     if not reference_fasta.is_file():
         raise RuntimeError(f"reference FASTA not found: {reference_fasta}")
 
     sample_dir = Path(str(sample_dir_raw)).expanduser().resolve()
-    chrom_mapping_raw = _pick(input_json, step_cfg, "chromMapping", "chrom_mapping")
+    chrom_mapping_raw = step_cfg.get("chrom_mapping")
     chrom_mapping = _materialize_chrom_mapping(
         sample_dir,
         chrom_mapping_raw,
@@ -258,13 +255,12 @@ def resolve_methyl_extract_config(
         step_cfg,
     )
 
-    extract_contexts = _normalize_contexts(
-        _pick(input_json, step_cfg, "extractContexts", "extract_contexts")
-    )
+    extract_contexts_raw = step_cfg.get("extract_contexts")
+    if extract_contexts_raw is None:
+        raise RuntimeError("extract_contexts must be set in profile/site actionConfig.methyl_extract")
+    extract_contexts = _normalize_contexts(extract_contexts_raw)
 
-    extractor_bin = str(
-        _pick(input_json, step_cfg, "extractorBin", "extractor_bin") or "MethylExtractor"
-    ).strip()
+    extractor_bin = str(step_cfg.get("extractor_bin") or "MethylExtractor").strip()
 
     return MethylExtractConfig(
         sample_id=sample_id,
@@ -275,17 +271,15 @@ def resolve_methyl_extract_config(
         reference_fasta=reference_fasta,
         chrom_mapping=chrom_mapping,
         extractor_bin=extractor_bin,
-        threads=_pick_int(input_json, step_cfg, "threads", "threads"),
-        min_mapq=_pick_int(input_json, step_cfg, "minMapq", "min_mapq"),
-        min_phred=_pick_int(input_json, step_cfg, "minPhred", "min_phred"),
-        min_cov=_pick_int(input_json, step_cfg, "minCov", "min_cov"),
-        cap_cov=_pick_int(input_json, step_cfg, "capCov", "cap_cov"),
-        compression=_pick_int(input_json, step_cfg, "compression", "compression"),
-        chunk_size=_pick_int(input_json, step_cfg, "chunkSize", "chunk_size"),
-        output_format=str(
-            _pick(input_json, step_cfg, "outputFormat", "output_format") or "hdf5"
-        ),
-        split=_pick_bool(input_json, step_cfg, "split", "split", default=True),
+        threads=step_cfg.get("threads") if step_cfg.get("threads") is not None else None,
+        min_mapq=step_cfg.get("min_mapq"),
+        min_phred=step_cfg.get("min_phred"),
+        min_cov=step_cfg.get("min_cov"),
+        cap_cov=step_cfg.get("cap_cov"),
+        compression=step_cfg.get("compression"),
+        chunk_size=step_cfg.get("chunk_size"),
+        output_format=str(step_cfg.get("output_format") or "hdf5"),
+        split=bool(step_cfg.get("split", True)),
     )
 
 
