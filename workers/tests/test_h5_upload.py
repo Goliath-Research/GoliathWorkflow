@@ -15,6 +15,7 @@ from methyl_worker.sample_archive import (
     archive_from_task_input,
     archive_sample,
     upload_h5_files,
+    upload_h5_from_task_input,
 )
 from pydantic import TypeAdapter
 
@@ -129,6 +130,20 @@ def test_archive_sample_skipped_without_sample_destination(tmp_path: Path) -> No
     )
     assert skipped["archiveSkipped"] is True
     assert skipped["missingConfiguration"] == ["sampleDestination"]
+
+
+def test_upload_h5_from_task_input_requires_sample_destination(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S1"
+    sample_dir.mkdir()
+    (sample_dir / "1-CG.h5").write_bytes(b"h5")
+
+    with pytest.raises(RuntimeError, match="sample.upload_h5 requires sampleDestination"):
+        upload_h5_from_task_input(
+            {
+                "sampleDir": str(sample_dir),
+                "sampleId": "S1",
+            }
+        )
 
 
 def test_upload_h5_files_ignores_fastqs(tmp_path: Path) -> None:

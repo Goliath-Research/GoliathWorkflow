@@ -448,12 +448,15 @@ def upload_h5_from_task_input(input_json: Mapping[str, Any]) -> dict[str, Any]:
     sample_dir = input_json.get("sampleDir")
     if not sample_dir:
         raise RuntimeError("sample.upload_h5 requires sampleDir")
+    destination = _resolve_destination(input_json)
+    if destination is None:
+        raise RuntimeError("sample.upload_h5 requires sampleDestination")
     h5_files = input_json.get("h5Files")
     if isinstance(h5_files, str):
         h5_files = [h5_files]
     result = upload_h5_files(
         sample_dir=str(sample_dir),
-        h5_destination=_resolve_destination(input_json),
+        h5_destination=destination,
         h5_files=h5_files,
     )
     result["sampleId"] = input_json.get("sampleId") or Path(str(sample_dir)).name
