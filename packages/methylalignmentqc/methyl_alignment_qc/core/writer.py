@@ -54,6 +54,48 @@ def _find_parabricks_metrics_json(sample_dir: Path, sample_name: str) -> Optiona
     return direct_candidate if direct_candidate.exists() else None
 
 
+def _load_parabricks_metrics_payload(
+    sample_dir: Path,
+    sample_name: str,
+) -> tuple[Dict[str, Any], Path]:
+    """
+    Load Parabricks/Picard metrics for QC export.
+
+    Prefers a full {sample_id}.json when it validates; otherwise falls back to
+    {sample_id}.qc-metrics.tar (legacy folders may contain guardrails-only JSON stubs).
+    """
+    json_path = _find_parabricks_metrics_json(sample_dir, sample_name)
+    if json_path is not None:
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                raw_payload = json.load(f)
+            payload = ParabricksMetricsPayload.model_validate(raw_payload).model_dump(
+                mode="python",
+                by_alias=True,
+                exclude_none=True,
+            )
+            return payload, json_path
+        except Exception:
+            pass
+
+    parsed_from_tar = _build_parabricks_payload_from_qc_tar(sample_dir, sample_name)
+    if parsed_from_tar is None:
+        raise RuntimeError(
+            f"Missing Parabricks metrics for {sample_name}: expected a full "
+            f"{sample_dir / f'{sample_name}.json'} or "
+            f"{sample_dir / f'{sample_name}.qc-metrics.tar'}"
+        )
+    payload = ParabricksMetricsPayload.model_validate(parsed_from_tar).model_dump(
+        mode="python",
+        by_alias=True,
+        exclude_none=True,
+    )
+    tar_path = _find_qc_metrics_tar(sample_dir, sample_name)
+    if tar_path is None:
+        raise RuntimeError(f"qc-metrics tar resolved during parse but not found for {sample_name}")
+    return payload, tar_path
+
+
 def _find_qc_metrics_tar(sample_dir: Path, sample_name: str) -> Optional[Path]:
     """Resolve canonical qc-metrics tar path for sample."""
     candidate = sample_dir / f"{sample_name}.qc-metrics.tar"
@@ -401,34 +443,7 @@ def build_sample_qc_v2_dict(
     metrics = parsed[sample_name]
     summary = core_parser.calculate_summary_stats(parsed)
 
-    payload: Dict[str, Any] = {}
-    parabricks_json = _find_parabricks_metrics_json(sample_dir, sample_name)
-    if parabricks_json is not None:
-        try:
-            with open(parabricks_json, "r", encoding="utf-8") as f:
-                raw_payload = json.load(f)
-            payload = ParabricksMetricsPayload.model_validate(raw_payload).model_dump(
-                mode="python",
-                by_alias=True,
-                exclude_none=True,
-            )
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to load/validate Parabricks JSON for {sample_name} from {parabricks_json}: {e}"
-            ) from e
-    else:
-        parsed_from_tar = _build_parabricks_payload_from_qc_tar(sample_dir, sample_name)
-        if parsed_from_tar is None:
-            raise RuntimeError(
-                f"Missing Parabricks metrics for {sample_name}: expected either "
-                f"{sample_dir / f'{sample_name}.json'} or {sample_dir / f'{sample_name}.qc-metrics.tar'}"
-            )
-        payload = ParabricksMetricsPayload.model_validate(parsed_from_tar).model_dump(
-            mode="python",
-            by_alias=True,
-            exclude_none=True,
-        )
-        parabricks_json = _find_qc_metrics_tar(sample_dir, sample_name)
+    payload, metrics_source = _load_parabricks_metrics_payload(sample_dir, sample_name)
 
     for key, value in metrics.items():
         if key not in payload:
@@ -441,14 +456,14 @@ def build_sample_qc_v2_dict(
         payload["summary_stats"] = summary[sample_name]
 
     try:
-        if parabricks_json is not None and str(parabricks_json).endswith(".json"):
-            payload["guardrails"] = check_wgbs_guardrails(str(parabricks_json), print_report=False)
+        if str(metrics_source).endswith(".json"):
+            payload["guardrails"] = check_wgbs_guardrails(str(metrics_source), print_report=False)
         else:
             from .wgbs_parabricks_qc import _build_wgbs_guardrail_report
 
             payload["guardrails"] = _build_wgbs_guardrail_report(payload)
     except Exception as e:
-        raise RuntimeError(f"Failed to compute guardrails for {sample_name} from {parabricks_json}: {e}") from e
+        raise RuntimeError(f"Failed to compute guardrails for {sample_name} from {metrics_source}: {e}") from e
 
     align_cfg = alignment_guardrails or AlignmentGuardrailsConfig()
     stats = compute_alignment_stats(payload)

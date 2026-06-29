@@ -151,6 +151,53 @@ def test_process_samples_to_qc_jsons_fails_when_parabricks_json_missing(tmp_path
         process_samples_to_qc_jsons([str(sample_dir)], str(output_dir), validate_schema=True)
 
 
+def test_process_samples_to_qc_jsons_uses_qc_metrics_tar_when_json_is_guardrails_stub(tmp_path: Path):
+    from methyl_alignment_qc.core.writer import process_samples_to_qc_jsons
+
+    sample_dir = tmp_path / "sampleD"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    _write_text(sample_dir / "sampleD.deduplicate_metrics.txt", _dedup_metrics_fixture())
+    (sample_dir / "sampleD.json").write_text(
+        json.dumps({"guardrails": {"overall_pass": True}}),
+        encoding="utf-8",
+    )
+
+    output_dir = tmp_path / "out"
+    with pytest.raises(RuntimeError, match="Missing Parabricks metrics"):
+        process_samples_to_qc_jsons([str(sample_dir)], str(output_dir), validate_schema=True)
+
+
+def test_build_sample_qc_v2_dict_falls_back_to_qc_metrics_tar(tmp_path: Path, monkeypatch) -> None:
+    from methyl_alignment_qc.core.writer import build_sample_qc_v2_dict
+
+    sample_dir = tmp_path / "sampleE"
+    sample_dir.mkdir(parents=True, exist_ok=True)
+    _write_text(sample_dir / "sampleE.deduplicate_metrics.txt", _dedup_metrics_fixture())
+    (sample_dir / "sampleE.json").write_text(
+        json.dumps({"guardrails": {"overall_pass": True}}),
+        encoding="utf-8",
+    )
+
+    fixture = _parabricks_json_fixture("sampleE")
+
+    def _fake_tar_build(sd: Path, name: str):
+        assert name == "sampleE"
+        return fixture
+
+    monkeypatch.setattr(
+        "methyl_alignment_qc.core.writer._build_parabricks_payload_from_qc_tar",
+        _fake_tar_build,
+    )
+    monkeypatch.setattr(
+        "methyl_alignment_qc.core.writer._find_qc_metrics_tar",
+        lambda sd, name: sd / f"{name}.qc-metrics.tar",
+    )
+
+    payload = build_sample_qc_v2_dict(sample_dir, cycle_screening=None)
+    assert payload["sample_id"] == "sampleE"
+    assert "quality_yield" in payload
+
+
 def test_process_samples_to_qc_jsons_uses_canonical_sample_json_name_only(tmp_path: Path):
     from methyl_alignment_qc.core.writer import process_samples_to_qc_jsons
 
