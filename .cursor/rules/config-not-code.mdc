@@ -1,0 +1,40 @@
+---
+description: Operational defaults live in config layers (site, profile, DB), not Python constants
+alwaysApply: true
+---
+
+# Config not code (MethylPipeline)
+
+MethylPipeline is **disease-agnostic** and **deployment-configurable**. Do not encode operational defaults in Python (magic numbers, `DEFAULT_*` constants, Pydantic `Field(default=1000)` for tunable science parameters).
+
+## Where values belong
+
+| Layer | Artifact | Who edits | DB visibility |
+|-------|----------|-----------|---------------|
+| **Site** | `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | Operator per cluster | Via instance `siteConfig` / enriched context |
+| **Profile** | `workflow_engine/domain/profiles/*.profile.json` (runtime-bundle) | Release / deployment | `pipelineProfile`, merged `actionConfig` in `wf.workflow_instance.context_json` |
+| **Study** | Instance `context_json` overlays, `profilePath` | Per study / API | `wf.workflow_instance.context_json` |
+| **Program** | `stepOverride` / `with` on DomainProgram nodes | Versioned topology | Node task payloads |
+
+**Precedence (highest wins):** program/instance override → profile `actionConfig` → analyte defaults → site `actionConfig` → *(no code fallback)*.
+
+## Code may only
+
+- **Resolve** merged config via `resolve_action_config` / `resolve_for_project` / `materialize_action_input`.
+- **Validate** types and bounds in Pydantic/JSON Schema (`ge=1`, `le=1.0`) with `default=None` for tunable knobs.
+- **Document** in schema descriptions *where* operators set values (site vs profile), not hardcoded numbers in code.
+
+## Forbidden patterns
+
+- `DEFAULT_GENE_FEATURECUTS_MAX_DMPS = 1000` (or similar) in packages.
+- `apply_*_defaults()` that inject numbers when config is missing — missing caps should surface clearly or remain unset.
+- Disease-specific profile names as the only way to get sane caps (`buffy_mc_*`); use generic profiles (`mc_gene_fc`) + site defaults.
+- Putting tool parameters in study `project_*.json` (`step_config` is removed).
+
+## Examples (gene FeatureCuts caps)
+
+- **Site (deployment):** `actionConfig.validation.stability_gene_featurecuts_max_dmps` / `max_genes` (and `gene_selection` aliases).
+- **Profile (procedure):** same keys under `actionConfig.validation` in `mc_gene_fc.profile.json`.
+- **DB workflow:** gateway enriches `context_json.actionConfig`; workers read `resolvedConfig` and `monte_carlo_runs/queue/mc_config.json` snapshots.
+
+When adding a new tunable parameter, add it to the appropriate JSON schema + profile/site examples — not to Python defaults.

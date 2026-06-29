@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-from methyl_gene_select.defaults import resolve_gene_featurecuts_caps
+from methyl_gene_select.caps import resolve_gene_featurecuts_caps
 
 from .base import CliAction
 
@@ -47,8 +47,14 @@ class GeneSelectCliAction(CliAction):
             else None,
             run_dir=payload.get("runDir"),
         )
-        payload["maxGenes"] = max_genes
-        payload["maxDmps"] = max_dmps
+        if max_genes is not None:
+            payload["maxGenes"] = max_genes
+        else:
+            payload.pop("maxGenes", None)
+        if max_dmps is not None:
+            payload["maxDmps"] = max_dmps
+        else:
+            payload.pop("maxDmps", None)
         cmd = super().build_argv(payload)
         if biomarker:
             cmd.append("--biomarker-filter")

@@ -1,5 +1,14 @@
 {
-  "actionConfig": {},
+  "actionConfig": {
+    "validation": {
+      "stability_gene_featurecuts_max_dmps": 1000,
+      "stability_gene_featurecuts_max_genes": 200
+    },
+    "gene_selection": {
+      "max_dmps": 1000,
+      "max_genes": 200
+    }
+  },
   "reference_genome": {
     "fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   },

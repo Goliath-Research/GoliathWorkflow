@@ -167,6 +167,8 @@
       "stability_classifier_export_margin_pct": 0.1,
       "stability_classifier_export_margin_abs": 10,
       "stability_classifier_export_max_dmps": 200,
+      "stability_gene_featurecuts_max_dmps": 1000,
+      "stability_gene_featurecuts_max_genes": 200,
       "stability_min_selected_genes": 50,
       "stability_mapper_enrich_disease": false,
       "abort_on_step_failure": true,

@@ -46,7 +46,20 @@ def test_gene_select_keeps_explicit_run_dir():
     assert cmd[run_dir_idx + 1] == "/work/projects/prostate-cancer/monte_carlo_runs/run_0001"
 
 
-def test_gene_select_applies_engine_default_caps():
+def test_gene_select_applies_resolved_config_caps():
+    action = _gene_select_action()
+    cmd = action.build_argv(
+        {
+            "projectPath": "/nonexistent/ci/configs/project_H_PCa.json",
+            "runDir": "/nonexistent/ci/monte_carlo_runs/run_0001",
+            "resolvedConfig": {"max_genes": 200, "max_dmps": 1000},
+        }
+    )
+    assert cmd[cmd.index("--max-genes") + 1] == "200"
+    assert cmd[cmd.index("--max-dmps") + 1] == "1000"
+
+
+def test_gene_select_omits_caps_when_unconfigured():
     action = _gene_select_action()
     cmd = action.build_argv(
         {
@@ -54,8 +67,8 @@ def test_gene_select_applies_engine_default_caps():
             "runDir": "/nonexistent/ci/monte_carlo_runs/run_0001",
         }
     )
-    assert cmd[cmd.index("--max-genes") + 1] == "200"
-    assert cmd[cmd.index("--max-dmps") + 1] == "1000"
+    assert "--max-genes" not in cmd
+    assert "--max-dmps" not in cmd
 
 
 def test_gene_select_merges_resolved_config_caps():

@@ -314,12 +314,6 @@ def materialize_action_input(
             program_override=override,
             regulatory=reg,
         )
-        try:
-            from methyl_gene_select.defaults import apply_gene_featurecuts_cap_defaults
-        except ImportError:
-            apply_gene_featurecuts_cap_defaults = None  # type: ignore[assignment,misc]
-        if apply_gene_featurecuts_cap_defaults is not None:
-            validation = apply_gene_featurecuts_cap_defaults(validation)
         rc = dict(out["resolvedConfig"])
         if rc.get("max_genes") is None:
             rc["max_genes"] = validation.get("stability_gene_featurecuts_max_genes")

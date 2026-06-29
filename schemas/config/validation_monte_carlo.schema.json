@@ -2770,8 +2770,8 @@
           "type": "null"
         }
       ],
-      "default": 1000,
-      "description": "Genome-wide cap on DMP loci used for MC gene FeatureCuts (after deduplication). Engine default limits k-search cost when discovery exports tens of thousands of loci.",
+      "default": null,
+      "description": "Genome-wide cap on DMP loci used for MC gene FeatureCuts (after deduplication). Set in site manifest or profile actionConfig.validation.",
       "title": "Stability Gene Featurecuts Max Dmps"
     },
     "stability_gene_featurecuts_max_genes": {
@@ -2784,7 +2784,7 @@
           "type": "null"
         }
       ],
-      "default": 200,
+      "default": null,
       "description": "Cap the ranked mapper gene pool before MC gene FeatureCuts k-search. Limits feature-matrix width and k-search cost when mapper exports tens of thousands of genes.",
       "title": "Stability Gene Featurecuts Max Genes"
     },
