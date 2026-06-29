@@ -53,17 +53,9 @@
               "if": "${extractionQcPass}",
               "then": [
                 {
-                  "if": "${h5Destination}",
-                  "then": [
-                    {
-                      "action": "sample.archive_sample",
-                      "node_key": "archive_sample",
-                      "with": {
-                        "mode": "full",
-                        "h5Destination": "${h5Destination}"
-                      }
-                    }
-                  ]
+                  "action": "sample.archive_sample",
+                  "node_key": "archive_sample",
+                  "with": {"mode": "full"}
                 },
                 {"action": "sample.delete_bam", "node_key": "delete_bam"}
               ],

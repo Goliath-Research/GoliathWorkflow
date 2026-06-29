@@ -221,6 +221,9 @@ class ArchiveSampleTaskOutput(ActionOutputBase):
     uploadedCount: int = 0
     skippedCount: int = 0
     sampleArchived: bool = False
+    archiveSkipped: bool = False
+    skipReason: Optional[str] = None
+    missingConfiguration: List[str] = Field(default_factory=list)
     archiveManifestPath: Optional[str] = None
 
 

@@ -77,6 +77,11 @@
       "title": "Archivemode",
       "type": "string"
     },
+    "archiveSkipped": {
+      "default": false,
+      "title": "Archiveskipped",
+      "type": "boolean"
+    },
     "artifacts": {
       "items": {
         "$ref": "#/$defs/ArtifactRef"
@@ -148,6 +153,13 @@
       "default": null,
       "title": "Manifest Path"
     },
+    "missingConfiguration": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Missingconfiguration",
+      "type": "array"
+    },
     "rejectReason": {
       "anyOf": [
         {
@@ -184,6 +196,18 @@
       "default": "1.0",
       "title": "Schema Version",
       "type": "string"
+    },
+    "skipReason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Skipreason"
     },
     "skippedCount": {
       "default": 0,

@@ -44,12 +44,14 @@ flowchart LR
 | `sample.fragmentomics` | `sampleId`, `sampleDir`, `projectPath` | `fragmentomics` | — |
 | `sample.methyl_extract` | `sampleId`, `sampleDir`, `projectPath` | `methyl_extract` | — |
 | `sample.extraction_qc` | `sampleId`, `sampleDir`, `projectPath` | `extraction_qc` | — |
-| `sample.archive_sample` | `sampleId`, `sampleDir`, `sampleDestination`, `h5Destination`, `mode`, `rejectReason`, `alignmentQcPath`, `qcPath`, `projectPath`, `h5Files` | — | — |
+| `sample.archive_sample` | `sampleId`, `sampleDir`, `sampleDestination`, `h5Destination` (deprecated alias), `mode`, `rejectReason`, `alignmentQcPath`, `qcPath`, `projectPath`, `h5Files` | — | — |
 | `sample.delete_fastqs` | `sampleId`, `sampleDir` | — | — |
 | `sample.delete_bam` | `sampleId`, `sampleDir` | — | — |
 | `sample.qc_failed` | `sampleId`, `sampleDir`, `reason` | — | — |
 
-**Removed:** `sample.upload_h5` — use `sample.archive_sample` with `h5Destination`.
+**Removed:** `sample.upload_h5` — use `sample.archive_sample` with `sampleDestination` (FASTQs, QC JSON, H5, manifests).
+
+**Archive skip output** (when `sampleDestination` is absent): `status=skipped`, `sampleArchived=false`, `archiveSkipped=true`, `skipReason=sample_destination_not_configured`, `missingConfiguration=["sampleDestination"]`.
 
 Parabricks image, BWA threads, and reference FASTA resolve from site `reference_genome` + `actionConfig.parabricks` (not wire). Methyl extract `min_mapq`, `min_phred`, `extract_contexts`, etc. resolve from `actionConfig.methyl_extract`.
 

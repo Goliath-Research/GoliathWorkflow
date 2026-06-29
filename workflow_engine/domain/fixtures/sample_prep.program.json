@@ -34,28 +34,18 @@
               "if": "${extractionQcPass}",
               "then": [
                 {
-                  "if": "${sampleDestination}",
-                  "then": [
-                    {
-                      "action": "sample.archive_sample",
-                      "node_key": "archive_sample",
-                      "with": {"mode": "full"}
-                    }
-                  ]
+                  "action": "sample.archive_sample",
+                  "node_key": "archive_sample",
+                  "with": {"mode": "full"}
                 },
                 {"action": "sample.delete_fastqs", "node_key": "delete_fastqs"},
                 {"action": "sample.delete_bam", "node_key": "delete_bam"}
               ],
               "else": [
                 {
-                  "if": "${sampleDestination}",
-                  "then": [
-                    {
-                      "action": "sample.archive_sample",
-                      "node_key": "archive_sample_qc_only",
-                      "with": {"mode": "qc_only", "rejectReason": "extraction_qc_failed"}
-                    }
-                  ]
+                  "action": "sample.archive_sample",
+                  "node_key": "archive_sample_qc_only",
+                  "with": {"mode": "qc_only", "rejectReason": "extraction_qc_failed"}
                 },
                 {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_extraction_fail"},
                 {"action": "sample.delete_bam", "node_key": "delete_bam_extraction_fail"},
@@ -122,28 +112,18 @@
                       "if": "${extractionQcPass}",
                       "then": [
                         {
-                          "if": "${sampleDestination}",
-                          "then": [
-                            {
-                              "action": "sample.archive_sample",
-                              "node_key": "archive_sample_retry",
-                              "with": {"mode": "full"}
-                            }
-                          ]
+                          "action": "sample.archive_sample",
+                          "node_key": "archive_sample_retry",
+                          "with": {"mode": "full"}
                         },
                         {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_after_retry"},
                         {"action": "sample.delete_bam", "node_key": "delete_bam_retry"}
                       ],
                       "else": [
                         {
-                          "if": "${sampleDestination}",
-                          "then": [
-                            {
-                              "action": "sample.archive_sample",
-                              "node_key": "archive_sample_qc_only_retry",
-                              "with": {"mode": "qc_only", "rejectReason": "extraction_qc_failed"}
-                            }
-                          ]
+                          "action": "sample.archive_sample",
+                          "node_key": "archive_sample_qc_only_retry",
+                          "with": {"mode": "qc_only", "rejectReason": "extraction_qc_failed"}
                         },
                         {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_extraction_fail_retry"},
                         {"action": "sample.delete_bam", "node_key": "delete_bam_extraction_fail_retry"},
@@ -153,14 +133,9 @@
                   ],
                   "else": [
                     {
-                      "if": "${sampleDestination}",
-                      "then": [
-                        {
-                          "action": "sample.archive_sample",
-                          "node_key": "archive_sample_qc_only_align_retry",
-                          "with": {"mode": "qc_only", "rejectReason": "alignment_qc_failed_after_retry"}
-                        }
-                      ]
+                      "action": "sample.archive_sample",
+                      "node_key": "archive_sample_qc_only_align_retry",
+                      "with": {"mode": "qc_only", "rejectReason": "alignment_qc_failed_after_retry"}
                     },
                     {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_retry_fail"},
                     {"action": "sample.delete_bam", "node_key": "delete_bam_retry_fail"},
@@ -170,14 +145,9 @@
               ],
               "else": [
                 {
-                  "if": "${sampleDestination}",
-                  "then": [
-                    {
-                      "action": "sample.archive_sample",
-                      "node_key": "archive_sample_qc_only_align",
-                      "with": {"mode": "qc_only", "rejectReason": "alignment_qc_failed"}
-                    }
-                  ]
+                  "action": "sample.archive_sample",
+                  "node_key": "archive_sample_qc_only_align",
+                  "with": {"mode": "qc_only", "rejectReason": "alignment_qc_failed"}
                 },
                 {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_fail"},
                 {"action": "sample.delete_bam", "node_key": "delete_bam_fail"},

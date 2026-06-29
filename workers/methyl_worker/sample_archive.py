@@ -338,18 +338,44 @@ def archive_sample(
         "uploadedCount": len(uploaded),
         "skippedCount": len(skipped),
         "sampleArchived": True,
+        "archiveSkipped": False,
+        "skipReason": None,
+        "missingConfiguration": [],
         "archiveManifestPath": str(manifest_local),
     }
 
 
-def _resolve_destination(input_json: Mapping[str, Any]) -> SampleDestinationLocation:
+def _resolve_destination(input_json: Mapping[str, Any]) -> SampleDestinationLocation | None:
     from pydantic import TypeAdapter
 
     adapter = TypeAdapter(SampleDestinationLocation)
     raw = input_json.get("sampleDestination") or input_json.get("h5Destination")
     if raw is None:
-        raise RuntimeError("sample.archive_sample requires sampleDestination")
+        return None
     return adapter.validate_python(raw)
+
+
+def _archive_skip_no_destination(
+    *,
+    sample_id: str,
+    mode: str,
+    reject_reason: Optional[str] = None,
+) -> dict[str, Any]:
+    return {
+        "sampleId": sample_id,
+        "archiveMode": mode,
+        "rejectReason": reject_reason,
+        "uploadedFiles": [],
+        "skippedFiles": [],
+        "remotePrefix": "",
+        "uploadedCount": 0,
+        "skippedCount": 0,
+        "sampleArchived": False,
+        "archiveSkipped": True,
+        "skipReason": "sample_destination_not_configured",
+        "missingConfiguration": ["sampleDestination"],
+        "archiveManifestPath": None,
+    }
 
 
 def archive_from_task_input(input_json: Mapping[str, Any]) -> dict[str, Any]:
@@ -358,10 +384,17 @@ def archive_from_task_input(input_json: Mapping[str, Any]) -> dict[str, Any]:
         raise RuntimeError("sample.archive_sample requires sampleDir")
     sample_id = str(input_json.get("sampleId") or Path(str(sample_dir)).name)
     mode = str(input_json.get("mode") or input_json.get("archiveMode") or "full")
+    destination = _resolve_destination(input_json)
+    if destination is None:
+        return _archive_skip_no_destination(
+            sample_id=sample_id,
+            mode=mode,
+            reject_reason=input_json.get("rejectReason"),
+        )
     return archive_sample(
         sample_dir=str(sample_dir),
         sample_id=sample_id,
-        sample_destination=_resolve_destination(input_json),
+        sample_destination=destination,
         mode=mode,
         reject_reason=input_json.get("rejectReason"),
         alignment_qc_path=input_json.get("alignmentQcPath") or input_json.get("qcPath"),

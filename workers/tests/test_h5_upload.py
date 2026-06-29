@@ -10,7 +10,12 @@ import pytest
 
 from methyl_domain.sample_storage import SampleDestinationLocation
 from methyl_worker.handlers import execute_task
-from methyl_worker.sample_archive import _should_skip_azure, archive_sample, upload_h5_files
+from methyl_worker.sample_archive import (
+    _should_skip_azure,
+    archive_from_task_input,
+    archive_sample,
+    upload_h5_files,
+)
 from pydantic import TypeAdapter
 
 _DEST_ADAPTER = TypeAdapter(SampleDestinationLocation)
@@ -92,6 +97,38 @@ def test_archive_sample_handler_h5_only(tmp_path: Path) -> None:
         },
     ).output.model_dump()
     assert out["uploadedCount"] >= 1
+
+
+def test_archive_sample_skipped_without_sample_destination(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S1"
+    sample_dir.mkdir()
+
+    out = execute_task(
+        "sample.archive-sample",
+        "sample.archive_sample",
+        {
+            "tool": "SampleArchive",
+            "sampleId": "S1",
+            "sampleDir": str(sample_dir),
+            "mode": "full",
+        },
+    ).output.model_dump()
+    assert out["status"] == "skipped"
+    assert out["sampleArchived"] is False
+    assert out["archiveSkipped"] is True
+    assert out["skipReason"] == "sample_destination_not_configured"
+    assert out["missingConfiguration"] == ["sampleDestination"]
+
+    skipped = archive_from_task_input(
+        {
+            "sampleDir": str(sample_dir),
+            "sampleId": "S1",
+            "mode": "qc_only",
+            "rejectReason": "alignment_qc_failed",
+        }
+    )
+    assert skipped["archiveSkipped"] is True
+    assert skipped["missingConfiguration"] == ["sampleDestination"]
 
 
 def test_upload_h5_files_ignores_fastqs(tmp_path: Path) -> None:

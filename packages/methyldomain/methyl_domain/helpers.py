@@ -383,6 +383,9 @@ def enrich_sample_prep_output(
             "skippedFiles": output_json.get("skippedFiles") or [],
             "archiveMode": output_json.get("archiveMode"),
             "sampleArchived": output_json.get("sampleArchived"),
+            "archiveSkipped": output_json.get("archiveSkipped"),
+            "skipReason": output_json.get("skipReason"),
+            "missingConfiguration": output_json.get("missingConfiguration") or [],
         }
         return sample.model_copy(update={"h5Archive": archive, "sampleArchive": archive})
     if action_name == "sample.qc_failed":

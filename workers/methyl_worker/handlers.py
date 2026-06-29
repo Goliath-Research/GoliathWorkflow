@@ -557,12 +557,17 @@ def _handle_archive_sample(_capability: str, _action_name: str, input: BaseModel
             action="sample.archive_sample",
             capability=_capability,
             attempt=int(input_json.get("qcAttempt") or 1),
-            reason=str(input_json.get("rejectReason") or "Archive sample bundle to durable storage"),
+            reason=str(
+                input_json.get("rejectReason")
+                or result.get("skipReason")
+                or "Archive sample bundle to durable storage"
+            ),
             inputs={"mode": result.get("archiveMode"), "remotePrefix": result.get("remotePrefix")},
             outputs=result,
             workflow_node_key=input_json.get("workflowNodeKey") or "archive_sample",
         )
-    return ArchiveSampleTaskOutput(status="ok", **result)
+    status = "skipped" if result.get("archiveSkipped") else "ok"
+    return ArchiveSampleTaskOutput(status=status, **result)
 
 
 def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:
@@ -1085,6 +1090,21 @@ def _handle_stub_external(capability: str, _action_name: str, input: BaseModel) 
             n_h5_files=len(h5_files),
         )
     if capability == "sample.archive-sample":
+        if not (input_json.get("sampleDestination") or input_json.get("h5Destination")):
+            return ArchiveSampleTaskOutput(
+                status="skipped",
+                sampleId=sample_id,
+                archiveMode=str(input_json.get("mode") or "full"),
+                uploadedFiles=[],
+                skippedFiles=[],
+                remotePrefix="",
+                uploadedCount=0,
+                skippedCount=0,
+                sampleArchived=False,
+                archiveSkipped=True,
+                skipReason="sample_destination_not_configured",
+                missingConfiguration=["sampleDestination"],
+            )
         return ArchiveSampleTaskOutput(
             status="ok",
             sampleId=sample_id,
