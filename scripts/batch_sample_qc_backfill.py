@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from methyl_alignment_qc.core.bam_flagstat import flagstat_bam_preflight_error
 from methyl_alignment_qc.cli.sample_qc_backfill import (
     _failed_guardrail_keys,
     format_bam_flagstat_status,
@@ -168,14 +169,12 @@ def run_job(
     if dry_run:
         bam = job.sample_dir / f"{job.sample_id}.bam"
         base.status = "dry_run"
-        if bam.is_file():
-            size_gb = bam.stat().st_size / (1024**3)
-            if size_gb < 0.001:
-                base.error = "note: BAM is empty (0 bytes); flagstat guardrails will fail"
-            else:
-                base.error = f"note: BAM present ({size_gb:.1f} GiB)"
+        preflight = flagstat_bam_preflight_error(bam)
+        if preflight:
+            base.error = f"note: {preflight}; flagstat guardrails will fail"
         else:
-            base.error = "note: BAM not found (flagstat guardrails will fail)"
+            size_gb = bam.stat().st_size / (1024**3)
+            base.error = f"note: BAM present ({size_gb:.1f} GiB)"
         return base
 
     bam = job.sample_dir / f"{job.sample_id}.bam"

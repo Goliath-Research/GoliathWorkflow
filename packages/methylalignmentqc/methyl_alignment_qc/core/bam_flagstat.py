@@ -92,6 +92,17 @@ def _validate_bam_for_flagstat(bam_path: Path) -> None:
         )
 
 
+def flagstat_bam_preflight_error(bam_path: Path) -> Optional[str]:
+    """Return a flagstat failure reason for ``bam_path``, or None when it looks runnable."""
+    if not bam_path.is_file():
+        return f"BAM not found for flagstat: {bam_path}"
+    try:
+        _validate_bam_for_flagstat(bam_path)
+    except RuntimeError as exc:
+        return str(exc)
+    return None
+
+
 def run_flagstat(
     sample_dir: Path,
     sample_id: str,

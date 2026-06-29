@@ -106,6 +106,27 @@ def test_apply_flagstat_guardrails_fail_on_error() -> None:
     assert report["overall_pass"] is False
 
 
+def test_flagstat_bam_preflight_error(tmp_path) -> None:
+    from methyl_alignment_qc.core.bam_flagstat import flagstat_bam_preflight_error
+
+    missing = tmp_path / "nope.bam"
+    assert flagstat_bam_preflight_error(missing) == f"BAM not found for flagstat: {missing}"
+
+    empty = tmp_path / "empty.bam"
+    empty.write_bytes(b"")
+    assert "empty (0 bytes)" in (flagstat_bam_preflight_error(empty) or "")
+
+    tiny = tmp_path / "tiny.bam"
+    tiny.write_bytes(b"\x1f\x8b" + b"\x00" * 10)
+    err = flagstat_bam_preflight_error(tiny)
+    assert err is not None
+    assert "too small to be valid (12 bytes)" in err
+
+    small_valid = tmp_path / "small.bam"
+    small_valid.write_bytes(b"\x1f\x8b" + b"\x00" * 32)
+    assert flagstat_bam_preflight_error(small_valid) is None
+
+
 def test_run_flagstat_rejects_empty_bam(tmp_path) -> None:
     from methyl_alignment_qc.core.bam_flagstat import run_flagstat
 
