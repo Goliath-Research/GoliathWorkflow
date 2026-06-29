@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from ..models.config import AlignmentGuardrailsConfig
+from ..models.sample_qc import AlignmentFlagstat
 
 _FLAGSTAT_LINE = re.compile(
     r"^(\d+)\s+\+\s+(\d+)\s+(.+)$",
@@ -50,18 +51,23 @@ def parse_flagstat_text(text: str) -> Dict[str, int]:
     return counts
 
 
-def _build_flagstat_metrics(counts: Dict[str, int]) -> Dict[str, Any]:
+def _build_flagstat_metrics(counts: Dict[str, int]) -> AlignmentFlagstat:
     total = int(counts.get("total_reads", 0) or 0)
     properly_paired = int(counts.get("properly_paired_reads", 0) or 0)
     supplementary = int(counts.get("supplementary_reads", 0) or 0)
     mapped = int(counts.get("mapped_reads", 0) or 0)
 
-    metrics: Dict[str, Any] = dict(counts)
-    if total > 0:
-        metrics["properly_paired_rate"] = round(properly_paired / total, 6)
-        metrics["supplementary_rate"] = round(supplementary / total, 6)
-        metrics["mapped_rate"] = round(mapped / total, 6)
-    return metrics
+    return AlignmentFlagstat(
+        total_reads=counts.get("total_reads"),
+        mapped_reads=counts.get("mapped_reads"),
+        properly_paired_reads=counts.get("properly_paired_reads"),
+        supplementary_reads=counts.get("supplementary_reads"),
+        secondary_reads=counts.get("secondary_reads"),
+        duplicate_reads=counts.get("duplicate_reads"),
+        properly_paired_rate=round(properly_paired / total, 6) if total > 0 else None,
+        supplementary_rate=round(supplementary / total, 6) if total > 0 else None,
+        mapped_rate=round(mapped / total, 6) if total > 0 else None,
+    )
 
 
 def _validate_bam_for_flagstat(bam_path: Path) -> None:
@@ -91,11 +97,11 @@ def run_flagstat(
     sample_id: str,
     *,
     force: bool = False,
-) -> Dict[str, Any]:
+) -> AlignmentFlagstat:
     """
     Run samtools flagstat on {sample_id}.bam; cache as {sample_id}.flagstat.txt.
 
-    Returns alignment_flagstat metrics dict. Raises RuntimeError when BAM missing
+    Returns typed alignment flagstat metrics. Raises RuntimeError when BAM missing
     or samtools/flagstat fails.
     """
     sample_dir = Path(sample_dir)
@@ -135,7 +141,7 @@ def run_flagstat(
 
 def apply_flagstat_guardrails(
     report: Dict[str, Any],
-    flagstat: Optional[Dict[str, Any]],
+    flagstat: Optional[AlignmentFlagstat],
     cfg: AlignmentGuardrailsConfig,
     *,
     error: Optional[str] = None,
@@ -174,7 +180,7 @@ def apply_flagstat_guardrails(
         return
 
     if cfg.min_properly_paired_rate is not None:
-        rate = flagstat.get("properly_paired_rate")
+        rate = flagstat.properly_paired_rate
         if rate is None:
             _fail_metric(
                 "properly_paired_rate",
@@ -196,7 +202,7 @@ def apply_flagstat_guardrails(
                 report["overall_pass"] = False
 
     if cfg.max_supplementary_rate_flagstat is not None:
-        rate = flagstat.get("supplementary_rate")
+        rate = flagstat.supplementary_rate
         if rate is None:
             _fail_metric(
                 "supplementary_rate_flagstat",

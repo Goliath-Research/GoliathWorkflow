@@ -143,7 +143,7 @@ def _preflight_sample_dir(sample_dir: Path, sample_id: str) -> Optional[str]:
     )
 
 
-def run_job(job: SampleJob, *, kwargs: Dict[str, Any], dry_run: bool) -> SampleResult:
+def run_job(job: SampleJob, *, kwargs: Dict[str, Any], dry_run: bool, verbose: bool = False) -> SampleResult:
     base = SampleResult(
         sample_id=job.sample_id,
         group=job.group,
@@ -160,8 +160,27 @@ def run_job(job: SampleJob, *, kwargs: Dict[str, Any], dry_run: bool) -> SampleR
     if dry_run:
         bam = job.sample_dir / f"{job.sample_id}.bam"
         base.status = "dry_run"
-        base.error = None if bam.is_file() else "note: BAM not found (flagstat guardrails will fail)"
+        if bam.is_file():
+            size_gb = bam.stat().st_size / (1024**3)
+            if size_gb < 0.001:
+                base.error = "note: BAM is empty (0 bytes); flagstat guardrails will fail"
+            else:
+                base.error = f"note: BAM present ({size_gb:.1f} GiB)"
+        else:
+            base.error = "note: BAM not found (flagstat guardrails will fail)"
         return base
+
+    bam = job.sample_dir / f"{job.sample_id}.bam"
+    if verbose and bam.is_file() and bam.stat().st_size > 0:
+        cache = job.sample_dir / f"{job.sample_id}.flagstat.txt"
+        if cache.is_file() and cache.stat().st_mtime >= bam.stat().st_mtime:
+            print(f"  flagstat: using cache {cache}", flush=True)
+        else:
+            print(
+                f"  flagstat: running samtools on BAM ({bam.stat().st_size / (1024**3):.1f} GiB); "
+                "this can take many minutes per sample",
+                flush=True,
+            )
 
     try:
         payload = build_sample_qc_v2_dict(
@@ -330,7 +349,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     results: List[SampleResult] = []
     for i, job in enumerate(jobs, start=1):
         print(f"[{i}/{len(jobs)}] {job.group}\t{job.sample_id}", flush=True)
-        result = run_job(job, kwargs=kwargs, dry_run=args.dry_run)
+        result = run_job(job, kwargs=kwargs, dry_run=args.dry_run, verbose=args.verbose)
         results.append(result)
 
         if result.status == "ok" and args.verbose:

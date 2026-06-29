@@ -483,11 +483,11 @@ def build_sample_qc_v2_dict(
         if align_cfg.flagstat_enabled:
             bam_path = sample_dir / f"{sample_name}.bam"
             flagstat_error: Optional[str] = None
-            flagstat_metrics: Optional[Dict[str, Any]] = None
+            flagstat_metrics = None
             if bam_path.is_file():
                 try:
                     flagstat_metrics = run_flagstat(sample_dir, sample_name)
-                    payload["alignment_flagstat"] = flagstat_metrics
+                    payload["alignment_flagstat"] = flagstat_metrics.model_dump()
                 except RuntimeError as exc:
                     flagstat_error = str(exc)
             else:

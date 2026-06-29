@@ -38,8 +38,27 @@ def test_build_flagstat_metrics_properly_paired_rate() -> None:
     """samtools counts properly paired per read, not per pair — no 2x multiplier."""
     counts = parse_flagstat_text(FLAGSTAT_FIXTURE)
     metrics = _build_flagstat_metrics(counts)
-    assert metrics["properly_paired_rate"] == 0.85
-    assert metrics["supplementary_rate"] == 0.01
+    assert metrics.properly_paired_rate == 0.85
+    assert metrics.supplementary_rate == 0.01
+    assert metrics.model_dump().keys() == {
+        "total_reads",
+        "mapped_reads",
+        "properly_paired_reads",
+        "supplementary_reads",
+        "secondary_reads",
+        "duplicate_reads",
+        "properly_paired_rate",
+        "supplementary_rate",
+        "mapped_rate",
+    }
+
+
+def test_build_flagstat_metrics_is_alignment_flagstat_model() -> None:
+    from methyl_alignment_qc.models.sample_qc import AlignmentFlagstat
+
+    counts = parse_flagstat_text(FLAGSTAT_FIXTURE)
+    metrics = _build_flagstat_metrics(counts)
+    assert isinstance(metrics, AlignmentFlagstat)
 
 
 def test_apply_flagstat_guardrails_fail_low_pairing() -> None:
@@ -58,10 +77,12 @@ def test_apply_flagstat_guardrails_fail_low_pairing() -> None:
 
 
 def test_apply_flagstat_guardrails_pass() -> None:
-    metrics = {
-        "properly_paired_rate": 0.95,
-        "supplementary_rate": 0.01,
-    }
+    from methyl_alignment_qc.models.sample_qc import AlignmentFlagstat
+
+    metrics = AlignmentFlagstat(
+        properly_paired_rate=0.95,
+        supplementary_rate=0.01,
+    )
     report = {"overall_pass": True, "recommendation": "PASS", "details": {}}
     cfg = AlignmentGuardrailsConfig(
         enabled=True,
