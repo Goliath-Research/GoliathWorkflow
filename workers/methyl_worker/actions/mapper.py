@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..task_models.step_override_models import MapperStepOverride
@@ -27,6 +29,31 @@ def merge_mapper_step_override(input_json: Dict[str, Any]) -> Optional[Dict[str,
         data = {k: v for k, v in raw.items() if v is not None}
     else:
         data = {}
+
+    resolved = input_json.get("resolvedConfig")
+    if isinstance(resolved, dict):
+        mapper_cfg = resolved.get("mapper")
+        if isinstance(mapper_cfg, dict):
+            for key in ("csv_pattern", "csv_filename_pattern", "output_dir", "enrich_disease"):
+                if mapper_cfg.get(key) is not None and key not in data:
+                    data[key] = mapper_cfg[key]
+
+    project = (
+        input_json.get("projectPath")
+        or input_json.get("project")
+        or input_json.get("project_path")
+    )
+    if project:
+        override_path = Path(str(project)).expanduser().resolve().parent / "mapper_step_override.json"
+        if override_path.is_file():
+            try:
+                file_data = json.loads(override_path.read_text(encoding="utf-8"))
+                if isinstance(file_data, dict):
+                    merged = {k: v for k, v in file_data.items() if v is not None}
+                    merged.update(data)
+                    data = merged
+            except (OSError, json.JSONDecodeError):
+                pass
 
     output_dir = input_json.get("outputDir")
     if output_dir not in (None, ""):

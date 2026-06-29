@@ -199,7 +199,9 @@ def write_mapper_classifier_override(
         dmp_source = str(
             loci or getattr(config, "stability_gene_featurecuts_dmp_source", "discovery") or "discovery"
         ).strip().lower()
-        if dmp_source in ("classifier", "featurecuts_selected", "selected"):
+        if dmp_source in ("discovery", "raw_pool"):
+            csv_pattern = DISCOVERY_DMP_CSV_PATTERN
+        elif dmp_source in ("classifier", "featurecuts_selected", "selected"):
             csv_pattern = SELECTED_DMP_CSV_PATTERN
         elif dmp_source in ("stable", "stable_panel"):
             csv_pattern = STABLE_DMP_CSV_PATTERN
