@@ -173,7 +173,7 @@ class AlignmentFlagstat(BaseModel):
 
 class GuardrailMetric(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    value: float
+    value: Optional[float] = None
     normal_range: str
     passed: bool = Field(alias="pass")
     message: str

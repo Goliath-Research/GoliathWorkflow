@@ -8,7 +8,7 @@ from .parser import (
     parse_all_metrics,
     calculate_summary_stats,
 )
-from .writer import write_sample_qc_json, process_samples_to_qc_jsons
+from .writer import write_sample_qc_json, process_samples_to_qc_jsons, build_sample_qc_v2_dict
 
 __all__ = [
     "parse_deduplication_metrics",
@@ -19,4 +19,5 @@ __all__ = [
     "calculate_summary_stats",
     "write_sample_qc_json",
     "process_samples_to_qc_jsons",
+    "build_sample_qc_v2_dict",
 ]

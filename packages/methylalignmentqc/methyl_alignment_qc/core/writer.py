@@ -370,6 +370,140 @@ def _apply_screening_and_audit(
     payload["sample_prep_log_path"] = log_path
 
 
+def build_sample_qc_v2_dict(
+    sample_dir: Path,
+    *,
+    validate_schema: bool = True,
+    fragmentomics: Optional[FragmentomicsConfig] = None,
+    bisulfite_conversion: Optional[BisulfiteConversionConfig] = None,
+    cycle_screening: Optional[CycleScreeningConfig] = None,
+    optional_guardrails: Optional[OptionalGuardrailsConfig] = None,
+    alignment_guardrails: Optional[AlignmentGuardrailsConfig] = None,
+    write_context: Optional[QcWriteContext] = None,
+    output_path_for_history: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """
+    Build one V2 sample QC export dict from a sample directory.
+
+    Expects Picard deduplicate metrics ({sample_id}.deduplicate_metrics.txt) and
+    Parabricks metrics ({sample_id}.json or {sample_id}.qc-metrics.tar).
+  """
+    from ..utils.schema_validator import validate_sample_qc_metrics
+
+    sample_dir = Path(sample_dir)
+    sample_name = sample_dir.name
+    parsed = core_parser.parse_metrics_from_sample_paths([sample_dir])
+    if sample_name not in parsed:
+        raise RuntimeError(
+            f"No Picard deduplicate metrics in {sample_dir}; "
+            f"expected {sample_dir / f'{sample_name}.deduplicate_metrics.txt'}"
+        )
+    metrics = parsed[sample_name]
+    summary = core_parser.calculate_summary_stats(parsed)
+
+    payload: Dict[str, Any] = {}
+    parabricks_json = _find_parabricks_metrics_json(sample_dir, sample_name)
+    if parabricks_json is not None:
+        try:
+            with open(parabricks_json, "r", encoding="utf-8") as f:
+                raw_payload = json.load(f)
+            payload = ParabricksMetricsPayload.model_validate(raw_payload).model_dump(
+                mode="python",
+                by_alias=True,
+                exclude_none=True,
+            )
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load/validate Parabricks JSON for {sample_name} from {parabricks_json}: {e}"
+            ) from e
+    else:
+        parsed_from_tar = _build_parabricks_payload_from_qc_tar(sample_dir, sample_name)
+        if parsed_from_tar is None:
+            raise RuntimeError(
+                f"Missing Parabricks metrics for {sample_name}: expected either "
+                f"{sample_dir / f'{sample_name}.json'} or {sample_dir / f'{sample_name}.qc-metrics.tar'}"
+            )
+        payload = ParabricksMetricsPayload.model_validate(parsed_from_tar).model_dump(
+            mode="python",
+            by_alias=True,
+            exclude_none=True,
+        )
+        parabricks_json = _find_qc_metrics_tar(sample_dir, sample_name)
+
+    for key, value in metrics.items():
+        if key not in payload:
+            payload[key] = value
+
+    if "duplication_histogram" in payload:
+        payload["duplication_histogram"] = _normalize_duplication_histogram(payload["duplication_histogram"])
+
+    if sample_name in summary:
+        payload["summary_stats"] = summary[sample_name]
+
+    try:
+        if parabricks_json is not None and str(parabricks_json).endswith(".json"):
+            payload["guardrails"] = check_wgbs_guardrails(str(parabricks_json), print_report=False)
+        else:
+            from .wgbs_parabricks_qc import _build_wgbs_guardrail_report
+
+            payload["guardrails"] = _build_wgbs_guardrail_report(payload)
+    except Exception as e:
+        raise RuntimeError(f"Failed to compute guardrails for {sample_name} from {parabricks_json}: {e}") from e
+
+    align_cfg = alignment_guardrails or AlignmentGuardrailsConfig()
+    stats = compute_alignment_stats(payload)
+    if stats is not None:
+        payload["alignment_stats"] = stats
+
+    if align_cfg.enabled:
+        apply_alignment_derived_guardrails(payload["guardrails"], payload, align_cfg)
+        if align_cfg.flagstat_enabled:
+            bam_path = sample_dir / f"{sample_name}.bam"
+            flagstat_error: Optional[str] = None
+            flagstat_metrics: Optional[Dict[str, Any]] = None
+            if bam_path.is_file():
+                try:
+                    flagstat_metrics = run_flagstat(sample_dir, sample_name)
+                    payload["alignment_flagstat"] = flagstat_metrics
+                except RuntimeError as exc:
+                    flagstat_error = str(exc)
+            else:
+                flagstat_error = f"BAM not found for flagstat: {bam_path}"
+            apply_flagstat_guardrails(
+                payload["guardrails"],
+                flagstat_metrics,
+                align_cfg,
+                error=flagstat_error,
+            )
+
+    apply_fragmentomics_to_payload(payload, fragmentomics)
+    apply_bisulfite_conversion_to_payload(payload, sample_dir, bisulfite_conversion)
+
+    history_path = output_path_for_history or (sample_dir / f"{sample_name}.json")
+    _apply_screening_and_audit(
+        payload,
+        cycle_screening=cycle_screening,
+        optional_guardrails=optional_guardrails,
+        write_ctx=write_context,
+        output_path=history_path,
+        sample_dir=sample_dir,
+        sample_name=sample_name,
+    )
+
+    if validate_schema:
+        errs = validate_sample_qc_metrics(payload)
+        if errs:
+            raise RuntimeError(f"Validation failed for {sample_name}: " + "; ".join(errs))
+
+    v1_model = ExportedSampleQCPayload.model_validate(payload)
+    v2_model = v1_model_to_v2(v1_model)
+    v2_dict = v2_model.model_dump(mode="python", by_alias=True, exclude_none=True)
+    if write_context is not None:
+        v2_dict.setdefault("metadata", {})["qc_attempt"] = write_context.attempt
+    ExportedSampleQCV2Payload.model_validate(v2_dict)
+    return v2_dict
+
+
 def process_samples_to_qc_jsons(
     sample_paths: List[str],
     output_dir: str,
@@ -390,126 +524,30 @@ def process_samples_to_qc_jsons(
         output_dir: Output directory for JSON files
         validate_schema: If True, validate each sample's JSON structure (via utils.schema_validator)
     """
-    from pathlib import Path
-
-    from ..utils.schema_validator import validate_sample_qc_metrics
-
     paths = [Path(p) for p in sample_paths]
     parsed = core_parser.parse_metrics_from_sample_paths(paths)
     if not parsed:
         return
 
-    summary = core_parser.calculate_summary_stats(parsed)
     sample_paths_by_name = {Path(p).name: Path(p) for p in paths}
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    for sample_name, metrics in parsed.items():
-        payload: Dict[str, Any] = {}
+    for sample_name in parsed:
         sample_dir = sample_paths_by_name.get(sample_name)
         if sample_dir is None:
             raise RuntimeError(f"Sample directory not found for parsed sample: {sample_name}")
 
-        parabricks_json = _find_parabricks_metrics_json(sample_dir, sample_name)
-        if parabricks_json is not None:
-            try:
-                # Keep all original Parabricks metrics as the base payload.
-                with open(parabricks_json, "r", encoding="utf-8") as f:
-                    raw_payload = json.load(f)
-                payload = ParabricksMetricsPayload.model_validate(raw_payload).model_dump(
-                    mode="python",
-                    by_alias=True,
-                    exclude_none=True,
-                )
-            except Exception as e:
-                raise RuntimeError(
-                    f"Failed to load/validate Parabricks JSON for {sample_name} from {parabricks_json}: {e}"
-                ) from e
-        else:
-            parsed_from_tar = _build_parabricks_payload_from_qc_tar(sample_dir, sample_name)
-            if parsed_from_tar is None:
-                raise RuntimeError(
-                    f"Missing Parabricks metrics for {sample_name}: expected either "
-                    f"{sample_dir / f'{sample_name}.json'} or {sample_dir / f'{sample_name}.qc-metrics.tar'}"
-                )
-            payload = ParabricksMetricsPayload.model_validate(parsed_from_tar).model_dump(
-                mode="python",
-                by_alias=True,
-                exclude_none=True,
-            )
-            parabricks_json = _find_qc_metrics_tar(sample_dir, sample_name)
-
-        # Ensure deduplication-derived fields are present.
-        for key, value in metrics.items():
-            if key not in payload:
-                payload[key] = value
-
-        if "duplication_histogram" in payload:
-            payload["duplication_histogram"] = _normalize_duplication_histogram(payload["duplication_histogram"])
-
-        if sample_name in summary:
-            payload["summary_stats"] = summary[sample_name]
-
-        try:
-            if str(parabricks_json).endswith(".json"):
-                payload["guardrails"] = check_wgbs_guardrails(str(parabricks_json), print_report=False)
-            else:
-                # Guardrails can be computed from reconstructed payload.
-                from .wgbs_parabricks_qc import _build_wgbs_guardrail_report
-
-                payload["guardrails"] = _build_wgbs_guardrail_report(payload)
-        except Exception as e:
-            raise RuntimeError(f"Failed to compute guardrails for {sample_name} from {parabricks_json}: {e}") from e
-
-        align_cfg = alignment_guardrails or AlignmentGuardrailsConfig()
-        stats = compute_alignment_stats(payload)
-        if stats is not None:
-            payload["alignment_stats"] = stats
-
-        if align_cfg.enabled:
-            apply_alignment_derived_guardrails(payload["guardrails"], payload, align_cfg)
-            if align_cfg.flagstat_enabled:
-                bam_path = sample_dir / f"{sample_name}.bam"
-                flagstat_error: Optional[str] = None
-                flagstat_metrics: Optional[Dict[str, Any]] = None
-                if bam_path.is_file():
-                    try:
-                        flagstat_metrics = run_flagstat(sample_dir, sample_name)
-                        payload["alignment_flagstat"] = flagstat_metrics
-                    except RuntimeError as exc:
-                        flagstat_error = str(exc)
-                else:
-                    flagstat_error = f"BAM not found for flagstat: {bam_path}"
-                apply_flagstat_guardrails(
-                    payload["guardrails"],
-                    flagstat_metrics,
-                    align_cfg,
-                    error=flagstat_error,
-                )
-
-        apply_fragmentomics_to_payload(payload, fragmentomics)
-        apply_bisulfite_conversion_to_payload(payload, sample_dir, bisulfite_conversion)
-
         output_file = out / f"{sample_name}.json"
-        _apply_screening_and_audit(
-            payload,
+        v2_dict = build_sample_qc_v2_dict(
+            sample_dir,
+            validate_schema=validate_schema,
+            fragmentomics=fragmentomics,
+            bisulfite_conversion=bisulfite_conversion,
             cycle_screening=cycle_screening,
             optional_guardrails=optional_guardrails,
-            write_ctx=write_context,
-            output_path=output_file,
-            sample_dir=sample_dir,
-            sample_name=sample_name,
+            alignment_guardrails=alignment_guardrails,
+            write_context=write_context,
+            output_path_for_history=output_file,
         )
-
-        if validate_schema:
-            errs = validate_sample_qc_metrics(payload)
-            if errs:
-                raise RuntimeError(f"Validation failed for {sample_name}: " + "; ".join(errs))
-        # Validate assembled columnar payload, convert to V2 row-oriented export, validate V2, then write.
-        v1_model = ExportedSampleQCPayload.model_validate(payload)
-        v2_model = v1_model_to_v2(v1_model)
-        v2_dict = v2_model.model_dump(mode="python", by_alias=True, exclude_none=True)
-        if write_context is not None:
-            v2_dict.setdefault("metadata", {})["qc_attempt"] = write_context.attempt
-        ExportedSampleQCV2Payload.model_validate(v2_dict)
         write_sample_qc_json(v2_dict, output_file)
