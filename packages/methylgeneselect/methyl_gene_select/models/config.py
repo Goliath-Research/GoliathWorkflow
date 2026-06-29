@@ -6,14 +6,19 @@ from typing import List, Literal, Optional, Sequence
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..defaults import (
+    DEFAULT_GENE_FEATURECUTS_MAX_DMPS,
+    DEFAULT_GENE_FEATURECUTS_MAX_GENES,
+)
+
 
 class GeneSelectionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     target_balanced_accuracy: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     min_selected_genes: Optional[int] = Field(default=None, ge=1)
-    max_genes: Optional[int] = Field(default=None, ge=1)
-    max_dmps: Optional[int] = Field(default=None, ge=1)
+    max_genes: Optional[int] = Field(default=DEFAULT_GENE_FEATURECUTS_MAX_GENES, ge=1)
+    max_dmps: Optional[int] = Field(default=DEFAULT_GENE_FEATURECUTS_MAX_DMPS, ge=1)
     biomarker_filter_enabled: bool = Field(default=False)
     biomarker_mode: Literal["ppi_only", "full_enricher"] = Field(default="ppi_only")
     biomarker_region_hits: Optional[List[str]] = Field(default=None)

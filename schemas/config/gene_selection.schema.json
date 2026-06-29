@@ -7,8 +7,8 @@
   "properties": {
     "target_balanced_accuracy": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
     "min_selected_genes": { "type": ["integer", "null"], "minimum": 1 },
-    "max_genes": { "type": ["integer", "null"], "minimum": 1 },
-    "max_dmps": { "type": ["integer", "null"], "minimum": 1 },
+    "max_genes": { "type": ["integer", "null"], "minimum": 1, "default": 200 },
+    "max_dmps": { "type": ["integer", "null"], "minimum": 1, "default": 1000 },
     "biomarker_filter_enabled": { "type": "boolean", "default": false },
     "biomarker_mode": { "type": "string", "enum": ["ppi_only", "full_enricher"], "default": "ppi_only" },
     "biomarker_region_hits": {

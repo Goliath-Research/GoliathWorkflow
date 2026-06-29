@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
+from methyl_gene_select.defaults import resolve_gene_featurecuts_caps
+
 from .base import CliAction
 
 GENE_SELECT_ARGV_MAP: Dict[str, str] = {
@@ -37,6 +39,16 @@ class GeneSelectCliAction(CliAction):
         project = payload.get("project") or payload.get("projectPath")
         if project and not payload.get("runDir"):
             payload["runDir"] = default_run_dir_for_project(str(project))
+        max_genes, max_dmps = resolve_gene_featurecuts_caps(
+            max_genes=payload.get("maxGenes"),
+            max_dmps=payload.get("maxDmps"),
+            resolved_config=payload.get("resolvedConfig")
+            if isinstance(payload.get("resolvedConfig"), dict)
+            else None,
+            run_dir=payload.get("runDir"),
+        )
+        payload["maxGenes"] = max_genes
+        payload["maxDmps"] = max_dmps
         cmd = super().build_argv(payload)
         if biomarker:
             cmd.append("--biomarker-filter")

@@ -113,16 +113,26 @@ def run_gene_select(
     """Run methyl-gene-select for one MC iteration run directory."""
     project_json = Path(project_json).resolve()
     run_dir = Path(run_dir).resolve() if run_dir is not None else project_json.parent
+    from methyl_gene_select.defaults import resolve_gene_featurecuts_caps
+
     cmd = ["methyl-gene-select", "--project", str(project_json), "--run-dir", str(run_dir)]
+    mc_caps: dict[str, object] = {}
     if config is not None:
-        max_genes = getattr(config, "stability_gene_featurecuts_max_genes", None)
-        max_dmps = getattr(config, "stability_gene_featurecuts_max_dmps", None)
-        if max_genes is not None:
-            cmd.extend(["--max-genes", str(int(max_genes))])
-        if max_dmps is not None:
-            cmd.extend(["--max-dmps", str(int(max_dmps))])
-        if bool(getattr(config, "stability_gene_biomarker_filter_enabled", False)):
-            cmd.append("--biomarker-filter")
+        mc_caps = {
+            "stability_gene_featurecuts_max_genes": getattr(
+                config, "stability_gene_featurecuts_max_genes", None
+            ),
+            "stability_gene_featurecuts_max_dmps": getattr(
+                config, "stability_gene_featurecuts_max_dmps", None
+            ),
+        }
+    max_genes, max_dmps = resolve_gene_featurecuts_caps(
+        resolved_config=mc_caps or None,
+        run_dir=run_dir,
+    )
+    cmd.extend(["--max-genes", str(max_genes), "--max-dmps", str(max_dmps)])
+    if config is not None and bool(getattr(config, "stability_gene_biomarker_filter_enabled", False)):
+        cmd.append("--biomarker-filter")
     return run_cmd(cmd)
 
 

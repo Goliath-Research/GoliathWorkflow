@@ -8,6 +8,11 @@ from typing import Annotated, Any, ClassVar, Dict, FrozenSet, List, Literal, Map
 from pydantic import BaseModel, ConfigDict, Field, create_model, field_validator, model_validator
 from pydantic_core import PydanticUndefined
 
+from methyl_gene_select.defaults import (
+    DEFAULT_GENE_FEATURECUTS_MAX_DMPS,
+    DEFAULT_GENE_FEATURECUTS_MAX_GENES,
+)
+
 
 class CohortCsv(BaseModel):
     """One cohort: display label (must match base project flat ``groups`` labels for K>2) and sample list CSV."""
@@ -850,20 +855,19 @@ class MonteCarloConfig(BaseModel):
         ),
     )
     stability_gene_featurecuts_max_dmps: Optional[int] = Field(
-        default=None,
+        default=DEFAULT_GENE_FEATURECUTS_MAX_DMPS,
         ge=1,
         description=(
-            "Optional genome-wide cap on classifier DMP loci used for MC gene FeatureCuts "
-            "(after deduplication). When unset, all FeatureCuts classifier exports are used "
-            "(typically ~min_selected_dmps per chromosome × number of chromosomes)."
+            "Genome-wide cap on DMP loci used for MC gene FeatureCuts (after deduplication). "
+            "Engine default limits k-search cost when discovery exports tens of thousands of loci."
         ),
     )
     stability_gene_featurecuts_max_genes: Optional[int] = Field(
-        default=500,
+        default=DEFAULT_GENE_FEATURECUTS_MAX_GENES,
         ge=1,
         description=(
             "Cap the ranked mapper gene pool before MC gene FeatureCuts k-search. "
-            "Limits feature-matrix width and k-search cost when mapper exports tens of thousands of genes."
+            "Engine default limits feature-matrix width and k-search cost."
         ),
     )
     dmp_modeling_mode: Optional[Literal["raw_pool", "featurecuts", "stable_panel"]] = Field(

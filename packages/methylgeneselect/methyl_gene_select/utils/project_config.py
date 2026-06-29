@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Optional, Union
 
+from methyl_gene_select.defaults import apply_gene_featurecuts_cap_defaults
 from methyl_utils import load_project
 from methyl_utils.action_config_resolver import resolve_for_project
 
@@ -62,4 +63,5 @@ def build_gene_select_config(
             payload[key] = validation[key]
 
     payload.update({k: v for k, v in overrides.items() if v is not None})
+    payload = apply_gene_featurecuts_cap_defaults(payload)
     return SimpleNamespace(**payload)

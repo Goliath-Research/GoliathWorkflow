@@ -48,3 +48,34 @@ def test_build_gene_select_config_merges_gene_selection_and_validation(tmp_path:
     assert cfg.stability_gene_biomarker_mode == "ppi_only"
     assert cfg.stability_gene_featurecuts_max_genes == 500
     assert cfg.stability_gene_region_hits == ["promoter"]
+
+
+def test_build_gene_select_config_applies_engine_defaults(tmp_path: Path, monkeypatch):
+    project = tmp_path / "project.json"
+    project.write_text(
+        """
+        {
+          "project_name": "t",
+          "output_base": "/tmp/out",
+          "controls": {"label": "healthy", "groups": [{"label": "all", "sample_paths": ["/a.csv"]}]},
+          "diseases": {"label": "cancer", "groups": [{"label": "PCa", "sample_paths": ["/b.csv"]}]},
+          "comparisons": "control_vs_each_disease",
+          "chromosomes": ["1"],
+          "contexts": ["CG"]
+        }
+        """.strip(),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "methyl_gene_select.utils.project_config.resolve_for_project",
+        lambda *args, **kwargs: {},
+    )
+    from methyl_gene_select.defaults import (
+        DEFAULT_GENE_FEATURECUTS_MAX_DMPS,
+        DEFAULT_GENE_FEATURECUTS_MAX_GENES,
+    )
+
+    cfg = build_gene_select_config(project)
+    assert cfg.stability_gene_featurecuts_max_dmps == DEFAULT_GENE_FEATURECUTS_MAX_DMPS
+    assert cfg.stability_gene_featurecuts_max_genes == DEFAULT_GENE_FEATURECUTS_MAX_GENES
