@@ -93,3 +93,21 @@ def test_run_flagstat_rejects_empty_bam(tmp_path) -> None:
     (sample_dir / "sampleZ.bam").write_bytes(b"")
     with pytest.raises(RuntimeError, match="BAM is empty"):
         run_flagstat(sample_dir, "sampleZ")
+
+
+def test_validate_bam_accepts_bgzf_gzip_prefix(tmp_path) -> None:
+    from methyl_alignment_qc.core.bam_flagstat import _validate_bam_for_flagstat
+
+    bam = tmp_path / "realish.bam"
+    # BGZF/gzip magic only; samtools would fail later on truncated data.
+    bam.write_bytes(b"\x1f\x8b" + b"\x00" * 32)
+    _validate_bam_for_flagstat(bam)
+
+
+def test_validate_bam_rejects_non_gzip_prefix(tmp_path) -> None:
+    from methyl_alignment_qc.core.bam_flagstat import _validate_bam_for_flagstat
+
+    bam = tmp_path / "fake.bam"
+    bam.write_bytes(b"BAM\x01" + b"\x00" * 32)
+    with pytest.raises(RuntimeError, match="BGZF-compressed BAM"):
+        _validate_bam_for_flagstat(bam)

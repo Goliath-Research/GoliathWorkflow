@@ -64,6 +64,28 @@ def _build_flagstat_metrics(counts: Dict[str, int]) -> Dict[str, Any]:
     return metrics
 
 
+def _validate_bam_for_flagstat(bam_path: Path) -> None:
+    """Reject missing/empty/trivial files before invoking samtools."""
+    bam_size = bam_path.stat().st_size
+    if bam_size == 0:
+        raise RuntimeError(
+            f"BAM is empty (0 bytes); cannot run flagstat: {bam_path}. "
+            "Re-run alignment or restore the BAM from archive."
+        )
+    if bam_size < 18:
+        raise RuntimeError(
+            f"BAM is too small to be valid ({bam_size} bytes): {bam_path}"
+        )
+    with open(bam_path, "rb") as fh:
+        magic = fh.read(2)
+    # On-disk BAM is BGZF (gzip) blocks; the BAM\\x01 magic is inside the first block,
+    # not at file offset 0. Reject only obvious non-BAM prefixes here.
+    if magic != b"\x1f\x8b":
+        raise RuntimeError(
+            f"File does not look like a BGZF-compressed BAM (missing gzip magic): {bam_path}"
+        )
+
+
 def run_flagstat(
     sample_dir: Path,
     sample_id: str,
@@ -83,22 +105,7 @@ def run_flagstat(
     if not bam_path.is_file():
         raise RuntimeError(f"BAM not found for flagstat: {bam_path}")
 
-    bam_size = bam_path.stat().st_size
-    if bam_size == 0:
-        raise RuntimeError(
-            f"BAM is empty (0 bytes); cannot run flagstat: {bam_path}. "
-            "Re-run alignment or restore the BAM from archive."
-        )
-    if bam_size < 4:
-        raise RuntimeError(
-            f"BAM is too small to contain a valid header ({bam_size} bytes): {bam_path}"
-        )
-    with open(bam_path, "rb") as fh:
-        if fh.read(4) != b"BAM\x01":
-            raise RuntimeError(
-                f"BAM does not have a valid SAM/BAM header magic: {bam_path}. "
-                "The file may be truncated or not a BAM."
-            )
+    _validate_bam_for_flagstat(bam_path)
 
     samtools = shutil.which("samtools")
     if samtools is None:
