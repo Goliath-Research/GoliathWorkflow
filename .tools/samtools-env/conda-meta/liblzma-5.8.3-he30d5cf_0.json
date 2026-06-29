@@ -1,0 +1,54 @@
+{
+    "arch": "aarch64",
+    "build": "he30d5cf_0",
+    "build_number": 0,
+    "build_string": "he30d5cf_0",
+    "channel": "conda-forge",
+    "constrains": [
+        "xz 5.8.3.*"
+    ],
+    "depends": [
+        "libgcc >=14"
+    ],
+    "extracted_package_dir": "/tmp/cursor-sandbox-cache/00bd36dee5615afd2449863119d268b2/conda/https/conda.anaconda.org/conda-forge/linux-aarch64/liblzma-5.8.3-he30d5cf_0",
+    "files": [
+        "lib/liblzma.so.5",
+        "lib/liblzma.so.5.8.3"
+    ],
+    "fn": "liblzma-5.8.3-he30d5cf_0.conda",
+    "license": "0BSD",
+    "link": {
+        "source": "/tmp/cursor-sandbox-cache/00bd36dee5615afd2449863119d268b2/conda/https/conda.anaconda.org/conda-forge/linux-aarch64/liblzma-5.8.3-he30d5cf_0",
+        "type": 1
+    },
+    "md5": "76298a9e6d71ee6e832a8d0d7373b261",
+    "name": "liblzma",
+    "package_tarball_full_path": "/tmp/cursor-sandbox-cache/00bd36dee5615afd2449863119d268b2/conda/https/conda.anaconda.org/conda-forge/linux-aarch64/liblzma-5.8.3-he30d5cf_0.tar.bz2",
+    "paths_data": {
+        "paths": [
+            {
+                "_path": "lib/liblzma.so.5",
+                "path_type": "hardlink",
+                "sha256": "66fc3e298be5fcb287bac4b1ff0bebce20ca1a2b10835cd07b3f7533bd6a1d2c",
+                "sha256_in_prefix": "66fc3e298be5fcb287bac4b1ff0bebce20ca1a2b10835cd07b3f7533bd6a1d2c",
+                "size_in_bytes": 292440
+            },
+            {
+                "_path": "lib/liblzma.so.5.8.3",
+                "path_type": "hardlink",
+                "sha256": "66fc3e298be5fcb287bac4b1ff0bebce20ca1a2b10835cd07b3f7533bd6a1d2c",
+                "sha256_in_prefix": "66fc3e298be5fcb287bac4b1ff0bebce20ca1a2b10835cd07b3f7533bd6a1d2c",
+                "size_in_bytes": 292440
+            }
+        ],
+        "paths_version": 1
+    },
+    "platform": "linux",
+    "requested_spec": "",
+    "sha256": "d61962b9cd54c3554361550203c64d5b65b71e3058a285b66e4b04b9769f0a5c",
+    "size": 126102,
+    "subdir": "linux-aarch64",
+    "timestamp": 1775828008,
+    "url": "https://conda.anaconda.org/conda-forge/linux-aarch64/liblzma-5.8.3-he30d5cf_0.conda",
+    "version": "5.8.3"
+}

@@ -1,0 +1,34 @@
+{
+    "arch": "aarch64",
+    "build": "he9431aa_19",
+    "build_number": 19,
+    "build_string": "he9431aa_19",
+    "channel": "conda-forge",
+    "constrains": [],
+    "depends": [
+        "libgcc 15.2.0 h8acb6b2_19"
+    ],
+    "extracted_package_dir": "/tmp/cursor-sandbox-cache/00bd36dee5615afd2449863119d268b2/conda/https/conda.anaconda.org/conda-forge/linux-aarch64/libgcc-ng-15.2.0-he9431aa_19",
+    "files": [],
+    "fn": "libgcc-ng-15.2.0-he9431aa_19.conda",
+    "license": "GPL-3.0-only WITH GCC-exception-3.1",
+    "link": {
+        "source": "/tmp/cursor-sandbox-cache/00bd36dee5615afd2449863119d268b2/conda/https/conda.anaconda.org/conda-forge/linux-aarch64/libgcc-ng-15.2.0-he9431aa_19",
+        "type": 1
+    },
+    "md5": "770cf892e5530f43e63cadc673e85653",
+    "name": "libgcc-ng",
+    "package_tarball_full_path": "/tmp/cursor-sandbox-cache/00bd36dee5615afd2449863119d268b2/conda/https/conda.anaconda.org/conda-forge/linux-aarch64/libgcc-ng-15.2.0-he9431aa_19.tar.bz2",
+    "paths_data": {
+        "paths": [],
+        "paths_version": 1
+    },
+    "platform": "linux",
+    "requested_spec": "",
+    "sha256": "1137f93f477f56199ded24117430045a0c02cbe8b10031beac3b9ad2138539d3",
+    "size": 27738,
+    "subdir": "linux-aarch64",
+    "timestamp": 1778268759,
+    "url": "https://conda.anaconda.org/conda-forge/linux-aarch64/libgcc-ng-15.2.0-he9431aa_19.conda",
+    "version": "15.2.0"
+}

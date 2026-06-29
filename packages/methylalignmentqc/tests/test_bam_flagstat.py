@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from methyl_alignment_qc.core.bam_flagstat import (
     _build_flagstat_metrics,
     apply_flagstat_guardrails,
@@ -81,3 +83,13 @@ def test_apply_flagstat_guardrails_fail_on_error() -> None:
     )
     apply_flagstat_guardrails(report, None, cfg, error="samtools not found")
     assert report["overall_pass"] is False
+
+
+def test_run_flagstat_rejects_empty_bam(tmp_path) -> None:
+    from methyl_alignment_qc.core.bam_flagstat import run_flagstat
+
+    sample_dir = tmp_path / "sampleZ"
+    sample_dir.mkdir()
+    (sample_dir / "sampleZ.bam").write_bytes(b"")
+    with pytest.raises(RuntimeError, match="BAM is empty"):
+        run_flagstat(sample_dir, "sampleZ")

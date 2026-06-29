@@ -83,6 +83,23 @@ def run_flagstat(
     if not bam_path.is_file():
         raise RuntimeError(f"BAM not found for flagstat: {bam_path}")
 
+    bam_size = bam_path.stat().st_size
+    if bam_size == 0:
+        raise RuntimeError(
+            f"BAM is empty (0 bytes); cannot run flagstat: {bam_path}. "
+            "Re-run alignment or restore the BAM from archive."
+        )
+    if bam_size < 4:
+        raise RuntimeError(
+            f"BAM is too small to contain a valid header ({bam_size} bytes): {bam_path}"
+        )
+    with open(bam_path, "rb") as fh:
+        if fh.read(4) != b"BAM\x01":
+            raise RuntimeError(
+                f"BAM does not have a valid SAM/BAM header magic: {bam_path}. "
+                "The file may be truncated or not a BAM."
+            )
+
     samtools = shutil.which("samtools")
     if samtools is None:
         raise RuntimeError("samtools not found on PATH; required for alignment flagstat QC")
