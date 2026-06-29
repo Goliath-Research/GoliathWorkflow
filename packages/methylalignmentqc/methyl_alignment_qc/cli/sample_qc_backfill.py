@@ -100,7 +100,12 @@ def _failed_guardrail_keys(guardrails: Dict[str, Any]) -> List[str]:
     return failed
 
 
-def print_guardrail_summary(payload: Dict[str, Any], *, stream=None) -> None:
+def print_guardrail_summary(
+    payload: Dict[str, Any],
+    *,
+    stream=None,
+    sample_dir: Optional[Path] = None,
+) -> None:
     stream = stream or sys.stderr
     guardrails = payload.get("guardrails") or {}
     sample_id = payload.get("sample_id", "?")
@@ -108,7 +113,7 @@ def print_guardrail_summary(payload: Dict[str, Any], *, stream=None) -> None:
     recommendation = guardrails.get("recommendation", "")
     failed = _failed_guardrail_keys(guardrails)
     print(f"sample_id={sample_id} overall_pass={overall}", file=stream)
-    flagstat_line = format_bam_flagstat_status(payload)
+    flagstat_line = format_bam_flagstat_status(payload, sample_dir=sample_dir)
     if flagstat_line:
         print(flagstat_line, file=stream)
     if recommendation:

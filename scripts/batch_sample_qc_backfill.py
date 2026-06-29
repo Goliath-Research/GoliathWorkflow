@@ -204,9 +204,10 @@ def run_job(
         base.status = "ok"
         base.overall_pass = guardrails.get("overall_pass")
         base.failed_guardrails = _failed_guardrail_keys(guardrails)
-        bam_line = format_bam_flagstat_status(payload, sample_dir=job.sample_dir)
-        if bam_line:
-            print(bam_line, flush=True)
+        if not verbose:
+            bam_line = format_bam_flagstat_status(payload, sample_dir=job.sample_dir)
+            if bam_line:
+                print(bam_line, flush=True)
         return base
     except Exception as exc:
         base.status = "error"
@@ -389,7 +390,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         if result.status == "ok" and args.verbose:
             payload = json.loads(Path(result.output_path).read_text(encoding="utf-8"))
-            print_guardrail_summary(payload)
+            print_guardrail_summary(payload, sample_dir=job.sample_dir)
         elif result.status in {"skipped", "error"}:
             print(f"  {result.status}: {result.error}", file=sys.stderr)
             if result.status == "error" and args.fail_fast:
