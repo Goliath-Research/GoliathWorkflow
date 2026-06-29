@@ -34,6 +34,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from methyl_alignment_qc.cli.sample_qc_backfill import (
     _failed_guardrail_keys,
+    format_bam_flagstat_status,
     print_guardrail_summary,
     resolve_backfill_kwargs,
 )
@@ -143,7 +144,14 @@ def _preflight_sample_dir(sample_dir: Path, sample_id: str) -> Optional[str]:
     )
 
 
-def run_job(job: SampleJob, *, kwargs: Dict[str, Any], dry_run: bool, verbose: bool = False) -> SampleResult:
+def run_job(
+    job: SampleJob,
+    *,
+    kwargs: Dict[str, Any],
+    dry_run: bool,
+    verbose: bool = False,
+    write_sample_dir: bool = False,
+) -> SampleResult:
     base = SampleResult(
         sample_id=job.sample_id,
         group=job.group,
@@ -190,10 +198,16 @@ def run_job(job: SampleJob, *, kwargs: Dict[str, Any], dry_run: bool, verbose: b
         )
         job.output_path.parent.mkdir(parents=True, exist_ok=True)
         write_sample_qc_json(payload, job.output_path)
+        if write_sample_dir:
+            sample_qc_path = job.sample_dir / f"{job.sample_id}.sample_qc.json"
+            write_sample_qc_json(payload, sample_qc_path)
         guardrails = payload.get("guardrails") or {}
         base.status = "ok"
         base.overall_pass = guardrails.get("overall_pass")
         base.failed_guardrails = _failed_guardrail_keys(guardrails)
+        bam_line = format_bam_flagstat_status(payload, sample_dir=job.sample_dir)
+        if bam_line:
+            print(bam_line, flush=True)
         return base
     except Exception as exc:
         base.status = "error"
@@ -310,6 +324,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         default=None,
         help="Summary TSV path (default: {output_dir}/backfill_summary.tsv)",
     )
+    parser.add_argument(
+        "--write-sample-dir",
+        action="store_true",
+        help="Also write full V2 JSON to {sample_dir}/{sample_id}.sample_qc.json (not the Parabricks stub {sample_id}.json)",
+    )
+    parser.add_argument(
+        "--force-flagstat",
+        action="store_true",
+        help="Re-run samtools flagstat even when {sample_id}.flagstat.txt cache is fresh",
+    )
     parser.add_argument("-v", "--verbose", action="store_true", help="Print per-sample guardrail summary")
     args = parser.parse_args(argv)
 
@@ -335,10 +359,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         analyte=None if args.project is not None else args.analyte,
         validate_schema=not args.no_validate,
     )
+    kwargs["force_flagstat"] = args.force_flagstat
 
     print(f"Samples: {len(jobs)} ({sum(1 for j in jobs if j.group == 'healthy')} healthy, "
           f"{sum(1 for j in jobs if j.group == 'PCa')} PCa)")
     print(f"Output dir: {args.output_dir}")
+    print(
+        "Note: V2 QC JSON is written under --output-dir. "
+        "/work/samples/{id}/{id}.json is often a Parabricks guardrails stub only — "
+        "use --write-sample-dir for {id}.sample_qc.json in each sample folder.",
+    )
     if args.project:
         print(f"Project config: {args.project}")
     elif args.analyte:
@@ -349,7 +379,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     results: List[SampleResult] = []
     for i, job in enumerate(jobs, start=1):
         print(f"[{i}/{len(jobs)}] {job.group}\t{job.sample_id}", flush=True)
-        result = run_job(job, kwargs=kwargs, dry_run=args.dry_run, verbose=args.verbose)
+        result = run_job(
+            job,
+            kwargs=kwargs,
+            dry_run=args.dry_run,
+            verbose=args.verbose,
+            write_sample_dir=args.write_sample_dir,
+        )
         results.append(result)
 
         if result.status == "ok" and args.verbose:

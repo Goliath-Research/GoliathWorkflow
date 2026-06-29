@@ -108,6 +108,9 @@ def print_guardrail_summary(payload: Dict[str, Any], *, stream=None) -> None:
     recommendation = guardrails.get("recommendation", "")
     failed = _failed_guardrail_keys(guardrails)
     print(f"sample_id={sample_id} overall_pass={overall}", file=stream)
+    flagstat_line = format_bam_flagstat_status(payload)
+    if flagstat_line:
+        print(flagstat_line, file=stream)
     if recommendation:
         print(f"  recommendation: {recommendation}", file=stream)
     if failed:
@@ -115,6 +118,47 @@ def print_guardrail_summary(payload: Dict[str, Any], *, stream=None) -> None:
     screening = (guardrails.get("details") or {}).get("screening")
     if isinstance(screening, dict) and screening.get("disposition"):
         print(f"  screening_disposition: {screening.get('disposition')}", file=stream)
+
+
+def format_bam_flagstat_status(
+    payload: Dict[str, Any],
+    *,
+    sample_dir: Optional[Path] = None,
+) -> Optional[str]:
+    """One-line BAM / flagstat status for operator logs."""
+    sample_id = str(payload.get("sample_id") or "")
+    if not sample_id:
+        return None
+    resolved_dir = sample_dir
+    if resolved_dir is None:
+        log_path = payload.get("sample_prep_log_path")
+        if log_path:
+            resolved_dir = Path(str(log_path)).parent
+    bam = (resolved_dir / f"{sample_id}.bam") if resolved_dir else Path(f"{sample_id}.bam")
+
+    if not bam.is_file():
+        return "  BAM: not found (flagstat guardrails will fail)"
+
+    size = bam.stat().st_size
+    if size == 0:
+        return "  BAM: empty (0 bytes) — flagstat not run"
+
+    size_gb = size / (1024**3)
+    cache = bam.parent / f"{sample_id}.flagstat.txt"
+    cache_note = "cached" if cache.is_file() and cache.stat().st_mtime >= bam.stat().st_mtime else "computed"
+    flagstat = payload.get("alignment_flagstat")
+    if isinstance(flagstat, dict) and flagstat.get("properly_paired_rate") is not None:
+        return (
+            f"  BAM: {size_gb:.1f} GiB | flagstat: {cache_note}, "
+            f"properly_paired_rate={flagstat.get('properly_paired_rate')}, "
+            f"mapped_rate={flagstat.get('mapped_rate')}"
+        )
+
+    details = (payload.get("guardrails") or {}).get("details") or {}
+    pp = details.get("properly_paired_rate")
+    if isinstance(pp, dict) and pp.get("message"):
+        return f"  BAM: {size_gb:.1f} GiB | flagstat: FAILED — {pp['message']}"
+    return f"  BAM: {size_gb:.1f} GiB | flagstat: no metrics in output"
 
 
 def main(argv: Optional[List[str]] = None) -> int:

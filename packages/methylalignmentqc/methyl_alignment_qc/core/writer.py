@@ -425,6 +425,7 @@ def build_sample_qc_v2_dict(
     output_path_for_history: Optional[Path] = None,
     dedup_metrics: Optional[Dict[str, Any]] = None,
     summary_stats: Optional[Dict[str, Any]] = None,
+    force_flagstat: bool = False,
 ) -> Dict[str, Any]:
     """
     Build one V2 sample QC export dict from a sample directory.
@@ -486,7 +487,7 @@ def build_sample_qc_v2_dict(
             flagstat_metrics = None
             if bam_path.is_file():
                 try:
-                    flagstat_metrics = run_flagstat(sample_dir, sample_name)
+                    flagstat_metrics = run_flagstat(sample_dir, sample_name, force=force_flagstat)
                     payload["alignment_flagstat"] = flagstat_metrics.model_dump()
                 except RuntimeError as exc:
                     flagstat_error = str(exc)
