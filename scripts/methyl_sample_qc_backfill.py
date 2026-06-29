@@ -23,8 +23,12 @@ Examples:
   python scripts/methyl_sample_qc_backfill.py /work/samples/003772_8C9_3 \\
     --project /work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json
 
-  # JSON to stdout (no file write)
+  # JSON to stdout only (no file)
   python scripts/methyl_sample_qc_backfill.py /work/samples/003772_8C9_3 --analyte cfdna --stdout
+
+  # File and stdout together
+  python scripts/methyl_sample_qc_backfill.py /work/samples/003772_8C9_3 \\
+    --analyte cfdna -o /tmp/out.json --stdout
 """
 
 from methyl_alignment_qc.cli.sample_qc_backfill import main

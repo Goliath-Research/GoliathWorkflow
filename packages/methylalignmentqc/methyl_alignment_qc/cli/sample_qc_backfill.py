@@ -132,7 +132,11 @@ def main(argv: Optional[List[str]] = None) -> int:
         type=Path,
         help="Output JSON path (default: {sample_dir}/{sample_id}.sample_qc.json)",
     )
-    parser.add_argument("--stdout", action="store_true", help="Also write JSON to stdout")
+    parser.add_argument(
+        "--stdout",
+        action="store_true",
+        help="Also write JSON to stdout; without -o/--output, skips writing a file",
+    )
     parser.add_argument(
         "--analyte",
         choices=["cfdna", "buffy_coat", "combined"],
@@ -178,12 +182,13 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
 
-    if not args.stdout:
+    write_file = args.output is not None or not args.stdout
+    if write_file:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         write_sample_qc_json(payload, out_path)
         if not args.quiet_summary:
             print(f"Wrote {out_path}", file=sys.stderr)
-    else:
+    if args.stdout:
         json.dump(payload, sys.stdout, indent=2)
         sys.stdout.write("\n")
 

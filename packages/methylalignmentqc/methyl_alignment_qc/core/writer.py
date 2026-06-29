@@ -423,25 +423,33 @@ def build_sample_qc_v2_dict(
     alignment_guardrails: Optional[AlignmentGuardrailsConfig] = None,
     write_context: Optional[QcWriteContext] = None,
     output_path_for_history: Optional[Path] = None,
+    dedup_metrics: Optional[Dict[str, Any]] = None,
+    summary_stats: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Build one V2 sample QC export dict from a sample directory.
 
     Expects Picard deduplicate metrics ({sample_id}.deduplicate_metrics.txt) and
     Parabricks metrics ({sample_id}.json or {sample_id}.qc-metrics.tar).
-  """
+
+    Pass ``dedup_metrics`` / ``summary_stats`` when batching to avoid re-parsing files.
+    """
     from ..utils.schema_validator import validate_sample_qc_metrics
 
     sample_dir = Path(sample_dir)
     sample_name = sample_dir.name
-    parsed = core_parser.parse_metrics_from_sample_paths([sample_dir])
-    if sample_name not in parsed:
-        raise RuntimeError(
-            f"No Picard deduplicate metrics in {sample_dir}; "
-            f"expected {sample_dir / f'{sample_name}.deduplicate_metrics.txt'}"
-        )
-    metrics = parsed[sample_name]
-    summary = core_parser.calculate_summary_stats(parsed)
+    if dedup_metrics is None:
+        parsed = core_parser.parse_metrics_from_sample_paths([sample_dir])
+        if sample_name not in parsed:
+            raise RuntimeError(
+                f"No Picard deduplicate metrics in {sample_dir}; "
+                f"expected {sample_dir / f'{sample_name}.deduplicate_metrics.txt'}"
+            )
+        metrics = parsed[sample_name]
+        if summary_stats is None:
+            summary_stats = core_parser.calculate_summary_stats(parsed).get(sample_name)
+    else:
+        metrics = dedup_metrics
 
     payload, metrics_source = _load_parabricks_metrics_payload(sample_dir, sample_name)
 
@@ -452,8 +460,8 @@ def build_sample_qc_v2_dict(
     if "duplication_histogram" in payload:
         payload["duplication_histogram"] = _normalize_duplication_histogram(payload["duplication_histogram"])
 
-    if sample_name in summary:
-        payload["summary_stats"] = summary[sample_name]
+    if summary_stats is not None:
+        payload["summary_stats"] = summary_stats
 
     try:
         if str(metrics_source).endswith(".json"):
@@ -545,10 +553,11 @@ def process_samples_to_qc_jsons(
         return
 
     sample_paths_by_name = {Path(p).name: Path(p) for p in paths}
+    summary_by_name = core_parser.calculate_summary_stats(parsed)
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    for sample_name in parsed:
+    for sample_name, dedup_metrics in parsed.items():
         sample_dir = sample_paths_by_name.get(sample_name)
         if sample_dir is None:
             raise RuntimeError(f"Sample directory not found for parsed sample: {sample_name}")
@@ -564,5 +573,7 @@ def process_samples_to_qc_jsons(
             alignment_guardrails=alignment_guardrails,
             write_context=write_context,
             output_path_for_history=output_file,
+            dedup_metrics=dedup_metrics,
+            summary_stats=summary_by_name.get(sample_name),
         )
         write_sample_qc_json(v2_dict, output_file)

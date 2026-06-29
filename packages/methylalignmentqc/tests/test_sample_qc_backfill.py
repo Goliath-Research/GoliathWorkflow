@@ -107,3 +107,51 @@ def test_backfill_cli_writes_json_and_summary(tmp_path: Path) -> None:
     ExportedSampleQCV2Payload.model_validate(payload)
     assert payload["sample_id"] == "sampleA"
     assert payload.get("fragmentomics_metrics") is not None
+
+
+def test_backfill_cli_stdout_and_output_both_written(tmp_path: Path) -> None:
+    sample_dir = _write_minimal_sample_dir(tmp_path)
+    out = tmp_path / "dual.json"
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "methyl_alignment_qc.cli.sample_qc_backfill",
+            str(sample_dir),
+            "-o",
+            str(out),
+            "--stdout",
+            "--quiet-summary",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert out.is_file()
+    file_payload = json.loads(out.read_text(encoding="utf-8"))
+    stdout_payload = json.loads(proc.stdout)
+    assert file_payload["sample_id"] == "sampleA"
+    assert stdout_payload["sample_id"] == "sampleA"
+
+
+def test_process_samples_to_qc_jsons_parses_dedup_metrics_once(tmp_path: Path, monkeypatch) -> None:
+    from methyl_alignment_qc.core import parser as core_parser
+    from methyl_alignment_qc.core.writer import process_samples_to_qc_jsons
+
+    sample_a = _write_minimal_sample_dir(tmp_path, "sampleA")
+    sample_b = _write_minimal_sample_dir(tmp_path, "sampleB")
+    calls = {"n": 0}
+    real_parse = core_parser.parse_metrics_from_sample_paths
+
+    def counting_parse(paths):
+        calls["n"] += 1
+        return real_parse(paths)
+
+    monkeypatch.setattr(core_parser, "parse_metrics_from_sample_paths", counting_parse)
+
+    output_dir = tmp_path / "out"
+    process_samples_to_qc_jsons([str(sample_a), str(sample_b)], str(output_dir), validate_schema=True)
+    assert calls["n"] == 1
+    assert (output_dir / "sampleA.json").is_file()
+    assert (output_dir / "sampleB.json").is_file()
