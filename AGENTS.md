@@ -6,6 +6,20 @@ Principles for AI agents and contributors working in this repository.
 
 MethylPipeline is **not** tied to one disease or study. Cohorts and paths live on `/work/projects/<study>/`; pipeline structure and profiles live in the **git repo** (or the promoted **runtime-bundle** on `/work/epimethyl/current/`). Do not hard-code study names, paths, or operational science parameters in Python.
 
+## Database backends (operator)
+
+| Backend | Typical use | Populate reference data |
+|---------|-------------|-------------------------|
+| Azure SQL | Production gateway, portal | Already populated; refresh catalog via `seed_action_catalog.py` or MCP |
+| PostgreSQL | Parity, dev gateway, CI | Schema via `sql_pg/deploy_azure.sh`; **data** via [`scripts/populate_postgres_reference_data.py`](scripts/populate_postgres_reference_data.py) |
+
+When assisting with DB tasks:
+
+1. **Azure SQL** — use Cursor MCP `user-azure-sql-dev` (`mcp_SQL_execute_query`, `mcp_SQL_discover_tables`) for inspection and surgical SQL when available.
+2. **PostgreSQL** — use PostgreSQL MCP (`pgsql_query`) when `pgsql_list_connection_profiles` returns profiles; otherwise require `POSTGRES_*` env and `psql` / `populate_postgres_reference_data.py`.
+3. **Catalog source of truth** — git (`schemas/actions/catalog.json` + `seed_action_catalog.py`), not necessarily production MSSQL rows (may include retired actions like `sample.upload_h5`).
+4. **Shell bootstrap** — `scripts/bootstrap_distributed_workers.sh` for full DDL + seed + workflow deploy; use MCP for verification and incremental fixes.
+
 ## Four-layer configuration
 
 | Layer | Artifact | Docs |

@@ -79,11 +79,18 @@ BEGIN
             IF @base_json IS NULL OR LTRIM(RTRIM(@base_json)) IN (N'', N'null')
                 THROW 50020, N'collection binding jsonPath missing base scope variable', 1;
 
-            SET @path_expr = COALESCE(NULLIF(LTRIM(RTRIM(@json_path)), N''), N'$');
-            IF LEFT(@path_expr, 2) <> N'$.'
-                SET @path_expr = N'$.' + LTRIM(REPLACE(@path_expr, N'$.', N''));
+            SET @path_expr = NULLIF(LTRIM(RTRIM(@json_path)), N'');
 
-            SET @extracted = JSON_QUERY(@base_json, @path_expr);
+            /* Parity with PG wf_json_path_to_pg: NULL / '' / '$' / '$.' → entire base document. */
+            IF @path_expr IS NULL OR @path_expr IN (N'$', N'$.')
+                SET @extracted = @base_json;
+            ELSE
+            BEGIN
+                IF LEFT(@path_expr, 2) <> N'$.'
+                    SET @path_expr = N'$.' + LTRIM(REPLACE(@path_expr, N'$.', N''));
+                SET @extracted = JSON_QUERY(@base_json, @path_expr);
+            END
+
             IF @extracted IS NULL OR @extracted = N'null'
                 THROW 50021, N'collection binding jsonPath produced null', 1;
 

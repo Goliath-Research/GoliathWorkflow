@@ -2,6 +2,45 @@
 
 Operator guide for seeding **PostgreSQL** or **Azure SQL** with the current action catalog (33 actions, post–streamline-action-parameters) and deploying DomainProgram workflows for remote GPU worker testing.
 
+## Two-database layout (typical)
+
+| Backend | Role | Data state |
+|---------|------|------------|
+| **Azure SQL** | Production / portal | Populated — actions, workflow defs, instances, workers |
+| **PostgreSQL** | Parity / gateway dev / CI | Schema + procedures deployed; **reference tables often empty** |
+
+PostgreSQL is **not** a full clone of Azure SQL. For worker testing it needs **reference metadata** only:
+
+- `wf.workflow_action` + `wf.workflow_action_schema` (catalog)
+- `wf.workflow_def` … `workflow_edge` … (compiled DomainPrograms), *or* deploy via gateway
+- `portal.resource_profile` (optional, for archive/H5 defaults)
+
+Do **not** copy `workflow_instance`, `node_execution`, `wf.worker`, or production leases into PostgreSQL unless you intend a dedicated test environment.
+
+### Populate empty PostgreSQL
+
+```bash
+source .venv/bin/activate
+
+export POSTGRES_HOST=epimethyl.postgres.database.azure.com
+export POSTGRES_DB=postgres
+export POSTGRES_USER=dba
+export POSTGRES_PASSWORD='...'
+export PGSSLMODE=require
+
+# 1) Catalog from git (33 actions — preferred over stale MSSQL rows)
+python scripts/populate_postgres_reference_data.py
+
+# 2) Optionally clone workflow definitions from production Azure SQL
+export AZURE_SQL_SERVER=....database.windows.net
+export AZURE_SQL_DB=MethylPipeline
+export AZURE_SQL_USER=...
+export AZURE_SQL_PASSWORD='...'
+python scripts/populate_postgres_reference_data.py --workflows-from-mssql --portal-profiles-from-mssql
+```
+
+**Cursor MCP:** inspect Azure SQL with the `user-azure-sql-dev` server (`mcp_SQL_execute_query`). PostgreSQL MCP requires a saved connection profile in the Cursor PostgreSQL extension (`pgsql_list_connection_profiles` must be non-empty).
+
 ## Quick start
 
 ```bash
