@@ -91,6 +91,10 @@ def _run_cluster_then_centroids_per_cluster(
     side: str,
     group_label: str,
     step_override_path: Optional[Union[str, Path]] = None,
+    *,
+    output_dir: Optional[Union[str, Path]] = None,
+    chromosome: Optional[str] = None,
+    context: Optional[str] = None,
 ) -> None:
     """
     Run MethylCluster for the group, then MethylCentroid once per derived cluster.
@@ -128,11 +132,17 @@ def _run_cluster_then_centroids_per_cluster(
         logger.warning("Empty manifest at %s; skipping centroid build for %s", manifest_path, group_label)
         return
 
-    chrom = project.chromosomes[0] if project.chromosomes else "1"
-    ctx = project.contexts[0] if project.contexts else "CG"
-    chromosomes = project.chromosomes or ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
-        "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y"]
+    chromosomes = project.chromosomes or [
+        "1", "2", "3", "4", "5", "6", "7", "8", "9", "10",
+        "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "X", "Y",
+    ]
     contexts = project.contexts or ["CG"]
+    if chromosome is not None:
+        chromosomes = [str(chromosome)]
+    if context is not None:
+        contexts = [str(context)]
+    chrom = chromosomes[0]
+    ctx = contexts[0]
     step_cfg = resolve_for_project("centroid", project)
     if step_override_path is not None:
         with open(step_override_path) as f:
@@ -143,7 +153,11 @@ def _run_cluster_then_centroids_per_cluster(
         sample_paths = groups.get(derived_label)
         if not sample_paths:
             continue
-        output_dir = project.get_centroid_dir(side, derived_label)
+        cluster_output_dir = (
+            str(Path(output_dir).expanduser().resolve())
+            if output_dir is not None
+            else project.get_centroid_dir(side, derived_label)
+        )
         base_config = MethylCentroidConfig(
             laboratory=project.project_name,
             disease="",
@@ -151,7 +165,7 @@ def _run_cluster_then_centroids_per_cluster(
             batch=project.project_name,
             chrom=chrom,
             ctx=ctx,
-            output_dir=output_dir,
+            output_dir=cluster_output_dir,
             add_samples=sample_paths,
             min_coverage=step_cfg.get("base_config", {}).get("min_coverage", 4),
             use_gpu=step_cfg.get("base_config", {}).get("use_gpu", True),
@@ -246,7 +260,13 @@ def run_centroid_for_one_group(
         and group_config.subcluster.persist_centroids
     ):
         _run_cluster_then_centroids_per_cluster(
-            project_path, side, label, step_override_path
+            project_path,
+            side,
+            label,
+            step_override_path,
+            output_dir=output_dir,
+            chromosome=chromosome,
+            context=context,
         )
     else:
         batch = resolve_centroid_batch_config(
