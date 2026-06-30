@@ -162,10 +162,30 @@ def build_detector_featurecuts_override(
 def write_detector_featurecuts_override(
     run_dir: Path,
     config: "MonteCarloConfig",
-) -> Optional[Dict[str, Any]]:
-    """Deprecated alias — returns override dict; does not write sidecar JSON."""
-    del run_dir
-    return build_detector_featurecuts_override(config)
+) -> Optional[Path]:
+    """Write per-run detector step override JSON when FeatureCuts stability is enabled."""
+    payload = build_detector_featurecuts_override(config)
+    if payload is None:
+        return None
+    run_dir.mkdir(parents=True, exist_ok=True)
+    path = run_dir / "detector_step_override.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, indent=2)
+    return path
+
+
+def resolve_detector_step_override_path(
+    run_dir: Path,
+    config: "MonteCarloConfig",
+) -> Optional[str]:
+    """Return absolute path to per-run detector override JSON, reusing or materializing sidecar."""
+    sidecar = run_dir / "detector_step_override.json"
+    if sidecar.is_file():
+        return str(sidecar.resolve())
+    written = write_detector_featurecuts_override(run_dir, config)
+    if written is None:
+        return None
+    return str(written.resolve())
 
 
 CLASSIFIER_DMP_CSV_PATTERN = "dmps-*-classifier.csv"

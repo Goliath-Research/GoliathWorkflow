@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from methyl_validation.mc_manifest import write_detector_featurecuts_override
+from methyl_validation.mc_manifest import (
+    resolve_detector_step_override_path,
+    write_detector_featurecuts_override,
+)
 from methyl_validation.cli import _count_run_samples_from_existing_files
 from methyl_validation.config import MonteCarloConfig
 from methyl_validation.stability import load_discovery_dmps
@@ -35,14 +38,52 @@ def test_write_detector_featurecuts_override(tmp_path: Path):
             stability_classifier_export_max_dmps=200,
         )
     )
-    payload = write_detector_featurecuts_override(tmp_path / "run_0001", cfg)
-    assert payload is not None
+    run_dir = tmp_path / "run_0001"
+    path = write_detector_featurecuts_override(run_dir, cfg)
+    assert path is not None
+    assert path == run_dir / "detector_step_override.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
     assert payload["classifier_dmp_selection"] == "featurecuts_validation"
     assert payload["target_balanced_accuracy"] == 0.95
     assert payload["min_core_dmps"] == 50
     assert payload["classifier_export_margin_pct"] == 0.10
     assert payload["classifier_export_margin_abs"] == 10
     assert payload["classifier_export_max_dmps"] == 200
+
+
+def test_resolve_detector_step_override_path_reuses_existing_sidecar(tmp_path: Path):
+    cfg = MonteCarloConfig.model_validate(
+        _minimal_mc_dict(stability_featurecuts_enabled=False)
+    )
+    run_dir = tmp_path / "run_0001"
+    run_dir.mkdir()
+    sidecar = run_dir / "detector_step_override.json"
+    sidecar.write_text('{"classifier_dmp_selection": "featurecuts_validation"}', encoding="utf-8")
+    assert resolve_detector_step_override_path(run_dir, cfg) == str(sidecar.resolve())
+
+
+def test_build_task_config_propagates_detector_step_override(tmp_path: Path):
+    from methyl_validation.workflow_planner import _build_task_config
+
+    cfg = MonteCarloConfig.model_validate(_minimal_mc_dict())
+    run_dir = tmp_path / "run_0001"
+    run_dir.mkdir()
+    project_path = run_dir / "project.json"
+    project_path.write_text("{}", encoding="utf-8")
+    override_path = str((run_dir / "detector_step_override.json").resolve())
+    task_config = _build_task_config(
+        display_run_id="feature_run_0001",
+        phase="feature",
+        phase_index=1,
+        layout="binary",
+        config=cfg,
+        seed_i=42,
+        project_path=project_path,
+        run_dir=run_dir,
+        monte_carlo_runs_root=tmp_path / "monte_carlo_runs",
+        detector_step_override_path=override_path,
+    )
+    assert task_config.detectorStepOverride == override_path
 
 
 def test_load_discovery_dmps_prefers_classifier_panel(tmp_path: Path):

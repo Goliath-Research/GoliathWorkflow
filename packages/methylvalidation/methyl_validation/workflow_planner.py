@@ -22,7 +22,7 @@ from .utils.migrate_backend_config import (
     LEGACY_BACKEND_KEYS,
     merge_legacy_validation_keys_into_backend_profiles,
 )
-from .mc_manifest import write_detector_featurecuts_override, write_mapper_classifier_override
+from .mc_manifest import write_detector_featurecuts_override, write_mapper_classifier_override, resolve_detector_step_override_path
 from .planner_models import (
     ValidationPlanContext,
     ValidationPlannedIteration,
@@ -153,7 +153,7 @@ def _build_task_config(
     project_path: Path,
     run_dir: Path,
     monte_carlo_runs_root: Path,
-    det_override: Optional[Dict[str, Any]] = None,
+    detector_step_override_path: Optional[str] = None,
     val_control_csv: Optional[Path] = None,
     val_disease_csv: Optional[Path] = None,
     val_groups_json: Optional[Path] = None,
@@ -186,6 +186,8 @@ def _build_task_config(
         payload["centroidOverridesByLabel"] = {
             lbl: str(path) for lbl, path in centroid_overrides_by_label.items()
         }
+    if detector_step_override_path is not None:
+        payload["detectorStepOverride"] = detector_step_override_path
     return McIterationTaskConfig.model_validate(payload)
 
 
@@ -400,6 +402,7 @@ def _materialize_iteration(
 
     project_path = run_dir / "project.json"
     if project_path.is_file() and not overwrite and not run_project_needs_regeneration(project_path):
+        detector_path = resolve_detector_step_override_path(run_dir, config)
         task_config = _build_task_config(
             display_run_id=display_run_id,
             phase=phase,
@@ -410,6 +413,7 @@ def _materialize_iteration(
             project_path=project_path,
             run_dir=run_dir,
             monte_carlo_runs_root=monte_carlo_runs_root,
+            detector_step_override_path=detector_path,
         )
         iteration = ValidationPlannedIteration(
             runId=display_run_id,
@@ -448,7 +452,10 @@ def _materialize_iteration(
             previous_run_dir if not parallel_seed else None,
         )
 
-    det_override = write_detector_featurecuts_override(run_dir, config)
+    det_override_path = write_detector_featurecuts_override(run_dir, config)
+    detector_path = (
+        str(det_override_path.resolve()) if det_override_path is not None else None
+    )
     if config.stability_gene_featurecuts_enabled:
         write_mapper_classifier_override(run_dir, config)
     if config.stability_gene_biomarker_filter_enabled and not config.stability_mapper_enrich_disease:
@@ -534,7 +541,7 @@ def _materialize_iteration(
         project_path=project_path,
         run_dir=run_dir,
         monte_carlo_runs_root=monte_carlo_runs_root,
-        det_override=det_override,
+        detector_step_override_path=detector_path,
         val_control_csv=val_control_csv,
         val_disease_csv=val_disease_csv,
         val_groups_json=val_groups_json,

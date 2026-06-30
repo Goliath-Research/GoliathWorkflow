@@ -205,7 +205,7 @@ def plan_discovery_runs(
                 )
                 want_preserve = False
 
-        det_override: Optional[Path]
+        det_override_path: Optional[Path] = None
         val_control_csv: Optional[Path] = None
         val_disease_csv: Optional[Path] = None
         val_groups_json: Optional[Path] = None
@@ -230,7 +230,7 @@ def plan_discovery_runs(
             project_path = Path(str(task.project_json))
         else:
             n_fresh += 1
-            det_override = write_detector_featurecuts_override(run_dir, config)
+            det_override_path = write_detector_featurecuts_override(run_dir, config)
             if config.stability_gene_featurecuts_enabled:
                 write_mapper_classifier_override(run_dir, config)
             if config.stability_gene_biomarker_filter_enabled and not config.stability_mapper_enrich_disease:
@@ -325,7 +325,9 @@ def plan_discovery_runs(
                 val_groups_json=str(val_groups_json) if val_groups_json is not None else None,
                 centroid_group1_override=str(c1) if c1 is not None else None,
                 centroid_group2_override=str(c2) if c2 is not None else None,
-                detector_step_override_path=None,
+                detector_step_override_path=(
+                    str(det_override_path.resolve()) if det_override_path is not None else None
+                ),
                 mc_config_path=str(mc_path.resolve()),
             )
         tpath.write_text(task.model_dump_json(indent=2), encoding="utf-8")

@@ -77,8 +77,8 @@ from .mc_config_load import (
     load_monte_carlo_config,
 )
 from .mc_manifest import (
-    build_detector_featurecuts_override,
     write_baseline_manifest,
+    write_detector_featurecuts_override,
     write_mapper_classifier_override,
 )
 
@@ -2885,7 +2885,7 @@ def main() -> None:
             run_id = f"run_{i + 1:04d}"
             run_dir = monte_carlo_runs_root / run_id
             seed_i = (config.seed + i) if config.seed is not None else None
-            detector_step_override = build_detector_featurecuts_override(config)
+            detector_step_override = write_detector_featurecuts_override(run_dir, config)
             if config.stability_gene_featurecuts_enabled:
                 write_mapper_classifier_override(run_dir, config)
 
