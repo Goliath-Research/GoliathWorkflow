@@ -151,7 +151,7 @@ Workers and CLIs write trace artifacts under shared storage:
 
 - **Per-action manifests:** `{output_dir}/.action_results/{action_name}.{run_key}.json` — full typed result snapshots from pipeline CLIs.
 - **Sample prep timeline:** `{sampleDir}/{sampleId}.sample_prep_log.jsonl` — append-only audit log.
-- **Validation / MC timeline:** `{monteCarloRunsRoot}/action_run_log.jsonl` — append-only log for validation-category actions.
+- **Workflow action timeline:** `{logRoot}/action_run_log.jsonl` — append-only log for every workflow ACTION when a log root resolves (MC runs, project output, or sample dir). Records include timing, typed `inputs`/`outputs`, and idempotency fields.
 
 Authors do not write these files; they are useful when debugging failed runs on `/work`.
 
@@ -167,7 +167,7 @@ By default, `execute_task()` **skips** an action when a prior successful manifes
 
 **Skip authority:** `{outputDir}/.action_results/{action_name}.{run_key}.json` (`ActionExecutionRecord`, schema 1.1).
 
-**Audit:** validation actions also append `skipped: true` lines to `{monteCarloRunsRoot}/action_run_log.jsonl`.
+**Audit:** every executed action appends a line to `{logRoot}/action_run_log.jsonl` (including `skipped: true` when signature skip applies).
 
 **FOREACH iterations:** the scheduler always enters each iteration body; **each action** inside (centroid, detector, mapper, gene_select, …) skips independently when its manifest under `{runDir}/.action_results/` matches. No iteration-level marker is required.
 

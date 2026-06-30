@@ -1270,41 +1270,51 @@ def _log_action_execution(
     skipped: bool,
     input_model: Optional[BaseModel] = None,
 ) -> None:
-    if entry.category != "validation":
-        return
     try:
-        from .action_run_log import append_action_run_log
+        from .action_run_log import (
+            append_action_run_log,
+            resolve_workflow_action_log_root,
+            task_inputs_for_log,
+        )
         from .action_skip import (
             compute_action_revision,
             compute_input_signature,
             compute_output_signature,
             artifacts_from_output,
         )
+        from .collectors import _run_key
 
-        mc_root = _resolve_monte_carlo_runs_root(input_json)
-        if mc_root is None:
+        log_root = resolve_workflow_action_log_root(entry, input_json)
+        if log_root is None:
             return
-        run_dir = input_json.get("runDir") or input_json.get("targetRunDir")
+
+        run_dir = (
+            input_json.get("runDir")
+            or input_json.get("targetRunDir")
+            or input_json.get("outputDir")
+        )
         outputs = result.output.model_dump(mode="json")
-        trimmed_inputs = {
-            k: input_json[k]
-            for k in ("projectPath", "project", "runDir", "monteCarloRunsRoot", "outputDir")
-            if k in input_json
-        }
         if input_model is None:
             from .action_execution import validate_input
 
             input_model = validate_input(entry, input_json)
         artifacts = artifacts_from_output(outputs)
         append_action_run_log(
-            mc_root,
+            log_root,
             action=action_name,
             capability=entry.capability,
+            category=entry.category,
             result_code=result.result_code,
             run_dir=str(run_dir) if run_dir else None,
-            inputs=trimmed_inputs,
+            run_key=_run_key(input_json) or None,
+            inputs=task_inputs_for_log(input_json),
             outputs=outputs,
             workflow_node_key=input_json.get("workflowNodeKey"),
+            started_at_utc=outputs.get("started_at_utc"),
+            finished_at_utc=outputs.get("finished_at_utc"),
+            duration_ms=outputs.get("duration_ms"),
+            status=outputs.get("status"),
+            exit_code=outputs.get("exit_code"),
             skipped=skipped,
             skip_reason="signature_match" if skipped else None,
             action_revision=compute_action_revision(entry),
@@ -1312,4 +1322,4 @@ def _log_action_execution(
             output_signature=compute_output_signature(artifacts),
         )
     except Exception:
-        logger.debug("validation action_run_log append skipped for %s", action_name, exc_info=True)
+        logger.debug("workflow_action_log append skipped for %s", action_name, exc_info=True)

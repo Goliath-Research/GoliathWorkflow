@@ -52,7 +52,9 @@ The worker reads and validates manifests after subprocess exit; legacy artifact 
 
 Sample prep also appends `{sampleDir}/{sampleId}.sample_prep_log.jsonl` for an operator-visible timeline.
 
-Validation / Monte Carlo runs append `{monteCarloRunsRoot}/action_run_log.jsonl` with one line per validation-category ACTION (plan, stability, model_mc, etc.). Log records include `skipped`, `action_revision`, and signature fields when idempotent skip applies.
+Workflow runs append a unified `{logRoot}/action_run_log.jsonl` with one line per ACTION (pipeline, validation, sample prep when a log root resolves). Each record includes timing (`started_at_utc`, `finished_at_utc`, `duration_ms`), branch fields (`result_code`, `status`, `exit_code`), full typed `inputs` and `outputs`, plus `skipped`, `action_revision`, and signature fields when idempotent skip applies.
+
+Log root resolution: explicit `monteCarloRunsRoot`, any path under `monte_carlo_runs/`, validation project output, project output base, or `sampleDir`.
 
 **FOREACH:** each action inside an MC iteration skips independently via its own manifest under `{runDir}/.action_results/`; the scheduler does not short-circuit whole iterations.
 
