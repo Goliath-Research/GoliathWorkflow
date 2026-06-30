@@ -422,7 +422,12 @@ def main() -> None:
                 if group_arg.isdigit():
                     group_arg = int(group_arg)
                 run_centroid_for_one_group(
-                    args.project, group_arg, args.step_override
+                    args.project,
+                    group_arg,
+                    args.step_override,
+                    output_dir=args.output_dir,
+                    chromosome=args.chromosome,
+                    context=args.context,
                 )
 
         elif args.batch_config:

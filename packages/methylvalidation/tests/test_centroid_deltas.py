@@ -89,6 +89,9 @@ def test_generate_run_project_writes_group_specific_centroid_deltas():
         assert group2_payload["base_config"]["remove_samples"] == ["/samples/disease_x"]
 
         run_proj = json.loads(project_path.read_text(encoding="utf-8"))
+        assert run_proj["controls"]["label"] == "healthy"
+        assert run_proj["controls"]["groups"][0]["label"] == "healthy"
+        assert run_proj["diseases"]["label"] == "disease"
         assert "step_config" not in run_proj
         val_groups = json.loads((run_dir / "val_test_groups.json").read_text(encoding="utf-8"))
         assert len(val_groups) == 2
@@ -128,6 +131,10 @@ def test_generate_run_project_creates_predictor_holdouts_when_missing():
         )
 
         run_proj = json.loads(project_path.read_text(encoding="utf-8"))
+        assert run_proj["controls"]["label"] == "healthy"
+        assert run_proj["controls"]["groups"][0]["label"] == "all"
+        assert run_proj["diseases"]["label"] == "cancer"
+        assert run_proj["diseases"]["groups"][0]["label"] == "PCa"
         assert "step_config" not in run_proj
         val_groups = json.loads((run_dir / "val_test_groups.json").read_text(encoding="utf-8"))
         assert val_groups[0]["paths"] == [str(Path("/samples/val_control").resolve())]

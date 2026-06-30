@@ -201,6 +201,10 @@ def run_centroid_for_one_group(
     project_path: Union[str, Path],
     group: Union[str, int],
     step_override_path: Optional[Union[str, Path]] = None,
+    *,
+    output_dir: Optional[Union[str, Path]] = None,
+    chromosome: Optional[str] = None,
+    context: Optional[str] = None,
 ) -> None:
     """
     Run MethylCentroid for a single group (by index or 'group1'/'group2').
@@ -211,12 +215,26 @@ def run_centroid_for_one_group(
     project = load_project(project_path)
     group = _normalize_centroid_group_arg(project, group)
     if not isinstance(group, int) or not project.uses_control_disease():
-        batch = resolve_centroid_batch_config(project_path, group, step_override_path)
+        batch = resolve_centroid_batch_config(
+            project_path,
+            group,
+            step_override_path,
+            output_dir_override=output_dir,
+            chromosome=chromosome,
+            context=context,
+        )
         run_batch_processing(batch)
         return
     with_side = project._get_resolved_groups_with_side()
     if group < 0 or group >= len(with_side):
-        batch = resolve_centroid_batch_config(project_path, group, step_override_path)
+        batch = resolve_centroid_batch_config(
+            project_path,
+            group,
+            step_override_path,
+            output_dir_override=output_dir,
+            chromosome=chromosome,
+            context=context,
+        )
         run_batch_processing(batch)
         return
     label, _paths, side = with_side[group]
@@ -231,7 +249,14 @@ def run_centroid_for_one_group(
             project_path, side, label, step_override_path
         )
     else:
-        batch = resolve_centroid_batch_config(project_path, group, step_override_path)
+        batch = resolve_centroid_batch_config(
+            project_path,
+            group,
+            step_override_path,
+            output_dir_override=output_dir,
+            chromosome=chromosome,
+            context=context,
+        )
         run_batch_processing(batch)
 
 
@@ -239,6 +264,10 @@ def resolve_centroid_batch_config(
     project_path: Union[str, Path],
     group: Union[str, int],
     step_override_path: Optional[Union[str, Path]] = None,
+    *,
+    output_dir_override: Optional[Union[str, Path]] = None,
+    chromosome: Optional[str] = None,
+    context: Optional[str] = None,
 ) -> BatchProcessingConfig:
     """
     Build BatchProcessingConfig for one group from a project config.
@@ -341,12 +370,22 @@ def resolve_centroid_batch_config(
         for key in ("chromosomes", "contexts", "continue_on_error", "save_batch_summary"):
             if key in overrides:
                 batch = batch.model_copy(update={key: overrides[key]})
-    # Ensure output_dir is always the derived path (output_base/project_name/centroids/...)
-    if isinstance(group, int):
-        canonical_output = paths.centroid_dirs[group] if (paths.centroid_dirs and group < len(paths.centroid_dirs)) else output_dir
+    # Keep canonical project paths unless the worker/CLI passed an explicit output dir.
+    if output_dir_override is not None:
+        canonical_output = str(Path(output_dir_override).expanduser().resolve())
+    elif isinstance(group, int):
+        canonical_output = (
+            paths.centroid_dirs[group]
+            if (paths.centroid_dirs and group < len(paths.centroid_dirs))
+            else output_dir
+        )
     else:
         canonical_output = paths.centroid1_dir if group == "group1" else paths.centroid2_dir
     batch = batch.model_copy(
         update={"base_config": batch.base_config.model_copy(update={"output_dir": canonical_output})}
     )
+    if chromosome is not None:
+        batch = batch.model_copy(update={"chromosomes": [str(chromosome)]})
+    if context is not None:
+        batch = batch.model_copy(update={"contexts": [str(context)]})
     return batch

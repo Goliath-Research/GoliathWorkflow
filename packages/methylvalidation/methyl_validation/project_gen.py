@@ -211,6 +211,21 @@ def _first_control_and_disease_labels(base: Dict[str, Any]) -> tuple[str, str]:
     return control_label, disease_label
 
 
+def _control_disease_side_labels(base: Dict[str, Any]) -> tuple[str, str]:
+    """Side labels from ``controls.label`` / ``diseases.label`` (not group labels)."""
+    control_side = "healthy"
+    disease_side = "disease"
+    if isinstance(base.get("controls"), dict):
+        control_side = base["controls"].get("label", control_side)
+    elif isinstance(base.get("control"), dict):
+        control_side = base["control"].get("label", control_side)
+    if isinstance(base.get("diseases"), dict):
+        disease_side = base["diseases"].get("label", disease_side)
+    elif isinstance(base.get("disease"), dict):
+        disease_side = base["disease"].get("label", disease_side)
+    return control_side, disease_side
+
+
 def link_run_artifacts_from_source(
     source_run_dir: Union[str, Path],
     target_run_dir: Union[str, Path],
@@ -544,7 +559,8 @@ def generate_run_project(
     write_val_csv(val_control_csv, val_control_paths)
     write_val_csv(val_disease_csv, val_disease_paths)
 
-    control_label, disease_label = _first_control_and_disease_labels(base)
+    control_group, disease_group = _first_control_and_disease_labels(base)
+    control_side, disease_side = _control_disease_side_labels(base)
 
     # Build project: same structure as pipeline expects (controls/diseases plural ok per pipeline normalizer)
     project = dict(base)
@@ -553,27 +569,27 @@ def generate_run_project(
     project["project_name"] = run_id
     project["samples_base_path"] = samples_base_path
     project["controls"] = {
-        "label": control_label,
+        "label": control_side,
         "groups": [
-            {"label": control_label, "sample_paths": [str(train_control_csv)]}
+            {"label": control_group, "sample_paths": [str(train_control_csv)]}
         ],
     }
     project["diseases"] = {
-        "label": disease_label,
+        "label": disease_side,
         "groups": [
-            {"label": disease_label, "sample_paths": [str(train_disease_csv)]}
+            {"label": disease_group, "sample_paths": [str(train_disease_csv)]}
         ],
     }
     project["comparisons"] = [
-        {"control_group": control_label, "disease_group": disease_label}
+        {"control_group": control_group, "disease_group": disease_group}
     ]
 
     _write_binary_val_test_groups_json(
         run_dir,
         val_control_paths,
         val_disease_paths,
-        control_label,
-        disease_label,
+        control_group,
+        disease_group,
     )
 
     project_path = run_dir / "project.json"
