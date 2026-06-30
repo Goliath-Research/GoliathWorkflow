@@ -23,7 +23,10 @@
         "chromosome",
         "context",
         "outputDir",
-        "stepOverride"
+        "stepOverride",
+        "addSamples",
+        "removeSamples",
+        "centroidSeedDir"
       ],
       "default_node_type": "ACTION",
       "description": "Build per-group methylation centroids (chr\u00d7context HDF5 aggregates).",
@@ -739,10 +742,15 @@
           {
             "output_json_path": "$.iterations",
             "var_name": "iterations"
+          },
+          {
+            "output_json_path": "$.centroidSeedGroups",
+            "var_name": "centroidSeedGroups"
           }
         ],
         "writes_types": [
-          "StratifiedCohortDraw"
+          "StratifiedCohortDraw",
+          "CentroidSeedGroup"
         ]
       },
       "execution_mode": "in_process",

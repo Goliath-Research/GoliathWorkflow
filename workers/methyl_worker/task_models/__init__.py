@@ -65,6 +65,7 @@ from .sample_prep_models import (
     TrimFastqTaskInput,
     TrimFastqTaskOutput,
 )
+from methyl_validation.planner_models import ValidationPlannedIteration
 from .validation_models import (
     FreezeReadinessTaskInput,
     LinkArtifactsTaskInput,
@@ -79,7 +80,6 @@ from .validation_models import (
     StabilityTaskInput,
     TaskErrorOutput,
     ValidationFreezeReadinessOutput,
-    ValidationIterationRef,
     ValidationLinkArtifactsOutput,
     ValidationModelBundleOutput,
     ValidationModelMcOutput,
@@ -165,7 +165,7 @@ __all__ = [
     "TrimFastqTaskInput",
     "TrimFastqTaskOutput",
     "ValidationFreezeReadinessOutput",
-    "ValidationIterationRef",
+    "ValidationPlannedIteration",
     "ValidationLinkArtifactsOutput",
     "ValidationModelBundleOutput",
     "ValidationModelMcOutput",

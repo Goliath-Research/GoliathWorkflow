@@ -90,20 +90,31 @@ class ForeachIterationScopeTests(unittest.TestCase):
         self.assertTrue(scope["taskConfig"].startswith("{"))
 
     def test_gene_select_template_resolves_run_dir(self) -> None:
-        from methyl_worker.task_models.validation_models import ValidationIterationRef
+        from methyl_validation.planner_models import ValidationPlannedIteration
         from methyl_worker.task_validation import normalize_task_input
         from workflow_engine.domain.compiler import compile_domain_program_file
         from workflow_engine.local.resolver import resolve_input_template
         from workflow_engine.local.scope import flatten_foreach_element
 
-        iteration = ValidationIterationRef.model_validate(
+        iteration = ValidationPlannedIteration.model_validate(
             {
-                "run_id": "feature_run_0001",
-                "project_json": "/work/demo/monte_carlo_runs/run_0001/project.json",
-                "run_dir": "/work/demo/monte_carlo_runs/run_0001",
-                "taskConfig": {"iteration": 1},
+                "$type": "StratifiedCohortDraw",
+                "runId": "feature_run_0001",
+                "phase": "feature",
+                "projectPath": "/work/demo/monte_carlo_runs/run_0001/project.json",
+                "runDir": "/work/demo/monte_carlo_runs/run_0001",
+                "taskConfig": {
+                    "runId": "feature_run_0001",
+                    "phase": "feature",
+                    "iteration": 1,
+                    "layout": "binary",
+                    "trainFraction": 0.8,
+                    "projectJson": "/work/demo/monte_carlo_runs/run_0001/project.json",
+                    "runDir": "/work/demo/monte_carlo_runs/run_0001",
+                    "monteCarloRunsRoot": "/work/demo/monte_carlo_runs",
+                },
             }
-        ).model_dump()
+        ).model_dump(mode="json", by_alias=True)
         scope = flatten_foreach_element(
             iteration, item_var="iteration", index_var="iterIndex", index=0
         )

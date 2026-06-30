@@ -147,7 +147,7 @@
           "title": "H5Files"
         },
         "h5Pattern": {
-          "default": "{chr}.{ctx}.h5",
+          "default": "{chr}-{ctx}.h5",
           "title": "H5Pattern",
           "type": "string"
         },

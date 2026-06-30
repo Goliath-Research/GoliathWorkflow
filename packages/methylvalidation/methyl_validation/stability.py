@@ -1703,6 +1703,8 @@ def run_stability_analysis(
     root_scored_path = output_dir / "stable_dmps_scored.csv"
     root_diag_json_path = output_dir / "stable_dmp_score_diagnostics.json"
     root_diag_csv_path = output_dir / "stable_dmp_score_diagnostics.csv"
+    root_dmps_diag_json_path = output_dir / "stable_dmps_score_diagnostics.json"
+    root_dmps_diag_csv_path = output_dir / "stable_dmps_score_diagnostics.csv"
     if tiered_stability_enabled:
         # Tiered mode writes strict/relaxed/scored artifacts under tier_* directories.
         # Remove root dual-cutoff files to avoid stale-table confusion.
@@ -1712,6 +1714,8 @@ def run_stability_analysis(
             root_scored_path,
             root_diag_json_path,
             root_diag_csv_path,
+            root_dmps_diag_json_path,
+            root_dmps_diag_csv_path,
         ):
             try:
                 if stale.exists():
@@ -1776,7 +1780,13 @@ def run_stability_analysis(
         selected_dmp_df.to_csv(root_relaxed_path, index=False)
         strict_dmp_path = root_strict_path
         relaxed_dmp_path = root_relaxed_path
-        for stale in (root_scored_path, root_diag_json_path, root_diag_csv_path):
+        for stale in (
+            root_scored_path,
+            root_diag_json_path,
+            root_diag_csv_path,
+            root_dmps_diag_json_path,
+            root_dmps_diag_csv_path,
+        ):
             try:
                 if stale.exists():
                     stale.unlink()

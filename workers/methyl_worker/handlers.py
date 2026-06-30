@@ -300,30 +300,6 @@ def _handle_methyl_fragmentomics(
     )
 
 
-def _normalize_validation_iteration_payload(item: Dict[str, Any]) -> Dict[str, Any]:
-    """Map planner iteration dict onto ValidationIterationRef fields."""
-    payload = dict(item)
-    payload["run_id"] = str(payload.get("run_id") or payload.get("runId") or "")
-    if payload.get("iteration") is not None:
-        payload["iteration"] = int(payload["iteration"])
-    elif payload.get("phase_index") is not None:
-        payload["iteration"] = int(payload["phase_index"])
-    else:
-        payload["iteration"] = 0
-    run_dir = payload.get("runDir") or payload.get("run_dir")
-    if run_dir is not None:
-        payload["runDir"] = str(run_dir)
-    project_path = payload.get("projectPath") or payload.get("projectJson")
-    if project_path is not None:
-        payload["projectPath"] = str(project_path)
-    return {
-        "run_id": payload["run_id"],
-        "iteration": int(payload.get("iteration") or 0),
-        "runDir": str(run_dir) if run_dir is not None else None,
-        "projectPath": str(project_path) if project_path is not None else None,
-    }
-
-
 def _handle_validation_plan_iterations(
     _capability: str,
     _action_name: str,
@@ -332,7 +308,7 @@ def _handle_validation_plan_iterations(
 ):
     from methyl_validation.workflow_planner import ValidationPlanRequest, plan_validation_context
 
-    from .task_models.validation_models import ValidationIterationRef, ValidationPlanTaskOutput
+    from .task_models.validation_models import ValidationPlanTaskOutput
 
     request = (
         input
@@ -343,17 +319,12 @@ def _handle_validation_plan_iterations(
         runtime = TaskRuntimeContext.from_wire({})
 
     context = plan_validation_context(request, profile_overrides=runtime.validationProfile)
-    iterations = []
-    for item in context.iterations:
-        payload = item.model_dump(mode="json")
-        iterations.append(
-            ValidationIterationRef.model_validate(_normalize_validation_iteration_payload(payload))
-        )
     return ValidationPlanTaskOutput(
         status="ok",
         projectPath=context.projectPath,
-        n_iterations=len(iterations),
-        iterations=iterations,
+        n_iterations=len(context.iterations),
+        centroidSeedGroups=context.centroidSeedGroups,
+        iterations=context.iterations,
     )
 
 

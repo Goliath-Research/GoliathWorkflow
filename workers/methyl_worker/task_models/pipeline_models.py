@@ -33,6 +33,9 @@ class CentroidTaskInput(BaseModel):
     outputDir: Optional[str] = None
     centroid1Dir: Optional[str] = None
     centroid2Dir: Optional[str] = None
+    centroidSeedDir: Optional[str] = None
+    addSamples: Optional[List[str]] = None
+    removeSamples: Optional[List[str]] = None
     stepOverride: Optional[CentroidStepOverride] = None
 
 

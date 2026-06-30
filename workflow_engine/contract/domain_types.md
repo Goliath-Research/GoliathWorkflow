@@ -32,6 +32,7 @@ FOREACH flattening and `${var.*}` templates work unchanged: domain objects are o
 | `FragmentomicsRef` | cfDNA fragmentomics artifacts |
 | `MethylationMatrixRef` | Post-extract HDF5 matrix handles |
 | `MethylGroup` | Cohort (static project group or MC train/val draw) |
+| `CentroidSeedGroup` | Shared MC centroid seed pool per cohort label (`_centroid_seed/{label}/`) |
 | `MethylCentroidRef` | Centroid HDF5 per group × chr × ctx |
 | `ComparisonSpec` | Control vs disease pair |
 | `MethylDetectionRef` | Detector run summary (paths, not full DMP table) |
@@ -53,7 +54,7 @@ Actions in `workers/methyl_worker/action_catalog.py` declare **`domain_effects`*
 | `sample.methyl_extract` | `MethylSampleRef` | `methylation` |
 | `pipeline.centroid` | `MethylGroup` | `MethylCentroidRef` |
 | `pipeline.detector` | `ComparisonSpec` + centroids | `MethylDetectionRef` |
-| `validation.plan_iterations` | project groups | `iterations[]` as `StratifiedCohortDraw` |
+| `validation.plan_iterations` | project groups | `centroidSeedGroups[]`, `iterations[]` as `StratifiedCohortDraw` with `centroidGroups` |
 
 Optional worker adapter: `methyl_domain.helpers.enrich_sample_prep_output()` merges handler `output_json` into a `MethylSampleRef`.
 
@@ -82,7 +83,10 @@ Example fixtures:
 
 ## Monte Carlo iterations
 
-`methyl_validation.workflow_planner` emits each `context_json.iterations[]` element as a tagged **`StratifiedCohortDraw`**, retaining flat keys (`runId`, `phase`, `projectPath`, `taskConfig`) for backward compatibility.
+`methyl_validation.workflow_planner` emits:
+
+- Top-level **`centroidSeedGroups[]`** (`CentroidSeedGroup`) — full per-cohort sample pools under `{monteCarloRunsRoot}/_centroid_seed/`.
+- Each **`iterations[]`** element as a tagged **`StratifiedCohortDraw`**, with typed `taskConfig` (`McIterationTaskConfig`) and **`centroidGroups[]`** (`CentroidGroupScope`) using cohort-relative deltas and `centroidSeedDir`.
 
 Helpers:
 

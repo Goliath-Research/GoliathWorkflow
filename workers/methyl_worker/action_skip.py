@@ -159,6 +159,12 @@ def _incremental_centroid_extra(input_json: Mapping[str, Any]) -> Optional[dict]
     if input_json.get("addSamples") or input_json.get("removeSamples"):
         extra["addSamples"] = input_json.get("addSamples")
         extra["removeSamples"] = input_json.get("removeSamples")
+    seed_dir = input_json.get("centroidSeedDir")
+    if seed_dir:
+        extra["centroidSeedDir"] = str(seed_dir)
+        fp = _directory_fingerprint(Path(str(seed_dir)))
+        if fp:
+            extra["centroidSeedFingerprint"] = fp
     return extra or None
 
 

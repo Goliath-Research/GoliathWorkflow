@@ -298,8 +298,11 @@ _DE_DETECTOR = DomainEffects(
 )
 _DE_PLAN_ITERATIONS = DomainEffects(
     reads_types=("MethylGroup",),
-    writes_types=("StratifiedCohortDraw",),
-    scope_bindings=(("iterations", "$.iterations"),),
+    writes_types=("StratifiedCohortDraw", "CentroidSeedGroup"),
+    scope_bindings=(
+        ("iterations", "$.iterations"),
+        ("centroidSeedGroups", "$.centroidSeedGroups"),
+    ),
 )
 _DE_PREPARE_FREEZE = DomainEffects(
     reads_types=("StratifiedCohortDraw",),
@@ -485,7 +488,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-centroid",
         tool="MethylCentroid",
         action_config_key="centroid",
-        context_vars=("group", "chromosome", "context", "outputDir", "stepOverride"),
+        context_vars=("group", "chromosome", "context", "outputDir", "stepOverride", "addSamples", "removeSamples", "centroidSeedDir"),
         argv_map=DEFAULT_PIPELINE_ARGV_MAP,
         domain_effects=_DE_CENTROID,
     ),

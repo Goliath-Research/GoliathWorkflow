@@ -2,6 +2,7 @@
   "domain_program": "domain_program.schema.json",
   "schemas": {
     "AlignmentQcRef": "alignment_qc_ref.schema.json",
+    "CentroidSeedGroup": "centroid_seed_group.schema.json",
     "ComparisonSpec": "comparison_spec.schema.json",
     "ExtractionQcRef": "extraction_qc_ref.schema.json",
     "FragmentomicsRef": "fragmentomics_ref.schema.json",
@@ -24,6 +25,7 @@
     "MethylCentroidRef",
     "MethylDetectionRef",
     "StratifiedCohortDraw",
+    "CentroidSeedGroup",
     "ComparisonSpec"
   ],
   "version": 1

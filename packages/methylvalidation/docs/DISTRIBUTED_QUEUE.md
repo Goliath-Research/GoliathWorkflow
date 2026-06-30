@@ -65,7 +65,17 @@ The queue manifest is **backend-agnostic** (JSON lines). A central service can h
 
 ## Task schema
 
-Task files use `task_schema_version: "1.0"` and the Pydantic model `DiscoveryRunTaskV1` in `methyl_validation.task_schema`. Extra fields are allowed for forward compatibility (`model_config = extra="allow"`).
+Task files use `task_schema_version: "1.0"` and the strict Pydantic model `DiscoveryRunTaskV1` in `methyl_validation.task_schema` (`extra="forbid"`).
+
+Optional seed fields for distributed `plan-runs` / `run-task`:
+
+| Field | Purpose |
+|-------|---------|
+| `centroid_seed_root` | Root of `{monteCarloRunsRoot}/_centroid_seed` when workers must resolve seed paths |
+| `centroid_seed_groups` | Typed `CentroidSeedGroup[]` copied from planner output |
+| `detector_step_override_path` | Path to detector step override JSON (replaces inline `detector_step_override` dict) |
+
+Workers copy each group's seed centroid tree into the run `centroidDir` before applying cohort-relative `addSamples` / `removeSamples` when `centroidSeedDir` is set on the task or in `centroidGroups`.
 
 ## Post-freeze enricher queue
 

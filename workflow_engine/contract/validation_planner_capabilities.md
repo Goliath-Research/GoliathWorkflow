@@ -51,11 +51,30 @@ Merge into instance `context_json`:
   "workerToolEnricher": "MethylEnricher",
   "workerToolProgression": "MethylDiseaseProgression",
   "orderedComparisonLabels": ["healthy_vs_PCa"],
+  "centroidSeedGroups": [
+    {
+      "$type": "CentroidSeedGroup",
+      "label": "__control__",
+      "addSamples": ["/work/samples/ctrl1", "/work/samples/ctrl2"],
+      "removeSamples": [],
+      "centroidDir": "/work/.../monte_carlo_runs/_centroid_seed/__control__"
+    }
+  ],
   "iterations": [
     {
+      "$type": "StratifiedCohortDraw",
       "runId": "feature_run_0001",
       "phase": "feature",
       "projectPath": "/work/.../monte_carlo_runs/run_0001",
+      "centroidGroups": [
+        {
+          "label": "__control__",
+          "addSamples": [],
+          "removeSamples": ["/work/samples/ctrl2"],
+          "centroidDir": "/work/.../monte_carlo_runs/run_0001/centroids/__control__",
+          "centroidSeedDir": "/work/.../monte_carlo_runs/_centroid_seed/__control__"
+        }
+      ],
       "taskConfig": {
         "runId": "feature_run_0001",
         "phase": "feature",
@@ -69,6 +88,16 @@ Merge into instance `context_json`:
 }
 ```
 
+### Parallel centroid seed (default)
+
+When `validation.parallel_mc_centroid_seed` is unset or `true` (profile/site `actionConfig.validation`):
+
+1. **`centroidSeedGroups[]`** — one entry per MC cohort label with the **full** resolved sample pool; centroids materialize under `{monteCarloRunsRoot}/_centroid_seed/{label}/`.
+2. DomainPrograms run a **parallel** FOREACH over `centroidSeedGroups`, then a **parallel** FOREACH over `iterations`.
+3. Each iteration’s `centroidGroups[]` uses **cohort-relative** deltas (`removeSamples = full_cohort \ train`) and `centroidSeedDir` pointing at the shared seed tree. Workers copy the seed baseline into the run `centroidDir` before `methyl-centroid` applies deltas.
+
+Set `parallel_mc_centroid_seed: false` to restore legacy sequential chaining via `previousRunDir` / `prepare_incremental_centroid_baseline`.
+
 ### `iterations[]` element shape
 
 Each object is opaque to the engine except for fields referenced in workflow templates:
@@ -79,10 +108,12 @@ Each object is opaque to the engine except for fields referenced in workflow tem
 | `phase` | string | `${var.phase}` |
 | `projectPath` | string | `${var.projectPath}` (iteration-specific run project) |
 | `taskConfig` | object | `${var.taskConfig}` embedded JSON in centroid/detector payloads |
+| `centroidGroups` | array | Per-group `centroidDir`, `centroidSeedDir`, `addSamples`, `removeSamples` for `pipeline.centroid` |
+| `previousRunDir` | string | Legacy sequential MC only (`parallel_mc_centroid_seed: false`) |
+
+Top-level **`centroidSeedGroups`** drives the seed-phase FOREACH in DomainProgram MC workflows (`parallel: true`).
 
 FOREACH flattening copies object keys into scope (`wf_seed_foreach_iteration_scope`), so `${var.taskConfig}` resolves without engine injection.
-
-Additional keys (e.g. `groups`, `comparisons`) are allowed for worker consumption.
 
 ## Optional audit persistence
 

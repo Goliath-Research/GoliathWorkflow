@@ -100,13 +100,13 @@ def test_build_group_centroid_scope_emits_add_remove(tmp_path: Path) -> None:
         },
     )
     assert len(groups) == 3
-    all_group = next(g for g in groups if g["label"] == "all")
-    assert len(all_group["addSamples"]) == 1
-    assert len(all_group["removeSamples"]) == 0
-    pca1 = next(g for g in groups if g["label"] == "PCa_PCa1")
-    assert str(tmp_path / "samples/d1") in pca1["addSamples"][0] or pca1["addSamples"]
-    assert pca1["removeSamples"]
-    assert all(g["centroidDir"] for g in groups)
+    all_group = next(g for g in groups if g.label == "all")
+    assert len(all_group.addSamples) == 1
+    assert len(all_group.removeSamples) == 0
+    pca1 = next(g for g in groups if g.label == "PCa_PCa1")
+    assert pca1.addSamples
+    assert pca1.removeSamples
+    assert all(g.centroidDir for g in groups)
 
 
 def test_plan_validation_context_hierarchical_groups(tmp_path: Path) -> None:
@@ -126,5 +126,7 @@ def test_plan_validation_context_hierarchical_groups(tmp_path: Path) -> None:
     assert len(first["centroidGroups"]) == 3
     for grp in first["centroidGroups"]:
         assert "addSamples" in grp and "removeSamples" in grp and "centroidDir" in grp
-    second = iterations[1].model_dump(mode="json")
-    assert second.get("previousRunDir")
+    second = iterations[1].model_dump(mode="json", by_alias=True)
+    assert "centroidGroups" in second
+    for grp in second["centroidGroups"]:
+        assert grp.get("centroidSeedDir")

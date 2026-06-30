@@ -2015,6 +2015,73 @@
       "description": "Legacy: CSV listing disease samples. Use with healthy_csv, or use cohorts instead.",
       "title": "Disease Csv"
     },
+    "dmp_featurecuts_fail_if_below_target": {
+      "default": false,
+      "description": "Strict DMP FC: exclude iteration when BA target unmet or panel below min_dmps (do not expand into worse BA).",
+      "title": "Dmp Featurecuts Fail If Below Target",
+      "type": "boolean"
+    },
+    "dmp_featurecuts_max_dmps": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Upper cap on DMP FeatureCuts k-search / export.",
+      "title": "Dmp Featurecuts Max Dmps"
+    },
+    "dmp_featurecuts_min_dmps": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Minimum DMP panel size after FC; fail/exclude run when unmet (no BA-diluting expansion).",
+      "title": "Dmp Featurecuts Min Dmps"
+    },
+    "dmp_featurecuts_target_ba": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Held-out BA gate for DMP FeatureCuts (separate from gene FC).",
+      "title": "Dmp Featurecuts Target Ba"
+    },
+    "dmp_modeling_mode": {
+      "anyOf": [
+        {
+          "enum": [
+            "raw_pool",
+            "featurecuts",
+            "stable_panel"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Statistical DMP axis: raw_pool (discovery only), featurecuts (BA-gated panel), or stable_panel (frozen consensus from prior phase). Seeds legacy stability flags when set.",
+      "title": "Dmp Modeling Mode"
+    },
     "ecdf_aggregated_enabled": {
       "anyOf": [
         {
@@ -2139,6 +2206,86 @@
       "description": "For feature_mode=observed_hybrid with gene family features, controls locus loading: frozen (exact frozen DMP loci) or range (all loci in frozen gene-feature ranges).",
       "title": "Gene Feature Loading",
       "type": "string"
+    },
+    "gene_featurecuts_loci_source": {
+      "anyOf": [
+        {
+          "enum": [
+            "raw_pool",
+            "featurecuts_selected",
+            "stable_panel"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Loci fed into gene FC: raw_pool (discovery), featurecuts_selected (classifier), or stable_panel (Phase B two-stage workflows).",
+      "title": "Gene Featurecuts Loci Source"
+    },
+    "gene_featurecuts_max_genes": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Cap ranked mapper gene pool before gene FC k-search.",
+      "title": "Gene Featurecuts Max Genes"
+    },
+    "gene_featurecuts_min_genes": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Minimum gene panel size after gene FC (alias for stability_min_selected_genes).",
+      "title": "Gene Featurecuts Min Genes"
+    },
+    "gene_featurecuts_target_ba": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Held-out BA gate for gene FeatureCuts (separate from DMP FC).",
+      "title": "Gene Featurecuts Target Ba"
+    },
+    "gene_modeling_mode": {
+      "anyOf": [
+        {
+          "enum": [
+            "none",
+            "mapper_ranked",
+            "featurecuts",
+            "from_stable_dmp_panel"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Statistical gene axis: none, mapper_ranked (annotation stability), featurecuts (BA-gated gene panel), or from_stable_dmp_panel (map stable loci then optional gene FC).",
+      "title": "Gene Modeling Mode"
     },
     "gene_scored_contrast_pairs": {
       "anyOf": [
@@ -2457,6 +2604,19 @@
       "title": "Output Base",
       "type": "string"
     },
+    "parallel_mc_centroid_seed": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When true (default), plan a shared per-group centroid seed and cohort-relative iteration deltas so MC iterations can run in parallel. Set false for legacy sequential iteration chaining.",
+      "title": "Parallel Mc Centroid Seed"
+    },
     "path_remap": {
       "anyOf": [
         {
@@ -2754,6 +2914,17 @@
       "title": "Stability Gene Biomarker Top Genes",
       "type": "integer"
     },
+    "stability_gene_featurecuts_dmp_source": {
+      "default": "discovery",
+      "description": "DMP CSV layer used to build gene FeatureCuts features. 'discovery' maps all biologically filtered loci to genes (recommended for discovery_gene_featurecuts). 'classifier' uses FeatureCuts-selected DMP panels only. 'stable' uses a frozen stable DMP panel CSV (two-phase mode 5).",
+      "enum": [
+        "discovery",
+        "classifier",
+        "stable"
+      ],
+      "title": "Stability Gene Featurecuts Dmp Source",
+      "type": "string"
+    },
     "stability_gene_featurecuts_enabled": {
       "default": false,
       "description": "If true, each MC iteration runs methyl-mapper then gene FeatureCuts (ECDF OvR k-search) after detector, and stability aggregates stable genes from genes-classifier exports.",
@@ -2771,7 +2942,7 @@
         }
       ],
       "default": null,
-      "description": "Genome-wide cap on DMP loci used for MC gene FeatureCuts (after deduplication). Set in site manifest or profile actionConfig.validation.",
+      "description": "Genome-wide cap on DMP loci used for MC gene FeatureCuts (after deduplication). Set in site manifest or profile actionConfig.validation (not in code).",
       "title": "Stability Gene Featurecuts Max Dmps"
     },
     "stability_gene_featurecuts_max_genes": {
@@ -2785,7 +2956,7 @@
         }
       ],
       "default": null,
-      "description": "Cap the ranked mapper gene pool before MC gene FeatureCuts k-search. Limits feature-matrix width and k-search cost when mapper exports tens of thousands of genes.",
+      "description": "Cap the ranked mapper gene pool before MC gene FeatureCuts k-search. Set in site manifest or profile actionConfig.validation (not in code).",
       "title": "Stability Gene Featurecuts Max Genes"
     },
     "stability_gene_freq": {
@@ -2795,6 +2966,24 @@
       "minimum": 0.0,
       "title": "Stability Gene Freq",
       "type": "number"
+    },
+    "stability_gene_recurrence_source": {
+      "anyOf": [
+        {
+          "enum": [
+            "enricher",
+            "mapper",
+            "classifier"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Gene stability aggregation source: enricher genes, mapper-ranked genes, or gene FC panels.",
+      "title": "Stability Gene Recurrence Source"
     },
     "stability_gene_region_hits": {
       "anyOf": [

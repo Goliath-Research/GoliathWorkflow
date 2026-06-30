@@ -26,6 +26,12 @@ python workflow_engine/domain/checks/pca1_5_cg/check_pipeline.py \
   --program workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability_smoke.program.json
 ```
 
-## Centroid efficiency
+## Centroid efficiency and parallel MC
 
-`validation.plan_iterations` enriches each iteration with per-group `addSamples` / `removeSamples` and copies baseline HDF5 when incremental updates are needed. `pipeline.centroid` passes these via `stepOverride`; MethylCentroid owns all statistics.
+`validation.plan_iterations` materializes **`centroidSeedGroups`** (full cohort pools under `_centroid_seed/`) and per-iteration **`centroidGroups`** with cohort-relative `addSamples` / `removeSamples` and `centroidSeedDir`. MC DomainPrograms run a **parallel seed FOREACH** over `centroidSeedGroups`, then **parallel iterations** (`parallel: true` on the outer `iterations` loop).
+
+Deploy updated graphs: `bash scripts/deploy_mc_workflow_definitions.sh` (see [`docs/plans/parallel-mc-centroid-seed.plan.md`](../../../../docs/plans/parallel-mc-centroid-seed.plan.md)).
+
+Legacy sequential chaining (`previousRunDir`, incremental baseline copy) remains available when `validation.parallel_mc_centroid_seed: false` in profile/site config.
+
+`pipeline.centroid` passes wire fields via `CentroidTaskInput`; workers copy the seed baseline before `methyl-centroid` applies deltas.

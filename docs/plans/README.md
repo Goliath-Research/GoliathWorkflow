@@ -18,6 +18,7 @@ Plans in this folder are the **source of truth** for large features. Each plan m
 | [`gene-feature-effect-size.plan.md`](gene-feature-effect-size.plan.md) | **Epic** | Biology-weighted gene/feature importance | `biology-weight-matrix`, `remove-legacy-mapper`, `canonical-gene-feature-formulas`, `fix-downstream-consumers`, `doc-biological-model` |
 | [`simplify-study-config.plan.md`](simplify-study-config.plan.md) | **Epic** | Simplify study config (four-layer model) | `contract-docs`, `site-resolver`, `profiles-progression`, `materialize-input`, `purge-step-config`, `migrate-manifests`, `editor-manual` |
 | [`streamline-action-parameters.plan.md`](streamline-action-parameters.plan.md) | **Epic** | Streamline workflow action parameters | `contract-audit-ci`, `canonical-config-keys`, `retire-mc-sidecars`, `slim-sample-prep-inputs`, `slim-pipeline-inputs`, `slim-validation-inputs`, `slim-implementations`, `docs-promote-plan` |
+| [`parallel-mc-centroid-seed.plan.md`](parallel-mc-centroid-seed.plan.md) | **Epic** | Parallel MC centroid seed | `typed-models`, `planner-models`, `handler-output`, `centroid-worker`, `domain-programs`, `schema-export`, `tests`, `db-catalog-seed`, `db-workflow-deploy`, `docs-plan-promote` |
 
 Create each **Task** under its Epic in Azure DevOps Boards. Copy the task title from the plan `todos[].content` field. Mark tasks **Closed** when the corresponding code is merged.
 

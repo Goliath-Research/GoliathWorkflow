@@ -5,8 +5,9 @@ JSON task descriptors for distributed queue workers (Pydantic).
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, Literal, Optional
+from typing import List, Literal, Optional
 
+from methyl_domain.types import CentroidSeedGroup
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -23,6 +24,8 @@ class DiscoveryRunTaskV1(BaseModel):
     pre-planned `run_####` directory.
     """
 
+    model_config = ConfigDict(extra="forbid")
+
     task_schema_version: Literal["1.0"] = "1.0"
     task_id: str = Field(..., min_length=1, description="Stable id for the queue, e.g. discovery_run_0001")
     mode: TaskMode = TaskMode.DISCOVERY
@@ -36,6 +39,8 @@ class DiscoveryRunTaskV1(BaseModel):
     per_cancer_group: bool = False
     predictor_only: bool = False
     frozen_project_path: Optional[str] = None
+    centroid_seed_root: Optional[str] = None
+    centroid_seed_groups: Optional[List[CentroidSeedGroup]] = None
     # Binary paths (relative/absolute as written by project_gen)
     val_control_csv: Optional[str] = None
     val_disease_csv: Optional[str] = None
@@ -43,11 +48,9 @@ class DiscoveryRunTaskV1(BaseModel):
     val_groups_json: Optional[str] = None
     centroid_group1_override: Optional[str] = None
     centroid_group2_override: Optional[str] = None
-    detector_step_override: Optional[Dict[str, Any]] = None
+    detector_step_override_path: Optional[str] = None
     # Worker loads full config
     mc_config_path: str = Field(..., description="Path to mc_config.json snapshot in queue/")
-
-    model_config = ConfigDict(extra="allow")
 
 
 def parse_discovery_task_file(path: str) -> DiscoveryRunTaskV1:
@@ -55,4 +58,8 @@ def parse_discovery_task_file(path: str) -> DiscoveryRunTaskV1:
     from pathlib import Path
 
     raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    legacy_override = raw.pop("detector_step_override", None)
+    if legacy_override is not None and raw.get("detector_step_override_path") is None:
+        if isinstance(legacy_override, str):
+            raw["detector_step_override_path"] = legacy_override
     return DiscoveryRunTaskV1.model_validate(raw)

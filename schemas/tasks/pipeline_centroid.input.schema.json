@@ -313,6 +313,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "addSamples": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Addsamples"
+    },
     "centroid1Dir": {
       "anyOf": [
         {
@@ -336,6 +351,18 @@
       ],
       "default": null,
       "title": "Centroid2Dir"
+    },
+    "centroidSeedDir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Centroidseeddir"
     },
     "chromosome": {
       "anyOf": [
@@ -420,6 +447,21 @@
       ],
       "default": null,
       "title": "Projectpath"
+    },
+    "removeSamples": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Removesamples"
     },
     "stepOverride": {
       "anyOf": [

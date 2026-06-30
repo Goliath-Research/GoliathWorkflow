@@ -762,6 +762,13 @@ class MonteCarloConfig(BaseModel):
         default=False,
         description="If True, abort all iterations when a pipeline step fails; if False, skip the iteration.",
     )
+    parallel_mc_centroid_seed: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When true (default), plan a shared per-group centroid seed and cohort-relative iteration "
+            "deltas so MC iterations can run in parallel. Set false for legacy sequential iteration chaining."
+        ),
+    )
     run_stability: bool = Field(
         default=False,
         description="If True, run stability analysis on discovery DMPs after the main loop (gene stability only if enricher ran).",

@@ -1,5 +1,44 @@
 {
   "$defs": {
+    "CentroidSeedGroup": {
+      "description": "Shared per-cohort centroid seed built before parallel MC iterations.",
+      "properties": {
+        "$type": {
+          "const": "CentroidSeedGroup",
+          "default": "CentroidSeedGroup",
+          "title": "$Type",
+          "type": "string"
+        },
+        "addSamples": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Addsamples",
+          "type": "array"
+        },
+        "centroidDir": {
+          "title": "Centroiddir",
+          "type": "string"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "removeSamples": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Removesamples",
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "centroidDir"
+      ],
+      "title": "CentroidSeedGroup",
+      "type": "object"
+    },
     "TaskMode": {
       "description": "High-level task kind.",
       "enum": [
@@ -11,7 +50,7 @@
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "additionalProperties": true,
+  "additionalProperties": false,
   "description": "One Monte Carlo \"discovery\" iteration: run centroid/detector (or predictor-only) for a\npre-planned `run_####` directory.",
   "properties": {
     "centroid_group1_override": {
@@ -38,7 +77,22 @@
       "default": null,
       "title": "Centroid Group2 Override"
     },
-    "detector_step_override": {
+    "centroid_seed_groups": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/CentroidSeedGroup"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Centroid Seed Groups"
+    },
+    "centroid_seed_root": {
       "anyOf": [
         {
           "type": "string"
@@ -48,7 +102,19 @@
         }
       ],
       "default": null,
-      "title": "Detector Step Override"
+      "title": "Centroid Seed Root"
+    },
+    "detector_step_override_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Detector Step Override Path"
     },
     "frozen_project_path": {
       "anyOf": [

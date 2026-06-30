@@ -11,9 +11,12 @@ from .helpers import (
 from .program import DomainProgram
 from .types import (
     AlignmentQcRef,
+    CentroidGroupScope,
+    CentroidSeedGroup,
     ComparisonSpecRef,
     DomainTypeName,
     FragmentomicsRef,
+    McIterationTaskConfig,
     MethylCentroidRef,
     MethylDetectionRef,
     MethylGroup,
@@ -28,10 +31,13 @@ from .types import (
 
 __all__ = [
     "AlignmentQcRef",
+    "CentroidGroupScope",
+    "CentroidSeedGroup",
     "ComparisonSpecRef",
     "DomainProgram",
     "DomainTypeName",
     "FragmentomicsRef",
+    "McIterationTaskConfig",
     "MethylCentroidRef",
     "MethylDetectionRef",
     "MethylDetectionRef_from_detector_output",

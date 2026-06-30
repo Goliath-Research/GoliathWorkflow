@@ -325,7 +325,7 @@ def plan_discovery_runs(
                 val_groups_json=str(val_groups_json) if val_groups_json is not None else None,
                 centroid_group1_override=str(c1) if c1 is not None else None,
                 centroid_group2_override=str(c2) if c2 is not None else None,
-                detector_step_override=det_override,
+                detector_step_override_path=None,
                 mc_config_path=str(mc_path.resolve()),
             )
         tpath.write_text(task.model_dump_json(indent=2), encoding="utf-8")

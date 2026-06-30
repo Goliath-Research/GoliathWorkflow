@@ -415,6 +415,12 @@
       "title": "Export Sample Size Estimate",
       "type": "boolean"
     },
+    "fail_if_below_target": {
+      "default": false,
+      "description": "Strict FeatureCuts: fail when target BA is unmet or selected k is below min_core_dmps instead of expanding the panel into worse held-out performance.",
+      "title": "Fail If Below Target",
+      "type": "boolean"
+    },
     "featurecuts_exhaustive_search": {
       "default": false,
       "description": "When classifier_dmp_selection=featurecuts_validation: search more k candidates (slower, more thorough).",

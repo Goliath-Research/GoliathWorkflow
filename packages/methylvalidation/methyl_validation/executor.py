@@ -160,15 +160,8 @@ def execute_discovery_task(
         else:
             # discovery (full iteration pipeline)
             det: Optional[Path] = None
-            if task.detector_step_override:
-                import json
-                import tempfile
-
-                with tempfile.NamedTemporaryFile(
-                    mode="w", suffix=".json", delete=False, encoding="utf-8"
-                ) as handle:
-                    json.dump(task.detector_step_override, handle)
-                    det = Path(handle.name)
+            if task.detector_step_override_path:
+                det = Path(str(task.detector_step_override_path))
             if str(task.layout) == "binary":
                 c1: Optional[Path] = (
                     Path(str(task.centroid_group1_override)) if task.centroid_group1_override else None

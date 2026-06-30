@@ -66,10 +66,10 @@
       "switch_ref_node_key": null,
       "condition_var": null,
       "switch_var": null,
-      "foreach_collection_var": "iterations",
-      "foreach_item_var": "iteration",
-      "foreach_index_var": "iterationIndex",
-      "foreach_parallel": false,
+      "foreach_collection_var": "centroidSeedGroups",
+      "foreach_item_var": "seedGroup",
+      "foreach_index_var": "seedGroupIndex",
+      "foreach_parallel": true,
       "input_template": null
     },
     {
@@ -96,9 +96,9 @@
       "switch_ref_node_key": null,
       "condition_var": null,
       "switch_var": null,
-      "foreach_collection_var": "centroidGroups",
-      "foreach_item_var": "group",
-      "foreach_index_var": "groupIndex",
+      "foreach_collection_var": "contexts",
+      "foreach_item_var": "context",
+      "foreach_index_var": "contextIndex",
       "foreach_parallel": true,
       "input_template": null
     },
@@ -148,7 +148,7 @@
       "input_template": null
     },
     {
-      "node_key": "centroid",
+      "node_key": "centroid_seed",
       "node_type": "ACTION",
       "action_name": "pipeline.centroid",
       "repeat_count": null,
@@ -168,9 +168,10 @@
         "chromosome": "${var.chromosome}",
         "context": "${var.context}",
         "outputDir": "${var.centroidDir}",
+        "stepOverride": "${var.stepOverride}",
         "addSamples": "${var.addSamples}",
         "removeSamples": "${var.removeSamples}",
-        "stepOverride": "${var.stepOverride}"
+        "centroidSeedDir": "${var.centroidSeedDir}"
       }
     },
     {
@@ -182,9 +183,9 @@
       "switch_ref_node_key": null,
       "condition_var": null,
       "switch_var": null,
-      "foreach_collection_var": "comparisons",
-      "foreach_item_var": "comparison",
-      "foreach_index_var": "comparisonIndex",
+      "foreach_collection_var": "iterations",
+      "foreach_item_var": "iteration",
+      "foreach_index_var": "iterationIndex",
       "foreach_parallel": true,
       "input_template": null
     },
@@ -212,6 +213,36 @@
       "switch_ref_node_key": null,
       "condition_var": null,
       "switch_var": null,
+      "foreach_collection_var": "centroidGroups",
+      "foreach_item_var": "group",
+      "foreach_index_var": "groupIndex",
+      "foreach_parallel": true,
+      "input_template": null
+    },
+    {
+      "node_key": "seq_11",
+      "node_type": "SEQUENCE",
+      "action_name": null,
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
+      "foreach_collection_var": null,
+      "foreach_item_var": null,
+      "foreach_index_var": null,
+      "foreach_parallel": null,
+      "input_template": null
+    },
+    {
+      "node_key": "foreach_12",
+      "node_type": "FOREACH",
+      "action_name": null,
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
       "foreach_collection_var": "chromosomes",
       "foreach_item_var": "chromosome",
       "foreach_index_var": "chromosomeIndex",
@@ -219,7 +250,94 @@
       "input_template": null
     },
     {
-      "node_key": "seq_11",
+      "node_key": "seq_13",
+      "node_type": "SEQUENCE",
+      "action_name": null,
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
+      "foreach_collection_var": null,
+      "foreach_item_var": null,
+      "foreach_index_var": null,
+      "foreach_parallel": null,
+      "input_template": null
+    },
+    {
+      "node_key": "centroid",
+      "node_type": "ACTION",
+      "action_name": "pipeline.centroid",
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
+      "foreach_collection_var": null,
+      "foreach_item_var": null,
+      "foreach_index_var": null,
+      "foreach_parallel": null,
+      "input_template": {
+        "tool": "MethylCentroid",
+        "projectPath": "${var.projectPath}",
+        "project": "${var.projectPath}",
+        "group": "${var.label}",
+        "chromosome": "${var.chromosome}",
+        "context": "${var.context}",
+        "outputDir": "${var.centroidDir}",
+        "stepOverride": "${var.stepOverride}",
+        "addSamples": "${var.addSamples}",
+        "removeSamples": "${var.removeSamples}",
+        "centroidSeedDir": "${var.centroidSeedDir}"
+      }
+    },
+    {
+      "node_key": "foreach_14",
+      "node_type": "FOREACH",
+      "action_name": null,
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
+      "foreach_collection_var": "comparisons",
+      "foreach_item_var": "comparison",
+      "foreach_index_var": "comparisonIndex",
+      "foreach_parallel": true,
+      "input_template": null
+    },
+    {
+      "node_key": "seq_15",
+      "node_type": "SEQUENCE",
+      "action_name": null,
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
+      "foreach_collection_var": null,
+      "foreach_item_var": null,
+      "foreach_index_var": null,
+      "foreach_parallel": null,
+      "input_template": null
+    },
+    {
+      "node_key": "foreach_16",
+      "node_type": "FOREACH",
+      "action_name": null,
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
+      "foreach_collection_var": "chromosomes",
+      "foreach_item_var": "chromosome",
+      "foreach_index_var": "chromosomeIndex",
+      "foreach_parallel": true,
+      "input_template": null
+    },
+    {
+      "node_key": "seq_17",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -322,7 +440,7 @@
       }
     },
     {
-      "node_key": "foreach_12",
+      "node_key": "foreach_18",
       "node_type": "FOREACH",
       "action_name": null,
       "repeat_count": null,
@@ -337,7 +455,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_13",
+      "node_key": "seq_19",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -352,7 +470,7 @@
       "input_template": null
     },
     {
-      "node_key": "foreach_14",
+      "node_key": "foreach_20",
       "node_type": "FOREACH",
       "action_name": null,
       "repeat_count": null,
@@ -367,7 +485,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_15",
+      "node_key": "seq_21",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -402,13 +520,14 @@
         "chromosome": "${var.chromosome}",
         "context": "${var.context}",
         "outputDir": "${var.outputDir}",
+        "stepOverride": "${var.stepOverride}",
         "addSamples": "${var.addSamples}",
         "removeSamples": "${var.removeSamples}",
-        "stepOverride": "${var.stepOverride}"
+        "centroidSeedDir": "${var.centroidSeedDir}"
       }
     },
     {
-      "node_key": "foreach_16",
+      "node_key": "foreach_22",
       "node_type": "FOREACH",
       "action_name": null,
       "repeat_count": null,
@@ -423,7 +542,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_17",
+      "node_key": "seq_23",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -438,7 +557,7 @@
       "input_template": null
     },
     {
-      "node_key": "foreach_18",
+      "node_key": "foreach_24",
       "node_type": "FOREACH",
       "action_name": null,
       "repeat_count": null,
@@ -453,7 +572,7 @@
       "input_template": null
     },
     {
-      "node_key": "seq_19",
+      "node_key": "seq_25",
       "node_type": "SEQUENCE",
       "action_name": null,
       "repeat_count": null,
@@ -684,7 +803,7 @@
     },
     {
       "parent_node_key": "seq_7",
-      "child_node_key": "centroid",
+      "child_node_key": "centroid_seed",
       "child_order": 0,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
@@ -692,9 +811,9 @@
       "is_default": false
     },
     {
-      "parent_node_key": "seq_3",
+      "parent_node_key": "seq_1",
       "child_node_key": "foreach_8",
-      "child_order": 1,
+      "child_order": 2,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -729,44 +848,8 @@
     },
     {
       "parent_node_key": "seq_11",
-      "child_node_key": "detect",
-      "child_order": 0,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_1",
-      "child_node_key": "stability",
-      "child_order": 2,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_1",
-      "child_node_key": "readiness",
-      "child_order": 3,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_1",
-      "child_node_key": "prepare_freeze",
-      "child_order": 4,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_1",
       "child_node_key": "foreach_12",
-      "child_order": 5,
+      "child_order": 0,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -783,8 +866,17 @@
     },
     {
       "parent_node_key": "seq_13",
-      "child_node_key": "foreach_14",
+      "child_node_key": "centroid",
       "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_9",
+      "child_node_key": "foreach_14",
+      "child_order": 1,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -801,17 +893,8 @@
     },
     {
       "parent_node_key": "seq_15",
-      "child_node_key": "freeze_centroid",
-      "child_order": 0,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_1",
       "child_node_key": "foreach_16",
-      "child_order": 6,
+      "child_order": 0,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -828,8 +911,44 @@
     },
     {
       "parent_node_key": "seq_17",
-      "child_node_key": "foreach_18",
+      "child_node_key": "detect",
       "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_1",
+      "child_node_key": "stability",
+      "child_order": 3,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_1",
+      "child_node_key": "readiness",
+      "child_order": 4,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_1",
+      "child_node_key": "prepare_freeze",
+      "child_order": 5,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_1",
+      "child_node_key": "foreach_18",
+      "child_order": 6,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -846,6 +965,69 @@
     },
     {
       "parent_node_key": "seq_19",
+      "child_node_key": "foreach_20",
+      "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "foreach_20",
+      "child_node_key": "seq_21",
+      "child_order": 0,
+      "branch_kind": "BODY",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_21",
+      "child_node_key": "freeze_centroid",
+      "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_1",
+      "child_node_key": "foreach_22",
+      "child_order": 7,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "foreach_22",
+      "child_node_key": "seq_23",
+      "child_order": 0,
+      "branch_kind": "BODY",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_23",
+      "child_node_key": "foreach_24",
+      "child_order": 0,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "foreach_24",
+      "child_node_key": "seq_25",
+      "child_order": 0,
+      "branch_kind": "BODY",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_25",
       "child_node_key": "freeze_detect",
       "child_order": 0,
       "branch_kind": "SEQUENCE",
@@ -856,15 +1038,6 @@
     {
       "parent_node_key": "seq_1",
       "child_node_key": "mapper",
-      "child_order": 7,
-      "branch_kind": "SEQUENCE",
-      "condition_expr": null,
-      "switch_case_value": null,
-      "is_default": false
-    },
-    {
-      "parent_node_key": "seq_1",
-      "child_node_key": "enricher",
       "child_order": 8,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
@@ -873,7 +1046,7 @@
     },
     {
       "parent_node_key": "seq_1",
-      "child_node_key": "progression",
+      "child_node_key": "enricher",
       "child_order": 9,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
@@ -882,7 +1055,7 @@
     },
     {
       "parent_node_key": "seq_1",
-      "child_node_key": "model_mc",
+      "child_node_key": "progression",
       "child_order": 10,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
@@ -891,7 +1064,7 @@
     },
     {
       "parent_node_key": "seq_1",
-      "child_node_key": "select_best_model",
+      "child_node_key": "model_mc",
       "child_order": 11,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
@@ -900,8 +1073,17 @@
     },
     {
       "parent_node_key": "seq_1",
-      "child_node_key": "post_model_validation",
+      "child_node_key": "select_best_model",
       "child_order": 12,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_1",
+      "child_node_key": "post_model_validation",
+      "child_order": 13,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -924,6 +1106,12 @@
       "var_name": "iterations",
       "source_kind": "output_path",
       "source_json_path": "$.iterations"
+    },
+    {
+      "node_key": "plan_iterations",
+      "var_name": "centroidSeedGroups",
+      "source_kind": "output_path",
+      "source_json_path": "$.centroidSeedGroups"
     },
     {
       "node_key": "prepare_freeze",
@@ -960,12 +1148,20 @@
       "bind_order": 0
     },
     {
+      "scope_var": "contexts",
+      "kind": "jsonPath",
+      "path_var": null,
+      "base_var": "project",
+      "json_path": "$.contexts",
+      "bind_order": 1
+    },
+    {
       "scope_var": "chromosomes",
       "kind": "jsonPath",
       "path_var": null,
       "base_var": "project",
       "json_path": "$.chromosomes",
-      "bind_order": 1
+      "bind_order": 2
     },
     {
       "scope_var": "comparisons",
@@ -973,7 +1169,7 @@
       "path_var": null,
       "base_var": "project",
       "json_path": "$.comparisons",
-      "bind_order": 2
+      "bind_order": 3
     }
   ]
 }

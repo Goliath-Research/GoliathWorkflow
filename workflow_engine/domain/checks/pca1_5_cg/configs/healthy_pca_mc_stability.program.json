@@ -10,21 +10,27 @@
     },
     {
       "for": {
-        "in": { "ref": "iterations" },
-        "as": "iteration",
-        "parallel": false
+        "in": {
+          "ref": "centroidSeedGroups"
+        },
+        "as": "seedGroup",
+        "parallel": true
       },
       "do": [
         {
           "for": {
-            "in": { "ref": "iteration.centroidGroups" },
-            "as": "group",
+            "in": {
+              "ref": "project.contexts"
+            },
+            "as": "context",
             "parallel": true
           },
           "do": [
             {
               "for": {
-                "in": { "ref": "project.chromosomes" },
+                "in": {
+                  "ref": "project.chromosomes"
+                },
                 "as": "chromosome",
                 "parallel": true
               },
@@ -32,12 +38,84 @@
                 {
                   "do": "pipeline.centroid",
                   "with": {
-                    "group": { "ref": "group.label" },
-                    "chromosome": { "ref": "chromosome" },
-                    "context": { "ref": "context" },
-                    "outputDir": { "ref": "group.centroidDir" },
-                    "addSamples": { "ref": "group.addSamples" },
-                    "removeSamples": { "ref": "group.removeSamples" }
+                    "group": {
+                      "ref": "seedGroup.label"
+                    },
+                    "chromosome": {
+                      "ref": "chromosome"
+                    },
+                    "context": {
+                      "ref": "context"
+                    },
+                    "outputDir": {
+                      "ref": "seedGroup.centroidDir"
+                    },
+                    "addSamples": {
+                      "ref": "seedGroup.addSamples"
+                    },
+                    "removeSamples": {
+                      "ref": "seedGroup.removeSamples"
+                    }
+                  },
+                  "node_key": "centroid_seed"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "for": {
+        "in": {
+          "ref": "iterations"
+        },
+        "as": "iteration",
+        "parallel": true
+      },
+      "do": [
+        {
+          "for": {
+            "in": {
+              "ref": "iteration.centroidGroups"
+            },
+            "as": "group",
+            "parallel": true
+          },
+          "do": [
+            {
+              "for": {
+                "in": {
+                  "ref": "project.chromosomes"
+                },
+                "as": "chromosome",
+                "parallel": true
+              },
+              "do": [
+                {
+                  "do": "pipeline.centroid",
+                  "with": {
+                    "group": {
+                      "ref": "group.label"
+                    },
+                    "chromosome": {
+                      "ref": "chromosome"
+                    },
+                    "context": {
+                      "ref": "context"
+                    },
+                    "outputDir": {
+                      "ref": "group.centroidDir"
+                    },
+                    "addSamples": {
+                      "ref": "group.addSamples"
+                    },
+                    "removeSamples": {
+                      "ref": "group.removeSamples"
+                    },
+                    "centroidSeedDir": {
+                      "ref": "group.centroidSeedDir"
+                    }
                   },
                   "node_key": "centroid"
                 }
@@ -47,14 +125,18 @@
         },
         {
           "for": {
-            "in": { "ref": "project.comparisons" },
+            "in": {
+              "ref": "project.comparisons"
+            },
             "as": "comparison",
             "parallel": true
           },
           "do": [
             {
               "for": {
-                "in": { "ref": "project.chromosomes" },
+                "in": {
+                  "ref": "project.chromosomes"
+                },
                 "as": "chromosome",
                 "parallel": true
               },
@@ -62,9 +144,15 @@
                 {
                   "do": "pipeline.detector",
                   "with": {
-                    "chromosome": { "ref": "chromosome" },
-                    "context": { "ref": "context" },
-                    "comparison": { "ref": "comparison.label" },
+                    "chromosome": {
+                      "ref": "chromosome"
+                    },
+                    "context": {
+                      "ref": "context"
+                    },
+                    "comparison": {
+                      "ref": "comparison.label"
+                    },
                     "stepOverride": {
                       "detection_mode": "discovery_only",
                       "export_classifier": false
@@ -78,10 +166,18 @@
                     {
                       "do": "pipeline.dmp_select",
                       "with": {
-                        "chromosome": { "ref": "chromosome" },
-                        "context": { "ref": "context" },
-                        "comparison": { "ref": "comparison.label" },
-                        "group": { "ref": "comparison.label" }
+                        "chromosome": {
+                          "ref": "chromosome"
+                        },
+                        "context": {
+                          "ref": "context"
+                        },
+                        "comparison": {
+                          "ref": "comparison.label"
+                        },
+                        "group": {
+                          "ref": "comparison.label"
+                        }
                       },
                       "node_key": "dmp_select"
                     }
@@ -93,8 +189,12 @@
             {
               "do": "pipeline.mapper",
               "with": {
-                "comparison": { "ref": "comparison.label" },
-                "group": { "ref": "comparison.label" }
+                "comparison": {
+                  "ref": "comparison.label"
+                },
+                "group": {
+                  "ref": "comparison.label"
+                }
               },
               "node_key": "mapper"
             }
@@ -106,8 +206,12 @@
             {
               "do": "validation.biomarker_filter",
               "with": {
-                "projectPath": { "ref": "iteration.projectPath" },
-                "runDir": { "ref": "iteration.runDir" }
+                "projectPath": {
+                  "ref": "iteration.projectPath"
+                },
+                "runDir": {
+                  "ref": "iteration.runDir"
+                }
               },
               "node_key": "biomarker_filter"
             }
@@ -120,9 +224,15 @@
             {
               "do": "pipeline.gene_select",
               "with": {
-                "projectPath": { "ref": "iteration.projectPath" },
-                "runDir": { "ref": "iteration.runDir" },
-                "biomarkerFilter": { "ref": "runBiomarkerFilter" }
+                "projectPath": {
+                  "ref": "iteration.projectPath"
+                },
+                "runDir": {
+                  "ref": "iteration.runDir"
+                },
+                "biomarkerFilter": {
+                  "ref": "runBiomarkerFilter"
+                }
               },
               "node_key": "gene_select"
             }

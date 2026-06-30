@@ -23,6 +23,7 @@ DomainTypeName = Literal[
     "MethylCentroidRef",
     "MethylDetectionRef",
     "StratifiedCohortDraw",
+    "CentroidSeedGroup",
     "ComparisonSpec",
 ]
 
@@ -37,6 +38,7 @@ DOMAIN_TYPE_NAMES: tuple[str, ...] = (
     "MethylCentroidRef",
     "MethylDetectionRef",
     "StratifiedCohortDraw",
+    "CentroidSeedGroup",
     "ComparisonSpec",
 )
 
@@ -150,6 +152,51 @@ class ComparisonSpecRef(DomainTaggedModel):
     comparisonLabel: Optional[str] = None
 
 
+class McIterationTaskConfig(BaseModel):
+    """Structured MC iteration taskConfig embedded in StratifiedCohortDraw / planner output."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    runId: str
+    phase: str
+    iteration: int = Field(..., ge=0)
+    layout: str
+    trainFraction: float = Field(..., gt=0.0, lt=1.0)
+    seed: Optional[int] = None
+    projectJson: str
+    runDir: str
+    monteCarloRunsRoot: str
+    detectorStepOverride: Optional[str] = None
+    valControlCsv: Optional[str] = None
+    valDiseaseCsv: Optional[str] = None
+    valGroupsJson: Optional[str] = None
+    centroidGroup1Override: Optional[str] = None
+    centroidGroup2Override: Optional[str] = None
+    centroidOverridesByLabel: Optional[Dict[str, str]] = None
+
+
+class CentroidGroupScope(BaseModel):
+    """Per-group centroid wire payload for one MC iteration (workflow FOREACH item)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str
+    addSamples: List[str] = Field(default_factory=list)
+    removeSamples: List[str] = Field(default_factory=list)
+    centroidDir: str
+    centroidSeedDir: Optional[str] = None
+
+
+class CentroidSeedGroup(DomainTaggedModel):
+    """Shared per-cohort centroid seed built before parallel MC iterations."""
+
+    type: Literal["CentroidSeedGroup"] = Field(alias="$type", default="CentroidSeedGroup")
+    label: str
+    addSamples: List[str] = Field(default_factory=list)
+    removeSamples: List[str] = Field(default_factory=list)
+    centroidDir: str
+
+
 class MethylDetectionRef(DomainTaggedModel):
     """Scope-facing detector run summary (paths, not full DMP table)."""
 
@@ -177,7 +224,7 @@ class StratifiedCohortDraw(DomainTaggedModel):
     projectPath: str
     groups: List[MethylGroup] = Field(default_factory=list)
     comparisons: List[ComparisonSpecRef] = Field(default_factory=list)
-    taskConfig: Optional[Dict[str, Any]] = None
+    taskConfig: Optional[McIterationTaskConfig] = None
 
 
 DOMAIN_MODEL_BY_TYPE: Dict[str, type[DomainTaggedModel]] = {
@@ -191,6 +238,7 @@ DOMAIN_MODEL_BY_TYPE: Dict[str, type[DomainTaggedModel]] = {
     "MethylCentroidRef": MethylCentroidRef,
     "MethylDetectionRef": MethylDetectionRef,
     "StratifiedCohortDraw": StratifiedCohortDraw,
+    "CentroidSeedGroup": CentroidSeedGroup,
     "ComparisonSpec": ComparisonSpecRef,
 }
 

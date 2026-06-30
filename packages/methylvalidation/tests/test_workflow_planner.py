@@ -75,7 +75,7 @@ def test_plan_validation_context_materializes_iterations(tmp_path: Path) -> None
         )
     )
     assert len(context.iterations) == 2
-    first = context.iterations[0].model_dump(mode="json")
+    first = context.iterations[0].model_dump(mode="json", by_alias=True)
     assert first["phase"] == "feature"
     assert first["runId"] == "feature_run_0001"
     assert first["$type"] == "StratifiedCohortDraw"
@@ -88,21 +88,15 @@ def test_plan_validation_context_materializes_iterations(tmp_path: Path) -> None
 
 
 def test_plan_validation_context_requires_validation_block(tmp_path: Path) -> None:
-    project_json = tmp_path / "project.json"
-    project_json.write_text(
-        json.dumps(
-            {
-                "project_name": "x",
-                "output_base": str(tmp_path),
-                "group1": {"label": "a", "sample_paths": ["/a"]},
-                "group2": {"label": "b", "sample_paths": ["/b"]},
-            }
-        ),
-        encoding="utf-8",
-    )
+    project_json = _write_minimal_binary_project(tmp_path)
     os.environ.pop("METHYL_PROFILE", None)
-    with pytest.raises(ValueError, match="validation action config"):
-        plan_validation_context({"projectPath": str(project_json), "featureIterations": 1})
+    with pytest.raises(Exception, match="validation action config|Field required"):
+        plan_validation_context(
+            ValidationPlanRequest(
+                projectPath=str(project_json),
+                featureIterations=1,
+            )
+        )
 
 
 def test_plan_validation_context_profile_overrides_exclude_legacy_defaults(tmp_path: Path) -> None:
@@ -201,19 +195,21 @@ def test_plan_validation_context_binary_centroid_groups(tmp_path: Path) -> None:
             overwrite=True,
         )
     )
-    first = context.iterations[0].model_dump(mode="json")
+    assert len(context.centroidSeedGroups) == 2
+    first = context.iterations[0].model_dump(mode="json", by_alias=True)
     assert "centroidGroups" in first
     assert len(first["centroidGroups"]) == 2
     for grp in first["centroidGroups"]:
         assert "addSamples" in grp and "removeSamples" in grp and "centroidDir" in grp
+        assert grp.get("centroidSeedDir")
         assert grp["centroidDir"].startswith(str(tmp_path / "work" / "demo_mc" / "monte_carlo_runs"))
     run_project_path = Path(first["projectPath"])
     run_root = run_project_path.parent
     assert first["centroid1Dir"] == str(run_root / "centroids" / "controls" / "healthy" / "healthy")
     assert first["centroid2Dir"] == str(run_root / "centroids" / "diseases" / "disease" / "disease")
     assert first["detectOutDir"] == str(run_root / "detections" / "healthy" / "disease")
-    second = context.iterations[1].model_dump(mode="json")
-    assert second.get("previousRunDir")
+    second = context.iterations[1].model_dump(mode="json", by_alias=True)
+    assert second.get("previousRunDir") is None
     assert "centroidGroups" in second
 
 

@@ -12,6 +12,7 @@ from .types import (
     ComparisonSpecRef,
     ExtractionQcRef,
     FragmentomicsRef,
+    McIterationTaskConfig,
     MethylDetectionRef,
     MethylGroup,
     MethylSampleRef,
@@ -202,7 +203,7 @@ def build_stratified_cohort_draw(
     comparisons: List[ComparisonSpecRef],
     seed: Optional[int] = None,
     train_fraction: Optional[float] = None,
-    task_config: Optional[Dict[str, Any]] = None,
+    task_config: Optional[McIterationTaskConfig] = None,
 ) -> Dict[str, Any]:
     """Build tagged JSON dict for one MC iteration (for context_json.iterations[])."""
     draw = StratifiedCohortDraw(

@@ -375,4 +375,8 @@ def build_action_from_catalog(entry: ActionCatalogEntry, handlers_module: Any) -
         return GeneFeatureSelectCliAction(
             entry=entry, cli_tool=cli, argv_map=GENE_FEATURE_SELECT_ARGV_MAP, collector=collector
         )
+    if entry.action_name == "pipeline.centroid":
+        from .centroid import CentroidCliAction
+
+        return CentroidCliAction(entry=entry, cli_tool=cli, argv_map=argv_map, collector=collector)
     return CliAction(entry=entry, cli_tool=cli, argv_map=argv_map, collector=collector)

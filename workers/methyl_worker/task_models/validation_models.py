@@ -4,26 +4,20 @@ from __future__ import annotations
 
 from typing import List, Literal, Optional
 
+from methyl_validation.planner_models import (
+    CentroidSeedGroup,
+    ValidationPlannedIteration,
+)
 from pydantic import BaseModel, ConfigDict, Field
 
 from .base import ActionOutputBase
 
 
-class ValidationIterationRef(BaseModel):
-    """One MC iteration in workflow scope."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    run_id: str
-    iteration: int = 0
-    runDir: Optional[str] = None
-    projectPath: Optional[str] = None
-
-
 class ValidationPlanTaskOutput(ActionOutputBase):
     projectPath: Optional[str] = None
     n_iterations: int = 0
-    iterations: List[ValidationIterationRef] = Field(default_factory=list)
+    centroidSeedGroups: List[CentroidSeedGroup] = Field(default_factory=list)
+    iterations: List[ValidationPlannedIteration] = Field(default_factory=list)
 
 
 class StabilityTaskInput(BaseModel):

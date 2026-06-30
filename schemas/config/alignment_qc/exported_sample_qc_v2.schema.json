@@ -867,12 +867,19 @@
           "type": "boolean"
         },
         "value": {
-          "title": "Value",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
         }
       },
       "required": [
-        "value",
         "normal_range",
         "pass",
         "message"

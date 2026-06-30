@@ -11,6 +11,8 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from methyl_domain.types import CentroidGroupScope, CentroidSeedGroup
+
 
 def write_run_project_json(project: Dict[str, Any], project_path: Path) -> None:
     """Write per-iteration ``project.json`` (slim manifest; no embedded ``step_config``)."""
@@ -243,32 +245,110 @@ def link_run_artifacts_from_source(
     return {"linked": linked, "sourceRunDir": str(src_root.resolve()), "targetRunDir": str(dst_root.resolve())}
 
 
+def _seed_centroid_dir_for_group(
+    monte_carlo_runs_root: Union[str, Path],
+    base_project_path: Union[str, Path],
+    side: str,
+    label: str,
+) -> str:
+    """Return shared seed centroid output dir for one cohort under ``_centroid_seed/``."""
+    from methyl_utils import load_project
+
+    project = load_project(str(base_project_path))
+    template = Path(project.get_centroid_dir(side, label))
+    parts = template.parts
+    if "centroids" in parts:
+        rel = Path(*parts[parts.index("centroids") :])
+        return str((Path(monte_carlo_runs_root) / "_centroid_seed" / rel).resolve())
+    return str((Path(monte_carlo_runs_root) / "_centroid_seed" / label).resolve())
+
+
+def build_centroid_seed_groups(
+    *,
+    monte_carlo_runs_root: Union[str, Path],
+    base_project_path: Union[str, Path],
+    cohort_paths_list: List[Tuple[str, List[str]]],
+) -> List[CentroidSeedGroup]:
+    """Build one seed group per MC cohort with the full resolved sample pool."""
+    from methyl_utils import load_project
+
+    project = load_project(str(base_project_path))
+    with_side = project._get_resolved_groups_with_side(expand_subclusters=True)
+    side_by_label = {lbl: side for lbl, _, side in with_side}
+    seeds: List[CentroidSeedGroup] = []
+    for label, paths in cohort_paths_list:
+        side = side_by_label.get(label, "control")
+        seeds.append(
+            CentroidSeedGroup(
+                label=label,
+                addSamples=_normalize_sample_paths(paths),
+                removeSamples=[],
+                centroidDir=_seed_centroid_dir_for_group(
+                    monte_carlo_runs_root, base_project_path, side, label
+                ),
+            )
+        )
+    return seeds
+
+
+def build_cohort_relative_centroid_scope(
+    *,
+    base_project_path: Union[str, Path],
+    cohort_labels: List[str],
+    full_cohort_by_label: Dict[str, List[str]],
+    train_by_label: Dict[str, List[str]],
+    seed_dir_by_label: Dict[str, str],
+) -> List[CentroidGroupScope]:
+    """Build per-iteration centroid deltas vs the full cohort (parallel MC path)."""
+    from methyl_utils import load_project
+
+    project = load_project(str(base_project_path))
+    with_side = project._get_resolved_groups_with_side(expand_subclusters=True)
+    side_by_label = {label: side for label, _, side in with_side}
+    groups: List[CentroidGroupScope] = []
+    for label in cohort_labels:
+        full_set = set(_normalize_sample_paths(full_cohort_by_label[label]))
+        train_set = set(_normalize_sample_paths(train_by_label[label]))
+        remove_paths = sorted(full_set - train_set)
+        side = side_by_label.get(label, "control")
+        groups.append(
+            CentroidGroupScope(
+                label=label,
+                addSamples=[],
+                removeSamples=remove_paths,
+                centroidDir=project.get_centroid_dir(side, label),
+                centroidSeedDir=seed_dir_by_label[label],
+            )
+        )
+    return groups
+
+
 def build_group_centroid_scope(
     *,
     base_project_path: Union[str, Path],
     cohort_labels: List[str],
     train_by_label: Dict[str, List[str]],
     previous_train_by_label: Optional[Dict[str, List[str]]] = None,
-) -> List[Dict[str, Any]]:
-    """Build per-group add/remove lists and centroid output dirs for workflow iterations."""
+) -> List[CentroidGroupScope]:
+    """Build per-group add/remove lists and centroid output dirs (legacy sequential MC)."""
     from methyl_utils import load_project
 
     project = load_project(str(base_project_path))
     with_side = project._get_resolved_groups_with_side(expand_subclusters=True)
     side_by_label = {label: side for label, _, side in with_side}
-    groups: List[Dict[str, Any]] = []
+    groups: List[CentroidGroupScope] = []
     prev_map = previous_train_by_label or {}
     for label in cohort_labels:
         train_paths = list(train_by_label[label])
         override = _build_centroid_step_override(prev_map.get(label), train_paths)
         side = side_by_label.get(label, "control")
         groups.append(
-            {
-                "label": label,
-                "addSamples": override["base_config"]["add_samples"],
-                "removeSamples": override["base_config"]["remove_samples"],
-                "centroidDir": project.get_centroid_dir(side, label),
-            }
+            CentroidGroupScope(
+                label=label,
+                addSamples=override["base_config"]["add_samples"],
+                removeSamples=override["base_config"]["remove_samples"],
+                centroidDir=project.get_centroid_dir(side, label),
+            )
         )
     return groups
 
@@ -347,6 +427,24 @@ def carry_forward_centroids_from_previous_run(
     dst = cur / "centroids"
     if not src.is_dir():
         return False
+    if dst.exists() or dst.is_symlink():
+        if dst.is_symlink():
+            dst.unlink()
+        elif dst.is_file():
+            dst.unlink()
+        else:
+            shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+    return True
+
+
+def copy_centroid_seed_baseline(seed_dir: Union[str, Path], output_dir: Union[str, Path]) -> bool:
+    """Copy a shared per-group seed centroid tree into a run iteration output dir."""
+    src = Path(seed_dir)
+    dst = Path(output_dir)
+    if not src.is_dir():
+        return False
+    dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists() or dst.is_symlink():
         if dst.is_symlink():
             dst.unlink()
