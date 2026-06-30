@@ -86,6 +86,38 @@ def _get_group_config_for_label(project: Any, side: str, label: str) -> Optional
     return None
 
 
+def _resolve_subcluster_centroid_output_dir(
+    project: Any,
+    side: str,
+    group_label: str,
+    derived_label: str,
+    output_dir: Optional[Union[str, Path]],
+    *,
+    n_derived_labels: int,
+) -> str:
+    """
+    Resolve centroid output dir for one derived sub-cluster.
+
+    Without an override, each derived label uses ``get_centroid_dir(side, derived_label)``.
+    With an override, a single derived label uses the override path as-is; multiple derived
+    labels map sibling paths under the override base (mirroring project layout) so
+    ``{chrom}-{ctx}.h5`` files do not collide.
+    """
+    canonical_derived = Path(project.get_centroid_dir(side, derived_label)).expanduser().resolve()
+    if output_dir is None:
+        return str(canonical_derived)
+    base = Path(output_dir).expanduser().resolve()
+    if n_derived_labels <= 1:
+        return str(base)
+    canonical_parent = Path(project.get_centroid_dir(side, group_label)).expanduser().resolve()
+    parent_parent = canonical_parent.parent
+    try:
+        rel = canonical_derived.relative_to(parent_parent)
+    except ValueError:
+        rel = Path(derived_label)
+    return str(base.parent / rel)
+
+
 def _run_cluster_then_centroids_per_cluster(
     project_path: Union[str, Path],
     side: str,
@@ -149,14 +181,18 @@ def _run_cluster_then_centroids_per_cluster(
             step_cfg = {**step_cfg, **json.load(f)}
     _forbid_centroid_samples_key(step_cfg, "centroid step config (subcluster)")
 
+    n_derived = len(derived_labels)
     for derived_label in derived_labels:
         sample_paths = groups.get(derived_label)
         if not sample_paths:
             continue
-        cluster_output_dir = (
-            str(Path(output_dir).expanduser().resolve())
-            if output_dir is not None
-            else project.get_centroid_dir(side, derived_label)
+        cluster_output_dir = _resolve_subcluster_centroid_output_dir(
+            project,
+            side,
+            group_label,
+            derived_label,
+            output_dir,
+            n_derived_labels=n_derived,
         )
         base_config = MethylCentroidConfig(
             laboratory=project.project_name,

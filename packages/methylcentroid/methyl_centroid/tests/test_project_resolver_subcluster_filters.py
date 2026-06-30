@@ -51,15 +51,17 @@ def _write_subcluster_project(path: Path) -> None:
     )
 
 
-def _write_cluster_manifest(project: Path) -> None:
+def _write_cluster_manifest(project: Path, *, derived_labels: list[str] | None = None) -> None:
     from methyl_utils import load_project
 
     cfg = load_project(project)
     clustering_dir = Path(cfg.get_clustering_output_dir("control", "all"))
     clustering_dir.mkdir(parents=True, exist_ok=True)
+    labels = derived_labels or ["cluster_a"]
+    sample = str(project.parent / "samples" / "S1")
     manifest = {
-        "derived_labels": ["cluster_a"],
-        "groups": {"cluster_a": [str(project.parent / "samples" / "S1")]},
+        "derived_labels": labels,
+        "groups": {label: [sample] for label in labels},
     }
     (clustering_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
 
@@ -89,3 +91,31 @@ def test_subcluster_centroid_path_honors_chr_context_and_output_dir(tmp_path: Pa
     assert batch.chromosomes == ["1"]
     assert batch.contexts == ["CG"]
     assert batch.base_config.output_dir == str(override_out.resolve())
+
+
+def test_subcluster_centroid_output_dirs_unique_per_derived_label(tmp_path: Path) -> None:
+    project = tmp_path / "project.json"
+    _write_subcluster_project(project)
+    _write_cluster_manifest(project, derived_labels=["all_c0", "all_c1"])
+    override_out = tmp_path / "custom" / "centroids" / "controls" / "healthy" / "all"
+    captured: list = []
+
+    def _capture_batch(batch):
+        captured.append(batch)
+
+    with patch("methyl_centroid.cli.run_batch_processing", side_effect=_capture_batch):
+        _run_cluster_then_centroids_per_cluster(
+            project,
+            "control",
+            "all",
+            output_dir=override_out,
+            chromosome="1",
+            context="CG",
+        )
+
+    assert len(captured) == 2
+    output_dirs = {batch.base_config.output_dir for batch in captured}
+    assert output_dirs == {
+        str((override_out.parent / "all_c0").resolve()),
+        str((override_out.parent / "all_c1").resolve()),
+    }
