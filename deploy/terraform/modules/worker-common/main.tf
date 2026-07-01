@@ -42,7 +42,7 @@ locals {
           KEY_VAULT_URI=${var.key_vault_uri}
           CLUSTER_KEY=${var.cluster_key}
     runcmd:
-      - curl -fsSL -o /tmp/epimethyl.tgz "$RELEASE_BUNDLE_URL"
+      - curl -fsSL -o /tmp/epimethyl.tgz "${var.release_bundle_url}"
       - echo "${var.release_bundle_sha256}  /tmp/epimethyl.tgz" | sha256sum -c -
       - bash /opt/methyl/scripts/provision_worker_node.sh --register-worker --enable-systemd --detect-capabilities --require-arc
     EOT
