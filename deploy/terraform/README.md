@@ -1,13 +1,15 @@
 # Multi-cloud Terraform for MethylPipeline worker fleets and Azure control plane.
-#
-# Layout:
-#   modules/control-plane-azure  — gateway, Azure SQL, Key Vault, NSGs
-#   modules/worker-common        — cloud-init: Arc, bundle, register, systemd
-#   modules/worker-nebius        — Nebius GPU VMs (official nebius/nebius provider)
-#   modules/worker-lambda        — Lambda Cloud VMs (community provider, pinned)
-#   envs/<name>/                 — backend + tfvars per environment
-#
-# Apply requires per-cloud credentials and is an operator action (not CI apply).
+
+## Layout
+
+- **`modules/control-plane-azure`**: Gateway, Azure SQL, Key Vault, NSGs
+- **`modules/worker-common`**: Cloud-init (Arc, bundle, register, systemd)
+- **`modules/worker-nebius`**: Nebius GPU VMs (official `nebius/nebius` provider)
+- **`modules/worker-lambda`**: Lambda Cloud VMs (community provider, pinned)
+- **`envs/<name>/`**: Backend and `tfvars` configuration per environment
+
+> [!IMPORTANT]
+> Apply requires per-cloud credentials and is an operator action (not a CI automated apply).
 
 ## Prerequisites
 
