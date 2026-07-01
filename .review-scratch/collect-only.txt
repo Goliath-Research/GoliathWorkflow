@@ -1,0 +1,1230 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-7.4.4, pluggy-1.6.0
+rootdir: /home/ubuntu/MethylPipeline
+configfile: pyproject.toml
+testpaths: packages/*/tests, workflow_engine/tests, workers/tests, tools/tests
+plugins: anyio-4.14.0, zarr-3.2.1, cov-7.1.0
+collected 999 items / 1 error
+
+<Module packages/methylalignmentqc/tests/test_alignment_derived_qc.py>
+  <Function test_compute_alignment_stats_mapping_rate>
+  <Function test_apply_alignment_guardrails_fail_low_mapping>
+  <Function test_apply_alignment_guardrails_disabled_skips>
+<Module packages/methylalignmentqc/tests/test_bam_flagstat.py>
+  <Function test_parse_flagstat_text>
+  <Function test_build_flagstat_metrics_properly_paired_rate>
+  <Function test_build_flagstat_metrics_is_alignment_flagstat_model>
+  <Function test_apply_flagstat_guardrails_fail_low_pairing>
+  <Function test_apply_flagstat_guardrails_pass>
+  <Function test_apply_flagstat_guardrails_fail_on_error>
+  <Function test_flagstat_bam_preflight_error>
+  <Function test_run_flagstat_rejects_empty_bam>
+  <Function test_validate_bam_accepts_bgzf_gzip_prefix>
+  <Function test_validate_bam_rejects_non_gzip_prefix>
+<Module packages/methylalignmentqc/tests/test_bisulfite_conversion.py>
+  <Function test_sidecar_conversion_guardrails_pass>
+  <Function test_low_conversion_fails_guardrail>
+<Module packages/methylalignmentqc/tests/test_cycle_quality_screening.py>
+  <Function test_screen_pass_when_overall_pass>
+  <Function test_screen_pass_when_overall_pass_despite_low_cycles>
+  <Function test_compute_trim_front2_requires_recovery>
+  <Function test_screen_r2_no_recovery_avoids_realign_trim>
+  <Function test_screen_r2_start_dip_only>
+  <Function test_screen_multi_region>
+  <Function test_screen_guardrail_only>
+  <Function test_fixture_003772_r2_trim>
+  <Function test_writer_qc_history_merge_on_retry>
+<Module packages/methylalignmentqc/tests/test_fragmentomics.py>
+  <Function test_compute_fragmentomics_metrics_cfdna>
+  <Function test_apply_fragmentomics_adds_guardrails_and_fails_short_fraction>
+  <Function test_resolve_fragmentomics_from_primary_analyte>
+  <Function test_resolve_fragmentomics_off_when_disabled>
+<Module packages/methylalignmentqc/tests/test_guardrail_migration.py>
+  <Function test_migrate_guardrail_metric_from_diagnostic_fields>
+  <Function test_migrate_guardrail_metric_prefers_legacy_note>
+  <Function test_migrate_guardrails_payload_noop_when_already_migrated>
+  <Function test_migrate_file_apply_overwrites_json>
+<Module packages/methylalignmentqc/tests/test_project_resolver.py>
+  <Function test_resolve_alignment_qc_config_output_dir_and_sample_paths>
+  <Function test_resolve_alignment_qc_config_step_config_validate_schema>
+  <Function test_resolve_alignment_qc_config_supports_control_and_label_filters>
+<Module packages/methylalignmentqc/tests/test_sample_qc_backfill.py>
+  <Function test_build_sample_qc_v2_dict_minimal_guardrails>
+  <Function test_build_sample_qc_v2_dict_cfdna_profile_layers>
+  <Function test_build_sample_qc_v2_dict_real_fixture_sample>
+  <Function test_backfill_cli_writes_json_and_summary>
+  <Function test_backfill_cli_stdout_and_output_both_written>
+  <Function test_process_samples_to_qc_jsons_parses_dedup_metrics_once>
+<Module packages/methylalignmentqc/tests/test_v1_to_v2_migration.py>
+  <Function test_v1_to_v2_transposes_row_sections>
+  <Function test_v2_payload_detected_idempotent_skip>
+  <Function test_convert_file_apply_writes_default_v2_suffix>
+  <Function test_convert_file_apply_with_backup>
+  <Function test_legacy_guardrail_threshold_migrated_then_converted>
+  <Function test_cli_single_file_dry_run>
+  <Function test_end_to_end_writer_output_is_v2>
+<Module packages/methylalignmentqc/tests/test_writer_guardrails.py>
+  <Function test_process_samples_to_qc_jsons_includes_guardrails_when_parabricks_json_present>
+  <Function test_process_samples_to_qc_jsons_fails_when_parabricks_json_missing>
+  <Function test_process_samples_to_qc_jsons_uses_qc_metrics_tar_when_json_is_guardrails_stub>
+  <Function test_build_sample_qc_v2_dict_falls_back_to_qc_metrics_tar>
+  <Function test_process_samples_to_qc_jsons_uses_canonical_sample_json_name_only>
+<Module packages/methylclassifier/tests/test_basic.py>
+  <Function test_extract_sample_features_dmp_past_last_position_no_index_error>
+  <Function test_chromosome_keys_to_str_unifies_int_and_str_keys>
+  <Function test_extract_chrom_context_from_classifier_fallback>
+  <Function test_classify_samples_from_list_realigns_expected_classes>
+<Module packages/methylclassifier/tests/test_calibration_holdout.py>
+  <Function test_stratified_calibration_fit_mask_per_class_floor>
+  <Function test_stratified_calibration_fit_mask_more_train_when_fraction_high>
+  <Function test_stratified_calibration_fit_mask_degenerate_returns_all_true>
+  <Function test_calibrate_probabilities_fit_mask_uses_subset>
+  <Function test_fit_chromosome_weights_fit_row_mask_wrong_length_raises>
+  <Function test_fit_chromosome_weights_fit_row_mask_runs>
+<Module packages/methylclassifier/tests/test_extract_sample_features_missing.py>
+  <Function test_nan_at_matched_position_is_unavailable>
+<Module packages/methylclassifier/tests/test_native_multiclass.py>
+  <Function test_merge_dmp_csvs_preserves_per_comparison_feature_columns>
+  <Function test_native_multiclass_contrast_mode_prefers_matching_disease_class>
+  <Function test_build_native_multiclass_model_loads_and_scores>
+  <Function test_compute_pre_softmax_scores_softmax_matches_predict_proba>
+  <Function test_native_multiclass_learned_head_smoke>
+  <Function test_build_learned_multiclass_requires_project_path>
+<Module packages/methylclassifier/tests/test_ovr_ecdf.py>
+  <Function test_build_union_dmp_overlapping_columns>
+  <Function test_fuse_ovr_binary_probas_rows_sum_to_one>
+  <Function test_fuse_ovr_binary_probas_all_nan_heads_yields_uniform>
+  <Function test_fuse_ovr_binary_probas_nan_head_reweights_remaining>
+  <Function test_fuse_pairwise_max_contrast_avoids_aggregate_softmax_with_pairwises>
+  <Function test_methyl_classifier_ovr_pkl_predict_proba_shape>
+  <Function test_methyl_classifier_ovr_save_writes_ecdf_one_vs_rest_dict>
+  <Function test_classifier_config_ovr_binary_paths_assembles_without_model_dir>
+  <Function test_export_ovr_pkl_helpers_match_cli_bundle>
+  <Function test_default_ovr_unified_classifier_basename_matches_project_contexts>
+  <Function test_classifier_step_dict_has_ovr_sources>
+  <Function test_expand_ovr_paths_from_healthy_pca_project_comparisons>
+  <Function test_ovr_multichrom_expert_reorders_columns_when_positions_differ_from_union_sort>
+  <Function test_ovr_pairwise_aggregate_control_head>
+  <Function test_ovr_bipartite_two_controls_two_diseases>
+  <Function test_ovr_detection_dirs_multichrom_two_chromosomes>
+<Module packages/methylclassifier/tests/test_panel_fusion.py>
+  <Function test_validate_spec_duplicate_class_raises>
+  <Function test_validate_spec_missing_disease_raises>
+  <Function test_pairwise_max_contrast_required>
+  <Function test_compute_panel_outputs_labels>
+  <Function test_compute_family_max_logits_column_mismatch_raises>
+  <Function test_classification_config_accepts_panel>
+  <Function test_panel_labels_explicit>
+<Module packages/methylclassifier/tests/test_prediction_abstention.py>
+  <Function test_abstention_uniform_and_negative_prediction>
+  <Function test_abstention_disabled>
+<Module packages/methylclassifier/tests/test_train_main_group.py>
+  <Function test_train_main_rejects_unknown_group>
+<Module packages/methylclassifier/tests/test_training_cohort_resolver.py>
+  <Function test_apply_training_cohort_to_classifier_base_sets_sample_paths>
+  <Function test_apply_training_cohort_skips_when_explicit_paths_set>
+<Module packages/methyldetector/tests/test_classifier_extended_export.py>
+  <Function test_compute_extended_panel_k_applies_margin_and_cap>
+  <Function test_classifier_extended_dmps_from_core_expands_ranked_pool>
+<Module packages/methyldetector/tests/test_detector_config_strict.py>
+  <Function test_rejects_removed_detector_keys[use_gpu-True-use_gpu was removed]>
+  <Function test_rejects_removed_detector_keys[max_dmps_for_classifier-10000-max_dmps_for_classifier was removed]>
+  <Function test_rejects_removed_detector_keys[validation_mode-real-validation_mode was removed]>
+  <Function test_rejects_removed_detector_keys[n_validation_samples-50-n_validation_samples was removed]>
+  <Function test_rejects_removed_detector_keys[min_sample_coverage-4-min_sample_coverage was removed]>
+  <Function test_rejects_removed_detector_keys[classifier_coverage_weighting-False-classifier_coverage_weighting was removed]>
+  <Function test_rejects_removed_detector_keys[min_validation_coverage_per_position-3-min_validation_coverage_per_position was removed]>
+  <Function test_rejects_removed_detector_keys[synthetic_config-bad_value7-synthetic_config was removed]>
+  <Function test_rejects_removed_detector_keys[classifier_type-ecdf-classifier_type was removed]>
+  <Function test_rejects_removed_detector_keys[eps-1e-09-eps was removed]>
+  <Function test_rejects_unknown_extra_key>
+  <Function test_canonical_ecdf_and_featurecuts_keys_validate>
+<Module packages/methyldetector/tests/test_ecdf_only_runtime.py>
+  <Function test_methyl_detector_config_rejects_legacy_distribution_fields>
+  <Function test_methyl_detector_config_rejects_removed_statistical_test_option>
+  <Function test_methyl_detector_config_persists_validation_split_fields>
+  <Function test_methyl_detector_config_rejects_legacy_ecdf_grid_alias>
+  <Function test_methyl_centroid_pair_is_ecdf_only>
+  <Function test_methyl_centroid_pair_uses_histogram_mann_whitney>
+  <Function test_effect_size_coverage_is_applied_per_context>
+  <Function test_prepare_validation_splits_uses_all_data_when_ratio_is_zero>
+  <Function test_tau2_filter_drops_only_high_heterogeneity_positions>
+  <Function test_prefix_cache_matches_direct_validation>
+  <Function test_merge_validation_results_merges_training_metrics>
+  <Function test_featurecuts_logs_dual_self_check_panels>
+  <Function test_featurecuts_strict_ba_rejection_raises>
+  <Function test_featurecuts_select_k_strict_ba_raises_not_swallowed>
+  <Function test_featurecuts_failure_does_not_fall_back_to_elbow>
+<Module packages/methyldetector/tests/test_explorer.py>
+  <Class TestMinNFilter>
+    <Function test_absolute_min_N>
+    <Function test_min_N_pct>
+  <Function test_explorer_lambda_var_optimization_reports_consistently>
+  <Function test_explorer_runs_mann_whitney_on_delta_reduced_positions>
+<Module packages/methyldetector/tests/test_filter_funnel_output.py>
+  <Function test_filter_funnel_sweep_writes_chromosome_specific_csv>
+  <Function test_filter_funnel_aggregate_combines_per_chrom_files>
+  <Function test_filter_funnel_sweep_then_aggregate_single_chromosome>
+<Module packages/methyldetector/tests/test_fixed_panel_recurrence_metadata.py>
+  <Function test_fixed_panel_recurrence_rejects_frequency_over_one>
+  <Function test_fixed_panel_recurrence_rejects_frequency_ratio_mismatch>
+  <Function test_fixed_panel_recurrence_accepts_valid_rows>
+<Module packages/methyldetector/tests/test_min_samples_cohort_size.py>
+  <Function test_cohort_size_prefers_n_samples_metadata>
+  <Function test_cohort_size_falls_back_to_n_max>
+<Module packages/methyldetector/tests/test_multiclass_merge_strict.py>
+  <Function test_check_detection_dirs_rejects_missing_output_dir_dict>
+  <Function test_check_detection_dirs_rejects_missing_output_dir_pydantic>
+  <Function test_check_detection_dirs_rejects_unsupported_type>
+  <Function test_check_detection_dirs_accepts_path_like>
+<Module packages/methyldiseaseprogression/tests/test_config.py>
+  <Function test_progression_step_config_defaults>
+  <Function test_progression_step_config_nested_gene_set_metrics>
+  <Function test_progression_rejects_unknown_gene_score_mode>
+<Module packages/methyldiseaseprogression/tests/test_gene_set_metrics.py>
+  <Function test_compute_metrics_custom_profile>
+  <Function test_cli_enables_metrics_with_bundled_profile>
+  <Function test_metrics_disabled_by_default>
+  <Function test_nested_gene_set_metrics_plan_config>
+  <Function test_inline_gene_set_profile_categories>
+  <Function test_gene_set_metrics_skips_stage_with_malformed_mapper_columns>
+<Module packages/methyldiseaseprogression/tests/test_progression.py>
+  <Function test_progression_report_writes_outputs>
+  <Function test_progression_report_respects_explicit_order>
+  <Function test_progression_report_strict_missing_fails>
+  <Function test_progression_report_skips_malformed_mapper_stage_when_not_strict>
+  <Function test_progression_prefers_module_primary_for_long_table>
+  <Function test_progression_falls_back_to_module_display_when_primary_missing>
+  <Function test_progression_variant_prefers_stable_family_key>
+  <Function test_progression_variant_derives_stable_family_from_legacy_columns>
+  <Function test_progression_detailed_matches_similar_noncanonical_entities>
+  <Function test_progression_gene_score_mode_effect_x_support>
+  <Function test_progression_uses_project_comparison_order>
+  <Function test_progression_effect_x_support_fallback_to_gene_importance>
+  <Function test_progression_writes_modules_activity_long_when_columns_present>
+  <Function test_progression_activity_columns_backward_compatible_when_absent>
+  <Function test_progression_activity_sanitizes_non_finite_values>
+  <Function test_progression_activity_preserves_nan_as_zero_and_negative_inf_as_zero>
+<Module packages/methyldmpselect/tests/test_dmp_select_config.py>
+  <Function test_dmp_selection_config_accepts_selection_mode>
+<Module packages/methyldmpselect/tests/test_runner.py>
+  <Function test_run_dmp_selection_uses_config_chromosome>
+<Module packages/methyldomain/tests/test_domain_types.py>
+  <Function test_domain_type_names_match_model_registry>
+  <Function test_extraction_qc_ref_parse_roundtrip>
+  <Function test_tagged_json_roundtrip>
+  <Function test_stratified_cohort_draw_has_type>
+  <Function test_groups_from_mc_run_dir_binary>
+  <Function test_detection_ref_from_detector_output>
+  <Function test_domain_schema_export_and_drift_check>
+<Module packages/methyldomain/tests/test_methylation_paths.py>
+  <Function test_resolve_methylation_h5_path_from_pattern>
+  <Function test_resolve_methylation_h5_path_from_h5_files>
+  <Function test_resolve_methylation_h5_path_requires_methylation_ref>
+<Module packages/methyldomain/tests/test_platform_storage.py>
+  <Function test_normalize_s3_endpoint_url_adds_https>
+  <Function test_profile_json_builds_myqnap_h5_defaults>
+  <Function test_profile_json_to_h5_storage_dict_reveals_secrets>
+<Module packages/methylenricher/tests/test_cisbp.py>
+  <Function test_config_nested_and_flat>
+  <Function test_cisbp_categorized_as_tf>
+  <Function test_registry_modes_and_stubs>
+  <Function test_disabled_returns_none>
+  <Function test_pwm_load_and_scan>
+  <Function test_prebuilt_gmt_ora_and_merge>
+  <Function test_load_gmt_preserves_first_gene_when_description_is_empty>
+  <Function test_promoter_scan_gmt_build>
+  <Function test_ensure_complete_path_runs_cisbp>
+  <Function test_context_defaults_genome_fasta_and_gtf_from_project>
+  <Function test_resolve_bundle_local_dir>
+  <Function test_annotate_tf_metadata_from_chea>
+  <Function test_cisbp_multi_mode_labels>
+  <Function test_normalize_tf_name>
+  <Function test_motif_scan_dmp_region_ora>
+  <Function test_motif_scan_requires_dmp_inputs>
+  <Function test_resolve_bundle_rechecks_cache_after_lock>
+<Module packages/methylenricher/tests/test_cli_network_refinement_config.py>
+  <Function test_apply_nested_network_refinement_config>
+  <Function test_apply_network_refinement_respects_non_default_cli_values>
+  <Function test_apply_dash_runtime_config>
+<Module packages/methylenricher/tests/test_enricher_completeness.py>
+  <Function test_classify_enrich_error_429>
+  <Function test_is_cisbp_library_label>
+  <Function test_sanitize_enrichment_df_clamps_zero_pvalues>
+  <Function test_merge_cisbp_appended_after_primary_libraries>
+  <Function test_merge_cisbp_only_does_not_write_top_hits>
+  <Function test_merge_library_results_from_csvs>
+  <Function test_production_enricher_root_not_control_subdir>
+  <Function test_assess_completeness_detects_missing>
+  <Function test_enrich_one_library_retries_then_succeeds>
+<Module packages/methylenricher/tests/test_enricher_project_resolver.py>
+  <Function test_resolve_enricher_paths_defaults_to_project_roots>
+  <Function test_resolve_enricher_paths_per_comparison_uses_canonical_layout>
+  <Function test_resolve_enricher_paths_warns_on_legacy_alias_keys>
+  <Function test_resolve_methyl_enricher_home_defaults>
+  <Function test_resolve_methyl_enricher_home_from_step_config>
+<Module packages/methylenricher/tests/test_enricher_queue.py>
+  <Function test_plan_and_export_queue>
+  <Function test_parse_task_file>
+<Module packages/methylenricher/tests/test_ensure_complete_empty_genes.py>
+  <Function test_sort_by_total_weight_maps_to_gene_importance>
+  <Function test_ensure_complete_skips_comparison_when_filters_remove_all_genes>
+<Module packages/methylenricher/tests/test_gene_q_filter_guard.py>
+  <Function test_skip_gene_q_filter_when_no_finite_values>
+<Module packages/methylenricher/tests/test_hits_weighting.py>
+  <Function test_gene_importance_is_used_as_canonical_weight>
+  <Function test_hits_filter_removes_rows_without_any_hits>
+  <Function test_load_gene_list_requires_mapper_contract_columns>
+  <Function test_min_dmp_count_falls_back_to_unique_dmps_when_dmp_count_missing>
+<Module packages/methylenricher/tests/test_module_network_plot_dash.py>
+  <Function test_build_cytoscape_payload_schema_is_stable>
+  <Function test_write_network_plots_cytoscape_json_regression>
+  <Function test_write_network_plots_dash_routes_to_launcher>
+<Module packages/methylenricher/tests/test_module_pipeline_disease_prior.py>
+  <Function test_modules_include_disease_columns_when_prior_exists>
+  <Function test_modules_omit_disease_columns_when_no_disease_metadata>
+  <Function test_modules_omit_disease_columns_when_prior_filters_to_empty>
+  <Function test_modules_export_activity_columns>
+<Module packages/methylenricher/tests/test_module_pipeline_labeling.py>
+  <Function test_dual_label_mode_keeps_canonical_primary>
+  <Function test_canonical_only_mode_does_not_append_subtitle>
+  <Function test_module_variant_family_is_deterministic_from_qvalue_order>
+<Module packages/methylenricher/tests/test_module_pipeline_network_refinement.py>
+  <Function test_module_pipeline_network_refinement_local_edges>
+  <Function test_module_pipeline_network_refinement_fallback>
+  <Function test_module_pipeline_passes_ppi_dataset_to_dash>
+<Module packages/methylenricher/tests/test_network_discovery.py>
+  <Function test_run_network_discovery_writes_db_and_export>
+  <Function test_resolve_discovery_paths_uses_home_root>
+<Module packages/methylenricher/tests/test_pathway_clustering.py>
+  <Function test_canonical_pathway_key_case_and_whitespace>
+  <Function test_pathway_gene_sets_merge_same_canonical_name>
+  <Function test_run_pathway_clustering_single_node_per_canonical_name>
+  <Function test_cluster_pathways_louvain_passes_random_state>
+<Module packages/methylenricher/tests/test_ppi_network.py>
+  <Function test_normalize_gene_symbols_deduplicates_and_upcases>
+  <Function test_load_local_edges_supports_source_target>
+  <Function test_attach_signal_reorders_hubs_by_methylation_weight>
+  <Function test_rank_hubs_topology_ignores_weight_ordering>
+  <Function test_compute_module_coherence_outputs_expected_columns>
+  <Function test_fetch_string_edges_uses_cache>
+<Module packages/methylenricher/tests/test_weighted_enrichment_metrics.py>
+  <Function test_attach_weighted_overlap_metrics_uses_gene_weights>
+<Module packages/methylextractionqc/tests/test_guardrails.py>
+  <Function test_evaluate_guardrails_passes_good_manifest>
+  <Function test_evaluate_guardrails_fails_low_coverage>
+  <Function test_evaluate_guardrails_fails_high_chh>
+  <Function test_process_sample_extraction_qc_writes_json>
+  <Function test_process_sample_extraction_qc_requires_manifest>
+<Module packages/methylfragmentomics/tests/test_bam_resolve.py>
+  <Function test_resolve_explicit_sample_bam_paths>
+  <Function test_resolve_canonical_bam_in_sample_dir>
+<Module packages/methylfragmentomics/tests/test_chrom_set.py>
+  <Function test_chrom_set_bare_names_include_chr_prefixed>
+  <Function test_chrom_set_chr_prefixed_names_include_bare>
+  <Function test_chrom_set_falls_back_to_project_chromosomes>
+  <Function test_chrom_set_none_when_unconfigured>
+<Module packages/methylgeneselect/tests/test_dmp_panel.py>
+  <Function test_load_discovery_dmp_panel_deduplicates_across_chromosomes>
+  <Function test_load_classifier_dmp_panel_prefers_classifier_exports>
+  <Function test_load_classifier_dmp_panel_per_dir_extended_fallback>
+<Module packages/methylgeneselect/tests/test_project_config.py>
+  <Function test_build_gene_select_config_merges_gene_selection_and_validation>
+  <Function test_build_gene_select_config_applies_site_and_profile_caps>
+<Module packages/methylmapper/tests/test_cache_db.py>
+  <Function test_sqlite_cache_store_wal_and_upsert_batch>
+  <Function test_sqlite_cache_store_ttl_prune>
+  <Function test_sqlite_cache_store_concurrency_smoke>
+  <Function test_enricher_json_migration_once>
+  <Function test_enricher_json_migration_reimports_new_json_after_marker>
+  <Function test_enricher_migrates_grok_only_json_and_keeps_open_targets_miss>
+  <Function test_enricher_partial_source_cache_behavior>
+  <Function test_empty_cached_payload_is_treated_as_miss>
+  <Function test_grok_explicit_negative_payload_is_cache_hit>
+<Module packages/methylmapper/tests/test_direction_sign.py>
+  <Function test_direction_to_sign_maps_common_tokens>
+  <Function test_normalize_dmp_columns_maps_direction_aliases>
+<Module packages/methylmapper/tests/test_effect_size_recovery.py>
+  <Function test_recover_effect_size_from_mean_column_when_flat_fallback>
+  <Function test_recover_effect_size_from_per_comparison_columns>
+<Module packages/methylmapper/tests/test_enrich_source_parse.py>
+  <Function test_parse_enrich_source_opentargets_token>
+  <Function test_parse_enrich_source_combined_sources>
+<Module packages/methylmapper/tests/test_gene_stat_export.py>
+  <Function test_aggregate_by_feature_exports_gene_p_and_q_columns_with_q_only_input>
+  <Function test_biology_matrix_weights_promoter_hyper_above_intron_hypo>
+  <Function test_aggregate_by_feature_exports_biology_weighted_gene_importance>
+  <Function test_aggregate_by_feature_uses_exclusive_feature_priority_for_hits>
+  <Function test_aggregate_by_feature_sorts_by_canonical_gene_importance_desc>
+  <Function test_aggregate_by_feature_gene_importance_scales_with_unique_dmp_support>
+  <Function test_aggregate_by_feature_exports_compound_columns>
+  <Function test_aggregate_by_feature_exports_signed_directional_biomarker_columns>
+  <Function test_aggregate_by_feature_rejects_invalid_stability_frequency_values>
+  <Function test_aggregate_by_feature_rolls_up_detailed_features_to_parent_buckets>
+  <Function test_pruned_gene_output_drops_legacy_columns>
+<Module packages/methylmapper/tests/test_mapper_project_resolver.py>
+  <Function test_resolve_mapper_paths_uses_comparison_wildcards>
+  <Function test_resolve_mapper_paths_per_comparison_uses_canonical_layout>
+  <Function test_resolve_mapper_paths_per_comparison_honors_step_override_output_dir>
+  <Function test_resolve_mapper_paths_per_comparison_output_dir_base_appends_each_comparison>
+  <Function test_resolve_mapper_paths_per_comparison_falls_back_to_existing_case_variant>
+<Module packages/methylmapper/tests/test_persist_secret.py>
+  <Function test_persist_secret_if_changed_skips_when_unchanged>
+  <Function test_persist_secret_if_changed_writes_when_new>
+  <Function test_persist_empty_returns_false>
+<Module packages/methylpredictor/tests/test_expand_test_paths.py>
+  <Function test_expand_relative_csv_next_to_project_not_under_samples_base>
+  <Function test_bare_sample_names_still_resolve_under_samples_base>
+<Module packages/methylpredictor/tests/test_project_resolver_binary_group_paths.py>
+  <Function test_binary_resolver_accepts_group_paths_train_holdout>
+  <Function test_binary_resolver_accepts_test_group_paths>
+  <Function test_binary_resolver_prefers_test_group_paths_over_training_cohorts>
+  <Function test_binary_per_comparison_resolver_accepts_test_group_paths>
+  <Function test_comparison_multiclass_resolver_accepts_multiclass_test_group_paths>
+  <Function test_binary_resolver_rejects_test_group_paths_with_non_binary_class_index>
+  <Function test_binary_resolver_rejects_test_group_paths_missing_class_index>
+  <Function test_binary_resolver_rejects_group_paths_with_non_binary_class_index>
+  <Function test_binary_resolver_rejects_group_paths_missing_class_index>
+  <Function test_binary_resolver_rejects_empty_holdout_group_paths>
+<Module packages/methylpredictor/tests/test_project_resolver_deprecations.py>
+  <Function test_resolve_predictor_config_warns_on_validator_alias>
+<Module packages/methylpredictor/tests/test_project_resolver_ecdf_gene_multiclass.py>
+  <Function test_per_comparison_resolver_uses_ecdf_gene_ovr_as_multiclass>
+<Module packages/methylpredictor/tests/test_project_resolver_multiclass_cli.py>
+  <Function test_apply_binary_cli_paths_replaces_multiclass_test_groups>
+  <Function test_cli_project_multiclass_honors_output_dir>
+<Module packages/methylpredictor/tests/test_project_resolver_strict_types.py>
+  <Function test_control_disease_side_to_dict_rejects_unsupported_type>
+<Module packages/methylpredictor/tests/test_run_prediction.py>
+  <Function test_run_prediction_multiclass_ovr_k3_writes_validation_metrics>
+  <Function test_run_prediction_train_holdout_binary_writes_dual_metrics>
+  <Function test_run_prediction_aggregated_ecdf_path_writes_evidence_columns>
+  <Function test_run_prediction_ovr_k2_uses_test_group_paths_only>
+  <Function test_predictor_config_resolves_relative_test_paths>
+  <Function test_run_prediction_metrics_follow_filtered_rows>
+  <Function test_run_prediction_blind_mode_writes_report_without_validation_metrics>
+  <Function test_predictor_config_rejects_blind_with_nested_controls>
+  <Function test_run_prediction_degenerate_class_and_dmp_coverage_in_metrics>
+  <Function test_predictor_config_nested_controls_diseases_expands>
+<Module packages/methylutils/tests/test_analyte_profiles.py>
+  <Function test_normalize_primary_analyte>
+  <Function test_cfdna_profile_fills_missing_keys>
+  <Function test_buffy_profile_enables_alignment_guardrails>
+  <Function test_user_override_wins_over_profile>
+  <Function test_buffy_disables_fragmentomics_step>
+  <Function test_should_apply_opt_out>
+  <Function test_resolve_action_config_applies_analyte_profile>
+  <Function test_cisbp_mode_label_and_resolve>
+<Module packages/methylutils/tests/test_disease_stages.py>
+  <Function test_disease_stages_expand_labels>
+  <Function test_group_rejects_stages_and_sample_paths>
+<Module packages/methylutils/tests/test_dmp_export_paths.py>
+  <Function test_classifier_prefers_suffix_over_legacy>
+  <Function test_classifier_legacy_dmps_only>
+  <Function test_classifier_excludes_discovery>
+  <Function test_discovery_glob>
+  <Function test_discovery_fallback_to_unified>
+  <Function test_glob_discovery_unified_fallback_single_dir>
+  <Function test_glob_discovery_unified_fallback_nested_comparisons>
+  <Function test_glob_discovery_unified_fallback_not_discovery_pattern>
+<Module packages/methylutils/tests/test_ecdf_aggregated_ovr.py>
+  <Function test_train_and_predict_aggregated_package_roundtrip>
+  <Function test_train_and_predict_gene_ecdf_package_roundtrip>
+  <Function test_build_effect_size_feature_weights_supports_dynamic_keys>
+  <Function test_build_effect_size_feature_weights_struct_keys_use_canonical_feature_aliases>
+<Module packages/methylutils/tests/test_pipeline_config_contracts.py>
+  <Function test_derive_panel_and_ordered_comparison_labels_from_comparisons>
+  <Function test_get_ordered_stage_narratives_and_description_field>
+  <Function test_project_config_rejects_step_config>
+  <Function test_regulatory_top_level>
+  <Function test_sample_list_csv_resolves_from_samples_base_parent>
+  <Function test_resolve_detection_output_dir_case_insensitive_fallback>
+<Module packages/methylutils/tests/test_profile_paths.py>
+  <Function test_resolve_profile_path_by_name_from_repo>
+  <Function test_resolve_profile_path_alias_buffy_mc_gene_fc>
+  <Function test_resolve_profile_path_explicit_file>
+  <Function test_profile_search_dirs_includes_epimethyl_bundle>
+<Module packages/methylutils/tests/test_sample_qc_missing_h5.py>
+  <Function test_global_sample_qc_excludes_samples_without_h5_and_writes_artifacts>
+  <Function test_global_sample_qc_fails_when_group_becomes_empty>
+<Module packages/methylvalidation/tests/test_analyte_guard.py>
+  <Function test_normalize_plasma_to_cfdna>
+  <Function test_effective_training_analyte_prefers_model_field>
+  <Function test_check_training_analyte_mismatch>
+  <Function test_load_monte_carlo_config_propagates_project_regulatory>
+<Module packages/methylvalidation/tests/test_analyte_profile_pipeline.py>
+  <Function test_cfdna_profile_enables_fragmentomics_step>
+<Module packages/methylvalidation/tests/test_backend_profiles_strict.py>
+  <Function test_model_mc_all_uses_only_enabled_profiles>
+  <Function test_model_mc_all_fails_when_no_enabled_profiles>
+  <Function test_merge_legacy_keys_preserves_backend_enabled_flags>
+  <Function test_migration_moves_legacy_keys_into_backend_profiles>
+  <Function test_with_backend_selection_resyncs_runtime_fields>
+  <Function test_update_backend_params_resyncs_runtime_fields>
+  <Function test_gene_feature_loading_is_shared_and_migrated>
+  <Function test_stability_early_stop_requires_min_iterations_within_budget>
+  <Function test_stability_early_stop_requires_window_smaller_than_min_iterations>
+<Module packages/methylvalidation/tests/test_biological_model_gate.py>
+  <Function test_assert_production_model_build_allowed_blocks_when_required>
+  <Function test_assert_production_model_build_allowed_passes_when_confirmed>
+  <Function test_assert_production_model_build_allowed_passes_when_not_required>
+<Module packages/methylvalidation/tests/test_biomarker_gene_pool.py>
+  <Function test_normalize_region_hits_aliases_body>
+  <Function test_apply_region_hits_filter_promoter_or_exon>
+  <Function test_build_biomarker_gene_pool_disease_only>
+  <Function test_build_biomarker_gene_pool_ppi_only_mocked>
+  <Function test_build_biomarker_gene_pool_honors_legacy_unique_dmps_config_key>
+  <Function test_build_biomarker_gene_pool_ppi_min_degree_zero_keeps_isolated_nodes>
+  <Function test_compute_biomarker_stability_diagnostics>
+  <Function test_validate_biomarker_allows_mapper_only_without_gene_featurecuts>
+<Module packages/methylvalidation/tests/test_centroid_deltas.py>
+  <Function test_generate_run_project_writes_group_specific_centroid_deltas>
+  <Function test_generate_run_project_creates_predictor_holdouts_when_missing>
+  <Function test_run_centroid_executes_group_specific_step_overrides>
+  <Function test_run_pipeline_for_iteration_splits_centroid_logs_and_counts>
+  <Function test_carry_forward_centroids_copies_tree_for_incremental_baseline>
+  <Function test_prepare_incremental_centroid_baseline_skips_without_remove_samples>
+  <Function test_incremental_centroid_update_requested_when_remove_present>
+  <Function test_run_pipeline_for_iteration_prepares_centroid_baseline>
+<Module packages/methylvalidation/tests/test_classification_metrics.py>
+  <Function test_multiclass_h_pcal_h_cm_no_top_level_sensitivity>
+  <Function test_binary_emits_sensitivity_specificity>
+  <Function test_resolve_class_roles_uses_cohort_side>
+<Module packages/methylvalidation/tests/test_classifier_dmp_panel.py>
+  <Function test_write_mapper_classifier_override>
+  <Function test_write_mapper_classifier_override_honors_enrich_disease_flag>
+  <Function test_load_classifier_dmp_panel_dedupes_and_caps>
+<Module packages/methylvalidation/tests/test_cli_resume.py>
+  <Function test_resolve_resume_start_iteration_auto_and_explicit>
+  <Function test_resolve_resume_start_iteration_validates_bounds>
+  <Function test_list_existing_run_numbers_and_load_step_timings>
+  <Function test_deep_merge_dicts_prefers_updates_and_preserves_other_keys>
+  <Function test_post_model_validation_requires_production_project>
+  <Function test_model_mc_all_requires_model_mc>
+  <Function test_skip_detection_runs_stability_only>
+  <Function test_skip_detection_allowed_for_freeze_and_forwarded>
+  <Function test_stability_early_stop_breaks_loop_and_writes_diagnostics>
+  <Function test_stability_early_stop_disabled_keeps_full_iteration_budget>
+  <Function test_model_mc_all_uses_shared_stage>
+  <Function test_select_best_model_ignores_shared_directory>
+  <Function test_model_mc_single_backend_reuses_existing_shared_runs>
+  <Function test_build_model_mc_shared_runs_symlinks_reusable_primary_runs>
+  <Function test_run_model_mc_backend_reuses_primary_centroid_detector_artifacts>
+<Module packages/methylvalidation/tests/test_config_schema_export.py>
+  <Function test_committed_config_schemas_match_pydantic_models>
+  <Function test_schema_export_is_deterministic>
+  <Function test_generate_schema_dict_sets_json_schema_meta>
+  <Function test_validation_step_schema_has_no_runner_required_fields>
+  <Function test_progression_step_schema_artifact_registered>
+  <Function test_check_mode_fails_on_stale_artifact>
+  <Function test_repo_schemas_config_dir_exists_after_bootstrap>
+<Module packages/methylvalidation/tests/test_fragmentomics_context.py>
+  <Function test_summarize_alignment_qc_fragmentomics>
+  <Function test_build_fragmentomics_report_cfdna_expected>
+<Module packages/methylvalidation/tests/test_gene_featurecuts.py>
+  <Function test_rank_gene_pool_orders_by_importance_then_support>
+  <Function test_cap_ranked_gene_pool_limits_panel>
+  <Function test_annotate_dmps_with_genes_parses_dmp_name_and_chr_prefix>
+  <Function test_search_gene_k_respects_min_genes_floor>
+  <Function test_run_gene_featurecuts_for_iteration_exports_panel>
+<Module packages/methylvalidation/tests/test_gene_featurecuts_pipeline.py>
+  <Function test_run_pipeline_for_iteration_appends_gene_stability_steps>
+<Module packages/methylvalidation/tests/test_generative_backend.py>
+  <Function test_generative_backend_multiclass_train_predict>
+  <Function test_generative_backend_binary_predict_shape>
+  <Function test_generative_observed_hybrid_train_predict_schema_parity>
+  <Function test_resolve_eval_paths_multiclass_falls_back_from_binary_predictor>
+  <Function test_generative_resolve_eval_prefers_holdout_binary_paths>
+  <Function test_generative_resolve_eval_prefers_holdout_group_paths_for_binary>
+  <Function test_generative_covariates_strict_join>
+  <Function test_generative_covariate_preprocessor_written>
+  <Function test_pipeline_runner_generative_backend_dispatch>
+  <Function test_generative_config_validation_strict_fields>
+<Module packages/methylvalidation/tests/test_hyperparam_objective.py>
+  <Function test_objective_median_ba_f1>
+  <Function test_objective_stability_panel>
+  <Function test_objective_constraint_rollout>
+  <Function test_objective_missing_metrics_file>
+<Module packages/methylvalidation/tests/test_hyperparam_search_dry_run.py>
+  <Function test_grid_to_dicts>
+  <Function test_dry_run_writes_search_summary>
+<Module packages/methylvalidation/tests/test_metrics_and_split.py>
+  <Function test_stratified_split_is_reproducible_and_exhaustive>
+  <Function test_load_and_resolve_sample_paths_skips_blank_csv_lines>
+  <Function test_validation_metric_summaries_aggregate_runs>
+  <Function test_iteration_scalar_metrics_flattens_per_class_recall>
+  <Function test_iteration_scalar_metrics_prefers_predictor_then_detector>
+  <Function test_write_metrics_distribution_plotly>
+<Module packages/methylvalidation/tests/test_model_bundle_tabular_backend.py>
+  <Function test_build_model_feature_bundle_and_load>
+  <Function test_build_mapper_annotation_cache_deterministic_collapse>
+  <Function test_build_mapper_annotation_cache_priority_intron_beats_gene_body>
+  <Function test_build_mapper_annotation_cache_weight_mode_preserves_gene_body>
+  <Function test_build_mapper_annotation_cache_unknown_fallback_to_gene_body>
+  <Function test_build_mapper_annotation_cache_joins_default_mapper_gene_columns>
+  <Function test_build_mapper_annotation_cache_empty_mapper_gene_columns_disables_join>
+  <Function test_build_frozen_gene_panel_writes_gene_and_feature_outputs>
+  <Function test_resolve_fixed_gene_features_panel_rebuilds_missing_compounds>
+  <Function test_normalize_mapper_intersections_uses_dmp_fallback_for_nan_keys>
+  <Function test_normalize_mapper_intersections_does_not_use_feature_start_as_dmp_position>
+  <Function test_build_model_feature_bundle_merges_mapper_annotations>
+  <Function test_build_model_feature_bundle_preserves_mapper_gene_columns>
+  <Function test_build_model_feature_bundle_persists_fixed_gene_feature_ranges>
+  <Function test_build_model_feature_bundle_uses_project_mapper_annotation_pointer>
+  <Function test_build_model_feature_bundle_requires_mapper_annotations_for_non_dmp>
+  <Function test_build_model_feature_bundle_canonicalizes_weight_to_effect_size>
+  <Function test_build_model_feature_bundle_requires_effect_size>
+  <Function test_build_model_feature_bundle_loads_all_chromosome_csvs>
+  <Function test_tabular_backend_train_and_predict>
+  <Function test_tabular_resolve_eval_prefers_holdout_binary_paths>
+  <Function test_tabular_resolve_eval_prefers_holdout_group_paths_for_binary>
+  <Function test_tabular_covariate_preprocessor_categorical>
+  <Function test_tabular_covariate_preprocessor_ordinal>
+  <Function test_tabular_resolve_eval_paths_multiclass_falls_back_from_binary_predictor>
+  <Function test_tabular_observed_hybrid_train_predict_schema_parity>
+  <Function test_tabular_multi_method_sequence_outputs_ranking>
+  <Function test_tabular_train_dataset_cache_hit_skips_feature_recompute>
+  <Function test_tabular_observed_hybrid_cache_schema_mismatch_recomputes>
+  <Function test_tabular_saves_test_dataset_next_to_train_dataset>
+  <Function test_tabular_gene_scored_test_export_passes_frozen_gene_panel>
+  <Function test_tabular_defaults_train_and_test_dataset_paths_to_bundle_dir>
+  <Function test_build_estimator_from_config_xgboost>
+  <Function test_build_estimator_from_config_xgboost_requires_dependency>
+<Module packages/methylvalidation/tests/test_model_mc_backend_layout.py>
+  <Function test_prepare_model_mc_backend_run_from_shared_routes_output_base>
+  <Function test_classifier_output_dir_uses_project_parent>
+  <Function test_write_classification_results_csv_roundtrip>
+<Module packages/methylvalidation/tests/test_model_mc_selection.py>
+  <Function test_score_backend_from_outputs_mean_and_median>
+  <Function test_write_backend_ranking_orders_by_score>
+<Module packages/methylvalidation/tests/test_modeling_mode_stability.py>
+  <Function test_load_mapper_genes_from_combined_csv>
+  <Function test_compute_gene_stability_mapper_axis>
+  <Function test_load_selected_dmp_panel_prefers_selected_csv>
+  <Function test_load_stable_dmp_panel_from_explicit_csv>
+<Module packages/methylvalidation/tests/test_modeling_modes.py>
+  <Function test_mode1_raw_pool_discovery_only>
+  <Function test_mode2_dmp_featurecuts_seeds_flags>
+  <Function test_mode3_mapper_gene_recurrence>
+  <Function test_mode4_gene_featurecuts_split_ba>
+  <Function test_mode5_from_stable_dmp_panel_loci_source>
+  <Function test_legacy_flags_infer_modes>
+<Module packages/methylvalidation/tests/test_monte_carlo_binary_comparisons.py>
+  <Function test_generate_run_project_comparisons_match_resolved_groups_staged_template>
+<Module packages/methylvalidation/tests/test_monte_carlo_multiclass.py>
+  <Function test_stratified_split_multiclass_three_classes>
+  <Function test_stratified_split_multiclass_unique_labels_required>
+  <Function test_monte_carlo_config_legacy_healthy_disease>
+  <Function test_monte_carlo_config_explicit_cohorts>
+  <Function test_infer_monte_carlo_layout_binary>
+  <Function test_infer_monte_carlo_layout_hierarchical_multiclass>
+  <Function test_infer_monte_carlo_layout_rejects_two_cohorts_when_disease_has_stages>
+  <Function test_infer_monte_carlo_layout_multiclass>
+  <Function test_predictor_policy_blind>
+  <Function test_hierarchical_mc_run_project_predictor_points_at_testing_csvs>
+  <Function test_hierarchical_mc_run_project_without_predictor_nested_sides>
+<Module packages/methylvalidation/tests/test_observed_feature_builder.py>
+  <Function test_range_loading_expands_loci_beyond_frozen_dmps>
+  <Function test_anchor_and_feature_table_do_not_diverge_for_dmp_family_with_range_loading>
+  <Function test_observed_feature_schema_is_deterministic>
+  <Function test_observed_feature_builder_keeps_missing_loci_as_nan>
+  <Function test_verify_feature_schema_raises_on_mismatch>
+  <Function test_observed_feature_builder_requires_effect_size>
+  <Function test_observed_feature_builder_includes_fixed_schema_and_centroid_metrics>
+  <Function test_observed_feature_builder_histogram_tail_features_multiclass_names>
+  <Function test_observed_feature_builder_centroid_distance_features_schema_and_behavior>
+  <Function test_observed_feature_builder_centroid_distance_missing_dir_is_nan>
+  <Function test_observed_feature_builder_histogram_tail_features_behaviors>
+  <Function test_observed_feature_builder_histogram_tail_features_nan_when_invalid>
+  <Function test_observed_feature_builder_gene_family_uses_dynamic_mapped_keys>
+  <Function test_observed_feature_builder_structural_family_uses_mapped_combinations>
+  <Function test_observed_feature_builder_dynamic_schema_is_deterministic>
+  <Function test_family_flags_gene_scored_tokens>
+  <Function test_normalize_feature_family_set_canonical_and_legacy_aliases>
+  <Function test_gene_scored_feature_names_and_fingerprint>
+  <Function test_prepare_gene_scored_panels_raises_when_min_support_filters_all_rows>
+  <Function test_prepare_gene_scored_panels_returns_empty_when_input_empty>
+  <Function test_gene_weighted_sign_agreement_nan_without_prior>
+  <Function test_gene_scored_panel_obs_fraction_single_gene_observed>
+  <Function test_compute_region_directional_score_matrix_hand_calculation>
+  <Function test_observed_feature_builder_gene_scored_family>
+  <Function test_observed_feature_builder_dmp_plus_gene_scored_includes_both_families>
+  <Function test_gene_scored_progression_k1_no_derived_columns>
+  <Function test_gene_scored_progression_k2_contrast_and_slope>
+  <Function test_gene_scored_progression_k4_column_count>
+  <Function test_gene_scored_progression_resolve_order_explicit_and_append_missing>
+  <Function test_gene_scored_progression_nan_when_endpoint_missing>
+  <Function test_gene_scored_progression_explicit_contrast_dedupes_extreme>
+  <Function test_gene_scored_progression_fingerprint_changes_with_order>
+  <Function test_observed_feature_builder_gene_scored_progression_k2>
+  <Function test_structural_scored_hand_calculation_and_dynamic_omission>
+  <Function test_prepare_structural_scored_panels_raises_when_min_support_filters_all_rows>
+  <Function test_structural_scored_gene_body_emitted_by_default>
+  <Function test_structural_scored_progression_k2>
+  <Function test_observed_feature_builder_structural_scored_family>
+  <Function test_preflight_structural_scored_training_fails_before_extraction>
+  <Function test_require_structural_scored_columns_emitted_zero_compound>
+  <Function test_require_structural_scored_columns_emitted_skipped_when_combined_family>
+  <Function test_build_observed_hybrid_structural_scored_only_raises_when_no_columns>
+<Module packages/methylvalidation/tests/test_path_remap.py>
+  <Function test_stale_samples_base_from_config_remapped_like_freeze>
+  <Function test_remap_path_string_longest_prefix>
+  <Function test_apply_path_remap_to_nested_mutates>
+  <Function test_remap_cohort_list_csv_rewrites_content_and_pointer>
+  <Function test_remap_methylvalidation_testing_csv_path_column>
+  <Function test_basename_only_cohort_csv_not_copied_samples_base_remapped>
+  <Function test_remap_cohort_list_no_op_when_paths_unchanged>
+<Module packages/methylvalidation/tests/test_post_model_validation_runner.py>
+  <Function test_post_model_runner_binary_ecdf>
+  <Function test_post_model_runner_binary_tabular>
+  <Function test_post_model_runner_multiclass_generative>
+<Module packages/methylvalidation/tests/test_progression_hook.py>
+  <Function test_run_pipeline_for_production_includes_progression_when_enabled>
+  <Function test_run_pipeline_for_production_skips_progression_when_skip_enricher>
+  <Function test_run_pipeline_for_production_supports_skip_centroid>
+  <Function test_run_pipeline_for_production_supports_skip_detection>
+  <Function test_run_pipeline_for_production_excludes_fragmentomics>
+<Module packages/methylvalidation/tests/test_project_path_resolution.py>
+  <Function test_model_bundle_loads_project_from_project_dir>
+  <Function test_tabular_train_loads_project_from_project_dir>
+  <Function test_generative_train_loads_project_from_project_dir>
+<Module packages/methylvalidation/tests/test_queue_workflow.py>
+  <Function test_export_queue_from_plan>
+  <Function test_plan_runs_idempotent_replan_same_seed>
+  <Function test_plan_runs_overwrite_does_not_delete_run_dirs>
+  <Function test_plan_runs_wipe_runs_deletes_run_dirs>
+  <Function test_plan_runs_incremental_preserves_completed_runs_and_adds_new>
+  <Function test_run_task_exits_0_if_already_completed>
+<Module packages/methylvalidation/tests/test_raw_gene_features.py>
+  <Function test_resolve_stable_gene_names_deduplicates_and_sorts>
+  <Function test_build_gene_locus_index_map_links_loci_to_genes>
+  <Function test_build_gene_panel_feature_weights_uses_gene_importance>
+  <Function test_build_raw_gene_feature_table_weighted_aggregate>
+  <Function test_normalize_production_ecdf_backend_defaults_to_raw_dmp>
+  <Function test_normalize_production_ecdf_backend_preserves_raw_gene>
+<Module packages/methylvalidation/tests/test_regulatory_reporting.py>
+  <Function test_regulatory_lifecycle_blocks_claims_before_pivotal>
+  <Function test_clinical_performance_report_multiclass_uses_screening_binary>
+  <Function test_clinical_performance_report_writes_ci_and_gate>
+  <Function test_locked_model_spec_writes_hashes>
+<Module packages/methylvalidation/tests/test_reuse_splits.py>
+  <Function test_try_load_binary_matches_generated_run>
+  <Function test_try_load_binary_returns_none_when_partition_incomplete>
+  <Function test_resolve_iteration_split_falls_back_when_run_missing>
+  <Function test_try_load_multiclass_matches_generated_run>
+  <Function test_resolve_iteration_split_multiclass_reuses>
+<Module packages/methylvalidation/tests/test_rollout.py>
+  <Function test_evaluate_dual_run_promote_with_improved_reliability>
+<Module packages/methylvalidation/tests/test_run_mapper.py>
+  <Function test_run_mapper_does_not_pass_per_cancer_group>
+  <Function test_run_mapper_passes_mapper_step_override_from_resolved_config>
+<Module packages/methylvalidation/tests/test_sample_prep_planner.py>
+  <Function test_explicit_samples_with_s3_storage>
+  <Function test_csv_plus_azure_storage>
+  <Function test_csv_rejects_legacy_uri>
+  <Function test_use_project_samples>
+  <Function test_dedupe_by_sample_id>
+  <Function test_explicit_fastq_source_override>
+  <Function test_cfdna_primary_analyte>
+  <Function test_h5_storage_materializes_per_sample_destination>
+  <Function test_prefix_base_on_fastq_storage>
+<Module packages/methylvalidation/tests/test_split_detector_pipeline.py>
+  <Function test_uses_discovery_only_reads_detection_mode>
+  <Function test_run_pipeline_for_iteration_inserts_split_steps>
+  <Function test_run_pipeline_for_iteration_legacy_keeps_in_process_gene_fc>
+  <Function test_run_dmp_select_loops_comparisons_and_chromosomes>
+<Module packages/methylvalidation/tests/test_stability_detector_parameters.py>
+  <Function test_extract_detector_parameters_for_run_summarizes_multichromosome_results>
+  <Function test_extract_detector_parameters_marks_inconsistent_config_fields>
+  <Function test_run_stability_analysis_includes_detector_parameters_and_missing_runs>
+  <Function test_run_stability_analysis_writes_frequency_plot_html>
+  <Function test_run_stability_analysis_writes_empty_stable_panel_when_no_dmps>
+  <Function test_run_stability_analysis_counts_each_dmp_once_per_run>
+  <Function test_run_stability_analysis_counts_each_dmp_once_per_run_across_detection_dirs>
+  <Function test_run_stability_analysis_refreshes_root_strict_relaxed_in_legacy_mode>
+  <Function test_run_stability_analysis_removes_stale_root_diagnostics_in_legacy_mode>
+  <Function test_run_balanced_accuracy_falls_back_to_detector_results>
+<Module packages/methylvalidation/tests/test_stability_dual_cutoff.py>
+  <Function test_score_stable_dmps_uses_effect_size_times_sqrt_frequency>
+  <Function test_detect_log_score_elbow_returns_internal_index_on_heavy_tail>
+  <Function test_select_dual_cutoff_dmps_ensures_strict_subset_relaxed>
+  <Function test_select_dual_cutoff_dmps_deterministic_on_ties>
+  <Function test_run_stability_analysis_dual_cutoff_writes_expected_artifacts>
+  <Function test_run_stability_analysis_tiered_outputs_and_extended_alias>
+  <Function test_run_stability_analysis_legacy_mode_has_no_tier_outputs>
+  <Function test_evaluate_dmp_stability_convergence_detects_converged_panel>
+  <Function test_evaluate_dmp_stability_convergence_reports_insufficient_runs>
+<Module packages/methylvalidation/tests/test_stability_featurecuts.py>
+  <Function test_write_detector_featurecuts_override>
+  <Function test_resolve_detector_step_override_path_reuses_existing_sidecar>
+  <Function test_build_task_config_propagates_detector_step_override>
+  <Function test_load_discovery_dmps_prefers_classifier_panel>
+  <Function test_count_run_samples_from_existing_files>
+<Module packages/methylvalidation/tests/test_stability_freeze_mapper_annotations.py>
+  <Function test_freeze_production_model_writes_mapper_annotation_pointer>
+  <Function test_freeze_production_model_forwards_skip_detection>
+  <Function test_freeze_production_model_wires_stable_genes_and_raw_gene>
+<Module packages/methylvalidation/tests/test_stability_freeze_readiness.py>
+  <Function test_resolve_report_output_defaults_under_project_readiness>
+  <Function test_resolve_report_output_absolute_unchanged>
+  <Function test_default_methyl_mapper_home_follows_project_mount_root>
+  <Function test_analyze_and_render_go>
+  <Function test_no_go_on_legacy_detector_keys>
+  <Function test_build_sanitized_ai_payload_no_path_like_strings>
+  <Function test_build_sanitized_ai_payload_scrubs_paths_in_verdict_text>
+  <Function test_resolve_grok_api_key_explicit_overrides_env>
+  <Function test_resolve_grok_api_key_decrypt_failure_surfaces_hint>
+  <Function test_render_markdown_ai_advisory_section>
+  <Function test_redact_report_for_export_strips_paths>
+  <Function test_primary_analyte_missing_is_non_blocking>
+  <Function test_main_no_grok_review_json>
+  <Function test_main_redact_paths_json>
+  <Function test_main_mock_grok_does_not_change_verdict>
+  <Function test_main_rejects_existing_file_as_project_root>
+  <Function test_main_skipped_no_key_non_blocking>
+  <Function test_ordered_stage_narratives_in_report_grok_payload_and_markdown>
+  <Function test_ordered_stage_narratives_tolerates_project_without_ordered_label_api>
+  <Function test_mostly_monotone_uses_single_dominant_direction>
+  <Function test_spearman_ranks_both_axes_with_missing_stage_gaps>
+<Module packages/methylvalidation/tests/test_stability_gene_panels.py>
+  <Function test_load_classifier_genes_reads_gene_stability_export>
+  <Function test_compute_gene_stability_counts_classifier_panels>
+  <Function test_compute_gene_stability_enricher_without_metric_columns>
+  <Function test_write_stable_gene_panel_and_stability_analysis>
+  <Function test_run_stability_analysis_persists_biomarker_filter_in_summary_json>
+  <Function test_evaluate_gene_stability_convergence_detects_converged_panel>
+  <Function test_evaluate_gene_stability_convergence_detects_drift>
+  <Function test_evaluate_gene_stability_convergence_reports_insufficient_runs>
+<Module packages/methylvalidation/tests/test_stability_recurrence_metadata.py>
+  <Function test_merge_stable_panels_rejects_count_greater_than_n_runs>
+  <Function test_merge_stable_panels_rejects_frequency_ratio_mismatch>
+  <Function test_merge_stable_panels_preserves_valid_recurrence_metadata>
+<Module packages/methylvalidation/tests/test_tabular_method_config_schema.py>
+  <Function test_tabular_methods_discriminated_union_parses>
+  <Function test_rejects_legacy_tabular_model_type>
+  <Function test_tabular_method_selection_metric_is_validated>
+  <Function test_tabular_dataset_reuse_and_test_export_defaults>
+<Module packages/methylvalidation/tests/test_trainer_api_ecdf_second_stage.py>
+  <Function test_build_model_backend_steps_ecdf_includes_second_stage>
+  <Function test_build_model_backend_steps_ecdf_second_stage_disabled>
+  <Function test_build_model_backend_steps_ecdf_observed_hybrid_defaults_to_classic_path>
+  <Function test_build_model_backend_steps_ecdf_raw_gene_uses_gene_ecdf_path>
+  <Function test_build_model_backend_steps_ecdf_observed_hybrid_uses_aggregated_path_when_explicit>
+  <Function test_build_model_backend_steps_ecdf_aggregated_can_be_explicitly_disabled>
+  <Function test_build_model_backend_steps_ecdf_aggregated_uses_configured_n_bins>
+<Module packages/methylvalidation/tests/test_workflow_planner.py>
+  <Function test_plan_validation_context_materializes_iterations>
+  <Function test_plan_validation_context_requires_validation_block>
+  <Function test_plan_validation_context_profile_overrides_exclude_legacy_defaults>
+  <Function test_plan_validation_context_regenerates_legacy_step_config_run_project>
+  <Function test_plan_validation_context_resume_includes_monte_carlo_runs_root>
+  <Function test_plan_validation_context_binary_centroid_groups>
+  <Function test_plan_validation_context_binary_resume_rehydrates_centroid_groups>
+<Module packages/methylvalidation/tests/test_workflow_planner_groups.py>
+  <Function test_build_group_centroid_scope_emits_add_remove>
+  <Function test_plan_validation_context_hierarchical_groups>
+<Module workflow_engine/tests/test_admin_client.py>
+  <Function test_admin_request_includes_http_error_body>
+<Module workflow_engine/tests/test_admin_handlers.py>
+  <Function test_seed_action_catalog_counts_actions>
+  <Function test_compile_domain_program_from_json>
+  <Function test_list_workflow_definitions_forwards_source_filter>
+  <Function test_list_workflow_definitions_rejects_invalid_source>
+<Module workflow_engine/tests/test_asgi.py>
+  <UnitTestCase AsgiGatewayTests>
+    <TestCaseFunction test_health_route>
+    <TestCaseFunction test_worker_auth_error_returns_401>
+<Module workflow_engine/tests/test_azure_auth.py>
+  <UnitTestCase AzureAuthTests>
+    <TestCaseFunction test_mssql_token_fetched_and_cached>
+    <TestCaseFunction test_mssql_token_utf16_le_with_length_prefix>
+    <TestCaseFunction test_postgres_uses_distinct_resource>
+    <TestCaseFunction test_token_refreshes_near_expiry>
+<Module workflow_engine/tests/test_collection_bindings.py>
+  <Function test_resolve_collection_bindings_from_inline_project>
+<Module workflow_engine/tests/test_connection.py>
+  <UnitTestCase ConnectionConfigTests>
+    <TestCaseFunction test_default_backend_is_mssql>
+    <TestCaseFunction test_managed_identity_flag>
+    <TestCaseFunction test_methylpipeline_db_override>
+    <TestCaseFunction test_mssql_conninfo_from_azure_env>
+    <TestCaseFunction test_mssql_conninfo_omits_credentials_when_mi>
+    <TestCaseFunction test_postgres_backend_aliases>
+    <TestCaseFunction test_postgres_conninfo_from_env>
+    <TestCaseFunction test_postgres_conninfo_sslmode_when_mi>
+    <TestCaseFunction test_resolve_config_builds_mi_mssql_string>
+    <TestCaseFunction test_schema_default>
+<Module workflow_engine/tests/test_db_client.py>
+  <UnitTestCase DbClientDsnLifecycleTests>
+    <TestCaseFunction test_dsn_string_closes_ephemeral_db>
+    <TestCaseFunction test_gateway_db_instance_not_closed>
+<Module workflow_engine/tests/test_dmp_gene_modeling_modes.py>
+  <Function test_statistical_profile_presets[mc_dmp_discovery-raw_pool-none-False-False]>
+  <Function test_statistical_profile_presets[mc_dmp_featurecuts-featurecuts-none-True-False]>
+  <Function test_statistical_profile_presets[mc_gene_mapper-raw_pool-mapper_ranked-False-False]>
+  <Function test_statistical_profile_presets[mc_gene_featurecuts-raw_pool-featurecuts-False-True]>
+  <Function test_statistical_profile_presets[phase_a_dmp_stability-featurecuts-none-True-False]>
+  <Function test_statistical_profile_presets[phase_b_gene_from_stable_dmps-stable_panel-from_stable_dmp_panel-False-True]>
+  <Function test_phase_b_wires_stable_dmp_csv_from_context>
+  <Function test_deprecated_profile_aliases_resolve>
+<Module workflow_engine/tests/test_domain_compiler.py>
+  <Function test_two_group_compiles_nested_foreach_and_parallel>
+  <Function test_compiler_emits_root_scope_defaults>
+  <Function test_compiler_preserves_iteration_dotted_refs_for_mc_gene_select>
+  <Function test_compiler_emits_validation_scope_output_bindings>
+  <Function test_two_group_emits_collection_bindings>
+  <Function test_two_group_context_json_minimal>
+  <Function test_parallel_block_edges_use_parallel_branch>
+  <Function test_sample_prep_still_compiles>
+  <Function test_buffy_action_templates_are_self_contained_when_resolved>
+  <Function test_buffy_check_bundle_compiles_full_pipeline>
+<Module workflow_engine/tests/test_foreach_iteration_scope.py>
+  <UnitTestCase ForeachIterationScopeTests>
+    <TestCaseFunction test_flatten_exposes_task_config_for_template>
+    <TestCaseFunction test_gene_select_template_resolves_run_dir>
+    <TestCaseFunction test_validation_mc_fixture_shape>
+<Module workflow_engine/tests/test_gateway_auth.py>
+  <UnitTestCase RouteClassificationTests>
+    <TestCaseFunction test_admin_catalog_seed>
+    <TestCaseFunction test_admin_workflow_post>
+    <TestCaseFunction test_public_health>
+    <TestCaseFunction test_worker_route>
+  <UnitTestCase ClientIpTests>
+    <TestCaseFunction test_trusted_proxy_prefers_x_real_ip>
+  <UnitTestCase AuthorizeRequestTests>
+    <TestCaseFunction test_admin_requires_bearer_when_entra_enabled>
+    <TestCaseFunction test_worker_ip_bind_denies_wrong_cidr>
+  <UnitTestCase ListDefinitionsTests>
+    <TestCaseFunction test_admin_list_definitions_forwards_source_query>
+    <TestCaseFunction test_admin_list_definitions_rejects_invalid_source>
+  <UnitTestCase AsgiEntraMiddlewareTests>
+    <TestCaseFunction test_admin_route_401_without_jwt>
+    <TestCaseFunction test_worker_route_allowed_without_jwt>
+<Module workflow_engine/tests/test_gateway_platform_storage.py>
+  <Function test_apply_archive_profile_fills_h5_only>
+  <Function test_apply_archive_profile_preserves_explicit_h5>
+  <Function test_apply_archive_profile_requires_lab_fastq>
+  <Function test_resource_profile_reader_parses_json>
+<Module workflow_engine/tests/test_local_engine.py>
+  <Function test_scope_var_truthy[True-True]>
+  <Function test_scope_var_truthy[False-False]>
+  <Function test_scope_var_truthy[1-True]>
+  <Function test_scope_var_truthy[0-False]>
+  <Function test_scope_var_truthy[true-True]>
+  <Function test_scope_var_truthy[-False]>
+  <Function test_scope_var_truthy[None-False]>
+  <Function test_scope_var_truthy[value7-True]>
+  <Function test_scope_var_truthy[value8-False]>
+  <Function test_if_then_else_branching>
+  <Function test_sample_prep_program_stub_run>
+<Module workflow_engine/tests/test_mssql_batches.py>
+  <UnitTestCase MssqlOutputBatchTests>
+    <TestCaseFunction test_output_batches_include_set_nocount>
+  <UnitTestCase MssqlJsonBindingTests>
+    <TestCaseFunction test_json_params_use_cast_not_raw_placeholder>
+<Module workflow_engine/tests/test_mssql_json_binding_policy.py>
+  <UnitTestCase MssqlJsonBindingPolicyTests>
+    <TestCaseFunction test_all_json_proc_params_use_declare_json_helper>
+    <TestCaseFunction test_json_dumps_only_in_json_text_helper>
+    <TestCaseFunction test_mssql_module_defines_json_cast_constant>
+    <TestCaseFunction test_mssql_sets_nvarchar_param_types>
+    <TestCaseFunction test_no_bare_json_parameter_bindings_in_source>
+<Module workflow_engine/tests/test_no_step_config_in_projects.py>
+  <Function test_no_step_config_in_committed_project_json>
+  <Function test_check_script_detects_step_config>
+<Module workflow_engine/tests/test_pipeline_profiles.py>
+  <Function test_gene_enricher_stability_profile_flags>
+  <Function test_discovery_gene_featurecuts_profile>
+  <Function test_full_biomarker_profile_enables_optional_branches>
+  <Function test_enrich_instance_context_seeds_flags_from_validation>
+  <Function test_enrich_preserves_profile_validation_when_single_pipeline_flag_set>
+  <Function test_composable_programs_compile_with_if_nodes[program_path0]>
+  <Function test_composable_programs_compile_with_if_nodes[program_path1]>
+  <Function test_composable_programs_compile_with_if_nodes[program_path2]>
+  <Function test_composable_programs_compile_with_if_nodes[program_path3]>
+  <Function test_mc_gene_enricher_program_has_enricher_not_dmp_select>
+<Module workflow_engine/tests/test_sample_prep_lifecycle.py>
+  <Function test_start_sample_prep_plans_context_and_starts_instance>
+  <Function test_start_sample_prep_requires_project_path>
+<Module workflow_engine/tests/test_study_lifecycle.py>
+  <Function test_apply_project_path_scope_default_replaces_circular_expr>
+  <Function test_compile_program_spec_pins_body_project_path>
+<Module workflow_engine/tests/test_workflow_builder.py>
+  <Function test_create_workflow_graph_and_start>
+<Module workflow_engine/tests/test_workflow_context.py>
+  <Function test_list_unresolved_placeholders_finds_var_refs>
+  <Function test_resolve_input_json_from_template>
+  <Function test_validate_resolved_input_json_rejects_placeholders>
+  <Function test_enrich_instance_context_from_buffy_project>
+<Module workers/tests/test_action_catalog.py>
+  <Function test_catalog_linkage_valid>
+  <Function test_task_schema_specs_derived_from_catalog>
+  <Function test_capability_handlers_derived_from_catalog>
+  <Function test_tool_cli_derived_from_catalog>
+  <Function test_every_in_process_handler_exists_in_handlers_module>
+  <Function test_catalog_entries_have_execution_mode>
+  <Function test_action_catalog_export_roundtrip>
+  <Function test_mark_failed_handler>
+  <Function test_sample_prep_actions_have_domain_effects>
+<Module workers/tests/test_action_run_log.py>
+  <Function test_append_action_run_log_writes_jsonl>
+  <Function test_monte_carlo_runs_root_from_path>
+  <Function test_resolve_workflow_action_log_root_from_run_dir>
+  <Function test_task_inputs_for_log_strips_runtime_fields>
+  <Function test_execute_task_appends_validation_action_log>
+  <Function test_execute_task_appends_pipeline_action_log>
+<Module workers/tests/test_action_skip.py>
+  <Function test_compute_input_signature_stable_for_same_payload>
+  <Function test_verify_artifacts_detects_size_change>
+  <Function test_maybe_skip_replays_when_manifest_matches>
+  <Function test_maybe_skip_works_with_workflow_node_key>
+  <Function test_force_rerun_bypasses_skip>
+  <Function test_plan_iterations_skip_blocked_by_legacy_mc_run_project>
+  <Function test_normalize_task_input_preserves_force_rerun>
+  <Function test_execute_task_honors_force_rerun_after_normalize>
+  <Function test_execute_task_skips_validation_stability_when_manifest_exists>
+<Module workers/tests/test_centroid_argv.py>
+  <Function test_centroid_build_argv_from_add_remove_samples>
+  <Function test_centroid_build_argv_synthesizes_override_when_step_override_key_is_none>
+<Module workers/tests/test_centroid_seed_copy.py>
+  <Function test_copy_centroid_seed_baseline_copies_tree>
+  <Function test_copy_centroid_seed_baseline_missing_seed_returns_false>
+<Module workers/tests/test_client.py>
+  <Function test_request_task_empty>
+  <Function test_request_task_claim>
+  <Function test_submit_result>
+  <Function test_post_json_http_error>
+<Module workers/tests/test_collectors_manifest.py>
+  <Function test_manifest_first_collector_reads_detector_manifest>
+  <Function test_manifest_first_collector_falls_back_to_centroid_legacy>
+  <Function test_enricher_legacy_collector_reads_completeness_manifest>
+  <Function test_manifest_first_collector_ignores_worker_idempotency_envelope>
+<Module workers/tests/test_detector_argv.py>
+  <Function test_merge_detector_step_override_folds_scope_fields>
+  <Function test_merge_detector_step_override_strips_null_workflow_keys>
+  <Function test_detector_build_argv_from_lifecycle_scope>
+  <Function test_detector_argv_accepted_by_methyl_detector_help>
+<Module workers/tests/test_extract_runner.py>
+  <Function test_normalize_contexts_default_all_three>
+  <Function test_normalize_contexts_cg_only>
+  <Function test_build_command_includes_chg_chh_flags>
+  <Function test_build_command_cg_only_skips_chg_chh>
+  <Function test_derives_chrom_mapping_from_chromosomes>
+  <Function test_inline_chrom_mapping_object_materialized>
+  <Function test_chrom_mapping_mismatch_raises>
+  <Function test_ucsc_chr_contig_naming>
+  <Function test_idempotent_skip_when_all_h5_present>
+  <Function test_resolve_bam_legacy_name>
+  <Function test_run_invokes_methyl_extractor>
+<Module workers/tests/test_extraction_qc_handler.py>
+  <Function test_methyl_extraction_qc_handler_writes_guardrails>
+<Module workers/tests/test_fastq_source.py>
+  <Function test_local_folder_downloads_all_fastq_gz>
+  <Function test_local_download_skips_unchanged_size_and_mtime>
+  <Function test_local_download_refreshes_when_size_changes>
+  <Function test_s3_folder_download>
+  <Function test_s3_preserves_subprefix_paths_when_basenames_collide>
+  <Function test_s3_skips_download_when_size_and_mtime_match>
+  <Function test_azure_folder_download>
+  <Function test_azure_preserves_subprefix_paths_when_basenames_collide>
+  <Function test_azure_empty_prefix_lists_container>
+<Module workers/tests/test_fastq_source_helpers.py>
+  <Function test_relative_to_prefix_strips_list_prefix>
+  <Function test_relative_to_prefix_keeps_subfolders>
+<Module workers/tests/test_fastq_storage_models.py>
+  <Function test_normalize_sample_prefix>
+  <Function test_merge_file_storage>
+  <Function test_merge_s3_storage>
+  <Function test_dump_storage_model_reveals_explicit_keys>
+  <Function test_s3_explicit_keys_require_secret>
+  <Function test_fastq_source_discriminator>
+<Module workers/tests/test_gene_feature_select_action.py>
+  <Function test_gene_feature_select_catalog_argv_map>
+<Module workers/tests/test_gene_select_action.py>
+  <Function test_default_run_dir_uses_parent_for_json_without_filesystem>
+  <Function test_gene_select_defaults_run_dir_to_project_parent>
+  <Function test_gene_select_keeps_explicit_run_dir>
+  <Function test_gene_select_applies_resolved_config_caps>
+  <Function test_gene_select_omits_caps_when_unconfigured>
+  <Function test_gene_select_merges_resolved_config_caps>
+<Module workers/tests/test_golden_task_outputs.py>
+  <Function test_golden_input_fixture[pipeline.centroid]>
+  <Function test_golden_input_fixture[pipeline.detector]>
+  <Function test_golden_input_fixture[pipeline.dmp_select]>
+  <Function test_golden_input_fixture[pipeline.mapper]>
+  <Function test_golden_input_fixture[pipeline.gene_select]>
+  <Function test_golden_input_fixture[pipeline.gene_feature_select]>
+  <Function test_golden_input_fixture[pipeline.enricher]>
+  <Function test_golden_input_fixture[pipeline.progression]>
+  <Function test_golden_input_fixture[pipeline.classifier]>
+  <Function test_golden_input_fixture[pipeline.predictor]>
+  <Function test_golden_input_fixture[sample.download_fastq]>
+  <Function test_golden_input_fixture[sample.parabricks_fq2bam]>
+  <Function test_golden_input_fixture[sample.delete_fastqs]>
+  <Function test_golden_input_fixture[sample.trim_fastq]>
+  <Function test_golden_input_fixture[sample.methyl_qc]>
+  <Function test_golden_input_fixture[sample.fragmentomics]>
+  <Function test_golden_input_fixture[sample.methyl_extract]>
+  <Function test_golden_input_fixture[sample.extraction_qc]>
+  <Function test_golden_input_fixture[sample.archive_sample]>
+  <Function test_golden_input_fixture[sample.delete_bam]>
+  <Function test_golden_input_fixture[sample.qc_failed]>
+  <Function test_golden_input_fixture[validation.plan_iterations]>
+  <Function test_golden_input_fixture[validation.stability]>
+  <Function test_golden_input_fixture[validation.biomarker_filter]>
+  <Function test_golden_input_fixture[validation.prepare_freeze_project]>
+  <Function test_golden_input_fixture[validation.stability_freeze_readiness]>
+  <Function test_golden_input_fixture[validation.link_artifacts]>
+  <Function test_golden_input_fixture[validation.model_bundle]>
+  <Function test_golden_input_fixture[validation.model_train]>
+  <Function test_golden_input_fixture[validation.model_predict]>
+  <Function test_golden_input_fixture[validation.select_best_model]>
+  <Function test_golden_input_fixture[validation.model_mc]>
+  <Function test_golden_input_fixture[validation.post_model_validation]>
+  <Function test_golden_output_fixture[pipeline.centroid]>
+  <Function test_golden_output_fixture[pipeline.detector]>
+  <Function test_golden_output_fixture[pipeline.dmp_select]>
+  <Function test_golden_output_fixture[pipeline.mapper]>
+  <Function test_golden_output_fixture[pipeline.gene_select]>
+  <Function test_golden_output_fixture[pipeline.gene_feature_select]>
+  <Function test_golden_output_fixture[pipeline.enricher]>
+  <Function test_golden_output_fixture[pipeline.progression]>
+  <Function test_golden_output_fixture[pipeline.classifier]>
+  <Function test_golden_output_fixture[pipeline.predictor]>
+  <Function test_golden_output_fixture[sample.download_fastq]>
+  <Function test_golden_output_fixture[sample.parabricks_fq2bam]>
+  <Function test_golden_output_fixture[sample.delete_fastqs]>
+  <Function test_golden_output_fixture[sample.trim_fastq]>
+  <Function test_golden_output_fixture[sample.methyl_qc]>
+  <Function test_golden_output_fixture[sample.fragmentomics]>
+  <Function test_golden_output_fixture[sample.methyl_extract]>
+  <Function test_golden_output_fixture[sample.extraction_qc]>
+  <Function test_golden_output_fixture[sample.archive_sample]>
+  <Function test_golden_output_fixture[sample.delete_bam]>
+  <Function test_golden_output_fixture[sample.qc_failed]>
+  <Function test_golden_output_fixture[validation.plan_iterations]>
+  <Function test_golden_output_fixture[validation.stability]>
+  <Function test_golden_output_fixture[validation.biomarker_filter]>
+  <Function test_golden_output_fixture[validation.prepare_freeze_project]>
+  <Function test_golden_output_fixture[validation.stability_freeze_readiness]>
+  <Function test_golden_output_fixture[validation.link_artifacts]>
+  <Function test_golden_output_fixture[validation.model_bundle]>
+  <Function test_golden_output_fixture[validation.model_train]>
+  <Function test_golden_output_fixture[validation.model_predict]>
+  <Function test_golden_output_fixture[validation.select_best_model]>
+  <Function test_golden_output_fixture[validation.model_mc]>
+  <Function test_golden_output_fixture[validation.post_model_validation]>
+<Module workers/tests/test_h5_upload.py>
+  <Function test_archive_sample_full_file_destination>
+  <Function test_archive_sample_qc_only>
+  <Function test_archive_sample_handler_h5_only>
+  <Function test_archive_sample_skipped_without_sample_destination>
+  <Function test_upload_h5_from_task_input_requires_sample_destination>
+  <Function test_upload_h5_files_ignores_fastqs>
+  <Function test_upload_h5_s3_skips_unchanged>
+  <Function test_should_skip_azure_matches_content_md5_bytes>
+  <Function test_upload_h5_missing_files_raises>
+<Module workers/tests/test_handlers.py>
+  <Function test_download_handler_receives_validated_input_model>
+  <Function test_mark_failed_handler>
+  <Function test_download_requires_fastq_source>
+  <Function test_parabricks_idempotent_when_outputs_exist>
+  <Function test_methyl_extract_idempotent_when_outputs_exist>
+  <Function test_pipeline_cli_dispatch>
+<Module workers/tests/test_in_process_action.py>
+  <Function test_handler_accepts_runtime_detects_signatures>
+  <Function test_call_in_process_handler_passes_keyword_only_runtime>
+  <Function test_in_process_action_supports_keyword_only_runtime_handler>
+  <Function test_in_process_action_calls_three_arg_handler_without_runtime>
+  <Function test_in_process_action_propagates_internal_type_error_from_four_arg_handler>
+  <Function test_in_process_action_passes_runtime_to_four_arg_handler>
+<Module workers/tests/test_mapper_argv.py>
+  <Function test_merge_mapper_step_override_merges_resolved_mapper_slice>
+  <Function test_mapper_build_argv_omits_comparison_flag>
+<Module workers/tests/test_parabricks_runner.py>
+  <Function test_resolve_paired_fastqs_prefers_explicit_names>
+  <Function test_resolve_paired_fastqs_recursive_glob>
+  <Function test_resolve_paired_fastqs_wrong_count>
+  <Function test_build_docker_command_mounts_and_flags>
+  <Function test_idempotent_skip_when_bam_and_qc_tar_exist>
+  <Function test_package_qc_metrics_dir_to_tar>
+  <Function test_run_fq2bam_meth_invokes_docker>
+  <Function test_resolve_parabricks_from_project_action_config>
+<Module workers/tests/test_sample_prep_log.py>
+  <Function test_append_sample_prep_log_preserves_prior_lines>
+<Module workers/tests/test_split_detector_task_schemas.py>
+  <Function test_detector_input_accepts_discovery_step_override>
+  <Function test_dmp_select_input_strips_unknown_keys_before_validate>
+  <Function test_gene_select_input_requires_project_and_defaults_run_dir>
+  <Function test_biomarker_filter_output_accepts_structured_payload>
+  <Function test_gene_feature_select_input_strict>
+<Module workers/tests/test_split_workflow_actions.py>
+  <Function test_split_workflow_actions_registered>
+  <Function test_action_config_keys_include_split_sections>
+  <Function test_split_actions_have_dedicated_task_schema_specs>
+<Module workers/tests/test_stub_external.py>
+  <Function test_stub_methyl_extract_writes_manifest>
+  <Function test_archive_sample_runs_real_handler_with_file_destination>
+<Module workers/tests/test_task_validation.py>
+  <Function test_pipeline_centroid_input_accepts_valid_payload>
+  <Function test_pipeline_centroid_input_rejects_missing_tool>
+  <Function test_pipeline_centroid_output_accepts_minimal>
+  <Function test_pipeline_centroid_output_rejects_wrong_output_model>
+  <Function test_unknown_action_skips_validation>
+  <Function test_validation_plan_resolves_by_capability>
+  <Function test_parse_task_envelope_strips_runtime_keys>
+  <Function test_cli_action_accepts_runtime_keys_on_wire>
+  <Function test_validate_task_output_rejects_action_execution_result_wrapper>
+  <Function test_try_validate_returns_message>
+  <Function test_task_validation_error_code_constant>
+<Module workers/tests/test_validation_model_mc.py>
+  <Function test_model_mc_handler_delegates_to_runner>
+<Module workers/tests/test_validation_planner_handler.py>
+  <Function test_validation_plan_iterations_handler>
+  <Function test_validation_plan_iterations_emits_centroid_seed_groups>
+<Module tools/tests/test_compare_analyte_mc_gene_fc.py>
+  <Function test_compare_mc_gene_fc_overlap>
+  <Function test_cross_analyte_concordance_differs_per_analyte>
+<Module tools/tests/test_compare_analyte_mc_signatures.py>
+  <Function test_overlap_metrics_prefers_plasma_signature>
+  <Function test_filter_mapper_genes_disease_only>
+  <Function test_load_signature_genes>
+  <Function test_filter_mapper_genes_association_type_string_not_characters>
+<Module tools/tests/test_compare_analyte_outputs.py>
+  <Function test_load_dmps_discovery>
+  <Function test_load_dmps_classifier_excludes_extended>
+  <Function test_load_dmps_classifier_extended>
+  <Function test_load_dmps_missing_raises>
+  <Function test_dmp_source_patterns>
+
+==================================== ERRORS ====================================
+________________ ERROR collecting workers/tests/test_runner.py _________________
+import file mismatch:
+imported module 'test_runner' has this __file__ attribute:
+  /home/ubuntu/MethylPipeline/packages/methyldmpselect/tests/test_runner.py
+which is not the same as the test file we want to collect:
+  /home/ubuntu/MethylPipeline/workers/tests/test_runner.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules
+=============================== warnings summary ===============================
+packages/methylclassifier/methyl_classifier/models/config.py:10
+  /home/ubuntu/MethylPipeline/packages/methylclassifier/methyl_classifier/models/config.py:10: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ClassifierConfig(BaseModel):
+
+packages/methylclassifier/methyl_classifier/models/config_schema.py:10
+  /home/ubuntu/MethylPipeline/packages/methylclassifier/methyl_classifier/models/config_schema.py:10: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ClassificationConfig(BaseModel):
+
+packages/methylpredictor/methyl_predictor/models/config.py:23
+  /home/ubuntu/MethylPipeline/packages/methylpredictor/methyl_predictor/models/config.py:23: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class PredictorConfig(BaseModel):
+
+.venv/lib/python3.12/site-packages/sqlmodel/main.py:583
+.venv/lib/python3.12/site-packages/sqlmodel/main.py:583
+  /home/ubuntu/MethylPipeline/.venv/lib/python3.12/site-packages/sqlmodel/main.py:583: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    "SQLModel", super().__new__(cls, name, bases, dict_used, **config_kwargs)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR workers/tests/test_runner.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+==================== 999 tests collected, 1 error in 3.52s =====================
