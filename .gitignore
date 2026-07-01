@@ -143,3 +143,6 @@ scripts/migrate_work_layout.env
 
 # Preflight manifest from migrate_work_layout.py --manifest-out (operator runtime output)
 migrate_work_layout.manifest.json
+
+# Ephemeral review/diagnostic output (pytest logs, schema-drift, guard results) — local only
+.review-scratch/
