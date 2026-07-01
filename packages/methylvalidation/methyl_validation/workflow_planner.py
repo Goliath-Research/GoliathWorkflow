@@ -30,6 +30,8 @@ from .planner_models import (
     ValidationPlanSummary,
 )
 from .project_gen import (
+    _run_scoped_artifact_dir,
+    _side_by_label,
     build_centroid_seed_groups,
     build_cohort_relative_centroid_scope,
     build_group_centroid_scope,
@@ -205,6 +207,9 @@ def _attach_iteration_centroid_scope(
     previous_train_by_label: Optional[Dict[str, List[str]]] = None,
 ) -> None:
     """Attach per-group centroid scope and run-scoped detect dirs for workflow iterations."""
+    from methyl_utils import load_project
+
+    project = load_project(str(base_project_path))
     if parallel_seed:
         if full_cohort_by_label is None or seed_dir_by_label is None:
             raise ValueError("parallel MC centroid seed requires full_cohort_by_label and seed_dir_by_label")
@@ -215,6 +220,7 @@ def _attach_iteration_centroid_scope(
             full_cohort_by_label=full_cohort_by_label,
             train_by_label=train_by_label,
             seed_dir_by_label=seed_dir_by_label,
+            project=project,
         )
     else:
         iteration.centroidGroups = build_group_centroid_scope(
@@ -223,33 +229,28 @@ def _attach_iteration_centroid_scope(
             cohort_labels=cohort_labels,
             train_by_label=train_by_label,
             previous_train_by_label=previous_train_by_label,
+            project=project,
         )
     if layout == "binary" and len(cohort_labels) >= 2:
-        from methyl_utils import load_project
-
-        from .project_gen import run_centroid_dir_for_group, run_detection_output_dir_for_comparison
-
-        project = load_project(str(base_project_path))
         control_label, disease_label = cohort_labels[0], cohort_labels[1]
-        with_side = project._get_resolved_groups_with_side(expand_subclusters=True)
-        side_by_label = {lbl: side for lbl, _, side in with_side}
-        iteration.centroid1Dir = run_centroid_dir_for_group(
+        side_by_label = _side_by_label(project)
+        iteration.centroid1Dir = _run_scoped_artifact_dir(
             run_dir,
-            base_project_path,
-            side_by_label.get(control_label, "control"),
-            control_label,
+            project.get_centroid_dir(side_by_label.get(control_label, "control"), control_label),
+            anchor="centroids",
+            fallback_name=control_label,
         )
-        iteration.centroid2Dir = run_centroid_dir_for_group(
+        iteration.centroid2Dir = _run_scoped_artifact_dir(
             run_dir,
-            base_project_path,
-            side_by_label.get(disease_label, "disease"),
-            disease_label,
+            project.get_centroid_dir(side_by_label.get(disease_label, "disease"), disease_label),
+            anchor="centroids",
+            fallback_name=disease_label,
         )
-        iteration.detectOutDir = run_detection_output_dir_for_comparison(
+        iteration.detectOutDir = _run_scoped_artifact_dir(
             run_dir,
-            base_project_path,
-            control_label,
-            disease_label,
+            project.get_detection_output_dir(control_label, disease_label),
+            anchor="detections",
+            fallback_name=f"{control_label}_{disease_label}",
         )
 
 
