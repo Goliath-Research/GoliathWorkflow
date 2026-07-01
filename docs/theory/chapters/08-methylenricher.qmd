@@ -181,7 +181,7 @@ For publication and auditability, offline artifacts should remain the canonical 
 
 ## Project-Orchestrated Execution
 
-In pipeline runs, MethylEnricher is commonly launched with `--project` and reads `step_config.enricher`.
+In pipeline runs, MethylEnricher is commonly launched with `--project` and reads merged `actionConfig.enricher`.
 When the project contains multiple comparison groups, the runtime can execute one enrichment/module pass per group using per-comparison mapper inputs and enricher outputs. If explicit input/output arguments are passed, execution falls back to a single run.
 
 Configuration precedence for libraries is:

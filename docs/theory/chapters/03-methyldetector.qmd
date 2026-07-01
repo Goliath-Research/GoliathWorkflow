@@ -93,15 +93,15 @@ Interpretation workflows (mapping DMPs to genes, pathway enrichment, comparing s
 The implementation therefore supports two coordinated outputs when `dmp_export_mode=dual` (default in project configs):
 
 - `dmps-{chrom}-discovery.csv`: all biologically filtered loci after importance ranking, **without** the effect-size elbow used to trim the classifier panel (unless `discovery_dynamic_dmp_cutoff_enabled` is turned on).
-- `dmps-{chrom}-classifier.csv`: the **prediction panel** after the same elbow heuristic as before, or after optional validation balanced-accuracy optimization (`classifier_dmp_selection=featurecuts_validation`) when validation samples are configured.
+- `dmps-{chrom}-selected.csv`: the **primary prediction panel** after FeatureCuts balanced-accuracy optimization or the effect-size elbow (`classifier_dmp_selection=featurecuts_validation` when validation samples are configured). Legacy `dmps-{chrom}-classifier.csv` remains for one release cycle.
 
-The saved ECDF classifier pickle always uses the **classifier** panel, not the discovery table. MethylMapper and MethylEnricher should read the **discovery** glob (for example `dmps-*-discovery.csv`). Multiclass merge utilities resolve `dmps-*-classifier.csv` automatically when present.
+The saved ECDF classifier pickle always uses the **selected** panel, not the discovery table. MethylMapper and MethylEnricher should read the **discovery** glob (for example `dmps-*-discovery.csv`) in discovery-only modeling modes; FeatureCuts workflows prefer `dmps-*-selected.csv`. Multiclass merge utilities resolve `dmps-*-selected.csv` automatically when present.
 
 For strict evaluation of a deployed classifier, feature selection must be performed **inside** each outer training fold (for example by running detection on fold-specific centroids, as in Monte Carlo train splits); discovery lists built on all samples may still be reported for mechanism, but they must not be the sole basis for performance claims unless that design is stated explicitly.
 
 ## Production Freeze Panel {#sec-detector-fixed-panel}
 
-In the production workflow (@sec-two-workflows), the detector can bypass statistical and biological discovery entirely and instead operate from a fixed list of pre-selected loci. This is configured via the `fixed_dmp_panel` parameter in `step_config.detection`.
+In the production workflow (@sec-two-workflows), the detector can bypass statistical and biological discovery entirely and instead operate from a fixed list of pre-selected loci. This is configured via the `fixed_dmp_panel` parameter in profile `actionConfig.detection`.
 
 When `fixed_dmp_panel` is set to a path pointing at a CSV file that contains at minimum the columns `chromosome` and `position`, the `_run_multi_context` method short-circuits the entire discovery pipeline. No centroids are compared, no KS statistics are computed, and no biological filtering is applied. The columns `context`, `effect_size`, `statistical_dmp`, and `biological_dmp` are inferred or set to unit defaults for any that are missing from the file. The result object is constructed directly from the loaded rows, with `biological_retention_rate = 1.0` and `n_statistical_dmps = n_biological_dmps = n_classifier_dmps` all equal to the CSV row count.
 
@@ -131,8 +131,8 @@ The exported classifier model (PKL) is identical in structure to one built throu
 
 A frequently encountered diagnostic problem is low DMP coverage in validation or prediction samples: the classifier reports that only 10–30% of DMP positions have usable observations in a given sample. The root cause is almost always a mismatch between coverage thresholds **at centroid construction / DMP discovery** and **at MethylClassifier inference**:
 
-- `min_coverage` in `step_config.centroid.base_config` and matching `min_coverage` in `step_config.detection` — minimum reads per locus when building centroids and when calling DMPs.
-- **`min_coverage` (or equivalent) in `step_config.classifier` / MethylClassifier JSON** — minimum reads required to treat a locus as observed in a *new* sample.
+- `min_coverage` in profile `actionConfig.centroid.base_config` and matching `min_coverage` in `actionConfig.detection` — minimum reads per locus when building centroids and when calling DMPs.
+- **`min_coverage` (or equivalent) in profile `actionConfig.classifier` / MethylClassifier JSON** — minimum reads required to treat a locus as observed in a *new* sample.
 
 If centroids and detection used `min_coverage = 4` but the classifier requires a higher per-locus depth, loci with 4–9 reads in a test sample are dropped from the feature matrix even though they were part of the DMP panel.
 

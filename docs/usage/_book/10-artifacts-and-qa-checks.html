@@ -340,7 +340,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li><strong>Per-action manifests:</strong> <code>{output_dir}/.action_results/{action_name}.{run_key}.json</code> — full typed result written by CLIs (e.g.&nbsp;<code>pipeline.dmp_select</code>, <code>pipeline.mapper</code>) or reconstructed by the worker collector.</li>
 <li><strong>Sample prep timeline:</strong> <code>{sampleDir}/{sampleId}.sample_prep_log.jsonl</code> — append-only JSONL audit for download, align, QC, extract, archive steps.</li>
-<li><strong>Validation / MC timeline:</strong> <code>{monteCarloRunsRoot}/action_run_log.jsonl</code> — append-only log for validation-category actions (plan, stability, model_mc, etc.).</li>
+<li><strong>Workflow action timeline:</strong> <code>{logRoot}/action_run_log.jsonl</code> — append-only log for every workflow ACTION when a log root resolves (MC runs, project output, or sample dir). Records include timing, typed <code>inputs</code>/<code>outputs</code>, and idempotency fields.</li>
 </ul>
 <p>Regenerate JSON Schema artifacts after model changes:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
@@ -398,7 +398,12 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="handoff-integrity-checks" class="level2" data-number="12.4">
 <h2 data-number="12.4" class="anchored" data-anchor-id="handoff-integrity-checks"><span class="header-section-number">12.4</span> Handoff integrity checks</h2>
-
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../diagrams/out/pipeline-stages.svg" class="img-fluid figure-img"></p>
+<figcaption>Artifact handoffs</figcaption>
+</figure>
+</div>
 </section>
 <section id="qa-checklist-per-stage" class="level2" data-number="12.5">
 <h2 data-number="12.5" class="anchored" data-anchor-id="qa-checklist-per-stage"><span class="header-section-number">12.5</span> QA checklist per stage</h2>

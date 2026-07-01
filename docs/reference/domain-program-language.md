@@ -51,13 +51,13 @@ source .venv/bin/activate
 # Compile only (inspect graph)
 python scripts/compile_workflow_program.py \
   workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json \
+  --context-file workflow_engine/domain/profiles/mc_gene_featurecuts.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'
 
 # Run in-process (stub external GPU tools)
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json \
+  --context-file workflow_engine/domain/profiles/mc_gene_featurecuts.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
   --stub-external
 ```
@@ -232,7 +232,7 @@ New runs combine four artifacts (see [`reference/config-parameter-matrix.md`](re
 3. **Profile** — reusable `actionConfig` packs and IF scope booleans
 4. **Site manifest** — shared infra paths (genome, GTF, caches)
 
-**Precedence:** program `with` / `stepOverride` → profile `actionConfig` → analyte defaults → site manifest → package defaults. Study manifests must not contain tool parameters.
+**Precedence:** program `with` / `stepOverride` → profile `actionConfig` → analyte defaults → site manifest → *(no Python fallback for tunable science knobs)*. Study manifests must not contain tool parameters.
 
 ### Statistical modeling modes (process-agnostic)
 
@@ -271,16 +271,15 @@ Named presets live in `workflow_engine/domain/profiles/*.profile.json`. Pass via
 |---------|----------|------------|------------|-------------------------|
 | `legacy_dual` | legacy inline FeatureCuts | off | discovery | DMP classifier panels |
 | `discovery_interpretation` | discovery_only | off | discovery | single-run mapper/enricher |
-| `gene_enricher_stability` | discovery_only | off | discovery | gene frequency from enricher |
-| `dmp_panel_stability` | discovery_only | on | classifier-extended | DMP panel MC |
-| `full_biomarker_gene_fc` | discovery + dmp_select | on | classifier-extended | DMP + gene FeatureCuts |
-| `discovery_gene_featurecuts` | discovery + dmp_select | on | discovery | gene FeatureCuts on broad mapped pool |
+| `mc_dmp_discovery` | discovery_only | off | discovery | DMP recurrence (raw pool) |
+| `mc_dmp_featurecuts` | discovery + dmp_select | on | selected | DMP panel MC |
+| `mc_gene_featurecuts` | discovery + dmp_select | on | selected | gene FeatureCuts on discovery-mapped loci |
+| `mc_gene_fc` | Binary cohort MC + stability (analyte-agnostic) | on | selected | DMP + gene FeatureCuts stability |
 | `structural_features` | discovery_only | off | discovery + intersections | gene×region ranked catalog |
 | `staged_ovr_mc` | staged OvR + FeatureCuts | on | discovery | MC stability + progression |
 | `staged_full_lifecycle` | staged OvR + FeatureCuts | on | discovery | MC + freeze + model lifecycle |
 | `staged_progression_interpretation` | discovery_only | off | discovery | mapper/enricher + progression (no MC) |
-| `mc_gene_fc` | Binary cohort MC + stability (analyte-agnostic; use manifest `regulatory`) | on | classifier-extended | gene FeatureCuts stability |
-| `buffy_mc_gene_fc` | *(deprecated alias → `mc_gene_fc`)* | | | |
+| `mc_gene_fc` | *(same as above; primary production profile)* | on | selected | gene FeatureCuts stability |
 
 ```json
 {
@@ -314,24 +313,24 @@ Example:
 ```bash
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_interpretation.program.json \
-  --context-file workflow_engine/domain/profiles/gene_enricher_single_run.context.json
+  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json
 
 methyl-validation run-workflow \
-  --program workflow_engine/domain/checks/pca1_5_cg/configs/mc_gene_enricher_stability.program.json \
-  --context-file workflow_engine/domain/profiles/gene_enricher_stability.profile.json
+  --program workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json \
+  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json
 ```
 
-**Discovery DMPs → broad mapper → gene FeatureCuts (stable gene panel for model):**
+**Gene FeatureCuts on discovery-mapped loci (mode 4):**
 
 ```bash
 methyl-validation run-workflow \
   --program workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/discovery_gene_featurecuts.profile.json
+  --context-file workflow_engine/domain/profiles/mc_gene_featurecuts.profile.json
 ```
 
-Uses `dmps-*-discovery.csv` for mapper (large gene pool), `pipeline.dmp_select` for classifier DMP exports required by `pipeline.gene_select`, and MC stability on gene classifier panels. Set `"runBiomarkerFilter": true` in context to add PPI/disease shrink before gene FeatureCuts (as in `full_biomarker_gene_fc`).
+Uses `dmps-*-discovery.csv` for mapper; gene FeatureCuts reads `dmps-*-selected.csv` when `gene_modeling_mode: featurecuts`. Set `"runBiomarkerFilter": true` in context to add PPI/disease shrink before gene FeatureCuts.
 
-Stability summaries record active axes in `stability_summary.json` → `pipeline_axes` (`dmp_axis`: `none|discovery|classifier`, `gene_axis`: `enricher|classifier`).
+Stability summaries record active axes in `stability_summary.json` → `pipeline_axes` (`dmp_axis`, `gene_axis` from modeling modes).
 
 ## Related JSON schemas
 

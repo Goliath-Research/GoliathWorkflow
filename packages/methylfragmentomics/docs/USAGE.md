@@ -7,10 +7,12 @@ Run after external alignment (BAM available). Typical order:
 3. `methyl-fragmentomics --project …` (optional regional WPS + end motifs)
 4. MethylDackel / HDF5 → centroid → detector → mapper → enricher (CIS-BP TF)
 
-## Enable in project.json
+## Enable via profile/site actionConfig
+
+Set fragmentomics and alignment QC under **profile or site `actionConfig`** (merged into instance `context_json`). The study manifest carries cohort paths and top-level `regulatory.primary_analyte` only.
 
 ```json
-"step_config": {
+"actionConfig": {
   "alignment_qc": {
     "fragmentomics": { "enabled": true, "profile": "cfdna" },
     "auto_profile_from_analyte": true

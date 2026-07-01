@@ -35,30 +35,8 @@ methyl-export-task-schemas --check   # CI drift gate
 
 ## Handoff integrity checks
 
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=1.2cm and 2.0cm,
-  box/.style={draw, rounded corners, align=center, minimum width=3.1cm, minimum height=0.8cm}
-]
-\node[box] (stability) {stability outputs};
-\node[box, below=of stability] (freezegate) {freeze input gate};
-\node[box, below=of freezegate] (production) {production outputs};
-\node[box, below left=of production] (modelgate) {model input gate};
-\node[box, below=of modelgate] (eval) {post-model outputs};
-\node[box, below right=of production] (blindgate) {blind input gate};
-\node[box, below=of blindgate] (blind) {blind outputs};
+![Artifact handoffs](../diagrams/out/pipeline-stages.svg)
 
-\draw[->] (stability) -- (freezegate);
-\draw[->] (freezegate) -- (production);
-\draw[->] (production) -- (modelgate);
-\draw[->] (modelgate) -- (eval);
-\draw[->] (production) -- (blindgate);
-\draw[->] (blindgate) -- (blind);
-\end{tikzpicture}
-\end{center}
-```
 
 ## QA checklist per stage
 

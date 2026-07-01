@@ -36,8 +36,27 @@ steps:
     displayName: Windows-compatible path guard
 
   - script: |
-      bash scripts/render_diagrams.sh --check || echo "Diagram freshness check skipped if SVG placeholders committed"
+      bash scripts/check_doc_freshness.sh
+    displayName: Documentation freshness guard
+
+  - script: |
+      sudo apt-get update
+      sudo apt-get install -y chromium-browser
+      cd docs/diagrams && npm ci --no-audit --no-fund
+      bash scripts/render_diagrams.sh --check
     displayName: Diagram asset freshness check
+
+  - script: |
+      if command -v quarto >/dev/null 2>&1; then
+        quarto render docs/theory docs/usage --to html
+      else
+        echo "quarto not installed on agent; skipping book smoke"
+      fi
+    displayName: Quarto book smoke (theory + usage HTML)
+
+  - script: |
+      pytest scripts/tests/test_check_doc_freshness.py scripts/tests/test_render_diagrams.py -q
+    displayName: Doc freshness and diagram script tests
 
   - script: |
       pytest scripts/tests/test_release_manifest.py -q

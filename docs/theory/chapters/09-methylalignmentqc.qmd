@@ -14,7 +14,7 @@ The package is deterministic: parsing, normalization, threshold checks, and cycl
 
 Parabricks emits tab-separated `*deduplicate_metrics.txt` (or `*duplication_metrics.txt`). The parser (`methyl_alignment_qc/core/parser.py`) reads columns such as `PERCENT_DUPLICATION`, read-pair counts, and unmapped reads. These populate `summary_stats` on the export JSON.
 
-Optional config guardrails (`step_config.alignment_qc.optional_guardrails.duplication_rate_max`, `min_pf_reads`) can fail samples with excessive PCR duplication even when cycle quality passes.
+Optional config guardrails (`actionConfig.alignment_qc.optional_guardrails.duplication_rate_max`, `min_pf_reads`) can fail samples with excessive PCR duplication even when cycle quality passes.
 
 ### Parabricks WGBS metrics JSON
 

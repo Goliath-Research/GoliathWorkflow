@@ -27,7 +27,7 @@ outputs with explicit promotion and rollback criteria.
 
 If reliability improves materially while discrimination is flat/slightly better, promote.
 
-These thresholds map directly to `step_config.validation` fields:
+These thresholds map directly to `actionConfig.validation` fields:
 
 - `rollout_balanced_accuracy_drop_max`
 - `rollout_macro_f1_drop_max`

@@ -90,7 +90,7 @@ methyl-enricher verify-complete --project /work/.../monte_carlo_runs/production/
 
 Artifacts live under `monte_carlo_runs/production/enricher/queue/` (manifest, `commands.sh`, per-task JSON).
 
-When `step_config.enricher.distributed` is **true**, monolithic freeze runs mapper + **plan-tasks** only; an external scheduler must run `run-task` workers, then `verify-complete`, before progression.
+When `actionConfig.enricher.distributed` is **true**, monolithic freeze runs mapper + **plan-tasks** only; an external scheduler must run `run-task` workers, then `verify-complete`, before progression.
 
 Monolithic alternative (single host): `methyl-enricher --project .../production/project.json --ensure-complete` (used by default freeze when `ensure_complete` is true).
 

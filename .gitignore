@@ -32,6 +32,10 @@ ENV/
 env/
 .venv
 
+# Node (diagram pre-render tooling under docs/diagrams/)
+node_modules/
+docs/diagrams/node_modules/
+
 # PyCharm
 .idea/
 

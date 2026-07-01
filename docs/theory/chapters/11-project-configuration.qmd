@@ -1,42 +1,48 @@
 # The Project Configuration File {#sec-project-configuration}
 
-## Role and Design Principle
+## Role and design principle
 
-MethylPipeline is controlled by a single JSON configuration file called the **project configuration file** (usually named `project_<name>.json`). Every pipeline step — centroid construction, DMP detection, classification, mapping, enrichment, prediction, and Monte Carlo validation — derives its inputs, outputs, and parameters from this one file.
+MethylPipeline separates **study facts** (cohorts, paths, comparisons) from **tool parameters** (detector thresholds, MC iteration counts, mapper windows). The study manifest — usually `project_<name>.json` on `/work/projects/<study>/configs/` — holds only study-level fields validated by `ProjectConfig` in `packages/methylutils/methyl_utils/pipeline_config.py`.
 
-The governing design principle is **single source of truth**: no piece of information that is already in the project file should be repeated inside any step-specific configuration. Specifically:
+**Study manifests must not contain `step_config`.** Tool parameters live in profile and site `actionConfig`, resolved at workflow plan time and worker claim time into `resolvedConfig`.
 
-- Sample paths are defined once in the top-level `controls`/`diseases` block. For Monte Carlo, per-run `project.json` files rewrite cohort lists to training CSVs; holdout lists are patched automatically—**you do not need** duplicate nested `step_config.predictor.controls` / `diseases` or hand-authored `train_group_paths` / `holdout_group_paths` in the template when the predictor step can inherit the top-level cohort shape (see `ProjectConfig` helpers in `pipeline_config.py`).
-- **Hierarchical panel readout** (`step_config.classifier.panel` / `step_config.predictor.panel`): when omitted, both **methyl-classifier** and **methyl-predictor** default the panel from **`comparisons`**, grouping disease leaves under each disease **parent** group (`derive_panel_spec_from_comparisons`). Explicit `panel` in `step_config.predictor` overrides `step_config.classifier.panel`, which overrides the derived default.
-- **Progression stage order**: when `step_config.progression.ordered_comparison_labels` is omitted, ordering follows **`comparisons`** via `get_ordered_comparison_labels()` (same order as `get_comparisons()`).
-- `output_base` and `samples_base_path` are top-level fields inherited by all steps.
-- Monte Carlo validation settings are embedded under `step_config.validation`, not in a separate file.
+## Four-layer configuration
 
-The Pydantic model that validates the project file is `ProjectConfig` in `packages/methylutils/methyl_utils/pipeline_config.py`.
+| Layer | Artifact | Owns |
+|-------|----------|------|
+| Study manifest | `project_*.json` | Cohorts, comparisons, paths, `regulatory`, `validation_partitions` |
+| Pipeline profile | `*.profile.json` | `actionConfig` parameter packs + scope booleans |
+| Site manifest | `/work/site/methyl_site.json` | Genomes, GTF, caches, deployment-wide defaults |
+| DomainProgram | `*.program.json` | Control flow; optional per-action `with` / `stepOverride` |
 
-## Top-Level Fields
+**Precedence** (highest wins): program/instance override → profile `actionConfig` → analyte defaults → site `actionConfig` → *(no Python fallback for tunable science knobs)*.
+
+See @sec-two-workflows for how Monte Carlo and production workflows consume these layers.
+
+## Top-level study manifest fields
 
 | Field | Type | Description |
 |---|---|---|
-| `project_name` | string | Used as the output directory name under `output_base`. |
+| `project_name` | string | Output directory name under `output_base`. |
 | `laboratory` | string | Metadata; appears in centroid H5 attributes. |
 | `batch` | string | Metadata; appears in centroid H5 attributes. |
 | `output_base` | string (path) | Root directory for all pipeline outputs. |
 | `samples_base_path` | string (path) | Base directory for resolving relative sample paths in cohort CSVs. |
-| `chromosomes` | list of strings | Chromosomes to process (e.g. `["1", "2", ..., "22", "X", "Y"]`). |
+| `chromosomes` | list of strings | Chromosomes to process (e.g. `["1", …, "22", "X", "Y"]`). |
 | `contexts` | list of strings | Methylation contexts: `"CG"`, `"CHG"`, `"CHH"`. |
-| `comparisons` | string or list | Comparison layout: `"control_vs_each_disease"` or a list of explicit comparison pairs. |
+| `comparisons` | string or list | Comparison layout: `"control_vs_each_disease"` or explicit pairs. |
+| `regulatory` | object | Optional regulatory metadata; `primary_analyte` seeds analyte profile merge. |
 
-## The Cohort Hierarchy
+## The cohort hierarchy
 
-The `controls` and `diseases` blocks define the study cohort structure. Each block has a `label` (used in output directory naming) and a `groups` list. For hierarchical multiclass designs, disease groups can have `stages`:
+The `controls` and `diseases` blocks define the study cohort structure. Each block has a `label` and a `groups` list. For hierarchical multiclass designs, disease groups can have `stages`:
 
 ```json
 {
   "controls": {
     "label": "healthy",
     "groups": [
-      { "label": "all", "sample_paths": ["configs/healthy.csv"] }
+      { "label": "all", "sample_paths": ["data/healthy.csv"] }
     ]
   },
   "diseases": {
@@ -45,8 +51,8 @@ The `controls` and `diseases` blocks define the study cohort structure. Each blo
       {
         "label": "pca",
         "stages": [
-          { "label": "pca1", "sample_paths": ["configs/pca1.csv"] },
-          { "label": "pca2", "sample_paths": ["configs/pca2.csv"] }
+          { "label": "pca1", "sample_paths": ["data/pca1.csv"] },
+          { "label": "pca2", "sample_paths": ["data/pca2.csv"] }
         ]
       }
     ]
@@ -54,200 +60,116 @@ The `controls` and `diseases` blocks define the study cohort structure. Each blo
 }
 ```
 
-In this layout, `methyl-centroid` builds one centroid per leaf group (`all`, `pca1`, `pca2`), and `methyl-detector` compares `all` versus each disease stage. The resolved group labels used by the Monte Carlo and predictor subsystems are the concatenated parent-and-leaf names: `pca_pca1`, `pca_pca2`, etc.
+`methyl-centroid` builds one centroid per leaf group; `methyl-detector` compares control leaves versus each disease stage. Resolved group labels for Monte Carlo and predictors concatenate parent and leaf names (`pca_pca1`, …).
 
-For flat two-class binary projects (one control group, one disease group, no stages), the structure simplifies to:
+## Where tool parameters live: `actionConfig`
 
-```json
-{
-  "controls": { "label": "healthy", "groups": [{ "label": "all", "sample_paths": ["..."] }] },
-  "diseases": { "label": "cancer", "groups": [{ "label": "all", "sample_paths": ["..."] }] }
-}
-```
+Parameters previously embedded in `step_config` now live under **`actionConfig.<action>`** in pipeline profiles and optionally the site manifest:
 
-## The `step_config` Dictionary
-
-`step_config` is a JSON object whose keys correspond to pipeline steps. Each value is a free-form dictionary of parameters that override the step's defaults. The recognized keys are:
-
-| Key | Handled by | Description |
+| `actionConfig` key | Handled by | Description |
 |---|---|---|
 | `centroid` | `methyl-centroid` | Coverage thresholds, histogram bins, GPU, parallelism. |
-| `detection` | `methyl-detector` | Statistical test, effect size, DMP selection, classifier export. |
+| `detection` | `methyl-detector` | Statistical test, effect size, DMP export mode. |
+| `dmp_selection` | `methyl-dmp-select` | FeatureCuts BA gate, panel size bounds. |
 | `mapper` | `methyl-mapper` | GTF, gene window sizes, enrichment source. |
 | `enricher` | `methyl-enricher` | Library selection, disease filters, module scoring. |
 | `classifier` | `methyl-classifier` | Chromosome weighting, OvR layout, panel definition. |
+| `gene_selection` | `methyl-gene-select` | Gene FeatureCuts caps, biomarker filter. |
 | `predictor` | `methyl-predictor` | Panel definition, debug mode. |
-| `validation` | `methyl-validation` | Monte Carlo settings embedded in the project. |
-| `alignment_qc` | `methyl-alignment-qc` | Schema validation, group filtering. |
+| `validation` | `methyl-validation` | Monte Carlo settings, stability gates, backend profiles. |
+| `alignment_qc` | `methyl-alignment-qc` | Schema validation, guardrails. |
 
-The exhaustive list of parameters for each key is in reference/configuration-reference.
+Exhaustive parameter tables: [configuration-reference](../../reference/configuration-reference.qmd) (keys listed as `actionConfig.*` sections).
 
-`step_config.cluster` is a legacy compatibility key for deprecated clustering workflows and is intentionally excluded from the active canonical workflow.
+Resolution: `resolve_action_config` / `resolve_for_project` in `packages/methylutils/methyl_utils/action_config_resolver.py`.
 
-## The `step_config.predictor` Anti-Pattern
+## Monte Carlo configuration
 
-A common mistake when creating project configurations is to copy the `controls`/`diseases` block from the top level into `step_config.predictor`. This creates duplication: the sample paths are now defined in two places. If the top-level cohort CSVs change, the predictor block must also be updated, creating a maintenance burden and a potential source of inconsistency.
+Monte Carlo settings belong in **profile** `actionConfig.validation` (and optional site defaults), not in the study manifest. When `methyl-validation` or the workflow planner runs, merged validation config becomes `MonteCarloConfig` and is snapshotted to `monte_carlo_runs/queue/mc_config.json` for workers.
 
-**Correct pattern:** `step_config.predictor` should contain only predictor-specific overrides — typically `debug`, `panel`, and optionally `multiclass_model_path`. The sample paths are resolved automatically from the top-level `controls`/`diseases` block during project loading.
-
-**Anti-pattern (avoid):**
+Example profile fragment:
 
 ```json
-"predictor": {
-  "controls": { ... },   ← duplicates top-level controls
-  "diseases": { ... },   ← duplicates top-level diseases
-  "panel": { ... }
-}
-```
-
-**Correct pattern:**
-
-```json
-"predictor": {
-  "debug": false,
-  "panel": { "primary_family": "prostate", "families": { ... }, "indeterminate_delta": 0.25 }
-}
-```
-
-## Embedding Monte Carlo Settings: `step_config.validation`
-
-Rather than maintaining a separate `monte_carlo_config.json` file, the Monte Carlo validation settings can be embedded directly inside the project file under `step_config.validation`. When `methyl-validation` is invoked with `--project <path>`, it reads the `step_config.validation` block and constructs a `MonteCarloConfig` from it, inheriting `samples_base_path`, `output_base`, and the cohort structure from the top-level project fields.
-
-The fields that are appropriate for `step_config.validation` are only the Monte Carlo-specific ones:
-
-```json
-"validation": {
-  "train_fraction": 0.8,
-  "n_iterations": 50,
-  "seed": 42,
-  "run_stability": true,
-  "stability_dmp_freq": 0.7,
-  "stability_min_balanced_accuracy": 0.6,
-  "abort_on_step_failure": false
-}
-```
-
-Fields that are **not** needed here (because they are inherited from the project): `samples_base_path`, `output_base`, `base_project`, `cohorts`, `healthy_csv`, `disease_csv`.
-
-### Modeling backend inside `step_config.validation`
-
-The same `validation` block also controls what happens during `methyl-validation --model`. The default backend is `ecdf` (classifier + predictor), but the project may select:
-
-- `model_backend: "tabular_sklearn"` for tabular bundle-based training/evaluation,
-- `model_backend: "generative_hybrid"` for the hybrid latent-density generative backend.
-
-This keeps backend choice versioned in the same project JSON used for stability/freeze/model orchestration.
-
-## Annotated Example
-
-The following is an annotated excerpt from `configs/project_Healthy_vs_PCa1-4-CG.json`, the reference project for prostate cancer staging:
-
-```json
-{
-  "project_name": "Healthy_vs_PCa1-4-CG",      ← output under output_base/Healthy_vs_PCa1-4-CG/
-  "laboratory": "psomagen",
-  "batch": "Second batch of prostate cancer samples",
-  "output_base": "/work/projects/prostate-cancer",        ← all outputs go here
-  "samples_base_path": "/work/projects/prostate-cancer/samples",
-  "chromosomes": ["1", "2", ..., "22", "X", "Y"],
-  "contexts": ["CG"],
-  "comparisons": "control_vs_each_disease",      ← healthy vs each pca stage
-
-  "controls": {
-    "label": "healthy",
-    "groups": [{ "label": "all", "sample_paths": ["configs/healthy.csv"] }]
-  },
-  "diseases": {
-    "label": "cancer",
-    "groups": [{
-      "label": "pca",
-      "stages": [
-        { "label": "pca1", "sample_paths": ["configs/pca1.csv"] },
-        { "label": "pca2", "sample_paths": ["configs/pca2.csv"] },
-        { "label": "pca3", "sample_paths": ["configs/pca3.csv"] },
-        { "label": "pca4", "sample_paths": ["configs/pca4.csv"] }
-      ]
-    }]
-  },
-
-  "step_config": {
-    "centroid": {
-      "base_config": {
-        "min_coverage": 4,           ← positions with < 4 reads excluded from centroid
-        "binned_stats_bins": 20,     ← 20-bin ECDF histogram stored per locus
-        "use_gpu": true
-      }
-    },
-    "detection": {
-      "alpha": 0.05,                 ← q-value threshold for statistical DMPs
-      "min_coverage": 4,             ← same as centroid min_coverage (critical: must match)
-      "effect_size_coverage": 0.95,  ← retain top 95% effect mass
-      "multiclass_train_learned_head": true,
-      "multiclass_learned_class_weight": "balanced"   ← corrects class imbalance
-    },
-    "classifier": {
-      "ovr_binary_pickles_from_comparisons": true,
-      "panel": {
-        "primary_family": "prostate",
-        "families": { "prostate": ["pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"] },
-        "indeterminate_delta": 0.25
-      }
-    },
-    "predictor": {
-      "debug": false,
-      "panel": {           ← same panel as classifier; only override is debug flag
-        "primary_family": "prostate",
-        "families": { "prostate": ["pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"] },
-        "indeterminate_delta": 0.25
-      }
-    },
-    "validation": {        ← embedded MC settings; no separate config file needed
-      "train_fraction": 0.8,
-      "n_iterations": 5,
-      "seed": 42,
-      "run_stability": true,
-      "stability_dmp_freq": 0.6
-    }
+"actionConfig": {
+  "validation": {
+    "train_fraction": 0.8,
+    "n_iterations": 10,
+    "seed": 42,
+    "run_stability": true,
+    "stability_dmp_freq": 0.8,
+    "dmp_modeling_mode": "featurecuts",
+    "gene_modeling_mode": "featurecuts",
+    "dmp_featurecuts_target_ba": 0.9,
+    "gene_featurecuts_target_ba": 0.88
   }
 }
 ```
 
-## Output Directory Layout
+Inherited from the study manifest (not duplicated in the profile): `samples_base_path`, `output_base`, cohort structure, `chromosomes`, `contexts`.
 
-Given `output_base = "/work/projects/prostate-cancer"` and `project_name = "Healthy_vs_PCa1-4-CG"`, the top-level output structure is:
+## Annotated study manifest example
+
+Slim project file on `/work` (tool parameters in `mc_gene_fc.profile.json`, not here):
+
+```json
+{
+  "project_name": "Buffy_healthy_vs_PCa",
+  "laboratory": "psomagen",
+  "batch": "prostate buffy coat",
+  "output_base": "/work/projects/prostate-cancer",
+  "samples_base_path": "/work/samples",
+  "chromosomes": ["1", "2", "21", "22"],
+  "contexts": ["CG"],
+  "comparisons": "control_vs_each_disease",
+  "regulatory": {
+    "primary_analyte": "buffy_coat",
+    "stage": "feasibility"
+  },
+  "controls": {
+    "label": "healthy",
+    "groups": [{ "label": "all", "sample_paths": ["data/healthy_b.csv"] }]
+  },
+  "diseases": {
+    "label": "cancer",
+    "groups": [{ "label": "pca", "sample_paths": ["data/pca_b.csv"] }]
+  }
+}
+```
+
+Run with a profile:
+
+```bash
+methyl-workflow-run \
+  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'
+```
+
+## Output directory layout
+
+Given `output_base = "/work/projects/prostate-cancer"` and `project_name = "Buffy_healthy_vs_PCa"`:
 
 ```
 /work/projects/prostate-cancer/
-└── Healthy_vs_PCa1-4-CG/
+└── Buffy_healthy_vs_PCa/
     ├── centroids/
-    │   ├── controls/healthy/all/<chrom>-CG.h5
-    │   └── diseases/cancer/pca_pca1/<chrom>-CG.h5   (and pca2, pca3, pca4)
     ├── detections/
     │   └── all/<comparison>/dmps-<chrom>-discovery.csv
-    │                        dmps-<chrom>-classifier.csv
-    │                        classifier-<chrom>-CG.pkl
+    │                        dmps-<chrom>-selected.csv
     ├── classifiers/
-    │   ├── all/
-    │   │   ├── pca_pca1/run_0001-classifier.pkl
-    │   │   └── multiclass-classifier.pkl
-    │   └── classifier_all_run_0001.pkl
     ├── mapper/
     ├── enricher/
     └── monte_carlo_runs/
+        ├── queue/mc_config.json
         ├── run_0001/
-        │   ├── project.json
-        │   ├── centroids/
-        │   ├── detections/
-        │   └── logs/
-        ├── stability/
-        │   └── stable_dmps_production.csv
+        ├── stability/stable_dmps_production.csv
         └── production/
-            ├── project.json          ← contains fixed_dmp_panel
-            ├── centroids/
-            ├── detections/
-            ├── mapper/
-            ├── enricher/
-            ├── progression/          ← optional when step_config.progression.enabled=true
-            ├── classifiers/          ← created by --model
-            └── predictors/           ← created by --model
 ```
+
+Downstream FeatureCuts and mapper steps prefer **`dmps-*-selected.csv`** (BA-gated panel). Discovery CSVs remain for exploration and raw-pool modeling modes.
+
+## Related
+
+- Usage: [Project config and layout](../../usage/02-project-config-and-layout.qmd)
+- Reference: [Config parameter matrix](../../reference/config-parameter-matrix.md)
+- Architecture: [Layer model](../../architecture/layer-model.md)

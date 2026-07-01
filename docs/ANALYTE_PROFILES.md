@@ -1,6 +1,6 @@
 # Analyte-driven pipeline profiles
 
-Set **`step_config.validation.regulatory.primary_analyte`** once (`cfdna`, `buffy_coat`, or `combined`). The pipeline fills missing step defaults from a profile via [`ProjectConfig.get_step_config`](../packages/methylutils/methyl_utils/pipeline_config.py) (deep setdefault: explicit JSON always wins).
+Set **`regulatory.primary_analyte`** once in the study manifest (`cfdna`, `buffy_coat`, or `combined`). The resolver merges analyte-specific defaults into profile/site `actionConfig` via `merge_step_config` in `packages/methylutils/methyl_utils/analyte_profiles.py` (explicit profile or site keys always win).
 
 Opt out: `"auto_apply_analyte_profile": false` under `regulatory`.
 
@@ -19,7 +19,7 @@ Background research on analyte tradeoffs: [docs/research/](../research/README.md
 
 ## CIS-BP multi-mode (cfDNA)
 
-When the profile sets `cisbp_modes`, the enricher runs modes in order and merges separate libraries:
+When the profile sets `cisbp_modes` under `actionConfig.enricher`, the enricher runs modes in order and merges separate libraries:
 
 - `CIS-BP` — gene_sets (1A)
 - `CIS-BP-motif` — motif_scan at DMP loci (1C)
@@ -29,21 +29,33 @@ When the profile sets `cisbp_modes`, the enricher runs modes in order and merges
 
 Profiles set guards and defaults; they do **not** train a classifier. For cfDNA production models, still run MC/freeze on plasma cohorts with `model_training_analyte: cfdna`. See [PLASMA_RETRAIN_PATH.md](../packages/methylvalidation/docs/PLASMA_RETRAIN_PATH.md).
 
-## Minimal cfDNA project example
+## Minimal cfDNA study example
+
+Study manifest (cohorts + regulatory only):
 
 ```json
 {
-  "step_config": {
-    "alignment_qc": { "genome_fasta": "/ref/hg38.fa" },
-    "mapper": { "gtf": "/ref/annotation.gtf" },
-    "validation": {
-      "regulatory": {
-        "primary_analyte": "cfdna",
-        "stage": "feasibility"
-      }
-    }
+  "project_name": "Plasma_cfDNA_CG",
+  "output_base": "/work/projects/prostate-cancer",
+  "samples_base_path": "/work/samples",
+  "chromosomes": ["1", "21", "22"],
+  "contexts": ["CG"],
+  "comparisons": "control_vs_each_disease",
+  "regulatory": {
+    "primary_analyte": "cfdna",
+    "stage": "feasibility"
+  },
+  "controls": {
+    "label": "healthy",
+    "groups": [{ "label": "all", "sample_paths": ["data/healthy_p.csv"] }]
+  },
+  "diseases": {
+    "label": "cancer",
+    "groups": [{ "label": "pca", "sample_paths": ["data/pca_p.csv"] }]
   }
 }
 ```
 
-See [`tools/methyl-config-editor/configs/project_Plasma_cfDNA_CG.example.json`](../tools/methyl-config-editor/configs/project_Plasma_cfDNA_CG.example.json).
+Tool parameters (fragmentomics, enricher CIS-BP modes, validation guards) live in profile `actionConfig` — see [`mc_gene_fc.profile.json`](../workflow_engine/domain/profiles/mc_gene_fc.profile.json) or a study-specific overlay, and site defaults in `/work/site/methyl_site.json`.
+
+Example: [`tools/methyl-config-editor/configs/project_Plasma_cfDNA_CG.example.json`](../tools/methyl-config-editor/configs/project_Plasma_cfDNA_CG.example.json).

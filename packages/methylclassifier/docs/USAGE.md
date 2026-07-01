@@ -152,7 +152,7 @@ Example config (`configs/PCa_vs_Healthy_classifier_config.json`):
 - **weight_fit_alpha**: Regularization strength (inverse of C for logistic). Default `1.0`.
 - **weight_fit_l1_ratio**: For `elasticnet_fitted` only: balance L1/L2 (0=ridge-like, 1=lasso-like). Default `0.5`.
 - **project_name**: When set, after classification the classifier is saved as `<project_name>-classifier.pkl` and the list of sample folders as `<project_name>-samples.txt` (or .csv) in the same directory as the classification output. You can override paths with **save_classifier_path** and **samples_list_export_path**.
-- **`--project`**: When using a project JSON, merged config comes from `step_config.classifier` and project paths. **Control/disease** projects run **one binary classification job per comparison**, then—if **`ovr_binary_pickles_from_comparisons`** is **true**—automatically **export the unified multiclass OvR PKL** to **`{project_root}/classifiers/<control_label>/classifier_<control>_<project_name>.pkl`** (same file **`--export-ovr-pkl`** would write). MethylPredictor loads that path via **`model_path`** / resolver defaults. Detector probe files default to **`classifier-{first_chrom}-{sorted_contexts}.pkl`** (e.g. **`classifier-1-CG.pkl`** for CG-only projects); set **`ovr_unified_classifier_basename`** only if your detector used a different naming pattern.
+- **`--project`**: When using a project JSON, merged config comes from `actionConfig.classifier` and project paths. **Control/disease** projects run **one binary classification job per comparison**, then—if **`ovr_binary_pickles_from_comparisons`** is **true**—automatically **export the unified multiclass OvR PKL** to **`{project_root}/classifiers/<control_label>/classifier_<control>_<project_name>.pkl`** (same file **`--export-ovr-pkl`** would write). MethylPredictor loads that path via **`model_path`** / resolver defaults. Detector probe files default to **`classifier-{first_chrom}-{sorted_contexts}.pkl`** (e.g. **`classifier-1-CG.pkl`** for CG-only projects); set **`ovr_unified_classifier_basename`** only if your detector used a different naming pattern.
 
 #### Reusing one PKL for prediction (OvR and multi-chromosome)
 
@@ -168,8 +168,8 @@ methyl_classifier --config ovr_only.json --export-ovr-pkl /custom/out.pkl
 ```
 
 - **Optional path**: If omitted, uses **save_classifier_path** from the resolved config, then **`<cwd>/<project_name>-classifier.pkl`** if **project_name** is set.
-- **Requires** **ovr_binary_model_paths** or **ovr_detection_dirs** (K≥2) in the config / `step_config.classifier`.
-- **Control/disease projects** are supported when **`step_config.classifier`** (or **`--step-override`**) defines **project-wide** `ovr_binary_model_paths` or `ovr_detection_dirs`, or sets **`ovr_binary_pickles_from_comparisons`: true**. That resolver fills **`ovr_detection_dirs`** with **one directory per disease comparison** and sets **`ovr_pairwise_aggregate_control`: true** unless an explicit control artifact exists (`ovr_control_vs_rest_pkl` or `detections/one_vs_rest/...`). With aggregation, you get **K** class probabilities (control + each subgroup) from **K−1** pairwise detectors plus a **synthetic control head** (geometric mean of each pairwise’s P(control)); each pairwise folder is still merged across chromosomes via **all** `classifier*.pkl` there.  
+- **Requires** **ovr_binary_model_paths** or **ovr_detection_dirs** (K≥2) in the config / `actionConfig.classifier`.
+- **Control/disease projects** are supported when **`actionConfig.classifier`** (or **`--step-override`**) defines **project-wide** `ovr_binary_model_paths` or `ovr_detection_dirs`, or sets **`ovr_binary_pickles_from_comparisons`: true**. That resolver fills **`ovr_detection_dirs`** with **one directory per disease comparison** and sets **`ovr_pairwise_aggregate_control`: true** unless an explicit control artifact exists (`ovr_control_vs_rest_pkl` or `detections/one_vs_rest/...`). With aggregation, you get **K** class probabilities (control + each subgroup) from **K−1** pairwise detectors plus a **synthetic control head** (geometric mean of each pairwise’s P(control)); each pairwise folder is still merged across chromosomes via **all** `classifier*.pkl` there.  
   The **exported** multiclass OvR PKL defaults to **`{project_root}/classifiers/<control_group_label>/classifier_<control>_<project_name>.pkl`**. **MethylPredictor** should use that single saved PKL (`model_path`) so prediction stays one load for the full union of DMPs across chromosomes and classes.
   **Fusion:** aggregated-control bundles record **`metadata.ovr_fuse_mode`**: **`pairwise_max_contrast`** by default (see `fuse_ovr_binary_probas` in `multiclass_ovr.py`). Use **`flat`** in the PKL metadata only if you need the legacy softmax over all K heads. Packages also persist **`metadata.ovr_inference_version`** so multiclass semantics are auditable across releases.
 
@@ -180,7 +180,7 @@ On top of the same fused OvR logits, you can define **disease families** (e.g. p
 Configure it in either place:
 
 - **Standalone classifier JSON** (`ClassificationConfig`): top-level **`panel`** object (same keys as below).
-- **Pipeline project**: **`step_config.classifier.panel`** — merged into the resolved classifier config the same way as other classifier step keys.
+- **Pipeline project**: **`actionConfig.classifier.panel`** — merged into the resolved classifier config the same way as other classifier step keys.
 
 Shape (example):
 
@@ -195,7 +195,7 @@ Shape (example):
 }
 ```
 
-**MethylPredictor** can use the same object under **`step_config.predictor.panel`** for prediction-only runs (see MethylPredictor `USAGE.md`). Implementation: **`methyl_classifier.core.panel_fusion`**; classification with **`samples_list`** or centroid-derived sample lists writes extra CSV columns and **`panel_report.json`** next to the results CSV when **`output_path`** is set.
+**MethylPredictor** can use the same object under **`actionConfig.predictor.panel`** for prediction-only runs (see MethylPredictor `USAGE.md`). Implementation: **`methyl_classifier.core.panel_fusion`**; classification with **`samples_list`** or centroid-derived sample lists writes extra CSV columns and **`panel_report.json`** next to the results CSV when **`output_path`** is set.
 
 ### Low DMP coverage abstention
 
@@ -203,7 +203,7 @@ Shape (example):
 
 ### Multiclass OvR (K≥2) without a separate bundle script
 
-If you have **K** MethylDetector pickles (one per one-vs-rest class), list them in the config (or under `step_config.classifier` in a project JSON) instead of `model_dir` / `model_path`:
+If you have **K** MethylDetector pickles (one per one-vs-rest class), list them in the config (or under `actionConfig.classifier` in a project JSON) instead of `model_dir` / `model_path`:
 
 - **`ovr_binary_model_paths`**: array of K absolute paths to detector `*.pkl` files (each must contain `classifier` + `dmpDF`).
 - **`ovr_detection_dirs`**: K directories (OvR order). **One** `classifier*.pkl` → single-chrom ECDF head; **several** `classifier-*.pkl` → weighted multi-chromosome expert for that class (same as loading that folder as **`model_dir`**).

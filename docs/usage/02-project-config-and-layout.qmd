@@ -13,7 +13,7 @@ Define a **study manifest** (slim project JSON) plus reusable **profile**, **sit
 | Site manifest | `/work/site/methyl_site.json` (or `METHYL_SITE_CONFIG`) | Genomes, GTF, caches, cluster defaults |
 | DomainProgram | repo `workflow_engine/domain/**/*.program.json` | Control flow, per-action `with` / `stepOverride` |
 
-**Precedence** (highest wins): program/instance override → profile `actionConfig` → analyte defaults (`regulatory.primary_analyte`) → site manifest → package defaults.
+**Precedence** (highest wins): program/instance override → profile `actionConfig` → analyte defaults (`regulatory.primary_analyte`) → site manifest → *(no Python fallback for tunable science knobs)*.
 
 Study manifests **must not** contain `step_config`. Legacy projects: `python scripts/migrate_project_config.py --in-place path/to/project.json`.
 
@@ -54,8 +54,9 @@ Resolved into `MonteCarloConfig` by `methyl-validation --project` (via `METHYL_P
   - `stability_min_balanced_accuracy`
   - `stability_gene_freq`
   - `stability_featurecuts_enabled`
-  - `stability_target_balanced_accuracy`
-  - `stability_min_selected_dmps`
+  - `dmp_featurecuts_target_ba`, `gene_featurecuts_target_ba` (split BA gates)
+  - `dmp_modeling_mode`, `gene_modeling_mode` (statistical axes)
+  - `stability_gene_featurecuts_max_dmps`, `stability_gene_featurecuts_max_genes` (site/profile caps)
 - freeze/model paths:
   - `freeze_stable_dmp_csv` (optional)
   - `production_output_dir` (optional)
@@ -83,28 +84,8 @@ Important subtrees:
 
 ## Handoff model
 
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=1.25cm,
-  box/.style={draw, rounded corners, align=center, minimum width=4.8cm, minimum height=0.9cm}
-]
-\node[box] (project) {Study manifest};
-\node[box, below=of project] (mc) {Monte Carlo Runs Root};
-\node[box, below=of mc] (stability) {stability/};
-\node[box, below=of stability] (freeze) {production/};
-\node[box, below=of freeze] (model) {classifiers and predictors};
-\node[box, below=of model] (postmodel) {post\_model\_validation/};
+![Configuration layer model](../diagrams/out/layer-model.svg)
 
-\draw[->] (project) -- (mc);
-\draw[->] (mc) -- (stability);
-\draw[->] (stability) -- (freeze);
-\draw[->] (freeze) -- (model);
-\draw[->] (model) -- (postmodel);
-\end{tikzpicture}
-\end{center}
-```
 
 ## Do not do this
 

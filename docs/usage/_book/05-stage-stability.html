@@ -293,7 +293,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#purpose" id="toc-purpose" class="nav-link active" data-scroll-target="#purpose"><span class="header-section-number">7.1</span> Purpose</a></li>
   <li><a href="#entry-command" id="toc-entry-command" class="nav-link" data-scroll-target="#entry-command"><span class="header-section-number">7.2</span> Entry command</a></li>
   <li><a href="#required-config-keys" id="toc-required-config-keys" class="nav-link" data-scroll-target="#required-config-keys"><span class="header-section-number">7.3</span> Required config keys</a></li>
-  <li><a href="#composable-workflow-profiles" id="toc-composable-workflow-profiles" class="nav-link" data-scroll-target="#composable-workflow-profiles"><span class="header-section-number">7.4</span> Composable workflow profiles</a></li>
+  <li><a href="#statistical-modeling-modes-generic-profiles" id="toc-statistical-modeling-modes-generic-profiles" class="nav-link" data-scroll-target="#statistical-modeling-modes-generic-profiles"><span class="header-section-number">7.4</span> Statistical modeling modes (generic profiles)</a></li>
   <li><a href="#process-model" id="toc-process-model" class="nav-link" data-scroll-target="#process-model"><span class="header-section-number">7.5</span> Process model</a></li>
   <li><a href="#expected-outputs" id="toc-expected-outputs" class="nav-link" data-scroll-target="#expected-outputs"><span class="header-section-number">7.6</span> Expected outputs</a></li>
   <li><a href="#success-checks" id="toc-success-checks" class="nav-link" data-scroll-target="#success-checks"><span class="header-section-number">7.7</span> Success checks</a></li>
@@ -332,10 +332,10 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="entry-command" class="level2" data-number="7.2">
 <h2 data-number="7.2" class="anchored" data-anchor-id="entry-command"><span class="header-section-number">7.2</span> Entry command</h2>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--stability</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--stability</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Optional strict FeatureCuts alignment:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="dt">\</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="dt">\</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--stability</span> <span class="at">--stability-featurecuts</span> <span class="at">--stability-target-ba</span> 0.95 <span class="at">--stability-min-selected-dmps</span> 1000</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="required-config-keys" class="level2" data-number="7.3">
@@ -359,29 +359,84 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>optional FeatureCuts controls:
 <ul>
 <li><code>stability_featurecuts_enabled</code></li>
-<li><code>stability_target_balanced_accuracy</code></li>
-<li><code>stability_min_selected_dmps</code></li>
+<li><code>dmp_featurecuts_target_ba</code>, <code>gene_featurecuts_target_ba</code> (split BA gates)</li>
+<li><code>dmp_modeling_mode</code>, <code>gene_modeling_mode</code></li>
+<li><code>stability_gene_featurecuts_max_dmps</code>, <code>stability_gene_featurecuts_max_genes</code> (site/profile caps)</li>
 </ul></li>
 </ul>
 </section>
-<section id="composable-workflow-profiles" class="level2" data-number="7.4">
-<h2 data-number="7.4" class="anchored" data-anchor-id="composable-workflow-profiles"><span class="header-section-number">7.4</span> Composable workflow profiles</h2>
-<p>DomainProgram workflows support selectable paths via context profiles in <code>workflow_engine/domain/profiles/</code>. Use <code>methyl-validation run-workflow</code> or <code>methyl-workflow-run</code> with <code>--context-file</code>.</p>
-<p><strong>Gene stability without DMP FeatureCuts</strong> (discovery DMPs → mapper → enricher → stability on enricher genes):</p>
-<ul>
-<li>Profile: <code>gene_enricher_stability.profile.json</code></li>
-<li>Program: <code>mc_gene_enricher_stability.program.json</code></li>
-<li>Set <code>stability_featurecuts_enabled: false</code>, <code>stability_gene_featurecuts_enabled: false</code>, <code>stability_gene_freq</code> as needed</li>
-<li>Mapper uses <code>dmps-*-discovery.csv</code>; enricher disease filters come from profile <code>actionConfig.enricher</code></li>
-</ul>
-<p><strong>DMP panel stability</strong> (split detector + <code>pipeline.dmp_select</code>): profile <code>dmp_panel_stability</code> or <code>full_biomarker_gene_fc</code>.</p>
-<p><strong>Discovery DMPs → broad mapper → gene FeatureCuts</strong> (stable gene panel for model): profile <code>discovery_gene_featurecuts</code> with <code>pca1_5_mc_stability.program.json</code>. Mapper uses <code>dmps-*-discovery.csv</code>; <code>pipeline.dmp_select</code> still runs so <code>pipeline.gene_select</code> has classifier DMP exports for validation. Biomarker/PPI pre-filter is off by default (largest gene pool); enable with <code>"runBiomarkerFilter": true</code> in context.</p>
-<p><strong>Biomarker / PPI pre-filter</strong> (<code>validation.biomarker_filter</code>): optional via <code>${runBiomarkerFilter}</code>; modes <code>ppi_only</code>, <code>disease_only</code>, <code>disease_and_ppi</code> under profile <code>actionConfig.validation</code> or <code>actionConfig.gene_selection</code>. Can run on mapper gene pools without gene FeatureCuts.</p>
-<p>See <code>docs/reference/domain-program-language.md</code> for the full profile matrix and IF branch flags (<code>runDmpSelection</code>, <code>runGeneFeaturecuts</code>, …).</p>
+<section id="statistical-modeling-modes-generic-profiles" class="level2" data-number="7.4">
+<h2 data-number="7.4" class="anchored" data-anchor-id="statistical-modeling-modes-generic-profiles"><span class="header-section-number">7.4</span> Statistical modeling modes (generic profiles)</h2>
+<p>Profiles are <strong>process-agnostic</strong>; study facts stay in the study manifest. See <code>docs/reference/domain-program-language.md</code> for the full matrix.</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 23%">
+<col style="width: 34%">
+<col style="width: 42%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Goal</th>
+<th>Profile</th>
+<th>Key modes</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>DMP recurrence only</td>
+<td><code>mc_dmp_discovery</code></td>
+<td><code>dmp_modeling_mode: raw_pool</code></td>
+</tr>
+<tr class="even">
+<td>BA-gated DMP panel</td>
+<td><code>mc_dmp_featurecuts</code></td>
+<td><code>dmp_modeling_mode: featurecuts</code></td>
+</tr>
+<tr class="odd">
+<td>Mapper gene recurrence</td>
+<td><code>mc_gene_mapper</code></td>
+<td><code>gene_modeling_mode: mapper_ranked</code></td>
+</tr>
+<tr class="even">
+<td>Gene FeatureCuts on discovery loci</td>
+<td><code>mc_gene_featurecuts</code></td>
+<td><code>gene_modeling_mode: featurecuts</code></td>
+</tr>
+<tr class="odd">
+<td>Full DMP + gene FC (production)</td>
+<td><code>mc_gene_fc</code></td>
+<td>both axes featurecuts</td>
+</tr>
+<tr class="even">
+<td>Two-phase panel lock</td>
+<td><code>phase_a_dmp_stability</code> → <code>phase_b_gene_from_stable_dmps</code></td>
+<td>stable DMP panel then gene FC</td>
+</tr>
+</tbody>
+</table>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-workflow-run</span> <span class="dt">\</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--program</span> workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json <span class="dt">\</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--context-file</span> workflow_engine/domain/profiles/mc_gene_fc.profile.json <span class="dt">\</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--context</span> <span class="st">'{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Mapper CSV pattern follows modeling mode: discovery → <code>dmps-*-discovery.csv</code>; featurecuts → <code>dmps-*-selected.csv</code>. Downstream consumers should prefer <strong><code>dmps-*-selected.csv</code></strong>.</p>
+<p>Deprecated names (<code>discovery_gene_featurecuts</code>, <code>dmp_panel_stability</code>, <code>gene_enricher_stability</code>, <code>buffy_mc_gene_fc</code>) alias to the generic presets in <code>pipeline_profiles.py</code>.</p>
 </section>
 <section id="process-model" class="level2" data-number="7.5">
 <h2 data-number="7.5" class="anchored" data-anchor-id="process-model"><span class="header-section-number">7.5</span> Process model</h2>
-
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../diagrams/out/stability-stage.svg" class="img-fluid figure-img"></p>
+<figcaption>Stability stage process model</figcaption>
+</figure>
+</div>
+<pre class="mermaid"><code>flowchart LR
+  runs[run_0001..run_N] --&gt; centroid[methyl-centroid] --&gt; detector[methyl-detector]
+  detector --&gt; dmp[discovery + selected DMP exports]
+  detector --&gt; results[result JSON]
+  dmp --&gt; agg[run_stability_analysis]
+  results --&gt; agg
+  agg --&gt; stable[stable_dmps_production.csv]
+  agg --&gt; summary[stability_summary.json]</code></pre>
 </section>
 <section id="expected-outputs" class="level2" data-number="7.6">
 <h2 data-number="7.6" class="anchored" data-anchor-id="expected-outputs"><span class="header-section-number">7.6</span> Expected outputs</h2>
@@ -415,18 +470,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <ul>
 <li><strong>Re-run workflow after MC complete (recommended):</strong> re-run the same DomainProgram. Each action inside the MC FOREACH loop skips independently when its <code>.action_results/</code> manifest matches; post-MC steps (stability, readiness) skip the same way once they have run successfully once.</li>
 </ul>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-workflow-run</span> <span class="at">--program</span> workflow_engine/domain/checks/.../buffy_mc_stability.program.json <span class="dt">\</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--context-file</span> workflow_engine/domain/profiles/your.profile.json</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-workflow-run</span> <span class="at">--program</span> workflow_engine/domain/checks/.../buffy_mc_stability.program.json <span class="dt">\</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--context-file</span> workflow_engine/domain/profiles/your.profile.json</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <ul>
 <li><strong>Stability-only (CLI, no workflow):</strong> when MC outputs exist but stability never succeeded:</li>
 </ul>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/.../configs/project.json <span class="at">--stability</span> <span class="at">--skip-detection</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/.../configs/project.json <span class="at">--stability</span> <span class="at">--skip-detection</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <ul>
 <li>Resume interrupted MC iteration loop:</li>
 </ul>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--stability</span> <span class="at">--resume</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--stability</span> <span class="at">--resume</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <ul>
 <li>If panel is too small: lower <code>stability_dmp_freq</code> or increase <code>n_iterations</code>.</li>
 <li>If run quality is too low: tune detector and/or adjust <code>stability_min_balanced_accuracy</code>.</li>

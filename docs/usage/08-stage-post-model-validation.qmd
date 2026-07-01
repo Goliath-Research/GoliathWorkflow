@@ -26,30 +26,8 @@ methyl-validation --project /work/projects/prostate-cancer/configs/project_Healt
 
 ## Process model
 
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=1.15cm,
-  box/.style={draw, rounded corners, align=center, minimum width=4.6cm, minimum height=0.85cm}
-]
-\node[box] (frozen) {production artifacts};
-\node[box, below=of frozen] (pmv) {post\_model\_validation start};
-\node[box, below=of pmv] (runs) {run\_0001..run\_N};
-\node[box, below=of runs] (eval) {frozen backend inference};
-\node[box, below=of eval] (rows) {all\_metrics.csv};
-\node[box, below=of rows] (summary) {metrics\_summary.json};
-\node[box, below=of summary] (plot) {metrics\_distributions\_plotly.html};
+![Post-model validation](../diagrams/out/pipeline-stages.svg)
 
-\draw[->] (frozen) -- (pmv);
-\draw[->] (pmv) -- (runs);
-\draw[->] (runs) -- (eval);
-\draw[->] (eval) -- (rows);
-\draw[->] (rows) -- (summary);
-\draw[->] (summary) -- (plot);
-\end{tikzpicture}
-\end{center}
-```
 
 ## Expected outputs
 

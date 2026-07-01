@@ -18,7 +18,7 @@ This document is the canonical register of documentation coverage, canonical sou
 | **SamplePrep + QC** | Usage ch.03, [`workflow_engine/sql/SamplePrepFlow.md`](../workflow_engine/sql/SamplePrepFlow.md) | Documented | |
 | **Deployment** | Usage ch.14, [`deployment/production_runbook.md`](deployment/production_runbook.md) | Dual-backend | |
 | **Schemas / contracts** | [`reference/schema-index.md`](reference/schema-index.md), [`contracts/openapi.yaml`](../contracts/openapi.yaml) | Machine-readable | |
-| **Diagrams** | [`docs/diagrams/src/*.mmd`](diagrams/src/), [`docs/diagrams/out/*.svg`](diagrams/out/) | Pre-render pipeline | `scripts/render_diagrams.sh` |
+| **Diagrams** | [`docs/diagrams/src/*.mmd`](diagrams/src/), [`docs/diagrams/out/*.svg`](diagrams/out/) | Pre-render pipeline | `scripts/render_diagrams.sh` (pinned `docs/diagrams/package.json`, system Chromium on ARM) |
 
 ## Canonical doc map (“read this for X”)
 
@@ -61,6 +61,7 @@ This document is the canonical register of documentation coverage, canonical sou
 - `bash scripts/check_doc_links.sh` — legacy path guard + required files
 - `python scripts/check_windows_paths.py` — reject tracked paths invalid on Windows
 - `bash scripts/render_diagrams.sh --check` — SVG freshness vs `.mmd` sources
+- `bash scripts/check_doc_freshness.sh` — stale config/export token guard
 - `quarto render docs/theory docs/usage --to html` — book smoke (when Quarto available)
 
 ## Related documents

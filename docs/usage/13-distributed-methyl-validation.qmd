@@ -6,7 +6,7 @@ Run discovery Monte Carlo (and related queue-backed work) on **several machines*
 
 ## Prerequisites
 
-- One **MonteCarloConfig** (dedicated `mc.json` or a project with `step_config.validation`) with `output_base` on shared storage
+- One **MonteCarloConfig** (dedicated `mc.json` or profile `actionConfig.validation` merged at plan time) with `output_base` on shared storage
 - The same virtual environment and `methyl-*` CLIs on each worker
 - R/W access to: `output_base/<project_name>/monte_carlo_runs/` and the `queue/` subtree created by planning
 

@@ -37,56 +37,47 @@ In the pipeline profile **`actionConfig.validation`** (set `METHYL_PROFILE` or p
   - `stability_convergence_patience`
 - optional FeatureCuts controls:
   - `stability_featurecuts_enabled`
-  - `stability_target_balanced_accuracy`
-  - `stability_min_selected_dmps`
+  - `dmp_featurecuts_target_ba`, `gene_featurecuts_target_ba` (split BA gates)
+  - `dmp_modeling_mode`, `gene_modeling_mode`
+  - `stability_gene_featurecuts_max_dmps`, `stability_gene_featurecuts_max_genes` (site/profile caps)
 
-## Composable workflow profiles
+## Statistical modeling modes (generic profiles)
 
-DomainProgram workflows support selectable paths via context profiles in `workflow_engine/domain/profiles/`. Use `methyl-validation run-workflow` or `methyl-workflow-run` with `--context-file`.
+Profiles are **process-agnostic**; study facts stay in the study manifest. See `docs/reference/domain-program-language.md` for the full matrix.
 
-**Gene stability without DMP FeatureCuts** (discovery DMPs → mapper → enricher → stability on enricher genes):
+| Goal | Profile | Key modes |
+|------|---------|-----------|
+| DMP recurrence only | `mc_dmp_discovery` | `dmp_modeling_mode: raw_pool` |
+| BA-gated DMP panel | `mc_dmp_featurecuts` | `dmp_modeling_mode: featurecuts` |
+| Mapper gene recurrence | `mc_gene_mapper` | `gene_modeling_mode: mapper_ranked` |
+| Gene FeatureCuts on discovery loci | `mc_gene_featurecuts` | `gene_modeling_mode: featurecuts` |
+| Full DMP + gene FC (production) | `mc_gene_fc` | both axes featurecuts |
+| Two-phase panel lock | `phase_a_dmp_stability` → `phase_b_gene_from_stable_dmps` | stable DMP panel then gene FC |
 
-- Profile: `gene_enricher_stability.profile.json`
-- Program: `mc_gene_enricher_stability.program.json`
-- Set `stability_featurecuts_enabled: false`, `stability_gene_featurecuts_enabled: false`, `stability_gene_freq` as needed
-- Mapper uses `dmps-*-discovery.csv`; enricher disease filters come from profile `actionConfig.enricher`
+```bash
+methyl-workflow-run \
+  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'
+```
 
-**DMP panel stability** (split detector + `pipeline.dmp_select`): profile `dmp_panel_stability` or `full_biomarker_gene_fc`.
+Mapper CSV pattern follows modeling mode: discovery → `dmps-*-discovery.csv`; featurecuts → `dmps-*-selected.csv`. Downstream consumers should prefer **`dmps-*-selected.csv`**.
 
-**Discovery DMPs → broad mapper → gene FeatureCuts** (stable gene panel for model): profile `discovery_gene_featurecuts` with `pca1_5_mc_stability.program.json`. Mapper uses `dmps-*-discovery.csv`; `pipeline.dmp_select` still runs so `pipeline.gene_select` has classifier DMP exports for validation. Biomarker/PPI pre-filter is off by default (largest gene pool); enable with `"runBiomarkerFilter": true` in context.
-
-**Biomarker / PPI pre-filter** (`validation.biomarker_filter`): optional via `${runBiomarkerFilter}`; modes `ppi_only`, `disease_only`, `disease_and_ppi` under profile `actionConfig.validation` or `actionConfig.gene_selection`. Can run on mapper gene pools without gene FeatureCuts.
-
-See `docs/reference/domain-program-language.md` for the full profile matrix and IF branch flags (`runDmpSelection`, `runGeneFeaturecuts`, …).
+Deprecated names (`discovery_gene_featurecuts`, `dmp_panel_stability`, `gene_enricher_stability`, `buffy_mc_gene_fc`) alias to the generic presets in `pipeline_profiles.py`.
 
 ## Process model
 
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=1.1cm and 1.5cm,
-  box/.style={draw, rounded corners, align=center, minimum width=3.2cm, minimum height=0.8cm}
-]
-\node[box] (runs) {run\_0001..run\_N};
-\node[box, right=of runs] (centroid) {methyl-centroid};
-\node[box, right=of centroid] (detector) {methyl-detector};
-\node[box, below left=of detector] (dmp) {discovery/classifier DMP exports};
-\node[box, below right=of detector] (results) {result JSON};
-\node[box, below=1.5cm of detector] (agg) {run\_stability\_analysis};
-\node[box, below left=of agg] (stable) {stable\_dmps\_production.csv};
-\node[box, below right=of agg] (summary) {stability\_summary.json};
+![Stability stage process model](../diagrams/out/stability-stage.svg)
 
-\draw[->] (runs) -- (centroid);
-\draw[->] (centroid) -- (detector);
-\draw[->] (detector) -- (dmp);
-\draw[->] (detector) -- (results);
-\draw[->] (dmp) -- (agg);
-\draw[->] (results) -- (agg);
-\draw[->] (agg) -- (stable);
-\draw[->] (agg) -- (summary);
-\end{tikzpicture}
-\end{center}
+```mermaid
+flowchart LR
+  runs[run_0001..run_N] --> centroid[methyl-centroid] --> detector[methyl-detector]
+  detector --> dmp[discovery + selected DMP exports]
+  detector --> results[result JSON]
+  dmp --> agg[run_stability_analysis]
+  results --> agg
+  agg --> stable[stable_dmps_production.csv]
+  agg --> summary[stability_summary.json]
 ```
 
 ## Expected outputs

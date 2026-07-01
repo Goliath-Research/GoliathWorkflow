@@ -5,7 +5,7 @@ Use this workflow when the cohort is **plasma or cell-free DNA**, not buffy-coat
 ## 1. Declare analyte in project JSON
 
 ```json
-"step_config": {
+"actionConfig": {
   "validation": {
     "regulatory": {
       "primary_analyte": "cfdna",

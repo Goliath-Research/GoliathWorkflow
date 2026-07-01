@@ -4,7 +4,7 @@ This document specifies the **objective** \(J(\theta)\), the **search space** (b
 
 ## 1. Objective \(J(\theta)\)
 
-Let \(\theta\) denote tunable parameters (merged into `MonteCarloConfig` and/or project `step_config`).
+Let \(\theta\) denote tunable parameters (merged into `MonteCarloConfig` and/or project `actionConfig`).
 
 **Implemented in** `methyl_validation.optimization.objective_from_monte_carlo_artifacts`:
 
@@ -33,8 +33,8 @@ Let \(\theta\) denote tunable parameters (merged into `MonteCarloConfig` and/or 
 
 | Tier | Scope | Examples |
 |------|--------|----------|
-| **A** | `MonteCarloConfig` / `step_config.validation` | `train_fraction`, `n_iterations`, `stability_dmp_freq`, `stability_gene_freq`, `stability_min_balanced_accuracy`, adaptive stop (`stability_early_stop_enabled`, `stability_min_iterations`, `stability_convergence_*`), FeatureCuts: `stability_featurecuts_enabled`, `stability_target_balanced_accuracy`, `stability_min_selected_dmps` |
-| **B** | Project `step_config` for detector/classifier | Thresholds, k for DMPs, options exposed in JSON |
+| **A** | `MonteCarloConfig` / `actionConfig.validation` | `train_fraction`, `n_iterations`, `stability_dmp_freq`, `stability_gene_freq`, `stability_min_balanced_accuracy`, adaptive stop (`stability_early_stop_enabled`, `stability_min_iterations`, `stability_convergence_*`), FeatureCuts: `stability_featurecuts_enabled`, `stability_target_balanced_accuracy`, `stability_min_selected_dmps` |
+| **B** | Project `actionConfig` for detector/classifier | Thresholds, k for DMPs, options exposed in JSON |
 | **C** | Model backend | `model_backend`, `tabular_methods`, `generative_*` — use **nested** search after Tier A, often on a **fixed** frozen panel |
 
 **Rule:** Full Cartesian product over A×B×C is usually too large. Use **small grids** on Tier A, **random** or **Bayesian** search on B/C, or **successive halving** with a low `n_iterations` pilot.

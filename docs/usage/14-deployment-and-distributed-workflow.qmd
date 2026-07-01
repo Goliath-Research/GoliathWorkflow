@@ -10,26 +10,8 @@ Deploy the **control plane** (database, REST gateway) and **GPU workers** that e
 
 ## Architecture
 
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=1.4cm,
-  box/.style={draw, rounded corners, align=center, minimum width=2.8cm, minimum height=0.8cm, font=\small}
-]
-\node[box] (portal) {Portal / SQL procs};
-\node[box, right=of portal] (db) {Database wf schema};
-\node[box, right=of db] (gw) {methyl-gateway};
-\node[box, right=of gw] (worker) {methyl-worker GPU};
-\node[box, below=1.0cm of worker] (work) {Shared /work storage};
+![Distributed runtime](../diagrams/out/distributed-runtime.svg)
 
-\draw[->] (portal) -- (db);
-\draw[->] (portal) -- (gw);
-\draw[->] (gw) -- (worker);
-\draw[->] (worker) -- (work);
-\end{tikzpicture}
-\end{center}
-```
 
 | Component | Role |
 |-----------|------|

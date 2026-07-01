@@ -104,7 +104,7 @@ Portal / planner JSON: instance-level `fastqStorage` (laboratory-owned ingress â
 
 ### Worker environment (fallback)
 
-Production settings should live in `project.step_config.parabricks` and task `input_json` overrides. Environment variables are used only when project/task values are absent:
+Production settings resolve from merged **profile/site `actionConfig.parabricks`** (materialized as task `resolvedConfig`) and optional task `input_json` overrides. Environment variables are used only when profile/site/task values are absent:
 
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
@@ -141,7 +141,7 @@ FASTQ inputs: prefer `{sampleId}_1.fastq.gz` + `{sampleId}_2.fastq.gz`; otherwis
 }
 ```
 
-### Project `step_config.parabricks` (shared storage)
+### Profile/site `actionConfig.parabricks`
 
 ```json
 "parabricks": {
@@ -272,11 +272,11 @@ Production remote workers are **self-contained per task**: config comes from **`
 | `sampleId` | Sample identifier |
 | `sampleDir` | Shared storage path (`/work/samples/{id}`) |
 | `project` | Absolute path to project JSON on shared storage |
-| `referenceFasta` | Reference FASTA (workflow instance context; fallback: `step_config.alignment_qc.genome_fasta`) |
+| `referenceFasta` | Reference FASTA (site `reference_genome.fasta`, instance `context_json`, or profile `actionConfig.alignment_qc.genome_fasta`) |
 
 Optional per-task overrides: `extractContexts`, `threads`, `minMapq`, `chromMapping`, â€¦
 
-### Project `step_config.methyl_extract` (shared storage)
+### Profile/site `actionConfig.methyl_extract`
 
 Production defaults (not env vars):
 
@@ -354,7 +354,7 @@ Upstream contract: MethylExtractor [`docs/extraction_qc_contract.md`](file:///ho
 
 Optional: `chromosomes` list when `project` is omitted (defaults to full genome expectation from manifest).
 
-### Project `step_config.extraction_qc`
+### Profile/site `actionConfig.extraction_qc`
 
 ```json
 "extraction_qc": {

@@ -419,11 +419,11 @@ window.Quarto = {
 \frac{\exp(\beta_k^\top z(x)+b_k)}
 {\sum_{r=1}^K \exp(\beta_r^\top z(x)+b_r)}.
 \]</span></p>
-<p>This layer is controlled by <code>multiclass_train_learned_head</code> and related hyperparameters in <code>step_config.detection</code> (see reference/configuration-reference). It is especially useful when the raw histogram scores have good ranking behavior but imperfect class boundaries.</p>
+<p>This layer is controlled by <code>multiclass_train_learned_head</code> and related hyperparameters in profile <code>actionConfig.detection</code> (see reference/configuration-reference). It is especially useful when the raw histogram scores have good ranking behavior but imperfect class boundaries.</p>
 </section>
 <section id="isotonic-and-stacking-layers" class="level3" data-number="5.8.2">
 <h3 data-number="5.8.2" class="anchored" data-anchor-id="isotonic-and-stacking-layers"><span class="header-section-number">5.8.2</span> Isotonic and Stacking Layers</h3>
-<p>Two additional modeling switches in <code>step_config.classifier</code> are important for current production behavior:</p>
+<p>Two additional modeling switches in profile <code>actionConfig.classifier</code> are important for current production behavior:</p>
 <ul>
 <li><code>use_isotonic_calibration</code>: nonparametric monotone calibration of predicted probabilities,</li>
 <li><code>use_elasticnet_stacking</code>: linear meta-model for chromosome-weight fusion under elastic-net regularization.</li>
@@ -444,7 +444,7 @@ window.Quarto = {
 </section>
 <section id="sec-classifier-class-weight" class="level2" data-number="5.9">
 <h2 data-number="5.9" class="anchored" data-anchor-id="sec-classifier-class-weight"><span class="header-section-number">5.9</span> Multiclass Learned Head: Class Weighting</h2>
-<p>When the native multiclass histogram classifier is extended with a learned logistic head (<code>multiclass_train_learned_head: true</code>), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a <code>class_weight</code> parameter (exposed as <code>multiclass_learned_class_weight</code> in <code>step_config.detection</code>; see reference/configuration-reference).</p>
+<p>When the native multiclass histogram classifier is extended with a learned logistic head (<code>multiclass_train_learned_head: true</code>), the logistic regression is fitted on top of the pre-softmax histogram scores from the base model. This second-stage model can accept a <code>class_weight</code> parameter (exposed as <code>multiclass_learned_class_weight</code> in profile <code>actionConfig.detection</code>; see reference/configuration-reference).</p>
 <p>With <code>multiclass_learned_class_weight: "balanced"</code>, sklearn computes inverse-frequency weights:</p>
 <p><span id="eq-class-weight-balanced"><span class="math display">\[
 w_k = \frac{n_{\text{total}}}{K \cdot n_k},

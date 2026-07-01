@@ -56,7 +56,7 @@ methyl-predictor --help
 
 - **`command not found`**: activate `.venv` and reinstall with `scripts/install_all.sh`.
 - **module import errors**: reinstall editable packages from repo root.
-- **path mismatch between hosts**: set `step_config.validation.path_remap` or `--path-remap OLD=NEW`.
+- **path mismatch between hosts**: set profile `actionConfig.validation.path_remap` or `--path-remap OLD=NEW`.
 
 ## See also
 

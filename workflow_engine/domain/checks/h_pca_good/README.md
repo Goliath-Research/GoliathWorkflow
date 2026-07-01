@@ -17,7 +17,7 @@ Buffy-coat **healthy vs PCa** using `healthy_good.csv` / `pca_good.csv`. Same MC
 
 | `/work` path | Role |
 |--------------|------|
-| `configs/project_H_PCa_good.json` | Study manifest (cohorts, `step_config`, `n_iterations`) |
+| `configs/project_H_PCa_good.json` | Study manifest (cohorts, comparisons, paths) |
 | `data/healthy_good.csv`, `data/pca_good.csv` | Sample lists |
 
 The `configs/project_H_PCa_good.json` in this folder is a **reference / CI mirror** only; edit production JSON on `/work`.
@@ -30,15 +30,16 @@ From repo root with `.venv` activated:
 methyl-workflow-run \
   --program workflow_engine/domain/checks/h_pca_good/configs/h_pca_good_mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/full_biomarker_gene_fc.profile.json \
-  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_H_PCa_good.json"}' \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_H_PCa_good.json","pipelineProfile":"full_biomarker_gene_fc"}' \
   --parallel-workers 1
 ```
 
 Outputs: `/work/projects/prostate-cancer/H_PCa_good/monte_carlo_runs/`.
 
-## Config notes (on `/work` project JSON)
+## Config notes (four-layer)
 
-- Use canonical `stability_*` keys under `step_config.validation` (not legacy `stability_dmps_*` names)
-- DMP FeatureCuts: `step_config.dmp_selection`
-- `enricher.sort_by`: `gene_importance`
-- `n_iterations`: 10 for the standard MC stability run
+- **Study manifest** (`/work/.../project_H_PCa_good.json`): cohorts, comparisons, paths only
+- **Profile** (`full_biomarker_gene_fc.profile.json`): MC knobs — use canonical `stability_*` keys under `actionConfig.validation` (not legacy `stability_dmps_*` names)
+- DMP FeatureCuts: profile `actionConfig.dmp_selection`
+- `actionConfig.enricher.sort_by`: `gene_importance`
+- `actionConfig.validation.n_iterations`: 10 for the standard MC stability run

@@ -22,12 +22,12 @@ Common options:
 - `--gene-sets-path` / `--gene-set-profile`: provide external profile JSON
 - `--disease-profile`: use bundled disease profile key
 
-## Configuration (`step_config.progression`)
+## Configuration (`actionConfig.progression`)
 
-The package reads optional progression settings from project JSON:
+Progression settings resolve from **profile/site `actionConfig.progression`** (merged into instance `context_json` / production `project.json` snapshots). The study manifest does not carry `step_config`.
 
 ```json
-"step_config": {
+"actionConfig": {
   "progression": {
     "enabled": true,
     "ordered_comparison_labels": ["pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"],
@@ -40,7 +40,7 @@ The package reads optional progression settings from project JSON:
 Order resolution precedence:
 
 1. CLI `--ordered-comparison-labels`
-2. `step_config.progression.ordered_comparison_labels` / `ordered_disease_groups`
+2. `actionConfig.progression.ordered_comparison_labels` / `ordered_disease_groups`
 3. Project comparison order from `methylutils` `ProjectConfig`
 
 ## Inputs Per Comparison
@@ -49,7 +49,7 @@ For each resolved comparison `(control_group, disease_group)`:
 
 - Mapper combined CSV:
   - `mapper/<control>/<disease>/all-gene_name-combined.csv`
-  - or `step_config.enricher.combined_csv_name`
+  - or `actionConfig.enricher.combined_csv_name`
 - Enricher merged pathway CSV:
   - `enricher/<control>/<disease>/enrichment_merged.csv` (fallback to `enrichment_top_q0.05.csv`)
 - Optional modules CSV:
@@ -74,7 +74,7 @@ and optional gene-set metrics metadata when enabled.
 ## Typical Integration
 
 In the standard `methyl-validation --freeze` stage, progression can run automatically when
-`step_config.progression.enabled=true`. You can also run it manually:
+`actionConfig.progression.enabled=true`. You can also run it manually:
 
 ```bash
 methyl-disease-progression \

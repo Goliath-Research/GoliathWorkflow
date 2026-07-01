@@ -402,22 +402,22 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </thead>
 <tbody>
 <tr class="odd">
-<td><code>step_config.validation.run_mapper_and_enricher</code></td>
+<td><code>actionConfig.validation.run_mapper_and_enricher</code></td>
 <td>Marked legacy in config reference</td>
 <td>Stability iterations now run centroid+detector only; mapper/enricher belong to <code>--freeze</code></td>
 <td>Remove flag; always run mapper/enricher in <code>--freeze</code> when enabled in project steps</td>
 </tr>
 <tr class="even">
-<td><code>step_config.validation.skip_enricher</code></td>
+<td><code>actionConfig.validation.skip_enricher</code></td>
 <td>Legacy companion to <code>run_mapper_and_enricher</code></td>
 <td>Semantics overlap with step-level enricher control and creates branchy MC behavior</td>
 <td>Drop from validation block; control enricher directly in freeze-stage execution policy</td>
 </tr>
 <tr class="odd">
-<td><code>step_config.validator</code> (alias)</td>
-<td>Deprecated alias for <code>step_config.predictor</code></td>
+<td><code>actionConfig.validator</code> (alias)</td>
+<td>Deprecated alias for <code>actionConfig.predictor</code></td>
 <td>Duplicates predictor namespace and complicates resolver logic</td>
-<td>Use only <code>step_config.predictor</code></td>
+<td>Use only <code>actionConfig.predictor</code></td>
 </tr>
 <tr class="even">
 <td>Flat cohort schema (<code>group1</code> / <code>group2</code> / top-level <code>groups</code>)</td>
@@ -447,7 +447,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="reference-tuning-template-binary-ecdf-first" class="level3" data-number="14.6.3">
 <h3 data-number="14.6.3" class="anchored" data-anchor-id="reference-tuning-template-binary-ecdf-first"><span class="header-section-number">14.6.3</span> Reference tuning template (binary ECDF-first)</h3>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="st">"step_config"</span><span class="er">:</span> <span class="fu">{</span></span>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="st">"actionConfig"</span><span class="er">:</span> <span class="fu">{</span></span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"validation"</span><span class="fu">:</span> <span class="fu">{</span></span>
 <span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"train_fraction"</span><span class="fu">:</span> <span class="fl">0.8</span><span class="fu">,</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"n_iterations"</span><span class="fu">:</span> <span class="dv">50</span><span class="fu">,</span></span>

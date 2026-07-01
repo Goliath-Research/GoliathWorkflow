@@ -45,7 +45,7 @@ When `wgbs_parabricks_qc.py` runs directly, it writes a `guardrails` block into 
 
 ## Bisulfite conversion (automated)
 
-Enable in `step_config.alignment_qc.bisulfite_conversion`. Place `bisulfite_conversion.json` in each sample directory:
+Enable in `actionConfig.alignment_qc.bisulfite_conversion` (profile/site). Place `bisulfite_conversion.json` in each sample directory:
 
 ```json
 {
@@ -69,7 +69,7 @@ When `cycle_screening.enabled` is true (default), each export includes `guardrai
 | `INVESTIGATE_GUARDRAIL_ONLY` | Cycles OK; check duplication/depth/insert size |
 | `NOT_FIXABLE` | No automated trim path |
 
-Optional config under `step_config.alignment_qc`:
+Optional config under `actionConfig.alignment_qc`:
 
 ```json
 {

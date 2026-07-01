@@ -22,7 +22,7 @@ This package supports internal repeated-split validation. It should not be descr
 
 ## Backend Configuration Contract
 
-Model backend behavior is controlled by `step_config.validation.backend_profiles` only. Legacy flat backend keys are intentionally rejected to avoid ambiguous runtime semantics.
+Model backend behavior is controlled by `actionConfig.validation.backend_profiles` only. Legacy flat backend keys are intentionally rejected to avoid ambiguous runtime semantics.
 
 - `--model-mc-all` evaluates only profiles with `enabled: true`.
 - Single-backend modes require the selected backend to be enabled.

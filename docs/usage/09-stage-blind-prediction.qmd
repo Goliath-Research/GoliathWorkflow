@@ -18,30 +18,12 @@ methyl-predictor --project /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/m
 
 ## Process model
 
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=1.7cm and 2.0cm,
-  box/.style={draw, rounded corners, align=center, minimum width=3.2cm, minimum height=0.8cm}
-]
-\node[box] (model) {production classifiers};
-\node[box, below=of model] (samples) {new unlabeled samples};
-\node[box, right=of model] (predictor) {methyl-predictor\\blind mode};
-\node[box, right=of predictor] (report) {prediction\_report.json};
-\node[box, below=of report] (scores) {per-sample probabilities};
+![Blind prediction stage](../diagrams/out/pipeline-stages.svg)
 
-\draw[->] (model) -- (predictor);
-\draw[->] (samples) -- (predictor);
-\draw[->] (predictor) -- (report);
-\draw[->] (predictor) -- (scores);
-\end{tikzpicture}
-\end{center}
-```
 
 ## Required config pattern
 
-`step_config.predictor` should reference blind/test-blind inputs and model paths resolved from frozen production project.
+Profile `actionConfig.predictor` should reference blind/test-blind inputs and model paths resolved from frozen production project.
 
 ## Expected outputs
 

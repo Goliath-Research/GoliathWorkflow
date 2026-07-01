@@ -20,7 +20,7 @@ Status legend:
 | Profile | `workflow_engine/domain/profiles/*.profile.json` | `schemas/config/profile.schema.json` | Scope booleans + `actionConfig` parameter packs |
 | Site | `/work/site/methyl_site.json` (or `METHYL_SITE_CONFIG`) | `schemas/config/site_manifest.schema.json` | Genomes, GTF, caches, cluster defaults |
 
-**Precedence** (highest wins): instance override → program `with` / `stepOverride` → profile `actionConfig` → analyte defaults (`regulatory.primary_analyte`) → site manifest → package defaults.
+**Precedence** (highest wins): instance override → program `with` / `stepOverride` → profile `actionConfig` → analyte defaults (`regulatory.primary_analyte`) → site manifest → *(no Python fallback for tunable science knobs)*.
 
 ## Study manifest (project_*.json)
 

@@ -119,7 +119,7 @@ You **do not** need to “build” a new aggregated classifier every time you pr
   - **Multiclass OvR**: a portable **`ecdf_one_vs_rest`** dict PKL — the K binary experts and union DMP layout are **fixed at save/export time** (`--export-ovr-pkl` does the same without classifying).
   - **Multi-chromosome binary**: a pickled **`MethylClassifier`** that already contains **all** chromosome sub-classifiers and (when fitted) chromosome weights.
 
-**MethylPredictor** should use **`model_path`** to that file. For comparison projects, the resolver picks **`step_config.predictor.multiclass_model_path`** or **`model_path`** if set; otherwise **`classifiers/multiclass-classifier.pkl`** (native histogram / learned multiclass from MethylDetector) **if that file exists**; otherwise **`classifier.save_classifier_path`**, then the **OvR ECDF bundle** under **`classifiers/<control>/`**, then **`{project_name}-classifier.pkl`**. Native **`multiclass-classifier.pkl`** wins over the OvR bundle when both are present so detector-built models are not shadowed.
+**MethylPredictor** should use **`model_path`** to that file. For comparison projects, the resolver picks **`actionConfig.predictor.multiclass_model_path`** or **`model_path`** if set; otherwise **`classifiers/multiclass-classifier.pkl`** (native histogram / learned multiclass from MethylDetector) **if that file exists**; otherwise **`classifier.save_classifier_path`**, then the **OvR ECDF bundle** under **`classifiers/<control>/`**, then **`{project_name}-classifier.pkl`**. Native **`multiclass-classifier.pkl`** wins over the OvR bundle when both are present so detector-built models are not shadowed.
 
 **`model_dir`** (a folder of `classifier-{chrom}*.pkl`) is still valid — typically MethylDetector output — but each predictor process **reloads every chromosome pickle** and wires multi-chromosome mode again. That is **more I/O and setup** than loading a **single saved PKL**; use **`model_path`** once the classifier step has produced it.
 
@@ -129,9 +129,9 @@ You **do not** need to “build” a new aggregated classifier every time you pr
 
 MethylPredictor needs two sets of sample paths: **control** (expected class 0) and **disease** (expected class 1). Each sample is a directory that MethylClassifier can load.
 
-### Project JSON (`step_config.predictor`)
+### Profile `actionConfig.predictor` (study manifest + merged profile)
 
-Use the **same shape** as top-level `controls` / `diseases`: each side has optional `label` and a **`groups`** array. Each group has **`label`** and **`sample_paths`** (CSV list files and/or directories, same as training).
+Use the **same shape** as top-level `controls` / `diseases`: each side has optional `label` and a **`groups`** array. Each group has **`label`** and **`sample_paths`** (CSV list files and/or directories, same as training). These keys live in profile **`actionConfig.predictor`**, not in the study manifest.
 
 - If **`predictor.controls`** or **`predictor.diseases`** is missing, or has an empty **`groups`** list, that side is taken from the **root** project `controls` / `diseases` (so you can use `"predictor": {}` to validate on the **same cohorts** as training).
 - For **per-comparison** projects, each run uses the comparison’s **`control_group`** / **`disease_group`** labels to pick the matching subgroup from those nested groups (see [`configs/project_Healthy_vs_PCa1-4.json`](../../configs/project_Healthy_vs_PCa1-4.json)).
@@ -140,7 +140,7 @@ Use the **same shape** as top-level `controls` / `diseases`: each side has optio
 
 For **multiclass OvR ECDF bundles** fused with **pairwise max-contrast** (the default when the control head is an aggregate over pairwise detectors), you can attach a **panel spec** so each sample gets an interpretable readout: **`healthy`**, **`primary_disease`** (top disease class belongs to your primary family), **`alternative_panel_disease`** (top disease is in another named family on the same panel), or **`indeterminate`** (no usable logits or top-two margin below a threshold).
 
-Add under **`step_config.predictor`** (or the equivalent field on a standalone predictor config):
+Add under profile **`actionConfig.predictor`** (or the equivalent field on a standalone predictor config):
 
 ```json
 "panel": {
@@ -236,7 +236,7 @@ When samples have **known** expected classes (control vs disease, or multiclass 
 
 By default, labeled runs score a **single** cohort list (often the same sample paths used to build centroids). In that case **`validation_metrics.json`** includes **`evaluation_semantics": "undifferentiated"`** and a **UserWarning** is emitted: top-level **`balanced_accuracy`** describes **in-sample** fit on the scored list, not a disjoint test set.
 
-To report **both** cohort homogeneity and **holdout generalization** in one run, set under **`step_config.predictor`**:
+To report **both** cohort homogeneity and **holdout generalization** in one run, set under profile **`actionConfig.predictor`**:
 
 - **Binary:** **`holdout_controls`** and **`holdout_diseases`** (same nested shape as **`controls`** / **`diseases`**). Training paths default to the usual predictor/project cohorts; override with **`train_controls`** / **`train_diseases`** if needed. Holdout group/stage **labels** must match the training sides.
 - **Multiclass:** **`holdout_group_paths`** (same shape as **`test_group_paths`**). Training paths default to the resolved evaluation groups; override with **`train_group_paths`**. The **`class_index`** set must match between train and holdout entries.

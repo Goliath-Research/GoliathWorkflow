@@ -186,7 +186,7 @@ Confidence rubric:
 
 | Finding | Evidence | Confidence | Action |
 |---|---|---|---|
-| `step_config.validator` superseded by `step_config.predictor` | `pipeline_config.normalize_predictor_step_key` copies + warns deprecation | Medium | Keep shim temporarily; remove from canonical docs and mark removal target |
+| `actionConfig.validator` superseded by `actionConfig.predictor` | `pipeline_config.normalize_predictor_step_key` copies + warns deprecation | Medium | Keep shim temporarily; remove from canonical docs and mark removal target |
 | Project metadata fields (`disease_name`, `laboratory`, `batch`) are weakly consumed in runtime paths | Present in schema, not strongly represented in execution branches | Medium | Verify external consumers before deprecation |
 | Legacy direct-script main block in centroid module | `methyl_centroid/methyl_centroid.py` has standalone `__main__` path while packaged CLI is canonical | Medium | Keep only if still used manually; otherwise remove |
 
@@ -240,7 +240,7 @@ Target file (proposed): `README.md` as canonical root narrative, backed only by 
 
 - Use detector effect-size-ranked DMPs and q-value filtered panel.
 - Use mapper/enricher outputs for gene/pathway-level interpretation.
-- Optional progression synthesis via `step_config.progression.enabled`.
+- Optional progression synthesis via `actionConfig.progression.enabled`.
 
 ### C) Model creation strategy
 

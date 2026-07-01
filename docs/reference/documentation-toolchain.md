@@ -15,6 +15,8 @@
 
 **Decision:** **Option A — Quarto + `@mermaid-js/mermaid-cli` pre-render** for theory and usage books. Plain Markdown for implementation and architecture pillars. **Retire dual TikZ maintenance** for workflow diagrams.
 
+**Validated 2026-07:** Theory book requires Quarto (LaTeX math, bibliography, cross-refs). Usage book reviewed — stays Quarto for multi-part PDF/HTML assembly despite no display math. CI smoke and doc freshness guards added in the docs refresh plan.
+
 ## Evaluation criteria (benchmark: theory ch.03 + three workflow diagrams)
 
 | Criterion | Weight | Quarto + mmdc (A) | MyST + Sphinx (B) | MkDocs Material (C) | Dual TikZ (D, status quo) |
@@ -53,21 +55,22 @@ scripts/render_diagrams.sh  # mmdc wrapper (--check for CI)
 
 ### Tooling
 
+Dependencies are pinned in [`docs/diagrams/package.json`](../diagrams/package.json). The render script installs them on first use (`npm ci` in that directory).
+
 ```bash
-# Global install (preferred on dev machines)
-npm install -g @mermaid-js/mermaid-cli
+# One-time (or let render_diagrams.sh install automatically)
+cd docs/diagrams && npm ci
 
-# Or one-shot via npx (used when mmdc not on PATH)
-npx --yes @mermaid-js/mermaid-cli -i docs/diagrams/src/layer-model.mmd -o docs/diagrams/out/layer-model.svg
-
-# Regenerate all shared diagrams
+# Regenerate all shared diagrams (uses system Chromium on ARM via PUPPETEER_EXECUTABLE_PATH)
 bash scripts/render_diagrams.sh
 
-# CI freshness check
+# CI freshness check (missing, stale, or placeholder SVGs fail)
 bash scripts/render_diagrams.sh --check
 ```
 
-If Node/`mmdc` is unavailable (e.g. ARM hosts where Puppeteer/Chrome fails), run `render_diagrams.sh` on an x86_64 CI agent or dev machine and commit the resulting SVGs. **Placeholder SVGs** may be checked in temporarily; CI `--check` still verifies freshness when sources change. PDF builds must not depend on live Mermaid JS.
+**ARM / aarch64 dev hosts:** `@mermaid-js/mermaid-cli` bundles Puppeteer; on ARM it may download the wrong Chrome arch when invoked via ephemeral `npx`. The repo pins a local install under `docs/diagrams/node_modules/` and `render_diagrams.sh` sets `PUPPETEER_EXECUTABLE_PATH` to system `chromium` / `chromium-browser` when unset. Install Chromium (`apt install chromium-browser`, or `/snap/bin/chromium`).
+
+**CI:** PR pipeline installs `chromium-browser`, runs `npm ci` in `docs/diagrams/`, then `render_diagrams.sh --check`. Commit regenerated SVGs whenever `.mmd` sources change. PDF builds must not depend on live Mermaid JS.
 
 ### TikZ policy
 

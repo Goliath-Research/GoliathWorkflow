@@ -54,41 +54,8 @@ methyl-predictor --project /work/project/monte_carlo_runs/production/project.jso
 
 ## Integration diagram
 
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=1.1cm and 1.7cm,
-  box/.style={draw, rounded corners, align=center, minimum width=2.9cm, minimum height=0.8cm}
-]
-\node[box] (validator) {methyl-validation};
-\node[box, right=of validator] (centroid) {methyl-centroid};
-\node[box, right=of centroid] (detector) {methyl-detector};
-\node[box, right=of detector] (mapper) {methyl-mapper};
-\node[box, right=of mapper] (enricher) {methyl-enricher};
-\node[box, right=of enricher] (progression) {methyl-disease-progression};
+![Package integration](../diagrams/out/pipeline-stages.svg)
 
-\node[box, below=of detector] (classifier) {methyl-classifier};
-\node[box, right=of classifier] (predictor) {methyl-predictor};
-\node[box, below=of centroid] (qc) {methyl-qc};
-
-\draw[->] (qc) -- (centroid);
-\draw[->] (centroid) -- (detector);
-\draw[->] (detector) -- (mapper);
-\draw[->] (mapper) -- (enricher);
-\draw[->] (enricher) -- (progression);
-\draw[->] (detector) -- (classifier);
-\draw[->] (classifier) -- (predictor);
-
-\draw[->] (validator) -- (centroid);
-\draw[->] (validator) -- (detector);
-\draw[->] (validator) to[bend right=15] (mapper);
-\draw[->] (validator) to[bend right=25] (enricher);
-\draw[->] (validator) to[bend right=35] (classifier);
-\draw[->] (validator) to[bend right=45] (predictor);
-\end{tikzpicture}
-\end{center}
-```
 
 ## Do not do this
 

@@ -19,6 +19,7 @@ Plans in this folder are the **source of truth** for large features. Each plan m
 | [`simplify-study-config.plan.md`](simplify-study-config.plan.md) | **Epic** | Simplify study config (four-layer model) | `contract-docs`, `site-resolver`, `profiles-progression`, `materialize-input`, `purge-step-config`, `migrate-manifests`, `editor-manual` |
 | [`streamline-action-parameters.plan.md`](streamline-action-parameters.plan.md) | **Epic** | Streamline workflow action parameters | `contract-audit-ci`, `canonical-config-keys`, `retire-mc-sidecars`, `slim-sample-prep-inputs`, `slim-pipeline-inputs`, `slim-validation-inputs`, `slim-implementations`, `docs-promote-plan` |
 | [`parallel-mc-centroid-seed.plan.md`](parallel-mc-centroid-seed.plan.md) | **Epic** | Parallel MC centroid seed | `typed-models`, `planner-models`, `handler-output`, `centroid-worker`, `domain-programs`, `schema-export`, `tests`, `db-catalog-seed`, `db-workflow-deploy`, `docs-plan-promote` |
+| [`docs-refresh-and-guardrails.plan.md`](docs-refresh-and-guardrails.plan.md) | **Epic** | Documentation refresh and CI guardrails | `audit-report`, `fix-precedence`, `fix-config-theory`, `fix-analyte`, `modeling-modes`, `profile-names`, `dmp-exports`, `workflow-engine-docs`, `validation-usage`, `package-sweep`, `quarto-record`, `tikz-svg`, `ci-freshness`, `ci-quarto`, `regen-verify` |
 
 Create each **Task** under its Epic in Azure DevOps Boards. Copy the task title from the plan `todos[].content` field. Mark tasks **Closed** when the corresponding code is merged.
 

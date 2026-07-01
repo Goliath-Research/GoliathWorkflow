@@ -261,17 +261,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#role-and-design-principle" id="toc-role-and-design-principle" class="nav-link active" data-scroll-target="#role-and-design-principle"><span class="header-section-number">12.1</span> Role and Design Principle</a></li>
-  <li><a href="#top-level-fields" id="toc-top-level-fields" class="nav-link" data-scroll-target="#top-level-fields"><span class="header-section-number">12.2</span> Top-Level Fields</a></li>
-  <li><a href="#the-cohort-hierarchy" id="toc-the-cohort-hierarchy" class="nav-link" data-scroll-target="#the-cohort-hierarchy"><span class="header-section-number">12.3</span> The Cohort Hierarchy</a></li>
-  <li><a href="#the-step_config-dictionary" id="toc-the-step_config-dictionary" class="nav-link" data-scroll-target="#the-step_config-dictionary"><span class="header-section-number">12.4</span> The <code>step_config</code> Dictionary</a></li>
-  <li><a href="#the-step_config.predictor-anti-pattern" id="toc-the-step_config.predictor-anti-pattern" class="nav-link" data-scroll-target="#the-step_config.predictor-anti-pattern"><span class="header-section-number">12.5</span> The <code>step_config.predictor</code> Anti-Pattern</a></li>
-  <li><a href="#embedding-monte-carlo-settings-step_config.validation" id="toc-embedding-monte-carlo-settings-step_config.validation" class="nav-link" data-scroll-target="#embedding-monte-carlo-settings-step_config.validation"><span class="header-section-number">12.6</span> Embedding Monte Carlo Settings: <code>step_config.validation</code></a>
-  <ul class="collapse">
-  <li><a href="#modeling-backend-inside-step_config.validation" id="toc-modeling-backend-inside-step_config.validation" class="nav-link" data-scroll-target="#modeling-backend-inside-step_config.validation"><span class="header-section-number">12.6.1</span> Modeling backend inside <code>step_config.validation</code></a></li>
-  </ul></li>
-  <li><a href="#annotated-example" id="toc-annotated-example" class="nav-link" data-scroll-target="#annotated-example"><span class="header-section-number">12.7</span> Annotated Example</a></li>
-  <li><a href="#output-directory-layout" id="toc-output-directory-layout" class="nav-link" data-scroll-target="#output-directory-layout"><span class="header-section-number">12.8</span> Output Directory Layout</a></li>
+  <li><a href="#role-and-design-principle" id="toc-role-and-design-principle" class="nav-link active" data-scroll-target="#role-and-design-principle"><span class="header-section-number">12.1</span> Role and design principle</a></li>
+  <li><a href="#four-layer-configuration" id="toc-four-layer-configuration" class="nav-link" data-scroll-target="#four-layer-configuration"><span class="header-section-number">12.2</span> Four-layer configuration</a></li>
+  <li><a href="#top-level-study-manifest-fields" id="toc-top-level-study-manifest-fields" class="nav-link" data-scroll-target="#top-level-study-manifest-fields"><span class="header-section-number">12.3</span> Top-level study manifest fields</a></li>
+  <li><a href="#the-cohort-hierarchy" id="toc-the-cohort-hierarchy" class="nav-link" data-scroll-target="#the-cohort-hierarchy"><span class="header-section-number">12.4</span> The cohort hierarchy</a></li>
+  <li><a href="#where-tool-parameters-live-actionconfig" id="toc-where-tool-parameters-live-actionconfig" class="nav-link" data-scroll-target="#where-tool-parameters-live-actionconfig"><span class="header-section-number">12.5</span> Where tool parameters live: <code>actionConfig</code></a></li>
+  <li><a href="#monte-carlo-configuration" id="toc-monte-carlo-configuration" class="nav-link" data-scroll-target="#monte-carlo-configuration"><span class="header-section-number">12.6</span> Monte Carlo configuration</a></li>
+  <li><a href="#annotated-study-manifest-example" id="toc-annotated-study-manifest-example" class="nav-link" data-scroll-target="#annotated-study-manifest-example"><span class="header-section-number">12.7</span> Annotated study manifest example</a></li>
+  <li><a href="#output-directory-layout" id="toc-output-directory-layout" class="nav-link" data-scroll-target="#output-directory-layout"><span class="header-section-number">12.8</span> Output directory layout</a></li>
+  <li><a href="#related" id="toc-related" class="nav-link" data-scroll-target="#related"><span class="header-section-number">12.9</span> Related</a></li>
   </ul>
 </nav>
     </div>
@@ -298,20 +296,53 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 
 
 <section id="role-and-design-principle" class="level2" data-number="12.1">
-<h2 data-number="12.1" class="anchored" data-anchor-id="role-and-design-principle"><span class="header-section-number">12.1</span> Role and Design Principle</h2>
-<p>MethylPipeline is controlled by a single JSON configuration file called the <strong>project configuration file</strong> (usually named <code>project_&lt;name&gt;.json</code>). Every pipeline step — centroid construction, DMP detection, classification, mapping, enrichment, prediction, and Monte Carlo validation — derives its inputs, outputs, and parameters from this one file.</p>
-<p>The governing design principle is <strong>single source of truth</strong>: no piece of information that is already in the project file should be repeated inside any step-specific configuration. Specifically:</p>
-<ul>
-<li>Sample paths are defined once in the top-level <code>controls</code>/<code>diseases</code> block. For Monte Carlo, per-run <code>project.json</code> files rewrite cohort lists to training CSVs; holdout lists are patched automatically—<strong>you do not need</strong> duplicate nested <code>step_config.predictor.controls</code> / <code>diseases</code> or hand-authored <code>train_group_paths</code> / <code>holdout_group_paths</code> in the template when the predictor step can inherit the top-level cohort shape (see <code>ProjectConfig</code> helpers in <code>pipeline_config.py</code>).</li>
-<li><strong>Hierarchical panel readout</strong> (<code>step_config.classifier.panel</code> / <code>step_config.predictor.panel</code>): when omitted, both <strong>methyl-classifier</strong> and <strong>methyl-predictor</strong> default the panel from <strong><code>comparisons</code></strong>, grouping disease leaves under each disease <strong>parent</strong> group (<code>derive_panel_spec_from_comparisons</code>). Explicit <code>panel</code> in <code>step_config.predictor</code> overrides <code>step_config.classifier.panel</code>, which overrides the derived default.</li>
-<li><strong>Progression stage order</strong>: when <code>step_config.progression.ordered_comparison_labels</code> is omitted, ordering follows <strong><code>comparisons</code></strong> via <code>get_ordered_comparison_labels()</code> (same order as <code>get_comparisons()</code>).</li>
-<li><code>output_base</code> and <code>samples_base_path</code> are top-level fields inherited by all steps.</li>
-<li>Monte Carlo validation settings are embedded under <code>step_config.validation</code>, not in a separate file.</li>
-</ul>
-<p>The Pydantic model that validates the project file is <code>ProjectConfig</code> in <code>packages/methylutils/methyl_utils/pipeline_config.py</code>.</p>
+<h2 data-number="12.1" class="anchored" data-anchor-id="role-and-design-principle"><span class="header-section-number">12.1</span> Role and design principle</h2>
+<p>MethylPipeline separates <strong>study facts</strong> (cohorts, paths, comparisons) from <strong>tool parameters</strong> (detector thresholds, MC iteration counts, mapper windows). The study manifest — usually <code>project_&lt;name&gt;.json</code> on <code>/work/projects/&lt;study&gt;/configs/</code> — holds only study-level fields validated by <code>ProjectConfig</code> in <code>packages/methylutils/methyl_utils/pipeline_config.py</code>.</p>
+<p><strong>Study manifests must not contain <code>step_config</code>.</strong> Tool parameters live in profile and site <code>actionConfig</code>, resolved at workflow plan time and worker claim time into <code>resolvedConfig</code>.</p>
 </section>
-<section id="top-level-fields" class="level2" data-number="12.2">
-<h2 data-number="12.2" class="anchored" data-anchor-id="top-level-fields"><span class="header-section-number">12.2</span> Top-Level Fields</h2>
+<section id="four-layer-configuration" class="level2" data-number="12.2">
+<h2 data-number="12.2" class="anchored" data-anchor-id="four-layer-configuration"><span class="header-section-number">12.2</span> Four-layer configuration</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 30%">
+<col style="width: 43%">
+<col style="width: 26%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Layer</th>
+<th>Artifact</th>
+<th>Owns</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Study manifest</td>
+<td><code>project_*.json</code></td>
+<td>Cohorts, comparisons, paths, <code>regulatory</code>, <code>validation_partitions</code></td>
+</tr>
+<tr class="even">
+<td>Pipeline profile</td>
+<td><code>*.profile.json</code></td>
+<td><code>actionConfig</code> parameter packs + scope booleans</td>
+</tr>
+<tr class="odd">
+<td>Site manifest</td>
+<td><code>/work/site/methyl_site.json</code></td>
+<td>Genomes, GTF, caches, deployment-wide defaults</td>
+</tr>
+<tr class="even">
+<td>DomainProgram</td>
+<td><code>*.program.json</code></td>
+<td>Control flow; optional per-action <code>with</code> / <code>stepOverride</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Precedence</strong> (highest wins): program/instance override → profile <code>actionConfig</code> → analyte defaults → site <code>actionConfig</code> → <em>(no Python fallback for tunable science knobs)</em>.</p>
+<p>See <a href="12-two-workflows.html" class="quarto-xref"><span>Chapter 13</span></a> for how Monte Carlo and production workflows consume these layers.</p>
+</section>
+<section id="top-level-study-manifest-fields" class="level2" data-number="12.3">
+<h2 data-number="12.3" class="anchored" data-anchor-id="top-level-study-manifest-fields"><span class="header-section-number">12.3</span> Top-level study manifest fields</h2>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 33%">
@@ -329,7 +360,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="odd">
 <td><code>project_name</code></td>
 <td>string</td>
-<td>Used as the output directory name under <code>output_base</code>.</td>
+<td>Output directory name under <code>output_base</code>.</td>
 </tr>
 <tr class="even">
 <td><code>laboratory</code></td>
@@ -354,7 +385,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="even">
 <td><code>chromosomes</code></td>
 <td>list of strings</td>
-<td>Chromosomes to process (e.g.&nbsp;<code>["1", "2", ..., "22", "X", "Y"]</code>).</td>
+<td>Chromosomes to process (e.g.&nbsp;<code>["1", …, "22", "X", "Y"]</code>).</td>
 </tr>
 <tr class="odd">
 <td><code>contexts</code></td>
@@ -364,19 +395,24 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="even">
 <td><code>comparisons</code></td>
 <td>string or list</td>
-<td>Comparison layout: <code>"control_vs_each_disease"</code> or a list of explicit comparison pairs.</td>
+<td>Comparison layout: <code>"control_vs_each_disease"</code> or explicit pairs.</td>
+</tr>
+<tr class="odd">
+<td><code>regulatory</code></td>
+<td>object</td>
+<td>Optional regulatory metadata; <code>primary_analyte</code> seeds analyte profile merge.</td>
 </tr>
 </tbody>
 </table>
 </section>
-<section id="the-cohort-hierarchy" class="level2" data-number="12.3">
-<h2 data-number="12.3" class="anchored" data-anchor-id="the-cohort-hierarchy"><span class="header-section-number">12.3</span> The Cohort Hierarchy</h2>
-<p>The <code>controls</code> and <code>diseases</code> blocks define the study cohort structure. Each block has a <code>label</code> (used in output directory naming) and a <code>groups</code> list. For hierarchical multiclass designs, disease groups can have <code>stages</code>:</p>
+<section id="the-cohort-hierarchy" class="level2" data-number="12.4">
+<h2 data-number="12.4" class="anchored" data-anchor-id="the-cohort-hierarchy"><span class="header-section-number">12.4</span> The cohort hierarchy</h2>
+<p>The <code>controls</code> and <code>diseases</code> blocks define the study cohort structure. Each block has a <code>label</code> and a <code>groups</code> list. For hierarchical multiclass designs, disease groups can have <code>stages</code>:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"controls"</span><span class="fu">:</span> <span class="fu">{</span></span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"healthy"</span><span class="fu">,</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>      <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"all"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"configs/healthy.csv"</span><span class="ot">]</span> <span class="fu">}</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>      <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"all"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"data/healthy.csv"</span><span class="ot">]</span> <span class="fu">}</span></span>
 <span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>    <span class="ot">]</span></span>
 <span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"diseases"</span><span class="fu">:</span> <span class="fu">{</span></span>
@@ -385,23 +421,18 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>      <span class="fu">{</span></span>
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca"</span><span class="fu">,</span></span>
 <span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"stages"</span><span class="fu">:</span> <span class="ot">[</span></span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>          <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca1"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"configs/pca1.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">,</span></span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>          <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca2"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"configs/pca2.csv"</span><span class="ot">]</span> <span class="fu">}</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>          <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca1"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"data/pca1.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">,</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>          <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca2"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"data/pca2.csv"</span><span class="ot">]</span> <span class="fu">}</span></span>
 <span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>        <span class="ot">]</span></span>
 <span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>      <span class="fu">}</span></span>
 <span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="ot">]</span></span>
 <span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
 <span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>In this layout, <code>methyl-centroid</code> builds one centroid per leaf group (<code>all</code>, <code>pca1</code>, <code>pca2</code>), and <code>methyl-detector</code> compares <code>all</code> versus each disease stage. The resolved group labels used by the Monte Carlo and predictor subsystems are the concatenated parent-and-leaf names: <code>pca_pca1</code>, <code>pca_pca2</code>, etc.</p>
-<p>For flat two-class binary projects (one control group, one disease group, no stages), the structure simplifies to:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"controls"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"healthy"</span><span class="fu">,</span> <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"all"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"..."</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">]</span> <span class="fu">},</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"diseases"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"cancer"</span><span class="fu">,</span> <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"all"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"..."</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">]</span> <span class="fu">}</span></span>
-<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p><code>methyl-centroid</code> builds one centroid per leaf group; <code>methyl-detector</code> compares control leaves versus each disease stage. Resolved group labels for Monte Carlo and predictors concatenate parent and leaf names (<code>pca_pca1</code>, …).</p>
 </section>
-<section id="the-step_config-dictionary" class="level2" data-number="12.4">
-<h2 data-number="12.4" class="anchored" data-anchor-id="the-step_config-dictionary"><span class="header-section-number">12.4</span> The <code>step_config</code> Dictionary</h2>
-<p><code>step_config</code> is a JSON object whose keys correspond to pipeline steps. Each value is a free-form dictionary of parameters that override the step’s defaults. The recognized keys are:</p>
+<section id="where-tool-parameters-live-actionconfig" class="level2" data-number="12.5">
+<h2 data-number="12.5" class="anchored" data-anchor-id="where-tool-parameters-live-actionconfig"><span class="header-section-number">12.5</span> Where tool parameters live: <code>actionConfig</code></h2>
+<p>Parameters previously embedded in <code>step_config</code> now live under <strong><code>actionConfig.&lt;action&gt;</code></strong> in pipeline profiles and optionally the site manifest:</p>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 33%">
@@ -410,7 +441,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </colgroup>
 <thead>
 <tr class="header">
-<th>Key</th>
+<th><code>actionConfig</code> key</th>
 <th>Handled by</th>
 <th>Description</th>
 </tr>
@@ -424,22 +455,32 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="even">
 <td><code>detection</code></td>
 <td><code>methyl-detector</code></td>
-<td>Statistical test, effect size, DMP selection, classifier export.</td>
+<td>Statistical test, effect size, DMP export mode.</td>
 </tr>
 <tr class="odd">
+<td><code>dmp_selection</code></td>
+<td><code>methyl-dmp-select</code></td>
+<td>FeatureCuts BA gate, panel size bounds.</td>
+</tr>
+<tr class="even">
 <td><code>mapper</code></td>
 <td><code>methyl-mapper</code></td>
 <td>GTF, gene window sizes, enrichment source.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>enricher</code></td>
 <td><code>methyl-enricher</code></td>
 <td>Library selection, disease filters, module scoring.</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>classifier</code></td>
 <td><code>methyl-classifier</code></td>
 <td>Chromosome weighting, OvR layout, panel definition.</td>
+</tr>
+<tr class="odd">
+<td><code>gene_selection</code></td>
+<td><code>methyl-gene-select</code></td>
+<td>Gene FeatureCuts caps, biomarker filter.</td>
 </tr>
 <tr class="even">
 <td><code>predictor</code></td>
@@ -449,165 +490,94 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="odd">
 <td><code>validation</code></td>
 <td><code>methyl-validation</code></td>
-<td>Monte Carlo settings embedded in the project.</td>
+<td>Monte Carlo settings, stability gates, backend profiles.</td>
 </tr>
 <tr class="even">
 <td><code>alignment_qc</code></td>
 <td><code>methyl-alignment-qc</code></td>
-<td>Schema validation, group filtering.</td>
+<td>Schema validation, guardrails.</td>
 </tr>
 </tbody>
 </table>
-<p>The exhaustive list of parameters for each key is in reference/configuration-reference.</p>
-<p><code>step_config.cluster</code> is a legacy compatibility key for deprecated clustering workflows and is intentionally excluded from the active canonical workflow.</p>
+<p>Exhaustive parameter tables: <a href="../../reference/configuration-reference.qmd">configuration-reference</a> (keys listed as <code>actionConfig.*</code> sections).</p>
+<p>Resolution: <code>resolve_action_config</code> / <code>resolve_for_project</code> in <code>packages/methylutils/methyl_utils/action_config_resolver.py</code>.</p>
 </section>
-<section id="the-step_config.predictor-anti-pattern" class="level2" data-number="12.5">
-<h2 data-number="12.5" class="anchored" data-anchor-id="the-step_config.predictor-anti-pattern"><span class="header-section-number">12.5</span> The <code>step_config.predictor</code> Anti-Pattern</h2>
-<p>A common mistake when creating project configurations is to copy the <code>controls</code>/<code>diseases</code> block from the top level into <code>step_config.predictor</code>. This creates duplication: the sample paths are now defined in two places. If the top-level cohort CSVs change, the predictor block must also be updated, creating a maintenance burden and a potential source of inconsistency.</p>
-<p><strong>Correct pattern:</strong> <code>step_config.predictor</code> should contain only predictor-specific overrides — typically <code>debug</code>, <code>panel</code>, and optionally <code>multiclass_model_path</code>. The sample paths are resolved automatically from the top-level <code>controls</code>/<code>diseases</code> block during project loading.</p>
-<p><strong>Anti-pattern (avoid):</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="st">"predictor"</span><span class="er">:</span> <span class="fu">{</span></span>
-<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"controls"</span><span class="fu">:</span> <span class="fu">{</span> <span class="er">...</span> <span class="fu">},</span>   <span class="er">←</span> <span class="er">duplicates</span> <span class="er">top-level</span> <span class="er">controls</span></span>
-<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"diseases"</span><span class="fu">:</span> <span class="fu">{</span> <span class="er">...</span> <span class="fu">},</span>   <span class="er">←</span> <span class="er">duplicates</span> <span class="er">top-level</span> <span class="er">diseases</span></span>
-<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"panel"</span><span class="fu">:</span> <span class="fu">{</span> <span class="er">...</span> <span class="fu">}</span></span>
-<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p><strong>Correct pattern:</strong></p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="st">"predictor"</span><span class="er">:</span> <span class="fu">{</span></span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"debug"</span><span class="fu">:</span> <span class="kw">false</span><span class="fu">,</span></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"panel"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"primary_family"</span><span class="fu">:</span> <span class="st">"prostate"</span><span class="fu">,</span> <span class="dt">"families"</span><span class="fu">:</span> <span class="fu">{</span> <span class="er">...</span> <span class="fu">},</span> <span class="dt">"indeterminate_delta"</span><span class="fu">:</span> <span class="fl">0.25</span> <span class="fu">}</span></span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="monte-carlo-configuration" class="level2" data-number="12.6">
+<h2 data-number="12.6" class="anchored" data-anchor-id="monte-carlo-configuration"><span class="header-section-number">12.6</span> Monte Carlo configuration</h2>
+<p>Monte Carlo settings belong in <strong>profile</strong> <code>actionConfig.validation</code> (and optional site defaults), not in the study manifest. When <code>methyl-validation</code> or the workflow planner runs, merged validation config becomes <code>MonteCarloConfig</code> and is snapshotted to <code>monte_carlo_runs/queue/mc_config.json</code> for workers.</p>
+<p>Example profile fragment:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="st">"actionConfig"</span><span class="er">:</span> <span class="fu">{</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"validation"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"train_fraction"</span><span class="fu">:</span> <span class="fl">0.8</span><span class="fu">,</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"n_iterations"</span><span class="fu">:</span> <span class="dv">10</span><span class="fu">,</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"seed"</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"run_stability"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"stability_dmp_freq"</span><span class="fu">:</span> <span class="fl">0.8</span><span class="fu">,</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"dmp_modeling_mode"</span><span class="fu">:</span> <span class="st">"featurecuts"</span><span class="fu">,</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"gene_modeling_mode"</span><span class="fu">:</span> <span class="st">"featurecuts"</span><span class="fu">,</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"dmp_featurecuts_target_ba"</span><span class="fu">:</span> <span class="fl">0.9</span><span class="fu">,</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"gene_featurecuts_target_ba"</span><span class="fu">:</span> <span class="fl">0.88</span></span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Inherited from the study manifest (not duplicated in the profile): <code>samples_base_path</code>, <code>output_base</code>, cohort structure, <code>chromosomes</code>, <code>contexts</code>.</p>
 </section>
-<section id="embedding-monte-carlo-settings-step_config.validation" class="level2" data-number="12.6">
-<h2 data-number="12.6" class="anchored" data-anchor-id="embedding-monte-carlo-settings-step_config.validation"><span class="header-section-number">12.6</span> Embedding Monte Carlo Settings: <code>step_config.validation</code></h2>
-<p>Rather than maintaining a separate <code>monte_carlo_config.json</code> file, the Monte Carlo validation settings can be embedded directly inside the project file under <code>step_config.validation</code>. When <code>methyl-validation</code> is invoked with <code>--project &lt;path&gt;</code>, it reads the <code>step_config.validation</code> block and constructs a <code>MonteCarloConfig</code> from it, inheriting <code>samples_base_path</code>, <code>output_base</code>, and the cohort structure from the top-level project fields.</p>
-<p>The fields that are appropriate for <code>step_config.validation</code> are only the Monte Carlo-specific ones:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb5"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="st">"validation"</span><span class="er">:</span> <span class="fu">{</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"train_fraction"</span><span class="fu">:</span> <span class="fl">0.8</span><span class="fu">,</span></span>
-<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"n_iterations"</span><span class="fu">:</span> <span class="dv">50</span><span class="fu">,</span></span>
-<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"seed"</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
-<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"run_stability"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
-<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"stability_dmp_freq"</span><span class="fu">:</span> <span class="fl">0.7</span><span class="fu">,</span></span>
-<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"stability_min_balanced_accuracy"</span><span class="fu">:</span> <span class="fl">0.6</span><span class="fu">,</span></span>
-<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"abort_on_step_failure"</span><span class="fu">:</span> <span class="kw">false</span></span>
-<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
-<p>Fields that are <strong>not</strong> needed here (because they are inherited from the project): <code>samples_base_path</code>, <code>output_base</code>, <code>base_project</code>, <code>cohorts</code>, <code>healthy_csv</code>, <code>disease_csv</code>.</p>
-<section id="modeling-backend-inside-step_config.validation" class="level3" data-number="12.6.1">
-<h3 data-number="12.6.1" class="anchored" data-anchor-id="modeling-backend-inside-step_config.validation"><span class="header-section-number">12.6.1</span> Modeling backend inside <code>step_config.validation</code></h3>
-<p>The same <code>validation</code> block also controls what happens during <code>methyl-validation --model</code>. The default backend is <code>ecdf</code> (classifier + predictor), but the project may select:</p>
-<ul>
-<li><code>model_backend: "tabular_sklearn"</code> for tabular bundle-based training/evaluation,</li>
-<li><code>model_backend: "generative_hybrid"</code> for the hybrid latent-density generative backend.</li>
-</ul>
-<p>This keeps backend choice versioned in the same project JSON used for stability/freeze/model orchestration.</p>
-</section>
-</section>
-<section id="annotated-example" class="level2" data-number="12.7">
-<h2 data-number="12.7" class="anchored" data-anchor-id="annotated-example"><span class="header-section-number">12.7</span> Annotated Example</h2>
-<p>The following is an annotated excerpt from <code>configs/project_Healthy_vs_PCa1-4-CG.json</code>, the reference project for prostate cancer staging:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb6"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"project_name"</span><span class="fu">:</span> <span class="st">"Healthy_vs_PCa1-4-CG"</span><span class="fu">,</span>      <span class="er">←</span> <span class="er">output</span> <span class="er">under</span> <span class="er">output_base/Healthy_vs_PCa1-4-CG/</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"laboratory"</span><span class="fu">:</span> <span class="st">"psomagen"</span><span class="fu">,</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"batch"</span><span class="fu">:</span> <span class="st">"Second batch of prostate cancer samples"</span><span class="fu">,</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"output_base"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer"</span><span class="fu">,</span>        <span class="er">←</span> <span class="er">all</span> <span class="er">outputs</span> <span class="er">go</span> <span class="er">here</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"samples_base_path"</span><span class="fu">:</span> <span class="st">"/work/prostate-cancer/samples"</span><span class="fu">,</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"chromosomes"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"1"</span><span class="ot">,</span> <span class="st">"2"</span><span class="ot">,</span> <span class="er">...</span><span class="ot">,</span> <span class="st">"22"</span><span class="ot">,</span> <span class="st">"X"</span><span class="ot">,</span> <span class="st">"Y"</span><span class="ot">]</span><span class="fu">,</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"contexts"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"CG"</span><span class="ot">]</span><span class="fu">,</span></span>
-<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"comparisons"</span><span class="fu">:</span> <span class="st">"control_vs_each_disease"</span><span class="fu">,</span>      <span class="er">←</span> <span class="er">healthy</span> <span class="er">vs</span> <span class="er">each</span> <span class="er">pca</span> <span class="er">stage</span></span>
-<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"controls"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"healthy"</span><span class="fu">,</span></span>
-<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"all"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"configs/healthy.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">]</span></span>
-<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
-<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"diseases"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"cancer"</span><span class="fu">,</span></span>
-<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span></span>
-<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca"</span><span class="fu">,</span></span>
-<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"stages"</span><span class="fu">:</span> <span class="ot">[</span></span>
-<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca1"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"configs/pca1.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">,</span></span>
-<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca2"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"configs/pca2.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">,</span></span>
-<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca3"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"configs/pca3.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">,</span></span>
-<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a>        <span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca4"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"configs/pca4.csv"</span><span class="ot">]</span> <span class="fu">}</span></span>
-<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a>      <span class="ot">]</span></span>
-<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span><span class="ot">]</span></span>
-<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
-<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"step_config"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"centroid"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"base_config"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"min_coverage"</span><span class="fu">:</span> <span class="dv">4</span><span class="fu">,</span>           <span class="er">←</span> <span class="er">positions</span> <span class="er">with</span> <span class="er">&lt;</span> <span class="er">4</span> <span class="er">reads</span> <span class="er">excluded</span> <span class="er">from</span> <span class="er">centroid</span></span>
-<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"binned_stats_bins"</span><span class="fu">:</span> <span class="dv">20</span><span class="fu">,</span>     <span class="er">←</span> <span class="er">20-bin</span> <span class="er">ECDF</span> <span class="er">histogram</span> <span class="er">stored</span> <span class="er">per</span> <span class="er">locus</span></span>
-<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"use_gpu"</span><span class="fu">:</span> <span class="kw">true</span></span>
-<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a>      <span class="fu">}</span></span>
-<span id="cb6-35"><a href="#cb6-35" aria-hidden="true" tabindex="-1"></a>    <span class="fu">},</span></span>
-<span id="cb6-36"><a href="#cb6-36" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"detection"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-37"><a href="#cb6-37" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"alpha"</span><span class="fu">:</span> <span class="fl">0.05</span><span class="fu">,</span>                 <span class="er">←</span> <span class="er">q-value</span> <span class="er">threshold</span> <span class="er">for</span> <span class="er">statistical</span> <span class="er">DMPs</span></span>
-<span id="cb6-38"><a href="#cb6-38" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"min_coverage"</span><span class="fu">:</span> <span class="dv">4</span><span class="fu">,</span>             <span class="er">←</span> <span class="er">same</span> <span class="er">as</span> <span class="er">centroid</span> <span class="er">min_coverage</span> <span class="er">(critical</span><span class="fu">:</span> <span class="er">must</span> <span class="er">match)</span></span>
-<span id="cb6-39"><a href="#cb6-39" aria-hidden="true" tabindex="-1"></a>      <span class="st">"effect_size_coverage"</span><span class="er">:</span> <span class="fl">0.95</span><span class="fu">,</span>  <span class="er">←</span> <span class="er">retain</span> <span class="er">top</span> <span class="er">95%</span> <span class="er">effect</span> <span class="er">mass</span></span>
-<span id="cb6-40"><a href="#cb6-40" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"multiclass_train_learned_head"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
-<span id="cb6-41"><a href="#cb6-41" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"multiclass_learned_class_weight"</span><span class="fu">:</span> <span class="st">"balanced"</span>   <span class="er">←</span> <span class="er">corrects</span> <span class="er">class</span> <span class="er">imbalance</span></span>
-<span id="cb6-42"><a href="#cb6-42" aria-hidden="true" tabindex="-1"></a>    <span class="fu">},</span></span>
-<span id="cb6-43"><a href="#cb6-43" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"classifier"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-44"><a href="#cb6-44" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"ovr_binary_pickles_from_comparisons"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
-<span id="cb6-45"><a href="#cb6-45" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"panel"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-46"><a href="#cb6-46" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"primary_family"</span><span class="fu">:</span> <span class="st">"prostate"</span><span class="fu">,</span></span>
-<span id="cb6-47"><a href="#cb6-47" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"families"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"prostate"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"pca_pca1"</span><span class="ot">,</span> <span class="st">"pca_pca2"</span><span class="ot">,</span> <span class="st">"pca_pca3"</span><span class="ot">,</span> <span class="st">"pca_pca4"</span><span class="ot">]</span> <span class="fu">},</span></span>
-<span id="cb6-48"><a href="#cb6-48" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"indeterminate_delta"</span><span class="fu">:</span> <span class="fl">0.25</span></span>
-<span id="cb6-49"><a href="#cb6-49" aria-hidden="true" tabindex="-1"></a>      <span class="fu">}</span></span>
-<span id="cb6-50"><a href="#cb6-50" aria-hidden="true" tabindex="-1"></a>    <span class="fu">},</span></span>
-<span id="cb6-51"><a href="#cb6-51" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"predictor"</span><span class="fu">:</span> <span class="fu">{</span></span>
-<span id="cb6-52"><a href="#cb6-52" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"debug"</span><span class="fu">:</span> <span class="kw">false</span><span class="fu">,</span></span>
-<span id="cb6-53"><a href="#cb6-53" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"panel"</span><span class="fu">:</span> <span class="fu">{</span>           <span class="er">←</span> <span class="er">same</span> <span class="er">panel</span> <span class="er">as</span> <span class="er">classifier;</span> <span class="er">only</span> <span class="er">override</span> <span class="er">is</span> <span class="er">debug</span> <span class="er">flag</span></span>
-<span id="cb6-54"><a href="#cb6-54" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"primary_family"</span><span class="fu">:</span> <span class="st">"prostate"</span><span class="fu">,</span></span>
-<span id="cb6-55"><a href="#cb6-55" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"families"</span><span class="fu">:</span> <span class="fu">{</span> <span class="dt">"prostate"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"pca_pca1"</span><span class="ot">,</span> <span class="st">"pca_pca2"</span><span class="ot">,</span> <span class="st">"pca_pca3"</span><span class="ot">,</span> <span class="st">"pca_pca4"</span><span class="ot">]</span> <span class="fu">},</span></span>
-<span id="cb6-56"><a href="#cb6-56" aria-hidden="true" tabindex="-1"></a>        <span class="dt">"indeterminate_delta"</span><span class="fu">:</span> <span class="fl">0.25</span></span>
-<span id="cb6-57"><a href="#cb6-57" aria-hidden="true" tabindex="-1"></a>      <span class="fu">}</span></span>
-<span id="cb6-58"><a href="#cb6-58" aria-hidden="true" tabindex="-1"></a>    <span class="fu">},</span></span>
-<span id="cb6-59"><a href="#cb6-59" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"validation"</span><span class="fu">:</span> <span class="fu">{</span>        <span class="er">←</span> <span class="er">embedded</span> <span class="er">MC</span> <span class="er">settings;</span> <span class="er">no</span> <span class="er">separate</span> <span class="er">config</span> <span class="er">file</span> <span class="er">needed</span></span>
-<span id="cb6-60"><a href="#cb6-60" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"train_fraction"</span><span class="fu">:</span> <span class="fl">0.8</span><span class="fu">,</span></span>
-<span id="cb6-61"><a href="#cb6-61" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"n_iterations"</span><span class="fu">:</span> <span class="dv">5</span><span class="fu">,</span></span>
-<span id="cb6-62"><a href="#cb6-62" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"seed"</span><span class="fu">:</span> <span class="dv">42</span><span class="fu">,</span></span>
-<span id="cb6-63"><a href="#cb6-63" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"run_stability"</span><span class="fu">:</span> <span class="kw">true</span><span class="fu">,</span></span>
-<span id="cb6-64"><a href="#cb6-64" aria-hidden="true" tabindex="-1"></a>      <span class="dt">"stability_dmp_freq"</span><span class="fu">:</span> <span class="fl">0.6</span></span>
-<span id="cb6-65"><a href="#cb6-65" aria-hidden="true" tabindex="-1"></a>    <span class="fu">}</span></span>
-<span id="cb6-66"><a href="#cb6-66" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
-<span id="cb6-67"><a href="#cb6-67" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<section id="annotated-study-manifest-example" class="level2" data-number="12.7">
+<h2 data-number="12.7" class="anchored" data-anchor-id="annotated-study-manifest-example"><span class="header-section-number">12.7</span> Annotated study manifest example</h2>
+<p>Slim project file on <code>/work</code> (tool parameters in <code>mc_gene_fc.profile.json</code>, not here):</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode json code-with-copy"><code class="sourceCode json"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="fu">{</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"project_name"</span><span class="fu">:</span> <span class="st">"Buffy_healthy_vs_PCa"</span><span class="fu">,</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"laboratory"</span><span class="fu">:</span> <span class="st">"psomagen"</span><span class="fu">,</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"batch"</span><span class="fu">:</span> <span class="st">"prostate buffy coat"</span><span class="fu">,</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"output_base"</span><span class="fu">:</span> <span class="st">"/work/projects/prostate-cancer"</span><span class="fu">,</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"samples_base_path"</span><span class="fu">:</span> <span class="st">"/work/samples"</span><span class="fu">,</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"chromosomes"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"1"</span><span class="ot">,</span> <span class="st">"2"</span><span class="ot">,</span> <span class="st">"21"</span><span class="ot">,</span> <span class="st">"22"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"contexts"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"CG"</span><span class="ot">]</span><span class="fu">,</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"comparisons"</span><span class="fu">:</span> <span class="st">"control_vs_each_disease"</span><span class="fu">,</span></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"regulatory"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"primary_analyte"</span><span class="fu">:</span> <span class="st">"buffy_coat"</span><span class="fu">,</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"stage"</span><span class="fu">:</span> <span class="st">"feasibility"</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"controls"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"healthy"</span><span class="fu">,</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"all"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"data/healthy_b.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">]</span></span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">},</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="dt">"diseases"</span><span class="fu">:</span> <span class="fu">{</span></span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"cancer"</span><span class="fu">,</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    <span class="dt">"groups"</span><span class="fu">:</span> <span class="ot">[</span><span class="fu">{</span> <span class="dt">"label"</span><span class="fu">:</span> <span class="st">"pca"</span><span class="fu">,</span> <span class="dt">"sample_paths"</span><span class="fu">:</span> <span class="ot">[</span><span class="st">"data/pca_b.csv"</span><span class="ot">]</span> <span class="fu">}</span><span class="ot">]</span></span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>  <span class="fu">}</span></span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a><span class="fu">}</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>Run with a profile:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-workflow-run</span> <span class="dt">\</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">--program</span> workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json <span class="dt">\</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">--context-file</span> workflow_engine/domain/profiles/mc_gene_fc.profile.json <span class="dt">\</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--context</span> <span class="st">'{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="output-directory-layout" class="level2" data-number="12.8">
-<h2 data-number="12.8" class="anchored" data-anchor-id="output-directory-layout"><span class="header-section-number">12.8</span> Output Directory Layout</h2>
-<p>Given <code>output_base = "/work/prostate-cancer"</code> and <code>project_name = "Healthy_vs_PCa1-4-CG"</code>, the top-level output structure is:</p>
-<pre><code>/work/prostate-cancer/
-└── Healthy_vs_PCa1-4-CG/
+<h2 data-number="12.8" class="anchored" data-anchor-id="output-directory-layout"><span class="header-section-number">12.8</span> Output directory layout</h2>
+<p>Given <code>output_base = "/work/projects/prostate-cancer"</code> and <code>project_name = "Buffy_healthy_vs_PCa"</code>:</p>
+<pre><code>/work/projects/prostate-cancer/
+└── Buffy_healthy_vs_PCa/
     ├── centroids/
-    │   ├── controls/healthy/all/&lt;chrom&gt;-CG.h5
-    │   └── diseases/cancer/pca_pca1/&lt;chrom&gt;-CG.h5   (and pca2, pca3, pca4)
     ├── detections/
     │   └── all/&lt;comparison&gt;/dmps-&lt;chrom&gt;-discovery.csv
-    │                        dmps-&lt;chrom&gt;-classifier.csv
-    │                        classifier-&lt;chrom&gt;-CG.pkl
+    │                        dmps-&lt;chrom&gt;-selected.csv
     ├── classifiers/
-    │   ├── all/
-    │   │   ├── pca_pca1/run_0001-classifier.pkl
-    │   │   └── multiclass-classifier.pkl
-    │   └── classifier_all_run_0001.pkl
     ├── mapper/
     ├── enricher/
     └── monte_carlo_runs/
+        ├── queue/mc_config.json
         ├── run_0001/
-        │   ├── project.json
-        │   ├── centroids/
-        │   ├── detections/
-        │   └── logs/
-        ├── stability/
-        │   └── stable_dmps_production.csv
-        └── production/
-            ├── project.json          ← contains fixed_dmp_panel
-            ├── centroids/
-            ├── detections/
-            ├── mapper/
-            ├── enricher/
-            ├── progression/          ← optional when step_config.progression.enabled=true
-            ├── classifiers/          ← created by --model
-            └── predictors/           ← created by --model</code></pre>
+        ├── stability/stable_dmps_production.csv
+        └── production/</code></pre>
+<p>Downstream FeatureCuts and mapper steps prefer <strong><code>dmps-*-selected.csv</code></strong> (BA-gated panel). Discovery CSVs remain for exploration and raw-pool modeling modes.</p>
+</section>
+<section id="related" class="level2" data-number="12.9">
+<h2 data-number="12.9" class="anchored" data-anchor-id="related"><span class="header-section-number">12.9</span> Related</h2>
+<ul>
+<li>Usage: <a href="../../usage/02-project-config-and-layout.qmd">Project config and layout</a></li>
+<li>Reference: <a href="../../reference/config-parameter-matrix.md">Config parameter matrix</a></li>
+<li>Architecture: <a href="../../architecture/layer-model.md">Layer model</a></li>
+</ul>
 
 
 </section>

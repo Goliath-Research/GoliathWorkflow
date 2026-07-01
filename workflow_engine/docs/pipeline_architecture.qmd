@@ -223,7 +223,7 @@ Example instance payload: [`workflow_engine/sql/instance_context_examples/sample
 
 ## 1. Project configuration
 
-A **project config** is a single JSON file that describes *what* to run: cohorts, comparisons, chromosomes, contexts, and per-step tool parameters. It is the scientific contract for one methylation study.
+A **project config** (study manifest) is a single JSON file that describes *what* to run: cohorts, comparisons, chromosomes, and contexts. Tool parameters live in **pipeline profile** and **site** `actionConfig`; instance **`context_json`** carries `pipelineProfile`, merged `actionConfig`, and planner fields. It is the scientific contract for one methylation study.
 
 **Canonical schema:** [`schemas/config/project_config.schema.json`](/home/ubuntu/MethylPipeline/schemas/config/project_config.schema.json)  
 **Pydantic model:** [`packages/methylutils/methyl_utils/pipeline_config.py`](/home/ubuntu/MethylPipeline/packages/methylutils/methyl_utils/pipeline_config.py)  
@@ -242,7 +242,10 @@ Only **`project_name`** and **`output_base`** are required. Everything else is o
 | `chromosomes` | Shared list (`"1"`…`"22"`, `"X"`, `"Y"`) |
 | `contexts` | Methylation contexts: `CG`, `CHG`, `CHH` |
 | `path_remap` | Prefix replacement when sample paths moved (e.g. NAS → cluster mount) |
-| `step_config` | Per-step overrides: `centroid`, `detection`, `mapper`, `enricher`, `classifier`, `predictor`, `validation`, `progression`, … |
+| `progression_order` | Optional ordered comparison labels for progression (study-only) |
+| `regulatory` / `validation_partitions` | Study metadata (not tool knobs) |
+
+Per-step tool parameters (`centroid`, `detection`, `mapper`, `enricher`, `validation`, …) belong in **profile/site `actionConfig`**, merged into instance `context_json` at workflow start — not in the study manifest.
 
 ### Cohort hierarchy
 
@@ -257,7 +260,7 @@ flowchart TD
   root --> cmp["comparisons"]
   root --> chr["chromosomes[]"]
   root --> ctx["contexts[]"]
-  root --> sc["step_config{}"]
+  root --> po["progression_order / regulatory"]
   ctrl --> g1["groups[]\nlabel, sample_paths"]
   dis --> g2["groups[]"]
   g2 --> stages["stages[]\noptional nesting"]
@@ -311,13 +314,11 @@ External reference project (not in repo): `project_PCa3.json` with one control (
   "comparisons": "control_vs_each_disease",
   "chromosomes": ["1", "2", "...", "22", "X", "Y"],
   "contexts": ["CG"],
-  "step_config": {
-    "centroid": { "base_config": { "use_gpu": true, "min_coverage": 4 } },
-    "detection": { "alpha": 0.05 },
-    "progression": { "ordered_comparison_labels": ["PCa1", "PCa2", "PCa3", "PCa4"] }
-  }
+  "progression_order": ["PCa1", "PCa2", "PCa3", "PCa4"]
 }
 ```
+
+Centroid, detection, and other tool knobs come from a **pipeline profile** (e.g. `mc_gene_fc.profile.json` → `actionConfig`) and/or site manifest (`/work/site/methyl_site.json`), passed via instance `context_json` (`pipelineProfile`, merged `actionConfig`).
 
 For a **two-group OvR** study (one control vs two disease stages), use `"comparisons": "control_vs_each_disease"` with two disease leaves (`PCa_Low`, `PCa_High`) — see [Section 5](#5-two-group-example-config--workflow-tree).
 
@@ -337,15 +338,15 @@ flowchart LR
   pcs --> gc["$defs/GroupConfig\n(recursive: stages)"]
   pcs --> cs["$defs/ComparisonSpec"]
   pcs --> sub["$defs/SubclusterRequest"]
-  pcs --> sc2["step_config keys"]
-  sc2 --> cent["centroid.schema.json"]
-  sc2 --> det["detection.schema.json"]
-  sc2 --> map["mapper.schema.json"]
-  sc2 --> enr["enricher.schema.json"]
-  sc2 --> cls["classifier.schema.json"]
-  sc2 --> val["validation.schema.json"]
-  sc2 --> prog["progression.schema.json"]
-  sc2 --> aqc["alignment_qc.schema.json"]
+  pcs --> prof["profile / site actionConfig"]
+  prof --> cent["centroid.schema.json"]
+  prof --> det["detection.schema.json"]
+  prof --> map["mapper.schema.json"]
+  prof --> enr["enricher.schema.json"]
+  prof --> cls["classifier.schema.json"]
+  prof --> val["validation.schema.json"]
+  prof --> prog["progression.schema.json"]
+  prof --> aqc["alignment_qc.schema.json"]
 ```
 :::
 
@@ -377,7 +378,7 @@ flowchart LR
 | `progression.schema.json` | MethylDiseaseProgression |
 | `alignment_qc.schema.json` | Alignment QC |
 
-`step_config` in the project file is an open object: keys name the step; values are merged into each tool’s config at runtime (CLI and workers still override with flags/files).
+Per-step schemas validate **profile/site `actionConfig`** slices and optional program `stepOverride` overlays. At runtime, `resolve_action_config` merges profile → site → analyte defaults into task `resolvedConfig`; workers and CLI may still override with flags or `stepOverride`.
 
 ### Action payload schemas (`schemas/tasks/`)
 
@@ -479,7 +480,9 @@ Typical mapping:
 | `chromosomes` | `chromosomes[]` |
 | `contexts` | `contexts[]` |
 | `output_base` + paths | `centroid1Dir`, `projectPath`, tool name strings |
-| `step_config.progression.ordered_comparison_labels` | `orderedComparisonLabels` |
+| `progression_order` or profile `actionConfig.progression.ordered_comparison_labels` | `orderedComparisonLabels` |
+| Pipeline profile name | `pipelineProfile` |
+| Profile + site `actionConfig` | Merged `actionConfig` / per-task `resolvedConfig` |
 
 **Alternative (DomainProgram + collection bindings):** pass only `{ "projectPath": "…" }`; the engine resolves `chromosomes`, `contexts`, and `comparisons` from the project JSON at instance start ([Section 3.5](#35-domain-program-language-and-workflow-compilation)). Pre-expanded arrays in `context_json` remain supported for hand-written seeds such as **DataDrivenPipeline**.
 
@@ -635,7 +638,7 @@ sequenceDiagram
 { "projectPath": "/work/study/configs/project_Healthy_vs_PCa.json" }
 ```
 
-The full project file remains authoritative for cohorts, `step_config`, and tool parameters; the engine only materializes **iteration arrays** needed by FOREACH nodes.
+The full project file remains authoritative for cohorts and study layout; **tool parameters** resolve from profile/site `actionConfig` (enriched into `context_json` at instance start). The engine only materializes **iteration arrays** needed by FOREACH nodes.
 
 **Note:** `jsonFile` uses PostgreSQL `pg_read_file` when the DB host can read the shared `/work/` mount. If not (e.g. Azure SQL without file access), include `"project": { … }` in `context_json` as a snapshot; `jsonPath` bindings still apply.
 
@@ -880,7 +883,7 @@ Full example: [`validation_mc.json`](/home/ubuntu/MethylPipeline/workflow_engine
 
 Legacy `MethylValidationFlow` + `context_json.monteCarlo` + `wf.monte_carlo_*` tables are **deprecated**. See [`packages/methylvalidation/docs/USAGE.md`](/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md) for CLI/filesystem-first validation.
 
-Project-level MC parameters also live under `step_config.validation` in the portal schema (`validation_monte_carlo` in [`validation.schema.json`](/home/ubuntu/MethylPipeline/schemas/config/validation.schema.json)): `train_fraction`, `n_iterations`, cohort CSVs, and regulatory metadata.
+Monte Carlo parameters (`train_fraction`, `n_iterations`, stability axes, backends, …) live in **profile/site `actionConfig.validation`** (schema: [`validation.schema.json`](/home/ubuntu/MethylPipeline/schemas/config/validation.schema.json) / `validation_monte_carlo`). The planner and gateway merge them into `context_json`; cohort CSVs and regulatory metadata stay in the study manifest.
 
 ### Cluster metadata in DB
 

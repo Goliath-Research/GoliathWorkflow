@@ -2,13 +2,15 @@
 
 > **Canonical home:** this file in `docs/reference/`. Moved from theory Part III (2026-06 IA revision).
 
-This chapter provides exhaustive tables of every parameter in every `step_config` section. For theoretical background on each parameter group, see the cross-references given in each section header.
+This reference lists parameters for each **`actionConfig`** section resolved by `resolve_action_config` (site → profile → program/instance override). Study manifests **must not** embed these keys; set them in pipeline profiles (`workflow_engine/domain/profiles/*.profile.json`), site manifest (`/work/site/methyl_site.json`), or workflow `stepOverride`.
 
-Parameters are listed with their JSON/Python name, type, default value, constraints, and a description. "Required" in the Default column means the field must be present; there is no default.
+For theoretical background on each parameter group, see the cross-references in each section header.
+
+Parameters are listed with their JSON/Python name, type, default value, constraints, and a description. "Required" in the Default column means the field must be present in the merged config; there is no code fallback for tunable science knobs.
 
 ---
 
-## `step_config.centroid` {#sec-ref-centroid}
+## `actionConfig.centroid` {#sec-ref-centroid}
 
 *See @sec-methylcentroid for theoretical background.*
 
@@ -25,7 +27,7 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 
 | Parameter | Type | Default | Constraints | Description |
 |---|---|---|---|---|
-| `min_coverage` | int | `4` | ≥ 1 | Minimum total (mC + uC) reads per position per sample. Positions below this threshold are excluded from the centroid. **Should match `step_config.detection.min_coverage`.** |
+| `min_coverage` | int | `4` | ≥ 1 | Minimum total (mC + uC) reads per position per sample. Positions below this threshold are excluded from the centroid. **Should match `actionConfig.detection.min_coverage`.** |
 | `use_gpu` | bool | `true` | — | Use GPU acceleration when available. |
 | `max_sample_workers` | int \| null | `null` | ≥ 1 or null | Maximum parallel worker processes for sample loading. `null` uses all available CPUs. |
 | `verbose` | bool | `true` | — | Verbose logging during centroid construction. |
@@ -44,7 +46,7 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 
 ---
 
-## `step_config.detection` — Runtime Parameters {#sec-ref-detection-runtime}
+## `actionConfig.detection` — Runtime Parameters {#sec-ref-detection-runtime}
 
 *See @sec-methyldetector for theoretical background. The parameters marked with an asterisk (★) have direct theoretical counterparts in the chapter.*
 
@@ -87,7 +89,7 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 
 | Parameter | Type | Default | Constraints | Description |
 |---|---|---|---|---|
-| `dmp_export_mode` | str | `"dual"` | `"unified"` or `"dual"` | `dual`: exports separate `dmps-{chrom}-discovery.csv` (for mapper/enricher) and `dmps-{chrom}-classifier.csv` (for classifier). `unified`: single CSV. |
+| `dmp_export_mode` | str | `"dual"` | `"unified"` or `"dual"` | `dual`: exports `dmps-{chrom}-discovery.csv` (mapper/enricher) and `dmps-{chrom}-selected.csv` (FeatureCuts panel; primary for downstream). Legacy `dmps-{chrom}-classifier.csv` is transitional. |
 | `dynamic_dmp_cutoff_enabled` | bool | `true` | — | Apply elbow detection on the effect-size distribution to trim the long tail of low-importance DMPs. |
 | `dynamic_dmp_cutoff_relaxation` | float | `1.0` | > 0 | Multiplier on the elbow threshold. < 1 keeps more DMPs; > 1 is stricter. |
 | `discovery_dynamic_dmp_cutoff_enabled` | bool | `false` | — | Apply the elbow trim to the discovery export as well (default: discovery keeps all biologically filtered DMPs). |
@@ -139,7 +141,7 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 
 ---
 
-## `step_config.detection` — Multiclass Export-Only Parameters {#sec-ref-detection-multiclass}
+## `actionConfig.detection` — Multiclass Export-Only Parameters {#sec-ref-detection-multiclass}
 
 These parameters are **stripped before** `MethylDetectorConfig` is constructed; they are passed to the native multiclass PKL export step (`build_multiclass_model`). They have no effect on DMP detection.
 
@@ -154,13 +156,13 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 
 ---
 
-## `step_config.mapper` {#sec-ref-mapper}
+## `actionConfig.mapper` {#sec-ref-mapper}
 
 *See @sec-methylmapper for theoretical background.*
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `csv_pattern` | str | `"dmps-*-discovery.csv"` | Glob pattern for DMP CSV files to map. Use `dmps-*-classifier.csv` to map the classifier panel instead. |
+| `csv_pattern` | str | `"dmps-*-discovery.csv"` | Glob pattern for DMP CSV files to map. Use `dmps-*-selected.csv` for FeatureCuts panels. |
 | `gtf` | str (path) | required | Path to the GTF annotation file (e.g. GENCODE v44). |
 | `upstream_size` | int | `5000` | Promoter window upstream of TSS (bp). |
 | `downstream_size` | int | `2000` | Terminator window downstream of gene end (bp). |
@@ -193,7 +195,7 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 
 ---
 
-## `step_config.enricher` {#sec-ref-enricher}
+## `actionConfig.enricher` {#sec-ref-enricher}
 
 *See @sec-methylenricher for theoretical background.*
 
@@ -223,7 +225,7 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 
 ---
 
-## `step_config.classifier` {#sec-ref-classifier}
+## `actionConfig.classifier` {#sec-ref-classifier}
 
 *See @sec-methylclassifier for theoretical background.*
 
@@ -249,19 +251,19 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 
 ---
 
-## `step_config.predictor` {#sec-ref-predictor}
+## `actionConfig.predictor` {#sec-ref-predictor}
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `debug` | bool | `false` | Verbose debug logging for the predictor. |
-| `panel` | dict \| null | `null` | Same hierarchical panel as classifier. Usually identical to `step_config.classifier.panel`. |
+| `panel` | dict \| null | `null` | Same hierarchical panel as classifier. Usually identical to `actionConfig.classifier.panel`. |
 | `multiclass_model_path` | str \| null | `null` | Override path to a specific multiclass PKL. If `null`, resolved from the project classifier output. |
 
-**Note.** Do not repeat the `controls`/`diseases` block inside `step_config.predictor`. Sample paths are inherited from the project's top-level cohort structure. See @sec-project-configuration for the correct anti-pattern avoidance.
+**Note.** Do not repeat the `controls`/`diseases` block inside `actionConfig.predictor`. Sample paths are inherited from the project's top-level cohort structure. See @sec-project-configuration for the correct anti-pattern avoidance.
 
 ---
 
-## `step_config.validation` {#sec-ref-validation}
+## `actionConfig.validation` {#sec-ref-validation}
 
 *Fields inherited from the project (`samples_base_path`, `output_base`, cohort structure) do not need to be repeated here.*
 
@@ -318,7 +320,7 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 
 ---
 
-## `step_config.progression` {#sec-ref-progression}
+## `actionConfig.progression` {#sec-ref-progression}
 
 *See @sec-two-workflows for workflow placement after freeze.*
 
@@ -333,7 +335,7 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 
 ---
 
-## `step_config.alignment_qc` {#sec-ref-alignment-qc}
+## `actionConfig.alignment_qc` {#sec-ref-alignment-qc}
 
 *See @sec-methylalignmentqc for theoretical background.*
 
@@ -363,9 +365,9 @@ This roadmap aligns deprecations with the current production workflow (`--stabil
 
 | Key / pattern | Current state | Proposed disposition |
 |---|---|---|
-| `step_config.validation.run_mapper_and_enricher` | Legacy behavior flag | Deprecate, then remove. Freeze stage owns mapper/enricher execution. |
-| `step_config.validation.skip_enricher` | Legacy companion flag | Deprecate, then remove. Use explicit freeze/enricher step policy instead. |
-| `step_config.validator` | Deprecated alias of `step_config.predictor` | Remove after one full release cycle of warnings. |
+| `actionConfig.validation.run_mapper_and_enricher` | Legacy behavior flag | Deprecate, then remove. Freeze stage owns mapper/enricher execution. |
+| `actionConfig.validation.skip_enricher` | Legacy companion flag | Deprecate, then remove. Use explicit freeze/enricher step policy instead. |
+| `actionConfig.validator` | Deprecated alias of `actionConfig.predictor` | Remove after one full release cycle of warnings. |
 | Flat schema (`group1`/`group2`/`groups`) for new configs | Backward-compatible | Keep loader compatibility; stop documenting as a preferred authoring pattern. |
 
 ### Phased plan
@@ -375,7 +377,7 @@ This roadmap aligns deprecations with the current production workflow (`--stabil
 - Emit `DeprecationWarning` whenever deprecated keys are parsed.
 - Keep runtime behavior unchanged.
 - Add docs examples showing only canonical keys:
-  - `step_config.predictor` (not `validator`),
+  - `actionConfig.predictor` (not `validator`),
   - control/disease/comparisons project schema,
   - freeze-stage mapper/enricher behavior.
 
@@ -411,12 +413,12 @@ Deprecation must not change model-quality semantics:
 
 Use this quick checklist when modernizing existing project configs.
 
-#### 1) `step_config.validator` -> `step_config.predictor`
+#### 1) `actionConfig.validator` -> `actionConfig.predictor`
 
 Before:
 
 ```json
-"step_config": {
+"actionConfig": {
   "validator": {
     "debug": false,
     "panel": { "primary_family": "prostate", "families": { "prostate": ["pca_pca1"] } }
@@ -427,7 +429,7 @@ Before:
 After:
 
 ```json
-"step_config": {
+"actionConfig": {
   "predictor": {
     "debug": false,
     "panel": { "primary_family": "prostate", "families": { "prostate": ["pca_pca1"] } }
@@ -435,12 +437,12 @@ After:
 }
 ```
 
-#### 2) Remove `run_mapper_and_enricher` / `skip_enricher` from `step_config.validation`
+#### 2) Remove `run_mapper_and_enricher` / `skip_enricher` from `actionConfig.validation`
 
 Before:
 
 ```json
-"step_config": {
+"actionConfig": {
   "validation": {
     "train_fraction": 0.8,
     "n_iterations": 50,
@@ -454,7 +456,7 @@ Before:
 After:
 
 ```json
-"step_config": {
+"actionConfig": {
   "validation": {
     "train_fraction": 0.8,
     "n_iterations": 50,

@@ -6,39 +6,8 @@ Standardize response for common stage failures and reduce ad-hoc debugging.
 
 ## Failure routing
 
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=1.2cm and 1.7cm,
-  box/.style={draw, rounded corners, align=center, minimum width=3.0cm, minimum height=0.8cm},
-  decision/.style={draw, diamond, aspect=2, align=center, inner sep=1pt}
-]
-\node[box] (fail) {Run failure};
-\node[decision, below=of fail] (classify) {issue type};
+![Failure routing](../diagrams/out/distributed-runtime.svg)
 
-\node[box, below left=of classify] (env) {environment/CLI};
-\node[box, below=of classify] (data) {input/path};
-\node[box, below right=of classify] (config) {config semantics};
-\node[box, right=of data] (stage) {artifact missing};
-
-\node[box, below=of env] (fixenv) {repair env and reinstall};
-\node[box, below=of data] (fixdata) {fix paths and sample lists};
-\node[box, below=of config] (fixconfig) {correct step config};
-\node[box, below=of stage] (rerun) {rerun required stage};
-
-\draw[->] (fail) -- (classify);
-\draw[->] (classify) -- (env);
-\draw[->] (classify) -- (data);
-\draw[->] (classify) -- (config);
-\draw[->] (classify) -- (stage);
-\draw[->] (env) -- (fixenv);
-\draw[->] (data) -- (fixdata);
-\draw[->] (config) -- (fixconfig);
-\draw[->] (stage) -- (rerun);
-\end{tikzpicture}
-\end{center}
-```
 
 ## Common problems
 

@@ -15,32 +15,8 @@ Without these gates, bad alignments would waste GPU extraction time, and under-c
 
 ## End-to-end flow
 
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=0.85cm,
-  box/.style={draw, rounded corners, align=center, minimum width=3.4cm, minimum height=0.75cm, font=\small}
-]
-\node[box] (dl) {download FASTQs};
-\node[box, below=of dl] (align) {Parabricks fq2bam};
-\node[box, below=of align] (aqc) {methyl-qc\\(alignment guardrail)};
-\node[box, below=of aqc] (gate1) {qcPass?};
-\node[box, below left=1.0cm and 0.6cm of gate1] (rem) {trim + realign\\(if fixable)};
-\node[box, below right=1.0cm and 0.6cm of gate1] (frag) {fragmentomics\\(cfDNA only)};
-\node[box, below=of frag] (ext) {MethylExtractor};
-\node[box, below=of ext] (eqc) {methyl-extraction-qc};
-\node[box, below=of eqc] (gate2) {extractionQcPass?};
-\node[box, below=of gate2] (h5) {archive H5 + cleanup};
+![Sample prep and QC flow](../diagrams/out/sample-prep-flow.svg)
 
-\draw[->] (dl) -- (align) -- (aqc) -- (gate1);
-\draw[->] (gate1) -- node[right, font=\scriptsize] {fail + fixable} (rem);
-\draw[->] (rem) -- (aqc);
-\draw[->] (gate1) -- node[right, font=\scriptsize] {pass} (frag);
-\draw[->] (frag) -- (ext) -- (eqc) -- (gate2) -- (h5);
-\end{tikzpicture}
-\end{center}
-```
 
 | Gate | Scope variable | When | Blocks |
 |------|----------------|------|--------|
@@ -77,7 +53,7 @@ Parabricks emits a tab-separated **deduplication metrics** file (names vary: `*d
 - `UNPAIRED_READ_DUPLICATES`, `READ_PAIR_DUPLICATES`
 - **`PERCENT_DUPLICATION`**
 
-These feed `summary_stats` on the export JSON (total reads, duplication rate, etc.). Optional config guardrails (`step_config.alignment_qc.optional_guardrails.duplication_rate_max`) can fail samples with excessive PCR duplication even when cycle quality looks fine.
+These feed `summary_stats` on the export JSON (total reads, duplication rate, etc.). Optional config guardrails (`actionConfig.alignment_qc.optional_guardrails.duplication_rate_max`) can fail samples with excessive PCR duplication even when cycle quality looks fine.
 
 ### Parabricks WGBS metrics JSON
 
@@ -125,7 +101,7 @@ Each metric carries a **`message`** explaining the biological/operational concer
 
 ### Optional and analyte-specific checks
 
-Configure under `step_config.alignment_qc` in the project JSON:
+Configure under profile or site `actionConfig.alignment_qc` (not in the study manifest):
 
 ```json
 {
@@ -216,7 +192,7 @@ MethylExtractor writes `{sample_id}.extraction_manifest.json` with:
 
 `guardrails.overall_pass` maps to workflow **`extractionQcPass`**. Failures are **terminal** today (no automatic retry loop).
 
-Override thresholds via `step_config.extraction_qc` in the project JSON. Schema: `schemas/extraction_qc_output.schema.json`.
+Override thresholds via profile `actionConfig.extraction_qc`. Schema: `schemas/extraction_qc_output.schema.json`.
 
 ### Why both gates matter
 
@@ -245,8 +221,8 @@ Workers tag scope with **`MethylSampleRef`** including `alignmentQc`, `extractio
 Before starting SamplePrep, confirm:
 
 - [ ] `project.json` lists samples and `samples_base_path` / `path_remap` resolve to `/work/samples/...`
-- [ ] `step_config.alignment_qc` thresholds match analyte (cfDNA vs buffy coat)
-- [ ] `step_config.extraction_qc` min coverage appropriate for WGBS depth expectations
+- [ ] Profile/site `actionConfig.alignment_qc` thresholds match analyte (cfDNA vs buffy coat)
+- [ ] Profile `actionConfig.extraction_qc` min coverage appropriate for WGBS depth expectations
 - [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
 - [ ] Instance `context_json` includes `fastqStorage`, `referenceFasta`, `samples[]`
 
@@ -258,7 +234,7 @@ source .venv/bin/activate
 # Alignment QC for one sample directory
 methyl-qc --samples /work/samples/SAMPLE_ID --output-dir /work/projects/prostate-cancer/alignment_qc
 
-# Project-scoped (uses step_config.alignment_qc)
+# Project-scoped (uses profile actionConfig.alignment_qc via METHYL_PROFILE)
 methyl-qc --project /work/projects/prostate-cancer/configs/project_Example.json
 
 # Extraction QC after MethylExtractor

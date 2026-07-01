@@ -58,7 +58,7 @@ docker exec -w /workspace/packages/methyldetector methylpipeline \
 - `--multi-class-model`: build a native multiclass classifier from the per-comparison `dmps-*.csv` outputs and class centroids  
 - `--learned-multiclass-head`: with `--multi-class-model`, fit a multinomial logistic layer on native histogram scores using the project’s training cohort lists  
 
-In `step_config.detection` (same effect as the CLI flag / hyperparameters; multiclass keys are **not** passed to MethylDetector itself):
+In profile `actionConfig.detection` (same effect as the CLI flag / hyperparameters; multiclass keys are **not** passed to MethylDetector itself):
 
 - `multiclass_train_learned_head` (bool): enable learned multinomial head when building the multiclass PKL  
 - `multiclass_learned_logistic_C` (float, optional): sklearn `C` for the logistic head  
@@ -216,8 +216,8 @@ else:
 
 Typical outputs under `output_dir`:
 
-- **Dual export** (`dmp_export_mode=dual`, default): `dmps-{chrom}-discovery.csv` (broad list for mapper/enricher), `dmps-{chrom}-classifier.csv` (prediction panel), `dmp-export-{chrom}.meta.json` (branch metadata), and `classifier-{chrom}-{contexts}.pkl`.
-- **Unified export** (`dmp_export_mode=unified`): single `dmps-{chrom}.csv` aligned with the classifier panel (optionally widened to `min_dmps_for_export` rows for mapping).
+- **Dual export** (`dmp_export_mode=dual`, default): `dmps-{chrom}-discovery.csv` (broad list for exploration), `dmps-{chrom}-selected.csv` (primary FeatureCuts / prediction panel), optional legacy `dmps-{chrom}-classifier-extended.csv`, `dmp-export-{chrom}.meta.json` (branch metadata), and `classifier-{chrom}-{contexts}.pkl`.
+- **Unified export** (`dmp_export_mode=unified`): single `dmps-{chrom}.csv` aligned with the selected panel (optionally widened to `min_dmps_for_export` rows for mapping).
 - **Summary / JSON**: `results-{chrom}.json` and optional validation blocks.
 - **Classifier**: ECDF pickle as above.
 

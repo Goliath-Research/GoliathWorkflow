@@ -14,7 +14,7 @@ Training-time checks frequently classify **group centroids** (or mean profiles) 
 
 2. After this rewrite, **`get_comparisons()`** and **`get_resolved_groups()`** agree: e.g. `all` vs `pca`, with outputs under `detections/all/pca/`, `classifiers/all/pca/`, etc.
 
-3. **Predictor expected classes** for binary runs come from **control paths first (0), then disease paths (1)** ([`_build_samples_and_expected`](../../packages/methylpredictor/methyl_predictor/core/predictor.py)). MC **`_patch_step_config_predictor_binary_holdouts`** points `step_config.predictor` at **validation CSVs** (`val_control.csv`, `val_disease.csv`) in the same order, so **0 = control, 1 = disease** matches the classifier’s **centroid1 vs centroid2** ordering **as long as** training used the same comparison.
+3. **Predictor expected classes** for binary runs come from **control paths first (0), then disease paths (1)** ([`_build_samples_and_expected`](../../packages/methylpredictor/methyl_predictor/core/predictor.py)). MC **`_patch_step_config_predictor_binary_holdouts`** (internal helper name) points merged **`actionConfig.predictor`** at **validation CSVs** (`val_control.csv`, `val_disease.csv`) in the same order, so **0 = control, 1 = disease** matches the classifier’s **centroid1 vs centroid2** ordering **as long as** training used the same comparison.
 
 4. **CLI override** `--test-control` / `--test-disease` merges into `test_group_paths` with explicit `class_index` 0 and 1 ([`project_resolver.py`](../../packages/methylpredictor/methyl_predictor/project_resolver.py)).
 
@@ -24,9 +24,9 @@ When the model’s `model_contexts == ['CG']`, [`classify_samples_from_list`](..
 
 ## Template vs MC disease label (`pca` vs `pca_pca1`)
 
-The **slim** template may use staged disease leaves (`pca_pca1`) for the **full** pipeline, while **binary MC** uses flattened labels (`pca`). Paths and pickles for a given run are **internally consistent** for that run’s `project.json`. If you compare artifacts across **different** project shapes, compare **directory names** (`all/pca` vs `all/pca_pca1`) and **`step_config.classifier.save_classifier_path`** / predictor `model_path`.
+The **slim** template may use staged disease leaves (`pca_pca1`) for the **full** pipeline, while **binary MC** uses flattened labels (`pca`). Paths and pickles for a given run are **internally consistent** for that run’s `project.json`. If you compare artifacts across **different** project shapes, compare **directory names** (`all/pca` vs `all/pca_pca1`) and **`actionConfig.classifier.save_classifier_path`** / predictor `model_path`.
 
-## `step_config.classifier` vs constant test predictions
+## `actionConfig.classifier` vs constant test predictions
 
 [`project_Healthy_vs_PCa1_only_CG.json`](../../configs/project_Healthy_vs_PCa1_only_CG.json) sets `ovr_binary_pickles_from_comparisons: false` and **`weight_method: linear_fitted`** for multi-chromosome fusion. If every sample gets **similar** `prob_class0` / `prob_class1` and **always** predicts class 0, investigate:
 

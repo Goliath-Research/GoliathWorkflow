@@ -140,7 +140,7 @@ Expected step override shape (no `samples` key; baseline comes from existing cen
 }
 ```
 
-`project.json` must not include `step_config.centroid.base_config.samples` (obsolete); the resolver raises a clear error if it is present.
+`project.json` must not include `actionConfig.centroid.base_config.samples` (obsolete); the resolver raises a clear error if it is present.
 
 ## Python Class Usage
 
@@ -231,7 +231,7 @@ The HDF5 centroid contains the required ECDF histogram data in
 
 ## Migration from older configs
 
-- Remove every `"samples"` key from `MethylCentroidConfig` JSON, `BatchProcessingConfig.base_config`, `project.json` `step_config.centroid`, and step-override files.
+- Remove every `"samples"` key from `MethylCentroidConfig` JSON, `BatchProcessingConfig.base_config`, `project.json` `actionConfig.centroid`, and step-override files.
 - If the old value was the full cohort, move those paths into `add_samples` (and keep `remove_samples` as needed for deltas).
 
 ## Troubleshooting

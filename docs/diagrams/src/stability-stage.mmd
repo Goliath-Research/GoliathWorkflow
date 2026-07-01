@@ -1,0 +1,17 @@
+flowchart LR
+  runs[run_0001..run_N]
+  centroid[methyl-centroid]
+  detector[methyl-detector]
+  dmp[discovery + selected DMP exports]
+  results[result JSON]
+  agg[run_stability_analysis]
+  stable[stable_dmps_production.csv]
+  summary[stability_summary.json]
+
+  runs --> centroid --> detector
+  detector --> dmp
+  detector --> results
+  dmp --> agg
+  results --> agg
+  agg --> stable
+  agg --> summary

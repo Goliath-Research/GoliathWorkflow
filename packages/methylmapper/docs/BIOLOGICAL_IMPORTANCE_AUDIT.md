@@ -32,7 +32,7 @@ Default biology matrix (`BiologyWeightConfig` in [`methyl_mapper/config.py`](../
 | gene_body | 1.0 | 1.0 |
 | terminator | 0.5 | 0.5 |
 
-Override via `step_config.mapper.biology_weights` in project JSON.
+Override via `actionConfig.mapper.biology_weights` in profile/site actionConfig.
 
 `frequency` encodes stability/recurrence. `region_weight` from BED is **not** used in biological importance (only in Stouffer/combined_weight for gene p-values).
 

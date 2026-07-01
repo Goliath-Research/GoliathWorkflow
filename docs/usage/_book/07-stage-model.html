@@ -337,14 +337,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="pattern-a-direct-production-model-build" class="level3" data-number="9.2.1">
 <h3 data-number="9.2.1" class="anchored" data-anchor-id="pattern-a-direct-production-model-build"><span class="header-section-number">9.2.1</span> Pattern A: Direct production model build</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG</span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--model</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> biological-readiness /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--model</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="pattern-b-backend-model-mc-comparison-then-select-best" class="level3" data-number="9.2.2">
 <h3 data-number="9.2.2" class="anchored" data-anchor-id="pattern-b-backend-model-mc-comparison-then-select-best"><span class="header-section-number">9.2.2</span> Pattern B: Backend model-MC comparison then select best</h3>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--model-mc</span> <span class="at">--model-mc-all</span></span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="dt">\</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--model-mc</span> <span class="at">--model-mc-all</span></span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="dt">\</span></span>
 <span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">--select-best-model</span> <span class="at">--model-mc-all</span> <span class="at">--selection-metric</span> balanced_accuracy <span class="at">--selection-stat</span> median</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 </section>
@@ -356,11 +356,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li><code>generative_hybrid</code>: in-process bundle -&gt; train -&gt; predict</li>
 </ul>
 <p>For <code>ecdf</code> + observed-hybrid mapped families (<code>feature_mode=observed_hybrid</code>, <code>feature_family_set!=dmp_scored</code>), the runtime path is aggregated ECDF OvR package train/predict and skips ECDF second-stage refinement.</p>
-<p>Configured by <code>step_config.validation.backend_profiles</code> (plus optional CLI backend override).</p>
+<p>Configured by profile <code>actionConfig.validation.backend_profiles</code> (plus optional CLI backend override).</p>
 </section>
 <section id="process-model" class="level2" data-number="9.4">
 <h2 data-number="9.4" class="anchored" data-anchor-id="process-model"><span class="header-section-number">9.4</span> Process model</h2>
-
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../diagrams/out/pipeline-stages.svg" class="img-fluid figure-img"></p>
+<figcaption>Model stage in pipeline lifecycle</figcaption>
+</figure>
+</div>
 </section>
 <section id="required-config-keys" class="level2" data-number="9.5">
 <h2 data-number="9.5" class="anchored" data-anchor-id="required-config-keys"><span class="header-section-number">9.5</span> Required config keys</h2>

@@ -20,7 +20,7 @@ Project configurations should follow a **single source of truth** principle:
   "samples_base_path": "/work/samples",
   "controls": { ... },           // Define once
   "diseases": { ... },           // Define once
-  "step_config": {
+  "actionConfig": {
     "centroid": { ... },
     "detection": { ... },
     "predictor": {
@@ -38,7 +38,7 @@ Project configurations should follow a **single source of truth** principle:
 - Run with `--freeze` to build production biological outputs from the stable panel
 - Run with `--model-mc` to perform full backend-specific MC retrain+test loops for model selection
 - Run with `--select-best-model` to select best backend and build final production model artifacts
-- Uses `step_config.validation` settings from the project
+- Uses `actionConfig.validation` settings from the project
 
 ### 2. Model Use for Prediction (Predictor-only)
 
@@ -73,11 +73,11 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 - **`--stability`**: after the MC loop, runs in-process stability aggregation (`run_stability_analysis`) over detector discovery outputs and optional classifier gene panels.
 - **`--freeze`**: runs `run_pipeline_for_production`: `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, then optional `methyl-disease-progression`.
 - **`--model-mc`**: full retrain+test MC for model selection. With `--model-mc-all`, MethylValidation first builds a shared iteration set (`model_mc/shared/run_XXXX`) for split + centroid + detector, then runs backend-specific train/predict stages under `model_mc/<backend>/run_XXXX`. When split source is reusable from primary MC runs, centroid/detector artifacts are linked into shared/backend run roots instead of recomputing.
-- **`--model`**: runs `run_pipeline_for_model`. Backend comes from `step_config.validation.backend_profiles` (or validated CLI override). For `ecdf`, steps are `methyl-classifier` -> `methyl-predictor`. For `tabular_sklearn` and `generative_hybrid`, steps are in-process bundle -> train -> predict and do not re-run `methyl-detector`.
+- **`--model`**: runs `run_pipeline_for_model`. Backend comes from `actionConfig.validation.backend_profiles` (or validated CLI override). For `ecdf`, steps are `methyl-classifier` -> `methyl-predictor`. For `tabular_sklearn` and `generative_hybrid`, steps are in-process bundle -> train -> predict and do not re-run `methyl-detector`.
 - **Aggregated ECDF observed-hybrid mode**: when `model_backend=ecdf` and observed-hybrid mapped features are active (`feature_family_set != dmp_scored`), trainer API runs `ecdf-aggregated-train` -> `ecdf-aggregated-predictor` and intentionally skips `ecdf-second-stage`.
 - **`--select-best-model`**: ranks backend model-MC summaries and runs final all-data production model build using selected backend.
 - **`--post-model-validation`**: runs MC holdout evaluation against frozen production artifacts only (no retraining). `ecdf` dispatches predictor-only runs; `tabular_sklearn` and `generative_hybrid` dispatch frozen model inference via backend predictors.
-- Legacy flat backend keys under `step_config.validation` are now rejected; migration is handled by `methyl-validation-migrate-backend-config`.
+- Legacy flat backend keys under `actionConfig.validation` are now rejected; migration is handled by `methyl-validation-migrate-backend-config`.
 - **`--predictor-only`**: MC iterations that run only `methyl-predictor` using frozen artifacts.
 - **`--rollout-compare`**: compares baseline/candidate `metrics_summary.json` and writes promotion/hold report using rollout thresholds in `MonteCarloConfig`.
 
@@ -112,7 +112,7 @@ When **K ≥ 2** ordered comparisons are available, derived progression features
 | 2 | `gene_directional_contrast__{first}__{last}` (= score(last) − score(first)), `gene_directional_progression_slope` |
 | ≥3 | above plus `gene_directional_range` and K−1 `gene_directional_adjacent_delta__{left}__{right}` (= score(right) − score(left) for consecutive steps) |
 
-Order resolution: `gene_scored_ordered_comparison_labels` (backend override) → `step_config.progression.ordered_comparison_labels` / `ordered_disease_groups` → `ProjectConfig.get_ordered_comparison_labels()` → append any remaining comparisons (sorted). Optional `gene_scored_contrast_pairs: [[left, right], ...]` adds extra contrast columns (deduped against the auto extreme pair).
+Order resolution: `gene_scored_ordered_comparison_labels` (backend override) → `actionConfig.progression.ordered_comparison_labels` / `ordered_disease_groups` → `ProjectConfig.get_ordered_comparison_labels()` → append any remaining comparisons (sorted). Optional `gene_scored_contrast_pairs: [[left, right], ...]` adds extra contrast columns (deduped against the auto extreme pair).
 
 NaN rules: contrast/delta NaN when either endpoint is NaN; slope requires ≥2 finite ordered scores; range requires all K scores finite.
 
@@ -165,14 +165,14 @@ The main components are:
 
 During stability MC runs, `stability_featurecuts_enabled` and related `stability_target_balanced_accuracy` / `stability_min_selected_dmps` settings are materialized per iteration as `detector_step_override.json` so detector selection policy is explicit and auditable in each `run_XXXX`.
 
-The `--freeze` path uses `run_pipeline_for_production()` which runs: centroid → detector(with `fixed_dmp_panel`) → mapper → enricher; when `step_config.progression.enabled=true`, it then runs `methyl-disease-progression`.
+The `--freeze` path uses `run_pipeline_for_production()` which runs: centroid → detector(with `fixed_dmp_panel`) → mapper → enricher; when `actionConfig.progression.enabled=true`, it then runs `methyl-disease-progression`.
 During freeze, model-bundle preparation materializes:
 
-- mapper annotation cache under `production/model_bundle/mapper_dmp_annotations.csv` and wires `step_config.model_bundle.mapper_annotation_csv`,
-- frozen gene ranking panel under `production/model_bundle/frozen_genes_production.csv` and wires `step_config.model_bundle.fixed_gene_panel`,
-- frozen gene-feature ranges under `production/model_bundle/frozen_gene_features.csv` and wires `step_config.model_bundle.fixed_gene_features`.
+- mapper annotation cache under `production/model_bundle/mapper_dmp_annotations.csv` and wires `actionConfig.model_bundle.mapper_annotation_csv`,
+- frozen gene ranking panel under `production/model_bundle/frozen_genes_production.csv` and wires `actionConfig.model_bundle.fixed_gene_panel`,
+- frozen gene-feature ranges under `production/model_bundle/frozen_gene_features.csv` and wires `actionConfig.model_bundle.fixed_gene_features`.
 
-Cache generation also supports configurable per-gene mapper attributes via `step_config.model_bundle.mapper_gene_columns` (or `step_config.mapper.mapper_gene_columns` fallback), defaulting to `["gene_importance", "gene_effect_abs_wsum", "gene_support_n", "gene_score", "mean_effect_size", "gene_effect_compound", "gene_feature_effect_compound"]`; set `[]` to disable carrying extra per-gene columns.
+Cache generation also supports configurable per-gene mapper attributes via `actionConfig.model_bundle.mapper_gene_columns` (or `actionConfig.mapper.mapper_gene_columns` fallback), defaulting to `["gene_importance", "gene_effect_abs_wsum", "gene_support_n", "gene_score", "mean_effect_size", "gene_effect_compound", "gene_feature_effect_compound"]`; set `[]` to disable carrying extra per-gene columns.
 For observed-hybrid gene families, `gene_feature_loading` determines whether training/prediction uses only frozen DMP loci (`frozen`) or expands to all loci observed inside the frozen gene-feature ranges (`range`).
 
 ```mermaid
@@ -228,8 +228,8 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 | **config.py** | `MonteCarloConfig` — `cohorts` (preferred) or legacy `healthy_csv`/`disease_csv`, plus train_fraction, n_iterations, seed, base_project, output_base, path_remap, abort_on_step_failure. |
 | **predictor_policy.py** | `assert_monte_carlo_predictor_allowed` — reject `predictor.blind` / `test_blind_paths` for MC. |
 | **split.py** | `load_and_resolve_sample_paths`; `stratified_split` (binary); `stratified_split_multiclass` (per-label train/val). |
-| **project_gen.py** | `infer_monte_carlo_layout` (rejects 2 cohorts when project resolves to >2 leaves); `generate_run_project` (binary CSV names unchanged); `generate_run_project_multiclass` / `generate_run_project_hierarchical_multiclass` (`training_<label>.csv`, `testing_<label>.csv`, `val_test_groups.json`). Each run’s `project.json` rewrites `step_config.predictor` to the holdout CSVs: **flat** MC also sets `test_group_paths`; **hierarchical** MC only updates nested `controls`/`diseases` (keeps template parent labels, e.g. `prostate_cancer` vs top-level `pca`). MethylPredictor zips predictor list expansion with resolved centroid labels when `test_group_paths` is absent. |
-| **pipeline_runner.py** | `run_pipeline_for_iteration` / `run_pipeline_for_iteration_multiclass`: centroid + detector only. In binary MC iterations, centroid executes as two tracked runs (`group1`, `group2`) with separate logs/timing rows and per-row `n_processed_samples` read from centroid metadata (`samples_used`). `run_pipeline_for_production`: freeze (centroid→detector→mapper→enricher) and optional `methyl-disease-progression` from `step_config.progression`. `run_pipeline_for_model`: classifier→predictor or backend bundle/train/predict. `run_predictor_only_*`: predictor-only. `run_post_model_validation_*`: frozen-artifact evaluation for post-model MC mode across all backends. |
+| **project_gen.py** | `infer_monte_carlo_layout` (rejects 2 cohorts when project resolves to >2 leaves); `generate_run_project` (binary CSV names unchanged); `generate_run_project_multiclass` / `generate_run_project_hierarchical_multiclass` (`training_<label>.csv`, `testing_<label>.csv`, `val_test_groups.json`). Each run’s `project.json` rewrites `actionConfig.predictor` to the holdout CSVs: **flat** MC also sets `test_group_paths`; **hierarchical** MC only updates nested `controls`/`diseases` (keeps template parent labels, e.g. `prostate_cancer` vs top-level `pca`). MethylPredictor zips predictor list expansion with resolved centroid labels when `test_group_paths` is absent. |
+| **pipeline_runner.py** | `run_pipeline_for_iteration` / `run_pipeline_for_iteration_multiclass`: centroid + detector only. In binary MC iterations, centroid executes as two tracked runs (`group1`, `group2`) with separate logs/timing rows and per-row `n_processed_samples` read from centroid metadata (`samples_used`). `run_pipeline_for_production`: freeze (centroid→detector→mapper→enricher) and optional `methyl-disease-progression` from `actionConfig.progression`. `run_pipeline_for_model`: classifier→predictor or backend bundle/train/predict. `run_predictor_only_*`: predictor-only. `run_post_model_validation_*`: frozen-artifact evaluation for post-model MC mode across all backends. |
 | **trainer_api.py** | Backend step abstraction for `--model`. Builds backend-specific step lists (ECDF, aggregated ECDF observed-hybrid, tabular, generative) so orchestration can be extracted into a future `methylmodeltrainer` package without changing workflow CLI semantics. |
 | **validator_metrics.py** | `iteration_scalar_metrics_from_run_dir`: predictor `validation_metrics.json` if present, else mean detector `balanced_accuracy` from `detections/**/result*.json`. Also exports aggregated Plotly KDE+ECDF chart (`metrics_distributions_plotly.html`) for post-model validation summaries. |
 
@@ -253,7 +253,7 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
 
 **After a frozen production build:** `--model-mc --model-mc-all` builds shared iteration artifacts under `monte_carlo_runs/model_mc/shared/` and evaluates each backend under `monte_carlo_runs/model_mc/<backend>/`. `--select-best-model` reads backend summaries, selects best backend by configured metric/statistic, and runs final all-data production model build. `--post-model-validation` remains a descriptive frozen-model MC path under `monte_carlo_runs/post_model_validation/`.
 
-**Disease progression synthesis:** when `step_config.progression.enabled` is set, freeze invokes `methyl-disease-progression --project <production/project.json>` after enricher. The progression tool reads comparison outputs (`mapper/<control>/<disease>/all-gene_name-combined.csv`, `enricher/<control>/<disease>/enrichment_merged.csv`, optional `modules_ranked.csv`) and writes long tables + summary under `<project_root>/progression`.
+**Disease progression synthesis:** when `actionConfig.progression.enabled` is set, freeze invokes `methyl-disease-progression --project <production/project.json>` after enricher. The progression tool reads comparison outputs (`mapper/<control>/<disease>/all-gene_name-combined.csv`, `enricher/<control>/<disease>/enrichment_merged.csv`, optional `modules_ranked.csv`) and writes long tables + summary under `<project_root>/progression`.
 
 ## Output files
 

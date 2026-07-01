@@ -1,0 +1,8 @@
+{
+  "name": "methylpipeline-diagrams",
+  "private": true,
+  "description": "Pinned @mermaid-js/mermaid-cli for docs/diagrams pre-render (see scripts/render_diagrams.sh)",
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "11.4.0"
+  }
+}

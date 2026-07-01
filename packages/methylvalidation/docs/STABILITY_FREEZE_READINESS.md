@@ -12,9 +12,9 @@ After Monte Carlo **stability** and production **freeze**, review artifacts befo
 | **Progression** | `monte_carlo_runs/production/progression/summary.json`, `modules_long.csv`, `entities_progression_labels.csv` | Stage order, missing inputs, module score vs stage trend |
 | **Balance** | Stable panel or frequency CSV | Chromosome concentration warnings |
 
-Set `step_config.validation.require_complete_enricher: true` to treat incomplete Enrichr as **no_go** (default: warning only).
+Set `actionConfig.validation.require_complete_enricher: true` to treat incomplete Enrichr as **no_go** (default: warning only).
 
-**Important:** MC **stability** does not run disease progression; progression is produced during **freeze** (and downstream mapper/enricher) when `step_config.progression.enabled` is true. See [`USAGE.md`](USAGE.md).
+**Important:** MC **stability** does not run disease progression; progression is produced during **freeze** (and downstream mapper/enricher) when `actionConfig.progression.enabled` is true. See [`USAGE.md`](USAGE.md).
 For observed-hybrid mapped-family model builds (`feature_family_set != dmp_scored`), freeze should also emit mapper annotation cache metadata (`production_summary.json -> mapper_annotation_cache`) and a cache CSV under `production/model_bundle/`.
 
 ## CLI
@@ -50,14 +50,14 @@ If no key is found or the API errors, the tool still emits **`ai_review`** and c
 
 **Privacy:** the Grok payload is built without project roots or artifact paths; free-text fields (e.g. verdict warnings) are scrubbed for obvious `/home/…`, `/work/…`, etc. **`--include-ai-raw-response`** adds truncated raw model text to `ai_review` (default off). Use **`--redact-paths`** when sharing exported markdown/JSON outside trusted hosts.
 
-`production/project.json` **`step_config.mapper.disease_term`** is passed through as **`disease_context`** unless **`--disease-context`** is set.
+`production/project.json` **`actionConfig.mapper.disease_term`** is passed through as **`disease_context`** unless **`--disease-context`** is set.
 
-`production/project.json` **`step_config.validation.regulatory.primary_analyte`** is also passed into the Grok advisory payload as analyte context (alongside `sample_type`). This helps interpretation stay aligned with analyte biology (for example, buffy-coat host-response signatures vs cfDNA tumor-derived signatures). If `primary_analyte` is not declared, readiness still runs and marks analyte framing as not declared.
+`production/project.json` **`actionConfig.validation.regulatory.primary_analyte`** is also passed into the Grok advisory payload as analyte context (alongside `sample_type`). This helps interpretation stay aligned with analyte biology (for example, buffy-coat host-response signatures vs cfDNA tumor-derived signatures). If `primary_analyte` is not declared, readiness still runs and marks analyte framing as not declared.
 
 For **cfDNA** projects, readiness also summarizes **fragmentomics**:
 
-- Phase 1: `alignment_qc/*.json` → `fragmentomics_metrics` from insert-size histograms (`step_config.alignment_qc.fragmentomics` or `auto_profile_from_analyte` when `primary_analyte` is `cfdna`).
-- Phase 2 (optional): `fragmentomics/fragmentomics_summary.json` from `methyl-fragmentomics` when `step_config.fragmentomics.enabled` is true.
+- Phase 1: `alignment_qc/*.json` → `fragmentomics_metrics` from insert-size histograms (`actionConfig.alignment_qc.fragmentomics` or `auto_profile_from_analyte` when `primary_analyte` is `cfdna`).
+- Phase 2 (optional): `fragmentomics/fragmentomics_summary.json` from `methyl-fragmentomics` when `actionConfig.fragmentomics.enabled` is true.
 
 Warnings are emitted when `primary_analyte=cfdna` but these artifacts are missing or guardrails fail.
 

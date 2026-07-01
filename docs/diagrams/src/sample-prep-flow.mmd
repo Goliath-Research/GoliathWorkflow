@@ -1,0 +1,17 @@
+flowchart TD
+  dl[download_fastq] --> pb[parabricks_fq2bam]
+  pb --> aqc[methyl_qc]
+  aqc --> gate{qcPass?}
+  gate -->|yes| frag{isCfdna?}
+  frag -->|yes| fm[fragmentomics_BAM]
+  frag -->|no| ext[methyl_extract]
+  fm --> ext
+  ext --> eqc[extraction_qc]
+  eqc --> pass{extractionQcPass?}
+  pass -->|yes| archive[archive_full]
+  gate -->|no + remediate| trim[trim_fastq_fastp]
+  trim --> pb2[parabricks_forceRealign]
+  pb2 --> aqc2[methyl_qc_retry]
+  aqc2 --> gate
+  gate -->|no terminal| reject[archive_qc_only]
+  pass -->|no| reject

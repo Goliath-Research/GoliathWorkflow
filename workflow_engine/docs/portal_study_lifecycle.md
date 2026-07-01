@@ -75,7 +75,7 @@ Authorization: Bearer <admin-jwt>
 
 Poll `GET /v1/workflows/instances/{id}` until status is **COMPLETED** (all samples passed QC and have per-chromosome HDF5s).
 
-`chrom_mapping` is derived from `project.chromosomes` at extract time (no shared-storage mapping file required). Optional overrides: `step_config.methyl_extract.contig_naming`, `chromosome_overrides`, or inline `chrom_mapping` object.
+`chrom_mapping` is derived from `project.chromosomes` at extract time (no shared-storage mapping file required). Optional overrides: profile/site `actionConfig.methyl_extract.contig_naming`, `chromosome_overrides`, inline `chrom_mapping` in instance `context_json`, or program `stepOverride`.
 
 ## Instance 2 — StudyValidationLifecycle
 
@@ -164,19 +164,23 @@ Compiler output bindings (scope write-back on task complete):
 | `validation.prepare_freeze_project` | `fixedDmpPanel` | `$.fixedDmpPanel` |
 | `validation.select_best_model` | `selectedBackend` | `$.selectedBackend` |
 
-## Project defaults
+## Project defaults (four-layer config)
 
-Portal-facing validation defaults live in `step_config.validation`:
+Tool parameters are **not** in the study manifest. Portal-facing validation defaults live in **pipeline profile** and/or **site** `actionConfig.validation` (merged into instance `context_json` at start):
 
 ```json
-"validation": {
-  "feature_iterations": 30,
-  "backends": ["ecdf", "tabular_sklearn", "generative_hybrid"],
-  "selection_metric": "balanced_accuracy"
+"actionConfig": {
+  "validation": {
+    "feature_iterations": 30,
+    "backends": ["ecdf", "tabular_sklearn", "generative_hybrid"],
+    "selection_metric": "balanced_accuracy"
+  }
 }
 ```
 
-Parabricks alignment settings: `step_config.parabricks` (`image`, `bwa_threads`, `gpu_flags`, …) with task `input_json` overrides; env vars remain as fallback.
+Pass `pipelineProfile` (e.g. `mc_gene_fc`) in `context_json` or `--context-file` when starting runs.
+
+Parabricks alignment settings: profile/site `actionConfig.parabricks` (`image`, `bwa_threads`, `gpu_flags`, …) with task `input_json` / `resolvedConfig` overrides; env vars remain as fallback when config is absent.
 
 ## Worker fleet and node prerequisites
 

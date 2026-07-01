@@ -99,9 +99,9 @@ These are practical candidates for staged deprecation in a future major release:
 
 | Candidate key / pattern | Current status | Why deprecate | Replacement |
 |---|---|---|---|
-| `step_config.validation.run_mapper_and_enricher` | Marked legacy in config reference | Stability iterations now run centroid+detector only; mapper/enricher belong to `--freeze` | Remove flag; always run mapper/enricher in `--freeze` when enabled in project steps |
-| `step_config.validation.skip_enricher` | Legacy companion to `run_mapper_and_enricher` | Semantics overlap with step-level enricher control and creates branchy MC behavior | Drop from validation block; control enricher directly in freeze-stage execution policy |
-| `step_config.validator` (alias) | Deprecated alias for `step_config.predictor` | Duplicates predictor namespace and complicates resolver logic | Use only `step_config.predictor` |
+| `actionConfig.validation.run_mapper_and_enricher` | Marked legacy in config reference | Stability iterations now run centroid+detector only; mapper/enricher belong to `--freeze` | Remove flag; always run mapper/enricher in `--freeze` when enabled in project steps |
+| `actionConfig.validation.skip_enricher` | Legacy companion to `run_mapper_and_enricher` | Semantics overlap with step-level enricher control and creates branchy MC behavior | Drop from validation block; control enricher directly in freeze-stage execution policy |
+| `actionConfig.validator` (alias) | Deprecated alias for `actionConfig.predictor` | Duplicates predictor namespace and complicates resolver logic | Use only `actionConfig.predictor` |
 | Flat cohort schema (`group1` / `group2` / top-level `groups`) | Backward-compatible path | New control/disease/comparisons schema is clearer and supports multiclass/stage workflows natively | Use `control`, `disease`, and explicit `comparisons` |
 
 Deprecation strategy recommendation:
@@ -123,7 +123,7 @@ For the best downstream predictive performance, favor stable panel discovery fir
 ### Reference tuning template (binary ECDF-first)
 
 ```json
-"step_config": {
+"actionConfig": {
   "validation": {
     "train_fraction": 0.8,
     "n_iterations": 50,

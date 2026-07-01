@@ -260,6 +260,7 @@ window.Quarto = {
   <ul class="collapse">
   <li><a href="#picard-style-deduplication-metrics" id="toc-picard-style-deduplication-metrics" class="nav-link" data-scroll-target="#picard-style-deduplication-metrics"><span class="header-section-number">9.2.1</span> Picard-style deduplication metrics</a></li>
   <li><a href="#parabricks-wgbs-metrics-json" id="toc-parabricks-wgbs-metrics-json" class="nav-link" data-scroll-target="#parabricks-wgbs-metrics-json"><span class="header-section-number">9.2.2</span> Parabricks WGBS metrics JSON</a></li>
+  <li><a href="#alignment-layer-guardrails" id="toc-alignment-layer-guardrails" class="nav-link" data-scroll-target="#alignment-layer-guardrails"><span class="header-section-number">9.2.3</span> Alignment-layer guardrails</a></li>
   </ul></li>
   <li><a href="#export-json-v2" id="toc-export-json-v2" class="nav-link" data-scroll-target="#export-json-v2"><span class="header-section-number">9.3</span> Export JSON (V2)</a></li>
   <li><a href="#cycle-screening-and-remediation" id="toc-cycle-screening-and-remediation" class="nav-link" data-scroll-target="#cycle-screening-and-remediation"><span class="header-section-number">9.4</span> Cycle screening and remediation</a></li>
@@ -303,7 +304,7 @@ window.Quarto = {
 <section id="picard-style-deduplication-metrics" class="level3" data-number="9.2.1">
 <h3 data-number="9.2.1" class="anchored" data-anchor-id="picard-style-deduplication-metrics"><span class="header-section-number">9.2.1</span> Picard-style deduplication metrics</h3>
 <p>Parabricks emits tab-separated <code>*deduplicate_metrics.txt</code> (or <code>*duplication_metrics.txt</code>). The parser (<code>methyl_alignment_qc/core/parser.py</code>) reads columns such as <code>PERCENT_DUPLICATION</code>, read-pair counts, and unmapped reads. These populate <code>summary_stats</code> on the export JSON.</p>
-<p>Optional config guardrails (<code>step_config.alignment_qc.optional_guardrails.duplication_rate_max</code>, <code>min_pf_reads</code>) can fail samples with excessive PCR duplication even when cycle quality passes.</p>
+<p>Optional config guardrails (<code>actionConfig.alignment_qc.optional_guardrails.duplication_rate_max</code>, <code>min_pf_reads</code>) can fail samples with excessive PCR duplication even when cycle quality passes.</p>
 </section>
 <section id="parabricks-wgbs-metrics-json" class="level3" data-number="9.2.2">
 <h3 data-number="9.2.2" class="anchored" data-anchor-id="parabricks-wgbs-metrics-json"><span class="header-section-number">9.2.2</span> Parabricks WGBS metrics JSON</h3>
@@ -315,6 +316,11 @@ window.Quarto = {
 <li><code>pre_adapter_summaries</code> — deamination and OxoG artifact qscores</li>
 </ul>
 <p>Guardrails in <code>wgbs_parabricks_qc.py</code> evaluate PF%, Q30, mean/min cycle quality, GC/AT dropout, median insert size, and deamination/OxoG scores before extraction proceeds.</p>
+</section>
+<section id="alignment-layer-guardrails" class="level3" data-number="9.2.3">
+<h3 data-number="9.2.3" class="anchored" data-anchor-id="alignment-layer-guardrails"><span class="header-section-number">9.2.3</span> Alignment-layer guardrails</h3>
+<p>Beyond sequencing/library checks, <code>alignment_derived_qc.py</code> derives <strong>mapping rate</strong>, <strong>secondary/supplementary rate</strong>, and <strong>GC coverage uniformity</strong> from Picard dedup and GC bias tables. When <code>alignment_guardrails.flagstat_enabled</code> is true, <code>bam_flagstat.py</code> runs <code>samtools flagstat</code> on the aligned BAM and gates <strong>properly paired rate</strong> and supplementary alignments.</p>
+<p>Analyte profiles enable these guardrails by default for <code>cfdna</code> and <code>buffy_coat</code>. See the <a href="../../implementation/sample-preparation-flow.md">sample preparation flow</a> for thresholds and operator guidance.</p>
 </section>
 </section>
 <section id="export-json-v2" class="level2" data-number="9.3">
@@ -347,6 +353,14 @@ window.Quarto = {
 <tr class="even">
 <td><code>qc_history</code></td>
 <td>Append-only audit (initial + post-remediation retries)</td>
+</tr>
+<tr class="odd">
+<td><code>alignment_stats</code></td>
+<td>Derived mapping and GC uniformity metrics</td>
+</tr>
+<tr class="even">
+<td><code>alignment_flagstat</code></td>
+<td>samtools flagstat summary (when enabled)</td>
 </tr>
 </tbody>
 </table>
@@ -413,6 +427,7 @@ window.Quarto = {
 <h2 data-number="9.8" class="anchored" data-anchor-id="related"><span class="header-section-number">9.8</span> Related</h2>
 <ul>
 <li>Package usage: <code>packages/methylalignmentqc/docs/USAGE.md</code></li>
+<li>Implementation guide (remediation, extraction filtering, cfDNA fragmentomics): <a href="../../implementation/sample-preparation-flow.md">Sample preparation flow</a></li>
 <li>Extraction QC (downstream gate): <a href="09a-methylextractionqc.html" class="quarto-xref"><span>Chapter 10</span></a></li>
 </ul>
 

@@ -473,7 +473,7 @@ J(A,B) = \frac{|A \cap B|}{|A \cup B|},
 </section>
 <section id="project-orchestrated-execution" class="level2" data-number="8.9">
 <h2 data-number="8.9" class="anchored" data-anchor-id="project-orchestrated-execution"><span class="header-section-number">8.9</span> Project-Orchestrated Execution</h2>
-<p>In pipeline runs, MethylEnricher is commonly launched with <code>--project</code> and reads <code>step_config.enricher</code>. When the project contains multiple comparison groups, the runtime can execute one enrichment/module pass per group using per-comparison mapper inputs and enricher outputs. If explicit input/output arguments are passed, execution falls back to a single run.</p>
+<p>In pipeline runs, MethylEnricher is commonly launched with <code>--project</code> and reads merged <code>actionConfig.enricher</code>. When the project contains multiple comparison groups, the runtime can execute one enrichment/module pass per group using per-comparison mapper inputs and enricher outputs. If explicit input/output arguments are passed, execution falls back to a single run.</p>
 <p>Configuration precedence for libraries is:</p>
 <ol type="1">
 <li>explicit <code>libraries</code>,</li>

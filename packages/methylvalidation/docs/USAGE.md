@@ -181,7 +181,7 @@ When to change defaults:
 
 | Flag | Description | Main subprocesses / backend path |
 |------|-------------|----------------------------------|
-| `--project PATH` | Path to the project JSON (preferred; reads `step_config.validation` from the project). | Controls whichever path you select (`--stability`, `--freeze`, `--model-mc`, `--select-best-model`, `--model`, `--post-model-validation`, or `--predictor-only`). |
+| `--project PATH` | Path to the study manifest (preferred). Validation settings come from the merged profile/site `actionConfig.validation` (see **Configuration** below). | Controls whichever path you select (`--stability`, `--freeze`, `--model-mc`, `--select-best-model`, `--model`, `--post-model-validation`, or `--predictor-only`). |
 | `--config PATH` | Path to a standalone Monte Carlo config JSON (alternative to `--project`). | Same as above, but from MC config file mode. |
 | `--stability` | Run stability analysis after the MC loop (Workflow 1, Step 1). | MC loop (`methyl-centroid` + `methyl-detector`) then in-process stability aggregation. |
 | `--stability-featurecuts` | Enable detector FeatureCuts during MC (`classifier_dmp_selection=featurecuts_validation`) and compute stability from classifier-panel DMP exports. | Detector step override per run + classifier-panel stability aggregation. |
@@ -196,16 +196,16 @@ When to change defaults:
 | `--skip-centroid` | Reuse existing centroid artifacts and skip centroid recomputation. Works in MC iteration mode and in `--freeze` (detector→mapper→enricher only). | MC loop detector-only on `run_XXXX` artifacts, or freeze runs without `methyl-centroid`. |
 | `--skip-detection` | Recompute only stability artifacts from existing `run_XXXX/detections/.../dmps-*.csv` outputs. Requires `--stability`. | Skips MC iteration execution; runs in-process stability aggregation only. |
 | `--resume [RUN]` | Resume interrupted MC runs for `--stability` / default MC mode. Without `RUN`, repeats the last existing run and continues to `n_iterations`; with `RUN` (1-based), restarts from that run. | MC loop resume control (run directories `run_0001`, `run_0002`, ...). |
-| `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). If `step_config.progression.enabled=true`, this also runs `methyl-disease-progression` after enricher. | `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher` (+ optional progression). |
+| `--freeze` | Run production freeze using the stable DMP panel, up to enricher (Workflow 1, Step 2). If profile `actionConfig.progression.enabled=true`, this also runs `methyl-disease-progression` after enricher. | `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher` (+ optional progression). |
 | `--model` | Run production model builder after freeze (Workflow 1, Step 3). | `ecdf`: `methyl-classifier` -> `methyl-predictor`; other backends: bundle -> train -> predict. |
 | `--model-mc` | Run full backend MC retraining+evaluation loop for model selection. | Per iteration: centroid -> detector -> backend train -> backend predict. |
 | `--model-mc-all` | With `--model-mc`, run only enabled backend profiles with isolated outputs while reusing one shared MC run set. | Creates `model_mc/shared/run_XXXX` plus per-enabled-backend folders. |
 | `--select-best-model` | Rank backend model-MC summaries and train final production model on all data. | Reads `model_mc/*/metrics_summary.json`, picks best by `--selection-metric`/`--selection-stat`, then runs production model build. |
-| `--rollout-compare` + `--baseline-summary` + `--candidate-summary` | Compare dual-run summaries and emit promote/hold recommendation JSON using rollout thresholds from `step_config.validation`. | In-process comparison (no training/inference run). |
+| `--rollout-compare` + `--baseline-summary` + `--candidate-summary` | Compare dual-run summaries and emit promote/hold recommendation JSON using rollout thresholds from profile `actionConfig.validation`. | In-process comparison (no training/inference run). |
 | `--selection-metric METRIC` | Metric for backend ranking in `--select-best-model`. | Default: `balanced_accuracy`. |
 | `--selection-stat {mean,median}` | Statistic for backend ranking in `--select-best-model`. | Default: `median` (p50). |
 | `--post-model-validation` | Run descriptive MC holdout evaluation with frozen production artifacts (no retraining). | `ecdf`: predictor-only evaluation; tabular/generative: in-process frozen model predict. Outputs to `monte_carlo_runs/post_model_validation/`. |
-| `--model-backend` / `--post-model-backend` | Override backend used by `--model`, `--model-mc`, or `--post-model-validation`. Backend must be enabled in `step_config.validation.backend_profiles`. | `ecdf` \| `tabular_sklearn` \| `generative_hybrid` |
+| `--model-backend` / `--post-model-backend` | Override backend used by `--model`, `--model-mc`, or `--post-model-validation`. Backend must be enabled in profile `actionConfig.validation.backend_profiles`. | `ecdf` \| `tabular_sklearn` \| `generative_hybrid` |
 | `--predictor-only` | Run only `methyl-predictor` per iteration using the frozen model (Workflow 2). | Monte Carlo iterations, predictor only. |
 | `--skip-enricher` | Skip the enricher inside MC iterations even when `run_mapper_and_enricher: true`. | Also short-circuits enricher (and therefore progression) in `--freeze`. |
 | `--iterations N` | Override `n_iterations` from config. | Affects MC loop count (`--stability` and `--predictor-only`). |
@@ -237,12 +237,26 @@ Paths in the config must be valid **inside** the container.
 
 ---
 
-## Project Config: `step_config.validation`
+## Configuration: profile `actionConfig`, `METHYL_PROFILE`, and worker snapshots
 
-Rather than a separate Monte Carlo config file, embed the validation settings directly in the project file. Only MC-specific fields are needed here; `samples_base_path`, `output_base`, and the cohort structure are inherited from the top-level project fields.
+Study manifests hold cohorts, paths, and comparisons only — **not** tool parameters. Monte Carlo and validation settings live in the **pipeline profile** under `actionConfig.validation` (and optional site defaults in `/work/site/methyl_site.json`). At workflow start the gateway merges layers into enriched instance `context_json`; workers receive **`resolvedConfig`** on each task payload.
+
+**Local / CLI runs:** pass the profile name or path via workflow context:
+
+```bash
+methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json \
+  --context '{"pipelineProfile":"mc_gene_fc"}' \
+  --stability
+```
+
+Or set **`METHYL_PROFILE=mc_gene_fc`** (resolves under `METHYL_PROFILE_DIR`, defaulting to the runtime-bundle profile directory in production).
+
+**Distributed workers:** the planner snapshots merged validation config to **`monte_carlo_runs/queue/mc_config.json`** so each worker sees the same resolved MC settings without re-reading profiles at claim time.
+
+Example profile fragment (`workflow_engine/domain/profiles/mc_gene_fc.profile.json`):
 
 ```json
-"step_config": {
+"actionConfig": {
   "validation": {
     "train_fraction": 0.8,
     "n_iterations": 50,
@@ -261,7 +275,7 @@ Rather than a separate Monte Carlo config file, embed the validation settings di
 }
 ```
 
-All `step_config.validation` fields are documented in the configuration reference (see `docs/reference/configuration-reference.qmd` or the Quarto book at `docs/theory/`).
+All `actionConfig.validation` fields are documented in the configuration reference (see `docs/reference/configuration-reference.qmd` or the Quarto book at `docs/theory/`).
 
 ### Stability + freeze controls (operationally important)
 
@@ -303,23 +317,24 @@ Common fields for production staging:
 Optional gene stability runs in the same MC loop when `stability_gene_featurecuts_enabled` is true:
 
 ```json
-"validation": {
-  "stability_featurecuts_enabled": true,
-  "stability_gene_featurecuts_enabled": true,
-  "stability_target_balanced_accuracy": 0.95,
-  "stability_min_core_dmps": 50,
-  "stability_classifier_export_margin_pct": 0.10,
-  "stability_classifier_export_margin_abs": 10,
-  "stability_classifier_export_max_dmps": 200,
-  "stability_min_selected_genes": 50,
-  "stability_gene_featurecuts_max_dmps": 500,
-  "stability_dmp_freq": 0.8,
-  "stability_gene_freq": 0.7,
-  "backend_profiles": {
-    "ecdf": {
-      "params": {
-        "feature_mode": "raw_gene",
-        "feature_family_set": "gene"
+"actionConfig": {
+  "validation": {
+    "stability_featurecuts_enabled": true,
+    "stability_gene_featurecuts_enabled": true,
+    "stability_target_balanced_accuracy": 0.95,
+    "stability_min_core_dmps": 50,
+    "stability_classifier_export_margin_pct": 0.10,
+    "stability_classifier_export_margin_abs": 10,
+    "stability_classifier_export_max_dmps": 200,
+    "stability_min_selected_genes": 50,
+    "stability_dmp_freq": 0.8,
+    "stability_gene_freq": 0.7,
+    "backend_profiles": {
+      "ecdf": {
+        "params": {
+          "feature_mode": "raw_gene",
+          "feature_family_set": "gene"
+        }
       }
     }
   }
@@ -328,9 +343,9 @@ Optional gene stability runs in the same MC loop when `stability_gene_featurecut
 
 CLI: `--stability --stability-featurecuts --stability-gene-featurecuts`.
 
-Per iteration: centroid → detector (DMP FeatureCuts) → methyl-mapper on **extended classifier** DMP CSVs (`dmps-*-classifier-extended.csv`, via `mapper_step_override.json`) → gene FeatureCuts (ECDF OvR k-search on validation BA). Outputs `run_XXXX/gene_stability/genes-classifier.csv`; aggregation writes `stability/stable_genes_production.csv`. `--freeze` copies the stable gene panel into production and wires `raw_gene` for `--model`.
+Per iteration: centroid → detector (DMP FeatureCuts) → methyl-mapper on the **selected** DMP CSVs (`dmps-*-selected.csv`, via `mapper_step_override.json`) → gene FeatureCuts (ECDF OvR k-search on validation BA). Outputs `run_XXXX/gene_stability/genes-classifier.csv`; aggregation writes `stability/stable_genes_production.csv`. `--freeze` copies the stable gene panel into production and wires `raw_gene` for `--model`.
 
-Detector exports three DMP branches per chromosome: `dmps-{chr}-discovery.csv` (broad), `dmps-{chr}-classifier.csv` (core model panel), and `dmps-{chr}-classifier-extended.csv` (k_core plus margin for mapper/gene work). DMP stability uses the core classifier CSV; mapper/gene FeatureCuts use extended. Set `stability_classifier_export_margin_pct` / `_abs` / `_max_dmps` to control extended size; `stability_gene_featurecuts_max_dmps` caps genome-wide extended loci after deduplication.
+Detector exports coordinated DMP branches per chromosome: `dmps-{chr}-discovery.csv` (broad), `dmps-{chr}-selected.csv` (FeatureCuts / prediction panel), and optionally `dmps-{chr}-classifier-extended.csv` (legacy margin export). DMP stability uses the selected panel; mapper/gene FeatureCuts read `dmps-*-selected.csv`. Set `stability_classifier_export_margin_pct` / `_abs` / `_max_dmps` under profile `actionConfig.dmp_selection` or `actionConfig.validation` to control panel size; gene FeatureCuts caps (`stability_gene_featurecuts_max_dmps`, `stability_gene_featurecuts_max_genes`) belong in profile `actionConfig.validation` or `actionConfig.gene_selection`.
 
 If gene FeatureCuts is enabled without DMP FeatureCuts, the CLI warns; iterations fail at gene FeatureCuts unless classifier exports exist from a prior detector run.
 
@@ -339,24 +354,26 @@ If gene FeatureCuts is enabled without DMP FeatureCuts, the CLI warns; iteration
 When `stability_gene_biomarker_filter_enabled` is true (requires `stability_gene_featurecuts_enabled`), each MC iteration applies **in-process** disease CSV filters and optional STRING PPI hub ranking before gene FeatureCuts. This does **not** run full `methyl-enricher` (no Enrichr ORA or module pipeline).
 
 ```json
-"validation": {
-  "stability_featurecuts_enabled": true,
-  "stability_gene_featurecuts_enabled": true,
-  "stability_mapper_enrich_disease": true,
-  "stability_gene_biomarker_filter_enabled": true,
-  "stability_gene_biomarker_mode": "ppi_only",
-  "stability_gene_region_hits": ["promoter", "exon"],
-  "stability_gene_biomarker_top_genes": 150,
-  "stability_gene_biomarker_ppi_top_hubs": 100,
-  "stability_gene_freq": 0.6
-},
-"enricher": {
-  "disease_only": true,
-  "min_dmp_count": 2,
-  "network_refinement": {
-    "enabled": true,
-    "cache_path": "/work/cache/methylenricher/string_edges",
-    "score_threshold": 400.0
+"actionConfig": {
+  "validation": {
+    "stability_featurecuts_enabled": true,
+    "stability_gene_featurecuts_enabled": true,
+    "stability_mapper_enrich_disease": true,
+    "stability_gene_biomarker_filter_enabled": true,
+    "stability_gene_biomarker_mode": "ppi_only",
+    "stability_gene_region_hits": ["promoter", "exon"],
+    "stability_gene_biomarker_top_genes": 150,
+    "stability_gene_biomarker_ppi_top_hubs": 100,
+    "stability_gene_freq": 0.6
+  },
+  "enricher": {
+    "disease_only": true,
+    "min_dmp_count": 2,
+    "network_refinement": {
+      "enabled": true,
+      "cache_path": "/work/cache/methylenricher/string_edges",
+      "score_threshold": 400.0
+    }
   }
 }
 ```
@@ -365,22 +382,24 @@ CLI: `--stability --stability-featurecuts --stability-gene-featurecuts --stabili
 
 Per iteration: centroid → detector → methyl-mapper (with disease enrichment when `stability_mapper_enrich_disease: true`) → biomarker filter (CSV filters + cached STRING PPI) → gene FeatureCuts. Writes `run_XXXX/gene_stability/biomarker_ppi_hubs.csv` and narrows the ranked gene pool. `stability_summary.json` includes `biomarker_filter` diagnostics (median pool size, empty-pool run counts).
 
-Filter thresholds inherit from `step_config.enricher`. Region focus for **model training** uses `region_directional_region_types` with `feature_family_set: structural_scored` at freeze/model time.
+Filter thresholds inherit from profile `actionConfig.enricher`. Region focus for **model training** uses `region_directional_region_types` with `feature_family_set: structural_scored` at freeze/model time.
 
 ### Strict stability profile example
 
 Use this profile when you want conservative run filtering and classifier-panel-aligned stability:
 
 ```json
-"validation": {
-  "n_iterations": 30,
-  "run_stability": true,
-  "stability_dmp_freq": 0.6,
-  "stability_min_balanced_accuracy": 0.9,
-  "stability_gene_freq": 0.5,
-  "stability_featurecuts_enabled": true,
-  "stability_target_balanced_accuracy": 0.95,
-  "stability_min_selected_dmps": 1000
+"actionConfig": {
+  "validation": {
+    "n_iterations": 30,
+    "run_stability": true,
+    "stability_dmp_freq": 0.6,
+    "stability_min_balanced_accuracy": 0.9,
+    "stability_gene_freq": 0.5,
+    "stability_featurecuts_enabled": true,
+    "stability_target_balanced_accuracy": 0.95,
+    "stability_min_selected_dmps": 1000
+  }
 }
 ```
 
@@ -398,10 +417,11 @@ Covariates are backend-specific and are **not** used by the ECDF Bayesian path.
 - **Categorical preprocessing:** one-hot with frozen vocab and `__UNKNOWN__` bucket at inference.
 - **Strictness:** `covariates_strict_join` (tabular) and `generative_covariates_strict` (generative) enforce one-to-one sample id coverage.
 
-Example (`step_config.validation`) using all covariate types:
+Example (profile `actionConfig.validation`) using all covariate types:
 
 ```json
-"validation": {
+"actionConfig": {
+  "validation": {
   "model_backend": "generative_hybrid",
   "covariates_path": "/data/covariates.csv",
   "covariate_id_column": "sample_id",
@@ -423,10 +443,10 @@ Example (`step_config.validation`) using all covariate types:
 
 ### Disease-feature controls for `observed_hybrid`
 
-When `step_config.validation.backend_profiles.<backend>.params.feature_mode` is `observed_hybrid`, feature schema is controlled by:
+When profile `actionConfig.validation.backend_profiles.<backend>.params.feature_mode` is `observed_hybrid`, feature schema is controlled by:
 
 - `feature_family_set` (applies only when `feature_mode=observed_hybrid`; ignored for `raw_dmp` / `raw_gene`):
-  - `dmp_scored`: aggregated DMP-family observed metrics (`max_weighted_directional_score`, etc.), including per-class `weighted_cosine_distance_to_centroid__{class}` columns from methyl-centroid H5 profiles at classifier-panel DMP loci (`dmps-*-classifier.csv`). Legacy alias: `dmp`.
+  - `dmp_scored`: aggregated DMP-family observed metrics (`max_weighted_directional_score`, etc.), including per-class `weighted_cosine_distance_to_centroid__{class}` columns from methyl-centroid H5 profiles at selected-panel DMP loci (`dmps-*-selected.csv`). Legacy alias: `dmp`.
   - `gene`: one feature per mapped gene (`gene::<GENE>`)
   - `structural`: one feature per mapped gene-annotation key (`struct::<GENE>::<FEATURE>`)
   - `gene_scored`: comparison-level features from frozen gene panels: `gene_directional_score__{comparison}`, `gene_panel_obs_fraction__{comparison}`, `gene_directional_iqr__{comparison}`, `gene_weighted_sign_agreement__{comparison}`; when **K ≥ 2** ordered comparisons, also progression contrasts (`gene_directional_contrast__*`, `gene_directional_adjacent_delta__*`, `gene_directional_progression_slope`, `gene_directional_range`) from directional scores only
@@ -452,10 +472,10 @@ For `gene`/`structural` families, per-sample mapped features are computed as sig
 Operational notes:
 
 - For non-`dmp_scored`-only families, model build requires mapper annotations from freeze (`mapper_annotation_csv`); this is enforced in trainer flows.
-- Freeze-time mapper cache can also carry per-gene mapper aggregates from `all-gene_name-combined.csv` through `step_config.model_bundle.mapper_gene_columns` (fallback `step_config.mapper.mapper_gene_columns`), defaulting to `["gene_importance", "gene_effect_signed_wsum", "gene_direction", "gene_effect_abs_wsum", "gene_support_n", "gene_score", "mean_effect_size", "gene_effect_compound", "gene_feature_effect_compound"]`; set `[]` to disable.
+- Freeze-time mapper cache can also carry per-gene mapper aggregates from `all-gene_name-combined.csv` through profile `actionConfig.model_bundle.mapper_gene_columns` (fallback `actionConfig.mapper.mapper_gene_columns`), defaulting to `["gene_importance", "gene_effect_signed_wsum", "gene_direction", "gene_effect_abs_wsum", "gene_support_n", "gene_score", "mean_effect_size", "gene_effect_compound", "gene_feature_effect_compound"]`; set `[]` to disable.
 - Freeze now also writes and wires:
-  - `step_config.model_bundle.fixed_gene_panel` -> `production/model_bundle/frozen_genes_production.csv`
-  - `step_config.model_bundle.fixed_gene_features` -> `production/model_bundle/frozen_gene_features.csv`
+  - `actionConfig.model_bundle.fixed_gene_panel` -> `production/model_bundle/frozen_genes_production.csv`
+  - `actionConfig.model_bundle.fixed_gene_features` -> `production/model_bundle/frozen_gene_features.csv`
 - After changing `mapper_annotation_collapse_mode`, `mapper_annotation_unknown_fallback`, or `region_directional_region_types`, refreeze mapper annotations, rebuild the model bundle, remove cached tabular train datasets if any, and retrain.
 - `gene_feature_loading` controls gene-family locus selection in observed-hybrid mode:
   - `frozen` (default): only frozen DMP loci are used.
@@ -465,7 +485,7 @@ Operational notes:
 
 ### Production ECDF feature modes (`model_backend=ecdf`)
 
-Production `--model` supports three ECDF modes via `step_config.validation.backend_profiles.ecdf.params.feature_mode`:
+Production `--model` supports three ECDF modes via profile `actionConfig.validation.backend_profiles.ecdf.params.feature_mode`:
 
 | `feature_mode` | Description | Artifact |
 |----------------|-------------|----------|
@@ -488,7 +508,7 @@ Aggregated observed-hybrid ECDF OvR runs only when `ecdf_aggregated_enabled: tru
 
 ### Tabular method configs (`tabular_sklearn`)
 
-`step_config.validation.backend_profiles.tabular_sklearn.params` supports canonical nested method configs:
+`actionConfig.validation.backend_profiles.tabular_sklearn.params` supports canonical nested method configs:
 
 - `tabular_methods`: ordered list of one or more entries
 - each entry uses a `method` discriminator and method-specific `params`
@@ -510,21 +530,23 @@ Bundle-size control shared by tabular and generative backends:
 Canonical nested JSON example:
 
 ```json
-"validation": {
-  "backend_profiles": {
-    "ecdf": {"enabled": false, "params": {"ecdf_second_stage_enabled": false}},
-    "tabular_sklearn": {
-      "enabled": true,
-      "params": {
-        "tabular_methods": [
-          {"method": "random_forest", "params": {"n_estimators": 500, "min_samples_leaf": 2, "class_weight": "balanced_subsample"}},
-          {"method": "xgboost", "params": {"n_estimators": 500, "max_depth": 6, "learning_rate": 0.05, "subsample": 0.9}}
-        ],
-        "tabular_method_selection_metric": "balanced_accuracy",
-        "tabular_method_selection_stat": "mean"
-      }
-    },
-    "generative_hybrid": {"enabled": false, "params": {}}
+"actionConfig": {
+  "validation": {
+    "backend_profiles": {
+      "ecdf": {"enabled": false, "params": {"ecdf_second_stage_enabled": false}},
+      "tabular_sklearn": {
+        "enabled": true,
+        "params": {
+          "tabular_methods": [
+            {"method": "random_forest", "params": {"n_estimators": 500, "min_samples_leaf": 2, "class_weight": "balanced_subsample"}},
+            {"method": "xgboost", "params": {"n_estimators": 500, "max_depth": 6, "learning_rate": 0.05, "subsample": 0.9}}
+          ],
+          "tabular_method_selection_metric": "balanced_accuracy",
+          "tabular_method_selection_stat": "mean"
+        }
+      },
+      "generative_hybrid": {"enabled": false, "params": {}}
+    }
   }
 }
 ```
@@ -535,12 +557,12 @@ Legacy backend keys are rejected at config validation time. Use:
 
 After upgrading, run migration to canonicalize legacy `feature_family_set` tokens (`dmp` → `dmp_scored`, etc.) in `backend_profiles.*.params`.
 
-### Optional: `step_config.progression`
+### Optional: profile `actionConfig.progression`
 
-`methyl-validation` reads progression settings from `step_config.progression` in the project JSON when running `--freeze`:
+`methyl-validation` reads progression settings from profile `actionConfig.progression` when running `--freeze`:
 
 ```json
-"step_config": {
+"actionConfig": {
   "progression": {
     "enabled": true,
     "ordered_comparison_labels": ["pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"],
@@ -557,22 +579,22 @@ After upgrading, run migration to canonicalize legacy `feature_family_set` token
 
 ### Canonical vs legacy config keys
 
-Prefer these canonical keys in project files:
+Prefer these canonical keys in profile `actionConfig`:
 
-- `step_config.predictor` (legacy alias `step_config.validator` is deprecated)
-- `step_config.enricher.input_file` / `step_config.enricher.output_dir` (legacy `input` / `outdir` are deprecated)
-- `step_config.detection.ecdf_grid_size` (only canonical key; `ecdf_overlap_grid_size` / `ecdf_ks_grid_size` are rejected)
+- `actionConfig.predictor` (legacy alias `validator` is deprecated)
+- `actionConfig.enricher.input_file` / `actionConfig.enricher.output_dir` (legacy `input` / `outdir` are deprecated)
+- `actionConfig.detection.ecdf_grid_size` (only canonical key; `ecdf_overlap_grid_size` / `ecdf_ks_grid_size` are rejected)
 
 ### De-duplicated panel, progression, and MC predictor wiring
 
-- **`comparisons`** is the canonical source for which disease leaves exist and in what order.
-- **Classifier / predictor `panel`**: you may omit both `step_config.classifier.panel` and `step_config.predictor.panel`. Classifier and predictor then use a panel derived from comparisons (disease leaves grouped under each disease **parent** label). If you set only `classifier.panel`, predictor inherits it unless `predictor.panel` is set explicitly.
-- **`step_config.progression.ordered_comparison_labels`**: optional. When omitted, disease-progression uses the same order as **`get_comparisons()`** / `get_ordered_comparison_labels()` on `ProjectConfig`. The same order drives **`gene_scored` progression/contrast features** when `feature_family_set` includes `gene_scored` (override with backend `gene_scored_ordered_comparison_labels` if needed).
-- **Monte Carlo hierarchical runs**: the template project does **not** need nested `step_config.predictor.controls` / `diseases` mirroring the top-level cohorts, and does **not** need `train_group_paths` / `holdout_group_paths` for split wiring. Run `project.json` generation copies top-level cohort shape into the predictor step and points leaves at per-run `testing_*.csv` files (see `methyl_validation.project_gen`).
+- **`comparisons`** is the canonical source for which disease leaves exist and in what order (study manifest).
+- **Classifier / predictor `panel`**: you may omit both `actionConfig.classifier.panel` and `actionConfig.predictor.panel`. Classifier and predictor then use a panel derived from comparisons (disease leaves grouped under each disease **parent** label). If you set only `classifier.panel`, predictor inherits it unless `predictor.panel` is set explicitly.
+- **`actionConfig.progression.ordered_comparison_labels`**: optional. When omitted, disease-progression uses the same order as **`get_comparisons()`** / `get_ordered_comparison_labels()` on `ProjectConfig`. The same order drives **`gene_scored` progression/contrast features** when `feature_family_set` includes `gene_scored` (override with backend `gene_scored_ordered_comparison_labels` if needed).
+- **Monte Carlo hierarchical runs**: the template study manifest does **not** need nested `actionConfig.predictor.controls` / `diseases` mirroring the top-level cohorts, and does **not** need `train_group_paths` / `holdout_group_paths` for split wiring. Run `project.json` generation copies top-level cohort shape into the predictor step and points leaves at per-run `testing_*.csv` files (see `methyl_validation.project_gen`).
 
 ### Rollout comparison thresholds
 
-`--rollout-compare` uses thresholds from `step_config.validation`:
+`--rollout-compare` uses thresholds from profile `actionConfig.validation`:
 
 - `rollout_balanced_accuracy_drop_max`
 - `rollout_macro_f1_drop_max`
@@ -580,7 +602,7 @@ Prefer these canonical keys in project files:
 - `rollout_brier_improvement_min_frac`
 - `rollout_ece_improvement_min_frac`
 
-If not set, package defaults in `MonteCarloConfig` are used.
+Set these in the profile or site manifest; there are no Python package defaults for tunable rollout thresholds.
 
 ---
 
@@ -606,7 +628,7 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `stability/gene_frequency.csv` | Gene recurrence table across qualifying MC runs. |
 | `stability/dmp_frequency_chr_<chrom>.html` | Per-chromosome Plotly chart files, each showing `all` vs `selected` DMP count distributions over frequency (%). |
 | `stability/stability_summary.json` | Stability run summary for DMP/gene frequency plus detector parameter extraction. Includes `detector_parameters.per_run` and `detector_parameters.aggregates` built from `detections/**/results-*.json` (minimal fields: exported/statistical/biological DMP totals, `effect_size_coverage`, `delta_mean_reduction`, `classifier_dmp_selection`, `dynamic_dmp_cutoff_enabled`), plus `early_stopping` diagnostics (`triggered`, stop iteration, per-checkpoint history). |
-| `production/project.json` | Frozen production project with `fixed_dmp_panel` in `step_config.detection`. |
+| `production/project.json` | Frozen production project with `fixed_dmp_panel` in resolved `actionConfig.detection`. |
 | `production/model_bundle/mapper_dmp_annotations.csv` | Mapper-derived DMP annotation cache used by non-`dmp` observed-hybrid feature families. |
 | `production/production_summary.json` | Production freeze summary including `mapper_annotation_cache` metadata when mapper annotations are prepared for model bundle flows. |
 | `model_mc/shared/run_000N/` | Shared per-iteration artifacts (split projects + centroid/detector outputs) reused by all backends in `--model-mc --model-mc-all`. |
@@ -632,12 +654,14 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 
 ### 1. Low DMP coverage (`dmps_used_fraction_median` < 0.5)
 
-**Cause:** MethylClassifier `min_coverage` (or equivalent) for new samples is higher than centroid `min_coverage` in `step_config.centroid.base_config`, so many DMP loci are missing in the feature matrix.
+**Cause:** MethylClassifier `min_coverage` (or equivalent) for new samples is higher than centroid `min_coverage` in profile `actionConfig.centroid.base_config`, so many DMP loci are missing in the feature matrix.
 
 **Fix:** Align classifier inference `min_coverage` with centroid training `min_coverage` (see MethylClassifier config / docs).
 
 ```json
-"centroid": { "base_config": { "min_coverage": 4 } }
+"actionConfig": {
+  "centroid": { "base_config": { "min_coverage": 4 } }
+}
 ```
 
 ### 2. Class imbalance (majority class recall ≈ 1.0, others ≈ 0)
@@ -646,9 +670,11 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 
 **Fix:**
 ```json
-"detection": {
-  "multiclass_train_learned_head": true,
-  "multiclass_learned_class_weight": "balanced"
+"actionConfig": {
+  "detection": {
+    "multiclass_train_learned_head": true,
+    "multiclass_learned_class_weight": "balanced"
+  }
 }
 ```
 
@@ -666,9 +692,9 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 |---------|-----|
 | `command not found: methyl-validation` | Activate the venv: `source .venv/bin/activate` |
 | `Monte Carlo config needs at least two cohorts` | Use `--project` not `--config` when passing a project file |
-| `step_config.validation not found` | Add the `validation` block to your project's `step_config` |
+| `actionConfig.validation not found` | Select a profile with a `validation` block (e.g. `mc_gene_fc`) or set `METHYL_PROFILE`; study manifests must not embed tool parameters |
 | `FileNotFoundError: fixed_dmp_panel not found` | Run `--stability` before `--freeze` |
-| `Blind predictor: blind mode rejected` | Remove `blind` from `step_config.predictor` |
+| `Blind predictor: blind mode rejected` | Remove `blind` from profile `actionConfig.predictor` |
 | Stability panel is empty | Lower `stability_dmp_freq` or increase `n_iterations` |
 
 ---

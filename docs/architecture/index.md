@@ -8,6 +8,7 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [Distributed runtime](distributed-runtime.md) | portal, DB, gateway, workers, shared storage |
 | [Orchestration paths](orchestration-paths.md) | local, gateway, legacy CLI matrix |
 | [Pipeline stages](pipeline-stages.md) | sample prep through validation stage DAG |
+| [Documentation audit (2026-07)](documentation-audit-2026-07.md) | Staleness findings + Quarto validation + remediation checklist |
 
 **Interactive hub:** [methylpipeline-architecture canvas](/home/ubuntu/.cursor/projects/home-ubuntu-MethylPipeline/canvases/methylpipeline-architecture.canvas.tsx) (local vs gateway, config layers, DB contract)
 

@@ -36,7 +36,7 @@ For formulas, assumptions, and caveats, see [`docs/theory/chapters/08-methylenri
 - `network_plot=dash` launches an interactive Cytoscape-style server; static exports (`plotly`, `cytoscape`) remain the reproducible offline default.
 - In module mode, omitted `network_plot` defaults to `plotly`; `none` disables visualization artifacts.
 - Dash mode can optionally include a second dataset tab for refinement PPI topology when network refinement is enabled.
-- Custom discovery SQLite storage follows `step_config.enricher.methyl_enricher_home` (default `/work/cache/methyl_enricher`), with canonical paths:
+- Custom discovery SQLite storage follows `actionConfig.enricher.methyl_enricher_home` (default `/work/cache/methyl_enricher`), with canonical paths:
   - `<methyl_enricher_home>/network_discovery/custom_network.sqlite`
   - `<methyl_enricher_home>/network_discovery/exports/local_edges.csv`
 - SQLite schema reference is maintained in `methyl_enricher/sql/network_discovery_schema.sql`.

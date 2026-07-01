@@ -31,7 +31,7 @@ Passing explicit `--input` or non-default `--outdir` with `--project` forces a s
 
 Library resolution is explicit and stable:
 
-- `--libraries` (or `step_config.enricher.libraries`) wins,
+- `--libraries` (or `actionConfig.enricher.libraries`) wins,
 - else `--library-preset`,
 - else package defaults.
 
@@ -57,15 +57,15 @@ gene-set service, so the integration is pluggable via a `mode`:
 
 CIS-BP has no query API, so the per-species archive is **auto-downloaded** from the
 bulk-download endpoint on first use and cached (default cache:
-`step_config.enricher.methyl_enricher_home` or `~/.methyl_enricher`).
+`actionConfig.enricher.methyl_enricher_home` or `~/.methyl_enricher`).
 
 For `mode=gene_sets` with the default `gene_set_source=promoter_scan`, TF → target
 sets are built by scanning gene **promoter** sequences with the CIS-BP PWMs, which
 needs a genome FASTA and a GTF. These default to the project's existing shared
 properties, so you do not repeat them in the CIS-BP block:
 
-- `genome_fasta` ← `step_config.alignment_qc.genome_fasta` (the project's reference genome),
-- `gtf` ← `step_config.mapper.gtf` (falling back to the `GENE_GTF` env var).
+- `genome_fasta` ← `actionConfig.alignment_qc.genome_fasta` (the project's reference genome),
+- `gtf` ← `actionConfig.mapper.gtf` (falling back to the `GENE_GTF` env var).
 
 Set `cisbp.genome_fasta` / `cisbp.gtf` only to override those project defaults. The
 built GMT is cached so subsequent runs are fast. You can also supply a prebuilt GMT
@@ -74,14 +74,14 @@ directly via `gene_set_source=prebuilt_gmt` + `gmt_path`.
 For **cfDNA** projects, set `validation.regulatory.primary_analyte` to `cfdna` and the
 [pipeline analyte profile](../../docs/ANALYTE_PROFILES.md) enables CIS-BP with
 `cisbp_modes: [gene_sets, motif_scan, annotate]` (three merge labels). Override in
-`step_config.enricher.cisbp` as needed.
+`actionConfig.enricher.cisbp` as needed.
 
-Enable via CLI (`--cisbp`, optional `--cisbp-mode`) or in the project config under
-`step_config.enricher.cisbp`:
+Enable via CLI (`--cisbp`, optional `--cisbp-mode`) or in the pipeline profile under
+`actionConfig.enricher.cisbp`:
 
 ```json
 {
-  "step_config": {
+  "actionConfig": {
     "alignment_qc": {
       "genome_fasta": "/path/to/hg38.fa"
     },
@@ -126,7 +126,7 @@ Module naming is disease-agnostic by default:
   - `Module_primary` (canonical label),
   - `Module_supporting_perturbation` (top perturbation signatures),
   - `Module_display` (presentation label).
-- Use `--module-label-mode canonical_only|dual_label` (or `step_config.enricher.module_label_mode`) to control display behavior. Default: `dual_label`.
+- Use `--module-label-mode canonical_only|dual_label` (or `actionConfig.enricher.module_label_mode`) to control display behavior. Default: `dual_label`.
 
 Disease columns in module outputs are conditional:
 
@@ -143,7 +143,7 @@ Disease columns in module outputs are conditional:
 - `plotly`, `pyvis`, `cytoscape`, `all`: offline artifacts,
 - `dash`: interactive server (`--dash-host`, `--dash-port`, optional `--dash-open-browser`).
 
-Optional PPI refinement can be enabled via CLI flags or `step_config.enricher.network_refinement`:
+Optional PPI refinement can be enabled via CLI flags or `actionConfig.enricher.network_refinement`:
 
 - `source=string_api` (default) or `source=local_edges`,
 - writes `ppi_network_edges.csv`, `ppi_node_metrics.csv`, `ppi_hubs.csv`, `ppi_module_coherence.csv`,
@@ -165,7 +165,7 @@ writes a versioned SQLite snapshot, and exports curated edges in `source,target,
 
 By convention, persistent artifacts resolve under:
 
-- `step_config.enricher.methyl_enricher_home`
+- `actionConfig.enricher.methyl_enricher_home`
 - default fallback: `/work/cache/methyl_enricher`
 
 Paths created by default:
@@ -181,9 +181,9 @@ methyl-enricher-network-discovery \
   --scan-root /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/enricher
 ```
 
-## Project step config mapping
+## Profile actionConfig mapping
 
-`step_config.enricher` maps onto CLI arguments through `EnricherStepConfig`.
+Profile `actionConfig.enricher` maps onto CLI arguments through `EnricherStepConfig`.
 
 - Both nested `network_refinement.{...}` and flat `network_refinement_*` keys are supported.
 - For `network_plot`, explicit CLI value wins over config.
@@ -219,7 +219,7 @@ methyl-enricher --project /path/to/monte_carlo_runs/production/project.json --en
 - Writes `enricher_task_status.json` per comparison and `enricher/enricher_completeness.json` at the enricher root.
 - Exit **0** only when all comparisons are complete; otherwise **1**.
 
-Config (`step_config.enricher`):
+Config (`actionConfig.enricher`):
 
 | Key | Default | Purpose |
 |-----|---------|---------|
@@ -244,7 +244,7 @@ methyl-enricher run-task --task .../enricher/queue/tasks/enricher_PCa_PCa1.json
 methyl-enricher verify-complete --project .../production/project.json
 ```
 
-Set `step_config.enricher.distributed: true` in freeze config to run **plan-tasks** during `--freeze` instead of blocking on Enrichr (workers must finish before progression).
+Set `actionConfig.enricher.distributed: true` in freeze config to run **plan-tasks** during `--freeze` instead of blocking on Enrichr (workers must finish before progression).
 
 ## Related Documentation
 

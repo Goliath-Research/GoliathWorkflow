@@ -5,7 +5,7 @@ Optional MethylPipeline step for **cfDNA fragmentomics** from aligned BAMs:
 - **wps**: binned fragment midpoint counts (simplified WPS-style signal)
 - **end_motifs**: 5' k-mer frequencies at fragment starts
 
-Phase 1 fragment-length QC lives in **methylalignmentqc** (`step_config.alignment_qc.fragmentomics`).
+Phase 1 fragment-length QC lives in **methylalignmentqc** (`actionConfig.alignment_qc.fragmentomics` on profile/site).
 
 ## Requirements
 
@@ -13,11 +13,13 @@ Phase 1 fragment-length QC lives in **methylalignmentqc** (`step_config.alignmen
 - `pysam` and indexed BAM per sample
 - `methylutils` (project JSON resolver)
 
-## Project config
+## Profile / site actionConfig
+
+Tool parameters belong in **profile or site `actionConfig`**, not the study manifest:
 
 ```json
 {
-  "step_config": {
+  "actionConfig": {
     "fragmentomics": {
       "enabled": true,
       "modes": ["wps", "end_motifs"],

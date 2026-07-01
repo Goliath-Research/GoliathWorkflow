@@ -332,7 +332,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="entry-command" class="level2" data-number="8.2">
 <h2 data-number="8.2" class="anchored" data-anchor-id="entry-command"><span class="header-section-number">8.2</span> Entry command</h2>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--freeze</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> <span class="at">--project</span> /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json <span class="at">--freeze</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="prerequisites" class="level2" data-number="8.3">
 <h2 data-number="8.3" class="anchored" data-anchor-id="prerequisites"><span class="header-section-number">8.3</span> Prerequisites</h2>
@@ -340,14 +340,19 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>Stability stage completed.</li>
 <li>Stable panel available at:
 <ul>
-<li>configured <code>step_config.validation.freeze_stable_dmp_csv</code>, or</li>
+<li>configured profile <code>actionConfig.validation.freeze_stable_dmp_csv</code>, or</li>
 <li>default <code>&lt;mc_root&gt;/stability/stable_dmps_production.csv</code>.</li>
 </ul></li>
 </ul>
 </section>
 <section id="process-model" class="level2" data-number="8.4">
 <h2 data-number="8.4" class="anchored" data-anchor-id="process-model"><span class="header-section-number">8.4</span> Process model</h2>
-
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../diagrams/out/pipeline-stages.svg" class="img-fluid figure-img"></p>
+<figcaption>Freeze stage in pipeline lifecycle</figcaption>
+</figure>
+</div>
 </section>
 <section id="expected-outputs" class="level2" data-number="8.5">
 <h2 data-number="8.5" class="anchored" data-anchor-id="expected-outputs"><span class="header-section-number">8.5</span> Expected outputs</h2>
@@ -373,7 +378,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <h2 data-number="8.7" class="anchored" data-anchor-id="recommended-post-freeze-gate"><span class="header-section-number">8.7</span> Recommended post-freeze gate</h2>
 <p>Run biological readiness before model training:</p>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
-<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> biological-readiness /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>This chained gate verifies:</p>
 <ul>
 <li>enricher completeness (<code>verify-complete</code>),</li>
@@ -381,7 +386,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <li>stability/freeze/progression readiness verdict.</li>
 </ul>
 <p>To include advisory Grok commentary in the readiness section:</p>
-<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> biological-readiness /work/prostate-cancer/Healthy_vs_PCa1-4-CG <span class="at">--grok-review</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-validation</span> biological-readiness /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG <span class="at">--grok-review</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Without <code>--grok-review</code>, the chain keeps Grok disabled by default and still enforces deterministic checks.</p>
 </section>
 <section id="do-not-do-this" class="level2" data-number="8.8">

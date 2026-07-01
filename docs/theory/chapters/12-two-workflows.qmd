@@ -13,7 +13,19 @@ MethylPipeline supports two primary end-to-end operational workflows. They are d
 | **Output** | stable panel, production biological outputs, final classifier/predictor outputs | `all_metrics.csv`, `metrics_summary.json` |
 | **Answers** | Which positions and model best separate the classes on all data? | What performance distribution does the frozen model achieve? |
 
-Both workflows are controlled entirely by the project configuration file and the `step_config.validation` embedded settings (see @sec-project-configuration).
+Both workflows are controlled by the study manifest (cohorts, paths, comparisons) plus the **pipeline profile** `actionConfig.validation` block (see @sec-project-configuration). Workers receive merged settings as `resolvedConfig`; MC runs snapshot them to `monte_carlo_runs/queue/mc_config.json`.
+
+### DMP and gene modeling modes
+
+Profile `actionConfig.validation` exposes **`dmp_modeling_mode`** and **`gene_modeling_mode`** (`discovery_only`, `featurecuts`, or `raw_pool`). These control which DMP CSV glob downstream steps consume:
+
+| Mode | Mapper / stability input | Typical use |
+|------|--------------------------|-------------|
+| `discovery_only` | `dmps-*-discovery.csv` | Broad biology, mapper/enricher exploration |
+| `featurecuts` (default in MC profiles) | `dmps-*-selected.csv` | BA-gated prediction panel + gene FeatureCuts |
+| `raw_pool` | Full detector export pool | Legacy / experimental paths |
+
+Gene FeatureCuts and stability aggregation follow the same mode contract. See @sec-project-configuration for profile examples (`dmp_modeling_mode`, `gene_modeling_mode`, FeatureCuts target BA).
 
 ---
 
@@ -78,7 +90,7 @@ The freeze artifacts (`production/project.json`, fixed-panel detection outputs, 
    - `methyl-enricher verify-complete`
    - `methyl-disease-progression --strict-missing`
    - `methyl-stability-freeze-readiness`
-2. If readiness passes, run `--model` using `step_config.validation.model_backend`:
+2. If readiness passes, run `--model` using profile `actionConfig.validation.model_backend`:
 
 - `ecdf` (default): runs `methyl-classifier` then `methyl-predictor`,
 - `tabular_sklearn`: runs model bundle -> tabular training -> tabular predictor evaluation,
@@ -92,21 +104,25 @@ The resulting files under `production/classifiers/` and `production/predictors/`
 
 ### Steps
 
-**Step 1: Prepare the project configuration**
+**Step 1: Prepare the profile and study manifest**
 
-Ensure the project file has `step_config.validation` with at least `train_fraction`, `n_iterations`, `seed`, and `run_stability: true`:
+Ensure the selected profile defines `actionConfig.validation` with at least `train_fraction`, `n_iterations`, `seed`, and `run_stability: true`. The study manifest supplies cohorts and paths only:
 
 ```json
-"validation": {
-  "train_fraction": 0.8,
-  "n_iterations": 50,
-  "seed": 42,
-  "run_stability": true,
-  "stability_dmp_freq": 0.7,
-  "stability_min_balanced_accuracy": null,
-  "abort_on_step_failure": false
+"actionConfig": {
+  "validation": {
+    "train_fraction": 0.8,
+    "n_iterations": 50,
+    "seed": 42,
+    "run_stability": true,
+    "stability_dmp_freq": 0.7,
+    "stability_min_balanced_accuracy": null,
+    "abort_on_step_failure": false
+  }
 }
 ```
+
+Pass the profile via workflow context (`pipelineProfile`) or `METHYL_PROFILE`.
 
 **Step 2: Run Monte Carlo with stability**
 
@@ -137,9 +153,9 @@ methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --freeze
 This calls `freeze_production_model()` and then (optionally) progression synthesis which:
 
 1. Merges stable DMP CSVs into `monte_carlo_runs/production/stable_dmps_genomewide.csv`.
-2. Creates `monte_carlo_runs/production/project.json` with `fixed_dmp_panel` injected into `step_config.detection`.
+2. Creates `monte_carlo_runs/production/project.json` with `fixed_dmp_panel` injected into resolved `actionConfig.detection`.
 3. Runs production freeze on **all samples**: centroid → detector(fixed panel) → mapper → enricher.
-4. If `step_config.progression.enabled=true`, runs `methyl-disease-progression` to aggregate cross-stage mapper/enricher outputs.
+4. If profile `actionConfig.progression.enabled=true`, runs `methyl-disease-progression` to aggregate cross-stage mapper/enricher outputs.
 5. Writes `monte_carlo_runs/production/production_summary.json`.
 
 **Step 4: Run biological readiness gate**
@@ -161,7 +177,7 @@ This runs `run_pipeline_for_model()`:
 1. `methyl-classifier --project production/project.json`
 2. `methyl-predictor --project production/project.json`
 
-If `step_config.validation.require_biological_review_for_model=true`, `--model` is blocked until `biological_review_confirmed=true`.
+If profile `actionConfig.validation.require_biological_review_for_model=true`, `--model` is blocked until `biological_review_confirmed=true`.
 
 ### Workflow 1 Diagram
 
@@ -312,7 +328,7 @@ After all iterations, the same aggregation as Workflow 1 produces `all_metrics.c
 
 **Cause.** The centroid/detector `min_coverage` (e.g. 4) is lower than the **MethylClassifier** per-locus coverage requirement for new samples, so many DMP loci are treated as missing in the feature matrix.
 
-**Fix.** In **`step_config.classifier`** (MethylClassifier config), set `min_coverage` to match centroid `base_config.min_coverage` (see classifier documentation for the exact field name in your layout).
+**Fix.** In profile **`actionConfig.classifier`** (MethylClassifier config), set `min_coverage` to match centroid `base_config.min_coverage` (see classifier documentation for the exact field name in your layout).
 
 **Verification.** Re-run Workflow 2. `dmps_used_fraction_median` should rise to 0.6–0.9 for typical WGBS data.
 
@@ -324,7 +340,7 @@ After all iterations, the same aggregation as Workflow 1 produces `all_metrics.c
 
 **Cause.** The training cohort has substantially more samples in one class. For example, 86 healthy vs 25–36 disease samples per stage (41% healthy in the example project). The multinomial logistic regression learned head defaults to the majority class when the histogram scores are ambiguous (which is common when DMP coverage is low).
 
-**Fix.** In `step_config.detection`, add:
+**Fix.** In profile `actionConfig.detection`, add:
 
 ```json
 "multiclass_train_learned_head": true,

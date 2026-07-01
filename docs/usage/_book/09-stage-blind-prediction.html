@@ -337,15 +337,20 @@ It is intentionally outside <code>methyl-validation</code> accuracy workflows.</
 <section id="entry-command-standalone" class="level2" data-number="11.3">
 <h2 data-number="11.3" class="anchored" data-anchor-id="entry-command-standalone"><span class="header-section-number">11.3</span> Entry command (standalone)</h2>
 <div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-predictor</span> <span class="at">--project</span> /work/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">methyl-predictor</span> <span class="at">--project</span> /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </section>
 <section id="process-model" class="level2" data-number="11.4">
 <h2 data-number="11.4" class="anchored" data-anchor-id="process-model"><span class="header-section-number">11.4</span> Process model</h2>
-
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="../diagrams/out/pipeline-stages.svg" class="img-fluid figure-img"></p>
+<figcaption>Blind prediction stage</figcaption>
+</figure>
+</div>
 </section>
 <section id="required-config-pattern" class="level2" data-number="11.5">
 <h2 data-number="11.5" class="anchored" data-anchor-id="required-config-pattern"><span class="header-section-number">11.5</span> Required config pattern</h2>
-<p><code>step_config.predictor</code> should reference blind/test-blind inputs and model paths resolved from frozen production project.</p>
+<p>Profile <code>actionConfig.predictor</code> should reference blind/test-blind inputs and model paths resolved from frozen production project.</p>
 </section>
 <section id="expected-outputs" class="level2" data-number="11.6">
 <h2 data-number="11.6" class="anchored" data-anchor-id="expected-outputs"><span class="header-section-number">11.6</span> Expected outputs</h2>

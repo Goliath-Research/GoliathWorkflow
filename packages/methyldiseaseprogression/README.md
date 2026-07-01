@@ -22,12 +22,12 @@ Optional flags:
 - `--strict-missing`: fail if any stage output is missing.
 - `--report-md`: also write a human-readable markdown report.
 
-## Project settings (`step_config.progression`)
+## Project settings (profile `actionConfig.progression`)
 
-The CLI can be configured via project JSON:
+The CLI reads progression settings from the merged profile `actionConfig.progression`:
 
 ```json
-"step_config": {
+"actionConfig": {
   "progression": {
     "enabled": true,
     "ordered_comparison_labels": ["pca_pca1", "pca_pca2", "pca_pca3", "pca_pca4"],
@@ -42,7 +42,7 @@ The CLI can be configured via project JSON:
 For each project comparison (`control_group`, `disease_group`), the tool reads:
 
 - Mapper combined genes: `mapper/<control>/<disease>/all-gene_name-combined.csv`
-  (or `step_config.enricher.combined_csv_name`).
+  (or profile `actionConfig.enricher.combined_csv_name`).
 - Enrichment table: `enricher/<control>/<disease>/enrichment_merged.csv`.
 - Optional modules table: `enricher/<control>/<disease>/modules_ranked.csv`.
 

@@ -32,13 +32,13 @@ JSON body (planner request):
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `projectPath` | string | yes | Base project JSON path or resolved project root |
-| `featureIterations` | int | no | Feature-stability MC count (default from `step_config.validation`) |
+| `featureIterations` | int | no | Feature-stability MC count (default from profile/site `actionConfig.validation` via `resolvedConfig`) |
 | `qualityIterations` | int | no | Post-model quality MC count |
 | `seed` | int | no | RNG seed for reproducible splits |
 | `trainFraction` | number | no | Stratified train fraction (e.g. `0.8`) |
 | `layout` | string | no | `binary` or multiclass layout name |
 
-The planner reads `project.json` / portal `validation.schema.json` (`validation_monte_carlo`) when overrides are omitted.
+The planner reads merged `actionConfig.validation` (profile + site + instance `context_json`) and `validation.schema.json` (`validation_monte_carlo`) when overrides are omitted.
 
 ## Output
 

@@ -15,37 +15,13 @@ methyl-validation --project /work/projects/prostate-cancer/configs/project_Healt
 
 - Stability stage completed.
 - Stable panel available at:
-  - configured `step_config.validation.freeze_stable_dmp_csv`, or
+  - configured profile `actionConfig.validation.freeze_stable_dmp_csv`, or
   - default `<mc_root>/stability/stable_dmps_production.csv`.
 
 ## Process model
 
-```{=latex}
-\begin{center}
-\begin{tikzpicture}[
-  >=Latex,
-  node distance=1.6cm,
-  box/.style={draw, rounded corners, align=center, minimum width=2.8cm, minimum height=0.8cm}
-]
-\node[box] (stable) {stable\_dmps\_production.csv};
-\node[box, right=of stable] (freeze) {methyl-validation --freeze};
-\node[box, right=of freeze] (centroid) {methyl-centroid};
-\node[box, right=of centroid] (detector) {methyl-detector\\fixed panel};
-\node[box, right=of detector] (mapper) {methyl-mapper};
-\node[box, right=of mapper] (enricher) {methyl-enricher};
-\node[box, above=1.2cm of enricher] (project) {production/project.json};
-\node[box, below=1.2cm of enricher] (progression) {methyl-disease-progression\\optional};
+![Freeze stage in pipeline lifecycle](../diagrams/out/pipeline-stages.svg)
 
-\draw[->] (stable) -- (freeze);
-\draw[->] (freeze) -- (centroid);
-\draw[->] (centroid) -- (detector);
-\draw[->] (detector) -- (mapper);
-\draw[->] (mapper) -- (enricher);
-\draw[->] (enricher) -- (project);
-\draw[->] (enricher) -- (progression);
-\end{tikzpicture}
-\end{center}
-```
 
 ## Expected outputs
 
