@@ -248,6 +248,7 @@ def action_input_spec_for(action_name: str) -> Optional[ActionInputSpec]:
         "outputDir",
         "centroid1Dir",
         "centroid2Dir",
+        "centroidSeedDir",
         "taskConfig",
         "phase",
         "runId",

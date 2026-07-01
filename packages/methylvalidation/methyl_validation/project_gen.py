@@ -537,11 +537,25 @@ def carry_forward_centroids_from_previous_run(
 
 
 def copy_centroid_seed_baseline(seed_dir: Union[str, Path], output_dir: Union[str, Path]) -> bool:
-    """Copy a shared per-group seed centroid tree into a run iteration output dir."""
+    """
+    Copy a shared per-group seed centroid tree into a run iteration output dir.
+
+    Returns ``False`` when the seed directory does not exist (no baseline to apply).
+    Raises ``FileNotFoundError`` when the seed directory exists but contains **no**
+    ``*.h5`` centroids: copying an empty tree silently yields ``start=0`` deltas and
+    the downstream ``methyl-centroid`` run fails with "No valid sample files found".
+    Failing here surfaces the real cause (empty seed) instead of a misleading error.
+    """
     src = Path(seed_dir)
     dst = Path(output_dir)
     if not src.is_dir():
         return False
+    if not any(src.rglob("*.h5")):
+        raise FileNotFoundError(
+            f"Centroid seed directory has no *.h5 centroids: {src}. "
+            "The seed phase must build centroids before cohort-relative MC iterations copy them. "
+            "Verify the centroid_seed FOREACH completed and wrote HDF5 to this path."
+        )
     dst.parent.mkdir(parents=True, exist_ok=True)
     if dst.exists() or dst.is_symlink():
         if dst.is_symlink():

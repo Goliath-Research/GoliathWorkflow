@@ -591,6 +591,7 @@ from .transformations import (
     eat_transform_from_betas,
     validate_eat_methylation_data
 )
+from .beta_analytics import beta_log_pdf
 
 
 # Distribution views and probability helpers
@@ -706,14 +707,8 @@ __all__ = [
     "compute_entropy",
     "compute_sample_centroid_jsd",
     "get_sample_beta_mom",
-    # Beta analytics functions (improved algorithm)
-    "compute_per_site_llr_stats",
-    "compute_precision_weighted_score",
-    "compute_bhattacharyya_coefficient",
+    # Beta analytics functions
     "beta_log_pdf",
-    "compute_beta_mean",
-    "compute_beta_variance",
-    "log_beta_binomial_pmf",
     # Factory functions
     "MetricFactory",
     "get_metric_factory",

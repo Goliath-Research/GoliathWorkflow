@@ -410,11 +410,15 @@ def production_enricher_root(project_json: Path) -> Path:
 
     project = load_project(project_json)
     root = Path(project.get_project_root())
-    # First comparison enricher dir's parent, or enricher under project root
+    # The manifest/queue live at the top-level ``enricher/`` dir, never a control-group
+    # subdir (comparison outputs may nest as ``enricher/<control>/<comparison>``).
     comparisons = project.get_comparisons() if hasattr(project, "get_comparisons") else []
     if comparisons:
         c0 = comparisons[0]
         enr = Path(project.get_enricher_output_dir(c0.control_group, c0.disease_group))
+        for ancestor in (enr, *enr.parents):
+            if ancestor.name == "enricher":
+                return ancestor
         return enr.parent
     return root / "enricher"
 

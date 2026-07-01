@@ -8,7 +8,7 @@ from pathlib import Path
 from methyl_predictor.project_resolver import resolve_predictor_config_per_comparison
 
 
-def test_per_comparison_resolver_uses_ecdf_gene_ovr_as_multiclass(tmp_path: Path) -> None:
+def test_per_comparison_resolver_uses_ecdf_gene_ovr_as_multiclass(tmp_path: Path, monkeypatch) -> None:
     out_base = tmp_path / "monte_carlo_runs"
     classifier_dir = out_base / "production" / "classifiers"
     classifier_dir.mkdir(parents=True)
@@ -39,7 +39,15 @@ def test_per_comparison_resolver_uses_ecdf_gene_ovr_as_multiclass(tmp_path: Path
                     ],
                 },
                 "comparisons": "control_vs_each_disease",
-                "step_config": {
+            }
+        ),
+        encoding="utf-8",
+    )
+    site = tmp_path / "methyl_site.json"
+    site.write_text(
+        json.dumps(
+            {
+                "actionConfig": {
                     "predictor": {
                         "test_group_paths": [
                             {"label": "all", "paths": ["/x/TE_C1"]},
@@ -47,11 +55,12 @@ def test_per_comparison_resolver_uses_ecdf_gene_ovr_as_multiclass(tmp_path: Path
                             {"label": "PCa_High", "paths": ["/x/TE_HIGH"]},
                         ],
                     }
-                },
+                }
             }
         ),
         encoding="utf-8",
     )
+    monkeypatch.setenv("METHYL_SITE_CONFIG", str(site))
 
     configs = resolve_predictor_config_per_comparison(project_path)
     assert len(configs) == 1

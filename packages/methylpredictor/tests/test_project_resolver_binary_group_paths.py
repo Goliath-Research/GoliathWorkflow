@@ -8,7 +8,14 @@ import pytest
 from methyl_predictor.project_resolver import resolve_predictor_config, resolve_predictor_config_per_comparison
 
 
-def _write_binary_project(tmp_path: Path, predictor_cfg: dict) -> Path:
+def _apply_predictor_site(tmp_path: Path, predictor_cfg: dict, monkeypatch) -> None:
+    """Feed predictor config via a site manifest (replaces study-manifest step_config)."""
+    site = tmp_path / "methyl_site.json"
+    site.write_text(json.dumps({"actionConfig": {"predictor": predictor_cfg}}), encoding="utf-8")
+    monkeypatch.setenv("METHYL_SITE_CONFIG", str(site))
+
+
+def _write_binary_project(tmp_path: Path, predictor_cfg: dict, monkeypatch) -> Path:
     project_path = tmp_path / "project.json"
     project_path.write_text(
         json.dumps(
@@ -25,15 +32,15 @@ def _write_binary_project(tmp_path: Path, predictor_cfg: dict) -> Path:
                     "groups": [{"label": "pca", "sample_paths": ["D_TRAIN_1"]}],
                 },
                 "comparisons": [{"control_group": "healthy", "disease_group": "pca"}],
-                "step_config": {"predictor": predictor_cfg},
             }
         ),
         encoding="utf-8",
     )
+    _apply_predictor_site(tmp_path, predictor_cfg, monkeypatch)
     return project_path
 
 
-def _write_comparison_multiclass_project(tmp_path: Path, predictor_cfg: dict) -> Path:
+def _write_comparison_multiclass_project(tmp_path: Path, predictor_cfg: dict, monkeypatch) -> Path:
     project_path = tmp_path / "project_multiclass_like.json"
     project_path.write_text(
         json.dumps(
@@ -60,17 +67,18 @@ def _write_comparison_multiclass_project(tmp_path: Path, predictor_cfg: dict) ->
                     ],
                 },
                 "comparisons": "control_vs_each_disease",
-                "step_config": {"predictor": predictor_cfg},
             }
         ),
         encoding="utf-8",
     )
+    _apply_predictor_site(tmp_path, predictor_cfg, monkeypatch)
     return project_path
 
 
-def test_binary_resolver_accepts_group_paths_train_holdout(tmp_path: Path) -> None:
+def test_binary_resolver_accepts_group_paths_train_holdout(tmp_path: Path, monkeypatch) -> None:
     project_path = _write_binary_project(
         tmp_path,
+        monkeypatch=monkeypatch,
         predictor_cfg={
             "train_group_paths": [
                 {"label": "healthy", "class_index": 0, "paths": ["/x/TR_C1", "/x/TR_C2"]},
@@ -91,9 +99,10 @@ def test_binary_resolver_accepts_group_paths_train_holdout(tmp_path: Path) -> No
     assert cfg.holdout_disease_paths == ["/x/HO_D1", "/x/HO_D2"]
 
 
-def test_binary_resolver_accepts_test_group_paths(tmp_path: Path) -> None:
+def test_binary_resolver_accepts_test_group_paths(tmp_path: Path, monkeypatch) -> None:
     project_path = _write_binary_project(
         tmp_path,
+        monkeypatch=monkeypatch,
         predictor_cfg={
             "test_group_paths": [
                 {"label": "healthy", "class_index": 0, "paths": ["/x/TE_C1", "/x/TE_C2"]},
@@ -111,9 +120,10 @@ def test_binary_resolver_accepts_test_group_paths(tmp_path: Path) -> None:
     assert [row["evaluation_split"] for row in cfg.sample_lineage] == ["test", "test", "test"]
 
 
-def test_binary_resolver_prefers_test_group_paths_over_training_cohorts(tmp_path: Path) -> None:
+def test_binary_resolver_prefers_test_group_paths_over_training_cohorts(tmp_path: Path, monkeypatch) -> None:
     project_path = _write_binary_project(
         tmp_path,
+        monkeypatch=monkeypatch,
         predictor_cfg={
             "test_group_paths": [
                 {"label": "healthy", "class_index": 0, "paths": ["/x/TE_C1"]},
@@ -128,9 +138,10 @@ def test_binary_resolver_prefers_test_group_paths_over_training_cohorts(tmp_path
     assert "D_TRAIN_1" not in cfg.test_disease_paths
 
 
-def test_binary_per_comparison_resolver_accepts_test_group_paths(tmp_path: Path) -> None:
+def test_binary_per_comparison_resolver_accepts_test_group_paths(tmp_path: Path, monkeypatch) -> None:
     project_path = _write_binary_project(
         tmp_path,
+        monkeypatch=monkeypatch,
         predictor_cfg={
             "test_group_paths": [
                 {"label": "healthy", "class_index": 0, "paths": ["/x/TE_C1"]},
@@ -146,9 +157,10 @@ def test_binary_per_comparison_resolver_accepts_test_group_paths(tmp_path: Path)
     assert cfg.holdout_disease_paths == []
 
 
-def test_comparison_multiclass_resolver_accepts_multiclass_test_group_paths(tmp_path: Path) -> None:
+def test_comparison_multiclass_resolver_accepts_multiclass_test_group_paths(tmp_path: Path, monkeypatch) -> None:
     project_path = _write_comparison_multiclass_project(
         tmp_path,
+        monkeypatch=monkeypatch,
         predictor_cfg={
             "test_group_paths": [
                 {"label": "all", "class_index": 0, "paths": ["/x/TE_C1"]},
@@ -167,9 +179,10 @@ def test_comparison_multiclass_resolver_accepts_multiclass_test_group_paths(tmp_
     assert [row["evaluation_split"] for row in cfg.sample_lineage] == ["test"] * 5
 
 
-def test_binary_resolver_rejects_test_group_paths_with_non_binary_class_index(tmp_path: Path) -> None:
+def test_binary_resolver_rejects_test_group_paths_with_non_binary_class_index(tmp_path: Path, monkeypatch) -> None:
     project_path = _write_binary_project(
         tmp_path,
+        monkeypatch=monkeypatch,
         predictor_cfg={
             "test_group_paths": [
                 {"label": "healthy", "class_index": 0, "paths": ["/x/TE_C1"]},
@@ -181,9 +194,10 @@ def test_binary_resolver_rejects_test_group_paths_with_non_binary_class_index(tm
         resolve_predictor_config(project_path)
 
 
-def test_binary_resolver_rejects_test_group_paths_missing_class_index(tmp_path: Path) -> None:
+def test_binary_resolver_rejects_test_group_paths_missing_class_index(tmp_path: Path, monkeypatch) -> None:
     project_path = _write_binary_project(
         tmp_path,
+        monkeypatch=monkeypatch,
         predictor_cfg={
             "test_group_paths": [
                 {"label": "healthy", "paths": ["/x/TE_C1"]},
@@ -195,9 +209,10 @@ def test_binary_resolver_rejects_test_group_paths_missing_class_index(tmp_path: 
         resolve_predictor_config(project_path)
 
 
-def test_binary_resolver_rejects_group_paths_with_non_binary_class_index(tmp_path: Path) -> None:
+def test_binary_resolver_rejects_group_paths_with_non_binary_class_index(tmp_path: Path, monkeypatch) -> None:
     project_path = _write_binary_project(
         tmp_path,
+        monkeypatch=monkeypatch,
         predictor_cfg={
             "holdout_group_paths": [
                 {"label": "healthy", "class_index": 0, "paths": ["/x/HO_C1"]},
@@ -209,9 +224,10 @@ def test_binary_resolver_rejects_group_paths_with_non_binary_class_index(tmp_pat
         resolve_predictor_config(project_path)
 
 
-def test_binary_resolver_rejects_group_paths_missing_class_index(tmp_path: Path) -> None:
+def test_binary_resolver_rejects_group_paths_missing_class_index(tmp_path: Path, monkeypatch) -> None:
     project_path = _write_binary_project(
         tmp_path,
+        monkeypatch=monkeypatch,
         predictor_cfg={
             "holdout_group_paths": [
                 {"label": "healthy", "paths": ["/x/HO_C1"]},
@@ -223,9 +239,10 @@ def test_binary_resolver_rejects_group_paths_missing_class_index(tmp_path: Path)
         resolve_predictor_config(project_path)
 
 
-def test_binary_resolver_rejects_empty_holdout_group_paths(tmp_path: Path) -> None:
+def test_binary_resolver_rejects_empty_holdout_group_paths(tmp_path: Path, monkeypatch) -> None:
     project_path = _write_binary_project(
         tmp_path,
+        monkeypatch=monkeypatch,
         predictor_cfg={
             "holdout_group_paths": [
                 {"label": "healthy", "class_index": 0, "paths": []},

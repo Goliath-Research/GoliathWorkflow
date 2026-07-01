@@ -32,7 +32,6 @@ def _minimal_project(tmp_path: Path) -> Path:
             "label": "cancer",
             "groups": [{"label": "PCa", "sample_paths": []}],
         },
-        "step_config": {"alignment_qc": {"genome_fasta": "/work/ref.fa"}},
     }
     path = tmp_path / "project.json"
     path.write_text(json.dumps(project), encoding="utf-8")

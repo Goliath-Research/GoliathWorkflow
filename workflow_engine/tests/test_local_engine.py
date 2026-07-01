@@ -101,8 +101,8 @@ def sample_prep_context() -> dict:
     return ctx
 
 
-def test_sample_prep_program_stub_run(sample_prep_context: dict) -> None:
-    os.environ["WORKER_STUB_EXTERNAL"] = "1"
+def test_sample_prep_program_stub_run(sample_prep_context: dict, monkeypatch) -> None:
+    monkeypatch.setenv("WORKER_STUB_EXTERNAL", "1")
     program = REPO / "workflow_engine/domain/fixtures/sample_prep.program.json"
     engine = LocalWorkflowEngine(config=SchedulerConfig(parallel_workers=1))
     result = engine.run_program(program, sample_prep_context, enrich_context=False)

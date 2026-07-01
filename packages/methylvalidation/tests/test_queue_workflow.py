@@ -8,7 +8,7 @@ from pathlib import Path
 from methyl_validation.queue_export import export_queue_artifacts
 
 
-def _binary_project_for_mc(tmp_path: Path) -> Path:
+def _binary_project_for_mc(tmp_path: Path, monkeypatch) -> Path:
     h = tmp_path / "healthy.csv"
     d = tmp_path / "disease.csv"
     h.write_text("sample\nH1\nH2\nH3\nH4\nH5\n", encoding="utf-8")
@@ -24,20 +24,21 @@ def _binary_project_for_mc(tmp_path: Path) -> Path:
                     {"label": "healthy", "sample_paths": [str(h)]},
                     {"label": "disease", "sample_paths": [str(d)]},
                 ],
-                "step_config": {
-                    "validation": {
-                        "train_fraction": 0.6,
-                        "n_iterations": 2,
-                    }
-                },
             }
         ),
         encoding="utf-8",
     )
+    # Validation/MC knobs resolve from profile/site actionConfig (config-not-code).
+    site = tmp_path / "methyl_site.json"
+    site.write_text(
+        json.dumps({"actionConfig": {"validation": {"train_fraction": 0.6, "n_iterations": 2}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("METHYL_SITE_CONFIG", str(site))
     return p
 
 
-def test_export_queue_from_plan(tmp_path: Path) -> None:
+def test_export_queue_from_plan(tmp_path: Path, monkeypatch) -> None:
     from methyl_validation.mc_config_load import (
         apply_monte_carlo_config_overrides,
         ensure_monte_carlo_output_tree,
@@ -46,7 +47,7 @@ def test_export_queue_from_plan(tmp_path: Path) -> None:
     from methyl_validation.planner import plan_discovery_runs
     from argparse import Namespace
 
-    project = _binary_project_for_mc(tmp_path)
+    project = _binary_project_for_mc(tmp_path, monkeypatch)
     args = Namespace(
         project=project,
         config=None,
@@ -94,7 +95,7 @@ def test_export_queue_from_plan(tmp_path: Path) -> None:
     assert rec["command"][1] == "run-task"
 
 
-def test_plan_runs_idempotent_replan_same_seed(tmp_path: Path) -> None:
+def test_plan_runs_idempotent_replan_same_seed(tmp_path: Path, monkeypatch) -> None:
     import shutil
 
     from argparse import Namespace
@@ -106,7 +107,7 @@ def test_plan_runs_idempotent_replan_same_seed(tmp_path: Path) -> None:
     )
     from methyl_validation.planner import plan_discovery_runs
 
-    project = _binary_project_for_mc(tmp_path)
+    project = _binary_project_for_mc(tmp_path, monkeypatch)
     ns = dict(
         project=project,
         config=None,
@@ -162,7 +163,7 @@ def test_plan_runs_idempotent_replan_same_seed(tmp_path: Path) -> None:
     assert p1 == p2
 
 
-def test_plan_runs_overwrite_does_not_delete_run_dirs(tmp_path: Path) -> None:
+def test_plan_runs_overwrite_does_not_delete_run_dirs(tmp_path: Path, monkeypatch) -> None:
     """--overwrite must refresh queue/plan without removing existing run_#### trees."""
     from argparse import Namespace
 
@@ -173,7 +174,7 @@ def test_plan_runs_overwrite_does_not_delete_run_dirs(tmp_path: Path) -> None:
     )
     from methyl_validation.planner import plan_discovery_runs
 
-    project = _binary_project_for_mc(tmp_path)
+    project = _binary_project_for_mc(tmp_path, monkeypatch)
     ns = dict(
         project=project,
         config=None,
@@ -228,7 +229,7 @@ def test_plan_runs_overwrite_does_not_delete_run_dirs(tmp_path: Path) -> None:
     assert marker.read_text(encoding="utf-8") == "keep"
 
 
-def test_plan_runs_wipe_runs_deletes_run_dirs(tmp_path: Path) -> None:
+def test_plan_runs_wipe_runs_deletes_run_dirs(tmp_path: Path, monkeypatch) -> None:
     from argparse import Namespace
 
     from methyl_validation.mc_config_load import (
@@ -238,7 +239,7 @@ def test_plan_runs_wipe_runs_deletes_run_dirs(tmp_path: Path) -> None:
     )
     from methyl_validation.planner import plan_discovery_runs
 
-    project = _binary_project_for_mc(tmp_path)
+    project = _binary_project_for_mc(tmp_path, monkeypatch)
     ns = dict(
         project=project,
         config=None,
@@ -293,7 +294,7 @@ def test_plan_runs_wipe_runs_deletes_run_dirs(tmp_path: Path) -> None:
     assert (mcr / "run_0001" / "project.json").is_file()
 
 
-def test_plan_runs_incremental_preserves_completed_runs_and_adds_new(tmp_path: Path) -> None:
+def test_plan_runs_incremental_preserves_completed_runs_and_adds_new(tmp_path: Path, monkeypatch) -> None:
     from argparse import Namespace
 
     from methyl_validation.mc_config_load import (
@@ -304,7 +305,7 @@ def test_plan_runs_incremental_preserves_completed_runs_and_adds_new(tmp_path: P
     from methyl_validation.planner import plan_discovery_runs
     from methyl_validation.storage_layout import atomic_write_json, run_status_path
 
-    project = _binary_project_for_mc(tmp_path)
+    project = _binary_project_for_mc(tmp_path, monkeypatch)
     ns1 = _queue_ns_base(project, iterations=1)
     args = Namespace(**ns1)
     config, _ = load_monte_carlo_config(args, None)
@@ -391,7 +392,7 @@ def test_run_task_exits_0_if_already_completed(
     )
     from methyl_validation.planner import plan_discovery_runs
 
-    project = _binary_project_for_mc(tmp_path)
+    project = _binary_project_for_mc(tmp_path, monkeypatch)
     args = Namespace(**_queue_ns_base(project, iterations=1))
     config, _ = load_monte_carlo_config(args, None)
     config = apply_monte_carlo_config_overrides(config, args)

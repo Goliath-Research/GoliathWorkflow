@@ -321,7 +321,7 @@ def _fit_learned_multiclass_head(
     rs = int(config.get("learned_random_state", 0))
     class_weight = config.get("learned_class_weight", None)
     clf = LogisticRegression(
-        multi_class="multinomial",
+        # sklearn >=1.7 removed the multi_class kwarg; multinomial is automatic for lbfgs.
         solver="lbfgs",
         max_iter=max_iter,
         C=C,

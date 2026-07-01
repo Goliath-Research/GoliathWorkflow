@@ -1,5 +1,10 @@
 # MethylPipeline Integrity and Design Review
 
+> **Remediation status (2026-07-01):** All prioritized follow-ups executed. Full suite now
+> **1002 passed, 3 skipped, 0 failed**; pytest collection clean (no `test_runner` collision);
+> schema-drift (4 exporters), guard scripts, and package imports all green. See
+> [Remediation log](#remediation-log) at the end for per-finding resolutions.
+
 > **Date:** 2026-07-01  
 > **Scope:** Whole repository (17 packages, workers, workflow_engine, schemas, docs)  
 > **Context:** ~31 commits in the prior 3 days (MC centroid seed/deltas, unified `action_run_log`, `project_resolver` run-dir fixes, `--group all` CLI disambiguation, config-not-code refactors)  
@@ -226,3 +231,22 @@ MethylPipeline's **core architecture remains sound**: disease-agnostic, four-lay
 The main integrity gaps are **test-suite hygiene** (stale fixtures, collection collision) and **operational hardening** (centroid collector/skip and seed validation). Neither blocks the current `run_0001` execution path, but both should be addressed before treating CI green as a release gate.
 
 **Review artifacts:** `.review-scratch/` (pytest output, schema drift, guards) — local only, not committed.
+
+---
+
+## Remediation log
+
+All findings from the prioritized list were addressed on 2026-07-01.
+
+| ID | Resolution |
+|----|-----------|
+| H1 | Renamed `workers/tests/test_runner.py` → `test_worker_runner.py`; collection now yields 1005 tests, no module-name collision. |
+| H2 | `pipeline.centroid` now fails when a "successful" run writes no HDF5 at `outputDir` ([centroid.py](../../workers/methyl_worker/actions/centroid.py) `_require_centroid_hdf5`); `maybe_skip_action` refuses to replay a centroid manifest with zero artifacts (`_requires_output_artifacts` in [action_skip.py](../../workers/methyl_worker/action_skip.py)). New tests in [test_action_skip.py](../../workers/tests/test_action_skip.py). |
+| H3 | [`copy_centroid_seed_baseline`](../../packages/methylvalidation/methyl_validation/project_gen.py) raises `FileNotFoundError` on a present-but-empty seed dir; worker fails loudly when a declared seed produces no baseline. Test in [test_centroid_seed_copy.py](../../workers/tests/test_centroid_seed_copy.py). |
+| M1 | Migrated stale `step_config` fixtures (predictor, enricher, alignmentqc, sample_prep, queue_workflow) to site/profile `actionConfig` via `METHYL_SITE_CONFIG`, or to top-level `regulatory`. |
+| M2 | Regenerated golden `validation.plan_iterations` output to match `ValidationPlannedIteration`; completed `StratifiedCohortDraw` taskConfig fixture. Also fixed real bugs: `predictor.py` `class_names` used before assignment; sklearn ≥1.7 `LogisticRegression(multi_class=...)` removal; `production_enricher_root` returning `enricher/<control>` instead of `enricher/`. |
+| M3 | Added [workflow_engine/tests/conftest.py](../../workflow_engine/tests/conftest.py) `local_project` factory that rewrites committed projects onto temp sample CSVs + H5 evidence; profile/compile tests no longer need `/work` data. |
+| M4 | Restored [beta_analytics.py](../../packages/methylutils/methyl_utils/beta_analytics.py) (`beta_log_pdf`) and wired it into `methyl_utils`; fixes `import methyl_cluster`. Verified bit-exact against `scipy.stats.beta.logpdf`. |
+| M5 | [layer-model.md](layer-model.md) precedence now states no Python fallback for tunable science knobs. |
+| M6 | Verified mapper/enricher/model_bundle operational knobs already resolve from site/profile `actionConfig` via `resolve_for_project`; remaining module-level `DEFAULT_*` are permitted library-API fallbacks for non-science infra/behavior knobs (no change needed). |
+| Extra | Fixed cross-test pollution: `test_local_engine.py` set `WORKER_STUB_EXTERNAL` via `os.environ` (now `monkeypatch`), which had leaked into `test_methyl_extract_idempotent_when_outputs_exist`. |

@@ -49,7 +49,6 @@ def test_generate_run_project_comparisons_match_resolved_groups_staged_template(
                         ],
                     },
                     "comparisons": "control_vs_each_disease",
-                    "step_config": {"predictor": {}},
                 },
                 indent=2,
             ),

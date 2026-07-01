@@ -622,6 +622,8 @@ def _predict_aggregated_ecdf_samples(
     except Exception as e:  # pragma: no cover
         raise RuntimeError(f"Aggregated ECDF predictor requires methyl_validation package: {e}") from e
 
+    class_names = [str(x) for x in (pkg.get("class_names") or [])]
+
     feat = build_observed_hybrid_feature_table(
         samples_list,
         dmp_df,
@@ -650,7 +652,6 @@ def _predict_aggregated_ecdf_samples(
 
     probs, evidence = predict_aggregated_ecdf_ovr_proba(pkg, np.asarray(feat.X, dtype=np.float64))
     pred = np.argmax(probs, axis=1).astype(int)
-    class_names = [str(x) for x in (pkg.get("class_names") or [])]
 
     df = pd.DataFrame(
         {

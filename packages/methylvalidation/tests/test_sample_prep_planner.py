@@ -44,11 +44,6 @@ def _write_project(tmp_path: Path, *, samples_base: str = "/work/samples") -> Pa
             "label": "cancer",
             "groups": [{"label": "PCa", "sample_paths": []}],
         },
-        "step_config": {
-            "alignment_qc": {
-                "genome_fasta": "/work/genomes/ref.fa",
-            }
-        },
     }
     path = tmp_path / "project.json"
     path.write_text(json.dumps(project), encoding="utf-8")
@@ -140,7 +135,6 @@ def test_use_project_samples(tmp_path: Path) -> None:
             "label": "cancer",
             "groups": [{"label": "PCa", "sample_paths": [str(pca)]}],
         },
-        "step_config": {"alignment_qc": {"genome_fasta": "/work/ref.fa"}},
     }
     project_path = tmp_path / "project.json"
     project_path.write_text(json.dumps(project), encoding="utf-8")
@@ -201,10 +195,7 @@ def test_cfdna_primary_analyte(tmp_path: Path) -> None:
             "label": "cancer",
             "groups": [{"label": "PCa", "sample_paths": []}],
         },
-        "step_config": {
-            "alignment_qc": {"genome_fasta": "/work/ref.fa"},
-            "validation": {"regulatory": {"primary_analyte": "cfdna"}},
-        },
+        "regulatory": {"primary_analyte": "cfdna"},
     }
     project_path = tmp_path / "project.json"
     project_path.write_text(json.dumps(project), encoding="utf-8")

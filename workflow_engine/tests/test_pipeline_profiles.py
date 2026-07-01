@@ -58,9 +58,9 @@ def test_enrich_instance_context_seeds_flags_from_validation() -> None:
     assert ctx["runDmpSelection"] is False
 
 
-def test_enrich_preserves_profile_validation_when_single_pipeline_flag_set() -> None:
+def test_enrich_preserves_profile_validation_when_single_pipeline_flag_set(local_project) -> None:
     """Regression: one PIPELINE_FLAG in context must not drop profile actionConfig for other flags."""
-    project = DOMAIN / "checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG.json"
+    project = local_project(DOMAIN / "checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG.json")
     ctx = enrich_instance_context(
         {
             "projectPath": str(project),
@@ -81,10 +81,11 @@ def test_enrich_preserves_profile_validation_when_single_pipeline_flag_set() -> 
         DOMAIN / "fixtures/dmp_select_optional.program.json",
     ],
 )
-def test_composable_programs_compile_with_if_nodes(program_path: Path) -> None:
-    project = DOMAIN / "checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json"
+def test_composable_programs_compile_with_if_nodes(program_path: Path, local_project) -> None:
+    src_project = DOMAIN / "checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json"
     if "pca1_5" in str(program_path):
-        project = DOMAIN / "checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG_smoke.json"
+        src_project = DOMAIN / "checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG_smoke.json"
+    project = local_project(src_project)
     result = compile_domain_program_file(program_path, enrich_context=False)
     ctx = enrich_instance_context(
         {

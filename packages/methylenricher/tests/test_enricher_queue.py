@@ -18,7 +18,7 @@ from methyl_enricher.ensure_complete import verify_project_complete
 
 
 @pytest.fixture
-def minimal_production_tree(tmp_path: Path) -> Path:
+def minimal_production_tree(tmp_path: Path, monkeypatch) -> Path:
     """Minimal production layout with one comparison."""
     sample_csv = tmp_path / "PCa1.csv"
     sample_csv.write_text("sample_id\ns1\n", encoding="utf-8")
@@ -41,14 +41,24 @@ def minimal_production_tree(tmp_path: Path) -> Path:
             ],
         },
         "comparisons": "control_vs_each_disease",
-        "step_config": {
-            "enricher": {
-                "library_preset": "cancer-core",
-                "modules": False,
-                "ensure_complete": True,
-            }
-        },
     }
+    # Enricher tool params come from site actionConfig (config-not-code), not study manifest.
+    site = tmp_path / "methyl_site.json"
+    site.write_text(
+        json.dumps(
+            {
+                "actionConfig": {
+                    "enricher": {
+                        "library_preset": "cancer-core",
+                        "modules": False,
+                        "ensure_complete": True,
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("METHYL_SITE_CONFIG", str(site))
     prod = tmp_path / "production"
     prod.mkdir(parents=True)
     (prod / "project.json").write_text(json.dumps(proj), encoding="utf-8")

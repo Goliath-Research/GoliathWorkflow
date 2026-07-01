@@ -354,9 +354,7 @@ def test_native_multiclass_learned_head_smoke() -> None:
     F, _ = base.compute_pre_softmax_scores(X, m)
     y = np.array([0, 1, 2])
     scaler = StandardScaler().fit(F)
-    lr = LogisticRegression(
-        multi_class="multinomial", solver="lbfgs", max_iter=2000, random_state=0
-    )
+    lr = LogisticRegression(solver="lbfgs", max_iter=2000, random_state=0)
     lr.fit(scaler.transform(F), y)
     learned = NativeMulticlassLearnedClassifier(base, lr, scaler)
     p = learned.predict_proba(X, m)

@@ -32,35 +32,40 @@ def test_resolve_alignment_qc_config_output_dir_and_sample_paths():
         Path(project_path).unlink(missing_ok=True)
 
 
-def test_resolve_alignment_qc_config_step_config_validate_schema():
-    """step_config.alignment_qc.validate_schema is applied."""
+def _write_site(tmp_path: Path, action_key: str, cfg: dict) -> str:
+    """Write a minimal site manifest carrying one action's config (replaces step_config)."""
+    site = tmp_path / "methyl_site.json"
+    site.write_text(json.dumps({"actionConfig": {action_key: cfg}}), encoding="utf-8")
+    return str(site)
+
+
+def test_resolve_alignment_qc_config_site_validate_schema(tmp_path, monkeypatch):
+    """alignment_qc.validate_schema from site actionConfig is applied (config-not-code)."""
     from methyl_alignment_qc.project_resolver import resolve_alignment_qc_config
 
+    out_base = tmp_path / "out"
     project = {
         "project_name": "Test",
-        "output_base": "/out",
+        "output_base": str(out_base),
         "group1": {"label": "g1", "sample_paths": ["/a"]},
-        "group2": {"label": "g2", "sample_paths": []},
-        "step_config": {"alignment_qc": {"validate_schema": False}},
+        "group2": {"label": "g2", "sample_paths": ["/b"]},
     }
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        json.dump(project, f)
-        project_path = f.name
-    try:
-        config = resolve_alignment_qc_config(project_path)
-        assert config.validate_schema is False
-        assert config.output_dir == "/out/Test/alignment_qc"
-    finally:
-        Path(project_path).unlink(missing_ok=True)
+    project_path = tmp_path / "project.json"
+    project_path.write_text(json.dumps(project), encoding="utf-8")
+    monkeypatch.setenv("METHYL_SITE_CONFIG", _write_site(tmp_path, "alignment_qc", {"validate_schema": False}))
+    config = resolve_alignment_qc_config(str(project_path))
+    assert config.validate_schema is False
+    assert config.output_dir == str(out_base / "Test" / "alignment_qc")
 
 
-def test_resolve_alignment_qc_config_supports_control_and_label_filters():
+def test_resolve_alignment_qc_config_supports_control_and_label_filters(tmp_path, monkeypatch):
     """Canonical control/disease projects can filter QC inputs by side or group label."""
     from methyl_alignment_qc.project_resolver import resolve_alignment_qc_config
 
+    out_base = tmp_path / "out"
     project = {
         "project_name": "CanonicalQC",
-        "output_base": "/out",
+        "output_base": str(out_base),
         "controls": {
             "label": "controls",
             "groups": [{"label": "healthy", "sample_paths": ["/samples/h1", "/samples/shared"]}],
@@ -76,14 +81,10 @@ def test_resolve_alignment_qc_config_supports_control_and_label_filters():
             {"control_group": "healthy", "disease_group": "pca"},
             {"control_group": "healthy", "disease_group": "crc"},
         ],
-        "step_config": {"alignment_qc": {"groups": ["control", "pca"]}},
     }
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        json.dump(project, f)
-        project_path = f.name
-    try:
-        config = resolve_alignment_qc_config(project_path)
-        assert config.output_dir == "/out/CanonicalQC/alignment_qc"
-        assert config.sample_paths == ["/samples/h1", "/samples/shared", "/samples/d1"]
-    finally:
-        Path(project_path).unlink(missing_ok=True)
+    project_path = tmp_path / "project.json"
+    project_path.write_text(json.dumps(project), encoding="utf-8")
+    monkeypatch.setenv("METHYL_SITE_CONFIG", _write_site(tmp_path, "alignment_qc", {"groups": ["control", "pca"]}))
+    config = resolve_alignment_qc_config(str(project_path))
+    assert config.output_dir == str(out_base / "CanonicalQC" / "alignment_qc")
+    assert config.sample_paths == ["/samples/h1", "/samples/shared", "/samples/d1"]

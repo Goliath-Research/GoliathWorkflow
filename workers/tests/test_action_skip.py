@@ -178,6 +178,62 @@ def test_plan_iterations_skip_blocked_by_legacy_mc_run_project(tmp_path: Path) -
     assert skipped is None
 
 
+def test_centroid_skip_blocked_when_manifest_has_no_artifacts(tmp_path: Path) -> None:
+    """A centroid manifest with result_code 0 but empty artifacts must not replay as skipped."""
+    from methyl_worker.task_models.pipeline_models import CentroidTaskOutput
+
+    entry = find_catalog_entry("pipeline.centroid")
+    assert entry is not None
+
+    out_dir = tmp_path / "monte_carlo_runs" / "run_0001" / "centroids" / "controls" / "healthy" / "all"
+    out_dir.mkdir(parents=True)
+
+    input_json = {
+        "tool": "methyl-centroid",
+        "projectPath": str(tmp_path / "project.json"),
+        "group": "all",
+        "chromosome": "1",
+        "context": "CG",
+        "outputDir": str(out_dir),
+    }
+    input_model = validate_input(entry, strip_runtime_input(input_json))
+    # Simulate the false-success case: no centroid_h5_path -> no artifacts recorded.
+    output = CentroidTaskOutput(status="ok", output_dir=str(out_dir), centroid_h5_path=None)
+    record_action_execution(entry, input_json, input_model, execution_result_from_output(output))
+
+    assert manifest_path_for(out_dir, entry.action_name, "1_CG_all").is_file()
+    assert maybe_skip_action(entry, input_json) is None
+
+
+def test_centroid_skip_replays_when_hdf5_artifact_present(tmp_path: Path) -> None:
+    """With a real HDF5 recorded, centroid skip/replay proceeds normally."""
+    from methyl_worker.task_models.pipeline_models import CentroidTaskOutput
+
+    entry = find_catalog_entry("pipeline.centroid")
+    assert entry is not None
+
+    out_dir = tmp_path / "monte_carlo_runs" / "run_0001" / "centroids" / "controls" / "healthy" / "all"
+    out_dir.mkdir(parents=True)
+    h5 = out_dir / "1-CG.h5"
+    h5.write_bytes(b"centroid")
+
+    input_json = {
+        "tool": "methyl-centroid",
+        "projectPath": str(tmp_path / "project.json"),
+        "group": "all",
+        "chromosome": "1",
+        "context": "CG",
+        "outputDir": str(out_dir),
+    }
+    input_model = validate_input(entry, strip_runtime_input(input_json))
+    output = CentroidTaskOutput(status="ok", output_dir=str(out_dir), centroid_h5_path=str(h5))
+    record_action_execution(entry, input_json, input_model, execution_result_from_output(output))
+
+    skipped = maybe_skip_action(entry, input_json)
+    assert skipped is not None
+    assert skipped.output.status == "skipped"
+
+
 def test_normalize_task_input_preserves_force_rerun() -> None:
     from methyl_worker.task_validation import normalize_task_input
 

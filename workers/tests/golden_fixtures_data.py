@@ -171,7 +171,16 @@ GOLDEN_OUTPUTS: Dict[str, Dict[str, Any]] = {
         "status": "ok",
         "projectPath": "/work/p/project.json",
         "n_iterations": 2,
-        "iterations": [{"run_id": "run_0001", "iteration": 1}],
+        "iterations": [
+            {
+                "$type": "StratifiedCohortDraw",
+                "runId": "run_0001",
+                "phase": "feature",
+                "projectPath": "/work/p/monte_carlo_runs/run_0001/project.json",
+                "run_id": "run_0001",
+                "runDir": "/work/p/monte_carlo_runs/run_0001",
+            }
+        ],
     },
     "validation.stability": {
         "status": "ok",

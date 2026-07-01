@@ -81,7 +81,7 @@ def test_resolve_methyl_enricher_home_defaults(tmp_path):
     assert home == DEFAULT_METHYL_ENRICHER_HOME
 
 
-def test_resolve_methyl_enricher_home_from_step_config(tmp_path):
+def test_resolve_methyl_enricher_home_from_site_config(tmp_path, monkeypatch):
     project_path = tmp_path / "project.json"
     project_path.write_text(
         json.dumps(
@@ -89,10 +89,15 @@ def test_resolve_methyl_enricher_home_from_step_config(tmp_path):
                 "project_name": "EnricherProject",
                 "output_base": "/work/output",
                 "groups": [{"label": "g1", "sample_paths": []}, {"label": "g2", "sample_paths": []}],
-                "step_config": {"enricher": {"methyl_enricher_home": "/work/cache/custom_enricher"}},
             }
         ),
         encoding="utf-8",
     )
+    site = tmp_path / "methyl_site.json"
+    site.write_text(
+        json.dumps({"actionConfig": {"enricher": {"methyl_enricher_home": "/work/cache/custom_enricher"}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("METHYL_SITE_CONFIG", str(site))
     home = resolve_methyl_enricher_home(project_path)
     assert home == "/work/cache/custom_enricher"

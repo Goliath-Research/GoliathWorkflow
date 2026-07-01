@@ -291,6 +291,16 @@ def compute_output_signature(artifacts: List[ArtifactRef]) -> str:
     return _sha256_text("\n".join(parts))
 
 
+# Actions whose success is meaningless without an on-disk output artifact.
+# An empty artifact list for these indicates a false-success manifest (the CLI
+# reported exit 0 but wrote nothing at outputDir), which must not be replayed.
+_ARTIFACT_REQUIRED_ACTIONS = frozenset({"pipeline.centroid"})
+
+
+def _requires_output_artifacts(entry: ActionCatalogEntry) -> bool:
+    return entry.action_name in _ARTIFACT_REQUIRED_ACTIONS
+
+
 def verify_artifacts(artifacts: List[ArtifactRef]) -> bool:
     for ref in artifacts:
         path = Path(ref.path)
@@ -379,6 +389,13 @@ def maybe_skip_action(
     if not verify_artifacts(record.artifacts):
         return None
     if record.output_signature != compute_output_signature(record.artifacts):
+        return None
+    if not record.artifacts and _requires_output_artifacts(entry):
+        logger.info(
+            "Not skipping %s: manifest %s recorded zero output artifacts (cannot verify success)",
+            entry.action_name,
+            manifest_path,
+        )
         return None
 
     if entry.action_name == "validation.plan_iterations" and output_dir is not None:

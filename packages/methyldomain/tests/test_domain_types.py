@@ -60,7 +60,17 @@ def test_stratified_cohort_draw_has_type():
         comparisons=[],
         seed=42,
         train_fraction=0.8,
-        task_config={"runId": "feature_run_0001"},
+        task_config={
+            "runId": "feature_run_0001",
+            "phase": "feature",
+            "iteration": 0,
+            "layout": "binary",
+            "trainFraction": 0.8,
+            "seed": 42,
+            "projectJson": "/work/run/project.json",
+            "runDir": "/work/run",
+            "monteCarloRunsRoot": "/work/run/monte_carlo_runs",
+        },
     )
     assert draw["$type"] == "StratifiedCohortDraw"
     assert draw["runId"] == "feature_run_0001"

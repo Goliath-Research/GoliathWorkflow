@@ -400,6 +400,20 @@ def test_pipeline_runner_generative_backend_dispatch(tmp_path: Path, monkeypatch
     monkeypatch.setattr("methyl_validation.generative_backend.train_generative_model", _fake_train)
     monkeypatch.setattr("methyl_validation.generative_backend.predict_generative_model_from_project", _fake_predict)
 
+    # Analyte guard loads the project file; provide a minimal one on disk.
+    (tmp_path / "project.json").write_text(
+        json.dumps(
+            {
+                "project_name": "gen",
+                "output_base": str(tmp_path),
+                "samples_base_path": "/tmp",
+                "controls": {"label": "healthy", "groups": [{"label": "healthy", "sample_paths": []}]},
+                "diseases": {"label": "cancer", "groups": [{"label": "disease", "sample_paths": []}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
     config = MonteCarloConfig.model_validate(
         {
             "samples_base_path": "/tmp",
