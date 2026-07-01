@@ -42,7 +42,7 @@ steps:
   - script: |
       sudo apt-get update
       sudo apt-get install -y chromium-browser
-      cd docs/diagrams && npm ci --no-audit --no-fund
+      (cd docs/diagrams && npm ci --no-audit --no-fund)
       bash scripts/render_diagrams.sh --check
     displayName: Diagram asset freshness check
 
