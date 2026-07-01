@@ -13,6 +13,7 @@ from typing import List
 from .config import MethylCentroidConfig, BatchProcessingConfig, ProcessingConfig, CentroidResults
 from .core import MethylCentroid
 from .project_resolver import (
+    group_token_requests_all_groups,
     resolve_centroid_batch_config,
     run_centroids_for_all_groups,
     run_centroid_for_one_group,
@@ -59,7 +60,8 @@ Examples:
     )
     config_group.add_argument(
         '--group',
-        help='Which cohort to build: group1, group2, all (every group), 0-based index, or project group label (e.g. PCa); requires --project'
+        help='Which cohort to build: group1, group2, 0-based index, or project group label (e.g. all, PCa). '
+        'Use --group all to run every cohort only when no group is labeled all; requires --project'
     )
     config_group.add_argument(
         '--step-override',
@@ -415,12 +417,12 @@ def main() -> None:
                 raise ValueError("--project requires --group (group1, group2, all, or 0-based index)")
             if not args.project.exists():
                 raise FileNotFoundError(f"Project config not found: {args.project}")
-            if args.group.strip().lower() == "all":
+            group_arg = args.group.strip()
+            if group_arg.isdigit():
+                group_arg = int(group_arg)
+            if group_token_requests_all_groups(args.project, group_arg):
                 run_centroids_for_all_groups(args.project, args.step_override)
             else:
-                group_arg = args.group.strip()
-                if group_arg.isdigit():
-                    group_arg = int(group_arg)
                 run_centroid_for_one_group(
                     args.project,
                     group_arg,

@@ -34,6 +34,28 @@ def _forbid_centroid_samples_key(step_dict: Any, source: str) -> None:
         )
 
 
+def group_token_requests_all_groups(
+    project_path: Union[str, Path],
+    group: Union[str, int],
+) -> bool:
+    """
+    True when ``--group all`` should run every resolved cohort.
+
+    When the project defines a group label ``all`` (common for pooled controls),
+    ``--group all`` targets that cohort instead of running all groups.
+    """
+    if isinstance(group, int):
+        return False
+    token = str(group).strip().lower()
+    if token != "all":
+        return False
+    project = load_project(project_path)
+    for label, _paths in project.get_resolved_groups():
+        if str(label).casefold() == "all":
+            return False
+    return True
+
+
 def _normalize_centroid_group_arg(
     project: Any,
     group: Union[str, int],
