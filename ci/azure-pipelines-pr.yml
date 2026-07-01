@@ -49,6 +49,15 @@ steps:
     displayName: Guard against step_config in project manifests
 
   - script: |
+      if command -v terraform >/dev/null 2>&1; then
+        terraform fmt -check -recursive deploy/terraform
+        cd deploy/terraform/envs/dev && terraform init -backend=false && terraform validate
+      else
+        echo "terraform not installed on agent; skipping IaC validate"
+      fi
+    displayName: Terraform fmt and validate (no apply)
+
+  - script: |
       python -m pip install -U pip build wheel
       bash scripts/build_release.sh \
         --version 0.0.0-ci \

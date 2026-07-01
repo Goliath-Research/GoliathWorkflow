@@ -640,6 +640,9 @@ components:
         capability:
           type: string
           nullable: true
+          description: >
+            Optional narrowing filter within the worker's registered wf.worker.capabilities.
+            Dispatch only returns tasks whose capability is in that set; this field cannot widen it.
         max_lease_seconds:
           type: integer
           default: 300

@@ -58,6 +58,35 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION wf.wf_worker_is_omnibus(p_capabilities jsonb)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT
+    p_capabilities IS NULL
+    OR p_capabilities = '[]'::jsonb
+    OR p_capabilities @> '["*"]'::jsonb;
+$$;
+
+CREATE OR REPLACE FUNCTION wf.wf_worker_capability_allowed(
+  p_worker_capabilities jsonb,
+  p_task_capability text
+)
+RETURNS boolean
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT
+    p_task_capability IS NULL
+    OR wf.wf_worker_is_omnibus(p_worker_capabilities)
+    OR EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(coalesce(p_worker_capabilities, '[]'::jsonb)) AS elem(value)
+      WHERE elem.value = p_task_capability
+    );
+$$;
+
 CREATE OR REPLACE FUNCTION wf.sp_worker_request_task(
   p_worker_id bigint,
   p_worker_token text,
@@ -81,8 +110,23 @@ DECLARE
   v_now timestamptz := (now() AT TIME ZONE 'utc');
   v_lease_end timestamptz := v_now + make_interval(secs => p_max_lease_seconds);
   v_picked bigint;
+  v_worker_capabilities jsonb;
+  v_is_omnibus boolean;
 BEGIN
   CALL wf.wf_worker_authenticate(p_worker_id, p_worker_token);
+
+  SELECT w.capabilities
+  INTO v_worker_capabilities
+  FROM wf.worker w
+  WHERE w.id = p_worker_id;
+
+  v_is_omnibus := wf.wf_worker_is_omnibus(v_worker_capabilities);
+
+  IF p_capability IS NOT NULL
+     AND NOT v_is_omnibus
+     AND NOT wf.wf_worker_capability_allowed(v_worker_capabilities, p_capability) THEN
+    RETURN;
+  END IF;
 
   WITH cte AS (
     SELECT ne.id
@@ -94,7 +138,12 @@ BEGIN
       AND wn.node_type = 'ACTION'
       AND wi.status = 'RUNNING'
       AND (ne.available_at_utc IS NULL OR ne.available_at_utc <= v_now)
-      AND (p_capability IS NULL OR wa.capability = p_capability OR wa.capability IS NULL)
+      AND wf.wf_worker_capability_allowed(v_worker_capabilities, wa.capability)
+      AND (
+        p_capability IS NULL
+        OR wa.capability = p_capability
+        OR wa.capability IS NULL
+      )
     ORDER BY ne.available_at_utc ASC NULLS FIRST, ne.id ASC
     LIMIT 1
     FOR UPDATE OF ne SKIP LOCKED

@@ -8,6 +8,7 @@ Wants=azure-arc-agent.service
 
 [Service]
 Type=simple
+EnvironmentFile=-/etc/methyl/worker-token
 EnvironmentFile=-/work/epimethyl/env/worker.env
 EnvironmentFile=-/work/epimethyl/env/parabricks.env
 # EnvironmentFile does not expand $PATH; set a literal PATH after env files.

@@ -10,7 +10,8 @@ Usage: scripts/register_worker.sh [options]
 Options:
   --key NAME           external_worker_key (default: hostname)
   --cluster KEY        cluster_key (default: epimethyl)
-  --capability NAME    Repeatable capability filter (omit for omnibus worker)
+  --capability NAME    Repeatable capability (omit for auto-detect on this VM)
+  --omnibus            Register wildcard '*' capability (legacy omnibus worker)
   --allowed-cidr CIDR  Repeatable cluster source CIDR (Tier C public workers)
   --entra-client-id ID Optional Entra application (client) id for cluster
   --arc-resource-id ID Azure Arc resource id (default: /etc/methyl/arc.env)

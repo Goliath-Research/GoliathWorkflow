@@ -1214,6 +1214,10 @@ def _attach_domain_sample_ref(
 
 def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) -> ActionExecutionResult:
     """Run one ACTION and return typed output + branch result_code for sp_worker_submit_result."""
+    from .capabilities import assert_execute_gpu_prereqs
+
+    assert_execute_gpu_prereqs(capability, action_name)
+
     entry = find_catalog_entry(action_name) or find_catalog_entry_by_capability(capability)
     if entry is None:
         raise RuntimeError(f"Unknown action {action_name!r} / capability {capability!r}")

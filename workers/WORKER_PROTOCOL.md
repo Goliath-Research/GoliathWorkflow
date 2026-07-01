@@ -71,11 +71,33 @@ Log root resolution: explicit `monteCarloRunsRoot`, any path under `monte_carlo_
 ## Implementing a worker in any language
 
 1. Load OpenAPI spec from `contracts/openapi.yaml`
-2. Poll `POST /workers/tasks/request` with `worker_id`, `worker_token`, optional `capability`
-3. Parse `input_json` from the claim response
-4. Execute domain logic
-5. `POST /workers/tasks/{nodeExecutionId}/submit` with `output_json`
-6. Optionally heartbeat during long jobs
+2. Register with `scripts/register_worker.py` (auto-detect capabilities on the VM by default)
+3. Poll `POST /workers/tasks/request` with `worker_id`, `worker_token`, optional `capability` **narrowing filter**
+4. Parse `input_json` from the claim response
+5. Execute domain logic
+6. `POST /workers/tasks/{nodeExecutionId}/submit` with `output_json`
+7. Optionally heartbeat during long jobs
+
+### Capability-based dispatch
+
+The engine **only returns tasks whose `wa.capability` is in the worker's registered**
+`wf.worker.capabilities` JSON array. A worker never receives a task it cannot run.
+
+| Registration | Dispatch |
+|--------------|----------|
+| `NULL`, `[]`, or `["*"]` | Omnibus (legacy — any capability) |
+| `["methyl-centroid", "methyl-detector", …]` | Only matching READY tasks |
+
+The poll request's optional `capability` field **narrows** within the registered set
+(e.g. `methyl-worker@methyl-centroid.service` sets `WORKER_CAPABILITY=methyl-centroid`).
+It cannot widen beyond registration.
+
+Auto-detect on the VM: `scripts/register_worker.py` (default) or `methyl_worker.capabilities.resolve_worker_capabilities()`.
+
+Workers send `X-Arc-Resource-Id` (from `/etc/methyl/arc.env`) when polling if the gateway
+has `GATEWAY_REQUIRE_ARC_ATTEST=1`.
+
+Credentials: prefer `/etc/methyl/worker-token` (mode 600), not shared `/work` env files.
 
 ## Reference implementation
 

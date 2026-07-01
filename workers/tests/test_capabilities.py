@@ -1,0 +1,50 @@
+"""Tests for worker capability detection and guards."""
+
+from __future__ import annotations
+
+from unittest.mock import patch
+
+import pytest
+
+from methyl_worker.capabilities import (
+    GPU_REQUIRED_CAPABILITIES,
+    OMNIBUS_WILDCARD,
+    assert_execute_gpu_prereqs,
+    assert_node_can_serve_capability,
+    capability_requires_gpu,
+    resolve_worker_capabilities,
+)
+
+
+def test_resolve_explicit_omnibus() -> None:
+    assert resolve_worker_capabilities(explicit=["*"]) == [OMNIBUS_WILDCARD]
+
+
+def test_resolve_explicit_list() -> None:
+    caps = resolve_worker_capabilities(explicit=["methyl-qc", "methyl-qc", "validation.plan-iterations"])
+    assert caps == ["methyl-qc", "validation.plan-iterations"]
+
+
+def test_gpu_capabilities_flagged() -> None:
+    assert "methyl-centroid" in GPU_REQUIRED_CAPABILITIES
+    assert "parabricks.fq2bam" in GPU_REQUIRED_CAPABILITIES
+    assert capability_requires_gpu("methyl-qc") is False
+
+
+def test_assert_node_rejects_gpu_capability_without_gpu() -> None:
+    with patch("methyl_worker.capabilities._gpu_available", return_value=False):
+        with pytest.raises(RuntimeError, match="no functional GPU"):
+            assert_node_can_serve_capability("methyl-centroid")
+
+
+def test_assert_execute_gpu_prereqs() -> None:
+    with patch("methyl_worker.capabilities._gpu_available", return_value=False):
+        with pytest.raises(RuntimeError, match="requires a GPU"):
+            assert_execute_gpu_prereqs("methyl-centroid", "pipeline.centroid")
+
+
+def test_auto_detect_includes_validation_caps() -> None:
+    with patch("methyl_worker.capabilities._gpu_available", return_value=False):
+        with patch("methyl_worker.capabilities._cli_on_path", return_value=False):
+            caps = resolve_worker_capabilities()
+    assert "validation.plan-iterations" in caps

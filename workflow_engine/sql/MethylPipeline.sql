@@ -1934,6 +1934,43 @@ GO
 PRINT (N'Create or alter procedure [wf].[sp_worker_request_task]')
 GO
 
+CREATE OR ALTER FUNCTION wf.wf_worker_is_omnibus(@capabilities NVARCHAR(MAX))
+RETURNS BIT
+AS
+BEGIN
+    IF @capabilities IS NULL OR LTRIM(RTRIM(@capabilities)) = N'' OR @capabilities = N'[]'
+        RETURN 1;
+    IF EXISTS (
+        SELECT 1
+        FROM OPENJSON(@capabilities) WITH (value NVARCHAR(128) '$') AS caps
+        WHERE caps.value = N'*'
+    )
+        RETURN 1;
+    RETURN 0;
+END;
+GO
+
+CREATE OR ALTER FUNCTION wf.wf_worker_capability_allowed(
+    @worker_capabilities NVARCHAR(MAX),
+    @task_capability NVARCHAR(128)
+)
+RETURNS BIT
+AS
+BEGIN
+    IF @task_capability IS NULL
+        RETURN 1;
+    IF wf.wf_worker_is_omnibus(@worker_capabilities) = 1
+        RETURN 1;
+    IF EXISTS (
+        SELECT 1
+        FROM OPENJSON(@worker_capabilities) WITH (value NVARCHAR(128) '$') AS caps
+        WHERE caps.value = @task_capability
+    )
+        RETURN 1;
+    RETURN 0;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE wf.sp_worker_request_task
     @worker_id BIGINT,
     @worker_token NVARCHAR(4000),
@@ -1948,6 +1985,21 @@ BEGIN
 
     DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
     DECLARE @lease_end DATETIME2(7) = DATEADD(SECOND, @max_lease_seconds, @now);
+    DECLARE @worker_capabilities NVARCHAR(MAX);
+    DECLARE @is_omnibus BIT;
+
+    SELECT @worker_capabilities = w.capabilities
+    FROM wf.worker AS w
+    WHERE w.id = @worker_id;
+
+    SET @is_omnibus = wf.wf_worker_is_omnibus(@worker_capabilities);
+
+    IF @capability IS NOT NULL
+       AND @is_omnibus = 0
+       AND wf.wf_worker_capability_allowed(@worker_capabilities, @capability) = 0
+    BEGIN
+        RETURN;
+    END
 
     BEGIN TRANSACTION;
 
@@ -1963,7 +2015,12 @@ BEGIN
           AND wn.node_type = N'ACTION'
           AND wi.status = N'RUNNING'
           AND (ne.available_at_utc IS NULL OR ne.available_at_utc <= @now)
-          AND (@capability IS NULL OR wa.capability = @capability OR wa.capability IS NULL)
+          AND wf.wf_worker_capability_allowed(@worker_capabilities, wa.capability) = 1
+          AND (
+              @capability IS NULL
+              OR wa.capability = @capability
+              OR wa.capability IS NULL
+          )
         ORDER BY ne.available_at_utc ASC, ne.id ASC
     )
     UPDATE ne

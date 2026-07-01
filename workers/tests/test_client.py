@@ -10,6 +10,24 @@ import pytest
 from methyl_worker.client import WorkflowRestClient
 
 
+def test_request_task_sends_arc_header(tmp_path) -> None:
+    arc_env = tmp_path / "arc.env"
+    arc_env.write_text('ARC_RESOURCE_ID="/subscriptions/sub/resourceGroups/rg/providers/Microsoft.HybridCompute/machines/vm1"\n')
+    client = WorkflowRestClient("http://test/v1", arc_resource_id=None)
+    client.arc_resource_id = None
+    with patch.dict("os.environ", {"METHYL_ARC_ENV": str(arc_env)}, clear=False):
+        client2 = WorkflowRestClient("http://test/v1")
+        assert client2.arc_resource_id is not None
+        assert "machines/vm1" in client2.arc_resource_id
+
+    with patch.object(WorkflowRestClient, "_post_json", return_value={"has_task": False}) as mock_post:
+        client3 = WorkflowRestClient("http://test/v1", arc_resource_id="arc-123")
+        client3.request_task(1, "tok")
+    # Header is applied in _request_json via urlopen patch - test via _default_headers
+    client4 = WorkflowRestClient("http://test/v1", arc_resource_id="arc-123")
+    assert client4._default_headers() == {"X-Arc-Resource-Id": "arc-123"}
+
+
 def test_request_task_empty() -> None:
     client = WorkflowRestClient("http://test/v1")
     with patch.object(client, "_post_json", return_value={"has_task": False}):

@@ -59,6 +59,21 @@ Engine errors use integer codes documented in worker API scripts (e.g. `10001` m
 
 ## Object categories
 
+### Worker capability dispatch
+
+`wf.sp_worker_request_task` enforces **registered capabilities** on `wf.worker.capabilities`:
+
+| `capabilities` value | Behavior |
+|---------------------|----------|
+| `NULL`, `[]`, or contains `"*"` | Omnibus — may claim any task capability (legacy) |
+| Concrete JSON array | Only tasks whose `wa.capability` is in the array |
+
+The optional request parameter `capability` **narrows** polling within the registered set; it cannot widen it.
+Helpers: `wf.wf_worker_is_omnibus`, `wf.wf_worker_capability_allowed` (both dialects).
+
+Workers register capabilities at provisioning via `scripts/register_worker.py --auto-detect` (default) or
+explicit `--capability` / `--omnibus`.
+
 ### 1. Worker API (required for remote execution)
 
 | Object | Kind | Purpose |

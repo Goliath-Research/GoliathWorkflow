@@ -10,6 +10,7 @@ Options:
   --root PATH           Epimethyl root (default: /work/epimethyl)
   --arch KEY            aarch64 or amd64 (default: detect)
   --capability NAME     Install methyl-worker@NAME.service instead of omnibus
+  --detect-capabilities Install one unit per auto-detected capability (or omnibus for '*')
   --runtime PATH        Path to runtime-bundle (default: <root>/current/runtime-bundle)
   --no-start            Install/enable only; do not start
   -h, --help
@@ -23,6 +24,7 @@ source "$SCRIPT_DIR/detect_platform.sh"
 ROOT="${EPIMETHYL_ROOT:-/work/epimethyl}"
 ARCH=""
 CAPABILITY=""
+DETECT_CAPABILITIES=0
 RUNTIME=""
 NO_START=0
 
@@ -31,6 +33,7 @@ while [[ $# -gt 0 ]]; do
     --root) ROOT="${2:-}"; shift 2 ;;
     --arch) ARCH="${2:-}"; shift 2 ;;
     --capability) CAPABILITY="${2:-}"; shift 2 ;;
+    --detect-capabilities) DETECT_CAPABILITIES=1; shift ;;
     --runtime) RUNTIME="${2:-}"; shift 2 ;;
     --no-start) NO_START=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -53,6 +56,43 @@ WORKER_BIN="$VENV/bin/methyl-worker"
 [[ -x "$WORKER_BIN" ]] || WORKER_BIN="$ROOT/venv/bin/methyl-worker"
 
 PATH_LINE="$VENV/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+_detect_capabilities() {
+  local py="$VENV/bin/python"
+  [[ -x "$py" ]] || py="python3"
+  "$py" -c "import json; from methyl_worker.capabilities import resolve_worker_capabilities; print(json.dumps(resolve_worker_capabilities()))"
+}
+
+_install_template_unit() {
+  local src="$DEPLOY/methyl-worker@.service"
+  [[ -f "$src" ]] || { echo "Missing $src" >&2; exit 1; }
+  sed -e "s|venv-aarch64|$VENV|g" \
+      -e "s|/work/epimethyl|$ROOT|g" \
+      -e "s|PATH=/work/epimethyl/venv-aarch64/bin:|PATH=$PATH_LINE|" \
+      "$src" >"/etc/systemd/system/methyl-worker@.service"
+}
+
+if [[ "$DETECT_CAPABILITIES" -eq 1 && -z "$CAPABILITY" ]]; then
+  mapfile -t CAPS < <(_detect_capabilities | python3 -c "import json,sys; print('\n'.join(json.load(sys.stdin)))")
+  if [[ "${#CAPS[@]}" -eq 0 ]]; then
+    echo "No capabilities detected" >&2
+    exit 1
+  fi
+  if [[ "${#CAPS[@]}" -eq 1 && "${CAPS[0]}" == "*" ]]; then
+    CAPABILITY=""
+  else
+    _install_template_unit
+    systemctl daemon-reload
+    for cap in "${CAPS[@]}"; do
+      [[ -z "$cap" || "$cap" == "*" ]] && continue
+      UNIT="methyl-worker@${cap}.service"
+      systemctl enable "$UNIT"
+      [[ "$NO_START" -eq 0 ]] && systemctl restart "$UNIT"
+      systemctl status "$UNIT" --no-pager -l | head -8
+    done
+    exit 0
+  fi
+fi
 
 if [[ -n "$CAPABILITY" ]]; then
   UNIT="methyl-worker@${CAPABILITY}.service"

@@ -18,9 +18,10 @@ Options:
   --arc-onboard            Run install_arc_agent.sh (needs Azure env)
   --require-arc            Pass --require-arc to bootstrap
   --skip-promote           Use existing venv on /work (second+ VM)
-  --register-worker        Run register_worker.sh after verify
-  --enable-systemd         Install and start methyl-worker.service
-  --capability NAME        Per-capability worker unit
+  --register-worker        Run register_worker.sh after verify (auto-detect capabilities)
+  --enable-systemd         Install and start methyl-worker units
+  --capability NAME        Single capability (overrides auto-detect)
+  --detect-capabilities    Install one systemd unit per detected capability
   --dry-run
   -h, --help
 
@@ -44,6 +45,7 @@ SKIP_PROMOTE=0
 REGISTER=0
 ENABLE_SYSTEMD=0
 CAPABILITY=""
+DETECT_CAPABILITIES=0
 DRY_RUN=0
 
 while [[ $# -gt 0 ]]; do
@@ -59,6 +61,7 @@ while [[ $# -gt 0 ]]; do
     --register-worker) REGISTER=1; shift ;;
     --enable-systemd) ENABLE_SYSTEMD=1; shift ;;
     --capability) CAPABILITY="${2:-}"; shift 2 ;;
+    --detect-capabilities) DETECT_CAPABILITIES=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
@@ -126,8 +129,10 @@ run bash "$SCRIPTS/verify_e2e_node.sh"
 
 if [[ "$REGISTER" -eq 1 ]]; then
   echo "=== Register worker ==="
-  REG_ARGS=(--cluster "$CLUSTER" --key "$(hostname -s)" --env-file "$ROOT/env/worker.env")
-  [[ -n "$CAPABILITY" ]] && REG_ARGS+=(--capability "$CAPABILITY")
+  REG_ARGS=(--cluster "$CLUSTER" --key "$(hostname -s)")
+  if [[ -n "$CAPABILITY" ]]; then
+    REG_ARGS+=(--capability "$CAPABILITY")
+  fi
   [[ "$REQUIRE_ARC" -eq 1 ]] && REG_ARGS+=(--require-arc)
   run bash "$SCRIPTS/register_worker.sh" "${REG_ARGS[@]}"
 fi
@@ -135,7 +140,11 @@ fi
 if [[ "$ENABLE_SYSTEMD" -eq 1 ]]; then
   echo "=== systemd ==="
   SD_ARGS=(--root "$ROOT" --arch "$ARCH" --runtime "$RUNTIME")
-  [[ -n "$CAPABILITY" ]] && SD_ARGS+=(--capability "$CAPABILITY")
+  if [[ -n "$CAPABILITY" ]]; then
+    SD_ARGS+=(--capability "$CAPABILITY")
+  elif [[ "$DETECT_CAPABILITIES" -eq 1 ]]; then
+    SD_ARGS+=(--detect-capabilities)
+  fi
   run sudo bash "$SCRIPTS/install_worker_systemd.sh" "${SD_ARGS[@]}"
 fi
 

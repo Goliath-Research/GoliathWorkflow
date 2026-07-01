@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Optional
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -31,6 +32,20 @@ class SubmitAck:
     next_ready_count: int
 
 
+def _load_arc_resource_id() -> Optional[str]:
+    explicit = os.environ.get("ARC_RESOURCE_ID", "").strip()
+    if explicit:
+        return explicit
+    arc_env = Path(os.environ.get("METHYL_ARC_ENV", "/etc/methyl/arc.env"))
+    if not arc_env.is_file():
+        return None
+    for line in arc_env.read_text(encoding="utf-8").splitlines():
+        if line.startswith("ARC_RESOURCE_ID="):
+            val = line.split("=", 1)[1].strip().strip('"').strip("'")
+            return val or None
+    return None
+
+
 class WorkflowRestClient:
     """REST-only workflow worker client; no direct database access."""
 
@@ -39,15 +54,25 @@ class WorkflowRestClient:
         base_url: Optional[str] = None,
         *,
         timeout_seconds: float = 120.0,
+        arc_resource_id: Optional[str] = None,
     ) -> None:
         raw = base_url or os.environ.get("METHYL_API_BASE", "http://localhost:8080/v1")
         self.base_url = raw.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        self.arc_resource_id = arc_resource_id if arc_resource_id is not None else _load_arc_resource_id()
+
+    def _default_headers(self) -> Dict[str, str]:
+        headers: Dict[str, str] = {}
+        if self.arc_resource_id:
+            headers["X-Arc-Resource-Id"] = self.arc_resource_id
+        return headers
 
     def _request_json(self, path: str, *, method: str = "GET", payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         url = f"{self.base_url}{path}"
         data = json.dumps(payload).encode("utf-8") if payload is not None else None
-        headers = {"Content-Type": "application/json"} if payload is not None else {}
+        headers = self._default_headers()
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
         req = Request(url, data=data, headers=headers, method=method)
         try:
             with urlopen(req, timeout=self.timeout_seconds) as resp:

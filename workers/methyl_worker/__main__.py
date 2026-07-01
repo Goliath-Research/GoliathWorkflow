@@ -9,6 +9,7 @@ import os
 import sys
 from pathlib import Path
 
+from .capabilities import assert_node_can_serve_capability
 from .client import WorkflowRestClient
 from .runner import WorkerRunner
 
@@ -61,6 +62,9 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.worker_id <= 0 or not args.worker_token:
         parser.error("Set --worker-id and --worker-token (or WORKER_ID / WORKER_TOKEN env vars)")
+
+    if args.capability:
+        assert_node_can_serve_capability(args.capability)
 
     client = WorkflowRestClient(args.api_base)
     if args.authenticate:

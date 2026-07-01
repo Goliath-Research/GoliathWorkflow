@@ -102,17 +102,42 @@ def register_worker(
     print(f"  WORKER_KEY={worker_key}")
     print(f"  WORKER_TOKEN={token}")
 
-    env_file.parent.mkdir(parents=True, exist_ok=True)
-    lines: list[str] = []
-    if env_file.is_file():
-        for line in env_file.read_text(encoding="utf-8").splitlines():
-            if not line.startswith("WORKER_ID=") and not line.startswith("WORKER_TOKEN="):
-                lines.append(line)
-    lines.append(f"WORKER_ID={worker_id}")
-    lines.append(f"WORKER_TOKEN={token}")
-    env_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"Updated {env_file}")
+    _write_worker_credentials(env_file, worker_id, token)
     return 0
+
+
+DEFAULT_TOKEN_FILE = Path("/etc/methyl/worker-token")
+
+
+def _resolve_token_env_file(explicit: Optional[Path]) -> Path:
+    if explicit is not None:
+        return explicit
+    secure = os.environ.get("METHYL_WORKER_TOKEN_FILE", "").strip()
+    if secure:
+        return Path(secure)
+    legacy = Path(os.environ.get("EPIMETHYL_ENV_DIR", "/work/epimethyl/env")) / "worker.env"
+    if legacy.is_file():
+        return legacy
+    return DEFAULT_TOKEN_FILE
+
+
+def _write_worker_credentials(env_file: Path, worker_id: int, token: str) -> None:
+    """Write credentials to a root-owned 600 file outside shared /work when possible."""
+    target = env_file
+    if target.parent == Path("/work/epimethyl/env") or str(target).startswith("/work/"):
+        target = DEFAULT_TOKEN_FILE
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    lines = [
+        f"WORKER_ID={worker_id}",
+        f"WORKER_TOKEN={token}",
+    ]
+    target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    try:
+        os.chmod(target, 0o600)
+    except OSError:
+        pass
+    print(f"Updated {target} (mode 600)")
 
 
 def _register_via_db(
@@ -303,8 +328,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--cluster", default=os.environ.get("CLUSTER_KEY", "epimethyl"))
     parser.add_argument("--capability", action="append", default=[])
     parser.add_argument(
+        "--auto-detect",
+        action="store_true",
+        help="Probe this VM and register detected capabilities (default when --capability omitted)",
+    )
+    parser.add_argument(
+        "--omnibus",
+        action="store_true",
+        help="Register wildcard capability '*' (matches any task; legacy behavior)",
+    )
+    parser.add_argument(
         "--env-file",
-        default=os.path.join(os.environ.get("EPIMETHYL_ENV_DIR", "/work/epimethyl/env"), "worker.env"),
+        default="",
+        help="Credential file (default: /etc/methyl/worker-token or legacy /work/epimethyl/env/worker.env)",
     )
     parser.add_argument("--token", default="")
     parser.add_argument("--allowed-cidr", action="append", default=[], dest="allowed_cidrs")
@@ -319,16 +355,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     entra = args.entra_client_id.strip() or None
     arc = args.arc_resource_id.strip() or _load_arc_env()
 
+    capabilities: Optional[list[str]]
+    if args.omnibus:
+        capabilities = ["*"]
+    elif args.capability:
+        capabilities = list(args.capability)
+    else:
+        sys.path.insert(0, str(REPO_ROOT / "workers"))
+        from methyl_worker.capabilities import resolve_worker_capabilities
+
+        capabilities = resolve_worker_capabilities()
+
+    env_path = _resolve_token_env_file(Path(args.env_file) if args.env_file else None)
+
     return register_worker(
         worker_key=worker_key,
         cluster_key=args.cluster,
         token=token,
-        capabilities=args.capability or None,
+        capabilities=capabilities,
         allowed_cidrs=args.allowed_cidrs,
         entra_client_id=entra,
         arc_resource_id=arc,
         require_arc=args.require_arc,
-        env_file=Path(args.env_file),
+        env_file=env_path,
         dry_run=args.dry_run,
     )
 

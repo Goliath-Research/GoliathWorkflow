@@ -5,6 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=simple
+EnvironmentFile=-/etc/methyl/worker-token
 EnvironmentFile=-/work/epimethyl/env/worker.env
 EnvironmentFile=-/work/epimethyl/env/parabricks.env
 Environment=WORKER_CAPABILITY=%i

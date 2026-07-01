@@ -149,6 +149,64 @@ def seed_minimal_workflow(dsn: str) -> tuple[int, int, str]:
     return version_id, worker_id, token
 
 
+def test_worker_capability_dispatch_postgres(dsn: str) -> None:
+    """Workers only claim tasks matching wf.worker.capabilities."""
+    version_id, worker_id, token = seed_minimal_workflow(dsn)
+    load_node = int(
+        _psql_query(
+            dsn,
+            f"SELECT id FROM wf.workflow_node WHERE workflow_version_id={version_id} AND node_key='load_input' LIMIT 1;",
+        )
+    )
+    _psql_query(
+        dsn,
+        f"UPDATE wf.worker SET capabilities = '[\"test-cap\"]'::jsonb WHERE id={worker_id};",
+    )
+    gpu_action_id = int(
+        _psql_query(
+            dsn,
+            "INSERT INTO wf.workflow_action (action_name, capability) "
+            "VALUES ('GpuOnly','gpu-cap') RETURNING id;",
+        )
+    )
+    gpu_node = int(
+        _psql_query(
+            dsn,
+            f"INSERT INTO wf.workflow_node (workflow_version_id, node_type, node_key, workflow_action_id) "
+            f"VALUES ({version_id}, 'ACTION', 'gpu_only', {gpu_action_id}) RETURNING id;",
+        )
+    )
+    _psql_query(dsn, f"UPDATE wf.workflow_version SET root_node_id = {gpu_node} WHERE id = {version_id};")
+    inst_gpu = int(
+        _psql_query(
+            dsn,
+            f"SELECT id FROM wf.wf_repo_create_workflow_instance({version_id}, '{{}}'::jsonb);",
+        )
+    )
+    _psql_query(dsn, f"CALL wf.sp_start_workflow_instance({inst_gpu});")
+
+    _psql_query(dsn, f"UPDATE wf.workflow_version SET root_node_id = {load_node} WHERE id = {version_id};")
+    inst_ok = int(
+        _psql_query(
+            dsn,
+            f"SELECT id FROM wf.wf_repo_create_workflow_instance({version_id}, '{{}}'::jsonb);",
+        )
+    )
+    _psql_query(dsn, f"CALL wf.sp_start_workflow_instance({inst_ok});")
+
+    claim = _psql_query(
+        dsn,
+        f"SELECT node_execution_id FROM wf.sp_worker_request_task({worker_id}, '{token}', NULL, 60);",
+    )
+    assert claim, "expected test-cap task claim while gpu-cap task is also READY"
+
+    narrow = _psql_query(
+        dsn,
+        f"SELECT node_execution_id FROM wf.sp_worker_request_task({worker_id}, '{token}', 'gpu-cap', 60);",
+    )
+    assert not narrow, "poll capability must not widen beyond registration"
+
+
 def test_worker_api_postgres(dsn: str) -> None:
     version_id, worker_id, token = seed_minimal_workflow(dsn)
     instance_id = int(
@@ -385,6 +443,7 @@ def main() -> int:
 
     print("Running worker API parity...")
     test_worker_api_postgres(dsn)
+    test_worker_capability_dispatch_postgres(dsn)
     print("Running repository parity...")
     test_repository_postgres(dsn)
     print("Running scope resolver parity...")
