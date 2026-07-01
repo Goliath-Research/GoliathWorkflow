@@ -278,6 +278,55 @@ def _seed_centroid_dir_for_group(
     return str((Path(monte_carlo_runs_root) / "_centroid_seed" / label).resolve())
 
 
+def _run_scoped_artifact_dir(
+    run_dir: Union[str, Path],
+    template_path: Union[str, Path],
+    *,
+    anchor: str,
+    fallback_name: str,
+) -> str:
+    """Map a base-project artifact path onto ``run_dir`` preserving layout from ``anchor``."""
+    template = Path(template_path)
+    parts = template.parts
+    if anchor in parts:
+        rel = Path(*parts[parts.index(anchor) :])
+        return str((Path(run_dir) / rel).resolve())
+    return str((Path(run_dir) / anchor / fallback_name).resolve())
+
+
+def run_centroid_dir_for_group(
+    run_dir: Union[str, Path],
+    base_project_path: Union[str, Path],
+    side: str,
+    label: str,
+) -> str:
+    """Return per-run centroid output dir for one cohort (mirrors base project layout)."""
+    from methyl_utils import load_project
+
+    project = load_project(str(base_project_path))
+    template = project.get_centroid_dir(side, label)
+    return _run_scoped_artifact_dir(run_dir, template, anchor="centroids", fallback_name=label)
+
+
+def run_detection_output_dir_for_comparison(
+    run_dir: Union[str, Path],
+    base_project_path: Union[str, Path],
+    control_group: str,
+    disease_group: str,
+) -> str:
+    """Return per-run detection output dir for one comparison."""
+    from methyl_utils import load_project
+
+    project = load_project(str(base_project_path))
+    template = project.get_detection_output_dir(control_group, disease_group)
+    return _run_scoped_artifact_dir(
+        run_dir,
+        template,
+        anchor="detections",
+        fallback_name=f"{control_group}_{disease_group}",
+    )
+
+
 def build_centroid_seed_groups(
     *,
     monte_carlo_runs_root: Union[str, Path],
@@ -309,6 +358,7 @@ def build_centroid_seed_groups(
 def build_cohort_relative_centroid_scope(
     *,
     base_project_path: Union[str, Path],
+    run_dir: Union[str, Path],
     cohort_labels: List[str],
     full_cohort_by_label: Dict[str, List[str]],
     train_by_label: Dict[str, List[str]],
@@ -331,7 +381,7 @@ def build_cohort_relative_centroid_scope(
                 label=label,
                 addSamples=[],
                 removeSamples=remove_paths,
-                centroidDir=project.get_centroid_dir(side, label),
+                centroidDir=run_centroid_dir_for_group(run_dir, base_project_path, side, label),
                 centroidSeedDir=seed_dir_by_label[label],
             )
         )
@@ -341,6 +391,7 @@ def build_cohort_relative_centroid_scope(
 def build_group_centroid_scope(
     *,
     base_project_path: Union[str, Path],
+    run_dir: Union[str, Path],
     cohort_labels: List[str],
     train_by_label: Dict[str, List[str]],
     previous_train_by_label: Optional[Dict[str, List[str]]] = None,
@@ -362,7 +413,7 @@ def build_group_centroid_scope(
                 label=label,
                 addSamples=override["base_config"]["add_samples"],
                 removeSamples=override["base_config"]["remove_samples"],
-                centroidDir=project.get_centroid_dir(side, label),
+                centroidDir=run_centroid_dir_for_group(run_dir, base_project_path, side, label),
             )
         )
     return groups

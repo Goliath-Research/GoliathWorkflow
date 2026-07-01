@@ -202,9 +202,11 @@ def test_plan_validation_context_binary_centroid_groups(tmp_path: Path) -> None:
     for grp in first["centroidGroups"]:
         assert "addSamples" in grp and "removeSamples" in grp and "centroidDir" in grp
         assert grp.get("centroidSeedDir")
-        assert grp["centroidDir"].startswith(str(tmp_path / "work" / "demo_mc" / "monte_carlo_runs"))
     run_project_path = Path(first["projectPath"])
     run_root = run_project_path.parent
+    for grp in first["centroidGroups"]:
+        assert grp["centroidDir"].startswith(str(run_root / "centroids"))
+        assert "/controls/all/all" not in grp["centroidDir"]
     assert first["centroid1Dir"] == str(run_root / "centroids" / "controls" / "healthy" / "healthy")
     assert first["centroid2Dir"] == str(run_root / "centroids" / "diseases" / "disease" / "disease")
     assert first["detectOutDir"] == str(run_root / "detections" / "healthy" / "disease")

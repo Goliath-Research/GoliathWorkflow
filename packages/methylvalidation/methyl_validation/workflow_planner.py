@@ -195,7 +195,8 @@ def _attach_iteration_centroid_scope(
     iteration: ValidationPlannedIteration,
     *,
     layout: str,
-    project_path: Path,
+    base_project_path: Path,
+    run_dir: Path,
     cohort_labels: List[str],
     train_by_label: Dict[str, List[str]],
     parallel_seed: bool,
@@ -208,7 +209,8 @@ def _attach_iteration_centroid_scope(
         if full_cohort_by_label is None or seed_dir_by_label is None:
             raise ValueError("parallel MC centroid seed requires full_cohort_by_label and seed_dir_by_label")
         iteration.centroidGroups = build_cohort_relative_centroid_scope(
-            base_project_path=project_path,
+            base_project_path=base_project_path,
+            run_dir=run_dir,
             cohort_labels=cohort_labels,
             full_cohort_by_label=full_cohort_by_label,
             train_by_label=train_by_label,
@@ -216,7 +218,8 @@ def _attach_iteration_centroid_scope(
         )
     else:
         iteration.centroidGroups = build_group_centroid_scope(
-            base_project_path=project_path,
+            base_project_path=base_project_path,
+            run_dir=run_dir,
             cohort_labels=cohort_labels,
             train_by_label=train_by_label,
             previous_train_by_label=previous_train_by_label,
@@ -224,11 +227,30 @@ def _attach_iteration_centroid_scope(
     if layout == "binary" and len(cohort_labels) >= 2:
         from methyl_utils import load_project
 
-        run_project = load_project(str(project_path))
+        from .project_gen import run_centroid_dir_for_group, run_detection_output_dir_for_comparison
+
+        project = load_project(str(base_project_path))
         control_label, disease_label = cohort_labels[0], cohort_labels[1]
-        iteration.centroid1Dir = run_project.get_centroid_dir("control", control_label)
-        iteration.centroid2Dir = run_project.get_centroid_dir("disease", disease_label)
-        iteration.detectOutDir = run_project.get_detection_output_dir(control_label, disease_label)
+        with_side = project._get_resolved_groups_with_side(expand_subclusters=True)
+        side_by_label = {lbl: side for lbl, _, side in with_side}
+        iteration.centroid1Dir = run_centroid_dir_for_group(
+            run_dir,
+            base_project_path,
+            side_by_label.get(control_label, "control"),
+            control_label,
+        )
+        iteration.centroid2Dir = run_centroid_dir_for_group(
+            run_dir,
+            base_project_path,
+            side_by_label.get(disease_label, "disease"),
+            disease_label,
+        )
+        iteration.detectOutDir = run_detection_output_dir_for_comparison(
+            run_dir,
+            base_project_path,
+            control_label,
+            disease_label,
+        )
 
 
 def _tag_iteration_as_stratified_draw(
@@ -271,7 +293,7 @@ def _rehydrate_iteration_centroid_scope(
     *,
     layout: str,
     run_dir: Path,
-    project_path: Path,
+    base_project_path: Path,
     cohort_paths_list: List[Tuple[str, List[str]]],
     cohort_labels: List[str],
     samples_base_path: str,
@@ -332,7 +354,8 @@ def _rehydrate_iteration_centroid_scope(
     _attach_iteration_centroid_scope(
         iteration,
         layout=layout,
-        project_path=project_path,
+        base_project_path=base_project_path,
+        run_dir=run_dir,
         cohort_labels=cohort_labels,
         train_by_label=train_by_label,
         parallel_seed=parallel_seed,
@@ -426,7 +449,7 @@ def _materialize_iteration(
             iteration,
             layout=layout,
             run_dir=run_dir,
-            project_path=project_path,
+            base_project_path=base_project,
             cohort_paths_list=cohort_paths_list,
             cohort_labels=cohort_labels,
             samples_base_path=config.samples_base_path,
@@ -579,7 +602,8 @@ def _materialize_iteration(
         _attach_iteration_centroid_scope(
             iteration,
             layout=layout,
-            project_path=project_path,
+            base_project_path=base_project,
+            run_dir=run_dir,
             cohort_labels=cohort_labels,
             train_by_label=train_by_label_for_scope,
             parallel_seed=parallel_seed,

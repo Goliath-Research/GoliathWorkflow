@@ -87,6 +87,7 @@ def test_build_group_centroid_scope_emits_add_remove(tmp_path: Path) -> None:
     project = _minimal_hierarchical_project(tmp_path)
     groups = build_group_centroid_scope(
         base_project_path=project,
+        run_dir=tmp_path / "run_0001",
         cohort_labels=["all", "PCa_PCa1", "PCa_PCa2"],
         train_by_label={
             "all": [str((tmp_path / "samples/s1").resolve()), str((tmp_path / "samples/s2").resolve())],
