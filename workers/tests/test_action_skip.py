@@ -66,6 +66,22 @@ def test_verify_artifacts_detects_size_change(tmp_path: Path) -> None:
     assert verify_artifacts([ref]) is False
 
 
+def test_verify_artifacts_ignores_action_result_envelope_size_drift(tmp_path: Path) -> None:
+    from methyl_domain.action_result import ArtifactRef
+
+    envelope = tmp_path / ".action_results" / "pipeline_centroid.1_CG_all.json"
+    envelope.parent.mkdir(parents=True)
+    envelope.write_text("{}", encoding="utf-8")
+    h5 = tmp_path / "1-CG.h5"
+    h5.write_bytes(b"x" * 10)
+    refs = [
+        ArtifactRef(path=str(envelope), bytes=2),
+        ArtifactRef(path=str(h5), bytes=10),
+    ]
+    envelope.write_text('{"schema_version": "1.1", "grown": true}', encoding="utf-8")
+    assert verify_artifacts(refs) is True
+
+
 def test_maybe_skip_replays_when_manifest_matches(tmp_path: Path) -> None:
     entry = find_catalog_entry("validation.stability")
     assert entry is not None

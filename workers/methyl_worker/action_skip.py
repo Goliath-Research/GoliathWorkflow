@@ -261,10 +261,17 @@ def _path_like_output_values(output_dict: Mapping[str, Any]) -> List[Path]:
     return paths
 
 
+def _is_action_result_envelope(path: Path) -> bool:
+    """Manifest JSON under .action_results/ — not a product artifact."""
+    return path.parent.name == ".action_results" and path.suffix == ".json"
+
+
 def artifacts_from_output(output_dict: Mapping[str, Any]) -> List[ArtifactRef]:
     refs: List[ArtifactRef] = []
     seen: set[str] = set()
     for path in _path_like_output_values(output_dict):
+        if _is_action_result_envelope(path):
+            continue
         key = str(path.resolve())
         if key in seen:
             continue
@@ -304,6 +311,8 @@ def _requires_output_artifacts(entry: ActionCatalogEntry) -> bool:
 def verify_artifacts(artifacts: List[ArtifactRef]) -> bool:
     for ref in artifacts:
         path = Path(ref.path)
+        if _is_action_result_envelope(path):
+            continue
         if not path.is_file():
             return False
         if ref.bytes is not None:
@@ -390,7 +399,10 @@ def maybe_skip_action(
         return None
     if record.output_signature != compute_output_signature(record.artifacts):
         return None
-    if not record.artifacts and _requires_output_artifacts(entry):
+    product_artifacts = [
+        a for a in record.artifacts if not _is_action_result_envelope(Path(a.path))
+    ]
+    if not product_artifacts and _requires_output_artifacts(entry):
         logger.info(
             "Not skipping %s: manifest %s recorded zero output artifacts (cannot verify success)",
             entry.action_name,
