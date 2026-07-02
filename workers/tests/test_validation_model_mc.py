@@ -42,6 +42,11 @@ def test_model_mc_handler_delegates_to_runner(tmp_path: Path) -> None:
                 task_input,
             )
 
+    mock_run.assert_called_once()
+    assert out.modelMcRoot.endswith("model_mc")
+    assert out.n_iterations == 3
+
+
 def test_load_mc_config_ignores_non_planner_task_fields(tmp_path: Path) -> None:
     """Stability-shaped task input carries fields ValidationPlanRequest forbids.
 
