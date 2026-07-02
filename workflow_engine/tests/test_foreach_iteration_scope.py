@@ -81,7 +81,7 @@ class ForeachIterationScopeTests(unittest.TestCase):
     def test_validation_mc_fixture_shape(self) -> None:
         from pathlib import Path
 
-        fixture = Path(__file__).resolve().parents[1] / "sql/instance_context_examples/validation_mc.json"
+        fixture = Path(__file__).resolve().parents[1] / "sql_mssql/instance_context_examples/validation_mc.json"
         data = json.loads(fixture.read_text(encoding="utf-8"))
         self.assertIn("iterations", data)
         first = data["iterations"][0]
