@@ -39,9 +39,9 @@ isProject: false
   - [`packages/methylvalidation/methyl_validation/planner.py`](packages/methylvalidation/methyl_validation/planner.py)
   - [`packages/methylvalidation/methyl_validation/task_schema.py`](packages/methylvalidation/methyl_validation/task_schema.py)
 - Delphi workflow runtime already resolves action input before claim:
-  - [`workflow_engine/src/WfEngine.ControlFlow.pas`](workflow_engine/src/WfEngine.ControlFlow.pas) (`ActivateAction` -> `ResolveInputForAction` -> persist `input_json`).
+  - [`workflow_engine/delphi/src/WfEngine.ControlFlow.pas`](workflow_engine/delphi/src/WfEngine.ControlFlow.pas) (`ActivateAction` -> `ResolveInputForAction` -> persist `input_json`).
 - SQL runtime already provides worker orchestration and control flow primitives:
-  - [`workflow_engine/sql/MethylPipelineDB_Script.sql`](workflow_engine/sql/MethylPipelineDB_Script.sql) (`wf.sp_start_workflow_instance`, `wf.sp_worker_request_task`, `wf.sp_worker_submit_result`).
+  - [`workflow_engine/sql_mssql/MethylPipelineDB_Script.sql`](workflow_engine/sql_mssql/MethylPipelineDB_Script.sql) (`wf.sp_start_workflow_instance`, `wf.sp_worker_request_task`, `wf.sp_worker_submit_result`).
 
 ## Target architecture
 ```mermaid
@@ -64,33 +64,33 @@ flowchart TD
   - Ensure IF/SWITCH can branch from variable-driven state (`condition_var`/`switch_var`) consistently with Delphi behavior.
   - Add minimal metadata persistence for Monte Carlo planning snapshots and iteration records (either columns/JSON blob or dedicated `wf` tables).
 - Primary SQL touchpoints:
-  - [`workflow_engine/sql/MethylPipelineDB_Script.sql`](workflow_engine/sql/MethylPipelineDB_Script.sql)
-  - [`workflow_engine/sql/wf_scope_variables.sql`](workflow_engine/sql/wf_scope_variables.sql)
+  - [`workflow_engine/sql_mssql/MethylPipelineDB_Script.sql`](workflow_engine/sql_mssql/MethylPipelineDB_Script.sql)
+  - [`workflow_engine/sql_mssql/wf_scope_variables.sql`](workflow_engine/sql_mssql/wf_scope_variables.sql)
   - New migration script for MC metadata tables/procs under [`workflow_engine/sql`](workflow_engine/sql)
 
 ## Delphi middle-tier changes
 - Add a dedicated Monte Carlo planner service to port Python planning behavior for all layouts:
   - New units:
-    - [`workflow_engine/src/WfEngine.McTypes.pas`](workflow_engine/src/WfEngine.McTypes.pas)
-    - [`workflow_engine/src/WfEngine.McPlanner.pas`](workflow_engine/src/WfEngine.McPlanner.pas)
+    - [`workflow_engine/delphi/src/WfEngine.McTypes.pas`](workflow_engine/delphi/src/WfEngine.McTypes.pas)
+    - [`workflow_engine/delphi/src/WfEngine.McPlanner.pas`](workflow_engine/delphi/src/WfEngine.McPlanner.pas)
 - Extend engine and repository contracts:
-  - [`workflow_engine/src/WfEngine.Interfaces.pas`](workflow_engine/src/WfEngine.Interfaces.pas): add planner interface and repository methods for MC plan persistence/query.
-  - [`workflow_engine/src/WfEngine.Repository.pas`](workflow_engine/src/WfEngine.Repository.pas): implement plan metadata and iteration scope writes/reads.
-  - [`workflow_engine/src/WfEngine.Scheduler.pas`](workflow_engine/src/WfEngine.Scheduler.pas): add `PrepareMonteCarloInstance` / `CreateAndStartMonteCarloInstance` orchestration.
+  - [`workflow_engine/delphi/src/WfEngine.Interfaces.pas`](workflow_engine/delphi/src/WfEngine.Interfaces.pas): add planner interface and repository methods for MC plan persistence/query.
+  - [`workflow_engine/delphi/src/WfEngine.Repository.pas`](workflow_engine/delphi/src/WfEngine.Repository.pas): implement plan metadata and iteration scope writes/reads.
+  - [`workflow_engine/delphi/src/WfEngine.Scheduler.pas`](workflow_engine/delphi/src/WfEngine.Scheduler.pas): add `PrepareMonteCarloInstance` / `CreateAndStartMonteCarloInstance` orchestration.
 - Integrate with runtime variable and input resolution:
-  - [`workflow_engine/src/WfEngine.Scope.pas`](workflow_engine/src/WfEngine.Scope.pas): seed instance-level and iteration-level MC variables.
-  - [`workflow_engine/src/WfEngine.JsonResolver.pas`](workflow_engine/src/WfEngine.JsonResolver.pas): ensure task payload assembly can emit full per-run config from MC scope entries.
-  - [`workflow_engine/src/WfEngine.ControlFlow.pas`](workflow_engine/src/WfEngine.ControlFlow.pas): keep scheduling generic; invoke planner only at controlled engine entry points.
+  - [`workflow_engine/delphi/src/WfEngine.Scope.pas`](workflow_engine/delphi/src/WfEngine.Scope.pas): seed instance-level and iteration-level MC variables.
+  - [`workflow_engine/delphi/src/WfEngine.JsonResolver.pas`](workflow_engine/delphi/src/WfEngine.JsonResolver.pas): ensure task payload assembly can emit full per-run config from MC scope entries.
+  - [`workflow_engine/delphi/src/WfEngine.ControlFlow.pas`](workflow_engine/delphi/src/WfEngine.ControlFlow.pas): keep scheduling generic; invoke planner only at controlled engine entry points.
 - Keep worker adapter thin:
-  - [`workflow_engine/src/WfEngine.WorkerApiAdapter.pas`](workflow_engine/src/WfEngine.WorkerApiAdapter.pas) remains claim/submit bridge, not planner.
+  - [`workflow_engine/delphi/src/WfEngine.WorkerApiAdapter.pas`](workflow_engine/delphi/src/WfEngine.WorkerApiAdapter.pas) remains claim/submit bridge, not planner.
 
 ## Workflow definition and seed strategy
 - Add/adjust workflow seed scripts so MC workflow is explicit and reusable in Azure SQL:
   - Plan node (engine-side or worker-side), iteration loop node, discovery task node, aggregate node.
   - Include all layout routing fields in input JSON schema.
 - Update and align example scripts/docs:
-  - [`workflow_engine/sql/workflow_tree_seed_example.sql`](workflow_engine/sql/workflow_tree_seed_example.sql)
-  - [`workflow_engine/sql/workflow_tree_run_example.sql`](workflow_engine/sql/workflow_tree_run_example.sql)
+  - [`workflow_engine/sql_mssql/workflow_tree_seed_example.sql`](workflow_engine/sql_mssql/workflow_tree_seed_example.sql)
+  - [`workflow_engine/sql_mssql/workflow_tree_run_example.sql`](workflow_engine/sql_mssql/workflow_tree_run_example.sql)
   - [`workflow_engine/WORKFLOW_ENGINE_DELPHI.md`](workflow_engine/WORKFLOW_ENGINE_DELPHI.md)
 
 ## Validation and parity checks
