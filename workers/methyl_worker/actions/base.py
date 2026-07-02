@@ -229,6 +229,12 @@ class CliAction:
         cmd = self.build_argv(argv_payload)
         logger.info("Running: %s", " ".join(cmd))
         proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        try:
+            from methyl_utils.gpu_detection import cleanup_gpu_memory
+
+            cleanup_gpu_memory()
+        except Exception:
+            pass
         finished_at, duration_ms = timer.finish()
         if proc.returncode != 0:
             raise RuntimeError(self._format_subprocess_failure(cmd, proc))

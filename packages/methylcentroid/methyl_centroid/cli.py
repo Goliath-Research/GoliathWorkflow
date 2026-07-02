@@ -326,6 +326,8 @@ def run_single_processing(
             import traceback
             traceback.print_exc()
         sys.exit(1)
+    finally:
+        cleanup_gpu_memory()
 
 
 def run_batch_processing(batch_config: BatchProcessingConfig) -> None:
