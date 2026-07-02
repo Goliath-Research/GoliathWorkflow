@@ -105,6 +105,8 @@ When instance/profile sets `alignmentMode: "pangenome"` (scope flag `usePangenom
 
 Profile override: `actionConfig.parabricks.alignment_mode: "pangenome"`.
 
+**Staging the graph bundle:** run [`scripts/download_pangenome_hprc_grch38.sh`](../../scripts/download_pangenome_hprc_grch38.sh) on the worker/GPU node to download `hprc-v1.1-mc-grch38.d9.gbz` from the [HPRC public S3 bucket](https://github.com/human-pangenomics/hpp_pangenome_resources) and build `vg autoindex` + `ref_paths` files under `/work/genomes/pangenome/`. For WGBS, point `PANGENOME_GBZ` at your bisulfite C→T graph and re-run indexing (`SKIP_DOWNLOAD=1` or `FORCE=1`).
+
 Implementation: [`workers/methyl_worker/giraffe_runner.py`](../../workers/methyl_worker/giraffe_runner.py).
 
 **Important:** consolidated alignment QC JSON is **assembled by methyl-qc**, not always emitted directly by Parabricks. When `{sample_id}.json` is absent, `writer._build_parabricks_payload_from_qc_tar` reconstructs the payload from the qc-metrics tar.
@@ -369,7 +371,7 @@ Before starting SamplePrep, confirm:
 - [ ] Profile `actionConfig.methyl_extract.min_mapq` / `min_phred` reviewed for analyte
 - [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
 - [ ] Instance `context_json` includes `fastqStorage`, `samples[]`; reference genome on site manifest
-- [ ] When using pangenome alignment: `pangenome_genome` bundle staged under `/work/genomes/pangenome/` and `alignmentMode: "pangenome"` (or profile `parabricks.alignment_mode`)
+- [ ] When using pangenome alignment: run [`scripts/download_pangenome_hprc_grch38.sh`](../../scripts/download_pangenome_hprc_grch38.sh), set `pangenome_genome` on the site manifest, and `alignmentMode: "pangenome"` (or profile `parabricks.alignment_mode`)
 
 Example profile `actionConfig.alignment_qc` snippet:
 
