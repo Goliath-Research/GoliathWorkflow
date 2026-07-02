@@ -90,6 +90,64 @@ run_vg() {
     vg "$@"
 }
 
+preflight_vg() {
+  # The vgteam/vg images bundle jemalloc compiled for 4 KB memory pages.
+  # On 64 KB-page kernels (e.g. NVIDIA Grace / GH200, aarch64 *-64k) jemalloc
+  # aborts at startup ("Unsupported system page size", SIGSEGV). Detect that
+  # here and print actionable guidance instead of the cryptic crash.
+  local out rc=0
+  out="$(run_vg version 2>&1)" || rc=$?
+  if [[ ${rc} -eq 0 ]]; then
+    return 0
+  fi
+
+  local page_size cause
+  page_size="$(getconf PAGE_SIZE 2>/dev/null || echo unknown)"
+  if printf '%s' "${out}" | grep -qi 'Unsupported system page size'; then
+    cause="bundled jemalloc was compiled for 4096-byte pages and aborts on
+                   64 KB-page kernels (NVIDIA Grace / GH200, *-64k). No runtime
+                   override exists (page size is compile-time)."
+  elif printf '%s' "${out}" | grep -qi 'exec format error'; then
+    cause="image architecture does not match this host and cannot execute
+                   (no working emulation)."
+  else
+    cause="see the container error below."
+  fi
+
+  cat >&2 <<EOF
+[ERROR] ${VG_IMAGE} cannot run on this host.
+
+  Host           : $(uname -m), $(uname -r), page size ${page_size} bytes
+  Cause          : ${cause}
+
+  Container error:
+    $(printf '%s' "${out}" | sed 's/^/    /')
+
+  The 'vg autoindex' step is a one-time OFFLINE prep and its outputs
+  (.dist / .shortread.withzip.min / .shortread.zipcodes / .paths.sub) are
+  portable data files, not executables. Build them on a standard 4 KB-page
+  x86_64 host, then copy them into ${PANGENOME_DIR} here.
+
+  On a 4 KB-page host with Docker, using the SAME vg version
+  (v1.70.0 -> Parabricks-compatible 'autoindex.1.70' format):
+
+    PANGENOME_DIR=/tmp/pg SKIP_DOWNLOAD=1 \\
+      scripts/download_pangenome_hprc_grch38.sh   # after copying the .gbz there
+
+  Then copy the built indexes back to this host:
+
+    scp builder:/tmp/pg/${AUTOINDEX_PREFIX}.dist \\
+        builder:/tmp/pg/${AUTOINDEX_PREFIX}.shortread.withzip.min \\
+        builder:/tmp/pg/${AUTOINDEX_PREFIX}.shortread.zipcodes \\
+        builder:/tmp/pg/${PREFIX}.paths.sub \\
+        ${PANGENOME_DIR}/
+
+  'pbrun giraffe' (NVIDIA Parabricks image) supports Grace/GH200 and runs on
+  this host; only the CPU vg index-prep container has this limitation.
+EOF
+  exit 2
+}
+
 build_autoindex() {
   local gbz_basename
   gbz_basename="$(basename "${GBZ}")"
@@ -162,6 +220,17 @@ main() {
   elif [[ ! -f "${GBZ}" ]]; then
     die "SKIP_DOWNLOAD=1 but GBZ not found: ${GBZ}"
   fi
+
+  local need_index=0
+  if [[ "${FORCE:-0}" == "1" ]]; then
+    need_index=1
+  elif [[ ! -f "${DIST}" || ! -f "${MIN}" || ! -f "${ZIP}" || ! -f "${PATHS_SUB}" ]]; then
+    need_index=1
+  fi
+  if [[ "${need_index}" -eq 1 ]]; then
+    preflight_vg
+  fi
+
   build_autoindex
   build_ref_paths
   verify_outputs
