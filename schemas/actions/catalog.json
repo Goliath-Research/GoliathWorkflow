@@ -392,6 +392,52 @@
       "tool": "ParabricksFq2Bam"
     },
     {
+      "action_config_key": "parabricks",
+      "action_name": "sample.parabricks_giraffe",
+      "argv_map": {},
+      "capability": "parabricks.giraffe",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Align FASTQs with Parabricks vg Giraffe (HPRC pangenome, GRCh38 surjection) + collectmultiplemetrics QC.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.bamPath",
+            "scope_field": "bamPath"
+          },
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.metricsJson",
+            "scope_field": "metricsJson"
+          },
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.qcMetricsTar",
+            "scope_field": "qcMetricsTar"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_parabricks_giraffe",
+      "input_schema_ref": "schemas/tasks/sample_parabricks_giraffe.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_parabricks_giraffe.output.schema.json",
+      "schema_id": "sample.parabricks_giraffe",
+      "tool": "ParabricksGiraffe"
+    },
+    {
       "action_name": "sample.delete_fastqs",
       "argv_map": {},
       "capability": "sample.delete-fastqs",

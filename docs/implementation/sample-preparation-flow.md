@@ -52,7 +52,8 @@ flowchart TD
 | Stage | Worker action | Handler | Key implementation |
 |-------|---------------|---------|-------------------|
 | Download | `sample.download_fastq` | `_handle_download_fastq` | [`workers/methyl_worker/fastq_source.py`](../../workers/methyl_worker/fastq_source.py) |
-| Align | `sample.parabricks_fq2bam` | `_handle_parabricks_fq2bam` | [`workers/methyl_worker/parabricks_runner.py`](../../workers/methyl_worker/parabricks_runner.py) |
+| Align (linear) | `sample.parabricks_fq2bam` | `_handle_parabricks_fq2bam` | [`workers/methyl_worker/parabricks_runner.py`](../../workers/methyl_worker/parabricks_runner.py) |
+| Align (pangenome) | `sample.parabricks_giraffe` | `_handle_parabricks_giraffe` | [`workers/methyl_worker/giraffe_runner.py`](../../workers/methyl_worker/giraffe_runner.py) |
 | Alignment QC | `sample.methyl_qc` | `_handle_methyl_qc` | [`packages/methylalignmentqc/methyl_alignment_qc/core/writer.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/writer.py) |
 | Trim (remediation) | `sample.trim_fastq` | `_handle_trim_fastq` | [`workers/methyl_worker/fastq_trim_runner.py`](../../workers/methyl_worker/fastq_trim_runner.py) |
 | cfDNA fragmentomics | `sample.fragmentomics` | — | [`packages/methylfragmentomics/`](../../packages/methylfragmentomics/) |
@@ -78,6 +79,33 @@ Clara Parabricks runs in Docker via `pbrun fq2bam_meth` with bisulfite-aware ali
 | `{sample_id}.fq2bam_meth.log` | Alignment log |
 
 GPU/Docker setup: [`workers/docs/parabricks.md`](../../workers/docs/parabricks.md).
+
+
+### Parabricks pangenome alignment (`giraffe` + `collectmultiplemetrics`)
+
+When instance/profile sets `alignmentMode: "pangenome"` (scope flag `usePangenome: true`), SamplePrep runs **`sample.parabricks_giraffe`** instead of `sample.parabricks_fq2bam`:
+
+1. **`pbrun giraffe`** — GPU vg Giraffe against an HPRC graph bundle from site manifest `pangenome_genome` (`gbz`, `dist`, `min`, `zipcodes`, `ref_paths`). Output is surjected to **GRCh38** coordinates via `--ref-paths` (same BAM artifact names as the linear path).
+2. **`pbrun collectmultiplemetrics --gen-all-metrics`** — regenerates the same Picard/GATK metric tables (`quality_yield`, `gcbias`, `insert_size`, `sequencingArtifact`, …) from the surjected BAM against `pangenome_genome.linear_ref_fasta`, packaged as `{sample_id}.qc-metrics.tar`.
+
+**Scientific requirement:** stock HPRC graphs are not bisulfite-aware. Operators must supply a **C→T-converted / WGBS-compatible graph** (or an explicit read-conversion workflow documented at the site). Default remains `alignmentMode: "linear"` (`fq2bam_meth`).
+
+**Site manifest example** (`/work/site/methyl_site.json`):
+
+```json
+"pangenome_genome": {
+  "gbz": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.gbz",
+  "dist": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.autoindex.1.70.dist",
+  "min": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.withzip.min",
+  "zipcodes": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.zipcodes",
+  "ref_paths": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.paths.sub",
+  "linear_ref_fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+}
+```
+
+Profile override: `actionConfig.parabricks.alignment_mode: "pangenome"`.
+
+Implementation: [`workers/methyl_worker/giraffe_runner.py`](../../workers/methyl_worker/giraffe_runner.py).
 
 **Important:** consolidated alignment QC JSON is **assembled by methyl-qc**, not always emitted directly by Parabricks. When `{sample_id}.json` is absent, `writer._build_parabricks_payload_from_qc_tar` reconstructs the payload from the qc-metrics tar.
 
@@ -341,6 +369,7 @@ Before starting SamplePrep, confirm:
 - [ ] Profile `actionConfig.methyl_extract.min_mapq` / `min_phred` reviewed for analyte
 - [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
 - [ ] Instance `context_json` includes `fastqStorage`, `samples[]`; reference genome on site manifest
+- [ ] When using pangenome alignment: `pangenome_genome` bundle staged under `/work/genomes/pangenome/` and `alignmentMode: "pangenome"` (or profile `parabricks.alignment_mode`)
 
 Example profile `actionConfig.alignment_qc` snippet:
 

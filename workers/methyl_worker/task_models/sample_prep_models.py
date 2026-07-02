@@ -29,6 +29,15 @@ class ParabricksFq2bamTaskInput(BaseModel):
     projectPath: Optional[str] = None
 
 
+class ParabricksGiraffeTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "ParabricksGiraffe"
+    sampleId: str
+    sampleDir: str
+    projectPath: Optional[str] = None
+
+
 class TrimFastqTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

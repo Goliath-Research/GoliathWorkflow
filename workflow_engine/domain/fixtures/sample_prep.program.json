@@ -16,40 +16,92 @@
         "parallel": true
       },
       "steps": [
-        {"action": "sample.download_fastq", "node_key": "download_fastq"},
-        {"action": "sample.parabricks_fq2bam", "node_key": "parabricks_fq2bam"},
-        {"action": "sample.methyl_qc", "node_key": "methyl_qc"},
+        {
+          "action": "sample.download_fastq",
+          "node_key": "download_fastq"
+        },
+        {
+          "if": "${usePangenome}",
+          "then": [
+            {
+              "action": "sample.parabricks_giraffe",
+              "node_key": "parabricks_giraffe"
+            }
+          ],
+          "else": [
+            {
+              "action": "sample.parabricks_fq2bam",
+              "node_key": "parabricks_fq2bam"
+            }
+          ]
+        },
+        {
+          "action": "sample.methyl_qc",
+          "node_key": "methyl_qc"
+        },
         {
           "if": "${qcPass}",
           "then": [
             {
               "if": "${isCfdna}",
               "then": [
-                {"action": "sample.fragmentomics", "node_key": "methyl_fragmentomics"}
+                {
+                  "action": "sample.fragmentomics",
+                  "node_key": "methyl_fragmentomics"
+                }
               ]
             },
-            {"action": "sample.methyl_extract", "node_key": "methyl_extract"},
-            {"action": "sample.extraction_qc", "node_key": "extraction_qc"},
+            {
+              "action": "sample.methyl_extract",
+              "node_key": "methyl_extract"
+            },
+            {
+              "action": "sample.extraction_qc",
+              "node_key": "extraction_qc"
+            },
             {
               "if": "${extractionQcPass}",
               "then": [
                 {
                   "action": "sample.archive_sample",
                   "node_key": "archive_sample",
-                  "with": {"mode": "full"}
+                  "with": {
+                    "mode": "full"
+                  }
                 },
-                {"action": "sample.delete_fastqs", "node_key": "delete_fastqs"},
-                {"action": "sample.delete_bam", "node_key": "delete_bam"}
+                {
+                  "action": "sample.delete_fastqs",
+                  "node_key": "delete_fastqs"
+                },
+                {
+                  "action": "sample.delete_bam",
+                  "node_key": "delete_bam"
+                }
               ],
               "else": [
                 {
                   "action": "sample.archive_sample",
                   "node_key": "archive_sample_qc_only",
-                  "with": {"mode": "qc_only", "rejectReason": "extraction_qc_failed"}
+                  "with": {
+                    "mode": "qc_only",
+                    "rejectReason": "extraction_qc_failed"
+                  }
                 },
-                {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_extraction_fail"},
-                {"action": "sample.delete_bam", "node_key": "delete_bam_extraction_fail"},
-                {"action": "sample.qc_failed", "node_key": "extraction_qc_failed", "with": {"reason": "extraction_qc_failed"}}
+                {
+                  "action": "sample.delete_fastqs",
+                  "node_key": "delete_fastqs_extraction_fail"
+                },
+                {
+                  "action": "sample.delete_bam",
+                  "node_key": "delete_bam_extraction_fail"
+                },
+                {
+                  "action": "sample.qc_failed",
+                  "node_key": "extraction_qc_failed",
+                  "with": {
+                    "reason": "extraction_qc_failed"
+                  }
+                }
               ]
             }
           ],
@@ -70,14 +122,31 @@
                   }
                 },
                 {
-                  "action": "sample.parabricks_fq2bam",
-                  "node_key": "parabricks_realign",
-                  "with": {
-                    "forceRealign": true,
-                    "alignmentPass": "post_trim_realign",
-                    "remediationReason": "${var.qcAttemptReason}",
-                    "workflowNodeKey": "parabricks_realign"
-                  }
+                  "if": "${usePangenome}",
+                  "then": [
+                    {
+                      "action": "sample.parabricks_giraffe",
+                      "node_key": "parabricks_giraffe_realign",
+                      "with": {
+                        "forceRealign": true,
+                        "alignmentPass": "post_trim_realign",
+                        "remediationReason": "${var.qcAttemptReason}",
+                        "workflowNodeKey": "parabricks_realign"
+                      }
+                    }
+                  ],
+                  "else": [
+                    {
+                      "action": "sample.parabricks_fq2bam",
+                      "node_key": "parabricks_realign",
+                      "with": {
+                        "forceRealign": true,
+                        "alignmentPass": "post_trim_realign",
+                        "remediationReason": "${var.qcAttemptReason}",
+                        "workflowNodeKey": "parabricks_realign"
+                      }
+                    }
+                  ]
                 },
                 {
                   "action": "sample.methyl_qc",
@@ -103,31 +172,63 @@
                     {
                       "if": "${isCfdna}",
                       "then": [
-                        {"action": "sample.fragmentomics", "node_key": "methyl_fragmentomics_retry"}
+                        {
+                          "action": "sample.fragmentomics",
+                          "node_key": "methyl_fragmentomics_retry"
+                        }
                       ]
                     },
-                    {"action": "sample.methyl_extract", "node_key": "methyl_extract_retry"},
-                    {"action": "sample.extraction_qc", "node_key": "extraction_qc_retry"},
+                    {
+                      "action": "sample.methyl_extract",
+                      "node_key": "methyl_extract_retry"
+                    },
+                    {
+                      "action": "sample.extraction_qc",
+                      "node_key": "extraction_qc_retry"
+                    },
                     {
                       "if": "${extractionQcPass}",
                       "then": [
                         {
                           "action": "sample.archive_sample",
                           "node_key": "archive_sample_retry",
-                          "with": {"mode": "full"}
+                          "with": {
+                            "mode": "full"
+                          }
                         },
-                        {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_after_retry"},
-                        {"action": "sample.delete_bam", "node_key": "delete_bam_retry"}
+                        {
+                          "action": "sample.delete_fastqs",
+                          "node_key": "delete_fastqs_after_retry"
+                        },
+                        {
+                          "action": "sample.delete_bam",
+                          "node_key": "delete_bam_retry"
+                        }
                       ],
                       "else": [
                         {
                           "action": "sample.archive_sample",
                           "node_key": "archive_sample_qc_only_retry",
-                          "with": {"mode": "qc_only", "rejectReason": "extraction_qc_failed"}
+                          "with": {
+                            "mode": "qc_only",
+                            "rejectReason": "extraction_qc_failed"
+                          }
                         },
-                        {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_extraction_fail_retry"},
-                        {"action": "sample.delete_bam", "node_key": "delete_bam_extraction_fail_retry"},
-                        {"action": "sample.qc_failed", "node_key": "extraction_qc_failed_retry", "with": {"reason": "extraction_qc_failed"}}
+                        {
+                          "action": "sample.delete_fastqs",
+                          "node_key": "delete_fastqs_extraction_fail_retry"
+                        },
+                        {
+                          "action": "sample.delete_bam",
+                          "node_key": "delete_bam_extraction_fail_retry"
+                        },
+                        {
+                          "action": "sample.qc_failed",
+                          "node_key": "extraction_qc_failed_retry",
+                          "with": {
+                            "reason": "extraction_qc_failed"
+                          }
+                        }
                       ]
                     }
                   ],
@@ -135,11 +236,23 @@
                     {
                       "action": "sample.archive_sample",
                       "node_key": "archive_sample_qc_only_align_retry",
-                      "with": {"mode": "qc_only", "rejectReason": "alignment_qc_failed_after_retry"}
+                      "with": {
+                        "mode": "qc_only",
+                        "rejectReason": "alignment_qc_failed_after_retry"
+                      }
                     },
-                    {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_retry_fail"},
-                    {"action": "sample.delete_bam", "node_key": "delete_bam_retry_fail"},
-                    {"action": "sample.qc_failed", "node_key": "qc_failed_after_retry"}
+                    {
+                      "action": "sample.delete_fastqs",
+                      "node_key": "delete_fastqs_retry_fail"
+                    },
+                    {
+                      "action": "sample.delete_bam",
+                      "node_key": "delete_bam_retry_fail"
+                    },
+                    {
+                      "action": "sample.qc_failed",
+                      "node_key": "qc_failed_after_retry"
+                    }
                   ]
                 }
               ],
@@ -147,11 +260,23 @@
                 {
                   "action": "sample.archive_sample",
                   "node_key": "archive_sample_qc_only_align",
-                  "with": {"mode": "qc_only", "rejectReason": "alignment_qc_failed"}
+                  "with": {
+                    "mode": "qc_only",
+                    "rejectReason": "alignment_qc_failed"
+                  }
                 },
-                {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_fail"},
-                {"action": "sample.delete_bam", "node_key": "delete_bam_fail"},
-                {"action": "sample.qc_failed", "node_key": "qc_failed"}
+                {
+                  "action": "sample.delete_fastqs",
+                  "node_key": "delete_fastqs_fail"
+                },
+                {
+                  "action": "sample.delete_bam",
+                  "node_key": "delete_bam_fail"
+                },
+                {
+                  "action": "sample.qc_failed",
+                  "node_key": "qc_failed"
+                }
               ]
             }
           ]

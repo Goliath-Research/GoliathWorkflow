@@ -82,12 +82,15 @@ def site_slice_for_action(site: Mapping[str, Any], action_key: str) -> Dict[str,
     ref = site.get("reference_genome") or {}
     ann = site.get("annotation") or {}
     caches = site.get("caches") or {}
+    pangenome = site.get("pangenome_genome") or {}
 
-    if action_key == "alignment_qc" and ref.get("fasta"):
-        out["genome_fasta"] = ref["fasta"]
-    if action_key in ("methyl_extract", "alignment_qc") and ref.get("fasta"):
-        out.setdefault("reference_fasta", ref["fasta"])
-        out.setdefault("genome_fasta", ref["fasta"])
+    linear_fasta = pangenome.get("linear_ref_fasta") or ref.get("fasta")
+
+    if action_key == "alignment_qc" and linear_fasta:
+        out["genome_fasta"] = linear_fasta
+    if action_key in ("methyl_extract", "alignment_qc") and linear_fasta:
+        out.setdefault("reference_fasta", linear_fasta)
+        out.setdefault("genome_fasta", linear_fasta)
     if action_key == "mapper":
         if ann.get("gtf"):
             out["gtf"] = ann["gtf"]
@@ -103,6 +106,29 @@ def site_slice_for_action(site: Mapping[str, Any], action_key: str) -> Dict[str,
     if action_key == "methyl_extract" and site.get("methyl_extract"):
         out.update(dict(site["methyl_extract"]))
     return out
+
+
+def resolve_pangenome_genome(site: Mapping[str, Any] | None = None) -> Dict[str, str]:
+    """
+    Resolve pangenome graph bundle paths from site manifest ``pangenome_genome``.
+
+    Required keys: gbz, dist, min, zipcodes, ref_paths, linear_ref_fasta.
+    """
+    data = dict(site or load_site_manifest())
+    bundle = data.get("pangenome_genome") or {}
+    if not isinstance(bundle, dict):
+        bundle = {}
+    required = ("gbz", "dist", "min", "zipcodes", "ref_paths", "linear_ref_fasta")
+    resolved: Dict[str, str] = {}
+    for key in required:
+        raw = bundle.get(key)
+        if raw in (None, ""):
+            raise RuntimeError(
+                f"site manifest pangenome_genome.{key} is required for pangenome alignment "
+                f"(METHYL_SITE_CONFIG / reference_genome.fasta alone is insufficient)"
+            )
+        resolved[key] = str(raw)
+    return resolved
 
 
 def resolve_action_config(

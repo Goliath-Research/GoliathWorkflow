@@ -32,7 +32,7 @@ After `sample.extraction_qc`, scope receives **`extractionQcPass`** from **`outp
 | `sample.download-fastq` | Destination FASTQs missing, or remote size/mtime differ from local |
 | `sample.delete-fastqs` | FASTQs already absent (no-op success) |
 | `sample.delete-bam` | BAM already absent (no-op success) |
-| `parabricks.fq2bam` | Only when BAM missing or QC artifact missing (`{sampleId}.json` or `{sampleId}.qc-metrics.tar`); pass **`forceRealign: true`** after trim to clear stale outputs |
+| `parabricks.fq2bam` / `parabricks.giraffe` | Only when BAM missing or QC artifact missing (`{sampleId}.json` or `{sampleId}.qc-metrics.tar`); pass **`forceRealign: true`** after trim to clear stale outputs |
 | `sample.trim-fastq` | When trimmed FASTQs missing or `trimFront2` changed |
 | `methyl-extract` | When HDF5 outputs missing for `project.chromosomes × extract_contexts` |
 | `methyl-extraction-qc` | When `{sampleId}.extraction_qc.json` missing or manifest changed |
@@ -191,6 +191,20 @@ Task `input_json` keys: `parabricksImage`, `bwaThreads`, `gpuFlags`, `extraDocke
 ```
 
 ---
+
+## `parabricks.giraffe`
+
+**action_name:** `sample.parabricks_giraffe`
+**Runtime:** Docker GPU container running `pbrun giraffe` (HPRC pangenome, GRCh38 surjection) followed by `pbrun collectmultiplemetrics --gen-all-metrics` on the surjected BAM.
+
+**When:** SamplePrep **IF** `usePangenome` is true (`alignmentMode: "pangenome"`). Idempotency and `forceRealign` semantics match `parabricks.fq2bam`.
+
+**Site manifest (`pangenome_genome`):** `gbz`, `dist`, `min`, `zipcodes`, `ref_paths`, `linear_ref_fasta` (required). `linear_ref_fasta` is also used for `collectmultiplemetrics`, `methyl_extract`, and `alignment_qc`.
+
+**Outputs:** Same artifacts as `parabricks.fq2bam` (`{sampleId}.bam`, `{sampleId}.deduplicate_metrics.txt`, `{sampleId}.qc-metrics.tar`, alignment log). `methyl-qc` consumes the regenerated qc-metrics tar unchanged.
+
+**Bisulfite caveat:** operator must provide a WGBS-compatible pangenome graph; stock HPRC graphs alone are not bisulfite-aware.
+
 
 ## `methyl-qc`
 
@@ -497,6 +511,7 @@ Use `result_code = 0` even when marking failed — the sample is intentionally s
 |-------------|------------|
 | `sample.download_fastq` | `sample.download-fastq` |
 | `sample.parabricks_fq2bam` | `parabricks.fq2bam` |
+| `sample.parabricks_giraffe` | `parabricks.giraffe` |
 | `sample.delete_fastqs` | `sample.delete-fastqs` |
 | `sample.trim_fastq` | `sample.trim-fastq` |
 | `sample.methyl_qc` | `methyl-qc` |

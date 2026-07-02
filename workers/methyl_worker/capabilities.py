@@ -15,6 +15,7 @@ OMNIBUS_WILDCARD = "*"
 GPU_REQUIRED_CAPABILITIES: FrozenSet[str] = frozenset(
     {
         "parabricks.fq2bam",
+        "parabricks.giraffe",
         "methyl-centroid",
     }
 )
@@ -131,6 +132,7 @@ def resolve_worker_capabilities(
 
     if _parabricks_available() and gpu:
         caps.add("parabricks.fq2bam")
+        caps.add("parabricks.giraffe")
     elif _parabricks_available() and not gpu:
         logger.warning("Parabricks image configured but no GPU; omitting parabricks.fq2bam")
 
@@ -157,7 +159,7 @@ def assert_node_can_serve_capability(capability: str) -> None:
             f"Worker configured for capability {capability!r} but no functional GPU was detected. "
             "Install NVIDIA drivers/CuPy, verify nvidia-smi, or run a CPU-only capability unit."
         )
-    if capability == "parabricks.fq2bam" and not _parabricks_available():
+    if capability in ("parabricks.fq2bam", "parabricks.giraffe") and not _parabricks_available():
         raise RuntimeError(
             "Worker configured for parabricks.fq2bam but Parabricks is not available. "
             "Set METHYL_PARABRICKS_IMAGE or install the nvcr.io Parabricks image."

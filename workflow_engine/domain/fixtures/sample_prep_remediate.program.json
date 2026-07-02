@@ -16,7 +16,10 @@
         "parallel": true
       },
       "steps": [
-        {"action": "sample.download_fastq", "node_key": "download_fastq"},
+        {
+          "action": "sample.download_fastq",
+          "node_key": "download_fastq"
+        },
         {
           "action": "sample.trim_fastq",
           "node_key": "trim_fastq",
@@ -26,7 +29,21 @@
             "workflowNodeKey": "trim_fastq"
           }
         },
-        {"action": "sample.parabricks_fq2bam", "node_key": "parabricks_fq2bam"},
+        {
+          "if": "${usePangenome}",
+          "then": [
+            {
+              "action": "sample.parabricks_giraffe",
+              "node_key": "parabricks_giraffe"
+            }
+          ],
+          "else": [
+            {
+              "action": "sample.parabricks_fq2bam",
+              "node_key": "parabricks_fq2bam"
+            }
+          ]
+        },
         {
           "action": "sample.methyl_qc",
           "node_key": "methyl_qc",
@@ -40,33 +57,62 @@
         {
           "if": "${qcPass}",
           "then": [
-            {"action": "sample.delete_fastqs", "node_key": "delete_fastqs"},
+            {
+              "action": "sample.delete_fastqs",
+              "node_key": "delete_fastqs"
+            },
             {
               "if": "${isCfdna}",
               "then": [
-                {"action": "sample.fragmentomics", "node_key": "methyl_fragmentomics"}
+                {
+                  "action": "sample.fragmentomics",
+                  "node_key": "methyl_fragmentomics"
+                }
               ]
             },
-            {"action": "sample.methyl_extract", "node_key": "methyl_extract"},
-            {"action": "sample.extraction_qc", "node_key": "extraction_qc"},
+            {
+              "action": "sample.methyl_extract",
+              "node_key": "methyl_extract"
+            },
+            {
+              "action": "sample.extraction_qc",
+              "node_key": "extraction_qc"
+            },
             {
               "if": "${extractionQcPass}",
               "then": [
                 {
                   "action": "sample.archive_sample",
                   "node_key": "archive_sample",
-                  "with": {"mode": "full"}
+                  "with": {
+                    "mode": "full"
+                  }
                 },
-                {"action": "sample.delete_bam", "node_key": "delete_bam"}
+                {
+                  "action": "sample.delete_bam",
+                  "node_key": "delete_bam"
+                }
               ],
               "else": [
-                {"action": "sample.qc_failed", "node_key": "extraction_qc_failed", "with": {"reason": "extraction_qc_failed"}}
+                {
+                  "action": "sample.qc_failed",
+                  "node_key": "extraction_qc_failed",
+                  "with": {
+                    "reason": "extraction_qc_failed"
+                  }
+                }
               ]
             }
           ],
           "else": [
-            {"action": "sample.delete_fastqs", "node_key": "delete_fastqs_fail"},
-            {"action": "sample.qc_failed", "node_key": "qc_failed"}
+            {
+              "action": "sample.delete_fastqs",
+              "node_key": "delete_fastqs_fail"
+            },
+            {
+              "action": "sample.qc_failed",
+              "node_key": "qc_failed"
+            }
           ]
         }
       ]

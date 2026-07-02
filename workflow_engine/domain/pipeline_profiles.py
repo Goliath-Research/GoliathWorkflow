@@ -14,6 +14,7 @@ _PROFILE_ALIASES: Dict[str, str] = {
 }
 
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
+    "usePangenome": False,
     "runDmpSelection": False,
     "runGeneFeaturecuts": False,
     "runBiomarkerFilter": False,
@@ -308,6 +309,22 @@ def seed_pipeline_scope_flags(
     if validation.get("dmp_modeling_mode") or validation.get("gene_modeling_mode"):
         for key, val in mode_flags.items():
             out[key] = bool(val)
+
+
+    parabricks_cfg = dict(ac.get("parabricks") or {})
+    alignment_mode = out.get("alignmentMode")
+    if alignment_mode in (None, ""):
+        alignment_mode = parabricks_cfg.get("alignment_mode")
+    if alignment_mode in (None, ""):
+        alignment_mode = "linear"
+    out.setdefault("alignmentMode", str(alignment_mode))
+    if "usePangenome" in out:
+        out["usePangenome"] = bool(out["usePangenome"])
+    else:
+        out.setdefault(
+            "usePangenome",
+            str(alignment_mode).strip().lower() == "pangenome",
+        )
 
     stable_csv = out.get("stableDmpCsv") or validation.get("freeze_stable_dmp_csv")
     if stable_csv and out.get("pipelineProfile") in (

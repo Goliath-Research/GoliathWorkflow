@@ -18,5 +18,13 @@
   "methyl_mapper_home": "/work/cache/methyl_mapper",
   "caches": {
     "string_edges": "/work/cache/methylenricher/string_edges"
+  },
+  "pangenome_genome": {
+    "gbz": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.gbz",
+    "dist": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.autoindex.1.70.dist",
+    "min": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.withzip.min",
+    "zipcodes": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.zipcodes",
+    "ref_paths": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.paths.sub",
+    "linear_ref_fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   }
 }

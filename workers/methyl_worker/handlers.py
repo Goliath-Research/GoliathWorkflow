@@ -438,6 +438,46 @@ def _handle_parabricks_fq2bam(_capability: str, _action_name: str, input: BaseMo
     return ParabricksTaskOutput(status="ok", **result)
 
 
+def _handle_parabricks_giraffe(_capability: str, _action_name: str, input: BaseModel) -> ParabricksTaskOutput:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    from .giraffe_runner import run_giraffe_align
+    from .sample_prep_log import append_sample_prep_log
+    from .task_models.sample_prep_models import ParabricksTaskOutput
+
+    sample_dir = input_json.get("sampleDir")
+    sample_id = input_json.get("sampleId")
+    if not sample_dir or not sample_id:
+        raise RuntimeError("sample.parabricks_giraffe requires sampleDir and sampleId")
+
+    site_path = input_json.get("siteConfigPath")
+    result = run_giraffe_align(
+        sample_id=str(sample_id),
+        sample_dir=str(sample_dir),
+        project=input_json.get("projectPath") or input_json.get("project"),
+        input_json=input_json,
+        site_path=str(site_path) if site_path else None,
+    )
+    reason = str(input_json.get("remediationReason") or "")
+    if input_json.get("forceRealign"):
+        reason = reason or f"forceRealign after trim_front2={input_json.get('trimFront2', '?')}"
+    append_sample_prep_log(
+        Path(str(sample_dir)),
+        sample_id=str(sample_id),
+        action="sample.parabricks_giraffe",
+        capability=_capability,
+        attempt=int(input_json.get("qcAttempt") or 1),
+        reason=reason or "Parabricks giraffe pangenome alignment",
+        inputs={
+            "forceRealign": bool(input_json.get("forceRealign")),
+            "alignmentPass": input_json.get("alignmentPass") or "initial",
+            "alignmentMode": "pangenome",
+        },
+        outputs=result,
+        workflow_node_key=input_json.get("workflowNodeKey") or "parabricks_giraffe",
+    )
+    return ParabricksTaskOutput(status="ok", **result)
+
+
 def _handle_delete_fastqs(_capability: str, _action_name: str, input: BaseModel) -> DeleteTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from .task_models.sample_prep_models import DeleteTaskOutput
