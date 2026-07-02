@@ -338,7 +338,10 @@ def write_mc_config_snapshot(
     config: MonteCarloConfig,
     path: Path,
 ) -> None:
-    """Write MonteCarloConfig for workers (Pydantic JSON, UTF-8)."""
+    """Write MonteCarloConfig for workers (Pydantic JSON, UTF-8).
+
+    Deprecated legacy backend keys are omitted so snapshots never re-seed them.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
-        f.write(config.model_dump_json(indent=2))
+        f.write(config.dump_clean_json(indent=2))

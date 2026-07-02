@@ -603,8 +603,41 @@ def _load_mc_config(input_json: Dict[str, Any]):
     request_data = {key: value for key, value in input_json.items() if key in allowed}
     if project_path:
         request_data["projectPath"] = str(project_path)
+    # Aggregation steps (stability, freeze, model-mc, …) don't carry the planner-only
+    # fields train_fraction / n_iterations / seed, but MonteCarloConfig requires them.
+    # Backfill from the MC config snapshot the planner wrote, so the config the runs were
+    # produced with is honored (config-not-code) instead of re-resolving them from code.
+    _backfill_planner_fields_from_snapshot(input_json, request_data)
     request = ValidationPlanRequest.model_validate(request_data)
     return _load_config_from_project(base_project, request), base_project
+
+
+def _backfill_planner_fields_from_snapshot(
+    input_json: Dict[str, Any], request_data: Dict[str, Any]
+) -> None:
+    """Fill trainFraction / featureIterations / seed from monte_carlo_runs/queue/mc_config.json.
+
+    Only reads the scalar planner fields (not the full, possibly schema-drifted snapshot),
+    and only when the task input did not already provide them.
+    """
+    from contextlib import suppress
+
+    with suppress(Exception):
+        import json as _json
+
+        from methyl_validation.storage_layout import mc_config_snapshot_path
+
+        mc_root = _resolve_monte_carlo_runs_root(input_json)
+        snapshot = mc_config_snapshot_path(mc_root)
+        if not snapshot.is_file():
+            return
+        raw = _json.loads(snapshot.read_text(encoding="utf-8"))
+        if request_data.get("featureIterations") is None and raw.get("n_iterations") is not None:
+            request_data["featureIterations"] = int(raw["n_iterations"])
+        if request_data.get("trainFraction") is None and raw.get("train_fraction") is not None:
+            request_data["trainFraction"] = float(raw["train_fraction"])
+        if request_data.get("seed") is None and raw.get("seed") is not None:
+            request_data["seed"] = int(raw["seed"])
 
 
 def _handle_validation_stability(_capability: str, _action_name: str, input: BaseModel):

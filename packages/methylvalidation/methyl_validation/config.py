@@ -2164,6 +2164,21 @@ class MonteCarloConfig(BaseModel):
             data = json.load(f)
         return cls.model_validate(data)
 
+    def dump_clean_json(self, indent: int = 2) -> str:
+        """Serialize to JSON without deprecated legacy backend keys.
+
+        The legacy backend fields are still declared for backward-compatible attribute
+        reads, but they are rejected on input and their real values live in
+        ``backend_profiles``. Persisted artifacts must not carry them, otherwise a
+        round-trip (``model_validate(model_dump())``) fails and stale snapshots keep
+        re-seeding deprecated values. This is the canonical writer for on-disk configs.
+        """
+        return self.model_dump_json(indent=indent, exclude=set(self._LEGACY_BACKEND_KEYS))
+
+    def dump_clean_dict(self) -> Dict[str, Any]:
+        """Dict form of :meth:`dump_clean_json` (deprecated legacy keys omitted)."""
+        return self.model_dump(mode="json", exclude=set(self._LEGACY_BACKEND_KEYS))
+
 
 def assert_production_model_build_allowed(config: MonteCarloConfig) -> None:
     """Raise ValueError if --model is blocked pending biological review."""

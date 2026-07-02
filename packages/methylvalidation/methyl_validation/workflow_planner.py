@@ -121,6 +121,16 @@ def _load_config_from_project(
         },
         project,
     )
+    # Planner-level fields (train_fraction, n_iterations, seed) may live only in the
+    # instance context at plan time, not in the profile's validation actionConfig.
+    # Aggregation steps re-resolve from the profile and pass these via the request
+    # (backfilled from the MC config snapshot); seed them so model validation succeeds.
+    if mc_dict.get("n_iterations") is None and request.featureIterations is not None:
+        mc_dict["n_iterations"] = int(request.featureIterations)
+    if mc_dict.get("train_fraction") is None and request.trainFraction is not None:
+        mc_dict["train_fraction"] = float(request.trainFraction)
+    if mc_dict.get("seed") is None and request.seed is not None:
+        mc_dict["seed"] = int(request.seed)
     config = MonteCarloConfig.model_validate(mc_dict)
 
     feature_n = request.featureIterations if request.featureIterations is not None else config.n_iterations

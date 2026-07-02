@@ -84,3 +84,51 @@ def test_load_mc_config_ignores_non_planner_task_fields(tmp_path: Path) -> None:
 
     assert base == project_json
     assert captured["projectPath"] == str(project_json)
+
+
+def test_load_mc_config_backfills_planner_fields_from_snapshot(tmp_path: Path) -> None:
+    """Aggregation task input lacks train_fraction/n_iterations.
+
+    _load_mc_config must backfill them from monte_carlo_runs/queue/mc_config.json so
+    _load_config_from_project can build a valid MonteCarloConfig (they otherwise fail
+    with Field required for train_fraction / n_iterations).
+    """
+    import json as _json
+
+    project_json = tmp_path / "project.json"
+    project_json.write_text("{}", encoding="utf-8")
+    mc_root = tmp_path / "monte_carlo_runs"
+    (mc_root / "queue").mkdir(parents=True)
+    (mc_root / "queue" / "mc_config.json").write_text(
+        _json.dumps({"train_fraction": 0.8, "n_iterations": 10, "seed": 7}),
+        encoding="utf-8",
+    )
+
+    captured = {}
+
+    def fake_load(base_project, request, **_kwargs):
+        captured["featureIterations"] = request.featureIterations
+        captured["trainFraction"] = request.trainFraction
+        captured["seed"] = request.seed
+        return MagicMock()
+
+    input_json = {
+        "tool": "validation.stability",
+        "projectPath": str(project_json),
+        "monteCarloRunsRoot": str(mc_root),
+        "outputDir": None,
+    }
+
+    with patch(
+        "methyl_validation.workflow_planner.resolve_base_project_json",
+        return_value=project_json,
+    ):
+        with patch(
+            "methyl_validation.workflow_planner._load_config_from_project",
+            side_effect=fake_load,
+        ):
+            handlers._load_mc_config(input_json)
+
+    assert captured["featureIterations"] == 10
+    assert captured["trainFraction"] == 0.8
+    assert captured["seed"] == 7

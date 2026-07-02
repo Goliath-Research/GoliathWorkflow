@@ -6,9 +6,50 @@ from methyl_validation.cli import _resolve_model_mc_backends
 from methyl_validation.config import MonteCarloConfig
 from methyl_validation.mc_config_load import _update_backend_params
 from methyl_validation.utils.migrate_backend_config import (
+    LEGACY_BACKEND_KEYS,
     _migrate_validation_section,
     merge_legacy_validation_keys_into_backend_profiles,
 )
+
+
+def test_migrator_recognizes_every_model_legacy_key() -> None:
+    """The migrator must strip every key the model rejects.
+
+    If a key is in MonteCarloConfig._LEGACY_BACKEND_KEYS but not in the migrator's
+    LEGACY_BACKEND_KEYS, snapshots carrying it are rejected but never migrated
+    (the mapper_gene_columns reload trap).
+    """
+    missing = set(MonteCarloConfig._LEGACY_BACKEND_KEYS) - set(LEGACY_BACKEND_KEYS)
+    assert missing == set(), f"migrator does not strip model legacy keys: {sorted(missing)}"
+
+
+def test_merge_strips_mapper_gene_columns() -> None:
+    validation = {"mapper_gene_columns": ["geneA", "geneB"], "stability_dmp_freq": 0.7}
+    migrated, moved = merge_legacy_validation_keys_into_backend_profiles(validation)
+    assert "mapper_gene_columns" in moved
+    assert "mapper_gene_columns" not in migrated
+
+
+def test_dump_clean_json_omits_legacy_keys_and_round_trips() -> None:
+    """Clean serialization drops deprecated keys and reloads without error.
+
+    A plain model_dump() re-emits the 65 legacy fields, which the strict validator
+    rejects — so persisted snapshots must use dump_clean_json to stay reloadable.
+    """
+    import json
+
+    cfg = MonteCarloConfig.model_validate(_base_payload())
+
+    plain = json.loads(cfg.model_dump_json())
+    assert set(plain) & set(MonteCarloConfig._LEGACY_BACKEND_KEYS), "precondition: plain dump has legacy keys"
+
+    clean = json.loads(cfg.dump_clean_json())
+    assert set(clean) & set(MonteCarloConfig._LEGACY_BACKEND_KEYS) == set()
+
+    # The previously-broken round-trip now succeeds on clean output.
+    reloaded = MonteCarloConfig.model_validate(clean)
+    assert reloaded.train_fraction == cfg.train_fraction
+    assert reloaded.n_iterations == cfg.n_iterations
 
 
 def _base_payload() -> dict:

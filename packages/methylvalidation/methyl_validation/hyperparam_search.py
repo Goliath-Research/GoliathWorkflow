@@ -127,7 +127,7 @@ def run_search(
         tdir.mkdir(parents=True, exist_ok=True)
         cfg_path = tdir / "mc_config.json"
         with open(cfg_path, "w", encoding="utf-8") as f:
-            f.write(cfg.model_dump_json(indent=2))
+            f.write(cfg.dump_clean_json(indent=2))
         mcr = monte_carlo_runs_dir_for_config(cfg)
         rec: Dict[str, Any] = {
             "trial": idx,
