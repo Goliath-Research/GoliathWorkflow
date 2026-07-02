@@ -622,17 +622,17 @@ def mann_whitney_from_bin_counts(
 
     mean_u = (n1 * n2) / 2.0
     valid = (n1 > 0) & (n2 > 0) & xp.isfinite(var_u) & (var_u > 0.0)
-    z_abs = xp.zeros_like(u_stat, dtype=xp.float64)
-    z_abs[valid] = xp.abs((u_stat[valid] - mean_u[valid]) / xp.sqrt(var_u[valid]))
+    z_stat = xp.zeros_like(u_stat, dtype=xp.float64)
+    z_stat[valid] = (u_stat[valid] - mean_u[valid]) / xp.sqrt(var_u[valid])
     p_value = 2.0 * xp.asarray(
-        norm_sf(to_cpu(z_abs), prefer_gpu=prefer_gpu), dtype=xp.float64
+        norm_sf(to_cpu(xp.abs(z_stat)), prefer_gpu=prefer_gpu), dtype=xp.float64
     )
     p_value = xp.where(valid, p_value, 1.0)
     p_value = xp.clip(p_value, 1e-300, 1.0)
 
     return {
         "u_stat": to_cpu(u_stat).astype(np.float64),
-        "z_stat": to_cpu(z_abs).astype(np.float64),
+        "z_stat": to_cpu(z_stat).astype(np.float64),
         "p_value": to_cpu(p_value).astype(np.float64),
         "var_u": to_cpu(var_u).astype(np.float64),
     }
@@ -686,9 +686,13 @@ def ecdf_overlap_integral(
     trapz = getattr(np, "trapezoid", None) or getattr(np, "trapz")
 
     if hasattr(ecdf_view1, "_pdf_batch") and hasattr(ecdf_view2, "_pdf_batch"):
+        from .core.distribution_views import ECDFView
+
         pdf1 = np.asarray(ecdf_view1._pdf_batch(position_indices, grid), dtype=np.float64)
         pdf2 = np.asarray(ecdf_view2._pdf_batch(position_indices, grid), dtype=np.float64)
+        pdf_grid = ECDFView._pdf_integration_grid(grid)
     else:
+        pdf_grid = grid
         pdf1 = np.zeros((len(position_indices), len(grid)), dtype=np.float64)
         pdf2 = np.zeros((len(position_indices), len(grid)), dtype=np.float64)
         for i, pos_idx in enumerate(position_indices):
@@ -697,11 +701,11 @@ def ecdf_overlap_integral(
 
     pdf1 = np.maximum(pdf1, 0.0)
     pdf2 = np.maximum(pdf2, 0.0)
-    area1 = trapz(pdf1, grid, axis=1)
-    area2 = trapz(pdf2, grid, axis=1)
+    area1 = trapz(pdf1, pdf_grid, axis=1)
+    area2 = trapz(pdf2, pdf_grid, axis=1)
     pdf1 = pdf1 / np.maximum(area1[:, None], 1e-12)
     pdf2 = pdf2 / np.maximum(area2[:, None], 1e-12)
-    overlap = trapz(np.minimum(pdf1, pdf2), grid, axis=1)
+    overlap = trapz(np.minimum(pdf1, pdf2), pdf_grid, axis=1)
     return np.clip(np.asarray(overlap, dtype=np.float64), 0.0, 1.0)
 
 

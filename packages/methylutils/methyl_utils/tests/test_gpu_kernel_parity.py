@@ -107,3 +107,28 @@ def test_get_array_module_respects_disable_env():
         assert used is False
     finally:
         os.environ.pop("METHYL_DISABLE_GPU", None)
+
+
+def test_ecdf_view_overlap_matches_pdf_grid_length():
+    """Regression: trapz abscissa must match _pdf_batch interval-midpoint output."""
+    bin_edges, bc1, bc2, _, _, Sx1, _, Sx2_1, _ = _synthetic_bin_data(n_pos=4)
+    N1 = np.maximum(Sx1 + 1, 1.0)
+    view1 = ECDFView(bin_edges, bc1, Sx1, N1, Sx2_1)
+    view2 = ECDFView(bin_edges, bc2, Sx1 * 0.8, N1, Sx2_1)
+    overlap = view1.overlap(view2)
+    assert overlap.shape == (4,)
+    assert np.all(np.isfinite(overlap))
+    assert np.all((overlap >= 0.0) & (overlap <= 1.0))
+
+
+def test_mann_whitney_z_stat_preserves_sign():
+    """Regression: z_stat must be signed, not abs(z)."""
+    bc1 = np.zeros((1, 10), dtype=np.float64)
+    bc2 = np.zeros((1, 10), dtype=np.float64)
+    bc1[0, 0] = 50.0
+    bc2[0, -1] = 50.0
+    n1 = np.array([100.0])
+    n2 = np.array([100.0])
+    out = mann_whitney_from_bin_counts(bc1, bc2, n1, n2, prefer_gpu=False)
+    assert out["z_stat"][0] < 0.0
+    assert out["p_value"][0] < 1.0

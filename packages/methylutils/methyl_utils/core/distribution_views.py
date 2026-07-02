@@ -242,28 +242,37 @@ class ECDFView:
     def _pdf_batch(
         self, position_indices: np.ndarray, grid: np.ndarray
     ) -> np.ndarray:
-        """Evaluate PDF via finite differences of batched linear CDF."""
+        """Evaluate piecewise PDF on interval midpoints; shape (P, len(grid)-1)."""
         position_indices = np.asarray(position_indices, dtype=np.intp).ravel()
         grid = np.clip(np.asarray(grid, dtype=np.float64).ravel(), 0.0, 1.0)
         cdf = self._cdf_batch(position_indices, grid)
         if grid.size < 2:
-            return np.zeros_like(cdf)
+            return np.zeros((len(position_indices), 0), dtype=np.float64)
         dx = np.maximum(np.diff(grid), 1e-12)
         return np.maximum(np.diff(cdf, axis=1), 0.0) / dx[np.newaxis, :]
+
+    @staticmethod
+    def _pdf_integration_grid(grid: np.ndarray) -> np.ndarray:
+        """Abscissa matching ``_pdf_batch`` output (interval midpoints)."""
+        grid = np.clip(np.asarray(grid, dtype=np.float64).ravel(), 0.0, 1.0)
+        if grid.size < 2:
+            return grid
+        return (grid[:-1] + grid[1:]) / 2.0
 
     def overlap(self, other: MethylDistributionView) -> np.ndarray:
         if isinstance(other, ECDFView):
             n = min(self._n_positions, len(other.mean))
             grid = np.linspace(0.0, 1.0, _ECDF_KS_GRID_SIZE, dtype=np.float64)
+            pdf_grid = self._pdf_integration_grid(grid)
             idx = np.arange(n, dtype=np.intp)
             pdf1 = self._pdf_batch(idx, grid)
             pdf2 = other._pdf_batch(idx, grid)
             trapz = getattr(np, "trapezoid", None) or getattr(np, "trapz")
-            area1 = trapz(pdf1, grid, axis=1)
-            area2 = trapz(pdf2, grid, axis=1)
+            area1 = trapz(pdf1, pdf_grid, axis=1)
+            area2 = trapz(pdf2, pdf_grid, axis=1)
             pdf1 = pdf1 / np.maximum(area1[:, None], MIN_EPS)
             pdf2 = pdf2 / np.maximum(area2[:, None], MIN_EPS)
-            overlap = trapz(np.minimum(pdf1, pdf2), grid, axis=1)
+            overlap = trapz(np.minimum(pdf1, pdf2), pdf_grid, axis=1)
             return np.clip(overlap, 0.0, 1.0)
         om = np.asarray(other.mean, dtype=np.float64)
         n = min(len(self._mean), len(om))

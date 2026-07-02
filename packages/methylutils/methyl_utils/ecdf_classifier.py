@@ -97,11 +97,11 @@ class ECDFClassifier:
         w_sq_sum = float(np.sum(self.weights ** 2))
         self._n_effective = (w_sum ** 2) / max(w_sq_sum, 1e-300)
 
-        # Pre-compute PDF lookup tables: shape (n_dmps, _PDF_GRID_SIZE).
-        # Queries are answered with np.interp — no Python loop over samples.
+        # Pre-compute PDF lookup tables on interval midpoints: (n_dmps, _PDF_GRID_SIZE - 1).
         self._grid = np.linspace(0.0, 1.0, _PDF_GRID_SIZE, dtype=np.float64)
-        self._pdf_c1 = self._build_pdf_table(self.bin_counts_c1)  # (n_dmps, grid)
-        self._pdf_c2 = self._build_pdf_table(self.bin_counts_c2)  # (n_dmps, grid)
+        self._pdf_grid = (self._grid[:-1] + self._grid[1:]) / 2.0
+        self._pdf_c1 = self._build_pdf_table(self.bin_counts_c1)
+        self._pdf_c2 = self._build_pdf_table(self.bin_counts_c2)
 
     # ------------------------------------------------------------------
     # Construction helpers
@@ -109,7 +109,7 @@ class ECDFClassifier:
 
     def _build_pdf_table(self, bin_counts: np.ndarray) -> np.ndarray:
         """
-        Build a (n_dmps, _PDF_GRID_SIZE) PDF lookup table via linear CDF interpolation.
+        Build a (n_dmps, len(_pdf_grid)) PDF lookup table via linear CDF interpolation.
         """
         from .array_backend import get_array_module, cdf_linear_interp_batch
 
@@ -135,7 +135,7 @@ class ECDFClassifier:
         from .array_backend import get_array_module, linear_interp_on_grid
 
         xp, _ = get_array_module()
-        return linear_interp_on_grid(xp, x_col, self._grid, pdf_row)
+        return linear_interp_on_grid(xp, x_col, self._pdf_grid, pdf_row)
 
     # ------------------------------------------------------------------
     # Public interface (mirrors BetaClassifier)
