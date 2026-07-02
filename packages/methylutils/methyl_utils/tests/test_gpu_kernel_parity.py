@@ -16,12 +16,10 @@ from methyl_utils.statistical_tests import (
     mann_whitney_from_bin_counts,
 )
 
-
-pytestmark = pytest.mark.skipif(
+requires_gpu = pytest.mark.skipif(
     not prefer_gpu_default(),
     reason="GPU not available or METHYL_DISABLE_GPU is set",
 )
-
 
 RTOL = 1e-4
 ATOL = 1e-6
@@ -41,6 +39,7 @@ def _synthetic_bin_data(n_pos: int = 32, n_bins: int = 20, seed: int = 0):
     return bin_edges, bc1, bc2, n1, n2, Sx1, Sx2, Sx2_1, Sx2_2
 
 
+@requires_gpu
 def test_mann_whitney_cpu_gpu_parity():
     _, bc1, bc2, n1, n2, *_ = _synthetic_bin_data()
     cpu = mann_whitney_from_bin_counts(bc1, bc2, n1, n2, prefer_gpu=False)
@@ -49,6 +48,7 @@ def test_mann_whitney_cpu_gpu_parity():
         np.testing.assert_allclose(cpu[key], gpu[key], rtol=RTOL, atol=ATOL)
 
 
+@requires_gpu
 def test_bhattacharyya_cpu_gpu_parity():
     bin_edges, bc1, bc2, *_ = _synthetic_bin_data()
     cpu = ecdf_bhattacharyya_trapezoidal_from_bin_counts(
@@ -60,6 +60,7 @@ def test_bhattacharyya_cpu_gpu_parity():
     np.testing.assert_allclose(cpu, gpu, rtol=RTOL, atol=ATOL)
 
 
+@requires_gpu
 def test_ecdf_cdf_batch_cpu_gpu_parity():
     bin_edges, bc1, bc2, _, _, Sx1, _, Sx2_1, _ = _synthetic_bin_data(n_pos=16)
     N1 = np.maximum(Sx1 + 1, 1.0)
