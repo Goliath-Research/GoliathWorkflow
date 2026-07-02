@@ -37,6 +37,13 @@ def test_assert_node_rejects_gpu_capability_without_gpu() -> None:
             assert_node_can_serve_capability("methyl-centroid")
 
 
+def test_assert_node_rejects_parabricks_giraffe_without_image() -> None:
+    with patch("methyl_worker.capabilities._gpu_available", return_value=True):
+        with patch("methyl_worker.capabilities._parabricks_available", return_value=False):
+            with pytest.raises(RuntimeError, match="parabricks\\.giraffe"):
+                assert_node_can_serve_capability("parabricks.giraffe")
+
+
 def test_assert_execute_gpu_prereqs() -> None:
     with patch("methyl_worker.capabilities._gpu_available", return_value=False):
         with pytest.raises(RuntimeError, match="requires a GPU"):

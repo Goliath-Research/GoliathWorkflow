@@ -317,7 +317,7 @@ def seed_pipeline_scope_flags(
         alignment_mode = parabricks_cfg.get("alignment_mode")
     if alignment_mode in (None, ""):
         alignment_mode = "linear"
-    out.setdefault("alignmentMode", str(alignment_mode))
+    out["alignmentMode"] = str(alignment_mode)
     if "usePangenome" in out:
         out["usePangenome"] = bool(out["usePangenome"])
     else:

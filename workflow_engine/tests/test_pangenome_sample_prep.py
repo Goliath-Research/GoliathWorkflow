@@ -41,3 +41,14 @@ def test_pipeline_profiles_seed_use_pangenome_from_alignment_mode() -> None:
         action_config={"parabricks": {"alignment_mode": "linear"}},
     )
     assert linear["usePangenome"] is False
+
+
+def test_pipeline_profiles_empty_alignment_mode_uses_profile_fallback() -> None:
+    from pipeline_profiles import seed_pipeline_scope_flags
+
+    ctx = seed_pipeline_scope_flags(
+        {"pipelineProfile": "legacy_dual", "alignmentMode": ""},
+        action_config={"parabricks": {"alignment_mode": "pangenome"}},
+    )
+    assert ctx["alignmentMode"] == "pangenome"
+    assert ctx["usePangenome"] is True

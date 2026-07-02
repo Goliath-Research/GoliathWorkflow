@@ -29,6 +29,33 @@ def _write_graph_bundle(root: Path) -> dict[str, str]:
     return {k: str(v) for k, v in paths.items()}
 
 
+def test_mount_root_excludes_linear_ref_fasta_parent(tmp_path: Path) -> None:
+    """Production layout: graph under pangenome/, linear FASTA under human_genome/."""
+    pangenome_dir = tmp_path / "work" / "genomes" / "pangenome"
+    human_dir = tmp_path / "work" / "genomes" / "human_genome"
+    pangenome_dir.mkdir(parents=True)
+    human_dir.mkdir(parents=True)
+    graph = runner.PangenomeGraphBundle(
+        gbz=pangenome_dir / "graph.gbz",
+        dist=pangenome_dir / "graph.dist",
+        minimizer=pangenome_dir / "graph.min",
+        zipcodes=pangenome_dir / "graph.zipcodes",
+        ref_paths=pangenome_dir / "graph.paths.sub",
+        linear_ref_fasta=human_dir / "GRCh38.fa",
+    )
+    for p in (
+        graph.gbz,
+        graph.dist,
+        graph.minimizer,
+        graph.zipcodes,
+        graph.ref_paths,
+        graph.linear_ref_fasta,
+    ):
+        p.write_text("x")
+
+    assert graph.mount_root.resolve() == pangenome_dir.resolve()
+
+
 def test_build_giraffe_docker_command_mounts_graph_and_ref_paths(tmp_path: Path) -> None:
     sample_dir = tmp_path / "S1"
     sample_dir.mkdir()
@@ -60,8 +87,9 @@ def test_build_giraffe_docker_command_mounts_graph_and_ref_paths(tmp_path: Path)
     assert "pbrun" in cmd
     assert "giraffe" in cmd
     assert f"{graph.mount_root.resolve()}:/pangenome:ro" in cmd
-    assert "--gbz-name=/pangenome/pangenome/graph.gbz" in cmd
-    assert "--ref-paths=/pangenome/pangenome/graph.paths.sub" in cmd
+    assert graph.mount_root.resolve() == (tmp_path / "pangenome").resolve()
+    assert "--gbz-name=/pangenome/graph.gbz" in cmd
+    assert "--ref-paths=/pangenome/graph.paths.sub" in cmd
     assert "--out-bam=/outputdir/S1.bam" in cmd
     assert "--out-duplicate-metrics=/outputdir/S1.deduplicate_metrics.txt" in cmd
 

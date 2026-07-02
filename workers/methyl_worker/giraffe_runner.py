@@ -39,7 +39,7 @@ class PangenomeGraphBundle:
 
     @property
     def mount_root(self) -> Path:
-        """Common read-only mount directory covering all graph index files."""
+        """Common read-only mount directory covering graph index files only."""
         return Path(
             os.path.commonpath(
                 [
@@ -48,7 +48,6 @@ class PangenomeGraphBundle:
                     str(self.minimizer.resolve().parent),
                     str(self.zipcodes.resolve().parent),
                     str(self.ref_paths.resolve().parent),
-                    str(self.linear_ref_fasta.resolve().parent),
                 ]
             )
         )

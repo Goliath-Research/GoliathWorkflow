@@ -161,7 +161,7 @@ def assert_node_can_serve_capability(capability: str) -> None:
         )
     if capability in ("parabricks.fq2bam", "parabricks.giraffe") and not _parabricks_available():
         raise RuntimeError(
-            "Worker configured for parabricks.fq2bam but Parabricks is not available. "
+            f"Worker configured for capability {capability!r} but Parabricks is not available. "
             "Set METHYL_PARABRICKS_IMAGE or install the nvcr.io Parabricks image."
         )
     if capability == "methyl-extract" and not _extractor_available():
