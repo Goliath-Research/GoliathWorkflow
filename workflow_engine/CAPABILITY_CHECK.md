@@ -1,6 +1,6 @@
 # Workflow Engine Capability Check (SQL-only, PCa3-oriented)
 
-This document maps the workflow "language" (tree control flow, remote worker tasks, variables/scopes, loop indices, assignments) to **`wf`** schema objects in [sql/MethylPipeline.sql](sql/MethylPipeline.sql) and notes gaps for running a project like `project_PCa3.json`.
+This document maps the workflow "language" (tree control flow, remote worker tasks, variables/scopes, loop indices, assignments) to **`wf`** schema objects in [sql_mssql/MethylPipeline.sql](sql_mssql/MethylPipeline.sql) and notes gaps for running a project like `project_PCa3.json`.
 
 **Runtime target:** pure T-SQL stored procedures (no Delphi `WfEngineSrv`).
 
@@ -20,7 +20,7 @@ This document maps the workflow "language" (tree control flow, remote worker tas
 
 **Activation / continuation:** `wf.wf_engine_activate`, `wf.wf_sequence_continue`, `wf.wf_parallel_continue`, `wf.wf_repeat_continue`, `wf.wf_while_continue`, `wf.wf_engine_on_composite_complete`, `wf.wf_engine_on_action_complete`.
 
-Branch parity (scope variables for IF/SWITCH/WHILE): [sql/wf_sql_branch_parity.sql](sql/wf_sql_branch_parity.sql).
+Branch parity (scope variables for IF/SWITCH/WHILE): [sql_mssql/wf_sql_branch_parity.sql](sql_mssql/wf_sql_branch_parity.sql).
 
 ### 1.2 Remote worker tasks
 
@@ -34,7 +34,7 @@ Branch parity (scope variables for IF/SWITCH/WHILE): [sql/wf_sql_branch_parity.s
 | Worker complete | `wf.sp_worker_submit_result` → `wf.wf_engine_on_action_complete` |
 | Lease | `wf.task_lease` |
 
-Placeholder resolution (read-path): `wf.wf_resolve_token`, `wf.wf_resolve_placeholders`, `wf.wf_build_input_json_for_action` ([sql/wf_sql_runtime_parity.sql](sql/wf_sql_runtime_parity.sql)).
+Placeholder resolution (read-path): `wf.wf_resolve_token`, `wf.wf_resolve_placeholders`, `wf.wf_build_input_json_for_action` ([sql_mssql/wf_sql_runtime_parity.sql](sql_mssql/wf_sql_runtime_parity.sql)).
 
 Supported token families:
 
@@ -54,7 +54,7 @@ Supported token families:
 | Scope defaults (definition) | `wf.node_scope_default` (`var_name`, `default_expr`) |
 | Output → variable (definition) | `wf.variable_output_binding` (`source_kind`: `result_code` \| `output_path`) |
 
-Scope read walk: [sql/wf_scope_readpath.sql](sql/wf_scope_readpath.sql) (`wf.wf_get_scope_variable_json` / `_int`).
+Scope read walk: [sql_mssql/wf_scope_readpath.sql](sql_mssql/wf_scope_readpath.sql) (`wf.wf_get_scope_variable_json` / `_int`).
 
 ### 1.4 Loop index
 
@@ -69,7 +69,7 @@ Scope read walk: [sql/wf_scope_readpath.sql](sql/wf_scope_readpath.sql) (`wf.wf_
 
 | Gap | Fix |
 |-----|-----|
-| Output bindings not applied on task complete | [sql/wf_sql_scope_writepath_parity.sql](sql/wf_sql_scope_writepath_parity.sql): `wf.wf_apply_output_bindings` called from `wf.wf_engine_on_action_complete` |
+| Output bindings not applied on task complete | [sql_mssql/wf_sql_scope_writepath_parity.sql](sql_mssql/wf_sql_scope_writepath_parity.sql): `wf.wf_apply_output_bindings` called from `wf.wf_engine_on_action_complete` |
 | Scope defaults not applied when composite opens | Same script: `wf.wf_open_scope` called from `wf.wf_engine_activate` for composite nodes |
 | ACTION under PARALLEL needs isolated scope copy | Same script: scope copy on ACTION activation when parent is `PARALLEL` |
 
@@ -81,13 +81,13 @@ Deploy **after** `wf_sql_runtime_parity.sql` and `wf_sql_branch_parity.sql`.
 
 | Gap | Impact |
 |-----|--------|
-| ~~No `FOREACH` node type~~ | **Implemented** — [`wf_sql_foreach_support.sql`](sql/wf_sql_foreach_support.sql); generic workflow [`wf_data_driven_pipeline_seed.sql`](sql/wf_data_driven_pipeline_seed.sql) |
+| ~~No `FOREACH` node type~~ | **Implemented** — [`wf_sql_foreach_support.sql`](sql_mssql/wf_sql_foreach_support.sql); generic workflow [`wf_data_driven_pipeline_seed.sql`](sql_mssql/wf_data_driven_pipeline_seed.sql) |
 | ~~No array indexing in placeholders~~ | **Implemented** — `${var.name[n]}` in `wf_resolve_token` |
 | No expression language in `${...}` | No `(`, `+`, spaces in tokens; object fields use FOREACH flatten or indexed arrays |
 | `payload_schema_ref` is external only | Worker validates JSON shape; DB does not enforce JSON Schema |
 | Detector has no `--chromosome` CLI flag | **Mitigated** — worker `DetectorCliAction` maps per-chromosome scope into `--step-override` JSON; `comparison` → `--group` |
 
-See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREACH` enhancement (milestone 3 — data-driven full project without node explosion).
+See [sql_mssql/wf_foreach_design.md](sql_mssql/wf_foreach_design.md) for the proposed `FOREACH` enhancement (milestone 3 — data-driven full project without node explosion).
 
 ---
 
@@ -109,7 +109,7 @@ See [sql/wf_foreach_design.md](sql/wf_foreach_design.md) for the proposed `FOREA
 | Delete BAM | `sample.delete-bam` | **SamplePrepPipeline** |
 | QC failed marker | `sample.mark-failed` | **SamplePrepPipeline** (optional) |
 
-Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contract/sample_prep_capabilities.md](contract/sample_prep_capabilities.md). **Deploy workflow:** `scripts/deploy_workflow_definitions.sh` (DomainProgram fixture).
+Operator guide: [sql_mssql/SamplePrepFlow.md](sql_mssql/SamplePrepFlow.md). Contract: [contract/sample_prep_capabilities.md](contract/sample_prep_capabilities.md). **Deploy workflow:** `scripts/deploy_workflow_definitions.sh` (DomainProgram fixture).
 
 ### Milestone 1–2: Analysis (downstream)
 
@@ -117,10 +117,10 @@ Operator guide: [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md). Contract: [contr
 |---------------|-------------------|-----------|
 | Centroid per group | `methyl-centroid` | 1 + 2 |
 | Detection per comparison | `methyl-detector` | 1 + 2 |
-| Mapper (all comparisons) | `methyl-mapper` | **2** ([PCaOvrFlow](sql/PCaOvrFlow.md)) |
+| Mapper (all comparisons) | `methyl-mapper` | **2** ([PCaOvrFlow](sql_mssql/PCaOvrFlow.md)) |
 | Enricher | `methyl-enricher` | **2** |
 | Disease progression | `methyl-disease-progression` | **2** |
-| MC validation loop | **ValidationPipeline** + planner | [wf_validation_pipeline_seed.sql](sql/wf_validation_pipeline_seed.sql) |
+| MC validation loop | **ValidationPipeline** + planner | [wf_validation_pipeline_seed.sql](sql_mssql/wf_validation_pipeline_seed.sql) |
 | Study validation lifecycle | **StudyValidationLifecycle** | `validation.plan_iterations` → stability → freeze → mapper/enricher/progression → `validation.model_mc` → `validation.select_best_model` → `validation.post_model_validation` |
 | Portal staged start | `POST /v1/studies/validation/start` | [docs/portal_study_lifecycle.md](docs/portal_study_lifecycle.md) |
 | Methyl extract chrom mapping | Derived from `project.chromosomes` | `step_config.methyl_extract.contig_naming` / inline `chrom_mapping` object |

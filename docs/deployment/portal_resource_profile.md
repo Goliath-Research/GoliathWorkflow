@@ -13,7 +13,7 @@ The workflow engine only stores resolved `fastqStorage` / `h5Storage` in `workfl
 
 ## Database table
 
-`portal.resource_profile` (deploy [`workflow_engine/sql/portal_resource_profile.sql`](../../workflow_engine/sql/portal_resource_profile.sql) on Azure SQL or [`workflow_engine/sql_pg/portal_resource_profile.sql`](../../workflow_engine/sql_pg/portal_resource_profile.sql) on PostgreSQL).
+`portal.resource_profile` (deploy [`workflow_engine/sql_mssql/portal_resource_profile.sql`](../../workflow_engine/sql_mssql/portal_resource_profile.sql) on Azure SQL or [`workflow_engine/sql_pg/portal_resource_profile.sql`](../../workflow_engine/sql_pg/portal_resource_profile.sql) on PostgreSQL).
 
 | Column | Purpose |
 |--------|---------|
@@ -90,7 +90,7 @@ If the mistaken `wf.platform_sample_storage` table was deployed:
 
 1. Deploy `portal.resource_profile` and copy credentials into `profile_json`
 2. Deploy code that reads portal schema
-3. Run [`wf_drop_platform_sample_storage.sql`](../../workflow_engine/sql/wf_drop_platform_sample_storage.sql)
+3. Run [`wf_drop_platform_sample_storage.sql`](../../workflow_engine/sql_mssql/wf_drop_platform_sample_storage.sql)
 
 ## Security
 

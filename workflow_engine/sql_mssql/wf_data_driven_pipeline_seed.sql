@@ -13,8 +13,8 @@
     └─ SEQUENCE post_pipeline → mapper, enricher, progression
 
   Instance context_json drives fan-out. Example payloads:
-  - workflow_engine/sql/instance_context_examples/pca_ovr.json
-  - workflow_engine/sql/instance_context_examples/minimal_two_task.json
+  - workflow_engine/sql_mssql/instance_context_examples/pca_ovr.json
+  - workflow_engine/sql_mssql/instance_context_examples/minimal_two_task.json
 
   Prerequisites:
   - wf_scope_variables.sql through wf_sql_foreach_support.sql

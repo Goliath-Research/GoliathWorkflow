@@ -530,7 +530,7 @@ def apply_db(cfg: MigrationConfig, engine: str, *, dry_run: bool) -> int:
             print("pip install psycopg for --apply-db postgres", file=sys.stderr)
             return 1
     if engine == "mssql":
-        sql_path = REPO_ROOT / "workflow_engine/sql/migrate_work_paths_prostate_cancer.sql"
+        sql_path = REPO_ROOT / "workflow_engine/sql_mssql/migrate_work_paths_prostate_cancer.sql"
         print(f"MSSQL: run {sql_path} manually or via sqlcmd (see runbook)", file=sys.stderr)
         return 0 if dry_run else 1
     print(f"unknown engine {engine}", file=sys.stderr)

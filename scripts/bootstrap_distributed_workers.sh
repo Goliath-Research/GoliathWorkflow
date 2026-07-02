@@ -88,7 +88,7 @@ if [[ "$SKIP_SCHEMA" -eq 0 ]]; then
   if [[ "$BACKEND" == "mssql" ]]; then
     DEPLOY_ARGS=()
     [[ "$WITH_CLUSTER_SECURITY" -eq 1 ]] && DEPLOY_ARGS+=(--with-cluster-security)
-    bash "$REPO_ROOT/workflow_engine/sql/deploy_azure.sh" "${DEPLOY_ARGS[@]}"
+    bash "$REPO_ROOT/workflow_engine/sql_mssql/deploy_azure.sh" "${DEPLOY_ARGS[@]}"
   else
     bash "$REPO_ROOT/workflow_engine/sql_pg/deploy_azure.sh"
     if [[ "$WITH_CLUSTER_SECURITY" -eq 1 && -f "$REPO_ROOT/workflow_engine/sql_pg/wf_cluster_security_columns.sql" ]]; then
@@ -122,7 +122,7 @@ if [[ "$SKIP_SEED" -eq 0 ]]; then
   else
     SEED_ARGS+=(--use-db)
   fi
-  "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql/seed_action_catalog.py" "${SEED_ARGS[@]}"
+  "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql_mssql/seed_action_catalog.py" "${SEED_ARGS[@]}"
 fi
 
 if [[ "$SKIP_WORKFLOWS" -eq 0 ]]; then

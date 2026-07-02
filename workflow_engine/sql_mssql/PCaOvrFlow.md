@@ -1,6 +1,6 @@
 # PCaOvrFlow — OvR scale-up for project_PCa3.json
 
-> **DEPRECATED.** This static SQL-seed workflow is superseded by **DomainProgram** definitions compiled and deployed via `scripts/deploy_workflow_definitions.sh`. See [`docs/reference/domain-program-language.md`](../../docs/reference/domain-program-language.md) and [`workflow_engine/domain/fixtures/`](../domain/fixtures/). Legacy seed: [`sql/deprecated/wf_pca_ovr_seed.sql`](deprecated/wf_pca_ovr_seed.sql).
+> **DEPRECATED.** This static SQL-seed workflow is superseded by **DomainProgram** definitions compiled and deployed via `scripts/deploy_workflow_definitions.sh`. See [`docs/reference/domain-program-language.md`](../../docs/reference/domain-program-language.md) and [`workflow_engine/domain/fixtures/`](../domain/fixtures/). Legacy seed: [`deprecated/wf_pca_ovr_seed.sql`](deprecated/wf_pca_ovr_seed.sql).
 
 Milestone 2 static workflow: **parallel comparisons** (`control_vs_each_disease`), then **sequential** mapper → enricher → disease progression.
 

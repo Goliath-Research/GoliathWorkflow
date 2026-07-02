@@ -93,7 +93,7 @@ def test_if_then_else_branching() -> None:
 
 @pytest.fixture
 def sample_prep_context() -> dict:
-    fixture = REPO / "workflow_engine/sql/instance_context_examples/sample_prep_plasma.json"
+    fixture = REPO / "workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json"
     ctx = json.loads(fixture.read_text(encoding="utf-8"))
     for sample in ctx.get("samples", []):
         if "sampleDestination" not in sample and "h5Destination" in sample:

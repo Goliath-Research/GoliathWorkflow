@@ -407,7 +407,7 @@ More operator commands: [Usage ch.03](../usage/03-sample-prep-and-qc.qmd).
 | Document | Role |
 |----------|------|
 | [Usage ch.03 — Sample Prep and QC](../usage/03-sample-prep-and-qc.qmd) | Operator manual, flow diagram, config examples |
-| [SamplePrepFlow.md](../../workflow_engine/sql/SamplePrepFlow.md) | Workflow tree, instance context, deploy |
+| [SamplePrepFlow.md](../../workflow_engine/sql_mssql/SamplePrepFlow.md) | Workflow tree, instance context, deploy |
 | [sample_prep_capabilities.md](../../workflow_engine/contract/sample_prep_capabilities.md) | Worker I/O contracts, idempotency |
 | [Workers and gateway](workers-and-gateway.md) | Poll/submit protocol |
 | [parabricks.md](../../workers/docs/parabricks.md) | GPU/Docker Parabricks setup |

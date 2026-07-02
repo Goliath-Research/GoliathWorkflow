@@ -8,7 +8,7 @@ The workflow engine schedules DomainProgram graphs either **in-process** (`Local
 |------|------|
 | `workflow_engine/local/` | In-process graph executor; `methyl-workflow-run` entry |
 | `workflow_engine/rest/` | `methyl-gateway` — stateless HTTP → stored procedures |
-| `workflow_engine/sql/` | Azure SQL deploy scripts, SamplePrep/DataDriven docs |
+| `workflow_engine/sql_mssql/` | Azure SQL deploy scripts, SamplePrep/DataDriven docs |
 | `workflow_engine/sql_pg/` | PostgreSQL parity |
 | `workflow_engine/domain/` | DomainProgram compiler, profiles, fixtures, checks |
 

@@ -15,7 +15,7 @@
     bash scripts/bootstrap_distributed_workers.sh --skip-schema --use-gateway-only
 
   This script is a lightweight alternative when you only need these four rows
-  (Azure SQL equivalent: workflow_engine/sql/wf_split_detector_actions_seed.sql).
+  (Azure SQL equivalent: workflow_engine/sql_mssql/wf_split_detector_actions_seed.sql).
 */
 
 DO $$

@@ -19,7 +19,7 @@ Internal map for `workflow_engine/`: gateway, database client, scheduler, and Do
 
 ## Database client
 
-- Dual backend: Azure SQL (`workflow_engine/sql/`) and PostgreSQL (`workflow_engine/sql_pg/`)
+- Dual backend: Azure SQL (`workflow_engine/sql_mssql/`) and PostgreSQL (`workflow_engine/sql_pg/`)
 - JSON-native params via `wf_json_native_params.sql`
 - FOREACH / PARALLEL scope encoding: `wf_sql_foreach_support.sql`, `wf_sql_scope_encoding_parity.sql`
 
@@ -46,4 +46,4 @@ Internal map for `workflow_engine/`: gateway, database client, scheduler, and Do
 
 - [Implementation guide (docs)](../../docs/implementation/index.md)
 - [Architecture](../../docs/architecture/index.md)
-- [Delphi runtime notes](WORKFLOW_ENGINE_DELPHI.md)
+- [Delphi runtime notes](../delphi/WORKFLOW_ENGINE_DELPHI.md)

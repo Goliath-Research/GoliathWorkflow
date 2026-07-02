@@ -5,7 +5,7 @@ Standalone integration test bed for **SamplePrepPipeline** (download â†’ align â
 ## Prerequisites
 
 - **Azure SQL** `wf` schema deployed (default `BACKEND_DB=mssql`; see [`docs/deployment/production_runbook.md`](../../docs/deployment/production_runbook.md))
-- Action catalog seeded: `bash scripts/refresh_sample_prep_test_bed.sh` (or `python workflow_engine/sql/seed_action_catalog.py` with `AZURE_SQL_*` env)
+- Action catalog seeded: `bash scripts/refresh_sample_prep_test_bed.sh` (or `python workflow_engine/sql_mssql/seed_action_catalog.py` with `AZURE_SQL_*` env)
 - Workflow definitions deployed: `bash scripts/deploy_workflow_definitions.sh`
 - REST gateway running ([`workflow_engine/rest/gateway.py`](../rest/gateway.py))
 - Worker registered with `WORKER_STUB_EXTERNAL=1` for dry-run smoke, or full stack for production FASTQs

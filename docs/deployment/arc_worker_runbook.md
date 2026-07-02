@@ -70,7 +70,7 @@ Ensure every Arc machine carries:
 
 Deploy SQL (if not already applied):
 
-- Azure SQL: [`workflow_engine/sql/wf_cluster_security_columns.sql`](../../workflow_engine/sql/wf_cluster_security_columns.sql)
+- Azure SQL: [`workflow_engine/sql_mssql/wf_cluster_security_columns.sql`](../../workflow_engine/sql_mssql/wf_cluster_security_columns.sql)
 - PostgreSQL: [`workflow_engine/sql_pg/wf_cluster_security_columns.sql`](../../workflow_engine/sql_pg/wf_cluster_security_columns.sql)
 
 Register worker (auto-loads `/etc/methyl/arc.env` when present):

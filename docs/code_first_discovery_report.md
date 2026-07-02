@@ -176,11 +176,11 @@ Confidence rubric:
 
 ## 4.1 High-confidence likely unused/orphan code
 
-| Finding | Evidence | Confidence | Validation before removal |
+| Finding | Evidence | Confidence | Status (2026-07) |
 |---|---|---|---|
-| `methyl_alignment_qc/core/wgbs_parabricks_qc.py` orphan module | No repo references except self-file | High | Confirm no external script users; then remove or relocate to examples |
-| `methyl_cluster/methyl_cluster_dp.py` orphan implementation | `MethylClusterDP` only appears in its own file | High | Confirm no notebooks/externals import it |
-| `methyl_utils/modeling/methyl_detector.py` appears disconnected | No imports of `methyl_utils.modeling` found in packages | High | Add import smoke test if intended; otherwise retire |
+| `methyl_alignment_qc/core/wgbs_parabricks_qc.py` | Imported by `writer.py` and `scripts/alignment_qc_cohort_screening.py` | — | **Active — keep** |
+| `methyl_cluster/methyl_cluster_dp.py` | Was orphan-only | High | **Removed** — no longer in tree |
+| `methyl_utils/modeling/methyl_detector.py` | Was disconnected | High | **Removed** — no longer in tree |
 
 ## 4.2 Medium-confidence superseded or weakly used fields
 

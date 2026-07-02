@@ -11,11 +11,11 @@
 #   export AZURE_SQL_DB=MethylPipeline
 #   export AZURE_SQL_USER=sql-admin
 #   export AZURE_SQL_PASSWORD='...'
-#   ./workflow_engine/sql/deploy_azure.sh
+#   ./workflow_engine/sql_mssql/deploy_azure.sh
 #
 # Optional:
 #   export SQLCMD_TRUST_SERVER_CERTIFICATE=1   # dev / private endpoints
-#   ./workflow_engine/sql/deploy_azure.sh --with-cluster-security
+#   ./workflow_engine/sql_mssql/deploy_azure.sh --with-cluster-security
 
 set -euo pipefail
 

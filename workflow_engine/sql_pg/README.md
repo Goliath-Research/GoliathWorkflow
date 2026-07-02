@@ -35,7 +35,7 @@ Or manually:
 ```bash
 methyl-export-task-schemas
 methyl-export-action-catalog
-python workflow_engine/sql/seed_action_catalog.py
+python workflow_engine/sql_mssql/seed_action_catalog.py
 bash scripts/deploy_workflow_definitions.sh
 ```
 
@@ -50,7 +50,7 @@ Azure SQL equivalent: [`../sql/wf_split_detector_actions_seed.sql`](../sql/wf_sp
 Legacy schema-only seed (requires actions already in DB):
 
 ```bash
-python workflow_engine/sql/seed_action_schemas.py
+python workflow_engine/sql_mssql/seed_action_schemas.py
 ```
 
 ## Azure Database for PostgreSQL

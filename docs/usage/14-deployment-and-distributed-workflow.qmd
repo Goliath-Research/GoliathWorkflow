@@ -30,7 +30,7 @@ Use this ordered checklist once per environment:
 1. [ ] Mount shared storage at `/work/epimethyl` (or study-specific `/work/<disease>/`)
 2. [ ] Deploy database schema (PostgreSQL **or** Azure SQL — see below)
 3. [ ] Run portal SQL scripts (`portal_resource_profile.sql`, `portal_workflow_api.sql`, cluster security if used)
-4. [ ] Seed action catalog: `methyl-export-task-schemas && methyl-export-action-catalog && python workflow_engine/sql/seed_action_catalog.py`
+4. [ ] Seed action catalog: `methyl-export-task-schemas && methyl-export-action-catalog && python workflow_engine/sql_mssql/seed_action_catalog.py`
 5. [ ] Deploy workflow definitions: `bash scripts/deploy_workflow_definitions.sh`
 6. [ ] Install and configure gateway (`deploy/env/gateway.postgres.env.example` or `gateway.mssql.env.example` → `/work/epimethyl/env/gateway.env`)
 7. [ ] Enable `methyl-gateway` systemd + nginx TLS (see [`production_runbook.md`](../../deployment/production_runbook.md))
@@ -68,7 +68,7 @@ psql -f workflow_engine/sql_pg/wf_cluster_security_columns.sql
 | Step | Command / doc |
 |------|----------------|
 | Script order | [`workflow_engine/README.md`](../../workflow_engine/README.md) |
-| Bundled schema | `workflow_engine/sql/MethylPipeline.sql` |
+| Bundled schema | `workflow_engine/sql_mssql/MethylPipeline.sql` |
 | FOREACH | `wf_sql_foreach_support.sql` (both backends) |
 
 ```bash
@@ -85,7 +85,7 @@ After schema deploy:
 source .venv/bin/activate
 methyl-export-task-schemas
 methyl-export-action-catalog
-python workflow_engine/sql/seed_action_catalog.py
+python workflow_engine/sql_mssql/seed_action_catalog.py
 
 # Deploy SamplePrep + StudyValidation DomainPrograms to gateway:
 export GATEWAY_URL=https://your-gateway.example.com
@@ -192,5 +192,5 @@ methyl-workflow-run --program path/to/program.json \
 - Production runbook: [`docs/deployment/production_runbook.md`](../../deployment/production_runbook.md)
 - Release layout: [`docs/deployment/production_release.md`](../../deployment/production_release.md)
 - Portal lifecycle: [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md)
-- SamplePrep operator guide: [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md)
+- SamplePrep operator guide: [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md)
 - Documentation audit: [`docs/DOCUMENTATION_AUDIT.md`](../../DOCUMENTATION_AUDIT.md)

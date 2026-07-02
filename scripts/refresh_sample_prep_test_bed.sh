@@ -97,7 +97,7 @@ if [[ "$SKIP_SEED" -eq 0 ]]; then
   if [[ -n "${GATEWAY_ADMIN_BEARER_TOKEN:-}" || -n "${GATEWAY_ENTRA_BEARER_TOKEN:-}" ]]; then
     SEED_ARGS+=(--use-gateway)
   fi
-  "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql/seed_action_catalog.py" "${SEED_ARGS[@]}"
+  "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql_mssql/seed_action_catalog.py" "${SEED_ARGS[@]}"
 fi
 
 if [[ "$SKIP_DEPLOY" -eq 0 ]]; then

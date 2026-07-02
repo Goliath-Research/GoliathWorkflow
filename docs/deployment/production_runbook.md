@@ -175,14 +175,14 @@ Release automation (no direct SQL creds on operator laptops):
 export WORKER_API_BASE=https://<gateway-fqdn>/v1
 export GATEWAY_ADMIN_BEARER_TOKEN=$(az account get-access-token --resource api://methyl-gateway --query accessToken -o tsv)
 bash scripts/deploy_workflow_definitions.sh
-python workflow_engine/sql/seed_action_catalog.py --use-gateway
+python workflow_engine/sql_mssql/seed_action_catalog.py --use-gateway
 ```
 
 Legacy operator routes remain as **admin-only CI aliases** when Entra is enabled; they are not for portal UI.
 
 ### Cluster registration + Tier C IP bind (phase 3)
 
-Deploy [`workflow_engine/sql/wf_cluster_security_columns.sql`](../../workflow_engine/sql/wf_cluster_security_columns.sql) (Azure SQL) or [`workflow_engine/sql_pg/wf_cluster_security_columns.sql`](../../workflow_engine/sql_pg/wf_cluster_security_columns.sql) (PostgreSQL).
+Deploy [`workflow_engine/sql_mssql/wf_cluster_security_columns.sql`](../../workflow_engine/sql_mssql/wf_cluster_security_columns.sql) (Azure SQL) or [`workflow_engine/sql_pg/wf_cluster_security_columns.sql`](../../workflow_engine/sql_pg/wf_cluster_security_columns.sql) (PostgreSQL).
 
 Register workers (both backends via gateway DB env):
 

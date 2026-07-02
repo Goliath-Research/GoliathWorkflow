@@ -180,4 +180,4 @@ Run from repo root:
 python workflow_engine/contract/validate_contract.py
 ```
 
-Fails if an object in `db_objects.yaml` is missing from either `sql/` or `sql_pg/` deploy scripts.
+Fails if an object in `db_objects.yaml` is missing from either `sql_mssql/` or `sql_pg/` deploy scripts.

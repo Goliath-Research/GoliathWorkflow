@@ -208,7 +208,7 @@ Minimal validation instance:
 
 Pass a profile file with `--context-file workflow_engine/domain/profiles/staged_ovr_mc.profile.json` (merges `actionConfig` and scope flags). Site defaults load from `METHYL_SITE_CONFIG` or `/work/site/methyl_site.json`.
 
-Sample prep adds `samples[]`, `isCfdna`, storage profiles — see `workflow_engine/sql/instance_context_examples/`.
+Sample prep adds `samples[]`, `isCfdna`, storage profiles — see `workflow_engine/sql_mssql/instance_context_examples/`.
 
 ## Local execution
 
@@ -341,4 +341,4 @@ Stability summaries record active axes in `stability_summary.json` → `pipeline
 
 ## Sample prep reference
 
-QC gates and Picard/Parabricks/extraction guardrails: [Usage ch.03](usage/03-sample-prep-and-qc.qmd), [`workflow_engine/sql/SamplePrepFlow.md`](../workflow_engine/sql/SamplePrepFlow.md).
+QC gates and Picard/Parabricks/extraction guardrails: [Usage ch.03](usage/03-sample-prep-and-qc.qmd), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md).

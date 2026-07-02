@@ -89,7 +89,7 @@ def _seed_catalog_from_repo() -> None:
     subprocess.run(
         [
             sys.executable,
-            str(REPO_ROOT / "workflow_engine/sql/seed_action_catalog.py"),
+            str(REPO_ROOT / "workflow_engine/sql_mssql/seed_action_catalog.py"),
             "--regenerate-catalog",
             "--use-db",
         ],

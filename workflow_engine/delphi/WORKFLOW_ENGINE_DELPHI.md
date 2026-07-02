@@ -1,8 +1,8 @@
 # Workflow Engine Delphi REST Gateway (frozen reference)
 
-> **Frozen (June 2026):** This Delphi HTTP host is kept for historical reference and optional Windows debugging only. See [`DELPHI_GATEWAY_STATUS.md`](DELPHI_GATEWAY_STATUS.md). **Production gateway:** Python `methyl-gateway` on Linux — [`rest/gateway.py`](rest/gateway.py), [`deploy/systemd/methyl-gateway.service`](../deploy/systemd/methyl-gateway.service). No new routes or OpenAPI parity work is expected on `WfEngineSrv`.
+> **Frozen (June 2026):** This Delphi HTTP host is kept for historical reference and optional Windows debugging only. See [`DELPHI_GATEWAY_STATUS.md`](DELPHI_GATEWAY_STATUS.md). **Production gateway:** Python `methyl-gateway` on Linux — [`../rest/gateway.py`](../rest/gateway.py), [`deploy/systemd/methyl-gateway.service`](../../deploy/systemd/methyl-gateway.service). No new routes or OpenAPI parity work is expected on `WfEngineSrv`.
 
-The Delphi middle-tier in `workflow_engine/src` is a **thin REST gateway** between workers (and other clients) and the `wf` SQL contract. It mirrors the Python production gateway in `workflow_engine/rest/gateway.py`.
+The Delphi middle-tier in `workflow_engine/delphi/src` is a **thin REST gateway** between workers (and other clients) and the `wf` SQL contract. It mirrors the Python production gateway in [`workflow_engine/rest/gateway.py`](../rest/gateway.py).
 
 Workflow activation, control flow, scope resolution, and task progression run **in the database** (`sp_start_workflow_instance`, `sp_worker_submit_result`, `wf_engine_activate`, and related procs). Delphi does not embed an inline engine.
 
@@ -59,19 +59,19 @@ All workflow state (`node_execution`, `task_lease`, `scope_variable`) lives in S
 
 ## Control flow and scope (SQL)
 
-Deploy `sql/wf_sql_runtime_parity.sql` (Azure SQL) or the PostgreSQL parity scripts under `sql_pg/` so that:
+Deploy `../sql_mssql/wf_sql_runtime_parity.sql` (Azure SQL) or the PostgreSQL parity scripts under `sql_pg/` so that:
 
 - Instance scope is seeded from `workflow_instance.context_json` at start.
 - `${var.*}` placeholders resolve in SQL input templates.
 - IF/SWITCH/WHILE/REPEAT/FOREACH semantics match the contract in `contract/db_objects.yaml`.
 
-For branch resolution parity, also run `sql/wf_sql_branch_parity.sql`.
+For branch resolution parity, also run `../sql_mssql/wf_sql_branch_parity.sql`.
 
 ## Extension pattern (validation / Monte Carlo)
 
 The gateway does **not** plan iterations. A planner worker (`validation.plan-iterations`) or `POST /v1/validation/plan-iterations` (Python gateway) merges `context_json.iterations[]` before start.
 
-Preferred validation workflow seed: `sql/wf_validation_pipeline_seed.sql` → **ValidationPipeline** (FOREACH over `iterations[]`).
+Preferred validation workflow seed: `../sql_mssql/wf_validation_pipeline_seed.sql` → **ValidationPipeline** (FOREACH over `iterations[]`).
 
 Contract: [`contract/validation_planner_capabilities.md`](contract/validation_planner_capabilities.md).
 
@@ -127,7 +127,7 @@ Build prerequisite: DMVC ≥ 3.5 (`delphimvcframework/sources`) on the `WfEngine
 
 ## Workflow tree example
 
-Use `sql/workflow_tree_seed_example.sql` and `sql/workflow_tree_run_example.sql` to exercise control-flow branches end-to-end via worker claim/submit against SQL activation.
+Use `../sql_mssql/workflow_tree_seed_example.sql` and `../sql_mssql/workflow_tree_run_example.sql` to exercise control-flow branches end-to-end via worker claim/submit against SQL activation.
 
 Seeded workflow name: `DelphiTreeFlow`.
 
@@ -144,8 +144,8 @@ python workflow_engine/rest/gateway.py --port 8080
 
 After `wf_repository_api.sql` / `02_repository_api.sql`:
 
-1. Apply [`sql/wf_action_schema.sql`](sql/wf_action_schema.sql) or [`sql_pg/wf_action_schema.sql`](sql_pg/wf_action_schema.sql).
+1. Apply [`../sql_mssql/wf_action_schema.sql`](../sql_mssql/wf_action_schema.sql) or [`sql_pg/wf_action_schema.sql`](sql_pg/wf_action_schema.sql).
 2. Export from Pydantic: `methyl-export-task-schemas` (writes `schemas/tasks/*.schema.json`; CI gate: `methyl-export-task-schemas --check`).
-3. Seed DB: `python workflow_engine/sql/seed_action_schemas.py` (PostgreSQL; Azure SQL via equivalent `sqlcmd` calling `wf.wf_repo_upsert_action_schema`).
+3. Seed DB: `python workflow_engine/sql_mssql/seed_action_schemas.py` (PostgreSQL; Azure SQL via equivalent `sqlcmd` calling `wf.wf_repo_upsert_action_schema`).
 
 Workers validate resolved `input_json` / handler output at runtime; the gateway serves schemas read-only for the Config Editor.

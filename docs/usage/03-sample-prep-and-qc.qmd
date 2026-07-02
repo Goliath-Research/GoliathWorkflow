@@ -11,7 +11,7 @@ Without these gates, bad alignments would waste GPU extraction time, and under-c
 
 **Workflow source of truth:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
 
-**Operator reference:** [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md)
+**Operator reference:** [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md)
 
 ## End-to-end flow
 
@@ -244,7 +244,7 @@ methyl-extraction-qc --sample-dir /work/samples/SAMPLE_ID --sample-id SAMPLE_ID
 ## Related documentation
 
 - **Implementation guide (guardrail boundaries, remediation, extraction filtering, cfDNA fragmentomics):** [`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md)
-- Workflow operator guide: [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md)
+- Workflow operator guide: [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md)
 - Architecture §0: [`workflow_engine/docs/pipeline_architecture.md`](../../workflow_engine/docs/pipeline_architecture.md)
 - Worker contract: [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md)
 - Alignment QC package: [`packages/methylalignmentqc/docs/USAGE.md`](../../packages/methylalignmentqc/docs/USAGE.md)

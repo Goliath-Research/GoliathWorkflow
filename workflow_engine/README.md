@@ -1,8 +1,8 @@
 # SQL Server Workflow Engine scripts
 
-Delphi runtime implementation notes and control-flow walkthrough: [`WORKFLOW_ENGINE_DELPHI.md`](WORKFLOW_ENGINE_DELPHI.md)
+Delphi runtime implementation notes and control-flow walkthrough: [`delphi/WORKFLOW_ENGINE_DELPHI.md`](delphi/WORKFLOW_ENGINE_DELPHI.md)
 
-**Azure SQL / bundled engine (`wf` schema):** use [`sql/MethylPipeline.sql`](sql/MethylPipeline.sql) as the bundled deploy script. It defines clusters, registered workers (`wf.worker`), bearer tokens (`wf.worker_token`), native `JSON` payload columns, and worker procedures that require `@worker_id BIGINT` (from `wf.worker.id`) plus `@worker_token`.
+**Azure SQL / bundled engine (`wf` schema):** use [`sql_mssql/MethylPipeline.sql`](sql_mssql/MethylPipeline.sql) as the bundled deploy script. It defines clusters, registered workers (`wf.worker`), bearer tokens (`wf.worker_token`), native `JSON` payload columns, and worker procedures that require `@worker_id BIGINT` (from `wf.worker.id`) plus `@worker_token`.
 
 ---
 
@@ -20,7 +20,7 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 8b. [`wf_json_column_alignment.sql`](wf_json_column_alignment.sql) — migrate scope/context JSON columns to native types.
 8c. [`wf_drop_monte_carlo_tables.sql`](wf_drop_monte_carlo_tables.sql) — remove deprecated `wf.monte_carlo_*` tables.
 9. [`wf_sql_branch_parity.sql`](wf_sql_branch_parity.sql) — SQL IF/SWITCH/WHILE variable-branch parity (`condition_var`/`switch_var`) with Delphi runtime behavior.
-10. [`sql/deprecated/workflow_methylvalidation_seed.sql`](sql/deprecated/workflow_methylvalidation_seed.sql) — **deprecated** MethylValidationFlow (use ValidationPipeline).
+10. [`sql_mssql/deprecated/workflow_methylvalidation_seed.sql`](sql_mssql/deprecated/workflow_methylvalidation_seed.sql) — **deprecated** MethylValidationFlow (use ValidationPipeline).
 10a. [`wf_validation_pipeline_seed.sql`](wf_validation_pipeline_seed.sql) — **ValidationPipeline** (FOREACH over `iterations[]`).
 11. [`wf_sql_runtime_parity.sql`](wf_sql_runtime_parity.sql) — SQL-only parity for scope init from context and `${var.*}` resolution.
 12. [`wf_sql_scope_writepath_parity.sql`](wf_sql_scope_writepath_parity.sql) — SQL write-path parity: `wf_apply_output_bindings`, `wf_open_scope`, scope copy for PARALLEL children.
@@ -39,13 +39,13 @@ Run scripts **in this order** on a database (SQL Server 2017+ recommended for `J
 17. [`wf_data_driven_pipeline_seed.sql`](wf_data_driven_pipeline_seed.sql) — **DataDrivenPipeline** (generic; instance `context_json` drives fan-out).
 17a. **Deploy SamplePrepPipeline:** `bash scripts/deploy_workflow_definitions.sh` (compiles [`domain/fixtures/sample_prep.program.json`](domain/fixtures/sample_prep.program.json)).
 
-17b. [`sql/deprecated/wf_sample_prep_pipeline_seed.sql`](sql/deprecated/wf_sample_prep_pipeline_seed.sql) — **deprecated** legacy SQL Server seed; prefer DomainProgram deploy above.
+17b. [`sql_mssql/deprecated/wf_sample_prep_pipeline_seed.sql`](sql_mssql/deprecated/wf_sample_prep_pipeline_seed.sql) — **deprecated** legacy SQL Server seed; prefer DomainProgram deploy above.
 17b. [`wf_action_schema.sql`](wf_action_schema.sql) — `workflow_action_schema` table + repo procs for action I/O JSON Schemas.
-16. [`sql/deprecated/wf_pca_two_group_seed.sql`](sql/deprecated/wf_pca_two_group_seed.sql) — **deprecated** static PCaTwoGroupFlow.
-17. [`sql/deprecated/wf_pca_ovr_seed.sql`](sql/deprecated/wf_pca_ovr_seed.sql) — **deprecated** static PCaOvrFlow.
-18. [`sql/deprecated/wf_pca_two_group_run_example.sql`](sql/deprecated/wf_pca_two_group_run_example.sql) — optional simulation for legacy seed.
+16. [`sql_mssql/deprecated/wf_pca_two_group_seed.sql`](sql_mssql/deprecated/wf_pca_two_group_seed.sql) — **deprecated** static PCaTwoGroupFlow.
+17. [`sql_mssql/deprecated/wf_pca_ovr_seed.sql`](sql_mssql/deprecated/wf_pca_ovr_seed.sql) — **deprecated** static PCaOvrFlow.
+18. [`sql_mssql/deprecated/wf_pca_two_group_run_example.sql`](sql_mssql/deprecated/wf_pca_two_group_run_example.sql) — optional simulation for legacy seed.
 
-See also: [CAPABILITY_CHECK.md](CAPABILITY_CHECK.md), [sql/DataDrivenPipeline.md](sql/DataDrivenPipeline.md), [sql/SamplePrepFlow.md](sql/SamplePrepFlow.md), [docs/pipeline_architecture.md](docs/pipeline_architecture.md) (Quarto HTML/PDF: [docs/pipeline_architecture.qmd](docs/pipeline_architecture.qmd)), [contract/db_objects.md](contract/db_objects.md), [contract/sample_prep_capabilities.md](contract/sample_prep_capabilities.md), [sql_pg/README.md](sql_pg/README.md), [../contracts/openapi.yaml](../contracts/openapi.yaml), [../workers/WORKER_PROTOCOL.md](../workers/WORKER_PROTOCOL.md), [sql/wf_foreach_design.md](sql/wf_foreach_design.md), [sql/instance_context_examples/pca_ovr.json](sql/instance_context_examples/pca_ovr.json), [sql/instance_context_examples/sample_prep_plasma.json](sql/instance_context_examples/sample_prep_plasma.json).
+See also: [CAPABILITY_CHECK.md](CAPABILITY_CHECK.md), [sql/DataDrivenPipeline.md](sql_mssql/DataDrivenPipeline.md), [sql/SamplePrepFlow.md](sql_mssql/SamplePrepFlow.md), [docs/pipeline_architecture.md](docs/pipeline_architecture.md) (Quarto HTML/PDF: [docs/pipeline_architecture.qmd](docs/pipeline_architecture.qmd)), [contract/db_objects.md](contract/db_objects.md), [contract/sample_prep_capabilities.md](contract/sample_prep_capabilities.md), [sql_pg/README.md](sql_pg/README.md), [../contracts/openapi.yaml](../contracts/openapi.yaml), [../workers/WORKER_PROTOCOL.md](../workers/WORKER_PROTOCOL.md), [sql/wf_foreach_design.md](sql_mssql/wf_foreach_design.md), [sql/instance_context_examples/pca_ovr.json](sql_mssql/instance_context_examples/pca_ovr.json), [sql/instance_context_examples/sample_prep_plasma.json](sql_mssql/instance_context_examples/sample_prep_plasma.json).
 
 To redeploy from scratch, drop runtime tables before re-running `workflow_definition.sql` if `workflow_instance` exists (it references `workflow_version`). Example:
 
@@ -102,7 +102,7 @@ Python REST worker (poll/submit): [`../workers/WORKER_PROTOCOL.md`](../workers/W
 | Implementation | Command | Backend |
 |----------------|---------|---------|
 | **Python (production)** | `methyl-gateway` via systemd on a dedicated Linux VM; dev: `python workflow_engine/rest/gateway.py` | Azure SQL (`BACKEND_DB=mssql`) or PostgreSQL (`BACKEND_DB=postgres`) via psycopg/pyodbc |
-| Delphi (frozen reference / Windows) | `WfEngineSrv` / `MethylWfGateway` — manual Win64 build only; see [`DELPHI_GATEWAY_STATUS.md`](DELPHI_GATEWAY_STATUS.md) | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |
+| Delphi (frozen reference / Windows) | `WfEngineSrv` / `MethylWfGateway` — manual Win64 build only; see [`delphi/DELPHI_GATEWAY_STATUS.md`](delphi/DELPHI_GATEWAY_STATUS.md) | UniDAC → Azure SQL or PostgreSQL (`BACKEND_DB`) |
 
 PostgreSQL parity scripts (`sql_pg/05`–`08`) port runtime resolver, scope write-path, JSON encoding, and **FOREACH** from the T-SQL parity scripts. Both Azure SQL (`wf_sql_foreach_support.sql`) and PostgreSQL (`sql_pg/08_foreach_support.sql`) support DomainProgram FOREACH workflows.
 
@@ -116,7 +116,7 @@ After deploying `wf_action_schema.sql`:
 source .venv/bin/activate
 methyl-export-task-schemas              # writes schemas/tasks/*.schema.json
 methyl-export-task-schemas --check      # CI drift gate
-python workflow_engine/sql/seed_action_schemas.py
+python workflow_engine/sql_mssql/seed_action_schemas.py
 ```
 
 Gateway routes: `GET /v1/actions`, `GET /v1/actions/{action_name}/schema?direction=input|output` ([`contracts/openapi.yaml`](../contracts/openapi.yaml)). The Config Editor fetches these when `[Gateway] Enabled=true` in its INI file.

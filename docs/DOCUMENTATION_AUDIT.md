@@ -15,7 +15,7 @@ This document is the canonical register of documentation coverage, canonical sou
 | **Architecture** | [`docs/architecture/`](architecture/index.md) | Consolidated | Absorbs architecture_review + pipeline overview |
 | **Reference** | [`docs/reference/`](reference/documentation-toolchain.md) | New pillar | Config matrix, DomainProgram language, toolchain decision |
 | **Workflow JSON** | [`reference/domain-program-language.md`](reference/domain-program-language.md) | Moved | Schemas in `schemas/domain/` |
-| **SamplePrep + QC** | Usage ch.03, [`workflow_engine/sql/SamplePrepFlow.md`](../workflow_engine/sql/SamplePrepFlow.md) | Documented | |
+| **SamplePrep + QC** | Usage ch.03, [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md) | Documented | |
 | **Deployment** | Usage ch.14, [`deployment/production_runbook.md`](deployment/production_runbook.md) | Dual-backend | |
 | **Schemas / contracts** | [`reference/schema-index.md`](reference/schema-index.md), [`contracts/openapi.yaml`](../contracts/openapi.yaml) | Machine-readable | |
 | **Diagrams** | [`docs/diagrams/src/*.mmd`](diagrams/src/), [`docs/diagrams/out/*.svg`](diagrams/out/) | Pre-render pipeline | `scripts/render_diagrams.sh` (pinned `docs/diagrams/package.json`, system Chromium on ARM) |

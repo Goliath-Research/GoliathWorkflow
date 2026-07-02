@@ -36,7 +36,7 @@ Override thresholds via `project.json` → `step_config.extraction_qc`.
 
 SamplePrepPipeline runs `sample.extraction_qc` after `sample.methyl_extract`. Scope variable `extractionQcPass` comes from `guardrails.overall_pass`.
 
-See [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md) and [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md).
+See [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md) and [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md).
 
 ## Related
 

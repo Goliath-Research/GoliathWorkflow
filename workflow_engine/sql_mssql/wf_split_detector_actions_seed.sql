@@ -5,7 +5,7 @@
     source .venv/bin/activate
     methyl-export-task-schemas
     methyl-export-action-catalog
-    python workflow_engine/sql/seed_action_catalog.py
+    python workflow_engine/sql_mssql/seed_action_catalog.py
 
   This script upserts four actions only (legacy lightweight path).
 */

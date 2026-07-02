@@ -1,6 +1,6 @@
 # PCa OvR Worker JSON Contracts
 
-> **DEPRECATED.** **PCaOvrFlow** static seed is legacy. Use DomainProgram workflows and [`workflow_engine/contract/sample_prep_capabilities.md`](../contract/sample_prep_capabilities.md) for current contracts. Legacy seed: [`sql/deprecated/wf_pca_ovr_seed.sql`](deprecated/wf_pca_ovr_seed.sql).
+> **DEPRECATED.** **PCaOvrFlow** static seed is legacy. Use DomainProgram workflows and [`workflow_engine/contract/sample_prep_capabilities.md`](../contract/sample_prep_capabilities.md) for current contracts. Legacy seed: [`deprecated/wf_pca_ovr_seed.sql`](deprecated/wf_pca_ovr_seed.sql).
 
 Workers poll `wf.sp_worker_request_task` by capability and submit via `wf.sp_worker_submit_result`.
 

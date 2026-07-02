@@ -1,4 +1,4 @@
-# Azure SQL deploy scripts (`sql/`)
+# Azure SQL deploy scripts (`sql_mssql/`)
 
 Incremental **wf** schema parity scripts for Azure SQL. Use after the bundled base schema (`MethylPipeline.sql` or `MethylPipelineDB_Script.sql`).
 
@@ -11,14 +11,14 @@ export AZURE_SQL_USER=sql-admin
 export AZURE_SQL_PASSWORD='...'
 export SQLCMD_TRUST_SERVER_CERTIFICATE=1   # optional
 
-chmod +x workflow_engine/sql/deploy_azure.sh
-./workflow_engine/sql/deploy_azure.sh
+chmod +x workflow_engine/sql_mssql/deploy_azure.sh
+./workflow_engine/sql_mssql/deploy_azure.sh
 ```
 
 Optional cluster IP binding:
 
 ```bash
-./workflow_engine/sql/deploy_azure.sh --with-cluster-security
+./workflow_engine/sql_mssql/deploy_azure.sh --with-cluster-security
 ```
 
 ## Seed action catalog + workflows
@@ -37,7 +37,7 @@ methyl-export-task-schemas
 methyl-export-action-catalog
 export BACKEND_DB=mssql
 export AZURE_SQL_SERVER=... AZURE_SQL_DB=... AZURE_SQL_USER=... AZURE_SQL_PASSWORD=...
-python workflow_engine/sql/seed_action_catalog.py
+python workflow_engine/sql_mssql/seed_action_catalog.py
 bash scripts/deploy_workflow_definitions.sh --api-base http://localhost:8080/v1
 ```
 

@@ -44,7 +44,7 @@ python scripts/migrate_work_layout.py --apply-remap --no-dry-run
 
 # 5. Database (after backup)
 psql "$GATEWAY_DATABASE_URL" -f workflow_engine/sql_pg/migrate_work_paths_prostate_cancer.sql
-# MSSQL: workflow_engine/sql/migrate_work_paths_prostate_cancer.sql
+# MSSQL: workflow_engine/sql_mssql/migrate_work_paths_prostate_cancer.sql
 
 # 6. Verify
 python scripts/migrate_work_layout.py --verify

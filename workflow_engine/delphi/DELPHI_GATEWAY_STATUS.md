@@ -2,7 +2,7 @@
 
 **Status:** Frozen reference (June 2026)
 
-The Delphi HTTP gateway (`WfEngineSrv` / `MethylWfGateway` Windows service) is **no longer the production middle tier**. The supported gateway is **Python `methyl-gateway`** on a dedicated Linux VM (systemd), documented in [`deploy/systemd/methyl-gateway.service`](../deploy/systemd/methyl-gateway.service) and [`docs/deployment/production_runbook.md`](../docs/deployment/production_runbook.md).
+The Delphi HTTP gateway (`WfEngineSrv` / `MethylWfGateway` Windows service) is **no longer the production middle tier**. The supported gateway is **Python `methyl-gateway`** on a dedicated Linux VM (systemd), documented in [`deploy/systemd/methyl-gateway.service`](../../deploy/systemd/methyl-gateway.service) and [`docs/deployment/production_runbook.md`](../../docs/deployment/production_runbook.md).
 
 ## Scope when frozen
 

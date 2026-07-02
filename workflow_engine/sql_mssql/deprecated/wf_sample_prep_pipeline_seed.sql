@@ -24,7 +24,7 @@
              ELSE delete_fastqs → qc_failed
 
   Instance context_json example:
-  - workflow_engine/sql/instance_context_examples/sample_prep_plasma.json
+  - workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json
 
   Prerequisites:
   - wf_scope_variables.sql through wf_sql_foreach_support.sql

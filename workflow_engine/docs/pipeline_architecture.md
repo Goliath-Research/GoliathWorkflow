@@ -84,9 +84,9 @@ The analysis pipeline ([Section 1](#1-project-configuration) onward) assumes per
 
 **Workflow definition:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](/home/ubuntu/MethylPipeline/workflow_engine/domain/fixtures/sample_prep.program.json) — deploy with `bash scripts/deploy_workflow_definitions.sh`.
 
-Legacy SQL seed [`workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql`](workflow_engine/sql/deprecated/wf_sample_prep_pipeline_seed.sql) is **deprecated**.
+Legacy SQL seed [`workflow_engine/sql_mssql/deprecated/wf_sample_prep_pipeline_seed.sql`](workflow_engine/sql_mssql/deprecated/wf_sample_prep_pipeline_seed.sql) is **deprecated**.
 
-**Operator guide:** [`workflow_engine/sql/SamplePrepFlow.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/SamplePrepFlow.md)  
+**Operator guide:** [`workflow_engine/sql_mssql/SamplePrepFlow.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/SamplePrepFlow.md)  
 **Worker contract:** [`workflow_engine/contract/sample_prep_capabilities.md`](/home/ubuntu/MethylPipeline/workflow_engine/contract/sample_prep_capabilities.md)  
 **Analyte profiles:** [`docs/ANALYTE_PROFILES.md`](/home/ubuntu/MethylPipeline/docs/ANALYTE_PROFILES.md)
 
@@ -160,7 +160,7 @@ Project [`path_remap`](/home/ubuntu/MethylPipeline/packages/methylutils/methyl_u
 1. Start **SamplePrepPipeline** when FASTQs are ready (`context_json.samples[]` lists each sample).
 2. On instance **COMPLETED** (all samples have HDF5 + passed QC), start **DataDrivenPipeline** with the same `projectPath`, `comparisons`, and `chromosomes`.
 
-Example instance payload: [`workflow_engine/sql/instance_context_examples/sample_prep_plasma.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql/instance_context_examples/sample_prep_plasma.json).
+Example instance payload: [`workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json).
 
 ---
 
@@ -329,7 +329,7 @@ flowchart LR
 |----------|------|
 | `workers/methyl_worker/task_models.py` | Source-of-truth Pydantic I/O models |
 | `methyl-export-task-schemas` | Writes `schemas/tasks/<action>.input\|output.schema.json` |
-| `workflow_engine/sql/seed_action_schemas.py` | Upserts schemas into the database |
+| `workflow_engine/sql_mssql/seed_action_schemas.py` | Upserts schemas into the database |
 | `GET /v1/actions/{name}/schema` | Config Editor + tooling fetch live schemas |
 | Worker `validate_task_input/output` | Enforces resolved payloads at claim/submit |
 
@@ -401,7 +401,7 @@ Typical mapping:
 
 **Alternative (DomainProgram + collection bindings):** pass only `{ "projectPath": "…" }`; the engine resolves `chromosomes`, `contexts`, and `comparisons` from the project JSON at instance start ([Section 3.5](#35-domain-program-language-and-workflow-compilation)). Pre-expanded arrays in `context_json` remain supported for hand-written seeds such as **DataDrivenPipeline**.
 
-Example instance payload: [`workflow_engine/sql/instance_context_examples/pca_ovr.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql/instance_context_examples/pca_ovr.json).
+Example instance payload: [`workflow_engine/sql_mssql/instance_context_examples/pca_ovr.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/instance_context_examples/pca_ovr.json).
 
 Starting a run (middle-tier):
 
@@ -558,7 +558,7 @@ The workflow engine stores **definitions** (reusable trees) and **runtime** (ins
 
 Deploy scripts:
 
-- SQL Server: bundled [`workflow_engine/sql/MethylPipeline.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/MethylPipeline.sql) + parity scripts
+- SQL Server: bundled [`workflow_engine/sql_mssql/MethylPipeline.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/MethylPipeline.sql) + parity scripts
 - PostgreSQL: [`workflow_engine/sql_pg/`](/home/ubuntu/MethylPipeline/workflow_engine/sql_pg/) (`00_schema.sql` … `07_scope_encoding_parity.sql`)
 
 ### Tables by layer
@@ -657,7 +657,7 @@ Example from per-comparison nodes in legacy PCa seeds: `centroid2Dir`, `detectOu
 | ACTION complete | Worker submit | `variable_output_binding`: `result_code` or JSON path from `output_json` |
 | Domain planner (optional) | Before instance start | Populates `context_json.iterations[]`; may audit via `wf.instance_extension` |
 
-Engine write-path: [`wf_sql_scope_writepath_parity.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sql_scope_writepath_parity.sql) (`wf_set_scope_variable`, `wf_open_scope`, `wf_apply_output_bindings`).
+Engine write-path: [`wf_sql_scope_writepath_parity.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/wf_sql_scope_writepath_parity.sql) (`wf_set_scope_variable`, `wf_open_scope`, `wf_apply_output_bindings`).
 
 #### Use (read-path)
 
@@ -673,7 +673,7 @@ Engine write-path: [`wf_sql_scope_writepath_parity.sql`](/home/ubuntu/MethylPipe
 
 The resolver does **not** evaluate arithmetic or boolean expressions in placeholders. Any logic beyond simple lookup must run in a worker (or in the planner before the instance starts) and **publish** a scalar or JSON value into scope.
 
-**Control-flow reads:** IF, SWITCH, and WHILE nodes specify `condition_var` / `switch_var`. The engine reads an **integer** from scope (`0` = false / exit loop; non-zero = true / continue). If the variable is absent, it falls back to `condition_ref_node_key` / `switch_ref_node_key` (prior ACTION `result_code`). See [`WORKFLOW_ENGINE_DELPHI.md`](/home/ubuntu/MethylPipeline/workflow_engine/WORKFLOW_ENGINE_DELPHI.md) and [`wf_sql_branch_parity.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_sql_branch_parity.sql).
+**Control-flow reads:** IF, SWITCH, and WHILE nodes specify `condition_var` / `switch_var`. The engine reads an **integer** from scope (`0` = false / exit loop; non-zero = true / continue). If the variable is absent, it falls back to `condition_ref_node_key` / `switch_ref_node_key` (prior ACTION `result_code`). See [`WORKFLOW_ENGINE_DELPHI.md`](/home/ubuntu/MethylPipeline/workflow_engine/delphi/WORKFLOW_ENGINE_DELPHI.md) and [`wf_sql_branch_parity.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/wf_sql_branch_parity.sql).
 
 ### Worker-driven conditions and branching
 
@@ -724,7 +724,7 @@ Stratified split: [`methyl_validation/split.py`](/home/ubuntu/MethylPipeline/pac
 
 #### Example workflow topology (`ValidationPipeline`)
 
-Seed: [`wf_validation_pipeline_seed.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_validation_pipeline_seed.sql)
+Seed: [`wf_validation_pipeline_seed.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/wf_validation_pipeline_seed.sql)
 
 ```mermaid
 flowchart TD
@@ -741,7 +741,7 @@ flowchart TD
 
 FOREACH flattening copies each `iterations[]` element's fields into scope, so templates embed `taskConfig` without hidden engine injection. The **final sequence** runs mapper → enricher → progression on the base `projectPath` after all iterations complete.
 
-**Composition:** outer `FOREACH iterations` × inner `FOREACH comparisons/chromosomes` (DataDrivenPipeline pattern) — see [`wf_foreach_design.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_foreach_design.md).
+**Composition:** outer `FOREACH iterations` × inner `FOREACH comparisons/chromosomes` (DataDrivenPipeline pattern) — see [`wf_foreach_design.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/wf_foreach_design.md).
 
 Example `context_json` fragment:
 
@@ -759,7 +759,7 @@ Example `context_json` fragment:
 }
 ```
 
-Full example: [`validation_mc.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql/instance_context_examples/validation_mc.json).
+Full example: [`validation_mc.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/instance_context_examples/validation_mc.json).
 
 Legacy `MethylValidationFlow` + `context_json.monteCarlo` + `wf.monte_carlo_*` tables are **deprecated**. See [`packages/methylvalidation/docs/USAGE.md`](/home/ubuntu/MethylPipeline/packages/methylvalidation/docs/USAGE.md) for CLI/filesystem-first validation.
 
@@ -802,7 +802,7 @@ Resolved directories (under `/work/projects/prostate-cancer/PCa3/`):
 
 ### 5.2 Instance `context_json` (runtime)
 
-From [`workflow_engine/sql/instance_context_examples/pca_ovr.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql/instance_context_examples/pca_ovr.json):
+From [`workflow_engine/sql_mssql/instance_context_examples/pca_ovr.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/instance_context_examples/pca_ovr.json):
 
 ```json
 {
@@ -833,7 +833,7 @@ No per-chromosome nodes are stored in the DB — only **~15 static nodes** in `D
 
 ### 5.3 Workflow tree (`DataDrivenPipeline`)
 
-Seed: [`workflow_engine/sql/wf_data_driven_pipeline_seed.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_data_driven_pipeline_seed.sql)
+Seed: [`workflow_engine/sql_mssql/wf_data_driven_pipeline_seed.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/wf_data_driven_pipeline_seed.sql)
 
 ```mermaid
 flowchart TD
@@ -887,7 +887,7 @@ Post steps run only after **all** comparison branches complete (root `SEQUENCE`:
 | `mapper` / `enricher` | `project` only (reads detection outputs from shared storage) |
 | `progression` | `project`, `orderedComparisonLabels` |
 
-Worker contracts: [`workflow_engine/sql/wf_worker_contracts_pca_ovr.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/wf_worker_contracts_pca_ovr.md)
+Worker contracts: [`workflow_engine/sql_mssql/wf_worker_contracts_pca_ovr.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/wf_worker_contracts_pca_ovr.md)
 
 ---
 
@@ -907,7 +907,7 @@ Workers **never connect to the database directly**. They use the REST API (or an
 | `POST` | `/v1/workflows/instances` | Portal / admin |
 | `GET` | `/v1/workflows/instances/{id}` | Portal status |
 
-Production implementation: Python [`workflow_engine/rest/gateway.py`](/home/ubuntu/MethylPipeline/workflow_engine/rest/gateway.py) (`methyl-gateway`, uvicorn, systemd on Linux). Frozen Delphi reference: [`WfEngine.GatewayService.pas`](/home/ubuntu/MethylPipeline/workflow_engine/src/WfEngine.GatewayService.pas) / `WfEngineSrv` (see [`DELPHI_GATEWAY_STATUS.md`](/home/ubuntu/MethylPipeline/workflow_engine/DELPHI_GATEWAY_STATUS.md)).
+Production implementation: Python [`workflow_engine/rest/gateway.py`](/home/ubuntu/MethylPipeline/workflow_engine/rest/gateway.py) (`methyl-gateway`, uvicorn, systemd on Linux). Frozen Delphi reference: [`WfEngine.GatewayService.pas`](/home/ubuntu/MethylPipeline/workflow_engine/delphi/src/WfEngine.GatewayService.pas) / `WfEngineSrv` (see [`DELPHI_GATEWAY_STATUS.md`](/home/ubuntu/MethylPipeline/workflow_engine/delphi/DELPHI_GATEWAY_STATUS.md)).
 
 ### Request / submit sequence
 
@@ -1030,9 +1030,9 @@ flowchart LR
 | Document | Topic |
 |----------|--------|
 | [`workflow_engine/contract/domain_types.md`](/home/ubuntu/MethylPipeline/workflow_engine/contract/domain_types.md) | Domain types, `$type` convention, compiler pipeline |
-| [`workflow_engine/sql/DataDrivenPipeline.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql/DataDrivenPipeline.md) | FOREACH workflow, deploy order |
+| [`workflow_engine/sql_mssql/DataDrivenPipeline.md`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/DataDrivenPipeline.md) | FOREACH workflow, deploy order |
 | [`workflow_engine/sql_pg/wf_sql_collection_bindings.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_pg/wf_sql_collection_bindings.sql) | Collection binding table and resolver |
-| [`workflow_engine/WORKFLOW_ENGINE_DELPHI.md`](/home/ubuntu/MethylPipeline/workflow_engine/WORKFLOW_ENGINE_DELPHI.md) | Scope variables, IF/SWITCH/WHILE, Monte Carlo bridge |
+| [`workflow_engine/delphi/WORKFLOW_ENGINE_DELPHI.md`](/home/ubuntu/MethylPipeline/workflow_engine/delphi/WORKFLOW_ENGINE_DELPHI.md) | Scope variables, IF/SWITCH/WHILE, Monte Carlo bridge |
 | [`workflow_engine/CAPABILITY_CHECK.md`](/home/ubuntu/MethylPipeline/workflow_engine/CAPABILITY_CHECK.md) | Engine capabilities vs gaps |
 | [`docs/theory/chapters/05-methylpredictor-and-validation.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/05-methylpredictor-and-validation.qmd) | Theory: Monte Carlo splits and validation |
 | [`docs/theory/chapters/11-project-configuration.qmd`](/home/ubuntu/MethylPipeline/docs/theory/chapters/11-project-configuration.qmd) | Theory: project configuration |

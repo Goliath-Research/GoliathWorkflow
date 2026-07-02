@@ -15,7 +15,7 @@
        └─ ACTION progression
 
   Instance context_json example:
-  - workflow_engine/sql/instance_context_examples/validation_mc.json
+  - workflow_engine/sql_mssql/instance_context_examples/validation_mc.json
 
   Prerequisites:
   - wf_scope_variables.sql through wf_sql_foreach_support.sql

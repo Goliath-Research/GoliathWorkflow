@@ -8,7 +8,7 @@
 
 **Deploy:** `bash scripts/deploy_workflow_definitions.sh` → `POST /v1/workflows/definitions`
 
-**Legacy SQL seed** [`sql/deprecated/wf_sample_prep_pipeline_seed.sql`](deprecated/wf_sample_prep_pipeline_seed.sql) is **deprecated**; use DomainProgram deploy above.
+**Legacy SQL seed** [`deprecated/wf_sample_prep_pipeline_seed.sql`](deprecated/wf_sample_prep_pipeline_seed.sql) is **deprecated**; use DomainProgram deploy above.
 
 ## Architecture
 

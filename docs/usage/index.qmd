@@ -46,7 +46,7 @@ flowchart LR
 
 ## Canonical references
 
-- Sample prep workflow: [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md)
+- Sample prep workflow: [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md)
 - DomainProgram language: [`docs/reference/domain-program-language.md`](../reference/domain-program-language.md)
 - Pipeline stages diagram: [`docs/architecture/pipeline-stages.md`](../architecture/pipeline-stages.md)
 - Validation orchestration: `packages/methylvalidation/docs/USAGE.md`

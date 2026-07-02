@@ -72,10 +72,10 @@ bash scripts/bootstrap_distributed_workers.sh
 
 The bootstrap script:
 
-1. Deploys wf schema parity DDL (`workflow_engine/sql_pg/deploy_azure.sh` or `workflow_engine/sql/deploy_azure.sh`)
+1. Deploys wf schema parity DDL (`workflow_engine/sql_pg/deploy_azure.sh` or `workflow_engine/sql_mssql/deploy_azure.sh`)
 2. Runs `methyl-export-task-schemas` + `methyl-export-action-catalog`
 3. Runs `scripts/check_task_input_config_boundary.py`
-4. Seeds `wf.workflow_action` + task JSON schemas via `workflow_engine/sql/seed_action_catalog.py`
+4. Seeds `wf.workflow_action` + task JSON schemas via `workflow_engine/sql_mssql/seed_action_catalog.py`
 5. POSTs compiled SamplePrep + StudyValidation workflows via `scripts/deploy_workflow_definitions.sh`
 
 ## Gateway-only (no DB creds on laptop)
@@ -128,8 +128,8 @@ bash scripts/smoke_study_lifecycle.sh --api-base "$WORKER_API_BASE"
 
 | Step | PostgreSQL | Azure SQL |
 |------|------------|-----------|
-| Schema deploy | [`workflow_engine/sql_pg/deploy_azure.sh`](../../workflow_engine/sql_pg/deploy_azure.sh) | Base: `MethylPipeline.sql` then [`workflow_engine/sql/deploy_azure.sh`](../../workflow_engine/sql/deploy_azure.sh) |
-| Action catalog seed | `python workflow_engine/sql/seed_action_catalog.py` | Same (uses `BACKEND_DB=mssql`) |
+| Schema deploy | [`workflow_engine/sql_pg/deploy_azure.sh`](../../workflow_engine/sql_pg/deploy_azure.sh) | Base: `MethylPipeline.sql` then [`workflow_engine/sql_mssql/deploy_azure.sh`](../../workflow_engine/sql_mssql/deploy_azure.sh) |
+| Action catalog seed | `python workflow_engine/sql_mssql/seed_action_catalog.py` | Same (uses `BACKEND_DB=mssql`) |
 | Workflow deploy | `bash scripts/deploy_workflow_definitions.sh` | Same |
 | Test bed (PG only) | `workflow_engine/sql_pg/deploy_test_bed.sh` | Use gateway + `smoke_*.sh` |
 | Worker API | `wf.sp_worker_request_task` | Same contract |

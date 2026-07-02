@@ -9,7 +9,7 @@ Usage:
   source .venv/bin/activate
   methyl-export-task-schemas
   methyl-export-action-catalog
-  python workflow_engine/sql/seed_action_catalog.py
+  python workflow_engine/sql_mssql/seed_action_catalog.py
 
 Azure SQL (default BACKEND_DB=mssql):
   export BACKEND_DB=mssql
@@ -17,7 +17,7 @@ Azure SQL (default BACKEND_DB=mssql):
   export AZURE_SQL_DB=...
   export AZURE_SQL_USER=...
   export AZURE_SQL_PASSWORD=...
-  python workflow_engine/sql/seed_action_catalog.py
+  python workflow_engine/sql_mssql/seed_action_catalog.py
 """
 
 from __future__ import annotations
