@@ -597,8 +597,13 @@ def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:
 def _load_mc_config(input_json: Dict[str, Any]):
     from methyl_validation.workflow_planner import ValidationPlanRequest, _load_config_from_project, resolve_base_project_json
 
-    base_project = resolve_base_project_json(input_json.get("projectPath") or input_json.get("project"))
-    request = ValidationPlanRequest.model_validate(input_json)
+    project_path = input_json.get("projectPath") or input_json.get("project")
+    base_project = resolve_base_project_json(project_path)
+    allowed = set(ValidationPlanRequest.model_fields)
+    request_data = {key: value for key, value in input_json.items() if key in allowed}
+    if project_path:
+        request_data["projectPath"] = str(project_path)
+    request = ValidationPlanRequest.model_validate(request_data)
     return _load_config_from_project(base_project, request), base_project
 
 
