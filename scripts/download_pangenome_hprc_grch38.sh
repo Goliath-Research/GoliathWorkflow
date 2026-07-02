@@ -87,7 +87,7 @@ run_vg() {
     -v "${PANGENOME_DIR}:/workdir" \
     -w /workdir \
     "${VG_IMAGE}" \
-    "$@"
+    vg "$@"
 }
 
 build_autoindex() {
