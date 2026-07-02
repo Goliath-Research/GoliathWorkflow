@@ -109,52 +109,33 @@ class ECDFClassifier:
 
     def _build_pdf_table(self, bin_counts: np.ndarray) -> np.ndarray:
         """
-        Build a (n_dmps, _PDF_GRID_SIZE) PDF lookup table.
-
-        PCHIP-derived PDF values are pre-evaluated on a dense uniform grid in
-        [0, 1].  Each row is renormalised so that the trapezoidal integral over
-        the grid equals 1 (guards against small numerical drift in the spline
-        derivative).
+        Build a (n_dmps, _PDF_GRID_SIZE) PDF lookup table via linear CDF interpolation.
         """
-        try:
-            from scipy.interpolate import PchipInterpolator
-        except ImportError:
-            PchipInterpolator = None
+        from .array_backend import get_array_module, cdf_linear_interp_batch
 
-        n_pos, n_bins = bin_counts.shape
-        total = np.sum(bin_counts, axis=1, keepdims=True)
-        total = np.maximum(total, 1e-12)
+        n_pos, _n_bins = bin_counts.shape
+        total = np.maximum(np.sum(bin_counts, axis=1, keepdims=True), 1e-12)
         cumsum = np.cumsum(bin_counts, axis=1) / total
-        # cdf at bin edges: prepend 0
         cdf_at_edges = np.concatenate(
             [np.zeros((n_pos, 1), dtype=np.float64), cumsum], axis=1
-        )  # (n_pos, n_bins+1)
-
-        pdf_table = np.zeros((n_pos, _PDF_GRID_SIZE), dtype=np.float64)
-
-        if PchipInterpolator is not None:
-            for i in range(n_pos):
-                interp = PchipInterpolator(self.bin_edges, cdf_at_edges[i])
-                deriv = interp.derivative()
-                pdf_vals = np.asarray(deriv(self._grid), dtype=np.float64)
-                pdf_table[i] = np.maximum(pdf_vals, 0.0)
-        else:
-            # Piecewise-constant fallback: bin density = counts / (total * bin_width)
-            widths = np.diff(self.bin_edges)
-            widths = np.maximum(widths, 1e-10)
-            density = (bin_counts / total) / widths[np.newaxis, :]  # (n_pos, n_bins)
-            E = len(self.bin_edges)
-            for j, g in enumerate(self._grid):
-                idx = np.searchsorted(self.bin_edges, g, side="right") - 1
-                idx = np.clip(idx, 0, E - 2)
-                pdf_table[:, j] = density[:, idx]
-
-        # Renormalise each row so the trapezoidal integral is 1
+        )
+        xp, _ = get_array_module()
+        cdf_grid = cdf_linear_interp_batch(xp, cdf_at_edges, self.bin_edges, self._grid)
+        pdf_table = np.maximum(np.diff(cdf_grid, axis=1), 0.0)
+        grid_mid = (self._grid[:-1] + self._grid[1:]) / 2.0
+        dx = np.maximum(np.diff(self._grid), 1e-12)
+        pdf_table = pdf_table / dx[np.newaxis, :]
         trapz = getattr(np, "trapezoid", None) or getattr(np, "trapz")
-        area = trapz(pdf_table, self._grid, axis=1)  # (n_pos,)
+        area = trapz(pdf_table, grid_mid, axis=1)
         area = np.maximum(area, 1e-12)
         pdf_table /= area[:, np.newaxis]
-        return np.maximum(pdf_table, 1e-300)  # floor to avoid log(0)
+        return np.maximum(pdf_table, 1e-300)
+
+    def _interp_pdf_rows(self, x_col: np.ndarray, pdf_row: np.ndarray) -> np.ndarray:
+        from .array_backend import get_array_module, linear_interp_on_grid
+
+        xp, _ = get_array_module()
+        return linear_interp_on_grid(xp, x_col, self._grid, pdf_row)
 
     # ------------------------------------------------------------------
     # Public interface (mirrors BetaClassifier)
@@ -199,8 +180,8 @@ class ECDFClassifier:
         log_p_c2 = np.zeros((n_samples, self.n_dmps), dtype=np.float64)
 
         for i in range(self.n_dmps):
-            pdf1_vals = np.interp(X_clean[:, i], self._grid, self._pdf_c1[i])
-            pdf2_vals = np.interp(X_clean[:, i], self._grid, self._pdf_c2[i])
+            pdf1_vals = self._interp_pdf_rows(X_clean[:, i], self._pdf_c1[i])
+            pdf2_vals = self._interp_pdf_rows(X_clean[:, i], self._pdf_c2[i])
             log_p_c1[:, i] = np.log(np.maximum(pdf1_vals, 1e-300))
             log_p_c2[:, i] = np.log(np.maximum(pdf2_vals, 1e-300))
 

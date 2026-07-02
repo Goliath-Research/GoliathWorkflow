@@ -13,12 +13,7 @@ import numpy as np
 import pandas as pd
 
 from .core.methyl_frame import MethylSample, MethylCentroid
-from .gpu_detection import (
-    is_gpu_available,
-    get_gpu_memory_gb,
-    get_gpu_device_count,
-    cleanup_gpu_memory,
-)
+from .array_backend import get_array_module, to_cpu, prefer_gpu_default
 from .memory_manager import get_memory_manager, force_gpu_cleanup
 from .metric_validations import validate_methylation_data
 from .performance_profiler import (
@@ -102,24 +97,23 @@ class MethylCentroidPair:
             if len(self.common_pos) == 0:
                 raise ValueError("Centroids have no common positions")
 
-        # Initialize GPU backend
-        self.gpu_available = is_gpu_available()
-        self.gpu_memory_gb = get_gpu_memory_gb() if self.gpu_available else 0.0
-        self.gpu_device_count = get_gpu_device_count() if self.gpu_available else 0
-
-        # Initialize array backend
+        # Initialize array backend (auto-prefer GPU unless METHYL_DISABLE_GPU)
+        self.xp, self.gpu_available = get_array_module()
+        self.to_cpu = to_cpu
         if self.gpu_available:
-            try:
-                import cupy as cp
-                self.cp = cp
-                self.xp = cp
-                self.to_cpu = cp.asnumpy
-                logger.info(f"GPU backend initialized: {self.gpu_device_count} device(s), {self.gpu_memory_gb:.1f}GB memory")
-            except ImportError:
-                self.gpu_available = False
-                self._init_cpu_backend()
+            from .gpu_detection import get_gpu_memory_gb, get_gpu_device_count
+
+            self.gpu_memory_gb = get_gpu_memory_gb()
+            self.gpu_device_count = get_gpu_device_count()
+            logger.info(
+                "GPU backend initialized: %s device(s), %.1fGB memory",
+                self.gpu_device_count,
+                self.gpu_memory_gb,
+            )
         else:
-            self._init_cpu_backend()
+            self.gpu_memory_gb = 0.0
+            self.gpu_device_count = 0
+            logger.debug("CPU array backend initialized")
 
         # Initialize utilities
         self.memory_manager = get_memory_manager()
@@ -764,7 +758,7 @@ class MethylCentroidPair:
         
         overlap_approx = np.asarray(
             ecdf_bhattacharyya_trapezoidal_from_bin_counts(
-                bc1_batch, bc2_batch, bin_edges, grid_size=256, use_gpu=self.gpu_available
+                bc1_batch, bc2_batch, bin_edges, grid_size=256, prefer_gpu=self.gpu_available
             ),
             dtype=np.float64,
         )
@@ -779,6 +773,7 @@ class MethylCentroidPair:
             bc2_batch,
             n1=N1,
             n2=N2,
+            prefer_gpu=self.gpu_available,
         )
         p_values = np.asarray(stat_result["p_value"], dtype=np.float32)
 

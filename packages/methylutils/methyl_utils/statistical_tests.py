@@ -561,18 +561,20 @@ def ecdf_ks_pvalue(
     n1: np.ndarray,
     n2: np.ndarray,
     grid_size: int = 256,
+    prefer_gpu: Optional[bool] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     KS statistic and asymptotic two-sided p-value for two ECDFs at each position.
     n_eff = harmonic mean of n1, n2; p = kstwobign.sf(sqrt(n_eff) * D).
     """
-    from scipy.stats import kstwobign
+    from .array_backend import kolmogorov_sf
+
     ks_stats = ecdf_ks_statistic(ecdf_view1, ecdf_view2, position_indices, grid_size)
     n1 = np.asarray(n1, dtype=np.float64).ravel()
     n2 = np.asarray(n2, dtype=np.float64).ravel()
     n_eff = 2.0 / (1.0 / np.maximum(n1, 1) + 1.0 / np.maximum(n2, 1))
     sqrt_n_eff = np.sqrt(n_eff)
-    p_values = kstwobign.sf(sqrt_n_eff * ks_stats)
+    p_values = kolmogorov_sf(sqrt_n_eff * ks_stats, prefer_gpu=prefer_gpu)
     return ks_stats, p_values
 
 
@@ -581,6 +583,7 @@ def mann_whitney_from_bin_counts(
     bc2: np.ndarray,
     n1: np.ndarray,
     n2: np.ndarray,
+    prefer_gpu: Optional[bool] = None,
 ) -> Dict[str, np.ndarray]:
     """
     Vectorized Mann-Whitney U test using centroid bin-count histograms.
@@ -588,49 +591,50 @@ def mann_whitney_from_bin_counts(
     The histogram approximation counts all pairs where a group-1 sample falls in a
     strictly larger bin than a group-2 sample, plus half credit for tied bins.
     """
-    from scipy.stats import norm
+    from .array_backend import get_array_module, norm_sf, to_cpu
 
-    bc1 = np.asarray(bc1, dtype=np.float64)
-    bc2 = np.asarray(bc2, dtype=np.float64)
+    xp, _ = get_array_module(prefer_gpu)
+    bc1 = xp.asarray(bc1, dtype=xp.float64)
+    bc2 = xp.asarray(bc2, dtype=xp.float64)
     if bc1.ndim == 1:
         bc1 = bc1.reshape(1, -1)
         bc2 = bc2.reshape(1, -1)
 
-    n1 = np.asarray(n1, dtype=np.float64).ravel()
-    n2 = np.asarray(n2, dtype=np.float64).ravel()
-    if n1.size != bc1.shape[0]:
-        n1 = np.resize(n1, bc1.shape[0])
-    if n2.size != bc2.shape[0]:
-        n2 = np.resize(n2, bc2.shape[0])
+    n1 = xp.asarray(n1, dtype=xp.float64).ravel()
+    n2 = xp.asarray(n2, dtype=xp.float64).ravel()
+    if int(n1.size) != bc1.shape[0]:
+        n1 = xp.resize(n1, bc1.shape[0])
+    if int(n2.size) != bc2.shape[0]:
+        n2 = xp.resize(n2, bc2.shape[0])
 
-    # Reconstruct U from histogram counts: lower bins in group2 contribute a win,
-    # same-bin pairs count as ties worth 0.5.
-    cs2 = np.cumsum(bc2, axis=1)
-    lower_than_bin = np.concatenate(
-        [np.zeros((bc2.shape[0], 1), dtype=np.float64), cs2[:, :-1]],
+    cs2 = xp.cumsum(bc2, axis=1)
+    lower_than_bin = xp.concatenate(
+        [xp.zeros((bc2.shape[0], 1), dtype=xp.float64), cs2[:, :-1]],
         axis=1,
     )
-    u_stat = np.sum(bc1 * lower_than_bin, axis=1) + 0.5 * np.sum(bc1 * bc2, axis=1)
+    u_stat = xp.sum(bc1 * lower_than_bin, axis=1) + 0.5 * xp.sum(bc1 * bc2, axis=1)
 
-    total_n = np.maximum(n1 + n2, 0.0)
+    total_n = xp.maximum(n1 + n2, 0.0)
     ties = bc1 + bc2
-    denom = np.maximum(total_n * np.maximum(total_n - 1.0, 0.0), 1.0)
-    tie_corr = np.sum(ties * (ties**2 - 1.0), axis=1) / denom
-    var_u = (n1 * n2 / 12.0) * np.maximum((total_n + 1.0) - tie_corr, 0.0)
+    denom = xp.maximum(total_n * xp.maximum(total_n - 1.0, 0.0), 1.0)
+    tie_corr = xp.sum(ties * (ties**2 - 1.0), axis=1) / denom
+    var_u = (n1 * n2 / 12.0) * xp.maximum((total_n + 1.0) - tie_corr, 0.0)
 
     mean_u = (n1 * n2) / 2.0
-    z_stat = np.zeros_like(u_stat, dtype=np.float64)
-    valid = (n1 > 0) & (n2 > 0) & np.isfinite(var_u) & (var_u > 0.0)
-    z_stat[valid] = (u_stat[valid] - mean_u[valid]) / np.sqrt(var_u[valid])
-    p_value = np.ones_like(u_stat, dtype=np.float64)
-    p_value[valid] = 2.0 * norm.sf(np.abs(z_stat[valid]))
-    p_value = np.clip(p_value, 1e-300, 1.0)
+    valid = (n1 > 0) & (n2 > 0) & xp.isfinite(var_u) & (var_u > 0.0)
+    z_abs = xp.zeros_like(u_stat, dtype=xp.float64)
+    z_abs[valid] = xp.abs((u_stat[valid] - mean_u[valid]) / xp.sqrt(var_u[valid]))
+    p_value = 2.0 * xp.asarray(
+        norm_sf(to_cpu(z_abs), prefer_gpu=prefer_gpu), dtype=xp.float64
+    )
+    p_value = xp.where(valid, p_value, 1.0)
+    p_value = xp.clip(p_value, 1e-300, 1.0)
 
     return {
-        "u_stat": np.asarray(u_stat, dtype=np.float64),
-        "z_stat": np.asarray(z_stat, dtype=np.float64),
-        "p_value": np.asarray(p_value, dtype=np.float64),
-        "var_u": np.asarray(var_u, dtype=np.float64),
+        "u_stat": to_cpu(u_stat).astype(np.float64),
+        "z_stat": to_cpu(z_abs).astype(np.float64),
+        "p_value": to_cpu(p_value).astype(np.float64),
+        "var_u": to_cpu(var_u).astype(np.float64),
     }
 
 
@@ -870,23 +874,22 @@ def ecdf_bhattacharyya_trapezoidal_from_bin_counts(
     bc2: np.ndarray,
     bin_edges: np.ndarray,
     grid_size: int = 256,
-    use_gpu: bool = True,
+    prefer_gpu: Optional[bool] = None,
+    use_gpu: Optional[bool] = None,
 ) -> np.ndarray:
     """
     Approximate Bhattacharyya coefficient by interpolating the ECDF on a dense
     uniform grid, then taking finite differences to estimate the PDF.
-    
-    This provides a smoother approximation when bins are unmatched or coarse, 
+
+    This provides a smoother approximation when bins are unmatched or coarse,
     while avoiding the full PCHIP spline overhead.
     """
-    from .metrics_core import DistanceCalculator
-    calc = DistanceCalculator()
-    
-    if use_gpu and getattr(calc, 'gpu_available', False) and hasattr(calc, 'cp'):
-        xp = calc.cp
-    else:
-        xp = np
-        
+    from .array_backend import get_array_module, to_cpu
+
+    if use_gpu is not None and prefer_gpu is None:
+        prefer_gpu = use_gpu
+    xp, _ = get_array_module(prefer_gpu)
+
     bc1 = xp.asarray(bc1, dtype=xp.float64)
     bc2 = xp.asarray(bc2, dtype=xp.float64)
     bin_edges = xp.asarray(bin_edges, dtype=xp.float64)
@@ -904,40 +907,32 @@ def ecdf_bhattacharyya_trapezoidal_from_bin_counts(
     cumsum1 = xp.cumsum(bc1, axis=1) / total1
     cumsum2 = xp.cumsum(bc2, axis=1) / total2
 
-    # Prepend 0 to form CDF at bin edges
     zeros = xp.zeros((n_pos, 1), dtype=xp.float64)
     cdf1_edges = xp.concatenate([zeros, cumsum1], axis=1)
     cdf2_edges = xp.concatenate([zeros, cumsum2], axis=1)
 
     grid = xp.linspace(0.0, 1.0, grid_size, dtype=xp.float64)
 
-    # Vectorized searchsorted for interpolation
     idx = xp.searchsorted(bin_edges, grid, side="right") - 1
     idx = xp.clip(idx, 0, len(bin_edges) - 2)
 
-    # Calculate fractional distance t
     widths = xp.maximum(bin_edges[idx + 1] - bin_edges[idx], 1e-20)
     t = (grid - bin_edges[idx]) / widths
     t = xp.clip(t, 0.0, 1.0)
 
-    # Linearly interpolate CDF
     cdf1_grid = (1.0 - t) * cdf1_edges[:, idx] + t * cdf1_edges[:, idx + 1]
     cdf2_grid = (1.0 - t) * cdf2_edges[:, idx] + t * cdf2_edges[:, idx + 1]
 
-    # Compute probability masses over the grid intervals
     p1_grid = xp.maximum(xp.diff(cdf1_grid, axis=1), 0.0)
     p2_grid = xp.maximum(xp.diff(cdf2_grid, axis=1), 0.0)
 
-    # Bhattacharyya coefficient
     overlap = xp.sum(xp.sqrt(p1_grid * p2_grid), axis=1)
-    
+
     out = xp.clip(overlap, 0.0, 1.0)
     if squeeze:
         out = out[0]
-        
-    if use_gpu and getattr(calc, 'gpu_available', False) and hasattr(xp, 'asnumpy'):
-        return xp.asnumpy(out)
-    return out
+
+    return to_cpu(out)
 
 # Dictionary of available aggregation methods
 PVALUE_AGGREGATION_METHODS = {

@@ -31,10 +31,11 @@ logger = logging.getLogger(__name__)
 
 
 def get_xp(use_gpu: bool = False) -> type:
-    """Get array backend (NumPy or CuPy)."""
-    if use_gpu and CUPY_AVAILABLE:
-        return cp
-    return np
+    """Get array backend (NumPy or CuPy); honors METHYL_DISABLE_GPU when use_gpu=True."""
+    from .array_backend import get_array_module
+
+    xp, _ = get_array_module(prefer_gpu=use_gpu)
+    return xp
 
 
 def validate_eat_inputs(alpha_H: np.ndarray, beta_H: np.ndarray,

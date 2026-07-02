@@ -29,6 +29,19 @@ from .gpu_detection import (
     compare_implementations
 )
 
+from .array_backend import (
+    gpu_disabled_by_env,
+    prefer_gpu_default,
+    get_array_module,
+    to_cpu,
+    to_device,
+    cdf_linear_interp_batch,
+    norm_sf,
+    kolmogorov_sf,
+    get_special_backend,
+    linear_interp_on_grid,
+)
+
 from .logging_utils import (
     setup_logging,
     setup_module_logging,
@@ -647,6 +660,16 @@ __all__ = [
     "to_cpu_array",
     "get_memory_info",
     "compare_implementations",
+    "gpu_disabled_by_env",
+    "prefer_gpu_default",
+    "get_array_module",
+    "to_cpu",
+    "to_device",
+    "cdf_linear_interp_batch",
+    "linear_interp_on_grid",
+    "norm_sf",
+    "kolmogorov_sf",
+    "get_special_backend",
     # Logging functions
     "setup_logging",
     "setup_module_logging",

@@ -564,16 +564,16 @@ def create_gpu_array(array: np.ndarray) -> Tuple[np.ndarray, bool]:
 def to_cpu_array(array) -> np.ndarray:
     """
     Convert array to CPU numpy array.
-    
+
     Args:
         array: Input array (numpy or CuPy)
-        
+
     Returns:
         CPU numpy array
     """
-    if hasattr(array, 'get'):  # CuPy array
-        return array.get()
-    return np.asarray(array)
+    from .array_backend import to_cpu
+
+    return to_cpu(array)
 
 def get_memory_info() -> Dict[str, int]:
     """

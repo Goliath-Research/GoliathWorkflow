@@ -192,6 +192,7 @@ from methyl_utils import (
     ChunkedGenomicProcessor,
     # GPU detection
     is_gpu_available,
+    prefer_gpu_default,
     cleanup_gpu_memory,
     # Logging
     get_logger,
@@ -395,8 +396,8 @@ class MethylCentroid:
 
         self.centroid: Optional[Path] = None
 
-        # Detect GPU availability and respect explicit user choice
-        gpu_available = is_gpu_available()
+        # Detect GPU availability (honors METHYL_DISABLE_GPU) and respect explicit user choice
+        gpu_available = prefer_gpu_default()
         self.logger.info(f"GPU available: {gpu_available}")
 
         self._gpu_enabled = True if use_gpu is None else bool(use_gpu)

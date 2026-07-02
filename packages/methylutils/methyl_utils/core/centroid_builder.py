@@ -8,12 +8,14 @@ from typing import Optional, Dict, Any, Union, List
 import numpy as np
 import pandas as pd
 
-# GPU support — transparent and lazy
+# GPU support via unified array backend
+from ..array_backend import get_array_module, prefer_gpu_default
+
 try:
     import cupy as cp
     from cupy import ndarray as CuArray
 
-    HAS_GPU = True
+    HAS_GPU = cp is not None
 except ImportError:
     cp = np
     CuArray = np.ndarray
@@ -45,8 +47,7 @@ class MethylCentroidBuilder:
                 f"binned_stats_bins must be >= 1 for ECDF centroids, got {binned_stats_bins}"
             )
         self.min_coverage = min_coverage
-        self.use_gpu = use_gpu and HAS_GPU
-        self.xp = cp if self.use_gpu else np
+        self.xp, self.use_gpu = get_array_module(prefer_gpu=use_gpu)
         self.metadata = metadata or {}
         self.binned_stats_bins = int(binned_stats_bins)
         self.bin_edges = np.linspace(0.0, 1.0, binned_stats_bins + 1, dtype=np.float64)

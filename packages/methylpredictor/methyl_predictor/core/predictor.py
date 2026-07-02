@@ -41,11 +41,14 @@ def _extract_probability_matrix_from_df(
         return None
     if np.isnan(m).all():
         return None
-    # Normalize row sums for numerical safety.
-    m = np.nan_to_num(m, nan=0.0, posinf=0.0, neginf=0.0)
-    row_sums = m.sum(axis=1, keepdims=True)
-    row_sums = np.where(row_sums <= 0.0, 1.0, row_sums)
-    return m / row_sums
+    from methyl_utils.array_backend import get_array_module, to_cpu
+
+    xp, _ = get_array_module()
+    m_xp = xp.asarray(m, dtype=xp.float64)
+    m_xp = xp.nan_to_num(m_xp, nan=0.0, posinf=0.0, neginf=0.0)
+    row_sums = m_xp.sum(axis=1, keepdims=True)
+    row_sums = xp.where(row_sums <= 0.0, 1.0, row_sums)
+    return to_cpu(m_xp / row_sums)
 
 
 def _compute_probabilistic_diagnostics(

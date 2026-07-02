@@ -63,25 +63,14 @@ class DistanceCalculator:
         Get the appropriate backend (CPU or GPU) for calculations.
 
         Args:
-            use_gpu: Whether to use GPU if available
+            use_gpu: Whether to prefer GPU if available (honors METHYL_DISABLE_GPU)
 
         Returns:
             Tuple of (array_module, digamma_func, polygamma_func, betaln_func)
         """
-        if use_gpu and self.gpu_available:
-            return (
-                self.cp,
-                self.gpu_digamma,
-                self.gpu_polygamma,
-                self.gpu_betaln
-            )
-        else:
-            return (
-                np,
-                digamma,
-                lambda n, x: polygamma(n, x),
-                betaln
-            )
+        from .array_backend import get_special_backend
+
+        return get_special_backend(prefer_gpu=use_gpu)
 
 
 def compute_jeffreys_divergence(

@@ -10,7 +10,8 @@ import pandas as pd
 
 # Import statistical functions from MethylUtils (required)
 from methyl_utils import (
-    cleanup_gpu_memory
+    cleanup_gpu_memory,
+    prefer_gpu_default,
 )
 from methyl_utils.logging_utils import setup_module_logging
 
@@ -189,6 +190,7 @@ class MethylDetector:
         self.config = config
         np.random.seed(config.random_state)
         self.gpu_config = GPUConfig()  # From MethylUtils for memory management
+        self._runtime_gpu_used = False
         self.df = None  # Current working dataframe
         self._exported_csv_path = None  # Path to exported CSV file
         self._current_chromosome = None  # Current chromosome being processed (for multi-chromosome mode)
@@ -366,7 +368,7 @@ class MethylDetector:
                 statistical_dmps=n_dmps,
                 biological_dmps=n_dmps,
                 processing_time_seconds=0.0,
-                gpu_used=self.gpu_config.GPU_AVAILABLE,
+                gpu_used=self._runtime_gpu_used,
             )
             comparison_stats = [stats]
 
@@ -722,6 +724,7 @@ class MethylDetector:
         comparison_results = centroid_pair.compare_centroids(
             centroid1, centroid2, position_subset=pre_filter_position_subset
         )
+        self._runtime_gpu_used = self._runtime_gpu_used or centroid_pair.gpu_available
         processing_time = time.time() - start_time
 
         logger.info(f"Context {context}: Compared {len(comparison_results):,} positions in {processing_time:.2f}s")
@@ -3949,7 +3952,7 @@ class MethylDetector:
                     statistical_dmps=ctx_statistical,
                     biological_dmps=len(ctx_bio),
                     processing_time_seconds=0.0,  # TODO: track per-context timing
-                    gpu_used=self.gpu_config.GPU_AVAILABLE
+                    gpu_used=self._runtime_gpu_used
                 )
                 comparison_stats.append(stats)
         
@@ -4297,7 +4300,7 @@ class MethylDetector:
             statistical_dmps=self.statistical_dmps_count if hasattr(self, 'statistical_dmps_count') else int(dmp_df["statistical_dmp"].sum()) if isinstance(dmp_df, pd.DataFrame) and "statistical_dmp" in dmp_df.columns else len(dmp_df),
             biological_dmps=len(biological_dmps_df) if biological_dmps_df is not None else 0,
             processing_time_seconds=self.processing_time_seconds if hasattr(self, 'processing_time_seconds') else 0.0,
-            gpu_used=self.gpu_config.GPU_AVAILABLE
+            gpu_used=self._runtime_gpu_used
         )
         comparison_stats = [stats]
         total_statistical_dmps = self.statistical_dmps_count if hasattr(self, 'statistical_dmps_count') else int(dmp_df["statistical_dmp"].sum()) if isinstance(dmp_df, pd.DataFrame) and "statistical_dmp" in dmp_df.columns else len(dmp_df)

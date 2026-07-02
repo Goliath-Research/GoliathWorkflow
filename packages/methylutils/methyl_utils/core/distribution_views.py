@@ -132,7 +132,7 @@ _ECDF_KS_GRID_SIZE = 256
 class ECDFView:
     """
     Empirical CDF view: parameters from binned_stats (bin_edges, bin_counts).
-    Uses PCHIP spline interpolation so F(x) and PDF(x)=F'(x) are defined for any x in [0,1].
+    Uses monotone linear interpolation on bin edges (CPU and GPU share the same method).
     Mean = Sx/N, variance = sample variance from Sx, Sx2, N.
     """
 
@@ -172,15 +172,16 @@ class ECDFView:
             axis=1,
         )
 
-        self._interpolators: List[Any] = []
-        if PchipInterpolator is not None:
-            for i in range(n_positions):
-                interp = PchipInterpolator(self._bin_edges, cdf_at_edges[i])
-                self._interpolators.append(interp)
-        else:
-            self._interpolators = None
         self._cdf_at_edges = cdf_at_edges
         self._n_positions = n_positions
+
+    @property
+    def bin_edges(self) -> np.ndarray:
+        return self._bin_edges
+
+    @property
+    def bin_counts(self) -> np.ndarray:
+        return self._bin_counts
 
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -203,89 +204,52 @@ class ECDFView:
         return self._variance
 
     def _cdf(self, position_idx: int, x: np.ndarray) -> np.ndarray:
+        from ..array_backend import get_array_module, cdf_linear_interp_batch
+
         x = np.clip(np.asarray(x, dtype=np.float64), 0.0, 1.0)
-        if self._interpolators is not None:
-            return np.clip(self._interpolators[position_idx](x), 0.0, 1.0)
-        # Fallback: piecewise constant from edges
-        return np.interp(x, self._bin_edges, self._cdf_at_edges[position_idx])
+        xp, _ = get_array_module()
+        return cdf_linear_interp_batch(
+            xp,
+            self._cdf_at_edges[position_idx : position_idx + 1],
+            self._bin_edges,
+            x,
+        )[0]
 
     def _cdf_batch(
         self, position_indices: np.ndarray, grid: np.ndarray
     ) -> np.ndarray:
-        """
-        Evaluate CDF at multiple positions and grid points. Returns array of shape
-        (len(position_indices), len(grid)). When Pchip interpolators are available,
-        uses the monotonic continuous ECDF; otherwise uses piecewise-linear at bin edges.
-        """
+        """Evaluate CDF at multiple positions and grid points (linear interpolation)."""
+        from ..array_backend import get_array_module, cdf_linear_interp_batch
+
         position_indices = np.asarray(position_indices, dtype=np.intp).ravel()
         grid = np.clip(np.asarray(grid, dtype=np.float64).ravel(), 0.0, 1.0)
-        P, G = len(position_indices), len(grid)
-        out = np.zeros((P, G), dtype=np.float64)
-        if self._interpolators is not None:
-            for i in range(P):
-                out[i] = np.clip(
-                    self._interpolators[position_indices[i]](grid), 0.0, 1.0
-                )
-            return out
-        # Fallback: piecewise-linear CDF at bin edges
-        cdf_slice = self._cdf_at_edges[position_indices]  # (P, n_edges)
-        bin_edges = self._bin_edges
-        E = len(bin_edges)
-        for j, g in enumerate(grid):
-            idx = np.searchsorted(bin_edges, g, side="right") - 1
-            idx = np.clip(idx, 0, E - 2)
-            t = (g - bin_edges[idx]) / (bin_edges[idx + 1] - bin_edges[idx])
-            t = np.clip(t, 0.0, 1.0)
-            out[:, j] = (1.0 - t) * cdf_slice[:, idx] + t * cdf_slice[:, idx + 1]
-        return np.clip(out, 0.0, 1.0)
+        xp, _ = get_array_module()
+        return cdf_linear_interp_batch(
+            xp,
+            self._cdf_at_edges[position_indices],
+            self._bin_edges,
+            grid,
+        )
 
     def _pdf(self, position_idx: int, x: float) -> float:
-        if self._interpolators is not None:
-            interp = self._interpolators[position_idx]
-            deriv = interp.derivative()
-            pdf_val = float(deriv(x))
-            return max(pdf_val, MIN_EPS)
-        # Piecewise constant: find bin, return (count/total)/width
-        total = np.sum(self._bin_counts[position_idx])
-        if total <= 0:
-            return MIN_EPS
-        idx = np.searchsorted(self._bin_edges, x, side="right") - 1
-        idx = np.clip(idx, 0, self._bin_counts.shape[1] - 1)
-        width = self._bin_edges[idx + 1] - self._bin_edges[idx]
-        width = max(width, 1e-10)
-        return max(float(self._bin_counts[position_idx, idx] / total / width), MIN_EPS)
+        grid = np.linspace(0.0, 1.0, 256, dtype=np.float64)
+        cdf_vals = self._cdf(position_idx, grid)
+        idx = int(np.searchsorted(grid, x, side="right")) - 1
+        idx = max(0, min(idx, len(grid) - 2))
+        dx = max(float(grid[idx + 1] - grid[idx]), 1e-12)
+        return max(float((cdf_vals[idx + 1] - cdf_vals[idx]) / dx), MIN_EPS)
 
     def _pdf_batch(
         self, position_indices: np.ndarray, grid: np.ndarray
     ) -> np.ndarray:
-        """
-        Evaluate PDF at multiple positions and grid points.
-
-        Returns an array of shape (len(position_indices), len(grid)).
-        Values are clipped to be non-negative so downstream overlap integrals
-        remain stable even when spline derivatives show minor numerical wiggles.
-        """
+        """Evaluate PDF via finite differences of batched linear CDF."""
         position_indices = np.asarray(position_indices, dtype=np.intp).ravel()
         grid = np.clip(np.asarray(grid, dtype=np.float64).ravel(), 0.0, 1.0)
-        P, G = len(position_indices), len(grid)
-        out = np.zeros((P, G), dtype=np.float64)
-        if self._interpolators is not None:
-            for i in range(P):
-                deriv = self._interpolators[position_indices[i]].derivative()
-                out[i] = np.maximum(np.asarray(deriv(grid), dtype=np.float64), 0.0)
-            return out
-
-        total = np.sum(self._bin_counts[position_indices], axis=1, keepdims=True)
-        total = np.maximum(total, MIN_EPS)
-        probs = self._bin_counts[position_indices] / total
-        bin_edges = self._bin_edges
-        widths = np.maximum(np.diff(bin_edges), 1e-10)
-        E = len(bin_edges)
-        for j, g in enumerate(grid):
-            idx = np.searchsorted(bin_edges, g, side="right") - 1
-            idx = np.clip(idx, 0, E - 2)
-            out[:, j] = probs[:, idx] / widths[idx]
-        return np.maximum(out, 0.0)
+        cdf = self._cdf_batch(position_indices, grid)
+        if grid.size < 2:
+            return np.zeros_like(cdf)
+        dx = np.maximum(np.diff(grid), 1e-12)
+        return np.maximum(np.diff(cdf, axis=1), 0.0) / dx[np.newaxis, :]
 
     def overlap(self, other: MethylDistributionView) -> np.ndarray:
         if isinstance(other, ECDFView):
