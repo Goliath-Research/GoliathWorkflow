@@ -6,11 +6,11 @@ import json
 import sys
 from pathlib import Path
 
-_DOMAIN = Path(__file__).resolve().parents[1] / "domain"
-if str(_DOMAIN) not in sys.path:
-    sys.path.insert(0, str(_DOMAIN))
+WF_ENGINE = Path(__file__).resolve().parents[1]
+if str(WF_ENGINE) not in sys.path:
+    sys.path.insert(0, str(WF_ENGINE))
 
-from study_lifecycle import (  # noqa: E402
+from admin.study_lifecycle import (  # noqa: E402
     _apply_project_path_scope_default,
     compile_program_spec,
 )

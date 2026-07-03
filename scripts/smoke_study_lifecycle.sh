@@ -50,6 +50,7 @@ fi
 
 "$PYTHON_BIN" - <<'PY' "$API_BASE" "$PROJECT_PATH" "$VERSIONS_FILE" "$POLL" "$TIMEOUT" "$REPO_ROOT"
 import json
+import os
 import subprocess
 import sys
 import time
@@ -62,7 +63,7 @@ versions_file = Path(sys.argv[3])
 poll = int(sys.argv[4])
 timeout = int(sys.argv[5])
 repo_root = Path(sys.argv[6])
-study_start = repo_root / "workflow_engine" / "study_start.py"
+wf_engine = repo_root / "workflow_engine"
 
 def request(method: str, path: str, body: dict | None = None) -> dict:
     data = None if body is None else json.dumps(body).encode("utf-8")
@@ -140,12 +141,15 @@ val_body = {
     "featureIterations": 2,
     "seed": 42,
 }
+env = os.environ.copy()
+env["PYTHONPATH"] = str(wf_engine)
 proc = subprocess.run(
-    [sys.executable, str(study_start), "validation-start", "-"],
+    [sys.executable, "-m", "admin.study_start", "validation-start", "-"],
     input=json.dumps(val_body),
     capture_output=True,
     text=True,
-    cwd=str(repo_root),
+    cwd=str(wf_engine),
+    env=env,
 )
 if proc.returncode != 0:
     raise SystemExit(f"methyl-study-start validation-start failed: {proc.stderr or proc.stdout}")

@@ -59,6 +59,7 @@ SMOKE_RUN_ROOT="$RUN_ROOT" bash "$SCRIPT_DIR/bootstrap_sample_prep_smoke_fixture
 "$PYTHON_BIN" - <<'PY' "$API_BASE" "$RUN_ROOT" "$VERSIONS_FILE" "$POLL" "$TIMEOUT" "$REMEDIATION" "$SAMPLE_ID" "$REPO_ROOT"
 import json
 import os
+import os
 import subprocess
 import sys
 import time
@@ -73,7 +74,7 @@ timeout = int(sys.argv[5])
 remediation = int(sys.argv[6])
 sample_id = sys.argv[7]
 repo_root = Path(sys.argv[8])
-study_start = repo_root / "workflow_engine" / "study_start.py"
+wf_engine = repo_root / "workflow_engine"
 
 project_path = run_root / "project.json"
 
@@ -135,13 +136,16 @@ if remediation:
     print("note: --remediation not yet implemented; running default pass-path smoke")
 
 body_json = json.dumps(body)
+wf_engine = repo_root / "workflow_engine"
+env = os.environ.copy()
+env["PYTHONPATH"] = str(wf_engine)
 proc = subprocess.run(
-    [sys.executable, str(study_start), "sample-prep-start", "-"],
+    [sys.executable, "-m", "admin.study_start", "sample-prep-start", "-"],
     input=body_json,
     capture_output=True,
     text=True,
-    cwd=str(repo_root),
-    env=os.environ.copy(),
+    cwd=str(wf_engine),
+    env=env,
 )
 if proc.returncode != 0:
     raise SystemExit(f"methyl-study-start failed: {proc.stderr or proc.stdout}")

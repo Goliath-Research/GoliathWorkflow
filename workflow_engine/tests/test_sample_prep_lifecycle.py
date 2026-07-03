@@ -1,4 +1,4 @@
-"""Tests for sample prep lifecycle gateway helper."""
+"""Tests for sample prep lifecycle admin helper."""
 
 from __future__ import annotations
 
@@ -9,13 +9,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
-_REST = Path(__file__).resolve().parents[1] / "domain"
-_VALIDATION = Path(__file__).resolve().parents[1].parent / "packages" / "methylvalidation"
-for _p in (_REST, _VALIDATION):
-    if str(_p) not in sys.path:
-        sys.path.insert(0, str(_p))
+WF_ENGINE = Path(__file__).resolve().parents[1]
+if str(WF_ENGINE) not in sys.path:
+    sys.path.insert(0, str(WF_ENGINE))
 
-from sample_lifecycle import start_sample_prep  # noqa: E402
+from admin.sample_lifecycle import start_sample_prep  # noqa: E402
+
 
 def _minimal_project(tmp_path: Path) -> Path:
     project = {

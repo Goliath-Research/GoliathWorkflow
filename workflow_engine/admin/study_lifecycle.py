@@ -3,26 +3,10 @@
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-def _ensure_import_paths() -> None:
-    domain = _REPO_ROOT / "workflow_engine" / "domain"
-    if str(domain) not in sys.path:
-        sys.path.insert(0, str(domain))
-    for rel in (
-        "workflow_engine/contract",
-        "workers",
-        "packages/methyldomain",
-        "packages/methylvalidation",
-    ):
-        p = _REPO_ROOT / rel
-        if str(p) not in sys.path:
-            sys.path.insert(0, str(p))
+from admin._paths import REPO_ROOT, ensure_import_paths
 
 
 def _apply_project_path_scope_default(spec: Dict[str, Any], project_path: str) -> None:
@@ -46,6 +30,7 @@ def _apply_project_path_scope_default(spec: Dict[str, Any], project_path: str) -
 
 
 def compile_program_spec(program: Path, *, project_path: Optional[str] = None) -> Dict[str, Any]:
+    ensure_import_paths()
     from compiler import compile_domain_program
     from methyl_domain.program import DomainProgram
 
@@ -78,7 +63,7 @@ def resolve_workflow_version_id(
     if not program_path:
         raise ValueError("workflow_version_id or program_path is required")
 
-    _ensure_import_paths()
+    ensure_import_paths()
 
     program = Path(str(program_path)).expanduser().resolve()
     if not program.is_file():
@@ -103,7 +88,7 @@ def start_study_validation(
     if not project_path:
         raise ValueError("projectPath is required")
 
-    _ensure_import_paths()
+    ensure_import_paths()
     from methyl_validation.workflow_planner import plan_validation_context
     from workflow_context import finalize_instance_context
 

@@ -2,31 +2,15 @@
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any, Dict
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+from admin._paths import REPO_ROOT, ensure_import_paths
+from admin.study_lifecycle import resolve_workflow_version_id
 
 _DEFAULT_SAMPLE_PREP_PROGRAM = (
-    _REPO_ROOT / "workflow_engine" / "domain" / "fixtures" / "sample_prep.program.json"
+    REPO_ROOT / "workflow_engine" / "domain" / "fixtures" / "sample_prep.program.json"
 )
-
-
-def _ensure_import_paths() -> None:
-    domain = _REPO_ROOT / "workflow_engine" / "domain"
-    if str(domain) not in sys.path:
-        sys.path.insert(0, str(domain))
-    for rel in (
-        "workflow_engine/contract",
-        "workflow_engine/portal",
-        "workers",
-        "packages/methyldomain",
-        "packages/methylvalidation",
-    ):
-        p = _REPO_ROOT / rel
-        if str(p) not in sys.path:
-            sys.path.insert(0, str(p))
 
 
 def start_sample_prep(
@@ -42,11 +26,10 @@ def start_sample_prep(
     if not project_path:
         raise ValueError("projectPath is required")
 
-    _ensure_import_paths()
+    ensure_import_paths()
     from archive_profile_resolver import apply_archive_profile_storage
     from methyl_validation.sample_prep_planner import plan_sample_prep_context
     from resource_profile import DEFAULT_ARCHIVE_PROFILE_KEY, ResourceProfileReader
-    from study_lifecycle import resolve_workflow_version_id
     from workflow_context import build_resolved_config_scope_vars
 
     planner_payload = dict(body)

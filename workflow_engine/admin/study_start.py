@@ -16,14 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-WF_ENGINE = Path(__file__).resolve().parent
-REPO_ROOT = WF_ENGINE.parent
-DOMAIN = WF_ENGINE / "domain"
-
-sys.path.insert(0, str(WF_ENGINE))
-sys.path.insert(0, str(DOMAIN))
-sys.path.insert(0, str(REPO_ROOT / "workers"))
-sys.path.insert(0, str(REPO_ROOT / "packages" / "methylvalidation"))
+from admin._paths import ensure_import_paths
 
 
 def _load_body(path: Optional[str]) -> Dict[str, Any]:
@@ -42,7 +35,7 @@ def _open_db():
 
 
 def cmd_compile(args: argparse.Namespace) -> int:
-    from study_lifecycle import compile_program_spec
+    from admin.study_lifecycle import compile_program_spec
 
     program = Path(args.program).expanduser().resolve()
     spec = compile_program_spec(program, project_path=args.project_path)
@@ -60,7 +53,7 @@ def cmd_validation_start(args: argparse.Namespace) -> int:
         create_workflow_instance,
         start_workflow_instance,
     )
-    from study_lifecycle import start_study_validation
+    from admin.study_lifecycle import start_study_validation
 
     body = _load_body(args.body_file)
     if args.project_path:
@@ -93,7 +86,7 @@ def cmd_sample_prep_start(args: argparse.Namespace) -> int:
         create_workflow_instance,
         start_workflow_instance,
     )
-    from sample_lifecycle import start_sample_prep
+    from admin.sample_lifecycle import start_sample_prep
 
     body = _load_body(args.body_file)
     if args.project_path:
@@ -152,6 +145,8 @@ def cmd_plan_iterations(args: argparse.Namespace) -> int:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    ensure_import_paths()
+
     parser = argparse.ArgumentParser(
         description="MethylPipeline admin study lifecycle (compile, plan, start instances)"
     )
