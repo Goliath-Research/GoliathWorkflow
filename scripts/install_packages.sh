@@ -28,8 +28,13 @@ install_packages_from_list() {
 
     local pkg_path="$packages_dir/$line"
     if [[ ! -d "$pkg_path" ]]; then
-      echo "[WARN] Skipping $line (directory not found: $pkg_path)"
-      continue
+      # Some listed packages (e.g. workflow_engine) live at the repo root, not under packages/.
+      if [[ -d "$project_root/$line" ]]; then
+        pkg_path="$project_root/$line"
+      else
+        echo "[WARN] Skipping $line (directory not found: $packages_dir/$line or $project_root/$line)"
+        continue
+      fi
     fi
     if [[ ! -f "$pkg_path/pyproject.toml" && ! -f "$pkg_path/setup.py" ]]; then
       echo "[WARN] Skipping $line (missing pyproject.toml/setup.py)"
