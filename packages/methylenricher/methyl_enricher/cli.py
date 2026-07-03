@@ -14,7 +14,7 @@ from .enricher import (
     resolve_enrichr_libraries,
 )
 from methyl_utils.action_config_resolver import resolve_for_project
-from .module_pipeline import run_module_pipeline
+from .module_pipeline import run_module_pipeline, run_ppi_hubs_only
 from .queue_cli import QUEUE_SUBCOMMANDS, main_queue
 
 
@@ -221,6 +221,12 @@ For theory and package documentation, see:
         '--modules', '-m',
         action='store_true',
         help='Run pathway-to-module pipeline: cluster pathways into modules, score and rank, write modules_ranked.csv'
+    )
+    parser.add_argument(
+        '--ppi-only',
+        action='store_true',
+        help='PPI-only: skip Enrichr libraries and pathway modules; build ppi_hubs.csv directly '
+             'from gene_importance-ranked mapper genes (fast; score-comparable across runs).'
     )
     parser.add_argument(
         '--similarity-threshold',
@@ -845,6 +851,36 @@ def main():
         )
 
     def _run_one(in_file: Path, out_dir: str):
+        if getattr(args, "ppi_only", False):
+            return run_ppi_hubs_only(
+                input_path=in_file,
+                output_dir=Path(out_dir),
+                gene_column=args.gene_column,
+                top_n=args.top,
+                disease_only=args.disease_only,
+                disease_association_types=args.disease_association_type,
+                min_disease_evidence_level=args.min_disease_evidence_level,
+                min_disease_publications=args.min_disease_publications,
+                min_disease_score=args.min_disease_score,
+                min_dmp_count=args.min_dmp_count,
+                min_unique_dmps=args.min_unique_dmps,
+                max_gene_q_value=args.max_gene_q_value,
+                min_gene_z=args.min_gene_z,
+                min_gene_importance=args.min_gene_importance,
+                sort_by=args.sort_by,
+                sort_ascending=args.sort_ascending,
+                network_refinement_source=getattr(args, "network_refinement_source", "string_api"),
+                network_refinement_local_edges_file=getattr(args, "network_refinement_local_edges_file", None),
+                network_refinement_cache_path=getattr(args, "network_refinement_cache_path", None),
+                network_refinement_score_threshold=getattr(args, "network_refinement_score_threshold", 400.0),
+                network_refinement_community_method=getattr(args, "network_refinement_community_method", "louvain"),
+                network_refinement_min_component_size=getattr(args, "network_refinement_min_component_size", 2),
+                network_refinement_hub_ranking_mode=getattr(args, "network_refinement_hub_ranking_mode", "signal_weighted"),
+                network_refinement_hub_disease_boost=getattr(args, "network_refinement_hub_disease_boost", 0.0),
+                network_refinement_hub_w_degree=getattr(args, "network_refinement_hub_w_degree", None),
+                network_refinement_hub_w_betweenness=getattr(args, "network_refinement_hub_w_betweenness", None),
+                network_refinement_hub_w_closeness=getattr(args, "network_refinement_hub_w_closeness", None),
+            )
         if getattr(args, "modules", False):
             _np = getattr(args, "network_plot", None)
             effective_network_plot = "plotly" if _np is None else _np

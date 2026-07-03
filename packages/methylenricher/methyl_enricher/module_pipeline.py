@@ -576,6 +576,146 @@ def _display_term_by_canonical_key(merged_df: pd.DataFrame) -> Dict[str, str]:
     return out
 
 
+def run_ppi_hubs_only(
+    input_path: Path,
+    output_dir: Path,
+    *,
+    gene_column: Optional[str] = None,
+    top_n: Optional[int] = None,
+    disease_only: bool = False,
+    disease_association_types: Optional[List[str]] = None,
+    min_disease_evidence_level: Optional[str] = None,
+    min_disease_publications: Optional[int] = None,
+    min_disease_score: Optional[float] = None,
+    min_dmp_count: Optional[int] = None,
+    min_unique_dmps: Optional[int] = None,
+    max_gene_q_value: Optional[float] = None,
+    min_gene_z: Optional[float] = None,
+    min_gene_importance: Optional[float] = None,
+    feature_types: Optional[List[str]] = None,
+    sort_by: Optional[str] = None,
+    sort_ascending: bool = False,
+    top_k_hubs: int = 25,
+    network_refinement_source: str = "string_api",
+    network_refinement_local_edges_file: Optional[str] = None,
+    network_refinement_cache_path: Optional[str] = None,
+    network_refinement_score_threshold: float = 400.0,
+    network_refinement_community_method: str = "louvain",
+    network_refinement_min_component_size: int = 2,
+    network_refinement_hub_ranking_mode: str = "signal_weighted",
+    network_refinement_hub_disease_boost: float = 0.0,
+    network_refinement_hub_w_degree: Optional[float] = None,
+    network_refinement_hub_w_betweenness: Optional[float] = None,
+    network_refinement_hub_w_closeness: Optional[float] = None,
+    disease_genes: Optional[Set[str]] = None,
+) -> pd.DataFrame:
+    """PPI-only hub extraction: no Enrichr libraries, no pathway modules.
+
+    Builds the STRING PPI graph directly over the top ``gene_importance``-ranked
+    mapper genes and scores hubs with the same ``signal_weighted`` recipe as the
+    full enricher (topology x normalized ``gene_importance``). Writes
+    ``ppi_hubs.csv`` / ``ppi_node_metrics.csv`` / ``ppi_network_edges.csv``.
+
+    This is intentionally kept separate from the full module pipeline: it never
+    mixes Enrichr pathway scores with PPI hub scores, so per-run hubs stay
+    score-comparable, and it is far faster (one STRING query + centralities, no
+    per-library Enrichr calls).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    analyzer = EnrichmentAnalyzer(libraries=[], organism="Human")
+    genes, gene_weights = analyzer.load_gene_list_with_weights(
+        input_path,
+        top_n=top_n,
+        gene_column=gene_column,
+        disease_only=disease_only,
+        disease_association_types=disease_association_types,
+        min_disease_evidence_level=min_disease_evidence_level,
+        min_disease_publications=min_disease_publications,
+        min_disease_score=min_disease_score,
+        min_dmp_count=min_dmp_count,
+        min_unique_dmps=min_unique_dmps,
+        max_gene_q_value=max_gene_q_value,
+        min_gene_z=min_gene_z,
+        min_gene_importance=min_gene_importance,
+        feature_types=feature_types,
+        sort_by=sort_by,
+        sort_ascending=sort_ascending,
+    )
+    if len(genes) < 2:
+        logger.warning("PPI-only: fewer than 2 genes after filtering; no hubs written.")
+        pd.DataFrame(columns=["gene"]).to_csv(output_dir / "ppi_hubs.csv", index=False)
+        return pd.DataFrame()
+
+    if network_refinement_source == "local_edges":
+        if not network_refinement_local_edges_file:
+            raise ValueError(
+                "network_refinement_local_edges_file is required when source=local_edges"
+            )
+        edges_df = load_local_edges(network_refinement_local_edges_file)
+        edges_df = edges_df[
+            pd.to_numeric(edges_df["score"], errors="coerce").fillna(0.0)
+            >= float(network_refinement_score_threshold)
+        ].copy()
+    else:
+        edges_df = fetch_string_edges(
+            genes=genes,
+            required_score=float(network_refinement_score_threshold),
+            cache_path=network_refinement_cache_path,
+        )
+
+    graph = build_ppi_graph(
+        edges_df=edges_df,
+        genes=genes,
+        min_component_size=int(network_refinement_min_component_size),
+    )
+    node_metrics_df = compute_network_metrics(graph)
+    wd = network_refinement_hub_w_degree
+    wb = network_refinement_hub_w_betweenness
+    wc = network_refinement_hub_w_closeness
+    if wd is None and wb is None and wc is None:
+        topology_blend = (1.0 / 3.0, 1.0 / 3.0, 1.0 / 3.0)
+    else:
+        topology_blend = (
+            float(wd if wd is not None else 1.0 / 3.0),
+            float(wb if wb is not None else 1.0 / 3.0),
+            float(wc if wc is not None else 1.0 / 3.0),
+        )
+    node_metrics_df = attach_signal_to_node_metrics(
+        node_metrics_df,
+        gene_weights,
+        hub_ranking_mode=network_refinement_hub_ranking_mode,
+        disease_genes=disease_genes,
+        hub_disease_boost=float(network_refinement_hub_disease_boost),
+        topology_blend=topology_blend,
+    )
+    communities = detect_communities(
+        graph, method=network_refinement_community_method
+    )
+    if not node_metrics_df.empty:
+        node_metrics_df["community_id"] = (
+            node_metrics_df["gene"].astype(str).str.upper().map(communities)
+        )
+
+    edges_df.to_csv(output_dir / "ppi_network_edges.csv", index=False)
+    node_metrics_df.to_csv(output_dir / "ppi_node_metrics.csv", index=False)
+    hubs = rank_hubs(
+        node_metrics_df,
+        top_k=int(top_k_hubs),
+        hub_ranking_mode=network_refinement_hub_ranking_mode,
+    )
+    hubs.to_csv(output_dir / "ppi_hubs.csv", index=False)
+    logger.info(
+        "PPI-only: wrote %s (%d hubs from %d nodes, %d edges).",
+        output_dir / "ppi_hubs.csv",
+        len(hubs),
+        len(node_metrics_df),
+        len(edges_df),
+    )
+    return hubs
+
+
 def run_module_pipeline(
     input_path: Path,
     output_dir: Path,
