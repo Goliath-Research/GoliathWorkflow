@@ -422,12 +422,18 @@ def evaluate_context(
             row["hubs_source"] = "rebuild_failed"
             row["hubs_dominant_signature"] = f"rebuild_error:{type(exc).__name__}"
             hub_genes = None
-        if hub_genes is not None:
+        if hub_genes:
             metrics = _overlap_metrics(hub_genes, plasma_sig, buffy_sig)
             row["hubs_source"] = "rebuilt_from_mapper"
             row.update({f"hubs_{k}": v for k, v in metrics.items() if not k.endswith("_genes_hit")})
             row["hubs_plasma_sig_genes_hit"] = ";".join(metrics["plasma_sig_genes_hit"])
             row["hubs_buffy_sig_genes_hit"] = ";".join(metrics["buffy_sig_genes_hit"])
+        elif hub_genes is not None:
+            # Empty list = filtering/graph produced no hubs; not a valid reconstruction.
+            # Keep distinct from a real 0-overlap result so it's excluded from hub stats.
+            row["hubs_n_selected"] = 0
+            row["hubs_source"] = "rebuild_empty"
+            row["hubs_dominant_signature"] = "no_hubs"
     else:
         row["hubs_n_selected"] = 0
         row["hubs_source"] = "none"
