@@ -918,7 +918,6 @@ def main():
             min_dmp_count=args.min_dmp_count,
             min_unique_dmps=args.min_unique_dmps,
             max_gene_q_value=args.max_gene_q_value,
-            min_mean_effect_size=args.min_mean_effect_size,
             min_gene_z=args.min_gene_z,
             min_gene_importance=args.min_gene_importance,
             sort_by=args.sort_by,
