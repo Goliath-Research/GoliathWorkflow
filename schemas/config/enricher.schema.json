@@ -638,6 +638,19 @@
       "default": null,
       "title": "Cisbp Mode"
     },
+    "cisbp_only": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "CIS-BP-only TF-motif enrichment: skip Enrichr libraries, PPI and modules; run only the configured CIS-BP mode(s). CIS-BP scores are not Enrichr-comparable, so this lets CIS-BP be requested without a full enrichment run.",
+      "title": "Cisbp Only"
+    },
     "cluster_resolution": {
       "anyOf": [
         {
@@ -1281,6 +1294,19 @@
       ],
       "default": null,
       "title": "Output Dir"
+    },
+    "ppi_only": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "PPI-only hub extraction: skip Enrichr libraries and pathway modules; build ppi_hubs.csv directly from gene_importance-ranked mapper genes (fast, score-comparable). Operator-set per profile/site actionConfig.enricher.",
+      "title": "Ppi Only"
     },
     "similarity_threshold": {
       "anyOf": [

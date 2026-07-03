@@ -1,0 +1,39 @@
+---
+description: Workflow-exposed action inputs/outputs are Pydantic models with JSON Schema
+alwaysApply: true
+---
+
+# Typed action I/O (Pydantic → JSON Schema)
+
+Any action exposed as part of the workflows must define its **input and output
+parameters as Pydantic models**, so those parameters are editable/validatable
+through their generated **JSON Schemas** (operators tune actions via schema-driven
+config, not by editing Python).
+
+## Rules
+
+- Action/task inputs and outputs are Pydantic models
+  (`workers/methyl_worker/task_models/*` — e.g. `ModelMcTaskInput`,
+  `ValidationModelMcOutput`) and step config is a Pydantic model
+  (e.g. `EnricherStepConfig`, `*StepConfig`).
+- Every tunable field uses `Field(default=None, description=...)` with bounds
+  (`ge`/`le`) so the exported schema documents *what it is and where operators set
+  it* (see `config-not-code`). Prefer `default=None` for tunable knobs.
+- When you add or change a tunable action parameter, **regenerate the committed
+  JSON Schema** so the editable surface stays in sync:
+  `scripts/export_config_schemas.sh` (and task/domain schema exporters as needed).
+- Internal helper functions that return `pandas.DataFrame` or take plain kwargs are
+  fine — this rule governs the *workflow-exposed action boundary*, not every function.
+
+## Example
+
+```python
+class EnricherStepConfig(BaseModel):
+    ppi_only: Optional[bool] = Field(
+        default=None,
+        description="PPI-only hubs: skip Enrichr libraries/modules. Operator-set per profile/site.",
+    )
+```
+
+Then run `scripts/export_config_schemas.sh` so `schemas/config/enricher.schema.json`
+reflects the new field.

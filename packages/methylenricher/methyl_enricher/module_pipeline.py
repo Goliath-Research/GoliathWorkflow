@@ -737,21 +737,25 @@ def run_cisbp_only(
     feature_types: Optional[List[str]] = None,
     sort_by: Optional[str] = None,
     sort_ascending: bool = False,
-):
+) -> pd.DataFrame:
     """CIS-BP-only TF-motif enrichment: no Enrichr libraries, no PPI, no modules.
 
     Selects the top ``gene_importance``-ranked mapper genes and runs only the
     configured CIS-BP mode(s), writing the CIS-BP CSV(s) to ``output_dir``. Kept
     separate from the Enrichr path because CIS-BP scores are not comparable to
     Enrichr q-values; this lets callers request CIS-BP without paying for a full
-    multi-library enrichment run. Returns the CIS-BP merge label(s).
+    multi-library enrichment run.
+
+    Returns a DataFrame with one row per emitted CIS-BP merge label (column
+    ``cisbp_label``), so the caller's ``.empty`` check works uniformly with the
+    other enrichment entry points; empty means nothing was produced.
     """
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if cisbp is None or not getattr(cisbp, "enabled", False):
         logger.warning("CIS-BP-only requested but CIS-BP config is disabled/None; nothing to do.")
-        return []
+        return pd.DataFrame(columns=["cisbp_label"])
 
     analyzer = EnrichmentAnalyzer(libraries=[], organism="Human")
     genes, _weights = analyzer.load_gene_list_with_weights(
@@ -774,7 +778,7 @@ def run_cisbp_only(
     )
     if not genes:
         logger.warning("CIS-BP-only: no genes after filtering; nothing to do.")
-        return []
+        return pd.DataFrame(columns=["cisbp_label"])
 
     from .cisbp import CisbpContext, run_cisbp
 
@@ -791,7 +795,7 @@ def run_cisbp_only(
         output_dir,
         labels or "none",
     )
-    return labels
+    return pd.DataFrame({"cisbp_label": labels})
 
 
 def run_module_pipeline(

@@ -4,7 +4,7 @@ Pydantic config models for MethylEnricher step (step_config.enricher in project 
 
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class NetworkRefinementConfig(BaseModel):
@@ -142,13 +142,22 @@ class EnricherStepConfig(BaseModel):
 
     # Module pipeline
     modules: Optional[bool] = None
-    # PPI-only hub extraction: skip Enrichr libraries + pathway modules, build hubs
-    # straight from the mapper's gene_importance-ranked genes (fast, score-comparable).
-    ppi_only: Optional[bool] = None
-    # CIS-BP-only TF-motif enrichment: skip Enrichr libraries + PPI + modules, run
-    # only the configured CIS-BP mode(s). CIS-BP scores are not Enrichr-comparable,
-    # so this lets CIS-BP be requested without a full enrichment run.
-    cisbp_only: Optional[bool] = None
+    ppi_only: Optional[bool] = Field(
+        default=None,
+        description=(
+            "PPI-only hub extraction: skip Enrichr libraries and pathway modules; build "
+            "ppi_hubs.csv directly from gene_importance-ranked mapper genes (fast, "
+            "score-comparable). Operator-set per profile/site actionConfig.enricher."
+        ),
+    )
+    cisbp_only: Optional[bool] = Field(
+        default=None,
+        description=(
+            "CIS-BP-only TF-motif enrichment: skip Enrichr libraries, PPI and modules; run "
+            "only the configured CIS-BP mode(s). CIS-BP scores are not Enrichr-comparable, so "
+            "this lets CIS-BP be requested without a full enrichment run."
+        ),
+    )
     similarity_threshold: Optional[float] = None
     cluster_resolution: Optional[float] = None
     cluster_seed: Optional[int] = None
