@@ -59,7 +59,6 @@ SMOKE_RUN_ROOT="$RUN_ROOT" bash "$SCRIPT_DIR/bootstrap_sample_prep_smoke_fixture
 "$PYTHON_BIN" - <<'PY' "$API_BASE" "$RUN_ROOT" "$VERSIONS_FILE" "$POLL" "$TIMEOUT" "$REMEDIATION" "$SAMPLE_ID" "$REPO_ROOT"
 import json
 import os
-import os
 import subprocess
 import sys
 import time
