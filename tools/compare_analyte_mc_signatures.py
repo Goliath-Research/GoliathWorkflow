@@ -280,6 +280,93 @@ def _enricher_filter_kwargs(project_json: Path) -> Dict[str, Any]:
     }
 
 
+def _network_cfg(project_json: Path) -> Dict[str, Any]:
+    """Resolve enricher network_refinement settings (STRING source, threshold, hub mode)."""
+    from methyl_utils import load_project
+
+    project = load_project(project_json)
+    cfg = resolve_for_project("enricher", project)
+    nr = cfg.get("network_refinement") or {}
+    return {
+        "source": str(nr.get("source") or "string_api"),
+        "local_edges_file": nr.get("local_edges_file"),
+        "cache_path": nr.get("cache_path"),
+        "score_threshold": float(nr.get("score_threshold") or 400.0),
+        "min_component_size": int(nr.get("min_component_size") or 2),
+        # Enricher default hub ranking is signal_weighted (topology x normalized gene_importance).
+        "hub_ranking_mode": str(nr.get("hub_ranking_mode") or "signal_weighted"),
+    }
+
+
+def compute_run_hub_genes(
+    mapper_csv: Path,
+    *,
+    filter_kwargs: Dict[str, Any],
+    net_cfg: Dict[str, Any],
+    top_k_hubs: int,
+) -> List[str]:
+    """Rebuild importance-weighted PPI hubs for one MC-run mapper CSV (route 1).
+
+    Mirrors the enricher's ppi_hubs recipe so per-run hubs are comparable to the
+    reference ppi_hubs.csv: STRING graph over the run's selected genes, node
+    centralities, ``signal_weighted`` hub score (topology x normalized
+    gene_importance), then top-k hubs. Reuses the enricher's own functions so the
+    scoring is identical, not a re-implementation.
+    """
+    from methyl_enricher.ppi_network import (
+        attach_signal_to_node_metrics,
+        build_ppi_graph,
+        compute_network_metrics,
+        fetch_string_edges,
+        load_local_edges,
+        rank_hubs,
+    )
+
+    df = pd.read_csv(mapper_csv)
+    gene_column = filter_kwargs.get("gene_column") or "gene_name"
+    top_n = int(filter_kwargs.get("top_n") or 150)
+    genes = filter_mapper_genes(
+        df, **{k: v for k, v in filter_kwargs.items() if k != "top_n"}, top_n=top_n
+    )
+    if len(genes) < 2:
+        return []
+
+    weights: Dict[str, float] = {}
+    if gene_column in df.columns and "gene_importance" in df.columns:
+        imp = pd.to_numeric(df["gene_importance"], errors="coerce")
+        for g, v in zip(df[gene_column].astype(str), imp):
+            key = g.strip()
+            if key and key not in weights and pd.notna(v):
+                weights[key] = float(v)
+
+    source = str(net_cfg.get("source") or "string_api")
+    threshold = float(net_cfg.get("score_threshold") or 400.0)
+    if source == "local_edges" and net_cfg.get("local_edges_file"):
+        edges = load_local_edges(str(net_cfg["local_edges_file"]))
+        edges = edges[
+            pd.to_numeric(edges["score"], errors="coerce").fillna(0.0) >= threshold
+        ].copy()
+    else:
+        edges = fetch_string_edges(
+            genes=genes,
+            required_score=threshold,
+            cache_path=net_cfg.get("cache_path"),
+        )
+
+    graph = build_ppi_graph(
+        edges, genes, min_component_size=int(net_cfg.get("min_component_size", 2))
+    )
+    node_metrics = compute_network_metrics(graph)
+    if node_metrics.empty:
+        return []
+    mode = str(net_cfg.get("hub_ranking_mode") or "signal_weighted")
+    node_metrics = attach_signal_to_node_metrics(
+        node_metrics, weights, hub_ranking_mode=mode
+    )
+    hubs = rank_hubs(node_metrics, top_k=top_k_hubs, hub_ranking_mode=mode)
+    return [str(g).strip() for g in hubs["gene"].tolist() if str(g).strip()]
+
+
 def evaluate_context(
     ctx: EvalContext,
     *,
@@ -288,6 +375,7 @@ def evaluate_context(
     buffy_sig: Set[str],
     signature_top_n: int,
     analyte: str,
+    net_cfg: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     row: Dict[str, Any] = {
         "context": ctx.label,
@@ -311,14 +399,38 @@ def evaluate_context(
         row["mapper_n_selected"] = 0
         row["mapper_dominant_signature"] = "missing_mapper"
 
+    # Prefer real per-run ppi_hubs.csv (route 2 output). If absent, rebuild
+    # importance-weighted hubs from the run's mapper (route 1) so the comparison
+    # is hub-vs-hub with the same recipe as the reference signatures.
     if ctx.ppi_hubs_csv and ctx.ppi_hubs_csv.is_file():
         hub_genes = _load_signature_genes(ctx.ppi_hubs_csv, top_n=signature_top_n)
         metrics = _overlap_metrics(hub_genes, plasma_sig, buffy_sig)
+        row["hubs_source"] = "ppi_hubs_csv"
         row.update({f"hubs_{k}": v for k, v in metrics.items() if not k.endswith("_genes_hit")})
         row["hubs_plasma_sig_genes_hit"] = ";".join(metrics["plasma_sig_genes_hit"])
         row["hubs_buffy_sig_genes_hit"] = ";".join(metrics["buffy_sig_genes_hit"])
+    elif net_cfg is not None and ctx.mapper_csv and ctx.mapper_csv.is_file():
+        try:
+            hub_genes = compute_run_hub_genes(
+                ctx.mapper_csv,
+                filter_kwargs=filter_kwargs,
+                net_cfg=net_cfg,
+                top_k_hubs=signature_top_n,
+            )
+        except Exception as exc:  # network/graph failures shouldn't abort the sweep
+            row["hubs_n_selected"] = 0
+            row["hubs_source"] = "rebuild_failed"
+            row["hubs_dominant_signature"] = f"rebuild_error:{type(exc).__name__}"
+            hub_genes = None
+        if hub_genes is not None:
+            metrics = _overlap_metrics(hub_genes, plasma_sig, buffy_sig)
+            row["hubs_source"] = "rebuilt_from_mapper"
+            row.update({f"hubs_{k}": v for k, v in metrics.items() if not k.endswith("_genes_hit")})
+            row["hubs_plasma_sig_genes_hit"] = ";".join(metrics["plasma_sig_genes_hit"])
+            row["hubs_buffy_sig_genes_hit"] = ";".join(metrics["buffy_sig_genes_hit"])
     else:
         row["hubs_n_selected"] = 0
+        row["hubs_source"] = "none"
         row["hubs_dominant_signature"] = "missing_ppi_hubs"
 
     return row
@@ -327,7 +439,10 @@ def evaluate_context(
 def _summarize_rows(rows: List[Dict[str, Any]], analyte: str) -> Dict[str, Any]:
     mc_rows = [r for r in rows if re.match(r"run_\d{4}", str(r.get("context", "")))]
     mapper_ok = [r for r in mc_rows if r.get("has_mapper")]
-    hubs_ok = [r for r in mc_rows if r.get("has_ppi_hubs")]
+    hubs_ok = [
+        r for r in mc_rows
+        if r.get("hubs_source") in ("ppi_hubs_csv", "rebuilt_from_mapper")
+    ]
 
     def _dominant_counts(sub: List[Dict[str, Any]], prefix: str) -> Dict[str, int]:
         counts: Dict[str, int] = {}
@@ -336,14 +451,23 @@ def _summarize_rows(rows: List[Dict[str, Any]], analyte: str) -> Dict[str, Any]:
             counts[key] = counts.get(key, 0) + 1
         return counts
 
+    def _mean(sub: List[Dict[str, Any]], key: str) -> Optional[float]:
+        vals = [r[key] for r in sub if isinstance(r.get(key), (int, float))]
+        return round(sum(vals) / len(vals), 6) if vals else None
+
+    hub_sources = sorted({str(r.get("hubs_source")) for r in hubs_ok}) if hubs_ok else []
+
     return {
         "analyte": analyte,
         "n_contexts_total": len(rows),
         "n_mc_runs_seen": len(mc_rows),
         "n_mc_runs_with_mapper": len(mapper_ok),
-        "n_mc_runs_with_ppi_hubs": len(hubs_ok),
+        "n_mc_runs_with_hubs": len(hubs_ok),
+        "hub_sources": hub_sources,
         "mc_mapper_dominant_counts": _dominant_counts(mapper_ok, "mapper_"),
         "mc_hubs_dominant_counts": _dominant_counts(hubs_ok, "hubs_"),
+        "mc_hubs_mean_plasma_sig_fraction": _mean(hubs_ok, "hubs_plasma_sig_fraction"),
+        "mc_hubs_mean_buffy_sig_fraction": _mean(hubs_ok, "hubs_buffy_sig_fraction"),
         "expected_dominant_for_analyte": "plasma" if analyte == "cfdna" else "buffy",
     }
 
@@ -381,6 +505,13 @@ def main() -> None:
         required=True,
         help="Output directory for CSV/JSON summary",
     )
+    parser.add_argument(
+        "--rebuild-hubs",
+        action="store_true",
+        help="Route 1: when a run has no ppi_hubs.csv, rebuild importance-weighted "
+        "PPI hubs from its mapper (STRING graph + signal_weighted hub score) so the "
+        "comparison is hub-vs-hub. Requires network access (or a local edges file).",
+    )
     args = parser.parse_args()
 
     from methyl_utils import load_project
@@ -394,6 +525,7 @@ def main() -> None:
     buffy_sig = set(buffy_genes)
 
     filter_kwargs = _enricher_filter_kwargs(args.project)
+    net_cfg = _network_cfg(args.project) if args.rebuild_hubs else None
     contexts = _discover_contexts(args.project, args.comparison)
 
     rows = [
@@ -404,6 +536,7 @@ def main() -> None:
             buffy_sig=buffy_sig,
             signature_top_n=args.signature_size,
             analyte=analyte,
+            net_cfg=net_cfg,
         )
         for ctx in contexts
     ]
@@ -434,6 +567,12 @@ def main() -> None:
     print(
         f"Analyte={analyte} MC runs with mapper={s['n_mc_runs_with_mapper']}/{s['n_mc_runs_seen']} "
         f"mapper dominant counts={s['mc_mapper_dominant_counts']}"
+    )
+    print(
+        f"  hubs: {s['n_mc_runs_with_hubs']}/{s['n_mc_runs_seen']} runs "
+        f"(source={s['hub_sources']}) dominant counts={s['mc_hubs_dominant_counts']} "
+        f"mean plasma/buffy sig fraction={s['mc_hubs_mean_plasma_sig_fraction']}/"
+        f"{s['mc_hubs_mean_buffy_sig_fraction']}"
     )
 
 
