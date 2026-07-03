@@ -716,6 +716,84 @@ def run_ppi_hubs_only(
     return hubs
 
 
+def run_cisbp_only(
+    input_path: Path,
+    output_dir: Path,
+    *,
+    cisbp: object = None,
+    cisbp_context: object = None,
+    gene_column: Optional[str] = None,
+    top_n: Optional[int] = None,
+    disease_only: bool = False,
+    disease_association_types: Optional[List[str]] = None,
+    min_disease_evidence_level: Optional[str] = None,
+    min_disease_publications: Optional[int] = None,
+    min_disease_score: Optional[float] = None,
+    min_dmp_count: Optional[int] = None,
+    min_unique_dmps: Optional[int] = None,
+    max_gene_q_value: Optional[float] = None,
+    min_gene_z: Optional[float] = None,
+    min_gene_importance: Optional[float] = None,
+    feature_types: Optional[List[str]] = None,
+    sort_by: Optional[str] = None,
+    sort_ascending: bool = False,
+):
+    """CIS-BP-only TF-motif enrichment: no Enrichr libraries, no PPI, no modules.
+
+    Selects the top ``gene_importance``-ranked mapper genes and runs only the
+    configured CIS-BP mode(s), writing the CIS-BP CSV(s) to ``output_dir``. Kept
+    separate from the Enrichr path because CIS-BP scores are not comparable to
+    Enrichr q-values; this lets callers request CIS-BP without paying for a full
+    multi-library enrichment run. Returns the CIS-BP merge label(s).
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    if cisbp is None or not getattr(cisbp, "enabled", False):
+        logger.warning("CIS-BP-only requested but CIS-BP config is disabled/None; nothing to do.")
+        return []
+
+    analyzer = EnrichmentAnalyzer(libraries=[], organism="Human")
+    genes, _weights = analyzer.load_gene_list_with_weights(
+        input_path,
+        top_n=top_n,
+        gene_column=gene_column,
+        disease_only=disease_only,
+        disease_association_types=disease_association_types,
+        min_disease_evidence_level=min_disease_evidence_level,
+        min_disease_publications=min_disease_publications,
+        min_disease_score=min_disease_score,
+        min_dmp_count=min_dmp_count,
+        min_unique_dmps=min_unique_dmps,
+        max_gene_q_value=max_gene_q_value,
+        min_gene_z=min_gene_z,
+        min_gene_importance=min_gene_importance,
+        feature_types=feature_types,
+        sort_by=sort_by,
+        sort_ascending=sort_ascending,
+    )
+    if not genes:
+        logger.warning("CIS-BP-only: no genes after filtering; nothing to do.")
+        return []
+
+    from .cisbp import CisbpContext, run_cisbp
+
+    context = cisbp_context or CisbpContext()
+    result = run_cisbp(cisbp, genes, output_dir, context=context)
+    labels = (
+        [str(x) for x in result if x]
+        if isinstance(result, list)
+        else ([str(result)] if result else [])
+    )
+    logger.info(
+        "CIS-BP-only: wrote %d gene(s) of CIS-BP output to %s (labels=%s).",
+        len(genes),
+        output_dir,
+        labels or "none",
+    )
+    return labels
+
+
 def run_module_pipeline(
     input_path: Path,
     output_dir: Path,

@@ -14,7 +14,7 @@ from .enricher import (
     resolve_enrichr_libraries,
 )
 from methyl_utils.action_config_resolver import resolve_for_project
-from .module_pipeline import run_module_pipeline, run_ppi_hubs_only
+from .module_pipeline import run_cisbp_only, run_module_pipeline, run_ppi_hubs_only
 from .queue_cli import QUEUE_SUBCOMMANDS, main_queue
 
 
@@ -227,6 +227,12 @@ For theory and package documentation, see:
         action='store_true',
         help='PPI-only: skip Enrichr libraries and pathway modules; build ppi_hubs.csv directly '
              'from gene_importance-ranked mapper genes (fast; score-comparable across runs).'
+    )
+    parser.add_argument(
+        '--cisbp-only',
+        action='store_true',
+        help='CIS-BP-only: skip Enrichr libraries, PPI and modules; run only the configured '
+             'CIS-BP mode(s) on gene_importance-ranked mapper genes (requires --cisbp config).'
     )
     parser.add_argument(
         '--similarity-threshold',
@@ -617,7 +623,8 @@ def _apply_enricher_config_to_args(args, config: "EnricherStepConfig") -> None:
 def _resolve_cisbp_config_with_cli(args):
     """Combine config-derived CisbpConfig with CLI --cisbp/--cisbp-mode overrides."""
     cisbp_config = getattr(args, "cisbp_config", None)
-    cli_enable = bool(getattr(args, "cisbp", False))
+    # --cisbp-only implies running CIS-BP, so treat it as enabling the integration.
+    cli_enable = bool(getattr(args, "cisbp", False)) or bool(getattr(args, "cisbp_only", False))
     cli_mode = getattr(args, "cisbp_mode", None)
     if not cli_enable and not cli_mode:
         return cisbp_config
@@ -851,6 +858,27 @@ def main():
         )
 
     def _run_one(in_file: Path, out_dir: str):
+        if getattr(args, "cisbp_only", False):
+            return run_cisbp_only(
+                input_path=in_file,
+                output_dir=Path(out_dir),
+                cisbp=cisbp_config,
+                cisbp_context=cisbp_context,
+                gene_column=args.gene_column,
+                top_n=args.top,
+                disease_only=args.disease_only,
+                disease_association_types=args.disease_association_type,
+                min_disease_evidence_level=args.min_disease_evidence_level,
+                min_disease_publications=args.min_disease_publications,
+                min_disease_score=args.min_disease_score,
+                min_dmp_count=args.min_dmp_count,
+                min_unique_dmps=args.min_unique_dmps,
+                max_gene_q_value=args.max_gene_q_value,
+                min_gene_z=args.min_gene_z,
+                min_gene_importance=args.min_gene_importance,
+                sort_by=args.sort_by,
+                sort_ascending=args.sort_ascending,
+            )
         if getattr(args, "ppi_only", False):
             return run_ppi_hubs_only(
                 input_path=in_file,

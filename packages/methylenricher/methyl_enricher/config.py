@@ -145,6 +145,10 @@ class EnricherStepConfig(BaseModel):
     # PPI-only hub extraction: skip Enrichr libraries + pathway modules, build hubs
     # straight from the mapper's gene_importance-ranked genes (fast, score-comparable).
     ppi_only: Optional[bool] = None
+    # CIS-BP-only TF-motif enrichment: skip Enrichr libraries + PPI + modules, run
+    # only the configured CIS-BP mode(s). CIS-BP scores are not Enrichr-comparable,
+    # so this lets CIS-BP be requested without a full enrichment run.
+    cisbp_only: Optional[bool] = None
     similarity_threshold: Optional[float] = None
     cluster_resolution: Optional[float] = None
     cluster_seed: Optional[int] = None
