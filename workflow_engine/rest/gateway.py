@@ -6,13 +6,15 @@ Two gateway identities:
 - WORKER (/v1/workers/*): task claim/submit for compute workers
 - ADMIN (/v1/admin/* + legacy CI aliases): catalog seed, workflow deploy
 
+The gateway is domain-agnostic: no pipeline knowledge, no catalog files on disk,
+and no config resolution at task claim. Use methyl-study-start for compile/plan/start.
+
 Portal (EpiPortal) never uses this HTTP surface — it talks to Azure SQL directly.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import sys
@@ -26,7 +28,6 @@ if __name__ == "__main__" and __package__ is None:
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "contract"))
 
 from .admin_handlers import (
-    compile_domain_program,
     deploy_workflow_definition,
     get_workflow_definition_by_name,
     list_workflow_definitions,
@@ -36,7 +37,6 @@ from .connection import resolve_connection_config
 from .db import open_gateway_db
 from .db.base import GatewayDb, WorkerAuthError
 from .db_client import (
-    apply_validation_plan,
     create_workflow_definition,
     create_workflow_instance,
     delete_workflow_definition,
@@ -52,57 +52,16 @@ from .db_client import (
     worker_request_task,
     worker_submit_result,
 )
-from .sample_lifecycle import start_sample_prep
-from .study_lifecycle import start_study_validation
 from workflow_definition_spec import WorkflowDefinitionSpec
-
-_DEFAULT_CATALOG_PATH = (
-    Path(__file__).resolve().parents[2] / "schemas" / "actions" / "catalog.json"
-)
-
-
-def _load_action_catalog_by_name(
-    catalog_path: Path = _DEFAULT_CATALOG_PATH,
-) -> dict[str, dict[str, Any]]:
-    catalog_by_name: dict[str, dict[str, Any]] = {}
-    if not catalog_path.is_file():
-        return catalog_by_name
-    catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-    for entry in catalog.get("actions") or []:
-        catalog_by_name[str(entry["action_name"])] = entry
-    return catalog_by_name
 
 
 class RestGateway:
-    def __init__(
-        self,
-        db: GatewayDb,
-        *,
-        catalog_path: Optional[Path] = None,
-    ) -> None:
+    def __init__(self, db: GatewayDb) -> None:
         self.db = db
-        self.catalog_by_name = _load_action_catalog_by_name(
-            catalog_path or _DEFAULT_CATALOG_PATH
-        )
 
     @property
     def backend(self) -> str:
         return self.db.backend
-
-    def _merge_action_catalog(self, actions: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        merged: list[dict[str, Any]] = []
-        for row in actions:
-            meta = self.catalog_by_name.get(str(row["action_name"]), {})
-            merged.append(
-                {
-                    **row,
-                    "execution_mode": meta.get("execution_mode"),
-                    "cli_tool": meta.get("cli_tool"),
-                    "argv_map": meta.get("argv_map"),
-                    "in_process_handler": meta.get("in_process_handler"),
-                }
-            )
-        return merged
 
     def dispatch(
         self,
@@ -193,9 +152,6 @@ class RestGateway:
             )
             return 200, {"action_name": m.group(1), "direction": body["direction"]}
 
-        if method == "POST" and path == "/v1/admin/workflows/compile":
-            return 200, compile_domain_program(body)
-
         if method == "POST" and path == "/v1/admin/workflows/definitions/deploy":
             result = deploy_workflow_definition(
                 self.db,
@@ -234,12 +190,16 @@ class RestGateway:
                 str(body["action_name"]),
                 body.get("capability"),
                 body.get("payload_schema_ref"),
+                execution_mode=body.get("execution_mode"),
+                cli_tool=body.get("cli_tool"),
+                in_process_handler=body.get("in_process_handler"),
+                argv_map=body.get("argv_map") if isinstance(body.get("argv_map"), dict) else None,
             )
             return 201, {"action_name": body["action_name"]}
 
         # --- Legacy admin aliases (CI smoke; portal must use DB) ---
         if method == "GET" and path == "/v1/actions":
-            return 200, {"actions": self._merge_action_catalog(list_workflow_actions(self.db))}
+            return 200, {"actions": list_workflow_actions(self.db)}
 
         m = re.fullmatch(r"/v1/actions/([^/]+)/schema", path)
         if method == "GET" and m:
@@ -255,45 +215,12 @@ class RestGateway:
                 str(body["action_name"]),
                 body.get("capability"),
                 body.get("payload_schema_ref"),
+                execution_mode=body.get("execution_mode"),
+                cli_tool=body.get("cli_tool"),
+                in_process_handler=body.get("in_process_handler"),
+                argv_map=body.get("argv_map") if isinstance(body.get("argv_map"), dict) else None,
             )
             return 201, {"action_name": body["action_name"]}
-
-        if method == "POST" and path == "/v1/validation/plan-iterations":
-            from methyl_validation.workflow_planner import plan_validation_context
-
-            context = plan_validation_context(body)
-            instance_id = body.get("workflow_instance_id")
-            if instance_id is not None:
-                apply_validation_plan(
-                    self.db,
-                    int(instance_id),
-                    context.model_dump(mode="json"),
-                    persist_extension=bool(body.get("persist_extension", True)),
-                )
-            return 200, {
-                "context_json": context.model_dump(mode="json"),
-                "n_iterations": len(context.iterations),
-            }
-
-        if method == "POST" and path == "/v1/studies/validation/start":
-            payload = start_study_validation(
-                self.db,
-                body,
-                create_workflow_definition=create_workflow_definition,
-                create_workflow_instance=create_workflow_instance,
-                start_workflow_instance=start_workflow_instance,
-            )
-            return 201, payload
-
-        if method == "POST" and path == "/v1/studies/sample-prep/start":
-            payload = start_sample_prep(
-                self.db,
-                body,
-                create_workflow_definition=create_workflow_definition,
-                create_workflow_instance=create_workflow_instance,
-                start_workflow_instance=start_workflow_instance,
-            )
-            return 201, payload
 
         if method == "POST" and path == "/v1/workflows/instances":
             instance_id = create_workflow_instance(

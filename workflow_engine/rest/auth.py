@@ -65,9 +65,7 @@ class GatewayAuthConfig:
 _PUBLIC_GET = frozenset({"/", "/v1", "/v1/health"})
 _ADMIN_PREFIX = "/v1/admin/"
 _LEGACY_ADMIN_PREFIXES = (
-    "/v1/studies/",
     "/v1/workflows/",
-    "/v1/validation/",
 )
 _JWKS_CLIENT: Any = None
 _JWKS_TENANT: str = ""

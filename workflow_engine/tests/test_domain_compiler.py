@@ -61,6 +61,7 @@ def test_two_group_compiles_nested_foreach_and_parallel():
     assert detect.input_template["context"] == "${var.context}"
     assert detect.input_template["centroid1Dir"] == "${var.centroid1Dir}"
     assert detect.input_template["outputDir"] == "${var.detectOutDir}"
+    assert detect.input_template["resolvedConfig"] == "${var.resolvedConfig__detection}"
 
 
 def test_compiler_emits_root_scope_defaults():

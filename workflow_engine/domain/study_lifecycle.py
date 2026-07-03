@@ -1,4 +1,4 @@
-"""Portal helper: plan validation context, enrich, and start StudyValidationLifecycle."""
+"""Admin tooling: plan validation context, enrich, and start StudyValidationLifecycle."""
 
 from __future__ import annotations
 
@@ -11,8 +11,10 @@ _REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _ensure_import_paths() -> None:
+    domain = _REPO_ROOT / "workflow_engine" / "domain"
+    if str(domain) not in sys.path:
+        sys.path.insert(0, str(domain))
     for rel in (
-        "workflow_engine/domain",
         "workflow_engine/contract",
         "workers",
         "packages/methyldomain",
@@ -43,7 +45,7 @@ def _apply_project_path_scope_default(spec: Dict[str, Any], project_path: str) -
     spec["scope_defaults"] = scope_defaults
 
 
-def _compile_program_spec(program: Path, *, project_path: Optional[str] = None) -> Dict[str, Any]:
+def compile_program_spec(program: Path, *, project_path: Optional[str] = None) -> Dict[str, Any]:
     from compiler import compile_domain_program
     from methyl_domain.program import DomainProgram
 
@@ -62,7 +64,7 @@ def _compile_program_spec(program: Path, *, project_path: Optional[str] = None) 
     return spec
 
 
-def _resolve_workflow_version_id(
+def resolve_workflow_version_id(
     db: Any,
     body: Dict[str, Any],
     *,
@@ -83,7 +85,7 @@ def _resolve_workflow_version_id(
         raise FileNotFoundError(f"program_path not found: {program}")
 
     project_path = body.get("projectPath")
-    spec = _compile_program_spec(program, project_path=project_path)
+    spec = compile_program_spec(program, project_path=project_path)
     created = create_workflow_definition(db, spec)
     return int(created["workflow_version_id"])
 
@@ -103,14 +105,14 @@ def start_study_validation(
 
     _ensure_import_paths()
     from methyl_validation.workflow_planner import plan_validation_context
-    from workflow_context import enrich_instance_context
+    from workflow_context import finalize_instance_context
 
     planner_payload = dict(body)
     planner_payload.setdefault("projectPath", project_path)
     planned = plan_validation_context(planner_payload)
-    context = enrich_instance_context(planned.model_dump(mode="json"))
+    context = finalize_instance_context(planned.model_dump(mode="json"))
 
-    version_id = _resolve_workflow_version_id(
+    version_id = resolve_workflow_version_id(
         db,
         body,
         create_workflow_definition=create_workflow_definition,

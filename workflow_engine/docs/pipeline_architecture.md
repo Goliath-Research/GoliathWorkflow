@@ -23,7 +23,7 @@ Quarto serves the page at `http://localhost:…` and Mermaid renders in your nor
 
 Two workflow definitions run in sequence for production studies: **SamplePrepPipeline** (per-sample FASTQ → HDF5), then **StudyValidationLifecycle** (MC stability → freeze → biological outputs → model MC → selection → hold-out). **DataDrivenPipeline** remains the single-pass centroid → enricher path for ad-hoc analysis.
 
-**Staged portal contract:** [`portal_study_lifecycle.md`](portal_study_lifecycle.md) — `POST /v1/studies/validation/start` after SamplePrep completes.
+**Staged portal contract:** [`portal_study_lifecycle.md`](portal_study_lifecycle.md) — `methyl-study-start validation-start` (or portal SQL) after SamplePrep completes.
 
 ```mermaid
 flowchart TB
@@ -661,7 +661,7 @@ Engine write-path: [`wf_sql_scope_writepath_parity.sql`](/home/ubuntu/MethylPipe
 
 #### Use (read-path)
 
-**Input templates and bindings** resolve placeholders at task claim time:
+**Input templates and bindings** resolve placeholders at task claim time in the SQL engine. **`resolvedConfig`** is baked into instance scope at configuration time (`resolvedConfig__*` vars via `finalize_instance_context`); the agnostic gateway does not merge config on claim.
 
 | Token family | Example | Source |
 |--------------|---------|--------|
@@ -877,7 +877,7 @@ one_chromosome (SEQUENCE)
 
 Post steps run only after **all** comparison branches complete (root `SEQUENCE`: fan-out then post_pipeline).
 
-### 5.6 Input templates (resolved at claim time)
+### 5.6 Input templates (resolved at claim time in SQL; config baked at instance create)
 
 | Node | Resolved `input_json` fields |
 |------|---------------------------|

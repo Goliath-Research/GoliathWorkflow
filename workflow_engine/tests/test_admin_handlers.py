@@ -6,19 +6,15 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import json
 import pytest
 
 WF_ENGINE = Path(__file__).resolve().parents[1]
 REST = WF_ENGINE / "rest"
-DOMAIN = WF_ENGINE / "domain"
-CONTRACT = WF_ENGINE / "contract"
-for _p in (REST, DOMAIN, CONTRACT):
+for _p in (REST,):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
 from rest.admin_handlers import (  # noqa: E402
-    compile_domain_program,
     list_workflow_definitions,
     seed_action_catalog,
 )
@@ -29,7 +25,16 @@ def test_seed_action_catalog_counts_actions() -> None:
     upsert_action = MagicMock()
     upsert_schema = MagicMock()
     body = {
-        "catalog": {"actions": [{"action_name": "sample.methyl_qc", "capability": "methyl-qc"}]},
+        "catalog": {
+            "actions": [
+                {
+                    "action_name": "sample.methyl_qc",
+                    "capability": "methyl-qc",
+                    "execution_mode": "cli",
+                    "cli_tool": "methyl-qc",
+                }
+            ]
+        },
         "schemas": [
             {
                 "action_name": "sample.methyl_qc",
@@ -49,25 +54,9 @@ def test_seed_action_catalog_counts_actions() -> None:
     assert result["schemas_upserted"] == 1
     upsert_action.assert_called_once()
     upsert_schema.assert_called_once()
-
-
-def test_compile_domain_program_from_json(tmp_path: Path) -> None:
-    project = tmp_path / "project.json"
-    project.write_text("{}", encoding="utf-8")
-    program_path = tmp_path / "program.json"
-    program_path.write_text(
-        json.dumps(
-            {
-                "programVersion": 2,
-                "name": "MiniFlow",
-                "projectPath": str(project),
-                "body": [],
-            }
-        ),
-        encoding="utf-8",
-    )
-    result = compile_domain_program({"program_path": str(program_path), "projectPath": str(project)})
-    assert result["spec"]["name"] == "MiniFlow"
+    kwargs = upsert_action.call_args.kwargs
+    assert kwargs.get("execution_mode") == "cli"
+    assert kwargs.get("cli_tool") == "methyl-qc"
 
 
 def test_list_workflow_definitions_forwards_source_filter() -> None:

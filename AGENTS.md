@@ -38,7 +38,7 @@ Study manifests must **not** contain `step_config` or tool parameters. See [conf
 **Cursor rule:** [`.cursor/rules/config-not-code.mdc`](.cursor/rules/config-not-code.mdc) (`alwaysApply`).
 
 - Do **not** add `DEFAULT_*` constants or Pydantic `Field(default=…)` for tunable operational parameters (caps, thresholds, iteration counts meant for operators).
-- Code **resolves** merged config (`resolve_action_config`, `resolve_for_project`, `materialize_action_input`) and **validates** types/bounds only.
+- Code **resolves** merged config at instance configuration (`finalize_instance_context`, `resolve_action_config`) and **validates** types/bounds only. Local runs may still call `materialize_action_input` in-process; the distributed gateway does not.
 - New tunable knobs: JSON schema + site/profile examples — not package defaults.
 
 **Repo vs `/work`:** [`.cursor/rules/work-config-paths.mdc`](.cursor/rules/work-config-paths.mdc).

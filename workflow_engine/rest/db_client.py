@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 from contextlib import contextmanager
@@ -50,23 +49,6 @@ def worker_authenticate(db_or_dsn: Union[GatewayDb, str], worker_id: int, worker
         db.worker_authenticate(worker_id, worker_token)
 
 
-def materialize_claimed_task_input(
-    input_json: dict[str, Any],
-    action_name: str,
-    instance_context: dict[str, Any] | None,
-) -> dict[str, Any]:
-    """Inject resolvedConfig at task claim when SQL stored only the resolved template."""
-    if not action_name or isinstance(input_json.get("resolvedConfig"), dict):
-        return input_json
-    scope = dict(instance_context or {})
-    domain = _REPO_ROOT / "workflow_engine" / "domain"
-    if str(domain) not in sys.path:
-        sys.path.insert(0, str(domain))
-    from workflow_context import materialize_action_input
-
-    return materialize_action_input(dict(input_json), action_name, scope)
-
-
 def worker_request_task(
     db_or_dsn: Union[GatewayDb, str],
     worker_id: int,
@@ -75,28 +57,9 @@ def worker_request_task(
     max_lease_seconds: int,
 ) -> dict[str, Any]:
     with _use_db(db_or_dsn) as db:
-        claim = db.worker_request_task(
+        return db.worker_request_task(
             worker_id, worker_token, capability, max_lease_seconds
         )
-        if not claim.get("has_task"):
-            return claim
-        input_json = claim.get("input_json")
-        action_name = str(claim.get("action_name") or "")
-        if isinstance(input_json, dict) and action_name:
-            context: dict[str, Any] = {}
-            instance_id = claim.get("workflow_instance_id")
-            if instance_id:
-                inst = db.get_workflow_instance(int(instance_id))
-                raw_ctx = inst.get("context_json")
-                if isinstance(raw_ctx, str):
-                    context = json.loads(raw_ctx) if raw_ctx else {}
-                elif isinstance(raw_ctx, dict):
-                    context = raw_ctx
-            claim = dict(claim)
-            claim["input_json"] = materialize_claimed_task_input(
-                input_json, action_name, context
-            )
-        return claim
 
 
 def worker_submit_result(
@@ -196,9 +159,22 @@ def upsert_workflow_action(
     action_name: str,
     capability: Optional[str],
     payload_schema_ref: Optional[str] = None,
+    *,
+    execution_mode: Optional[str] = None,
+    cli_tool: Optional[str] = None,
+    in_process_handler: Optional[str] = None,
+    argv_map: Optional[dict[str, Any]] = None,
 ) -> None:
     with _use_db(db_or_dsn) as db:
-        db.upsert_workflow_action(action_name, capability, payload_schema_ref)
+        db.upsert_workflow_action(
+            action_name,
+            capability,
+            payload_schema_ref,
+            execution_mode=execution_mode,
+            cli_tool=cli_tool,
+            in_process_handler=in_process_handler,
+            argv_map=argv_map,
+        )
 
 
 def upsert_action_schema(
@@ -227,7 +203,6 @@ __all__ = [
     "get_action_schema",
     "get_workflow_instance",
     "list_workflow_actions",
-    "materialize_claimed_task_input",
     "open_gateway_db",
     "pg_dsn",
     "resolve_connection_config",

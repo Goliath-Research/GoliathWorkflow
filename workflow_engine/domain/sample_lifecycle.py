@@ -1,4 +1,4 @@
-"""Portal helper: plan sample prep context and start SamplePrepPipeline."""
+"""Admin tooling: plan sample prep context and start SamplePrepPipeline."""
 
 from __future__ import annotations
 
@@ -14,8 +14,10 @@ _DEFAULT_SAMPLE_PREP_PROGRAM = (
 
 
 def _ensure_import_paths() -> None:
+    domain = _REPO_ROOT / "workflow_engine" / "domain"
+    if str(domain) not in sys.path:
+        sys.path.insert(0, str(domain))
     for rel in (
-        "workflow_engine/domain",
         "workflow_engine/contract",
         "workflow_engine/portal",
         "workers",
@@ -44,7 +46,8 @@ def start_sample_prep(
     from archive_profile_resolver import apply_archive_profile_storage
     from methyl_validation.sample_prep_planner import plan_sample_prep_context
     from resource_profile import DEFAULT_ARCHIVE_PROFILE_KEY, ResourceProfileReader
-    from study_lifecycle import _resolve_workflow_version_id
+    from study_lifecycle import resolve_workflow_version_id
+    from workflow_context import build_resolved_config_scope_vars
 
     planner_payload = dict(body)
     planner_payload.setdefault("projectPath", project_path)
@@ -61,6 +64,7 @@ def start_sample_prep(
     )
 
     context = plan_sample_prep_context(planner_payload)
+    context.update(build_resolved_config_scope_vars(context))
 
     program_path = body.get("program_path")
     if program_path is None and body.get("workflow_version_id") is None:
@@ -70,7 +74,7 @@ def start_sample_prep(
     if program_path is not None:
         version_body["program_path"] = program_path
 
-    version_id = _resolve_workflow_version_id(
+    version_id = resolve_workflow_version_id(
         db,
         version_body,
         create_workflow_definition=create_workflow_definition,

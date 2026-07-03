@@ -17,6 +17,7 @@ dependencies = [
 [project.scripts]
 methyl-gateway = "rest.gateway:main"
 methyl-workflow-run = "local.runner:main"
+methyl-study-start = "study_start:main"
 
 [build-system]
 requires = ["setuptools>=61"]

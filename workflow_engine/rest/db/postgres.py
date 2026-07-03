@@ -279,10 +279,23 @@ class PostgresGatewayDb(GatewayDbBase):
         action_name: str,
         capability: Optional[str],
         payload_schema_ref: Optional[str] = None,
+        *,
+        execution_mode: Optional[str] = None,
+        cli_tool: Optional[str] = None,
+        in_process_handler: Optional[str] = None,
+        argv_map: Optional[dict[str, Any]] = None,
     ) -> None:
         self._exec_proc(
-            f"CALL {self._qual('wf_repo_upsert_workflow_action')}(%s, %s, %s)",
-            (action_name, capability, payload_schema_ref),
+            f"CALL {self._qual('wf_repo_upsert_workflow_action')}(%s, %s, %s, %s, %s, %s, %s::jsonb)",
+            (
+                action_name,
+                capability,
+                payload_schema_ref,
+                execution_mode,
+                cli_tool,
+                in_process_handler,
+                json.dumps(argv_map) if argv_map is not None else None,
+            ),
         )
 
     def upsert_action_schema(

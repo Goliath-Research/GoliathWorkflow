@@ -1,12 +1,20 @@
-"""Admin-tier gateway handlers (catalog seed, compile, deploy)."""
+"""Admin-tier gateway handlers (catalog seed, deploy)."""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from workflow_definition_spec import WorkflowDefinitionSpec
+
+
+def _dispatch_fields(action: dict[str, Any]) -> dict[str, Any]:
+    argv_map = action.get("argv_map")
+    return {
+        "execution_mode": action.get("execution_mode"),
+        "cli_tool": action.get("cli_tool"),
+        "in_process_handler": action.get("in_process_handler"),
+        "argv_map": dict(argv_map) if isinstance(argv_map, dict) else None,
+    }
 
 
 def seed_action_catalog(
@@ -29,6 +37,7 @@ def seed_action_catalog(
                 str(action["action_name"]),
                 str(action.get("capability") or "") or None,
                 str(action.get("schema_id") or action["action_name"]),
+                **_dispatch_fields(action),
             )
             action_count += 1
         except Exception as exc:
@@ -55,27 +64,6 @@ def seed_action_catalog(
     }
 
 
-def compile_domain_program(body: Dict[str, Any]) -> Dict[str, Any]:
-    from .study_lifecycle import _compile_program_spec
-
-    program_path = body.get("program_path")
-    program = body.get("program")
-    project_path = body.get("projectPath") or body.get("project_path")
-
-    if program_path:
-        spec = _compile_program_spec(Path(str(program_path)), project_path=project_path)
-    elif program is not None:
-        import tempfile
-
-        tmp = Path(tempfile.mkdtemp()) / "program.json"
-        tmp.write_text(json.dumps(program), encoding="utf-8")
-        spec = _compile_program_spec(tmp, project_path=project_path)
-    else:
-        raise ValueError("program or program_path is required")
-
-    return {"spec": spec}
-
-
 def deploy_workflow_definition(
     db: Any,
     body: Dict[str, Any],
@@ -86,14 +74,12 @@ def deploy_workflow_definition(
     replace = bool(body.get("replace", False))
     spec = body.get("spec")
 
-    if spec is None and (body.get("program") is not None or body.get("program_path")):
-        spec = compile_domain_program(body)["spec"]
-    elif spec is None:
+    if spec is None:
         spec = WorkflowDefinitionSpec.model_validate(body).to_db_spec()
     elif isinstance(spec, dict) and "nodes" in spec:
         spec = WorkflowDefinitionSpec.model_validate(spec).to_db_spec()
     else:
-        raise ValueError("spec, program, or program_path is required")
+        raise ValueError("spec is required (compiled WorkflowDefinitionSpec JSON)")
 
     name = str(spec.get("name") or "")
     if not name:

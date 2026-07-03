@@ -48,11 +48,11 @@ fi
 
 [[ -f "$PROJECT_PATH" ]] || { echo "Project not found: $PROJECT_PATH" >&2; exit 1; }
 
-"$PYTHON_BIN" - <<'PY' "$API_BASE" "$PROJECT_PATH" "$VERSIONS_FILE" "$POLL" "$TIMEOUT"
+"$PYTHON_BIN" - <<'PY' "$API_BASE" "$PROJECT_PATH" "$VERSIONS_FILE" "$POLL" "$TIMEOUT" "$REPO_ROOT"
 import json
+import subprocess
 import sys
 import time
-import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -61,6 +61,8 @@ project_path = sys.argv[2]
 versions_file = Path(sys.argv[3])
 poll = int(sys.argv[4])
 timeout = int(sys.argv[5])
+repo_root = Path(sys.argv[6])
+study_start = repo_root / "workflow_engine" / "study_start.py"
 
 def request(method: str, path: str, body: dict | None = None) -> dict:
     data = None if body is None else json.dumps(body).encode("utf-8")
@@ -131,17 +133,23 @@ prep_status = poll_instance(prep_id)
 if prep_status != "COMPLETED":
     raise SystemExit(f"SamplePrep smoke failed: {prep_status}")
 
-# Instance 2: StudyValidationLifecycle via gateway helper
-val = request(
-    "POST",
-    "/studies/validation/start",
-    {
-        "projectPath": project_path,
-        "workflow_version_id": int(lifecycle_vid),
-        "featureIterations": 2,
-        "seed": 42,
-    },
+# Instance 2: StudyValidationLifecycle via admin CLI (not gateway domain routes)
+val_body = {
+    "projectPath": project_path,
+    "workflow_version_id": int(lifecycle_vid),
+    "featureIterations": 2,
+    "seed": 42,
+}
+proc = subprocess.run(
+    [sys.executable, str(study_start), "validation-start", "-"],
+    input=json.dumps(val_body),
+    capture_output=True,
+    text=True,
+    cwd=str(repo_root),
 )
+if proc.returncode != 0:
+    raise SystemExit(f"methyl-study-start validation-start failed: {proc.stderr or proc.stdout}")
+val = json.loads(proc.stdout)
 val_id = int(val["instance_id"])
 val_status = poll_instance(val_id)
 if val_status != "COMPLETED":

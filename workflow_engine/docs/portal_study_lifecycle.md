@@ -10,7 +10,7 @@ Staged orchestration for multi-group studies: **SamplePrep** completes, then the
 | **Workers** | Gateway `/v1/workers/*` | Execute READY action tasks |
 | **CI / release admin** | Gateway `/v1/admin/*` | Seed action catalog, deploy system workflow graphs |
 
-The portal **never** calls the REST gateway. Legacy gateway routes under `/v1/studies/*` and `/v1/workflows/*` remain as **admin-only CI aliases** when Entra is enabled.
+The portal **never** calls the REST gateway. Study compile/plan/start for CI and operators uses **`methyl-study-start`** (admin CLI), not gateway domain routes. Generic gateway aliases under `/v1/workflows/*` remain for CI smoke when Entra is enabled.
 
 Deploy portal SQL API: [`../sql/portal_workflow_api.sql`](../sql/portal_workflow_api.sql) (Azure SQL) or [`../sql_pg/portal_workflow_api.sql`](../sql_pg/portal_workflow_api.sql) (PostgreSQL).
 
@@ -37,19 +37,13 @@ Monitor:
 EXEC portal.sp_get_instance_tasks @workflow_instance_id = @instance_id;
 ```
 
-### Option B — Admin gateway CI alias (not for portal UI)
+### Option B — Admin CLI (CI / operators, not portal UI)
 
 **`fastqStorage` is always required** — initial FASTQs come from **laboratory-owned** storage.
 
-```http
-POST /v1/studies/sample-prep/start
-Authorization: Bearer <admin-jwt>
-{
-  "projectPath": "/work/.../project.json",
-  "workflow_version_id": <sample_prep_version>,
-  "fastqStorage": { "type": "s3", "bucket": "lab-cohort-bucket", ... },
-  "sampleCsvs": ["/work/.../healthy.csv"]
-}
+```bash
+methyl-study-start sample-prep-start request.json
+# request.json: projectPath, workflow_version_id, fastqStorage, sampleCsvs, ...
 ```
 
 See [`sample_prep_test_bed.md`](sample_prep_test_bed.md) for smoke scripts and QC semantics.
@@ -81,29 +75,16 @@ Poll `GET /v1/workflows/instances/{id}` until status is **COMPLETED** (all sampl
 
 The portal **pre-plans** iterations before starting the workflow. Two equivalent paths:
 
-### Option A — Gateway helper (recommended)
+### Option A — Admin CLI (recommended for CI)
 
-```http
-POST /v1/studies/validation/start
-{
-  "projectPath": "/work/.../project_Healthy_vs_PCa1-5-CG.json",
-  "workflow_version_id": <study_validation_version>,
-  "featureIterations": 30,
-  "seed": 42
-}
+```bash
+methyl-study-start validation-start request.json
+# request.json: projectPath, workflow_version_id, featureIterations, seed, ...
 ```
 
-Or register from a DomainProgram on the fly:
+Or register from a DomainProgram on the fly (include `program_path` in the JSON body).
 
-```http
-POST /v1/studies/validation/start
-{
-  "projectPath": "/work/.../project_Healthy_vs_PCa1-5-CG.json",
-  "program_path": "/work/.../study_validation_lifecycle.program.json"
-}
-```
-
-Response:
+Response (stdout JSON):
 
 ```json
 {
@@ -116,12 +97,12 @@ Response:
 
 ### Option B — Manual plan + enrich + start
 
-```http
-POST /v1/validation/plan-iterations
-{ "projectPath": "...", "featureIterations": 30 }
+```bash
+methyl-study-start plan-iterations planner.json
+# planner.json: projectPath, featureIterations, ...
 ```
 
-Merge planner output with enriched project fields (`comparisons`, `chromosomes`, `groups`, `contexts`) via `enrich_instance_context`, then:
+Merge planner output with enriched project fields via `finalize_instance_context`, then create/start via portal SQL or generic `POST /v1/workflows/instances`.
 
 ```http
 POST /v1/workflows/instances

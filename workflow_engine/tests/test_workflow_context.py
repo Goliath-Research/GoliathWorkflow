@@ -12,8 +12,10 @@ if str(_DOMAIN) not in sys.path:
     sys.path.insert(0, str(_DOMAIN))
 
 from workflow_context import (  # noqa: E402
+    build_resolved_config_scope_vars,
     enrich_instance_context,
     list_unresolved_placeholders,
+    resolved_config_scope_var_name,
     resolve_input_json_from_template,
     validate_resolved_input_json,
 )
@@ -58,3 +60,16 @@ def test_enrich_instance_context_from_buffy_project():
     first = enriched["comparisons"][0]
     assert "detectOutDir" in first
     assert "centroid2Dir" in first
+
+
+def test_build_resolved_config_scope_vars_uses_profile_action_config():
+    scope = build_resolved_config_scope_vars(
+        {
+            "actionConfig": {"detection": {"alpha": 0.01}},
+            "siteConfig": {},
+            "regulatory": {},
+        }
+    )
+    key = resolved_config_scope_var_name("detection")
+    assert key in scope
+    assert scope[key].get("alpha") == 0.01

@@ -20,7 +20,7 @@ MethylPipeline is **disease-agnostic** and **deployment-configurable**. Do not e
 
 ## Code may only
 
-- **Resolve** merged config via `resolve_action_config` / `resolve_for_project` / `materialize_action_input`.
+- **Resolve** merged config via `resolve_action_config` / `resolve_for_project` / `finalize_instance_context` (DB-backed instances) or `materialize_action_input` (local engine only).
 - **Validate** types and bounds in Pydantic/JSON Schema (`ge=1`, `le=1.0`) with `default=None` for tunable knobs.
 - **Document** in schema descriptions *where* operators set values (site vs profile), not hardcoded numbers in code.
 

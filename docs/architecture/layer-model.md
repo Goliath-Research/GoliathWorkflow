@@ -10,9 +10,9 @@ Study configuration is split across layers so pipeline structure stays in versio
 | Workflow IR | `*.program.json` / `DomainProgram` | `for`, `if`, `parallel`, `do` — pipeline structure |
 | Deploy spec | `compiled_workflow.json` | Nodes, edges, templates, bindings for engine |
 | Instance | `context_json` | `projectPath`, `pipelineProfile`, `samples[]`, … |
-| Task input | `resolvedConfig` | Merged action parameters at worker claim time |
+| Task input | `resolvedConfig` | Merged action parameters baked at instance configuration (`resolvedConfig__*` scope vars) |
 | Execution | Action catalog + `methyl_worker.handlers` | CLI / in-process dispatch |
-| Orchestration | DB engine + gateway **or** `LocalWorkflowEngine` | Graph scheduling |
+| Orchestration | DB engine + agnostic gateway **or** `LocalWorkflowEngine` | Graph scheduling; gateway does not resolve config at claim |
 
 **Storage rule:** DomainPrograms, profiles, and schemas live in the **git repository**. Study manifests (`project_*.json`), sample CSVs, and run artifacts live on **`/work/<disease>/`**.
 

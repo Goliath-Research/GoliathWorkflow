@@ -203,6 +203,7 @@ def _action_template(entry, step: ActionStep) -> Dict[str, Any]:
     template["projectPath"] = "${var.projectPath}"
     if entry.action_config_key:
         template["project"] = "${var.projectPath}"
+        template["resolvedConfig"] = f"${{var.resolvedConfig__{entry.action_config_key}}}"
     for ctx_var in entry.context_vars:
         template[ctx_var] = f"${{var.{ctx_var}}}"
 

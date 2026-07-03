@@ -1,4 +1,4 @@
-"""Tests for study lifecycle workflow registration helpers."""
+"""Tests for study lifecycle admin helpers."""
 
 from __future__ import annotations
 
@@ -6,15 +6,13 @@ import json
 import sys
 from pathlib import Path
 
-_REST = Path(__file__).resolve().parents[1] / "rest"
 _DOMAIN = Path(__file__).resolve().parents[1] / "domain"
-for _p in (_REST, _DOMAIN):
-    if str(_p) not in sys.path:
-        sys.path.insert(0, str(_p))
+if str(_DOMAIN) not in sys.path:
+    sys.path.insert(0, str(_DOMAIN))
 
 from study_lifecycle import (  # noqa: E402
     _apply_project_path_scope_default,
-    _compile_program_spec,
+    compile_program_spec,
 )
 
 
@@ -57,7 +55,7 @@ def test_compile_program_spec_pins_body_project_path(tmp_path: Path) -> None:
         encoding="utf-8",
     )
 
-    spec = _compile_program_spec(program_path, project_path=str(project_in_body))
+    spec = compile_program_spec(program_path, project_path=str(project_in_body))
     project_default = next(
         item for item in spec["scope_defaults"] if item["var_name"] == "projectPath"
     )

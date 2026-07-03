@@ -339,11 +339,27 @@ SELECT @deleted_instance_count AS deleted_instance_count,
         action_name: str,
         capability: Optional[str],
         payload_schema_ref: Optional[str] = None,
+        *,
+        execution_mode: Optional[str] = None,
+        cli_tool: Optional[str] = None,
+        in_process_handler: Optional[str] = None,
+        argv_map: Optional[dict[str, Any]] = None,
     ) -> None:
         self._exec_proc(
+            f"{_declare_json('argv')}"
             f"EXEC {self._qual('wf_repo_upsert_workflow_action')} "
-            "@action_name=?, @capability=?, @payload_schema_ref=?",
-            (action_name, capability, payload_schema_ref),
+            "@action_name=?, @capability=?, @payload_schema_ref=?, "
+            "@execution_mode=?, @cli_tool=?, @in_process_handler=?, "
+            f"@argv_map={_json_var('argv')}",
+            (
+                _json_text(argv_map),
+                action_name,
+                capability,
+                payload_schema_ref,
+                execution_mode,
+                cli_tool,
+                in_process_handler,
+            ),
         )
 
     def upsert_action_schema(

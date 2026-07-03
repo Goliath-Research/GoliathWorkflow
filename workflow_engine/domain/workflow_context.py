@@ -2,8 +2,9 @@
 WorkflowContext contract: how instance parameters become per-action input_json.
 
 Parameter derivation lives in planners + SQL engine (templates, scope, bindings).
-Workers receive fully resolved payloads only; this module supports planners, tests,
-and instance-context enrichment before POST /v1/workflows/instances.
+Workers receive fully resolved payloads from the DB read-path when instances are
+configured with ``finalize_instance_context`` (``resolvedConfig__*`` scope vars).
+This module supports planners, admin CLI, tests, and ``LocalWorkflowEngine``.
 """
 
 from __future__ import annotations
@@ -268,6 +269,63 @@ def action_input_spec_for(action_name: str) -> Optional[ActionInputSpec]:
         required_keys=sorted(set(required)),
         optional_keys=optional,
     )
+
+
+def resolved_config_scope_var_name(action_config_key: str) -> str:
+    """Scope variable name for a pre-resolved actionConfig slice at instance start."""
+    return f"resolvedConfig__{action_config_key}"
+
+
+def build_resolved_config_scope_vars(context: Mapping[str, Any]) -> Dict[str, Any]:
+    """
+    Resolve each actionConfig key once at instance configuration time.
+
+    Flattened scope vars (``resolvedConfig__<key>``) are stored in context_json so
+    the SQL engine can bind ``${var.resolvedConfig__*}`` in action input templates
+    without gateway-side materialization at task claim.
+    """
+    import sys
+    from pathlib import Path as _Path
+
+    workers = _Path(__file__).resolve().parents[2] / "workers"
+    if str(workers) not in sys.path:
+        sys.path.insert(0, str(workers))
+
+    from methyl_worker.action_catalog import ACTION_CATALOG
+    from methyl_utils.action_config_resolver import resolve_action_config
+
+    ac = context.get("actionConfig")
+    profile_ac = dict(ac) if isinstance(ac, dict) else {}
+    site = context.get("siteConfig") if isinstance(context.get("siteConfig"), dict) else {}
+    reg = context.get("regulatory") if isinstance(context.get("regulatory"), dict) else {}
+
+    keys: Set[str] = set(profile_ac.keys())
+    for entry in ACTION_CATALOG:
+        if entry.action_config_key:
+            keys.add(entry.action_config_key)
+
+    out: Dict[str, Any] = {}
+    for key in sorted(keys):
+        out[resolved_config_scope_var_name(key)] = resolve_action_config(
+            key,
+            site=site,
+            profile_action_config=profile_ac,
+            program_override=None,
+            regulatory=reg,
+        )
+    return out
+
+
+def finalize_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Enrich instance context and bake resolvedConfig scope vars for DB-backed runs.
+
+    Call before ``create_workflow_instance`` when the workflow engine will resolve
+    action input templates from scope (distributed path).
+    """
+    out = enrich_instance_context(context)
+    out.update(build_resolved_config_scope_vars(out))
+    return out
 
 
 def materialize_action_input(

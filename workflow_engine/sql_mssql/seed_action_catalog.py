@@ -132,6 +132,10 @@ def _seed_via_gateway() -> tuple[int, int]:
                 str(action["action_name"]),
                 str(action.get("capability") or "") or None,
                 str(action.get("schema_id") or action["action_name"]),
+                execution_mode=action.get("execution_mode"),
+                cli_tool=action.get("cli_tool"),
+                in_process_handler=action.get("in_process_handler"),
+                argv_map=action.get("argv_map") if isinstance(action.get("argv_map"), dict) else None,
             )
             action_count += 1
             print(f"Upserted action {action['action_name']}")

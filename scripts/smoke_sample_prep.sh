@@ -1,5 +1,5 @@
 #!/bin/bash
-# Smoke test: SamplePrepPipeline only via POST /v1/studies/sample-prep/start.
+# Smoke test: SamplePrepPipeline via methyl-study-start (admin CLI, not gateway domain routes).
 
 set -euo pipefail
 
@@ -8,7 +8,7 @@ usage() {
 Usage: scripts/smoke_sample_prep.sh [options]
 
 Options:
-  --api-base URL       Gateway base (default: WORKER_API_BASE)
+  --api-base URL       Gateway base for instance polling (default: WORKER_API_BASE)
   --run-root PATH      Smoke fixture root (default: .smoke/sample_prep under repo)
   --poll-seconds N     Instance poll interval (default: 5)
   --timeout SEC        Max wait per instance (default: 600)
@@ -56,11 +56,12 @@ fi
 
 SMOKE_RUN_ROOT="$RUN_ROOT" bash "$SCRIPT_DIR/bootstrap_sample_prep_smoke_fixtures.sh" --run-root "$RUN_ROOT" --sample-id "$SAMPLE_ID"
 
-"$PYTHON_BIN" - <<'PY' "$API_BASE" "$RUN_ROOT" "$VERSIONS_FILE" "$POLL" "$TIMEOUT" "$REMEDIATION" "$SAMPLE_ID"
+"$PYTHON_BIN" - <<'PY' "$API_BASE" "$RUN_ROOT" "$VERSIONS_FILE" "$POLL" "$TIMEOUT" "$REMEDIATION" "$SAMPLE_ID" "$REPO_ROOT"
 import json
+import os
+import subprocess
 import sys
 import time
-import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -71,6 +72,8 @@ poll = int(sys.argv[4])
 timeout = int(sys.argv[5])
 remediation = int(sys.argv[6])
 sample_id = sys.argv[7]
+repo_root = Path(sys.argv[8])
+study_start = repo_root / "workflow_engine" / "study_start.py"
 
 project_path = run_root / "project.json"
 
@@ -131,7 +134,18 @@ body = {
 if remediation:
     print("note: --remediation not yet implemented; running default pass-path smoke")
 
-started = request("POST", "/v1/studies/sample-prep/start", body)
+body_json = json.dumps(body)
+proc = subprocess.run(
+    [sys.executable, str(study_start), "sample-prep-start", "-"],
+    input=body_json,
+    capture_output=True,
+    text=True,
+    cwd=str(repo_root),
+    env=os.environ.copy(),
+)
+if proc.returncode != 0:
+    raise SystemExit(f"methyl-study-start failed: {proc.stderr or proc.stdout}")
+started = json.loads(proc.stdout)
 instance_id = int(started["instance_id"])
 print(json.dumps({"planned_samples": started.get("n_samples"), "context_samples": len(started.get("context_json", {}).get("samples", []))}, indent=2))
 

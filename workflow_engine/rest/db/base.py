@@ -119,6 +119,11 @@ class GatewayDb(Protocol):
         action_name: str,
         capability: Optional[str],
         payload_schema_ref: Optional[str] = None,
+        *,
+        execution_mode: Optional[str] = None,
+        cli_tool: Optional[str] = None,
+        in_process_handler: Optional[str] = None,
+        argv_map: Optional[dict[str, Any]] = None,
     ) -> None: ...
 
     def upsert_action_schema(
@@ -244,6 +249,11 @@ class GatewayDbBase(ABC):
         action_name: str,
         capability: Optional[str],
         payload_schema_ref: Optional[str] = None,
+        *,
+        execution_mode: Optional[str] = None,
+        cli_tool: Optional[str] = None,
+        in_process_handler: Optional[str] = None,
+        argv_map: Optional[dict[str, Any]] = None,
     ) -> None: ...
 
     @abstractmethod
@@ -281,6 +291,10 @@ class GatewayDbBase(ABC):
             "capability": row.get("capability"),
             "has_input_schema": bool(row.get("has_input_schema")),
             "has_output_schema": bool(row.get("has_output_schema")),
+            "execution_mode": row.get("execution_mode"),
+            "cli_tool": row.get("cli_tool"),
+            "in_process_handler": row.get("in_process_handler"),
+            "argv_map": parse_json_value(row.get("argv_map")),
         }
 
     def _format_schema_row(self, row: dict[str, Any]) -> dict[str, Any]:
