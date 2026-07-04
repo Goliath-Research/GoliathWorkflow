@@ -2839,6 +2839,100 @@
       "description": "For model_backend=generative_hybrid: random seed.",
       "title": "Generative Seed"
     },
+    "holdout_ci": {
+      "anyOf": [
+        {
+          "exclusiveMaximum": 1.0,
+          "exclusiveMinimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": 0.95,
+      "description": "Two-sided confidence level for bootstrap intervals on hold-out QC metrics.",
+      "title": "Holdout Ci"
+    },
+    "holdout_eval": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": false,
+      "description": "If True, run the true held-out batch evaluation (Workflow 3): score a frozen model on a designated hold-out partition (never used for training/selection) and bootstrap the QC metric distributions. Requires frozen_project_path (or the default monte_carlo_runs/production/project.json) and a populated validation_partitions hold-out role.",
+      "title": "Holdout Eval"
+    },
+    "holdout_exclude_from_training": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": true,
+      "description": "Preflight guard: fail --holdout-eval if hold-out samples also appear in the frozen model's training cohorts, which would invalidate the held-out claim.",
+      "title": "Holdout Exclude From Training"
+    },
+    "holdout_n_bootstrap": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": 1000,
+      "description": "Number of bootstrap resamples used to characterize hold-out QC metric distributions.",
+      "title": "Holdout N Bootstrap"
+    },
+    "holdout_partition": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": "locked_test",
+      "description": "Which validation_partitions role provides the held-out batch samples for --holdout-eval (e.g. locked_test, pivotal_validation, post_market_monitoring).",
+      "title": "Holdout Partition"
+    },
+    "holdout_seed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Random seed for hold-out bootstrap resampling (None = nondeterministic).",
+      "title": "Holdout Seed"
+    },
+    "holdout_stratified": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": true,
+      "description": "Resample within each class (stratified bootstrap) so class proportions are preserved.",
+      "title": "Holdout Stratified"
+    },
     "mapper_annotation_collapse_mode": {
       "anyOf": [
         {

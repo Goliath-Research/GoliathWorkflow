@@ -322,6 +322,72 @@ After all iterations, the same aggregation as Workflow 1 produces `all_metrics.c
 
 ---
 
+## Workflow 3: True Held-Out Batch Evaluation {#sec-workflow-holdout}
+
+### Theoretical Motivation
+
+Workflow 2 answers "how stable is the frozen model across random holdouts drawn from the available cohort?", but its holdouts overlap the training centroid, so it is not a hold-out evaluation in the classical sense (@sec-workflow-prediction). Workflow 3 closes that gap: it evaluates the frozen production model on a **designated batch of samples that were never used for training or model selection**, and characterizes the *sampling distribution* of the quality metrics by bootstrap.
+
+This is the same reporting philosophy used by MethylIT [@sanchez2019clinical], which evaluates classifier performance with Monte Carlo resampling and reports each indicator with bootstrap confidence intervals rather than a single point estimate.
+
+### Designating the Held-Out Batch
+
+Held-out samples are declared through the `validation_partitions` contract in profile/project `actionConfig.validation` (the same object used for lifecycle governance). The default hold-out role is `locked_test`; `holdout_partition` selects a different role (for example `pivotal_validation` or `post_market_monitoring`):
+
+```json
+"actionConfig": {
+  "validation": {
+    "validation_partitions": {
+      "locked_test": ["batch7/S001", "batch7/S002", "batch7/S003"]
+    },
+    "holdout_partition": "locked_test",
+    "holdout_n_bootstrap": 1000,
+    "holdout_ci": 0.95,
+    "holdout_stratified": true
+  }
+}
+```
+
+The partition contract already validates that hold-out samples do not overlap `development_train` at config-parse time. The held-out samples must also appear in the project's control/disease cohorts (with their true labels) so that each hold-out sample can be assigned a class for labeled metrics.
+
+### Disjointness Guarantee (Exclusion at Freeze)
+
+For the held-out claim to be valid, the frozen model must not have been trained on the hold-out samples. When `holdout_exclude_from_training=true` (default), the `--freeze` step filters the hold-out samples out of the production cohort list files before building centroids/detector/classifier, and records the excluded set in `monte_carlo_runs/production/holdout_manifest.json`. Workflow 3 preflights that manifest and refuses to run if any current hold-out sample was not excluded, so a false held-out claim cannot be produced silently.
+
+### Bootstrap Distribution of QC Metrics
+
+The frozen model scores the hold-out batch **once** (a single `methyl-predictor` pass), producing per-sample true labels, predictions, and class probabilities. The per-sample results are then resampled (stratified by class by default) `holdout_n_bootstrap` times. For each resample the following are recomputed:
+
+- balanced accuracy, sensitivity, specificity, $F_1$, ROC-AUC (binary), or
+- balanced accuracy, macro recall, macro specificity, macro $F_1$, macro one-vs-rest AUC, plus control-vs-pooled-disease screening sensitivity/specificity/$F_1$/AUC (multiclass).
+
+Each metric is summarized by its mean, standard deviation, two-sided bootstrap confidence interval at level `holdout_ci`, and percentiles. ROC-AUC is reported as NaN (and excluded from a summary) for any resample in which only one class is present.
+
+### Steps
+
+```bash
+source .venv/bin/activate
+# 1. Build the frozen model with hold-out excluded from training:
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --stability
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --freeze
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --model
+# 2. Evaluate the frozen model on the designated hold-out batch:
+methyl-validation --project configs/project_Healthy_vs_PCa1-4-CG.json --holdout-eval
+```
+
+Outputs under `monte_carlo_runs/holdout_batch/`:
+
+- `holdout_metrics_bootstrap.json` — point estimate plus per-metric distribution summary,
+- `holdout_metrics_distribution.csv` — one row per bootstrap resample (for custom plots),
+- `holdout_metrics_distribution.html` — KDE/ECDF of each metric,
+- `predictor/` — the raw per-sample predictions and `validation_metrics.json`.
+
+### Caveat
+
+Bootstrapping characterizes uncertainty due to the finite size and composition of the *provided* hold-out batch. It is not a substitute for prospective external validation on an independent population; it quantifies how much the reported metrics would vary if the same held-out batch had been sampled slightly differently.
+
+---
+
 ## Diagnostic: DMP Coverage {#sec-diag-dmp-coverage}
 
 **Symptom.** `sample_dmp_coverage.dmps_used_fraction_median < 0.5` in `validation_metrics.json`. Values below 0.3 indicate severe degradation.

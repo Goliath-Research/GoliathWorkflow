@@ -2714,6 +2714,58 @@
       "description": "Legacy: CSV listing control/healthy samples. Use with disease_csv, or use cohorts instead.",
       "title": "Healthy Csv"
     },
+    "holdout_ci": {
+      "default": 0.95,
+      "description": "Two-sided confidence level for bootstrap intervals on hold-out QC metrics.",
+      "exclusiveMaximum": 1.0,
+      "exclusiveMinimum": 0.0,
+      "title": "Holdout Ci",
+      "type": "number"
+    },
+    "holdout_eval": {
+      "default": false,
+      "description": "If True, run the true held-out batch evaluation (Workflow 3): score a frozen model on a designated hold-out partition (never used for training/selection) and bootstrap the QC metric distributions. Requires frozen_project_path (or the default monte_carlo_runs/production/project.json) and a populated validation_partitions hold-out role.",
+      "title": "Holdout Eval",
+      "type": "boolean"
+    },
+    "holdout_exclude_from_training": {
+      "default": true,
+      "description": "Preflight guard: fail --holdout-eval if hold-out samples also appear in the frozen model's training cohorts, which would invalidate the held-out claim.",
+      "title": "Holdout Exclude From Training",
+      "type": "boolean"
+    },
+    "holdout_n_bootstrap": {
+      "default": 1000,
+      "description": "Number of bootstrap resamples used to characterize hold-out QC metric distributions.",
+      "minimum": 1,
+      "title": "Holdout N Bootstrap",
+      "type": "integer"
+    },
+    "holdout_partition": {
+      "default": "locked_test",
+      "description": "Which validation_partitions role provides the held-out batch samples for --holdout-eval (e.g. locked_test, pivotal_validation, post_market_monitoring).",
+      "title": "Holdout Partition",
+      "type": "string"
+    },
+    "holdout_seed": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Random seed for hold-out bootstrap resampling (None = nondeterministic).",
+      "title": "Holdout Seed"
+    },
+    "holdout_stratified": {
+      "default": true,
+      "description": "Resample within each class (stratified bootstrap) so class proportions are preserved.",
+      "title": "Holdout Stratified",
+      "type": "boolean"
+    },
     "mapper_annotation_collapse_mode": {
       "default": "priority",
       "description": "How to collapse multi-feature mapper intersections to one row per locus in mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) or weight (legacy highest combined_weight wins).",

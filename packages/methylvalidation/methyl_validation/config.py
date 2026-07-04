@@ -1199,6 +1199,49 @@ class MonteCarloConfig(BaseModel):
         default=None,
         description="project.json from --freeze production build; merged into each run for predictor_only mode.",
     )
+    holdout_eval: bool = Field(
+        default=False,
+        description=(
+            "If True, run the true held-out batch evaluation (Workflow 3): score a frozen model "
+            "on a designated hold-out partition (never used for training/selection) and bootstrap "
+            "the QC metric distributions. Requires frozen_project_path (or the default "
+            "monte_carlo_runs/production/project.json) and a populated validation_partitions "
+            "hold-out role."
+        ),
+    )
+    holdout_partition: str = Field(
+        default="locked_test",
+        description=(
+            "Which validation_partitions role provides the held-out batch samples for --holdout-eval "
+            "(e.g. locked_test, pivotal_validation, post_market_monitoring)."
+        ),
+    )
+    holdout_n_bootstrap: int = Field(
+        default=1000,
+        ge=1,
+        description="Number of bootstrap resamples used to characterize hold-out QC metric distributions.",
+    )
+    holdout_ci: float = Field(
+        default=0.95,
+        gt=0.0,
+        lt=1.0,
+        description="Two-sided confidence level for bootstrap intervals on hold-out QC metrics.",
+    )
+    holdout_seed: Optional[int] = Field(
+        default=None,
+        description="Random seed for hold-out bootstrap resampling (None = nondeterministic).",
+    )
+    holdout_stratified: bool = Field(
+        default=True,
+        description="Resample within each class (stratified bootstrap) so class proportions are preserved.",
+    )
+    holdout_exclude_from_training: bool = Field(
+        default=True,
+        description=(
+            "Preflight guard: fail --holdout-eval if hold-out samples also appear in the frozen "
+            "model's training cohorts, which would invalidate the held-out claim."
+        ),
+    )
     require_biological_review_for_model: bool = Field(
         default=False,
         description=(

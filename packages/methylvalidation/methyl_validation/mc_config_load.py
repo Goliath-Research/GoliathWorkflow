@@ -225,6 +225,16 @@ def apply_monte_carlo_config_overrides(
         config = config.model_copy(update={"skip_enricher": True})
     if getattr(args, "predictor_only", None):
         config = config.model_copy(update={"predictor_only": True})
+    if getattr(args, "holdout_eval", None):
+        config = config.model_copy(update={"holdout_eval": True})
+    if getattr(args, "holdout_partition", None):
+        config = config.model_copy(update={"holdout_partition": str(args.holdout_partition)})
+    if getattr(args, "holdout_n_bootstrap", None) is not None:
+        config = config.model_copy(update={"holdout_n_bootstrap": int(args.holdout_n_bootstrap)})
+    if getattr(args, "holdout_ci", None) is not None:
+        config = config.model_copy(update={"holdout_ci": float(args.holdout_ci)})
+    if getattr(args, "holdout_seed", None) is not None:
+        config = config.model_copy(update={"holdout_seed": int(args.holdout_seed)})
 
     validate_stability_gene_biomarker_config(config)
 

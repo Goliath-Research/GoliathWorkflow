@@ -2177,6 +2177,37 @@ def freeze_production_model(
         config=config,
         stable_gene_csv=stability_gene_panel_path or stable_gene_csv,
     )
+
+    # True held-out batch support: keep hold-out samples out of the production training
+    # cohorts so the frozen model is genuinely disjoint from the evaluation batch.
+    if config is not None:
+        holdout_partition = str(getattr(config, "holdout_partition", "locked_test"))
+        partitions = getattr(config, "validation_partitions", None)
+        holdout_paths = (
+            list(getattr(partitions, holdout_partition, []) or []) if partitions is not None else []
+        )
+        if holdout_paths and bool(getattr(config, "holdout_exclude_from_training", True)):
+            from .holdout_eval import (
+                apply_holdout_exclusion_to_project_dict,
+                write_holdout_manifest,
+            )
+
+            holdout_basenames = {Path(str(p)).name for p in holdout_paths}
+            excluded = apply_holdout_exclusion_to_project_dict(
+                project_dict, holdout_basenames, prod_dir
+            )
+            write_holdout_manifest(
+                prod_dir,
+                partition=holdout_partition,
+                holdout_paths=holdout_paths,
+                excluded=excluded,
+            )
+            logger.info(
+                "Held-out batch (%s): excluded %d sample(s) from production training cohorts.",
+                holdout_partition,
+                len(excluded),
+            )
+
     with open(prod_project_path, "w", encoding="utf-8") as f:
         json.dump(project_dict, f, indent=2)
 

@@ -1869,6 +1869,41 @@ def main() -> None:
         action="store_true",
         help="Each iteration runs only methyl-predictor on MC holdouts; use frozen_project_path or monte_carlo_runs/production/project.json.",
     )
+    parser.add_argument(
+        "--holdout-eval",
+        action="store_true",
+        help=(
+            "True held-out batch evaluation (Workflow 3): score the frozen model once on a "
+            "validation_partitions hold-out role and bootstrap the QC metric distributions. "
+            "One-shot; not a Monte Carlo loop."
+        ),
+    )
+    parser.add_argument(
+        "--holdout-partition",
+        default=None,
+        help="validation_partitions role providing hold-out samples (default: config holdout_partition / locked_test).",
+    )
+    parser.add_argument(
+        "--holdout-n-bootstrap",
+        type=int,
+        default=None,
+        metavar="B",
+        help="Bootstrap resamples for hold-out QC metric distributions (default: config / 1000).",
+    )
+    parser.add_argument(
+        "--holdout-ci",
+        type=float,
+        default=None,
+        metavar="C",
+        help="Confidence level for hold-out bootstrap intervals (default: config / 0.95).",
+    )
+    parser.add_argument(
+        "--holdout-seed",
+        type=int,
+        default=None,
+        metavar="S",
+        help="Random seed for hold-out bootstrap resampling.",
+    )
     args = parser.parse_args()
 
     config, _ = load_monte_carlo_config(args, parser)
@@ -2001,6 +2036,30 @@ def main() -> None:
         print(f"Error: frozen_project_path not found: {config.frozen_project_path}", file=sys.stderr)
         sys.exit(1)
 
+    if config.holdout_eval and (
+        args.freeze or args.model or args.model_mc or args.post_model_validation
+        or args.select_best_model or config.predictor_only
+    ):
+        print(
+            "Error: --holdout-eval cannot be combined with "
+            "--freeze/--model/--model-mc/--post-model-validation/--select-best-model/--predictor-only.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if config.holdout_eval and not config.frozen_project_path:
+        default_frozen = monte_carlo_runs_root / "production" / "project.json"
+        if default_frozen.is_file():
+            config.frozen_project_path = str(default_frozen)
+    if config.holdout_eval and (
+        not config.frozen_project_path or not Path(config.frozen_project_path).is_file()
+    ):
+        print(
+            "Error: --holdout-eval requires a frozen production model. Set frozen_project_path or run "
+            f"--freeze/--model so {monte_carlo_runs_root / 'production' / 'project.json'} exists.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     try:
         assert_validation_predictor_accuracy_mode(
             resolve_for_project("predictor", base_project_config)
@@ -2031,6 +2090,39 @@ def main() -> None:
             )
             sys.exit(1)
         print(f"Production freeze complete. See: {out}")
+        print("Done.")
+        return
+    elif config.holdout_eval:
+        from .holdout_eval import run_holdout_evaluation
+
+        holdout_out = monte_carlo_runs_root / "holdout_batch"
+        print(
+            f"Running held-out batch evaluation (partition={config.holdout_partition}) "
+            f"against frozen model: {config.frozen_project_path}"
+        )
+        try:
+            result = run_holdout_evaluation(
+                config=config,
+                frozen_project_path=Path(config.frozen_project_path),
+                output_dir=holdout_out,
+            )
+        except (ValueError, RuntimeError) as e:
+            print(f"Error: held-out evaluation failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        point = result.get("point", {})
+        print(
+            f"Held-out batch: n={result.get('n_samples')} samples, "
+            f"{result.get('n_bootstrap')} bootstraps, CI={result.get('ci_level')}"
+        )
+        for key in result.get("metric_keys", []):
+            b = result.get("bootstrap", {}).get(key, {})
+            if b.get("mean") is None:
+                continue
+            print(
+                f"  {key}: point={point.get(key)} "
+                f"mean={b['mean']:.4f} CI[{b['ci_low']:.4f}, {b['ci_high']:.4f}]"
+            )
+        print(f"Wrote: {result.get('outputs', {}).get('bootstrap_json')}")
         print("Done.")
         return
     elif args.model:
