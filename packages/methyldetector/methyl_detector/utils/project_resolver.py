@@ -130,6 +130,7 @@ def resolve_detector_config(
     output_base_override: Optional[Union[str, Path]] = None,
     centroid1_dir_override: Optional[Union[str, Path]] = None,
     centroid2_dir_override: Optional[Union[str, Path]] = None,
+    resolved_config_path: Optional[Union[str, Path]] = None,
 ) -> MethylDetectorConfig:
     """
     Build MethylDetectorConfig from a project config and optional step overrides.
@@ -166,28 +167,25 @@ def resolve_detector_config(
 
     _attach_samples_base(base, project)
 
-    # Apply project-level step config (detection) if present
-    step_cfg = filter_detection_config_for_detector(resolve_for_project("detection", project))
+    # Apply detection step config (worker path uses --resolved-config; standalone uses profile/env).
+    from methyl_utils.cli_resolved_config import resolve_cli_step_config
+
+    step_cfg = filter_detection_config_for_detector(
+        resolve_cli_step_config(
+            "detection",
+            project,
+            resolved_config_path=resolved_config_path,
+            step_override_path=step_override_path,
+        )
+    )
     if step_cfg:
         for k, v in step_cfg.items():
             base[k] = v
-        # Restore comparison-based structure so step_config cannot override it
         if project.uses_control_disease() and len(project.get_comparisons()) == 1:
             spec = project.get_comparisons()[0]
             base["output_dir"] = project.get_detection_output_dir(spec.control_group, spec.disease_group)
 
-    if step_override_path is not None:
-        with open(step_override_path) as f:
-            overrides = json.load(f)
-        overrides = filter_detection_config_for_detector(overrides)
-        for k, v in overrides.items():
-            base[k] = v
-        # Keep comparison-based structure: detections/<control_group>/<disease_group>
-        if project.uses_control_disease() and len(project.get_comparisons()) == 1:
-            spec = project.get_comparisons()[0]
-            base["output_dir"] = project.get_detection_output_dir(spec.control_group, spec.disease_group)
-
-    # CLI overrides for centroid dirs (apply after step_override so they take precedence)
+    # CLI overrides for centroid dirs (apply after step config so they take precedence)
     if centroid1_dir_override is not None:
         base["centroid1_dir"] = str(centroid1_dir_override)
     if centroid2_dir_override is not None:

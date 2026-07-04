@@ -17,6 +17,7 @@ RUNTIME_INPUT_KEYS = frozenset({
     "workflowNodeKey",
     "actionConfig",
     "resolvedConfig",
+    "resolvedProject",
     "siteConfig",
     "siteConfigPath",
     "pipelineProfile",

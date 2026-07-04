@@ -48,6 +48,7 @@ DEFAULT_PIPELINE_ARGV_MAP: ArgvMap = (
     ("centroid1Dir", "--centroid1-dir"),
     ("centroid2Dir", "--centroid2-dir"),
     ("stepOverride", "--step-override"),
+    ("resolvedConfigPath", "--resolved-config"),
 )
 NodeType = Literal[
     "ACTION",
@@ -317,6 +318,11 @@ _DE_SELECT_BEST_MODEL = DomainEffects(
 _DE_VALIDATION = DomainEffects(
     reads_types=("StratifiedCohortDraw",),
     writes_types=("ValidationArtifactRef",),
+)
+_DE_RESOLVE_PROJECT = DomainEffects(
+    reads_types=("MethylGroup", "ComparisonSpec"),
+    writes_types=("ResolvedProject",),
+    scope_bindings=(("resolvedProject", "$.resolvedProject"),),
 )
 
 
@@ -650,6 +656,21 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-predictor",
         tool="MethylPredictor",
         action_config_key="predictor",
+    ),
+    _in_process(
+        "context.resolve_project",
+        "context.resolve-project",
+        "context.resolve_project",
+        "Materialize study manifest paths and cohorts into a typed ResolvedProject.",
+        "validation",
+        "methyl_worker.task_models.context_models",
+        "ResolveProjectTaskInput",
+        "methyl_worker.task_models.context_models",
+        "ResolveProjectTaskOutput",
+        in_process_handler="_handle_context_resolve_project",
+        tool="ContextResolveProject",
+        context_vars=("projectPath", "monteCarloRunsRoot", "cohortPathsList"),
+        domain_effects=_DE_RESOLVE_PROJECT,
     ),
     _in_process(
         "sample.download_fastq",

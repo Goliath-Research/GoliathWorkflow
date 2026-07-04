@@ -4,6 +4,7 @@
 |------|-------|--------|
 | **Workflow (canonical)** | `methyl-workflow-run`, `methyl-validation run-workflow` | Preferred |
 | Distributed workflow | `methyl-gateway` + `methyl-worker` | Production cluster (gateway = DB passthrough) |
+| Worker task input | `resolvedConfig` + optional `resolvedProject` | Baked at instance start; CLIs receive `--resolved-config` |
 | Study lifecycle (admin) | `methyl-study-start` | Compile/plan/start — not gateway domain routes |
 | Monolithic CLI | `methyl-validation --stability/--freeze/--model` | Legacy (`--legacy-orchestration`) |
 | File queue | `methyl-validation plan-runs` / `run-task` | Legacy distributed MC |

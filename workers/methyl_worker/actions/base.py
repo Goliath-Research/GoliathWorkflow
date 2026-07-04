@@ -151,6 +151,20 @@ class CliAction:
                     return str(val)
         raise RuntimeError("input_json missing project / projectPath")
 
+    def _materialize_resolved_config_path(self, input_json: Mapping[str, Any]) -> Optional[str]:
+        """Write task resolvedConfig slice to a temp JSON file for --resolved-config."""
+        resolved = input_json.get("resolvedConfig")
+        if not isinstance(resolved, dict) or not resolved:
+            return None
+        fd, path = tempfile.mkstemp(suffix=".json", prefix="resolved-config-")
+        try:
+            with open(fd, "w", encoding="utf-8") as f:
+                json.dump(resolved, f)
+        except Exception:
+            Path(path).unlink(missing_ok=True)
+            raise
+        return path
+
     def _argv_value(self, json_key: str, val: Any) -> Optional[str]:
         if val is None or val == "":
             return None
@@ -169,6 +183,9 @@ class CliAction:
 
     def build_argv(self, input_json: Mapping[str, Any]) -> List[str]:
         data = dict(input_json)
+        resolved_path = self._materialize_resolved_config_path(data)
+        if resolved_path is not None:
+            data["resolvedConfigPath"] = resolved_path
         cmd = [self.cli_tool]
         project_set = False
         step_override: Optional[Dict[str, Any]] = data.get("stepOverride")  # type: ignore[assignment]
@@ -385,4 +402,8 @@ def build_action_from_catalog(entry: ActionCatalogEntry, handlers_module: Any) -
         from .centroid import CentroidCliAction
 
         return CentroidCliAction(entry=entry, cli_tool=cli, argv_map=argv_map, collector=collector)
+    if entry.action_name == "pipeline.enricher":
+        from .enricher import ENRICHER_ARGV_MAP, EnricherCliAction
+
+        return EnricherCliAction(entry=entry, cli_tool=cli, argv_map=ENRICHER_ARGV_MAP, collector=collector)
     return CliAction(entry=entry, cli_tool=cli, argv_map=argv_map, collector=collector)

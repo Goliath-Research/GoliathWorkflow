@@ -1036,6 +1036,7 @@ def resolve_predictor_config(
     output_dir: Optional[Union[str, Path]] = None,
     test_control_paths: Optional[List[str]] = None,
     test_disease_paths: Optional[List[str]] = None,
+    resolved_config_path: Optional[Union[str, Path]] = None,
 ) -> PredictorConfig:
     """
     Build a single PredictorConfig from project (non-comparison / flat layout).
@@ -1046,9 +1047,18 @@ def resolve_predictor_config(
     Optional CLI override: when both ``test_control_paths`` and ``test_disease_paths`` are passed,
     they are expanded as flat lists (no nested report shape).
     """
+    from methyl_utils.cli_resolved_config import resolve_cli_step_config
+
     project = load_project(project_path)
-    step_cfg = (resolve_for_project("predictor", project)).copy()
-    if not step_cfg:
+    step_cfg = dict(
+        resolve_cli_step_config(
+            "predictor",
+            project,
+            resolved_config_path=resolved_config_path,
+            step_override_path=step_override_path,
+        )
+    )
+    if not step_cfg and resolved_config_path in (None, ""):
         legacy_validator = (resolve_for_project("validator", project)).copy()
         if legacy_validator:
             warnings.warn(
@@ -1057,13 +1067,15 @@ def resolve_predictor_config(
                 stacklevel=2,
             )
             step_cfg = legacy_validator
-    classifier_step = resolve_for_project("classifier", project)
-    if step_override_path is not None:
-        override_path = Path(step_override_path)
-        if override_path.exists():
-            with open(override_path) as f:
-                overrides = json.load(f)
-            step_cfg = {**step_cfg, **overrides}
+    classifier_step = (
+        resolve_cli_step_config(
+            "classifier",
+            project,
+            resolved_config_path=resolved_config_path,
+        )
+        if resolved_config_path not in (None, "")
+        else resolve_for_project("classifier", project)
+    )
 
     paths = project.get_derived_paths()
     model_path = step_cfg.get("model_path") or classifier_step.get("save_classifier_path")

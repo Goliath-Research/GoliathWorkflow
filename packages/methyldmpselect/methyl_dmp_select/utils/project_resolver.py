@@ -60,41 +60,49 @@ def resolve_dmp_selection_config(
     chromosome: Optional[str] = None,
     step_override_path: Optional[Union[str, Path]] = None,
     output_base_override: Optional[Union[str, Path]] = None,
+    resolved_config_path: Optional[Union[str, Path]] = None,
 ) -> DmpSelectionConfig:
     project = load_project(
         project_path,
         output_base_override=str(output_base_override) if output_base_override else None,
     )
-    step_cfg: Dict[str, Any] = dict(resolve_for_project("dmp_selection", project))
-    det_cfg: Dict[str, Any] = dict(resolve_for_project("detection", project))
-    for legacy_key in (
-        "classifier_dmp_selection",
-        "target_balanced_accuracy",
-        "featurecuts_max_k_cap",
-        "featurecuts_exhaustive_search",
-        "featurecuts_max_candidates",
-        "min_core_dmps",
-        "min_selected_dmps",
-        "classifier_export_margin_pct",
-        "classifier_export_margin_abs",
-        "classifier_export_max_dmps",
-        "dynamic_dmp_cutoff_enabled",
-        "dynamic_dmp_cutoff_relaxation",
-        "validation_split_ratio",
-        "validation_n_repeats",
-        "temperature",
-        "centroid1_validation_samples",
-        "centroid2_validation_samples",
-        "validation_samples_base_path",
-        "random_state",
-        "min_dmps_for_export",
-        "dmp_export_mode",
-    ):
-        if legacy_key not in step_cfg and legacy_key in det_cfg:
-            step_cfg[legacy_key] = det_cfg[legacy_key]
-    if step_override_path:
-        with open(step_override_path, encoding="utf-8") as f:
-            step_cfg = {**step_cfg, **json.load(f)}
+    from methyl_utils.cli_resolved_config import resolve_cli_step_config
+
+    step_cfg: Dict[str, Any] = dict(
+        resolve_cli_step_config(
+            "dmp_selection",
+            project,
+            resolved_config_path=resolved_config_path,
+            step_override_path=step_override_path,
+        )
+    )
+    if resolved_config_path in (None, ""):
+        det_cfg: Dict[str, Any] = dict(resolve_for_project("detection", project))
+        for legacy_key in (
+            "classifier_dmp_selection",
+            "target_balanced_accuracy",
+            "featurecuts_max_k_cap",
+            "featurecuts_exhaustive_search",
+            "featurecuts_max_candidates",
+            "min_core_dmps",
+            "min_selected_dmps",
+            "classifier_export_margin_pct",
+            "classifier_export_margin_abs",
+            "classifier_export_max_dmps",
+            "dynamic_dmp_cutoff_enabled",
+            "dynamic_dmp_cutoff_relaxation",
+            "validation_split_ratio",
+            "validation_n_repeats",
+            "temperature",
+            "centroid1_validation_samples",
+            "centroid2_validation_samples",
+            "validation_samples_base_path",
+            "random_state",
+            "min_dmps_for_export",
+            "dmp_export_mode",
+        ):
+            if legacy_key not in step_cfg and legacy_key in det_cfg:
+                step_cfg[legacy_key] = det_cfg[legacy_key]
 
     _ctrl, _dis, c1_dir, c2_dir, out_dir = _comparison_dirs(project, comparison)
     chromosomes = project.chromosomes or ["1"]

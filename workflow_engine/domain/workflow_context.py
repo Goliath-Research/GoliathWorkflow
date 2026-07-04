@@ -328,6 +328,65 @@ def finalize_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _match_resolved_comparison(
+    resolved_project: Mapping[str, Any],
+    *,
+    comparison: Optional[str] = None,
+    group: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    comparisons = resolved_project.get("comparisons")
+    if not isinstance(comparisons, list) or not comparisons:
+        return None
+    token = comparison or group
+    if token in (None, ""):
+        first = comparisons[0]
+        return dict(first) if isinstance(first, dict) else None
+    token_str = str(token)
+    for item in comparisons:
+        if not isinstance(item, dict):
+            continue
+        if token_str in {
+            str(item.get("label") or ""),
+            str(item.get("comparisonLabel") or ""),
+            str(item.get("diseaseGroup") or ""),
+        }:
+            return dict(item)
+    return None
+
+
+def bind_resolved_project_paths(
+    input_json: Dict[str, Any],
+    scope: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Inject concrete artifact dirs from scope ``resolvedProject`` when templates omit them."""
+    rp = scope.get("resolvedProject")
+    if not isinstance(rp, dict):
+        return input_json
+    cmp = _match_resolved_comparison(
+        rp,
+        comparison=input_json.get("comparison") if isinstance(input_json.get("comparison"), str) else None,
+        group=input_json.get("group") if isinstance(input_json.get("group"), str) else None,
+    )
+    if cmp is None:
+        return input_json
+    out = dict(input_json)
+    action_name = str(out.get("tool") or "")
+    if not out.get("centroid1Dir") and cmp.get("centroid1Dir"):
+        out["centroid1Dir"] = cmp["centroid1Dir"]
+    if not out.get("centroid2Dir") and cmp.get("centroid2Dir"):
+        out["centroid2Dir"] = cmp["centroid2Dir"]
+    if not out.get("outputDir"):
+        if "MethylDetector" in action_name or out.get("discoveryCsv"):
+            out["outputDir"] = cmp.get("detectOutDir")
+        elif "MethylMapper" in action_name:
+            out["outputDir"] = cmp.get("mapperOutDir")
+        elif "MethylEnricher" in action_name:
+            out["outputDir"] = cmp.get("enricherOutDir")
+        elif "MethylClassifier" in action_name:
+            out["outputDir"] = cmp.get("classifierOutDir") or cmp.get("detectOutDir")
+    return out
+
+
 def materialize_action_input(
     input_json: Dict[str, Any],
     action_name: str,
@@ -346,9 +405,9 @@ def materialize_action_input(
 
     entry = find_catalog_entry(action_name)
     if entry is None or not entry.action_config_key:
-        return input_json
+        return bind_resolved_project_paths(input_json, scope)
 
-    out = dict(input_json)
+    out = bind_resolved_project_paths(dict(input_json), scope)
     if isinstance(out.get("resolvedConfig"), dict):
         return out
 

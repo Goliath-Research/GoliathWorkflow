@@ -13,7 +13,6 @@ from .enricher import (
     LIBRARY_PRESETS,
     resolve_enrichr_libraries,
 )
-from methyl_utils.action_config_resolver import resolve_for_project
 from .module_pipeline import run_cisbp_only, run_module_pipeline, run_ppi_hubs_only
 from .queue_cli import QUEUE_SUBCOMMANDS, main_queue
 
@@ -168,6 +167,9 @@ For theory and package documentation, see:
         metavar='JSON',
         help='Optional JSON overrides for enricher step when using --project (e.g. input, output_dir)'
     )
+    from methyl_utils.cli_resolved_config import add_resolved_config_argument
+
+    add_resolved_config_argument(io_group, help_suffix="(enricher actionConfig slice)")
     
     # Enrichment parameters
     enrich_group = parser.add_argument_group('Enrichment Parameters')
@@ -702,7 +704,14 @@ def main():
             print(f"[ERROR] Project config not found: {project_path}")
             sys.exit(1)
         project = load_project(project_path)
-        step_cfg = resolve_for_project("enricher", project)
+        from methyl_utils.cli_resolved_config import resolve_cli_step_config
+
+        step_cfg = resolve_cli_step_config(
+            "enricher",
+            project,
+            resolved_config_path=getattr(args, "resolved_config", None),
+            step_override_path=args.step_override,
+        )
         if step_cfg:
             enricher_config = EnricherStepConfig.model_validate(step_cfg)
             _apply_enricher_config_to_args(args, enricher_config)

@@ -300,6 +300,35 @@ def _handle_methyl_fragmentomics(
     )
 
 
+def _handle_context_resolve_project(
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime: TaskRuntimeContext,
+):
+    from methyl_domain.helpers import build_resolved_project
+    from methyl_domain.types import to_tagged_json
+
+    from .task_models.context_models import ResolveProjectTaskInput, ResolveProjectTaskOutput
+
+    req = (
+        input
+        if isinstance(input, ResolveProjectTaskInput)
+        else ResolveProjectTaskInput.model_validate(input.model_dump(mode="json"))
+    )
+    del runtime
+    cohort_paths = None
+    if req.cohortPathsList:
+        cohort_paths = [(label, list(paths)) for label, paths in req.cohortPathsList]
+    resolved = build_resolved_project(
+        req.projectPath,
+        monte_carlo_runs_root=req.monteCarloRunsRoot,
+        cohort_paths_list=cohort_paths,
+    )
+    tagged = to_tagged_json(resolved)
+    return ResolveProjectTaskOutput(status="ok", resolvedProject=tagged)
+
+
 def _handle_validation_plan_iterations(
     _capability: str,
     _action_name: str,

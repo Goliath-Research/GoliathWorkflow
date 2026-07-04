@@ -392,3 +392,75 @@ def enrich_sample_prep_output(
     if action_name == "sample.qc_failed":
         return sample.model_copy(update={"status": "QC_FAILED"})
     return sample
+
+
+def build_resolved_project(
+    project: Union[str, Path],
+    *,
+    monte_carlo_runs_root: Optional[Union[str, Path]] = None,
+    cohort_paths_list: Optional[List[tuple[str, List[str]]]] = None,
+) -> "ResolvedProject":
+    """
+    Materialize study manifest paths and cohort membership for worker task inputs.
+
+    Single seam that reads ``/work`` study manifests; downstream worker actions should
+    bind concrete fields from the returned ``ResolvedProject`` instead of re-resolving
+    sample paths from ``project.json``.
+    """
+    from methyl_utils import load_project
+
+    from .types import ResolvedComparison, ResolvedProject
+
+    project_path = Path(str(project)).expanduser().resolve()
+    cfg = load_project(str(project_path))
+    groups = groups_from_project(project_path)
+
+    paths_by_label: Dict[str, List[str]] = {}
+    for label, paths, _side in cfg._get_resolved_groups_with_side():
+        paths_by_label[str(label)] = [str(Path(p).resolve()) for p in paths]
+
+    comparisons: List[ResolvedComparison] = []
+    for cmp in cfg.get_comparisons():
+        control = str(cmp.control_group)
+        disease = str(cmp.disease_group)
+        label = cmp.comparison_label or disease or f"{control}_vs_{disease}"
+        comparisons.append(
+            ResolvedComparison(
+                label=str(label),
+                controlGroup=control,
+                diseaseGroup=disease,
+                comparisonLabel=str(label),
+                centroid1Dir=str(cfg.get_centroid_dir("control", control)),
+                centroid2Dir=str(cfg.get_centroid_dir("disease", disease)),
+                detectOutDir=str(cfg.get_detection_output_dir(control, disease)),
+                mapperOutDir=str(cfg.get_mapper_output_dir(control, disease)),
+                enricherOutDir=str(cfg.get_enricher_output_dir(control, disease)),
+                classifierOutDir=str(cfg.get_classifier_output_dir(control, disease)),
+                controlSamplePaths=list(paths_by_label.get(control, [])),
+                diseaseSamplePaths=list(paths_by_label.get(disease, [])),
+            )
+        )
+
+    centroid1_dir: Optional[str] = None
+    if comparisons:
+        centroid1_dir = comparisons[0].centroid1Dir
+
+    seed_groups = None
+    if monte_carlo_runs_root and cohort_paths_list:
+        from methyl_validation.project_gen import build_centroid_seed_groups
+
+        seed_groups = build_centroid_seed_groups(
+            monte_carlo_runs_root=monte_carlo_runs_root,
+            base_project_path=project_path,
+            cohort_paths_list=cohort_paths_list,
+        )
+
+    return ResolvedProject(
+        projectPath=str(project_path),
+        groups=groups,
+        comparisons=comparisons,
+        chromosomes=list(cfg.chromosomes or []),
+        contexts=list(getattr(cfg, "contexts", None) or ["CG"]),
+        centroid1Dir=centroid1_dir,
+        centroidSeedGroups=seed_groups,
+    )

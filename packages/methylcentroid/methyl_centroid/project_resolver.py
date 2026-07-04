@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from methyl_utils import load_project
-from methyl_utils.action_config_resolver import resolve_for_project
+from methyl_utils.cli_resolved_config import resolve_cli_step_config
 
 from .config import BatchProcessingConfig, MethylCentroidConfig
 
@@ -197,10 +197,11 @@ def _run_cluster_then_centroids_per_cluster(
         contexts = [str(context)]
     chrom = chromosomes[0]
     ctx = contexts[0]
-    step_cfg = resolve_for_project("centroid", project)
-    if step_override_path is not None:
-        with open(step_override_path) as f:
-            step_cfg = {**step_cfg, **json.load(f)}
+    step_cfg = resolve_cli_step_config(
+        "centroid",
+        project,
+        step_override_path=step_override_path,
+    )
     _forbid_centroid_samples_key(step_cfg, "centroid step config (subcluster)")
 
     n_derived = len(derived_labels)
@@ -346,6 +347,7 @@ def resolve_centroid_batch_config(
     output_dir_override: Optional[Union[str, Path]] = None,
     chromosome: Optional[str] = None,
     context: Optional[str] = None,
+    resolved_config_path: Optional[Union[str, Path]] = None,
 ) -> BatchProcessingConfig:
     """
     Build BatchProcessingConfig for one group from a project config.
@@ -423,7 +425,12 @@ def resolve_centroid_batch_config(
         base_config=base_config,
     )
     # Apply project-level step config (centroid) if present (never override output_dir)
-    step_cfg = resolve_for_project("centroid", project)
+    step_cfg = resolve_cli_step_config(
+        "centroid",
+        project,
+        resolved_config_path=resolved_config_path,
+        step_override_path=step_override_path,
+    )
     if step_cfg:
         _forbid_centroid_samples_key(step_cfg, "project step_config.centroid")
         if "base_config" in step_cfg:
@@ -435,19 +442,6 @@ def resolve_centroid_batch_config(
         for key in ("chromosomes", "contexts", "continue_on_error", "save_batch_summary"):
             if key in step_cfg:
                 batch = batch.model_copy(update={key: step_cfg[key]})
-    if step_override_path is not None:
-        with open(step_override_path) as f:
-            overrides = json.load(f)
-        _forbid_centroid_samples_key(overrides, "centroid --step-override")
-        if "base_config" in overrides:
-            base_data = batch.base_config.model_dump()
-            for k, v in overrides["base_config"].items():
-                if k != "output_dir":
-                    base_data[k] = v
-            batch = batch.model_copy(update={"base_config": MethylCentroidConfig(**base_data)})
-        for key in ("chromosomes", "contexts", "continue_on_error", "save_batch_summary"):
-            if key in overrides:
-                batch = batch.model_copy(update={key: overrides[key]})
     # Keep canonical project paths unless the worker/CLI passed an explicit output dir.
     if output_dir_override is not None:
         canonical_output = str(Path(output_dir_override).expanduser().resolve())

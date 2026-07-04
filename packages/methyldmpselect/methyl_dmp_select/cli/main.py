@@ -22,6 +22,12 @@ from ..utils.project_resolver import resolve_dmp_selection_config
 @click.option("--discovery-csv", type=click.Path(path_type=Path), default=None)
 @click.option("--output-dir", type=click.Path(path_type=Path), default=None)
 @click.option("--step-override", type=click.Path(path_type=Path), default=None)
+@click.option(
+    "--resolved-config",
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help="Baked dmp_selection actionConfig slice from workflow task input.",
+)
 @click.option("--force", is_flag=True, default=False, help="Re-run even if outputs exist")
 @click.option("--verbose", "-v", is_flag=True, default=False)
 def main(
@@ -32,6 +38,7 @@ def main(
     discovery_csv: Optional[Path],
     output_dir: Optional[Path],
     step_override: Optional[Path],
+    resolved_config: Optional[Path],
     force: bool,
     verbose: bool,
 ) -> None:
@@ -51,6 +58,7 @@ def main(
             comparison=group,
             chromosome=chromosome,
             step_override_path=step_override,
+            resolved_config_path=resolved_config,
         )
     else:
         click.echo("Provide --project or --config", err=True)

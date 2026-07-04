@@ -41,6 +41,12 @@ except ImportError:
     help='Optional JSON with detector overrides (merged over project-derived config)',
 )
 @click.option(
+    '--resolved-config',
+    type=click.Path(exists=True, path_type=Path),
+    default=None,
+    help='Baked detection actionConfig slice from workflow task input (worker path).',
+)
+@click.option(
     '--verbose', '-v',
     is_flag=True,
     default=False,
@@ -105,6 +111,7 @@ def main(
     config: Optional[Path],
     project: Optional[Path],
     step_override: Optional[Path],
+    resolved_config: Optional[Path],
     verbose: bool,
     log_file: Optional[Path],
     output_base: Optional[Path],
@@ -242,6 +249,7 @@ def main(
             output_base_override=output_base,
             centroid1_dir_override=centroid1_dir,
             centroid2_dir_override=centroid2_dir,
+            resolved_config_path=resolved_config,
         )
     else:
         if not config.exists():

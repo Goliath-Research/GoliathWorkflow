@@ -11,6 +11,7 @@ Study configuration is split across layers so pipeline structure stays in versio
 | Deploy spec | `compiled_workflow.json` | Nodes, edges, templates, bindings for engine |
 | Instance | `context_json` | `projectPath`, `pipelineProfile`, `samples[]`, … |
 | Task input | `resolvedConfig` | Merged action parameters baked at instance configuration (`resolvedConfig__*` scope vars) |
+| Task input | `resolvedProject` | Optional materialized study paths/cohorts from `context.resolve_project` |
 | Execution | Action catalog + `methyl_worker.handlers` | CLI / in-process dispatch |
 | Orchestration | DB engine + agnostic gateway **or** `LocalWorkflowEngine` | Graph scheduling; gateway does not resolve config at claim |
 

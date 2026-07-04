@@ -10,6 +10,20 @@ parameters as Pydantic models**, so those parameters are editable/validatable
 through their generated **JSON Schemas** (operators tune actions via schema-driven
 config, not by editing Python).
 
+## Worker isolation (Universal Action Input Contract)
+
+- **Gateway/DB** bake per-action ``resolvedConfig`` at instance configuration and bind
+  task ``input_json`` templates program-agnostically.
+- **Workers** must consume that payload only: CLI actions receive
+  ``--resolved-config <file.json>`` (materialized from ``resolvedConfig``) plus optional
+  ``--step-override`` overlay. They must **not** re-read ``project.json``, pipeline
+  profiles, or ``METHYL_*`` env for tool parameters on the worker path.
+- **`context.resolve_project`** is the single in-process seam that reads ``/work`` study
+  manifests and emits a typed ``ResolvedProject`` (groups, comparisons with artifact dirs,
+  sample path arrays). Downstream templates bind concrete paths from ``resolvedProject``.
+- ``projectPath`` may remain on task inputs for **provenance/logging** but must not be used
+  as a configuration source when ``--resolved-config`` is present.
+
 ## Rules
 
 - Action/task inputs and outputs are Pydantic models

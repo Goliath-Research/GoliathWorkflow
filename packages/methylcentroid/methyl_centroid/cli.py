@@ -69,6 +69,9 @@ Examples:
         metavar='JSON',
         help='Optional JSON overrides for centroid step (when using --project)'
     )
+    from methyl_utils.cli_resolved_config import add_resolved_config_argument
+
+    add_resolved_config_argument(config_group, help_suffix="(centroid actionConfig slice)")
 
     # Individual parameters (when not using config file)
     params_group = parser.add_argument_group('Individual Parameters')

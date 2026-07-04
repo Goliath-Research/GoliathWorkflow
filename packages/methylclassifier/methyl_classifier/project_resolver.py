@@ -528,6 +528,7 @@ def resolve_classifier_config(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
     output_filename: str = "classification_results.csv",
+    resolved_config_path: Optional[Union[str, Path]] = None,
 ) -> ClassificationConfig:
     """
     Build ClassificationConfig from a project config and optional step overrides.
@@ -554,7 +555,14 @@ def resolve_classifier_config(
         base["centroid_path_remap"] = project.path_remap
 
     # Apply project-level step config (classifier) if present
-    step_cfg = resolve_for_project("classifier", project)
+    from methyl_utils.cli_resolved_config import resolve_cli_step_config
+
+    step_cfg = resolve_cli_step_config(
+        "classifier",
+        project,
+        resolved_config_path=resolved_config_path,
+        step_override_path=step_override_path,
+    )
     if step_cfg:
         for k, v in step_cfg.items():
             base[k] = v
@@ -567,19 +575,13 @@ def resolve_classifier_config(
             base["panel"] = derived_panel
 
     # Default calibration holdout to MC validation train_fraction/seed when classifier omits them
-    val_cfg = resolve_for_project("validation", project)
-    if base.get("calibration_train_fraction") is None and val_cfg.get("train_fraction") is not None:
-        base["calibration_train_fraction"] = float(val_cfg["train_fraction"])
-    if base.get("calibration_seed") is None and val_cfg.get("seed") is not None:
-        base["calibration_seed"] = int(val_cfg["seed"])
+    if resolved_config_path in (None, ""):
+        val_cfg = resolve_for_project("validation", project)
+        if base.get("calibration_train_fraction") is None and val_cfg.get("train_fraction") is not None:
+            base["calibration_train_fraction"] = float(val_cfg["train_fraction"])
+        if base.get("calibration_seed") is None and val_cfg.get("seed") is not None:
+            base["calibration_seed"] = int(val_cfg["seed"])
 
-    if step_override_path is not None:
-        override_path = Path(step_override_path)
-        if override_path.exists():
-            with open(override_path) as f:
-                overrides = json.load(f)
-            for k, v in overrides.items():
-                base[k] = v
     if not base.get("centroid_sample_root"):
         default_root = _default_centroid_sample_root(project)
         if default_root is not None:
@@ -594,7 +596,7 @@ def resolve_classifier_config(
 
     # Default save path: multiclass OvR → classifiers/<control>/<bundle>.pkl; else classifiers root.
     if not base.get("save_classifier_path"):
-        merged_cls = dict(resolve_for_project("classifier", project))
+        merged_cls = dict(step_cfg or {})
         for k in _CLASSIFIER_STEP_KEYS_FOR_BUNDLE_PATH:
             if k in base:
                 merged_cls[k] = base[k]

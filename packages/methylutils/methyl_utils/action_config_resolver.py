@@ -217,21 +217,61 @@ def resolve_from_task_input(
     )
 
 
+def _load_json_mapping(path: str | Path) -> Dict[str, Any]:
+    raw = json.loads(Path(path).expanduser().read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError(f"resolved config JSON must be an object: {path}")
+    return dict(raw)
+
+
+def load_resolved_config(
+    action_key: str,
+    *,
+    resolved_config_path: str | Path | None = None,
+    resolved_config: Optional[Mapping[str, Any]] = None,
+    step_override: Optional[Mapping[str, Any]] = None,
+    step_override_path: str | Path | None = None,
+) -> Dict[str, Any]:
+    """
+    Load a baked actionConfig slice from a worker ``--resolved-config`` file or dict.
+
+    ``step_override`` / ``step_override_path`` overlay wins over the baked slice.
+    Does not read project.json, profiles, or METHYL_* environment variables.
+    """
+    del action_key  # slice is already action-specific when passed from the worker
+    if resolved_config_path not in (None, ""):
+        cfg = _load_json_mapping(resolved_config_path)
+    elif isinstance(resolved_config, dict):
+        cfg = dict(resolved_config)
+    else:
+        raise ValueError("load_resolved_config requires resolved_config_path or resolved_config")
+
+    overlay = dict(step_override) if isinstance(step_override, dict) else None
+    if overlay is None and step_override_path not in (None, ""):
+        overlay = _load_json_mapping(step_override_path)
+    if overlay:
+        return deep_merge(cfg, overlay)
+    return cfg
+
+
 def resolve_for_project(
     action_key: str,
     project: Any,
     *,
     step_override: Optional[Mapping[str, Any]] = None,
     resolved_config: Optional[Mapping[str, Any]] = None,
+    resolved_config_path: str | Path | None = None,
     profile_path: str | Path | None = None,
     site_path: str | Path | None = None,
 ) -> Dict[str, Any]:
     """Resolve action config for standalone CLIs and package resolvers."""
-    if isinstance(resolved_config, dict):
-        cfg = dict(resolved_config)
-        if isinstance(step_override, dict):
-            return deep_merge(cfg, dict(step_override))
-        return cfg
+    if resolved_config_path not in (None, "") or isinstance(resolved_config, dict):
+        return load_resolved_config(
+            action_key,
+            resolved_config_path=resolved_config_path,
+            resolved_config=resolved_config,
+            step_override=step_override,
+        )
     reg = project.get_regulatory_config() if hasattr(project, "get_regulatory_config") else {}
     return resolve_action_config_from_env(
         action_key,

@@ -16,7 +16,7 @@ from .mapper import DMPMapper
 from .bedtools_mapper import BedtoolsMapper
 from .project_resolver import resolve_mapper_paths, resolve_mapper_paths_per_cancer_group
 from .secure_credentials import SecureCredentialManager, persist_secret_if_changed
-from methyl_utils.action_config_resolver import resolve_for_project
+from methyl_utils.cli_resolved_config import add_resolved_config_argument, resolve_cli_step_config
 
 
 def normalize_enrich_source(value: str) -> str:
@@ -728,6 +728,7 @@ Examples:
         metavar='JSON',
         help='Optional JSON overrides for mapper step when using --project (e.g. csv_pattern, output_dir)'
     )
+    add_resolved_config_argument(parser, help_suffix="(mapper actionConfig slice)")
 
     # Other options
     parser.add_argument(
@@ -797,7 +798,12 @@ Examples:
         # Apply project step_config.mapper via Pydantic model
         from methyl_utils import load_project
         project = load_project(project_path)
-        step_cfg = resolve_for_project("mapper", project)
+        step_cfg = resolve_cli_step_config(
+            "mapper",
+            project,
+            resolved_config_path=getattr(args, "resolved_config", None),
+            step_override_path=args.step_override,
+        )
         if step_cfg:
             mapper_config = MapperStepConfig.model_validate(step_cfg)
             _apply_mapper_config_to_args(args, mapper_config)

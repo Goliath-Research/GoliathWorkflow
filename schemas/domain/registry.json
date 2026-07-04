@@ -12,6 +12,8 @@
     "MethylIngestRef": "methyl_ingest_ref.schema.json",
     "MethylSampleRef": "methyl_sample_ref.schema.json",
     "MethylationMatrixRef": "methylation_matrix_ref.schema.json",
+    "ResolvedComparison": "resolved_comparison.schema.json",
+    "ResolvedProject": "resolved_project.schema.json",
     "StratifiedCohortDraw": "stratified_cohort_draw.schema.json"
   },
   "types": [
@@ -26,7 +28,9 @@
     "MethylDetectionRef",
     "StratifiedCohortDraw",
     "CentroidSeedGroup",
-    "ComparisonSpec"
+    "ComparisonSpec",
+    "ResolvedComparison",
+    "ResolvedProject"
   ],
   "version": 1
 }

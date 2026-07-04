@@ -25,6 +25,8 @@ DomainTypeName = Literal[
     "StratifiedCohortDraw",
     "CentroidSeedGroup",
     "ComparisonSpec",
+    "ResolvedComparison",
+    "ResolvedProject",
 ]
 
 DOMAIN_TYPE_NAMES: tuple[str, ...] = (
@@ -40,6 +42,8 @@ DOMAIN_TYPE_NAMES: tuple[str, ...] = (
     "StratifiedCohortDraw",
     "CentroidSeedGroup",
     "ComparisonSpec",
+    "ResolvedComparison",
+    "ResolvedProject",
 )
 
 
@@ -227,6 +231,52 @@ class StratifiedCohortDraw(DomainTaggedModel):
     taskConfig: Optional[McIterationTaskConfig] = None
 
 
+class ResolvedComparison(DomainTaggedModel):
+    """Fully materialized comparison with artifact dirs and per-side sample paths."""
+
+    type: Literal["ResolvedComparison"] = Field(alias="$type", default="ResolvedComparison")
+    label: str = Field(description="Comparison label (usually disease group name).")
+    controlGroup: str
+    diseaseGroup: str
+    comparisonLabel: Optional[str] = None
+    centroid1Dir: str = Field(description="Control-side centroid output directory.")
+    centroid2Dir: str = Field(description="Disease-side centroid output directory.")
+    detectOutDir: str = Field(description="Detection output directory for this comparison.")
+    mapperOutDir: str = Field(description="Mapper output directory for this comparison.")
+    enricherOutDir: str = Field(description="Enricher output directory for this comparison.")
+    classifierOutDir: Optional[str] = Field(
+        default=None,
+        description="Classifier output directory when configured for this comparison.",
+    )
+    controlSamplePaths: List[str] = Field(
+        default_factory=list,
+        description="Absolute HDF5/sample paths for the control side.",
+    )
+    diseaseSamplePaths: List[str] = Field(
+        default_factory=list,
+        description="Absolute HDF5/sample paths for the disease side.",
+    )
+
+
+class ResolvedProject(DomainTaggedModel):
+    """Study manifest materialized for worker actions (paths + cohorts, no re-read of /work)."""
+
+    type: Literal["ResolvedProject"] = Field(alias="$type", default="ResolvedProject")
+    projectPath: str = Field(description="Provenance path to study manifest (logging only on worker path).")
+    groups: List[MethylGroup] = Field(default_factory=list)
+    comparisons: List[ResolvedComparison] = Field(default_factory=list)
+    chromosomes: List[str] = Field(default_factory=list)
+    contexts: List[str] = Field(default_factory=lambda: ["CG"])
+    centroid1Dir: Optional[str] = Field(
+        default=None,
+        description="Shared control centroid dir for the primary comparison when applicable.",
+    )
+    centroidSeedGroups: Optional[List[CentroidSeedGroup]] = Field(
+        default=None,
+        description="Optional MC seed centroid groups when monteCarloRunsRoot is resolved.",
+    )
+
+
 DOMAIN_MODEL_BY_TYPE: Dict[str, type[DomainTaggedModel]] = {
     "MethylIngestRef": MethylIngestRef,
     "MethylSampleRef": MethylSampleRef,
@@ -240,6 +290,8 @@ DOMAIN_MODEL_BY_TYPE: Dict[str, type[DomainTaggedModel]] = {
     "StratifiedCohortDraw": StratifiedCohortDraw,
     "CentroidSeedGroup": CentroidSeedGroup,
     "ComparisonSpec": ComparisonSpecRef,
+    "ResolvedComparison": ResolvedComparison,
+    "ResolvedProject": ResolvedProject,
 }
 
 
