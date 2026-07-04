@@ -78,7 +78,7 @@ def _pmd_load_fraction(
     pos = positions[order]
     vals = values[order]
     cov = coverage[order]
-    valid = cov >= int(min_coverage) & np.isfinite(vals)
+    valid = (cov >= int(min_coverage)) & np.isfinite(vals)
     if int(np.sum(valid)) == 0:
         return float("nan")
     pos = pos[valid]
@@ -141,6 +141,8 @@ def compute_sample_genome_measures(
     all_pos: List[np.ndarray] = []
     chrom_cov_medians: Dict[str, float] = {}
     chrom_mean_beta: Dict[str, float] = {}
+    chrom_pdr_proxy: Dict[str, float] = {}
+    chrom_pmd_load: Dict[str, float] = {}
     x_beta_vals: List[float] = []
     auto_beta_vals: List[float] = []
 
@@ -184,10 +186,21 @@ def compute_sample_genome_measures(
             pos_cat = np.concatenate(chrom_positions)
             beta_cat = np.concatenate(chrom_betas)
             cov_cat = np.concatenate(chrom_covs)
-            chrom_mean_beta.setdefault(str(chrom), float("nan"))
-            key_pdr = f"genome::chrom_{chrom}::pdr_proxy"
-            key_pmd = f"genome::chrom_{chrom}::pmd_load"
-            # stored below via row dict
+            chrom_pdr_proxy[str(chrom)] = _adjacent_disagreement_fraction(
+                pos_cat, beta_cat, cov_cat, min_coverage=min_cov, threshold=pdr_t
+            )
+            chrom_pmd_load[str(chrom)] = _pmd_load_fraction(
+                pos_cat,
+                beta_cat,
+                cov_cat,
+                min_coverage=min_cov,
+                window_bp=pmd_w,
+                step_bp=pmd_s,
+                beta_threshold=pmd_t,
+            )
+        else:
+            chrom_pdr_proxy[str(chrom)] = float("nan")
+            chrom_pmd_load[str(chrom)] = float("nan")
 
     row: Dict[str, Any] = {str(cfg.sample_id_column): str(sample_id)}
 
@@ -229,42 +242,12 @@ def compute_sample_genome_measures(
         else:
             row[f"genome::chrom_{chrom}::coverage_zscore"] = float("nan")
 
-        chrom_betas: List[np.ndarray] = []
-        chrom_covs: List[np.ndarray] = []
-        chrom_positions: List[np.ndarray] = []
-        for ctx in contexts:
-            sample = _load_chrom_sample(sample_dir, str(chrom), str(ctx))
-            if sample is None:
-                continue
-            beta = np.asarray(sample.get_methylation_levels(), dtype=np.float64)
-            cov = np.asarray(sample.get_coverage(), dtype=np.float64)
-            pos = np.asarray(sample.pos, dtype=np.uint32)
-            n = min(beta.size, cov.size, pos.size)
-            mask = cov[:n] >= min_cov
-            if not np.any(mask):
-                continue
-            chrom_betas.append(beta[:n][mask])
-            chrom_covs.append(cov[:n][mask])
-            chrom_positions.append(pos[:n][mask])
-        if chrom_positions:
-            pos_cat = np.concatenate(chrom_positions)
-            beta_cat = np.concatenate(chrom_betas)
-            cov_cat = np.concatenate(chrom_covs)
-            row[f"genome::chrom_{chrom}::pdr_proxy"] = _adjacent_disagreement_fraction(
-                pos_cat, beta_cat, cov_cat, min_coverage=min_cov, threshold=pdr_t
-            )
-            row[f"genome::chrom_{chrom}::pmd_load"] = _pmd_load_fraction(
-                pos_cat,
-                beta_cat,
-                cov_cat,
-                min_coverage=min_cov,
-                window_bp=pmd_w,
-                step_bp=pmd_s,
-                beta_threshold=pmd_t,
-            )
-        else:
-            row[f"genome::chrom_{chrom}::pdr_proxy"] = float("nan")
-            row[f"genome::chrom_{chrom}::pmd_load"] = float("nan")
+        row[f"genome::chrom_{chrom}::pdr_proxy"] = float(
+            chrom_pdr_proxy.get(str(chrom), float("nan"))
+        )
+        row[f"genome::chrom_{chrom}::pmd_load"] = float(
+            chrom_pmd_load.get(str(chrom), float("nan"))
+        )
 
     return row
 
