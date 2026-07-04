@@ -2843,6 +2843,29 @@ def main() -> None:
             sys.exit(1)
         cohort_paths_list.append((c.label, paths))
 
+    # Keep the designated hold-out batch out of the stability/MC pool so it stays disjoint from
+    # feature selection (the "active" set that stability further partitions is the non-hold-out
+    # remainder). Exclusion is skipped when holdout_exclude_from_training is False.
+    from .holdout_eval import filter_cohort_paths_excluding, holdout_basenames_from_config
+
+    _holdout_bns = holdout_basenames_from_config(config)
+    if _holdout_bns:
+        cohort_paths_list, _removed_holdout = filter_cohort_paths_excluding(cohort_paths_list, _holdout_bns)
+        for label, paths in cohort_paths_list:
+            if not paths:
+                print(
+                    f"Error: cohort {label!r} has no samples left after excluding the hold-out "
+                    f"partition '{config.holdout_partition}'. Reduce the hold-out or fix the partition.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+        if _removed_holdout:
+            print(
+                f"Excluding {len(_removed_holdout)} hold-out sample(s) "
+                f"(partition '{config.holdout_partition}') from the stability/MC pool.",
+                file=sys.stderr,
+            )
+
     cohort_labels = [c.label for c in config.cohorts]
     control_paths: List[str] = []
     disease_paths: List[str] = []

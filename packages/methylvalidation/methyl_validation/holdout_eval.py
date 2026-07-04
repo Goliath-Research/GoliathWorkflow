@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import csv
 import json
+import random
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -31,6 +32,84 @@ from .cohort_inference import infer_monte_carlo_cohorts_from_project
 from .split import load_and_resolve_sample_paths
 
 HOLDOUT_MANIFEST_NAME = "holdout_manifest.json"
+
+
+def stratified_holdout_by_fraction(
+    cohort_paths_by_label: Sequence[Tuple[str, Sequence[str]]],
+    fraction: float,
+    *,
+    seed: Optional[int] = None,
+    min_holdout_per_class: int = 1,
+) -> Dict[str, Dict[str, List[str]]]:
+    """
+    Draw a per-class stratified hold-out: each class contributes ``round(fraction * n_class)``
+    samples to the hold-out (at least ``min_holdout_per_class`` when the class is non-empty and
+    ``fraction > 0``), leaving the remainder as the *active* pool for stability/freeze/model.
+
+    Holding out 10% therefore removes 10% of each class independently, preserving class balance in
+    both the hold-out and the active set (which stability further partitions, e.g. 80/20).
+
+    Returns ``{label: {"holdout": [paths], "active": [paths]}}``.
+    """
+    if not (0.0 <= float(fraction) <= 1.0):
+        raise ValueError(f"fraction must be in [0, 1]; got {fraction}")
+    rng = random.Random(seed)
+    out: Dict[str, Dict[str, List[str]]] = {}
+    for label, paths in cohort_paths_by_label:
+        items = [str(p) for p in paths]
+        n = len(items)
+        if n == 0:
+            out[str(label)] = {"holdout": [], "active": []}
+            continue
+        shuffled = list(items)
+        rng.shuffle(shuffled)
+        n_hold = int(round(float(fraction) * n))
+        if fraction > 0.0 and n_hold < min_holdout_per_class:
+            n_hold = min(min_holdout_per_class, n)
+        # Never leave the active pool empty when there is more than one sample.
+        if n_hold >= n and n > 1:
+            n_hold = n - 1
+        holdout = sorted(shuffled[:n_hold])
+        active = sorted(shuffled[n_hold:])
+        out[str(label)] = {"holdout": holdout, "active": active}
+    return out
+
+
+def filter_cohort_paths_excluding(
+    cohort_paths_list: Sequence[Tuple[str, Sequence[str]]],
+    holdout_basenames: set[str],
+) -> Tuple[List[Tuple[str, List[str]]], List[str]]:
+    """
+    Remove hold-out samples (matched by basename) from each cohort's path list.
+
+    Returns ``(filtered_cohort_paths_list, removed_basenames)``. Used so that ``--stability`` (and
+    other training-time cohort assembly) operate on the *active* pool only, keeping the hold-out
+    batch disjoint from feature selection as well as from the final freeze.
+    """
+    if not holdout_basenames:
+        return [(str(lbl), [str(p) for p in paths]) for lbl, paths in cohort_paths_list], []
+    filtered: List[Tuple[str, List[str]]] = []
+    removed: set[str] = set()
+    for label, paths in cohort_paths_list:
+        kept: List[str] = []
+        for p in paths:
+            bn = _basename(p)
+            if bn in holdout_basenames:
+                removed.add(bn)
+            else:
+                kept.append(str(p))
+        filtered.append((str(label), kept))
+    return filtered, sorted(removed)
+
+
+def holdout_basenames_from_config(config: Any) -> set[str]:
+    """Basenames of the configured hold-out partition, or empty set when exclusion is off/unset."""
+    if not bool(getattr(config, "holdout_exclude_from_training", True)):
+        return set()
+    partition = str(getattr(config, "holdout_partition", "locked_test"))
+    partitions = getattr(config, "validation_partitions", None)
+    paths = list(getattr(partitions, partition, []) or []) if partitions is not None else []
+    return {_basename(p) for p in paths}
 
 
 def _basename(p: str) -> str:

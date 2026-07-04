@@ -332,7 +332,9 @@ This is the same reporting philosophy used by MethylIT [@sanchez2019clinical], w
 
 ### Designating the Held-Out Batch
 
-Held-out samples are declared through the `validation_partitions` contract in profile/project `actionConfig.validation` (the same object used for lifecycle governance). The default hold-out role is `locked_test`; `holdout_partition` selects a different role (for example `pivotal_validation` or `post_market_monitoring`):
+Held-out samples are declared through the `validation_partitions` contract in profile/project `actionConfig.validation` (the same object used for lifecycle governance). The default hold-out role is `locked_test`; `holdout_partition` selects a different role (for example `pivotal_validation` or `post_market_monitoring`).
+
+The hold-out is **stratified per class**: holding out 10% removes 10% of *each* group independently, so class balance is preserved in both the hold-out and the remaining active pool. The helper `methyl_validation.holdout_eval.stratified_holdout_by_fraction(cohorts, fraction, seed=...)` produces such a split (returning `{label: {"holdout": [...], "active": [...]}}`); its `holdout` lists populate the partition. The **active** remainder (e.g. 90%) is what `--stability` consumes, and stability then further partitions the active pool into its own train/validation splits (for example 80/20 per iteration). The hold-out samples never enter stability or the final freeze.
 
 ```json
 "actionConfig": {
@@ -352,7 +354,12 @@ The partition contract already validates that hold-out samples do not overlap `d
 
 ### Disjointness Guarantee (Exclusion at Freeze)
 
-For the held-out claim to be valid, the frozen model must not have been trained on the hold-out samples. When `holdout_exclude_from_training=true` (default), the `--freeze` step filters the hold-out samples out of the production cohort list files before building centroids/detector/classifier, and records the excluded set in `monte_carlo_runs/production/holdout_manifest.json`. Workflow 3 preflights that manifest and refuses to run if any current hold-out sample was not excluded, so a false held-out claim cannot be produced silently.
+For the held-out claim to be valid, the frozen model must not have been trained on the hold-out samples at **any** stage. When `holdout_exclude_from_training=true` (default):
+
+- `--stability` excludes the hold-out partition from the Monte Carlo cohort pool, so feature selection (DMP discovery) sees only the active samples;
+- `--freeze` filters the hold-out samples out of the production cohort list files before building centroids/detector/classifier, and records the excluded set together with each sample's recovered class label in `monte_carlo_runs/production/holdout_manifest.json`.
+
+Workflow 3 preflights that manifest and refuses to run if any current hold-out sample was not excluded, so a false held-out claim cannot be produced silently. Because freeze removes the hold-out samples from the cohort CSVs, their class labels can no longer be read from those files; Workflow 3 therefore recovers labels from the manifest's `holdout_class_map` recorded at freeze time.
 
 ### Bootstrap Distribution of QC Metrics
 

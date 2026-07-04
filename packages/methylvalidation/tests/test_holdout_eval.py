@@ -10,9 +10,11 @@ import pytest
 
 from methyl_validation.holdout_eval import (
     apply_holdout_exclusion_to_project_dict,
+    filter_cohort_paths_excluding,
     read_predictions_for_bootstrap,
     resolve_holdout_from_class_map,
     resolve_holdout_groups,
+    stratified_holdout_by_fraction,
     _is_control_label,
     _preflight_exclusion,
     write_holdout_manifest,
@@ -151,3 +153,48 @@ def test_read_predictions_requires_labels(tmp_path):
     pd.DataFrame({"sample": ["H1"], "prediction": [0]}).to_csv(csv_path, index=False)
     with pytest.raises(ValueError):
         read_predictions_for_bootstrap(csv_path)
+
+
+def test_stratified_holdout_by_fraction_per_class():
+    cohorts = [
+        ("healthy", [f"H{i}" for i in range(10)]),
+        ("cancer", [f"C{i}" for i in range(20)]),
+    ]
+    split = stratified_holdout_by_fraction(cohorts, 0.10, seed=1)
+    # 10% per class, independently: 1 of 10 healthy, 2 of 20 cancer.
+    assert len(split["healthy"]["holdout"]) == 1
+    assert len(split["healthy"]["active"]) == 9
+    assert len(split["cancer"]["holdout"]) == 2
+    assert len(split["cancer"]["active"]) == 18
+    # Hold-out and active are disjoint and cover the class.
+    for label, n in (("healthy", 10), ("cancer", 20)):
+        h = set(split[label]["holdout"])
+        a = set(split[label]["active"])
+        assert h.isdisjoint(a)
+        assert len(h | a) == n
+
+
+def test_stratified_holdout_is_deterministic_with_seed():
+    cohorts = [("a", [f"A{i}" for i in range(50)])]
+    s1 = stratified_holdout_by_fraction(cohorts, 0.2, seed=7)
+    s2 = stratified_holdout_by_fraction(cohorts, 0.2, seed=7)
+    assert s1["a"]["holdout"] == s2["a"]["holdout"]
+
+
+def test_stratified_holdout_never_empties_active():
+    cohorts = [("tiny", ["X1", "X2"])]
+    split = stratified_holdout_by_fraction(cohorts, 1.0, seed=0)
+    assert len(split["tiny"]["active"]) == 1
+    assert len(split["tiny"]["holdout"]) == 1
+
+
+def test_filter_cohort_paths_excluding_removes_holdout():
+    cohorts = [
+        ("healthy", ["/data/H1", "/data/H2", "/data/H3"]),
+        ("cancer", ["/data/C1", "/data/C2"]),
+    ]
+    filtered, removed = filter_cohort_paths_excluding(cohorts, {"H2", "C1"})
+    assert removed == ["C1", "H2"]
+    kept = {label: [Path(p).name for p in paths] for label, paths in filtered}
+    assert kept["healthy"] == ["H1", "H3"]
+    assert kept["cancer"] == ["C2"]

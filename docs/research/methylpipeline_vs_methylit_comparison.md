@@ -103,7 +103,7 @@ classic MethylIT methodology:
   chosen by cross-validation (`r_cv`). This fitted distribution is the noise/background model.
 - **`pDMP`** (potential DMPs) — selects positions in the **tail** of the fitted distribution
   (`alpha: 0.05`) **and** with total variation above a cut (`tv_cut`). Signal-detection: a position
-  is a candidate when its divergence is improbable under the fitted null.
+  is a candidate when its divergence is improbable under the fitted distribution.
 - **`cutpoint`** — a **supervised ML classifier** estimates the optimal boundary separating treatment
   DMPs from control DMPs, using features `hdiv, TV, jdiv.stat, bay.TV, jdiv, wprob, pos` with
   interactions, PCA (`n_pc: 4`), and two learners (`classifier1: logistic`, `classifier2:
@@ -163,6 +163,147 @@ flowchart TD
    difference; MethylPipeline via the effect-size / delta-mu filter. Same instinct ("significant but
    trivial is not enough"), different formalisms.
 
+## Deeper theoretical analysis (mathematics and statistics)
+
+This section examines two specific complexity choices in MethylIT — the *parametric* Weibull/GGamma
+distribution fitted to the divergence values, and the *multivariate ML classifier* at the cutpoint — and
+argues, with the supporting mathematics, that under the regimes typical of genome-wide human WGBS
+both are largely reducible to simpler, more scalable constructs. The conclusions converge on what
+MethylPipeline already does (nonparametric ECDF screen + explicit effect-size gate + simple
+aggregation).
+
+### A. Does the Weibull/generalized-gamma distribution matter for the initial tail, or would the ECDF do?
+
+**What MethylIT does.** For each individual sample it fits a cumulative distribution
+$F_\theta$ to the per-cytosine Hellinger-divergence values $\{H_i\}$ — `Weibull2P/3P`, `Gamma2P`, or
+`GGamma3P/4P` — chosen by cross-validated goodness-of-fit, then takes the critical value
+$H_\alpha = F_\theta^{-1}(1-\alpha)$ with $\alpha=0.05$. A cytosine is a *potential* DMP when
+$H_i > H_\alpha$ **and** its total-variation of methylation level exceeds a cut,
+$\mathrm{TV}_i = |\hat p_{t,i}-\hat p_{c,i}| > \texttt{tv\_cut}$ (0.2 in the 0.4.0 config; the 2019
+paper uses the empirical TV95 $\approx 0.28$–$0.35$).
+
+**Why the parametric form is second-order at $\alpha=0.05$.** Reading off $H_\alpha$ is nothing more
+than estimating the $0.95$ quantile of the divergence distribution. The nonparametric alternative is
+the empirical quantile $\hat H_\alpha = \hat F_n^{-1}(1-\alpha)$ from the ECDF. For a moderate
+(non-extreme) quantile like $0.95$ with genome-scale $n$ (covered cytosines per sample per
+chromosome, $10^4$–$10^6$), the sample quantile is consistent and asymptotically normal with standard
+error
+$$
+\operatorname{SE}(\hat q_{0.95}) \approx \frac{1}{f(q_{0.95})}\sqrt{\frac{0.95\cdot 0.05}{n}},
+$$
+which is minute. So the ECDF already estimates the $0.95$ cutpoint precisely; a parametric fit can
+only *slightly* reduce variance, and it can *introduce* bias if the chosen family is misspecified.
+Parametric tail modeling earns its keep in the **far** tail ($\alpha \to 10^{-4}$ or smaller), where
+empirical quantiles are noisy or undefined and extrapolation (extreme-value / parametric) is
+mandatory — not at $\alpha = 0.05$. Note also that `GGamma3P` *nests* Weibull and gamma as special
+cases (Stacy 1962), so "Weibull as a simpler version" is literally a submodel; but every member of
+that family is being used only to read a single $0.95$ quantile that the ECDF returns
+assumption-free.
+
+**Why the TV cut is the binding constraint.** The two gates are not independent. For a Bernoulli
+methylation level the total-variation distance between control and treatment is exactly
+$\mathrm{TV}=|\Delta p|$, and the Hellinger distance is
+$H^2 = 1-\sqrt{p_c p_t}-\sqrt{(1-p_c)(1-p_t)}$; both are monotone in $|\Delta p|$ at fixed marginals.
+More generally, Hellinger and total variation *sandwich each other* (Gibbs & Su 2002):
+$$
+H^2(P,Q)\;\le\;\mathrm{TV}(P,Q)\;\le\;\sqrt{2}\,H(P,Q),
+$$
+so they are topologically equivalent metrics and strongly correlated. Crucially, MethylIT's $H$ is
+**coverage-weighted** (`weight: cov`), which is exactly why its divergence distribution looks
+Weibull/gamma-like (a scaled sum of confidence-weighted terms), whereas the TV gate is an
+**unweighted, bounded** $[0,1]$ effect size. Requiring $\mathrm{TV} > 0.2$ discards the large
+population of high-$H$ positions that are statistically confident (deep coverage) but biologically
+small ($|\Delta p|$ tiny). The identity and count of surviving pDMPs is therefore governed mostly by
+the TV gate; perturbing the $H$-quantile estimator (parametric $\leftrightarrow$ ECDF) only nudges a
+threshold on a variable whose gate is looser than TV's. **Net effect on the pDMP set: second-order** —
+your intuition is correct.
+
+**Where the parametric model still matters (the honest caveats).** (i) MethylIT computes $H_\alpha$
+*per individual*, so the fit provides a per-sample, coverage-aware noise calibration that a single
+pooled ECDF would not; (ii) very small $\alpha$; (iii) the paper's headline advantage over Fisher's
+exact test / DSS comes from *modeling the signal distribution at all*, not from Weibull-vs-ECDF
+specifically (Sanchez et al. 2019). The precise statement is: **the functional form of the fitted
+divergence distribution is not the load-bearing choice at $\alpha=0.05$; having an effect-size (TV)
+gate is.** This is exactly
+why MethylPipeline's nonparametric ECDF/KS screen plus an explicit effect-size filter is a defensible
+substitute for the parametric tail — the two products converge here.
+
+### B. Is a Random Forest justified at the cutpoint, or does single-variable Youden suffice?
+
+**What MethylIT does.** `estimateCutPoint` classifies each pDMP as control-like vs treatment-like and
+picks the optimal divergence cutpoint. The paper offers three routes: (1) the **Youden index** on a
+single divergence; (2) posterior probabilities from an ML classifier (logistic/RF/QDA/kNN); (3) a
+gamma-mixture posterior (Sanchez et al. 2019). The 0.4.0 config wires the ML route:
+`classifier1: logistic`, `classifier2: random_forest` (`ntree: 300`) over
+$\{$`hdiv, TV, jdiv.stat, bay.TV, jdiv, wprob, pos`$\}$ with interactions and `n_pc: 4` PCA.
+
+**If the signal is essentially one monotone variable (e.g. J-divergence), the RF is unnecessary.**
+For a single score $s$ with monotone $P(\text{treatment}\mid s)$, the Bayes-optimal decision rule is a
+**threshold** $s > c^\*$. Maximizing Youden's $J(c)=\mathrm{Se}(c)+\mathrm{Sp}(c)-1$ over $c$ returns
+precisely the threshold that minimizes total misclassification under equal error weighting — Youden's
+$c_J$ is provably the optimal-misclassification cutpoint for a given weighting
+(Youden 1950; Perkins & Schisterman 2006). So Youden on the single variable **is** the optimal classifier for that
+variable; a Random Forest cannot beat it and, as a piecewise-constant axis-aligned ensemble, can only
+*approximate* the same threshold while adding variance, hyperparameters (`ntree`, `nsplit`), a
+serialized version-fragile model, nondeterminism, and calibration burden.
+
+**Scalability.** Youden is "sort the $n$ scores and sweep thresholds", $O(n\log n)$, deterministic,
+one output parameter (the cutpoint), trivially portable. A 300-tree forest is
+$O(\texttt{ntree}\cdot n\log n\cdot \sqrt{d})$ with bootstrap resampling per tree. On genome-scale
+pDMP tables ($10^5$–$10^6$ rows per sample) the difference in constant factors is large — the
+single-variable threshold scales far better, exactly as you note.
+
+**Collinearity / effective dimension $\approx 1$.** `hdiv` (Hellinger), `jdiv` (J-divergence),
+`bay.TV`, and `TV` are all monotone transforms of the same underlying $(\hat p_c,\hat p_t,
+\text{coverage})$; the J-divergence and Hellinger divergence are both $f$-divergences of the *same*
+Bernoulli pair and are highly correlated. The nominal feature vector therefore has effective
+dimension near 1 (perhaps 2 once coverage weighting is included); PCA to 4 components on collinear
+inputs mostly repackages a single direction, and RF variable importance would collapse onto one
+feature. In that regime a multivariate learner has almost nothing to learn beyond the single
+divergence axis, and the parsimonious estimator (a threshold) dominates on bias, variance,
+interpretability, and compute. Random forests excel with *many weakly informative, interacting*
+features (Breiman 2001) — the opposite of a single dominant monotone score.
+
+**When the RF is actually justified.** Only if `pos`, coverage weighting `wprob`, or genuine
+interactions (`wprob:hdiv`, `wprob:jdiv`) carry non-redundant, **non-monotone** signal that materially
+improves per-pDMP classification. That is an empirical question: compare held-out AUC / Youden-$J$ of
+the single-variable threshold against the full RF; under the collinearity above the delta is likely
+negligible. And because the *clinical* decision aggregates thousands of pDMPs per sample, small
+per-pDMP gains wash out at the sample level — further favoring the simple threshold. This mirrors
+MethylPipeline, which keeps per-locus detection as a nonparametric test plus a scalar effect score and
+defers learning to a downstream *aggregate* classifier rather than a heavy per-locus model.
+
+### C. Synthesis
+
+The two most complex pieces of MethylIT — the parametric divergence distribution and the multivariate
+per-locus ML cutpoint — are, under the conditions typical of human genome-wide WGBS, largely reducible
+to (a) an ECDF/effect-size screen and (b) a single-variable optimal threshold. Their complexity is
+defensible only in specific regimes — far-tail $\alpha$, per-individual noise calibration, or
+genuinely multivariate non-monotone signal — which should be **measured, not assumed**. MethylPipeline's
+new held-out bootstrap (Workflow 3) is the right instrument to settle it empirically: quantify (1) the
+Jaccard overlap of pDMP sets selected by the parametric-$\alpha$ vs ECDF-$\alpha$ rule (expected high),
+and (2) the held-out balanced-accuracy/AUC gap between a single-variable Youden threshold and the full
+Random Forest (expected within bootstrap noise). If those deltas are negligible, the simpler
+constructs are not just adequate — they are preferable on reproducibility and scale.
+
+### Additional references
+
+Beyond Sanchez & Mackenzie, the analysis above rests on:
+
+- **E. W. Stacy (1962).** "A Generalization of the Gamma Distribution." *Ann. Math. Statist.*
+  33(3):1187–1192. — GGamma nests Weibull and gamma as special cases.
+- **A. L. Gibbs & F. E. Su (2002).** "On Choosing and Bounding Probability Metrics." *Int. Stat. Rev.*
+  70(3):419–435. doi:10.1111/j.1751-5823.2002.tb00178.x — the Hellinger–total-variation inequalities.
+- **W. J. Youden (1950).** "Index for rating diagnostic tests." *Cancer* 3(1):32–35. — the Youden
+  index / optimal single-score cutpoint.
+- **N. J. Perkins & E. F. Schisterman (2006).** "The inconsistency of 'optimal' cutpoints obtained
+  using two criteria based on the receiver operating characteristic curve." *Am. J. Epidemiol.*
+  163(7):670–675. — $c_J$ is the optimal-misclassification cutpoint under a given weighting.
+- **L. Breiman (2001).** "Random Forests." *Machine Learning* 45:5–32. — where ensembles help (many
+  weak, interacting features) versus a single dominant monotone score.
+- **D. M. Green & J. A. Swets (1966).** *Signal Detection Theory and Psychophysics.* Wiley. — the
+  signal-detection framing shared by both products.
+
 ## Feature-selection stability and "production" model
 
 - **MethylPipeline** has a first-class, formalized answer: Monte Carlo recurrence -> stable panel ->
@@ -216,7 +357,7 @@ automatically:
   against. `score_only` reuses the same manifest via `centroid_manifest_path`, i.e. the reference is
   frozen and reused.
 - **Why it governs all calculations.** The pooled reference feeds (1) the per-sample divergence for
-  all samples, (2) the goodness-of-fit null fit to the divergence background, (3) the potential-DMP
+  all samples, (2) the goodness-of-fit distribution fitted to the divergence values, (3) the potential-DMP
   tail test, and (4) the cutpoint classifier and prediction. So the single human decision "which rows
   are `is_reference`" propagates into every downstream number.
 
@@ -226,18 +367,19 @@ Practical recipe (grounded in the artifacts; MethylIT provides levers but no alg
 - Pool several, not one — the `centroid` stage exists to build a stable per-position baseline;
   `min_sitecov: 4` sets the usable-position floor.
 - Make it representative and batch-balanced — any systematic reference-vs-rest difference (depth,
-  batch, age/sex, prep) becomes spurious divergence and biases the fitted null.
+  batch, age/sex, prep) becomes spurious divergence and biases the fitted divergence distribution.
 - Keep it fixed and reuse it (`centroid_manifest_path`) for comparability; `exp_wand.py` holds the
   reference constant and forbids reference/training overlap in experiments.
 - Decide on overlap deliberately — overlap is allowed (reference is used to compute a divergence, not
   as a label) but warned, since reusing healthy samples as reference and as evaluation controls
   introduces optimism. Mark reference-only samples `analysis_role=other` for cleaner separation.
 
-The key implication: MethylIT's reference is manual, pooled, and upstream of the null model, and the
-tool validates it only via coverage floors and overlap warnings. If the pool is unrepresentative or
-too small, nothing automatic will catch or correct it. A **reference-swap sensitivity study** (build
-several reference pools from different healthy subsets; rerun `03_centroid -> divergence -> gof ->
-pDMP`; compare potential-DMP sets and fitted null parameters) would convert this unmeasured
+The key implication: MethylIT's reference is manual, pooled, and upstream of the fitted divergence
+distribution, and the tool validates it only via coverage floors and overlap warnings. If the pool is
+unrepresentative or too small, nothing automatic will catch or correct it. A **reference-swap
+sensitivity study** (build several reference pools from different healthy subsets; rerun
+`03_centroid -> divergence -> gof -> pDMP`; compare potential-DMP sets and fitted distribution
+parameters) would convert this unmeasured
 assumption into a quantified one.
 
 ## Engineering and interpretation differences
