@@ -12,7 +12,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "$SCRIPT_DIR/lib/mc_analyte_sweep_common.sh"
+source "$SCRIPT_DIR/mc_analyte_sweep_common.sh"
 
 ANALYTE="buffy"
 PROJECT_JSON="${BUFFY_PROJECT:-/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json}"
