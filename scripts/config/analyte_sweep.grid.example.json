@@ -1,0 +1,38 @@
+[
+  {
+    "label": "baseline_n30_freq50",
+    "overlay": {
+      "n_iterations": 30,
+      "stability_gene_freq": 0.5,
+      "stability_dmp_freq": 0.75,
+      "gene_featurecuts_min_genes": 25,
+      "stability_min_selected_genes": 25,
+      "gene_featurecuts_target_ba": 0.85
+    }
+  },
+  {
+    "label": "strict_freq70_min50",
+    "overlay": {
+      "n_iterations": 30,
+      "stability_gene_freq": 0.7,
+      "stability_dmp_freq": 0.8,
+      "gene_featurecuts_min_genes": 50,
+      "stability_min_selected_genes": 50,
+      "gene_featurecuts_target_ba": 0.88
+    }
+  },
+  {
+    "label": "long_n50_early_stop",
+    "overlay": {
+      "n_iterations": 50,
+      "stability_gene_freq": 0.5,
+      "stability_dmp_freq": 0.75,
+      "gene_featurecuts_min_genes": 25,
+      "stability_min_selected_genes": 25,
+      "gene_featurecuts_target_ba": 0.85,
+      "stability_early_stop_enabled": true,
+      "stability_min_iterations": 25,
+      "stability_convergence_jaccard": 0.9
+    }
+  }
+]

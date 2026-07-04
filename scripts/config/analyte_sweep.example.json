@@ -1,0 +1,24 @@
+{
+  "n_iterations": 30,
+  "train_fraction": 0.8,
+  "seed": 42,
+  "stability_gene_recurrence_source": "classifier",
+  "stability_gene_freq": 0.5,
+  "stability_dmp_freq": 0.75,
+  "stability_min_balanced_accuracy": 0.9,
+  "gene_featurecuts_target_ba": 0.85,
+  "gene_featurecuts_min_genes": 25,
+  "stability_min_selected_genes": 25,
+  "stability_early_stop_enabled": false,
+  "stability_min_iterations": 20,
+  "stability_convergence_window": 5,
+  "stability_convergence_jaccard": 0.9,
+  "stability_convergence_max_size_delta": 0.05,
+  "stability_convergence_patience": 3,
+  "gene_selection": {
+    "min_selected_genes": 25,
+    "target_balanced_accuracy": 0.85,
+    "max_genes": 200,
+    "max_dmps": 1000
+  }
+}
