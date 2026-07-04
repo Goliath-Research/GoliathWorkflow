@@ -285,9 +285,9 @@ PY
     local overlay_file
     overlay_file="$(mktemp)"
     printf '%s\n' "$overlay_json" >"$overlay_file"
+    rc=0
     mc_sweep_run_one "$analyte" "$project_json" "$sweep_id" "$variant_label" \
-      "$output_base" "$overlay_file" "$resume_arg" "$dry_run" "$skip_mc"
-    rc=$?
+      "$output_base" "$overlay_file" "$resume_arg" "$dry_run" "$skip_mc" || rc=$?
     rm -f "$overlay_file"
     if [[ $rc -ne 0 ]]; then
       rm -f "$grid_lines"
