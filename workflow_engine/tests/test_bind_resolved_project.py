@@ -61,3 +61,18 @@ def test_materialize_action_input_preserves_existing_output_dir() -> None:
     )
     assert out["outputDir"] == "/explicit/out"
     assert out["resolvedConfig"]["ppi_only"] is True
+
+
+def test_materialize_predictor_inlines_classifier_slice() -> None:
+    out = materialize_action_input(
+        {"tool": "MethylPredictor", "projectPath": "/work/p.json"},
+        "pipeline.predictor",
+        {
+            "actionConfig": {
+                "predictor": {"debug": False},
+                "classifier": {"save_classifier_path": "/work/models/ovr.pkl"},
+            },
+        },
+    )
+    assert out["resolvedConfig"]["classifier"]["save_classifier_path"] == "/work/models/ovr.pkl"
+    assert out["resolvedConfig"]["model_path"] == "/work/models/ovr.pkl"

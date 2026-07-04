@@ -149,6 +149,7 @@ def _run_cluster_then_centroids_per_cluster(
     output_dir: Optional[Union[str, Path]] = None,
     chromosome: Optional[str] = None,
     context: Optional[str] = None,
+    resolved_config_path: Optional[Union[str, Path]] = None,
 ) -> None:
     """
     Run MethylCluster for the group, then MethylCentroid once per derived cluster.
@@ -200,6 +201,7 @@ def _run_cluster_then_centroids_per_cluster(
     step_cfg = resolve_cli_step_config(
         "centroid",
         project,
+        resolved_config_path=resolved_config_path,
         step_override_path=step_override_path,
     )
     _forbid_centroid_samples_key(step_cfg, "centroid step config (subcluster)")
@@ -244,6 +246,7 @@ def _run_cluster_then_centroids_per_cluster(
 def run_centroids_for_all_groups(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
+    resolved_config_path: Optional[Union[str, Path]] = None,
 ) -> None:
     """
     Run MethylCentroid batch for every resolved group. For groups with subcluster and
@@ -263,10 +266,14 @@ def run_centroids_for_all_groups(
             and group_config.subcluster.persist_centroids
         ):
             _run_cluster_then_centroids_per_cluster(
-                project_path, side, label, step_override_path
+                project_path, side, label, step_override_path,
+                resolved_config_path=resolved_config_path,
             )
         else:
-            batch = resolve_centroid_batch_config(project_path, i, step_override_path)
+            batch = resolve_centroid_batch_config(
+                project_path, i, step_override_path,
+                resolved_config_path=resolved_config_path,
+            )
             run_batch_processing(batch)
 
 
@@ -278,6 +285,7 @@ def run_centroid_for_one_group(
     output_dir: Optional[Union[str, Path]] = None,
     chromosome: Optional[str] = None,
     context: Optional[str] = None,
+    resolved_config_path: Optional[Union[str, Path]] = None,
 ) -> None:
     """
     Run MethylCentroid for a single group (by index or 'group1'/'group2').
@@ -295,6 +303,7 @@ def run_centroid_for_one_group(
             output_dir_override=output_dir,
             chromosome=chromosome,
             context=context,
+            resolved_config_path=resolved_config_path,
         )
         run_batch_processing(batch)
         return
@@ -307,6 +316,7 @@ def run_centroid_for_one_group(
             output_dir_override=output_dir,
             chromosome=chromosome,
             context=context,
+            resolved_config_path=resolved_config_path,
         )
         run_batch_processing(batch)
         return
@@ -326,6 +336,7 @@ def run_centroid_for_one_group(
             output_dir=output_dir,
             chromosome=chromosome,
             context=context,
+            resolved_config_path=resolved_config_path,
         )
     else:
         batch = resolve_centroid_batch_config(
@@ -335,6 +346,7 @@ def run_centroid_for_one_group(
             output_dir_override=output_dir,
             chromosome=chromosome,
             context=context,
+            resolved_config_path=resolved_config_path,
         )
         run_batch_processing(batch)
 

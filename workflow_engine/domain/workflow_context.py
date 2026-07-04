@@ -424,6 +424,20 @@ def materialize_action_input(
         program_override=override,
         regulatory=reg,
     )
+    if entry.action_config_key == "predictor":
+        classifier_cfg = resolve_action_config(
+            "classifier",
+            site=site,
+            profile_action_config=profile_ac,
+            program_override=None,
+            regulatory=reg,
+        )
+        if isinstance(classifier_cfg, dict) and classifier_cfg:
+            baked = dict(out["resolvedConfig"])
+            baked["classifier"] = classifier_cfg
+            if baked.get("model_path") in (None, "") and classifier_cfg.get("save_classifier_path"):
+                baked["model_path"] = classifier_cfg["save_classifier_path"]
+            out["resolvedConfig"] = baked
     return out
 
 

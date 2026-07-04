@@ -426,7 +426,11 @@ def main() -> None:
             if group_arg.isdigit():
                 group_arg = int(group_arg)
             if group_token_requests_all_groups(args.project, group_arg):
-                run_centroids_for_all_groups(args.project, args.step_override)
+                run_centroids_for_all_groups(
+                    args.project,
+                    args.step_override,
+                    resolved_config_path=getattr(args, "resolved_config", None),
+                )
             else:
                 run_centroid_for_one_group(
                     args.project,
@@ -435,6 +439,7 @@ def main() -> None:
                     output_dir=args.output_dir,
                     chromosome=args.chromosome,
                     context=args.context,
+                    resolved_config_path=getattr(args, "resolved_config", None),
                 )
 
         elif args.batch_config:

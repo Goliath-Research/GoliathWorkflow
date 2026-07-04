@@ -49,8 +49,44 @@ def _classifier_step_snapshot(classifier_step: Optional[Dict[str, Any]]) -> Opti
     return out or None
 
 
+def _resolve_classifier_step_for_predictor(
+    project: ProjectConfig,
+    step_cfg: Dict[str, Any],
+    *,
+    resolved_config_path: Optional[Union[str, Path]] = None,
+) -> Dict[str, Any]:
+    """
+    Classifier slice for model_path fallbacks and classifier_step_snapshot.
+
+    Worker path: read nested ``classifier`` (or inlined keys) from the baked predictor
+    ``resolvedConfig`` file — never re-load the same file as a classifier action slice.
+    Standalone path: resolve from profile/env via ``resolve_for_project("classifier")``.
+    """
+    if resolved_config_path not in (None, ""):
+        nested = step_cfg.get("classifier")
+        if isinstance(nested, dict):
+            return dict(nested)
+        inlined = {
+            k: step_cfg[k]
+            for k in (
+                "save_classifier_path",
+                "model_dir",
+                "ovr_binary_model_paths",
+                "ovr_detection_dirs",
+                "panel",
+                *_CLASSIFIER_SNAPSHOT_KEYS,
+            )
+            if k in step_cfg
+        }
+        return inlined
+    return dict(resolve_for_project("classifier", project))
+
+
 def _resolve_panel_for_predictor(
-    project: ProjectConfig, step_cfg: Dict[str, Any]
+    project: ProjectConfig,
+    step_cfg: Dict[str, Any],
+    *,
+    classifier_step: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Panel precedence: explicit predictor.panel → classifier.panel → derived from comparisons.
@@ -58,7 +94,11 @@ def _resolve_panel_for_predictor(
     p = step_cfg.get("panel")
     if isinstance(p, dict) and p:
         return p
-    cls_step = resolve_for_project("classifier", project)
+    cls_step = (
+        dict(classifier_step)
+        if isinstance(classifier_step, dict)
+        else resolve_for_project("classifier", project)
+    )
     c = cls_step.get("panel")
     if isinstance(c, dict) and c:
         return c
@@ -1067,14 +1107,10 @@ def resolve_predictor_config(
                 stacklevel=2,
             )
             step_cfg = legacy_validator
-    classifier_step = (
-        resolve_cli_step_config(
-            "classifier",
-            project,
-            resolved_config_path=resolved_config_path,
-        )
-        if resolved_config_path not in (None, "")
-        else resolve_for_project("classifier", project)
+    classifier_step = _resolve_classifier_step_for_predictor(
+        project,
+        step_cfg,
+        resolved_config_path=resolved_config_path,
     )
 
     paths = project.get_derived_paths()
@@ -1119,7 +1155,7 @@ def resolve_predictor_config(
             report_controls={"label": "control", "groups": [{"label": "cli", "sample_paths": []}]},
             report_diseases={"label": "disease", "groups": [{"label": "cli", "sample_paths": []}]},
             sample_lineage=lineage,
-            panel=_resolve_panel_for_predictor(project, step_cfg),
+            panel=_resolve_panel_for_predictor(project, step_cfg, classifier_step=classifier_step),
             classifier_step_snapshot=_classifier_step_snapshot(classifier_step),
             **_predictor_decision_overrides(step_cfg),
         )
@@ -1181,7 +1217,7 @@ def resolve_predictor_config(
                 report_diseases=None,
                 sample_lineage=mc_lineage,
                 cohort_hierarchy=tree or None,
-                panel=_resolve_panel_for_predictor(project, step_cfg),
+                panel=_resolve_panel_for_predictor(project, step_cfg, classifier_step=classifier_step),
                 classifier_step_snapshot=_classifier_step_snapshot(classifier_step),
                 **_predictor_decision_overrides(step_cfg),
             )
