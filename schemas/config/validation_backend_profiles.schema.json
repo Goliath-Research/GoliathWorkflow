@@ -3,6 +3,83 @@
     "EcdfBackendParams": {
       "additionalProperties": false,
       "properties": {
+        "chromosome_distance_metrics": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Non-parametric sample-vs-centroid distance metrics for chromosome family: subset of js, hellinger, wasserstein. Default all three when null.",
+          "title": "Chromosome Distance Metrics"
+        },
+        "chromosome_hypo_beta_threshold": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Beta cutoff for hypomethylation burden features (chromosome family). Operator-set per profile/site; builder uses 0.2 when null.",
+          "title": "Chromosome Hypo Beta Threshold"
+        },
+        "chromosome_intermediate_beta_hi": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Upper bound for intermediate-methylation fraction (chromosome family). Default 0.75 when null.",
+          "title": "Chromosome Intermediate Beta Hi"
+        },
+        "chromosome_intermediate_beta_lo": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lower bound for intermediate-methylation fraction (chromosome family). Default 0.25 when null.",
+          "title": "Chromosome Intermediate Beta Lo"
+        },
+        "chromosome_list": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional chromosome allow-list for chromosome-family features. When null, chromosomes are inferred from the DMP panel.",
+          "title": "Chromosome List"
+        },
         "covariate_categorical_columns": {
           "anyOf": [
             {
@@ -438,6 +515,83 @@
     "GenerativeBackendParams": {
       "additionalProperties": false,
       "properties": {
+        "chromosome_distance_metrics": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Non-parametric sample-vs-centroid distance metrics for chromosome family: subset of js, hellinger, wasserstein. Default all three when null.",
+          "title": "Chromosome Distance Metrics"
+        },
+        "chromosome_hypo_beta_threshold": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Beta cutoff for hypomethylation burden features (chromosome family). Operator-set per profile/site; builder uses 0.2 when null.",
+          "title": "Chromosome Hypo Beta Threshold"
+        },
+        "chromosome_intermediate_beta_hi": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Upper bound for intermediate-methylation fraction (chromosome family). Default 0.75 when null.",
+          "title": "Chromosome Intermediate Beta Hi"
+        },
+        "chromosome_intermediate_beta_lo": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lower bound for intermediate-methylation fraction (chromosome family). Default 0.25 when null.",
+          "title": "Chromosome Intermediate Beta Lo"
+        },
+        "chromosome_list": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional chromosome allow-list for chromosome-family features. When null, chromosomes are inferred from the DMP panel.",
+          "title": "Chromosome List"
+        },
         "covariate_categorical_columns": {
           "anyOf": [
             {
@@ -1049,6 +1203,83 @@
     "TabularBackendParams": {
       "additionalProperties": false,
       "properties": {
+        "chromosome_distance_metrics": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Non-parametric sample-vs-centroid distance metrics for chromosome family: subset of js, hellinger, wasserstein. Default all three when null.",
+          "title": "Chromosome Distance Metrics"
+        },
+        "chromosome_hypo_beta_threshold": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Beta cutoff for hypomethylation burden features (chromosome family). Operator-set per profile/site; builder uses 0.2 when null.",
+          "title": "Chromosome Hypo Beta Threshold"
+        },
+        "chromosome_intermediate_beta_hi": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Upper bound for intermediate-methylation fraction (chromosome family). Default 0.75 when null.",
+          "title": "Chromosome Intermediate Beta Hi"
+        },
+        "chromosome_intermediate_beta_lo": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Lower bound for intermediate-methylation fraction (chromosome family). Default 0.25 when null.",
+          "title": "Chromosome Intermediate Beta Lo"
+        },
+        "chromosome_list": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional chromosome allow-list for chromosome-family features. When null, chromosomes are inferred from the DMP panel.",
+          "title": "Chromosome List"
+        },
         "covariate_categorical_columns": {
           "anyOf": [
             {

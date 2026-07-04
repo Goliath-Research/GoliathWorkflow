@@ -824,6 +824,15 @@ class MethylClassifier:
                 else:
                     self._calibrated = False
 
+                from methyl_classifier.utils.ecdf_derived_measures import schema_from_model_package
+
+                self.derived_measures_schema = schema_from_model_package(model_package)
+                if self.derived_measures_schema:
+                    print(
+                        "📊 Derived measures schema: "
+                        f"{len(self.derived_measures_schema.get('feature_names') or [])} features"
+                    )
+
                 # Multi-class single-file: set dmp_positions_df so loader can use per-chromosome positions
                 if "dmp_df" in model_package:
                     dmp_df = model_package["dmp_df"]

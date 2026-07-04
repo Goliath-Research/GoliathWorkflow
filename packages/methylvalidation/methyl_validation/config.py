@@ -244,6 +244,41 @@ class BackendSharedParams(BaseModel):
             "Observed-hybrid columns computed and exported but excluded from model training."
         ),
     )
+    chromosome_hypo_beta_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Beta cutoff for hypomethylation burden features (chromosome family). "
+            "Operator-set per profile/site; builder uses 0.2 when null."
+        ),
+    )
+    chromosome_intermediate_beta_lo: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Lower bound for intermediate-methylation fraction (chromosome family). Default 0.25 when null.",
+    )
+    chromosome_intermediate_beta_hi: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Upper bound for intermediate-methylation fraction (chromosome family). Default 0.75 when null.",
+    )
+    chromosome_distance_metrics: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Non-parametric sample-vs-centroid distance metrics for chromosome family: "
+            "subset of js, hellinger, wasserstein. Default all three when null."
+        ),
+    )
+    chromosome_list: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Optional chromosome allow-list for chromosome-family features. "
+            "When null, chromosomes are inferred from the DMP panel."
+        ),
+    )
 
     covariates_path: Optional[str] = Field(default=None)
     covariate_id_column: str = Field(default="sample_id")
@@ -1302,8 +1337,9 @@ class MonteCarloConfig(BaseModel):
         default="dmp_scored",
         description=(
             "For feature_mode=observed_hybrid, controls active feature families: "
-            "dmp_scored | gene | structural | gene_scored | dmp_scored+gene | "
-            "dmp_scored+structural | dmp_scored+gene_scored | hybrid-all. "
+            "dmp_scored | gene | structural | gene_scored | structural_scored | chromosome | "
+            "dmp_scored+gene | dmp_scored+structural | dmp_scored+gene_scored | "
+            "dmp_scored+structural_scored | dmp_scored+chromosome | hybrid-all. "
             "Legacy aliases (dmp, dmp+gene_scored, etc.) are accepted and normalized."
         ),
     )
@@ -1498,6 +1534,41 @@ class MonteCarloConfig(BaseModel):
         default_factory=lambda: ["obs_fraction", "n_obs_dmps", "n_total_dmps"],
         description=(
             "Observed-hybrid columns computed and exported but excluded from model training."
+        ),
+    )
+    chromosome_hypo_beta_threshold: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Beta cutoff for hypomethylation burden features (chromosome family). "
+            "Operator-set per profile/site; builder uses 0.2 when null."
+        ),
+    )
+    chromosome_intermediate_beta_lo: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Lower bound for intermediate-methylation fraction (chromosome family). Default 0.25 when null.",
+    )
+    chromosome_intermediate_beta_hi: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Upper bound for intermediate-methylation fraction (chromosome family). Default 0.75 when null.",
+    )
+    chromosome_distance_metrics: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Non-parametric sample-vs-centroid distance metrics for chromosome family: "
+            "subset of js, hellinger, wasserstein. Default all three when null."
+        ),
+    )
+    chromosome_list: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Optional chromosome allow-list for chromosome-family features. "
+            "When null, chromosomes are inferred from the DMP panel."
         ),
     )
     ecdf_second_stage_enabled: bool = Field(
@@ -1863,6 +1934,11 @@ class MonteCarloConfig(BaseModel):
             "mapper_annotation_collapse_mode",
             "mapper_annotation_unknown_fallback",
             "observed_feature_quality_columns",
+            "chromosome_hypo_beta_threshold",
+            "chromosome_intermediate_beta_lo",
+            "chromosome_intermediate_beta_hi",
+            "chromosome_distance_metrics",
+            "chromosome_list",
             "covariates_path",
             "covariate_id_column",
             "covariate_numeric_columns",

@@ -719,11 +719,13 @@ def test_observed_feature_builder_dynamic_schema_is_deterministic(monkeypatch):
 
 
 def test_family_flags_gene_scored_tokens():
-    assert observed_feature_builder._family_flags("gene_scored") == (False, False, False, True, False)
-    assert observed_feature_builder._family_flags("dmp_scored+gene_scored") == (True, False, False, True, False)
-    assert observed_feature_builder._family_flags("structural_scored") == (False, False, False, False, True)
-    assert observed_feature_builder._family_flags("dmp_scored+structural_scored") == (True, False, False, False, True)
-    assert observed_feature_builder._family_flags("hybrid-all") == (True, True, True, False, False)
+    assert observed_feature_builder._family_flags("gene_scored") == (False, False, False, True, False, False)
+    assert observed_feature_builder._family_flags("dmp_scored+gene_scored") == (True, False, False, True, False, False)
+    assert observed_feature_builder._family_flags("structural_scored") == (False, False, False, False, True, False)
+    assert observed_feature_builder._family_flags("dmp_scored+structural_scored") == (True, False, False, False, True, False)
+    assert observed_feature_builder._family_flags("hybrid-all") == (True, True, True, False, False, True)
+    assert observed_feature_builder._family_flags("chromosome") == (False, False, False, False, False, True)
+    assert observed_feature_builder._family_flags("dmp_scored+chromosome") == (True, False, False, False, False, True)
 
 
 def test_normalize_feature_family_set_canonical_and_legacy_aliases():

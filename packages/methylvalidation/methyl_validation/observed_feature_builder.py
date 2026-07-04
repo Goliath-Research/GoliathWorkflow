@@ -28,6 +28,24 @@ class ObservedFeatureArtifacts:
     report: Dict[str, Any]
 
 
+def observed_chromosome_build_kwargs(
+    *,
+    chromosome_hypo_beta_threshold: Optional[float] = None,
+    chromosome_intermediate_beta_lo: Optional[float] = None,
+    chromosome_intermediate_beta_hi: Optional[float] = None,
+    chromosome_distance_metrics: Optional[Sequence[str]] = None,
+    chromosome_list: Optional[Sequence[str]] = None,
+) -> Dict[str, Any]:
+    """Keyword bundle for chromosome-family tunables (profile/site resolved upstream)."""
+    return {
+        "chromosome_hypo_beta_threshold": chromosome_hypo_beta_threshold,
+        "chromosome_intermediate_beta_lo": chromosome_intermediate_beta_lo,
+        "chromosome_intermediate_beta_hi": chromosome_intermediate_beta_hi,
+        "chromosome_distance_metrics": chromosome_distance_metrics,
+        "chromosome_list": chromosome_list,
+    }
+
+
 @dataclass
 class ObservedHybridAnchors:
     healthy_reference_vector: np.ndarray
@@ -48,10 +66,12 @@ HYBRID_FEATURE_FAMILY_SETS = (
     "structural",
     "gene_scored",
     "structural_scored",
+    "chromosome",
     "dmp_scored+gene",
     "dmp_scored+structural",
     "dmp_scored+gene_scored",
     "dmp_scored+structural_scored",
+    "dmp_scored+chromosome",
     "hybrid-all",
 )
 LEGACY_FEATURE_FAMILY_ALIASES: Dict[str, str] = {
@@ -78,12 +98,17 @@ def normalize_feature_family_set(value: Optional[str]) -> str:
 
 
 def family_includes_dmp_scored(feature_family_set: Optional[str]) -> bool:
-    include_dmp, _, _, _, _ = _family_flags(feature_family_set)
+    include_dmp, _, _, _, _, _ = _family_flags(feature_family_set)
     return bool(include_dmp)
 
 
+def family_includes_chromosome(feature_family_set: Optional[str]) -> bool:
+    _, _, _, _, _, include_chromosome = _family_flags(feature_family_set)
+    return bool(include_chromosome)
+
+
 def describe_active_feature_families(feature_family_set: Optional[str]) -> Dict[str, bool]:
-    include_dmp, include_gene, include_structural, include_gene_scored, include_structural_scored = (
+    include_dmp, include_gene, include_structural, include_gene_scored, include_structural_scored, include_chromosome = (
         _family_flags(feature_family_set)
     )
     return {
@@ -92,6 +117,7 @@ def describe_active_feature_families(feature_family_set: Optional[str]) -> Dict[
         "structural": bool(include_structural),
         "gene_scored": bool(include_gene_scored),
         "structural_scored": bool(include_structural_scored),
+        "chromosome": bool(include_chromosome),
     }
 REMOVED_OBSERVED_HYBRID_FEATURES = {
     "gene_shift_q50",
@@ -317,29 +343,33 @@ def _build_dynamic_mapped_feature_names(
     return gene_names, struct_names, metadata
 
 
-def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool, bool, bool]:
-    """Return (dmp_scored, legacy_gene, structural, gene_scored, structural_scored)."""
+def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool, bool, bool, bool]:
+    """Return (dmp_scored, legacy_gene, structural, gene_scored, structural_scored, chromosome)."""
     token = normalize_feature_family_set(feature_family_set)
     if token == "dmp_scored":
-        return True, False, False, False, False
+        return True, False, False, False, False, False
     if token == "gene":
-        return False, True, False, False, False
+        return False, True, False, False, False, False
     if token == "structural":
-        return False, False, True, False, False
+        return False, False, True, False, False, False
     if token == "gene_scored":
-        return False, False, False, True, False
+        return False, False, False, True, False, False
     if token == "structural_scored":
-        return False, False, False, False, True
+        return False, False, False, False, True, False
+    if token == "chromosome":
+        return False, False, False, False, False, True
     if token == "dmp_scored+gene":
-        return True, True, False, False, False
+        return True, True, False, False, False, False
     if token == "dmp_scored+structural":
-        return True, False, True, False, False
+        return True, False, True, False, False, False
     if token == "dmp_scored+gene_scored":
-        return True, False, False, True, False
+        return True, False, False, True, False, False
     if token == "dmp_scored+structural_scored":
-        return True, False, False, False, True
+        return True, False, False, False, True, False
+    if token == "dmp_scored+chromosome":
+        return True, False, False, False, False, True
     if token == "hybrid-all":
-        return True, True, True, False, False
+        return True, True, True, False, False, True
     raise ValueError(
         f"Unsupported feature_family_set={feature_family_set!r}; "
         f"allowed={list(HYBRID_FEATURE_FAMILY_SETS)}"
@@ -705,7 +735,7 @@ def derive_observed_hybrid_anchors(
     gene_feature_loading: str = "frozen",
     fixed_gene_features_df: Optional[pd.DataFrame] = None,
 ) -> ObservedHybridAnchors:
-    _include_dmp_family, include_gene_family, _include_structural_family, _include_gene_scored, _include_structural_scored = (
+    _include_dmp_family, include_gene_family, _include_structural_family, _include_gene_scored, _include_structural_scored, _include_chromosome = (
         _family_flags(feature_family_set)
     )
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
@@ -1036,6 +1066,8 @@ def observed_hybrid_feature_names(
     region_directional_region_types: Optional[Sequence[str]] = None,
     region_directional_min_loci: int = 1,
     observed_feature_quality_columns: Optional[Sequence[str]] = None,
+    chromosome_distance_metrics: Optional[Sequence[str]] = None,
+    chromosome_list: Optional[Sequence[str]] = None,
 ) -> List[str]:
     from .gene_scored_features import (
         gene_scored_feature_names,
@@ -1050,7 +1082,7 @@ def observed_hybrid_feature_names(
         validate_structural_scored_contrast_pairs_against_labels,
     )
 
-    include_dmp_family, include_gene_family, include_structural_family, include_gene_scored, include_structural_scored = (
+    include_dmp_family, include_gene_family, include_structural_family, include_gene_scored, include_structural_scored, include_chromosome = (
         _family_flags(feature_family_set)
     )
     names: List[str] = []
@@ -1119,6 +1151,26 @@ def observed_hybrid_feature_names(
                 contrast_pairs=structural_scored_contrast_pairs,
             )
         )
+    if include_chromosome:
+        from .chromosome_features import chromosome_feature_names
+
+        work_dmp = dmp_df if dmp_df is not None else pd.DataFrame()
+        if chromosome_list:
+            chroms = [str(c) for c in chromosome_list]
+        elif not work_dmp.empty and "chromosome" in work_dmp.columns:
+            chroms = sorted({str(c) for c in work_dmp["chromosome"].astype(str).tolist()})
+        else:
+            chroms = []
+        class_labels = [str(x) for x in (all_class_labels or cancer_class_labels or [])]
+        if not class_labels:
+            class_labels = ["healthy", "cancer"]
+        names.extend(
+            chromosome_feature_names(
+                chroms,
+                class_labels=class_labels,
+                distance_metrics=chromosome_distance_metrics or ("js", "hellinger", "wasserstein"),
+            )
+        )
     return names
 
 
@@ -1180,7 +1232,7 @@ def observed_hybrid_schema_fingerprint(
     )
 
     payload = "\n".join(names)
-    include_dmp_family, _, _, include_gene_scored, include_structural_scored = _family_flags(
+    include_dmp_family, _, _, include_gene_scored, include_structural_scored, _include_chromosome = _family_flags(
         feature_family_set
     )
     if include_dmp_family:
@@ -1310,13 +1362,18 @@ def build_observed_hybrid_feature_table(
     region_directional_region_types: Optional[Sequence[str]] = None,
     region_directional_min_loci: int = 1,
     observed_feature_quality_columns: Optional[Sequence[str]] = None,
+    chromosome_hypo_beta_threshold: Optional[float] = None,
+    chromosome_intermediate_beta_lo: Optional[float] = None,
+    chromosome_intermediate_beta_hi: Optional[float] = None,
+    chromosome_distance_metrics: Optional[Sequence[str]] = None,
+    chromosome_list: Optional[Sequence[str]] = None,
 ) -> ObservedFeatureArtifacts:
     del quantiles, dmr_window_bp, max_dmr_features, max_gene_features
     # The redesigned schema is fixed; these toggles are retained only for compatibility.
     del include_dmp_features, include_chromosome_features, include_dmr_features, include_gene_features
     del hist_tail_agreement_threshold
 
-    include_dmp_family, include_gene_family, include_structural_family, include_gene_scored_family, include_structural_scored_family = (
+    include_dmp_family, include_gene_family, include_structural_family, include_gene_scored_family, include_structural_scored_family, include_chromosome_family = (
         _family_flags(feature_family_set)
     )
     gene_feature_loading_norm = str(gene_feature_loading or "frozen").strip().lower()
@@ -1421,6 +1478,8 @@ def build_observed_hybrid_feature_table(
         region_directional_region_types=region_directional_region_types,
         region_directional_min_loci=int(max(1, region_directional_min_loci)),
         observed_feature_quality_columns=observed_feature_quality_columns,
+        chromosome_distance_metrics=chromosome_distance_metrics,
+        chromosome_list=chromosome_list,
     )
     training_feature_names, quality_feature_names = partition_observed_hybrid_feature_names(
         feature_names,
@@ -1732,6 +1791,28 @@ def build_observed_hybrid_feature_table(
                         )
                         X_feat[i, idx[s_key]] = float(numer / denom)
 
+    chromosome_report: Dict[str, Any] = {}
+    if include_chromosome_family:
+        from .chromosome_features import compute_chromosome_feature_matrix
+
+        X_chrom, _chrom_names, chromosome_report = compute_chromosome_feature_matrix(
+            X_raw,
+            locus_df,
+            w,
+            class_labels=all_class_labels_list,
+            healthy_class_label=healthy_class_label,
+            centroid_dir_by_class_label=centroid_dir_by_class_label,
+            hypo_beta_threshold=chromosome_hypo_beta_threshold,
+            intermediate_beta_lo=chromosome_intermediate_beta_lo,
+            intermediate_beta_hi=chromosome_intermediate_beta_hi,
+            distance_metrics=chromosome_distance_metrics,
+            chromosomes=chromosome_list,
+        )
+        for j, cname in enumerate(_chrom_names):
+            col_idx = idx.get(cname)
+            if col_idx is not None:
+                X_feat[:, int(col_idx)] = X_chrom[:, j]
+
     gene_scored_report: Dict[str, Any] = {}
     structural_scored_report: Dict[str, Any] = {}
     if include_gene_scored_family:
@@ -1954,7 +2035,7 @@ def build_observed_hybrid_feature_table(
     )
     if include_gene_scored_family or include_structural_scored_family:
         schema_version = HYBRID_FEATURE_SCHEMA_VERSION
-    elif include_gene_family or include_structural_family:
+    elif include_gene_family or include_structural_family or include_chromosome_family:
         schema_version = HYBRID_FEATURE_SCHEMA_VERSION
     else:
         schema_version = OBSERVED_HYBRID_SCHEMA_VERSION
@@ -1966,7 +2047,7 @@ def build_observed_hybrid_feature_table(
         "quantiles": [0.10, 0.50, 0.90],
         "feature_families": {
             "dmp_scored": bool(include_dmp_family),
-            "chromosome": False,
+            "chromosome": bool(include_chromosome_family),
             "dmr": False,
             "gene": bool(include_gene_family),
             "structural": bool(include_structural_family),
@@ -2002,6 +2083,7 @@ def build_observed_hybrid_feature_table(
         "raw_mapped_feature_metadata": mapped_feature_meta,
         "gene_scored": gene_scored_report,
         "structural_scored": structural_scored_report,
+        "chromosome": chromosome_report,
         "feature_profile": {
             "schema_version": HYBRID_FEATURE_SCHEMA_VERSION if include_dmp_family else schema_version,
             "removed_dmp_features": list(DEFAULT_REMOVED_DMP_FEATURE_SUFFIXES),

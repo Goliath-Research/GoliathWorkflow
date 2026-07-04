@@ -127,6 +127,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="FragmentomicsStepConfig",
     ),
     ConfigSchemaSpec(
+        schema_id="derived_measures",
+        module="methyl_derived_measures.config",
+        class_name="DerivedMeasuresStepConfig",
+        filename="derived_measures.schema.json",
+        title="DerivedMeasuresStepConfig",
+    ),
+    ConfigSchemaSpec(
         schema_id="centroid",
         module="methyl_centroid.config",
         class_name="MethylCentroidConfig",

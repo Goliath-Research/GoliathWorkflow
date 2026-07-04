@@ -13,6 +13,7 @@ import pandas as pd
 
 from ..core.classifier import MethylClassifier
 from ..utils.data_loader import DataLoader
+from ..utils.ecdf_derived_measures import extract_derived_measures_from_dmp_vector
 from ..utils.prediction_abstention import apply_min_observed_dmp_abstention
 from ..utils.calibration_split import stratified_calibration_fit_mask
 from ..utils.utils import extract_chrom_context_from_classifier, setup_logging
@@ -707,6 +708,9 @@ def classify_samples_from_list(
                 with open(pr, "w", encoding="utf-8") as f:
                     json.dump(panel_json, f, indent=2)
                 print(f"📋 Panel report saved to: {pr}", flush=True)
+        derived_cols = _derived_measures_extra_columns(classifier, feature_matrix_fast)
+        if derived_cols:
+            extra_cols = {**(extra_cols or {}), **derived_cols}
         _save_classification_results(
             classifier,
             sample_names_fast,
@@ -839,6 +843,9 @@ def classify_samples_from_list(
                 with open(pr, "w", encoding="utf-8") as f:
                     json.dump(panel_json, f, indent=2)
                 print(f"📋 Panel report saved to: {pr}", flush=True)
+        derived_cols = _derived_measures_extra_columns(classifier, feature_matrix)
+        if derived_cols:
+            extra_cols = {**(extra_cols or {}), **derived_cols}
         _save_classification_results(
             classifier, sample_names, predictions, probabilities,
             availability_mask, dmp_positions, output_file,
@@ -931,6 +938,9 @@ def _classify_single_file_multichrom_dmps(
                 with open(pr, "w", encoding="utf-8") as f:
                     json.dump(panel_json, f, indent=2)
                 print(f"📋 Panel report saved to: {pr}", flush=True)
+    derived_cols = _derived_measures_extra_columns(classifier, feature_matrix)
+    if derived_cols:
+        extra_cols = {**(extra_cols or {}), **derived_cols}
     _save_classification_results(
         classifier, sample_names, predictions, probabilities,
         availability_mask, dmp_positions_flat, output_file,
@@ -1303,6 +1313,29 @@ def _panel_spec_to_csv_columns(
         ],
     }
     return extra, json_payload
+
+
+def _derived_measures_extra_columns(
+    classifier: MethylClassifier,
+    feature_matrix: np.ndarray,
+) -> Dict[str, List[Any]]:
+    schema = getattr(classifier, "derived_measures_schema", None)
+    if not schema and getattr(classifier, "model_packages", None):
+        first = next(iter(classifier.model_packages.values()), {})
+        if isinstance(first, dict):
+            schema = first.get("derived_measures_schema")
+    if not schema:
+        return {}
+    names = list(schema.get("feature_names") or [])
+    if not names:
+        return {}
+    cols: Dict[str, List[Any]] = {n: [] for n in names}
+    for i in range(feature_matrix.shape[0]):
+        vec, out_names = extract_derived_measures_from_dmp_vector(feature_matrix[i], schema)
+        for j, name in enumerate(out_names):
+            val = float(vec[j]) if j < len(vec) and np.isfinite(vec[j]) else None
+            cols[name].append(val)
+    return cols
 
 
 def _save_classification_results(

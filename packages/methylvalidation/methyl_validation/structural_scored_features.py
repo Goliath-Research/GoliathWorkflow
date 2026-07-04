@@ -377,7 +377,7 @@ def preflight_structural_scored_training(
 
     if not family_includes_structural_scored(feature_family_set):
         return
-    include_dmp, include_gene, include_structural, include_gene_scored, include_structural_scored = (
+    include_dmp, include_gene, include_structural, include_gene_scored, include_structural_scored, _include_chromosome = (
         _family_flags(feature_family_set)
     )
     structural_scored_only = bool(

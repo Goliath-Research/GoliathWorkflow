@@ -260,6 +260,19 @@ def build_model_backend_steps(
                     observed_feature_quality_columns=(
                         config.observed_feature_quality_columns if config is not None else None
                     ),
+                    chromosome_hypo_beta_threshold=(
+                        config.chromosome_hypo_beta_threshold if config is not None else None
+                    ),
+                    chromosome_intermediate_beta_lo=(
+                        config.chromosome_intermediate_beta_lo if config is not None else None
+                    ),
+                    chromosome_intermediate_beta_hi=(
+                        config.chromosome_intermediate_beta_hi if config is not None else None
+                    ),
+                    chromosome_distance_metrics=(
+                        config.chromosome_distance_metrics if config is not None else None
+                    ),
+                    chromosome_list=(config.chromosome_list if config is not None else None),
                     save_train_dataset=(
                         bool(config.tabular_save_train_dataset)
                         if config is not None
@@ -450,6 +463,19 @@ def build_model_backend_steps(
                     observed_feature_quality_columns=(
                         config.observed_feature_quality_columns if config is not None else None
                     ),
+                    chromosome_hypo_beta_threshold=(
+                        config.chromosome_hypo_beta_threshold if config is not None else None
+                    ),
+                    chromosome_intermediate_beta_lo=(
+                        config.chromosome_intermediate_beta_lo if config is not None else None
+                    ),
+                    chromosome_intermediate_beta_hi=(
+                        config.chromosome_intermediate_beta_hi if config is not None else None
+                    ),
+                    chromosome_distance_metrics=(
+                        config.chromosome_distance_metrics if config is not None else None
+                    ),
+                    chromosome_list=(config.chromosome_list if config is not None else None),
                 )
                 return 0, f"Generative model trained: {model_path}", ""
             except Exception as e:
@@ -694,6 +720,20 @@ def build_model_backend_steps(
                 hist_tail_agreement_threshold=(
                     config.observed_hist_tail_agreement_threshold if config is not None else 0.10
                 ),
+                chromosome_hypo_beta_threshold=(
+                    config.chromosome_hypo_beta_threshold if config is not None else None
+                ),
+                chromosome_intermediate_beta_lo=(
+                    config.chromosome_intermediate_beta_lo if config is not None else None
+                ),
+                chromosome_intermediate_beta_hi=(
+                    config.chromosome_intermediate_beta_hi if config is not None else None
+                ),
+                chromosome_distance_metrics=(
+                    config.chromosome_distance_metrics if config is not None else None
+                ),
+                chromosome_list=(config.chromosome_list if config is not None else None),
+                feature_family_set=feature_family_set,
             )
             if isinstance(out, dict):
                 out["training_metrics_saved"] = bool(tm_ok)

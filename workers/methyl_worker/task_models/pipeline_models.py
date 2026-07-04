@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -96,6 +96,23 @@ class MapperTaskOutput(ActionOutputBase):
     n_output_genes: Optional[int] = None
     output_csv: Optional[str] = None
     output_json: Optional[str] = None
+
+
+class DerivedMeasuresTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str
+    project: Optional[str] = None
+    projectPath: Optional[str] = None
+    outputDir: Optional[str] = None
+    stepOverride: Optional[Dict[str, Any]] = None
+
+
+class DerivedMeasuresTaskOutput(ActionOutputBase):
+    output_dir: Optional[str] = None
+    output_csv: Optional[str] = None
+    n_samples: Optional[int] = None
+    n_columns: Optional[int] = None
 
 
 class EnricherTaskInput(BaseModel):

@@ -30,6 +30,7 @@ ActionConfigKey = Literal[
     "fragmentomics",
     "methyl_extract",
     "validation",
+    "derived_measures",
     "progression",
     "parabricks",
 ]
@@ -77,6 +78,7 @@ PROJECT_ACTION_CONFIG_KEYS: FrozenSet[ActionConfigKey] = frozenset(
         "fragmentomics",
         "methyl_extract",
         "validation",
+        "derived_measures",
         "progression",
         "parabricks",
     }
@@ -560,6 +562,20 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-mapper",
         tool="MethylMapper",
         action_config_key="mapper",
+    ),
+    _cli(
+        "pipeline.derived_measures",
+        "methyl-derived-measures",
+        "pipeline.derived_measures",
+        "Genome-wide per-sample derived methylation measures (sidecar CSV).",
+        "modeling",
+        _PIPELINE_MODULE,
+        "DerivedMeasuresTaskInput",
+        _PIPELINE_MODULE,
+        "DerivedMeasuresTaskOutput",
+        cli_tool="methyl-derived-measures",
+        tool="MethylDerivedMeasures",
+        action_config_key="derived_measures",
     ),
     _cli(
         "pipeline.gene_select",

@@ -58,6 +58,7 @@ from .observed_feature_builder import (
     describe_active_feature_families,
     fit_feature_fill_values,
     normalize_feature_family_set,
+    observed_chromosome_build_kwargs,
     observed_hybrid_feature_names,
     observed_hybrid_schema_fingerprint,
     select_training_feature_matrix,
@@ -389,6 +390,11 @@ def train_tabular_model(
     region_directional_region_types: Optional[List[str]] = None,
     region_directional_min_loci: int = 1,
     observed_feature_quality_columns: Optional[List[str]] = None,
+    chromosome_hypo_beta_threshold: Optional[float] = None,
+    chromosome_intermediate_beta_lo: Optional[float] = None,
+    chromosome_intermediate_beta_hi: Optional[float] = None,
+    chromosome_distance_metrics: Optional[List[str]] = None,
+    chromosome_list: Optional[List[str]] = None,
     save_train_dataset: bool = False,
     reuse_train_dataset: bool = True,
     train_dataset_path: Optional[str | Path] = None,
@@ -545,6 +551,13 @@ def train_tabular_model(
                 region_directional_region_types=region_directional_region_types,
                 region_directional_min_loci=int(max(1, region_directional_min_loci)),
                 observed_feature_quality_columns=observed_feature_quality_columns,
+                **observed_chromosome_build_kwargs(
+                    chromosome_hypo_beta_threshold=chromosome_hypo_beta_threshold,
+                    chromosome_intermediate_beta_lo=chromosome_intermediate_beta_lo,
+                    chromosome_intermediate_beta_hi=chromosome_intermediate_beta_hi,
+                    chromosome_distance_metrics=chromosome_distance_metrics,
+                    chromosome_list=chromosome_list,
+                ),
             )
             if feature_mode_norm == "observed_hybrid"
             else None
@@ -599,6 +612,13 @@ def train_tabular_model(
         "observed_feature_quality_columns": [
             str(x) for x in (observed_feature_quality_columns or ["obs_fraction", "n_obs_dmps", "n_total_dmps"])
         ],
+        "chromosome_hypo_beta_threshold": chromosome_hypo_beta_threshold,
+        "chromosome_intermediate_beta_lo": chromosome_intermediate_beta_lo,
+        "chromosome_intermediate_beta_hi": chromosome_intermediate_beta_hi,
+        "chromosome_distance_metrics": (
+            [str(x) for x in chromosome_distance_metrics] if chromosome_distance_metrics else None
+        ),
+        "chromosome_list": ([str(x) for x in chromosome_list] if chromosome_list else None),
     }
     train_fingerprint = _fingerprint_payload(
         {
@@ -798,6 +818,13 @@ def train_tabular_model(
                 region_directional_region_types=region_directional_region_types,
                 region_directional_min_loci=int(max(1, region_directional_min_loci)),
                 observed_feature_quality_columns=observed_feature_quality_columns,
+                **observed_chromosome_build_kwargs(
+                    chromosome_hypo_beta_threshold=chromosome_hypo_beta_threshold,
+                    chromosome_intermediate_beta_lo=chromosome_intermediate_beta_lo,
+                    chromosome_intermediate_beta_hi=chromosome_intermediate_beta_hi,
+                    chromosome_distance_metrics=chromosome_distance_metrics,
+                    chromosome_list=chromosome_list,
+                ),
             )
             X_obs_full = np.asarray(feat.X, dtype=np.float32)
             feature_fill_values = fit_feature_fill_values(X_obs_full)
@@ -1046,6 +1073,13 @@ def train_tabular_model(
                     region_directional_region_types=region_directional_region_types,
                     region_directional_min_loci=int(max(1, region_directional_min_loci)),
                     observed_feature_quality_columns=observed_feature_quality_columns,
+                    **observed_chromosome_build_kwargs(
+                        chromosome_hypo_beta_threshold=chromosome_hypo_beta_threshold,
+                        chromosome_intermediate_beta_lo=chromosome_intermediate_beta_lo,
+                        chromosome_intermediate_beta_hi=chromosome_intermediate_beta_hi,
+                        chromosome_distance_metrics=chromosome_distance_metrics,
+                        chromosome_list=chromosome_list,
+                    ),
                 )
                 verify_feature_schema(
                     feat_eval.feature_names,
@@ -1204,6 +1238,13 @@ def train_tabular_model(
             "observed_feature_quality_columns": [
                 str(x) for x in (observed_feature_quality_columns or ["obs_fraction", "n_obs_dmps", "n_total_dmps"])
             ],
+            "chromosome_hypo_beta_threshold": chromosome_hypo_beta_threshold,
+            "chromosome_intermediate_beta_lo": chromosome_intermediate_beta_lo,
+            "chromosome_intermediate_beta_hi": chromosome_intermediate_beta_hi,
+            "chromosome_distance_metrics": (
+                [str(x) for x in chromosome_distance_metrics] if chromosome_distance_metrics else None
+            ),
+            "chromosome_list": ([str(x) for x in chromosome_list] if chromosome_list else None),
             "selected_feature_count": int(len(feature_names)),
             "covariates_path": str(covariates_path) if covariates_path else None,
             "covariate_id_column": covariate_id_column,
@@ -1424,6 +1465,13 @@ def predict_tabular_model_from_project(
             region_directional_region_types=meta.get("region_directional_region_types"),
             region_directional_min_loci=int(meta.get("region_directional_min_loci", 1)),
             observed_feature_quality_columns=meta.get("observed_feature_quality_columns"),
+            **observed_chromosome_build_kwargs(
+                chromosome_hypo_beta_threshold=meta.get("chromosome_hypo_beta_threshold"),
+                chromosome_intermediate_beta_lo=meta.get("chromosome_intermediate_beta_lo"),
+                chromosome_intermediate_beta_hi=meta.get("chromosome_intermediate_beta_hi"),
+                chromosome_distance_metrics=meta.get("chromosome_distance_metrics"),
+                chromosome_list=meta.get("chromosome_list"),
+            ),
         )
         verify_feature_schema(
             feat.feature_names,
@@ -1544,6 +1592,8 @@ def predict_tabular_model_from_project(
             },
             "mandatory_ablation_matrix": [
                 {"name": "dmp_scored", "feature_family_set": "dmp_scored"},
+                {"name": "dmp_scored+chromosome", "feature_family_set": "dmp_scored+chromosome"},
+                {"name": "chromosome", "feature_family_set": "chromosome"},
                 {"name": "gene", "feature_family_set": "gene"},
                 {"name": "structural", "feature_family_set": "structural"},
                 {"name": "dmp_scored+gene", "feature_family_set": "dmp_scored+gene"},

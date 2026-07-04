@@ -32,6 +32,7 @@ from .observed_feature_builder import (
     build_observed_hybrid_feature_table,
     derive_observed_hybrid_anchors,
     normalize_feature_family_set,
+    observed_chromosome_build_kwargs,
     select_training_feature_matrix,
 )
 from .tabular_backend import _resolve_class_centroid_dirs
@@ -67,6 +68,11 @@ def train_ecdf_aggregated_ovr_model(
     observed_hist_alpha: float = 0.5,
     observed_hist_evidence_clip_cap: float = 5.0,
     observed_hist_tail_agreement_threshold: float = 0.10,
+    chromosome_hypo_beta_threshold: Optional[float] = None,
+    chromosome_intermediate_beta_lo: Optional[float] = None,
+    chromosome_intermediate_beta_hi: Optional[float] = None,
+    chromosome_distance_metrics: Optional[List[str]] = None,
+    chromosome_list: Optional[List[str]] = None,
     n_bins: int = 100,
     temperature: float = 2.0,
 ) -> Path:
@@ -103,6 +109,13 @@ def train_ecdf_aggregated_ovr_model(
         hist_tail_agreement_threshold=float(observed_hist_tail_agreement_threshold),
         feature_family_set=str(feature_family_set),
         observed_feature_quality_columns=observed_feature_quality_columns,
+        **observed_chromosome_build_kwargs(
+            chromosome_hypo_beta_threshold=chromosome_hypo_beta_threshold,
+            chromosome_intermediate_beta_lo=chromosome_intermediate_beta_lo,
+            chromosome_intermediate_beta_hi=chromosome_intermediate_beta_hi,
+            chromosome_distance_metrics=chromosome_distance_metrics,
+            chromosome_list=chromosome_list,
+        ),
     )
     export_feature_names = list(feat.feature_names)
     training_feature_names = list(feat.training_feature_names)

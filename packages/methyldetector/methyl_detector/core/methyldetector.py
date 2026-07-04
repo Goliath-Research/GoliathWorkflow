@@ -3660,6 +3660,15 @@ class MethylDetector:
             if self._platt_calibrator_scaler_bytes is not None:
                 model_package["metadata"]["platt_calibrator_scaler"] = self._platt_calibrator_scaler_bytes
             logger.info("  - Platt calibrator included (enable_platt_calibration=True)")
+
+        derived_schema = self._build_derived_measures_schema(selected_dmps_df, dmpDF)
+        if derived_schema:
+            model_package["derived_measures_schema"] = derived_schema
+            logger.info(
+                "  - Derived measures schema: %s features (fingerprint=%s)",
+                len(derived_schema.get("feature_names") or []),
+                derived_schema.get("feature_order_fingerprint"),
+            )
         
         # Save to pickle
         with open(model_path, 'wb') as f:
@@ -3674,6 +3683,35 @@ class MethylDetector:
         logger.info(f"  - DMPs per context: {model_package['n_dmps_per_context']}")
         if 'effect_size' in selected_dmps_df.columns:
             logger.info(f"  - Effect size range: {selected_dmps_df['effect_size'].min():.4f} to {selected_dmps_df['effect_size'].max():.4f}")
+
+    def _build_derived_measures_schema(
+        self,
+        selected_dmps_df: pd.DataFrame,
+        dmpDF: pd.DataFrame,
+    ) -> Optional[Dict[str, Any]]:
+        """Persist effect_size-weighted panel derived-measures schema for blind predict."""
+        try:
+            from methyl_validation.chromosome_features import build_ecdf_derived_measures_schema
+        except ImportError:
+            logger.debug("methyl_validation not available; skipping derived_measures_schema")
+            return None
+        weights = self._get_classifier_weights(selected_dmps_df)
+        locus_df = selected_dmps_df.copy()
+        if "chromosome" not in locus_df.columns:
+            locus_df["chromosome"] = str(self.chromosome)
+        healthy_label = str(getattr(self.config, "control_group", None) or "healthy")
+        cancer_label = str(getattr(self.config, "disease_group", None) or "cancer")
+        centroid_dirs = {
+            healthy_label: str(self.config.centroid1_dir),
+            cancer_label: str(self.config.centroid2_dir),
+        }
+        return build_ecdf_derived_measures_schema(
+            locus_df,
+            effect_size_weights=weights,
+            class_labels=[healthy_label, cancer_label],
+            healthy_class_label=healthy_label,
+            centroid_dir_by_class_label=centroid_dirs,
+        )
 
     def _get_or_load_centroid_bin_cache(self, chrom: Any, ctx: Any) -> Optional[dict]:
         """Load and cache binned_stats + positions for one chromosome×context pair, or return None."""

@@ -254,6 +254,10 @@
       "node_key": "mapper"
     },
     {
+      "do": "pipeline.derived_measures",
+      "node_key": "derived_measures"
+    },
+    {
       "do": "pipeline.enricher",
       "node_key": "enricher"
     },

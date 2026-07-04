@@ -13,6 +13,7 @@
         "outputDir": "--output-dir",
         "project": "--project",
         "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
         "stepOverride": "--step-override"
       },
       "capability": "methyl-centroid",
@@ -141,6 +142,7 @@
         "outputDir": "--output-dir",
         "project": "--project",
         "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
         "stepOverride": "--step-override"
       },
       "capability": "methyl-mapper",
@@ -154,6 +156,34 @@
       "output_schema_ref": "schemas/tasks/pipeline_mapper.output.schema.json",
       "schema_id": "pipeline.mapper",
       "tool": "MethylMapper"
+    },
+    {
+      "action_config_key": "derived_measures",
+      "action_name": "pipeline.derived_measures",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-derived-measures",
+      "category": "modeling",
+      "cli_tool": "methyl-derived-measures",
+      "context_vars": [],
+      "default_node_type": "ACTION",
+      "description": "Genome-wide per-sample derived methylation measures (sidecar CSV).",
+      "execution_mode": "cli",
+      "input_schema_ref": "schemas/tasks/pipeline_derived_measures.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_derived_measures.output.schema.json",
+      "schema_id": "pipeline.derived_measures",
+      "tool": "MethylDerivedMeasures"
     },
     {
       "action_config_key": "gene_selection",
@@ -215,6 +245,7 @@
         "outputDir": "--output-dir",
         "project": "--project",
         "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
         "stepOverride": "--step-override"
       },
       "capability": "methyl-enricher",
@@ -242,6 +273,7 @@
         "outputDir": "--output-dir",
         "project": "--project",
         "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
         "stepOverride": "--step-override"
       },
       "capability": "methyl-disease-progression",
@@ -269,6 +301,7 @@
         "outputDir": "--output-dir",
         "project": "--project",
         "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
         "stepOverride": "--step-override"
       },
       "capability": "methyl-classifier",
@@ -296,6 +329,7 @@
         "outputDir": "--output-dir",
         "project": "--project",
         "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
         "stepOverride": "--step-override"
       },
       "capability": "methyl-predictor",
@@ -309,6 +343,41 @@
       "output_schema_ref": "schemas/tasks/pipeline_predictor.output.schema.json",
       "schema_id": "pipeline.predictor",
       "tool": "MethylPredictor"
+    },
+    {
+      "action_name": "context.resolve_project",
+      "argv_map": {},
+      "capability": "context.resolve-project",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "monteCarloRunsRoot",
+        "cohortPathsList"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Materialize study manifest paths and cohorts into a typed ResolvedProject.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "MethylGroup",
+          "ComparisonSpec"
+        ],
+        "scope_bindings": [
+          {
+            "output_json_path": "$.resolvedProject",
+            "var_name": "resolvedProject"
+          }
+        ],
+        "writes_types": [
+          "ResolvedProject"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_context_resolve_project",
+      "input_schema_ref": "schemas/tasks/context_resolve_project.input.schema.json",
+      "output_schema_ref": "schemas/tasks/context_resolve_project.output.schema.json",
+      "schema_id": "context.resolve_project",
+      "tool": "ContextResolveProject"
     },
     {
       "action_name": "sample.download_fastq",

@@ -171,6 +171,12 @@ def train_and_apply_ecdf_second_stage(
     hist_alpha: float = 0.5,
     hist_evidence_clip_cap: float = 5.0,
     hist_tail_agreement_threshold: float = 0.10,
+    chromosome_hypo_beta_threshold: Optional[float] = None,
+    chromosome_intermediate_beta_lo: Optional[float] = None,
+    chromosome_intermediate_beta_hi: Optional[float] = None,
+    chromosome_distance_metrics: Optional[List[str]] = None,
+    chromosome_list: Optional[List[str]] = None,
+    feature_family_set: str = "dmp_scored",
 ) -> Dict[str, Any]:
     project_json = Path(project_json).resolve()
     predictor_output_dir = Path(predictor_output_dir).resolve()
@@ -242,6 +248,12 @@ def train_and_apply_ecdf_second_stage(
         hist_alpha=float(hist_alpha),
         hist_evidence_clip_cap=float(hist_evidence_clip_cap),
         hist_tail_agreement_threshold=float(hist_tail_agreement_threshold),
+        feature_family_set=str(feature_family_set),
+        chromosome_hypo_beta_threshold=chromosome_hypo_beta_threshold,
+        chromosome_intermediate_beta_lo=chromosome_intermediate_beta_lo,
+        chromosome_intermediate_beta_hi=chromosome_intermediate_beta_hi,
+        chromosome_distance_metrics=chromosome_distance_metrics,
+        chromosome_list=chromosome_list,
     )
     X_obs_full = np.asarray(feat.X, dtype=np.float32)
     fill_values = fit_feature_fill_values(X_obs_full)

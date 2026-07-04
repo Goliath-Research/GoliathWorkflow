@@ -149,6 +149,17 @@
     "progression": {
       "enabled": false
     },
+    "derived_measures": {
+      "contexts": ["CG"],
+      "hypo_beta_threshold": 0.2,
+      "intermediate_beta_lo": 0.25,
+      "intermediate_beta_hi": 0.75,
+      "pmd_beta_threshold": 0.3,
+      "pmd_window_bp": 100000,
+      "pmd_step_bp": 50000,
+      "pdr_disagreement_threshold": 0.25,
+      "min_coverage": 1
+    },
     "classifier": {
       "enable_platt_calibration": true
     },
@@ -166,6 +177,22 @@
       "stability_mapper_enrich_disease": false,
       "abort_on_step_failure": true,
       "backend_profiles": {
+        "tabular_sklearn": {
+          "enabled": false,
+          "params": {
+            "feature_mode": "observed_hybrid",
+            "feature_family_set": "dmp_scored+chromosome",
+            "covariates_path": "{output_base}/derived_measures/derived_measures.csv"
+          }
+        },
+        "generative_hybrid": {
+          "enabled": false,
+          "params": {
+            "feature_mode": "observed_hybrid",
+            "feature_family_set": "dmp_scored+chromosome",
+            "covariates_path": "{output_base}/derived_measures/derived_measures.csv"
+          }
+        },
         "ecdf": {
           "enabled": true,
           "params": {
