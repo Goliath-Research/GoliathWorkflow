@@ -169,7 +169,7 @@ mc_sweep_run_one() {
 
   mc_sweep_write_status "$status_file" "building_config" "Writing mc_config.json"
 
-  local project_root
+  local project_root rc=0
   project_root="$(
     python3 "$repo_root/scripts/build_mc_sweep_config.py" \
       --project "$project_json" \
@@ -177,7 +177,14 @@ mc_sweep_run_one() {
       --overlay "$overlay_file" \
       --out "$mc_config" \
       --print-project-root
-  )"
+  )" || rc=$?
+  if [[ $rc -ne 0 || -z "$project_root" || ! -f "$mc_config" ]]; then
+    mc_sweep_write_status "$status_file" "failed" "build_mc_sweep_config.py failed (rc=$rc)"
+    mc_sweep_update_manifest "$manifest" "$analyte" "$sweep_id" "failed" \
+      "" "$mc_config" "$overlay_file"
+    echo "Error: failed to build MC config for $analyte (variant=${variant_label:-<none>}, rc=$rc)." >&2
+    return 1
+  fi
 
   mc_sweep_update_manifest "$manifest" "$analyte" "$sweep_id" "configured" \
     "$project_root" "$mc_config" "$overlay_file"
@@ -214,21 +221,20 @@ mc_sweep_run_one() {
     return 0
   fi
 
-  set +e
-  "${cmd[@]}"
-  local rc=$?
-  set -e
+  rc=0
+  "${cmd[@]}" || rc=$?
 
   if [[ $rc -eq 0 ]]; then
     mc_sweep_write_status "$status_file" "completed" "MC stability finished"
     mc_sweep_update_manifest "$manifest" "$analyte" "$sweep_id" "completed" \
       "$project_root" "$mc_config" "$overlay_file"
-  else
-    mc_sweep_write_status "$status_file" "failed" "methyl-validation exited $rc"
-    mc_sweep_update_manifest "$manifest" "$analyte" "$sweep_id" "failed" \
-      "$project_root" "$mc_config" "$overlay_file"
-    return "$rc"
+    return 0
   fi
+
+  mc_sweep_write_status "$status_file" "failed" "methyl-validation exited $rc"
+  mc_sweep_update_manifest "$manifest" "$analyte" "$sweep_id" "failed" \
+    "$project_root" "$mc_config" "$overlay_file"
+  return "$rc"
 }
 
 mc_sweep_run_grid() {
@@ -241,30 +247,20 @@ mc_sweep_run_grid() {
   local dry_run="$7"
   local skip_mc="$8"
 
-  local repo_root
+  local repo_root grid_lines variant_count=0 rc=0
   repo_root="$(mc_sweep_repo_root)"
   mc_sweep_activate_venv "$repo_root"
 
-  while IFS= read -r variant_label; do
-    IFS= read -r overlay_json
-    local overlay_file
-    overlay_file="$(mktemp)"
-    printf '%s\n' "$overlay_json" >"$overlay_file"
-    mc_sweep_run_one "$analyte" "$project_json" "$sweep_id" "$variant_label" \
-      "$output_base" "$overlay_file" "$resume_arg" "$dry_run" "$skip_mc" || {
-      local rc=$?
-      rm -f "$overlay_file"
-      return "$rc"
-    }
-    rm -f "$overlay_file"
-  done < <(
-    python3 - <<'PY' "$grid_file"
+  grid_lines="$(mktemp)"
+  if ! python3 - <<'PY' "$grid_file" >"$grid_lines"
 import json, sys
 from pathlib import Path
 
 grid = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
 if not isinstance(grid, list):
     raise SystemExit("grid file must be a JSON array")
+if not grid:
+    raise SystemExit("grid file must contain at least one variant")
 for i, item in enumerate(grid):
     if not isinstance(item, dict):
         raise SystemExit(f"grid[{i}] must be an object")
@@ -273,5 +269,37 @@ for i, item in enumerate(grid):
     print(label)
     print(json.dumps(overlay))
 PY
-  )
+  then
+    rm -f "$grid_lines"
+    echo "Error: invalid or empty grid file: $grid_file" >&2
+    return 1
+  fi
+
+  while IFS= read -r variant_label; do
+    IFS= read -r overlay_json || {
+      rm -f "$grid_lines"
+      echo "Error: malformed grid variant record for label: ${variant_label:-<unknown>}" >&2
+      return 1
+    }
+    variant_count=$((variant_count + 1))
+    local overlay_file
+    overlay_file="$(mktemp)"
+    printf '%s\n' "$overlay_json" >"$overlay_file"
+    mc_sweep_run_one "$analyte" "$project_json" "$sweep_id" "$variant_label" \
+      "$output_base" "$overlay_file" "$resume_arg" "$dry_run" "$skip_mc"
+    rc=$?
+    rm -f "$overlay_file"
+    if [[ $rc -ne 0 ]]; then
+      rm -f "$grid_lines"
+      return "$rc"
+    fi
+  done <"$grid_lines"
+  rm -f "$grid_lines"
+
+  if [[ $variant_count -eq 0 ]]; then
+    echo "Error: grid file produced no variants: $grid_file" >&2
+    return 1
+  fi
+
+  return 0
 }
