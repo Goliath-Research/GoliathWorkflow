@@ -11,7 +11,9 @@ import pytest
 from methyl_validation.holdout_eval import (
     apply_holdout_exclusion_to_project_dict,
     read_predictions_for_bootstrap,
+    resolve_holdout_from_class_map,
     resolve_holdout_groups,
+    _is_control_label,
     _preflight_exclusion,
     write_holdout_manifest,
     HOLDOUT_MANIFEST_NAME,
@@ -57,8 +59,11 @@ def test_apply_holdout_exclusion_removes_from_cohorts(tmp_path):
     project = _binary_project(tmp_path)
     out = tmp_path / "prod"
     out.mkdir()
-    excluded = apply_holdout_exclusion_to_project_dict(project, {"H3", "H4", "C4"}, out)
+    excluded, class_map = apply_holdout_exclusion_to_project_dict(project, {"H3", "H4", "C4"}, out)
     assert sorted(excluded) == ["C4", "H3", "H4"]
+    # Class map captures side/label so labels survive the cohort filtering (Bug 2 fix).
+    assert class_map["H3"]["side"] == "control"
+    assert class_map["C4"]["side"] == "disease"
     # Project now points at filtered CSVs; verify hold-out names are gone.
     healthy_csv = project["controls"]["groups"][0]["sample_paths"][0]
     kept = [ln.strip() for ln in Path(healthy_csv).read_text().splitlines()[1:] if ln.strip()]
@@ -66,6 +71,43 @@ def test_apply_holdout_exclusion_removes_from_cohorts(tmp_path):
     cancer_csv = project["diseases"]["groups"][0]["sample_paths"][0]
     kept_c = [ln.strip() for ln in Path(cancer_csv).read_text().splitlines()[1:] if ln.strip()]
     assert kept_c == ["C1", "C2", "C3"]
+
+
+def test_is_control_label_all_substring_false_positive_guard():
+    # Bug 1: "all" must match only by exact equality, never as a substring.
+    assert _is_control_label("all") is True
+    assert _is_control_label("healthy") is True
+    assert _is_control_label("Normal_Controls") is True
+    assert _is_control_label("small_cell") is False  # would be True under naive "all in label"
+    assert _is_control_label("gallbladder") is False
+    assert _is_control_label("cancer") is False
+
+
+def test_holdout_eval_end_to_end_label_resolution_after_exclusion(tmp_path):
+    # Bug 2 regression: after freeze filters cohorts, class labels are recovered from
+    # the manifest class map, not from the (now-filtered) cohort CSVs.
+    project = _binary_project(tmp_path)
+    base = project["samples_base_path"]
+    holdout_paths = [str(Path(base) / n) for n in ("H3", "H4", "C4")]
+    holdout_basenames = {Path(p).name for p in holdout_paths}
+
+    prod = tmp_path / "production"
+    prod.mkdir()
+    excluded, class_map = apply_holdout_exclusion_to_project_dict(project, holdout_basenames, prod)
+    write_holdout_manifest(
+        prod, partition="locked_test", holdout_paths=holdout_paths, excluded=excluded, class_map=class_map
+    )
+
+    # The filtered project can no longer resolve labels from CSVs...
+    resolved_from_csv = resolve_holdout_groups(project, holdout_paths)
+    assert set(resolved_from_csv["unresolved"]) == holdout_basenames
+
+    # ...but the manifest class map resolves them correctly.
+    resolved = resolve_holdout_from_class_map(class_map, holdout_paths, base)
+    assert resolved["unresolved"] == []
+    assert sorted(Path(p).name for p in resolved["control_paths"]) == ["H3", "H4"]
+    assert sorted(Path(p).name for p in resolved["disease_paths"]) == ["C4"]
+    assert resolved["binary"] is True
 
 
 def test_preflight_exclusion_pass_and_fail(tmp_path):

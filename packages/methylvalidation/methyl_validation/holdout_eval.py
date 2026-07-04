@@ -41,6 +41,22 @@ def _samples_base_path(project_dict: Dict[str, Any]) -> str:
     return str(project_dict.get("samples_base_path") or ".")
 
 
+def _is_control_label(label: str) -> bool:
+    """
+    Heuristic control-side classification for the flat ``groups`` layout.
+
+    Mirrors ``_heuristic_control_class_index`` in ``classification_metrics.py``:
+    ``all`` matches only by exact equality (never as a substring), while
+    ``healthy``/``control``/``normal`` match as substrings. This avoids the
+    false positive where ``"all" in "small_cell"`` would misclassify a disease
+    group (e.g. small-cell carcinoma) as control.
+    """
+    norm = str(label).strip().lower()
+    if norm == "all":
+        return True
+    return any(tok in norm for tok in ("healthy", "control", "normal"))
+
+
 def _control_disease_group_csvs(project_dict: Dict[str, Any]) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
     """Return (control_groups, disease_groups) as [{label, csv}] using cohort inference sides."""
     controls = project_dict.get("controls") or project_dict.get("control") or {}
@@ -53,8 +69,7 @@ def _control_disease_group_csvs(project_dict: Dict[str, Any]) -> Tuple[List[Dict
     if not control_groups and not disease_groups:
         flat = infer_monte_carlo_cohorts_from_project(project_dict, Path("."))
         for g in flat:
-            label = g["label"].strip().lower()
-            if any(tok in label for tok in ("healthy", "control", "normal", "all")):
+            if _is_control_label(g["label"]):
                 control_groups.append(g)
             else:
                 disease_groups.append(g)
@@ -136,21 +151,25 @@ def apply_holdout_exclusion_to_project_dict(
     project_dict: Dict[str, Any],
     holdout_basenames: set[str],
     out_dir: Path,
-) -> List[str]:
+) -> Tuple[List[str], Dict[str, Dict[str, str]]]:
     """
     Rewrite each cohort list file referenced by ``project_dict`` to drop hold-out
     samples, writing filtered CSVs under ``out_dir`` and repointing the project.
 
-    Returns the sorted list of excluded sample basenames actually removed. This is
-    what makes the production model train on a set disjoint from the hold-out batch.
+    Returns ``(removed_basenames, class_map)`` where ``class_map`` maps each removed
+    basename to ``{"side": "control"|"disease", "label": <group label>}``. The class
+    map is what lets :func:`run_holdout_evaluation` assign labels to hold-out samples
+    later — the filtered cohort CSVs no longer contain them, so the labels must be
+    captured here (Bug 2 fix).
     """
     if not holdout_basenames:
-        return []
+        return [], {}
     filtered_dir = Path(out_dir) / "holdout_filtered_cohorts"
     filtered_dir.mkdir(parents=True, exist_ok=True)
     removed: set[str] = set()
+    class_map: Dict[str, Dict[str, str]] = {}
 
-    def _filter_group(group: Dict[str, Any], scope: str, gid: str) -> None:
+    def _filter_group(group: Dict[str, Any], scope: str, gid: str, *, side: str, label: str) -> None:
         paths = group.get("sample_paths")
         if not isinstance(paths, list) or not paths:
             return
@@ -159,6 +178,12 @@ def apply_holdout_exclusion_to_project_dict(
             return
         kept_rows: List[List[str]] = []
         header: Optional[List[str]] = None
+
+        def _record(name: str) -> None:
+            bn = _basename(name)
+            removed.add(bn)
+            class_map[bn] = {"side": side, "label": str(label)}
+
         with open(src_csv, newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
             first = next(reader, None)
@@ -169,14 +194,14 @@ def apply_holdout_exclusion_to_project_dict(
                 header = first
             elif first and first[0].strip():
                 if _basename(first[0]) in holdout_basenames:
-                    removed.add(_basename(first[0]))
+                    _record(first[0])
                 else:
                     kept_rows.append(first)
             for row in reader:
                 if not row or not row[0].strip():
                     continue
                 if _basename(row[0]) in holdout_basenames:
-                    removed.add(_basename(row[0]))
+                    _record(row[0])
                 else:
                     kept_rows.append(row)
         dst_csv = filtered_dir / f"{scope}_{gid}_{src_csv.name}"
@@ -187,36 +212,47 @@ def apply_holdout_exclusion_to_project_dict(
             writer.writerows(kept_rows)
         group["sample_paths"] = [str(dst_csv)]
 
-    def _walk_side(side_key: str) -> None:
-        side = project_dict.get(side_key)
-        if not isinstance(side, dict):
+    def _walk_side(side_key: str, side: str) -> None:
+        side_obj = project_dict.get(side_key)
+        if not isinstance(side_obj, dict):
             return
-        groups = side.get("groups")
+        groups = side_obj.get("groups")
         if not isinstance(groups, list):
             return
         for gi, g in enumerate(groups):
             if not isinstance(g, dict):
                 continue
+            parent = str(g.get("label") or f"{side}_{gi}")
             stages = g.get("stages")
             if isinstance(stages, list) and stages:
                 for si, st in enumerate(stages):
                     if isinstance(st, dict):
-                        _filter_group(st, side_key, f"{gi}_{si}")
+                        stage_label = str(st.get("label") or si)
+                        _filter_group(st, side_key, f"{gi}_{si}", side=side, label=f"{parent}_{stage_label}")
             else:
-                _filter_group(g, side_key, str(gi))
+                _filter_group(g, side_key, str(gi), side=side, label=parent)
 
-    for side_key in ("controls", "control", "diseases", "disease"):
-        _walk_side(side_key)
+    for side_key, side in (("controls", "control"), ("control", "control"), ("diseases", "disease"), ("disease", "disease")):
+        _walk_side(side_key, side)
     flat_groups = project_dict.get("groups")
     if isinstance(flat_groups, list):
         for gi, g in enumerate(flat_groups):
             if isinstance(g, dict):
-                _filter_group(g, "groups", str(gi))
+                label = str(g.get("label") or f"group_{gi}")
+                side = "control" if _is_control_label(label) else "disease"
+                _filter_group(g, "groups", str(gi), side=side, label=label)
 
-    return sorted(removed)
+    return sorted(removed), class_map
 
 
-def write_holdout_manifest(out_dir: Path, *, partition: str, holdout_paths: Sequence[str], excluded: Sequence[str]) -> Path:
+def write_holdout_manifest(
+    out_dir: Path,
+    *,
+    partition: str,
+    holdout_paths: Sequence[str],
+    excluded: Sequence[str],
+    class_map: Optional[Dict[str, Dict[str, str]]] = None,
+) -> Path:
     """Record which samples were held out and excluded from production training."""
     manifest = {
         "partition": str(partition),
@@ -224,12 +260,58 @@ def write_holdout_manifest(out_dir: Path, *, partition: str, holdout_paths: Sequ
         "excluded_from_training": sorted(set(excluded)),
         "n_holdout": len({_basename(p) for p in holdout_paths}),
         "n_excluded_from_training": len(set(excluded)),
+        "holdout_class_map": dict(class_map or {}),
     }
     path = Path(out_dir) / HOLDOUT_MANIFEST_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
     return path
+
+
+def resolve_holdout_from_class_map(
+    class_map: Dict[str, Dict[str, str]],
+    holdout_paths: Sequence[str],
+    base_path: str,
+) -> Dict[str, Any]:
+    """
+    Build the same structure as :func:`resolve_holdout_groups`, but from the freeze-time
+    class map instead of the (now-filtered) cohort CSVs.
+
+    This is the Bug 2 fix: after ``--freeze`` excludes hold-out samples from the cohort
+    list files, their class labels can no longer be recovered from those files, so they
+    are read from ``holdout_class_map`` recorded in the manifest.
+    """
+    control_paths: List[str] = []
+    disease_paths: List[str] = []
+    groups_by_label: Dict[str, List[str]] = {}
+    unresolved: List[str] = []
+    control_labels: set[str] = set()
+    disease_labels: set[str] = set()
+    for raw in holdout_paths:
+        abs_path = str(Path(raw)) if Path(raw).is_absolute() else str(Path(base_path).resolve() / raw)
+        bn = _basename(raw)
+        info = class_map.get(bn)
+        if not info:
+            unresolved.append(bn)
+            continue
+        side = str(info.get("side") or "").strip().lower()
+        label = str(info.get("label") or (side or bn))
+        groups_by_label.setdefault(label, []).append(abs_path)
+        if side == "control":
+            control_paths.append(abs_path)
+            control_labels.add(label)
+        else:
+            disease_paths.append(abs_path)
+            disease_labels.add(label)
+    binary = (len(control_labels) <= 1) and (len(disease_labels) <= 1) and (len(groups_by_label) <= 2)
+    return {
+        "binary": binary,
+        "control_paths": control_paths,
+        "disease_paths": disease_paths,
+        "groups_by_label": groups_by_label,
+        "unresolved": unresolved,
+    }
 
 
 def read_predictions_for_bootstrap(predictions_csv: Path) -> Dict[str, Any]:
@@ -342,18 +424,33 @@ def run_holdout_evaluation(
     holdout_basenames = {_basename(p) for p in holdout_paths}
 
     if bool(getattr(config, "holdout_exclude_from_training", True)):
-        ok, msg = _preflight_exclusion(
-            frozen_project_path.parent / HOLDOUT_MANIFEST_NAME, holdout_basenames
-        )
+        manifest_path = frozen_project_path.parent / HOLDOUT_MANIFEST_NAME
+        ok, msg = _preflight_exclusion(manifest_path, holdout_basenames)
         if not ok:
             raise ValueError(msg)
+        # Bug 2 fix: the frozen project's cohort CSVs had the hold-out samples removed,
+        # so their class labels are recovered from the manifest class map, not the CSVs.
+        with open(manifest_path, encoding="utf-8") as f:
+            manifest = json.load(f)
+        class_map = manifest.get("holdout_class_map") or {}
+        if not class_map:
+            raise ValueError(
+                f"{manifest_path} has no holdout_class_map (older freeze). Re-run '--freeze' to "
+                "regenerate the manifest so hold-out class labels can be resolved."
+            )
+        resolved = resolve_holdout_from_class_map(
+            class_map, holdout_paths, _samples_base_path(project_dict)
+        )
+    else:
+        # Exclusion disabled: cohorts still contain the hold-out samples, so labels can
+        # be resolved directly from the (unfiltered) project cohort list files.
+        resolved = resolve_holdout_groups(project_dict, holdout_paths)
 
-    resolved = resolve_holdout_groups(project_dict, holdout_paths)
     if resolved["unresolved"]:
         preview = resolved["unresolved"][:8]
         raise ValueError(
-            "Hold-out samples not found in any project cohort (cannot assign a class label): "
-            f"{preview}. Add them to the appropriate control/disease cohort with target labels."
+            "Hold-out samples could not be assigned a class label: "
+            f"{preview}. Ensure they were in a labeled control/disease cohort when '--freeze' ran."
         )
 
     pred_out = output_dir / "predictor"

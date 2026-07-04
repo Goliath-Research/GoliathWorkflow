@@ -2193,7 +2193,7 @@ def freeze_production_model(
             )
 
             holdout_basenames = {Path(str(p)).name for p in holdout_paths}
-            excluded = apply_holdout_exclusion_to_project_dict(
+            excluded, holdout_class_map = apply_holdout_exclusion_to_project_dict(
                 project_dict, holdout_basenames, prod_dir
             )
             write_holdout_manifest(
@@ -2201,6 +2201,7 @@ def freeze_production_model(
                 partition=holdout_partition,
                 holdout_paths=holdout_paths,
                 excluded=excluded,
+                class_map=holdout_class_map,
             )
             logger.info(
                 "Held-out batch (%s): excluded %d sample(s) from production training cohorts.",
