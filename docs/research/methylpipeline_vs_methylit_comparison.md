@@ -533,6 +533,98 @@ sensitivity study** (build several reference pools from different healthy subset
 parameters) would convert this unmeasured
 assumption into a quantified one.
 
+## DMP-to-gene mapping and weight propagation (the interpretation layer)
+
+The sections above compare how each product *detects* DMPs. They deliberately stopped at the locus
+level and did not describe what happens *after* detection: how a per-locus signal is projected onto
+genes and gene features, and how the DMP's weight is carried upward so genes and features can be
+**ranked**. This is a real asymmetry between the two products, so it is worth making explicit.
+
+### MethylPipeline: a signed, feature-resolved DMP weight propagated up to genes, features, and networks
+
+MethylPipeline has a full DMP -> gene -> feature -> network/pathway interpretation stack
+(`methylmapper` -> `methylenricher`, with `methylgeneselect` / `methylgenefeatureselect` consuming
+the ranked outputs). The load-bearing idea is that a **continuous, signed, feature-resolved weight**
+is propagated from each DMP up to the objects being ranked, rather than a gene simply being flagged
+"hit / not hit."
+
+1. **Interval mapping (deterministic).** `methylmapper` assigns each DMP to a genomic feature by
+   bedtools-style interval logic (or the external `spMapDMP2Genes` Azure SQL procedure), with an
+   **exclusive** feature priority `promoter > exon > intron > gene_body > terminator`
+   (`packages/methylmapper/methyl_mapper/bedtools_mapper.py`).
+2. **Per-DMP weight.** The detector's biological effect size
+   $e_i=|\Delta\mu_i|\,(1-\text{overlap}_i)\,e^{-\lambda(\sqrt{v_{1,i}}+\sqrt{v_{2,i}})}\cdot(\text{mean-level weight})$
+   is combined with recurrence frequency and a **biology-weight matrix** $b(\text{feature},\text{hyper}\,|\,\text{hypo})$
+   (e.g. promoter-hyper $=2.0$, intron-hyper $=0.5$):
+   $$
+   w_i = f_i \cdot b(\text{feature}_i, s_i), \qquad
+   \text{abs\_term}_i = w_i\,|e_i|, \qquad
+   \text{signed\_term}_i = \text{sign}(\Delta\mu_i)\,\text{abs\_term}_i .
+   $$
+3. **Gene- and feature-level aggregation and rank.** Over unique DMPs mapped to a gene,
+   $$
+   I_{\text{gene}} = \Big(\textstyle\sum_i \text{abs\_term}_i\Big)\cdot
+   \underbrace{\frac{|\sum_i \text{signed\_term}_i|}{\sum_i \text{abs\_term}_i}}_{\text{direction coherence}}\cdot
+   \sqrt{\bar f}\,,
+   $$
+   and `feature_importance_{promoter,exon,...}` uses the same construction within each feature bucket.
+   Statistical significance is kept on a **separate axis**: a signed weighted **Stouffer** aggregation
+   of the mapped DMP p-values gives `gene_p_value` -> Storey `gene_q_value` (with the honest caveat
+   that mapped DMPs in one gene are spatially correlated, so the independence assumption is only
+   approximate). The canonical spec is
+   `packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md`.
+4. **The three "focus" refinements the comparison omitted.** Once genes carry a `gene_importance`
+   weight, `methylenricher` (and the in-process biomarker pool) can rank/prioritize them three
+   different ways, and each one **reuses the propagated DMP weight** rather than discarding it:
+   - **PPI-focused.** STRING (or a local edge list) builds a gene-gene graph; node topology metrics
+     are blended with **min-max-normalized methylation weights** (`gene_importance` / `mean_effect_size`)
+     and an optional disease-prior boost into a `combined_hub_score`, so hub ranking is *signal-weighted*
+     by default rather than dominated by high-database-degree "infrastructure" genes
+     (`network_refinement`, `hub_ranking_mode=signal_weighted`; `EnrichmentAnalyzer` PPI layer and
+     `methyl_gene_select/core/biomarker_gene_pool.py` `mode="ppi_only"`). PPI coherence per module is
+     $0.4\,\text{density}+0.3\,\overline{\text{node-metric}}+0.3\,\text{LCC-ratio}$.
+   - **CIS-BP-focused.** Two sub-modes in `methyl_enricher/cisbp/`: *annotate* matches TF enrichment
+     hits (ChEA/ENCODE/TRRUST) to CIS-BP motif metadata (`annotate.py`); *motif_scan* scans PWMs over
+     the DMP region windows themselves, builds a TF->DMP-region GMT, and runs an **offline ORA on the
+     foreground DMP regions** (`motif_scan.py`) — i.e. it goes back to the DMP coordinates, not just
+     the gene symbols.
+   - **Enrichr with selected libraries (+ AI / DisGeNET).** Over-representation is delegated to
+     Enrichr via `gseapy.enrichr` with explicit `libraries` or a named `library_preset`
+     (`cancer-core`, `cancer-extended`) that pull in disease/TF libraries such as `DisGeNET`,
+     `Jensen_DISEASES`, `GWAS_Catalog`, `ChEA`, `TRRUST`. Pathways are grouped into modules by
+     Jaccard overlap + Louvain, scored by a heuristic module score, and a **disease-relevance prior**
+     is added. Separately, `methylmapper`'s `GeneDiseaseEnricher` gathers **external gene-disease
+     evidence** from **DisGeNET** and **Open Targets**, plus an optional **LLM-assisted (Grok /
+     `grok-4-latest`, xAI batch API) synthesis** (`gene_disease_enricher.py`), under `strict` /
+     `balanced` / `permissive` score-threshold profiles; that disease evidence can feed the
+     `hub_disease_boost` in the PPI step.
+5. **Weights all the way into selection.** The propagated weight is not merely for display: the
+   downstream contract is that `methyl-gene-select` derives **ECDF-OvR feature weights from
+   `gene_importance`**, and `methyl-gene-feature-select` ranks structural (gene x region) features by
+   `feature_importance_{feature_type}` (`methyl_gene_select/core/gene_featurecuts.py`,
+   `methyl_gene_feature_select/core/runner.py`). So the DMP's signed, feature-resolved weight is what
+   ultimately orders the gene/feature panel that gets classified.
+
+### MethylIT_py 0.4.0: no weight propagation to genes; gene use is the reverse direction (masking detection)
+
+MethylIT_py 0.4.0's core (`orca` modules 1-4, `06_potential_dimp -> 09_prediction`) has **no**
+DMP -> gene -> feature -> pathway propagation, and **no** PPI, CIS-BP, Enrichr, or disease-database
+layer. Where genes appear at all, the direction of information flow is reversed:
+
+- `scripts/g2dmp_m34.py` **restricts detection to gene coordinates** and reruns modules 3-4 (with
+  rules to exclude under-covered samples and skip chromosomes, and SHA256 provenance receipts). This
+  is a **gene -> DMP masking** harness — "only call DMPs inside these gene windows" — not a
+  DMP -> gene ranking. It never carries a per-DMP weight up into a `gene_importance` and never ranks
+  genes or gene features by an aggregated, signed effect.
+
+The consequence for a direct comparison: MethylIT keeps the signal at the per-cytosine divergence
+level and, at most, *scopes* detection to gene regions; MethylPipeline treats gene- and
+feature-level ranking as a first-class, weighted aggregation problem and then layers PPI / CIS-BP /
+Enrichr / disease-evidence prioritization on top of the same propagated weight. Any head-to-head that
+stops at the DMP set will therefore miss the entire interpretation stack, which in MethylPipeline is
+also used as an orthogonal **biological validation** check (do top-weighted genes recover lineage
+markers and coherent modules?), whereas in MethylIT_py 0.4.0 it is simply out of scope.
+
 ## Engineering and interpretation differences
 
 - **Discovery vs prediction outputs.** MethylPipeline emits a broad `discovery` list and a smaller
