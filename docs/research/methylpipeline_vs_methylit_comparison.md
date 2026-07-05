@@ -113,26 +113,32 @@ classic MethylIT methodology:
 Statistical spirit: model the distribution of a divergence statistic, then apply detection theory
 (tail probability + optimal cutpoint) and ML on divergence-derived features.
 
-## Side-by-side pipelines
+## Comparison of pipelines
+
+### MethylPipeline: Empirical two-cohort path
 
 ```mermaid
 flowchart TD
-  subgraph MP [MethylPipeline: empirical two-cohort]
     MP1["Cohort centroids (ECDF + sufficient stats)"]
     MP2["Two-sample tests: control vs disease centroids (KS / Mann-Whitney)"]
     MP3["Storey q-values (FDR) + heuristic effect-size ranking"]
     MP4["ECDF Naive-Bayes classifier"]
     MP5["Monte Carlo recurrence -> stable panel -> freeze -> train"]
+    
     MP1 --> MP2 --> MP3 --> MP4 --> MP5
-  end
-  subgraph MI [MethylIT_py: information + signal detection]
+```
+
+### MethylIT_py 0.4.0: Information & signal detection path
+
+```mermaid
+flowchart TD
     MI1["Per-sample divergence vs reference (Hellinger / J-div, Bayesian)"]
     MI2["Fit parametric background (GGamma3P / Weibull) to divergence"]
     MI3["Potential DMP = tail(alpha) AND TV cut"]
     MI4["ML cutpoint (logistic + random forest, PCA) on divergence features"]
     MI5["Final DMPs -> per-sample prediction"]
+    
     MI1 --> MI2 --> MI3 --> MI4 --> MI5
-  end
 ```
 
 ## The core theoretical divergence, in depth
@@ -239,7 +245,7 @@ $\{$`hdiv, TV, jdiv.stat, bay.TV, jdiv, wprob, pos`$\}$ with interactions and `n
 
 **If the signal is essentially one monotone variable (e.g. J-divergence), the RF is unnecessary.**
 For a single score $s$ with monotone $P(\text{treatment}\mid s)$, the Bayes-optimal decision rule is a
-**threshold** $s > c^\*$. Maximizing Youden's $J(c)=\mathrm{Se}(c)+\mathrm{Sp}(c)-1$ over $c$ returns
+**threshold** $s > c^*$. Maximizing Youden's $J(c)=\mathrm{Se}(c)+\mathrm{Sp}(c)-1$ over $c$ returns
 precisely the threshold that minimizes total misclassification under equal error weighting — Youden's
 $c_J$ is provably the optimal-misclassification cutpoint for a given weighting
 (Youden 1950; Perkins & Schisterman 2006). So Youden on the single variable **is** the optimal classifier for that
@@ -254,8 +260,7 @@ pDMP tables ($10^5$–$10^6$ rows per sample) the difference in constant factors
 single-variable threshold scales far better, exactly as you note.
 
 **Collinearity / effective dimension $\approx 1$.** `hdiv` (Hellinger), `jdiv` (J-divergence),
-`bay.TV`, and `TV` are all monotone transforms of the same underlying $(\hat p_c,\hat p_t,
-\text{coverage})$; the J-divergence and Hellinger divergence are both $f$-divergences of the *same*
+`bay.TV`, and `TV` are all monotone transforms of the same underlying $(\hat p_c, \hat p_t, \text{coverage})$; the J-divergence and Hellinger divergence are both $f$-divergences of the *same*
 Bernoulli pair and are highly correlated. The nominal feature vector therefore has effective
 dimension near 1 (perhaps 2 once coverage weighting is included); PCA to 4 components on collinear
 inputs mostly repackages a single direction, and RF variable importance would collapse onto one
