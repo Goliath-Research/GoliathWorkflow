@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -27,8 +27,8 @@ def _import_h5py_with_plugins():
     return h5py
 
 
-def _load_covariate_table(covariates_path: str, covariate_id_column: str) -> pd.DataFrame:
-    p = Path(covariates_path)
+def _load_single_covariate_table(path: Path, covariate_id_column: str) -> pd.DataFrame:
+    p = Path(path)
     if not p.is_file():
         raise FileNotFoundError(f"covariates_path not found: {p}")
     if p.suffix.lower() in (".csv", ".tsv"):
@@ -55,6 +55,29 @@ def _load_covariate_table(covariates_path: str, covariate_id_column: str) -> pd.
     df = df.copy()
     df[covariate_id_column] = df[covariate_id_column].astype(str)
     return df
+
+
+def _load_covariate_table(
+    covariates_path: Union[str, Sequence[str]],
+    covariate_id_column: str,
+) -> pd.DataFrame:
+    if isinstance(covariates_path, (list, tuple)):
+        paths = [Path(str(p)) for p in covariates_path if str(p).strip()]
+        if not paths:
+            raise ValueError("covariates_path list is empty")
+        merged = _load_single_covariate_table(paths[0], covariate_id_column)
+        for extra in paths[1:]:
+            other = _load_single_covariate_table(extra, covariate_id_column)
+            overlap = [
+                c
+                for c in other.columns
+                if c != covariate_id_column and c in merged.columns
+            ]
+            if overlap:
+                other = other.rename(columns={c: f"{c}__dup" for c in overlap})
+            merged = merged.merge(other, on=covariate_id_column, how="outer")
+        return merged
+    return _load_single_covariate_table(Path(str(covariates_path)), covariate_id_column)
 
 
 def _infer_column_roles(df: pd.DataFrame, candidate_cols: List[str]) -> Tuple[List[str], List[str]]:
@@ -184,7 +207,7 @@ def _ordered_covariate_rows(
 
 
 def fit_covariates(
-    covariates_path: Optional[str],
+    covariates_path: Optional[Union[str, Sequence[str]]],
     sample_ids: Sequence[str],
     *,
     covariate_id_column: str,
@@ -393,7 +416,7 @@ def fit_covariates(
 
 
 def transform_covariates(
-    covariates_path: Optional[str],
+    covariates_path: Optional[Union[str, Sequence[str]]],
     sample_ids: Sequence[str],
     preprocessor: Optional[CovariatePreprocessor],
     *,

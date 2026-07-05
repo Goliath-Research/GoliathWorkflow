@@ -38,6 +38,8 @@ class MethylExtractConfig:
     chunk_size: Optional[int]
     output_format: str
     split: bool
+    read_level: bool
+    tile_size: Optional[int]
 
 
 @dataclass(frozen=True)
@@ -261,6 +263,7 @@ def resolve_methyl_extract_config(
     extract_contexts = _normalize_contexts(extract_contexts_raw)
 
     extractor_bin = str(step_cfg.get("extractor_bin") or "MethylExtractor").strip()
+    read_level, tile_size = _resolve_read_level(step_cfg)
 
     return MethylExtractConfig(
         sample_id=sample_id,
@@ -280,7 +283,42 @@ def resolve_methyl_extract_config(
         chunk_size=step_cfg.get("chunk_size"),
         output_format=str(step_cfg.get("output_format") or "hdf5"),
         split=bool(step_cfg.get("split", True)),
+        read_level=read_level,
+        tile_size=tile_size,
     )
+
+
+def _resolve_read_level(step_cfg: Mapping[str, Any]) -> tuple[bool, Optional[int]]:
+    """Parse methyl_extract.read_level (bool or {enabled, tile_size})."""
+    raw = step_cfg.get("read_level")
+    tile_size = step_cfg.get("tile_size")
+    if isinstance(raw, dict):
+        enabled = bool(raw.get("enabled", False))
+        if raw.get("tile_size") is not None:
+            tile_size = raw.get("tile_size")
+        return enabled, int(tile_size) if tile_size is not None else None
+    if isinstance(raw, bool):
+        return raw, int(tile_size) if tile_size is not None else None
+    if raw is not None:
+        enabled = str(raw).strip().lower() not in {"0", "false", "no"}
+        return enabled, int(tile_size) if tile_size is not None else None
+    return False, int(tile_size) if tile_size is not None else None
+
+
+def expected_pattern_h5_files(
+    chromosomes: Sequence[str],
+    extract_contexts: Sequence[str],
+) -> List[str]:
+    return [f"{chrom}-{ctx}.patterns.h5" for chrom in chromosomes for ctx in extract_contexts]
+
+
+def extract_pattern_outputs_complete(
+    sample_dir: Path,
+    expected_names: Sequence[str],
+) -> bool:
+    if not expected_names:
+        return True
+    return all((sample_dir / name).is_file() for name in expected_names)
 
 
 def expected_h5_files(chromosomes: Sequence[str], extract_contexts: Sequence[str]) -> List[str]:
@@ -352,6 +390,10 @@ def build_methyl_extractor_command(cfg: MethylExtractConfig, paths: MethylExtrac
     cmd.append(f"--output-format={cfg.output_format}")
     if cfg.split:
         cmd.append("--split")
+    if cfg.read_level:
+        cmd.append("--read-level")
+        if cfg.tile_size is not None:
+            cmd.append(f"--tile-size={int(cfg.tile_size)}")
     cmd.append(f"--output-dir={paths.sample_dir}")
     cmd.append(str(paths.bam_path))
     # With --output-dir set, MethylExtractor treats the next positional as ref.fa only
@@ -386,7 +428,15 @@ def run_methyl_extract(
         raise RuntimeError(f"sampleDir not found: {cfg.sample_dir}")
 
     expected = expected_h5_files(cfg.chromosomes, cfg.extract_contexts)
-    if extract_outputs_complete(cfg.sample_dir, expected):
+    pattern_expected = (
+        expected_pattern_h5_files(cfg.chromosomes, cfg.extract_contexts)
+        if cfg.read_level
+        else []
+    )
+    if extract_outputs_complete(cfg.sample_dir, expected) and (
+        not pattern_expected
+        or extract_pattern_outputs_complete(cfg.sample_dir, pattern_expected)
+    ):
         logger.info("Skipping MethylExtractor; outputs already present for %s", cfg.sample_id)
         return {
             "sampleId": cfg.sample_id,
@@ -411,6 +461,15 @@ def run_methyl_extract(
         )
 
     h5_files = [name for name in expected if (cfg.sample_dir / name).is_file()]
+    if pattern_expected:
+        pattern_files = [
+            name for name in pattern_expected if (cfg.sample_dir / name).is_file()
+        ]
+        if cfg.read_level and not pattern_files:
+            logger.warning(
+                "MethylExtractor read_level enabled but no *.patterns.h5 files produced for %s",
+                cfg.sample_id,
+            )
     if not h5_files:
         h5_files = sorted(p.name for p in cfg.sample_dir.glob("*-*.h5"))
     if not h5_files:

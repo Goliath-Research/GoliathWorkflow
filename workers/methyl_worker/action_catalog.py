@@ -31,6 +31,7 @@ ActionConfigKey = Literal[
     "methyl_extract",
     "validation",
     "derived_measures",
+    "info_measures",
     "progression",
     "parabricks",
 ]
@@ -79,6 +80,7 @@ PROJECT_ACTION_CONFIG_KEYS: FrozenSet[ActionConfigKey] = frozenset(
         "methyl_extract",
         "validation",
         "derived_measures",
+        "info_measures",
         "progression",
         "parabricks",
     }
@@ -576,6 +578,20 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         cli_tool="methyl-derived-measures",
         tool="MethylDerivedMeasures",
         action_config_key="derived_measures",
+    ),
+    _cli(
+        "pipeline.info_measures",
+        "methyl-infotheory",
+        "pipeline.info_measures",
+        "Read-level information-theoretic methylation measures (entropy, JSD, confirmation).",
+        "modeling",
+        _PIPELINE_MODULE,
+        "InfoMeasuresTaskInput",
+        _PIPELINE_MODULE,
+        "InfoMeasuresTaskOutput",
+        cli_tool="methyl-infotheory",
+        tool="MethylInfoTheory",
+        action_config_key="info_measures",
     ),
     _cli(
         "pipeline.gene_select",

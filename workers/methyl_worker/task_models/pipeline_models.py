@@ -115,6 +115,26 @@ class DerivedMeasuresTaskOutput(ActionOutputBase):
     n_columns: Optional[int] = None
 
 
+class InfoMeasuresTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str
+    project: Optional[str] = None
+    projectPath: Optional[str] = None
+    outputDir: Optional[str] = None
+    stepOverride: Optional[Dict[str, Any]] = None
+
+
+class InfoMeasuresTaskOutput(ActionOutputBase):
+    output_dir: Optional[str] = None
+    output_csv: Optional[str] = None
+    confirmation_report: Optional[str] = None
+    n_samples: Optional[int] = None
+    n_columns: Optional[int] = None
+    n_jsd_windows: Optional[int] = None
+    status: Optional[str] = None
+
+
 class EnricherTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

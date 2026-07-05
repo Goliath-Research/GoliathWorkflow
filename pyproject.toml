@@ -68,6 +68,7 @@ pythonpath = [
     "packages/methyldomain",
     "packages/methylfragmentomics",
     "packages/methylderivedmeasures",
+    "packages/methylinfotheory",
     "workers",
     "workflow_engine",
     "workflow_engine/local",

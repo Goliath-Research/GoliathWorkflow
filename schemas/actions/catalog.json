@@ -186,6 +186,34 @@
       "tool": "MethylDerivedMeasures"
     },
     {
+      "action_config_key": "info_measures",
+      "action_name": "pipeline.info_measures",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-infotheory",
+      "category": "modeling",
+      "cli_tool": "methyl-infotheory",
+      "context_vars": [],
+      "default_node_type": "ACTION",
+      "description": "Read-level information-theoretic methylation measures (entropy, JSD, confirmation).",
+      "execution_mode": "cli",
+      "input_schema_ref": "schemas/tasks/pipeline_info_measures.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_info_measures.output.schema.json",
+      "schema_id": "pipeline.info_measures",
+      "tool": "MethylInfoTheory"
+    },
+    {
       "action_config_key": "gene_selection",
       "action_name": "pipeline.gene_select",
       "argv_map": {

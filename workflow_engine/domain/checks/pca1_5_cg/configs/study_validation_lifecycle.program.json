@@ -258,6 +258,10 @@
       "node_key": "derived_measures"
     },
     {
+      "do": "pipeline.info_measures",
+      "node_key": "info_measures"
+    },
+    {
       "do": "pipeline.enricher",
       "node_key": "enricher"
     },

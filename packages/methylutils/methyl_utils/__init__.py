@@ -64,6 +64,13 @@ from .core.io import (
     estimate_n_cap_from_sample_path_with_log,
 )
 
+from .core.read_level_io import (
+    ReadLevelPatterns,
+    discover_pattern_files,
+    load_read_level_patterns,
+    write_read_level_patterns,
+)
+
 # Legacy exports from old methyl_sample.py (for backward compatibility during migration)
 # Legacy imports - these are now defined directly below
 # try:

@@ -280,7 +280,7 @@ class BackendSharedParams(BaseModel):
         ),
     )
 
-    covariates_path: Optional[str] = Field(default=None)
+    covariates_path: Optional[Union[str, List[str]]] = Field(default=None)
     covariate_id_column: str = Field(default="sample_id")
     covariate_numeric_columns: Optional[List[str]] = Field(default=None)
     covariate_ordinal_columns: Optional[List[str]] = Field(default=None)
@@ -1634,10 +1634,11 @@ class MonteCarloConfig(BaseModel):
         le=512,
         description="Histogram bin count per feature for aggregated ECDF OvR heads.",
     )
-    covariates_path: Optional[str] = Field(
+    covariates_path: Optional[Union[str, List[str]]] = Field(
         default=None,
         description=(
-            "Optional covariates sidecar (HDF5 preferred, CSV accepted). "
+            "Optional covariates sidecar path or list of paths (HDF5 preferred, CSV accepted). "
+            "Multiple CSVs are merged on sample_id. "
             "Rows should include sample identifier column for join with sample basename."
         ),
     )

@@ -134,6 +134,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="DerivedMeasuresStepConfig",
     ),
     ConfigSchemaSpec(
+        schema_id="info_measures",
+        module="methyl_infotheory.config",
+        class_name="InfoTheoryStepConfig",
+        filename="info_measures.schema.json",
+        title="InfoTheoryStepConfig",
+    ),
+    ConfigSchemaSpec(
         schema_id="centroid",
         module="methyl_centroid.config",
         class_name="MethylCentroidConfig",

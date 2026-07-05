@@ -35,6 +35,7 @@ from ..task_models.pipeline_models import (
     GeneFeatureSelectTaskOutput,
     GeneSelectTaskOutput,
     DerivedMeasuresTaskOutput,
+    InfoMeasuresTaskOutput,
     MapperTaskOutput,
 )
 from ..task_models.step_override_models import CentroidBaseConfigOverride, CentroidStepOverride
@@ -355,6 +356,11 @@ def _collector_for_entry(entry: ActionCatalogEntry) -> ArtifactCollector:
             output_model=DerivedMeasuresTaskOutput,
             resolve_output_dir=lambda inp: inp.get("outputDir"),
         )
+    if name == "pipeline.info_measures":
+        return ManifestFirstCollector(
+            output_model=InfoMeasuresTaskOutput,
+            resolve_output_dir=lambda inp: inp.get("outputDir"),
+        )
     if name == "pipeline.centroid":
         return ManifestFirstCollector(
             output_model=CentroidTaskOutput,
@@ -399,6 +405,12 @@ def build_action_from_catalog(entry: ActionCatalogEntry, handlers_module: Any) -
 
         return DerivedMeasuresCliAction(
             entry=entry, cli_tool=cli, argv_map=DERIVED_MEASURES_ARGV_MAP, collector=collector
+        )
+    if entry.action_name == "pipeline.info_measures":
+        from .info_measures import INFO_MEASURES_ARGV_MAP, InfoMeasuresCliAction
+
+        return InfoMeasuresCliAction(
+            entry=entry, cli_tool=cli, argv_map=INFO_MEASURES_ARGV_MAP, collector=collector
         )
     if entry.action_name == "pipeline.gene_select":
         from .gene_select import GENE_SELECT_ARGV_MAP, GeneSelectCliAction

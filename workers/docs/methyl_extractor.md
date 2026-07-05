@@ -51,7 +51,26 @@ Optional dev env: `METHYL_EXTRACTOR_BIN` if the binary is not on default PATH.
 
 Under `{sampleDir}`:
 
-- `{chrom}-{ctx}.h5` — methylation matrices (e.g. `1-CG.h5`, `1-CHG.h5`)
-- `{sampleId}.methyl_extract.log` — command log
+| Artifact | Pattern | Role |
+|----------|---------|------|
+| Per-chrom HDF5 | `{chrom}-{ctx}.h5` | Marginal per-CpG counts (e.g. `1-CG.h5`) |
+| Read-level sidecar | `{chrom}-{ctx}.patterns.h5` | Per-tile read co-methylation histograms (when `--read-level`) |
+| Extraction log | `{sampleId}.methyl_extract.log` | Command log |
+
+### Read-level pattern sidecar (optional)
+
+When profile `actionConfig.methyl_extract.read_level.enabled` is true (or `--read-level`
+is passed), MethylExtractor also writes `{chrom}-{ctx}.patterns.h5` files. Schema:
+[`docs/reference/read_level_pattern_contract.md`](../../docs/reference/read_level_pattern_contract.md).
+
+Profile example:
+
+```json
+"methyl_extract": {
+  "read_level": { "enabled": true, "tile_size": 4 }
+}
+```
+
+Worker CLI flags: `--read-level`, `--tile-size=<k>` (forwarded from resolved config).
 
 See [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md) for the full contract.

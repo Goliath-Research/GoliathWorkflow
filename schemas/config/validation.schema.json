@@ -185,6 +185,12 @@
               "type": "string"
             },
             {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
               "type": "null"
             }
           ],
@@ -695,6 +701,12 @@
           "anyOf": [
             {
               "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
             },
             {
               "type": "null"
@@ -1506,6 +1518,12 @@
               "type": "string"
             },
             {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
               "type": "null"
             }
           ],
@@ -2308,11 +2326,17 @@
           "type": "string"
         },
         {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
           "type": "null"
         }
       ],
       "default": null,
-      "description": "Optional covariates sidecar (HDF5 preferred, CSV accepted). Rows should include sample identifier column for join with sample basename.",
+      "description": "Optional covariates sidecar path or list of paths (HDF5 preferred, CSV accepted). Multiple CSVs are merged on sample_id. Rows should include sample identifier column for join with sample basename.",
       "title": "Covariates Path"
     },
     "covariates_strict_join": {

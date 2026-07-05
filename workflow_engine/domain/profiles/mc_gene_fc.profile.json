@@ -19,7 +19,11 @@
       "min_mapq": 20,
       "min_phred": 20,
       "split": true,
-      "output_format": "hdf5"
+      "output_format": "hdf5",
+      "read_level": {
+        "enabled": false,
+        "tile_size": 4
+      }
     },
     "centroid": {
       "base_config": {
@@ -160,6 +164,13 @@
       "pdr_disagreement_threshold": 0.25,
       "min_coverage": 1
     },
+    "info_measures": {
+      "contexts": ["CG"],
+      "tile_size": 4,
+      "min_tile_reads": 5,
+      "jsd_top_windows": 100,
+      "jsd_min_cohort_reads": 10
+    },
     "classifier": {
       "enable_platt_calibration": true
     },
@@ -182,7 +193,10 @@
           "params": {
             "feature_mode": "observed_hybrid",
             "feature_family_set": "dmp_scored+chromosome",
-            "covariates_path": "{output_base}/derived_measures/derived_measures.csv"
+            "covariates_path": [
+              "{output_base}/derived_measures/derived_measures.csv",
+              "{output_base}/info_measures/readlevel_measures.csv"
+            ]
           }
         },
         "generative_hybrid": {
@@ -190,7 +204,10 @@
           "params": {
             "feature_mode": "observed_hybrid",
             "feature_family_set": "dmp_scored+chromosome",
-            "covariates_path": "{output_base}/derived_measures/derived_measures.csv"
+            "covariates_path": [
+              "{output_base}/derived_measures/derived_measures.csv",
+              "{output_base}/info_measures/readlevel_measures.csv"
+            ]
           }
         },
         "ecdf": {
