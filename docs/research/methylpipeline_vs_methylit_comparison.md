@@ -304,6 +304,152 @@ Beyond Sanchez & Mackenzie, the analysis above rests on:
 - **D. M. Green & J. A. Swets (1966).** *Signal Detection Theory and Psychophysics.* Wiley. — the
   signal-detection framing shared by both products.
 
+## Independent corroboration and open critiques
+
+The analysis so far took MethylIT's own framing at face value. This section steps back and asks two
+harder questions: *how independent is the evidence base?* and *do the specific engineering choices
+(count-based modeling forcing downsampling, small low-coverage cohorts, a Random-Forest cutpoint, and
+a small training fraction) hold up against the external literature?*
+
+### 1. The evidence base is almost entirely first-party
+
+Every foundational MethylIT reference — the 2016 information-thermodynamics paper, the 2019 clinical
+signal-detection paper, the R package, and the 2023 re-analysis of public methylomes — traces to
+Sanchez and Mackenzie (and close collaborators). MethylIT_py 0.4.0 is a Python migration of that same
+R code, not an independent re-implementation. A literature scan for **independent** groups
+reproducing or externally validating the specific Hellinger-divergence → Weibull/GGamma →
+signal-detection → ML-cutpoint pipeline returns essentially nothing: adoption outside the originating
+lab is not documented in peer-reviewed work. This does not make the method wrong, but it means the
+pipeline's performance claims rest on self-reported analyses of a few datasets, which is exactly the
+situation independent held-out evaluation (Workflow 3) exists to remedy.
+
+Two clarifications keep this fair:
+
+- The **underlying ideas are not fringe**, and independent groups *do* pursue information-theoretic
+  methylation analysis — e.g. the epigenome "potential energy landscape" / `informME` framework of
+  Jenkinson, Abante, Feinberg & Goutsias (Nat. Genet. 2017) and methylation-entropy / epipolymorphism
+  work (Landan et al., Nat. Genet. 2012). Signal-detection theory in diagnostics is likewise a mature,
+  independent field (Green & Swets 1966; Pepe, *The Statistical Evaluation of Medical Tests*, 2003).
+  So the *concepts* have external support; the *specific pipeline* does not have independent
+  reproduction.
+- Independent theoretical support for a concept is not a substitute for independent empirical
+  reproduction of a tool. Both matter, and only the first is currently satisfied.
+
+### 2. Counts vs methylation levels, and the forced downsampling to ~10x
+
+The observation that MethylIT "works with counts, not levels" and therefore **caps/downsamples 30x to
+~10x** is a real limitation, and the external literature both explains why capping hurts and shows the
+standard way to avoid it.
+
+- **Why low depth is costly.** Methylation level is a proportion $m/(m+u)$; at depth 10 it can only
+  take values $\{0, 0.1, \dots, 1.0\}$, so it *cannot* be within 5% of a true value like 0.85
+  (BoostMe, Zou et al., BMC Genomics 2018; "Characterizing the properties of bisulfite sequencing
+  data," BMC Genomics 2021). Downsampling 30x → 10x therefore throws away real precision and injects
+  quantization error into exactly the small/moderate $\Delta p$ regime where DMP calling is hardest.
+- **The field standard avoids downsampling by modeling coverage in the likelihood.** DSS
+  (Feng, Conneely & Wu, *Nucleic Acids Res.* 2014), methylSig (Park et al. 2014), methylKit
+  (Akalin et al., *Genome Biol.* 2012), bsseq/BSmooth (Hansen, Langmead & Irizarry, *Genome Biol.*
+  2012), and dmrseq (Korthauer et al., *Biostatistics* 2018) all model the methylated/total read
+  counts with a **beta-binomial** (a per-site methylation mean plus a dispersion parameter, with
+  coverage entering as the binomial denominator). Deeper sites automatically receive more weight;
+  no reads are discarded and no coverage equalization by capping is needed. MethylIT does use
+  coverage weighting and a Bayesian level estimate, but its need to *cap* coverage to keep the
+  weighted Hellinger divergence comparable across samples is precisely the problem the beta-binomial
+  likelihood solves without information loss. In other words, downsampling is a symptom of putting
+  coverage into a weight on a divergence rather than into the denominator of a count model.
+- **Practical consequence.** Capping to 10x is defensible as a crude cross-sample normalization, but
+  it is strictly dominated, on statistical-efficiency grounds, by depth-aware count models that the
+  rest of the field has used for a decade.
+
+### 3. Few samples at low coverage: replicates, not depth, are the binding constraint
+
+MethylIT's published results use small cohorts. The most-cited WGBS design study — Ziller, Hansen,
+Meissner & Aryee, "Coverage recommendations for methylation analysis by whole-genome bisulfite
+sequencing" (*Nat. Methods* 2015) — is directly relevant and, notably, **independent** of MethylIT:
+
+- Per-sample coverage of **5–15x is sufficient** for DMR detection; sequencing deeper is "wasted
+  resources that would be better spent on an increased number of biological replicates."
+- **Biological replicates should be analyzed separately, not pooled**, and adding replicates raises
+  power more than adding depth.
+
+This reframes the critique constructively: a design of *many* replicates at *modest* depth is
+statistically superior to *few* deep samples that are then downsampled — and it is the opposite of
+what the original MethylIT demonstrations used. It also means a pooled-control **reference centroid**
+(Section on reference selection) discards the very replicate-level variance Ziller says to preserve.
+
+### 4. Small training fraction, Monte Carlo splits, and Random Forest scalability
+
+Two ML choices deserve external scrutiny.
+
+- **Small training fraction (e.g. ~20% train / ~80% test) driven by RF cost.** There is a narrow
+  theoretical defense: for *model selection*, Monte Carlo cross-validation with a large validation
+  fraction is asymptotically consistent and guards against over-large models (Shao, *JASA* 1993;
+  Picard & Cook 1984). But for estimating the performance of a *fixed predictive* model, shrinking the
+  training set raises bias and, in the small-$n$ regime MethylIT operates in, small-sample
+  cross-validation estimates are known to be **high-variance and optimistically biased**
+  (Braga-Neto & Dougherty, "Is cross-validation valid for small-sample microarray classification?",
+  *Bioinformatics* 2004). A 20/80 split chosen because a 300-tree Random Forest over $10^5$–$10^6$
+  per-locus rows is too slow at 80/20 is a *computational* concession with *statistical* costs, not a
+  principled design.
+- **Feature-selection leakage.** Selecting DMPs and then estimating classifier performance is
+  vulnerable to selection bias unless selection is redone *inside* each resampling fold
+  (Ambroise & McLachlan, *PNAS* 2002). This is the same hazard MethylPipeline documents for its own
+  stability workflow, and it is worth checking explicitly for MethylIT's cutpoint step.
+- **Random Forest is the wrong tool for a near-1-D, collinear feature set** (see the deeper-analysis
+  section above): on a single dominant monotone divergence a Youden-index threshold is Bayes-optimal,
+  $O(n\log n)$, and deterministic, whereas the forest adds cost and variance without new signal. The
+  small-sample microarray RF literature reaches the same parsimony conclusion (smaller/simpler models
+  match or beat large forests on small $n$).
+
+### 5. What this implies
+
+None of the above proves MethylIT is inaccurate; it shows that (a) its evidence is self-generated and
+un-reproduced, and (b) several implementation choices — count-driven downsampling, few deep samples,
+a heavy per-locus classifier, and a compute-driven small training fraction — run against
+well-established, independent methodology (beta-binomial depth modeling; replicates-over-depth; nested
+selection; parsimonious thresholds). The productive response is measurement, not rhetoric:
+MethylPipeline's true held-out bootstrap (Workflow 3) plus a beta-binomial or ECDF baseline can
+quantify, on the same cohort, whether the Weibull/GGamma + Random-Forest machinery buys anything over
+a coverage-aware count model with a single-variable Youden cutpoint. The external literature predicts
+the gap will be small — and if so, the simpler, depth-preserving, replicate-rich design is the more
+defensible one.
+
+### External references (independent of the MethylIT authors)
+
+- **Ziller M. J., Hansen K. D., Meissner A., Aryee M. J. (2015).** "Coverage recommendations for
+  methylation analysis by whole-genome bisulfite sequencing." *Nat. Methods* 12(3):230–232. — 5–15x
+  is enough; add replicates, not depth; analyze replicates separately.
+- **Feng H., Conneely K. N., Wu H. (2014).** "A Bayesian hierarchical model to detect differentially
+  methylated loci from single-nucleotide-resolution sequencing data." *Nucleic Acids Res.* 42(8):e69.
+  (DSS; beta-binomial with dispersion shrinkage.)
+- **Korthauer K., Chakraborty S., Benjamini Y., Irizarry R. A. (2018).** "Detection and accurate false
+  discovery rate control of differentially methylated regions from WGBS." *Biostatistics* 19(3):325–343.
+  (dmrseq; works with as few as two per group.)
+- **Akalin A. et al. (2012).** "methylKit: a comprehensive R package for the analysis of genome-wide
+  DNA methylation profiles." *Genome Biol.* 13:R87.
+- **Hansen K. D., Langmead B., Irizarry R. A. (2012).** "BSmooth: from whole genome bisulfite
+  sequencing reads to differentially methylated regions." *Genome Biol.* 13:R83.
+- **Park Y., Figueroa M. E., Rozek L. S., Sartor M. A. (2014).** "MethylSig: a whole genome DNA
+  methylation analysis pipeline." *Bioinformatics* 30(17):2414–2422.
+- **Zou L. S. et al. (2018).** "BoostMe accurately predicts DNA methylation values in WGBS of multiple
+  human tissues." *BMC Genomics* 19:390. — low-depth quantization error.
+- **"Characterizing the properties of bisulfite sequencing data…" (2021).** *BMC Genomics*
+  22, s12864-021-07721-z. — read depth vs sensitivity; finite proportion values at low depth.
+- **Braga-Neto U. M., Dougherty E. R. (2004).** "Is cross-validation valid for small-sample microarray
+  classification?" *Bioinformatics* 20(3):374–380.
+- **Ambroise C., McLachlan G. J. (2002).** "Selection bias in gene extraction on the basis of
+  microarray gene-expression data." *PNAS* 99(10):6562–6566. — feature selection must be inside the
+  resampling loop.
+- **Shao J. (1993).** "Linear model selection by cross-validation." *J. Am. Stat. Assoc.*
+  88(422):486–494. — asymptotics of leave-many-out Monte Carlo cross-validation.
+- **Pepe M. S. (2003).** *The Statistical Evaluation of Medical Tests for Classification and
+  Prediction.* Oxford University Press. — independent signal-detection/ROC foundation.
+- **Jenkinson G., Abante J., Feinberg A. P., Goutsias J. (2017).** "Potential energy landscapes
+  identify the information-theoretic nature of the epigenome." *Nat. Genet.* 49:719–729. (`informME`;
+  independent information-theoretic methylation modeling.)
+- **Landan G. et al. (2012).** "Epigenetic polymorphism and the stochastic formation of differentially
+  methylated regions in normal and cancerous tissues." *Nat. Genet.* 44:1207–1214.
+
 ## Feature-selection stability and "production" model
 
 - **MethylPipeline** has a first-class, formalized answer: Monte Carlo recurrence -> stable panel ->
@@ -416,6 +562,12 @@ differences, and (b) MethylIT's DMP set depends on a learned classifier/cutpoint
 MethylPipeline's depends on FDR-controlled tests plus a heuristic effect filter.
 
 ## References supporting the MethylIT_py theory
+
+> **First-party caveat.** References 1–3 below share the same authors (Sanchez & Mackenzie and close
+> collaborators) and describe the *same* method and codebase (MethylIT_py 0.4.0 is a Python migration
+> of the R package). They establish what the method *is*, not that it has been independently
+> reproduced. For independent literature bearing on the underlying ideas and on the specific
+> engineering choices, see "Independent corroboration and open critiques" above.
 
 The 0.4.0 `stages` config maps one-to-one onto the published MethylIT methodology:
 
