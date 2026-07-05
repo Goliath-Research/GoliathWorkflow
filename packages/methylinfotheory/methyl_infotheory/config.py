@@ -55,3 +55,44 @@ class InfoTheoryStepConfig(BaseModel):
         default=None,
         description="Optional path to DMP discovery/selected CSV for locus overlap concordance.",
     )
+    ising_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable v2 equilibrium Ising/max-entropy model per tile. Operator-set per profile/site.",
+    )
+    ising_max_iter: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Maximum Newton iterations for batched Ising fit.",
+    )
+    ising_tol: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description="Convergence tolerance on moment-matching residual.",
+    )
+    ising_l2: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="L2 ridge on Ising parameters for sparse tiles.",
+    )
+    ising_coupling: Optional[Literal["nearest", "all"]] = Field(
+        default=None,
+        description="Pairwise coupling structure: nearest-neighbor or all-pairs within tile.",
+    )
+    ising_min_tile_reads: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Minimum reads per tile for Ising model fitting (may exceed min_tile_reads).",
+    )
+    prefer_gpu: Optional[bool] = Field(
+        default=None,
+        description="Prefer GPU via methyl_utils array backend; None = auto.",
+    )
+    ising_batch_tiles: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Max tiles per GPU batch during Ising fit.",
+    )
+    dynamics_enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable dynamic measures (channel capacity, RDE, turnover); deferred in v2 phase 1.",
+    )

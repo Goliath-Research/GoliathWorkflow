@@ -2,7 +2,12 @@
 name: Read-level info measures
 overview: Add read-level (co-methylation) information-theoretic measures to MethylPipeline by (1) extending MethylExtractor to emit a per-tile methylation-pattern HDF5 sidecar, (2) adding a native Python package that computes pragmatic read-level measures (methylation entropy, epipolymorphism, true PDR, cohort Jensen-Shannon distance) with no full Ising fit, and (3) wiring it as a new pipeline action that produces a covariates sidecar CSV first and a DMP/gene concordance confirmation report second.
 
-> **Status: IMPLEMENTED.** Contract, loader, `methylinfotheory` package, `pipeline.info_measures` action, profile/program wiring, schemas, and unit tests are in-repo. External MethylExtractor `--read-level` C implementation remains a separate follow-up.
+> **Status: IMPLEMENTED (v1 + v2 equilibrium Ising).** Contract, loader, `methylinfotheory` package,
+> `pipeline.info_measures` action, profile/program wiring, schemas, and unit tests are in-repo.
+> v2 adds batched per-tile Ising fit (MML/NME/ESI/MSI, dMML/dNME, model JSD, MI ranking) via
+> `ising_enabled` in `actionConfig.info_measures`. Dynamic capacity/RDE/turnover remain deferred
+> (`dynamics_enabled` scaffold). External MethylExtractor `--read-level` C implementation remains
+> a separate follow-up.
 
 todos:
   - id: contract-loader
@@ -123,3 +128,11 @@ Dependencies: numpy, pandas, h5py, scipy (JSD/entropy); no pysam.
 ### Out of scope (first cut)
 
 Full Ising/MRF estimation (alpha/beta/gamma, partition function, ESI/MSI, channel capacity, RDE) is deferred; the package structure leaves room to add it behind the same action later. No changes to the marginal `.h5` schema or existing consumers.
+
+### v2 follow-on (equilibrium Ising — implemented)
+
+- `packages/methylinfotheory/methyl_infotheory/core/ising.py` — batched max-entropy fit on GPU via `get_array_module`
+- `ising_measures.py` — MML, NME, ESI, MSI sample covariates
+- `differential.py` — cohort dMML/dNME, model JSD, MI gene ranking → `ising_regions.csv`
+- `dynamics.py` — scaffold for channel capacity / RDE / turnover (`dynamics_enabled`)
+- Profile knob: `actionConfig.info_measures.ising_enabled: true` in `mc_gene_fc.profile.json`

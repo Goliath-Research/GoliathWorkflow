@@ -169,7 +169,13 @@
       "tile_size": 4,
       "min_tile_reads": 5,
       "jsd_top_windows": 100,
-      "jsd_min_cohort_reads": 10
+      "jsd_min_cohort_reads": 10,
+      "ising_enabled": true,
+      "ising_coupling": "nearest",
+      "ising_min_tile_reads": 10,
+      "ising_max_iter": 50,
+      "ising_tol": 1e-6,
+      "ising_l2": 0.0001
     },
     "classifier": {
       "enable_platt_calibration": true

@@ -138,6 +138,132 @@
       "default": null,
       "description": "Optional path to DMP discovery/selected CSV for locus overlap concordance.",
       "title": "Dmp Panel Csv"
+    },
+    "ising_enabled": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Enable v2 equilibrium Ising/max-entropy model per tile. Operator-set per profile/site.",
+      "title": "Ising Enabled"
+    },
+    "ising_max_iter": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Maximum Newton iterations for batched Ising fit.",
+      "title": "Ising Max Iter"
+    },
+    "ising_tol": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Convergence tolerance on moment-matching residual.",
+      "title": "Ising Tol"
+    },
+    "ising_l2": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "L2 ridge on Ising parameters for sparse tiles.",
+      "title": "Ising L2"
+    },
+    "ising_coupling": {
+      "anyOf": [
+        {
+          "enum": [
+            "nearest",
+            "all"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Pairwise coupling structure: nearest-neighbor or all-pairs within tile.",
+      "title": "Ising Coupling"
+    },
+    "ising_min_tile_reads": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Minimum reads per tile for Ising model fitting (may exceed min_tile_reads).",
+      "title": "Ising Min Tile Reads"
+    },
+    "prefer_gpu": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prefer GPU via methyl_utils array backend; None = auto.",
+      "title": "Prefer Gpu"
+    },
+    "ising_batch_tiles": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Max tiles per GPU batch during Ising fit.",
+      "title": "Ising Batch Tiles"
+    },
+    "dynamics_enabled": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Enable dynamic measures (channel capacity, RDE, turnover); deferred in v2 phase 1.",
+      "title": "Dynamics Enabled"
     }
   },
   "title": "InfoTheoryStepConfig",

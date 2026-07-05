@@ -58,6 +58,15 @@ Example for `k=4`:
 MethylPipeline reads this contract via
 `methyl_utils.core.read_level_io.load_read_level_patterns(path)`.
 
+## v2 Ising/MRF consumption (contract unchanged)
+
+The v2 equilibrium Ising layer in `methylinfotheory` consumes this sidecar **as-is** at per-tile
+granularity (`k` consecutive CpGs, default 4). It densifies sparse pattern histograms to
+`(n_tiles, 2^k)` batches for GPU-accelerated max-entropy fitting via `methyl_utils` array backend.
+No schema version bump or MethylExtractor change is required beyond `--read-level` emission.
+Dynamic measures (channel capacity, RDE, turnover) are deferred; see
+`docs/research/methylpipeline_informme_integration.md`.
+
 ## MethylExtractor flags
 
 When enabled, MethylExtractor accepts:

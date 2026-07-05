@@ -101,6 +101,30 @@ second opinion:
 - **Licensing.** informME is GPLv3. Running it as an external tool is fine; embedding requires a
   clean-room Python reimplementation of the Ising estimation.
 
+## v2 equilibrium Ising in `methylinfotheory` (implemented)
+
+When `actionConfig.info_measures.ising_enabled` is true, `pipeline.info_measures` fits a
+**per-tile max-entropy / Ising model** to the same `{chrom}-{ctx}.patterns.h5` sidecars (no
+contract change). Outputs extend v1:
+
+| Layer | Artifacts / columns |
+|-------|---------------------|
+| Sample covariates | `readlevel::global_{mml,nme,esi,msi}` and per-chromosome variants in `readlevel_measures.csv` |
+| Cohort differential | `ising_regions.csv` with dMML, dNME, model-based JSD, mutual information per tile |
+| Confirmation | `confirmation_report.json` adds `top_dnme`, `dmp_concordance_dnme`, `gene_concordance_mi` |
+
+Implementation: `packages/methylinfotheory/methyl_infotheory/core/{ising,ising_measures,differential}.py`.
+GPU batching uses `methyl_utils.array_backend.get_array_module` (CuPy when available;
+`METHYL_DISABLE_GPU=1` forces CPU). Tiles are batched as dense `(n_tiles, 2^k)` tensors.
+
+## Dynamic measures deferred (phase 2 scaffold)
+
+Channel capacity, relative dissipated energy (RDE), and turnover ratio from the Nat. Genet. 2017
+birth–death / potential-energy model are **not** computed in v2 phase 1. Setting
+`dynamics_enabled: true` records `{"status": "not_computed", "reason": "deferred_v2_phase2"}`
+in the confirmation report; signatures live in `core/dynamics.py` for a later cut behind the
+same `pipeline.info_measures` action.
+
 ## Sources
 
 - README + release notes: <https://github.com/GarrettJenkinson/informME> (`uploads/informME-0.md`).
