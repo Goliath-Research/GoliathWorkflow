@@ -18,6 +18,7 @@ This document is the canonical register of documentation coverage, canonical sou
 | **SamplePrep + QC** | Usage ch.03, [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md) | Documented | |
 | **Deployment** | Usage ch.14, [`deployment/production_runbook.md`](deployment/production_runbook.md) | Dual-backend | |
 | **Schemas / contracts** | [`reference/schema-index.md`](reference/schema-index.md), [`contracts/openapi.yaml`](../contracts/openapi.yaml) | Machine-readable | |
+| **Regulatory / product controls** | [`regulatory/`](regulatory/README.md) | New synthesis pillar | Product controls, validation evidence index, change management, deployment supervision, traceability |
 | **Diagrams** | [`docs/diagrams/src/*.mmd`](diagrams/src/), [`docs/diagrams/out/*.svg`](diagrams/out/) | Pre-render pipeline | `scripts/render_diagrams.sh` (pinned `docs/diagrams/package.json`, system Chromium on ARM) |
 
 ## Canonical doc map (“read this for X”)
@@ -32,6 +33,7 @@ This document is the canonical register of documentation coverage, canonical sou
 | How do I deploy DB + gateway + workers? | Usage ch.14, [production_runbook.md](deployment/production_runbook.md) |
 | What is the REST/worker protocol? | [WORKER_PROTOCOL.md](../workers/WORKER_PROTOCOL.md), [implementation/workers-and-gateway.md](implementation/workers-and-gateway.md) |
 | What do config keys mean? | [configuration-reference.qmd](reference/configuration-reference.qmd), [config-parameter-matrix.md](reference/config-parameter-matrix.md) |
+| How do I present product controls, evidence, and change management? | [regulatory/README.md](regulatory/README.md) |
 | What is stale vs current? | This file |
 
 ## Repository vs `/work` ownership

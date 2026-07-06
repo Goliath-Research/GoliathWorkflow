@@ -1,6 +1,6 @@
 # MethylPipeline Documentation
 
-Navigation hub for the three documentation pillars (Theory, Usage, Implementation) plus cross-cutting reference, architecture, and deployment.
+Navigation hub for the three documentation pillars (Theory, Usage, Implementation) plus cross-cutting reference, architecture, deployment, and regulatory/product-control docs.
 
 **Interactive hub:** [methylpipeline-docs canvas](/home/ubuntu/.cursor/projects/home-ubuntu-MethylPipeline/canvases/methylpipeline-docs.canvas.tsx)
 
@@ -13,6 +13,7 @@ Navigation hub for the three documentation pillars (Theory, Usage, Implementatio
 | **Developer** — engine, workers, compiler | [Implementation guide](implementation/index.md) |
 | **Workflow author** — DomainPrograms | [DomainProgram language](reference/domain-program-language.md) + [Architecture: layer model](architecture/layer-model.md) |
 | **DevOps** — DB, gateway, workers | [Usage ch.14](usage/14-deployment-and-distributed-workflow.qmd) + [Deployment runbook](deployment/production_runbook.md) |
+| **Regulatory / quality** — product controls, evidence, change management | [Regulatory and product controls](regulatory/README.md) |
 
 ## Five navigation lenses
 
@@ -51,6 +52,7 @@ See table above. Package maintainers: [implementation/packages/](implementation/
 | Architecture | [`architecture/`](architecture/index.md) |
 | Reference lookup | [`reference/`](reference/documentation-toolchain.md) |
 | Deployment | [`deployment/`](deployment/production_runbook.md) |
+| Regulatory / product controls | [`regulatory/`](regulatory/README.md) |
 | Plans | [`plans/`](plans/README.md) |
 | Audit registry | [`DOCUMENTATION_AUDIT.md`](DOCUMENTATION_AUDIT.md) |
 
