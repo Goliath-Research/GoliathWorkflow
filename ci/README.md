@@ -11,6 +11,27 @@ Each YAML lives in **this repository** so Azure DevOps can point pipelines at lo
 | [`azure-pipelines-release-assemble.yml`](azure-pipelines-release-assemble.yml) | Epimethyl-Release-Assemble | Manual |
 | [`azure-pipelines-release-deploy.yml`](azure-pipelines-release-deploy.yml) | Epimethyl-Release-Deploy | Manual (+ approval) |
 
+## Regression and coverage gate (PR pipeline)
+
+`azure-pipelines-pr.yml` runs the **full pytest suite** as a regression gate on
+every pull request, in addition to the doc/diagram/packaging guards. It builds a
+`.venv`, installs the editable packages with dependencies
+(`scripts/install_packages.sh --with-deps`), then runs
+[`../scripts/run_tests_ci.sh`](../scripts/run_tests_ci.sh), which emits:
+
+- `test-results/junit.xml` — published via `PublishTestResults@2` (a failing test fails the PR),
+- `coverage/coverage.xml` — published via `PublishCodeCoverageResults@2` (Cobertura),
+- `coverage/html/` — browsable HTML report.
+
+GPU tests are deselected (`-m "not gpu"`); database and `/work`-fixture tests
+self-skip on the hosted agent. Coverage is **measure-and-report only**: there is
+no `--cov-fail-under` gate yet. The baseline is recorded so the threshold can be
+ratcheted up over time. Policy and rationale live in
+[`../docs/regulatory/continuous-integration-and-regression-testing.md`](../docs/regulatory/continuous-integration-and-regression-testing.md).
+
+Run the same suite locally with `./scripts/run_tests_ci.sh` (or `./scripts/run_tests.sh`
+for a plain run without coverage artifacts).
+
 ## MethylExtractor repo (separate)
 
 MethylExtractor pipelines are in **MethylExtractor** → `ci/` (`azure-pipelines-release-arm64.yml`, `azure-pipelines-release-x64.yml`, `azure-pipelines-pr.yml`).

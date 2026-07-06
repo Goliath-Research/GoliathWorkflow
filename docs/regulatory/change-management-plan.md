@@ -53,17 +53,22 @@ For each change, answer:
 
 ## Required Gates By Change Type
 
+Every non-documentation change additionally runs the **full regression suite**
+(all packages) with coverage reporting as a pull-request gate. See
+[`continuous-integration-and-regression-testing.md`](continuous-integration-and-regression-testing.md).
+
 | Change Type | Required Gates |
 |-------------|----------------|
-| Documentation only | Link check, doc freshness where applicable |
-| Python package code | Unit tests, import checks, relevant package tests |
+| Documentation only | Link check, doc freshness where applicable; regression suite still runs |
+| Python package code | Full regression suite passes, coverage report reviewed, import checks, relevant package tests |
 | Task I/O model | `methyl-export-task-schemas --check`, schema review |
 | Action catalog | `methyl-export-action-catalog --check`, DB seed/redeploy plan |
 | Config model | config schema export/check, config boundary check |
 | DomainProgram | domain schema export/check, compile smoke, workflow deploy plan |
 | Worker protocol | worker tests, OpenAPI/schema review, protocol docs update |
 | Deployment scripts | shell syntax, packaging smoke, release runbook update |
-| Scientific behavior | targeted tests, validation artifact review, possible model revalidation |
+| Scientific behavior | full regression suite, targeted new/updated tests, validation artifact review, possible model revalidation |
+| New feature | new tests demonstrating the feature and guarding against future regression |
 | Security | threat/permission review, deployment runbook update, verification step |
 
 Current CI hooks and documentation checks are summarized in

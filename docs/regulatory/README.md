@@ -18,6 +18,7 @@ discussions.
 | [Deployment and supervision](deployment-and-supervision.md) | Production topology, worker supervision, portal monitoring, release bundles, rollback, and security controls |
 | [Validation evidence index](validation-evidence-index.md) | Template and registry structure for real study/model results tied to exact software and configuration versions |
 | [Change management plan](change-management-plan.md) | Proposed change classification, impact assessment, CI gates, release controls, and model revalidation triggers |
+| [Continuous integration and regression testing](continuous-integration-and-regression-testing.md) | Regression gate, test taxonomy, coverage measurement, per-package test expectation, and CI evidence |
 | [Traceability matrix](traceability-matrix.md) | Mapping from product claims and controls to source docs, schemas, tests, and runtime evidence |
 
 ## Relationship to Canonical Docs
@@ -35,5 +36,5 @@ discussions.
 
 These documents should cite canonical sources for detailed behavior and should
 be updated when any change affects intended use, workflow topology, schema
-contracts, production deployment, worker traceability, release controls, or
-validation evidence.
+contracts, production deployment, worker traceability, release controls,
+regression testing, or validation evidence.

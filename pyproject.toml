@@ -76,16 +76,24 @@ pythonpath = [
     "workflow_engine/contract",
     "tools",
 ]
-testpaths = ["packages/*/tests", "workflow_engine/tests", "workers/tests", "tools/tests"]
+testpaths = [
+    "packages/*/tests",
+    "packages/methylcentroid/methyl_centroid/tests",
+    "packages/methylutils/methyl_utils/tests",
+    "workflow_engine/tests",
+    "workers/tests",
+    "tools/tests",
+    "scripts/tests",
+]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+# Coverage flags are intentionally NOT in addopts so subset/local runs do not
+# require pytest-cov. CI enables coverage explicitly via scripts/run_tests_ci.sh.
 addopts = [
     "-v",
     "--strict-markers",
     "--tb=short",
-    "--cov-report=term-missing",
-    "--cov-report=html",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
@@ -108,7 +116,7 @@ follow_imports = "normal"
 ignore_missing_imports = true
 
 [tool.coverage.run]
-source = ["packages/"]
+source = ["packages/", "workers/", "workflow_engine/"]
 omit = [
     "*/tests/*",
     "*/test_*.py",

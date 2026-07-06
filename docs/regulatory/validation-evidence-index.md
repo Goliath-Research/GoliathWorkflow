@@ -49,6 +49,8 @@ Copy this template for each reviewed study/model.
 - Release manifest SHA256:
 - Git tag / commit:
 - CI run:
+- Regression test results (JUnit):
+- Coverage report:
 - Deploy approval record:
 
 ### Configuration Inputs

@@ -91,3 +91,36 @@ steps:
       bash -n scripts/assemble_release.sh
       bash -n scripts/promote_release.sh
     displayName: Verify release layout
+
+  # --- Regression gate: full pytest suite + coverage (measure-and-report) ---
+  # Runs the whole monorepo suite so changes cannot silently regress existing
+  # behavior. GPU/DB/`/work`-fixture tests self-skip on the hosted agent.
+  # Coverage is reported (no --cov-fail-under yet); see
+  # docs/regulatory/continuous-integration-and-regression-testing.md.
+  - script: |
+      python -m venv .venv
+      . .venv/bin/activate
+      python -m pip install -U pip
+      python -m pip install pytest pytest-cov
+      bash scripts/install_packages.sh --with-deps
+    displayName: Build test venv (editable packages + deps)
+
+  - script: |
+      bash scripts/run_tests_ci.sh
+    displayName: Full pytest suite (regression) + coverage
+
+  - task: PublishTestResults@2
+    condition: succeededOrFailed()
+    inputs:
+      testResultsFormat: JUnit
+      testResultsFiles: test-results/junit.xml
+      testRunTitle: MethylPipeline PR regression suite
+      failTaskOnFailedTests: true
+    displayName: Publish test results
+
+  - task: PublishCodeCoverageResults@2
+    condition: succeededOrFailed()
+    inputs:
+      summaryFileLocation: coverage/coverage.xml
+      pathToSources: $(Build.SourcesDirectory)
+    displayName: Publish code coverage

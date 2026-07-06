@@ -22,6 +22,7 @@ Plans in this folder are the **source of truth** for large features. Each plan m
 | [`docs-refresh-and-guardrails.plan.md`](docs-refresh-and-guardrails.plan.md) | **Epic** | Documentation refresh and CI guardrails | `audit-report`, `fix-precedence`, `fix-config-theory`, `fix-analyte`, `modeling-modes`, `profile-names`, `dmp-exports`, `workflow-engine-docs`, `validation-usage`, `package-sweep`, `quarto-record`, `tikz-svg`, `ci-freshness`, `ci-quarto`, `regen-verify` |
 | [`agnostic-gateway-and-boundaries.plan.md`](agnostic-gateway-and-boundaries.plan.md) | **Epic** | Agnostic gateway and documented boundaries | `resolve-at-config`, `gateway-claim-clean`, `gateway-catalog-clean`, `move-lifecycle-out`, `repoint-callers`, `docs-boundaries`, `promote-plan`, `verify` |
 | [`read-level-info-measures.plan.md`](read-level-info-measures.plan.md) | **Epic** | Read-level information-theoretic measures | `contract-loader`, `extractor-flags`, `package-core`, `outputs`, `action-registration`, `covariate-list`, `config-program-wiring`, `regen-seed`, `tests`, `plan-promotion` |
+| [`ci-regression-testing.plan.md`](ci-regression-testing.plan.md) | **Epic** | CI regression testing and coverage | `pytest-config`, `ci-script`, `test-gap-analysis`, `author-missing-tests`, `azure-pipeline`, `ci-readme`, `regulatory-doc`, `regulatory-wiring`, `verify` |
 
 Create each **Task** under its Epic in Azure DevOps Boards. Copy the task title from the plan `todos[].content` field. Mark tasks **Closed** when the corresponding code is merged.
 

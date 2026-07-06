@@ -33,6 +33,9 @@ release readiness, and regulatory evidence assembly.
 | Frozen model is built from fixed panel | Freeze stage injects fixed panel and reruns production analysis | [`../theory/chapters/15-model-creation-and-validation.qmd`](../theory/chapters/15-model-creation-and-validation.qmd) | project/config schemas | model creation tests | `production/project.json`, classifier artifacts |
 | Biological readiness is reviewed before model use | Readiness gate checks stability, freeze, enrichment, progression | [`../../packages/methylvalidation/docs/STABILITY_FREEZE_READINESS.md`](../../packages/methylvalidation/docs/STABILITY_FREEZE_READINESS.md) | readiness output JSON | readiness CLI tests | `readiness/readiness.json`, `readiness.md` |
 | True holdout evaluation can exclude samples from training | Validation partitions and holdout manifest | [`../theory/chapters/12-two-workflows.qmd`](../theory/chapters/12-two-workflows.qmd) | validation config schema | holdout evaluation tests | `production/holdout_manifest.json`, `holdout_batch/` metrics |
+| Changes must not introduce regressions | Full regression suite on every pull request | [`continuous-integration-and-regression-testing.md`](continuous-integration-and-regression-testing.md) | `pyproject.toml` pytest config, `scripts/run_tests_ci.sh` | CI PR pipeline JUnit results | published test results, CI run ID |
+| Test coverage is measured per change | pytest-cov coverage reporting (measure-and-report) | [`continuous-integration-and-regression-testing.md`](continuous-integration-and-regression-testing.md) | `[tool.coverage.*]` in `pyproject.toml` | Cobertura coverage report in CI | `coverage/coverage.xml`, coverage trend |
+| Used packages test their key features | Per-package coverage expectation | [`continuous-integration-and-regression-testing.md`](continuous-integration-and-regression-testing.md) | package `tests/` suites | package unit tests in regression suite | test IDs per package |
 | Real claims require version-bound evidence | Evidence package registry | [`validation-evidence-index.md`](validation-evidence-index.md) | evidence package template | review checklist | approved evidence package |
 
 ## Evidence Collection Checklist
@@ -40,6 +43,7 @@ release readiness, and regulatory evidence assembly.
 For each release or model review, collect:
 
 - release manifest and checksums,
+- CI run ID, regression test results, and coverage report,
 - CI and deploy approval records,
 - study/site/profile/program hashes,
 - workflow version and instance IDs,
