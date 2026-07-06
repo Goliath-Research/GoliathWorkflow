@@ -56,7 +56,7 @@ locus where the control-cohort distribution differs from the disease-cohort dist
 | Stability / freeze | Sidecar experiment scripts (`exp_wand.py`) | First-class Monte Carlo recurrence -> freeze -> train |
 | Held-out evaluation | True holdout in `exp_wand.py` | Workflow 3 (`--holdout-eval`) with bootstrap CIs |
 | DMP -> gene interpretation | Out of scope in 0.4.0 core (genes only *mask* detection) | Full signed, weighted mapper -> enricher stack |
-| Evidence base | First-party (Sanchez & Mackenzie), no independent reproduction | Repo is source of truth; internals audited |
+| Evidence base | First-party (Sanchez & Mackenzie), no independent reproduction | Repo is source of truth; internals audited, with a per-PR regression + coverage CI gate and a designated real reference-sample test tier |
 
 The table is a map, not a verdict; the sections below justify each row and flag which comparative
 claims are established versus which are hypotheses still to be tested (see
@@ -700,6 +700,18 @@ markers and coherent modules?), whereas in MethylIT_py 0.4.0 it is simply out of
   checks in the divergence stage and a cuPyNumeric-friendly HDF5 export, reflecting a heavy
   vectorizable divergence computation. MethylPipeline emphasizes distributed workers and gateway/DB
   orchestration.
+- **Verification and reproducibility posture.** MethylPipeline now runs the full monorepo test suite
+  as a per-pull-request **regression gate** with coverage measurement (`ci/azure-pipelines-pr.yml`,
+  `scripts/run_tests_ci.sh`), and formalizes testing as a regulatory control
+  (`docs/regulatory/continuous-integration-and-regression-testing.md`). Critically for a fair
+  head-to-head, it adds a typed **real reference-sample test registry**
+  (`docs/reference/test-data-registry.md`): designated real extracted samples per analyte
+  (`cfdna`, `buffy_coat`) plus named cohorts (`healthy`, `PCa`) that back `@pytest.mark.real_data`
+  tests, with non-PHI provenance recorded in the validation-evidence index. This means the empirical
+  comparisons below can be run against *real* methylomes on a self-hosted tier, not only synthetic
+  fixtures. MethylIT_py 0.4.0 ships careful sidecar harnesses (`exp_wand.py`, `g2dmp_m34.py` with
+  SHA256 receipts) but no comparable per-change regression gate or designated-sample registry in the
+  reviewed bundle.
 
 ## Empirical tests needed
 
@@ -709,6 +721,13 @@ noise," or "the gap will be small," and each is falsifiable. Turning the critiqu
 research agenda, the following experiments would convert inferred claims into evidence. All are
 runnable on the same prostate healthy-vs-PCa cohort using MethylPipeline's Workflow 3 held-out
 bootstrap as the evaluation harness.
+
+The harness now has a concrete data path: MethylPipeline's **real reference-sample registry**
+(`docs/reference/test-data-registry.md`) designates real extracted samples per analyte
+(`cfdna`, `buffy_coat`) and named cohorts (`healthy`, `PCa`), so these experiments can be executed on
+real methylomes (not synthetic fixtures) with the sample provenance recorded as validation evidence.
+The registry's `healthy`/`PCa` groups are exactly the control/disease cohorts the experiments below
+require, and per-analyte samples let the cfDNA and buffy-coat regimes be compared separately.
 
 1. **ECDF vs GGamma/Weibull pDMP overlap.** Select potential DMPs by the parametric tail
    ($H > F_\theta^{-1}(1-\alpha)$) and by the empirical ECDF quantile ($H > \hat F_n^{-1}(1-\alpha)$)
@@ -762,7 +781,9 @@ MethylPipeline's depends on FDR-controlled tests plus a heuristic effect filter.
 A fairness note on tone: MethylPipeline is described from its source code (the repo is the source of
 truth), whereas MethylIT_py 0.4.0 is reconstructed from release artifacts (configs, sample sheets,
 runner scripts) with estimator internals unavailable (see [Scope and evidence
-boundary](#scope-and-evidence-boundary)). The MethylPipeline side therefore reads as audited and the
+boundary](#scope-and-evidence-boundary)). The MethylPipeline side therefore reads as audited — and is
+now additionally guarded by a per-pull-request regression + coverage gate and a designated
+real-sample test tier (see [Verification and reproducibility posture](#engineering-and-interpretation-differences)) — while the
 MethylIT side as inferred. Where this note reaches conclusions about MethylIT's behavior, they are
 predictions to be confirmed by the [Empirical tests needed](#empirical-tests-needed), not settled
 findings.
