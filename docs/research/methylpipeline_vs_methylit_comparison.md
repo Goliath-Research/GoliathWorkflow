@@ -43,6 +43,25 @@ The deepest distinction: in MethylIT a DMP is a **per-sample** event (how far *t
 diverges from a reference), whereas in MethylPipeline a DMP is a **per-comparison** event (a
 locus where the control-cohort distribution differs from the disease-cohort distribution).
 
+### Fast-orientation summary
+
+| Dimension | MethylIT_py 0.4.0 | MethylPipeline |
+|-----------|-------------------|----------------|
+| Unit of signal | Per-sample divergence vs a shared reference | Per-comparison difference between two cohort ECDFs |
+| Signal statistic | Hellinger / J-divergence (Bayesian, coverage-weighted) | KS / Mann-Whitney on reconstructed ECDFs |
+| Noise model | Parametric fit (GGamma3P / Weibull) to divergence | Distribution-free (empirical quantiles + Storey FDR) |
+| Effect-size gate | Total-variation cut (`tv_cut`) | Heuristic effect size `|dmu|*(1-overlap)*exp(...)` + effect-mass trim |
+| Where ML enters | Inside detection (logistic + random forest cutpoint) | Downstream only (ECDF Naive-Bayes classifier) |
+| Reference | Manually flagged (`is_reference`), pooled, fixed | None; control-cohort centroid rebuilt per split |
+| Stability / freeze | Sidecar experiment scripts (`exp_wand.py`) | First-class Monte Carlo recurrence -> freeze -> train |
+| Held-out evaluation | True holdout in `exp_wand.py` | Workflow 3 (`--holdout-eval`) with bootstrap CIs |
+| DMP -> gene interpretation | Out of scope in 0.4.0 core (genes only *mask* detection) | Full signed, weighted mapper -> enricher stack |
+| Evidence base | First-party (Sanchez & Mackenzie), no independent reproduction | Repo is source of truth; internals audited |
+
+The table is a map, not a verdict; the sections below justify each row and flag which comparative
+claims are established versus which are hypotheses still to be tested (see
+[Empirical tests needed](#empirical-tests-needed)).
+
 ## What the two products agree on
 
 - Same biological framing: control/reference group, training set, validation/prediction samples;
@@ -55,6 +74,16 @@ locus where the control-cohort distribution differs from the disease-cohort dist
   handling.
 
 The disagreement is not *what* to model but *how* to define and detect the signal.
+
+---
+
+# Part I — Detection and prediction comparison
+
+This first part compares how each product *detects* DMPs and *predicts* sample class: the signal
+definition, the noise model, where machine learning enters, and how well the specific engineering
+choices hold up against the external literature. It deliberately stops at the locus/sample level;
+[Part II](#part-ii--biological-interpretation-and-deployment-comparison) picks up what happens after
+detection (gene interpretation and deployment).
 
 ## MethylPipeline: the empirical-distribution / two-cohort path
 
@@ -221,8 +250,9 @@ Weibull/gamma-like (a scaled sum of confidence-weighted terms), whereas the TV g
 population of high-$H$ positions that are statistically confident (deep coverage) but biologically
 small ($|\Delta p|$ tiny). The identity and count of surviving pDMPs is therefore governed mostly by
 the TV gate; perturbing the $H$-quantile estimator (parametric $\leftrightarrow$ ECDF) only nudges a
-threshold on a variable whose gate is looser than TV's. **Net effect on the pDMP set: second-order** —
-your intuition is correct.
+threshold on a variable whose gate is looser than TV's. **Predicted net effect on the pDMP set:
+second-order.** This is a testable prediction, not a measured result — see
+[Empirical tests needed](#empirical-tests-needed).
 
 **Where the parametric model still matters (the honest caveats).** (i) MethylIT computes $H_\alpha$
 *per individual*, so the fit provides a per-sample, coverage-aware noise calibration that a single
@@ -272,8 +302,9 @@ features (Breiman 2001) — the opposite of a single dominant monotone score.
 **When the RF is actually justified.** Only if `pos`, coverage weighting `wprob`, or genuine
 interactions (`wprob:hdiv`, `wprob:jdiv`) carry non-redundant, **non-monotone** signal that materially
 improves per-pDMP classification. That is an empirical question: compare held-out AUC / Youden-$J$ of
-the single-variable threshold against the full RF; under the collinearity above the delta is likely
-negligible. And because the *clinical* decision aggregates thousands of pDMPs per sample, small
+the single-variable threshold against the full RF; under the collinearity above the document predicts
+a negligible delta, but this should be measured. And because the *clinical* decision aggregates
+thousands of pDMPs per sample, small
 per-pDMP gains wash out at the sample level — further favoring the simple threshold. This mirrors
 MethylPipeline, which keeps per-locus detection as a nonparametric test plus a scalar effect score and
 defers learning to a downstream *aggregate* classifier rather than a heavy per-locus model.
@@ -286,9 +317,11 @@ to (a) an ECDF/effect-size screen and (b) a single-variable optimal threshold. T
 defensible only in specific regimes — far-tail $\alpha$, per-individual noise calibration, or
 genuinely multivariate non-monotone signal — which should be **measured, not assumed**. MethylPipeline's
 new held-out bootstrap (Workflow 3) is the right instrument to settle it empirically: quantify (1) the
-Jaccard overlap of pDMP sets selected by the parametric-$\alpha$ vs ECDF-$\alpha$ rule (expected high),
-and (2) the held-out balanced-accuracy/AUC gap between a single-variable Youden threshold and the full
-Random Forest (expected within bootstrap noise). If those deltas are negligible, the simpler
+Jaccard overlap of pDMP sets selected by the parametric-$\alpha$ vs ECDF-$\alpha$ rule (the document
+predicts high overlap), and (2) the held-out balanced-accuracy/AUC gap between a single-variable
+Youden threshold and the full Random Forest (predicted within bootstrap noise). These are predictions
+to be tested, not established results; the concrete protocol is in
+[Empirical tests needed](#empirical-tests-needed). If those deltas turn out negligible, the simpler
 constructs are not just adequate — they are preferable on reproducibility and scale.
 
 ### Additional references
@@ -416,8 +449,9 @@ selection; parsimonious thresholds). The productive response is measurement, not
 MethylPipeline's true held-out bootstrap (Workflow 3) plus a beta-binomial or ECDF baseline can
 quantify, on the same cohort, whether the Weibull/GGamma + Random-Forest machinery buys anything over
 a coverage-aware count model with a single-variable Youden cutpoint. The external literature predicts
-the gap will be small — and if so, the simpler, depth-preserving, replicate-rich design is the more
-defensible one.
+the gap will be small; that prediction should be tested rather than assumed (see
+[Empirical tests needed](#empirical-tests-needed)) — and if it holds, the simpler, depth-preserving,
+replicate-rich design is the more defensible one.
 
 ### External references (independent of the MethylIT authors)
 
@@ -454,6 +488,17 @@ defensible one.
   independent information-theoretic methylation modeling.)
 - **Landan G. et al. (2012).** "Epigenetic polymorphism and the stochastic formation of differentially
   methylated regions in normal and cancerous tissues." *Nat. Genet.* 44:1207–1214.
+
+---
+
+# Part II — Biological interpretation and deployment comparison
+
+Part I compared detection and prediction and stopped at the DMP set. This second part is a
+deliberate expansion of the comparison beyond DMP discovery: how each product turns a frozen panel
+into a deployable model (stability, reference handling) and how it projects per-locus signal onto
+genes, features, and networks for biological interpretation. This is where the two products are most
+asymmetric — MethylPipeline treats interpretation and deployment as first-class, while MethylIT_py
+0.4.0 largely leaves them out of the core.
 
 ## Feature-selection stability and "production" model
 
@@ -640,6 +685,46 @@ markers and coherent modules?), whereas in MethylIT_py 0.4.0 it is simply out of
   vectorizable divergence computation. MethylPipeline emphasizes distributed workers and gateway/DB
   orchestration.
 
+## Empirical tests needed
+
+Several of this document's strongest claims are *predictions* derived from theory and the external
+literature, not measurements on a shared cohort. They read as "second-order," "within bootstrap
+noise," or "the gap will be small," and each is falsifiable. Turning the critique into a testable
+research agenda, the following experiments would convert inferred claims into evidence. All are
+runnable on the same prostate healthy-vs-PCa cohort using MethylPipeline's Workflow 3 held-out
+bootstrap as the evaluation harness.
+
+1. **ECDF vs GGamma/Weibull pDMP overlap.** Select potential DMPs by the parametric tail
+   ($H > F_\theta^{-1}(1-\alpha)$) and by the empirical ECDF quantile ($H > \hat F_n^{-1}(1-\alpha)$)
+   at matched $\alpha$ and TV cut. Report the Jaccard overlap of the two pDMP sets and how it varies
+   with $\alpha$. *Prediction: high overlap at $\alpha=0.05$, decreasing as $\alpha \to 10^{-4}$.*
+2. **Youden vs Random Forest cutpoint.** On identical pDMP features, compare a single-variable Youden
+   threshold against the logistic and 300-tree RF cutpoints. Report held-out AUC and balanced accuracy
+   with bootstrap CIs. *Prediction: differences within bootstrap noise.*
+3. **Reference-swap sensitivity (MethylIT).** Build several reference pools from disjoint healthy
+   subsets; rerun `03_centroid -> divergence -> gof -> pDMP`; report the variability of pDMP sets and
+   fitted distribution parameters across pools. *Prediction: material sensitivity to pool composition.*
+4. **Nested-resampling leakage check.** Compare performance when DMP/feature selection is redone
+   inside each fold versus selected once on all data, for both products' selection steps. *Prediction:
+   optimistic bias when selection is outside the loop.*
+5. **Beta-binomial baseline.** Add a depth-aware count model (e.g. DSS-style beta-binomial) as a third
+   detector and score it through the same harness, at full depth versus capped 10x. *Prediction:
+   count model matches or beats the capped divergence pipeline, especially in small-$\Delta p$ regimes.*
+
+Suggested comparison table to populate under one nested resampling design (same folds, same metric,
+bootstrap CIs):
+
+| Method | Detector / feature | Cutpoint | Held-out balanced acc. (CI) | Held-out AUC (CI) | Notes |
+|--------|--------------------|----------|-----------------------------|-------------------|-------|
+| Youden (single divergence) | Hellinger or J-div | Youden $c_J$ | TBD | TBD | Parsimony baseline |
+| Logistic | pDMP features | logistic posterior | TBD | TBD | Linear multivariate |
+| Random Forest | pDMP features (+PCA) | RF posterior | TBD | TBD | MethylIT 0.4.0 default |
+| Beta-binomial | count model, full depth | Youden $c_J$ | TBD | TBD | Depth-aware baseline |
+| ECDF / KS (MethylPipeline) | cohort ECDF + effect size | classifier score | TBD | TBD | Nonparametric two-cohort |
+
+Until these cells are filled, the comparative conclusions below should be read as theoretically
+motivated hypotheses about *where* each design should win, not as an empirical verdict.
+
 ## Bottom line
 
 - **MethylIT_py 0.4.0** = information-thermodynamics + signal detection: per-sample Hellinger/J
@@ -657,6 +742,14 @@ Watch-items when comparing their DMPs directly: results need not agree, because 
 per-sample tail events against a reference while MethylPipeline DMPs are per-comparison distributional
 differences, and (b) MethylIT's DMP set depends on a learned classifier/cutpoint whereas
 MethylPipeline's depends on FDR-controlled tests plus a heuristic effect filter.
+
+A fairness note on tone: MethylPipeline is described from its source code (the repo is the source of
+truth), whereas MethylIT_py 0.4.0 is reconstructed from release artifacts (configs, sample sheets,
+runner scripts) with estimator internals unavailable (see [Scope and evidence
+boundary](#scope-and-evidence-boundary)). The MethylPipeline side therefore reads as audited and the
+MethylIT side as inferred. Where this note reaches conclusions about MethylIT's behavior, they are
+predictions to be confirmed by the [Empirical tests needed](#empirical-tests-needed), not settled
+findings.
 
 ## References supporting the MethylIT_py theory
 
