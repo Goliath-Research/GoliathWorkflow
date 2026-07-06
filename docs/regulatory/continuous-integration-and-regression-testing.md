@@ -122,6 +122,39 @@ New tests must follow [`config-not-code.mdc`](../../.cursor/rules/config-not-cod
 assert behavior and contracts (including that missing tunable caps resolve to
 "unset"), not hard-coded operational defaults.
 
+## Real Reference-Sample Testing
+
+Most tests use synthetic or stubbed HDF5, which is correct for wiring, config,
+schema, and contract tests. But the numerical and IO layers (the H5 loader,
+centroid building, detector ECDF, genome-wide derived measures, information
+theory, clustering) behave differently on real MethylExtractor output - real
+Blosc compression, real trinucleotide `tnc`, realistic scale and coverage
+sparsity - which synthetic fixtures do not reproduce. For those layers, real data
+is the stronger test.
+
+MethylPipeline uses a **test data registry** to designate real reference samples
+for testing without hard-coding paths in code:
+
+- one reference sample per analyte (e.g. `cfdna`, `buffy_coat`), and
+- named groups of samples (e.g. `healthy`, `PCa`) for cohort-level tests.
+
+Tests are marked `@pytest.mark.real_data` and obtain samples through
+`methyl_utils.testing`, which **skips** when the sample is not mounted. This runs
+as a two-tier strategy:
+
+| Tier | Data | Runs on |
+|------|------|---------|
+| Committed fixture | small, real-format, non-PHI H5 under `tests/real_data/fixtures/` | hosted PR CI + local |
+| Designated `/work` samples | full samples/groups declared in the site manifest `testing` block or `METHYL_TEST_DATA_CONFIG` | self-hosted `production-work-agents` ([`../../ci/azure-pipelines-real-data.yml`](../../ci/azure-pipelines-real-data.yml)) |
+
+Reference samples must be **non-PHI** (public/consented sources). Each sample's
+provenance - source, consent basis, and producing MethylExtractor release - is
+recorded in the registry and in the validation evidence index, so a real-data
+test result is traceable validation evidence.
+
+Full specification and operator checklist:
+[`../reference/test-data-registry.md`](../reference/test-data-registry.md).
+
 ## Regression Gate Mapped to Change Classes
 
 This extends the gate table in
@@ -154,4 +187,5 @@ For each regulated change or release, retain from the CI run:
 - [`change-management-plan.md`](change-management-plan.md)
 - [`traceability-matrix.md`](traceability-matrix.md)
 - [`validation-evidence-index.md`](validation-evidence-index.md)
+- [`../reference/test-data-registry.md`](../reference/test-data-registry.md)
 - [`../../ci/README.md`](../../ci/README.md)

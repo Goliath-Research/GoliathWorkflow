@@ -29,6 +29,15 @@ todos:
   - id: verify
     content: Run scripts/run_tests_ci.sh in .venv to confirm full collection and artifact generation with no import collisions or new failures.
     status: completed
+  - id: real-data-registry
+    content: Add typed TestDataRegistry (per-analyte reference samples + named groups), schema export, site manifest 'testing' block, and pytest real-data helpers/marker.
+    status: completed
+  - id: real-data-tests
+    content: Add real_data tests (loader, derived measures, cohort group) that skip when unmounted, plus registry unit tests; add self-hosted real-data CI pipeline.
+    status: completed
+  - id: real-data-docs
+    content: Author docs/reference/test-data-registry.md and wire real-data testing + provenance into the regulatory CI/traceability/evidence docs.
+    status: completed
 ---
 
 # Continuous Integration and Regression Testing
@@ -111,8 +120,33 @@ and resolved so the suite is green:
 | `scripts` `parse_chromosome_list` case test (1) | asserted uppercasing the function deliberately does not do | removed the invalid test |
 | `methylutils` ECDF `normal_closest` (1) | brittle statistical assertion (truncated-normal fit slightly better by Beta) | removed the brittle test (5 other ECDF tests retained) |
 
+## Real reference-sample testing
+
+Added a typed **test data registry** so real extracted samples can back tests
+without hard-coding paths:
+
+- `TestDataRegistry` in [`../../packages/methylutils/methyl_utils/test_data_registry.py`](../../packages/methylutils/methyl_utils/test_data_registry.py):
+  per-analyte reference `samples` (e.g. `cfdna`, `buffy_coat`) plus named `groups`
+  (e.g. `healthy`, `PCa`). Registered for schema export
+  (`schemas/config/test_data_registry.schema.json`) and exposed as an optional
+  site manifest `testing` block.
+- Resolution precedence: `METHYL_TEST_DATA_CONFIG` -> site `testing` -> committed
+  `tests/real_data/registry.json`.
+- pytest helpers `methyl_utils.testing` (`require_reference_sample`,
+  `require_reference_group`) + `real_data` marker; tests skip cleanly when a
+  sample is not mounted.
+- Tests: real loader, real derived measures (closes the missing H5 integration
+  gap), real cohort group, plus registry unit tests.
+- CI: [`../../ci/azure-pipelines-real-data.yml`](../../ci/azure-pipelines-real-data.yml)
+  runs `-m real_data` on the self-hosted `production-work-agents` pool.
+- Docs: [`../reference/test-data-registry.md`](../reference/test-data-registry.md);
+  provenance wired into the regulatory CI/traceability/evidence docs; reference
+  samples must be non-PHI.
+
 ## Out of scope
 
 - No hard coverage threshold / build-failing gate (deferred until a baseline exists).
 - Not exhaustive 100% coverage: the aim is the most-used classes/features per package.
 - No changes to the release/assemble/deploy pipelines.
+- No committed real H5 yet: the fixture dir and `/work` samples are operator-provided
+  (non-PHI); the wiring and skip-guarded tests are in place.

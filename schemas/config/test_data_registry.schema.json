@@ -1,0 +1,224 @@
+{
+  "$defs": {
+    "TestSampleGroup": {
+      "additionalProperties": false,
+      "description": "A named cohort of real reference samples for cohort-level tests.",
+      "properties": {
+        "analyte": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Canonical analyte for the group (cfdna, buffy_coat, ...).",
+          "title": "Analyte"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Human-readable purpose/notes for the group.",
+          "title": "Description"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cohort label (e.g. healthy, PCa, PCa1).",
+          "title": "Label"
+        },
+        "sample_dirs": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Sample directories in the group (absolute or repo-relative).",
+          "title": "Sample Dirs"
+        }
+      },
+      "title": "TestSampleGroup",
+      "type": "object"
+    },
+    "TestSampleRef": {
+      "additionalProperties": false,
+      "description": "One designated real reference sample (a directory of ``{chr}-{ctx}.h5``).",
+      "properties": {
+        "analyte": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Canonical analyte (cfdna, buffy_coat, combined, ...) this sample represents.",
+          "title": "Analyte"
+        },
+        "chromosomes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Chromosomes available for this reference sample (e.g. ['21']).",
+          "title": "Chromosomes"
+        },
+        "contexts": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Methylation contexts available (e.g. ['CG']).",
+          "title": "Contexts"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Human-readable purpose/notes for the reference sample.",
+          "title": "Description"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source, consent basis, and producing MethylExtractor release for regulatory traceability (non-PHI sources only).",
+          "title": "Provenance"
+        },
+        "sample_dir": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Directory holding extracted {chr}-{ctx}.h5 files. Absolute (e.g. /work/samples/<id>) or repo-relative (resolved from the repository root).",
+          "title": "Sample Dir"
+        },
+        "sample_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Stable identifier for the reference sample.",
+          "title": "Sample Id"
+        }
+      },
+      "title": "TestSampleRef",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Registry of real reference samples and groups used by ``real_data`` tests.",
+  "properties": {
+    "committed_fixture_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Repo-relative directory holding the small committed real-format H5 fixture (runs on hosted CI). Absent/empty when only /work samples are used.",
+      "title": "Committed Fixture Dir"
+    },
+    "groups": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/TestSampleGroup"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Named cohorts keyed by group name (e.g. {'healthy': {...}, 'PCa': {...}}).",
+      "title": "Groups"
+    },
+    "samples": {
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/TestSampleRef"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Reference samples keyed by analyte or logical name (e.g. {'cfdna': {...}, 'buffy_coat': {...}}).",
+      "title": "Samples"
+    }
+  },
+  "title": "TestDataRegistry",
+  "type": "object"
+}

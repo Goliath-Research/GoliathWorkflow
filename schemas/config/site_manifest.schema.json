@@ -54,6 +54,24 @@
         "type": "object",
         "additionalProperties": true
       }
+    },
+    "testing": {
+      "type": "object",
+      "description": "Optional TestDataRegistry: designated real reference samples per analyte and named groups for @pytest.mark.real_data tests. See schemas/config/test_data_registry.schema.json and docs/reference/test-data-registry.md.",
+      "properties": {
+        "committed_fixture_dir": { "type": "string" },
+        "samples": {
+          "type": "object",
+          "description": "Reference samples keyed by analyte or logical name (e.g. cfdna, buffy_coat).",
+          "additionalProperties": { "type": "object", "additionalProperties": true }
+        },
+        "groups": {
+          "type": "object",
+          "description": "Named cohorts keyed by group name (e.g. healthy, PCa).",
+          "additionalProperties": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true

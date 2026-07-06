@@ -1,0 +1,43 @@
+{
+  "committed_fixture_dir": "tests/real_data/fixtures",
+  "samples": {
+    "cfdna": {
+      "sample_id": "REF_CFDNA_01",
+      "sample_dir": "/work/samples/__testref_cfdna__",
+      "analyte": "cfdna",
+      "chromosomes": ["21"],
+      "contexts": ["CG"],
+      "description": "Designated cfDNA reference sample for real-data regression tests.",
+      "provenance": "Public/consented WGBS source; extracted with MethylExtractor <release>. Non-PHI."
+    },
+    "buffy_coat": {
+      "sample_id": "REF_BUFFY_01",
+      "sample_dir": "/work/samples/__testref_buffy__",
+      "analyte": "buffy_coat",
+      "chromosomes": ["21"],
+      "contexts": ["CG"],
+      "description": "Designated buffy-coat reference sample for real-data regression tests.",
+      "provenance": "Public/consented WGBS source; extracted with MethylExtractor <release>. Non-PHI."
+    }
+  },
+  "groups": {
+    "healthy": {
+      "label": "healthy",
+      "analyte": "cfdna",
+      "sample_dirs": [
+        "/work/samples/__testref_healthy_1__",
+        "/work/samples/__testref_healthy_2__"
+      ],
+      "description": "Healthy cohort for cohort-level real-data tests (centroid, clustering)."
+    },
+    "PCa": {
+      "label": "PCa",
+      "analyte": "cfdna",
+      "sample_dirs": [
+        "/work/samples/__testref_pca_1__",
+        "/work/samples/__testref_pca_2__"
+      ],
+      "description": "Prostate-cancer cohort for cohort-level real-data tests."
+    }
+  }
+}

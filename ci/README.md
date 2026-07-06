@@ -10,6 +10,7 @@ Each YAML lives in **this repository** so Azure DevOps can point pipelines at lo
 | [`azure-pipelines-release.yml`](azure-pipelines-release.yml) | MethylPipeline-Release | Tags `v*` |
 | [`azure-pipelines-release-assemble.yml`](azure-pipelines-release-assemble.yml) | Epimethyl-Release-Assemble | Manual |
 | [`azure-pipelines-release-deploy.yml`](azure-pipelines-release-deploy.yml) | Epimethyl-Release-Deploy | Manual (+ approval) |
+| [`azure-pipelines-real-data.yml`](azure-pipelines-real-data.yml) | MethylPipeline-RealData | Manual / scheduled (self-hosted) |
 
 ## Regression and coverage gate (PR pipeline)
 
@@ -31,6 +32,16 @@ ratcheted up over time. Policy and rationale live in
 
 Run the same suite locally with `./scripts/run_tests_ci.sh` (or `./scripts/run_tests.sh`
 for a plain run without coverage artifacts).
+
+## Real reference-sample tests (self-hosted)
+
+`azure-pipelines-real-data.yml` runs the `@pytest.mark.real_data` tests against
+designated **real** reference samples (per-analyte samples plus named groups such
+as `healthy`/`PCa`) on the self-hosted `production-work-agents` pool, which mounts
+`/work`. Hosted PR agents do not mount `/work`, so these tests self-skip there;
+they only execute where a real sample is declared via the site manifest `testing`
+block or `METHYL_TEST_DATA_CONFIG`. See
+[`../docs/reference/test-data-registry.md`](../docs/reference/test-data-registry.md).
 
 ## MethylExtractor repo (separate)
 

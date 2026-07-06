@@ -51,6 +51,8 @@ Copy this template for each reviewed study/model.
 - CI run:
 - Regression test results (JUnit):
 - Coverage report:
+- Real reference-sample(s) used (id / analyte / provenance):
+- Real-data test run (JUnit):
 - Deploy approval record:
 
 ### Configuration Inputs

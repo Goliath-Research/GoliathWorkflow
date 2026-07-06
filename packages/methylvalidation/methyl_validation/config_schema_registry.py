@@ -175,6 +175,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         filename="alignment_qc/exported_sample_qc_v2.schema.json",
         title="ExportedSampleQCV2Payload",
     ),
+    ConfigSchemaSpec(
+        schema_id="test_data_registry",
+        module="methyl_utils.test_data_registry",
+        class_name="TestDataRegistry",
+        filename="test_data_registry.schema.json",
+        title="TestDataRegistry",
+    ),
 )
 
 

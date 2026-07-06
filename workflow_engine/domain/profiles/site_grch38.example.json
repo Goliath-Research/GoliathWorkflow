@@ -14,5 +14,37 @@
   "methyl_mapper_home": "/work/cache/methyl_mapper",
   "caches": {
     "string_edges": "/work/cache/methylenricher/string_edges"
+  },
+  "testing": {
+    "samples": {
+      "cfdna": {
+        "sample_id": "REF_CFDNA_01",
+        "sample_dir": "/work/samples/__testref_cfdna__",
+        "analyte": "cfdna",
+        "chromosomes": ["21"],
+        "contexts": ["CG"],
+        "provenance": "Non-PHI public/consented WGBS; MethylExtractor <release>."
+      },
+      "buffy_coat": {
+        "sample_id": "REF_BUFFY_01",
+        "sample_dir": "/work/samples/__testref_buffy__",
+        "analyte": "buffy_coat",
+        "chromosomes": ["21"],
+        "contexts": ["CG"],
+        "provenance": "Non-PHI public/consented WGBS; MethylExtractor <release>."
+      }
+    },
+    "groups": {
+      "healthy": {
+        "label": "healthy",
+        "analyte": "cfdna",
+        "sample_dirs": ["/work/samples/__testref_healthy_1__", "/work/samples/__testref_healthy_2__"]
+      },
+      "PCa": {
+        "label": "PCa",
+        "analyte": "cfdna",
+        "sample_dirs": ["/work/samples/__testref_pca_1__", "/work/samples/__testref_pca_2__"]
+      }
+    }
   }
 }
