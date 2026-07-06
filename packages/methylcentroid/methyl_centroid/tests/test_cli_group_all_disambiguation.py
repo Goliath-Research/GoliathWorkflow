@@ -49,7 +49,16 @@ def test_cli_group_all_runs_single_cohort_when_label_exists(
     project = _write_project(tmp_path / "project.json", control_label="all")
     calls: dict[str, object] = {}
 
-    def fake_one(project_path, group, step_override, *, output_dir=None, chromosome=None, context=None):
+    def fake_one(
+        project_path,
+        group,
+        step_override,
+        *,
+        output_dir=None,
+        chromosome=None,
+        context=None,
+        resolved_config_path=None,
+    ):
         calls["one"] = {
             "project": str(project_path),
             "group": group,
@@ -58,7 +67,7 @@ def test_cli_group_all_runs_single_cohort_when_label_exists(
             "context": context,
         }
 
-    def fake_all(project_path, step_override):
+    def fake_all(project_path, step_override, *, resolved_config_path=None):
         calls["all"] = True
 
     monkeypatch.setattr(cli, "run_centroid_for_one_group", fake_one)
@@ -97,7 +106,7 @@ def test_cli_group_all_runs_every_cohort_when_label_missing(
     def fake_one(*_args, **_kwargs):
         calls["one"] = True
 
-    def fake_all(project_path, step_override):
+    def fake_all(project_path, step_override, *, resolved_config_path=None):
         calls["all"] = str(project_path)
 
     monkeypatch.setattr(cli, "run_centroid_for_one_group", fake_one)

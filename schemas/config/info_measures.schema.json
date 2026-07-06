@@ -1,17 +1,21 @@
 {
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
-    "output_dir": {
+    "chromosomes": {
       "anyOf": [
         {
-          "type": "string"
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "description": "Output directory; default {project_root}/info_measures.",
-      "title": "Output Dir"
+      "description": "Chromosome allow-list; default from project chromosomes.",
+      "title": "Chromosomes"
     },
     "contexts": {
       "anyOf": [
@@ -34,98 +38,6 @@
       "description": "Methylation contexts to scan; default CG only.",
       "title": "Contexts"
     },
-    "chromosomes": {
-      "anyOf": [
-        {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Chromosome allow-list; default from project chromosomes.",
-      "title": "Chromosomes"
-    },
-    "tile_size": {
-      "anyOf": [
-        {
-          "maximum": 16,
-          "minimum": 2,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Expected tile width k in sidecar files. Operator-set per profile/site.",
-      "title": "Tile Size"
-    },
-    "min_tile_reads": {
-      "anyOf": [
-        {
-          "minimum": 1,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Minimum reads per tile for inclusion in aggregates.",
-      "title": "Min Tile Reads"
-    },
-    "jsd_top_windows": {
-      "anyOf": [
-        {
-          "minimum": 1,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Number of top JSD windows to retain in confirmation report.",
-      "title": "Jsd Top Windows"
-    },
-    "jsd_min_cohort_reads": {
-      "anyOf": [
-        {
-          "minimum": 1,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Minimum summed reads per tile per cohort for JSD computation.",
-      "title": "Jsd Min Cohort Reads"
-    },
-    "sample_id_column": {
-      "default": "sample_id",
-      "description": "Column name for sample identifier in readlevel_measures.csv.",
-      "title": "Sample Id Column",
-      "type": "string"
-    },
-    "mapper_gene_csv": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Optional path to mapper all-gene_name-combined.csv for gene concordance.",
-      "title": "Mapper Gene Csv"
-    },
     "dmp_panel_csv": {
       "anyOf": [
         {
@@ -139,7 +51,7 @@
       "description": "Optional path to DMP discovery/selected CSV for locus overlap concordance.",
       "title": "Dmp Panel Csv"
     },
-    "ising_enabled": {
+    "dynamics_enabled": {
       "anyOf": [
         {
           "type": "boolean"
@@ -149,10 +61,10 @@
         }
       ],
       "default": null,
-      "description": "Enable v2 equilibrium Ising/max-entropy model per tile. Operator-set per profile/site.",
-      "title": "Ising Enabled"
+      "description": "Enable dynamic measures (channel capacity, RDE, turnover); deferred in v2 phase 1.",
+      "title": "Dynamics Enabled"
     },
-    "ising_max_iter": {
+    "ising_batch_tiles": {
       "anyOf": [
         {
           "minimum": 1,
@@ -163,36 +75,8 @@
         }
       ],
       "default": null,
-      "description": "Maximum Newton iterations for batched Ising fit.",
-      "title": "Ising Max Iter"
-    },
-    "ising_tol": {
-      "anyOf": [
-        {
-          "exclusiveMinimum": 0.0,
-          "type": "number"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Convergence tolerance on moment-matching residual.",
-      "title": "Ising Tol"
-    },
-    "ising_l2": {
-      "anyOf": [
-        {
-          "minimum": 0.0,
-          "type": "number"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "L2 ridge on Ising parameters for sparse tiles.",
-      "title": "Ising L2"
+      "description": "Max tiles per GPU batch during Ising fit.",
+      "title": "Ising Batch Tiles"
     },
     "ising_coupling": {
       "anyOf": [
@@ -211,6 +95,47 @@
       "description": "Pairwise coupling structure: nearest-neighbor or all-pairs within tile.",
       "title": "Ising Coupling"
     },
+    "ising_enabled": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Enable v2 equilibrium Ising/max-entropy model per tile. Operator-set per profile/site.",
+      "title": "Ising Enabled"
+    },
+    "ising_l2": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "L2 ridge on Ising parameters for sparse tiles.",
+      "title": "Ising L2"
+    },
+    "ising_max_iter": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Maximum Newton iterations for batched Ising fit.",
+      "title": "Ising Max Iter"
+    },
     "ising_min_tile_reads": {
       "anyOf": [
         {
@@ -225,6 +150,88 @@
       "description": "Minimum reads per tile for Ising model fitting (may exceed min_tile_reads).",
       "title": "Ising Min Tile Reads"
     },
+    "ising_tol": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Convergence tolerance on moment-matching residual.",
+      "title": "Ising Tol"
+    },
+    "jsd_min_cohort_reads": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Minimum summed reads per tile per cohort for JSD computation.",
+      "title": "Jsd Min Cohort Reads"
+    },
+    "jsd_top_windows": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Number of top JSD windows to retain in confirmation report.",
+      "title": "Jsd Top Windows"
+    },
+    "mapper_gene_csv": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional path to mapper all-gene_name-combined.csv for gene concordance.",
+      "title": "Mapper Gene Csv"
+    },
+    "min_tile_reads": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Minimum reads per tile for inclusion in aggregates.",
+      "title": "Min Tile Reads"
+    },
+    "output_dir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Output directory; default {project_root}/info_measures.",
+      "title": "Output Dir"
+    },
     "prefer_gpu": {
       "anyOf": [
         {
@@ -238,10 +245,17 @@
       "description": "Prefer GPU via methyl_utils array backend; None = auto.",
       "title": "Prefer Gpu"
     },
-    "ising_batch_tiles": {
+    "sample_id_column": {
+      "default": "sample_id",
+      "description": "Column name for sample identifier in readlevel_measures.csv.",
+      "title": "Sample Id Column",
+      "type": "string"
+    },
+    "tile_size": {
       "anyOf": [
         {
-          "minimum": 1,
+          "maximum": 16,
+          "minimum": 2,
           "type": "integer"
         },
         {
@@ -249,21 +263,8 @@
         }
       ],
       "default": null,
-      "description": "Max tiles per GPU batch during Ising fit.",
-      "title": "Ising Batch Tiles"
-    },
-    "dynamics_enabled": {
-      "anyOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Enable dynamic measures (channel capacity, RDE, turnover); deferred in v2 phase 1.",
-      "title": "Dynamics Enabled"
+      "description": "Expected tile width k in sidecar files. Operator-set per profile/site.",
+      "title": "Tile Size"
     }
   },
   "title": "InfoTheoryStepConfig",

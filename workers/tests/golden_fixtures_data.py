@@ -33,6 +33,15 @@ GOLDEN_INPUTS: Dict[str, Dict[str, Any]] = {
     "pipeline.progression": {"tool": "MethylProgression", "projectPath": "/work/p/project.json"},
     "pipeline.classifier": {"tool": "MethylClassifier", "projectPath": "/work/p/project.json"},
     "pipeline.predictor": {"tool": "MethylPredictor", "projectPath": "/work/p/project.json"},
+    "pipeline.derived_measures": {"tool": "MethylDerivedMeasures", "projectPath": "/work/p/project.json"},
+    "pipeline.info_measures": {"tool": "MethylInfoTheory", "projectPath": "/work/p/project.json"},
+    "context.resolve_project": {"tool": "ContextResolveProject", "projectPath": "/work/p/project.json"},
+    "sample.parabricks_giraffe": {
+        "tool": "ParabricksGiraffe",
+        "sampleId": "S1",
+        "sampleDir": "/work/samples/S1",
+        "projectPath": "/work/p/project.json",
+    },
     "sample.download_fastq": {
         "tool": "SampleDownloadFastq",
         "sampleId": "S1",
@@ -129,6 +138,33 @@ GOLDEN_OUTPUTS: Dict[str, Dict[str, Any]] = {
     "pipeline.progression": {"status": "ok", "n_comparisons": 3},
     "pipeline.classifier": {"status": "ok", "model_path": "/work/p/models/model.pkl"},
     "pipeline.predictor": {"status": "ok", "balanced_accuracy": 0.85},
+    "pipeline.derived_measures": {
+        "status": "ok",
+        "output_dir": "/work/p/derived_measures",
+        "output_csv": "/work/p/derived_measures/genome_measures.csv",
+        "n_samples": 10,
+        "n_columns": 40,
+    },
+    "pipeline.info_measures": {
+        "status": "ok",
+        "output_dir": "/work/p/info_measures",
+        "output_csv": "/work/p/info_measures/info_measures.csv",
+        "n_samples": 10,
+        "n_columns": 20,
+        "n_jsd_windows": 5,
+    },
+    "context.resolve_project": {
+        "status": "ok",
+        "resolvedProject": {
+            "$type": "ResolvedProject",
+            "projectPath": "/work/p/project.json",
+        },
+    },
+    "sample.parabricks_giraffe": {
+        "status": "ok",
+        "sampleId": "S1",
+        "bamPath": "/work/samples/S1/S1.bam",
+    },
     "sample.download_fastq": {"status": "ok", "sampleId": "S1", "fastqFiles": ["S1_1.fastq.gz"], "n_files": 1},
     "sample.parabricks_fq2bam": {
         "status": "ok",

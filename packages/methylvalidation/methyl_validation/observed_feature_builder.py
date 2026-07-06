@@ -1197,6 +1197,11 @@ def observed_hybrid_schema_fingerprint(
     region_directional_region_types: Optional[Sequence[str]] = None,
     region_directional_min_loci: int = 1,
     observed_feature_quality_columns: Optional[Sequence[str]] = None,
+    chromosome_hypo_beta_threshold: Optional[float] = None,
+    chromosome_intermediate_beta_lo: Optional[float] = None,
+    chromosome_intermediate_beta_hi: Optional[float] = None,
+    chromosome_distance_metrics: Optional[Sequence[str]] = None,
+    chromosome_list: Optional[Sequence[str]] = None,
 ) -> str:
     from .gene_scored_features import (
         GENE_SCORED_SCHEMA_VERSION,
@@ -1229,12 +1234,23 @@ def observed_hybrid_schema_fingerprint(
         region_directional_region_types=region_directional_region_types,
         region_directional_min_loci=region_directional_min_loci,
         observed_feature_quality_columns=observed_feature_quality_columns,
+        chromosome_distance_metrics=chromosome_distance_metrics,
+        chromosome_list=chromosome_list,
     )
 
     payload = "\n".join(names)
-    include_dmp_family, _, _, include_gene_scored, include_structural_scored, _include_chromosome = _family_flags(
+    include_dmp_family, _, _, include_gene_scored, include_structural_scored, include_chromosome = _family_flags(
         feature_family_set
     )
+    if include_chromosome:
+        payload = (
+            f"{payload}\n"
+            f"chromosome_hypo_beta_threshold={chromosome_hypo_beta_threshold}\n"
+            f"chromosome_intermediate_beta_lo={chromosome_intermediate_beta_lo}\n"
+            f"chromosome_intermediate_beta_hi={chromosome_intermediate_beta_hi}\n"
+            f"chromosome_distance_metrics={list(chromosome_distance_metrics) if chromosome_distance_metrics else None}\n"
+            f"chromosome_list={list(chromosome_list) if chromosome_list else None}\n"
+        )
     if include_dmp_family:
         quality = normalize_quality_only_feature_columns(observed_feature_quality_columns)
         payload = (

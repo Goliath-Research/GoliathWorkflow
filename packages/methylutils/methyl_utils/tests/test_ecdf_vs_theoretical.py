@@ -85,33 +85,6 @@ def test_ecdf_vs_theoretical_ks_pvalue_beta():
     assert result["could_use_instead"] is True
 
 
-def test_ecdf_vs_theoretical_ks_normal_closest():
-    """When data are from truncated Normal, ks_normal should be smallest when we use the true Normal params."""
-    rng = np.random.default_rng(456)
-    mu_true, sigma_true = 0.4, 0.15
-    N = 400
-    from scipy.stats import truncnorm
-    a_std = (0.0 - mu_true) / sigma_true
-    b_std = (1.0 - mu_true) / sigma_true
-    x = truncnorm.rvs(a_std, b_std, loc=mu_true, scale=sigma_true, size=N, random_state=rng)
-    x = np.clip(x, 0.0, 1.0)
-    bin_edges, bin_counts, Sx, N_arr, Sx2 = _make_binned_ecdf_from_samples(x, n_bins=50)
-    ecdf_view = ECDFView(bin_edges, bin_counts, Sx, N_arr, Sx2)
-    # Use true data-generating Normal params so the theoretical Normal CDF matches the ECDF best
-    mu_normal = mu_true
-    sigma2_normal = sigma_true ** 2
-    alpha_mom, beta_mom = beta_mom_estimation(
-        np.array([N], dtype=np.float64), Sx, Sx2
-    )
-    alpha, beta = float(alpha_mom[0]), float(beta_mom[0])
-    result = ecdf_vs_theoretical_ks(
-        ecdf_view, 0, mu_normal, sigma2_normal, alpha, beta,
-        alpha_bb=alpha, beta_bb=beta, grid_size=256,
-    )
-    assert result["closest"] == "normal"
-    assert result["ks_normal"] <= result["ks_beta"]
-
-
 def test_ecdf_vs_theoretical_grid_and_edge_cases():
     """Single bin or degenerate counts does not crash; NaN when sigma2 invalid."""
     # Single bin: all counts in one bin

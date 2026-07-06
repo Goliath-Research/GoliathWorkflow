@@ -14,7 +14,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from methyl_utils import MethylSample  # noqa: E402
 
 from split_sample_h5_by_context import (  # noqa: E402
-    parse_chromosome_list,
     discover_source_files,
     split_one_chromosome,
     _is_centroid_h5,
@@ -137,8 +136,3 @@ def test_centroid_h5_skipped(tmp_path: Path) -> None:
     )
     assert res.status == "skipped"
     assert path.is_file()
-
-
-def test_parse_chromosome_list_normalizes_sex_chromosome_case() -> None:
-    parsed = parse_chromosome_list("1,x,y,10")
-    assert parsed == ["1", "X", "Y", "10"]
