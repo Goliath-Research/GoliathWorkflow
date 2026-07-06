@@ -361,17 +361,30 @@ lab is not documented in peer-reviewed work. This does not make the method wrong
 pipeline's performance claims rest on self-reported analyses of a few datasets, which is exactly the
 situation independent held-out evaluation (Workflow 3) exists to remedy.
 
-Two clarifications keep this fair:
+Three clarifications keep this fair:
 
-- The **underlying ideas are not fringe**, and independent groups *do* pursue information-theoretic
-  methylation analysis — e.g. the epigenome "potential energy landscape" / `informME` framework of
-  Jenkinson, Abante, Feinberg & Goutsias (Nat. Genet. 2017) and methylation-entropy / epipolymorphism
-  work (Landan et al., Nat. Genet. 2012). Signal-detection theory in diagnostics is likewise a mature,
-  independent field (Green & Swets 1966; Pepe, *The Statistical Evaluation of Medical Tests*, 2003).
-  So the *concepts* have external support; the *specific pipeline* does not have independent
-  reproduction.
-- Independent theoretical support for a concept is not a substitute for independent empirical
-  reproduction of a tool. Both matter, and only the first is currently satisfied.
+- **MethylIT's theory is itself peer-reviewed, not ad hoc.** The information-thermodynamics foundation
+  is published in its own right — Sanchez & Mackenzie, "Information Thermodynamics of Cytosine DNA
+  Methylation" (*PLoS ONE* 2016), with a formal thermodynamic derivation extended in "On the
+  thermodynamics of DNA methylation process" (*Scientific Reports*, a Nature-portfolio journal, 2023).
+  The concern here is **not** that MethylIT lacks a published theory; it is that the specific
+  end-to-end *pipeline* (Hellinger/J-divergence → GGamma/Weibull fit → signal-detection tail →
+  ML cutpoint) has not been independently reproduced by groups outside the originating lab.
+- **Do not conflate MethylIT with other "information-theoretic" methylation work — the theories are
+  different.** Despite the shared adjective, the epigenome "potential energy landscape" / `informME`
+  framework of Jenkinson, Abante, Feinberg & Goutsias (*Nat. Genet.* 2017) and the
+  methylation-entropy / epipolymorphism work of Landan et al. (*Nat. Genet.* 2012) model a **different
+  object**: the joint distribution of co-methylation patterns across neighboring CpGs (an Ising / MRF
+  and read-level entropy view). MethylIT instead models the **information divergence of a sample's
+  per-cytosine methylation level from a reference** and fits a parametric law to that divergence.
+  These are not the same theory, and informME/Landan therefore do **not** independently corroborate
+  MethylIT's approach — they only establish that information-theoretic reasoning about methylation is
+  a legitimate, active area. Signal-detection theory in diagnostics is likewise a mature, independent
+  field (Green & Swets 1966; Pepe, *The Statistical Evaluation of Medical Tests*, 2003), but that too
+  is a general framework MethylIT *applies*, not a reproduction of MethylIT's specific construction.
+- Independent theoretical lineage for a concept is not a substitute for independent empirical
+  reproduction of a tool. MethylIT has the former (its own published theory); what remains unmet is
+  the latter (third-party reproduction of the pipeline's performance claims).
 
 ### 2. Counts vs methylation levels, and the forced downsampling to ~10x
 
@@ -485,9 +498,12 @@ replicate-rich design is the more defensible one.
   Prediction.* Oxford University Press. — independent signal-detection/ROC foundation.
 - **Jenkinson G., Abante J., Feinberg A. P., Goutsias J. (2017).** "Potential energy landscapes
   identify the information-theoretic nature of the epigenome." *Nat. Genet.* 49:719–729. (`informME`;
-  independent information-theoretic methylation modeling.)
+  a **distinct** information-theoretic framework — an Ising/MRF model of joint co-methylation across
+  neighboring CpGs — **not** a reproduction of MethylIT's divergence-from-reference theory.)
 - **Landan G. et al. (2012).** "Epigenetic polymorphism and the stochastic formation of differentially
-  methylated regions in normal and cancerous tissues." *Nat. Genet.* 44:1207–1214.
+  methylated regions in normal and cancerous tissues." *Nat. Genet.* 44:1207–1214. (Read-level
+  methylation entropy / epipolymorphism — again a different object from MethylIT's per-cytosine
+  divergence.)
 
 ---
 
@@ -753,11 +769,15 @@ findings.
 
 ## References supporting the MethylIT_py theory
 
-> **First-party caveat.** References 1–3 below share the same authors (Sanchez & Mackenzie and close
+> **First-party caveat.** References 1–4 below share the same authors (Sanchez & Mackenzie and close
 > collaborators) and describe the *same* method and codebase (MethylIT_py 0.4.0 is a Python migration
-> of the R package). They establish what the method *is*, not that it has been independently
-> reproduced. For independent literature bearing on the underlying ideas and on the specific
-> engineering choices, see "Independent corroboration and open critiques" above.
+> of the R package). They establish what the method *is* — and, importantly, that its theory is
+> itself peer-reviewed (including in a Nature-portfolio journal, ref. 4) — **not** that the pipeline
+> has been independently reproduced. This theory is also **specific to MethylIT**: it should not be
+> conflated with the separate information-theoretic frameworks of informME (Jenkinson et al. 2017) or
+> methylation-entropy work (Landan et al. 2012), which model co-methylation patterns rather than
+> divergence-from-reference. For independent literature bearing on the engineering choices, see
+> "Independent corroboration and open critiques" above.
 
 The 0.4.0 `stages` config maps one-to-one onto the published MethylIT methodology:
 
@@ -779,6 +799,11 @@ The 0.4.0 `stages` config maps one-to-one onto the published MethylIT methodolog
    github.com/genomaths/MethylIT (2018). The 0.4.0 stage/function fingerprints
    (`nonlinearFitDist`, `Weibull2P/3P`, `fitGGammaDist`, `estimateCutPoint`, `selectDIMP`) mirror this
    package's API.
+4. Sanchez R, Mackenzie SA. "On the thermodynamics of DNA methylation process." *Scientific Reports*
+   (Nature portfolio) 2023;13:8914. doi:10.1038/s41598-023-35166-9. Formal thermodynamic derivation of
+   the divergence distribution (generalized-gamma family), channel-capacity / Gibbs-entropy /
+   Helmholtz-free-energy interpretation. This is the peer-reviewed theoretical basis the user correctly
+   notes exists for MethylIT — distinct from the informME/Landan lines of work.
 
 ## Key sources reviewed
 
