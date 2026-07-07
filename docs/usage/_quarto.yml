@@ -35,6 +35,9 @@ book:
     - part: "Part IV: Worked Tutorials"
       chapters:
         - 16-tutorial-healthy-vs-cancer-stages.qmd
+    - part: "Part V: Hyperparameter Versioning"
+      chapters:
+        - 17-content-addressed-action-store.qmd
 
 format:
   html:

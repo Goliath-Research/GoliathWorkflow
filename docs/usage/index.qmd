@@ -17,8 +17,9 @@ For statistical background, use [`docs/theory/`](../theory/index.qmd). For compi
 - **Sample prep (FASTQ → HDF5):** Chapter `03` (`03-sample-prep-and-qc.qmd`).
 - **Fast path (stage execution):** Chapters `05` to `09` (stability through blind prediction).
 - **New project setup:** Chapters `01`, `02`, `03`, then `05`.
-- **Guided tutorial (healthy vs. cancer stages):** Chapter `16` — end-to-end walkthrough for a single-group or multi-stage comparison.
-- **Daily operations:** Chapters `10` to `12`.
+- **Guided tutorial (healthy vs. cancer stages):** Chapter `16` — end-to-end walkthrough; **§18.6** lists every shipped pipeline profile.
+- **Hyperparameter versioning (CAAS):** `17-content-addressed-action-store.qmd` (Part V; follows the tutorial).
+- **Daily operations:** `10-artifacts-and-qa-checks.qmd` through `12-command-cookbook.qmd`.
 - **Scaling MC across machines:** Chapter `13` — shared `/work` storage and queue subcommands.
 - **Deployment (DB + gateway + workers):** Chapter `14`.
 - **Optional hyperparameter tuning:** Chapter `15` — `methyl-hyperparam-search` grid driver.

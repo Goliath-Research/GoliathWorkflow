@@ -106,7 +106,7 @@ When a worker completes an ACTION, it submits **`result_code`** (integer) with t
 | `1` | True branch (e.g. remediation needed) |
 | `2..N` | Multi-way SWITCH cases (per action) |
 
-See also [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) (worker contract) and the user manual [Artifacts and QA Checks — observability](usage/10-artifacts-and-qa-checks.qmd).
+See also [`workers/WORKER_PROTOCOL.md`](../workers/WORKER_PROTOCOL.md) (worker contract) and the user manual [Content-Addressed Action Store (CAAS)](usage/17-content-addressed-action-store.qmd) and [Artifacts and QA Checks — observability](usage/10-artifacts-and-qa-checks.qmd).
 
 ### Two branching styles
 

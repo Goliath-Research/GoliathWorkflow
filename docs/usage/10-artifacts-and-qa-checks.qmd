@@ -10,11 +10,11 @@ Each workflow ACTION executed by `methyl-worker` submits a typed `output_json` t
 
 On `/work`, look for:
 
-- **Per-action manifests:** `{output_dir}/.action_results/{action_name}.{run_key}.json` — full typed result written by CLIs (e.g. `pipeline.dmp_select`, `pipeline.mapper`) or reconstructed by the worker collector. Schema 1.2 adds `content_key` and `hyperparam_set_id` when CAAS is enabled.
-- **Content-addressed store (CAAS):** `{project_root}/.caas/{action_safe}/{content_key}/` — immutable product artifacts keyed by hyperparameter/config signature; canonical output paths become symlinks. Enable with `METHYL_CAAS_ENABLED=1`.
-- **Hyperparameter-set ledger:** `{project_root}/.caas/instances/{hyperparamSetId}.json` — maps each action/run_key to its `content_key` for a workflow instance. `hyperparamSetId` is computed at instance start from merged `resolvedConfig__*` slices.
+- **Per-action manifests:** `{output_dir}/.action_results/{action_name}.{run_key}.json` — full typed result written by CLIs (e.g. `pipeline.dmp_select`, `pipeline.mapper`) or reconstructed by the worker collector. Schema 1.2 adds `content_key` and `hyperparam_set_id` when [CAAS](17-content-addressed-action-store.qmd) is enabled.
 - **Sample prep timeline:** `{sampleDir}/{sampleId}.sample_prep_log.jsonl` — append-only JSONL audit for download, align, QC, extract, archive steps.
 - **Workflow action timeline:** `{logRoot}/action_run_log.jsonl` — append-only log for every workflow ACTION when a log root resolves (MC runs, project output, or sample dir). Records include timing, typed `inputs`/`outputs`, and idempotency fields.
+
+For `.caas/` layout, hyperparameter-set ledgers, and cross-instance reuse, see [Content-Addressed Action Store (CAAS)](17-content-addressed-action-store.qmd).
 
 Regenerate JSON Schema artifacts after model changes:
 

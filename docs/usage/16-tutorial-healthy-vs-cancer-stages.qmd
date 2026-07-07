@@ -120,16 +120,62 @@ Important: `"control_vs_each_disease"` compares **healthy against each stage** �
 
 ## Step 4 — Pick a profile
 
-The profile supplies the science knobs (iterations, thresholds, feature caps). Pick by what you want out of the run:
+The profile supplies the science knobs (iterations, thresholds, feature caps). Profiles are **process-agnostic** — study facts stay in your manifest; the profile selects which statistical branch and scope flags run.
+
+All shipped profiles live in `workflow_engine/domain/profiles/*.profile.json` (production: `/work/epimethyl/current/runtime-bundle/domain/profiles/`). Pass one with `--context-file` or set `pipelineProfile` in `--context`.
+
+### Quick picks (this tutorial)
 
 | Goal | `pipelineProfile` |
 |------|-------------------|
 | Standard binary Monte-Carlo stability (DMP + gene FeatureCuts) | `mc_dmp_gene_fc` |
 | Multi-stage, one-vs-rest Monte-Carlo stability | `staged_ovr_mc` |
 | Multi-stage end-to-end (stability + freeze + model) | `staged_full_lifecycle` |
-| Progression / interpretation only | `staged_progression_interpretation` |
+| Progression / interpretation only (no MC) | `staged_progression_interpretation` |
 
-All profiles live in `workflow_engine/domain/profiles/`. See the profile/mode table in [Stage: Stability](05-stage-stability.qmd).
+### Statistical modeling modes (`mc_*`)
+
+Five reusable **research axes** for Monte-Carlo stability. See also [Stage: Stability](05-stage-stability.qmd).
+
+| Mode | Profile | `dmp_modeling_mode` | `gene_modeling_mode` | Use when |
+|------|---------|---------------------|----------------------|----------|
+| 1 | `mc_dmp` | `raw_pool` | `none` | Exploratory DMP recurrence (no FeatureCuts) |
+| 2 | `mc_dmp_fc` | `featurecuts` | `none` | BA-gated DMP panel stability |
+| 3 | `mc_gene` | `raw_pool` | `none` | Enricher gene recurrence (PPI hubs or Enrichr) |
+| 4 | `mc_gene_fc` | `raw_pool` | `featurecuts` | Gene-axis BA gate on enricher/PPI genes |
+| 5 | `mc_dmp_gene_fc` | `featurecuts` | `featurecuts` | Full DMP + gene FeatureCuts (production dual-axis) |
+
+`mc_gene` and `mc_gene_fc` default to `actionConfig.enricher.ppi_only: true` (STRING PPI hubs). Set `ppi_only: false` in a site/profile/instance override for Enrichr pathway libraries.
+
+### Full profile catalog
+
+Every profile file in the repo/runtime bundle:
+
+| Profile | Detector / selection | Mapper CSV | Stability / lifecycle | Typical use |
+|---------|---------------------|------------|----------------------|-------------|
+| `mc_dmp` | discovery only | `dmps-*-discovery.csv` | DMP recurrence (raw pool) | DMP-axis research |
+| `mc_dmp_fc` | discovery + `dmp_select` | `dmps-*-selected.csv` | DMP panel MC + FeatureCuts | BA-gated DMP panel |
+| `mc_gene` | discovery only | discovery | enricher gene recurrence | Gene-axis research (PPI/Enrichr) |
+| `mc_gene_fc` | discovery only | discovery | gene FeatureCuts on enricher genes | Gene-axis BA gate |
+| `mc_dmp_gene_fc` | discovery + `dmp_select` | discovery / selected | DMP + gene FeatureCuts MC | **Production** binary stability |
+| `phase_a_dmp_stability` | discovery + `dmp_select` | selected | DMP panel lock (phase A) | Two-phase: lock DMP panel first |
+| `phase_b_gene_from_stable_dmps` | stable-panel detector | discovery | gene FC from frozen DMPs (phase B) | Phase B after `stable_dmps_production.csv` |
+| `staged_ovr_mc` | staged OvR + FeatureCuts | discovery | MC stability + progression | Multi-stage healthy vs. stages |
+| `staged_full_lifecycle` | staged OvR + FeatureCuts | discovery | MC + freeze + model | Multi-stage end-to-end |
+| `staged_progression_interpretation` | discovery only | discovery | mapper/enricher + progression (no MC) | Interpretation / progression only |
+| `discovery_interpretation` | discovery only | discovery | single-run mapper/enricher | One-shot interpretation |
+| `structural_features` | discovery only | discovery + intersections | gene×region ranked catalog | Structural / region features |
+| `full_biomarker_gene_fc` | discovery + selects | selected | DMP + gene FC + biomarker filter | Biomarker-filtered gene FC |
+| `discovery_gene_featurecuts` | discovery + gene FC | discovery / selected | dual-axis FeatureCuts (legacy name) | Alias → `mc_dmp_gene_fc` |
+| `legacy_dual` | legacy inline FeatureCuts | discovery | DMP classifier panels | Historical dual-axis layout |
+| `dmp_panel_stability` | discovery + `dmp_select` | selected | DMP panel MC | **Deprecated** → `mc_dmp_fc` |
+| `gene_enricher_stability` | discovery only | discovery | enricher recurrence | **Deprecated** → `mc_dmp` |
+
+**Deprecated aliases** (resolve to canonical `mc_*` files in `pipeline_profiles.py`): `mc_dmp_discovery` → `mc_dmp`, `mc_dmp_featurecuts` → `mc_dmp_fc`, `mc_gene_mapper` → `mc_gene`, `mc_gene_featurecuts` → `mc_gene_fc`, `discovery_gene_featurecuts` → `mc_dmp_gene_fc`, `dmp_panel_stability` → `mc_dmp_fc`, `gene_enricher_stability` → `mc_dmp`, `buffy_mc_gene_fc` → `mc_dmp_gene_fc`.
+
+**Two-phase workflow:** run Phase A with `phase_a_dmp_stability`; pass `stable_dmps_production.csv` via context `stableDmpCsv` (or `freeze_stable_dmp_csv` in validation overrides) for Phase B `phase_b_gene_from_stable_dmps`.
+
+Parameter detail: [DomainProgram language — Pipeline profiles](../reference/domain-program-language.md#pipeline-profiles-and-site-manifest).
 
 ## Step 5 — Run it
 
@@ -185,7 +231,7 @@ For a binary study the single comparison appears under `detections/all/PCa/`. Mo
 
 1. One CSV per group under `data/`.
 2. One manifest: `controls` + `diseases` (nest `stages[]` for increasing stages), `comparisons: "control_vs_each_disease"`.
-3. Pick a profile (`mc_dmp_gene_fc` binary dual-axis, `mc_dmp` / `mc_dmp_fc` / `mc_gene` / `mc_gene_fc` for research axes, `staged_ovr_mc` multi-stage).
+3. Pick a profile from the [full catalog](#step-4--pick-a-profile) (`mc_dmp_gene_fc` binary dual-axis, `mc_*` research axes, `staged_*` multi-stage).
 4. `methyl-workflow-run --program … --context-file …profile.json --context '{"projectPath":…,"pipelineProfile":…}'`.
 5. Read results per comparison under `<project_name>/detections/<control>/<disease>/`.
 
