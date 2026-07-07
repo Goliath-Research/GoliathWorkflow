@@ -109,6 +109,15 @@ steps:
       bash scripts/run_tests_ci.sh
     displayName: Full pytest suite (regression) + coverage
 
+  # --- Narrow, branch-aware coverage ratchet on the shared config-resolution ---
+  # spine. Unlike the measure-and-report suite above, this enforces a real
+  # fail_under on the small set of modules upstream of every typed action, where
+  # a regression is high-blast-radius and invisible to the Pydantic boundary.
+  - script: |
+      . .venv/bin/activate
+      bash scripts/run_spine_coverage_ratchet.sh
+    displayName: Spine config-resolution coverage ratchet (branch, fail_under)
+
   - task: PublishTestResults@2
     condition: succeededOrFailed()
     inputs:

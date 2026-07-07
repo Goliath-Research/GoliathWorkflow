@@ -13,11 +13,58 @@ if str(DOMAIN) not in __import__("sys").path:
 
 from compiler import compile_domain_program_file  # noqa: E402
 from pipeline_profiles import (  # noqa: E402
+    _deep_merge,
     apply_pipeline_profile,
     load_profile,
     seed_pipeline_scope_flags,
 )
 from workflow_context import enrich_instance_context  # noqa: E402
+
+
+# --------------------------------------------------------------------------- #
+# _deep_merge (pure dict logic, tier-1 runnable)
+# --------------------------------------------------------------------------- #
+def test_deep_merge_recurses_and_overlay_wins() -> None:
+    base = {"a": 1, "nested": {"x": 1, "y": 2}}
+    overlay = {"a": 2, "nested": {"y": 20, "z": 30}}
+    assert _deep_merge(base, overlay) == {
+        "a": 2,
+        "nested": {"x": 1, "y": 20, "z": 30},
+    }
+
+
+def test_deep_merge_scalar_replaces_dict() -> None:
+    assert _deep_merge({"k": {"a": 1}}, {"k": 5})["k"] == 5
+
+
+# --------------------------------------------------------------------------- #
+# apply_pipeline_profile action config + flag merge precedence
+# --------------------------------------------------------------------------- #
+def test_apply_pipeline_profile_merges_action_config() -> None:
+    ctx = {"actionConfig": {"detection": {"alpha": 0.05, "min_coverage": 4}}}
+    profile = {
+        "pipelineProfile": "custom",
+        "actionConfig": {"detection": {"alpha": 0.01}},
+    }
+    out = apply_pipeline_profile(ctx, profile)
+    # Profile actionConfig wins on the shared key, context-only key survives.
+    assert out["actionConfig"]["detection"]["alpha"] == 0.01
+    assert out["actionConfig"]["detection"]["min_coverage"] == 4
+    assert out["pipelineProfile"] == "custom"
+
+
+def test_apply_pipeline_profile_sets_flags_from_preset() -> None:
+    out = apply_pipeline_profile({}, load_profile("full_biomarker_gene_fc"))
+    assert out["runDmpSelection"] is True
+    assert out["runBiomarkerFilter"] is True
+
+
+def test_apply_pipeline_profile_explicit_profile_flag_overrides_preset() -> None:
+    # Preset for mc_gene_fc sets runDmpSelection True; explicit False in the
+    # profile body must win.
+    profile = {"pipelineProfile": "mc_gene_fc", "runDmpSelection": False}
+    out = apply_pipeline_profile({}, profile)
+    assert out["runDmpSelection"] is False
 
 
 def test_gene_enricher_stability_profile_flags() -> None:

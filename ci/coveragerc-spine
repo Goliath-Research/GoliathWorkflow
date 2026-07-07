@@ -1,0 +1,23 @@
+# Branch-coverage ratchet scoped to the shared config-resolution "spine".
+#
+# These modules sit upstream of every typed action (config resolve/merge,
+# CLI resolved-config routing, artifact/result manifests, pipeline-profile
+# merge). A regression here mis-feeds many actions with type-valid but wrong
+# values that the Pydantic models cannot catch, so they get a real fail_under
+# gate even though the global policy stays measure-and-report.
+#
+# Used by scripts/run_spine_coverage_ratchet.sh (not the default CI run).
+
+[run]
+branch = True
+source =
+    methyl_utils
+    methyl_domain
+
+[report]
+include =
+    */methyl_utils/action_config_resolver.py
+    */methyl_utils/cli_resolved_config.py
+    */methyl_domain/action_result.py
+show_missing = True
+fail_under = 80

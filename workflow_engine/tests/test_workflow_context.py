@@ -73,3 +73,48 @@ def test_build_resolved_config_scope_vars_uses_profile_action_config():
     key = resolved_config_scope_var_name("detection")
     assert key in scope
     assert scope[key].get("alpha") == 0.01
+
+
+def test_build_resolved_config_scope_vars_merges_site_paths():
+    """Site-derived paths merge into the resolved slice alongside profile knobs."""
+    scope = build_resolved_config_scope_vars(
+        {
+            "actionConfig": {"mapper": {"csv_pattern": "dmps-*.csv"}},
+            "siteConfig": {"annotation": {"gtf": "/ref/genes.gtf"}},
+            "regulatory": {},
+        }
+    )
+    mapper = scope[resolved_config_scope_var_name("mapper")]
+    assert mapper.get("csv_pattern") == "dmps-*.csv"
+    assert mapper.get("gtf") == "/ref/genes.gtf"
+
+
+def test_build_resolved_config_scope_vars_profile_beats_site():
+    """Profile actionConfig section wins over the site slice on a shared key."""
+    scope = build_resolved_config_scope_vars(
+        {
+            "actionConfig": {"mapper": {"gtf": "/profile/genes.gtf"}},
+            "siteConfig": {"annotation": {"gtf": "/site/genes.gtf"}},
+            "regulatory": {},
+        }
+    )
+    mapper = scope[resolved_config_scope_var_name("mapper")]
+    assert mapper.get("gtf") == "/profile/genes.gtf"
+
+
+def test_build_resolved_config_scope_vars_covers_all_catalog_keys():
+    """Every catalog action_config_key gets a resolved scope var (no key dropped)."""
+    import sys
+    from pathlib import Path as _Path
+
+    workers = _Path(__file__).resolve().parents[2] / "workers"
+    if str(workers) not in sys.path:
+        sys.path.insert(0, str(workers))
+    from methyl_worker.action_catalog import ACTION_CATALOG
+
+    scope = build_resolved_config_scope_vars(
+        {"actionConfig": {}, "siteConfig": {}, "regulatory": {}}
+    )
+    for entry in ACTION_CATALOG:
+        if entry.action_config_key:
+            assert resolved_config_scope_var_name(entry.action_config_key) in scope

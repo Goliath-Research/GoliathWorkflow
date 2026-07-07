@@ -33,6 +33,20 @@ ratcheted up over time. Policy and rationale live in
 Run the same suite locally with `./scripts/run_tests_ci.sh` (or `./scripts/run_tests.sh`
 for a plain run without coverage artifacts).
 
+### Spine coverage ratchet (branch, `fail_under`)
+
+The global suite stays measure-and-report, but the PR pipeline additionally runs
+[`../scripts/run_spine_coverage_ratchet.sh`](../scripts/run_spine_coverage_ratchet.sh),
+a **narrow, branch-aware gate** on the shared config-resolution "spine"
+(`methyl_utils/action_config_resolver.py`, `methyl_utils/cli_resolved_config.py`,
+`methyl_domain/action_result.py`). These modules sit upstream of every typed
+action, so a regression is high-blast-radius yet invisible to the Pydantic
+boundary (values stay type-valid but wrong). Config is in
+[`coveragerc-spine`](coveragerc-spine) with `branch = True` and a real
+`fail_under` on just these files, so the GPU-depressed global number does not
+force a meaningless whole-repo threshold. Run it locally with
+`./scripts/run_spine_coverage_ratchet.sh`.
+
 ## Real reference-sample tests (self-hosted)
 
 `azure-pipelines-real-data.yml` runs the `@pytest.mark.real_data` tests against
