@@ -1,6 +1,6 @@
 # Sample Preparation Flow
 
-Developer and operator reference for the per-sample upstream workflow: laboratory FASTQs → aligned BAM → alignment QC → optional remediation → methylation extraction → extraction QC → `{chr}-CG.h5` archives.
+Developer and operator reference for the per-sample upstream workflow: laboratory FASTQs (from shared storage or cloud object stores) → aligned BAM → alignment QC → optional remediation → methylation extraction → extraction QC → `{chr}-CG.h5` archives, with optional upload to durable cloud storage for reuse and long-term retention.
 
 **Workflow source of truth:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
 
@@ -47,6 +47,156 @@ flowchart TD
 
 **Ordering rationale:** alignment QC runs before cfDNA BAM fragmentomics so failed samples skip BAM scanning. FASTQs are retained until final QC disposition so fastp remediation can run.
 
+## Storage topology: sample sources and result archival
+
+SamplePrepPipeline is the **low-cost gate** before stability, freeze, and discovery workflows. Inputs may already live on shared cluster storage or in a laboratory-owned cloud bucket; outputs are materialized on `/work` for GPU processing, then optionally archived back to cloud storage for reuse and long-term retention.
+
+### End-to-end topology
+
+```mermaid
+flowchart LR
+  subgraph sources [Laboratory FASTQ sources]
+    fileSrc["file: NFS or /work"]
+    s3Src["s3: bucket + prefix"]
+    azSrc["azure_blob: container + prefix"]
+  end
+  dl[sample.download_fastq]
+  work["/work/samples/sample_id"]
+  prep[align_QC_extract]
+  arch[sample.archive_sample]
+  subgraph destinations [Durable archive destinations]
+    fileDst["file: NFS archive"]
+    s3Dst["s3: bucket + prefix"]
+    azDst["azure_blob: container + prefix"]
+  end
+  fileSrc --> dl
+  s3Src --> dl
+  azSrc --> dl
+  dl --> work
+  work --> prep
+  prep --> arch
+  arch --> fileDst
+  arch --> s3Dst
+  arch --> azDst
+```
+
+**Supported cloud providers:** Amazon S3 and Azure Blob Storage only. There is no GCS, `azcopy`, or `rclone` integration in the worker path.
+
+### Sample source options (input)
+
+Every sample carries a typed `fastqSource` (discriminated union in [`packages/methyldomain/methyl_domain/fastq_storage.py`](../../packages/methyldomain/methyl_domain/fastq_storage.py)). The worker action `sample.download_fastq` (`sample.download-fastq`) stages all FASTQs for one sample into `/work/samples/{sample_id}/` via [`workers/methyl_worker/fastq_source.py`](../../workers/methyl_worker/fastq_source.py).
+
+| Scheme | Keys | Staging mechanism |
+|--------|------|-------------------|
+| `file` | `basePath`, `prefix` | `shutil.copy2` from a shared/NFS path (samples already on `/work` or a mounted share) |
+| `s3` | `bucket`, `prefix`, `region`, `endpointUrl`, `credentials` | `boto3` list + download |
+| `azure_blob` | `account`, `container`, `prefix`, `credentials` | `azure-storage-blob` + `azure-identity` |
+
+**Credential auth modes** (typed JSON on `fastqSource.credentials` — no worker env fallback):
+
+| Scheme | `authMode` | Notes |
+|--------|------------|-------|
+| `s3` | `explicit_keys` | `accessKeyId`, `secretAccessKey`, optional `sessionToken` |
+| `s3` | `instance_profile` | IAM role / boto3 default credential chain |
+| `azure_blob` | `account_key` | Storage account key |
+| `azure_blob` | `connection_string` | Full connection string |
+| `azure_blob` | `default_credential` | `DefaultAzureCredential` (managed identity, etc.) |
+
+Secrets are marked `writeOnly` in the JSON schema and expanded for workers at runtime. They do **not** belong in the site manifest (`/work/site/methyl_site.json`) or `METHYL_*` environment variables.
+
+**Instance defaults:** top-level `fastqStorage` (with optional `prefixBase`) merges with each sample's `fastqPrefix` into the resolved `fastqSource`. See [`workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json`](../../workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json) for a full S3 ingress example.
+
+**Idempotency:** `download_from_source` skips a file when local size matches remote and mtime is within ±1 s.
+
+### Shared processing layer (`/work/samples/{sample_id}/`)
+
+All source schemes converge on the same per-sample directory on shared cluster storage:
+
+- Staged FASTQs: `*_1.fastq.gz`, `*_2.fastq.gz`
+- Alignment artifacts: BAM, Picard dedup metrics, Parabricks qc-metrics tar
+- Methylation outputs: `{chr}-{CG|CHG|CHH}.h5`, extraction manifest, QC JSON
+
+Study manifests reference this tree via `samples_base_path` (default `/work/samples`). See [Artifact map](#artifact-map) below for the full file list.
+
+### Result archival to cloud (output)
+
+After QC disposition, `sample.archive_sample` (`sample.archive-sample`, [`workers/methyl_worker/sample_archive.py`](../../workers/methyl_worker/sample_archive.py)) uploads a curated bundle to a typed `sampleDestination` (same three schemes as ingress, defined in [`packages/methyldomain/methyl_domain/sample_storage.py`](../../packages/methyldomain/methyl_domain/sample_storage.py)).
+
+> **Note:** `sample.upload_h5` is **retired**. Use `sample.archive_sample` with `sampleDestination`. See [`docs/reference/action-parameter-contract.md`](../reference/action-parameter-contract.md).
+
+```mermaid
+flowchart TD
+  qc{extractionQcPass?}
+  qc -->|yes| full["archive_sample mode=full"]
+  qc -->|no| qcOnly["archive_sample mode=qc_only"]
+  full --> uploadFull["Upload: qc/*.json, fastq/*, h5/*, archive_manifest.json"]
+  qcOnly --> uploadQc["Upload: qc/*.json, reject_reason, archive_manifest.json"]
+```
+
+| Mode | When | Remote layout |
+|------|------|---------------|
+| `full` | Extraction QC passes | `qc/alignment.json`, `qc/extraction_qc.json`, `qc/extraction_manifest.json`, `qc/sample_prep_log.jsonl`, `fastq/*.fastq.gz`, `h5/{chr}-{ctx}.h5`, `archive_manifest.json` |
+| `qc_only` | Alignment or extraction QC fails (terminal) | QC JSONs + `sample_prep_log.jsonl` + `reject_reason`; no FASTQs or H5 |
+
+**Destination config:** `sampleDestination` (or deprecated alias `h5Destination` / instance-level `h5Storage` → `sampleStorage`) uses the same `file` / `s3` / `azure_blob` keys as ingress (`bucket`/`container`, `prefix`, `credentials`). If no destination is configured, archive is skipped with `skipReason: "sample_destination_not_configured"` — local `/work` files are still retained for downstream analysis.
+
+**Idempotency:** S3 skips upload when remote size and ETag (32-char hex) match local md5; Azure skips on matching blob size.
+
+**Audit trail:** each archive writes `archive_manifest.json` (`schema_name: "methylpipeline.sample_archive"`, `schema_version: "1.0.0"`) listing every uploaded file with `md5`, `size`, and `remote_prefix`.
+
+### Reuse and caching (skip re-prep)
+
+Already-prepared samples are detected by **H5 evidence** on `samples_base_path`, so the expensive analysis pipeline does not re-run sample prep when `{chr}-{ctx}.h5` files already exist:
+
+```mermaid
+flowchart TD
+  check{H5 evidence on samples_base_path?}
+  check -->|yes| reuse[Reuse sample in downstream workflows]
+  check -->|no| prep[Run SamplePrepPipeline]
+  prep --> archive{sampleDestination configured?}
+  archive -->|yes| cloud[archive_sample to cloud]
+  archive -->|no| localOnly[Retain on /work only]
+  cloud --> reuse
+  localOnly --> reuse
+```
+
+| Mechanism | Location | Behavior |
+|-----------|----------|----------|
+| `sample_has_h5` | [`packages/methylutils/methyl_utils/test_data_registry.py`](../../packages/methylutils/methyl_utils/test_data_registry.py) | True when directory contains at least one `*-*.h5` |
+| `_sample_h5_qc_record` | [`packages/methylutils/methyl_utils/pipeline_config.py`](../../packages/methylutils/methyl_utils/pipeline_config.py) | Per-project eligibility: expected `{chrom}×{context}` pairs vs found H5 files |
+| Sample QC artifacts | `{project_root}/sample_qc/` | `sample_qc_report.csv`, `eligible_samples.txt`, `ineligible_samples.txt` |
+
+Samples without H5 evidence are excluded from cohort comparisons (`reason: excluded_no_h5`). Cloud-archived H5 bundles can be re-staged to `/work/samples/{id}/` (via `file` copy or re-download) before starting a new study.
+
+### Config surfaces recap
+
+| Layer | Artifact | What it holds |
+|-------|----------|---------------|
+| **Instance context** | `context_json` on sample-prep start | `fastqStorage`, `sampleStorage`, `samples[]` with `fastqSource`, `sampleDestination`, `sampleDir` |
+| **Site manifest** | `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | Reference genome, GTF, caches, Parabricks — **not** cloud credentials |
+| **Portal** | `SampleStorageDefaults` | Operator archive profile defaults (e.g. `epimethyl-samples`) |
+| **Study manifest** | `project.json` | `samples_base_path`, cohort CSVs — **not** FASTQ/archive credentials |
+
+Example instance context (S3 ingress + S3 archive, abbreviated):
+
+```json
+{
+  "fastqStorage": { "type": "s3", "bucket": "methyl-cohort", "region": "us-east-1",
+    "credentials": { "authMode": "instance_profile" } },
+  "sampleStorage": { "type": "s3", "bucket": "methyl-archive", "region": "us-east-1",
+    "credentials": { "authMode": "instance_profile" } },
+  "samples": [{
+    "sampleId": "DPLST-051425-111148",
+    "sampleDir": "/work/samples/DPLST-051425-111148",
+    "fastqPrefix": "plasma/DPLST-051425-111148/",
+    "fastqSource": { "type": "s3", "bucket": "methyl-cohort", "prefix": "plasma/DPLST-051425-111148/", ... },
+    "sampleDestination": { "type": "s3", "bucket": "methyl-archive", "prefix": "plasma/DPLST-051425-111148/", ... }
+  }]
+}
+```
+
+Full example: [`workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json`](../../workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json).
+
 ## Stage-by-stage data path
 
 | Stage | Worker action | Handler | Key implementation |
@@ -62,7 +212,7 @@ flowchart TD
 
 ### Download FASTQs
 
-Laboratory-owned `fastqSource` (file, S3, or Azure Blob) is materialized into `/work/samples/{sample_id}/` as paired `*_1.fastq.gz` / `*_2.fastq.gz`. Download is idempotent when local size and mtime match remote.
+See [Storage topology](#storage-topology-sample-sources-and-result-archival) above for source schemes, credentials, and archival. Laboratory-owned `fastqSource` (file, S3, or Azure Blob) is materialized into `/work/samples/{sample_id}/` as paired `*_1.fastq.gz` / `*_2.fastq.gz`. Download is idempotent when local size and mtime match remote.
 
 ### Parabricks alignment (`fq2bam_meth`)
 
@@ -440,6 +590,9 @@ More operator commands: [Usage ch.03](../usage/03-sample-prep-and-qc.qmd).
 | [Usage ch.03 — Sample Prep and QC](../usage/03-sample-prep-and-qc.qmd) | Operator manual, flow diagram, config examples |
 | [SamplePrepFlow.md](../../workflow_engine/sql_mssql/SamplePrepFlow.md) | Workflow tree, instance context, deploy |
 | [sample_prep_capabilities.md](../../workflow_engine/contract/sample_prep_capabilities.md) | Worker I/O contracts, idempotency |
+| [fastq_storage.py](../../packages/methyldomain/methyl_domain/fastq_storage.py) | Typed FASTQ source models (file / S3 / Azure) |
+| [sample_storage.py](../../packages/methyldomain/methyl_domain/sample_storage.py) | Typed archive destination models |
+| [sample_archive_sample.input.schema.json](../../schemas/tasks/sample_archive_sample.input.schema.json) | Archive action input schema |
 | [Workers and gateway](workers-and-gateway.md) | Poll/submit protocol |
 | [parabricks.md](../../workers/docs/parabricks.md) | GPU/Docker Parabricks setup |
 | [methylalignmentqc USAGE](../../packages/methylalignmentqc/docs/USAGE.md) | methyl-qc CLI, guardrails, screening |
