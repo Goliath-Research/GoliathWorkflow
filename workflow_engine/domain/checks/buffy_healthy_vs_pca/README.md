@@ -7,7 +7,7 @@ Validates **DomainProgram → compiler → collection bindings → instance cont
 | Location | Artifacts |
 |----------|-----------|
 | **Repo** (this bundle) | `configs/*.program.json`, `instance/*.json` examples, smoke `project_*.json`, `data/*.csv` for CI |
-| **Repo** (`workflow_engine/domain/profiles/`) | Named pipeline profiles (`mc_gene_fc`, …) |
+| **Repo** (`workflow_engine/domain/profiles/`) | Named pipeline profiles (`mc_dmp_gene_fc`, `mc_gene_fc`, …) |
 | **`/work/projects/prostate-cancer/`** | `configs/project_Buffy_healthy_vs_PCa.json`, `data/healthy_b.csv`, `pca_b.csv`, run outputs |
 
 Edit the **study manifest** on `/work` only. Programs and profiles stay in the repository.
@@ -16,7 +16,7 @@ Edit the **study manifest** on `/work` only. Programs and profiles stay in the r
 |-----------|------|
 | `configs/buffy_data_driven.program.json` | Single-run discovery (centroid → detector → mapper → enricher) |
 | `configs/buffy_mc_stability.program.json` | 10-iteration MC stability (FeatureCuts + gene select) |
-| `../profiles/mc_gene_fc.profile.json` | Profile for Buffy MC (`runDmpSelection`, gene FeatureCuts, stability axes) |
+| `../profiles/mc_dmp_gene_fc.profile.json` | Profile for Buffy MC (`runDmpSelection`, gene FeatureCuts, stability axes) |
 
 | `/work` path | Role |
 |--------------|------|
@@ -58,8 +58,8 @@ methyl-workflow-run \
 ```bash
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json \
-  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"mc_gene_fc"}' \
+  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"mc_dmp_gene_fc"}' \
   --parallel-workers 1
 ```
 

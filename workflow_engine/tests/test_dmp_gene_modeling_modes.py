@@ -16,10 +16,11 @@ from pipeline_profiles import apply_pipeline_profile, load_profile  # noqa: E402
 @pytest.mark.parametrize(
     ("profile_name", "dmp_mode", "gene_mode", "run_dmp", "run_gene_fc"),
     [
-        ("mc_dmp_discovery", "raw_pool", "none", False, False),
-        ("mc_dmp_featurecuts", "featurecuts", "none", True, False),
-        ("mc_gene_mapper", "raw_pool", "mapper_ranked", False, False),
-        ("mc_gene_featurecuts", "raw_pool", "featurecuts", False, True),
+        ("mc_dmp", "raw_pool", "none", False, False),
+        ("mc_dmp_fc", "featurecuts", "none", True, False),
+        ("mc_gene", "raw_pool", "none", False, False),
+        ("mc_gene_fc", "raw_pool", "featurecuts", False, True),
+        ("mc_dmp_gene_fc", "featurecuts", "featurecuts", True, True),
         ("phase_a_dmp_stability", "featurecuts", "none", True, False),
         ("phase_b_gene_from_stable_dmps", "stable_panel", "from_stable_dmp_panel", False, True),
     ],
@@ -62,5 +63,17 @@ def test_phase_b_wires_stable_dmp_csv_from_context() -> None:
 
 
 def test_deprecated_profile_aliases_resolve() -> None:
-    assert load_profile("gene_enricher_stability")["pipelineProfile"] == "mc_dmp_discovery"
-    assert load_profile("dmp_panel_stability")["pipelineProfile"] == "mc_dmp_featurecuts"
+    assert load_profile("gene_enricher_stability")["pipelineProfile"] == "mc_dmp"
+    assert load_profile("dmp_panel_stability")["pipelineProfile"] == "mc_dmp_fc"
+    assert load_profile("mc_dmp_discovery")["pipelineProfile"] == "mc_dmp"
+    assert load_profile("mc_gene_mapper")["pipelineProfile"] == "mc_gene"
+    assert load_profile("mc_gene_featurecuts")["pipelineProfile"] == "mc_gene_fc"
+    assert load_profile("discovery_gene_featurecuts")["pipelineProfile"] == "mc_dmp_gene_fc"
+
+
+def test_mc_gene_profile_defaults_ppi_only() -> None:
+    profile = load_profile("mc_gene")
+    enricher = (profile.get("actionConfig") or {}).get("enricher") or {}
+    assert enricher.get("ppi_only") is True
+    validation = (profile.get("actionConfig") or {}).get("validation") or {}
+    assert validation.get("stability_gene_recurrence_source") == "enricher"

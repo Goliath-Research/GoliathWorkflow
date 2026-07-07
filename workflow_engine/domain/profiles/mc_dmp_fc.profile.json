@@ -1,5 +1,5 @@
 {
-  "pipelineProfile": "mc_dmp_featurecuts",
+  "pipelineProfile": "mc_dmp_fc",
   "dmp_modeling_mode": "featurecuts",
   "gene_modeling_mode": "none",
   "runDmpSelection": true,

@@ -25,7 +25,7 @@ mc_sweep_activate_venv() {
 mc_sweep_defaults() {
   local repo_root
   repo_root="$(mc_sweep_repo_root)"
-  : "${METHYL_PROFILE:=mc_gene_fc}"
+  : "${METHYL_PROFILE:=mc_dmp_gene_fc}"
   : "${METHYL_SITE_CONFIG:=/work/site/methyl_site.json}"
   if [[ -z "${METHYL_PROFILE_DIR:-}" ]]; then
     if [[ -d /work/epimethyl/current/runtime-bundle/domain/profiles ]]; then
@@ -52,7 +52,7 @@ Shared options (plasma and buffy runners):
   -h, --help             Show help
 
 Environment:
-  METHYL_PROFILE         Pipeline profile (default: mc_gene_fc)
+  METHYL_PROFILE         Pipeline profile (default: mc_dmp_gene_fc)
   METHYL_SITE_CONFIG     Site manifest (default: /work/site/methyl_site.json)
   STUDY_ROOT             Study root on NFS (default: /work/projects/prostate-cancer)
   SWEEP_ROOT             Sweeps directory (default: $STUDY_ROOT/sweeps)

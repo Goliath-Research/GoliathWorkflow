@@ -54,7 +54,16 @@ def resolve_profile_path(name_or_path: Union[str, Path]) -> Path:
     if not key:
         raise FileNotFoundError("Empty pipeline profile name")
 
-    aliases = {"buffy_mc_gene_fc": "mc_gene_fc"}
+    aliases = {
+        "buffy_mc_gene_fc": "mc_dmp_gene_fc",
+        "mc_dmp_discovery": "mc_dmp",
+        "mc_dmp_featurecuts": "mc_dmp_fc",
+        "mc_gene_mapper": "mc_gene",
+        "mc_gene_featurecuts": "mc_gene_fc",
+        "gene_enricher_stability": "mc_dmp",
+        "dmp_panel_stability": "mc_dmp_fc",
+        "discovery_gene_featurecuts": "mc_dmp_gene_fc",
+    }
     candidates = [key]
     if key in aliases:
         candidates.append(aliases[key])

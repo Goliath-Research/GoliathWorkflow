@@ -12,6 +12,9 @@ from typing import Any
 
 import pytest
 
+DOMAIN = Path(__file__).resolve().parents[1] / "domain"
+REPO_PROFILES = DOMAIN / "profiles"
+
 
 def _rewrite_sample_paths(node: Any, tmp_dir: Path, counter: dict, sample_names: list) -> None:
     """Recursively replace every ``sample_paths`` list with local temp CSVs.
@@ -75,6 +78,12 @@ def project_with_local_samples(src_project: Path, tmp_path: Path) -> Path:
     out = tmp_path / f"{Path(src_project).stem}.local.json"
     out.write_text(json.dumps(data), encoding="utf-8")
     return out
+
+
+@pytest.fixture(autouse=True)
+def repo_pipeline_profiles(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prefer repo profile JSON over deployed /work/epimethyl bundles in tests."""
+    monkeypatch.setenv("METHYL_PROFILE_DIR", str(REPO_PROFILES))
 
 
 @pytest.fixture

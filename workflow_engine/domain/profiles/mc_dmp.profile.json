@@ -1,5 +1,5 @@
 {
-  "pipelineProfile": "mc_dmp_discovery",
+  "pipelineProfile": "mc_dmp",
   "dmp_modeling_mode": "raw_pool",
   "gene_modeling_mode": "none",
   "runDmpSelection": false,

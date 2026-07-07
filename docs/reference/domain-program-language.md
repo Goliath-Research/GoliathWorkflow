@@ -51,13 +51,13 @@ source .venv/bin/activate
 # Compile only (inspect graph)
 python scripts/compile_workflow_program.py \
   workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/mc_gene_featurecuts.profile.json \
+  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'
 
 # Run in-process (stub external GPU tools)
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/mc_gene_featurecuts.profile.json \
+  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
   --stub-external
 ```
@@ -240,28 +240,31 @@ Five reusable **statistical alternatives** for methylation MC validation are enc
 
 | Mode | Profile | `dmp_modeling_mode` | `gene_modeling_mode` | Regulatory intent |
 |------|---------|---------------------|----------------------|-------------------|
-| 1 | `mc_dmp_discovery` | `raw_pool` | `none` | Exploratory locus recurrence |
-| 2 | `mc_dmp_featurecuts` | `featurecuts` | `none` | BA-gated DMP panel stability |
-| 3 | `mc_gene_mapper` | `raw_pool` | `mapper_ranked` | Mapper gene recurrence (no gene k-search) |
-| 4 | `mc_gene_featurecuts` | `raw_pool` | `featurecuts` | Independent gene-axis BA gate on discovery-mapped loci |
-| 5 | `phase_a_dmp_stability` → `phase_b_gene_from_stable_dmps` | `featurecuts` → `stable_panel` | `none` → `from_stable_dmp_panel` | Two-stage panel lock before gene modeling |
+| 1 | `mc_dmp` | `raw_pool` | `none` | Exploratory DMP recurrence (no FeatureCuts) |
+| 2 | `mc_dmp_fc` | `featurecuts` | `none` | BA-gated DMP panel stability |
+| 3 | `mc_gene` | `raw_pool` | `none` | Enricher gene recurrence (PPI hubs or Enrichr via `enricher.ppi_only`) |
+| 4 | `mc_gene_fc` | `raw_pool` | `featurecuts` | Gene-axis BA gate on enricher/PPI genes |
+| 5 | `mc_dmp_gene_fc` | `featurecuts` | `featurecuts` | Full DMP + gene FeatureCuts (production dual-axis) |
+| 6 | `phase_a_dmp_stability` → `phase_b_gene_from_stable_dmps` | `featurecuts` → `stable_panel` | `none` → `from_stable_dmp_panel` | Two-stage panel lock before gene modeling |
+
+**PPI vs Enrichr (`mc_gene`, `mc_gene_fc`):** profiles default to `actionConfig.enricher.ppi_only: true` (STRING PPI hubs, fast). Set `ppi_only: false` in a site/profile/instance override to use Enrichr pathway libraries instead.
 
 **Artifact ladder:** DomainProgram (topology) → Profile (statistical procedure + `actionConfig`) → Study manifest (cohort/paths) → Instance context (`projectPath`, `pipelineProfile`, optional `stableDmpCsv` for Phase B).
 
 **DMP export simplification:** downstream consumers should prefer `dmps-*-selected.csv` (FeatureCuts panel). Legacy `dmps-*-classifier.csv` / `-classifier-extended.csv` remain for one release.
 
-**Two-phase mode 5:** run Phase A with `phase_a_dmp_stability`; pass `stable_dmps_production.csv` via context `stableDmpCsv` (or `freeze_stable_dmp_csv` in validation overrides) for Phase B `phase_b_gene_from_stable_dmps`.
+**Two-phase mode 6:** run Phase A with `phase_a_dmp_stability`; pass `stable_dmps_production.csv` via context `stableDmpCsv` (or `freeze_stable_dmp_csv` in validation overrides) for Phase B `phase_b_gene_from_stable_dmps`.
 
 ```bash
 # Mode 4 example (fixture paths only)
 methyl-workflow-run \
   --program workflow_engine/domain/fixtures/dmp_select_optional.program.json \
-  --context-file workflow_engine/domain/profiles/mc_gene_featurecuts.profile.json \
+  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json \
   --context '{"projectPath":"workflow_engine/domain/fixtures/project_smoke.json"}' \
   --stub-external
 ```
 
-Deprecated profile names (`gene_enricher_stability`, `dmp_panel_stability`, `discovery_gene_featurecuts`) alias to the statistical presets above.
+Deprecated profile names (`mc_dmp_discovery`, `mc_dmp_featurecuts`, `mc_gene_mapper`, `mc_gene_featurecuts`, `gene_enricher_stability`, `dmp_panel_stability`, `discovery_gene_featurecuts`, `buffy_mc_gene_fc`) alias to the canonical `mc_*` presets above.
 
 ### Profile presets (legacy names)
 
@@ -271,15 +274,15 @@ Named presets live in `workflow_engine/domain/profiles/*.profile.json`. Pass via
 |---------|----------|------------|------------|-------------------------|
 | `legacy_dual` | legacy inline FeatureCuts | off | discovery | DMP classifier panels |
 | `discovery_interpretation` | discovery_only | off | discovery | single-run mapper/enricher |
-| `mc_dmp_discovery` | discovery_only | off | discovery | DMP recurrence (raw pool) |
-| `mc_dmp_featurecuts` | discovery + dmp_select | on | selected | DMP panel MC |
-| `mc_gene_featurecuts` | discovery + dmp_select | on | selected | gene FeatureCuts on discovery-mapped loci |
-| `mc_gene_fc` | Binary cohort MC + stability (analyte-agnostic) | on | selected | DMP + gene FeatureCuts stability |
+| `mc_dmp` | discovery_only | off | discovery | DMP recurrence (raw pool) |
+| `mc_dmp_fc` | discovery + dmp_select | on | selected | DMP panel MC |
+| `mc_gene` | discovery_only | off | discovery | enricher gene recurrence (PPI or Enrichr) |
+| `mc_gene_fc` | discovery_only | off | discovery | gene FeatureCuts on enricher/PPI genes |
+| `mc_dmp_gene_fc` | discovery + dmp_select | on | discovery/selected | DMP + gene FeatureCuts stability (production) |
 | `structural_features` | discovery_only | off | discovery + intersections | gene×region ranked catalog |
 | `staged_ovr_mc` | staged OvR + FeatureCuts | on | discovery | MC stability + progression |
 | `staged_full_lifecycle` | staged OvR + FeatureCuts | on | discovery | MC + freeze + model lifecycle |
 | `staged_progression_interpretation` | discovery_only | off | discovery | mapper/enricher + progression (no MC) |
-| `mc_gene_fc` | *(same as above; primary production profile)* | on | selected | gene FeatureCuts stability |
 
 ```json
 {
@@ -313,22 +316,22 @@ Example:
 ```bash
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_interpretation.program.json \
-  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json
+  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json
 
 methyl-validation run-workflow \
   --program workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json
+  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json
 ```
 
-**Gene FeatureCuts on discovery-mapped loci (mode 4):**
+**Gene FeatureCuts on enricher/PPI genes (mode 4):**
 
 ```bash
 methyl-validation run-workflow \
   --program workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/mc_gene_featurecuts.profile.json
+  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json
 ```
 
-Uses `dmps-*-discovery.csv` for mapper; gene FeatureCuts reads `dmps-*-selected.csv` when `gene_modeling_mode: featurecuts`. Set `"runBiomarkerFilter": true` in context to add PPI/disease shrink before gene FeatureCuts.
+Uses `dmps-*-discovery.csv` for mapper; gene FeatureCuts runs on enricher-ranked genes when `gene_modeling_mode: featurecuts`. Toggle PPI vs Enrichr with `actionConfig.enricher.ppi_only`. Set `"runBiomarkerFilter": true` in context to add PPI/disease shrink before gene FeatureCuts.
 
 Stability summaries record active axes in `stability_summary.json` → `pipeline_axes` (`dmp_axis`, `gene_axis` from modeling modes).
 

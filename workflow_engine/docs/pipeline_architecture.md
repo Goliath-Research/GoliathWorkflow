@@ -254,7 +254,7 @@ External reference project (not in repo): `project_PCa3.json` with one control (
 }
 ```
 
-Centroid, detection, and other tool knobs come from a **pipeline profile** (e.g. `mc_gene_fc.profile.json` → `actionConfig`) and/or site manifest (`/work/site/methyl_site.json`), passed via instance `context_json` (`pipelineProfile`, merged `actionConfig`).
+Centroid, detection, and other tool knobs come from a **pipeline profile** (e.g. `mc_dmp_gene_fc.profile.json` → `actionConfig`) and/or site manifest (`/work/site/methyl_site.json`), passed via instance `context_json` (`pipelineProfile`, merged `actionConfig`).
 
 For a **two-group OvR** study (one control vs two disease stages), use `"comparisons": "control_vs_each_disease"` with two disease leaves (`PCa_Low`, `PCa_High`) — see [Section 5](#5-two-group-example-config--workflow-tree).
 

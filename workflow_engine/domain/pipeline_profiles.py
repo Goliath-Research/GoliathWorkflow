@@ -8,9 +8,14 @@ from typing import Any, Dict, Mapping, Optional
 
 # Deprecated profile names → canonical file (preset flags also aliased in PROFILE_PRESETS).
 _PROFILE_ALIASES: Dict[str, str] = {
-    "buffy_mc_gene_fc": "mc_gene_fc",
-    "gene_enricher_stability": "mc_dmp_discovery",
-    "dmp_panel_stability": "mc_dmp_featurecuts",
+    "buffy_mc_gene_fc": "mc_dmp_gene_fc",
+    "gene_enricher_stability": "mc_dmp",
+    "dmp_panel_stability": "mc_dmp_fc",
+    "mc_dmp_discovery": "mc_dmp",
+    "mc_dmp_featurecuts": "mc_dmp_fc",
+    "mc_gene_mapper": "mc_gene",
+    "mc_gene_featurecuts": "mc_gene_fc",
+    "discovery_gene_featurecuts": "mc_dmp_gene_fc",
 }
 
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
@@ -97,19 +102,52 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "stabilityGeneFeaturecutsEnabled": True,
     },
     "mc_gene_fc": {
+        "runDmpSelection": False,
+        "runGeneFeaturecuts": True,
+        "stabilityFeaturecutsEnabled": False,
+        "stabilityGeneFeaturecutsEnabled": True,
+    },
+    "mc_dmp_gene_fc": {
         "runDmpSelection": True,
         "runGeneFeaturecuts": True,
         "stabilityFeaturecutsEnabled": True,
         "stabilityGeneFeaturecutsEnabled": True,
     },
-    # Deprecated alias — use mc_gene_fc
+    # Deprecated alias — use mc_dmp_gene_fc
     "buffy_mc_gene_fc": {
         "runDmpSelection": True,
         "runGeneFeaturecuts": True,
         "stabilityFeaturecutsEnabled": True,
         "stabilityGeneFeaturecutsEnabled": True,
     },
-    # Statistical-mode profiles (process-agnostic; study facts live in project.json)
+    # Research stability profiles (process-agnostic; study facts live in project.json)
+    "mc_dmp": {
+        "runDmpSelection": False,
+        "runGeneFeaturecuts": False,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": False,
+        "stabilityGeneFeaturecutsEnabled": False,
+        "stabilityGeneBiomarkerFilterEnabled": False,
+    },
+    "mc_dmp_fc": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": False,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": False,
+    },
+    "mc_gene": {
+        "runDmpSelection": False,
+        "runGeneFeaturecuts": False,
+        "runBiomarkerFilter": False,
+        "runGeneFeatureSelect": False,
+        "stabilityFeaturecutsEnabled": False,
+        "stabilityGeneFeaturecutsEnabled": False,
+        "stabilityGeneBiomarkerFilterEnabled": False,
+    },
+    # Statistical-mode profiles (deprecated names; aliases resolve to mc_* above)
     "mc_dmp_discovery": {
         "runDmpSelection": False,
         "runGeneFeaturecuts": False,

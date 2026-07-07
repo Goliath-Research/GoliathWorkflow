@@ -1,5 +1,7 @@
 {
-  "pipelineProfile": "mc_gene_fc",
+  "pipelineProfile": "mc_dmp_gene_fc",
+  "dmp_modeling_mode": "featurecuts",
+  "gene_modeling_mode": "featurecuts",
   "runDmpSelection": true,
   "runGeneFeaturecuts": true,
   "runBiomarkerFilter": false,
@@ -19,7 +21,11 @@
       "min_mapq": 20,
       "min_phred": 20,
       "split": true,
-      "output_format": "hdf5"
+      "output_format": "hdf5",
+      "read_level": {
+        "enabled": false,
+        "tile_size": 4
+      }
     },
     "centroid": {
       "base_config": {
@@ -149,6 +155,30 @@
     "progression": {
       "enabled": false
     },
+    "derived_measures": {
+      "contexts": ["CG"],
+      "hypo_beta_threshold": 0.2,
+      "intermediate_beta_lo": 0.25,
+      "intermediate_beta_hi": 0.75,
+      "pmd_beta_threshold": 0.3,
+      "pmd_window_bp": 100000,
+      "pmd_step_bp": 50000,
+      "pdr_disagreement_threshold": 0.25,
+      "min_coverage": 1
+    },
+    "info_measures": {
+      "contexts": ["CG"],
+      "tile_size": 4,
+      "min_tile_reads": 5,
+      "jsd_top_windows": 100,
+      "jsd_min_cohort_reads": 10,
+      "ising_enabled": true,
+      "ising_coupling": "nearest",
+      "ising_min_tile_reads": 10,
+      "ising_max_iter": 50,
+      "ising_tol": 1e-6,
+      "ising_l2": 0.0001
+    },
     "classifier": {
       "enable_platt_calibration": true
     },
@@ -157,22 +187,41 @@
       "n_iterations": 10,
       "seed": 42,
       "run_stability": true,
+      "dmp_modeling_mode": "featurecuts",
+      "gene_modeling_mode": "featurecuts",
       "stability_featurecuts_enabled": true,
       "stability_gene_featurecuts_enabled": true,
       "stability_dmp_freq": 0.8,
       "stability_gene_freq": 0.7,
       "stability_min_balanced_accuracy": 0.9,
-      "stability_target_balanced_accuracy": 0.9,
-      "stability_min_core_dmps": 50,
-      "stability_classifier_export_margin_pct": 0.1,
-      "stability_classifier_export_margin_abs": 10,
-      "stability_classifier_export_max_dmps": 200,
-      "stability_gene_featurecuts_max_dmps": 1000,
-      "stability_gene_featurecuts_max_genes": 200,
+      "dmp_featurecuts_target_ba": 0.95,
+      "gene_featurecuts_target_ba": 0.9,
       "stability_min_selected_genes": 50,
       "stability_mapper_enrich_disease": false,
       "abort_on_step_failure": true,
       "backend_profiles": {
+        "tabular_sklearn": {
+          "enabled": false,
+          "params": {
+            "feature_mode": "observed_hybrid",
+            "feature_family_set": "dmp_scored+chromosome",
+            "covariates_path": [
+              "{output_base}/derived_measures/derived_measures.csv",
+              "{output_base}/info_measures/readlevel_measures.csv"
+            ]
+          }
+        },
+        "generative_hybrid": {
+          "enabled": false,
+          "params": {
+            "feature_mode": "observed_hybrid",
+            "feature_family_set": "dmp_scored+chromosome",
+            "covariates_path": [
+              "{output_base}/derived_measures/derived_measures.csv",
+              "{output_base}/info_measures/readlevel_measures.csv"
+            ]
+          }
+        },
         "ecdf": {
           "enabled": true,
           "params": {
@@ -181,6 +230,10 @@
           }
         }
       }
+    },
+    "gene_selection": {
+      "max_genes": 200,
+      "max_dmps": 1000
     }
   }
 }

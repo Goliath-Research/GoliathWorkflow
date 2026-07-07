@@ -63,11 +63,19 @@ check_absent 'site manifest → package defaults' 'Precedence must end with no P
 check_absent 'site manifest -> package defaults' 'Precedence must end with no Python fallback, not package defaults'
 
 # Deprecated profile names as primary paths (aliases remain in code only).
-check_absent 'discovery_gene_featurecuts\.profile\.json' 'Use mc_gene_featurecuts or mc_gene_fc profile names'
+check_absent 'discovery_gene_featurecuts\.profile\.json' 'Use mc_dmp_gene_fc profile name'
 
-check_absent 'dmp_panel_stability\.profile\.json' 'Use mc_dmp_featurecuts profile name'
+check_absent 'mc_dmp_discovery\.profile\.json' 'Use mc_dmp profile name'
 
-check_absent 'gene_enricher_stability\.profile\.json' 'Use mc_dmp_discovery profile name'
+check_absent 'mc_dmp_featurecuts\.profile\.json' 'Use mc_dmp_fc profile name'
+
+check_absent 'mc_gene_mapper\.profile\.json' 'Use mc_gene profile name'
+
+check_absent 'mc_gene_featurecuts\.profile\.json' 'Use mc_gene_fc profile name'
+
+check_absent 'dmp_panel_stability\.profile\.json' 'Use mc_dmp_fc profile name'
+
+check_absent 'gene_enricher_stability\.profile\.json' 'Use mc_dmp profile name'
 
 # Hardcoded gene FC cap example that contradicts site/profile config.
 check_absent 'stability_gene_featurecuts_max_dmps": 500' 'Gene FC caps belong in site/profile actionConfig, not hardcoded 500 in docs'

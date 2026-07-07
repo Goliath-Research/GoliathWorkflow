@@ -124,7 +124,7 @@ The profile supplies the science knobs (iterations, thresholds, feature caps). P
 
 | Goal | `pipelineProfile` |
 |------|-------------------|
-| Standard binary Monte-Carlo stability (DMP + gene FeatureCuts) | `mc_gene_fc` |
+| Standard binary Monte-Carlo stability (DMP + gene FeatureCuts) | `mc_dmp_gene_fc` |
 | Multi-stage, one-vs-rest Monte-Carlo stability | `staged_ovr_mc` |
 | Multi-stage end-to-end (stability + freeze + model) | `staged_full_lifecycle` |
 | Progression / interpretation only | `staged_progression_interpretation` |
@@ -141,8 +141,8 @@ Binary (healthy vs. one cancer group):
 source .venv/bin/activate
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json \
-  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"mc_gene_fc"}' \
+  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"mc_dmp_gene_fc"}' \
   --parallel-workers 1
 ```
 
@@ -185,7 +185,7 @@ For a binary study the single comparison appears under `detections/all/PCa/`. Mo
 
 1. One CSV per group under `data/`.
 2. One manifest: `controls` + `diseases` (nest `stages[]` for increasing stages), `comparisons: "control_vs_each_disease"`.
-3. Pick a profile (`mc_gene_fc` binary, `staged_ovr_mc` multi-stage).
+3. Pick a profile (`mc_dmp_gene_fc` binary dual-axis, `mc_dmp` / `mc_dmp_fc` / `mc_gene` / `mc_gene_fc` for research axes, `staged_ovr_mc` multi-stage).
 4. `methyl-workflow-run --program … --context-file …profile.json --context '{"projectPath":…,"pipelineProfile":…}'`.
 5. Read results per comparison under `<project_name>/detections/<control>/<disease>/`.
 

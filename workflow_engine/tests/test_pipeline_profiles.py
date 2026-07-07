@@ -60,11 +60,33 @@ def test_apply_pipeline_profile_sets_flags_from_preset() -> None:
 
 
 def test_apply_pipeline_profile_explicit_profile_flag_overrides_preset() -> None:
-    # Preset for mc_gene_fc sets runDmpSelection True; explicit False in the
+    # Preset for mc_dmp_gene_fc sets runDmpSelection True; explicit False in the
     # profile body must win.
-    profile = {"pipelineProfile": "mc_gene_fc", "runDmpSelection": False}
+    profile = {"pipelineProfile": "mc_dmp_gene_fc", "runDmpSelection": False}
     out = apply_pipeline_profile({}, profile)
     assert out["runDmpSelection"] is False
+
+
+def test_research_profile_presets() -> None:
+    mc_dmp = apply_pipeline_profile({}, load_profile("mc_dmp"))
+    assert mc_dmp["runDmpSelection"] is False
+    assert mc_dmp["runGeneFeaturecuts"] is False
+
+    mc_dmp_fc = apply_pipeline_profile({}, load_profile("mc_dmp_fc"))
+    assert mc_dmp_fc["runDmpSelection"] is True
+    assert mc_dmp_fc["runGeneFeaturecuts"] is False
+
+    mc_gene = apply_pipeline_profile({}, load_profile("mc_gene"))
+    assert mc_gene["runDmpSelection"] is False
+    assert mc_gene["runGeneFeaturecuts"] is False
+
+    mc_gene_fc = apply_pipeline_profile({}, load_profile("mc_gene_fc"))
+    assert mc_gene_fc["runDmpSelection"] is False
+    assert mc_gene_fc["runGeneFeaturecuts"] is True
+
+    mc_dmp_gene_fc = apply_pipeline_profile({}, load_profile("mc_dmp_gene_fc"))
+    assert mc_dmp_gene_fc["runDmpSelection"] is True
+    assert mc_dmp_gene_fc["runGeneFeaturecuts"] is True
 
 
 def test_gene_enricher_stability_profile_flags() -> None:
