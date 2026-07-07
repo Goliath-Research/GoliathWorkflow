@@ -57,8 +57,14 @@ def test_shared_memory_array_roundtrip():
     assert arr.shape == (4, 4)
     arr[0, 0] = 3.5
     assert arr[0, 0] == 3.5
-    # is_shared_memory_array reflects whichever backing was used.
-    assert is_shared_memory_array(arr) == getattr(arr, "_is_shared_memory", False)
+    # A plain ndarray is never reported as shared-memory-backed.
+    assert is_shared_memory_array(np.zeros((4, 4), dtype="float32")) is False
+    # Detection must track the independent backing signal (presence of a live
+    # SharedMemory block), not merely echo the _is_shared_memory flag. When
+    # shared memory is available the array carries a _shared_memory block and
+    # must be detected as shared; the regular-array fallback carries neither.
+    has_shared_block = hasattr(arr, "_shared_memory")
+    assert is_shared_memory_array(arr) is has_shared_block
     mm.cleanup_shared_memory_array(arr)
 
 
