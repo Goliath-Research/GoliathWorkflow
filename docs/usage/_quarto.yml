@@ -32,6 +32,9 @@ book:
         - 13-distributed-methyl-validation.qmd
         - 14-deployment-and-distributed-workflow.qmd
         - 15-optional-hyperparameter-search.qmd
+    - part: "Part IV: Worked Tutorials"
+      chapters:
+        - 16-tutorial-healthy-vs-cancer-stages.qmd
 
 format:
   html:
