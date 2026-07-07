@@ -12,7 +12,13 @@ from methyl_extraction_qc.guardrails import evaluate_guardrails
 from methyl_extraction_qc.models.config import ExtractionQCConfig, ExtractionQCGuardrailConfig
 
 
-def _manifest_fixture(*, cpg_cov: float = 15.0, chh: float = 0.005, chg: float = 0.004) -> dict:
+def _manifest_fixture(
+    *,
+    cpg_cov: float = 15.0,
+    chh: float = 0.005,
+    chg: float = 0.004,
+    retention_rate: float | None = 0.85,
+) -> dict:
     per_chromosome = {}
     for chrom in ["1", "2", "21", "X"]:
         per_chromosome[chrom] = {
@@ -22,7 +28,7 @@ def _manifest_fixture(*, cpg_cov: float = 15.0, chh: float = 0.005, chg: float =
                 "mean_coverage": 12.0 if chrom != "21" else 11.0,
             }
         }
-    return {
+    manifest = {
         "metadata": {
             "schema_name": "methylextractor.extraction_manifest",
             "schema_version": "1.0.0",
@@ -37,6 +43,15 @@ def _manifest_fixture(*, cpg_cov: float = 15.0, chh: float = 0.005, chg: float =
         },
         "per_chromosome": per_chromosome,
     }
+    if retention_rate is not None:
+        reads_seen = 1_000_000
+        reads_used = round(reads_seen * retention_rate)
+        manifest["read_filtering"] = {
+            "reads_seen": reads_seen,
+            "reads_used": reads_used,
+            "read_retention_rate": retention_rate,
+        }
+    return manifest
 
 
 def test_evaluate_guardrails_passes_good_manifest() -> None:
@@ -67,6 +82,62 @@ def test_evaluate_guardrails_fails_high_chh() -> None:
     )
     assert report["overall_pass"] is False
     assert report["metrics"]["chh_methylation_level"]["pass"] is False
+
+
+def test_evaluate_guardrails_read_discard_passes_normal_retention() -> None:
+    report = evaluate_guardrails(
+        _manifest_fixture(retention_rate=0.85),
+        config=ExtractionQCGuardrailConfig(),
+        expected_chromosomes=["1", "2", "21", "X"],
+    )
+    metric = report["metrics"]["read_discard_fraction"]
+    assert metric["pass"] is True
+    assert metric["value"]["discard_fraction"] == pytest.approx(0.15)
+
+
+def test_evaluate_guardrails_fails_high_discard_fraction() -> None:
+    report = evaluate_guardrails(
+        _manifest_fixture(retention_rate=0.05),
+        config=ExtractionQCGuardrailConfig(),
+        expected_chromosomes=["1", "2", "21", "X"],
+    )
+    assert report["overall_pass"] is False
+    metric = report["metrics"]["read_discard_fraction"]
+    assert metric["pass"] is False
+    assert metric["value"]["discard_fraction"] == pytest.approx(0.95)
+
+
+def test_evaluate_guardrails_read_discard_honors_config_threshold() -> None:
+    report = evaluate_guardrails(
+        _manifest_fixture(retention_rate=0.6),
+        config=ExtractionQCGuardrailConfig(max_discard_fraction=0.3),
+        expected_chromosomes=["1", "2", "21", "X"],
+    )
+    assert report["metrics"]["read_discard_fraction"]["pass"] is False
+
+
+def test_evaluate_guardrails_read_discard_skipped_when_absent() -> None:
+    report = evaluate_guardrails(
+        _manifest_fixture(retention_rate=None),
+        config=ExtractionQCGuardrailConfig(),
+        expected_chromosomes=["1", "2", "21", "X"],
+    )
+    metric = report["metrics"]["read_discard_fraction"]
+    assert metric["pass"] is True
+    assert metric["value"] is None
+
+
+def test_evaluate_guardrails_read_discard_from_counts_without_rate() -> None:
+    manifest = _manifest_fixture(retention_rate=None)
+    manifest["read_filtering"] = {"reads_seen": 100, "reads_used": 40}
+    report = evaluate_guardrails(
+        manifest,
+        config=ExtractionQCGuardrailConfig(max_discard_fraction=0.5),
+        expected_chromosomes=["1", "2", "21", "X"],
+    )
+    metric = report["metrics"]["read_discard_fraction"]
+    assert metric["pass"] is False
+    assert metric["value"]["discard_fraction"] == pytest.approx(0.6)
 
 
 def test_process_sample_extraction_qc_writes_json(tmp_path: Path) -> None:

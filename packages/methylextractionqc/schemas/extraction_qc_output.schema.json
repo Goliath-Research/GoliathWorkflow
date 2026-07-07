@@ -38,7 +38,8 @@
         "chh_methylation_level": { "$ref": "#/$defs/guardrailMetric" },
         "chg_methylation_level": { "$ref": "#/$defs/guardrailMetric" },
         "chromosome_completeness": { "$ref": "#/$defs/guardrailMetric" },
-        "chromosome_uniformity": { "$ref": "#/$defs/guardrailMetric" }
+        "chromosome_uniformity": { "$ref": "#/$defs/guardrailMetric" },
+        "read_discard_fraction": { "$ref": "#/$defs/guardrailMetric" }
       },
       "additionalProperties": { "$ref": "#/$defs/guardrailMetric" }
     }

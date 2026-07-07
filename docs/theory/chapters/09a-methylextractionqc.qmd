@@ -12,6 +12,7 @@ MethylExtractor writes `{sample_id}.extraction_manifest.json` with:
 
 - `summary` — genome-wide CpG weighted mean coverage, CHH/CHG methylation levels
 - `per_chromosome` — per-chromosome `CG.mean_coverage` and related stats
+- `read_filtering` — aggregated read filter stats (`reads_seen`, `reads_used`, `read_retention_rate`, per-reason drop counts)
 
 ## Guardrails
 
@@ -24,6 +25,9 @@ MethylExtractor writes `{sample_id}.extraction_manifest.json` with:
 | `chg_methylation_level` | ≤ 0.02 | Same for CHG |
 | `chromosome_completeness` | all expected chromosomes | Every project chromosome present with CG block |
 | `chromosome_uniformity` | autosomal min/median ≥ 0.5 | No severe localized dropout |
+| `read_discard_fraction` | ≤ 0.9 | Catastrophic read loss (`1 − read_retention_rate`) — wrong reference, contamination, or mis-set filters |
+
+The `read_discard_fraction` check reads the manifest `read_filtering` block; when that block is absent (manifests predating read-filtering stats) the check is skipped as a pass so older samples are not retroactively failed.
 
 `guardrails.overall_pass` maps to workflow **`extractionQcPass`**. Failures are terminal in SamplePrep today (no automatic retry).
 
@@ -31,7 +35,7 @@ Output: `{sample_id}.extraction_qc.json` (schema: `schemas/extraction_qc_output.
 
 ## Configuration
 
-Override thresholds via `step_config.extraction_qc` in the project JSON on `/work`.
+Override thresholds (including `max_discard_fraction`) via profile/site `actionConfig.extraction_qc.guardrails`.
 
 ## Why both alignment and extraction QC
 

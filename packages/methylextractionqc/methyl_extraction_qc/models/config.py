@@ -16,6 +16,7 @@ class ExtractionQCGuardrailConfig(BaseModel):
     max_chh_methylation_level: float = 0.02
     max_chg_methylation_level: float = 0.02
     min_autosomal_coverage_uniformity_ratio: float = 0.5
+    max_discard_fraction: float = 0.9
 
 
 class ExtractionQCConfig(BaseModel):

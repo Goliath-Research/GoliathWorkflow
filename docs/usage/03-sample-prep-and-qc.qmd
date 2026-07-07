@@ -189,6 +189,7 @@ MethylExtractor writes `{sample_id}.extraction_manifest.json` with:
 | `chg_methylation_level` | ≤ 0.02 | Same for CHG |
 | `chromosome_completeness` | all expected chromosomes | Every project chromosome present with CG metrics |
 | `chromosome_uniformity` | autosomal min/median ≥ 0.5 | No severe localized dropout |
+| `read_discard_fraction` | ≤ 0.9 | Catastrophic read loss (`1 − read_retention_rate`) from extraction-time filters |
 
 `guardrails.overall_pass` maps to workflow **`extractionQcPass`**. Failures are **terminal** today (no automatic retry loop).
 

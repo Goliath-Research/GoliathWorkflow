@@ -35,6 +35,27 @@ def _cg_mean_coverage(chrom_entry: Dict[str, Any]) -> Optional[float]:
     return float(value)
 
 
+def _read_retention_rate(read_filtering: Dict[str, Any]) -> Optional[float]:
+    """Retention rate (reads_used / reads_seen) from a manifest read_filtering block.
+
+    Prefers the exporter-provided ``read_retention_rate`` and falls back to
+    computing it from ``reads_used`` / ``reads_seen``. Returns None when the
+    block predates read-filtering stats or reports no reads seen.
+    """
+
+    rate = read_filtering.get("read_retention_rate")
+    if rate is not None:
+        return float(rate)
+    reads_seen = read_filtering.get("reads_seen")
+    reads_used = read_filtering.get("reads_used")
+    if reads_seen is None or reads_used is None:
+        return None
+    reads_seen_f = float(reads_seen)
+    if reads_seen_f <= 0:
+        return None
+    return float(reads_used) / reads_seen_f
+
+
 def evaluate_guardrails(
     manifest: Dict[str, Any],
     *,
@@ -177,6 +198,40 @@ def evaluate_guardrails(
         passed=uniformity_pass,
         message=uniformity_message,
     )
+
+    read_filtering = manifest.get("read_filtering")
+    retention_rate = (
+        _read_retention_rate(read_filtering) if isinstance(read_filtering, dict) else None
+    )
+    if retention_rate is None or not isinstance(read_filtering, dict):
+        results["read_discard_fraction"] = _metric(
+            value=None,
+            normal_range=f"<= {config.max_discard_fraction}",
+            passed=True,
+            message=(
+                "Skipped read-discard check: extraction manifest read_filtering block is "
+                "absent or reports no reads seen (manifest predates read-filtering stats)."
+            ),
+        )
+    else:
+        discard_fraction = 1.0 - retention_rate
+        discard_pass = discard_fraction <= config.max_discard_fraction
+        results["read_discard_fraction"] = _metric(
+            value={
+                "discard_fraction": round(discard_fraction, 6),
+                "read_retention_rate": round(retention_rate, 6),
+                "reads_seen": read_filtering.get("reads_seen"),
+                "reads_used": read_filtering.get("reads_used"),
+            },
+            normal_range=f"<= {config.max_discard_fraction}",
+            passed=discard_pass,
+            message=(
+                "Fraction of reads dropped by extraction-time filters (unmapped, "
+                "secondary/supplementary, duplicate, low-MAPQ, multimap, no-strand). "
+                "A very high discard fraction with acceptable coverage signals a systematic "
+                "problem (wrong reference, contamination, or mis-set filters)."
+            ),
+        )
 
     overall_pass = all(bool(item.get("pass")) for item in results.values())
     return {

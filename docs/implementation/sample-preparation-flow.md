@@ -431,7 +431,7 @@ Configured in profile/site `actionConfig.methyl_extract` (production profiles de
 
 Wired in [`extract_runner.py`](../../workers/methyl_worker/extract_runner.py) via `resolvedConfig.methyl_extract` only (no wire tunables). Raising these values protects against low-quality reads but reduces effective coverage; lowering them without cause risks noisy methylation calls.
 
-There is **no** standalone "discard rate" guardrail in alignment or extraction QC today.
+Alignment QC has no standalone read-discard guardrail; extraction QC now includes one (`read_discard_fraction`, see below) driven by the MethylExtractor `read_filtering` manifest block.
 
 ### Post-discard QC (second gate)
 
@@ -444,6 +444,9 @@ There is **no** standalone "discard rate" guardrail in alignment or extraction Q
 | `chg_methylation_level` | ≤ 0.02 | Conversion sanity (when CHG extracted) |
 | `chromosome_completeness` | all expected chromosomes | Missing chromosomes after aggressive filtering |
 | `chromosome_uniformity` | autosomal min/median ≥ 0.5 | Localized dropout from MAPQ/Phred losses |
+| `read_discard_fraction` | ≤ 0.9 (`max_discard_fraction`) | Catastrophic read loss: `1 − read_retention_rate` from `read_filtering` (unmapped, secondary/supplementary, duplicate, low-MAPQ, multimap, no-strand) |
+
+`read_discard_fraction` reads the manifest `read_filtering` block (`reads_seen`, `reads_used`, `read_retention_rate`); it is skipped as a pass when the block is absent (older manifests). It complements the coverage checks — a sample can retain acceptable coverage yet still have discarded the bulk of its reads, which flags a systematic problem (wrong reference, contamination, or mis-set `min_mapq`/`min_phred`). Tune `max_discard_fraction` via profile/site `actionConfig.extraction_qc.guardrails`.
 
 `guardrails.overall_pass` maps to workflow **`extractionQcPass`**. Failures are **terminal** today (no automatic retry loop).
 
@@ -453,7 +456,7 @@ There is **no** standalone "discard rate" guardrail in alignment or extraction Q
 2. If extraction coverage fails while alignment passed, suspect aggressive `min_mapq`/`min_phred` or localized BAM quality issues — do not blindly lower thresholds.
 3. Use [`scripts/alignment_qc_cohort_screening.py`](../../scripts/alignment_qc_cohort_screening.py) for cohort-level alignment review; extraction failures are per-sample via `{sample_id}.extraction_qc.json`.
 
-**Future enhancement:** if MethylExtractor adds `reads_used` / `reads_discarded` to the extraction manifest (see MethylExtractor `docs/extraction_qc_contract.md`), a dedicated `max_discard_fraction` guardrail could be added to `methylextractionqc`.
+**Implemented:** MethylExtractor emits `reads_seen` / `reads_used` / `read_retention_rate` in the extraction manifest `read_filtering` block (see MethylExtractor `docs/extraction_qc_contract.md`), and `methylextractionqc` evaluates the `read_discard_fraction` guardrail (`max_discard_fraction`, default ≤ 0.9) against it.
 
 ## cfDNA fragmentomics as additional QC
 

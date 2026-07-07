@@ -376,7 +376,8 @@ Optional: `chromosomes` list when `project` is omitted (defaults to full genome 
     "min_cpg_weighted_mean_coverage": 10.0,
     "max_chh_methylation_level": 0.02,
     "max_chg_methylation_level": 0.02,
-    "min_autosomal_coverage_uniformity_ratio": 0.5
+    "min_autosomal_coverage_uniformity_ratio": 0.5,
+    "max_discard_fraction": 0.9
   },
   "expected_chromosomes": ["1", "2", "..."]
 }
