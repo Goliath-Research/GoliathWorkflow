@@ -71,6 +71,8 @@ dmypy.json
 docs/_build/
 docs/_static/
 docs/_templates/
+docs/usage/_book/
+docs/theory/_book/
 
 # Docker
 *.tar
