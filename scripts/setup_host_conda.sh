@@ -194,6 +194,7 @@ echo "📦 Installing additional libraries..."
 EXTRA_PACKAGES=(
   h5py hdf5plugin zarr pyarrow psutil plotly matplotlib seaborn
   click tqdm statsmodels sqlalchemy scikit-learn pydantic pyodbc pymssql
+  librsvg
 )
 
 ARCH="$(uname -m)"
