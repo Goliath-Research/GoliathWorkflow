@@ -18,6 +18,15 @@
   companion runner scripts (`scripts/g2dmp_m34.py`, `exp_wand.py`, `pred_h5.py`,
   `prediction_tsv_to_cupy_h5.py`). Where intent is inferred from parameter names it is
   flagged as such.
+- **MethylIT R package (source, added review pass).** The original R implementation that
+  MethylIT_py migrates — `MethylIT` **0.3.2.8** (Sanchez, `github.com/genomaths/MethylIT`) —
+  was subsequently read from source at `C:\Work\MethylIT2\R\*.R`. This turns the previously
+  *reconstructed* estimator description into a *verified* one and corrects two claims that the
+  config-only reconstruction got wrong (the cutpoint default and the gene-level layer). The
+  section **"Cross-check against the original R source"** below records what the code confirms,
+  what it corrects, and the exact estimator formulas. The 0.4.0 Python config still governs how
+  a *particular deployment* wires these functions, so where the R defaults and the 0.4.0 config
+  differ, both are stated.
 
 ## Executive summary
 
@@ -30,8 +39,10 @@ are nearly opposite:
   measures an *information divergence* of methylation from a common **reference** at every
   cytosine, fits a *parametric* distribution to the background divergence, calls a position a
   potential DMP when its divergence lies in the tail of that fitted noise model (plus a total-
-  variation cut), then trains a supervised classifier (logistic + random forest) to set an
-  optimal cutpoint.
+  variation cut), then sets an optimal cutpoint separating control-like from treatment-like
+  DMPs. In the R package that cutpoint is a **single-variable Youden index by default**
+  (`estimateCutPoint(simple = TRUE)`); the supervised logistic + random-forest route is the
+  opt-in `simple = FALSE` path that the 0.4.0 config happens to wire (see cross-check below).
 - **MethylPipeline = nonparametric empirical distributions + resampling stability.** It
   represents each cohort as an ECDF "centroid," detects DMPs by two-sample tests
   (Kolmogorov-Smirnov / Mann-Whitney) *between two cohort centroids* with Storey FDR control,
@@ -51,11 +62,11 @@ locus where the control-cohort distribution differs from the disease-cohort dist
 | Signal statistic | Hellinger / J-divergence (Bayesian, coverage-weighted) | KS / Mann-Whitney on reconstructed ECDFs |
 | Noise model | Parametric fit (GGamma3P / Weibull) to divergence | Distribution-free (empirical quantiles + Storey FDR) |
 | Effect-size gate | Total-variation cut (`tv_cut`) | Heuristic effect size `|dmu|*(1-overlap)*exp(...)` + effect-mass trim |
-| Where ML enters | Inside detection (logistic + random forest cutpoint) | Downstream only (ECDF Naive-Bayes classifier) |
+| Where ML enters | Cutpoint step, but **optional**: Youden index by default, logistic/RF only if `simple = FALSE` (0.4.0 config opts in) | Downstream only (ECDF Naive-Bayes classifier) |
 | Reference | Manually flagged (`is_reference`), pooled, fixed | None; control-cohort centroid rebuilt per split |
 | Stability / freeze | Sidecar experiment scripts (`exp_wand.py`) | First-class Monte Carlo recurrence -> freeze -> train |
 | Held-out evaluation | True holdout in `exp_wand.py` | Workflow 3 (`--holdout-eval`) with bootstrap CIs |
-| DMP -> gene interpretation | Out of scope in 0.4.0 core (genes only *mask* detection) | Full signed, weighted mapper -> enricher stack |
+| DMP -> gene interpretation | R package has count-based DMGs (`getDMGs` -> GLM); 0.4.0 core ships only gene *masking* of detection, no weighted propagation | Full signed, weighted mapper -> enricher stack |
 | Evidence base | First-party (Sanchez & Mackenzie), no independent reproduction | Repo is source of truth; internals audited, with a per-PR regression + coverage CI gate and a designated real reference-sample test tier |
 
 The table is a map, not a verdict; the sections below justify each row and flag which comparative
@@ -341,6 +352,90 @@ Beyond Sanchez & Mackenzie, the analysis above rests on:
   weak, interacting features) versus a single dominant monotone score.
 - **D. M. Green & J. A. Swets (1966).** *Signal Detection Theory and Psychophysics.* Wiley. — the
   signal-detection framing shared by both products.
+
+## Cross-check against the original R source
+
+The two sections above were written before the estimator internals were readable; they reasoned
+from the 0.4.0 stage config alone. The original R implementation (`MethylIT` 0.3.2.8,
+`C:\Work\MethylIT2\R\*.R`) — the code that MethylIT_py migrates — has now been read directly.
+It **confirms** the reconstructed pipeline and the exact statistics, and it **corrects two claims**
+that the config-only view got wrong. Both corrections happen to *strengthen* the analysis in
+sections A and B rather than weaken it.
+
+### What the source confirms
+
+- **Pipeline shape.** `estimateDivergence` → `gofReport`/`nonlinearFitDist` → `getPotentialDIMP`
+  → `estimateCutPoint` → `selectDIMP` is exactly the `divergence → gof → pDMP → cutpoint → dmp`
+  chain reconstructed from the `06→07→08→09` folder trail.
+- **Coverage-weighted Hellinger.** `estimateHellingerDiv` (called by `estimateBayesianDivergence`)
+  computes the count-based Hellinger of Basu, Mandal & Pardo (2010):
+  $$
+  H = \frac{2\,(n_1+1)(n_2+1)}{n_1+n_2+2}\Big[(\sqrt{p_1}-\sqrt{p_2})^2 +
+  (\sqrt{1-p_1}-\sqrt{1-p_2})^2\Big],
+  $$
+  where $n_1, n_2$ are the control/reference and sample coverages. This *is* the coverage weighting
+  the analysis attributed to `weight: cov`, and it confirms the mechanism behind section 2's
+  argument: coverage enters as a **multiplicative weight on the divergence**, so deep sites inflate
+  $H$ — which is exactly why a separate `cap_coverage` stage is needed in 0.4.0 (see below).
+- **Bayesian methylation levels are beta-binomial.** `beta_bin_meth` fits a Beta prior per sample
+  by nonlinear least squares on the ECDF of the naive levels $q = (mC+1)/(n+1)$
+  (`estimateBetaDist`), then returns posteriors $\hat p = (a + mC)/(a + b + n)$
+  (`.betaBinPosteriors`). This confirms the "Bayesian shrinkage of low-coverage estimates" claim and
+  identifies `idiv_prior`/`bayesian_p` as the Beta hyper-parameters.
+- **Potential-DMP tail test + TV gate.** `getPotentialDIMP` keeps sites with tail probability
+  $p = P(\text{DIV} > \text{DIV}_k) < \alpha$ (default $\alpha = 0.05$) from the fitted CDF
+  (`pweibull`/`pgamma`/`pggamma`/…), with an **optional** `tv.cut`/`hdiv.cut` magnitude filter.
+  This confirms the two-gate structure (improbable **and** large).
+- **J-divergence and its $\chi^2$ statistic** (`estimateJDiv`) are the symmetrised KL divergence with
+  the Salicrú/Kupperman asymptotic statistic $2(n_1+1)(n_2+1)\,JD/(n_1+n_2+2)$ — as described.
+- **The reference is a manual pooled centroid.** `poolFromGRlist` builds it with
+  `stat = mean` (group centroid), `median`, `sum`, or `jackmean`; there is no automatic reference
+  selection, confirming the "reference selection governs everything, and is not auto-chosen" section.
+
+### What the source corrects
+
+1. **The cutpoint is a single-variable Youden index *by default*; the ML classifier is opt-in.**
+   The reconstruction (and the fast-orientation table) said MethylIT "bakes supervised learning into
+   detection itself." The R signature is `estimateCutPoint(..., simple = TRUE, ...)`, and
+   `simple = TRUE` calls `simpleCutPoint`, which computes the optimal cutpoint from the **Youden
+   index on one divergence** (`.roc`: `which.max(sens + spec)`). The logistic/LDA/QDA/random-forest
+   machinery lives in `mlCutpoint` and only runs when the caller sets `simple = FALSE`. So the
+   package's *default and simplest* path is precisely the single-variable threshold that
+   [section B](#b-is-a-random-forest-justified-at-the-cutpoint-or-does-single-variable-youden-suffice)
+   argues for; the random forest is one of several optional classifiers (`classifier1`/`classifier2`
+   ∈ {logistic, lda, qda, pca.*, random_forest}), and the 0.4.0 config's choice of `logistic` +
+   `random_forest` is a *deployment* decision, not an intrinsic property of the method. This makes
+   section B's conclusion stronger: the parsimonious estimator it recommends is the one the original
+   author already ships as the default.
+2. **The nonparametric ECDF tail is a first-class built-in, not just a hypothetical substitute.**
+   `getPotentialDIMP` accepts `dist.name = "ECDF"` (and falls back to the ECDF when `nlms = NULL`),
+   selecting sites by `1 - ECDF(q) < alpha`. So the "would the ECDF do?" alternative in
+   [section A](#a-does-the-weibullgeneralized-gamma-distribution-matter-for-the-initial-tail-or-would-the-ecdf-do)
+   is already implemented in the same function as the parametric fit — the parametric-vs-ECDF pDMP
+   Jaccard comparison proposed in [Empirical tests needed](#empirical-tests-needed) can be run
+   *inside MethylIT itself* by flipping one argument, with no re-implementation.
+3. **The R package *does* have a DMP → gene layer; "no gene propagation" is a property of the 0.4.0
+   bundle, not of the method.** The gene-mapping section states MethylIT keeps signal at the
+   per-cytosine level and only *masks* detection to gene windows. That is accurate for the 0.4.0
+   core (`orca` modules 1–4 + `g2dmp_m34.py`), but the R package ships **differentially methylated
+   gene** detection: `getDIMPatGenes` counts DMPs per gene body, and `getDMGs` → `countTest2` fits a
+   Poisson / negative-binomial GLM to those per-gene counts (with `log2FC`, Wald or LRT p-values, and
+   BH adjustment), plus `dmpClusters` for region building. This is still **count-based** aggregation
+   (number of DMPs per gene), not the signed, feature-resolved, effect-size-weighted propagation
+   MethylPipeline uses — so the qualitative contrast in that section holds — but the sharper, correct
+   statement is: *MethylIT ranks genes by DMP-count over-representation via a GLM; MethylPipeline
+   ranks genes by a propagated continuous signed weight.* The claim that gene handling is only
+   "reverse direction (masking)" should be scoped to the 0.4.0 release bundle, not the lineage.
+
+### Net effect on the analysis
+
+The source access converts the two headline arguments from "plausible under stated regimes" to
+"the original code already contains the simpler construct as a supported option": Youden is the
+default cutpoint, and the ECDF is a built-in tail model. It also tightens one over-broad claim
+(gene-level testing exists in R, as a count GLM). None of the statistical reasoning in sections A, B,
+or the independent-critique section changes; the divergence formula, the coverage-in-weight
+mechanism behind the downsampling critique, the beta-binomial Bayesian levels, and the manual pooled
+reference are all confirmed verbatim in the code.
 
 ## Independent corroboration and open critiques
 
@@ -666,11 +761,18 @@ is propagated from each DMP up to the objects being ranked, rather than a gene s
    `methyl_gene_feature_select/core/runner.py`). So the DMP's signed, feature-resolved weight is what
    ultimately orders the gene/feature panel that gets classified.
 
-### MethylIT_py 0.4.0: no weight propagation to genes; gene use is the reverse direction (masking detection)
+### MethylIT_py 0.4.0: gene-level testing is count-based (and absent from the 0.4.0 core), not a weighted propagation
+
+> **Corrected against the R source.** An earlier version of this section claimed MethylIT has *no*
+> gene layer at all and only *masks* detection to gene windows. That is true of the **0.4.0 release
+> bundle** examined here, but **not** of the MethylIT lineage: the R package (`MethylIT` 0.3.2.8) has
+> a real differentially-methylated-**gene** layer. See the
+> [cross-check section](#cross-check-against-the-original-r-source). The distinction that survives is
+> *count-based over-representation* (MethylIT) vs *signed weighted propagation* (MethylPipeline).
 
 MethylIT_py 0.4.0's core (`orca` modules 1-4, `06_potential_dimp -> 09_prediction`) has **no**
 DMP -> gene -> feature -> pathway propagation, and **no** PPI, CIS-BP, Enrichr, or disease-database
-layer. Where genes appear at all, the direction of information flow is reversed:
+layer. Where genes appear in the 0.4.0 bundle at all, the direction of information flow is reversed:
 
 - `scripts/g2dmp_m34.py` **restricts detection to gene coordinates** and reruns modules 3-4 (with
   rules to exclude under-covered samples and skip chromosomes, and SHA256 provenance receipts). This
@@ -678,13 +780,25 @@ layer. Where genes appear at all, the direction of information flow is reversed:
   DMP -> gene ranking. It never carries a per-DMP weight up into a `gene_importance` and never ranks
   genes or gene features by an aggregated, signed effect.
 
-The consequence for a direct comparison: MethylIT keeps the signal at the per-cytosine divergence
-level and, at most, *scopes* detection to gene regions; MethylPipeline treats gene- and
-feature-level ranking as a first-class, weighted aggregation problem and then layers PPI / CIS-BP /
-Enrichr / disease-evidence prioritization on top of the same propagated weight. Any head-to-head that
-stops at the DMP set will therefore miss the entire interpretation stack, which in MethylPipeline is
-also used as an orthogonal **biological validation** check (do top-weighted genes recover lineage
-markers and coherent modules?), whereas in MethylIT_py 0.4.0 it is simply out of scope.
+What the **R package** adds (and a future MethylIT_py release could expose) is a *count-based* gene
+test, which is still categorically different from MethylPipeline's weighted propagation:
+
+- `getDIMPatGenes` counts DMPs overlapping each gene body (optionally hyper- or hypo-only via the
+  sign of `TV`); `getDMGs` then feeds those per-gene counts to `countTest2`, a Poisson /
+  negative-binomial **GLM** that reports `log2FC`, a Wald or LRT p-value, and BH-adjusted q-values;
+  `dmpClusters` builds DMP-dense regions for the same GLM. So MethylIT *does* rank genes — by the
+  **statistical over-representation of DMP counts** in a gene, not by a continuous signed effect
+  carried up from each DMP.
+
+The consequence for a direct comparison: MethylIT (R) ranks genes by a **count GLM** (how many DMPs
+fall in the gene, tested against a Poisson/NB null); MethylPipeline treats gene- and feature-level
+ranking as a first-class **weighted** aggregation problem — a signed, feature-resolved DMP weight
+propagated into `gene_importance` — and then layers PPI / CIS-BP / Enrichr / disease-evidence
+prioritization on top of that same weight. Any head-to-head that stops at the DMP set will therefore
+miss the entire interpretation stack, which in MethylPipeline is also used as an orthogonal
+**biological validation** check (do top-weighted genes recover lineage markers and coherent modules?),
+whereas in MethylIT_py 0.4.0 it is out of scope and in MethylIT (R) it is count-based rather than
+weight-propagated.
 
 ## Engineering and interpretation differences
 
@@ -764,9 +878,11 @@ motivated hypotheses about *where* each design should win, not as an empirical v
 
 - **MethylIT_py 0.4.0** = information-thermodynamics + signal detection: per-sample Hellinger/J
   divergence from a designated reference, a fitted GGamma/Weibull noise model, tail-based potential
-  DMPs gated by total variation, and an ML-learned cutpoint. Statistically principled *if* the
-  parametric divergence law holds, individual-centric, and critically dependent on a **manually
-  chosen reference** that is not auto-selected or auto-validated.
+  DMPs gated by total variation, and an optimal cutpoint separating control-like from treatment-like
+  DMPs (a **single-variable Youden index by default** in the R source; the logistic + random-forest
+  route is the opt-in path the 0.4.0 config selects). Statistically principled *if* the parametric
+  divergence law holds, individual-centric, and critically dependent on a **manually chosen
+  reference** that is not auto-selected or auto-validated.
 - **MethylPipeline** = nonparametric empirical distributions + resampling stability: cohort-vs-cohort
   ECDF two-sample tests with FDR, heuristic biological ranking, ECDF Naive-Bayes classification, and
   a formalized Monte-Carlo-stability -> freeze -> train workflow with rich biological interpretation.
@@ -775,16 +891,21 @@ motivated hypotheses about *where* each design should win, not as an empirical v
 
 Watch-items when comparing their DMPs directly: results need not agree, because (a) MethylIT DMPs are
 per-sample tail events against a reference while MethylPipeline DMPs are per-comparison distributional
-differences, and (b) MethylIT's DMP set depends on a learned classifier/cutpoint whereas
-MethylPipeline's depends on FDR-controlled tests plus a heuristic effect filter.
+differences, and (b) MethylIT's DMP set depends on its cutpoint (a Youden threshold by default, or a
+classifier when `simple = FALSE`) whereas MethylPipeline's depends on FDR-controlled tests plus a
+heuristic effect filter.
 
 A fairness note on tone: MethylPipeline is described from its source code (the repo is the source of
-truth), whereas MethylIT_py 0.4.0 is reconstructed from release artifacts (configs, sample sheets,
-runner scripts) with estimator internals unavailable (see [Scope and evidence
-boundary](#scope-and-evidence-boundary)). The MethylPipeline side therefore reads as audited — and is
-now additionally guarded by a per-pull-request regression + coverage gate and a designated
-real-sample test tier (see [Verification and reproducibility posture](#engineering-and-interpretation-differences)) — while the
-MethylIT side as inferred. Where this note reaches conclusions about MethylIT's behavior, they are
+truth). MethylIT_py 0.4.0 was first reconstructed from release artifacts (configs, sample sheets,
+runner scripts), and its estimator internals have now been **verified against the original R source**
+(`MethylIT` 0.3.2.8; see [Scope and evidence boundary](#scope-and-evidence-boundary) and
+[Cross-check against the original R source](#cross-check-against-the-original-r-source)). The
+algorithm and its formulas are therefore no longer inferred; what remains deployment-specific is how
+the 0.4.0 Python bundle *wires* those functions (e.g. choosing the ML cutpoint over the default
+Youden route, and shipping only the masking-style gene harness). The MethylPipeline side reads as
+audited — and is now additionally guarded by a per-pull-request regression + coverage gate and a
+designated real-sample test tier (see [Verification and reproducibility posture](#engineering-and-interpretation-differences)).
+Where this note still reaches *performance* conclusions (Jaccard overlap, AUC gaps), those remain
 predictions to be confirmed by the [Empirical tests needed](#empirical-tests-needed), not settled
 findings.
 
@@ -819,7 +940,11 @@ The 0.4.0 `stages` config maps one-to-one onto the published MethylIT methodolog
 3. Sanchez R. *MethylIT: Methylation Analysis Based on Signal Detection.* R package,
    github.com/genomaths/MethylIT (2018). The 0.4.0 stage/function fingerprints
    (`nonlinearFitDist`, `Weibull2P/3P`, `fitGGammaDist`, `estimateCutPoint`, `selectDIMP`) mirror this
-   package's API.
+   package's API. Source **version 0.3.2.8** was read directly for this note (see
+   [Cross-check against the original R source](#cross-check-against-the-original-r-source)); the
+   estimator functions (`estimateDivergence`, `estimateHellingerDiv`, `estimateBayesianDivergence`,
+   `beta_bin_meth`, `getPotentialDIMP`, `estimateCutPoint`/`simpleCutPoint`/`mlCutpoint`,
+   `getDMGs`/`getDIMPatGenes`/`countTest2`) confirm the reconstructed pipeline and its formulas.
 4. Sanchez R, Mackenzie SA. "On the thermodynamics of DNA methylation process." *Scientific Reports*
    (Nature portfolio) 2023;13:8914. doi:10.1038/s41598-023-35166-9. Formal thermodynamic derivation of
    the divergence distribution (generalized-gamma family), channel-capacity / Gibbs-entropy /
@@ -835,3 +960,9 @@ The 0.4.0 `stages` config maps one-to-one onto the published MethylIT methodolog
   `config_smoke.yaml`, `config_example_score_only.yaml`; `examples/sample_sheet_*.{csv,tsv}`;
   `scripts/g2dmp_m34.py`, `exp_wand.py`, `pred_h5.py`, `prediction_tsv_to_cupy_h5.py`;
   `README_INSTALL.txt`.
+- MethylIT R source (`MethylIT` 0.3.2.8, `C:\Work\MethylIT2`): `R/estimateDivergence.R`,
+  `estimateBayesianDivergence.R`, `estimateHellingerDiv.R`, `estimateJDiv.R`, `beta_bin_meth.R`,
+  `betaBinPosteriors.R`, `estimateBetaDist.R`, `nonlinearFitDist.R`, `gofReport.R`,
+  `getPotentialDIMP.R`, `estimateCutPoint.R`, `simpleCutPoint.R`, `mlCutpoint.R`, `selectDIMP.R`,
+  `poolFromGRlist.R`, `getDMGs.R`, `getDIMPatGenes.R`, `countTest2.R`, `dmpClusters.R`,
+  `helmholtz_free_energy.R`; `DESCRIPTION`.
