@@ -31,7 +31,8 @@ Libraries in use (for verification):
   - GPU: requirements-gpu-cuda12.txt (cupy-cuda12x, cudf-cu12, pylibcudf-cu12, rmm-cu12).
   - System (--system-deps): Python dev, build-essential, hdf5-tools, libhdf5-dev,
     libzstd-dev, ODBC, bedtools (for MethylMapper), samtools (for alignment QC flagstat),
-    fastp (for SamplePrep trim remediation); with GPU, libnvrtc{N} for NVRTC.
+    fastp (for SamplePrep trim remediation), librsvg2-bin (rsvg-convert, for Quarto
+    SVG->PDF docs rendering); with GPU, libnvrtc{N} for NVRTC.
 EOF
 }
 
@@ -202,7 +203,8 @@ install_system_deps() {
     unixodbc-dev \
     bedtools \
     samtools \
-    fastp
+    fastp \
+    librsvg2-bin
 
   if ! dpkg -s msodbcsql18 >/dev/null 2>&1; then
     info "Installing Microsoft ODBC Driver 18..."
