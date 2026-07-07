@@ -55,40 +55,43 @@ BEGIN
 END
 GO
 
-CREATE OR ALTER FUNCTION wf.wf_repo_upsert_hyperparameter_set
-(
+/*
+  Upsert helper is a PROCEDURE (not a scalar FUNCTION): SQL Server forbids
+  INSERT/UPDATE against base tables inside user-defined functions (Msg 443).
+  The set id is returned via the @set_id OUTPUT parameter.
+*/
+CREATE OR ALTER PROCEDURE wf.wf_repo_upsert_hyperparameter_set
     @set_key NVARCHAR(64),
     @display_name NVARCHAR(256) = NULL,
-    @config_json json = NULL
-)
-RETURNS BIGINT
+    @config_json json = NULL,
+    @set_id BIGINT OUTPUT
 AS
 BEGIN
-    DECLARE @id BIGINT;
+    SET NOCOUNT ON;
+
     DECLARE @cfg json = COALESCE(@config_json, N'{}');
+    SET @set_id = NULL;
 
     IF @set_key IS NULL OR LTRIM(RTRIM(@set_key)) = N''
-        RETURN NULL;
+        RETURN;
 
-    SELECT @id = hs.id
+    SELECT @set_id = hs.id
     FROM wf.hyperparameter_set AS hs WITH (UPDLOCK, HOLDLOCK)
     WHERE hs.set_key = @set_key;
 
-    IF @id IS NULL
+    IF @set_id IS NULL
     BEGIN
         INSERT INTO wf.hyperparameter_set (set_key, display_name, config_json)
         VALUES (@set_key, NULLIF(LTRIM(RTRIM(@display_name)), N''), @cfg);
-        SET @id = SCOPE_IDENTITY();
+        SET @set_id = SCOPE_IDENTITY();
     END
     ELSE
     BEGIN
         UPDATE wf.hyperparameter_set
         SET display_name = COALESCE(NULLIF(LTRIM(RTRIM(@display_name)), N''), display_name),
             config_json = @cfg
-        WHERE id = @id;
+        WHERE id = @set_id;
     END
-
-    RETURN @id;
 END;
 GO
 
@@ -108,7 +111,11 @@ BEGIN
     IF @set_key IS NULL OR LTRIM(RTRIM(@set_key)) = N''
         RETURN;
 
-    SET @set_id = wf.wf_repo_upsert_hyperparameter_set(@set_key, @display_name, @cfg);
+    EXEC wf.wf_repo_upsert_hyperparameter_set
+        @set_key = @set_key,
+        @display_name = @display_name,
+        @config_json = @cfg,
+        @set_id = @set_id OUTPUT;
 
     UPDATE wf.workflow_instance
     SET hyperparameter_set_id = @set_id
@@ -147,7 +154,17 @@ BEGIN
        OR @content_key IS NULL OR LTRIM(RTRIM(@content_key)) = N''
         RETURN;
 
-    SET @set_id = wf.wf_repo_upsert_hyperparameter_set(@set_key, NULL, N'{}');
+    /* Resolve the set id; only create (never clobber config_json) when missing. */
+    SELECT @set_id = hs.id
+    FROM wf.hyperparameter_set AS hs
+    WHERE hs.set_key = @set_key;
+
+    IF @set_id IS NULL
+        EXEC wf.wf_repo_upsert_hyperparameter_set
+            @set_key = @set_key,
+            @display_name = NULL,
+            @config_json = N'{}',
+            @set_id = @set_id OUTPUT;
 
     IF EXISTS (
         SELECT 1

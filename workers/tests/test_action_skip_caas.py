@@ -112,11 +112,34 @@ def test_symlink_paths_affect_input_signature(tmp_path: Path) -> None:
         outputDir: str
         centroid_h5_path: str
 
-    model = FakeInput(outputDir=str(out_dir), centroid_h5_path=str(h5_link))
-    payload = {"outputDir": str(out_dir), "centroid_h5_path": str(h5_link)}
-    sig = compute_input_signature(entry, payload, model)
-    assert sig
-    assert str(h5_link.resolve()) in json.dumps(
-        {"input": model.model_dump(mode="json")},
-        default=str,
-    ) or sig  # signature encodes resolved paths via _normalize_path_strings
+    # Signature computed from the symlink path.
+    model_link = FakeInput(outputDir=str(out_dir), centroid_h5_path=str(h5_link))
+    sig_link = compute_input_signature(
+        entry,
+        {"outputDir": str(out_dir), "centroid_h5_path": str(h5_link)},
+        model_link,
+    )
+
+    # Signature computed from the resolved (real) target path.
+    model_real = FakeInput(outputDir=str(out_dir), centroid_h5_path=str(h5_store))
+    sig_real = compute_input_signature(
+        entry,
+        {"outputDir": str(out_dir), "centroid_h5_path": str(h5_store)},
+        model_real,
+    )
+
+    # Signature computed from a *different* real file (negative control).
+    other = out_dir / "1-CG-other.h5"
+    other.write_bytes(b"data")
+    model_other = FakeInput(outputDir=str(out_dir), centroid_h5_path=str(other))
+    sig_other = compute_input_signature(
+        entry,
+        {"outputDir": str(out_dir), "centroid_h5_path": str(other)},
+        model_other,
+    )
+
+    # _normalize_path_strings resolves symlinks, so the symlink and its target
+    # produce identical signatures (cumulative signatures survive relinking)...
+    assert sig_link == sig_real
+    # ...while the path genuinely contributes to the signature (not dropped).
+    assert sig_link != sig_other
