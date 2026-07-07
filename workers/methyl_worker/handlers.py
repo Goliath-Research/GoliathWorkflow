@@ -1320,7 +1320,12 @@ def _attach_domain_sample_ref(
 
 
 def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) -> ActionExecutionResult:
-    """Run one ACTION and return typed output + branch result_code for sp_worker_submit_result."""
+    """Run one ACTION and return typed output + branch result_code for sp_worker_submit_result.
+
+    When ``METHYL_CAAS_ENABLED`` (or task ``caasEnabled``) is set, idempotent actions
+    commit product artifacts to ``{project_root}/.caas/`` and reuse entries keyed by
+    ``content_key`` via ``maybe_skip_action`` / ``record_action_execution``.
+    """
     from .capabilities import assert_execute_gpu_prereqs
 
     assert_execute_gpu_prereqs(capability, action_name)

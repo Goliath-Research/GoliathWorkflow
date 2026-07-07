@@ -24,6 +24,7 @@ Plans in this folder are the **source of truth** for large features. Each plan m
 | [`read-level-info-measures.plan.md`](read-level-info-measures.plan.md) | **Epic** | Read-level information-theoretic measures | `contract-loader`, `extractor-flags`, `package-core`, `outputs`, `action-registration`, `covariate-list`, `config-program-wiring`, `regen-seed`, `tests`, `plan-promotion` |
 | [`ci-regression-testing.plan.md`](ci-regression-testing.plan.md) | **Epic** | CI regression testing and coverage | `pytest-config`, `ci-script`, `test-gap-analysis`, `author-missing-tests`, `azure-pipeline`, `ci-readme`, `regulatory-doc`, `regulatory-wiring`, `verify` |
 | [`regression-protection-test-coverage.plan.md`](regression-protection-test-coverage.plan.md) | **Epic** | Regression-protection test coverage | `p1-resolver-merge`, `p1-workflow-merge`, `p2-task-schema-drift-pytest`, `p3-cli-resolved-config`, `p4-action-result`, `p5-resolver-model-handshake`, `p6-ratchet-scope` |
+| [`hyperparameter-result-versioning.plan.md`](hyperparameter-result-versioning.plan.md) | **Epic** | Hyperparameter result versioning (CAAS) | `record-schema`, `content-store`, `content-key`, `skip-reuse`, `execute-orchestrate`, `hpset-id`, `tests`, `docs` |
 
 Create each **Task** under its Epic in Azure DevOps Boards. Copy the task title from the plan `todos[].content` field. Mark tasks **Closed** when the corresponding code is merged.
 

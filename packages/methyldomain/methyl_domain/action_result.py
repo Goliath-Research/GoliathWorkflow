@@ -47,7 +47,7 @@ class ActionExecutionRecord(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["1.1"] = "1.1"
+    schema_version: Literal["1.1", "1.2"] = "1.2"
     action_name: str
     capability: str
     started_at_utc: datetime
@@ -60,6 +60,8 @@ class ActionExecutionRecord(BaseModel):
     action_revision: str
     input_signature: str
     output_signature: str
+    content_key: Optional[str] = None
+    hyperparam_set_id: Optional[str] = None
     skipped: bool = False
     skip_reason: Optional[str] = None
     task_output: dict = Field(default_factory=dict)
@@ -81,6 +83,38 @@ def manifest_path_for(
     safe_action = action_name.replace(".", "_")
     safe_key = run_key.replace("/", "_").replace(" ", "_")
     return action_results_dir(output_dir) / f"{safe_action}.{safe_key}.json"
+
+
+def caas_root(project_root: Path | str) -> Path:
+    """Content-addressed action store root under a project output tree."""
+    return Path(project_root) / ".caas"
+
+
+def caas_action_safe_name(action_name: str) -> str:
+    return action_name.replace(".", "_")
+
+
+def caas_entry_dir(
+    project_root: Path | str,
+    action_name: str,
+    content_key: str,
+) -> Path:
+    """Directory holding one immutable CAAS entry for an action result."""
+    return caas_root(project_root) / caas_action_safe_name(action_name) / content_key
+
+
+def caas_entry_manifest_path(
+    project_root: Path | str,
+    action_name: str,
+    content_key: str,
+) -> Path:
+    return caas_entry_dir(project_root, action_name, content_key) / "manifest.json"
+
+
+def instance_ledger_path(project_root: Path | str, hyperparam_set_id: str) -> Path:
+    """Per-hyperparameter-set ledger mapping action+run_key to content_key."""
+    safe_id = hyperparam_set_id.replace("/", "_").replace(" ", "_")
+    return caas_root(project_root) / "instances" / f"{safe_id}.json"
 
 
 def atomic_write_json(path: Path, payload: dict) -> None:

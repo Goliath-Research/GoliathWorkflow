@@ -111,6 +111,15 @@ objects:
     - name: wf.wf_repo_get_instance_extension
       kind: function
       required: true
+    - name: wf.wf_apply_hyperparameter_set
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_upsert_hyperparameter_action_entry
+      kind: procedure
+      required: true
+    - name: wf.wf_repo_get_action_submit_context
+      kind: procedure
+      required: true
     - name: wf.wf_repo_set_scope_variable
       kind: procedure
       required: true

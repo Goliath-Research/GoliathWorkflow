@@ -110,6 +110,31 @@ class GatewayDb(Protocol):
         persist_extension: bool = True,
     ) -> None: ...
 
+    def apply_hyperparameter_set(
+        self,
+        workflow_instance_id: int,
+        *,
+        set_key: str,
+        display_name: Optional[str] = None,
+        config_json: Optional[dict[str, Any]] = None,
+        persist_extension: bool = True,
+    ) -> None: ...
+
+    def get_action_submit_context(
+        self,
+        node_execution_id: int,
+    ) -> Optional[dict[str, Any]]: ...
+
+    def upsert_hyperparameter_action_entry(
+        self,
+        *,
+        set_key: str,
+        workflow_instance_id: int,
+        action_name: str,
+        run_key: str,
+        content_key: str,
+    ) -> None: ...
+
     def list_workflow_actions(self) -> list[dict[str, Any]]: ...
 
     def get_action_schema(self, action_name: str, direction: str) -> dict[str, Any]: ...

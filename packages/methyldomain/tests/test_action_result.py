@@ -45,6 +45,22 @@ def test_manifest_path_default_run_key(tmp_path: Path):
     assert path.name == "sample_methyl_qc.default.json"
 
 
+def test_caas_path_helpers(tmp_path: Path):
+    from methyl_domain.action_result import (
+        caas_entry_dir,
+        caas_entry_manifest_path,
+        caas_root,
+        instance_ledger_path,
+    )
+
+    project_root = tmp_path / "Study"
+    assert caas_root(project_root) == project_root / ".caas"
+    entry = caas_entry_dir(project_root, "pipeline.centroid", "abc123")
+    assert entry == project_root / ".caas" / "pipeline_centroid" / "abc123"
+    assert caas_entry_manifest_path(project_root, "pipeline.centroid", "abc123") == entry / "manifest.json"
+    assert instance_ledger_path(project_root, "hpset-1") == project_root / ".caas" / "instances" / "hpset-1.json"
+
+
 # --------------------------------------------------------------------------- #
 # Atomic writes
 # --------------------------------------------------------------------------- #

@@ -10,7 +10,7 @@ from typing import Any, Generator, Optional
 
 import pyodbc
 
-from .base import GatewayDbBase, WorkerAuthError, row_to_dict
+from .base import GatewayDbBase, WorkerAuthError, parse_json_value, row_to_dict
 
 # Required for pyodbc anonymous batches that read OUTPUT params via a trailing SELECT.
 _MSSQL_OUTPUT_BATCH_PREFIX = "SET NOCOUNT ON;\n"
@@ -317,6 +317,59 @@ SELECT @deleted_instance_count AS deleted_instance_count,
             f"EXEC {self._qual('wf_apply_validation_plan')} "
             f"@workflow_instance_id=?, @context_json={_json_var('context')}, @persist_extension=?",
             (_json_text(context_json), workflow_instance_id, 1 if persist_extension else 0),
+        )
+
+    def apply_hyperparameter_set(
+        self,
+        workflow_instance_id: int,
+        *,
+        set_key: str,
+        display_name: Optional[str] = None,
+        config_json: Optional[dict[str, Any]] = None,
+        persist_extension: bool = True,
+    ) -> None:
+        self._exec_proc(
+            f"{_declare_json('config')}"
+            f"EXEC {self._qual('wf_apply_hyperparameter_set')} "
+            f"@workflow_instance_id=?, @set_key=?, @display_name=?, "
+            f"@config_json={_json_var('config')}, @persist_extension=?",
+            (
+                _json_text(config_json or {}),
+                workflow_instance_id,
+                set_key,
+                display_name,
+                1 if persist_extension else 0,
+            ),
+        )
+
+    def get_action_submit_context(self, node_execution_id: int) -> Optional[dict[str, Any]]:
+        rows = self._fetch_all(
+            f"EXEC {self._qual('wf_repo_get_action_submit_context')} @node_execution_id=?",
+            (node_execution_id,),
+        )
+        if not rows:
+            return None
+        row = rows[0]
+        return {
+            "workflow_instance_id": row["workflow_instance_id"],
+            "hyperparam_set_key": row.get("hyperparam_set_key"),
+            "action_name": row.get("action_name"),
+            "input_json": parse_json_value(row.get("input_json")) or {},
+        }
+
+    def upsert_hyperparameter_action_entry(
+        self,
+        *,
+        set_key: str,
+        workflow_instance_id: int,
+        action_name: str,
+        run_key: str,
+        content_key: str,
+    ) -> None:
+        self._exec_proc(
+            f"EXEC {self._qual('wf_repo_upsert_hyperparameter_action_entry')} "
+            f"@set_key=?, @workflow_instance_id=?, @action_name=?, @run_key=?, @content_key=?",
+            (set_key, workflow_instance_id, action_name, run_key, content_key),
         )
 
     def list_workflow_actions(self) -> list[dict[str, Any]]:

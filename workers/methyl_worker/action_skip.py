@@ -20,6 +20,15 @@ from methyl_domain.action_result import (
     read_action_result,
     utc_now,
 )
+from methyl_domain.content_store import (
+    append_instance_ledger,
+    caas_enabled,
+    commit_artifacts_to_store,
+    link_entry_into_place,
+    read_caas_entry,
+    resolve_project_root,
+    verify_entry_artifacts,
+)
 from pydantic import BaseModel
 
 from .action_catalog import ActionCatalogEntry, idempotency_enabled_for
@@ -250,14 +259,24 @@ def resolve_action_output_dir(entry: ActionCatalogEntry, input_json: Mapping[str
 
 def _path_like_output_values(output_dict: Mapping[str, Any]) -> List[Path]:
     paths: List[Path] = []
+
+    def _walk(value: Any) -> None:
+        if isinstance(value, str):
+            if value.startswith("/") or value.endswith(_PATH_SUFFIXES):
+                p = Path(value)
+                if p.is_file():
+                    paths.append(p)
+            return
+        if isinstance(value, Mapping):
+            for item in value.values():
+                _walk(item)
+            return
+        if isinstance(value, list):
+            for item in value:
+                _walk(item)
+
     for val in output_dict.values():
-        if not isinstance(val, str):
-            continue
-        if not (val.startswith("/") or val.endswith(_PATH_SUFFIXES)):
-            continue
-        p = Path(val)
-        if p.is_file():
-            paths.append(p)
+        _walk(val)
     return paths
 
 
@@ -342,6 +361,86 @@ def _read_manifest(manifest_path: Path) -> Optional[ActionExecutionRecord]:
         return None
 
 
+def compute_content_key(action_revision: str, input_signature: str) -> str:
+    """Content-addressed key for one action result (cumulative via input_signature)."""
+    return _sha256_text(f"{action_revision}|{input_signature}")
+
+
+def _hyperparam_set_id(input_json: Mapping[str, Any]) -> Optional[str]:
+    value = input_json.get("hyperparamSetId")
+    return str(value) if value else None
+
+
+def _maybe_replay_from_caas(
+    entry: ActionCatalogEntry,
+    input_json: Mapping[str, Any],
+    *,
+    content_key: str,
+    output_dir: Path,
+    manifest_path: Path,
+    input_model: BaseModel,
+) -> Optional[ActionExecutionResult]:
+    project_root = resolve_project_root(input_json)
+    if project_root is None:
+        return None
+
+    record = read_caas_entry(project_root, entry.action_name, content_key)
+    if record is None or record.result_code != 0:
+        return None
+
+    current_revision = compute_action_revision(entry)
+    current_input_sig = compute_input_signature(entry, dict(input_json), input_model)
+    if record.action_revision != current_revision:
+        return None
+    if record.input_signature != current_input_sig:
+        return None
+    if not verify_entry_artifacts(record):
+        return None
+    if record.output_signature != compute_output_signature(record.artifacts):
+        return None
+
+    product_artifacts = [
+        a for a in record.artifacts if not _is_action_result_envelope(Path(a.path))
+    ]
+    if not product_artifacts and _requires_output_artifacts(entry):
+        return None
+
+    linked = link_entry_into_place(
+        project_root,
+        entry.action_name,
+        content_key,
+        output_dir=output_dir,
+    )
+    if linked is None:
+        return None
+
+    try:
+        action_results_dir(output_dir).mkdir(parents=True, exist_ok=True)
+        atomic_write_action_result(manifest_path, linked)
+    except Exception:
+        logger.debug("local manifest mirror failed for %s", entry.action_name, exc_info=True)
+
+    hyperparam_set_id = _hyperparam_set_id(input_json)
+    if hyperparam_set_id:
+        from .collectors import _run_key
+
+        append_instance_ledger(
+            project_root,
+            hyperparam_set_id,
+            action_name=entry.action_name,
+            run_key=_run_key(input_json),
+            content_key=content_key,
+        )
+
+    logger.info(
+        "Skipping %s (CAAS content_key %s, manifest %s)",
+        entry.action_name,
+        content_key[:12],
+        manifest_path,
+    )
+    return _replay_result(entry, linked, manifest_path=manifest_path)
+
+
 def _replay_result(
     entry: ActionCatalogEntry,
     record: ActionExecutionRecord,
@@ -378,9 +477,6 @@ def maybe_skip_action(
 
     run_key = _run_key(input_json)
     manifest_path = manifest_path_for(output_dir, entry.action_name, run_key)
-    record = _read_manifest(manifest_path)
-    if record is None or record.result_code != 0:
-        return None
 
     task_input = strip_runtime_input(dict(input_json))
     try:
@@ -390,6 +486,23 @@ def maybe_skip_action(
 
     current_revision = compute_action_revision(entry)
     current_input_sig = compute_input_signature(entry, dict(input_json), input_model)
+    content_key = compute_content_key(current_revision, current_input_sig)
+
+    if caas_enabled(input_json):
+        caas_skip = _maybe_replay_from_caas(
+            entry,
+            input_json,
+            content_key=content_key,
+            output_dir=output_dir,
+            manifest_path=manifest_path,
+            input_model=input_model,
+        )
+        if caas_skip is not None:
+            return caas_skip
+
+    record = _read_manifest(manifest_path)
+    if record is None or record.result_code != 0:
+        return None
 
     if record.action_revision != current_revision:
         return None
@@ -423,6 +536,18 @@ def maybe_skip_action(
                 return None
         except Exception:
             logger.debug("legacy MC run scan failed for %s", output_dir, exc_info=True)
+
+    hyperparam_set_id = _hyperparam_set_id(input_json)
+    if hyperparam_set_id and caas_enabled(input_json):
+        project_root = resolve_project_root(input_json)
+        if project_root is not None:
+            append_instance_ledger(
+                project_root,
+                hyperparam_set_id,
+                action_name=entry.action_name,
+                run_key=run_key,
+                content_key=content_key,
+            )
 
     logger.info(
         "Skipping %s (signature match, manifest %s)",
@@ -479,6 +604,11 @@ def record_action_execution(
     if not artifacts and output_dict.get("artifacts"):
         artifacts = [ArtifactRef.model_validate(a) for a in output_dict["artifacts"]]
 
+    action_revision = compute_action_revision(entry)
+    input_signature = compute_input_signature(entry, dict(input_json), input_model)
+    content_key = compute_content_key(action_revision, input_signature)
+    hyperparam_set_id = _hyperparam_set_id(input_json)
+
     record = ActionExecutionRecord(
         action_name=entry.action_name,
         capability=entry.capability,
@@ -489,13 +619,53 @@ def record_action_execution(
         exit_code=int(output_dict.get("exit_code") or 0),
         manifest_path=str(manifest_path),
         artifacts=artifacts,
-        action_revision=compute_action_revision(entry),
-        input_signature=compute_input_signature(entry, dict(input_json), input_model),
+        action_revision=action_revision,
+        input_signature=input_signature,
         output_signature=compute_output_signature(artifacts),
+        content_key=content_key,
+        hyperparam_set_id=hyperparam_set_id,
         skipped=skipped,
         skip_reason=skip_reason,
         task_output=task_output,
     )
+
+    if (
+        caas_enabled(input_json)
+        and result.result_code == 0
+        and not skipped
+    ):
+        project_root = resolve_project_root(input_json)
+        if project_root is not None:
+            try:
+                record = commit_artifacts_to_store(
+                    project_root,
+                    entry.action_name,
+                    content_key,
+                    record,
+                    output_dir=output_dir,
+                )
+                record = record.model_copy(update={"manifest_path": str(manifest_path)})
+            except Exception:
+                logger.debug(
+                    "CAAS commit failed for %s",
+                    entry.action_name,
+                    exc_info=True,
+                )
+            if hyperparam_set_id:
+                try:
+                    append_instance_ledger(
+                        project_root,
+                        hyperparam_set_id,
+                        action_name=entry.action_name,
+                        run_key=run_key,
+                        content_key=content_key,
+                    )
+                except Exception:
+                    logger.debug(
+                        "CAAS ledger append failed for %s",
+                        entry.action_name,
+                        exc_info=True,
+                    )
 
     try:
         action_results_dir(output_dir).mkdir(parents=True, exist_ok=True)

@@ -9,6 +9,7 @@ This module supports planners, admin CLI, tests, and ``LocalWorkflowEngine``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -316,6 +317,25 @@ def build_resolved_config_scope_vars(context: Mapping[str, Any]) -> Dict[str, An
     return out
 
 
+def compute_hyperparam_set_id(context: Mapping[str, Any]) -> str:
+    """
+    Stable identifier for the merged hyperparameter set baked at instance start.
+
+    Hashes all ``resolvedConfig__*`` scope slices plus an optional operator label
+    (``hyperparamSetName`` / ``hyperparamSetLabel``).
+    """
+    slices: Dict[str, Any] = {}
+    for key, value in sorted(context.items()):
+        if key.startswith("resolvedConfig__"):
+            slices[key] = value
+    payload: Dict[str, Any] = {"slices": slices}
+    label = context.get("hyperparamSetName") or context.get("hyperparamSetLabel")
+    if label:
+        payload["name"] = label
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:32]
+
+
 def finalize_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     Enrich instance context and bake resolvedConfig scope vars for DB-backed runs.
@@ -325,6 +345,7 @@ def finalize_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
     """
     out = enrich_instance_context(context)
     out.update(build_resolved_config_scope_vars(out))
+    out["hyperparamSetId"] = compute_hyperparam_set_id(out)
     return out
 
 

@@ -60,6 +60,7 @@ SCRIPTS=(
   01_worker_api.sql
   02_repository_api.sql
   wf_apply_validation_plan.sql
+  wf_hyperparameter_set.sql
   04_admin.sql
   wf_action_schema.sql
   wf_repo_upsert_workflow_action.sql

@@ -259,6 +259,54 @@ class PostgresGatewayDb(GatewayDbBase):
             (workflow_instance_id, json.dumps(context_json), persist_extension),
         )
 
+    def apply_hyperparameter_set(
+        self,
+        workflow_instance_id: int,
+        *,
+        set_key: str,
+        display_name: Optional[str] = None,
+        config_json: Optional[dict[str, Any]] = None,
+        persist_extension: bool = True,
+    ) -> None:
+        self._exec_proc(
+            f"CALL {self._qual('wf_apply_hyperparameter_set')}(%s, %s, %s, %s, %s)",
+            (
+                workflow_instance_id,
+                set_key,
+                display_name,
+                json.dumps(config_json or {}),
+                persist_extension,
+            ),
+        )
+
+    def get_action_submit_context(self, node_execution_id: int) -> Optional[dict[str, Any]]:
+        row = self._fetch_one(
+            f"SELECT * FROM {self._qual('wf_repo_get_action_submit_context')}(%s)",
+            (node_execution_id,),
+        )
+        if not row:
+            return None
+        return {
+            "workflow_instance_id": row["workflow_instance_id"],
+            "hyperparam_set_key": row.get("hyperparam_set_key"),
+            "action_name": row.get("action_name"),
+            "input_json": parse_json_value(row.get("input_json")) or {},
+        }
+
+    def upsert_hyperparameter_action_entry(
+        self,
+        *,
+        set_key: str,
+        workflow_instance_id: int,
+        action_name: str,
+        run_key: str,
+        content_key: str,
+    ) -> None:
+        self._exec_proc(
+            f"CALL {self._qual('wf_repo_upsert_hyperparameter_action_entry')}(%s, %s, %s, %s, %s)",
+            (set_key, workflow_instance_id, action_name, run_key, content_key),
+        )
+
     def list_workflow_actions(self) -> list[dict[str, Any]]:
         rows = self._fetch_all(f"SELECT * FROM {self._qual('wf_repo_list_actions')}()")
         return [self._format_action_row(row) for row in rows]

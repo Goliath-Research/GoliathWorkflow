@@ -13,6 +13,7 @@ if str(_DOMAIN) not in sys.path:
 
 from workflow_context import (  # noqa: E402
     build_resolved_config_scope_vars,
+    compute_hyperparam_set_id,
     enrich_instance_context,
     list_unresolved_placeholders,
     resolved_config_scope_var_name,
@@ -118,3 +119,27 @@ def test_build_resolved_config_scope_vars_covers_all_catalog_keys():
     for entry in ACTION_CATALOG:
         if entry.action_config_key:
             assert resolved_config_scope_var_name(entry.action_config_key) in scope
+
+
+def test_compute_hyperparam_set_id_stable_and_label_sensitive():
+    base = {
+        "resolvedConfig__detection": {"alpha": 0.05},
+        "resolvedConfig__validation": {"n_iterations": 10},
+    }
+    id_a = compute_hyperparam_set_id(base)
+    id_b = compute_hyperparam_set_id(base)
+    assert id_a == id_b
+    labeled = {**base, "hyperparamSetName": "tier-a-baseline"}
+    assert compute_hyperparam_set_id(labeled) != id_a
+
+
+def test_finalize_instance_context_bakes_hyperparam_set_id():
+    ctx = {
+        "projectPath": "/work/projects/x/configs/project.json",
+        "actionConfig": {"detection": {"alpha": 0.05}},
+        "siteConfig": {},
+        "regulatory": {},
+    }
+    ctx.update(build_resolved_config_scope_vars(ctx))
+    ctx["hyperparamSetId"] = compute_hyperparam_set_id(ctx)
+    assert len(ctx["hyperparamSetId"]) == 32

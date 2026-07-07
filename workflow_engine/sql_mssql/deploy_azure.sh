@@ -88,6 +88,7 @@ SCRIPTS=(
   wf_action_dispatch_metadata.sql
   wf_repo_create_workflow_graph.sql
   wf_apply_validation_plan.sql
+  wf_hyperparameter_set.sql
   wf_sql_collection_bindings.sql
   portal_resource_profile.sql
   portal_workflow_api.sql

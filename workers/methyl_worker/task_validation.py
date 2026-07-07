@@ -23,6 +23,8 @@ RUNTIME_INPUT_KEYS = frozenset({
     "pipelineProfile",
     "profilePath",
     "stepOverride",
+    "hyperparamSetId",
+    "caasEnabled",
 })
 
 

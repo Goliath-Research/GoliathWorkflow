@@ -106,6 +106,16 @@ class RestGateway:
                 int(body["result_code"]),
                 body.get("output_json"),
             )
+            try:
+                from rest.hyperparameter_set import sync_hyperparameter_action_entry_after_submit
+
+                sync_hyperparameter_action_entry_after_submit(
+                    self.db,
+                    int(m.group(1)),
+                    int(body["result_code"]),
+                )
+            except Exception:
+                pass
             return 200, payload
 
         m = re.fullmatch(r"/v1/workers/tasks/(\d+)/heartbeat", path)

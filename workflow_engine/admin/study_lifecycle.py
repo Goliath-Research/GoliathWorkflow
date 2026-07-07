@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
 from admin._paths import REPO_ROOT, ensure_import_paths
+
+logger = logging.getLogger(__name__)
 
 
 def _apply_project_path_scope_default(spec: Dict[str, Any], project_path: str) -> None:
@@ -103,6 +106,18 @@ def start_study_validation(
         create_workflow_definition=create_workflow_definition,
     )
     instance_id = create_workflow_instance(db, version_id, context)
+    from rest.hyperparameter_set import extract_hyperparameter_set_payload
+
+    hpset = extract_hyperparameter_set_payload(context)
+    if hpset is not None:
+        try:
+            db.apply_hyperparameter_set(instance_id, **hpset)
+        except Exception:
+            logger.warning(
+                "Failed to register hyperparameter set for instance %s",
+                instance_id,
+                exc_info=True,
+            )
     start_workflow_instance(db, instance_id)
     return {
         "instance_id": instance_id,

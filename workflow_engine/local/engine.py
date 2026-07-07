@@ -21,7 +21,7 @@ if str(_CONTRACT) not in sys.path:
 
 from compiler import compile_domain_program, compile_domain_program_file  # noqa: E402
 from workflow_definition_spec import WorkflowDefinitionSpec  # noqa: E402
-from workflow_context import enrich_instance_context  # noqa: E402
+from workflow_context import finalize_instance_context  # noqa: E402
 
 from .scheduler import ExecutionTrace, SchedulerConfig, WorkflowScheduler
 from .scope import ScopeFrame, resolve_collection_bindings
@@ -82,7 +82,7 @@ class LocalWorkflowEngine:
         context = dict(context_json)
         if enrich_context:
             try:
-                context = enrich_instance_context(context)
+                context = finalize_instance_context(context)
             except (FileNotFoundError, ValueError) as exc:
                 logger.warning("context enrichment skipped: %s", exc)
 

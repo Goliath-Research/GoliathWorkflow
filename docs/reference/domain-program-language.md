@@ -165,7 +165,22 @@ By default, `execute_task()` **skips** an action when a prior successful manifes
 | `input_signature` | manifest + `action_run_log.jsonl` | Hash of validated input + materialized `resolvedConfig` |
 | `output_signature` | manifest + log | Hash of output artifact metadata (size/mtime; not full HDF5 contents) |
 
-**Skip authority:** `{outputDir}/.action_results/{action_name}.{run_key}.json` (`ActionExecutionRecord`, schema 1.1).
+**Skip authority:** `{outputDir}/.action_results/{action_name}.{run_key}.json` (`ActionExecutionRecord`, schema 1.1 or 1.2).
+
+### Content-addressed action store (CAAS)
+
+When `METHYL_CAAS_ENABLED=1` (or per-task `caasEnabled: true`), successful idempotent actions also commit product artifacts to `{project_root}/.caas/{action_safe}/{content_key}/` and replace canonical paths with symlinks into that store. A second workflow instance (hyperparameter set) with the same cumulative `content_key` reuses the entry without recomputing.
+
+| Field | Location | Purpose |
+|-------|----------|---------|
+| `content_key` | `.caas/.../manifest.json` | `sha256(action_revision + "|" + input_signature)` — version identity |
+| `hyperparam_set_id` | manifest + `.caas/instances/{id}.json` | Links instance hyperparameter set to content keys |
+
+`hyperparamSetId` is baked at instance configuration (`finalize_instance_context`) from all `resolvedConfig__*` slices (optional label via `hyperparamSetName`). Every ACTION template receives `"hyperparamSetId": "${var.hyperparamSetId}"`.
+
+**Instance ledger:** `{project_root}/.caas/instances/{hyperparamSetId}.json` maps `{action}:{run_key}` → `content_key` for later comparison (e.g. Balanced Accuracy per hyperparameter set).
+
+**Database mirror:** `wf.hyperparameter_set`, `wf.workflow_instance.hyperparameter_set_id`, and `wf.hyperparameter_set_action_entry` (see `workflow_engine/sql_pg/wf_hyperparameter_set.sql`). Instance creation calls `wf_apply_hyperparameter_set`; successful task submits upsert action entries when CAAS is enabled.
 
 **Audit:** every executed action appends a line to `{logRoot}/action_run_log.jsonl` (including `skipped: true` when signature skip applies).
 
