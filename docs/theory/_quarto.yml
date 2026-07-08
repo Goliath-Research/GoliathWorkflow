@@ -54,6 +54,8 @@ format:
         \usepackage{amsmath,amssymb,mathtools}
         \usepackage{microtype}
         \usepackage{graphicx}
+        \usepackage{tikz}
+        \usetikzlibrary{positioning,arrows.meta}
     geometry:
       - margin=1in
 
