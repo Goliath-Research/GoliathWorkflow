@@ -1,18 +1,31 @@
 # MethylPipeline vs MethylIT_py 0.4.0 — Approach and Theory Comparison
 
 > Informal design/research note. **Not** canonical user or operator documentation.
-> It compares the theoretical foundations and workflows of two products that both
-> model healthy-vs-prostate-cancer methylomes and detect DMPs as the basis for
-> classification.
+> Compares theoretical foundations and DMP → classification workflows of two products that
+> both separate control vs disease methylomes (worked examples are often healthy vs prostate
+> cancer; MethylPipeline itself is **disease-agnostic**).
+
+**How to read this note.** Part I (detection / prediction theory) is the durable core.
+Part II (interpretation, deployment, CI) drifts as MethylPipeline’s orchestration evolves —
+prefer [`docs/architecture/orchestration-paths.md`](../architecture/orchestration-paths.md)
+and Usage ch.04 for *how to run* today. Empirical cells in
+[Empirical tests needed](#empirical-tests-needed) remain **unfilled hypotheses**.
+
+**Related research notes:** [`methylpipeline_informme_integration.md`](methylpipeline_informme_integration.md)
+(distinct information-theoretic lineage), [`BuffyCoat_vs_cfDNA_for_Cancer_Detection.md`](BuffyCoat_vs_cfDNA_for_Cancer_Detection.md)
+(analyte choice; both products can ingest WGBS from either material).
 
 ## Scope and evidence boundary
 
 - **MethylPipeline** was read from its canonical theory book (`docs/theory/chapters/*.qmd`)
-  and per-package `docs/THEORY.md` files. In this repo the code is the source of truth and
-  the theory book is written from the implemented behavior.
+  and per-package theory/usage docs. In this repo the code is the source of truth and
+  the theory book is written from the implemented behavior. Canonical orchestration is
+  **`methyl-workflow-run` + DomainProgram + profile**; `methyl-validation --stability/--freeze/--model/--holdout-eval`
+  remains a **legacy / transitional** CLI that still matches the statistical workflows described
+  below (Workflows 1–3).
 - **MethylIT_py 0.4.0** ships as an installed wheel (`python -m methylit`). Its estimator
-  internals were **not** available on disk during this review. The description below is
-  reconstructed from the release bundle that *is* present: the stage configuration
+  internals were **not** available on disk during the first review pass. The description below is
+  reconstructed from the release bundle that *was* present: the stage configuration
   (`examples/config_test6.yaml`, `config_test5.yaml`, `config_smoke.yaml`,
   `config_example_score_only.yaml`), the sample sheets (`sample_sheet_*.csv/.tsv`), and the
   companion runner scripts (`scripts/g2dmp_m34.py`, `exp_wand.py`, `pred_h5.py`,
@@ -20,13 +33,13 @@
   flagged as such.
 - **MethylIT R package (source, added review pass).** The original R implementation that
   MethylIT_py migrates — `MethylIT` **0.3.2.8** (Sanchez, `github.com/genomaths/MethylIT`) —
-  was subsequently read from source at `C:\Work\MethylIT2\R\*.R`. This turns the previously
-  *reconstructed* estimator description into a *verified* one and corrects two claims that the
-  config-only reconstruction got wrong (the cutpoint default and the gene-level layer). The
-  section **"Cross-check against the original R source"** below records what the code confirms,
-  what it corrects, and the exact estimator formulas. The 0.4.0 Python config still governs how
-  a *particular deployment* wires these functions, so where the R defaults and the 0.4.0 config
-  differ, both are stated.
+  was subsequently read from an external checkout (`MethylIT2/R/*.R`; path may differ by machine).
+  This turns the previously *reconstructed* estimator description into a *verified* one and
+  corrects two claims that the config-only reconstruction got wrong (the cutpoint default and
+  the gene-level layer). The section **"Cross-check against the original R source"** below
+  records what the code confirms, what it corrects, and the exact estimator formulas. The 0.4.0
+  Python config still governs how a *particular deployment* wires these functions, so where the
+  R defaults and the 0.4.0 config differ, both are stated.
 
 ## Executive summary
 
@@ -64,10 +77,11 @@ locus where the control-cohort distribution differs from the disease-cohort dist
 | Effect-size gate | Total-variation cut (`tv_cut`) | Heuristic effect size `|dmu|*(1-overlap)*exp(...)` + effect-mass trim |
 | Where ML enters | Cutpoint step, but **optional**: Youden index by default, logistic/RF only if `simple = FALSE` (0.4.0 config opts in) | Downstream only (ECDF Naive-Bayes classifier) |
 | Reference | Manually flagged (`is_reference`), pooled, fixed | None; control-cohort centroid rebuilt per split |
-| Stability / freeze | Sidecar experiment scripts (`exp_wand.py`) | First-class Monte Carlo recurrence -> freeze -> train |
-| Held-out evaluation | True holdout in `exp_wand.py` | Workflow 3 (`--holdout-eval`) with bootstrap CIs |
-| DMP -> gene interpretation | R package has count-based DMGs (`getDMGs` -> GLM); 0.4.0 core ships only gene *masking* of detection, no weighted propagation | Full signed, weighted mapper -> enricher stack |
+| Stability / freeze | Sidecar experiment scripts (`exp_wand.py`) | First-class Monte Carlo recurrence → freeze → train (DomainProgram or legacy `methyl-validation`) |
+| Held-out evaluation | True holdout in `exp_wand.py` | Workflow 3 / hold-out DomainProgram path (legacy: `--holdout-eval`) with bootstrap CIs |
+| DMP → gene interpretation | R package has count-based DMGs (`getDMGs` → GLM); 0.4.0 core ships only gene *masking* of detection, no weighted propagation | Full signed, weighted mapper → enricher stack |
 | Evidence base | First-party (Sanchez & Mackenzie), no independent reproduction | Repo is source of truth; internals audited, with a per-PR regression + coverage CI gate and a designated real reference-sample test tier |
+| Analyte / sample prep | WGBS inputs; reference/roles in sample sheet | `primary_analyte` (`cfdna` / `buffy_coat` / `combined`) + SamplePrepPipeline QC |
 
 The table is a map, not a verdict; the sections below justify each row and flag which comparative
 claims are established versus which are hypotheses still to be tested (see
@@ -80,9 +94,10 @@ claims are established versus which are hypotheses still to be tested (see
 - Organized by chromosome and cytosine context (CG/CHG/CHH).
 - Both produce a reusable trained artifact and an apply-only scoring mode for unknowns —
   MethylIT `run mode: score_only` (reusing `centroid_manifest_path` + `model_dir`) mirrors
-  MethylPipeline `--predictor-only`.
+  MethylPipeline’s frozen-panel / predictor-only path (legacy CLI: `--predictor-only`).
 - Both are engineered for genome-scale WGBS: per-chromosome parallelism, HDF5 outputs, coverage
-  handling.
+  handling. Sequencing is typically on Illumina instruments; neither product is an EPIC BeadChip
+  pipeline.
 
 The disagreement is not *what* to model but *how* to define and detect the signal.
 
@@ -98,7 +113,10 @@ detection (gene interpretation and deployment).
 
 ## MethylPipeline: the empirical-distribution / two-cohort path
 
-Pipeline: `centroid -> detector -> classifier -> predictor`, wrapped by a validation/stability layer.
+Statistical pipeline: `centroid → detector → classifier → predictor`, wrapped by a
+validation/stability layer. **Orchestration** today is DomainProgram-first
+(`methyl-workflow-run` with profiles such as `mc_dmp` / `mc_gene_fc`); the same stages appear as
+legacy `methyl-validation --stability` / `--freeze` / `--model` / `--holdout-eval`.
 
 - **Centroid (`methylcentroid`).** A cohort is compressed into per-locus sufficient statistics
   (`N`, `Sx`, `Sx2`, count sums) **plus histogram counts** so an ECDF can be reconstructed later.
@@ -117,12 +135,13 @@ Pipeline: `centroid -> detector -> classifier -> predictor`, wrapped by a valida
   across DMP loci with explicit class priors and temperature-scaled softmax, plus optional
   Platt/isotonic calibration, learned chromosome-fusion and multiclass one-vs-rest heads, and
   class-imbalance weighting.
-- **Model creation as a stability problem (`methylvalidation`, "two workflows").** Repeated Monte
-  Carlo train/validation splits rerun `centroid -> detector`; a locus's **recurrence frequency**
+- **Model creation as a stability problem (`methylvalidation` / DomainProgram MC loops).** Repeated
+  Monte Carlo train/validation splits rerun `centroid → detector`; a locus's **recurrence frequency**
   `f_hat(d) = (1/R*) * sum_r 1[d in D_disc,r]` determines a **stable panel** (`f_hat >= tau`,
   `stability_dmp_freq`). The panel is frozen (`fixed_dmp_panel`) and the final classifier trained on
-  all data restricted to it. Prostate cancer additionally gets multiclass staging (PCa1-4), gene
-  mapping, pathway enrichment, and ordered disease-progression synthesis.
+  all data restricted to it. Study-specific programs may add multiclass staging (e.g. PCa1–4), gene
+  mapping, pathway enrichment, and ordered disease-progression synthesis — those layers are optional
+  topology, not required by the detector theory.
 
 Statistical spirit: frequentist two-sample testing at the cohort level plus resampling-based
 feature-selection stability.
@@ -144,10 +163,11 @@ classic MethylIT methodology:
 - **`pDMP`** (potential DMPs) — selects positions in the **tail** of the fitted distribution
   (`alpha: 0.05`) **and** with total variation above a cut (`tv_cut`). Signal-detection: a position
   is a candidate when its divergence is improbable under the fitted distribution.
-- **`cutpoint`** — a **supervised ML classifier** estimates the optimal boundary separating treatment
-  DMPs from control DMPs, using features `hdiv, TV, jdiv.stat, bay.TV, jdiv, wprob, pos` with
-  interactions, PCA (`n_pc: 4`), and two learners (`classifier1: logistic`, `classifier2:
-  random_forest`, `ntree: 300`). This is the ROC/optimal-cutpoint step.
+- **`cutpoint`** — optimal boundary separating treatment-like from control-like DMPs. In the R
+  package this is a **Youden index on one divergence by default** (`simple = TRUE`); the 0.4.0
+  Python config opts into the supervised ML route (`simple = FALSE`): features
+  `hdiv, TV, jdiv.stat, bay.TV, jdiv, wprob, pos` with interactions, PCA (`n_pc: 4`), and learners
+  `classifier1: logistic`, `classifier2: random_forest` (`ntree: 300`).
 - **`dmp`** — final DMP calls applying the cutpoint; **`09_prediction`** classifies samples.
 
 Statistical spirit: model the distribution of a divergence statistic, then apply detection theory
@@ -175,7 +195,7 @@ flowchart TD
     MI1["Per-sample divergence vs reference (Hellinger / J-div, Bayesian)"]
     MI2["Fit parametric background (GGamma3P / Weibull) to divergence"]
     MI3["Potential DMP = tail(alpha) AND TV cut"]
-    MI4["ML cutpoint (logistic + random forest, PCA) on divergence features"]
+    MI4["Cutpoint: Youden on one divergence by default; ML logistic/RF if simple=FALSE (0.4.0 config)"]
     MI5["Final DMPs -> per-sample prediction"]
     
     MI1 --> MI2 --> MI3 --> MI4 --> MI5
@@ -195,11 +215,12 @@ flowchart TD
    divergence). If the fit is good, tail probabilities are principled and powerful. MethylPipeline
    avoids the assumption: it reconstructs ECDFs and applies asymptotic KS/MWU with FDR — but its
    p-values are grid/histogram approximations and its effect-mass trimming is an explicit heuristic.
-3. **Where machine learning enters.** MethylIT bakes supervised learning into *detection itself* —
-   the DMP-defining cutpoint is learned (logistic / random forest on divergence features, with PCA
-   and interactions). MethylPipeline keeps detection statistical (tests + FDR + effect size) and puts
-   learning downstream in the classifier. So MethylIT's DMP definition is model-dependent while
-   MethylPipeline's is test-derived with a separate, later classifier.
+3. **Where machine learning enters.** In the **0.4.0 deployment config**, MethylIT wires supervised
+   learning into *detection itself* (logistic / random forest cutpoint on divergence features, with
+   PCA and interactions). The R default is simpler (Youden). MethylPipeline keeps detection
+   statistical (tests + FDR + effect size) and puts learning downstream in the classifier. So
+   MethylIT's DMP definition is cutpoint-dependent (Youden or ML), while MethylPipeline's is
+   test-derived with a separate, later classifier.
 4. **Bayesian methylation estimation vs frequentist moments.** MethylIT applies a Bayesian estimate
    of methylation levels before computing divergence (`idiv_prior`, `bayesian_p`), shrinking noisy
    low-coverage estimates. MethylPipeline uses empirical fractions and sufficient statistics with
@@ -327,7 +348,8 @@ per-locus ML cutpoint — are, under the conditions typical of human genome-wide
 to (a) an ECDF/effect-size screen and (b) a single-variable optimal threshold. Their complexity is
 defensible only in specific regimes — far-tail $\alpha$, per-individual noise calibration, or
 genuinely multivariate non-monotone signal — which should be **measured, not assumed**. MethylPipeline's
-new held-out bootstrap (Workflow 3) is the right instrument to settle it empirically: quantify (1) the
+MethylPipeline's held-out bootstrap (Workflow 3 / DomainProgram hold-out path; legacy
+`--holdout-eval`) is the right instrument to settle it empirically: quantify (1) the
 Jaccard overlap of pDMP sets selected by the parametric-$\alpha$ vs ECDF-$\alpha$ rule (the document
 predicts high overlap), and (2) the held-out balanced-accuracy/AUC gap between a single-variable
 Youden threshold and the full Random Forest (predicted within bootstrap noise). These are predictions
@@ -357,7 +379,7 @@ Beyond Sanchez & Mackenzie, the analysis above rests on:
 
 The two sections above were written before the estimator internals were readable; they reasoned
 from the 0.4.0 stage config alone. The original R implementation (`MethylIT` 0.3.2.8,
-`C:\Work\MethylIT2\R\*.R`) — the code that MethylIT_py migrates — has now been read directly.
+external checkout `MethylIT2/R/*.R`) — the code that MethylIT_py migrates — has now been read directly.
 It **confirms** the reconstructed pipeline and the exact statistics, and it **corrects two claims**
 that the config-only view got wrong. Both corrections happen to *strengthen* the analysis in
 sections A and B rather than weaken it.
@@ -613,10 +635,11 @@ asymmetric — MethylPipeline treats interpretation and deployment as first-clas
 
 ## Feature-selection stability and "production" model
 
-- **MethylPipeline** has a first-class, formalized answer: Monte Carlo recurrence -> stable panel ->
-  freeze -> train, with an explicit warning that the panel was selected using the full sample set
+- **MethylPipeline** has a first-class, formalized answer: Monte Carlo recurrence → stable panel →
+  freeze → train, with an explicit warning that the panel was selected using the full sample set
   (internal validation, not external). Multiclass staging, calibration, and biology (mapper /
-  enricher / progression) are part of the model story.
+  enricher / progression) are part of the model story when the DomainProgram includes them.
+  Operators run this via `methyl-workflow-run` (canonical) or legacy `methyl-validation` stage flags.
 - **MethylIT_py 0.4.0** addresses the same concern through **sidecar experiment scripts**, not a
   built-in workflow:
   - `exp_wand.py` runs a training-set sensitivity study — builds many train subsets at increasing
@@ -626,16 +649,16 @@ asymmetric — MethylPipeline treats interpretation and deployment as first-clas
   - `g2dmp_m34.py` restricts detection to gene coordinates and reruns modules 3-4, with rules to
     exclude under-covered samples and skip chromosomes; it emits SHA256 provenance receipts.
   These are careful investigative harnesses around the core detector, not a codified
-  stability -> freeze -> deploy pipeline.
+  stability → freeze → deploy pipeline.
 
 On train/test separation specifically: `exp_wand.py` evaluates on true holdouts, whereas
 MethylPipeline's Workflow 2 holdouts overlap the training centroid, so it is not a classical
-hold-out. MethylPipeline now also provides **Workflow 3 (`methyl-validation --holdout-eval`)**, a true
-held-out batch evaluation: designated batches (declared in `validation_partitions`) are excluded from
-production training at `--freeze` and scored once by the frozen model, and the QC-metric distributions
-(balanced accuracy, sensitivity, specificity, F1, ROC-AUC) are produced by bootstrap with confidence
-intervals — the same bootstrap-CI reporting philosophy MethylIT uses. See
-`docs/theory/chapters/12-two-workflows.qmd` (Workflow 3).
+hold-out. MethylPipeline also provides **Workflow 3** (true held-out batch evaluation): designated
+batches (declared in `validation_partitions`) are excluded from production training at freeze and
+scored once by the frozen model, with QC-metric distributions (balanced accuracy, sensitivity,
+specificity, F1, ROC-AUC) produced by bootstrap with confidence intervals — the same bootstrap-CI
+reporting philosophy MethylIT uses. Theory: `docs/theory/chapters/12-two-workflows.qmd`. Operator
+entry: DomainProgram hold-out path or legacy `methyl-validation --holdout-eval`.
 
 ## Reference selection (the decision that governs everything in MethylIT)
 
@@ -808,13 +831,13 @@ weight-propagated.
   interpretation is not part of the 0.4.0 core the way it is in MethylPipeline (mapper, enricher,
   disease progression).
 - **Configuration philosophy.** MethylPipeline is aggressively config-not-code: four layers
-  (site/profile/study/program), no tunable defaults in Python, schema-validated. MethylIT_py uses a
-  single self-contained YAML per run with all stage knobs inline.
+  (site / profile / study / DomainProgram), no tunable science defaults in Python, schema-validated
+  `actionConfig`. MethylIT_py uses a single self-contained YAML per run with all stage knobs inline.
 - **Compute.** Both parallelize per chromosome and use HDF5. MethylIT_py exposes explicit GPU parity
   checks in the divergence stage and a cuPyNumeric-friendly HDF5 export, reflecting a heavy
   vectorizable divergence computation. MethylPipeline emphasizes distributed workers and gateway/DB
-  orchestration.
-- **Verification and reproducibility posture.** MethylPipeline now runs the full monorepo test suite
+  orchestration (`methyl-gateway` / `methyl-worker`, runtime-bundle on `/work/epimethyl/current`).
+- **Verification and reproducibility posture.** MethylPipeline runs the full monorepo test suite
   as a per-pull-request **regression gate** with coverage measurement (`ci/azure-pipelines-pr.yml`,
   `scripts/run_tests_ci.sh`), and formalizes testing as a regulatory control
   (`docs/regulatory/continuous-integration-and-regression-testing.md`). Critically for a fair
@@ -833,8 +856,8 @@ Several of this document's strongest claims are *predictions* derived from theor
 literature, not measurements on a shared cohort. They read as "second-order," "within bootstrap
 noise," or "the gap will be small," and each is falsifiable. Turning the critique into a testable
 research agenda, the following experiments would convert inferred claims into evidence. All are
-runnable on the same prostate healthy-vs-PCa cohort using MethylPipeline's Workflow 3 held-out
-bootstrap as the evaluation harness.
+runnable on the same prostate healthy-vs-PCa cohort (or any matched control/disease WGBS cohort)
+using MethylPipeline's Workflow 3 held-out bootstrap as the evaluation harness.
 
 The harness now has a concrete data path: MethylPipeline's **real reference-sample registry**
 (`docs/reference/test-data-registry.md`) designates real extracted samples per analyte
@@ -948,8 +971,8 @@ The 0.4.0 `stages` config maps one-to-one onto the published MethylIT methodolog
 4. Sanchez R, Mackenzie SA. "On the thermodynamics of DNA methylation process." *Scientific Reports*
    (Nature portfolio) 2023;13:8914. doi:10.1038/s41598-023-35166-9. Formal thermodynamic derivation of
    the divergence distribution (generalized-gamma family), channel-capacity / Gibbs-entropy /
-   Helmholtz-free-energy interpretation. This is the peer-reviewed theoretical basis the user correctly
-   notes exists for MethylIT — distinct from the informME/Landan lines of work.
+   Helmholtz-free-energy interpretation. Peer-reviewed theoretical basis for MethylIT — distinct from
+   the informME/Landan lines of work.
 
 ## Key sources reviewed
 
@@ -960,9 +983,23 @@ The 0.4.0 `stages` config maps one-to-one onto the published MethylIT methodolog
   `config_smoke.yaml`, `config_example_score_only.yaml`; `examples/sample_sheet_*.{csv,tsv}`;
   `scripts/g2dmp_m34.py`, `exp_wand.py`, `pred_h5.py`, `prediction_tsv_to_cupy_h5.py`;
   `README_INSTALL.txt`.
-- MethylIT R source (`MethylIT` 0.3.2.8, `C:\Work\MethylIT2`): `R/estimateDivergence.R`,
+- MethylIT R source (`MethylIT` 0.3.2.8, external checkout e.g. `MethylIT2/`): `R/estimateDivergence.R`,
   `estimateBayesianDivergence.R`, `estimateHellingerDiv.R`, `estimateJDiv.R`, `beta_bin_meth.R`,
   `betaBinPosteriors.R`, `estimateBetaDist.R`, `nonlinearFitDist.R`, `gofReport.R`,
   `getPotentialDIMP.R`, `estimateCutPoint.R`, `simpleCutPoint.R`, `mlCutpoint.R`, `selectDIMP.R`,
   `poolFromGRlist.R`, `getDMGs.R`, `getDIMPatGenes.R`, `countTest2.R`, `dmpClusters.R`,
   `helmholtz_free_energy.R`; `DESCRIPTION`.
+
+## Suggested follow-ups (editorial / research)
+
+1. **Fill the empirical table** — until then, keep Part I’s “second-order / within noise” language
+   labeled as predictions (already done in [Empirical tests needed](#empirical-tests-needed)).
+2. **Optional short Part 0** — one page: “when to prefer which product” (individual abnormality vs
+   cohort DMP panel; reference-centric vs MC-stability-centric ops).
+3. **Analyte appendix** — one subsection linking buffy vs cfDNA to both detectors (shared WGBS inputs;
+   MethylPipeline fragmentomics only on `cfdna`); see
+   [`BuffyCoat_vs_cfDNA_for_Cancer_Detection.md`](BuffyCoat_vs_cfDNA_for_Cancer_Detection.md).
+4. **Do not expand** the enricher/PPI/CIS-BP detail further in this note — point to theory ch.07–08
+   instead if the comparison grows again.
+5. **Keep MethylIT R path portable** — prefer “external MethylIT 0.3.2.8 checkout” over a machine-
+   specific absolute path when citing source.
