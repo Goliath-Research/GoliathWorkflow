@@ -20,6 +20,8 @@ esac
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 cd "$TMP"
-curl -fsSL "https://github.com/quarto-dev/quarto-cli/releases/latest/download/${DEB}" -o quarto.deb
+# GitHub /releases/latest/download/ requires the exact versioned asset name (404 otherwise).
+# Quarto's redirect always resolves to the current release .deb for this arch.
+curl -fsSL "https://quarto.org/download/latest/${DEB}" -o quarto.deb
 sudo dpkg -i quarto.deb
 quarto --version
