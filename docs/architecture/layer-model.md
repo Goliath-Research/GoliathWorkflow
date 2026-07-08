@@ -9,7 +9,7 @@ Study configuration is split across layers so pipeline structure stays in versio
 | Pipeline profile | `*.profile.json` | Reusable `actionConfig` packs + scope booleans |
 | Workflow IR | `*.program.json` / `DomainProgram` | `for`, `if`, `parallel`, `do` — pipeline structure |
 | Deploy spec | `compiled_workflow.json` | Nodes, edges, templates, bindings for engine |
-| Instance | `context_json` | `projectPath`, `pipelineProfile`, `samples[]`, … |
+| Instance | `context_json` | `projectPath`, `pipelineProfile`, `samples[]`, …; optional `hyperparamSetId` (hash of merged `resolvedConfig__*` slices) labels one config combination for CAAS cross-instance reuse — see [Usage ch.17](../usage/17-content-addressed-action-store.qmd) |
 | Task input | `resolvedConfig` | Merged action parameters baked at instance configuration (`resolvedConfig__*` scope vars) |
 | Task input | `resolvedProject` | Optional materialized study paths/cohorts from `context.resolve_project` |
 | Execution | Action catalog + `methyl_worker.handlers` | CLI / in-process dispatch |

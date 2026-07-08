@@ -56,35 +56,23 @@ END;
 GO
 
 CREATE OR ALTER FUNCTION wf.wf_repo_list_actions()
-RETURNS TABLE (
-    action_name NVARCHAR(256),
-    capability NVARCHAR(128),
-    has_input_schema BIT,
-    has_output_schema BIT,
-    execution_mode NVARCHAR(32),
-    cli_tool NVARCHAR(256),
-    in_process_handler NVARCHAR(256),
-    argv_map json
-)
+RETURNS TABLE
 AS
-BEGIN
-    RETURN
+RETURN
+(
     SELECT
         a.action_name,
         a.capability,
-        CAST(CASE WHEN EXISTS (
-            SELECT 1 FROM wf.workflow_action_schema si
-            WHERE si.workflow_action_id = a.id AND si.direction = N'input'
-        ) THEN 1 ELSE 0 END AS BIT) AS has_input_schema,
-        CAST(CASE WHEN EXISTS (
-            SELECT 1 FROM wf.workflow_action_schema so
-            WHERE so.workflow_action_id = a.id AND so.direction = N'output'
-        ) THEN 1 ELSE 0 END AS has_output_schema,
+        CAST(CASE WHEN si.workflow_action_id IS NOT NULL THEN 1 ELSE 0 END AS bit) AS has_input_schema,
+        CAST(CASE WHEN so.workflow_action_id IS NOT NULL THEN 1 ELSE 0 END AS bit) AS has_output_schema,
         a.execution_mode,
         a.cli_tool,
         a.in_process_handler,
         a.argv_map
-    FROM wf.workflow_action a
-    ORDER BY a.action_name;
-END;
+    FROM wf.workflow_action AS a
+    LEFT JOIN wf.workflow_action_schema AS si
+        ON si.workflow_action_id = a.id AND si.direction = N'input'
+    LEFT JOIN wf.workflow_action_schema AS so
+        ON so.workflow_action_id = a.id AND so.direction = N'output'
+);
 GO

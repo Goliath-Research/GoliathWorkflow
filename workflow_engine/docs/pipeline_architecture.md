@@ -566,7 +566,7 @@ Deploy scripts:
 | Layer | Tables |
 |-------|--------|
 | **Definition** | `workflow_def`, `workflow_version`, `workflow_node`, `workflow_edge`, `workflow_action`, `workflow_input_template`, `workflow_input_binding`, `variable_output_binding`, `node_scope_default`, **`workflow_collection_binding`** |
-| **Runtime** | `workflow_instance`, `node_execution`, `task_lease`, `loop_state`, `execution_context`, `scope_variable`, `instance_cursor` |
+| **Runtime** | `workflow_instance`, `node_execution`, `task_lease`, `loop_state`, `execution_context`, `scope_variable`, `instance_cursor`, **`hyperparameter_set`**, **`hyperparameter_set_action_entry`** (`workflow_instance.hyperparameter_set_id` FK, nullable) |
 | **Workers / cluster** | `worker`, `worker_token`, `cluster` |
 
 ### Control-flow node types
@@ -603,6 +603,52 @@ erDiagram
   cluster ||--o{ worker : registers
   worker ||--o{ worker_token : auth
 ```
+
+### Hyperparameter sets and CAAS
+
+When operators experiment with the **same** workflow (site/study/profile/DomainProgram) under varied config, the Content-Addressed Action Store (CAAS) versions idempotent action results by cumulative input signature and reuses identical intermediate outputs across workflow instances. The database mirrors on-disk CAAS identity and ledger for portal queries and cross-instance comparison.
+
+**Process-agnostic design:** these objects are **additive** — they do not alter the core workflow-engine tables or procedures. Identity is a generic `set_key` hash of merged `resolvedConfig__*` slices; `config_json` is opaque JSON; the ledger keys on `action_name`, `run_key`, and `content_key`. There are no disease, study, or process-specific columns. The FK `workflow_instance.hyperparameter_set_id` is **nullable**; instances that do not opt into CAAS behave as before.
+
+| Object | Role |
+|--------|------|
+| `wf.hyperparameter_set` | Registry of unique config combinations (`set_key`, optional `display_name`, `config_json`) |
+| `wf.workflow_instance.hyperparameter_set_id` | Links each run to its hyperparameter set |
+| `wf.hyperparameter_set_action_entry` | Queryable ledger: `(set, action_name, run_key) → content_key` |
+
+**Procedures** (deployed from [`workflow_engine/sql_pg/wf_hyperparameter_set.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_pg/wf_hyperparameter_set.sql); parity in `sql_mssql/`):
+
+- `wf_apply_hyperparameter_set` — called at instance creation when `hyperparamSetId` is present in `context_json`
+- `wf_repo_upsert_hyperparameter_action_entry` — called after successful task submit when CAAS is enabled
+
+On-disk CAAS (`.caas/` under `{project_root}`) remains the execution store; the database mirrors identity and ledger only.
+
+```mermaid
+erDiagram
+  hyperparameter_set ||--o{ workflow_instance : "labels runs"
+  hyperparameter_set ||--o{ hyperparameter_set_action_entry : "ledger"
+  workflow_instance ||--o{ hyperparameter_set_action_entry : "records"
+  hyperparameter_set {
+    bigint id PK
+    text set_key "hash of resolvedConfig slices"
+    text display_name "optional"
+    jsonb config_json "opaque merged config"
+  }
+  workflow_instance {
+    bigint id PK
+    bigint hyperparameter_set_id FK "nullable"
+    jsonb context_json
+  }
+  hyperparameter_set_action_entry {
+    bigint hyperparameter_set_id FK
+    bigint workflow_instance_id FK
+    text action_name
+    text run_key
+    text content_key "sha256(action_revision|input_signature)"
+  }
+```
+
+**See also:** [Usage ch.17 — Content-Addressed Action Store](/home/ubuntu/MethylPipeline/docs/usage/17-content-addressed-action-store.qmd), [hyperparameter-result-versioning plan](/home/ubuntu/MethylPipeline/docs/plans/hyperparameter-result-versioning.plan.md).
 
 ### Scoped variables — declaration, assignment, and use
 

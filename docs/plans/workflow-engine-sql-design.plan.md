@@ -80,6 +80,18 @@ isProject: false
 - Track lease ownership (`worker_id`, `lease_expires_at`) to prevent duplicate execution when multiple workers poll concurrently.
 - Resolve and persist a final `input_json` snapshot at claim/start time so workers get deterministic immutable input.
 
+### Hyperparameter sets (result versioning)
+
+An **additive, process-agnostic** extension (implemented in [`workflow_engine/sql_pg/wf_hyperparameter_set.sql`](../../workflow_engine/sql_pg/wf_hyperparameter_set.sql)) links workflow instances to hyperparameter-set identity and a CAAS action ledger:
+
+| Object | Purpose |
+|--------|---------|
+| `wf.hyperparameter_set` | Registry of unique config combinations (`set_key` hash, opaque `config_json`, optional `display_name`) |
+| `wf.workflow_instance.hyperparameter_set_id` | Nullable FK from instance to its hyperparameter set |
+| `wf.hyperparameter_set_action_entry` | Ledger: `(hyperparameter_set_id, action_name, run_key) → content_key` |
+
+No disease/study/process columns — the engine stores opaque keys and JSON only. Instance creation calls `wf_apply_hyperparameter_set` when `hyperparamSetId` is present; successful task submits upsert ledger rows when CAAS is enabled. Full design: [hyperparameter-result-versioning.plan.md](hyperparameter-result-versioning.plan.md).
+
 ## JSON Parameterization Strategy
 - Treat UI-provided payloads as **JSON templates** with placeholders, not fixed static values.
 - Use **one strict placeholder syntax only**: `${...}` (no other macros/functions embedded in JSON).
@@ -135,6 +147,9 @@ flowchart TD
   workflowNode --> workflowInputTemplate[workflow_input_template]
   workflowNode --> workflowInputBinding[workflow_input_binding]
   workflowVersion --> workflowInstance[workflow_instance]
+  workflowInstance --> hyperparameterSet[hyperparameter_set]
+  workflowInstance --> hyperparameterSetActionEntry[hyperparameter_set_action_entry]
+  hyperparameterSet --> hyperparameterSetActionEntry
   workflowInstance --> nodeExecution[node_execution]
   nodeExecution --> executionContext[execution_context]
   nodeExecution --> taskLease[task_lease]

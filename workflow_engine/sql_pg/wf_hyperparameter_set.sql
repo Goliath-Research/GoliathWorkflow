@@ -1,7 +1,9 @@
 /*
   MethylPipeline wf schema - hyperparameter set registry and action result ledger (PostgreSQL).
 
-  Prerequisites: 00_schema.sql (workflow_instance)
+  Prerequisites:
+  - 00_schema.sql (workflow_instance, wf.instance_extension)
+  - 02_repository_api.sql or wf_instance_extension.sql (wf_repo_upsert_instance_extension)
 */
 
 CREATE TABLE IF NOT EXISTS wf.hyperparameter_set (
