@@ -48,12 +48,17 @@ def _record(
     )
 
 
-def test_caas_enabled_env_gate(monkeypatch) -> None:
+def test_caas_enabled_defaults_on(monkeypatch) -> None:
     monkeypatch.delenv("METHYL_CAAS_ENABLED", raising=False)
+    assert caas_enabled({}) is True
+    assert caas_enabled({"caasEnabled": True}) is True
+    assert caas_enabled({"caasEnabled": False}) is False
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "0")
+    assert caas_enabled({}) is False
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "false")
     assert caas_enabled({}) is False
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     assert caas_enabled({}) is True
-    assert caas_enabled({"caasEnabled": False}) is False
 
 
 def test_resolve_project_root_from_mc_run_dir(tmp_path: Path) -> None:

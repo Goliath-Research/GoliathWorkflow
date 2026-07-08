@@ -6,12 +6,16 @@ Version idempotent workflow action results by **hyperparameter and input signatu
 
 CAAS complements (does not replace) per-output-dir manifests at `{output_dir}/.action_results/`.
 
-## When to enable
+## Default behavior
 
-- **Site / worker:** `METHYL_CAAS_ENABLED=1` in worker environment.
-- **Per instance / task:** `"caasEnabled": true` in instance context or task input.
+CAAS is **enabled by default** for every project and workflow run. No environment variable or task flag is required.
 
-Leave disabled during initial debugging if you need to inspect plain files without symlinks.
+### When to disable
+
+- **Per instance / task:** `"caasEnabled": false` in instance context or task input.
+- **Worker / site opt-out:** `METHYL_CAAS_ENABLED=0` (also accepts `false`, `no`, `off`).
+
+Disable only for debugging when you need to inspect plain files without symlinks.
 
 ## Content key
 
@@ -78,7 +82,7 @@ Or set `"forceRerun": true` in context / per-action input, or `METHYL_FORCE_RERU
 
 ## Observability checklist
 
-- [ ] `METHYL_CAAS_ENABLED=1` (or `caasEnabled: true`) on workers that should version results
+- [ ] No opt-out is set (`caasEnabled` not false; `METHYL_CAAS_ENABLED` not `0`/`false`)
 - [ ] `{project_root}/.caas/` appears after first successful idempotent action
 - [ ] `.action_results/*.json` records include `content_key` and `hyperparam_set_id` (schema 1.2)
 - [ ] Second instance with unchanged upstream config reuses entries (check `skipped: true` in `action_run_log.jsonl`)

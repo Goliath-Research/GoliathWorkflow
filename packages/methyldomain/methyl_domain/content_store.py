@@ -49,13 +49,22 @@ def compute_artifacts_signature(artifacts: Sequence[ArtifactRef]) -> str:
 
 
 def caas_enabled(input_json: Mapping[str, Any]) -> bool:
-    """Return True when CAAS commit/reuse is active for this task."""
+    """Return True when CAAS commit/reuse is active for this task.
+
+    CAAS is **on by default** for every project/run. Operators may opt out with
+    task ``caasEnabled: false`` or ``METHYL_CAAS_ENABLED=0`` (false/no/off).
+    Explicit ``caasEnabled: true`` / env truthy values still force enable.
+    """
     if input_json.get("caasEnabled") is True:
         return True
     if input_json.get("caasEnabled") is False:
         return False
     env = os.environ.get("METHYL_CAAS_ENABLED", "").strip().lower()
-    return env in {"1", "true", "yes"}
+    if env in {"0", "false", "no", "off"}:
+        return False
+    if env in {"1", "true", "yes", "on"}:
+        return True
+    return True
 
 
 def resolve_project_root(input_json: Mapping[str, Any]) -> Optional[Path]:

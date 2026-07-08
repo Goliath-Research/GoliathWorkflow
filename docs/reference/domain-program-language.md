@@ -169,7 +169,7 @@ By default, `execute_task()` **skips** an action when a prior successful manifes
 
 ### Content-addressed action store (CAAS)
 
-When `METHYL_CAAS_ENABLED=1` (or per-task `caasEnabled: true`), successful idempotent actions also commit product artifacts to `{project_root}/.caas/{action_safe}/{content_key}/` and replace canonical paths with symlinks into that store. A second workflow instance (hyperparameter set) with the same cumulative `content_key` reuses the entry without recomputing.
+CAAS is **on by default**. Successful idempotent actions commit product artifacts to `{project_root}/.caas/{action_safe}/{content_key}/` and replace canonical paths with symlinks into that store. A second workflow instance (hyperparameter set) with the same cumulative `content_key` reuses the entry without recomputing. Opt out with `"caasEnabled": false` or `METHYL_CAAS_ENABLED=0`.
 
 | Field | Location | Purpose |
 |-------|----------|---------|

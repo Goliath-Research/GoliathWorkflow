@@ -71,7 +71,7 @@ content_key = sha256(action_revision + "|" + input_signature)
 
 ### Rollout
 
-- Gated by `METHYL_CAAS_ENABLED=1` or per-task `caasEnabled: true`.
+- **On by default**; opt out with `METHYL_CAAS_ENABLED=0` or per-task `caasEnabled: false`.
 - `forceRerun` / `METHYL_FORCE_RERUN` bypass skip and produce a fresh entry.
 
 ### Database (wf schema)
