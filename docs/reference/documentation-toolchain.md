@@ -11,6 +11,7 @@
 | **Usage** | Quarto (`.qmd`) | `quarto render docs/usage` — operator runbooks |
 | **Implementation** | Plain Markdown | GitHub-native; fenced Mermaid |
 | **Architecture** | Plain Markdown | GitHub-native; pre-rendered SVG for PDF exports |
+| **Cursor canvases** | `.canvas.tsx` in `docs/canvas/` | Interactive IDE hubs; sync via `scripts/sync_cursor_canvases.sh` |
 | **Reference** | Plain Markdown / optional Quarto | Lookup tables, schemas, language spec |
 
 **Decision:** **Option A — Quarto + `@mermaid-js/mermaid-cli` pre-render** for theory and usage books. Plain Markdown for implementation and architecture pillars. **Retire dual TikZ maintenance** for workflow diagrams.

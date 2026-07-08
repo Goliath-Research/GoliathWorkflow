@@ -2,7 +2,7 @@
 
 Navigation hub for the three documentation pillars (Theory, Usage, Implementation) plus cross-cutting reference, architecture, deployment, and regulatory/product-control docs.
 
-**Interactive hub:** [methylpipeline-docs canvas](/home/ubuntu/.cursor/projects/home-ubuntu-MethylPipeline/canvases/methylpipeline-docs.canvas.tsx)
+**Interactive hub:** [methylpipeline-docs canvas](canvas/methylpipeline-docs.canvas.tsx) — [canvas index](canvas/README.md)
 
 ## Start here by role
 
@@ -54,6 +54,7 @@ See table above. Package maintainers: [implementation/packages/](implementation/
 | Deployment | [`deployment/`](deployment/production_runbook.md) |
 | Regulatory / product controls | [`regulatory/`](regulatory/README.md) |
 | Plans | [`plans/`](plans/README.md) |
+| Cursor canvases | [`canvas/`](canvas/README.md) — versioned `.canvas.tsx`; run `scripts/sync_cursor_canvases.sh` after clone |
 | Audit registry | [`DOCUMENTATION_AUDIT.md`](DOCUMENTATION_AUDIT.md) |
 
 ## Canonical workflow (DomainProgram-first)

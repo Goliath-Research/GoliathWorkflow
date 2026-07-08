@@ -12,9 +12,9 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [Hyperparameter sets & CAAS](../usage/17-content-addressed-action-store.qmd) | Experiment with the same workflow under varied config; idempotent cross-instance reuse ([deep dive](../../workflow_engine/docs/pipeline_architecture.md#hyperparameter-sets-and-caas)) |
 | [Documentation audit (2026-07)](documentation-audit-2026-07.md) | Staleness findings + Quarto validation + remediation checklist |
 
-**Interactive hub:** [methylpipeline-architecture canvas](/home/ubuntu/.cursor/projects/home-ubuntu-MethylPipeline/canvases/methylpipeline-architecture.canvas.tsx) (local vs gateway, config layers, DB contract)
+**Interactive hub:** [methylpipeline-architecture canvas](../canvas/methylpipeline-architecture.canvas.tsx) (local vs gateway, config layers, DB contract)
 
-**Documentation hub:** [methylpipeline-docs canvas](/home/ubuntu/.cursor/projects/home-ubuntu-MethylPipeline/canvases/methylpipeline-docs.canvas.tsx)
+**Documentation hub:** [methylpipeline-docs canvas](../canvas/methylpipeline-docs.canvas.tsx) — [all canvases](../canvas/README.md)
 
 **Implementation detail:** [Implementation guide](../implementation/index.md). **Operator runbooks:** [Usage manual](../usage/index.qmd).
 

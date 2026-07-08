@@ -70,5 +70,5 @@ This document is the canonical register of documentation coverage, canonical sou
 
 - Hub: [`index.md`](index.md)
 - Toolchain decision: [`reference/documentation-toolchain.md`](reference/documentation-toolchain.md)
-- Canvas hub: [`methylpipeline-docs.canvas.tsx`](/home/ubuntu/.cursor/projects/home-ubuntu-MethylPipeline/canvases/methylpipeline-docs.canvas.tsx)
+- Canvas hub: [`methylpipeline-docs.canvas.tsx`](canvas/methylpipeline-docs.canvas.tsx) (git: `docs/canvas/`; sync with `scripts/sync_cursor_canvases.sh`)
 - Plans: [`plans/README.md`](plans/README.md)
