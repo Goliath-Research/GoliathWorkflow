@@ -71,8 +71,11 @@ dmypy.json
 docs/_build/
 docs/_static/
 docs/_templates/
-docs/usage/_book/
-docs/theory/_book/
+# Quarto HTML under _book/ is regenerated; track PDF book outputs.
+docs/usage/_book/*
+!docs/usage/_book/*.pdf
+docs/theory/_book/*
+!docs/theory/_book/*.pdf
 
 # Docker
 *.tar
