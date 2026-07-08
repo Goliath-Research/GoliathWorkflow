@@ -5,10 +5,12 @@
 > both separate control vs disease methylomes (worked examples are often healthy vs prostate
 > cancer; MethylPipeline itself is **disease-agnostic**).
 
-**How to read this note.** Part I (detection / prediction theory) is the durable core.
+**How to read this note.** Start with [Part 0](#part-0--when-to-prefer-which-product) for decision framing.
+Part I (detection / prediction theory) is the durable core.
 Part II (interpretation, deployment, CI) drifts as MethylPipeline’s orchestration evolves —
 prefer [`docs/architecture/orchestration-paths.md`](../architecture/orchestration-paths.md)
-and Usage ch.04 for *how to run* today. Empirical cells in
+and Usage ch.04 for *how to run* today. The [analyte appendix](#appendix--analyte-buffy-coat-vs-cfdna)
+links both detectors to `cfdna` / `buffy_coat`. Empirical cells in
 [Empirical tests needed](#empirical-tests-needed) remain **unfilled hypotheses**.
 
 **Related research notes:** [`methylpipeline_informme_integration.md`](methylpipeline_informme_integration.md)
@@ -43,10 +45,11 @@ and Usage ch.04 for *how to run* today. Empirical cells in
 
 ## Executive summary
 
-Both products attack the same problem — separate healthy from prostate-cancer methylomes and
+Both products attack the same problem — separate control from disease methylomes and
 score incoming samples — and share vocabulary (reference/centroid, train, validation/prediction;
-per-chromosome; cytosine contexts CG/CHG/CHH; positive/negative class). Their theoretical cores
-are nearly opposite:
+per-chromosome; cytosine contexts CG/CHG/CHH; positive/negative class). Worked examples in both
+codebases are often healthy vs prostate cancer; that is a cohort choice, not a product limit.
+Their theoretical cores are nearly opposite:
 
 - **MethylIT_py 0.4.0 = information theory + signal-detection theory.** For each sample it
   measures an *information divergence* of methylation from a common **reference** at every
@@ -100,6 +103,33 @@ claims are established versus which are hypotheses still to be tested (see
   pipeline.
 
 The disagreement is not *what* to model but *how* to define and detect the signal.
+
+---
+
+# Part 0 — When to prefer which product
+
+This is a **decision frame**, not an empirical verdict. Prefer the product whose *unit of signal*
+matches the scientific question; then use Part I to understand why DMP sets will not necessarily
+agree.
+
+| Situation | Prefer | Why |
+|-----------|--------|-----|
+| “How abnormal is **this** sample vs a fixed normal baseline?” (individual divergence / clinical-style signal detection) | **MethylIT** | Per-sample Hellinger/J-divergence vs a pooled reference; cutpoint on divergence features |
+| “Which loci differ between **control and disease cohorts**, and which survive resampling?” (panel discovery for a classifier) | **MethylPipeline** | Cohort-vs-cohort ECDF tests + MC recurrence → freeze → train |
+| Need a **production panel** with formal stability, freeze, hold-out, and gene/feature ranking | **MethylPipeline** | First-class DomainProgram / validation workflows + mapper → enricher → gene/feature select |
+| Need a **lightweight divergence screen** against a carefully curated healthy reference, with optional Youden cutpoint | **MethylIT** (R default / simple cutpoint) | Fewer moving parts if the reference pool is trustworthy |
+| Ops want **config layers, gateway workers, analyte profiles, CI gates** | **MethylPipeline** | Four-layer config, runtime-bundle, PR regression + real-sample registry |
+| Ops accept a **single YAML + sample sheet** and sidecar holdout scripts | **MethylIT_py 0.4.0** | Self-contained stage config; `exp_wand.py` for true holdouts |
+| Head-to-head on the **same WGBS cohort** | Run **both**, then compare | Different DMP definitions → expect incomplete overlap; use [Empirical tests needed](#empirical-tests-needed) |
+
+**Do not** treat “MethylIT found more DMPs” or “MethylPipeline found more DMPs” as a quality score
+without aligning definitions (per-sample tail event vs per-comparison FDR locus) and evaluation
+(nested selection, true hold-out).
+
+**Practical pairing (optional):** use MethylIT-style per-sample divergence as an *exploratory*
+abnormality score while MethylPipeline owns the stable production panel — or the reverse for a
+reference-centric lab that only needs MethylPipeline’s mapper/enricher on an imported locus list
+(`fixed_dmp_panel`). That pairing is a study design choice, not a built-in bridge.
 
 ---
 
@@ -748,41 +778,18 @@ is propagated from each DMP up to the objects being ranked, rather than a gene s
    $$
    and `feature_importance_{promoter,exon,...}` uses the same construction within each feature bucket.
    Statistical significance is kept on a **separate axis**: a signed weighted **Stouffer** aggregation
-   of the mapped DMP p-values gives `gene_p_value` -> Storey `gene_q_value` (with the honest caveat
+   of the mapped DMP p-values gives `gene_p_value` → Storey `gene_q_value` (with the honest caveat
    that mapped DMPs in one gene are spatially correlated, so the independence assumption is only
-   approximate). The canonical spec is
-   `packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md`.
-4. **The three "focus" refinements the comparison omitted.** Once genes carry a `gene_importance`
-   weight, `methylenricher` (and the in-process biomarker pool) can rank/prioritize them three
-   different ways, and each one **reuses the propagated DMP weight** rather than discarding it:
-   - **PPI-focused.** STRING (or a local edge list) builds a gene-gene graph; node topology metrics
-     are blended with **min-max-normalized methylation weights** (`gene_importance` / `mean_effect_size`)
-     and an optional disease-prior boost into a `combined_hub_score`, so hub ranking is *signal-weighted*
-     by default rather than dominated by high-database-degree "infrastructure" genes
-     (`network_refinement`, `hub_ranking_mode=signal_weighted`; `EnrichmentAnalyzer` PPI layer and
-     `methyl_gene_select/core/biomarker_gene_pool.py` `mode="ppi_only"`). PPI coherence per module is
-     $0.4\,\text{density}+0.3\,\overline{\text{node-metric}}+0.3\,\text{LCC-ratio}$.
-   - **CIS-BP-focused.** Two sub-modes in `methyl_enricher/cisbp/`: *annotate* matches TF enrichment
-     hits (ChEA/ENCODE/TRRUST) to CIS-BP motif metadata (`annotate.py`); *motif_scan* scans PWMs over
-     the DMP region windows themselves, builds a TF->DMP-region GMT, and runs an **offline ORA on the
-     foreground DMP regions** (`motif_scan.py`) — i.e. it goes back to the DMP coordinates, not just
-     the gene symbols.
-   - **Enrichr with selected libraries (+ AI / DisGeNET).** Over-representation is delegated to
-     Enrichr via `gseapy.enrichr` with explicit `libraries` or a named `library_preset`
-     (`cancer-core`, `cancer-extended`) that pull in disease/TF libraries such as `DisGeNET`,
-     `Jensen_DISEASES`, `GWAS_Catalog`, `ChEA`, `TRRUST`. Pathways are grouped into modules by
-     Jaccard overlap + Louvain, scored by a heuristic module score, and a **disease-relevance prior**
-     is added. Separately, `methylmapper`'s `GeneDiseaseEnricher` gathers **external gene-disease
-     evidence** from **DisGeNET** and **Open Targets**, plus an optional **LLM-assisted (Grok /
-     `grok-4-latest`, xAI batch API) synthesis** (`gene_disease_enricher.py`), under `strict` /
-     `balanced` / `permissive` score-threshold profiles; that disease evidence can feed the
-     `hub_disease_boost` in the PPI step.
-5. **Weights all the way into selection.** The propagated weight is not merely for display: the
-   downstream contract is that `methyl-gene-select` derives **ECDF-OvR feature weights from
-   `gene_importance`**, and `methyl-gene-feature-select` ranks structural (gene x region) features by
-   `feature_importance_{feature_type}` (`methyl_gene_select/core/gene_featurecuts.py`,
-   `methyl_gene_feature_select/core/runner.py`). So the DMP's signed, feature-resolved weight is what
-   ultimately orders the gene/feature panel that gets classified.
+   approximate). Spec: `packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md`; theory
+   [`docs/theory/chapters/07-methylmapper.qmd`](../theory/chapters/07-methylmapper.qmd).
+4. **Downstream biology (summary only).** Once genes carry `gene_importance`, `methylenricher`
+   can prioritize via PPI hubs (signal-weighted), CIS-BP annotate / motif_scan, and Enrichr library
+   presets (`cancer-core`, …), optionally with disease-evidence boosts. Those layers **reuse** the
+   propagated DMP weight rather than discarding it. Details live in theory
+   [`08-methylenricher.qmd`](../theory/chapters/08-methylenricher.qmd) — not duplicated here.
+5. **Weights into selection.** `methyl-gene-select` / `methyl-gene-feature-select` consume
+   `gene_importance` and `feature_importance_*` so the signed, feature-resolved DMP weight orders
+   the gene/feature panel that gets classified.
 
 ### MethylIT_py 0.4.0: gene-level testing is count-based (and absent from the 0.4.0 core), not a weighted propagation
 
@@ -816,12 +823,11 @@ test, which is still categorically different from MethylPipeline's weighted prop
 The consequence for a direct comparison: MethylIT (R) ranks genes by a **count GLM** (how many DMPs
 fall in the gene, tested against a Poisson/NB null); MethylPipeline treats gene- and feature-level
 ranking as a first-class **weighted** aggregation problem — a signed, feature-resolved DMP weight
-propagated into `gene_importance` — and then layers PPI / CIS-BP / Enrichr / disease-evidence
-prioritization on top of that same weight. Any head-to-head that stops at the DMP set will therefore
-miss the entire interpretation stack, which in MethylPipeline is also used as an orthogonal
-**biological validation** check (do top-weighted genes recover lineage markers and coherent modules?),
-whereas in MethylIT_py 0.4.0 it is out of scope and in MethylIT (R) it is count-based rather than
-weight-propagated.
+propagated into `gene_importance`, then optionally refined by PPI / CIS-BP / Enrichr (theory ch.08).
+Any head-to-head that stops at the DMP set will therefore miss the interpretation stack, which in
+MethylPipeline is also used as an orthogonal **biological validation** check (do top-weighted genes
+recover coherent modules?), whereas in MethylIT_py 0.4.0 it is out of scope and in MethylIT (R) it
+is count-based rather than weight-propagated.
 
 ## Engineering and interpretation differences
 
@@ -899,6 +905,13 @@ motivated hypotheses about *where* each design should win, not as an empirical v
 
 ## Bottom line
 
+See [Part 0](#part-0--when-to-prefer-which-product) for the decision table. In one line:
+
+- **MethylIT** — individual abnormality vs a fixed reference (signal detection on divergence).
+- **MethylPipeline** — cohort DMP panel + MC stability + interpretation stack (no reference to choose).
+
+Expanded:
+
 - **MethylIT_py 0.4.0** = information-thermodynamics + signal detection: per-sample Hellinger/J
   divergence from a designated reference, a fitted GGamma/Weibull noise model, tail-based potential
   DMPs gated by total variation, and an optimal cutpoint separating control-like from treatment-like
@@ -908,7 +921,7 @@ motivated hypotheses about *where* each design should win, not as an empirical v
   reference** that is not auto-selected or auto-validated.
 - **MethylPipeline** = nonparametric empirical distributions + resampling stability: cohort-vs-cohort
   ECDF two-sample tests with FDR, heuristic biological ranking, ECDF Naive-Bayes classification, and
-  a formalized Monte-Carlo-stability -> freeze -> train workflow with rich biological interpretation.
+  a formalized Monte-Carlo-stability → freeze → train workflow with rich biological interpretation.
   Fewer distributional assumptions, more engineering scaffolding, group-comparison-centric, no
   reference to choose.
 
@@ -990,16 +1003,36 @@ The 0.4.0 `stages` config maps one-to-one onto the published MethylIT methodolog
   `poolFromGRlist.R`, `getDMGs.R`, `getDIMPatGenes.R`, `countTest2.R`, `dmpClusters.R`,
   `helmholtz_free_energy.R`; `DESCRIPTION`.
 
-## Suggested follow-ups (editorial / research)
+## Suggested follow-ups (research)
 
 1. **Fill the empirical table** — until then, keep Part I’s “second-order / within noise” language
    labeled as predictions (already done in [Empirical tests needed](#empirical-tests-needed)).
-2. **Optional short Part 0** — one page: “when to prefer which product” (individual abnormality vs
-   cohort DMP panel; reference-centric vs MC-stability-centric ops).
-3. **Analyte appendix** — one subsection linking buffy vs cfDNA to both detectors (shared WGBS inputs;
-   MethylPipeline fragmentomics only on `cfdna`); see
-   [`BuffyCoat_vs_cfDNA_for_Cancer_Detection.md`](BuffyCoat_vs_cfDNA_for_Cancer_Detection.md).
-4. **Do not expand** the enricher/PPI/CIS-BP detail further in this note — point to theory ch.07–08
-   instead if the comparison grows again.
-5. **Keep MethylIT R path portable** — prefer “external MethylIT 0.3.2.8 checkout” over a machine-
-   specific absolute path when citing source.
+2. **Optional bridge experiment** — import a MethylIT Youden DMP list into MethylPipeline
+   `fixed_dmp_panel` (or the reverse) and score the same hold-out batch under both classifiers.
+
+---
+
+# Appendix — Analyte (buffy coat vs cfDNA)
+
+Both products consume **WGBS-derived methylation** (Illumina sequencing → extract → per-cytosine
+levels). Neither is an Infinium MethylationEPIC BeadChip pipeline. Analyte choice is mostly
+**biology and QC**, not a different detector math.
+
+| Topic | Shared | MethylPipeline-specific | MethylIT-specific |
+|-------|--------|-------------------------|-------------------|
+| Inputs | Per-chromosome cytosine methylation (CG/CHG/CHH) | SamplePrepPipeline → alignment QC → extract → extraction QC | Sample sheet roles (`is_reference`, `analysis_role`) |
+| Buffy coat | Abundant leukocyte DNA; host/systemic epigenome | `primary_analyte: buffy_coat` — guardrails + bisulfite; no cfDNA fragmentomics profile | Same divergence math; reference pool should be analyte-matched healthy buffy |
+| cfDNA / plasma | Lower tumor fraction; fragment length structure matters | `primary_analyte: cfdna` — enables **fragmentomics** QC/features; `enforce_training_analyte_match` | Same divergence math; do not mix plasma samples into a buffy reference pool |
+| Paired designs | Industry uses buffy as hematopoietic / host background beside plasma | Separate manifests or `combined`; see analyte-comparison canvas | Flag matched buffy as reference-only or train roles deliberately |
+
+**Detector implication:** MethylIT’s fixed reference is especially sensitive to analyte mismatch
+(plasma vs buffy in the same `is_reference` pool → spurious divergence). MethylPipeline rebuilds
+control centroids per MC split but still requires analyte-matched training for production claims
+(plasma retrain path). Depth guidance (~30× buffy often adequate; cfDNA needs tumor-fraction-aware
+design) is in
+[`BuffyCoat_vs_cfDNA_for_Cancer_Detection.md`](BuffyCoat_vs_cfDNA_for_Cancer_Detection.md);
+config defaults in [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md).
+
+**Do not** expect MethylIT and MethylPipeline DMP sets to agree more on one analyte than the other
+without measuring it — analyte changes the biology of the signal, not the definitional gap between
+per-sample divergence and per-comparison ECDFs.
