@@ -61,10 +61,10 @@ Orchestration stays DomainProgram-first (`methyl-workflow-run`); analyte does no
 
 ## Depth: is ~30× enough?
 
-Clarify assay type:
+Clarify what “depth” means here:
 
-- **MethylPipeline production path** is WGBS / extractor-based methylation (not Illumina EPIC arrays). Depth here means **genome-wide sequencing coverage**, not array probe intensity.
-- For **buffy-coat / leukocyte WGBS**, ~30× whole-genome–equivalent depth is generally **technically adequate** for CpG-level methylation once reads are aggregated. Further depth usually yields diminishing returns; variance is dominated by biology (cell-type composition, inter-individual differences), not Poisson sampling of methylated counts ([related WBC methylation depth discussion](https://pmc.ncbi.nlm.nih.gov/articles/PMC10262593/)).
+- Libraries are typically sequenced on **Illumina instruments** (e.g. NovaSeq). That is the sequencing platform — not the Infinium MethylationEPIC **BeadChip array**. MethylPipeline’s production path is **WGBS / extractor-based** methylation from BAM/FASTQ, so depth means **genome-wide sequencing coverage**, not array probe intensity.
+- For **buffy-coat / leukocyte WGBS**, ~30× whole-genome–equivalent depth on Illumina is generally **technically adequate** for CpG-level methylation once reads are aggregated. Further depth usually yields diminishing returns; variance is dominated by biology (cell-type composition, inter-individual differences), not Poisson sampling of methylated counts ([related WBC methylation depth discussion](https://pmc.ncbi.nlm.nih.gov/articles/PMC10262593/)).
 - For **cfDNA**, depth and library complexity matter more because **tumor fraction** can be very low in early disease. “Enough depth” is inseparable from tumor fraction, duplex/UMI design, and feature aggregation — not a single magic number copied from buffy coat.
 
 **Practical rule for this repo**
