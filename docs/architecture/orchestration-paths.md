@@ -1,13 +1,16 @@
 # Orchestration Paths
 
+**Default for new work:** `methyl-workflow-run` with a DomainProgram and pipeline profile. The monolithic `methyl-validation` stage flags are **legacy**.
+
 | Path | Entry | Status |
 |------|-------|--------|
-| **Workflow (canonical)** | `methyl-workflow-run`, `methyl-validation run-workflow` | Preferred |
+| **Workflow (canonical)** | `methyl-workflow-run` | **Preferred** — local, CI, and production workers |
+| Workflow (CLI alias) | `methyl-validation run-workflow` | Same engine; prefer `methyl-workflow-run` for clarity |
 | Distributed workflow | `methyl-gateway` + `methyl-worker` | Production cluster (gateway = DB passthrough) |
 | Worker task input | `resolvedConfig` + optional `resolvedProject` | Baked at instance start; CLIs receive `--resolved-config` |
 | Study lifecycle (admin) | `methyl-study-start` | Compile/plan/start — not gateway domain routes |
-| Monolithic CLI | `methyl-validation --stability/--freeze/--model` | Legacy (`--legacy-orchestration`) |
-| File queue | `methyl-validation plan-runs` / `run-task` | Legacy distributed MC |
+| Monolithic CLI | `methyl-validation --stability/--freeze/--model` | **Legacy** (`--legacy-orchestration`) — transitional scripts only |
+| File queue | `methyl-validation plan-runs` / `run-task` | **Legacy** distributed MC — migrate to gateway workers when possible |
 | Direct package CLIs | `methyl-centroid`, `methyl-detector`, … | Single-step debugging |
 
 ## Canonical workflow programs

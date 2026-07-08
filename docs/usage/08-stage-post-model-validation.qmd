@@ -4,14 +4,20 @@
 
 Measure descriptive performance distributions using frozen production artifacts without retraining.
 
-## Entry command
+> **Canonical entry:** Post-model validation is a step in `study_validation_lifecycle.program.json`. Legacy `methyl-validation --post-model-validation` is transitional only. See [Orchestration](04-orchestration-workflow-run.qmd).
+
+## Entry command (canonical)
+
+Run as part of the full lifecycle program, or re-run the lifecycle graph after freeze/model — completed actions skip via `.action_results/` manifests.
+
+## Legacy entry command
 
 ```bash
 source .venv/bin/activate
 methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --post-model-validation
 ```
 
-Optional backend override:
+Optional backend override (legacy CLI):
 
 ```bash
 source .venv/bin/activate

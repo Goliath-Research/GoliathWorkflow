@@ -2,7 +2,7 @@
 
 ## When to use
 
-After a baseline `methyl-validation` path is understood, use a controlled **outer loop** to compare candidate settings—typically **Tier A** knobs in profile `actionConfig.validation` (e.g. `stability_dmp_freq`, `n_iterations` as budget, `stability_min_balanced_accuracy`). Tuning detector and model backends (Tier B/C) is a separate, often **nested** exercise; see the theory chapter on multi-stage search tradeoffs in `docs/theory/chapters/15-model-creation-and-validation.qmd` (*Optional pipeline hyperparameter search*).
+After a baseline workflow-run (or legacy `methyl-validation` path) is understood, use a controlled **outer loop** to compare candidate settings—typically **Tier A** knobs in profile `actionConfig.validation` (e.g. `stability_dmp_freq`, `n_iterations` as budget, `stability_min_balanced_accuracy`). Tuning detector and model backends (Tier B/C) is a separate, often **nested** exercise; see the theory chapter on multi-stage search tradeoffs in `docs/theory/chapters/15-model-creation-and-validation.qmd` (*Optional pipeline hyperparameter search*).
 
 ## What it is
 

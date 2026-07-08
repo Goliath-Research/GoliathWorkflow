@@ -174,7 +174,7 @@ methyl-workflow-run \
   --context '{"projectPath":"/work/.../configs/project.json"}'
 ```
 
-Or staged CLI: [Stage: Stability](05-stage-stability.qmd).
+Or legacy CLI recovery: [Stage: Stability](05-stage-stability.qmd) (transitional `methyl-validation` flags).
 
 ### 3. Local workflow (no gateway)
 

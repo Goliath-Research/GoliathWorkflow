@@ -16,7 +16,7 @@ methyl-workflow-run \
 - **Programs and profiles** live in this repository (`workflow_engine/domain/`).
 - **Study manifests and artifacts** live on shared storage (`/work/<disease>/`).
 
-Legacy monolithic CLI (`methyl-validation --stability/--freeze/--model`) is still supported; see [Usage manual](docs/usage/index.qmd).
+Legacy monolithic CLI (`methyl-validation --stability/--freeze/--model`) is **transitional only**; see [Usage ch.04 orchestration](docs/usage/04-orchestration-workflow-run.qmd).
 
 ## What This Repository Includes
 

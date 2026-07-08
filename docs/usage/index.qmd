@@ -12,11 +12,24 @@ This is the operational companion to the theory book. It is designed for executi
 
 For statistical background, use [`docs/theory/`](../theory/index.qmd). For compiler and worker internals, use [`docs/implementation/`](../implementation/index.md). Start with [Relationship to Theory and Implementation](00-relationship-to-theory-and-implementation.qmd).
 
+## How to run staged validation
+
+**Use `methyl-workflow-run`** with a DomainProgram and pipeline profile. That is the canonical path for new studies, local runs, and production gateway workers.
+
+**`methyl-validation --stability/--freeze/--model` is legacy** — documented for transitional scripts and narrow recovery, not for new workflow design. See [Orchestration: workflow-run](04-orchestration-workflow-run.qmd) before the stage chapters.
+
+| Goal | Start here |
+|------|------------|
+| Understand entry points | [Orchestration (ch.04)](04-orchestration-workflow-run.qmd) |
+| First end-to-end run | [Tutorial (ch.16)](16-tutorial-healthy-vs-cancer-stages.qmd) |
+| One stage's artifacts and gates | Part II (ch.05–09) — each chapter links back to workflow-run |
+| Legacy CLI flags | `packages/methylvalidation/docs/USAGE.md` |
+
 ## Reading paths
 
 - **Sample prep (FASTQ → HDF5):** Chapter `03` (`03-sample-prep-and-qc.qmd`).
-- **Fast path (stage execution):** Chapters `05` to `09` (stability through blind prediction).
-- **New project setup:** Chapters `01`, `02`, `03`, then `05`.
+- **New project setup:** Chapters `01`, `02`, `04` (orchestration), then `05` or [Tutorial ch.16](16-tutorial-healthy-vs-cancer-stages.qmd).
+- **Fast path (stage execution):** [Orchestration ch.04](04-orchestration-workflow-run.qmd) → `methyl-workflow-run`; stage detail in ch.05–09.
 - **Guided tutorial (healthy vs. cancer stages):** Chapter `16` — end-to-end walkthrough; **§18.6** lists every shipped pipeline profile.
 - **Hyperparameter versioning (CAAS):** `17-content-addressed-action-store.qmd` (Part V; follows the tutorial).
 - **Daily operations:** `10-artifacts-and-qa-checks.qmd` through `12-command-cookbook.qmd`.
@@ -32,7 +45,8 @@ For statistical background, use [`docs/theory/`](../theory/index.qmd). For compi
 ## Scope boundaries
 
 - **SamplePrepPipeline** (FASTQ → aligned BAM → methylation HDF5) runs before staged validation; see Chapter 3.
-- **Canonical orchestration:** `methyl-workflow-run` with repo DomainPrograms; legacy `methyl-validation --stability/--freeze/--model` documented where still used.
+- **Canonical orchestration:** `methyl-workflow-run` + DomainProgram + profile — [chapter 04](04-orchestration-workflow-run.qmd).
+- **Legacy orchestration:** `methyl-validation --stability/--freeze/--model` — transitional scripts and recovery only; do not use for new studies.
 - Blind-only prediction is documented as a standalone `methyl-predictor` operation.
 - Package behavior is documented from implementation in `packages/*`.
 

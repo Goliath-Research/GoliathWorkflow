@@ -32,6 +32,7 @@ bash scripts/install_all.sh --gpu-reqs
 
 ```bash
 source .venv/bin/activate
+methyl-workflow-run --help
 methyl-validation --help
 methyl-centroid --help
 methyl-detector --help
@@ -49,7 +50,7 @@ methyl-predictor --help
 ## Success checks
 
 - `.venv` activates without import errors.
-- `methyl-validation --help` prints options.
+- `methyl-workflow-run --help` and `methyl-validation --help` print options.
 - Project JSON path resolves on the execution host.
 
 ## Common failures and fixes

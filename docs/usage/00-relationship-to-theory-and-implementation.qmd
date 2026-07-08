@@ -10,6 +10,13 @@ This usage manual owns **operator commands**, stage handoffs, artifact gates, an
 | Workflow engine, workers, compiler | [Implementation guide](../implementation/index.md) |
 | System layers and orchestration paths | [Architecture](../architecture/index.md) |
 
-**Canonical orchestration:** `methyl-workflow-run` with repo DomainPrograms and `/work` study manifests. Legacy `methyl-validation --stability/--freeze/--model` remains documented where operators still use it; prefer DomainProgram paths for new studies.
+**Canonical orchestration:** [`methyl-workflow-run`](04-orchestration-workflow-run.qmd) with repo DomainPrograms, pipeline profiles, and `/work` study manifests. This is the path for new studies, local development, and production workers.
+
+**Legacy orchestration:** `methyl-validation --stability/--freeze/--model` and the file-queue subcommands (`plan-runs`, `run-task`) remain documented for transitional scripts and recovery. Do not start new studies on the monolithic CLI — migrate to a DomainProgram that encodes the same stages.
+
+| Need | Read |
+|------|------|
+| Entry points, program selection | [Orchestration (ch.04)](04-orchestration-workflow-run.qmd) |
+| Path matrix (local / gateway / legacy) | [Architecture: orchestration paths](../architecture/orchestration-paths.md) |
 
 **Repo vs `/work`:** profiles and programs live in the git repo; `project_*.json` and run artifacts live under `/work/<disease>/`. See ch.02 and [work-config-paths rule](../../.cursor/rules/work-config-paths.mdc).

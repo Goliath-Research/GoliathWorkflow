@@ -500,7 +500,16 @@ After:
 
 #### 4) Accuracy sanity checks after migration
 
-After rewriting config keys, rerun:
+After rewriting config keys, rerun staged validation with the **canonical** entry:
+
+```bash
+methyl-workflow-run \
+  --program workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
+  --context '{"projectPath":"/work/.../configs/project.json","pipelineProfile":"mc_dmp_gene_fc"}'
+```
+
+Legacy transitional path (same stages, monolithic CLI):
 
 1. `methyl-validation --project <project.json> --stability`
 2. `methyl-validation --project <project.json> --freeze`

@@ -1,5 +1,7 @@
 # Distributed MethylValidation on shared storage {#sec-distributed-methylvalidation}
 
+> **Status:** This chapter documents the **legacy file-queue** path (`plan-runs` / `run-task`). New cluster deployments should use **`methyl-gateway` + `methyl-worker`** with the same DomainPrograms as local `methyl-workflow-run` — see [Deployment and distributed workflow](14-deployment-and-distributed-workflow.qmd) and [Orchestration](04-orchestration-workflow-run.qmd).
+
 ## Purpose
 
 Run discovery Monte Carlo (and related queue-backed work) on **several machines** when a single host cannot finish `n_iterations` in acceptable wall time. Every worker must read and write the **same** `output_base` tree (commonly shared NFS under `/work/...`).

@@ -1,5 +1,7 @@
 # MethylValidation Usage Guide
 
+> **Orchestration:** For new studies and production runs, use **`methyl-workflow-run`** with a DomainProgram and pipeline profile. This document describes the **`methyl-validation`** CLI — stage flags (`--stability`, `--freeze`, `--model`, …) are **legacy**; they remain documented because each flag maps to a workflow action and is still used in transitional scripts and narrow recovery. Start with [`docs/usage/04-orchestration-workflow-run.qmd`](../../../docs/usage/04-orchestration-workflow-run.qmd).
+
 ## Overview
 
 MethylValidation orchestrates repeated train/validation splits, **methyl-centroid + methyl-detector** per iteration, backend model training/evaluation loops, and production freeze/model build. It supports the staged workflow below:

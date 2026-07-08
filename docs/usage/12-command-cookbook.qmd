@@ -2,9 +2,30 @@
 
 ## Purpose
 
-Provide copy-ready command sequences for the full solution lifecycle.
+Provide copy-ready command sequences for the full solution lifecycle. **Prefer `methyl-workflow-run`** (see [Orchestration](04-orchestration-workflow-run.qmd)). Legacy `methyl-validation` sequences are at the end for transitional scripts.
 
-## 1) Full staged run (strict profile example)
+## 1) Full staged run (canonical — DomainProgram)
+
+```bash
+source .venv/bin/activate
+methyl-workflow-run \
+  --program workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json","pipelineProfile":"mc_dmp_gene_fc"}' \
+  --parallel-workers 1
+```
+
+MC stability only (freeze-readiness gate included):
+
+```bash
+source .venv/bin/activate
+methyl-workflow-run \
+  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"mc_dmp_gene_fc"}'
+```
+
+## 2) Full staged run (legacy CLI — transitional only)
 
 ```bash
 source .venv/bin/activate
@@ -16,7 +37,7 @@ methyl-validation --project "$PROJECT" --model
 methyl-validation --project "$PROJECT" --post-model-validation
 ```
 
-## 2) Backend comparison and selection
+## 3) Backend comparison and selection (legacy CLI)
 
 ```bash
 source .venv/bin/activate
@@ -27,7 +48,7 @@ methyl-validation --project "$PROJECT" --select-best-model --model-mc-all \
   --selection-metric balanced_accuracy --selection-stat median
 ```
 
-## 3) Rollout comparison report
+## 4) Rollout comparison report (legacy CLI)
 
 ```bash
 source .venv/bin/activate
@@ -39,7 +60,7 @@ methyl-validation --project "$PROJECT" --rollout-compare \
   --baseline-summary "$BASE" --candidate-summary "$CAND"
 ```
 
-## 4) Standalone enricher run from mapper output
+## 5) Standalone enricher run from mapper output
 
 ```bash
 source .venv/bin/activate
@@ -50,32 +71,32 @@ methyl-enricher \
   --outdir /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/enricher/all/pca_pca1
 ```
 
-## 5) Standalone blind prediction
+## 6) Standalone blind prediction
 
 ```bash
 source .venv/bin/activate
 methyl-predictor --project /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/monte_carlo_runs/production/project.json
 ```
 
-## 6) Manual rendering commands (this manual)
+## 7) Manual rendering commands (this manual)
 
 ```bash
 quarto render docs/usage --to html
 quarto render docs/usage --to pdf
 ```
 
-## 7) Distributed queue (one task)
+## 8) Distributed queue (legacy — one task)
 
-Full workflow: [Distributed MethylValidation on shared storage](13-distributed-methyl-validation.qmd) (Chapter 13). One worker invocation:
+Full workflow: [Distributed MethylValidation on shared storage](13-distributed-methyl-validation.qmd) (Chapter 13). Prefer gateway workers for new deployments. One file-queue worker invocation:
 
 ```bash
 source .venv/bin/activate
 methyl-validation run-task --task /work/.../monte_carlo_runs/queue/tasks/run_0001.json
 ```
 
-## 8) Hyperparameter search grid (example)
+## 9) Hyperparameter search grid (example)
 
-After `plan-runs` / full stability is understood, use the grid driver. Details: [Optional hyperparameter search](15-optional-hyperparameter-search.qmd) (Chapter 15).
+After stability is understood (via workflow-run or legacy CLI), use the grid driver. Details: [Optional hyperparameter search](15-optional-hyperparameter-search.qmd) (Chapter 15).
 
 ```bash
 source .venv/bin/activate
@@ -91,3 +112,4 @@ methyl-hyperparam-search \
 - Always activate `.venv` before `methyl-*` commands.
 - Use absolute project paths in production scripts.
 - Keep command logs with timestamp and git commit hash for audit.
+- New studies: start from [Orchestration (ch.04)](04-orchestration-workflow-run.qmd), not legacy stage flags.

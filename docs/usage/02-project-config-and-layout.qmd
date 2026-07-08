@@ -26,7 +26,7 @@ Study manifests **must not** contain `step_config`. Legacy projects: `python scr
 | JSON schemas (`schemas/config/`) | Run outputs (`monte_carlo_runs/`, `stability/`, …) |
 | Site example (`tools/methyl-config-editor/configs/site_grch38.example.json`) | `/work/site/methyl_site.json` (operator copy) |
 
-- Point `methyl-workflow-run --program` at a **repo** DomainProgram path.
+- Point `methyl-workflow-run --program` at a **repo** DomainProgram path (see [Orchestration](04-orchestration-workflow-run.qmd)).
 - Point `--context` / `projectPath` at a **study manifest on `/work`**.
 - Pass **`--context-file`** with a profile from `workflow_engine/domain/profiles/`, or set `METHYL_PROFILE`.
 - Set **`METHYL_SITE_CONFIG`** (or install site manifest under `/work/site/`).

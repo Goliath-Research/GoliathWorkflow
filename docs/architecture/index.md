@@ -22,5 +22,5 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 
 - **Config author** → [layer-model.md](layer-model.md)
 - **DevOps / cluster** → [distributed-runtime.md](distributed-runtime.md) + [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd)
-- **Workflow author** → [orchestration-paths.md](orchestration-paths.md) + [DomainProgram reference](../reference/domain-program-language.md)
+- **Workflow author** → [orchestration-paths.md](orchestration-paths.md) + [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.qmd) + [DomainProgram reference](../reference/domain-program-language.md)
 - **Experimentation / result versioning** → [Usage ch.17](../usage/17-content-addressed-action-store.qmd) + [pipeline architecture — hyperparameter sets](../../workflow_engine/docs/pipeline_architecture.md#hyperparameter-sets-and-caas)

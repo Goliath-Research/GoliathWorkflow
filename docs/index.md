@@ -35,7 +35,7 @@ See table above. Package maintainers: [implementation/packages/](implementation/
 
 ### By execution mode
 
-[Architecture: orchestration paths](architecture/orchestration-paths.md) — local vs gateway vs legacy CLI
+[Architecture: orchestration paths](architecture/orchestration-paths.md) — **`methyl-workflow-run` (canonical)** vs legacy `methyl-validation`
 
 ## Three pillars
 
@@ -65,7 +65,7 @@ methyl-workflow-run \
   --context '{"projectPath": "/work/<disease>/configs/project_*.json"}'
 ```
 
-Legacy monolithic path (`methyl-validation --stability/--freeze/--model`) remains documented in Usage for transitional studies.
+Legacy monolithic path (`methyl-validation --stability/--freeze/--model`) is **transitional only** — see [Usage ch.04 orchestration](usage/04-orchestration-workflow-run.qmd).
 
 ## Repository layout
 

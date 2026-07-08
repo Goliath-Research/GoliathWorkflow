@@ -16,6 +16,7 @@ book:
         - 01-prerequisites-and-environment.qmd
         - 02-project-config-and-layout.qmd
         - 03-sample-prep-and-qc.qmd
+        - 04-orchestration-workflow-run.qmd
         - 04-package-reference-individual-usage.qmd
     - part: "Part II: Staged Solution Workflow"
       chapters:
