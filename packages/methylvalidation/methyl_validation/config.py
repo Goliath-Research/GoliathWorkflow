@@ -820,7 +820,10 @@ class MonteCarloConfig(BaseModel):
         le=1.0,
         description=(
             "If set, stability counts DMPs only from iterations whose validation_metrics.json "
-            "balanced_accuracy is >= this value. Frequencies are over those qualifying runs only."
+            "balanced_accuracy is >= this value. Frequencies are over those qualifying runs only. "
+            "Requires DMP or gene FeatureCuts (dmp_modeling_mode=featurecuts and/or "
+            "gene_modeling_mode=featurecuts|from_stable_dmp_panel); without FeatureCuts per-run "
+            "balanced_accuracy is unavailable."
         ),
     )
     stability_early_stop_enabled: bool = Field(
@@ -1897,6 +1900,15 @@ class MonteCarloConfig(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def _validate_stability_min_balanced_accuracy_requires_featurecuts(
+        self,
+    ) -> "MonteCarloConfig":
+        from .modeling_modes import validate_stability_min_balanced_accuracy_requires_featurecuts
+
+        validate_stability_min_balanced_accuracy_requires_featurecuts(self.model_dump(mode="python"))
+        return self
+
+    @model_validator(mode="after")
     def _require_tabular_methods(self) -> "MonteCarloConfig":
         if not self.get_enabled_backends():
             raise ValueError("At least one backend profile must have enabled=true.")
@@ -2427,5 +2439,11 @@ def parse_validation_profile(raw: Optional[Mapping[str, Any]]) -> Optional[Valid
     known = {key: value for key, value in raw.items() if key in ValidationStepConfig.model_fields}
     if not known:
         return None
-    return ValidationStepConfig.model_validate(known)
+    cfg = ValidationStepConfig.model_validate(known)
+    from .modeling_modes import validate_stability_min_balanced_accuracy_requires_featurecuts
+
+    validate_stability_min_balanced_accuracy_requires_featurecuts(
+        {key: value for key, value in cfg.model_dump().items() if value is not None}
+    )
+    return cfg
 

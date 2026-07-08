@@ -94,3 +94,61 @@ def test_mode5_from_stable_dmp_panel_loci_source() -> None:
 def test_legacy_flags_infer_modes() -> None:
     assert infer_dmp_modeling_mode({"stability_featurecuts_enabled": True}) == "featurecuts"
     assert infer_gene_modeling_mode({"stability_gene_featurecuts_enabled": True}) == "featurecuts"
+
+
+def test_stability_min_balanced_accuracy_rejected_without_featurecuts() -> None:
+    import pytest
+
+    from methyl_validation.modeling_modes import (
+        validate_stability_min_balanced_accuracy_requires_featurecuts,
+    )
+
+    with pytest.raises(ValueError, match="stability_min_balanced_accuracy requires"):
+        validate_stability_min_balanced_accuracy_requires_featurecuts(
+            {
+                "dmp_modeling_mode": "raw_pool",
+                "gene_modeling_mode": "none",
+                "stability_min_balanced_accuracy": 0.5,
+            }
+        )
+
+    with pytest.raises(ValueError, match="stability_min_balanced_accuracy requires"):
+        MonteCarloConfig.model_validate(
+            _minimal_mc(
+                dmp_modeling_mode="raw_pool",
+                gene_modeling_mode="none",
+                stability_min_balanced_accuracy=0.5,
+            )
+        )
+
+    MonteCarloConfig.model_validate(
+        _minimal_mc(
+            dmp_modeling_mode="featurecuts",
+            gene_modeling_mode="none",
+            dmp_featurecuts_target_ba=0.95,
+            stability_min_balanced_accuracy=0.5,
+        )
+    )
+    MonteCarloConfig.model_validate(
+        _minimal_mc(
+            dmp_modeling_mode="raw_pool",
+            gene_modeling_mode="featurecuts",
+            gene_featurecuts_target_ba=0.90,
+            stability_min_balanced_accuracy=0.5,
+        )
+    )
+
+
+def test_parse_validation_profile_rejects_min_ba_without_featurecuts() -> None:
+    import pytest
+
+    from methyl_validation.config import parse_validation_profile
+
+    with pytest.raises(ValueError, match="stability_min_balanced_accuracy requires"):
+        parse_validation_profile(
+            {
+                "dmp_modeling_mode": "raw_pool",
+                "gene_modeling_mode": "none",
+                "stability_min_balanced_accuracy": 0.6,
+            }
+        )

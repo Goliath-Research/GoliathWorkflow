@@ -3925,7 +3925,7 @@
         }
       ],
       "default": null,
-      "description": "If set, stability counts DMPs only from iterations whose validation_metrics.json balanced_accuracy is >= this value. Frequencies are over those qualifying runs only.",
+      "description": "If set, stability counts DMPs only from iterations whose validation_metrics.json balanced_accuracy is >= this value. Frequencies are over those qualifying runs only. Requires DMP or gene FeatureCuts (dmp_modeling_mode=featurecuts and/or gene_modeling_mode=featurecuts|from_stable_dmp_panel); without FeatureCuts per-run balanced_accuracy is unavailable.",
       "title": "Stability Min Balanced Accuracy"
     },
     "stability_min_core_dmps": {

@@ -163,6 +163,30 @@ def apply_modeling_modes_to_validation_dict(validation: Dict[str, Any]) -> Dict[
     return out
 
 
+def validate_stability_min_balanced_accuracy_requires_featurecuts(
+    validation: Mapping[str, Any],
+) -> None:
+    """
+    Reject stability_min_balanced_accuracy when no FeatureCuts axis is enabled.
+
+    Without DMP or gene FeatureCuts, per-run balanced_accuracy used for stability
+    run filtering is unavailable (null/zero), so the threshold is meaningless.
+    """
+    derived = apply_modeling_modes_to_validation_dict(dict(validation))
+    min_ba = derived.get("stability_min_balanced_accuracy")
+    if min_ba is None:
+        return
+    if not bool(derived.get("stability_featurecuts_enabled")) and not bool(
+        derived.get("stability_gene_featurecuts_enabled")
+    ):
+        raise ValueError(
+            "stability_min_balanced_accuracy requires DMP or gene FeatureCuts: "
+            "set dmp_modeling_mode=featurecuts and/or "
+            "gene_modeling_mode=featurecuts|from_stable_dmp_panel. "
+            "Without FeatureCuts, per-run balanced_accuracy is unavailable for stability filtering."
+        )
+
+
 def mapper_csv_pattern_for_dmp_mode(dmp_mode: DmpModelingMode) -> str:
     if dmp_mode == "stable_panel":
         return "stable_dmps*.csv"
