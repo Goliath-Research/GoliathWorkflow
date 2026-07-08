@@ -17,6 +17,9 @@
     },
     "thermos": {
       "enabled": true
+    },
+    "docs-canvas": {
+      "enabled": true
     }
   }
 }
