@@ -20,7 +20,7 @@ methyl-validation --project /work/projects/prostate-cancer/configs/project_Healt
 
 ## Process model
 
-![Freeze stage in pipeline lifecycle](../diagrams/out/pipeline-stages.svg)
+![Freeze stage in pipeline lifecycle](../diagrams/out/pipeline-stages.png)
 
 
 ## Expected outputs

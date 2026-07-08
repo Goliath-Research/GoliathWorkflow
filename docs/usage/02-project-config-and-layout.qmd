@@ -84,7 +84,7 @@ Important subtrees:
 
 ## Handoff model
 
-![Configuration layer model](../diagrams/out/layer-model.svg)
+![Configuration layer model](../diagrams/out/layer-model.png)
 
 
 ## Do not do this

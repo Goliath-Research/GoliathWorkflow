@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Pre-render Mermaid sources in docs/diagrams/src/ to SVG in docs/diagrams/out/.
+# Pre-render Mermaid sources in docs/diagrams/src/ to SVG + PNG in docs/diagrams/out/.
+# PNG uses native SVG text (htmlLabels: false) so labels survive LaTeX/PDF embeds.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -7,11 +8,12 @@ SRC="${ROOT}/docs/diagrams/src"
 OUT="${ROOT}/docs/diagrams/out"
 DIAGRAM_PKG="${ROOT}/docs/diagrams"
 MMDC="${DIAGRAM_PKG}/node_modules/.bin/mmdc"
+MERMAID_CONFIG="${DIAGRAM_PKG}/mermaid-config.json"
 CHECK_ONLY=false
 
 usage() {
   echo "Usage: $0 [--check]" >&2
-  echo "  Renders *.mmd to matching *.svg under docs/diagrams/out/." >&2
+  echo "  Renders *.mmd to matching *.svg and *.png under docs/diagrams/out/." >&2
   echo "  --check  Exit 1 if any output is missing, older than its source, or a placeholder." >&2
 }
 
@@ -79,11 +81,15 @@ shopt -s nullglob
 for mmd in "$SRC"/*.mmd; do
   base="$(basename "$mmd" .mmd)"
   svg="$OUT/${base}.svg"
+  png="$OUT/${base}.png"
   if $CHECK_ONLY; then
-    if [[ ! -f "$svg" ]] || [[ "$mmd" -nt "$svg" ]]; then
-      echo "STALE: $svg (regenerate with scripts/render_diagrams.sh)" >&2
-      stale=1
-    elif is_placeholder_svg "$svg"; then
+    for artifact in "$svg" "$png"; do
+      if [[ ! -f "$artifact" ]] || [[ "$mmd" -nt "$artifact" ]]; then
+        echo "STALE: $artifact (regenerate with scripts/render_diagrams.sh)" >&2
+        stale=1
+      fi
+    done
+    if [[ -f "$svg" ]] && is_placeholder_svg "$svg"; then
       echo "PLACEHOLDER: $svg (regenerate with scripts/render_diagrams.sh)" >&2
       stale=1
     fi
@@ -91,8 +97,13 @@ for mmd in "$SRC"/*.mmd; do
   fi
   ensure_mmdc
   resolve_chromium
-  echo "Rendering $mmd -> $svg (PUPPETEER_EXECUTABLE_PATH=${PUPPETEER_EXECUTABLE_PATH:-unset})"
-  "$MMDC" -i "$mmd" -o "$svg" -b transparent
+  if [[ ! -f "$MERMAID_CONFIG" ]]; then
+    echo "ERROR: missing Mermaid config at $MERMAID_CONFIG" >&2
+    exit 1
+  fi
+  echo "Rendering $mmd -> $svg + $png (PUPPETEER_EXECUTABLE_PATH=${PUPPETEER_EXECUTABLE_PATH:-unset})"
+  "$MMDC" -i "$mmd" -o "$svg" -b transparent -c "$MERMAID_CONFIG"
+  "$MMDC" -i "$mmd" -o "$png" -b transparent -c "$MERMAID_CONFIG" -s 2
   if is_placeholder_svg "$svg"; then
     echo "ERROR: render produced placeholder-like output for $svg" >&2
     exit 1

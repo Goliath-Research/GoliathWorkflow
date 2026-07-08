@@ -35,7 +35,7 @@ Configured by profile `actionConfig.validation.backend_profiles` (plus optional 
 
 ## Process model
 
-![Model stage in pipeline lifecycle](../diagrams/out/pipeline-stages.svg)
+![Model stage in pipeline lifecycle](../diagrams/out/pipeline-stages.png)
 
 
 ## Required config keys

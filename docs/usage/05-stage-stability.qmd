@@ -67,18 +67,7 @@ Deprecated names (`mc_dmp_discovery`, `mc_dmp_featurecuts`, `mc_gene_mapper`, `m
 
 ## Process model
 
-![Stability stage process model](../diagrams/out/stability-stage.svg)
-
-```mermaid
-flowchart LR
-  runs[run_0001..run_N] --> centroid[methyl-centroid] --> detector[methyl-detector]
-  detector --> dmp[discovery + selected DMP exports]
-  detector --> results[result JSON]
-  dmp --> agg[run_stability_analysis]
-  results --> agg
-  agg --> stable[stable_dmps_production.csv]
-  agg --> summary[stability_summary.json]
-```
+![Stability stage process model](../diagrams/out/stability-stage.png)
 
 ## Expected outputs
 

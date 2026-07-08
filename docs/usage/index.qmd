@@ -27,17 +27,7 @@ For statistical background, use [`docs/theory/`](../theory/index.qmd). For compi
 
 ## End-to-end workflow map
 
-```mermaid
-flowchart LR
-  setup[Setup]
-  stability[Stability]
-  freeze[Freeze]
-  model[Model]
-  postmodel[Post-model Validation]
-  blind[Blind Prediction]
-  setup --> stability --> freeze --> model --> postmodel
-  model --> blind
-```
+![End-to-end pipeline stages](../diagrams/out/pipeline-stages.png)
 
 ## Scope boundaries
 

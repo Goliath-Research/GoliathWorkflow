@@ -115,7 +115,7 @@ flowchart TB
 :::
 
 ::: {.content-visible when-format="pdf"}
-![presentation-map](../../../docs/diagrams/out/distributed-runtime.svg){width=100%}
+![presentation-map](../../../docs/diagrams/out/distributed-runtime.png){width=100%}
 :::
 
 

@@ -54,7 +54,7 @@ methyl-predictor --project /work/project/monte_carlo_runs/production/project.jso
 
 ## Integration diagram
 
-![Package integration](../diagrams/out/pipeline-stages.svg)
+![Package integration](../diagrams/out/pipeline-stages.png)
 
 
 ## Do not do this

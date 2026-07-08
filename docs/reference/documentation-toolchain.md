@@ -25,7 +25,7 @@
 | Display math (HTML + PDF) | High | Excellent (LaTeX) | Excellent | Weak PDF | Excellent |
 | Bibliography / `@citation` | High | Existing `references.bib` | Migration cost | Plugin-dependent | Existing |
 | Equation cross-refs | High | `@eq-`, `@sec-` in place | Comparable | Limited | In place |
-| Mermaid → PDF fidelity | High | Pre-rendered SVG via `mmdc` | Extension-dependent | Poor | TikZ duplicate (painful) |
+| Mermaid → PDF fidelity | High | Pre-rendered PNG (`htmlLabels: false` SVG + 2× PNG via `mmdc`) | Extension-dependent | Poor | TikZ duplicate (painful) |
 | Mermaid → HTML / GitHub | High | Native + CDN | Good | Built-in | HTML only without TikZ |
 | CI complexity | Medium | Quarto + TeX + Node for mmdc | Higher migration | Lower | Quarto + TeX + manual TikZ |
 | Contributor friction | Medium | `.qmd` + one diagram source | New toolchain | Split from theory book | Two diagram languages |
@@ -42,15 +42,17 @@
 
 ```
 docs/diagrams/src/*.mmd     # canonical Mermaid source
-docs/diagrams/out/*.svg     # committed pre-rendered assets
+docs/diagrams/out/*.svg     # committed pre-rendered assets (GitHub / HTML; native SVG text)
+docs/diagrams/out/*.png     # committed pre-rendered assets (Quarto PDF — reliable label rasterization)
+docs/diagrams/mermaid-config.json  # htmlLabels: false so SVG text survives non-HTML viewers
 scripts/render_diagrams.sh  # mmdc wrapper (--check for CI)
 ```
 
 | Output | Mechanism |
 |--------|-----------|
 | GitHub / plain `.md` | Fenced ` ```mermaid ` blocks (native GitHub) |
-| Quarto HTML | Live Mermaid JS (Quarto 1.4+ or CDN hook) |
-| Quarto PDF | `![caption](../diagrams/out/fig.svg)` or `\includegraphics` — **no inline TikZ for workflow figures** |
+| Quarto HTML | `![caption](../diagrams/out/fig.png)` or `.svg` |
+| Quarto PDF | `![caption](../diagrams/out/fig.png)` — **PNG embeds** (SVG can rasterize labels poorly in LuaLaTeX) |
 | Canvas | SDK DAG layout mirroring same topology; links to `.mmd` sources |
 | Marp | Embed pre-rendered PNG/SVG from `out/` |
 
@@ -71,7 +73,7 @@ bash scripts/render_diagrams.sh --check
 
 **ARM / aarch64 dev hosts:** `@mermaid-js/mermaid-cli` bundles Puppeteer; on ARM it may download the wrong Chrome arch when invoked via ephemeral `npx`. The repo pins a local install under `docs/diagrams/node_modules/` and `render_diagrams.sh` sets `PUPPETEER_EXECUTABLE_PATH` to system `chromium` / `chromium-browser` when unset. Install Chromium (`apt install chromium-browser`, or `/snap/bin/chromium`).
 
-**CI:** PR pipeline installs `chromium-browser`, runs `npm ci` in `docs/diagrams/`, then `render_diagrams.sh --check`. Commit regenerated SVGs whenever `.mmd` sources change. PDF builds must not depend on live Mermaid JS.
+**CI:** PR pipeline installs `chromium-browser`, runs `npm ci` in `docs/diagrams/`, then `render_diagrams.sh --check`. Commit regenerated SVG **and** PNG whenever `.mmd` sources change. PDF builds must not depend on live Mermaid JS or SVG `foreignObject` labels.
 
 ### TikZ policy
 

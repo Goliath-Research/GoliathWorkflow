@@ -82,6 +82,13 @@ check_absent 'stability_gene_featurecuts_max_dmps": 500' 'Gene FC caps belong in
 
 check_absent 'package defaults in MonteCarloConfig' 'Do not document Python package defaults for MC tunables'
 
+# Usage manual PDF uses pre-rendered PNG; inline Mermaid renders as source in LaTeX.
+if rg -l '```mermaid' --glob 'docs/usage/**/*.qmd' . >/tmp/doc_fresh_hits.txt 2>/dev/null; then
+  echo "FAIL: docs/usage must not use inline \`\`\`mermaid (use ../diagrams/out/*.png for PDF)" >&2
+  head -30 /tmp/doc_fresh_hits.txt >&2
+  fail=1
+fi
+
 # Primary DMP export should be selected, not classifier-extended as the main narrative.
 check_absent 'dmps-\*-classifier-extended\.csv' 'Prefer dmps-*-selected.csv; classifier-extended is transitional'
 

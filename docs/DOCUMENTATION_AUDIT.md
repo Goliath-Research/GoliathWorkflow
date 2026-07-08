@@ -19,7 +19,7 @@ This document is the canonical register of documentation coverage, canonical sou
 | **Deployment** | Usage ch.14, [`deployment/production_runbook.md`](deployment/production_runbook.md) | Dual-backend | |
 | **Schemas / contracts** | [`reference/schema-index.md`](reference/schema-index.md), [`contracts/openapi.yaml`](../contracts/openapi.yaml) | Machine-readable | |
 | **Regulatory / product controls** | [`regulatory/`](regulatory/README.md) | New synthesis pillar | Product controls, validation evidence index, change management, deployment supervision, traceability |
-| **Diagrams** | [`docs/diagrams/src/*.mmd`](diagrams/src/), [`docs/diagrams/out/*.svg`](diagrams/out/) | Pre-render pipeline | `scripts/render_diagrams.sh` (pinned `docs/diagrams/package.json`, system Chromium on ARM) |
+| **Diagrams** | [`docs/diagrams/src/*.mmd`](diagrams/src/), [`docs/diagrams/out/*.svg`](diagrams/out/), [`docs/diagrams/out/*.png`](diagrams/out/) | Pre-render pipeline | `scripts/render_diagrams.sh` (`htmlLabels: false`, PNG for Quarto PDF) |
 
 ## Canonical doc map (“read this for X”)
 

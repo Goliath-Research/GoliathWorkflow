@@ -18,7 +18,7 @@ methyl-predictor --project /work/projects/prostate-cancer/Healthy_vs_PCa1-4-CG/m
 
 ## Process model
 
-![Blind prediction stage](../diagrams/out/pipeline-stages.svg)
+![Blind prediction stage](../diagrams/out/pipeline-stages.png)
 
 
 ## Required config pattern

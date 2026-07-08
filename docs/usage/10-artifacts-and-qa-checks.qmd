@@ -37,7 +37,7 @@ methyl-export-task-schemas --check   # CI drift gate
 
 ## Handoff integrity checks
 
-![Artifact handoffs](../diagrams/out/pipeline-stages.svg)
+![Artifact handoffs](../diagrams/out/pipeline-stages.png)
 
 
 ## QA checklist per stage

@@ -10,7 +10,7 @@ Deploy the **control plane** (database, REST gateway) and **GPU workers** that e
 
 ## Architecture
 
-![Distributed runtime](../diagrams/out/distributed-runtime.svg)
+![Distributed runtime](../diagrams/out/distributed-runtime.png)
 
 
 | Component | Role |

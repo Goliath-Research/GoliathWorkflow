@@ -15,7 +15,7 @@ Without these gates, bad alignments would waste GPU extraction time, and under-c
 
 ## End-to-end flow
 
-![Sample prep and QC flow](../diagrams/out/sample-prep-flow.svg)
+![Sample prep and QC flow](../diagrams/out/sample-prep-flow.png)
 
 
 | Gate | Scope variable | When | Blocks |
