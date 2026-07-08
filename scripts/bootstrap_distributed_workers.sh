@@ -33,6 +33,7 @@
 #   --api-base URL         Gateway for workflow deploy (default: WORKER_API_BASE)
 #   --use-gateway-only     Seed catalog via admin gateway (requires bearer token)
 #   --with-cluster-security  Azure SQL/PG: apply cluster IP-binding columns
+#   --verify               Read-only health check (schema artifacts, catalog drift, optional gateway ping)
 #   -h, --help
 
 set -euo pipefail
@@ -48,6 +49,7 @@ SCHEMA_ONLY=0
 REGISTER_WORKER=0
 GATEWAY_ONLY=0
 WITH_CLUSTER_SECURITY=0
+VERIFY_ONLY=0
 WORKER_KEY="${WORKER_KEY:-$(hostname -s 2>/dev/null || echo worker-1)}"
 CLUSTER_KEY="${CLUSTER_KEY:-epimethyl}"
 WORKER_ENV_FILE="${WORKER_ENV_FILE:-/work/epimethyl/env/worker.env}"
@@ -68,6 +70,7 @@ while [[ $# -gt 0 ]]; do
     --api-base) API_BASE="${2:-}"; shift 2 ;;
     --use-gateway-only) GATEWAY_ONLY=1; shift ;;
     --with-cluster-security) WITH_CLUSTER_SECURITY=1; shift ;;
+    --verify) VERIFY_ONLY=1; SKIP_SCHEMA=1; SKIP_SEED=1; SKIP_WORKFLOWS=1; shift ;;
     --worker-env) WORKER_ENV_FILE="${2:-}"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage; exit 1 ;;
@@ -76,6 +79,39 @@ done
 
 PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
 [[ -x "$PYTHON_BIN" ]] || PYTHON_BIN=python3
+
+if [[ "$VERIFY_ONLY" -eq 1 ]]; then
+  echo "==> Bootstrap verify (read-only) ..."
+  fail=0
+  cd "$REPO_ROOT"
+  # shellcheck disable=SC1091
+  if [[ -f "$REPO_ROOT/.venv/bin/activate" ]]; then
+    source "$REPO_ROOT/.venv/bin/activate"
+  fi
+  if ! methyl-export-action-catalog --check; then fail=1; fi
+  if ! methyl-export-domain-schemas --check; then fail=1; fi
+  if [[ -f "$REPO_ROOT/schemas/actions/catalog.json" ]]; then
+    n="$(python3 -c 'import json; print(len(json.load(open("schemas/actions/catalog.json"))["actions"]))' 2>/dev/null || echo 0)"
+    echo "Catalog actions on disk: $n"
+  fi
+  if [[ -f /work/epimethyl/env/workflow_versions.json ]]; then
+    echo "OK: workflow_versions.json present"
+  else
+    echo "WARN: /work/epimethyl/env/workflow_versions.json missing (run deploy_workflow_definitions.sh)"
+  fi
+  if curl -fsS -o /dev/null "${API_BASE%/}/health" 2>/dev/null || curl -fsS -o /dev/null "$API_BASE" 2>/dev/null; then
+    echo "OK: gateway reachable at $API_BASE"
+  else
+    echo "WARN: gateway not reachable at $API_BASE (start methyl-gateway for live check)"
+  fi
+  bash "$SCRIPT_DIR/verify_work_layout.sh" || fail=1
+  if [[ $fail -ne 0 ]]; then
+    echo "Bootstrap verify failed." >&2
+    exit 1
+  fi
+  echo "Bootstrap verify passed."
+  exit 0
+fi
 
 # shellcheck disable=SC1091
 source "$REPO_ROOT/.venv/bin/activate"

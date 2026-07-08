@@ -119,3 +119,9 @@ def test_domain_schema_export_and_drift_check(tmp_path):
     registry = json.loads((tmp_path / "registry.json").read_text(encoding="utf-8"))
     assert "MethylSampleRef" in registry["types"]
     assert (tmp_path / "domain_program.schema.json").is_file()
+
+
+def test_committed_domain_schemas_match_repo() -> None:
+    """Committed schemas/domain/* must match in-code domain models."""
+    drift = check_domain_schema_drift()
+    assert drift == [], "\n".join(drift)

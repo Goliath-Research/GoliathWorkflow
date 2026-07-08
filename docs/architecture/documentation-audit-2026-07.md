@@ -1,6 +1,6 @@
 # Documentation Audit — July 2026
 
-> **Status:** Remediation in progress (docs refresh + CI guardrails plan).
+> **Status:** COMPLETE (docs refresh + CI guardrails plan, 2026-07).
 
 This audit records drift between MethylPipeline code and documentation after the **four-layer config**, **config-not-code**, **DMP/gene modeling modes**, and **DMP export simplification** changes.
 

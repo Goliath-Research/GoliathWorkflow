@@ -36,6 +36,23 @@ flowchart LR
 
 Register pipelines per [`ci/README.md`](../../ci/README.md).
 
+## Operator script catalog
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/assemble_release.sh` | Compose MP + MethylExtractor release bundle |
+| `scripts/promote_release.sh` | Promote bundle to `/work/epimethyl/current` |
+| `scripts/bootstrap_distributed_workers.sh` | DB seed + workflow deploy (`--verify` for health check) |
+| `scripts/deploy_workflow_definitions.sh` | POST DomainPrograms to gateway |
+| `scripts/verify_setup.sh` | Post-promote layout verification |
+| `scripts/verify_e2e_node.sh` | GPU worker pre-flight |
+| `scripts/verify_work_layout.sh` | Four-layer `/work` + env sanity |
+| `scripts/smoke_sample_prep.sh` | SamplePrep smoke (stub or live worker) |
+| `scripts/smoke_study_lifecycle.sh` | Validation lifecycle smoke |
+| `scripts/workflow_presets.sh` | Canonical `methyl-workflow-run` command presets |
+
+Full operator journey: [`operator-journey.md`](operator-journey.md).
+
 ## Directory layout
 
 ```

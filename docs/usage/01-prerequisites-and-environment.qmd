@@ -13,7 +13,14 @@ Set up a reproducible execution environment for all package CLIs and workflow st
 
 ## Environment bootstrap
 
-From repo root:
+From repo root (canonical):
+
+```bash
+bash scripts/setup_host.sh --system-deps --with-deps
+source .venv/bin/activate
+```
+
+Or manual venv:
 
 ```bash
 python3.12 -m venv .venv
@@ -63,3 +70,4 @@ methyl-predictor --help
 
 - `README.md`
 - `docs/DEPLOYMENT.md`
+- Interactive doc hubs: [`docs/canvas/`](../canvas/README.md) — run `bash scripts/sync_cursor_canvases.sh` after clone to open canvases in Cursor

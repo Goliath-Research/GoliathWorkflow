@@ -15,6 +15,12 @@ Thin index linking each package's `IMPLEMENTATION.md`. Apply [`_TEMPLATE.md`](_T
 | methylalignmentqc | [IMPLEMENTATION.md](../../../packages/methylalignmentqc/docs/IMPLEMENTATION.md) | [THEORY ch.09](../../../docs/theory/chapters/09-methylalignmentqc.qmd) | [USAGE.md](../../../packages/methylalignmentqc/docs/USAGE.md) |
 | methylextractionqc | — | [THEORY ch.09a](../../../docs/theory/chapters/09a-methylextractionqc.qmd) | [USAGE.md](../../../packages/methylextractionqc/docs/USAGE.md) |
 | methyldiseaseprogression | [IMPLEMENTATION.md](../../../packages/methyldiseaseprogression/docs/IMPLEMENTATION.md) | [THEORY ch.05](../../../docs/theory/chapters/05-methylpredictor-and-validation.qmd) | [USAGE.md](../../../packages/methyldiseaseprogression/docs/USAGE.md) |
+| methyldomain | [IMPLEMENTATION.md](../../../packages/methyldomain/docs/IMPLEMENTATION.md) | — | [USAGE.md](../../../packages/methyldomain/docs/USAGE.md) |
+| methyldmpselect | [IMPLEMENTATION.md](../../../packages/methyldmpselect/docs/IMPLEMENTATION.md) | — | [USAGE.md](../../../packages/methyldmpselect/docs/USAGE.md) |
+| methylgeneselect | [IMPLEMENTATION.md](../../../packages/methylgeneselect/docs/IMPLEMENTATION.md) | — | [USAGE.md](../../../packages/methylgeneselect/docs/USAGE.md) |
+| methylgenefeatureselect | [IMPLEMENTATION.md](../../../packages/methylgenefeatureselect/docs/IMPLEMENTATION.md) | — | [USAGE.md](../../../packages/methylgenefeatureselect/docs/USAGE.md) |
+| methylinfotheory | [IMPLEMENTATION.md](../../../packages/methylinfotheory/docs/IMPLEMENTATION.md) | — | [USAGE.md](../../../packages/methylinfotheory/docs/USAGE.md) |
+| methylderivedmeasures | [IMPLEMENTATION.md](../../../packages/methylderivedmeasures/docs/IMPLEMENTATION.md) | — | [USAGE.md](../../../packages/methylderivedmeasures/docs/USAGE.md) |
 | methylcluster | **archived** — see below | [THEORY.md](../../../packages/methylcluster/docs/THEORY.md) | [USAGE.md](../../../packages/methylcluster/docs/USAGE.md) |
 
 ## methylcluster (archived)

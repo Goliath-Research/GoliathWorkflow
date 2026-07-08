@@ -114,6 +114,12 @@ Or register from the operator host during bootstrap:
 bash scripts/bootstrap_distributed_workers.sh --register-worker --skip-schema
 ```
 
+Read-only health check (no DDL/seed/deploy):
+
+```bash
+bash scripts/bootstrap_distributed_workers.sh --verify
+```
+
 ## Smoke tests
 
 ```bash

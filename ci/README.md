@@ -11,6 +11,7 @@ Each YAML lives in **this repository** so Azure DevOps can point pipelines at lo
 | [`azure-pipelines-release-assemble.yml`](azure-pipelines-release-assemble.yml) | Epimethyl-Release-Assemble | Manual |
 | [`azure-pipelines-release-deploy.yml`](azure-pipelines-release-deploy.yml) | Epimethyl-Release-Deploy | Manual (+ approval) |
 | [`azure-pipelines-real-data.yml`](azure-pipelines-real-data.yml) | MethylPipeline-RealData | Manual / scheduled (self-hosted) |
+| [`azure-pipelines-smoke.yml`](azure-pipelines-smoke.yml) | MethylPipeline-Distributed-Smoke | Nightly + manual (`production-work-agents`) |
 
 ## Regression and coverage gate (PR pipeline)
 
@@ -87,3 +88,7 @@ Pipeline **definition names** must match assemble/deploy parameters (`methylPipe
 4. Approve **Epimethyl-Release-Deploy** (this repo).
 
 See [`docs/deployment/production_release.md`](../docs/deployment/production_release.md).
+
+## GitHub Actions (supplementary)
+
+The root [`.github/workflows/db-parity.yml`](../.github/workflows/db-parity.yml) runs PostgreSQL parity and worker schema drift on path-filtered changes. **Full regression remains on Azure DevOps** (`MethylPipeline-PR`). Configure branch policies to require the ADO build on merge, or add a mirror workflow if GitHub-only forks must gate without ADO.

@@ -12,7 +12,7 @@ Navigation hub for the three documentation pillars (Theory, Usage, Implementatio
 | **Statistician** — methods and assumptions | [Theory book](theory/index.qmd) — e.g. ch.03 DMP detection |
 | **Developer** — engine, workers, compiler | [Implementation guide](implementation/index.md) |
 | **Workflow author** — DomainPrograms | [DomainProgram language](reference/domain-program-language.md) + [Architecture: layer model](architecture/layer-model.md) |
-| **DevOps** — DB, gateway, workers | [Usage ch.14](usage/14-deployment-and-distributed-workflow.qmd) + [Deployment runbook](deployment/production_runbook.md) |
+| **DevOps** — DB, gateway, workers | [Operator journey](deployment/operator-journey.md) · [Usage ch.14](usage/14-deployment-and-distributed-workflow.qmd) · [Production runbook](deployment/production_runbook.md) |
 | **Regulatory / quality** — product controls, evidence, change management | [Regulatory and product controls](regulatory/README.md) |
 
 ## Five navigation lenses
@@ -50,8 +50,8 @@ See table above. Package maintainers: [implementation/packages/](implementation/
 | Area | Location |
 |------|----------|
 | Architecture | [`architecture/`](architecture/index.md) |
-| Reference lookup | [`reference/`](reference/documentation-toolchain.md) |
-| Deployment | [`deployment/`](deployment/production_runbook.md) |
+| Reference lookup | [`reference/documentation-toolchain.md`](reference/documentation-toolchain.md), [`reference/configuration-reference.qmd`](reference/configuration-reference.qmd) |
+| Deployment | [`deployment/operator-journey.md`](deployment/operator-journey.md), [`deployment/production_runbook.md`](deployment/production_runbook.md) |
 | Regulatory / product controls | [`regulatory/`](regulatory/README.md) |
 | Plans | [`plans/`](plans/README.md) |
 | Cursor canvases | [`canvas/`](canvas/README.md) — versioned `.canvas.tsx`; run `scripts/sync_cursor_canvases.sh` after clone |

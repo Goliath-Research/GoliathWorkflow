@@ -25,6 +25,11 @@ Plans in this folder are the **source of truth** for large features. Each plan m
 | [`ci-regression-testing.plan.md`](ci-regression-testing.plan.md) | **Epic** | CI regression testing and coverage | `pytest-config`, `ci-script`, `test-gap-analysis`, `author-missing-tests`, `azure-pipeline`, `ci-readme`, `regulatory-doc`, `regulatory-wiring`, `verify` |
 | [`regression-protection-test-coverage.plan.md`](regression-protection-test-coverage.plan.md) | **Epic** | Regression-protection test coverage | `p1-resolver-merge`, `p1-workflow-merge`, `p2-task-schema-drift-pytest`, `p3-cli-resolved-config`, `p4-action-result`, `p5-resolver-model-handshake`, `p6-ratchet-scope` |
 | [`hyperparameter-result-versioning.plan.md`](hyperparameter-result-versioning.plan.md) | **Epic** | Hyperparameter result versioning (CAAS) | `record-schema`, `content-store`, `content-key`, `skip-reuse`, `execute-orchestrate`, `hpset-id`, `tests`, `docs` |
+| [`workflow-engine-sql-design.plan.md`](workflow-engine-sql-design.plan.md) | **Epic** | Workflow engine SQL design | (see plan frontmatter) |
+| [`alignment-derived-guardrails.plan.md`](alignment-derived-guardrails.plan.md) | **Task** | Alignment-derived guardrails | (see plan frontmatter) |
+| [`dmp_gene_modeling_modes_c0d0bad6.plan.md`](dmp_gene_modeling_modes_c0d0bad6.plan.md) | **Task** | DMP/gene modeling modes (historical) | Superseded by composable-pipeline + docs refresh |
+| [`chromosome_sample_derived_measures_a9b33eac.plan.md`](chromosome_sample_derived_measures_a9b33eac.plan.md) | **Task** | Chromosome sample derived measures | (see plan frontmatter) |
+| [`ising_mrf_v2_gpu_5f06ccb7.plan.md`](ising_mrf_v2_gpu_5f06ccb7.plan.md) | **Task** | Ising MRF v2 GPU | (see plan frontmatter) |
 
 Create each **Task** under its Epic in Azure DevOps Boards. Copy the task title from the plan `todos[].content` field. Mark tasks **Closed** when the corresponding code is merged.
 

@@ -62,6 +62,12 @@ def test_catalog_entries_have_execution_mode() -> None:
             assert entry.action_config_key in PROJECT_ACTION_CONFIG_KEYS
 
 
+def test_committed_action_catalog_matches_repo() -> None:
+    """Committed schemas/actions/catalog.json must match in-code catalog."""
+    drift = check_action_catalog_drift()
+    assert drift == [], "\n".join(drift)
+
+
 def test_action_catalog_export_roundtrip(tmp_path) -> None:
     export_action_catalog(output_root=tmp_path, write=True)
     assert check_action_catalog_drift(output_root=tmp_path) == []

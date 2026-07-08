@@ -56,6 +56,14 @@ steps:
         "$(Build.ArtifactStagingDirectory)/release/wheels/"*.whl
     displayName: Upload wheels to Azure Artifacts PyPI feed
 
+  - bash: |
+      set -euo pipefail
+      bash scripts/install_quarto_ci.sh
+      quarto render docs/theory docs/usage --to pdf
+      bash scripts/check_book_freshness.sh --check
+    displayName: Build documentation PDFs and verify freshness
+    continueOnError: true
+
   # Optional: copy to shared /work when a self-hosted agent with EPIMETHYL_ROOT is used
   - bash: |
       set -euo pipefail

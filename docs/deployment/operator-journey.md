@@ -1,0 +1,84 @@
+# Operator journey (day-1 → day-N)
+
+Single navigation page for production operators. Each step links to the canonical deep-dive runbook — this file does not duplicate them.
+
+## Prerequisites
+
+| Step | Action | Deep dive |
+|------|--------|-----------|
+| 1 | Mount shared storage at `/work/epimethyl` and study trees under `/work/projects/<study>/` | [Production runbook — prerequisites](production_runbook.md) |
+| 2 | Install site manifest at `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | [Layer model](../architecture/layer-model.md) |
+| 3 | Choose DB backend (PostgreSQL recommended for greenfield; Azure SQL for portal phase-1) | [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd) |
+
+## Greenfield control plane
+
+| Step | Script / command | Deep dive |
+|------|------------------|-----------|
+| 4 | Deploy DB schema | `workflow_engine/sql_pg/deploy_azure.sh` or `sql_mssql/deploy_azure.sh` |
+| 5 | Bootstrap catalog + workflows | `bash scripts/bootstrap_distributed_workers.sh` |
+| 6 | Verify bootstrap (read-only) | `bash scripts/bootstrap_distributed_workers.sh --verify` |
+| 7 | Start gateway (systemd) | `deploy/systemd/methyl-gateway.service` |
+| 8 | Register + start workers | `scripts/register_worker.sh`, `scripts/install_worker_systemd.sh` |
+
+See [Distributed workers bootstrap](distributed-workers-bootstrap.md) and [GPU worker runbook](gpu_worker_runbook.md).
+
+## Release promote
+
+| Step | Script / pipeline | Deep dive |
+|------|-------------------|-----------|
+| 9 | Tag release build | Azure DevOps `ci/azure-pipelines-release.yml` (`v*`) |
+| 10 | Assemble MP + MethylExtractor | `ci/azure-pipelines-release-assemble.yml` → `scripts/assemble_release.sh` |
+| 11 | Promote to `/work/epimethyl/current` | `ci/azure-pipelines-release-deploy.yml` → `scripts/promote_release.sh` |
+| 12 | Post-promote verify | `scripts/verify_setup.sh` (deploy pipeline); optional `scripts/verify_e2e_node.sh` on GPU worker |
+
+See [Production release](production_release.md).
+
+## Study execution (canonical)
+
+| Step | Entry | Deep dive |
+|------|-------|-----------|
+| 13 | Sample prep (FASTQ → HDF5) | Portal `POST /v1/studies/sample-prep/start` or admin CLI | [SamplePrepFlow](../../workflow_engine/sql_mssql/SamplePrepFlow.md), [Usage ch.03](../usage/03-sample-prep-and-qc.qmd) |
+| 14 | Staged validation | `methyl-workflow-run` + DomainProgram + profile | [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.qmd) |
+| 15 | Monitor instances | Gateway poll + DB `wf.workflow_instance` | [Distributed runtime](../architecture/distributed-runtime.md) |
+
+**Presets:** copy-ready program/profile/context combos — `bash scripts/workflow_presets.sh list`.
+
+## Smoke and rollback
+
+| Step | Script | When |
+|------|--------|------|
+| Smoke (stub worker) | `WORKER_STUB_EXTERNAL=1 bash scripts/smoke_sample_prep.sh` | After bootstrap |
+| Smoke (lifecycle) | `bash scripts/smoke_study_lifecycle.sh` | After workflow deploy |
+| Nightly CI smoke | `ci/azure-pipelines-smoke.yml` | Scheduled on `production-work-agents` |
+| Rollback release | Re-run deploy pipeline with previous `releaseVersion` | [Production release — rollback](production_release.md#rollback) |
+
+## Script catalog (operator)
+
+| Script | Purpose |
+|--------|---------|
+| `bootstrap_distributed_workers.sh` | DDL + catalog seed + workflow deploy (+ `--verify`) |
+| `assemble_release.sh` | Bundle MethylPipeline + MethylExtractor artifacts |
+| `promote_release.sh` | Flip `/work/epimethyl/current`, refresh venv, worker env |
+| `deploy_workflow_definitions.sh` | POST compiled DomainPrograms to gateway |
+| `register_worker.sh` | Register `wf.cluster` / worker row |
+| `verify_setup.sh` | Release layout + script presence |
+| `verify_e2e_node.sh` | GPU worker pre-flight (Parabricks, HDF5 plugin, venv) |
+| `verify_work_layout.sh` | Four-layer path and env sanity |
+| `smoke_sample_prep.sh` | End-to-end SamplePrep instance smoke |
+| `smoke_study_lifecycle.sh` | Validation lifecycle smoke |
+| `workflow_presets.sh` | Print canonical `methyl-workflow-run` command lines |
+
+## Legacy paths (transitional only)
+
+| Path | Use when |
+|------|----------|
+| `methyl-validation --stability/--freeze/--model` | Unmigrated shell scripts only |
+| `methyl-validation plan-runs` / `run-task` | File-queue MC not yet on gateway workers |
+
+See [Usage ch.13](../usage/13-distributed-methyl-validation.qmd).
+
+## Related
+
+- [Production runbook](production_runbook.md)
+- [Usage ch.14 — Deployment and distributed workflow](../usage/14-deployment-and-distributed-workflow.qmd)
+- [Operator DB canvas](../canvas/methylpipeline-db-runbook.canvas.tsx)

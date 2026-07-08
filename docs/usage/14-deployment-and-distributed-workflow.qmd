@@ -5,6 +5,7 @@
 Deploy the **control plane** (database, REST gateway) and **GPU workers** that execute SamplePrep and validation workflows. This chapter consolidates the dual-backend story (Azure SQL and PostgreSQL) and links to detailed runbooks.
 
 **Deep dive:** [`docs/deployment/production_runbook.md`](../../deployment/production_runbook.md)  
+**Operator journey (day-1 → day-N):** [`docs/deployment/operator-journey.md`](../../deployment/operator-journey.md)  
 **Worker protocol:** [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md)  
 **REST contract:** [`contracts/openapi.yaml`](../../contracts/openapi.yaml)
 

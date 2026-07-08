@@ -10,6 +10,8 @@ Developer-facing documentation for the workflow engine, workers, DomainProgram c
 | [DomainProgram compiler](domain-program-compiler.md) | compile, bind, deploy |
 | [Packages index](packages/index.md) | links to `packages/*/docs/IMPLEMENTATION.md` |
 
+**Engine deep dive:** [`workflow_engine/docs/pipeline_architecture.md`](../../workflow_engine/docs/pipeline_architecture.md) — DB tables, hyperparameter sets, CAAS, portal lifecycle.
+
 **Also:** [`workflow_engine/docs/IMPLEMENTATION.md`](../../workflow_engine/docs/IMPLEMENTATION.md) — gateway, DB client, scheduler internals.
 
 **Architecture (system design):** [../architecture/](../architecture/index.md). **Operator runbooks:** [../usage/](../usage/index.qmd).

@@ -19,16 +19,20 @@ parameters:
     displayName: Shared storage root on agent
     type: string
     default: /work/epimethyl
+  - name: runE2eVerify
+    displayName: Run verify_e2e_node.sh on deploy agent (GPU worker checks)
+    type: boolean
+    default: false
 
-# Uncomment to auto-trigger after successful assemble (set assemble pipeline name in ADO):
-# resources:
-#   pipelines:
-#     - pipeline: release_assemble
-#       source: Epimethyl-Release-Assemble
-#       trigger:
-#         branches:
-#           include:
-#             - main
+# Auto-trigger after successful assemble (set assemble pipeline name in ADO):
+resources:
+  pipelines:
+    - pipeline: release_assemble
+      source: Epimethyl-Release-Assemble
+      trigger:
+        branches:
+          include:
+            - main
 
 stages:
   - stage: Deploy
@@ -77,9 +81,13 @@ stages:
                 - bash: |
                     set -euo pipefail
                     RUNTIME="${{ parameters.epimethylRoot }}/current/runtime-bundle"
-                    if [[ -x "$RUNTIME/scripts/verify_setup.sh" ]]; then
-                      bash "$RUNTIME/scripts/verify_setup.sh" || true
+                    if [[ ! -x "$RUNTIME/scripts/verify_setup.sh" ]]; then
+                      echo "Missing verify_setup.sh under $RUNTIME"
+                      exit 1
                     fi
-                    echo "Deploy complete for ${{ parameters.releaseVersion }}"
-                  displayName: Post-promote smoke (optional)
-                  continueOnError: true
+                    bash "$RUNTIME/scripts/verify_setup.sh"
+                    if [[ -x "$RUNTIME/scripts/verify_e2e_node.sh" && "${{ parameters.runE2eVerify }}" == "True" ]]; then
+                      bash "$RUNTIME/scripts/verify_e2e_node.sh"
+                    fi
+                    echo "Deploy verification passed for ${{ parameters.releaseVersion }}"
+                  displayName: Post-promote verification

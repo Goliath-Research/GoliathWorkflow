@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/work/epimethyl/repos/MethylPipeline
+# Promoted release layout — no git checkout required at runtime.
+WorkingDirectory=/work/epimethyl/current
 EnvironmentFile=-/work/epimethyl/env/gateway.env
 Environment=PATH=/work/epimethyl/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=/work/epimethyl/venv/bin/methyl-gateway --host 127.0.0.1 --port 8080

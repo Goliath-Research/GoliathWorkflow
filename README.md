@@ -42,19 +42,30 @@ Legacy monolithic CLI (`methyl-validation --stability/--freeze/--model`) is **tr
 
 ## Quick Start (Host / `.venv`)
 
+Canonical bootstrap from repo root:
+
 ```bash
 cd /home/ubuntu/MethylPipeline
-python3.12 -m venv .venv
+bash scripts/setup_host.sh --system-deps --with-deps
 source .venv/bin/activate
-pip install -e packages/methylutils
 ```
 
-Install additional packages as needed, then:
+Or minimal manual venv:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+bash scripts/install_all.sh
+```
+
+Smoke check (canonical first):
 
 ```bash
 methyl-workflow-run --help
-methyl-validation --help
+methyl-validation --help   # legacy / transitional
 ```
+
+See also: `make help` for common dev targets.
 
 ## Notes
 

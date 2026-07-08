@@ -47,12 +47,18 @@ steps:
     displayName: Diagram asset freshness check
 
   - script: |
-      if command -v quarto >/dev/null 2>&1; then
-        quarto render docs/theory docs/usage --to html
-      else
-        echo "quarto not installed on agent; skipping book smoke"
-      fi
+      bash scripts/install_quarto_ci.sh
+      quarto render docs/theory docs/usage --to html
     displayName: Quarto book smoke (theory + usage HTML)
+
+  - script: |
+      python -m venv .venv
+      . .venv/bin/activate
+      python -m pip install -U pip
+      bash scripts/install_packages.sh --with-deps
+      methyl-export-action-catalog --check
+      methyl-export-domain-schemas --check
+    displayName: Schema and action catalog drift check
 
   - script: |
       pytest scripts/tests/test_check_doc_freshness.py scripts/tests/test_render_diagrams.py -q

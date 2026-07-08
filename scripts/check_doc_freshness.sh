@@ -12,7 +12,7 @@ RG_GLOBS=(
   --glob 'packages/**/docs/**'
   --glob 'packages/**/README.md'
   --glob 'workflow_engine/docs/**'
-  --glob 'workflow_engine/contract/**'
+  --glob 'workers/docs/**'
   --glob 'workflow_engine/domain/checks/**/README.md'
   --glob '!.venv/**'
   --glob '!**/_book/**'
@@ -56,6 +56,10 @@ check_absent 'step_config\.enricher' 'Use actionConfig.enricher instead of step_
 check_absent 'step_config\.classifier' 'Use actionConfig.classifier instead of step_config.classifier'
 
 check_absent 'step_config\.alignment_qc' 'Use actionConfig.alignment_qc instead of step_config.alignment_qc'
+
+check_absent 'step_config\.methyl_extract' 'Use actionConfig.methyl_extract instead of step_config.methyl_extract'
+
+check_absent 'step_config\.extraction_qc' 'Use actionConfig.extraction_qc instead of step_config.extraction_qc'
 
 # Precedence must not imply Python package defaults for tunable science knobs.
 check_absent 'site manifest → package defaults' 'Precedence must end with no Python fallback, not package defaults'

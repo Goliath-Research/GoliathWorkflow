@@ -25,7 +25,7 @@ methyl-extraction-qc --project /work/projects/prostate-cancer/configs/project_Ex
 | Chromosome completeness | `per_chromosome` vs expected set | all present with CG |
 | Chromosome uniformity | autosomal `CG.mean_coverage` min/median | ≥ 0.5 |
 
-Override thresholds via `project.json` → `step_config.extraction_qc`.
+Override thresholds via profile or site `actionConfig.extraction_qc`.
 
 ## Output
 

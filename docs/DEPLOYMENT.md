@@ -10,34 +10,30 @@ This guide covers supported execution environments and installation patterns for
 
 ## Recommended: Host `.venv` Setup
 
-From repository root:
+From repository root (canonical):
+
+```bash
+bash scripts/setup_host.sh --system-deps --with-deps
+source .venv/bin/activate
+```
+
+This creates `.venv`, installs editable packages from `scripts/packages.list`, and optional pipeline/GPU dependency sets.
+
+Alternative (manual):
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install --upgrade pip
+bash scripts/install_all.sh
+# optional: bash scripts/install_all.sh --pipeline-reqs --gpu-reqs
 ```
 
-Install packages in editable mode (minimum + common pipeline stack):
+Smoke check (canonical orchestration first):
 
 ```bash
-pip install -e packages/methylutils
-pip install -e packages/methylcentroid
-pip install -e packages/methyldetector
-pip install -e packages/methylclassifier
-pip install -e packages/methylpredictor
-pip install -e packages/methylmapper
-pip install -e packages/methylenricher
-pip install -e packages/methyldiseaseprogression
-pip install -e packages/methylalignmentqc
-pip install -e packages/methylvalidation
-```
-
-Smoke check:
-
-```bash
-methyl-validation --help
+methyl-workflow-run --help
 methyl-stability-freeze-readiness --help
+methyl-validation --help   # legacy / transitional only
 ```
 
 ### Presentation tooling (Marp)
@@ -63,7 +59,7 @@ Run tests and CLI tools from the local virtual environment:
 
 ```bash
 source .venv/bin/activate
-pytest
+make test
 ```
 
 or one-shot:
@@ -85,7 +81,7 @@ Example:
 ```bash
 cd docker
 docker compose up -d
-docker exec -w /workspace methylpipeline methyl-validation --help
+docker exec -w /workspace methylpipeline methyl-workflow-run --help
 docker exec -w /workspace methylpipeline marp --version
 ```
 

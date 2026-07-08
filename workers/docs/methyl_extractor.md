@@ -20,14 +20,16 @@ Remote workers receive **`input_json`** from the workflow engine and read **`pro
 | Source | Fields |
 |--------|--------|
 | `input_json` | `sampleId`, `sampleDir`, `project`, `referenceFasta` (+ optional overrides) |
-| `project.json` | `chromosomes`, `step_config.methyl_extract` |
+| `resolvedConfig` / profile | `actionConfig.methyl_extract` (chromosomes from study manifest; extract contexts, read-level knobs) |
+
+Workers on the distributed path receive merged config via `--resolved-config`; they do **not** read `step_config` from `project.json`.
 
 ### Extract contexts vs downstream `contexts`
 
 | Config | Purpose |
 |--------|---------|
 | `project.contexts` | Downstream centroid/detector (often `["CG"]` only) |
-| `step_config.methyl_extract.extract_contexts` | What sample prep writes (default `["CG","CHG","CHH"]`) |
+| `actionConfig.methyl_extract.extract_contexts` | What sample prep writes (default `["CG","CHG","CHH"]`) |
 
 Extracting all contexts lets `sample.delete_bam` reclaim space without losing CHG/CHH for later analysis.
 

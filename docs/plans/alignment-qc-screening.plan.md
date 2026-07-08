@@ -2,7 +2,7 @@
 name: Alignment QC screening
 overview: Extend MethylAlignmentQC with read-end-aware cycle screening and structured remediation dispositions, then wire fastp Read-2 trimming and forced realign into SamplePrep (plus a remediation workflow for the existing prostate cohort).
 
-> **Status: IMPLEMENTED.** This plan is historical reference. The live workflow is [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (deploy via `scripts/deploy_workflow_definitions.sh`). Operator guide: usage ch.03 [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.qmd) and [`workflow_engine/sql/SamplePrepFlow.md`](../../workflow_engine/sql/SamplePrepFlow.md).
+> **Status: IMPLEMENTED.** This plan is historical reference. The live workflow is [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (deploy via `scripts/deploy_workflow_definitions.sh`). Operator guide: usage ch.03 [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.qmd) and [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md).
 
 azure_devops:
   type: Epic
@@ -279,7 +279,7 @@ Extend [`parabricks_runner.py`](workers/methyl_worker/parabricks_runner.py):
 |------------------|------------------|
 | download → parabricks → **delete_fastqs** → methyl_qc → gate | download → parabricks → methyl_qc → gate → **delete_fastqs only on exit paths** |
 
-Update [`sample_prep_capabilities.md`](workflow_engine/contract/sample_prep_capabilities.md) and [`SamplePrepFlow.md`](workflow_engine/sql/SamplePrepFlow.md):
+Update [`sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md) and [`SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md):
 - Document that FASTQs are retained until final QC
 - Revise Parabricks idempotency notes: re-align after trim requires FASTQs still present
 - `sample.delete-fastqs` runs once per sample on **every terminal path** (pass or final fail), unless `retain_fastqs_on_fail` is set

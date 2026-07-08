@@ -60,6 +60,17 @@ methyl-workflow-run \
 
 Validate compile/bindings before a long run: `python workflow_engine/domain/checks/<study>/check_pipeline.py --program ...`.
 
+## Command presets
+
+Copy-ready program/profile/context combinations:
+
+```bash
+bash scripts/workflow_presets.sh list
+bash scripts/workflow_presets.sh show lifecycle
+```
+
+Set `METHYL_RUNTIME_ROOT=/work/epimethyl/current/runtime-bundle` on production workers to resolve bundle paths.
+
 ## Legacy `methyl-validation` (when it still appears)
 
 Use **`methyl-validation`** only when:
