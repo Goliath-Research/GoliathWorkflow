@@ -48,6 +48,8 @@ format:
     code-overflow: wrap
   pdf:
     documentclass: scrreprt
+    classoption:
+      - DIV=12
     toc: true
     number-sections: true
     colorlinks: true
@@ -55,6 +57,7 @@ format:
     include-in-header:
       text: |
         \usepackage{graphicx}
+        \input{pdf-table-fix.tex}
     geometry:
       - margin=1in
 

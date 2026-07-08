@@ -33,7 +33,9 @@ SEQUENCE root
 └─ FOREACH samples (parallel)
    └─ SEQUENCE one_sample
       ├─ ACTION download_fastq       ← laboratory fastqSource → local sampleDir
-      ├─ ACTION parabricks_fq2bam    ← GPU WGBS align
+      ├─ IF usePangenome
+      │    ├─ THEN parabricks_giraffe   ← GPU vg Giraffe (HPRC pangenome → GRCh38 surjection)
+      │    └─ ELSE parabricks_fq2bam    ← GPU linear WGBS align (fq2bam_meth)
       ├─ ACTION methyl_qc            ← alignment guardrail #1
       │     binds: qcPass, qcDisposition, trimFront1/2, trimTail1/2, remediateAlignment
       └─ IF qcPass
@@ -49,7 +51,7 @@ SEQUENCE root
          └─ ELSE (alignment fail)
             └─ IF remediateAlignment
                ├─ trim_fastq (fastp, read-end trim from screening)
-               ├─ parabricks_fq2bam (forceRealign)
+               ├─ IF usePangenome → parabricks_giraffe else parabricks_fq2bam (forceRealign)
                ├─ methyl_qc retry (attempt 2)
                └─ IF qcPass → same pass path as above
                   ELSE → archive_sample mode=qc_only → delete_fastqs → delete_bam → qc_failed
@@ -88,8 +90,9 @@ Top-level keys become scope-0 variables. FOREACH object elements flatten into pe
 | `projectPath` | string | yes | Absolute path to `project.json` |
 | `primaryAnalyte` | string | yes | `cfdna`, `buffy_coat`, etc. |
 | `isCfdna` | boolean | yes | Drives fragmentomics **IF** |
-| `referenceFasta` | string | yes | Reference FASTA for Parabricks and MethylExtractor |
+| `referenceFasta` | string | yes | Reference FASTA for linear Parabricks fq2bam and MethylExtractor |
 | `referenceGtf` | string | no | GTF for Parabricks |
+| `alignmentMode` | string | no | `linear` (default) or `pangenome` — binds `usePangenome` for Giraffe vs fq2bam |
 | `fastqStorage` | object | yes | Laboratory-owned ingress (never inferred from archive profile) |
 | `sampleStorage` | object | no | Internal archive defaults from `portal.resource_profile` when omitted (`h5Storage` alias) |
 | `samples` | array | yes | Each object: `sampleId`, `sampleDir`, materialized `fastqSource`, optional `sampleDestination` |

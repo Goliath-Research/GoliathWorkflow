@@ -145,6 +145,8 @@ Five reusable **research axes** for Monte-Carlo stability. See also [Stage: Stab
 | 4 | `mc_gene_fc` | `raw_pool` | `featurecuts` | Gene-axis BA gate on enricher/PPI genes |
 | 5 | `mc_dmp_gene_fc` | `featurecuts` | `featurecuts` | Full DMP + gene FeatureCuts (production dual-axis) |
 
+: Statistical modeling modes {tbl-colwidths="[6,14,18,18,44]"}
+
 `mc_gene` and `mc_gene_fc` default to `actionConfig.enricher.ppi_only: true` (STRING PPI hubs). Set `ppi_only: false` in a site/profile/instance override for Enrichr pathway libraries.
 
 ### Full profile catalog
@@ -170,6 +172,8 @@ Every profile file in the repo/runtime bundle:
 | `legacy_dual` | legacy inline FeatureCuts | discovery | DMP classifier panels | Historical dual-axis layout |
 | `dmp_panel_stability` | discovery + `dmp_select` | selected | DMP panel MC | **Deprecated** → `mc_dmp_fc` |
 | `gene_enricher_stability` | discovery only | discovery | enricher recurrence | **Deprecated** → `mc_dmp` |
+
+: Shipped pipeline profiles {tbl-colwidths="[14,20,14,22,30]"}
 
 **Deprecated aliases** (resolve to canonical `mc_*` files in `pipeline_profiles.py`): `mc_dmp_discovery` → `mc_dmp`, `mc_dmp_featurecuts` → `mc_dmp_fc`, `mc_gene_mapper` → `mc_gene`, `mc_gene_featurecuts` → `mc_gene_fc`, `discovery_gene_featurecuts` → `mc_dmp_gene_fc`, `dmp_panel_stability` → `mc_dmp_fc`, `gene_enricher_stability` → `mc_dmp`, `buffy_mc_gene_fc` → `mc_dmp_gene_fc`.
 

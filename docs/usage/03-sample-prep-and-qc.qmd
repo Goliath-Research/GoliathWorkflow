@@ -9,13 +9,34 @@
 
 Without these gates, bad alignments would waste GPU extraction time, and under-covered or poorly converted extractions would pollute centroids, DMP discovery, and classifiers.
 
+Each sample is aligned on GPU using either **linear** (`fq2bam_meth`) or **pangenome** (`vg giraffe` via Clara Parabricks), then passes through the same QC and extraction gates below.
+
 **Workflow source of truth:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
 
 **Operator reference:** [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md)
 
+**Implementation detail (alignment modes, storage, guardrails):** [`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md)
+
+## Alignment modes (linear vs pangenome)
+
+After FASTQ download, SamplePrep chooses **one GPU alignment path** per sample (and the same path on fastp remediation realign):
+
+| Mode | Scope flag | Worker action | Parabricks entry | Reference |
+|------|------------|---------------|------------------|-----------|
+| **Linear (default)** | `usePangenome: false` | `sample.parabricks_fq2bam` | `pbrun fq2bam_meth` — traditional bisulfite-aware WGBS align to a linear reference | `referenceFasta` on instance / site `genomes` |
+| **Pangenome** | `usePangenome: true` | `sample.parabricks_giraffe` | `pbrun giraffe` — vg Giraffe on an HPRC graph bundle, surjected to **GRCh38** coordinates; then `collectmultiplemetrics` for the same QC tar/JSON shape as linear | Site manifest `pangenome_genome` (`gbz`, `dist`, `min`, `zipcodes`, `ref_paths`, `linear_ref_fasta`) |
+
+: Alignment modes {tbl-colwidths="[12,14,18,22,34]"}
+
+**How to enable pangenome:** set instance `alignmentMode: "pangenome"` (binds `usePangenome`) or profile `actionConfig.parabricks.alignment_mode: "pangenome"`. Default is **`linear`**.
+
+**WGBS note:** stock HPRC graphs are not bisulfite-aware. For pangenome WGBS, operators must stage a **C→T-converted / WGBS-compatible graph** (or document an explicit read-conversion workflow at the site). See implementation guide § Parabricks pangenome alignment and `scripts/download_pangenome_hprc_grch38.sh`.
+
+Downstream steps (`methyl_qc`, fragmentomics, `methyl_extract`, extraction QC) are identical for both modes — alignment QC consumes the same normalized metrics JSON regardless of aligner.
+
 ## End-to-end flow
 
-![Sample prep and QC flow](../diagrams/out/sample-prep-flow.png)
+![Sample prep and QC flow (linear or pangenome align, then shared QC gates)](../diagrams/out/sample-prep-flow.png)
 
 
 | Gate | Scope variable | When | Blocks |
@@ -226,6 +247,7 @@ Before starting SamplePrep, confirm:
 - [ ] Profile `actionConfig.extraction_qc` min coverage appropriate for WGBS depth expectations
 - [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
 - [ ] Instance `context_json` includes `fastqStorage`, `referenceFasta`, `samples[]`
+- [ ] When using pangenome: site `pangenome_genome` bundle staged, `alignmentMode: "pangenome"` (or profile `parabricks.alignment_mode`)
 
 ## Commands (standalone debugging)
 

@@ -17,8 +17,11 @@ Without these gates, bad alignments waste GPU extraction time, and under-covered
 
 ```mermaid
 flowchart TD
-  dl[download_fastq] --> pb[parabricks_fq2bam]
-  pb --> aqc[methyl_qc]
+  dl[download_fastq] --> mode{usePangenome?}
+  mode -->|linear| fq[parabricks_fq2bam]
+  mode -->|pangenome| gf[parabricks_giraffe]
+  fq --> aqc[methyl_qc]
+  gf --> aqc
   aqc --> gate{qcPass?}
   gate -->|yes| frag{isCfdna?}
   frag -->|yes| fm[fragmentomics_BAM]
@@ -28,12 +31,17 @@ flowchart TD
   eqc --> pass{extractionQcPass?}
   pass -->|yes| archive[archive_full]
   gate -->|no + remediate| trim[trim_fastq_fastp]
-  trim --> pb2[parabricks_forceRealign]
-  pb2 --> aqc2[methyl_qc_retry]
+  trim --> rmode{usePangenome?}
+  rmode -->|linear| fq2[fq2bam_forceRealign]
+  rmode -->|pangenome| gf2[giraffe_forceRealign]
+  fq2 --> aqc2[methyl_qc_retry]
+  gf2 --> aqc2
   aqc2 --> gate
   gate -->|no terminal| reject[archive_qc_only]
   pass -->|no| reject
 ```
+
+Canonical source: [`docs/diagrams/src/sample-prep-flow.mmd`](../diagrams/src/sample-prep-flow.mmd) (pre-rendered SVG/PNG under `docs/diagrams/out/`).
 
 ### Workflow scope variables
 
