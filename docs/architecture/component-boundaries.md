@@ -17,7 +17,7 @@ The database owns:
 
 The database does **not** encode methylation semantics. Action names, capabilities, and JSON schemas are **data rows** seeded from git; the engine never branches on pipeline meaning in SQL.
 
-**Config resolution at instance time:** Admin tooling (portal, `methyl-study-start`) calls `finalize_instance_context()` before `create_workflow_instance`, baking `resolvedConfig__<action_config_key>` scope variables. The SQL read-path binds these into action input templates — workers receive fully-resolved payloads without gateway enrichment.
+**Config resolution at instance time:** Portal middle-tier (or CI helpers under `workflow_engine/ops` / `scripts/start_study_instance.py`) call `finalize_instance_context()` before `create_workflow_instance`, baking `resolvedConfig__<action_config_key>` scope variables. The SQL read-path binds these into action input templates — workers receive fully-resolved payloads without gateway enrichment.
 
 ## REST gateway (`methyl-gateway`)
 
@@ -26,25 +26,27 @@ The gateway is a **stateless REST passthrough** between compute workers and the 
 | Allowed | Forbidden |
 |---------|-----------|
 | Worker auth, claim, submit, heartbeat, fail | Reading `schemas/actions/catalog.json` |
-| Admin catalog seed (opaque JSON upserts) | `materialize_action_input` / config merge at claim |
-| Deploy compiled `WorkflowDefinitionSpec` | DomainProgram compile, validation/sample-prep planners |
-| Generic create/start/get instance (pre-built `context_json`) | Study-specific lifecycle routes |
+| Health check | Catalog seed, workflow deploy, study lifecycle |
+| | `materialize_action_input` / config merge at claim |
+| | DomainProgram compile, validation/sample-prep planners |
 
-**Identities:**
+**Identity:**
 
 - **Worker** — `POST /v1/workers/*` with `worker_id` + `worker_token`
-- **Admin / CI** — `POST /v1/admin/*` with Entra `WorkflowEngineAdmin` or bearer token
 
 EpiPortal **never** calls the gateway; it uses Azure SQL `portal.sp_*` directly.
 
-## Admin tooling (domain-aware, outside gateway)
+## Operator tooling (domain-aware, outside gateway)
 
 | Tool | Role |
 |------|------|
-| **`methyl-study-start`** | Compile DomainPrograms, plan/enrich context, finalize resolvedConfig, create/start instances via DB |
-| **`scripts/deploy_workflow_definitions.sh`** | POST compiled workflow specs to admin gateway |
+| **Portal SQL** (`portal.sp_*`) | Production create/start/monitor for EpiPortal |
+| **`workflow_engine/ops`** | Direct-DB helpers: catalog seed, workflow deploy, study/sample lifecycle |
+| **`scripts/start_study_instance.py`** | CI/smoke plan+start (SamplePrep / StudyValidation) |
+| **`scripts/deploy_workflow_definitions.sh`** | Compile + deploy workflow specs via direct DB |
 | **`seed_action_catalog.py`** | Upsert action catalog + dispatch metadata into `wf.workflow_action` |
 | **`methyl-workflow-run`** | Local in-process runs (no database) |
+| **Cursor MCP** | Interactive SQL inspect/edit in development |
 
 ## Compute workers
 
@@ -70,7 +72,7 @@ Cursor MCP servers (`user-azure-sql-dev`, PostgreSQL MCP) are **operator/dev too
 - Inspection, parity checks, surgical SQL during development
 - **Not** part of worker runtime, gateway data plane, or production automation
 
-Bulk catalog seed and workflow deploy use scripts or the admin gateway API — not MCP.
+Bulk catalog seed and workflow deploy use direct-DB scripts — not MCP and not the gateway.
 
 See also [worker-transport-decision.md](worker-transport-decision.md).
 

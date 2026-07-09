@@ -23,7 +23,7 @@ Quarto serves the page at `http://localhost:…` and Mermaid renders in your nor
 
 Two workflow definitions run in sequence for production studies: **SamplePrepPipeline** (per-sample FASTQ → HDF5), then **StudyValidationLifecycle** (MC stability → freeze → biological outputs → model MC → selection → hold-out). **DataDrivenPipeline** remains the single-pass centroid → enricher path for ad-hoc analysis.
 
-**Staged portal contract:** [`portal_study_lifecycle.md`](portal_study_lifecycle.md) — `methyl-study-start validation-start` (or portal SQL) after SamplePrep completes.
+**Staged portal contract:** [`portal_study_lifecycle.md`](portal_study_lifecycle.md) — `scripts/start_study_instance.py validation-start` (or portal SQL) after SamplePrep completes.
 
 ```mermaid
 flowchart TB

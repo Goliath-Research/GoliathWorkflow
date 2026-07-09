@@ -13,7 +13,7 @@ WF_ENGINE = Path(__file__).resolve().parents[1]
 if str(WF_ENGINE) not in sys.path:
     sys.path.insert(0, str(WF_ENGINE))
 
-from admin.sample_lifecycle import start_sample_prep  # noqa: E402
+from ops.sample_lifecycle import start_sample_prep  # noqa: E402
 
 
 def _minimal_project(tmp_path: Path) -> Path:

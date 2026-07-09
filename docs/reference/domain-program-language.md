@@ -24,10 +24,10 @@ Compiler: `workflow_engine/domain/compiler.py` → `WorkflowDefinitionSpec` (Pyd
        ▼ compile_domain_program / compile_domain_program_file
 WorkflowDefinitionSpec  Engine graph (nodes, FOREACH, templates, bindings)
        │
-       ▼ POST /v1/workflows/definitions  OR  methyl-workflow-run (local)
+       ▼ deploy_workflow_definitions.sh (direct DB)  OR  methyl-workflow-run (local)
 Database + scheduler    Instance execution with context_json + collection bindings
        │
-       ▼ worker poll/submit
+       ▼ worker poll/submit via methyl-gateway
 methyl-worker           Executes catalog actions; writes artifacts on /work
 ```
 
@@ -62,15 +62,15 @@ methyl-workflow-run \
   --stub-external
 ```
 
-### Deploy to gateway
+### Deploy to database
 
 ```bash
-export GATEWAY_URL=https://your-gateway.example.com
-export GATEWAY_ADMIN_BEARER_TOKEN='...'
+export BACKEND_DB=mssql   # or postgres
+# AZURE_SQL_* or POSTGRES_*
 bash scripts/deploy_workflow_definitions.sh
 ```
 
-Writes `workflow_versions.json` with IDs for `POST /v1/workflows/instances` and study-start APIs.
+Writes `workflow_versions.json` with IDs for portal SQL / `scripts/start_study_instance.py`.
 
 ## Constructs
 

@@ -1,4 +1,4 @@
-"""Unit tests for gateway Entra / route-tier authorization."""
+"""Unit tests for gateway worker route-tier authorization."""
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ sys.path.insert(0, str(WF_ENGINE))
 
 from rest.asgi import create_app  # noqa: E402
 from rest.auth import (  # noqa: E402
-    AuthError,
     AuthForbidden,
     GatewayAuthConfig,
     RouteTier,
@@ -40,24 +39,13 @@ class _StubDb:
             }
         return None
 
-    def list_workflow_definitions(
-        self, *, source_filter: str | None = None
-    ) -> list[dict[str, object]]:
-        return []
-
-    def get_workflow_definition_by_name(self, name: str) -> dict[str, object]:
-        raise KeyError(name)
-
 
 class RouteClassificationTests(unittest.TestCase):
     def test_worker_route(self) -> None:
         self.assertEqual(classify_route("POST", "/v1/workers/tasks/request"), RouteTier.WORKER)
 
-    def test_admin_workflow_post(self) -> None:
-        self.assertEqual(classify_route("POST", "/v1/workflows/instances"), RouteTier.ADMIN)
-
-    def test_admin_catalog_seed(self) -> None:
-        self.assertEqual(classify_route("POST", "/v1/admin/catalog/seed"), RouteTier.ADMIN)
+    def test_unknown_is_public(self) -> None:
+        self.assertEqual(classify_route("POST", "/v1/admin/catalog/seed"), RouteTier.PUBLIC)
 
     def test_public_health(self) -> None:
         self.assertEqual(classify_route("GET", "/v1/health"), RouteTier.PUBLIC)
@@ -75,24 +63,6 @@ class ClientIpTests(unittest.TestCase):
 
 
 class AuthorizeRequestTests(unittest.TestCase):
-    def test_admin_requires_bearer_when_entra_enabled(self) -> None:
-        config = GatewayAuthConfig(
-            require_entra=True,
-            tenant_id="t",
-            audience="api://test",
-            admin_roles=("WorkflowEngineAdmin",),
-        )
-        with self.assertRaises(AuthError):
-            authorize_request(
-                _StubDb(),
-                config,
-                "POST",
-                "/v1/admin/catalog/seed",
-                [],
-                {},
-                {"client": ("127.0.0.1", 0)},
-            )
-
     def test_worker_ip_bind_denies_wrong_cidr(self) -> None:
         config = GatewayAuthConfig(worker_ip_bind=True, trusted_proxy_cidrs=("127.0.0.1/32",))
         scope = {"client": ("127.0.0.1", 0)}
@@ -109,56 +79,14 @@ class AuthorizeRequestTests(unittest.TestCase):
             )
 
 
-class _FilteringStubDb(_StubDb):
-    def list_workflow_definitions(
-        self, *, source_filter: str | None = None
-    ) -> list[dict[str, object]]:
-        rows = [
-            {"name": "SamplePrep", "source": "system"},
-            {"name": "CustomFlow", "source": "portal"},
-        ]
-        if source_filter is None:
-            return rows
-        return [row for row in rows if row["source"] == source_filter]
-
-
-class ListDefinitionsTests(unittest.TestCase):
-    def test_admin_list_definitions_forwards_source_query(self) -> None:
-        gateway = RestGateway(_FilteringStubDb())
-        status, payload = gateway.dispatch(
-            "GET",
-            "/v1/admin/workflows/definitions",
-            {},
-            query={"source": ["portal"]},
-        )
-        self.assertEqual(status, 200)
-        self.assertEqual([row["name"] for row in payload["definitions"]], ["CustomFlow"])
-
-    def test_admin_list_definitions_rejects_invalid_source(self) -> None:
-        gateway = RestGateway(_StubDb())
-        status, payload = gateway.dispatch(
-            "GET",
-            "/v1/admin/workflows/definitions",
-            {},
-            query={"source": ["bogus"]},
-        )
-        self.assertEqual(status, 400)
-        self.assertIn("source must be", payload["error"])
-
-
 class AsgiEntraMiddlewareTests(unittest.IsolatedAsyncioTestCase):
-    async def test_admin_route_401_without_jwt(self) -> None:
-        config = GatewayAuthConfig(
-            require_entra=True,
-            tenant_id="t",
-            audience="api://test",
-            admin_roles=("WorkflowEngineAdmin",),
-        )
+    async def test_admin_route_404_without_handler(self) -> None:
+        config = GatewayAuthConfig(require_entra=True, tenant_id="t", audience="api://test")
         app = create_app(RestGateway(_StubDb()), auth_config=config)
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
             response = await client.post("/v1/admin/catalog/seed", json={"catalog": {"actions": []}})
-        self.assertEqual(response.status_code, 401)
+        self.assertEqual(response.status_code, 404)
 
     async def test_worker_route_allowed_without_jwt(self) -> None:
         config = GatewayAuthConfig(require_entra=True, tenant_id="t", audience="api://test")

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Smoke test: SamplePrepPipeline via methyl-study-start (admin CLI, not gateway domain routes).
+# Smoke test: SamplePrepPipeline via scripts/start_study_instance.py (direct DB).
 
 set -euo pipefail
 
@@ -8,7 +8,6 @@ usage() {
 Usage: scripts/smoke_sample_prep.sh [options]
 
 Options:
-  --api-base URL       Gateway base for instance polling (default: WORKER_API_BASE)
   --run-root PATH      Smoke fixture root (default: .smoke/sample_prep under repo)
   --poll-seconds N     Instance poll interval (default: 5)
   --timeout SEC        Max wait per instance (default: 600)
@@ -16,8 +15,8 @@ Options:
   -h, --help           Show this help
 
 Requires:
-  - Running REST gateway + PostgreSQL wf schema
-  - Registered worker with WORKER_STUB_EXTERNAL=1
+  - Direct DB env (BACKEND_DB + AZURE_SQL_* or POSTGRES_*)
+  - Registered worker claiming tasks via worker-only gateway
   - workflow_versions.json from deploy_workflow_definitions.sh
 EOF
 }
@@ -25,7 +24,6 @@ EOF
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-API_BASE="${WORKER_API_BASE:-http://localhost:8080/v1}"
 RUN_ROOT="$REPO_ROOT/.smoke/sample_prep"
 SAMPLE_ID="${SMOKE_SAMPLE_ID:-smoke-1}"
 POLL=5
@@ -34,7 +32,7 @@ REMEDIATION=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --api-base) API_BASE="${2:-}"; shift 2 ;;
+    --api-base) echo "Note: --api-base ignored (poll via direct DB)" >&2; shift 2 ;;
     --run-root) RUN_ROOT="${2:-}"; shift 2 ;;
     --poll-seconds) POLL="${2:-}"; shift 2 ;;
     --timeout) TIMEOUT="${2:-}"; shift 2 ;;
@@ -56,42 +54,33 @@ fi
 
 SMOKE_RUN_ROOT="$RUN_ROOT" bash "$SCRIPT_DIR/bootstrap_sample_prep_smoke_fixtures.sh" --run-root "$RUN_ROOT" --sample-id "$SAMPLE_ID"
 
-"$PYTHON_BIN" - <<'PY' "$API_BASE" "$RUN_ROOT" "$VERSIONS_FILE" "$POLL" "$TIMEOUT" "$REMEDIATION" "$SAMPLE_ID" "$REPO_ROOT"
+"$PYTHON_BIN" - <<'PY' "$RUN_ROOT" "$VERSIONS_FILE" "$POLL" "$TIMEOUT" "$REMEDIATION" "$SAMPLE_ID" "$REPO_ROOT"
 import json
 import os
 import subprocess
 import sys
 import time
-import urllib.request
 from pathlib import Path
 
-api_base = sys.argv[1].rstrip("/")
-run_root = Path(sys.argv[2])
-versions_file = Path(sys.argv[3])
-poll = int(sys.argv[4])
-timeout = int(sys.argv[5])
-remediation = int(sys.argv[6])
-sample_id = sys.argv[7]
-repo_root = Path(sys.argv[8])
+run_root = Path(sys.argv[1])
+versions_file = Path(sys.argv[2])
+poll = int(sys.argv[3])
+timeout = int(sys.argv[4])
+remediation = int(sys.argv[5])
+sample_id = sys.argv[6]
+repo_root = Path(sys.argv[7])
 wf_engine = repo_root / "workflow_engine"
+sys.path.insert(0, str(wf_engine))
+
+from rest.connection import resolve_connection_config
+from rest.db import open_gateway_db
 
 project_path = run_root / "project.json"
 
-def request(method: str, path: str, body: dict | None = None) -> dict:
-    data = None if body is None else json.dumps(body).encode("utf-8")
-    req = urllib.request.Request(
-        f"{api_base}{path}",
-        data=data,
-        headers={"Content-Type": "application/json"} if body else {},
-        method=method,
-    )
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        return json.loads(resp.read().decode("utf-8"))
-
-def poll_instance(instance_id: int) -> str:
+def poll_instance(db, instance_id: int) -> str:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        inst = request("GET", f"/workflows/instances/{instance_id}")
+        inst = db.get_workflow_instance(instance_id)
         status = inst.get("status") or inst.get("workflow_status")
         print(f"instance {instance_id} status={status}", flush=True)
         if status in ("COMPLETED", "FAILED", "CANCELLED"):
@@ -134,25 +123,27 @@ body = {
 if remediation:
     print("note: --remediation not yet implemented; running default pass-path smoke")
 
-body_json = json.dumps(body)
-wf_engine = repo_root / "workflow_engine"
-env = os.environ.copy()
-env["PYTHONPATH"] = str(wf_engine)
+start_script = repo_root / "scripts" / "start_study_instance.py"
 proc = subprocess.run(
-    [sys.executable, "-m", "admin.study_start", "sample-prep-start", "-"],
-    input=body_json,
+    [sys.executable, str(start_script), "sample-prep-start", "-"],
+    input=json.dumps(body),
     capture_output=True,
     text=True,
-    cwd=str(wf_engine),
-    env=env,
+    cwd=str(repo_root),
+    env={**os.environ, "PYTHONPATH": str(wf_engine)},
 )
 if proc.returncode != 0:
-    raise SystemExit(f"methyl-study-start failed: {proc.stderr or proc.stdout}")
+    raise SystemExit(f"start_study_instance failed: {proc.stderr or proc.stdout}")
 started = json.loads(proc.stdout)
 instance_id = int(started["instance_id"])
 print(json.dumps({"planned_samples": started.get("n_samples"), "context_samples": len(started.get("context_json", {}).get("samples", []))}, indent=2))
 
-status = poll_instance(instance_id)
+config = resolve_connection_config()
+db = open_gateway_db(config)
+try:
+    status = poll_instance(db, instance_id)
+finally:
+    db.close()
 if status != "COMPLETED":
     raise SystemExit(f"SamplePrep smoke failed: {status}")
 

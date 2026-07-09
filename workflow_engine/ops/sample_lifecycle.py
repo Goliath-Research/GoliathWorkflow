@@ -1,12 +1,12 @@
-"""Admin tooling: plan sample prep context and start SamplePrepPipeline."""
+"""Plan sample prep context and start SamplePrepPipeline (direct DB)."""
 
 from __future__ import annotations
 
 from pathlib import Path
 from typing import Any, Dict
 
-from admin._paths import REPO_ROOT, ensure_import_paths
-from admin.study_lifecycle import resolve_workflow_version_id
+from ops._paths import REPO_ROOT, ensure_import_paths
+from ops.study_lifecycle import resolve_workflow_version_id
 
 _DEFAULT_SAMPLE_PREP_PROGRAM = (
     REPO_ROOT / "workflow_engine" / "domain" / "fixtures" / "sample_prep.program.json"
@@ -36,7 +36,9 @@ def start_sample_prep(
     planner_payload.setdefault("projectPath", project_path)
 
     profile_key = str(
-        body.get("archiveProfileKey") or body.get("archiveStorageKey") or body.get("storageKey")
+        body.get("archiveProfileKey")
+        or body.get("archiveStorageKey")
+        or body.get("storageKey")
         or DEFAULT_ARCHIVE_PROFILE_KEY
     )
     profile_reader = ResourceProfileReader(db)

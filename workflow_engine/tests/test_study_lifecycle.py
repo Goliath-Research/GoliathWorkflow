@@ -10,7 +10,7 @@ WF_ENGINE = Path(__file__).resolve().parents[1]
 if str(WF_ENGINE) not in sys.path:
     sys.path.insert(0, str(WF_ENGINE))
 
-from admin.study_lifecycle import (  # noqa: E402
+from ops.study_lifecycle import (  # noqa: E402
     _apply_project_path_scope_default,
     compile_program_spec,
 )

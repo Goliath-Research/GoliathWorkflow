@@ -1,7 +1,7 @@
 """
 Pydantic models for programmatic workflow definition creation.
 
-Used by REST POST /v1/workflows/definitions and wf.wf_repo_create_workflow_graph.
+Used by direct-DB deploy (``ops.workflow_deploy``) and wf.wf_repo_create_workflow_graph.
 """
 
 from __future__ import annotations

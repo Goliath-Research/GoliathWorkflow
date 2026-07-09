@@ -122,7 +122,7 @@ Operator guide: [sql_mssql/SamplePrepFlow.md](sql_mssql/SamplePrepFlow.md). Cont
 | Disease progression | `methyl-disease-progression` | **2** |
 | MC validation loop | **ValidationPipeline** + planner | [wf_validation_pipeline_seed.sql](sql_mssql/wf_validation_pipeline_seed.sql) |
 | Study validation lifecycle | **StudyValidationLifecycle** | `validation.plan_iterations` → stability → freeze → mapper/enricher/progression → `validation.model_mc` → `validation.select_best_model` → `validation.post_model_validation` |
-| Portal staged start | `methyl-study-start validation-start` or `portal.sp_create_and_start_instance` | [docs/portal_study_lifecycle.md](docs/portal_study_lifecycle.md) |
+| Portal staged start | `scripts/start_study_instance.py validation-start` or `portal.sp_create_and_start_instance` | [docs/portal_study_lifecycle.md](docs/portal_study_lifecycle.md) |
 | Methyl extract chrom mapping | Derived from `project.chromosomes` | `step_config.methyl_extract.contig_naming` / inline `chrom_mapping` object |
 | Compiler scope bindings | `iterations`, `fixedDmpPanel`, `selectedBackend` | From `action_catalog` `domain_effects.scope_bindings` → `variable_output_binding` |
 

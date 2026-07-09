@@ -6,7 +6,7 @@
 
 **Implementation detail:** [`docs/implementation/sample-preparation-flow.md`](../../docs/implementation/sample-preparation-flow.md) — guardrail boundaries, focused FASTP remediation, extraction filtering, cfDNA fragmentomics.
 
-**Deploy:** `bash scripts/deploy_workflow_definitions.sh` → `POST /v1/workflows/definitions`
+**Deploy:** `bash scripts/deploy_workflow_definitions.sh` (direct DB)
 
 **Legacy SQL seed** [`deprecated/wf_sample_prep_pipeline_seed.sql`](deprecated/wf_sample_prep_pipeline_seed.sql) is **deprecated**; use DomainProgram deploy above.
 
@@ -108,7 +108,7 @@ Examples:
 - [`instance_context_examples/sample_prep_plasma.json`](instance_context_examples/sample_prep_plasma.json)
 - [`instance_context_examples/sample_prep_from_planner.json`](instance_context_examples/sample_prep_from_planner.json)
 
-**Planner:** `POST /v1/studies/sample-prep/start` or `methyl_validation.sample_prep_planner.plan_sample_prep_context()`. See [`../docs/sample_prep_test_bed.md`](../docs/sample_prep_test_bed.md).
+**Planner:** `scripts/start_study_instance.py sample-prep-start` or `methyl_validation.sample_prep_planner.plan_sample_prep_context()`. See [`../docs/sample_prep_test_bed.md`](../docs/sample_prep_test_bed.md).
 
 ## Storage contract
 
@@ -142,11 +142,11 @@ Downstream analysis loads HDF5 via **`methyl_domain.helpers.resolve_methylation_
 
 ## Deploy & run
 
-PostgreSQL (REST) — **preferred**:
+Direct DB deploy + CI start:
 
 ```bash
 bash scripts/deploy_workflow_definitions.sh
-curl -X POST http://localhost:8080/v1/studies/sample-prep/start -H 'Content-Type: application/json' -d '{ ... }'
+python scripts/start_study_instance.py sample-prep-start request.json
 ```
 
 Workers poll by capability; task count scales with `len(samples) × actions per sample` including remediation when triggered.

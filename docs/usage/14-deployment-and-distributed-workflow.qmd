@@ -88,13 +88,13 @@ methyl-export-task-schemas
 methyl-export-action-catalog
 python workflow_engine/sql_mssql/seed_action_catalog.py
 
-# Deploy SamplePrep + StudyValidation DomainPrograms to gateway:
-export GATEWAY_URL=https://your-gateway.example.com
-export GATEWAY_ADMIN_BEARER_TOKEN='...'   # when Entra required
+# Deploy SamplePrep + StudyValidation DomainPrograms (direct DB):
+export BACKEND_DB=mssql   # or postgres
+# AZURE_SQL_* or POSTGRES_*
 bash scripts/deploy_workflow_definitions.sh
 ```
 
-Output: `workflow_versions.json` with `workflow_version_id` values for API calls.
+Output: `workflow_versions.json` with `workflow_version_id` values for portal / CI start.
 
 Canonical programs (repo):
 
@@ -126,8 +126,7 @@ Key variables (see `workflow_engine/rest/connection.py`):
 - `BACKEND_DB` — `postgres` or `mssql`
 - `POSTGRES_*` or `AZURE_SQL_*` — connection targets
 - `WF_USE_MANAGED_IDENTITY` — Azure Entra token auth for DB
-- `GATEWAY_REQUIRE_ENTRA` — require JWT on admin/operator routes
-- `GATEWAY_ENTRA_AUDIENCE`, `AZURE_TENANT_ID` — Entra validation
+- Worker auth is `worker_id` + `worker_token` on `/v1/workers/*` (gateway is worker-only)
 
 ## Worker configuration
 
@@ -152,14 +151,10 @@ Worker poll/submit contract: [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER
 
 ### 1. SamplePrepPipeline
 
-```http
-POST /v1/studies/sample-prep/start
-{
-  "projectPath": "/work/epimethyl/data/project_Example.json",
-  "workflow_version_id": <from workflow_versions.json>,
-  "fastqStorage": { "type": "s3", "bucket": "...", "region": "us-west-2" },
-  "sampleCsvs": ["/work/.../samples.csv"]
-}
+Prefer portal SQL (`portal.sp_create_and_start_instance`) after planning context. For CI:
+
+```bash
+python scripts/start_study_instance.py sample-prep-start request.json
 ```
 
 See [Sample Prep and Quality Control](03-sample-prep-and-qc.qmd) for QC gates.

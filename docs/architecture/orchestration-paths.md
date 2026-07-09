@@ -8,7 +8,7 @@
 | Workflow (CLI alias) | `methyl-validation run-workflow` | Same engine; prefer `methyl-workflow-run` for clarity |
 | Distributed workflow | `methyl-gateway` + `methyl-worker` | Production cluster (gateway = DB passthrough) |
 | Worker task input | `resolvedConfig` + optional `resolvedProject` | Baked at instance start; CLIs receive `--resolved-config` |
-| Study lifecycle (admin) | `methyl-study-start` | Compile/plan/start — not gateway domain routes |
+| Study lifecycle (CI) | `scripts/start_study_instance.py` / portal SQL | Compile/plan/start via direct DB — not gateway |
 | Monolithic CLI | `methyl-validation --stability/--freeze/--model` | **Legacy** (`--legacy-orchestration`) — transitional scripts only |
 | File queue | `methyl-validation plan-runs` / `run-task` | **Legacy** distributed MC — migrate to gateway workers when possible |
 | Direct package CLIs | `methyl-centroid`, `methyl-detector`, … | Single-step debugging |
@@ -26,7 +26,7 @@ Deploy compiled specs: `bash scripts/deploy_workflow_definitions.sh`
 ## Local vs distributed
 
 - **Local:** `LocalWorkflowEngine` executes compiled graphs in-process — same DomainPrograms as production.
-- **Distributed:** workers claim `node_execution` rows via the agnostic gateway; scope variables (including `resolvedConfig__*`) drive template binding in SQL. Instance context is finalized by portal or `methyl-study-start` before create — not at task claim in the gateway.
+- **Distributed:** workers claim `node_execution` rows via the agnostic gateway; scope variables (including `resolvedConfig__*`) drive template binding in SQL. Instance context is finalized by portal or CI helpers (`workflow_engine/ops`) before create — not at task claim in the gateway.
 
 Deprecated SQL seeds (`workflow_methylvalidation_seed.sql`, `wf_pca_*`, `wf_sample_prep_pipeline_seed.sql`) — use DomainProgram compile + deploy instead.
 

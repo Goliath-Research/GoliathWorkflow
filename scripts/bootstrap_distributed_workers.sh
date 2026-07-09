@@ -17,11 +17,6 @@
 #   export AZURE_SQL_USER=... AZURE_SQL_PASSWORD='...'
 #   bash scripts/bootstrap_distributed_workers.sh
 #
-#   # Gateway-only seed/deploy (no direct DB creds on operator host)
-#   export WORKER_API_BASE=https://gateway.example.com/v1
-#   export GATEWAY_ADMIN_BEARER_TOKEN='...'
-#   bash scripts/bootstrap_distributed_workers.sh --skip-schema --use-gateway-only
-#
 # Options:
 #   --skip-schema          Skip DDL deploy (schema already applied)
 #   --skip-seed            Skip action catalog + JSON schema seed
@@ -30,8 +25,6 @@
 #   --register-worker      Register wf.cluster/worker after seed (direct DB)
 #   --worker-key NAME      external_worker_key (default: hostname)
 #   --cluster KEY          cluster_key (default: epimethyl)
-#   --api-base URL         Gateway for workflow deploy (default: WORKER_API_BASE)
-#   --use-gateway-only     Seed catalog via admin gateway (requires bearer token)
 #   --with-cluster-security  Azure SQL/PG: apply cluster IP-binding columns
 #   --verify               Read-only health check (schema artifacts, catalog drift, optional gateway ping)
 #   -h, --help
@@ -47,7 +40,6 @@ SKIP_SEED=0
 SKIP_WORKFLOWS=0
 SCHEMA_ONLY=0
 REGISTER_WORKER=0
-GATEWAY_ONLY=0
 WITH_CLUSTER_SECURITY=0
 VERIFY_ONLY=0
 WORKER_KEY="${WORKER_KEY:-$(hostname -s 2>/dev/null || echo worker-1)}"
@@ -55,7 +47,7 @@ CLUSTER_KEY="${CLUSTER_KEY:-epimethyl}"
 WORKER_ENV_FILE="${WORKER_ENV_FILE:-/work/epimethyl/env/worker.env}"
 
 usage() {
-  sed -n '2,40p' "$0"
+  sed -n '2,34p' "$0"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -68,7 +60,10 @@ while [[ $# -gt 0 ]]; do
     --worker-key) WORKER_KEY="${2:-}"; shift 2 ;;
     --cluster) CLUSTER_KEY="${2:-}"; shift 2 ;;
     --api-base) API_BASE="${2:-}"; shift 2 ;;
-    --use-gateway-only) GATEWAY_ONLY=1; shift ;;
+    --use-gateway-only)
+      echo "Note: --use-gateway-only removed; catalog seed/deploy use direct DB" >&2
+      shift
+      ;;
     --with-cluster-security) WITH_CLUSTER_SECURITY=1; shift ;;
     --verify) VERIFY_ONLY=1; SKIP_SCHEMA=1; SKIP_SEED=1; SKIP_WORKFLOWS=1; shift ;;
     --worker-env) WORKER_ENV_FILE="${2:-}"; shift 2 ;;
@@ -139,31 +134,19 @@ if [[ "$SCHEMA_ONLY" -eq 1 ]]; then
   exit 0
 fi
 
-if [[ "$GATEWAY_ONLY" -eq 0 && "$SKIP_SEED" -eq 0 ]]; then
-  if [[ -n "${GATEWAY_ADMIN_BEARER_TOKEN:-}" || -n "${GATEWAY_ENTRA_BEARER_TOKEN:-}" ]]; then
-    GATEWAY_ONLY=1
-  fi
-fi
-
 if [[ "$SKIP_SEED" -eq 0 ]]; then
-  echo "==> Exporting task schemas and action catalog (33 actions) ..."
+  echo "==> Exporting task schemas and action catalog ..."
   methyl-export-task-schemas
   methyl-export-action-catalog
   python scripts/check_task_input_config_boundary.py
 
-  echo "==> Seeding wf.workflow_action + task JSON schemas ..."
-  SEED_ARGS=(--regenerate-catalog)
-  if [[ "$GATEWAY_ONLY" -eq 1 ]]; then
-    SEED_ARGS+=(--use-gateway)
-  else
-    SEED_ARGS+=(--use-db)
-  fi
-  "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql_mssql/seed_action_catalog.py" "${SEED_ARGS[@]}"
+  echo "==> Seeding wf.workflow_action + task JSON schemas (direct DB) ..."
+  "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql_mssql/seed_action_catalog.py" --regenerate-catalog --use-db
 fi
 
 if [[ "$SKIP_WORKFLOWS" -eq 0 ]]; then
-  echo "==> Deploying DomainProgram workflows to ${API_BASE} ..."
-  bash "$SCRIPT_DIR/deploy_workflow_definitions.sh" --api-base "$API_BASE"
+  echo "==> Deploying DomainProgram workflows (direct DB) ..."
+  bash "$SCRIPT_DIR/deploy_workflow_definitions.sh"
 fi
 
 if [[ "$REGISTER_WORKER" -eq 1 ]]; then
@@ -178,20 +161,11 @@ cat <<EOF
 
 Bootstrap complete.
 
-Backend: ${BACKEND}
-Gateway: ${API_BASE}
+Next:
+  # Start worker-only gateway (optional for claim/submit)
+  methyl-gateway
 
-Next steps for distributed workers:
-  1. Copy deploy/env/gateway.$(if [[ "$BACKEND" == mssql ]]; then echo mssql; else echo postgres; fi).env.example → /work/epimethyl/env/gateway.env
-  2. Start gateway: methyl-gateway (see deploy/systemd/methyl-gateway.service)
-  3. On each GPU worker:
-       bash scripts/register_worker.sh --cluster ${CLUSTER_KEY} --key <hostname>
-       bash scripts/install_worker_systemd.sh
-  4. Smoke test:
-       export WORKER_STUB_EXTERNAL=1   # optional dry-run
-       bash scripts/smoke_sample_prep.sh --api-base ${API_BASE}
-
-Workflow version map: /work/epimethyl/env/workflow_versions.json
-Docs: docs/deployment/distributed-workers-bootstrap.md
+  # Register a worker if not done above
+  bash scripts/register_worker.sh --cluster ${CLUSTER_KEY} --key ${WORKER_KEY}
 
 EOF

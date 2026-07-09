@@ -12,46 +12,20 @@ End-to-end operator checklist for real FASTQ → HDF5 → validation on `/work/e
 - [ ] Workflow definitions deployed (`deploy_workflow_definitions.sh`)
 - [ ] Workers registered and systemd units running (`WORKER_API_BASE` → gateway VM)
 - [ ] Reference FASTA and project JSON on shared storage
-- [ ] Portal or API client pointed at `WORKER_API_BASE`
+- [ ] Portal middle-tier using Azure SQL `portal.sp_*` (not the worker gateway)
 
 ## Stage 1 — SamplePrepPipeline
 
 See [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md) and the SamplePrep test bed [`workflow_engine/docs/sample_prep_test_bed.md`](../../workflow_engine/docs/sample_prep_test_bed.md).
 
-**Recommended start:**
+**Recommended start:** portal SQL after planning (`portal.sp_create_and_start_instance`). For CI:
 
-```http
-POST /v1/studies/sample-prep/start
-{
-  "projectPath": "/work/epimethyl/data/project_....json",
-  "workflow_version_id": <from workflow_versions.json SamplePrepPipeline>,
-  "fastqStorage": {
-    "type": "s3",
-    "bucket": "<laboratory-cohort-bucket>",
-    "region": "us-west-2",
-    "credentials": { "authMode": "instance_profile" }
-  },
-  "sampleCsvs": ["/work/.../healthy.csv", "/work/.../pca.csv"]
-}
+```bash
+python scripts/start_study_instance.py sample-prep-start request.json
+# request.json: projectPath, workflow_version_id, fastqStorage, sampleCsvs, ...
 ```
 
 **Ingress vs retention:** `fastqStorage` must point at **laboratory-owned** storage (never inferred from myQNAPcloud). HDF5 archive (`h5Storage`) defaults from `portal.resource_profile` when omitted. See [portal_resource_profile.md](portal_resource_profile.md).
-
-**Manual instance** (hand-built `context_json`):
-
-```http
-POST /v1/workflows/instances
-{
-  "workflow_version_id": <from workflow_versions.json SamplePrepPipeline>,
-  "context_json": {
-    "projectPath": "/work/epimethyl/data/project_....json",
-    "primaryAnalyte": "buffy_coat",
-    "isCfdna": false,
-    "referenceFasta": "/work/epimethyl/data/reference.fa",
-    "samples": [ ... ]
-  }
-}
-```
 
 **Local smoke (stub worker):**
 
@@ -81,16 +55,11 @@ Review `remediation_manifest.csv` for batch remediation via `SamplePrepRemediati
 
 ## Stage 2 — StudyValidationLifecycle
 
-Recommended:
+Recommended: portal SQL after planning. For CI:
 
-```http
-POST /v1/studies/validation/start
-{
-  "projectPath": "/work/epimethyl/data/project_....json",
-  "workflow_version_id": <from workflow_versions.json StudyValidationLifecycle>,
-  "featureIterations": 30,
-  "seed": 42
-}
+```bash
+python scripts/start_study_instance.py validation-start request.json
+# request.json: projectPath, workflow_version_id, featureIterations, seed, ...
 ```
 
 ## Troubleshooting
@@ -156,29 +125,26 @@ Tiered model: **TLS edge** → **Entra JWT for control-plane APIs** → **regist
 Merge [`deploy/env/gateway.security.env.example`](../../deploy/env/gateway.security.env.example) into `gateway.env`:
 
 ```bash
-GATEWAY_REQUIRE_ENTRA=1
+# Optional legacy flags (gateway is worker-only; Entra is not used for HTTP admin)
+GATEWAY_REQUIRE_ENTRA=0
 AZURE_TENANT_ID=<tenant>
-GATEWAY_ENTRA_AUDIENCE=api://methyl-gateway   # app registration Application ID URI
-GATEWAY_ENTRA_ADMIN_ROLES=WorkflowEngineAdmin   # CI / release operator app role
+GATEWAY_ENTRA_AUDIENCE=api://methyl-gateway
 ```
 
 | Identity | Routes | Auth |
 |----------|--------|------|
 | **Worker** | `POST /v1/workers/*` | `worker_id` + `worker_token` over HTTPS |
-| **Admin** | `POST /v1/admin/*` (+ legacy `/v1/studies/*`, `/v1/workflows/*`, `/v1/actions*`) | `Authorization: Bearer <entra-jwt>` with admin app role |
 
 **EpiPortal does not call the gateway.** Portal workflow builder and instance lifecycle use Azure SQL procs (`portal.sp_*`). See [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md).
 
-Release automation (no direct SQL creds on operator laptops):
+Release automation (direct DB from a privileged host or CI secret):
 
 ```bash
-export WORKER_API_BASE=https://<gateway-fqdn>/v1
-export GATEWAY_ADMIN_BEARER_TOKEN=$(az account get-access-token --resource api://methyl-gateway --query accessToken -o tsv)
+export BACKEND_DB=mssql
+# AZURE_SQL_* credentials
 bash scripts/deploy_workflow_definitions.sh
-python workflow_engine/sql_mssql/seed_action_catalog.py --use-gateway
+python workflow_engine/sql_mssql/seed_action_catalog.py --use-db
 ```
-
-Legacy operator routes remain as **admin-only CI aliases** when Entra is enabled; they are not for portal UI.
 
 ### Cluster registration + Tier C IP bind (phase 3)
 
@@ -215,9 +181,10 @@ Workers never connect to SQL directly. Lock down the database to the gateway onl
 
 ```bash
 bash scripts/test_gateway_remote.sh --ssh-only
-# Operator API without JWT should 401 when GATEWAY_REQUIRE_ENTRA=1:
-curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://gateway/v1/workflows/instances \
-  -H 'Content-Type: application/json' -d '{"workflow_version_id":1}'
+# Worker-only gateway: admin paths are gone (404); health is public:
+curl -sS -o /dev/null -w '%{http_code}\n' https://gateway/v1/health
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://gateway/v1/admin/catalog/seed \
+  -H 'Content-Type: application/json' -d '{}'
 ```
 
 ## Arc compliance and incident response

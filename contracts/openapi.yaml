@@ -1,262 +1,35 @@
 openapi: 3.0.3
 info:
   title: MethylPipeline Workflow Gateway API
-  description: |
-    REST contract for the workflow **gateway only** (two identities):
-
-    - **Workers** — `/workers/*` with `worker_id` + `worker_token` (poll, submit, heartbeat, fail).
-    - **Admin** — `/admin/*` with Entra JWT + app role (catalog seed, workflow compile/deploy).
-
-    **EpiPortal never calls this API.** Portal workflow builder, instance create/start, and monitoring
-    use Azure SQL / PostgreSQL procs in `portal.sp_*` (see `workflow_engine/contract/db_objects.yaml`).
-
-    Legacy paths under `/studies/*`, `/workflows/*`, `/actions*` remain as **admin-only CI aliases**
-    when Entra is enabled; they are not for portal UI.
-
-    Maps to DB objects in `workflow_engine/contract/db_objects.yaml`.
-    Production: Python gateway on Linux (`methyl-gateway`, systemd, uvicorn).
-  version: 1.1.0
-
+  description: "REST contract for the workflow **gateway** (worker-only):\n\n- **Workers** \u2014 `/workers/*`\
+    \ with `worker_id` + `worker_token` (poll, submit, heartbeat, fail).\n\n**EpiPortal never calls this\
+    \ API.** Catalog seed, workflow deploy, and study lifecycle use direct DB (`workflow_engine/ops`,\
+    \ `seed_action_catalog.py`, `deploy_workflow_definitions.sh`) or portal SQL (`portal.sp_*`). Interactive\
+    \ inspection uses Cursor MCP.\n\nMaps to DB objects in `workflow_engine/contract/db_objects.yaml`.\n\
+    Production: Python gateway on Linux (`methyl-gateway`, systemd, uvicorn)."
+  version: 1.2.0
 servers:
-  - url: https://api.example.com/v1
-    description: Production
-  - url: http://localhost:8080/v1
-    description: Local Python gateway (methyl-gateway)
-
+- url: https://api.example.com/v1
+  description: Production
+- url: http://localhost:8080/v1
+  description: Local Python gateway (methyl-gateway)
 tags:
-  - name: workers
-    description: Remote worker poll/submit protocol (worker token auth)
-  - name: admin
-    description: Catalog seed and system workflow deploy (Entra JWT + admin app role)
-  - name: legacy-admin
-    description: Deprecated CI aliases — same admin auth as /admin/*
-
+- name: workers
+  description: Remote worker poll/submit protocol (worker token auth)
 paths:
   /health:
     get:
-      tags: [workers]
+      tags:
+      - workers
       summary: Gateway health
       security: []
       responses:
         '200':
           description: OK
-
-  /admin/catalog/seed:
-    post:
-      tags: [admin]
-      summary: Bulk upsert action catalog + JSON Schemas (release operator)
-      operationId: adminSeedCatalog
-      security:
-        - AdminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                catalog:
-                  type: object
-                  properties:
-                    actions:
-                      type: array
-                      items:
-                        type: object
-                        additionalProperties: true
-                schemas:
-                  type: array
-                  items:
-                    type: object
-                    additionalProperties: true
-      responses:
-        '200':
-          description: Seed summary (actions_upserted, schemas_upserted, errors)
-
-  /admin/actions/{actionName}/schema:
-    put:
-      tags: [admin]
-      summary: Upsert one action JSON Schema (wf.wf_repo_upsert_action_schema)
-      operationId: adminUpsertActionSchema
-      security:
-        - AdminBearer: []
-      parameters:
-        - name: actionName
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [direction, schema_json]
-              properties:
-                direction:
-                  type: string
-                  enum: [input, output]
-                schema_json:
-                  type: object
-                  additionalProperties: true
-                schema_id:
-                  type: string
-      responses:
-        '200':
-          description: Schema upserted
-
-  /admin/actions:
-    post:
-      tags: [admin]
-      summary: Upsert workflow action row (wf.wf_repo_upsert_workflow_action)
-      operationId: adminUpsertWorkflowAction
-      security:
-        - AdminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpsertActionRequest'
-      responses:
-        '201':
-          description: Action upserted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpsertActionResponse'
-
-  /admin/workflows/compile:
-    post:
-      tags: [admin]
-      summary: Compile DomainProgram JSON to WorkflowDefinitionSpec
-      operationId: adminCompileWorkflow
-      security:
-        - AdminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                program_path:
-                  type: string
-                program:
-                  type: object
-                  additionalProperties: true
-                projectPath:
-                  type: string
-      responses:
-        '200':
-          description: Compiled spec
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  spec:
-                    $ref: '#/components/schemas/WorkflowDefinitionSpec'
-
-  /admin/workflows/definitions/deploy:
-    post:
-      tags: [admin]
-      summary: Compile (optional) and deploy workflow graph (wf.wf_repo_create_workflow_graph)
-      operationId: adminDeployWorkflowDefinition
-      security:
-        - AdminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                spec:
-                  $ref: '#/components/schemas/WorkflowDefinitionSpec'
-                program_path:
-                  type: string
-                program:
-                  type: object
-                  additionalProperties: true
-                replace:
-                  type: boolean
-                  default: false
-      responses:
-        '201':
-          description: Workflow definition deployed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateWorkflowDefinitionResponse'
-
-  /admin/workflows/definitions:
-    get:
-      tags: [admin]
-      summary: List workflow definitions
-      operationId: adminListWorkflowDefinitions
-      security:
-        - AdminBearer: []
-      parameters:
-        - name: source
-          in: query
-          schema:
-            type: string
-            enum: [system, portal]
-      responses:
-        '200':
-          description: Definition list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  definitions:
-                    type: array
-                    items:
-                      type: object
-                      additionalProperties: true
-
-  /admin/workflows/definitions/{name}:
-    get:
-      tags: [admin]
-      summary: Get workflow definition by name
-      operationId: adminGetWorkflowDefinition
-      security:
-        - AdminBearer: []
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Definition metadata
-    delete:
-      tags: [admin]
-      summary: Delete workflow definition (wf.sp_delete_workflow_def)
-      operationId: adminDeleteWorkflowDefinition
-      security:
-        - AdminBearer: []
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: deleteInstances
-          in: query
-          schema:
-            type: boolean
-            default: true
-      responses:
-        '200':
-          description: Definition deleted
-
   /workers/authenticate:
     post:
-      tags: [workers]
+      tags:
+      - workers
       summary: Validate worker credentials
       operationId: workerAuthenticate
       requestBody:
@@ -270,10 +43,10 @@ paths:
           description: Worker authenticated
         '401':
           description: Invalid credentials
-
   /workers/tasks/request:
     post:
-      tags: [workers]
+      tags:
+      - workers
       summary: Claim one READY task (wf.sp_worker_request_task)
       operationId: workerRequestTask
       requestBody:
@@ -289,19 +62,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkerTaskClaimResponse'
-
   /workers/tasks/{nodeExecutionId}/submit:
     post:
-      tags: [workers]
+      tags:
+      - workers
       summary: Submit task result (wf.sp_worker_submit_result)
       operationId: workerSubmitResult
       parameters:
-        - name: nodeExecutionId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
+      - name: nodeExecutionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
       requestBody:
         required: true
         content:
@@ -315,19 +88,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkerSubmitResultResponse'
-
   /workers/tasks/{nodeExecutionId}/heartbeat:
     post:
-      tags: [workers]
+      tags:
+      - workers
       summary: Extend task lease (wf.sp_worker_heartbeat)
       operationId: workerHeartbeat
       parameters:
-        - name: nodeExecutionId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
+      - name: nodeExecutionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
       requestBody:
         required: true
         content:
@@ -344,19 +117,19 @@ paths:
                 properties:
                   rows_updated:
                     type: integer
-
   /workers/tasks/{nodeExecutionId}/fail:
     post:
-      tags: [workers]
+      tags:
+      - workers
       summary: Fail task (wf.sp_worker_fail_task)
       operationId: workerFailTask
       parameters:
-        - name: nodeExecutionId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
+      - name: nodeExecutionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
       requestBody:
         required: true
         content:
@@ -366,271 +139,24 @@ paths:
       responses:
         '204':
           description: Task failed
-
-  /actions:
-    get:
-      tags: [legacy-admin]
-      summary: "[CI alias] List workflow actions"
-      description: Prefer portal DB `portal.sp_list_workflow_actions` for EpiPortal. Admin gateway alias for smoke tests.
-      operationId: listWorkflowActions
-      security:
-        - AdminBearer: []
-      responses:
-        '200':
-          description: Action catalog
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActionListResponse'
-    post:
-      tags: [legacy-admin]
-      summary: "[CI alias] Upsert workflow action row"
-      operationId: upsertWorkflowAction
-      security:
-        - AdminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpsertActionRequest'
-      responses:
-        '201':
-          description: Action upserted
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UpsertActionResponse'
-
-  /actions/{actionName}/schema:
-    get:
-      tags: [legacy-admin]
-      summary: "[CI alias] Get JSON Schema for action"
-      operationId: getActionSchema
-      security:
-        - AdminBearer: []
-      parameters:
-        - name: actionName
-          in: path
-          required: true
-          schema:
-            type: string
-          description: Workflow action name (e.g. pipeline.centroid)
-        - name: direction
-          in: query
-          schema:
-            type: string
-            enum: [input, output]
-            default: input
-      responses:
-        '200':
-          description: JSON Schema document
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ActionSchemaResponse'
-        '404':
-          description: Schema not registered for this action/direction
-
-  /studies/sample-prep/start:
-    post:
-      tags: [legacy-admin]
-      summary: "[CI alias] Plan sample list and start SamplePrepPipeline"
-      description: EpiPortal should use portal DB procs + in-process planner instead.
-      operationId: startSamplePrep
-      security:
-        - AdminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/StartSamplePrepRequest'
-      responses:
-        '201':
-          description: Sample prep instance created and started
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/StartSamplePrepResponse'
-
-  /studies/validation/start:
-    post:
-      tags: [legacy-admin]
-      summary: "[CI alias] Start StudyValidationLifecycle"
-      operationId: startStudyValidation
-      security:
-        - AdminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [projectPath]
-              additionalProperties: true
-      responses:
-        '201':
-          description: Validation workflow instance created and started
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-
-  /validation/plan-iterations:
-    post:
-      tags: [legacy-admin]
-      summary: "[CI alias] Plan validation iterations"
-      operationId: planValidationIterations
-      security:
-        - AdminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              additionalProperties: true
-      responses:
-        '200':
-          description: Planned context_json
-          content:
-            application/json:
-              schema:
-                type: object
-                additionalProperties: true
-
-  /workflows/instances:
-    post:
-      tags: [legacy-admin]
-      summary: "[CI alias] Create and start workflow instance"
-      description: EpiPortal should use `portal.sp_create_and_start_instance`.
-      operationId: createWorkflowInstance
-      security:
-        - AdminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CreateInstanceRequest'
-      responses:
-        '201':
-          description: Instance created and started
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkflowInstanceSummary'
-
-  /workflows/instances/{instanceId}:
-    get:
-      tags: [legacy-admin]
-      summary: "[CI alias] Get workflow instance status"
-      operationId: getWorkflowInstance
-      security:
-        - AdminBearer: []
-      parameters:
-        - name: instanceId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '200':
-          description: Instance status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkflowInstanceSummary'
-
-  /workflows/instances/{instanceId}/start:
-    post:
-      tags: [legacy-admin]
-      summary: "[CI alias] Start workflow instance"
-      operationId: startWorkflowInstance
-      security:
-        - AdminBearer: []
-      parameters:
-        - name: instanceId
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '200':
-          description: Instance started
-
-  /workflows/definitions:
-    post:
-      tags: [legacy-admin]
-      summary: "[CI alias] Create workflow definition graph"
-      description: Prefer `POST /admin/workflows/definitions/deploy` for CI releases.
-      operationId: createWorkflowDefinition
-      security:
-        - AdminBearer: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WorkflowDefinitionSpec'
-      responses:
-        '201':
-          description: Workflow definition created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CreateWorkflowDefinitionResponse'
-
-  /workflows/definitions/{name}:
-    delete:
-      tags: [legacy-admin]
-      summary: "[CI alias] Delete workflow definition"
-      operationId: deleteWorkflowDefinition
-      security:
-        - AdminBearer: []
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: deleteInstances
-          in: query
-          schema:
-            type: boolean
-            default: true
-      responses:
-        '200':
-          description: Definition deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  deleted_instance_count:
-                    type: integer
-                  deleted_version_count:
-                    type: integer
-
 components:
   schemas:
     WorkerAuthRequest:
       type: object
-      required: [worker_id, worker_token]
+      required:
+      - worker_id
+      - worker_token
       properties:
         worker_id:
           type: integer
           format: int64
         worker_token:
           type: string
-
     WorkerRequestTaskRequest:
       type: object
-      required: [worker_id, worker_token]
+      required:
+      - worker_id
+      - worker_token
       properties:
         worker_id:
           type: integer
@@ -640,16 +166,17 @@ components:
         capability:
           type: string
           nullable: true
-          description: >
-            Optional narrowing filter within the worker's registered wf.worker.capabilities.
+          description: 'Optional narrowing filter within the worker''s registered wf.worker.capabilities.
             Dispatch only returns tasks whose capability is in that set; this field cannot widen it.
+
+            '
         max_lease_seconds:
           type: integer
           default: 300
-
     WorkerTaskClaimResponse:
       type: object
-      required: [has_task]
+      required:
+      - has_task
       properties:
         has_task:
           type: boolean
@@ -672,10 +199,12 @@ components:
           additionalProperties: true
         iteration_no:
           type: integer
-
     WorkerSubmitResultRequest:
       type: object
-      required: [worker_id, worker_token, result_code]
+      required:
+      - worker_id
+      - worker_token
+      - result_code
       properties:
         worker_id:
           type: integer
@@ -688,7 +217,6 @@ components:
           type: object
           additionalProperties: true
           nullable: true
-
     WorkerSubmitResultResponse:
       type: object
       properties:
@@ -698,10 +226,11 @@ components:
           type: string
         next_ready_count:
           type: integer
-
     WorkerHeartbeatRequest:
       type: object
-      required: [worker_id, worker_token]
+      required:
+      - worker_id
+      - worker_token
       properties:
         worker_id:
           type: integer
@@ -711,10 +240,12 @@ components:
         extend_seconds:
           type: integer
           default: 300
-
     WorkerFailTaskRequest:
       type: object
-      required: [worker_id, worker_token, error_code]
+      required:
+      - worker_id
+      - worker_token
+      - error_code
       properties:
         worker_id:
           type: integer
@@ -726,237 +257,10 @@ components:
         error_message:
           type: string
           nullable: true
-
-    CreateInstanceRequest:
-      type: object
-      required: [workflow_version_id]
-      properties:
-        workflow_version_id:
-          type: integer
-          format: int64
-        context_json:
-          type: object
-          additionalProperties: true
-
-    WorkflowInstanceSummary:
-      type: object
-      properties:
-        id:
-          type: integer
-          format: int64
-        workflow_version_id:
-          type: integer
-          format: int64
-        status:
-          type: string
-          enum: [CREATED, RUNNING, COMPLETED, FAILED, CANCELLED]
-
-    ActionSummary:
-      type: object
-      required: [action_name, has_input_schema, has_output_schema]
-      properties:
-        action_name:
-          type: string
-        capability:
-          type: string
-          nullable: true
-        has_input_schema:
-          type: boolean
-        has_output_schema:
-          type: boolean
-        execution_mode:
-          type: string
-          enum: [cli, in_process]
-          nullable: true
-        cli_tool:
-          type: string
-          nullable: true
-        argv_map:
-          type: object
-          additionalProperties:
-            type: string
-          nullable: true
-        in_process_handler:
-          type: string
-          nullable: true
-
-    ActionListResponse:
-      type: object
-      required: [actions]
-      properties:
-        actions:
-          type: array
-          items:
-            $ref: '#/components/schemas/ActionSummary'
-
-    ActionSchemaResponse:
-      type: object
-      required: [action_name, direction, schema_json]
-      properties:
-        action_name:
-          type: string
-        direction:
-          type: string
-          enum: [input, output]
-        schema_id:
-          type: string
-          nullable: true
-        schema_json:
-          type: object
-          additionalProperties: true
-
-    UpsertActionRequest:
-      type: object
-      required: [action_name]
-      properties:
-        action_name:
-          type: string
-        capability:
-          type: string
-          nullable: true
-        payload_schema_ref:
-          type: string
-          nullable: true
-
-    UpsertActionResponse:
-      type: object
-      required: [action_name]
-      properties:
-        action_name:
-          type: string
-
-    WorkflowDefinitionSpec:
-      type: object
-      required: [name, root_node_key, nodes]
-      properties:
-        name:
-          type: string
-        description:
-          type: string
-          nullable: true
-        version_major:
-          type: integer
-          default: 1
-        version_minor:
-          type: integer
-          default: 0
-        is_active:
-          type: boolean
-          default: true
-        root_node_key:
-          type: string
-        nodes:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        edges:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        input_bindings:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        output_bindings:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        scope_defaults:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-
-    CreateWorkflowDefinitionResponse:
-      type: object
-      required: [workflow_def_id, workflow_version_id, root_node_id, name]
-      properties:
-        workflow_def_id:
-          type: integer
-          format: int64
-        workflow_version_id:
-          type: integer
-          format: int64
-        root_node_id:
-          type: integer
-          format: int64
-        name:
-          type: string
-
-    StartSamplePrepRequest:
-      type: object
-      required: [projectPath]
-      properties:
-        projectPath:
-          type: string
-        workflow_version_id:
-          type: integer
-          format: int64
-        program_path:
-          type: string
-          nullable: true
-        samples:
-          type: array
-          items:
-            type: object
-            additionalProperties: true
-        sampleCsv:
-          type: string
-          nullable: true
-        sampleCsvs:
-          type: array
-          items:
-            type: string
-        useProjectSamples:
-          type: boolean
-          default: false
-        fastqStorage:
-          type: object
-          description: Instance-level FASTQ storage defaults (file, s3, or azure_blob)
-          additionalProperties: true
-        samplesBaseDir:
-          type: string
-          nullable: true
-        referenceFasta:
-          type: string
-          nullable: true
-        referenceGtf:
-          type: string
-          nullable: true
-        primaryAnalyte:
-          type: string
-          nullable: true
-
-    StartSamplePrepResponse:
-      type: object
-      required: [instance_id, workflow_version_id, context_json, n_samples]
-      properties:
-        instance_id:
-          type: integer
-          format: int64
-        workflow_version_id:
-          type: integer
-          format: int64
-        context_json:
-          type: object
-          additionalProperties: true
-        n_samples:
-          type: integer
-
   securitySchemes:
     WorkerToken:
       type: apiKey
       in: header
       name: X-Worker-Token
       description: Worker body fields worker_id + worker_token (primary auth)
-    AdminBearer:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-      description: Entra ID JWT with GATEWAY_ENTRA_ADMIN_ROLES app role when GATEWAY_REQUIRE_ENTRA=1
-
 security: []

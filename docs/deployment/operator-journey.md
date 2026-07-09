@@ -37,7 +37,7 @@ See [Production release](production_release.md).
 
 | Step | Entry | Deep dive |
 |------|-------|-----------|
-| 13 | Sample prep (FASTQ → HDF5) | Portal `POST /v1/studies/sample-prep/start` or admin CLI | [SamplePrepFlow](../../workflow_engine/sql_mssql/SamplePrepFlow.md), [Usage ch.03](../usage/03-sample-prep-and-qc.qmd) |
+| 13 | Sample prep (FASTQ → HDF5) | Portal SQL or `scripts/start_study_instance.py` | [SamplePrepFlow](../../workflow_engine/sql_mssql/SamplePrepFlow.md), [Usage ch.03](../usage/03-sample-prep-and-qc.qmd) |
 | 14 | Staged validation | `methyl-workflow-run` + DomainProgram + profile | [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.qmd) |
 | 15 | Monitor instances | Gateway poll + DB `wf.workflow_instance` | [Distributed runtime](../architecture/distributed-runtime.md) |
 

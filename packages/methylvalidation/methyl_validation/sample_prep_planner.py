@@ -2,7 +2,7 @@
 Build SamplePrepPipeline context_json from project + sample lists + structured FASTQ storage.
 
 Used by:
-- middle-tier REST ``POST /v1/studies/sample-prep/start``
+- portal / CI helpers (``scripts/start_study_instance.py``, ``ops.sample_lifecycle``)
 - ``methyl-validation plan-sample-prep-context`` CLI (optional)
 """
 

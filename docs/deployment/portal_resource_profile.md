@@ -67,11 +67,10 @@ WHERE profile_key = 'epimethyl-samples';
 
 **Optional default:** `sampleStorage` from portal profile when omitted (`archiveProfileKey` defaults to `epimethyl-samples`). Legacy `h5Storage` accepted.
 
-```http
-POST /v1/studies/sample-prep/start
+```json
 {
   "projectPath": "/work/epimethyl/data/project_....json",
-  "workflow_version_id": <sample_prep_version>,
+  "workflow_version_id": "<sample_prep_version>",
   "fastqStorage": {
     "type": "s3",
     "bucket": "lab-external-cohort",
@@ -81,6 +80,8 @@ POST /v1/studies/sample-prep/start
   "sampleCsvs": ["/work/.../healthy.csv"]
 }
 ```
+
+Start via portal SQL or `python scripts/start_study_instance.py sample-prep-start request.json`.
 
 Legacy aliases: `archiveStorageKey`, `storageKey` → `archiveProfileKey`.
 

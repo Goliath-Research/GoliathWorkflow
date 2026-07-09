@@ -7,14 +7,7 @@
 #   # set AZURE_SQL_* or POSTGRES_* (see deploy/env/gateway.*.env.example)
 #   bash scripts/deploy_mc_workflow_definitions.sh
 #
-#   # Gateway admin (no direct DB on host)
-#   export WORKER_API_BASE=https://gateway.example.com/v1
-#   export GATEWAY_ADMIN_BEARER_TOKEN='...'
-#   bash scripts/deploy_mc_workflow_definitions.sh --use-gateway
-#
 # Options:
-#   --api-base URL     Gateway base (default WORKER_API_BASE or http://localhost:8080/v1)
-#   --use-gateway      POST specs via admin API instead of direct DB
 #   --dry-run          Compile only
 #   --delete-instances Pass delete_instances=true on replace deploy (default: false)
 #   -h, --help
@@ -24,19 +17,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-API_BASE="${WORKER_API_BASE:-http://localhost:8080/v1}"
 DRY_RUN=0
-USE_GATEWAY=0
 DELETE_INSTANCES=0
 
 usage() {
-  sed -n '2,22p' "$0"
+  sed -n '2,16p' "$0"
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --api-base) API_BASE="${2:-}"; shift 2 ;;
-    --use-gateway) USE_GATEWAY=1; shift ;;
+    --api-base|--use-gateway)
+      echo "Note: gateway deploy removed; using direct DB only ($1 ignored)" >&2
+      if [[ "$1" == "--api-base" ]]; then shift 2; else shift; fi
+      ;;
     --dry-run) DRY_RUN=1; shift ;;
     --delete-instances) DELETE_INSTANCES=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -78,63 +71,33 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
-"$PYTHON_BIN" - "$REPO_ROOT" "$API_BASE" "$USE_GATEWAY" "$DELETE_INSTANCES" "${COMPILED[@]}" <<'PY'
+"$PYTHON_BIN" - "$REPO_ROOT" "$DELETE_INSTANCES" "${COMPILED[@]}" <<'PY'
 import json
-import os
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 repo = Path(sys.argv[1])
-api_base = sys.argv[2].rstrip("/")
-use_gateway = sys.argv[3] == "1"
-delete_instances = sys.argv[4] == "1"
-compiled_paths = [Path(p) for p in sys.argv[5:]]
+delete_instances = sys.argv[2] == "1"
+compiled_paths = [Path(p) for p in sys.argv[3:]]
 
-if use_gateway:
-    token = os.environ.get("GATEWAY_ADMIN_BEARER_TOKEN") or os.environ.get("GATEWAY_ENTRA_BEARER_TOKEN")
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
+sys.path.insert(0, str(repo / "workflow_engine"))
+from ops.workflow_deploy import deploy_workflow_definition
+from rest.connection import resolve_connection_config
+from rest.db import open_gateway_db
+
+config = resolve_connection_config()
+db = open_gateway_db(config)
+try:
     for path in compiled_paths:
         spec = json.loads(path.read_text(encoding="utf-8"))
-        body = {"spec": spec, "replace": True, "delete_instances": delete_instances}
-        req = urllib.request.Request(
-            f"{api_base}/admin/workflows/definitions/deploy",
-            data=json.dumps(body).encode("utf-8"),
-            headers=headers,
-            method="POST",
+        result = deploy_workflow_definition(
+            db,
+            {"spec": spec, "replace": True, "delete_instances": delete_instances},
+            create_workflow_definition=db.create_workflow_definition,
+            delete_workflow_definition=db.delete_workflow_definition,
         )
-        try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise SystemExit(f"POST failed for {spec.get('name')}: HTTP {exc.code}: {detail}") from exc
+        db.commit()
         print(f"deployed {spec.get('name')}: workflow_version_id={result.get('workflow_version_id')}")
-else:
-    import sys as _sys
-
-    wf_engine = repo / "workflow_engine"
-    _sys.path.insert(0, str(wf_engine))
-    from rest.connection import resolve_connection_config
-    from rest.db import open_gateway_db
-    from rest.admin_handlers import deploy_workflow_definition
-
-    config = resolve_connection_config()
-    db = open_gateway_db(config)
-    try:
-        for path in compiled_paths:
-            spec = json.loads(path.read_text(encoding="utf-8"))
-            result = deploy_workflow_definition(
-                db,
-                {"spec": spec, "replace": True, "delete_instances": delete_instances},
-                create_workflow_definition=db.create_workflow_definition,
-                delete_workflow_definition=db.delete_workflow_definition,
-            )
-            db.commit()
-            print(f"deployed {spec.get('name')}: workflow_version_id={result.get('workflow_version_id')}")
-    finally:
-        db.close()
+finally:
+    db.close()
 PY

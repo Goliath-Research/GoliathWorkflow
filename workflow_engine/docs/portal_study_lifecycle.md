@@ -8,9 +8,9 @@ Staged orchestration for multi-group studies: **SamplePrep** completes, then the
 |-------|-----------|---------|
 | **EpiPortal** | **Azure SQL direct** | Plan context, create/start instances, monitor (`portal.sp_*` procs) |
 | **Workers** | Gateway `/v1/workers/*` | Execute READY action tasks |
-| **CI / release admin** | Gateway `/v1/admin/*` | Seed action catalog, deploy system workflow graphs |
+| **CI / release** | Direct DB scripts | Seed action catalog, deploy system workflow graphs (`seed_action_catalog.py`, `deploy_workflow_definitions.sh`, `workflow_engine/ops`) |
 
-The portal **never** calls the REST gateway. Study compile/plan/start for CI and operators uses **`methyl-study-start`** (admin CLI), not gateway domain routes. Generic gateway aliases under `/v1/workflows/*` remain for CI smoke when Entra is enabled.
+The portal **never** calls the REST gateway. The gateway is **worker-only**. Study compile/plan/start for CI uses **`scripts/start_study_instance.py`** (or `workflow_engine/ops` helpers); production uses portal SQL.
 
 Deploy portal SQL API: [`../sql/portal_workflow_api.sql`](../sql/portal_workflow_api.sql) (Azure SQL) or [`../sql_pg/portal_workflow_api.sql`](../sql_pg/portal_workflow_api.sql) (PostgreSQL).
 
@@ -37,48 +37,25 @@ Monitor:
 EXEC portal.sp_get_instance_tasks @workflow_instance_id = @instance_id;
 ```
 
-### Option B — Admin CLI (CI / operators, not portal UI)
+### Option B — Direct DB CI helper
 
 **`fastqStorage` is always required** — initial FASTQs come from **laboratory-owned** storage.
 
 ```bash
-methyl-study-start sample-prep-start request.json
+python scripts/start_study_instance.py sample-prep-start request.json
 # request.json: projectPath, workflow_version_id, fastqStorage, sampleCsvs, ...
 ```
 
 See [`sample_prep_test_bed.md`](sample_prep_test_bed.md) for smoke scripts and QC semantics.
 
-### Option C — Manual context_json (admin CI)
-
-```http
-POST /v1/workflows/instances
-Authorization: Bearer <admin-jwt>
-{
-  "workflow_version_id": <sample_prep_version>,
-  "context_json": {
-    "projectPath": "/work/.../project_Healthy_vs_PCa1-5-CG.json",
-    "primaryAnalyte": "buffy_coat",
-    "isCfdna": false,
-    "referenceFasta": "/work/genomes/.../Homo_sapiens.GRCh38.dna.primary_assembly.fa",
-    "samples": [
-      { "sampleId": "S1", "sampleDir": "/work/samples/S1", "fastqPrefix": "plasma/S1/" }
-    ]
-  }
-}
-```
-
-Poll `GET /v1/workflows/instances/{id}` until status is **COMPLETED** (all samples passed QC and have per-chromosome HDF5s).
-
-`chrom_mapping` is derived from `project.chromosomes` at extract time (no shared-storage mapping file required). Optional overrides: profile/site `actionConfig.methyl_extract.contig_naming`, `chromosome_overrides`, inline `chrom_mapping` in instance `context_json`, or program `stepOverride`.
-
 ## Instance 2 — StudyValidationLifecycle
 
 The portal **pre-plans** iterations before starting the workflow. Two equivalent paths:
 
-### Option A — Admin CLI (recommended for CI)
+### Option A — Direct DB CI helper
 
 ```bash
-methyl-study-start validation-start request.json
+python scripts/start_study_instance.py validation-start request.json
 # request.json: projectPath, workflow_version_id, featureIterations, seed, ...
 ```
 
@@ -95,30 +72,25 @@ Response (stdout JSON):
 }
 ```
 
-### Option B — Manual plan + enrich + start
+### Option B — Manual plan + enrich + portal SQL
 
-```bash
-methyl-study-start plan-iterations planner.json
-# planner.json: projectPath, featureIterations, ...
+Plan iterations with `methyl_validation.workflow_planner.plan_validation_context`, merge via `finalize_instance_context`, then:
+
+```sql
+EXEC portal.sp_create_and_start_instance
+  @workflow_version_id = @study_validation_version_id,
+  @context_json = @planned_context_json;
 ```
 
-Merge planner output with enriched project fields via `finalize_instance_context`, then create/start via portal SQL or generic `POST /v1/workflows/instances`.
+`chrom_mapping` is derived from `project.chromosomes` at extract time (no shared-storage mapping file required). Optional overrides: profile/site `actionConfig.methyl_extract.contig_naming`, `chromosome_overrides`, inline `chrom_mapping` in instance `context_json`, or program `stepOverride`.
 
-```http
-POST /v1/workflows/instances
-{
-  "workflow_version_id": <study_validation_version>,
-  "context_json": {
-    "projectPath": "...",
-    "iterations": [ "... from plan-iterations ..." ],
-    "monteCarloRunsRoot": "/work/.../monte_carlo_runs",
-    "backends": ["ecdf", "tabular_sklearn", "generative_hybrid"],
-    "comparisons": [ "..." ],
-    "chromosomes": ["1", "2", "..."],
-    "contexts": ["CG"],
-    "groups": [ { "label": "healthy" }, { "label": "PCa1" } ]
-  }
-}
+## Deploy system graphs
+
+```bash
+export BACKEND_DB=mssql   # or postgres
+# AZURE_SQL_* or POSTGRES_*
+bash scripts/deploy_workflow_definitions.sh
+python workflow_engine/sql_mssql/seed_action_catalog.py --use-db
 ```
 
 ## StudyValidationLifecycle phases

@@ -76,21 +76,7 @@ The bootstrap script:
 2. Runs `methyl-export-task-schemas` + `methyl-export-action-catalog`
 3. Runs `scripts/check_task_input_config_boundary.py`
 4. Seeds `wf.workflow_action` + task JSON schemas via `workflow_engine/sql_mssql/seed_action_catalog.py`
-5. POSTs compiled SamplePrep + StudyValidation workflows via `scripts/deploy_workflow_definitions.sh`
-
-## Gateway-only (no DB creds on laptop)
-
-When the gateway VM has DB access and you hold an admin bearer token:
-
-```bash
-export WORKER_API_BASE=https://gateway.example.com/v1
-export GATEWAY_ADMIN_BEARER_TOKEN='...'
-
-bash scripts/bootstrap_distributed_workers.sh \
-  --skip-schema \
-  --use-gateway-only \
-  --api-base "$WORKER_API_BASE"
-```
+5. Deploys compiled SamplePrep + StudyValidation workflows via `scripts/deploy_workflow_definitions.sh` (direct DB)
 
 ## Register remote workers
 

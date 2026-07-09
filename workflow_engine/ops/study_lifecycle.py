@@ -1,4 +1,4 @@
-"""Admin tooling: plan validation context, enrich, and start StudyValidationLifecycle."""
+"""Plan validation context, enrich, and start StudyValidationLifecycle (direct DB)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from admin._paths import REPO_ROOT, ensure_import_paths
+from ops._paths import ensure_import_paths
 
 logger = logging.getLogger(__name__)
 

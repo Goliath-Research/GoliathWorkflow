@@ -7,7 +7,7 @@ Standalone integration test bed for **SamplePrepPipeline** (download â†’ align â
 - **Azure SQL** `wf` schema deployed (default `BACKEND_DB=mssql`; see [`docs/deployment/production_runbook.md`](../../docs/deployment/production_runbook.md))
 - Action catalog seeded: `bash scripts/refresh_sample_prep_test_bed.sh` (or `python workflow_engine/sql_mssql/seed_action_catalog.py` with `AZURE_SQL_*` env)
 - Workflow definitions deployed: `bash scripts/deploy_workflow_definitions.sh`
-- REST gateway running ([`workflow_engine/rest/gateway.py`](../rest/gateway.py))
+- Worker-only REST gateway running ([`workflow_engine/rest/gateway.py`](../rest/gateway.py)) for task claim/submit
 - Worker registered with `WORKER_STUB_EXTERNAL=1` for dry-run smoke, or full stack for production FASTQs
 
 ## Refresh test bed (Azure SQL)
@@ -21,15 +21,20 @@ export AZURE_SQL_DB=MethylPipeline
 export AZURE_SQL_USER=...
 export AZURE_SQL_PASSWORD=...
 
-bash scripts/refresh_sample_prep_test_bed.sh --api-base http://localhost:8080/v1
+bash scripts/refresh_sample_prep_test_bed.sh
 ```
 
-This exports task schemas, seeds `wf.workflow_action` + JSON schemas, and POSTs compiled SamplePrep to the gateway.
+This exports task schemas, seeds `wf.workflow_action` + JSON schemas, and deploys compiled SamplePrep via direct DB.
 
-## Start via gateway (recommended)
+## Start via CI helper (recommended for smoke)
 
-```http
-POST /v1/studies/sample-prep/start
+```bash
+python scripts/start_study_instance.py sample-prep-start request.json
+```
+
+Example `request.json`:
+
+```json
 {
   "projectPath": "/work/.../project.json",
   "workflow_version_id": 12,
@@ -62,7 +67,7 @@ Alternative inputs:
 | `useProjectSamples: true` | Union cohort CSVs from project `controls` / `diseases` |
 | `program_path` | Compile+register SamplePrep on the fly (defaults to `sample_prep.program.json`) |
 
-Response:
+Response (stdout JSON):
 
 ```json
 {
@@ -73,7 +78,7 @@ Response:
 }
 ```
 
-Poll `GET /v1/workflows/instances/{instance_id}` until **COMPLETED**.
+Poll instance status via DB (`wf.wf_repo_get_workflow_instance` / portal procs) until **COMPLETED**.
 
 ## Planner-only (no start)
 
@@ -91,7 +96,7 @@ context = plan_sample_prep_context({
 })
 ```
 
-Then `POST /v1/workflows/instances` with `workflow_version_id` and `context_json`.
+Then create/start via portal SQL (`portal.sp_create_and_start_instance`) with `workflow_version_id` and `context_json`.
 
 ## Local smoke
 
@@ -99,8 +104,9 @@ Then `POST /v1/workflows/instances` with `workflow_version_id` and `context_json
 source .venv/bin/activate
 export WORKER_STUB_EXTERNAL=1
 bash scripts/bootstrap_sample_prep_smoke_fixtures.sh
-bash scripts/smoke_sample_prep.sh --api-base http://localhost:8080/v1
+bash scripts/smoke_sample_prep.sh
 ```
+
 
 Bootstrap writes fixtures under `.smoke/sample_prep/` (Parabricks metrics JSON + placeholder FASTQs) so real `methyl_qc` runs while download/align/extract are stubbed.
 

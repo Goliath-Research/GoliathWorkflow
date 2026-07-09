@@ -1,4 +1,4 @@
-"""Repo layout sys.path bootstrap for admin CLI sibling packages."""
+"""Repo layout sys.path bootstrap for ops helpers."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ WF_ENGINE = REPO_ROOT / "workflow_engine"
 
 
 def ensure_import_paths() -> None:
-    """Add repo sibling paths when methyldomain/methylvalidation/domain are not pip-installed."""
+    """Add repo sibling paths when packages are not pip-installed."""
     for rel in (
         WF_ENGINE / "domain",
         WF_ENGINE / "contract",
