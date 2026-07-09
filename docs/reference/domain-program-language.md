@@ -70,7 +70,7 @@ export BACKEND_DB=mssql   # or postgres
 bash scripts/deploy_workflow_definitions.sh
 ```
 
-Writes `workflow_versions.json` with IDs for portal SQL / `scripts/start_study_instance.py`.
+Writes `workflow_versions.json` with IDs for portal SQL / `methyl-study-start`.
 
 ## Constructs
 

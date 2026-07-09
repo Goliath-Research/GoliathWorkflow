@@ -81,7 +81,7 @@ WHERE profile_key = 'epimethyl-samples';
 }
 ```
 
-Start via portal SQL or `python scripts/start_study_instance.py sample-prep-start request.json`.
+Start via portal SQL or `methyl-study-start sample-prep-start request.json`.
 
 Legacy aliases: `archiveStorageKey`, `storageKey` → `archiveProfileKey`.
 

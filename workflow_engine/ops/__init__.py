@@ -1,6 +1,6 @@
 """Direct-DB operator helpers (catalog seed, workflow deploy, study lifecycle).
 
-These replace the former gateway ``/v1/admin/*`` HTTP surface and the
-``methyl-study-start`` CLI. Portal SQL and Cursor MCP remain the operator
-interfaces for production and interactive DB work.
+Shared by ``methyl-study-start`` (Admin CLI) and deploy/seed scripts.
+Uses ``rest.db_client`` so MSSQL and PostgreSQL share one API. Not exposed on
+the worker-only REST gateway.
 """

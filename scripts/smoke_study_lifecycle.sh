@@ -94,7 +94,6 @@ if not sample_prep_vid or not lifecycle_vid:
         f"workflow_version_id missing in {versions_file}; run deploy_workflow_definitions.sh"
     )
 
-start_script = repo_root / "scripts" / "start_study_instance.py"
 env = {**os.environ, "PYTHONPATH": str(wf_engine)}
 
 prep_body = {
@@ -116,11 +115,11 @@ prep_body = {
     ],
 }
 proc = subprocess.run(
-    [sys.executable, str(start_script), "sample-prep-start", "-"],
+    [sys.executable, "-m", "admin.study_start", "sample-prep-start", "-"],
     input=json.dumps(prep_body),
     capture_output=True,
     text=True,
-    cwd=str(repo_root),
+    cwd=str(wf_engine),
     env=env,
 )
 if proc.returncode != 0:
@@ -144,11 +143,11 @@ val_body = {
     "seed": 42,
 }
 proc = subprocess.run(
-    [sys.executable, str(start_script), "validation-start", "-"],
+    [sys.executable, "-m", "admin.study_start", "validation-start", "-"],
     input=json.dumps(val_body),
     capture_output=True,
     text=True,
-    cwd=str(repo_root),
+    cwd=str(wf_engine),
     env=env,
 )
 if proc.returncode != 0:

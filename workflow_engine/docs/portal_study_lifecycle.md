@@ -8,9 +8,9 @@ Staged orchestration for multi-group studies: **SamplePrep** completes, then the
 |-------|-----------|---------|
 | **EpiPortal** | **Azure SQL direct** | Plan context, create/start instances, monitor (`portal.sp_*` procs) |
 | **Workers** | Gateway `/v1/workers/*` | Execute READY action tasks |
-| **CI / release** | Direct DB scripts | Seed action catalog, deploy system workflow graphs (`seed_action_catalog.py`, `deploy_workflow_definitions.sh`, `workflow_engine/ops`) |
+| **CI / operators** | Admin CLI + direct DB scripts | `methyl-study-start`, `seed_action_catalog.py`, `deploy_workflow_definitions.sh` |
 
-The portal **never** calls the REST gateway. The gateway is **worker-only**. Study compile/plan/start for CI uses **`scripts/start_study_instance.py`** (or `workflow_engine/ops` helpers); production uses portal SQL.
+The portal **never** calls the REST gateway. The gateway is **worker-only**. Study compile/plan/start for CI and Cursor developer mode uses **`methyl-study-start`** (backend-agnostic DB client); production uses portal SQL.
 
 Deploy portal SQL API: [`../sql/portal_workflow_api.sql`](../sql/portal_workflow_api.sql) (Azure SQL) or [`../sql_pg/portal_workflow_api.sql`](../sql_pg/portal_workflow_api.sql) (PostgreSQL).
 
@@ -37,12 +37,12 @@ Monitor:
 EXEC portal.sp_get_instance_tasks @workflow_instance_id = @instance_id;
 ```
 
-### Option B — Direct DB CI helper
+### Option B — Admin CLI (CI / Cursor developer mode)
 
 **`fastqStorage` is always required** — initial FASTQs come from **laboratory-owned** storage.
 
 ```bash
-python scripts/start_study_instance.py sample-prep-start request.json
+methyl-study-start sample-prep-start request.json
 # request.json: projectPath, workflow_version_id, fastqStorage, sampleCsvs, ...
 ```
 
@@ -52,10 +52,10 @@ See [`sample_prep_test_bed.md`](sample_prep_test_bed.md) for smoke scripts and Q
 
 The portal **pre-plans** iterations before starting the workflow. Two equivalent paths:
 
-### Option A — Direct DB CI helper
+### Option A — Admin CLI (recommended for CI)
 
 ```bash
-python scripts/start_study_instance.py validation-start request.json
+methyl-study-start validation-start request.json
 # request.json: projectPath, workflow_version_id, featureIterations, seed, ...
 ```
 

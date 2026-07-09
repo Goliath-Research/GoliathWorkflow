@@ -18,10 +18,10 @@ End-to-end operator checklist for real FASTQ → HDF5 → validation on `/work/e
 
 See [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md) and the SamplePrep test bed [`workflow_engine/docs/sample_prep_test_bed.md`](../../workflow_engine/docs/sample_prep_test_bed.md).
 
-**Recommended start:** portal SQL after planning (`portal.sp_create_and_start_instance`). For CI:
+**Recommended start:** portal SQL after planning (`portal.sp_create_and_start_instance`). For CI / Admin CLI:
 
 ```bash
-python scripts/start_study_instance.py sample-prep-start request.json
+methyl-study-start sample-prep-start request.json
 # request.json: projectPath, workflow_version_id, fastqStorage, sampleCsvs, ...
 ```
 
@@ -55,10 +55,10 @@ Review `remediation_manifest.csv` for batch remediation via `SamplePrepRemediati
 
 ## Stage 2 — StudyValidationLifecycle
 
-Recommended: portal SQL after planning. For CI:
+Recommended: portal SQL after planning. For CI / Admin CLI:
 
 ```bash
-python scripts/start_study_instance.py validation-start request.json
+methyl-study-start validation-start request.json
 # request.json: projectPath, workflow_version_id, featureIterations, seed, ...
 ```
 

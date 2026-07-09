@@ -1,5 +1,5 @@
 #!/bin/bash
-# Smoke test: SamplePrepPipeline via scripts/start_study_instance.py (direct DB).
+# Smoke test: SamplePrepPipeline via methyl-study-start (Admin CLI / direct DB).
 
 set -euo pipefail
 
@@ -123,17 +123,16 @@ body = {
 if remediation:
     print("note: --remediation not yet implemented; running default pass-path smoke")
 
-start_script = repo_root / "scripts" / "start_study_instance.py"
 proc = subprocess.run(
-    [sys.executable, str(start_script), "sample-prep-start", "-"],
+    [sys.executable, "-m", "admin.study_start", "sample-prep-start", "-"],
     input=json.dumps(body),
     capture_output=True,
     text=True,
-    cwd=str(repo_root),
+    cwd=str(wf_engine),
     env={**os.environ, "PYTHONPATH": str(wf_engine)},
 )
 if proc.returncode != 0:
-    raise SystemExit(f"start_study_instance failed: {proc.stderr or proc.stdout}")
+    raise SystemExit(f"methyl-study-start failed: {proc.stderr or proc.stdout}")
 started = json.loads(proc.stdout)
 instance_id = int(started["instance_id"])
 print(json.dumps({"planned_samples": started.get("n_samples"), "context_samples": len(started.get("context_json", {}).get("samples", []))}, indent=2))

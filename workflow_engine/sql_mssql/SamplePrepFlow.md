@@ -108,7 +108,7 @@ Examples:
 - [`instance_context_examples/sample_prep_plasma.json`](instance_context_examples/sample_prep_plasma.json)
 - [`instance_context_examples/sample_prep_from_planner.json`](instance_context_examples/sample_prep_from_planner.json)
 
-**Planner:** `scripts/start_study_instance.py sample-prep-start` or `methyl_validation.sample_prep_planner.plan_sample_prep_context()`. See [`../docs/sample_prep_test_bed.md`](../docs/sample_prep_test_bed.md).
+**Planner:** `methyl-study-start sample-prep-start` or `methyl_validation.sample_prep_planner.plan_sample_prep_context()`. See [`../docs/sample_prep_test_bed.md`](../docs/sample_prep_test_bed.md).
 
 ## Storage contract
 
@@ -146,7 +146,7 @@ Direct DB deploy + CI start:
 
 ```bash
 bash scripts/deploy_workflow_definitions.sh
-python scripts/start_study_instance.py sample-prep-start request.json
+methyl-study-start sample-prep-start request.json
 ```
 
 Workers poll by capability; task count scales with `len(samples) × actions per sample` including remediation when triggered.

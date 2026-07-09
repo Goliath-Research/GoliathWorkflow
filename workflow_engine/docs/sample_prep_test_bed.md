@@ -29,7 +29,7 @@ This exports task schemas, seeds `wf.workflow_action` + JSON schemas, and deploy
 ## Start via CI helper (recommended for smoke)
 
 ```bash
-python scripts/start_study_instance.py sample-prep-start request.json
+methyl-study-start sample-prep-start request.json
 ```
 
 Example `request.json`:

@@ -154,7 +154,7 @@ Worker poll/submit contract: [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER
 Prefer portal SQL (`portal.sp_create_and_start_instance`) after planning context. For CI:
 
 ```bash
-python scripts/start_study_instance.py sample-prep-start request.json
+methyl-study-start sample-prep-start request.json
 ```
 
 See [Sample Prep and Quality Control](03-sample-prep-and-qc.qmd) for QC gates.

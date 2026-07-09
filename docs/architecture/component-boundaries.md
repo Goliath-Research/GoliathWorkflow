@@ -17,7 +17,7 @@ The database owns:
 
 The database does **not** encode methylation semantics. Action names, capabilities, and JSON schemas are **data rows** seeded from git; the engine never branches on pipeline meaning in SQL.
 
-**Config resolution at instance time:** Portal middle-tier (or CI helpers under `workflow_engine/ops` / `scripts/start_study_instance.py`) call `finalize_instance_context()` before `create_workflow_instance`, baking `resolvedConfig__<action_config_key>` scope variables. The SQL read-path binds these into action input templates — workers receive fully-resolved payloads without gateway enrichment.
+**Config resolution at instance time:** Portal middle-tier or `methyl-study-start` calls `finalize_instance_context()` before `create_workflow_instance`, baking `resolvedConfig__<action_config_key>` scope variables. The SQL read-path binds these into action input templates — workers receive fully-resolved payloads without gateway enrichment.
 
 ## REST gateway (`methyl-gateway`)
 
@@ -41,12 +41,14 @@ EpiPortal **never** calls the gateway; it uses Azure SQL `portal.sp_*` directly.
 | Tool | Role |
 |------|------|
 | **Portal SQL** (`portal.sp_*`) | Production create/start/monitor for EpiPortal |
-| **`workflow_engine/ops`** | Direct-DB helpers: catalog seed, workflow deploy, study/sample lifecycle |
-| **`scripts/start_study_instance.py`** | CI/smoke plan+start (SamplePrep / StudyValidation) |
+| **`methyl-study-start` (Admin CLI)** | Compile/plan/start via `rest.db_client` (MSSQL or PostgreSQL) — Cursor developer mode + CI |
+| **`workflow_engine/ops`** | Shared helpers used by Admin CLI and deploy/seed scripts |
 | **`scripts/deploy_workflow_definitions.sh`** | Compile + deploy workflow specs via direct DB |
 | **`seed_action_catalog.py`** | Upsert action catalog + dispatch metadata into `wf.workflow_action` |
 | **`methyl-workflow-run`** | Local in-process runs (no database) |
 | **Cursor MCP** | Interactive SQL inspect/edit in development |
+
+The Admin CLI does **not** go through the REST gateway. It opens the same backend-agnostic DB connection workers' gateway uses (`open_gateway_db` / `BACKEND_DB`), runs domain Python (compile/plan/enrich), then writes through `rest.db_client`.
 
 ## Compute workers
 

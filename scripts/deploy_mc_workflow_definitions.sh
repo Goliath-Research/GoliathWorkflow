@@ -97,7 +97,6 @@ try:
             create_workflow_definition=create_workflow_definition,
             delete_workflow_definition=delete_workflow_definition,
         )
-        db.commit()
         print(f"deployed {spec.get('name')}: workflow_version_id={result.get('workflow_version_id')}")
 finally:
     db.close()

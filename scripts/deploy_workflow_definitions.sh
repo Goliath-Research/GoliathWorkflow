@@ -88,7 +88,6 @@ try:
             create_workflow_definition=create_workflow_definition,
             delete_workflow_definition=delete_workflow_definition,
         )
-        db.commit()
         results[name] = result
         print(f"deployed {name}: workflow_version_id={result.get('workflow_version_id')}")
 finally:
