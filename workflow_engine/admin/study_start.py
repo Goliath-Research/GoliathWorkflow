@@ -41,11 +41,11 @@ def cmd_compile(args: argparse.Namespace) -> int:
 
     program = Path(args.program).expanduser().resolve()
     spec = compile_program_spec(program, project_path=args.project_path)
+    text = json.dumps(spec, indent=2) + "\n"
     if args.output:
-        Path(args.output).write_text(json.dumps(spec, indent=2) + "\n", encoding="utf-8")
+        Path(args.output).write_text(text, encoding="utf-8")
     else:
-        json.dump({"spec": spec}, sys.stdout, indent=2)
-        sys.stdout.write("\n")
+        sys.stdout.write(text)
     return 0
 
 
