@@ -132,6 +132,7 @@ Modules:
 |--------|------|
 | [`methyl_worker/client.py`](methyl_worker/client.py) | REST client (`request`, `submit`, `heartbeat`, `fail`) |
 | `methyl_worker/handlers/` | Capability dispatch to methyl-* CLIs, sample-prep handlers, and **`validation.plan-iterations`** (Monte Carlo planner); CLI providers via `actions/registry.py` |
+| `methyl_worker/depends.py` | Worker-local `Depends` for in-process handlers (`TaskRuntimeContext`, logger, path helpers) — not used by the SQL engine/gateway |
 | [`methyl_worker/runner.py`](methyl_worker/runner.py) | Poll loop with background heartbeat |
 
 Legacy shim: [`reference_rest_worker.py`](reference_rest_worker.py) delegates to `methyl-worker`.

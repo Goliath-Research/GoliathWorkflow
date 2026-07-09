@@ -52,6 +52,31 @@ DomainProgram compiler would couple orchestration to process-pack types.
 Keep the catalog **explicit** (CI drift check). Do not rely on silent setuptools
 entry-point discovery as the sole registration path.
 
+## Phase 3 — Worker-local DI (in-process handlers only)
+
+Optional kwargs on in-process handlers may use a tiny custom `Depends` marker
+([`workers/methyl_worker/depends.py`](../../workers/methyl_worker/depends.py)):
+
+```python
+from methyl_worker.depends import Depends, get_logger, get_runtime
+
+def _handle_example(
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime: TaskRuntimeContext = Depends(get_runtime),
+    log: logging.Logger = Depends(get_logger),
+) -> BaseModel:
+    ...
+```
+
+Built-in providers: `get_runtime`, `get_logger`, `get_project_path`,
+`get_monte_carlo_runs_root`. Invocation goes through
+`call_in_process_handler` from `InProcessAction` — **not** through the SQL
+engine, gateway, or DomainProgram compiler.
+
+Do **not** add `fast_depends` / FastAPI DI to those orchestration layers.
+
 ## Related
 
 - [Component boundaries](component-boundaries.md)

@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import methyl_validation.model_mc_runner as model_mc_runner
 from methyl_worker import handlers
+from methyl_worker.depends import call_in_process_handler
 from methyl_worker.task_models.validation_models import ModelMcTaskInput
 
 
@@ -36,7 +37,8 @@ def test_model_mc_handler_delegates_to_runner(tmp_path: Path) -> None:
             config = MagicMock()
             config.production_output_dir = None
             mock_cfg.return_value = (config, tmp_path / "project.json")
-            out = handlers._handle_validation_model_mc(
+            out = call_in_process_handler(
+                handlers._handle_validation_model_mc,
                 "validation.model-mc",
                 "validation.model_mc",
                 task_input,

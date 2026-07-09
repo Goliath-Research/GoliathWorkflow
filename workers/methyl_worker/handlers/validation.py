@@ -10,11 +10,14 @@ from typing import Any, Dict, List, Mapping, Optional
 
 from pydantic import BaseModel
 
+from ..depends import Depends, get_logger, get_monte_carlo_runs_root, get_runtime
 from ..task_models.runtime_models import TaskRuntimeContext
 
 logger = logging.getLogger(__name__)
 
+
 def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:
+    """Legacy helper for callers that already have dumped input_json."""
     project_path = input_json.get("projectPath") or input_json.get("project")
     if not project_path:
         raise RuntimeError("validation action requires projectPath")
@@ -117,7 +120,9 @@ def _handle_validation_stability(
     _capability: str,
     _action_name: str,
     input: BaseModel,
-    runtime=None,
+    runtime: TaskRuntimeContext = Depends(get_runtime),
+    log: logging.Logger = Depends(get_logger),
+    mc_root: Path = Depends(get_monte_carlo_runs_root),
 ):
     input_json = _mc_input_with_runtime(input, runtime)
 
@@ -125,10 +130,10 @@ def _handle_validation_stability(
 
     from ..task_models.validation_models import StabilitySummary, ValidationStabilityOutput
 
-    mc_root = _resolve_monte_carlo_runs_root(input_json)
-    profile_overrides = getattr(runtime, "validationProfile", None) if runtime is not None else None
+    profile_overrides = runtime.validationProfile
     config, _base = _load_mc_config(input_json, profile_overrides=profile_overrides)
     output_dir = Path(input_json.get("outputDir") or mc_root / "stability")
+    log.info("validation.stability mc_root=%s output_dir=%s", mc_root, output_dir)
     summary_raw = run_stability_analysis(
         mc_root,
         output_dir=output_dir,
@@ -177,7 +182,10 @@ def _handle_validation_stability(
 
 
 def _handle_validation_biomarker_filter(
-    _capability: str, _action_name: str, input: BaseModel, runtime=None
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime: TaskRuntimeContext = Depends(get_runtime),
 ):
     """In-process PPI-only biomarker gene pool filter on mapper combined genes."""
     input_json = _mc_input_with_runtime(input, runtime)
@@ -194,7 +202,7 @@ def _handle_validation_biomarker_filter(
     run_dir = Path(str(input_json.get("runDir") or project_path)).resolve()
     config, _base = _load_mc_config(
         input_json,
-        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+        profile_overrides=runtime.validationProfile,
     )
     mapper_dirs = list(run_dir.glob("**/mapper/*/*")) or list(run_dir.glob("mapper/*/*"))
     gene_df = None
@@ -228,7 +236,11 @@ def _handle_validation_biomarker_filter(
 
 
 def _handle_validation_prepare_freeze(
-    _capability: str, _action_name: str, input: BaseModel, runtime=None
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime: TaskRuntimeContext = Depends(get_runtime),
+    mc_root: Path = Depends(get_monte_carlo_runs_root),
 ):
     input_json = _mc_input_with_runtime(input, runtime)
     from methyl_validation.stability import prepare_freeze_project
@@ -237,9 +249,8 @@ def _handle_validation_prepare_freeze(
 
     config, base_project = _load_mc_config(
         input_json,
-        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+        profile_overrides=runtime.validationProfile,
     )
-    mc_root = _resolve_monte_carlo_runs_root(input_json)
     stable_csv = input_json.get("stableDmpCsv") or config.freeze_stable_dmp_csv or str(
         mc_root / "stability" / "stable_dmps_production.csv"
     )
@@ -409,7 +420,11 @@ def _handle_validation_model_predict(
 
 
 def _handle_validation_model_mc(
-    _capability: str, _action_name: str, input: BaseModel, runtime=None
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime: TaskRuntimeContext = Depends(get_runtime),
+    mc_root: Path = Depends(get_monte_carlo_runs_root),
 ):
     input_json = _mc_input_with_runtime(input, runtime)
     from methyl_validation.model_mc_runner import run_model_mc_all
@@ -418,9 +433,8 @@ def _handle_validation_model_mc(
 
     config, _base = _load_mc_config(
         input_json,
-        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+        profile_overrides=runtime.validationProfile,
     )
-    mc_root = _resolve_monte_carlo_runs_root(input_json)
     production_dir = Path(
         input_json.get("productionOutputDir") or config.production_output_dir or mc_root / "production"
     )
@@ -442,7 +456,11 @@ def _handle_validation_model_mc(
 
 
 def _handle_validation_select_best_model(
-    _capability: str, _action_name: str, input: BaseModel, runtime=None
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime: TaskRuntimeContext = Depends(get_runtime),
+    mc_root: Path = Depends(get_monte_carlo_runs_root),
 ):
     input_json = _mc_input_with_runtime(input, runtime)
     from methyl_validation.cli import _write_backend_ranking
@@ -452,9 +470,8 @@ def _handle_validation_select_best_model(
 
     config, _base = _load_mc_config(
         input_json,
-        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+        profile_overrides=runtime.validationProfile,
     )
-    mc_root = _resolve_monte_carlo_runs_root(input_json)
     model_mc_root = Path(input_json.get("modelMcRoot") or mc_root / "model_mc")
     backends = list(input_json.get("backends") or ["ecdf", "tabular_sklearn", "generative_hybrid"])
     metric = str(input_json.get("selectionMetric") or "balanced_accuracy")
@@ -485,7 +502,11 @@ def _handle_validation_select_best_model(
 
 
 def _handle_validation_post_model_validation(
-    _capability: str, _action_name: str, input: BaseModel, runtime=None
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime: TaskRuntimeContext = Depends(get_runtime),
+    mc_root: Path = Depends(get_monte_carlo_runs_root),
 ):
     input_json = _mc_input_with_runtime(input, runtime)
     from methyl_validation.pipeline_runner import (
@@ -498,9 +519,8 @@ def _handle_validation_post_model_validation(
 
     config, base_project = _load_mc_config(
         input_json,
-        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+        profile_overrides=runtime.validationProfile,
     )
-    mc_root = _resolve_monte_carlo_runs_root(input_json)
     production_dir = Path(
         input_json.get("productionOutputDir") or config.production_output_dir or mc_root / "production"
     )

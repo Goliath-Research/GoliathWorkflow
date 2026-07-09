@@ -58,7 +58,10 @@ Workers poll the gateway (or future equivalent transport), execute tasks, and su
 **Process-pack dispatch** (methyl-specific, outside the engine) uses a catalog-driven
 [action provider registry](action-provider-registry.md): CLI subclasses register by
 `action_name`, in-process handlers live under `methyl_worker.handlers`, and compiler
-template extras come from catalog `domain_effects` — not from engine-side DI.
+template extras come from catalog `domain_effects`. Optional worker-local `Depends`
+([`depends.py`](../../workers/methyl_worker/depends.py)) injects `TaskRuntimeContext` /
+logger / path helpers into in-process handlers only — not into the SQL engine, gateway,
+or DomainProgram compiler.
 
 ## MCP servers (development only)
 
