@@ -1,5 +1,12 @@
 /*
-  PostgreSQL: upsert workflow_action rows from the Python action catalog.
+  PostgreSQL: bootstrap upsert for wf.workflow_action (name / capability / schema ref).
+
+  SUPERSEDED for full catalog seed: deploy ``wf_action_dispatch_metadata.sql`` after
+  this file. That script adds execution_mode / cli_tool / in_process_handler / argv_map
+  and replaces this procedure with the 7-parameter version used by
+  ``seed_action_catalog.py`` and the admin gateway.
+
+  Kept as a bootstrap so databases without dispatch columns can still upsert names.
   Prerequisites: 00_schema.sql (workflow_action)
 */
 

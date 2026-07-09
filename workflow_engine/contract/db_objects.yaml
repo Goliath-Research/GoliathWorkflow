@@ -132,13 +132,21 @@ objects:
     - name: wf.wf_repo_list_actions
       kind: function
       required: true
+      # After wf_action_dispatch_metadata.sql: also returns execution_mode, cli_tool,
+      # in_process_handler, argv_map alongside schema availability flags.
     - name: wf.wf_repo_upsert_workflow_action
       kind: procedure
       required: true
+      # Canonical signature after wf_action_dispatch_metadata.sql (deployed after the
+      # 3-arg bootstrap in wf_repo_upsert_workflow_action.sql).
       parameters:
         - { name: action_name, type: text, direction: in }
         - { name: capability, type: text, direction: in, nullable: true }
         - { name: payload_schema_ref, type: text, direction: in, nullable: true }
+        - { name: execution_mode, type: text, direction: in, nullable: true }
+        - { name: cli_tool, type: text, direction: in, nullable: true }
+        - { name: in_process_handler, type: text, direction: in, nullable: true }
+        - { name: argv_map, type: json, direction: in, nullable: true }
     - name: wf.wf_repo_create_workflow_graph
       kind: function
       required: true

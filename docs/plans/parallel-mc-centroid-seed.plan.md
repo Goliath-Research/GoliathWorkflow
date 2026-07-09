@@ -242,7 +242,7 @@ python workflow_engine/sql/seed_action_catalog.py --dsn …  # PostgreSQL
 **Verify via MCP** (run on **both** DBs; compare row counts and key JSON paths):
 
 ```sql
--- Catalog row counts (expect 33 actions, 66 schemas after export)
+-- Catalog row counts (expect 37 actions, 74 schemas after export)
 SELECT COUNT(*) AS action_count FROM wf.workflow_action;
 SELECT COUNT(*) AS schema_count FROM wf.workflow_action_schema;
 

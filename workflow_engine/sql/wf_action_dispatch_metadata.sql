@@ -1,5 +1,5 @@
 /*
-  Azure SQL (legacy sql/ tree): optional dispatch metadata columns on wf.workflow_action.
+  Azure SQL (legacy sql/ tree): dispatch metadata + canonical 7-arg upsert.
   Mirror of sql_mssql/wf_action_dispatch_metadata.sql for deploy_azure.sh parity.
 */
 

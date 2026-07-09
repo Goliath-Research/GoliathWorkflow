@@ -16,7 +16,8 @@ Deploy **in order**:
 | 8 | [`02_repository_api.sql`](02_repository_api.sql) | Middle-tier repository wrappers |
 | 9 | [`04_admin.sql`](04_admin.sql) | Admin (`sp_delete_workflow_def`) |
 | 10 | [`wf_action_schema.sql`](wf_action_schema.sql) | Action I/O JSON Schema storage + repo procs |
-| 11 | [`wf_repo_upsert_workflow_action.sql`](wf_repo_upsert_workflow_action.sql) | Upsert action catalog rows |
+| 11 | [`wf_repo_upsert_workflow_action.sql`](wf_repo_upsert_workflow_action.sql) | Bootstrap 3-arg upsert (name / capability / schema ref) |
+| 11a | [`wf_action_dispatch_metadata.sql`](wf_action_dispatch_metadata.sql) | Dispatch columns + 7-arg upsert / list_actions |
 | 12 | [`wf_repo_create_workflow_graph.sql`](wf_repo_create_workflow_graph.sql) | Programmatic workflow definition builder |
 | 13 | [`wf_sql_collection_bindings.sql`](wf_sql_collection_bindings.sql) | Collection binding resolution at instance start |
 | 14 | [`portal_resource_profile.sql`](portal_resource_profile.sql) | Portal archive storage profiles (domain config) |
@@ -39,13 +40,13 @@ python workflow_engine/sql_mssql/seed_action_catalog.py
 bash scripts/deploy_workflow_definitions.sh
 ```
 
-Split-detector actions only (lightweight; does not seed task I/O schemas):
+Split-detector actions only (lightweight; requires `wf_action_dispatch_metadata.sql`; does not seed task I/O schemas):
 
 ```bash
 psql "$DSN" -f workflow_engine/sql_pg/wf_split_detector_actions_seed.sql
 ```
 
-Azure SQL equivalent: [`../sql/wf_split_detector_actions_seed.sql`](../sql/wf_split_detector_actions_seed.sql).
+Azure SQL equivalent: [`../sql_mssql/wf_split_detector_actions_seed.sql`](../sql_mssql/wf_split_detector_actions_seed.sql).
 
 Legacy schema-only seed (requires actions already in DB):
 

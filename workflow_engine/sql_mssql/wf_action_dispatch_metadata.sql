@@ -1,5 +1,8 @@
 /*
-  Azure SQL: optional dispatch metadata columns on wf.workflow_action.
+  Azure SQL: dispatch metadata columns on wf.workflow_action + canonical 7-arg upsert.
+
+  Deploy after wf_repo_upsert_workflow_action.sql (3-arg bootstrap). This script is
+  required for seed_action_catalog.py / admin catalog seed / GET /v1/actions dispatch fields.
 */
 
 SET ANSI_NULLS ON;

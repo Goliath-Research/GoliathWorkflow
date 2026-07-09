@@ -69,12 +69,28 @@ def _exec_psql(dsn: str, sql: str) -> None:
     )
 
 
-def _upsert_action_psql(dsn: str, action_name: str, capability: str, payload_schema_ref: str | None) -> None:
+def _upsert_action_psql(
+    dsn: str,
+    action_name: str,
+    capability: str,
+    payload_schema_ref: str | None,
+    *,
+    execution_mode: str | None = None,
+    cli_tool: str | None = None,
+    in_process_handler: str | None = None,
+    argv_map: dict | None = None,
+) -> None:
+    """Upsert via 7-arg ``wf_repo_upsert_workflow_action`` (dispatch metadata)."""
     cap = _sql_literal(capability) if capability else "NULL"
     ref = _sql_literal(payload_schema_ref) if payload_schema_ref else "NULL"
+    mode = _sql_literal(execution_mode) if execution_mode else "NULL"
+    tool = _sql_literal(cli_tool) if cli_tool else "NULL"
+    handler = _sql_literal(in_process_handler) if in_process_handler else "NULL"
+    argv = _json_literal(argv_map) if isinstance(argv_map, dict) else "NULL"
     _exec_psql(
         dsn,
-        f"CALL wf.wf_repo_upsert_workflow_action({_sql_literal(action_name)}, {cap}, {ref});",
+        "CALL wf.wf_repo_upsert_workflow_action("
+        f"{_sql_literal(action_name)}, {cap}, {ref}, {mode}, {tool}, {handler}, {argv});",
     )
 
 
@@ -177,6 +193,10 @@ def _seed_via_psql(dsn: str) -> tuple[int, int]:
             str(action["action_name"]),
             str(action.get("capability") or ""),
             str(action.get("schema_id") or action["action_name"]),
+            execution_mode=action.get("execution_mode"),
+            cli_tool=action.get("cli_tool"),
+            in_process_handler=action.get("in_process_handler"),
+            argv_map=action.get("argv_map") if isinstance(action.get("argv_map"), dict) else None,
         )
         action_count += 1
         print(f"Upserted action {action['action_name']}")
@@ -209,7 +229,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--dsn",
         default=None,
-        help="PostgreSQL DSN only (skip gateway env; uses psql)",
+        help=(
+            "PostgreSQL DSN only (skip gateway env; uses psql). "
+            "Requires wf_action_dispatch_metadata.sql so the 7-arg upsert exists."
+        ),
     )
     parser.add_argument(
         "--regenerate-catalog",

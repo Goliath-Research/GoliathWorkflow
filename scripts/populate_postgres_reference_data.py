@@ -5,7 +5,7 @@ Populate PostgreSQL wf reference metadata for distributed-worker testing.
 Azure SQL is the production database (populated, in use). PostgreSQL typically has
 the same schema/procedures but empty reference tables. This script:
 
-  1. Seeds action catalog + JSON schemas from the **git repo** (33 actions, current).
+  1. Seeds action catalog + JSON schemas from the **git repo** (37 actions, current).
   2. Optionally copies workflow **definitions** (def/version/node/edge/bindings) from
      Azure SQL when both connection env sets are available.
 

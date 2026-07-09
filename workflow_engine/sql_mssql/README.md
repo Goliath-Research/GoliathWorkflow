@@ -46,13 +46,15 @@ bash scripts/deploy_workflow_definitions.sh --api-base http://localhost:8080/v1
 Applies parity scripts in dependency order, including:
 
 - Runtime / scope / FOREACH parity (`wf_sql_runtime_parity.sql`, `wf_sql_foreach_support.sql`, …)
-- Repository API + action schema (`wf_action_schema.sql`, `wf_repo_upsert_workflow_action.sql`, `wf_repo_create_workflow_graph.sql`)
+- Repository API + action schema (`wf_action_schema.sql`, `wf_repo_upsert_workflow_action.sql`, `wf_action_dispatch_metadata.sql`, `wf_repo_create_workflow_graph.sql`)
 - Collection bindings (`wf_sql_collection_bindings.sql`) — jsonPath; jsonFile requires gateway-enriched `context_json`
 - Portal DDL (`portal_resource_profile.sql`, `portal_workflow_api.sql`)
 
+`wf_repo_upsert_workflow_action.sql` is a 3-arg bootstrap; `wf_action_dispatch_metadata.sql` (applied next) replaces it with the 7-arg upsert that stores `execution_mode` / `cli_tool` / `in_process_handler` / `argv_map`.
+
 ## Lightweight action seed (legacy)
 
-[`wf_split_detector_actions_seed.sql`](wf_split_detector_actions_seed.sql) upserts four pipeline actions only. **Do not use for distributed worker testing** — run full `seed_action_catalog.py` instead (33 actions + JSON schemas).
+[`wf_split_detector_actions_seed.sql`](wf_split_detector_actions_seed.sql) upserts four pipeline actions only (with dispatch metadata). **Do not use for distributed worker testing** — run full `seed_action_catalog.py` instead (37 actions + JSON schemas from `schemas/actions/catalog.json`).
 
 PostgreSQL equivalent: [`../sql_pg/wf_split_detector_actions_seed.sql`](../sql_pg/wf_split_detector_actions_seed.sql).
 

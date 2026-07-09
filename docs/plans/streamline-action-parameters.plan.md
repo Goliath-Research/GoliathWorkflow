@@ -37,7 +37,7 @@ todos:
 
 MethylPipeline has end-to-end documentation ([`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md), workflow engine guides) and a mature action surface:
 
-- **33 actions** in [`workers/methyl_worker/action_catalog.py`](../../workers/methyl_worker/action_catalog.py) (`sample.upload_h5` removed)
+- **33 actions** in [`workers/methyl_worker/action_catalog.py`](../../workers/methyl_worker/action_catalog.py) at plan time (`sample.upload_h5` removed; catalog is **37** actions as of action-provider-registry)
 - **Strict typed I/O** (implemented per [`typed-action-observability.plan.md`](typed-action-observability.plan.md))
 - **Four-layer config** (implemented per [`simplify-study-config.plan.md`](simplify-study-config.plan.md))
 

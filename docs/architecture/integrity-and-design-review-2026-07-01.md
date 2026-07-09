@@ -30,7 +30,7 @@
 | `methyl-export-config-schemas --check` | **PASS** | 18 artifacts |
 | `methyl-export-domain-schemas --check` | **PASS** | 13 artifacts |
 | `methyl-export-task-schemas --check` | **PASS** | 66 artifacts |
-| `methyl-export-action-catalog --check` | **PASS** | 33 actions |
+| `methyl-export-action-catalog --check` | **PASS** | 37 actions (was 33 at review time) |
 | `scripts/check_no_step_config.py` | **PASS** | |
 | `scripts/check_task_input_config_boundary.py` | **PASS** | |
 | `scripts/check_windows_paths.py` | **PASS** | 5735 tracked paths |
@@ -157,8 +157,8 @@ flowchart LR
 
 | Source | Count | Match? |
 |--------|-------|--------|
-| Git `schemas/actions/catalog.json` | 33 actions | Baseline |
-| `methyl-export-action-catalog --check` | 33 actions | **PASS** |
+| Git `schemas/actions/catalog.json` | 37 actions (was 33 at review time) | Baseline |
+| `methyl-export-action-catalog --check` | 37 actions | **PASS** |
 | PostgreSQL `wf.workflow_action_schema` | 33 input + 33 output = 66 rows | **PASS** (2 rows per action) |
 | Azure SQL `wf.workflow_action_schema` | Query succeeded; direction/group count returned | **Likely PASS** (row data not fully captured in MCP response) |
 | Compiled workflow vs program | `buffy_mc_stability` compiled JSON includes `centroid_seed`, `centroidSeedDir` bindings | **Consistent** with [buffy_mc_stability.program.json](workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json) |

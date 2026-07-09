@@ -1,6 +1,6 @@
 # Distributed workers bootstrap
 
-Operator guide for seeding **PostgreSQL** or **Azure SQL** with the current action catalog (33 actions, post–streamline-action-parameters) and deploying DomainProgram workflows for remote GPU worker testing.
+Operator guide for seeding **PostgreSQL** or **Azure SQL** with the current action catalog (37 actions from `schemas/actions/catalog.json`) and deploying DomainProgram workflows for remote GPU worker testing.
 
 ## Two-database layout (typical)
 
@@ -28,7 +28,7 @@ export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 export PGSSLMODE=require
 
-# 1) Catalog from git (33 actions — preferred over stale MSSQL rows)
+# 1) Catalog from git (37 actions — preferred over stale MSSQL rows)
 python scripts/populate_postgres_reference_data.py
 
 # 2) Optionally clone workflow definitions from production Azure SQL
