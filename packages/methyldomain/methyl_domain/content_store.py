@@ -235,21 +235,46 @@ def _move_tree_into_entry(
 def _move_artifacts_into_entry(
     artifacts: Sequence[ArtifactRef],
     entry_dir: Path,
+    *,
+    output_dir: Optional[Path] = None,
 ) -> List[ArtifactRef]:
-    """Move product artifact files into entry_dir (flat basename layout)."""
+    """Move product artifact files into entry_dir.
+
+    When ``output_dir`` is set and an artifact lives under it, preserve the
+    relative path (required for ``validation.plan_iterations``, which emits many
+    ``run_####/project.json`` files with the same basename). Flat basename storage
+    would collapse those into a single CAAS blob and relink only at the MC root.
+
+    Without a usable relative root, fall back to basename (safe when names are
+    unique in a shared directory, e.g. per-chromosome centroid HDF5s).
+    """
     entry_dir.mkdir(parents=True, exist_ok=True)
+    out_root = output_dir.expanduser().resolve() if output_dir is not None else None
     updated: List[ArtifactRef] = []
     for ref in artifacts:
         src = Path(ref.path)
         if not src.is_file() or _ACTION_RESULTS_DIRNAME in src.parts:
             continue
-        dest = entry_dir / src.name
-        if dest.exists() and dest.resolve() != src.resolve():
-            dest.unlink()
-        if src.resolve() != dest.resolve():
-            if dest.exists():
-                dest.unlink()
-            shutil.move(str(src), str(dest))
+        try:
+            src_resolved = src.expanduser().resolve()
+        except OSError:
+            src_resolved = src.expanduser()
+        if out_root is not None and _is_under(src_resolved, out_root):
+            dest = entry_dir / src_resolved.relative_to(out_root)
+        else:
+            dest = entry_dir / src.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            same_path = dest.exists() and dest.resolve() == src_resolved
+        except OSError:
+            same_path = False
+        if not same_path:
+            if dest.exists() or dest.is_symlink():
+                if dest.is_dir() and not dest.is_symlink():
+                    shutil.rmtree(dest)
+                else:
+                    dest.unlink()
+            shutil.move(str(src_resolved), str(dest))
         updated.append(
             ArtifactRef(
                 path=str(dest.resolve()),
@@ -411,7 +436,11 @@ def commit_artifacts_to_store(
             pass
         relinked = _relink_artifacts_from_entry(stored_artifacts, entry_dir, output_dir=out_dir)
     else:
-        stored_artifacts = _move_artifacts_into_entry(record.artifacts, entry_dir)
+        stored_artifacts = _move_artifacts_into_entry(
+            record.artifacts,
+            entry_dir,
+            output_dir=out_dir,
+        )
         relinked = _relink_artifacts_from_entry(
             stored_artifacts,
             entry_dir,

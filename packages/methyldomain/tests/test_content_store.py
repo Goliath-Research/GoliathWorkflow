@@ -231,3 +231,54 @@ def test_instance_ledger_records_action_run_key(tmp_path: Path) -> None:
     payload = json.loads(ledger_path.read_text(encoding="utf-8"))
     assert payload["hyperparam_set_id"] == "hpset-abc"
     assert payload["entries"]["pipeline.centroid:1_CG_all"]["content_key"] == "ck-123"
+
+
+def test_plan_iterations_preserves_run_relative_paths(tmp_path: Path, monkeypatch) -> None:
+    """Same-basename files under run_####/ must not collapse into one CAAS blob."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    project_root = tmp_path / "Study"
+    mc_root = project_root / "monte_carlo_runs"
+    mc_root.mkdir(parents=True)
+    # Unowned sibling forces flat (non-tree) commit — the plan_iterations case.
+    (mc_root / "queue").mkdir()
+    (mc_root / "action_run_log.jsonl").write_text("{}\n", encoding="utf-8")
+
+    artifacts: list[ArtifactRef] = []
+    for i in (1, 2):
+        run_dir = mc_root / f"run_{i:04d}"
+        run_dir.mkdir()
+        project = run_dir / "project.json"
+        project.write_text(json.dumps({"run": i}), encoding="utf-8")
+        train = run_dir / "train_control.csv"
+        train.write_text(f"sample\ns{i}\n", encoding="utf-8")
+        artifacts.append(ArtifactRef(path=str(project), bytes=project.stat().st_size))
+        artifacts.append(ArtifactRef(path=str(train), bytes=train.stat().st_size))
+
+    record = _record(
+        artifacts=artifacts,
+        input_sig="sig-plan",
+        output_sig="out-plan",
+    )
+    record = record.model_copy(update={"action_name": "validation.plan_iterations"})
+    commit_artifacts_to_store(
+        project_root,
+        "validation.plan_iterations",
+        "key-plan",
+        record,
+        output_dir=mc_root,
+    )
+
+    entry_dir = caas_entry_dir(project_root, "validation.plan_iterations", "key-plan")
+    assert (entry_dir / "run_0001" / "project.json").is_file()
+    assert (entry_dir / "run_0002" / "project.json").is_file()
+    assert json.loads((entry_dir / "run_0001" / "project.json").read_text()) == {"run": 1}
+    assert json.loads((entry_dir / "run_0002" / "project.json").read_text()) == {"run": 2}
+
+    for i in (1, 2):
+        link = mc_root / f"run_{i:04d}" / "project.json"
+        assert link.is_symlink()
+        assert not os.path.isabs(os.readlink(link))
+        assert json.loads(link.read_text(encoding="utf-8")) == {"run": i}
+        train_link = mc_root / f"run_{i:04d}" / "train_control.csv"
+        assert train_link.is_symlink()
+        assert train_link.read_text(encoding="utf-8").startswith("sample")
