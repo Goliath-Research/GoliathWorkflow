@@ -69,6 +69,37 @@ def test_resolve_project_root_from_mc_run_dir(tmp_path: Path) -> None:
     assert resolved == project_root.resolve()
 
 
+def test_shared_output_dir_uses_flat_commit(tmp_path: Path, monkeypatch) -> None:
+    """Sibling chromosome files in one centroids/all dir must not tree-steal each other."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    project_root = tmp_path / "Study"
+    out_dir = project_root / "monte_carlo_runs" / "_centroid_seed" / "centroids" / "all"
+    out_dir.mkdir(parents=True)
+    chr1 = out_dir / "1-CG.h5"
+    chr1.write_bytes(b"one")
+    chr2 = out_dir / "2-CG.h5"
+    chr2.write_bytes(b"two")
+
+    record = _record(
+        artifacts=[ArtifactRef(path=str(chr1), bytes=3)],
+        input_sig="sig-chr1",
+        output_sig="out-chr1",
+    )
+    commit_artifacts_to_store(
+        project_root,
+        "pipeline.centroid",
+        "key-chr1",
+        record,
+        output_dir=out_dir,
+    )
+    assert chr1.is_symlink()
+    assert not os.path.isabs(os.readlink(chr1))
+    assert chr1.resolve().is_file()
+    # Sibling must remain a real file (not moved into chr1's CAAS entry).
+    assert chr2.is_file() and not chr2.is_symlink()
+    assert chr2.read_bytes() == b"two"
+
+
 def test_commit_and_relink_uses_relative_symlink(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     project_root = tmp_path / "Study"

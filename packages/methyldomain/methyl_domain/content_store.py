@@ -121,21 +121,40 @@ def _product_artifact_paths(artifacts: Sequence[ArtifactRef]) -> List[Path]:
 
 
 def _should_commit_directory(output_dir: Path, artifacts: Sequence[ArtifactRef]) -> bool:
+    """Return True only when output_dir is exclusively owned by this action's artifacts.
+
+    Shared product directories (e.g. multi-chromosome ``pipeline.centroid`` writing into the
+    same ``.../centroids/.../all`` folder) must use flat per-artifact commits. Tree-moving
+    the whole directory would steal sibling chromosome files/symlinks into the wrong
+    content_key and leave broken product paths.
+    """
     product_paths = _product_artifact_paths(artifacts)
-    if product_paths and output_dir.is_dir():
-        for path in product_paths:
-            if not _is_under(path, output_dir):
-                return False
-        return True
-    if not output_dir.is_dir():
+    if not product_paths or not output_dir.is_dir():
         return False
+    for path in product_paths:
+        if not _is_under(path, output_dir):
+            return False
+
+    owned: Set[Path] = set()
+    for path in product_paths:
+        try:
+            owned.add(path.expanduser().resolve())
+        except OSError:
+            owned.add(path.expanduser())
+
     for path in output_dir.rglob("*"):
-        if not path.is_file():
-            continue
         if _ACTION_RESULTS_DIRNAME in path.parts:
             continue
-        return True
-    return False
+        if not (path.is_file() or path.is_symlink()):
+            continue
+        try:
+            resolved = path.expanduser().resolve()
+        except OSError:
+            # Dangling sibling symlink from another content_key — shared dir.
+            return False
+        if resolved not in owned:
+            return False
+    return True
 
 
 def _relative_under(root: Path, path: Path) -> Path:
@@ -187,12 +206,18 @@ def _move_tree_into_entry(
     *,
     exclude_names: Optional[Set[str]] = None,
 ) -> List[Path]:
-    """Move files from source_root into entry_dir, preserving relative layout."""
+    """Move files from source_root into entry_dir, preserving relative layout.
+
+    Skips symlinks (including CAAS product links) so a tree commit cannot pull
+    sibling content-addressed blobs into this entry.
+    """
     exclude = exclude_names or set()
     moved: List[Path] = []
     source_root = source_root.resolve()
     entry_dir.mkdir(parents=True, exist_ok=True)
     for path in sorted(source_root.rglob("*")):
+        if path.is_symlink():
+            continue
         if not path.is_file():
             continue
         rel = path.relative_to(source_root)
