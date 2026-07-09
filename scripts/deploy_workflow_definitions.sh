@@ -73,6 +73,7 @@ sys.path.insert(0, str(repo / "workflow_engine"))
 from ops.workflow_deploy import deploy_workflow_definition
 from rest.connection import resolve_connection_config
 from rest.db import open_gateway_db
+from rest.db_client import create_workflow_definition, delete_workflow_definition
 
 config = resolve_connection_config()
 db = open_gateway_db(config)
@@ -84,8 +85,8 @@ try:
         result = deploy_workflow_definition(
             db,
             {"spec": spec, "replace": True, "delete_instances": True},
-            create_workflow_definition=db.create_workflow_definition,
-            delete_workflow_definition=db.delete_workflow_definition,
+            create_workflow_definition=create_workflow_definition,
+            delete_workflow_definition=delete_workflow_definition,
         )
         db.commit()
         results[name] = result

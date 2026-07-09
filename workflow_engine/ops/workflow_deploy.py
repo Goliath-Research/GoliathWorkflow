@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Dict, Optional
 
-from workflow_definition_spec import WorkflowDefinitionSpec
+from ops._paths import ensure_import_paths
 
 
 def deploy_workflow_definition(
@@ -14,6 +14,9 @@ def deploy_workflow_definition(
     create_workflow_definition: Callable[..., Dict[str, Any]],
     delete_workflow_definition: Callable[..., Dict[str, int]],
 ) -> Dict[str, Any]:
+    ensure_import_paths()
+    from workflow_definition_spec import WorkflowDefinitionSpec
+
     replace = bool(body.get("replace", False))
     spec = body.get("spec")
 

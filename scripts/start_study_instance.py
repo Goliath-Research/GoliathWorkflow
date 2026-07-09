@@ -62,6 +62,11 @@ def main(argv: list[str] | None = None) -> int:
 
     from rest.connection import resolve_connection_config
     from rest.db import open_gateway_db
+    from rest.db_client import (
+        create_workflow_definition,
+        create_workflow_instance,
+        start_workflow_instance,
+    )
 
     body = _load_body(args.request)
     config = resolve_connection_config()
@@ -73,9 +78,9 @@ def main(argv: list[str] | None = None) -> int:
             result = start_study_validation(
                 db,
                 body,
-                create_workflow_definition=db.create_workflow_definition,
-                create_workflow_instance=db.create_workflow_instance,
-                start_workflow_instance=db.start_workflow_instance,
+                create_workflow_definition=create_workflow_definition,
+                create_workflow_instance=create_workflow_instance,
+                start_workflow_instance=start_workflow_instance,
             )
         else:
             from ops.sample_lifecycle import start_sample_prep
@@ -83,9 +88,9 @@ def main(argv: list[str] | None = None) -> int:
             result = start_sample_prep(
                 db,
                 body,
-                create_workflow_definition=db.create_workflow_definition,
-                create_workflow_instance=db.create_workflow_instance,
-                start_workflow_instance=db.start_workflow_instance,
+                create_workflow_definition=create_workflow_definition,
+                create_workflow_instance=create_workflow_instance,
+                start_workflow_instance=start_workflow_instance,
             )
         db.commit()
     finally:
