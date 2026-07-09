@@ -54,6 +54,23 @@ mkdir -p "$OUTPUT" "$WHEELS_DIR" "$RUNTIME_DIR"
 PARABRICKS_IMAGE="${METHYL_PARABRICKS_IMAGE:-$(resolve_parabricks_image)}"
 ARCH_KEY="$(platform_arch_key "$(detect_uname_arch)")"
 
+_resolve_pkg_path() {
+  local name="$1"
+  local candidates=(
+    "$REPO_ROOT/packages/$name"
+    "$REPO_ROOT/$name"
+    "$REPO_ROOT/workers"
+  )
+  local path
+  for path in "${candidates[@]}"; do
+    if [[ -d "$path" && ( -f "$path/pyproject.toml" || -f "$path/setup.py" ) ]]; then
+      echo "$path"
+      return 0
+    fi
+  done
+  return 1
+}
+
 build_wheels() {
   info "Building wheels into $WHEELS_DIR"
   "$PYTHON_BIN" -m pip install -U pip build wheel
@@ -61,13 +78,10 @@ build_wheels() {
     line="${line%%#*}"
     line="$(echo "$line" | xargs)"
     [[ -z "$line" ]] && continue
-    pkg_path="$REPO_ROOT/packages/$line"
-    [[ -d "$pkg_path" ]] || { die "Package not found: $pkg_path"; }
-    info "  wheel: $line"
+    pkg_path="$(_resolve_pkg_path "$line")" || die "Package not found for packages.list entry: $line"
+    info "  wheel: $line ($pkg_path)"
     "$PYTHON_BIN" -m pip wheel "$pkg_path" -w "$WHEELS_DIR" --no-deps
   done < "$REPO_ROOT/scripts/packages.list"
-  info "  wheel: workers"
-  "$PYTHON_BIN" -m pip wheel "$REPO_ROOT/workers" -w "$WHEELS_DIR" --no-deps
 }
 
 write_lockfile() {
@@ -118,7 +132,14 @@ build_runtime_bundle() {
     fi
   done
   if [[ -d "$REPO_ROOT/workflow_engine/domain" ]]; then
+    mkdir -p "$RUNTIME_DIR/domain"
     "${rsync_safe[@]}" "$REPO_ROOT/workflow_engine/domain/" "$RUNTIME_DIR/domain/"
+  fi
+  if [[ -f "$REPO_ROOT/requirements-pipeline.txt" ]]; then
+    cp -f "$REPO_ROOT/requirements-pipeline.txt" "$RUNTIME_DIR/"
+  fi
+  if [[ -f "$REPO_ROOT/requirements-gpu-cuda12.txt" ]]; then
+    cp -f "$REPO_ROOT/requirements-gpu-cuda12.txt" "$RUNTIME_DIR/"
   fi
   # Ensure detect_platform and platform_matrix travel with scripts
   cp -f "$REPO_ROOT/scripts/detect_platform.sh" "$RUNTIME_DIR/scripts/"
@@ -126,7 +147,8 @@ build_runtime_bundle() {
   for s in install_release.sh promote_release.sh write_worker_env.sh setup_gpu_node.sh \
            verify_e2e_node.sh verify_setup.sh verify_parabricks.sh verify_methyl_extractor.sh \
            register_worker.sh build_release.sh package_methyl_extractor.sh \
-           download_methyl_extractor_artifacts.sh assemble_release.sh bootstrap_epimethyl.sh; do
+           download_methyl_extractor_artifacts.sh assemble_release.sh bootstrap_epimethyl.sh \
+           install_gateway_systemd.sh install_worker_systemd.sh; do
     [[ -f "$REPO_ROOT/scripts/$s" ]] && cp -f "$REPO_ROOT/scripts/$s" "$RUNTIME_DIR/scripts/"
   done
   chmod +x "$RUNTIME_DIR/scripts/"*.sh 2>/dev/null || true

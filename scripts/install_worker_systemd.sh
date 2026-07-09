@@ -57,6 +57,13 @@ WORKER_BIN="$VENV/bin/methyl-worker"
 
 PATH_LINE="$VENV/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+_render_unit() {
+  local src="$1" dest="$2"
+  sed -e "s|__EPIMETHYL_ROOT__|$ROOT|g" \
+      -e "s|__EPIMETHYL_VENV__|$VENV|g" \
+      "$src" >"$dest"
+}
+
 _detect_capabilities() {
   local py="$VENV/bin/python"
   [[ -x "$py" ]] || py="python3"
@@ -66,10 +73,7 @@ _detect_capabilities() {
 _install_template_unit() {
   local src="$DEPLOY/methyl-worker@.service"
   [[ -f "$src" ]] || { echo "Missing $src" >&2; exit 1; }
-  sed -e "s|venv-aarch64|$VENV|g" \
-      -e "s|/work/epimethyl|$ROOT|g" \
-      -e "s|PATH=/work/epimethyl/venv-aarch64/bin:|PATH=$PATH_LINE|" \
-      "$src" >"/etc/systemd/system/methyl-worker@.service"
+  _render_unit "$src" "/etc/systemd/system/methyl-worker@.service"
 }
 
 if [[ "$DETECT_CAPABILITIES" -eq 1 && -z "$CAPABILITY" ]]; then
@@ -98,10 +102,7 @@ if [[ -n "$CAPABILITY" ]]; then
   UNIT="methyl-worker@${CAPABILITY}.service"
   SRC="$DEPLOY/methyl-worker@.service"
   [[ -f "$SRC" ]] || { echo "Missing $SRC" >&2; exit 1; }
-  sed -e "s|venv-aarch64|$VENV|g" \
-      -e "s|/work/epimethyl|$ROOT|g" \
-      -e "s|PATH=/work/epimethyl/venv-aarch64/bin:|PATH=$PATH_LINE|" \
-      "$SRC" >"/etc/systemd/system/methyl-worker@.service"
+  _render_unit "$SRC" "/etc/systemd/system/methyl-worker@.service"
   systemctl daemon-reload
   systemctl enable "$UNIT"
   [[ "$NO_START" -eq 0 ]] && systemctl restart "$UNIT"
@@ -112,14 +113,7 @@ fi
 SRC="$DEPLOY/methyl-worker.service"
 [[ -f "$SRC" ]] || { echo "Missing $SRC" >&2; exit 1; }
 
-TMP="$(mktemp)"
-sed -e "s|venv-aarch64|$VENV|g" \
-    -e "s|/work/epimethyl|$ROOT|g" \
-    -e "s|ExecStart=/work/epimethyl/venv-aarch64/bin/methyl-worker|ExecStart=$WORKER_BIN|" \
-    -e "s|PATH=/work/epimethyl/venv-aarch64/bin:|PATH=$PATH_LINE|" \
-    "$SRC" >"$TMP"
-cp "$TMP" /etc/systemd/system/methyl-worker.service
-rm -f "$TMP"
+_render_unit "$SRC" "/etc/systemd/system/methyl-worker.service"
 
 systemctl daemon-reload
 systemctl enable methyl-worker.service

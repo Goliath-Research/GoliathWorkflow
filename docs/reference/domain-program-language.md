@@ -14,7 +14,8 @@ Authoring format for MethylPipeline workflows.
 Compiler: `workflow_engine/domain/compiler.py` → `WorkflowDefinitionSpec` (Pydantic: `workflow_engine/contract/workflow_definition_spec.py`).
 
 **Architecture overview:** [`docs/architecture/index.md`](architecture/index.md)  
-**Operator deployment:** [Usage ch.14](usage/14-deployment-and-distributed-workflow.qmd-and-distributed-workflow.qmd)
+**Operator deployment:** [Usage ch.14](usage/14-deployment-and-distributed-workflow.qmd)  
+**Admin CLI:** [admin-cli-methyl-study-start.md](admin-cli-methyl-study-start.md)
 
 ## Artifact ladder
 
@@ -71,6 +72,33 @@ bash scripts/deploy_workflow_definitions.sh
 ```
 
 Writes `workflow_versions.json` with IDs for portal SQL / `methyl-study-start`.
+
+### End-to-end: deploy and start (production)
+
+```bash
+set -a && source /work/epimethyl/env/gateway.env && set +a
+source /work/epimethyl/venv-aarch64/bin/activate
+
+# 1) Compile + deploy standard programs
+bash scripts/deploy_workflow_definitions.sh
+
+# 2) Inspect compiled spec (optional)
+methyl-study-start compile \
+  workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  --project-path /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json
+
+# 3) Start validation instance
+methyl-study-start validation-start - <<'JSON'
+{
+  "projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
+  "pipelineProfile": "mc_gene_fc"
+}
+JSON
+
+# 4) Observe: SQL wf.workflow_instance / wf.node_execution; worker journal
+```
+
+See [implementation/domain-program-compiler.md](../implementation/domain-program-compiler.md) for compiler internals.
 
 ## Constructs
 

@@ -49,11 +49,12 @@ source .venv/bin/activate
 
 # PostgreSQL (Azure Database for PostgreSQL or local)
 export BACKEND_DB=postgres
-export PGHOST=epimethyl.postgres.database.azure.com
-export PGDATABASE=postgres
-export PGUSER=dba
-export PGPASSWORD='...'
-export PGSSLMODE=require
+export POSTGRES_HOST=epimethyl.postgres.database.azure.com
+export POSTGRES_PORT=5432
+export POSTGRES_DB=methylpipeline
+export POSTGRES_USER=dba
+export POSTGRES_PASSWORD='...'
+# Or: export METHYLPIPELINE_DB='postgresql://...'
 
 bash scripts/bootstrap_distributed_workers.sh
 ```
@@ -128,7 +129,7 @@ bash scripts/smoke_study_lifecycle.sh --api-base "$WORKER_API_BASE"
 
 ## Catalog contents (current)
 
-- **33** workflow actions (`sample.upload_h5` removed; use `sample.archive_sample`)
+- **33+** workflow actions in `schemas/actions/catalog.json` (use `sample.archive_sample` for HDF5 archive)
 - Typed task I/O under `schemas/tasks/*.schema.json`
 - Exported catalog: `schemas/actions/catalog.json`
 

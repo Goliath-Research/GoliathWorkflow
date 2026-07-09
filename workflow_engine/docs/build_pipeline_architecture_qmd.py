@@ -70,6 +70,7 @@ FIGURE_ORDER: list[tuple[str, str]] = [
     ("portal-editor", "portal-editor"),
     ("domain-program-compile", "domain-program-compile"),
     ("er-diagram", "er-diagram"),
+    ("caas-er-diagram", "er-diagram"),
     ("scope-hierarchy", "scope-hierarchy"),
     ("worker-conditions", "worker-conditions"),
     ("methylvalidation-flow", "methylvalidation-flow"),

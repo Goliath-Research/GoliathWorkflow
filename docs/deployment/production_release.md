@@ -43,7 +43,7 @@ Register pipelines per [`ci/README.md`](../../ci/README.md).
 | `scripts/assemble_release.sh` | Compose MP + MethylExtractor release bundle |
 | `scripts/promote_release.sh` | Promote bundle to `/work/epimethyl/current` |
 | `scripts/bootstrap_distributed_workers.sh` | DB seed + workflow deploy (`--verify` for health check) |
-| `scripts/deploy_workflow_definitions.sh` | POST DomainPrograms to gateway |
+| `scripts/deploy_workflow_definitions.sh` | Compile + deploy DomainPrograms via direct DB |
 | `scripts/verify_setup.sh` | Post-promote layout verification |
 | `scripts/verify_e2e_node.sh` | GPU worker pre-flight |
 | `scripts/verify_work_layout.sh` | Four-layer `/work` + env sanity |

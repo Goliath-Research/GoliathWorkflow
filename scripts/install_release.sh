@@ -85,6 +85,11 @@ else
 fi
 
 info "Installing from $LOCK_FILE into $VENV_DIR"
-pip install "${PIP_ARGS[@]}"
+if [[ -z "$INDEX_URL" ]]; then
+  # Local wheels cover epimethyl packages only; third-party deps need PyPI or an index mirror.
+  pip install --find-links "$WHEELS_DIR" "${PIP_ARGS[@]}"
+else
+  pip install "${PIP_ARGS[@]}"
+fi
 
 info "Release install complete: $VENV_DIR"

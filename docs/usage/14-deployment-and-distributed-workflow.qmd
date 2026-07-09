@@ -53,11 +53,12 @@ Both backends implement the same **`wf`** schema contract. Choose one primary ba
 | FOREACH support | Included in `08_foreach_support.sql` |
 
 ```bash
-export PGHOST=your-server.postgres.database.azure.com
-export PGDATABASE=postgres
-export PGUSER=dba
-export PGPASSWORD='...'
-export PGSSLMODE=require
+export BACKEND_DB=postgres
+export POSTGRES_HOST=your-server.postgres.database.azure.com
+export POSTGRES_PORT=5432
+export POSTGRES_DB=methylpipeline
+export POSTGRES_USER=dba
+export POSTGRES_PASSWORD='...'
 ./workflow_engine/sql_pg/deploy_azure.sh
 
 # Optional: cluster IP binding columns (when using wf.cluster security features)

@@ -119,4 +119,4 @@ methyl-export-task-schemas --check      # CI drift gate
 python workflow_engine/sql_mssql/seed_action_schemas.py
 ```
 
-Gateway routes: `GET /v1/actions`, `GET /v1/actions/{action_name}/schema?direction=input|output` ([`contracts/openapi.yaml`](../contracts/openapi.yaml)). The Config Editor fetches these when `[Gateway] Enabled=true` in its INI file.
+Gateway routes: **worker-only** — see [`contracts/openapi.yaml`](../contracts/openapi.yaml) (`/v1/workers/*`, health). Action catalog source of truth: `schemas/actions/catalog.json` + `seed_action_catalog.py`. Config Editor may use filesystem schemas or DB-seeded `wf.workflow_action_schema` after deploy.

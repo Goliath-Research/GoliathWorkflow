@@ -1,6 +1,7 @@
 # MethylPipeline Documentation Audit
 
-**Date:** 2026-06-26 (IA revision)  
+**Date:** 2026-07-09 (comprehensive audit refresh)  
+**Prior IA revision:** 2026-06-26  
 **Scope:** Theory, Usage, Implementation, Architecture, Reference, deployment, DomainProgram language.
 
 This document is the canonical register of documentation coverage, canonical sources, stale items, and maintenance rules.
@@ -16,7 +17,11 @@ This document is the canonical register of documentation coverage, canonical sou
 | **Reference** | [`docs/reference/`](reference/documentation-toolchain.md) | New pillar | Config matrix, DomainProgram language, toolchain decision |
 | **Workflow JSON** | [`reference/domain-program-language.md`](reference/domain-program-language.md) | Moved | Schemas in `schemas/domain/` |
 | **SamplePrep + QC** | Usage ch.03, [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md) | Documented | |
-| **Deployment** | Usage ch.14, [`deployment/production_runbook.md`](deployment/production_runbook.md) | Dual-backend | |
+| **Deployment** | Usage ch.14, [`deployment/production_runbook.md`](deployment/production_runbook.md) | Dual-backend | Worker-only gateway; env templates in `deploy/env/` |
+| **Admin CLI** | [`reference/admin-cli-methyl-study-start.md`](reference/admin-cli-methyl-study-start.md) | Documented | Direct DB; not on gateway |
+| **Workflow engine** | [`implementation/workflow-engine.md`](implementation/workflow-engine.md) | Expanded | Dual-dialect state machine |
+| **Traceability / ops** | [`reference/traceability-provenance.md`](reference/traceability-provenance.md), [`architecture/workflow-idempotency-retry-lease.md`](architecture/workflow-idempotency-retry-lease.md) | New | Honest lease/retry gaps |
+| **July 2026 audit** | [`architecture/documentation-audit-2026-07-09.md`](architecture/documentation-audit-2026-07-09.md) | Active | Supersedes partial 2026-07 config audit items |
 | **Schemas / contracts** | [`reference/schema-index.md`](reference/schema-index.md), [`contracts/openapi.yaml`](../contracts/openapi.yaml) | Machine-readable | |
 | **Regulatory / product controls** | [`regulatory/`](regulatory/README.md) | New synthesis pillar | Product controls, validation evidence index, change management, deployment supervision, traceability |
 | **Diagrams** | [`docs/diagrams/src/*.mmd`](diagrams/src/), [`docs/diagrams/out/*.svg`](diagrams/out/), [`docs/diagrams/out/*.png`](diagrams/out/) | Pre-render pipeline | `scripts/render_diagrams.sh` (`htmlLabels: false`, PNG for Quarto PDF) |
@@ -30,11 +35,10 @@ This document is the canonical register of documentation coverage, canonical sou
 | How does SamplePrep QC work? | Usage ch.03, theory ch.09 |
 | How do I run a study end-to-end? | `methyl-workflow-run` + Usage Part II |
 | How do I author a workflow in JSON? | [domain-program-language.md](reference/domain-program-language.md) |
-| How do I deploy DB + gateway + workers? | Usage ch.14, [production_runbook.md](deployment/production_runbook.md) |
-| What is the REST/worker protocol? | [WORKER_PROTOCOL.md](../workers/WORKER_PROTOCOL.md), [implementation/workers-and-gateway.md](implementation/workers-and-gateway.md) |
-| What do config keys mean? | [configuration-reference.qmd](reference/configuration-reference.qmd), [config-parameter-matrix.md](reference/config-parameter-matrix.md) |
-| How do I present product controls, evidence, and change management? | [regulatory/README.md](regulatory/README.md) |
-| What is stale vs current? | This file |
+| How do I deploy DB + gateway + workers? | Usage ch.14, [production_runbook.md](deployment/production_runbook.md), [deploy/env/](../deploy/env/README.md) |
+| How do I compile/start instances without gateway admin? | [admin-cli-methyl-study-start.md](reference/admin-cli-methyl-study-start.md) |
+| What is the REST/worker protocol? | [WORKER_PROTOCOL.md](../workers/WORKER_PROTOCOL.md), [contracts/openapi.yaml](../contracts/openapi.yaml) |
+| What is stale vs current? | This file + [documentation-audit-2026-07-09.md](architecture/documentation-audit-2026-07-09.md) |
 
 ## Repository vs `/work` ownership
 

@@ -21,9 +21,15 @@ RG_GLOBS=(
   --glob '!**/*.pdf'
   --glob '!docs/plans/**'
   --glob '!docs/architecture/documentation-audit-2026-07.md'
+  --glob '!docs/architecture/documentation-audit-2026-07-09.md'
   --glob '!docs/architecture/integrity-and-design-review-2026-07-01.md'
-  --glob '!docs/deployment/work_layout_migration.md'
+  --glob '!workflow_engine/docs/pipeline_architecture.md'
+  --glob '!workflow_engine/CAPABILITY_CHECK.md'
+  --glob '!workflow_engine/delphi/**'
+  --glob '!tools/methyl-config-editor/**'
+  --glob '!docs/deployment/production_runbook.md'
   --glob '!docs/reference/action-parameter-contract.md'
+  --glob '!docs/implementation/sample-preparation-flow.md'
   --glob '!docs/theory/chapters/13-configuration-reference.qmd'
   --glob '!docs/theory/chapters/14-user-guide.qmd'
 )
@@ -95,6 +101,30 @@ fi
 
 # Primary DMP export should be selected, not classifier-extended as the main narrative.
 check_absent 'dmps-\*-classifier-extended\.csv' 'Prefer dmps-*-selected.csv; classifier-extended is transitional'
+
+# Retired gateway admin / catalog HTTP (worker-only gateway).
+check_absent 'Gateway routes: `GET /v1/actions`' 'Gateway is worker-only; use schemas/actions/catalog.json'
+check_absent 'Fetch live metadata with `GET /v1/actions`' 'Workers use catalog.json metadata'
+check_absent '`POST /v1/workflows/definitions`' 'Deploy via deploy_workflow_definitions.sh or methyl-study-start'
+check_absent '`POST /v1/workflows/instances`' 'Start instances via methyl-study-start or portal SQL'
+check_absent '/v1/admin/catalog' 'Admin routes removed; use seed_action_catalog.py'
+
+# Retired action name in active operator docs.
+check_absent 'sample\.upload_h5' 'Use sample.archive_sample'
+
+check_absent '37 workflow actions' 'Action count drifts; cite schemas/actions/catalog.json'
+
+# PostgreSQL env: code reads POSTGRES_*, not libpq PGHOST in deployment docs.
+if rg -l 'export PGHOST=' --glob 'docs/deployment/**' --glob 'docs/usage/**' --glob '!**/.quarto/**' . >/tmp/doc_fresh_hits.txt 2>/dev/null; then
+  echo "FAIL: deployment docs must use POSTGRES_* not PGHOST" >&2
+  head -30 /tmp/doc_fresh_hits.txt >&2
+  fail=1
+fi
+
+# Deploy env templates must exist.
+for f in deploy/env/gateway.postgres.env.example deploy/env/gateway.mssql.env.example deploy/env/worker.env.example; do
+  [[ -f "$ROOT/$f" ]] || { echo "FAIL: missing $f" >&2; fail=1; }
+done
 
 if [[ $fail -ne 0 ]]; then
   exit 1

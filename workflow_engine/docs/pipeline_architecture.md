@@ -104,7 +104,7 @@ flowchart TD
     ext[MethylExtractor GPU]
     extQc[extraction_qc post-extract guardrail]
     gateExt{extractionQcPass}
-    upload[upload_h5 optional]
+    upload[archive_sample optional]
     delBam[delete_BAM]
     trim[trim_fastq fastp]
     align2[Parabricks forceRealign]
@@ -311,18 +311,20 @@ Per-step schemas validate **profile/site `actionConfig`** slices and optional pr
 
 ### Action payload schemas (`schemas/tasks/`)
 
-Workflow **actions** (not project config steps) have separate input/output JSON Schemas stored in `wf.workflow_action_schema` and served by the REST gateway:
+Workflow **actions** (not project config steps) have separate input/output JSON Schemas stored in `wf.workflow_action_schema` and exported to `schemas/tasks/`:
 
 ```mermaid
 flowchart LR
   PM[Pydantic task models]
   EXP[methyl-export-task-schemas]
   DB[wf.workflow_action_schema]
-  GW[GET /v1/actions]
+  CAT[schemas/actions/catalog.json]
   ED[Config Editor]
   WK[Worker runtime]
-  PM --> EXP --> DB --> GW --> ED
+  PM --> EXP --> DB
+  CAT --> WK
   PM --> WK
+  DB --> ED
 ```
 
 | Artifact | Role |
@@ -330,8 +332,10 @@ flowchart LR
 | `workers/methyl_worker/task_models.py` | Source-of-truth Pydantic I/O models |
 | `methyl-export-task-schemas` | Writes `schemas/tasks/<action>.input\|output.schema.json` |
 | `workflow_engine/sql_mssql/seed_action_schemas.py` | Upserts schemas into the database |
-| `GET /v1/actions/{name}/schema` | Config Editor + tooling fetch live schemas |
+| `schemas/actions/catalog.json` | Git catalog; Config Editor filesystem mode |
 | Worker `validate_task_input/output` | Enforces resolved payloads at claim/submit |
+
+> **Note:** The production gateway is **worker-only** (`/v1/workers/*`). Catalog HTTP routes were removed; use `schemas/actions/catalog.json` or DB seed. Instance lifecycle uses portal SQL or `methyl-study-start` (direct DB).
 
 Template documents (`workflow_input_template.template_json`) may contain `${var.*}` placeholders. The Config Editor treats `${...}` strings as wildcards during validation; workers validate fully resolved JSON.
 
@@ -403,18 +407,21 @@ Typical mapping:
 
 Example instance payload: [`workflow_engine/sql_mssql/instance_context_examples/pca_ovr.json`](/home/ubuntu/MethylPipeline/workflow_engine/sql_mssql/instance_context_examples/pca_ovr.json).
 
-Starting a run (middle-tier):
+Starting a run (portal SQL or Admin CLI — not gateway HTTP):
 
-```http
-POST /v1/workflows/instances
-{ "workflow_version_id": <DataDrivenPipeline version id>, "context_json": { ... } }
+```bash
+methyl-study-start validation-start - <<'JSON'
+{ "projectPath": "/work/projects/.../configs/project_*.json", "pipelineProfile": "mc_gene_fc" }
+JSON
 ```
+
+Or portal: `portal.sp_start_workflow_instance` with `workflow_version_id` + `context_json`.
 
 ---
 
 ## 3.5 Domain program language and workflow compilation
 
-Hand-written SQL seeds (`wf_data_driven_pipeline_seed.sql`, `wf_sample_prep_pipeline_seed.sql`) define fixed workflow graphs. The **domain program layer** lets clients describe *any* pipeline in a small declarative language, compile it to a **`WorkflowDefinitionSpec`**, and deploy it with **`POST /v1/workflows/definitions`** — without per-study node explosion in the database.
+Hand-written SQL seeds (`wf_data_driven_pipeline_seed.sql`, `wf_sample_prep_pipeline_seed.sql`) define fixed workflow graphs. The **domain program layer** lets clients describe *any* pipeline in a small declarative language, compile it to a **`WorkflowDefinitionSpec`**, and deploy via **`scripts/deploy_workflow_definitions.sh`** or **`methyl-study-start`** (direct DB) — without per-study node explosion in the database.
 
 **Package:** [`packages/methyldomain/`](/home/ubuntu/MethylPipeline/packages/methyldomain/)  
 **Compiler:** [`workflow_engine/domain/compiler.py`](/home/ubuntu/MethylPipeline/workflow_engine/domain/compiler.py)  
@@ -488,8 +495,8 @@ DomainProgram JSON
       → WorkflowDefinitionSpec (nodes, edges, templates, collection_bindings)
       → context_json { "projectPath": "..." }   // minimal instance payload
 
-POST /v1/workflows/definitions     → wf.wf_repo_create_workflow_graph
-POST /v1/workflows/instances         → sp_start_workflow_instance
+deploy_workflow_definitions.sh / methyl-study-start  → wf.wf_repo_create_workflow_graph
+methyl-study-start / portal.sp_*                     → sp_start_workflow_instance
   → wf_init_instance_scope_from_context
   → wf_resolve_collection_bindings   // populate chromosomes, contexts, comparisons, …
   → graph activation → READY tasks with concrete input_json
@@ -531,7 +538,7 @@ sequenceDiagram
   participant DB as Engine (DB)
   participant Worker
 
-  Client->>DB: POST /v1/workflows/instances { projectPath }
+  Client->>DB: create instance { projectPath, pipelineProfile }
   Client->>DB: sp_start_workflow_instance
   DB->>DB: init scope from context_json
   DB->>DB: resolve collection_bindings (project → chromosomes, contexts, comparisons)
@@ -941,17 +948,16 @@ Worker contracts: [`workflow_engine/sql_mssql/wf_worker_contracts_pca_ovr.md`](/
 
 Workers **never connect to the database directly**. They use the REST API (or an equivalent gateway) documented in [`contracts/openapi.yaml`](/home/ubuntu/MethylPipeline/contracts/openapi.yaml) and [`workflow_engine/WORKER_PROTOCOL.md`](/home/ubuntu/MethylPipeline/workflow_engine/WORKER_PROTOCOL.md).
 
-### REST endpoints
+### REST endpoints (worker-only gateway)
 
 | Method | Path | Caller |
 |--------|------|--------|
-| `POST` | `/v1/workers/authenticate` | Worker registration |
-| `POST` | `/v1/workers/tasks/request` | Worker poll loop |
-| `POST` | `/v1/workers/tasks/{id}/submit` | Task completion |
-| `POST` | `/v1/workers/tasks/{id}/heartbeat` | Long-running jobs |
-| `POST` | `/v1/workers/tasks/{id}/fail` | Explicit failure |
-| `POST` | `/v1/workflows/instances` | Portal / admin |
-| `GET` | `/v1/workflows/instances/{id}` | Portal status |
+| `GET` | `/v1/health` | Load balancer / monitoring |
+| `POST` | `/v1/workers/claim` | Worker poll loop |
+| `POST` | `/v1/workers/submit` | Task completion |
+| `POST` | `/v1/workers/heartbeat` | Long-running jobs (optional) |
+
+Instance create/start: **portal SQL** or **`methyl-study-start`** (direct DB). See [`docs/reference/admin-cli-methyl-study-start.md`](/home/ubuntu/MethylPipeline/docs/reference/admin-cli-methyl-study-start.md).
 
 Production implementation: Python [`workflow_engine/rest/gateway.py`](/home/ubuntu/MethylPipeline/workflow_engine/rest/gateway.py) (`methyl-gateway`, uvicorn, systemd on Linux). Frozen Delphi reference: [`WfEngine.GatewayService.pas`](/home/ubuntu/MethylPipeline/workflow_engine/delphi/src/WfEngine.GatewayService.pas) / `WfEngineSrv` (see [`DELPHI_GATEWAY_STATUS.md`](/home/ubuntu/MethylPipeline/workflow_engine/delphi/DELPHI_GATEWAY_STATUS.md)).
 
@@ -1063,7 +1069,7 @@ flowchart LR
 1. User edits project.json in portal (schema-validated)
 2. Planner builds context_json (comparisons[], chromosomes[], dirs)
    — OR compile DomainProgram and pass { projectPath } with collection_bindings
-3. Portal POST /v1/workflows/instances { workflow_version_id, context_json }
+3. Portal or `methyl-study-start` creates instance { workflow_version_id, context_json }
 4. Engine resolves collection bindings (if defined) → activates graph → READY rows
 5. Workers on cluster pull tasks, read/write /work/..., submit results
 6. Instance status → COMPLETED when root SEQUENCE finishes

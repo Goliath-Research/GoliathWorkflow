@@ -50,12 +50,12 @@ bash scripts/setup_host.sh --system-deps --with-deps
 source .venv/bin/activate
 ```
 
-Or minimal manual venv:
+Or minimal manual venv (must include pipeline requirements):
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-bash scripts/install_all.sh
+bash scripts/install_all.sh --pipeline-reqs
 ```
 
 Smoke check (canonical first):

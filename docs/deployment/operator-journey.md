@@ -17,7 +17,7 @@ Single navigation page for production operators. Each step links to the canonica
 | 4 | Deploy DB schema | `workflow_engine/sql_pg/deploy_azure.sh` or `sql_mssql/deploy_azure.sh` |
 | 5 | Bootstrap catalog + workflows | `bash scripts/bootstrap_distributed_workers.sh` |
 | 6 | Verify bootstrap (read-only) | `bash scripts/bootstrap_distributed_workers.sh --verify` |
-| 7 | Start gateway (systemd) | `deploy/systemd/methyl-gateway.service` |
+| 7 | Start gateway (systemd) | `scripts/install_gateway_systemd.sh` → `deploy/systemd/methyl-gateway.service` |
 | 8 | Register + start workers | `scripts/register_worker.sh`, `scripts/install_worker_systemd.sh` |
 
 See [Distributed workers bootstrap](distributed-workers-bootstrap.md) and [GPU worker runbook](gpu_worker_runbook.md).
@@ -59,7 +59,8 @@ See [Production release](production_release.md).
 | `bootstrap_distributed_workers.sh` | DDL + catalog seed + workflow deploy (+ `--verify`) |
 | `assemble_release.sh` | Bundle MethylPipeline + MethylExtractor artifacts |
 | `promote_release.sh` | Flip `/work/epimethyl/current`, refresh venv, worker env |
-| `deploy_workflow_definitions.sh` | POST compiled DomainPrograms to gateway |
+| `deploy_workflow_definitions.sh` | Compile + deploy DomainPrograms via direct DB (`methyl-study-start` / `ops`) |
+| `install_gateway_systemd.sh` | Install arch-aware gateway unit (`venv-<arch>`) |
 | `register_worker.sh` | Register `wf.cluster` / worker row |
 | `verify_setup.sh` | Release layout + script presence |
 | `verify_e2e_node.sh` | GPU worker pre-flight (Parabricks, HDF5 plugin, venv) |

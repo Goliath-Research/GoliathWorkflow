@@ -114,7 +114,8 @@ bash /work/epimethyl/current/runtime-bundle/scripts/write_worker_env.sh \
 ### 7. Register worker (once per VM)
 
 ```bash
-export PGHOST=… PGUSER=… PGPASSWORD=… PGDATABASE=…
+export POSTGRES_HOST=… POSTGRES_USER=… POSTGRES_PASSWORD=… POSTGRES_DB=…
+export BACKEND_DB=postgres
 bash /work/epimethyl/current/runtime-bundle/scripts/register_worker.sh \
   --cluster gpu-west \
   --key "$(hostname -s)" \

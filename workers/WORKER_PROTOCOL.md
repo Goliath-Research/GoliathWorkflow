@@ -29,7 +29,7 @@ sequenceDiagram
 ## Capability strings
 
 Map to `wf.workflow_action.capability` (e.g. `methyl-centroid`, `methyl-detector`).
-The reference worker dispatches via **ActionBase** (`CliAction` / `InProcessAction`) using metadata from `schemas/actions/catalog.json` (`execution_mode`, `cli_tool`, `argv_map`). Fetch live metadata with `GET /v1/actions`.
+The reference worker dispatches via **ActionBase** (`CliAction` / `InProcessAction`) using metadata from `schemas/actions/catalog.json` (`execution_mode`, `cli_tool`, `argv_map`). Live DB rows mirror catalog fields after `seed_action_catalog.py`; the gateway does **not** expose `GET /v1/actions`.
 
 ## Result codes
 

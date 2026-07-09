@@ -36,7 +36,7 @@ bash scripts/smoke_sample_prep.sh
 
 Poll until **COMPLETED**. Do not start validation until all samples have per-chromosome HDF5s archived (when `h5Storage` is configured) and present locally under `/work/samples/{id}/`.
 
-**HDF5 archive:** After `sample.methyl_extract`, `sample.upload_h5` copies `{chr}-{ctx}.h5` to S3/Azure/NFS per instance `h5Storage` + per-sample prefix. Local files are retained for validation and BAM deletion.
+**HDF5 archive:** After `sample.methyl_extract`, `sample.archive_sample` copies HDF5 and related artifacts to S3/Azure/NFS per instance `h5Storage` + per-sample prefix. Local files are retained for validation and BAM deletion.
 
 **FASTQ retention:** SamplePrep keeps FASTQs until final QC (pass or final fail after any trim/realign retry). Samples with `REALIGN_READ2_TRIM` run `sample.trim_fastq` → Parabricks `forceRealign` → `methyl_qc` retry before `delete_fastqs`.
 
@@ -181,10 +181,15 @@ Workers never connect to SQL directly. Lock down the database to the gateway onl
 
 ```bash
 bash scripts/test_gateway_remote.sh --ssh-only
-# Worker-only gateway: admin paths are gone (404); health is public:
+# Worker-only gateway: health is public; admin paths return 404
 curl -sS -o /dev/null -w '%{http_code}\n' https://gateway/v1/health
 curl -sS -o /dev/null -w '%{http_code}\n' -X POST https://gateway/v1/admin/catalog/seed \
   -H 'Content-Type: application/json' -d '{}'
+# Expect: health 200, admin 404
+
+# Catalog seed (direct DB, not gateway):
+set -a && source /work/epimethyl/env/gateway.env && set +a
+python workflow_engine/sql_mssql/seed_action_catalog.py
 ```
 
 ## Arc compliance and incident response

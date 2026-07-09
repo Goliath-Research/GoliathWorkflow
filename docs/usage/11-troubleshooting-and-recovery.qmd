@@ -2,46 +2,63 @@
 
 ## Purpose
 
-Standardize response for common stage failures and reduce ad-hoc debugging.
+Operator recovery for **distributed** (gateway + DB + workers) and **local** (`methyl-workflow-run`) workflows.
 
 ## Failure routing
 
 ![Failure routing](../diagrams/out/distributed-runtime.png)
 
-
-## Common problems
+## Distributed — common problems
 
 | Symptom | Likely cause | Recovery |
-|---|---|---|
-| `command not found: methyl-validation` | `.venv` inactive or install missing | Activate `.venv`, rerun `scripts/install_all.sh` |
-| freeze fails for missing stable panel | stability not run or wrong path | Run `--stability` or set `freeze_stable_dmp_csv` |
-| model fails due to biological review gate | `require_biological_review_for_model=true` and not confirmed | set `biological_review_confirmed=true` after review |
-| path file-not-found across hosts | environment path differences | use `path_remap`/`--path-remap OLD=NEW` |
-| blind predictor rejected in validation mode | blind settings passed to `methyl-validation` | run blind mode with standalone `methyl-predictor` |
+|---------|--------------|----------|
+| Worker idle, nodes `READY` | Worker not registered or wrong capability | `register_worker.sh`, check `wf.worker`; restart systemd unit |
+| Node `RUNNING`, stale lease | Worker crash; **no auto requeue on lease expiry** | See [idempotency/lease doc](../architecture/workflow-idempotency-retry-lease.md); operator release per runbook |
+| `401` on claim/submit | Token mismatch | Re-issue token via `register_worker.sh`; sync `/etc/methyl/worker-token` |
+| Gateway unreachable | systemd down or wrong `WORKER_API_BASE` | `install_gateway_systemd.sh`, curl health |
+| Instance `FAILED` | Negative `result_code` from action | Inspect `node_execution.output_json`; fix science/config; new instance |
+| Smoke fails immediately | DB env, missing `workflow_versions.json`, no worker | `bootstrap_distributed_workers.sh --verify`; deploy workflows; start worker |
 
-## Safe recovery sequence
+## Local / legacy — common problems
 
-1. Validate environment and CLI availability.
-2. Confirm previous-stage artifacts exist.
-3. Re-run failed stage only.
-4. Use resume mode where supported.
-5. Re-check QA gates before advancing.
+| Symptom | Likely cause | Recovery |
+|---------|--------------|----------|
+| `command not found: methyl-workflow-run` | `.venv` inactive | `source .venv/bin/activate`; `bash scripts/setup_host.sh --with-deps` |
+| freeze fails for missing stable panel | stability not run | Re-run stability stage or set `freeze_stable_dmp_csv` in manifest paths |
+| path file-not-found across hosts | path drift | `path_remap` / consistent `/work/projects/...` layout |
 
-## Resume examples
+## Safe recovery sequence (distributed)
+
+1. Confirm release: `bash scripts/verify_setup.sh --runtime-bundle`
+2. Query instance + nodes in DB (`wf.workflow_instance`, `wf.node_execution`)
+3. Check worker logs: `journalctl -u methyl-worker -f`
+4. Do **not** assume automatic retry — prefer new instance when `actionConfig` changed
+5. Record `workflow_instance_id` and overrides for traceability
+
+## Safe recovery sequence (local)
+
+1. Validate `.venv` and CLI availability
+2. Confirm previous-stage artifacts exist under project output dir
+3. Re-run failed stage only (`methyl-workflow-run` with scoped program node or legacy `--resume`)
+
+## Resume examples (legacy transitional)
 
 ```bash
 source .venv/bin/activate
 methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --stability --resume
-methyl-validation --project /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-4-CG.json --post-model-validation --resume
 ```
+
+Prefer DomainProgram reruns for new studies.
 
 ## Operational guardrails
 
-- Keep original run directories for traceability.
-- Prefer additive reruns over manual artifact edits.
-- Record config overrides used in reruns.
+- Keep original run directories and DB instance rows for traceability
+- Prefer new `workflow_instance` over manual `node_execution` edits
+- Document `resolvedConfig` overrides in operator notes
 
 ## See also
 
-- `docs/code_first_discovery_report.md`
-- `docs/reference/config-parameter-matrix.md`
+- [Logging and observability](../reference/logging-observability.md)
+- [Traceability](../reference/traceability-provenance.md)
+- [Operator journey](../deployment/operator-journey.md)
+- [Config parameter matrix](../reference/config-parameter-matrix.md)
