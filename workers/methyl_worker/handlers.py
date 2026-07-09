@@ -623,8 +623,40 @@ def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:
     return Path(project.output_base) / project.project_name / "monte_carlo_runs"
 
 
-def _load_mc_config(input_json: Dict[str, Any]):
-    from methyl_validation.workflow_planner import ValidationPlanRequest, _load_config_from_project, resolve_base_project_json
+def _mc_input_with_runtime(input: BaseModel, runtime=None) -> Dict[str, Any]:
+    """Merge task input with runtime envelope so resolvedConfig reaches _load_mc_config."""
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    if runtime is None:
+        return input_json
+    profile = getattr(runtime, "validationProfile", None)
+    if profile is not None and "resolvedConfig" not in input_json:
+        try:
+            input_json["resolvedConfig"] = profile.model_dump(mode="json", exclude_none=True)
+        except Exception:
+            pass
+    # Prefer explicit wire resolvedConfig when present on runtime context construction path
+    return input_json
+
+
+def _load_mc_config(
+    input_json: Dict[str, Any],
+    *,
+    profile_overrides=None,
+):
+    """Build MonteCarloConfig for validation aggregation actions.
+
+    Prefer the worker Universal Action Input Contract: baked ``resolvedConfig`` /
+    ``TaskRuntimeContext.validationProfile`` (same slice CAAS signs). Do **not**
+    re-merge site/profile from the environment when a resolved slice is present —
+    that mismatch previously let CAAS cache empty BA-gated panels under a raw_pool
+    signature while execution used a different FeatureCuts profile.
+    """
+    from methyl_validation.config import ValidationStepConfig, parse_validation_profile
+    from methyl_validation.workflow_planner import (
+        ValidationPlanRequest,
+        _load_config_from_project,
+        resolve_base_project_json,
+    )
 
     project_path = input_json.get("projectPath") or input_json.get("project")
     base_project = resolve_base_project_json(project_path)
@@ -638,7 +670,15 @@ def _load_mc_config(input_json: Dict[str, Any]):
     # produced with is honored (config-not-code) instead of re-resolving them from code.
     _backfill_planner_fields_from_snapshot(input_json, request_data)
     request = ValidationPlanRequest.model_validate(request_data)
-    return _load_config_from_project(base_project, request), base_project
+
+    overrides = profile_overrides
+    if overrides is None:
+        resolved = input_json.get("resolvedConfig")
+        if isinstance(resolved, dict):
+            overrides = parse_validation_profile(resolved)
+        elif isinstance(resolved, ValidationStepConfig):
+            overrides = resolved
+    return _load_config_from_project(base_project, request, profile_overrides=overrides), base_project
 
 
 def _backfill_planner_fields_from_snapshot(
@@ -669,15 +709,21 @@ def _backfill_planner_fields_from_snapshot(
             request_data["seed"] = int(raw["seed"])
 
 
-def _handle_validation_stability(_capability: str, _action_name: str, input: BaseModel):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
+def _handle_validation_stability(
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime=None,
+):
+    input_json = _mc_input_with_runtime(input, runtime)
 
     from methyl_validation.stability import run_stability_analysis
 
     from .task_models.validation_models import StabilitySummary, ValidationStabilityOutput
 
     mc_root = _resolve_monte_carlo_runs_root(input_json)
-    config, _base = _load_mc_config(input_json)
+    profile_overrides = getattr(runtime, "validationProfile", None) if runtime is not None else None
+    config, _base = _load_mc_config(input_json, profile_overrides=profile_overrides)
     output_dir = Path(input_json.get("outputDir") or mc_root / "stability")
     summary_raw = run_stability_analysis(
         mc_root,
@@ -697,6 +743,20 @@ def _handle_validation_stability(_capability: str, _action_name: str, input: Bas
         tier_exploratory_frequency=config.stability_tier_exploratory_freq,
         default_freeze_tier=config.stability_default_freeze_tier,
     )
+    dmp_block = summary_raw.get("dmp_stability") if isinstance(summary_raw, dict) else None
+    if isinstance(dmp_block, dict):
+        n_runs = int(dmp_block.get("n_runs_analyzed") or 0)
+        skipped_ba = int(dmp_block.get("skipped_low_balanced_accuracy") or 0)
+        skipped_disc = int(dmp_block.get("skipped_no_discovery") or 0)
+        run_dirs = list(mc_root.glob("run_*")) if mc_root is not None else []
+        if run_dirs and n_runs == 0 and (skipped_ba + skipped_disc) >= len(run_dirs):
+            raise RuntimeError(
+                "validation.stability analyzed 0 Monte Carlo runs "
+                f"(skipped_low_balanced_accuracy={skipped_ba}, skipped_no_discovery={skipped_disc}). "
+                "Refusing empty stable panels. For raw_pool/discovery-only profiles, "
+                "stability_min_balanced_accuracy and FeatureCuts gates must be unset/false; "
+                "check resolvedConfig matches the DomainProgram profile."
+            )
     summary_path = output_dir / "stability_summary.json"
     return ValidationStabilityOutput(
         status="ok",
@@ -713,10 +773,10 @@ def _handle_validation_stability(_capability: str, _action_name: str, input: Bas
 
 
 def _handle_validation_biomarker_filter(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str, _action_name: str, input: BaseModel, runtime=None
 ):
     """In-process PPI-only biomarker gene pool filter on mapper combined genes."""
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    input_json = _mc_input_with_runtime(input, runtime)
     from pathlib import Path
 
     import pandas as pd
@@ -728,7 +788,10 @@ def _handle_validation_biomarker_filter(
     if not project_path:
         raise RuntimeError("validation.biomarker_filter requires projectPath")
     run_dir = Path(str(input_json.get("runDir") or project_path)).resolve()
-    config, _base = _load_mc_config(input_json)
+    config, _base = _load_mc_config(
+        input_json,
+        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+    )
     mapper_dirs = list(run_dir.glob("**/mapper/*/*")) or list(run_dir.glob("mapper/*/*"))
     gene_df = None
     for d in mapper_dirs:
@@ -761,14 +824,17 @@ def _handle_validation_biomarker_filter(
 
 
 def _handle_validation_prepare_freeze(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str, _action_name: str, input: BaseModel, runtime=None
 ):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    input_json = _mc_input_with_runtime(input, runtime)
     from methyl_validation.stability import prepare_freeze_project
 
     from .task_models.validation_models import ValidationPrepareFreezeOutput
 
-    config, base_project = _load_mc_config(input_json)
+    config, base_project = _load_mc_config(
+        input_json,
+        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+    )
     mc_root = _resolve_monte_carlo_runs_root(input_json)
     stable_csv = input_json.get("stableDmpCsv") or config.freeze_stable_dmp_csv or str(
         mc_root / "stability" / "stable_dmps_production.csv"
@@ -939,14 +1005,17 @@ def _handle_validation_model_predict(
 
 
 def _handle_validation_model_mc(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str, _action_name: str, input: BaseModel, runtime=None
 ):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    input_json = _mc_input_with_runtime(input, runtime)
     from methyl_validation.model_mc_runner import run_model_mc_all
 
     from .task_models.validation_models import ValidationModelMcOutput
 
-    config, _base = _load_mc_config(input_json)
+    config, _base = _load_mc_config(
+        input_json,
+        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+    )
     mc_root = _resolve_monte_carlo_runs_root(input_json)
     production_dir = Path(
         input_json.get("productionOutputDir") or config.production_output_dir or mc_root / "production"
@@ -969,15 +1038,18 @@ def _handle_validation_model_mc(
 
 
 def _handle_validation_select_best_model(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str, _action_name: str, input: BaseModel, runtime=None
 ):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    input_json = _mc_input_with_runtime(input, runtime)
     from methyl_validation.cli import _write_backend_ranking
     from methyl_validation.stability import build_production_model
 
     from .task_models.validation_models import ValidationSelectBestModelOutput
 
-    config, _base = _load_mc_config(input_json)
+    config, _base = _load_mc_config(
+        input_json,
+        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+    )
     mc_root = _resolve_monte_carlo_runs_root(input_json)
     model_mc_root = Path(input_json.get("modelMcRoot") or mc_root / "model_mc")
     backends = list(input_json.get("backends") or ["ecdf", "tabular_sklearn", "generative_hybrid"])
@@ -1009,9 +1081,9 @@ def _handle_validation_select_best_model(
 
 
 def _handle_validation_post_model_validation(
-    _capability: str, _action_name: str, input: BaseModel
+    _capability: str, _action_name: str, input: BaseModel, runtime=None
 ):
-    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    input_json = _mc_input_with_runtime(input, runtime)
     from methyl_validation.pipeline_runner import (
         run_post_model_validation_binary,
         run_post_model_validation_multiclass,
@@ -1020,7 +1092,10 @@ def _handle_validation_post_model_validation(
 
     from .task_models.validation_models import ValidationPostModelValidationOutput
 
-    config, base_project = _load_mc_config(input_json)
+    config, base_project = _load_mc_config(
+        input_json,
+        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+    )
     mc_root = _resolve_monte_carlo_runs_root(input_json)
     production_dir = Path(
         input_json.get("productionOutputDir") or config.production_output_dir or mc_root / "production"

@@ -47,6 +47,46 @@ def test_model_mc_handler_delegates_to_runner(tmp_path: Path) -> None:
     assert out.n_iterations == 3
 
 
+def test_load_mc_config_prefers_resolved_config_slice(tmp_path: Path) -> None:
+    """When resolvedConfig is present, do not re-merge site/profile via resolve_for_project."""
+    project_json = tmp_path / "project.json"
+    project_json.write_text("{}", encoding="utf-8")
+
+    input_json = {
+        "projectPath": str(project_json),
+        "resolvedConfig": {
+            "n_iterations": 5,
+            "train_fraction": 0.8,
+            "seed": 1,
+            "dmp_modeling_mode": "raw_pool",
+            "stability_featurecuts_enabled": False,
+            "stability_min_balanced_accuracy": None,
+            "stability_dmp_freq": 0.8,
+        },
+    }
+    captured = {}
+
+    def fake_load(base_project, request, **kwargs):
+        captured["profile_overrides"] = kwargs.get("profile_overrides")
+        return MagicMock(
+            stability_featurecuts_enabled=False,
+            stability_min_balanced_accuracy=None,
+        )
+
+    with patch(
+        "methyl_validation.workflow_planner.resolve_base_project_json",
+        return_value=project_json,
+    ):
+        with patch(
+            "methyl_validation.workflow_planner._load_config_from_project",
+            side_effect=fake_load,
+        ):
+            handlers._load_mc_config(input_json)
+
+    assert captured["profile_overrides"] is not None
+    assert captured["profile_overrides"].stability_featurecuts_enabled is False
+
+
 def test_load_mc_config_ignores_non_planner_task_fields(tmp_path: Path) -> None:
     """Stability-shaped task input carries fields ValidationPlanRequest forbids.
 

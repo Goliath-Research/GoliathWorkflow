@@ -177,6 +177,45 @@ def _incremental_centroid_extra(input_json: Mapping[str, Any]) -> Optional[dict]
     return extra or None
 
 
+def _stability_mc_extra(input_json: Mapping[str, Any]) -> Optional[dict]:
+    """Fingerprint Monte Carlo run inputs so stability CAAS does not reuse stale panels.
+
+    Config-only signatures previously allowed replaying empty BA-gated stability
+    results after discovery CSVs were regenerated under a raw_pool profile.
+    """
+    mc_root = _resolve_monte_carlo_runs_root(input_json)
+    if mc_root is None or not mc_root.is_dir():
+        return None
+    extra: dict[str, Any] = {"monteCarloRunsRoot": str(mc_root)}
+    snapshot = mc_root / "queue" / "mc_config.json"
+    if snapshot.is_file() or snapshot.is_symlink():
+        try:
+            st = snapshot.resolve().stat() if snapshot.is_symlink() else snapshot.stat()
+            extra["mcConfig"] = f"{st.st_size}:{int(st.st_mtime)}"
+        except OSError:
+            extra["mcConfig"] = "missing"
+    run_dirs = sorted(p for p in mc_root.glob("run_*") if p.is_dir())
+    extra["nRuns"] = len(run_dirs)
+    # Cheap per-run discovery presence fingerprint (not full CSV hash).
+    discovery_bits: List[str] = []
+    for run_dir in run_dirs[:64]:
+        n_disc = 0
+        newest = 0
+        total_bytes = 0
+        for csv in run_dir.glob("detections/**/dmps-*-discovery.csv"):
+            try:
+                st = csv.stat()
+            except OSError:
+                continue
+            n_disc += 1
+            newest = max(newest, int(st.st_mtime))
+            total_bytes += int(st.st_size)
+        discovery_bits.append(f"{run_dir.name}:{n_disc}:{total_bytes}:{newest}")
+    if discovery_bits:
+        extra["discoveryFingerprint"] = _sha256_text("\n".join(discovery_bits))[:16]
+    return extra
+
+
 def compute_input_signature(
     entry: ActionCatalogEntry,
     input_json: Mapping[str, Any],
@@ -193,6 +232,10 @@ def compute_input_signature(
         extra = _incremental_centroid_extra(input_json)
         if extra:
             payload["incremental"] = extra
+    if entry.action_name == "validation.stability":
+        extra = _stability_mc_extra(input_json)
+        if extra:
+            payload["monteCarlo"] = extra
     return _sha256_text(_canonical_json(payload))
 
 

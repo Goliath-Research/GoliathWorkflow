@@ -142,20 +142,43 @@ def _relative_under(root: Path, path: Path) -> Path:
     return path.resolve().relative_to(root.resolve())
 
 
+def _symlink_target_for(link_path: Path, target: Path) -> Path | str:
+    """Prefer a project-local relative symlink target.
+
+    Absolute ``resolve()`` targets break when the same NFS volume is visible as both
+    ``/work/...`` and ``/lambda/nfs/Work/...`` (or when bind-mount prefixes differ).
+    Relative targets stay valid as long as link and blob share one filesystem tree.
+    """
+    target_resolved = target.expanduser().resolve()
+    link_parent = link_path.expanduser().parent
+    try:
+        link_parent_resolved = link_parent.resolve()
+    except OSError:
+        link_parent.mkdir(parents=True, exist_ok=True)
+        link_parent_resolved = link_parent.resolve()
+    try:
+        return os.path.relpath(target_resolved, start=link_parent_resolved)
+    except ValueError:
+        return target_resolved
+
+
 def _ensure_symlink(link_path: Path, target: Path) -> None:
     link_path = link_path.expanduser()
-    target = target.expanduser().resolve()
+    target_resolved = target.expanduser().resolve()
     link_path.parent.mkdir(parents=True, exist_ok=True)
     if link_path.is_symlink():
-        if link_path.resolve() == target:
-            return
+        try:
+            if link_path.resolve() == target_resolved:
+                return
+        except OSError:
+            pass
         link_path.unlink()
     elif link_path.exists():
         if link_path.is_dir():
             shutil.rmtree(link_path)
         else:
             link_path.unlink()
-    link_path.symlink_to(target)
+    link_path.symlink_to(_symlink_target_for(link_path, target_resolved))
 
 
 def _move_tree_into_entry(

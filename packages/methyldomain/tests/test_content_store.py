@@ -69,6 +69,28 @@ def test_resolve_project_root_from_mc_run_dir(tmp_path: Path) -> None:
     assert resolved == project_root.resolve()
 
 
+def test_commit_and_relink_uses_relative_symlink(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    project_root = tmp_path / "Study"
+    stability_dir = project_root / "monte_carlo_runs" / "stability"
+    stability_dir.mkdir(parents=True)
+    summary = stability_dir / "stability_summary.json"
+    summary.write_text("{}", encoding="utf-8")
+
+    record = _record(artifacts=[ArtifactRef(path=str(summary), bytes=2)])
+    commit_artifacts_to_store(
+        project_root,
+        "validation.stability",
+        "content-key-rel",
+        record,
+        output_dir=stability_dir,
+    )
+    assert summary.is_symlink()
+    target = os.readlink(summary)
+    assert not os.path.isabs(target), f"expected relative symlink, got {target!r}"
+    assert summary.resolve().is_file()
+
+
 def test_commit_and_relink_directory_entry(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     project_root = tmp_path / "Study"

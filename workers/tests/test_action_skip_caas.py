@@ -143,3 +143,37 @@ def test_symlink_paths_affect_input_signature(tmp_path: Path) -> None:
     assert sig_link == sig_real
     # ...while the path genuinely contributes to the signature (not dropped).
     assert sig_link != sig_other
+
+
+def test_stability_signature_includes_discovery_fingerprint(tmp_path: Path) -> None:
+    entry = find_catalog_entry("validation.stability")
+    assert entry is not None
+
+    project = tmp_path / "configs" / "project.json"
+    _write_study_project(project, tmp_path)
+    project_root = tmp_path / "Study"
+    mc_root = project_root / "monte_carlo_runs"
+    run = mc_root / "run_0001" / "detections" / "all" / "PCa"
+    run.mkdir(parents=True)
+    disc = run / "dmps-1-discovery.csv"
+    disc.write_text("chromosome,position\n1,1\n", encoding="utf-8")
+
+    input_json = {
+        "projectPath": str(project),
+        "monteCarloRunsRoot": str(mc_root),
+        "outputDir": str(mc_root / "stability"),
+        "resolvedConfig": {
+            "n_iterations": 2,
+            "stability_dmp_freq": 0.7,
+            "dmp_modeling_mode": "raw_pool",
+            "stability_featurecuts_enabled": False,
+        },
+    }
+    input_model = validate_input(entry, strip_runtime_input(input_json))
+    sig1 = compute_input_signature(entry, input_json, input_model)
+
+    disc.write_text("chromosome,position\n1,1\n1,2\n", encoding="utf-8")
+    # bump mtime
+    os.utime(disc, None)
+    sig2 = compute_input_signature(entry, input_json, input_model)
+    assert sig1 != sig2
