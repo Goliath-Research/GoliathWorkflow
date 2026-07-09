@@ -5,6 +5,7 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | Document | Topic |
 |----------|-------|
 | [Component boundaries](component-boundaries.md) | Gateway vs DB vs admin CLI vs MCP vs pipeline knowledge |
+| [Action provider registry](action-provider-registry.md) | Process-pack registry vs engine; why not DI |
 | [Layer model](layer-model.md) | manifest → profile → program → instance → worker |
 | [Distributed runtime](distributed-runtime.md) | portal, DB, gateway, workers, shared storage |
 | [Orchestration paths](orchestration-paths.md) | local, gateway, legacy CLI matrix |

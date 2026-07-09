@@ -197,6 +197,31 @@ def _group_ref_side(ref: Any) -> Optional[str]:
     return None
 
 
+def _apply_catalog_template_rules(
+    template: Dict[str, Any],
+    entry: Any,
+    params: Dict[str, Any],
+) -> None:
+    """Apply process-pack template metadata from catalog ``domain_effects`` (no action_name switch)."""
+    effects = getattr(entry, "domain_effects", None)
+    if effects is None:
+        return
+    for rule in getattr(effects, "template_defaults", ()) or ():
+        if rule.only_if_absent:
+            if rule.field in template:
+                continue
+            absent_also = getattr(rule, "absent_also", ()) or ()
+            if any(key in template for key in absent_also):
+                continue
+        template[rule.field] = f"${{var.{rule.scope_var}}}"
+    side = _group_ref_side(params.get("group"))
+    if side is None:
+        return
+    for rule in getattr(effects, "template_group_side_defaults", ()) or ():
+        if rule.side == side:
+            template[rule.field] = f"${{var.{rule.scope_var}}}"
+
+
 def _action_template(entry, step: ActionStep) -> Dict[str, Any]:
     tool = entry.tool or entry.action_name
     template: Dict[str, Any] = {"tool": tool}
@@ -212,20 +237,7 @@ def _action_template(entry, step: ActionStep) -> Dict[str, Any]:
     for key, val in params.items():
         template[key] = _placeholder_for_value(val)
 
-    action = entry.action_name
-    if action == "pipeline.centroid":
-        side = _group_ref_side(params.get("group"))
-        if side == "control":
-            template["outputDir"] = "${var.centroid1Dir}"
-        elif side == "disease":
-            template["outputDir"] = "${var.centroid2Dir}"
-    elif action == "pipeline.detector":
-        template["centroid1Dir"] = "${var.centroid1Dir}"
-        template["centroid2Dir"] = "${var.centroid2Dir}"
-        template["outputDir"] = "${var.detectOutDir}"
-        if "comparison" not in template and "label" not in template:
-            template["comparison"] = "${var.label}"
-
+    _apply_catalog_template_rules(template, entry, params)
     return template
 
 

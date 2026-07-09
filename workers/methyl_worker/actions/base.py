@@ -20,24 +20,7 @@ from ..action_execution import (
     finalize_output,
     validate_input,
 )
-from ..collectors import (
-    ArtifactCollector,
-    GenericPipelineCollector,
-    ManifestFirstCollector,
-    _resolve_dmp_output_dir,
-    _resolve_enricher_output_dir,
-)
-from ..task_models.pipeline_models import (
-    CentroidTaskOutput,
-    DetectorTaskOutput,
-    DmpSelectTaskOutput,
-    EnricherTaskOutput,
-    GeneFeatureSelectTaskOutput,
-    GeneSelectTaskOutput,
-    DerivedMeasuresTaskOutput,
-    InfoMeasuresTaskOutput,
-    MapperTaskOutput,
-)
+from ..collectors import ArtifactCollector, GenericPipelineCollector
 from ..task_models.step_override_models import CentroidBaseConfigOverride, CentroidStepOverride
 
 logger = logging.getLogger(__name__)
@@ -324,57 +307,8 @@ class InProcessAction:
         return execution_result_from_output(output)
 
 
-def _collector_for_entry(entry: ActionCatalogEntry) -> ArtifactCollector:
-    name = entry.action_name
-    if name == "pipeline.dmp_select":
-        return ManifestFirstCollector(
-            output_model=DmpSelectTaskOutput,
-            resolve_output_dir=lambda inp: _resolve_dmp_output_dir(inp),
-        )
-    if name == "pipeline.gene_select":
-        return ManifestFirstCollector(
-            output_model=GeneSelectTaskOutput,
-            resolve_output_dir=lambda inp: inp.get("runDir"),
-        )
-    if name == "pipeline.gene_feature_select":
-        return ManifestFirstCollector(
-            output_model=GeneFeatureSelectTaskOutput,
-            resolve_output_dir=lambda inp: inp.get("outputDir"),
-        )
-    if name == "pipeline.detector":
-        return ManifestFirstCollector(
-            output_model=DetectorTaskOutput,
-            resolve_output_dir=lambda inp: inp.get("outputDir"),
-        )
-    if name == "pipeline.mapper":
-        return ManifestFirstCollector(
-            output_model=MapperTaskOutput,
-            resolve_output_dir=lambda inp: inp.get("outputDir"),
-        )
-    if name == "pipeline.derived_measures":
-        return ManifestFirstCollector(
-            output_model=DerivedMeasuresTaskOutput,
-            resolve_output_dir=lambda inp: inp.get("outputDir"),
-        )
-    if name == "pipeline.info_measures":
-        return ManifestFirstCollector(
-            output_model=InfoMeasuresTaskOutput,
-            resolve_output_dir=lambda inp: inp.get("outputDir"),
-        )
-    if name == "pipeline.centroid":
-        return ManifestFirstCollector(
-            output_model=CentroidTaskOutput,
-            resolve_output_dir=lambda inp: inp.get("outputDir"),
-        )
-    if name == "pipeline.enricher":
-        return ManifestFirstCollector(
-            output_model=EnricherTaskOutput,
-            resolve_output_dir=_resolve_enricher_output_dir,
-        )
-    return GenericPipelineCollector()
-
-
 def build_action_from_catalog(entry: ActionCatalogEntry, handlers_module: Any) -> ActionBase:
+    """Dispatch via catalog execution_mode + CLI provider registry (no action_name switch)."""
     if entry.execution_mode == "in_process":
         handler_name = entry.in_process_handler or entry.handler
         handler = getattr(handlers_module, handler_name, None)
@@ -382,52 +316,6 @@ def build_action_from_catalog(entry: ActionCatalogEntry, handlers_module: Any) -
             raise RuntimeError(f"Missing in-process handler {handler_name!r} for {entry.action_name}")
         return InProcessAction(handler, entry=entry)
 
-    cli = entry.cli_tool
-    if cli is None:
-        raise RuntimeError(f"Action {entry.action_name!r} has execution_mode=cli but no cli_tool")
+    from .registry import build_cli_action
 
-    argv_map = dict(entry.argv_map) if entry.argv_map else dict(DEFAULT_PIPELINE_ARGV_MAP)
-    collector = _collector_for_entry(entry)
-    if entry.action_name == "pipeline.detector":
-        from .detector import DETECTOR_ARGV_MAP, DetectorCliAction
-
-        return DetectorCliAction(entry=entry, cli_tool=cli, argv_map=DETECTOR_ARGV_MAP, collector=collector)
-    if entry.action_name == "pipeline.dmp_select":
-        from .dmp_select import DMP_SELECT_ARGV_MAP, DmpSelectCliAction
-
-        return DmpSelectCliAction(entry=entry, cli_tool=cli, argv_map=DMP_SELECT_ARGV_MAP, collector=collector)
-    if entry.action_name == "pipeline.mapper":
-        from .mapper import MAPPER_ARGV_MAP, MapperCliAction
-
-        return MapperCliAction(entry=entry, cli_tool=cli, argv_map=MAPPER_ARGV_MAP, collector=collector)
-    if entry.action_name == "pipeline.derived_measures":
-        from .derived_measures import DERIVED_MEASURES_ARGV_MAP, DerivedMeasuresCliAction
-
-        return DerivedMeasuresCliAction(
-            entry=entry, cli_tool=cli, argv_map=DERIVED_MEASURES_ARGV_MAP, collector=collector
-        )
-    if entry.action_name == "pipeline.info_measures":
-        from .info_measures import INFO_MEASURES_ARGV_MAP, InfoMeasuresCliAction
-
-        return InfoMeasuresCliAction(
-            entry=entry, cli_tool=cli, argv_map=INFO_MEASURES_ARGV_MAP, collector=collector
-        )
-    if entry.action_name == "pipeline.gene_select":
-        from .gene_select import GENE_SELECT_ARGV_MAP, GeneSelectCliAction
-
-        return GeneSelectCliAction(entry=entry, cli_tool=cli, argv_map=GENE_SELECT_ARGV_MAP, collector=collector)
-    if entry.action_name == "pipeline.gene_feature_select":
-        from .gene_feature_select import GENE_FEATURE_SELECT_ARGV_MAP, GeneFeatureSelectCliAction
-
-        return GeneFeatureSelectCliAction(
-            entry=entry, cli_tool=cli, argv_map=GENE_FEATURE_SELECT_ARGV_MAP, collector=collector
-        )
-    if entry.action_name == "pipeline.centroid":
-        from .centroid import CentroidCliAction
-
-        return CentroidCliAction(entry=entry, cli_tool=cli, argv_map=argv_map, collector=collector)
-    if entry.action_name == "pipeline.enricher":
-        from .enricher import ENRICHER_ARGV_MAP, EnricherCliAction
-
-        return EnricherCliAction(entry=entry, cli_tool=cli, argv_map=ENRICHER_ARGV_MAP, collector=collector)
-    return CliAction(entry=entry, cli_tool=cli, argv_map=argv_map, collector=collector)
+    return build_cli_action(entry)

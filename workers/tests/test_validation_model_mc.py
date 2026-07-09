@@ -32,7 +32,7 @@ def test_model_mc_handler_delegates_to_runner(tmp_path: Path) -> None:
     )
 
     with patch.object(model_mc_runner, "run_model_mc_all", return_value=fake_result) as mock_run:
-        with patch.object(handlers, "_load_mc_config") as mock_cfg:
+        with patch("methyl_worker.handlers.validation._load_mc_config") as mock_cfg:
             config = MagicMock()
             config.production_output_dir = None
             mock_cfg.return_value = (config, tmp_path / "project.json")

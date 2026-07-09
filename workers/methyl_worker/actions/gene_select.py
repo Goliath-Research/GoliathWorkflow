@@ -55,3 +55,14 @@ class GeneSelectCliAction(CliAction):
         if biomarker:
             cmd.append("--biomarker-filter")
         return cmd
+
+
+from .collectors_registry import collector_gene_select
+from .registry import register_cli_provider
+
+register_cli_provider(
+    "pipeline.gene_select",
+    action_cls=GeneSelectCliAction,
+    argv_map=GENE_SELECT_ARGV_MAP,
+    collector_factory=collector_gene_select,
+)

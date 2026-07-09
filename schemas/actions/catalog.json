@@ -37,6 +37,19 @@
           "MethylGroup"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [
+          {
+            "field": "outputDir",
+            "scope_var": "centroid1Dir",
+            "side": "control"
+          },
+          {
+            "field": "outputDir",
+            "scope_var": "centroid2Dir",
+            "side": "disease"
+          }
+        ],
         "writes_types": [
           "MethylCentroidRef"
         ]
@@ -77,6 +90,35 @@
           "MethylCentroidRef"
         ],
         "scope_bindings": [],
+        "template_defaults": [
+          {
+            "absent_also": [],
+            "field": "centroid1Dir",
+            "only_if_absent": false,
+            "scope_var": "centroid1Dir"
+          },
+          {
+            "absent_also": [],
+            "field": "centroid2Dir",
+            "only_if_absent": false,
+            "scope_var": "centroid2Dir"
+          },
+          {
+            "absent_also": [],
+            "field": "outputDir",
+            "only_if_absent": false,
+            "scope_var": "detectOutDir"
+          },
+          {
+            "absent_also": [
+              "label"
+            ],
+            "field": "comparison",
+            "only_if_absent": true,
+            "scope_var": "label"
+          }
+        ],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylDetectionRef"
         ]
@@ -119,6 +161,8 @@
           "MethylCentroidRef"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylDetectionRef"
         ]
@@ -396,6 +440,8 @@
             "var_name": "resolvedProject"
           }
         ],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ResolvedProject"
         ]
@@ -431,6 +477,8 @@
           "MethylIngestRef"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylSampleRef"
         ]
@@ -477,6 +525,8 @@
           "MethylSampleRef"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylSampleRef"
         ]
@@ -523,6 +573,8 @@
           "MethylSampleRef"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylSampleRef"
         ]
@@ -639,6 +691,8 @@
             "var_name": "remediateR2Trim"
           }
         ],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylSampleRef"
         ]
@@ -676,6 +730,8 @@
           "MethylSampleRef"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylSampleRef"
         ]
@@ -712,6 +768,8 @@
           "MethylSampleRef"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylSampleRef"
         ]
@@ -754,6 +812,8 @@
             "var_name": "extractionQcPass"
           }
         ],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylSampleRef"
         ]
@@ -799,6 +859,8 @@
             "var_name": "sampleArchived"
           }
         ],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylSampleRef"
         ]
@@ -852,6 +914,8 @@
           "MethylSampleRef"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "MethylSampleRef"
         ]
@@ -891,6 +955,8 @@
             "var_name": "centroidSeedGroups"
           }
         ],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "StratifiedCohortDraw",
           "CentroidSeedGroup"
@@ -921,6 +987,8 @@
           "StratifiedCohortDraw"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -973,6 +1041,8 @@
             "var_name": "fixedDmpPanel"
           }
         ],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -1000,6 +1070,8 @@
           "StratifiedCohortDraw"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -1028,6 +1100,8 @@
           "StratifiedCohortDraw"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -1055,6 +1129,8 @@
           "StratifiedCohortDraw"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -1085,6 +1161,8 @@
           "StratifiedCohortDraw"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -1113,6 +1191,8 @@
           "StratifiedCohortDraw"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -1149,6 +1229,8 @@
             "var_name": "selectedBackend"
           }
         ],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -1179,6 +1261,8 @@
           "StratifiedCohortDraw"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ValidationArtifactRef"
         ]
@@ -1208,6 +1292,8 @@
           "StratifiedCohortDraw"
         ],
         "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
         "writes_types": [
           "ValidationArtifactRef"
         ]

@@ -62,7 +62,10 @@ def test_parabricks_idempotent_when_outputs_exist(tmp_path: Path) -> None:
         "os.environ",
         {"METHYL_PARABRICKS_IMAGE": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1"},
     ):
-        with patch("methyl_worker.handlers._resolve_reference_fasta", return_value=str(ref)):
+        with patch(
+            "methyl_worker.handlers.sample_prep.resolve_reference_fasta",
+            return_value=str(ref),
+        ):
             with patch(
                 "methyl_worker.parabricks_runner.resolve_parabricks_config",
                 return_value=runner.ParabricksConfig(

@@ -1,0 +1,542 @@
+"""Validation in-process handlers."""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Mapping, Optional
+
+from pydantic import BaseModel
+
+from ..task_models.runtime_models import TaskRuntimeContext
+
+logger = logging.getLogger(__name__)
+
+def _resolve_monte_carlo_runs_root(input_json: Dict[str, Any]) -> Path:
+    project_path = input_json.get("projectPath") or input_json.get("project")
+    if not project_path:
+        raise RuntimeError("validation action requires projectPath")
+    explicit = input_json.get("monteCarloRunsRoot")
+    if explicit:
+        return Path(str(explicit)).expanduser().resolve()
+    from methyl_utils import load_project
+
+    project = load_project(str(project_path))
+    return Path(project.output_base) / project.project_name / "monte_carlo_runs"
+
+
+def _mc_input_with_runtime(input: BaseModel, runtime=None) -> Dict[str, Any]:
+    """Merge task input with runtime envelope so resolvedConfig reaches _load_mc_config."""
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    if runtime is None:
+        return input_json
+    profile = getattr(runtime, "validationProfile", None)
+    if profile is not None and "resolvedConfig" not in input_json:
+        try:
+            input_json["resolvedConfig"] = profile.model_dump(mode="json", exclude_none=True)
+        except Exception:
+            pass
+    # Prefer explicit wire resolvedConfig when present on runtime context construction path
+    return input_json
+
+
+def _load_mc_config(
+    input_json: Dict[str, Any],
+    *,
+    profile_overrides=None,
+):
+    """Build MonteCarloConfig for validation aggregation actions.
+
+    Prefer the worker Universal Action Input Contract: baked ``resolvedConfig`` /
+    ``TaskRuntimeContext.validationProfile`` (same slice CAAS signs). Do **not**
+    re-merge site/profile from the environment when a resolved slice is present —
+    that mismatch previously let CAAS cache empty BA-gated panels under a raw_pool
+    signature while execution used a different FeatureCuts profile.
+    """
+    from methyl_validation.config import ValidationStepConfig, parse_validation_profile
+    from methyl_validation.workflow_planner import (
+        ValidationPlanRequest,
+        _load_config_from_project,
+        resolve_base_project_json,
+    )
+
+    project_path = input_json.get("projectPath") or input_json.get("project")
+    base_project = resolve_base_project_json(project_path)
+    allowed = set(ValidationPlanRequest.model_fields)
+    request_data = {key: value for key, value in input_json.items() if key in allowed}
+    if project_path:
+        request_data["projectPath"] = str(project_path)
+    # Aggregation steps (stability, freeze, model-mc, …) don't carry the planner-only
+    # fields train_fraction / n_iterations / seed, but MonteCarloConfig requires them.
+    # Backfill from the MC config snapshot the planner wrote, so the config the runs were
+    # produced with is honored (config-not-code) instead of re-resolving them from code.
+    _backfill_planner_fields_from_snapshot(input_json, request_data)
+    request = ValidationPlanRequest.model_validate(request_data)
+
+    overrides = profile_overrides
+    if overrides is None:
+        resolved = input_json.get("resolvedConfig")
+        if isinstance(resolved, dict):
+            overrides = parse_validation_profile(resolved)
+        elif isinstance(resolved, ValidationStepConfig):
+            overrides = resolved
+    return _load_config_from_project(base_project, request, profile_overrides=overrides), base_project
+
+
+def _backfill_planner_fields_from_snapshot(
+    input_json: Dict[str, Any], request_data: Dict[str, Any]
+) -> None:
+    """Fill trainFraction / featureIterations / seed from monte_carlo_runs/queue/mc_config.json.
+
+    Only reads the scalar planner fields (not the full, possibly schema-drifted snapshot),
+    and only when the task input did not already provide them.
+    """
+    from contextlib import suppress
+
+    with suppress(Exception):
+        import json as _json
+
+        from methyl_validation.storage_layout import mc_config_snapshot_path
+
+        mc_root = _resolve_monte_carlo_runs_root(input_json)
+        snapshot = mc_config_snapshot_path(mc_root)
+        if not snapshot.is_file():
+            return
+        raw = _json.loads(snapshot.read_text(encoding="utf-8"))
+        if request_data.get("featureIterations") is None and raw.get("n_iterations") is not None:
+            request_data["featureIterations"] = int(raw["n_iterations"])
+        if request_data.get("trainFraction") is None and raw.get("train_fraction") is not None:
+            request_data["trainFraction"] = float(raw["train_fraction"])
+        if request_data.get("seed") is None and raw.get("seed") is not None:
+            request_data["seed"] = int(raw["seed"])
+
+
+def _handle_validation_stability(
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime=None,
+):
+    input_json = _mc_input_with_runtime(input, runtime)
+
+    from methyl_validation.stability import run_stability_analysis
+
+    from ..task_models.validation_models import StabilitySummary, ValidationStabilityOutput
+
+    mc_root = _resolve_monte_carlo_runs_root(input_json)
+    profile_overrides = getattr(runtime, "validationProfile", None) if runtime is not None else None
+    config, _base = _load_mc_config(input_json, profile_overrides=profile_overrides)
+    output_dir = Path(input_json.get("outputDir") or mc_root / "stability")
+    summary_raw = run_stability_analysis(
+        mc_root,
+        output_dir=output_dir,
+        dmp_min_freq=config.stability_dmp_freq,
+        gene_min_freq=config.stability_gene_freq,
+        min_balanced_accuracy=config.stability_min_balanced_accuracy,
+        prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+        prefer_classifier_gene_panels=bool(config.stability_gene_featurecuts_enabled),
+        dual_cutoff_enabled=bool(config.stability_dual_cutoff_enabled),
+        relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
+        relaxed_multiplier=config.stability_relaxed_multiplier,
+        score_eps=config.stability_score_eps,
+        tiered_stability_enabled=bool(config.stability_tiers_enabled),
+        tier_core_frequency=config.stability_tier_core_freq,
+        tier_extended_frequency=config.stability_tier_extended_freq,
+        tier_exploratory_frequency=config.stability_tier_exploratory_freq,
+        default_freeze_tier=config.stability_default_freeze_tier,
+    )
+    dmp_block = summary_raw.get("dmp_stability") if isinstance(summary_raw, dict) else None
+    if isinstance(dmp_block, dict):
+        n_runs = int(dmp_block.get("n_runs_analyzed") or 0)
+        skipped_ba = int(dmp_block.get("skipped_low_balanced_accuracy") or 0)
+        skipped_disc = int(dmp_block.get("skipped_no_discovery") or 0)
+        run_dirs = list(mc_root.glob("run_*")) if mc_root is not None else []
+        if run_dirs and n_runs == 0 and (skipped_ba + skipped_disc) >= len(run_dirs):
+            raise RuntimeError(
+                "validation.stability analyzed 0 Monte Carlo runs "
+                f"(skipped_low_balanced_accuracy={skipped_ba}, skipped_no_discovery={skipped_disc}). "
+                "Refusing empty stable panels. For raw_pool/discovery-only profiles, "
+                "stability_min_balanced_accuracy and FeatureCuts gates must be unset/false; "
+                "check resolvedConfig matches the DomainProgram profile."
+            )
+    summary_path = output_dir / "stability_summary.json"
+    return ValidationStabilityOutput(
+        status="ok",
+        outputDir=str(output_dir),
+        summary=StabilitySummary(
+            n_iterations=summary_raw.get("n_iterations"),
+            n_stable_dmps=summary_raw.get("n_stable_dmps"),
+            n_stable_genes=summary_raw.get("n_stable_genes"),
+            dmp_min_frequency=summary_raw.get("dmp_min_frequency"),
+            gene_min_frequency=summary_raw.get("gene_min_frequency"),
+            summary_json_path=str(summary_path) if summary_path.is_file() else None,
+        ),
+    )
+
+
+def _handle_validation_biomarker_filter(
+    _capability: str, _action_name: str, input: BaseModel, runtime=None
+):
+    """In-process PPI-only biomarker gene pool filter on mapper combined genes."""
+    input_json = _mc_input_with_runtime(input, runtime)
+    from pathlib import Path
+
+    import pandas as pd
+
+    from methyl_gene_select.core.gene_featurecuts import _apply_biomarker_gene_pool_filter
+    from methyl_worker.split_detector_task_models import BiomarkerFilterSummary, BiomarkerFilterTaskOutput
+
+    project_path = input_json.get("projectPath") or input_json.get("project")
+    if not project_path:
+        raise RuntimeError("validation.biomarker_filter requires projectPath")
+    run_dir = Path(str(input_json.get("runDir") or project_path)).resolve()
+    config, _base = _load_mc_config(
+        input_json,
+        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+    )
+    mapper_dirs = list(run_dir.glob("**/mapper/*/*")) or list(run_dir.glob("mapper/*/*"))
+    gene_df = None
+    for d in mapper_dirs:
+        for csv in d.glob("all-gene_name-combined.csv"):
+            try:
+                gene_df = pd.read_csv(csv)
+                break
+            except Exception:
+                continue
+        if gene_df is not None:
+            break
+    if gene_df is None or gene_df.empty:
+        raise RuntimeError("No mapper all-gene_name-combined.csv found for biomarker filter")
+    out_dir = run_dir / "gene_stability"
+    filtered, meta = _apply_biomarker_gene_pool_filter(
+        gene_df,
+        project_json=Path(str(project_path)),
+        config=config,
+        out_dir=out_dir,
+    )
+    out_csv = out_dir / "biomarker_gene_pool.csv"
+    filtered.to_csv(out_csv, index=False)
+    summary = BiomarkerFilterSummary.model_validate(meta)
+    return BiomarkerFilterTaskOutput(
+        status="ok",
+        n_genes=int(len(filtered)),
+        outputCsv=str(out_csv),
+        biomarker_filter=summary,
+    )
+
+
+def _handle_validation_prepare_freeze(
+    _capability: str, _action_name: str, input: BaseModel, runtime=None
+):
+    input_json = _mc_input_with_runtime(input, runtime)
+    from methyl_validation.stability import prepare_freeze_project
+
+    from ..task_models.validation_models import ValidationPrepareFreezeOutput
+
+    config, base_project = _load_mc_config(
+        input_json,
+        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+    )
+    mc_root = _resolve_monte_carlo_runs_root(input_json)
+    stable_csv = input_json.get("stableDmpCsv") or config.freeze_stable_dmp_csv or str(
+        mc_root / "stability" / "stable_dmps_production.csv"
+    )
+    result = prepare_freeze_project(
+        base_project=base_project,
+        stable_dmp_csv=str(stable_csv),
+        monte_carlo_runs_root=mc_root,
+        production_output_dir=input_json.get("productionOutputDir") or config.production_output_dir,
+        config=config,
+    )
+    return ValidationPrepareFreezeOutput(
+        status="ok",
+        productionOutputDir=result.get("productionOutputDir") or result.get("production_output_dir"),
+        sourceRunDir=result.get("sourceRunDir"),
+        targetRunDir=result.get("targetRunDir"),
+        projectPath=result.get("projectPath") or str(base_project),
+    )
+
+
+def _handle_validation_stability_freeze_readiness(
+    _capability: str, _action_name: str, input: BaseModel
+):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    from methyl_validation.stability_freeze_readiness import analyze_project_root
+
+    from ..task_models.validation_models import ValidationFreezeReadinessOutput
+
+    project_path = input_json.get("projectPath") or input_json.get("project")
+    if not project_path:
+        raise RuntimeError("validation.stability_freeze_readiness requires projectPath")
+    from methyl_utils import load_project
+
+    project = load_project(str(project_path))
+    project_root = Path(project.output_base) / project.project_name
+    report = analyze_project_root(project_root)
+    verdict = report.get("verdict", {}) if isinstance(report, dict) else {}
+    missing = verdict.get("missing_artifacts") or verdict.get("missing") or []
+    if not isinstance(missing, list):
+        missing = []
+    ready = str(verdict.get("ready", verdict.get("status", ""))).lower() in {"ready", "pass", "true", "ok"}
+    return ValidationFreezeReadinessOutput(
+        status="ok",
+        ready=ready,
+        outputDir=str(project_root),
+        missing_artifacts=[str(x) for x in missing],
+    )
+
+
+def _handle_validation_link_artifacts(
+    _capability: str, _action_name: str, input: BaseModel
+):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    from methyl_validation.project_gen import link_run_artifacts_from_source
+
+    from ..task_models.validation_models import ValidationLinkArtifactsOutput
+
+    source = input_json.get("sourceRunDir")
+    target = input_json.get("targetRunDir") or input_json.get("runDir")
+    if not source or not target:
+        raise RuntimeError("validation.link_artifacts requires sourceRunDir and targetRunDir")
+    linked = link_run_artifacts_from_source(source, target)
+    return ValidationLinkArtifactsOutput(
+        status="ok",
+        bundleDir=str(linked.get("targetRunDir") or target),
+        linked_files=[str(x) for x in (linked.get("linked") or [])],
+    )
+
+
+def _handle_validation_model_bundle(
+    _capability: str, _action_name: str, input: BaseModel
+):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    from methyl_validation.model_bundle import build_model_feature_bundle
+
+    from ..task_models.validation_models import ValidationModelBundleOutput
+
+    project_path = input_json.get("projectPath") or input_json.get("project")
+    if not project_path:
+        raise RuntimeError("validation.model_bundle requires projectPath")
+    bundle_dir = Path(input_json.get("bundleDir") or Path(str(project_path)).parent / "model_bundle")
+    manifest = build_model_feature_bundle(str(project_path), bundle_dir)
+    bundle_h5 = bundle_dir / "model_feature_bundle.h5"
+    return ValidationModelBundleOutput(
+        status="ok",
+        bundleDir=str(bundle_dir),
+        bundleH5=str(bundle_h5) if bundle_h5.is_file() else str(manifest),
+    )
+
+
+def _handle_validation_model_train(
+    _capability: str, _action_name: str, input: BaseModel
+):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    from ..task_models.validation_models import ValidationModelTrainOutput
+
+    backend = str(input_json.get("backend") or "tabular_sklearn")
+    project_path = Path(input_json.get("projectPath") or input_json.get("project") or "")
+    if not project_path.is_file():
+        raise RuntimeError("validation.model_train requires projectPath")
+    run_dir = Path(input_json.get("runDir") or project_path.parent)
+    bundle_h5 = input_json.get("bundleH5") or run_dir / "model_bundle" / "model_feature_bundle.h5"
+    output_dir = Path(input_json.get("outputDir") or run_dir / "models")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    if backend == "tabular_sklearn":
+        from methyl_validation.tabular_backend import train_tabular_model
+
+        summary = train_tabular_model(project_path, bundle_h5, output_dir)
+    elif backend == "generative_hybrid":
+        from methyl_validation.generative_backend import train_generative_model
+
+        summary = train_generative_model(project_path, bundle_h5, output_dir)
+    else:
+        raise RuntimeError(
+            f"validation.model_train does not support backend={backend!r}; use pipeline.classifier for ecdf"
+        )
+    model_path = str(summary) if not isinstance(summary, dict) else summary.get("model_path")
+    if model_path is None:
+        candidate = output_dir / "tabular-model.joblib"
+        model_path = str(candidate) if candidate.is_file() else str(output_dir)
+    return ValidationModelTrainOutput(
+        status="ok",
+        model_path=str(model_path),
+        backend=backend,
+    )
+
+
+def _handle_validation_model_predict(
+    _capability: str, _action_name: str, input: BaseModel
+):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    from ..task_models.validation_models import ValidationModelPredictOutput
+
+    backend = str(input_json.get("backend") or "tabular_sklearn")
+    project_path = Path(input_json.get("projectPath") or input_json.get("project") or "")
+    if not project_path.is_file():
+        raise RuntimeError("validation.model_predict requires projectPath")
+    run_dir = Path(input_json.get("runDir") or project_path.parent)
+    if backend == "tabular_sklearn":
+        from methyl_validation.tabular_backend import predict_tabular_model_from_project
+
+        model_dir = run_dir / "models"
+        summary = predict_tabular_model_from_project(project_path, model_dir, run_dir)
+    elif backend == "generative_hybrid":
+        from methyl_validation.generative_backend import predict_generative_model_from_project
+
+        summary = predict_generative_model_from_project(project_path, output_dir=run_dir)
+    else:
+        raise RuntimeError(
+            f"validation.model_predict does not support backend={backend!r}; use pipeline.predictor for ecdf"
+        )
+    predictions_path = run_dir / "predictions.csv"
+    n_samples = None
+    if isinstance(summary, dict):
+        n_samples = summary.get("n_samples")
+    if n_samples is None and predictions_path.is_file():
+        try:
+            import pandas as pd
+
+            n_samples = len(pd.read_csv(predictions_path))
+        except Exception:
+            n_samples = None
+    return ValidationModelPredictOutput(
+        status="ok",
+        predictions_path=str(predictions_path) if predictions_path.is_file() else None,
+        n_samples=int(n_samples) if n_samples is not None else None,
+    )
+
+
+def _handle_validation_model_mc(
+    _capability: str, _action_name: str, input: BaseModel, runtime=None
+):
+    input_json = _mc_input_with_runtime(input, runtime)
+    from methyl_validation.model_mc_runner import run_model_mc_all
+
+    from ..task_models.validation_models import ValidationModelMcOutput
+
+    config, _base = _load_mc_config(
+        input_json,
+        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+    )
+    mc_root = _resolve_monte_carlo_runs_root(input_json)
+    production_dir = Path(
+        input_json.get("productionOutputDir") or config.production_output_dir or mc_root / "production"
+    )
+    production_project = production_dir / "project.json"
+    backends = input_json.get("backends")
+    resume = input_json.get("resume")
+    raw = run_model_mc_all(
+        production_project=production_project,
+        monte_carlo_runs_root=mc_root,
+        config=config,
+        backends=list(backends) if backends else None,
+        resume=int(resume) if resume is not None else None,
+    )
+    return ValidationModelMcOutput(
+        status="ok",
+        modelMcRoot=str(raw.get("modelMcRoot") or mc_root / "model_mc"),
+        n_iterations=int(raw.get("nSharedIterations") or 0),
+    )
+
+
+def _handle_validation_select_best_model(
+    _capability: str, _action_name: str, input: BaseModel, runtime=None
+):
+    input_json = _mc_input_with_runtime(input, runtime)
+    from methyl_validation.cli import _write_backend_ranking
+    from methyl_validation.stability import build_production_model
+
+    from ..task_models.validation_models import ValidationSelectBestModelOutput
+
+    config, _base = _load_mc_config(
+        input_json,
+        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+    )
+    mc_root = _resolve_monte_carlo_runs_root(input_json)
+    model_mc_root = Path(input_json.get("modelMcRoot") or mc_root / "model_mc")
+    backends = list(input_json.get("backends") or ["ecdf", "tabular_sklearn", "generative_hybrid"])
+    metric = str(input_json.get("selectionMetric") or "balanced_accuracy")
+    stat = str(input_json.get("selectionStat") or "median")
+    ranking = _write_backend_ranking(model_mc_root, backends, metric=metric, stat=stat)
+    best_backend = str(ranking[0]["backend"])
+    summary = build_production_model(
+        monte_carlo_runs_root=mc_root,
+        production_output_dir=config.production_output_dir,
+        config=config.with_backend_selection(best_backend),
+    )
+    production_dir = Path(summary.get("output_dir") or mc_root / "production")
+    selection_path = production_dir / "selected_backend.json"
+    selection_payload = {
+        "selected_backend": best_backend,
+        "selection_metric": metric,
+        "selection_stat": stat,
+        "ranking": ranking,
+    }
+    selection_path.write_text(json.dumps(selection_payload, indent=2) + "\n", encoding="utf-8")
+    selection_stat = ranking[0].get(stat) if ranking else None
+    return ValidationSelectBestModelOutput(
+        status="ok",
+        selectedBackend=best_backend,
+        selectionMetric=metric,
+        selectionStat=float(selection_stat) if selection_stat is not None else None,
+    )
+
+
+def _handle_validation_post_model_validation(
+    _capability: str, _action_name: str, input: BaseModel, runtime=None
+):
+    input_json = _mc_input_with_runtime(input, runtime)
+    from methyl_validation.pipeline_runner import (
+        run_post_model_validation_binary,
+        run_post_model_validation_multiclass,
+    )
+    from methyl_validation.project_gen import infer_monte_carlo_layout
+
+    from ..task_models.validation_models import ValidationPostModelValidationOutput
+
+    config, base_project = _load_mc_config(
+        input_json,
+        profile_overrides=getattr(runtime, "validationProfile", None) if runtime is not None else None,
+    )
+    mc_root = _resolve_monte_carlo_runs_root(input_json)
+    production_dir = Path(
+        input_json.get("productionOutputDir") or config.production_output_dir or mc_root / "production"
+    )
+    production_project = production_dir / "project.json"
+    if not production_project.is_file():
+        raise RuntimeError(f"production project not found: {production_project}")
+    layout = infer_monte_carlo_layout(production_project, len(config.cohorts))
+    run_dir = Path(input_json.get("runDir") or mc_root / "post_model_validation" / "run_0001")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    if layout == "binary":
+        success, errors, timings = run_post_model_validation_binary(
+            production_project,
+            run_dir,
+            logs_dir=run_dir / "logs",
+            config=config,
+        )
+    else:
+        success, errors, timings = run_post_model_validation_multiclass(
+            production_project,
+            run_dir,
+            logs_dir=run_dir / "logs",
+            config=config,
+        )
+    report_path = run_dir / "post_model_validation_report.json"
+    if not report_path.is_file():
+        report_path.write_text(
+            json.dumps({"success": success, "errors": errors, "timings": timings}, indent=2),
+            encoding="utf-8",
+        )
+    return ValidationPostModelValidationOutput(
+        status="ok" if success else "failed",
+        result_code=0 if success else 1,
+        outputDir=str(run_dir),
+        report_path=str(report_path),
+        passed=success,
+    )
+
+
+

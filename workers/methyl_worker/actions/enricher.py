@@ -71,3 +71,14 @@ class EnricherCliAction(CliAction):
         ):
             payload.pop(drop_key, None)
         return super().build_argv(payload)
+
+
+from .collectors_registry import collector_enricher
+from .registry import register_cli_provider
+
+register_cli_provider(
+    "pipeline.enricher",
+    action_cls=EnricherCliAction,
+    argv_map=ENRICHER_ARGV_MAP,
+    collector_factory=collector_enricher,
+)

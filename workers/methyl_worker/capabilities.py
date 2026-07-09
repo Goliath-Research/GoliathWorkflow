@@ -20,46 +20,41 @@ GPU_REQUIRED_CAPABILITIES: FrozenSet[str] = frozenset(
     }
 )
 
-# Pipeline modeling capabilities available when the corresponding CLI is on PATH.
-_MODELING_CLI_CAPABILITIES: tuple[tuple[str, str], ...] = (
-    ("methyl-centroid", "methyl-centroid"),
-    ("methyl-detector", "methyl-detector"),
-    ("methyl-dmp-select", "methyl-dmp-select"),
-    ("methyl-mapper", "methyl-mapper"),
-    ("methyl-gene-select", "methyl-gene-select"),
-    ("methyl-gene-feature-select", "methyl-gene-feature-select"),
-    ("methyl-enricher", "methyl-enricher"),
-    ("methyl-disease-progression", "methyl-disease-progression"),
-    ("methyl-classifier", "methyl-classifier"),
-    ("methyl-predictor", "methyl-predictor"),
-    ("methyl-fragmentomics", "methyl-fragmentomics"),
-)
+# Probe kinds for catalog-derived auto-detection (not tunable science parameters).
+_PROBE_ALWAYS = "always"
+_PROBE_CLI = "cli"
+_PROBE_PARABRICKS = "parabricks"
+_PROBE_EXTRACTOR = "extractor"
 
-# In-process / sample-prep capabilities when the worker package is installed.
-_ALWAYS_AVAILABLE_CAPABILITIES: FrozenSet[str] = frozenset(
-    {
-        "sample.download-fastq",
-        "sample.trim-fastq",
-        "sample.delete-fastqs",
-        "sample.delete-bam",
-        "sample.archive-sample",
-        "sample.mark-failed",
-        "methyl-qc",
-        "methyl-extraction-qc",
-        "validation.plan-iterations",
-        "validation.stability",
-        "validation.biomarker-filter",
-        "validation.prepare-freeze-project",
-        "validation.stability-freeze-readiness",
-        "validation.link-artifacts",
-        "validation.model-bundle",
-        "validation.model-train",
-        "validation.model-predict",
-        "validation.select-best-model",
-        "validation.model-mc",
-        "validation.post-model-validation",
-    }
-)
+
+def _capability_probe_kind(capability: str, *, execution_mode: str, cli_tool: Optional[str]) -> str:
+    """Classify how auto-detect decides whether a catalog capability is available."""
+    if capability in ("parabricks.fq2bam", "parabricks.giraffe"):
+        return _PROBE_PARABRICKS
+    if capability == "methyl-extract":
+        return _PROBE_EXTRACTOR
+    if execution_mode == "cli" and cli_tool:
+        return _PROBE_CLI
+    return _PROBE_ALWAYS
+
+
+def _catalog_capability_rows() -> list[tuple[str, str, Optional[str]]]:
+    """Return (capability, probe_kind, cli_tool) derived from ACTION_CATALOG."""
+    from .action_catalog import ACTION_CATALOG
+
+    rows: list[tuple[str, str, Optional[str]]] = []
+    seen: set[str] = set()
+    for entry in ACTION_CATALOG:
+        if entry.capability in seen:
+            continue
+        seen.add(entry.capability)
+        kind = _capability_probe_kind(
+            entry.capability,
+            execution_mode=entry.execution_mode,
+            cli_tool=entry.cli_tool,
+        )
+        rows.append((entry.capability, kind, entry.cli_tool))
+    return rows
 
 
 def _gpu_available() -> bool:
@@ -111,7 +106,7 @@ def resolve_worker_capabilities(
     When ``explicit`` is provided, returns that set (deduplicated). A single ``*`` entry
     means omnibus (matches any task capability at dispatch).
 
-    Otherwise probes GPU, Parabricks, extractor, and installed CLIs on the local VM.
+    Otherwise probes GPU, Parabricks, extractor, and installed CLIs from the action catalog.
     """
     if explicit:
         normalized = [str(c).strip() for c in explicit if str(c).strip()]
@@ -119,25 +114,35 @@ def resolve_worker_capabilities(
             return [OMNIBUS_WILDCARD]
         return sorted(set(normalized))
 
-    caps: set[str] = set(_ALWAYS_AVAILABLE_CAPABILITIES)
+    caps: set[str] = set()
     gpu = _gpu_available()
+    parabricks_ok = _parabricks_available()
+    extractor_ok = _extractor_available()
 
-    for capability, binary in _MODELING_CLI_CAPABILITIES:
-        if not _cli_on_path(binary):
+    for capability, kind, cli_tool in _catalog_capability_rows():
+        if kind == _PROBE_ALWAYS:
+            caps.add(capability)
             continue
-        if capability in GPU_REQUIRED_CAPABILITIES and not gpu:
-            logger.debug("Skipping %s: GPU required but not available", capability)
+        if kind == _PROBE_CLI:
+            if not cli_tool or not _cli_on_path(cli_tool):
+                continue
+            if capability in GPU_REQUIRED_CAPABILITIES and not gpu:
+                logger.debug("Skipping %s: GPU required but not available", capability)
+                continue
+            caps.add(capability)
             continue
-        caps.add(capability)
-
-    if _parabricks_available() and gpu:
-        caps.add("parabricks.fq2bam")
-        caps.add("parabricks.giraffe")
-    elif _parabricks_available() and not gpu:
-        logger.warning("Parabricks image configured but no GPU; omitting parabricks.fq2bam")
-
-    if _extractor_available():
-        caps.add("methyl-extract")
+        if kind == _PROBE_PARABRICKS:
+            if parabricks_ok and gpu:
+                caps.add(capability)
+            elif parabricks_ok and not gpu:
+                logger.warning(
+                    "Parabricks image configured but no GPU; omitting %s", capability
+                )
+            continue
+        if kind == _PROBE_EXTRACTOR:
+            if extractor_ok:
+                caps.add(capability)
+            continue
 
     if not caps:
         logger.warning("resolve_worker_capabilities: no capabilities detected; registering omnibus")

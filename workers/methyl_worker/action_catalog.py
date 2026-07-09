@@ -97,11 +97,35 @@ class DomainOutputBinding:
 
 
 @dataclass(frozen=True)
+class TemplateDefault:
+    """Compiler template field bound to a scope variable: ``template[field] = ${var.scope_var}``."""
+
+    field: str
+    scope_var: str
+    only_if_absent: bool = False
+    # Extra template keys that must also be absent when ``only_if_absent`` is set
+    # (e.g. skip ``comparison`` when ``label`` is already present).
+    absent_also: Tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TemplateGroupSideDefault:
+    """When ``with.group`` references control/disease side, bind ``field`` to ``scope_var``."""
+
+    side: Literal["control", "disease"]
+    field: str
+    scope_var: str
+
+
+@dataclass(frozen=True)
 class DomainEffects:
     reads_types: Tuple[str, ...] = ()
     writes_types: Tuple[str, ...] = ()
     scope_bindings: Tuple[Tuple[str, str], ...] = ()  # (var_name, output_json_path)
     output_bindings: Tuple[DomainOutputBinding, ...] = ()
+    # Compiler input_template rules (process-pack metadata; engine stays action-agnostic).
+    template_defaults: Tuple[TemplateDefault, ...] = ()
+    template_group_side_defaults: Tuple[TemplateGroupSideDefault, ...] = ()
 
 
 class ActionCatalogExport(TypedDict, total=False):
@@ -211,6 +235,23 @@ class ActionCatalogEntry:
                     }
                     for b in de.output_bindings
                 ],
+                "template_defaults": [
+                    {
+                        "field": t.field,
+                        "scope_var": t.scope_var,
+                        "only_if_absent": t.only_if_absent,
+                        "absent_also": list(t.absent_also),
+                    }
+                    for t in de.template_defaults
+                ],
+                "template_group_side_defaults": [
+                    {
+                        "side": t.side,
+                        "field": t.field,
+                        "scope_var": t.scope_var,
+                    }
+                    for t in de.template_group_side_defaults
+                ],
             }
         return payload
 
@@ -296,10 +337,24 @@ _DE_QC_FAILED = DomainEffects(
 _DE_CENTROID = DomainEffects(
     reads_types=("MethylGroup",),
     writes_types=("MethylCentroidRef",),
+    template_group_side_defaults=(
+        TemplateGroupSideDefault("control", "outputDir", "centroid1Dir"),
+        TemplateGroupSideDefault("disease", "outputDir", "centroid2Dir"),
+    ),
+)
+_DE_DETECTION_TYPES = DomainEffects(
+    reads_types=("ComparisonSpec", "MethylCentroidRef"),
+    writes_types=("MethylDetectionRef",),
 )
 _DE_DETECTOR = DomainEffects(
     reads_types=("ComparisonSpec", "MethylCentroidRef"),
     writes_types=("MethylDetectionRef",),
+    template_defaults=(
+        TemplateDefault("centroid1Dir", "centroid1Dir"),
+        TemplateDefault("centroid2Dir", "centroid2Dir"),
+        TemplateDefault("outputDir", "detectOutDir"),
+        TemplateDefault("comparison", "label", only_if_absent=True, absent_also=("label",)),
+    ),
 )
 _DE_PLAN_ITERATIONS = DomainEffects(
     reads_types=("MethylGroup",),
@@ -549,7 +604,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
             ("outputDir", "--output-dir"),
             ("stepOverride", "--step-override"),
         ),
-        domain_effects=_DE_DETECTOR,
+        domain_effects=_DE_DETECTION_TYPES,
     ),
     _cli(
         "pipeline.mapper",

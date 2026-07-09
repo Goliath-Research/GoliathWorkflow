@@ -73,3 +73,14 @@ class DmpSelectCliAction(CliAction):
         ):
             payload.pop(drop_key, None)
         return super().build_argv(payload)
+
+
+from .collectors_registry import collector_dmp_select
+from .registry import register_cli_provider
+
+register_cli_provider(
+    "pipeline.dmp_select",
+    action_cls=DmpSelectCliAction,
+    argv_map=DMP_SELECT_ARGV_MAP,
+    collector_factory=collector_dmp_select,
+)

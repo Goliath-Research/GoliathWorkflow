@@ -55,6 +55,11 @@ Workers poll the gateway (or future equivalent transport), execute tasks, and su
 - Never connect to SQL directly
 - Never use MCP
 
+**Process-pack dispatch** (methyl-specific, outside the engine) uses a catalog-driven
+[action provider registry](action-provider-registry.md): CLI subclasses register by
+`action_name`, in-process handlers live under `methyl_worker.handlers`, and compiler
+template extras come from catalog `domain_effects` — not from engine-side DI.
+
 ## MCP servers (development only)
 
 Cursor MCP servers (`user-azure-sql-dev`, PostgreSQL MCP) are **operator/dev tooling**:
@@ -82,5 +87,7 @@ See also [worker-transport-decision.md](worker-transport-decision.md).
 - [Layer model](layer-model.md) — four-layer config precedence
 - [Distributed runtime](distributed-runtime.md) — portal / gateway / worker topology
 - [Orchestration paths](orchestration-paths.md) — local vs distributed entry points
+- [Action provider registry](action-provider-registry.md) — process pack vs engine; registry over DI
 - [portal_study_lifecycle.md](../../workflow_engine/docs/portal_study_lifecycle.md) — portal staged starts
 - Plan: [agnostic-gateway-and-boundaries.plan.md](../plans/agnostic-gateway-and-boundaries.plan.md)
+- Plan: [action-provider-registry.plan.md](../plans/action-provider-registry.plan.md)

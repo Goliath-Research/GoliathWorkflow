@@ -24,3 +24,14 @@ class DerivedMeasuresCliAction(CliAction):
         for drop_key in ("chromosome", "context", "comparison", "group"):
             payload.pop(drop_key, None)
         return super().build_argv(payload)
+
+
+from .collectors_registry import collector_derived_measures
+from .registry import register_cli_provider
+
+register_cli_provider(
+    "pipeline.derived_measures",
+    action_cls=DerivedMeasuresCliAction,
+    argv_map=DERIVED_MEASURES_ARGV_MAP,
+    collector_factory=collector_derived_measures,
+)

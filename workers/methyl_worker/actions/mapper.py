@@ -69,3 +69,14 @@ class MapperCliAction(CliAction):
         ):
             payload.pop(drop_key, None)
         return super().build_argv(payload)
+
+
+from .collectors_registry import collector_mapper
+from .registry import register_cli_provider
+
+register_cli_provider(
+    "pipeline.mapper",
+    action_cls=MapperCliAction,
+    argv_map=MAPPER_ARGV_MAP,
+    collector_factory=collector_mapper,
+)

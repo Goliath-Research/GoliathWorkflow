@@ -90,3 +90,14 @@ class DetectorCliAction(CliAction):
         ):
             payload.pop(drop_key, None)
         return super().build_argv(payload)
+
+
+from .collectors_registry import collector_detector
+from .registry import register_cli_provider
+
+register_cli_provider(
+    "pipeline.detector",
+    action_cls=DetectorCliAction,
+    argv_map=DETECTOR_ARGV_MAP,
+    collector_factory=collector_detector,
+)

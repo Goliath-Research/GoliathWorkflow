@@ -96,3 +96,13 @@ class CentroidCliAction(CliAction):
             "different path; refusing to record a false-success manifest.\n"
             f"stdout tail:\n{stdout[-500:]}"
         )
+
+
+from .collectors_registry import collector_centroid
+from .registry import register_cli_provider
+
+register_cli_provider(
+    "pipeline.centroid",
+    action_cls=CentroidCliAction,
+    collector_factory=collector_centroid,
+)

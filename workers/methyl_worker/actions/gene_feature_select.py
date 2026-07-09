@@ -43,3 +43,14 @@ class GeneFeatureSelectCliAction(CliAction):
         if target_ba is not None:
             cmd.extend(["--target-ba", str(target_ba)])
         return cmd
+
+
+from .collectors_registry import collector_gene_feature_select
+from .registry import register_cli_provider
+
+register_cli_provider(
+    "pipeline.gene_feature_select",
+    action_cls=GeneFeatureSelectCliAction,
+    argv_map=GENE_FEATURE_SELECT_ARGV_MAP,
+    collector_factory=collector_gene_feature_select,
+)
