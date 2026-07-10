@@ -25,23 +25,24 @@ links both detectors to `cfdna` / `buffy_coat`. Empirical cells in
   **`methyl-workflow-run` + DomainProgram + profile**; `methyl-validation --stability/--freeze/--model/--holdout-eval`
   remains a **legacy / transitional** CLI that still matches the statistical workflows described
   below (Workflows 1–3).
-- **MethylIT_py 0.4.0** ships as an installed wheel (`python -m methylit`). Its estimator
-  internals were **not** available on disk during the first review pass. The description below is
-  reconstructed from the release bundle that *was* present: the stage configuration
-  (`examples/config_test6.yaml`, `config_test5.yaml`, `config_smoke.yaml`,
-  `config_example_score_only.yaml`), the sample sheets (`sample_sheet_*.csv/.tsv`), and the
-  companion runner scripts (`scripts/g2dmp_m34.py`, `exp_wand.py`, `pred_h5.py`,
-  `prediction_tsv_to_cupy_h5.py`). Where intent is inferred from parameter names it is
-  flagged as such.
-- **MethylIT R package (source, added review pass).** The original R implementation that
-  MethylIT_py migrates — `MethylIT` **0.3.2.8** (Sanchez, `github.com/genomaths/MethylIT`) —
-  was subsequently read from an external checkout (`MethylIT2/R/*.R`; path may differ by machine).
-  This turns the previously *reconstructed* estimator description into a *verified* one and
-  corrects two claims that the config-only reconstruction got wrong (the cutpoint default and
-  the gene-level layer). The section **"Cross-check against the original R source"** below
-  records what the code confirms, what it corrects, and the exact estimator formulas. The 0.4.0
-  Python config still governs how a *particular deployment* wires these functions, so where the
-  R defaults and the 0.4.0 config differ, both are stated.
+- **MethylIT_py — now read from source (`methylit` 0.4.2).** The first review pass saw only the
+  installed wheel and reconstructed behavior from the release bundle (stage YAMLs, sample sheets,
+  runner scripts). The **Python source tree is now available** (external checkout `EDFi/`; package
+  `methylit` **0.4.2**; `methylit/pipeline/*.py`, `methylit/models/*.py`, `profiles/*.yaml`). The
+  estimator description below is therefore **verified against the Python code**, not inferred. The
+  section **"Cross-check against the current Python source (methylit 0.4.2)"** records what the
+  port confirms and the three places where reading the code changes earlier claims — most
+  importantly, the single-variable **Youden cutpoint is not implemented** in the port (it raises
+  `NotImplementedError`, deferred to a later phase), and the coverage cap is a per-site
+  `target_sum` (default **500**), not a downsample to ~10x. Because the package still carries the
+  `0.4.x` line, "MethylIT_py 0.4.0" throughout this note should be read as the `0.4.x` Python port
+  (reviewed at 0.4.2).
+- **MethylIT R package (source review pass).** The original R implementation that MethylIT_py
+  migrates — `MethylIT` **0.3.2.8** (Sanchez, `github.com/genomaths/MethylIT`) — was also read
+  from an external checkout (`MethylIT2/R/*.R`; path may differ by machine). The section
+  **"Cross-check against the original R source"** records what the R code confirms and the exact
+  estimator formulas. Where the mature R defaults and the Python port differ (cutpoint default;
+  gene-level layer), both are stated.
 
 ## Executive summary
 
@@ -57,8 +58,10 @@ Their theoretical cores are nearly opposite:
   potential DMP when its divergence lies in the tail of that fitted noise model (plus a total-
   variation cut), then sets an optimal cutpoint separating control-like from treatment-like
   DMPs. In the R package that cutpoint is a **single-variable Youden index by default**
-  (`estimateCutPoint(simple = TRUE)`); the supervised logistic + random-forest route is the
-  opt-in `simple = FALSE` path that the 0.4.0 config happens to wire (see cross-check below).
+  (`estimateCutPoint(simple = TRUE)`), with a supervised logistic + random-forest route as the
+  opt-in `simple = FALSE` alternative. The **Python port (0.4.2) ships only the ML route** —
+  `simple = True` raises `NotImplementedError` — so in the current port the cutpoint is always a
+  learned classifier (see both cross-check sections below).
 - **MethylPipeline = nonparametric empirical distributions + resampling stability.** It
   represents each cohort as an ECDF "centroid," detects DMPs by two-sample tests
   (Kolmogorov-Smirnov / Mann-Whitney) *between two cohort centroids* with Storey FDR control,
@@ -78,7 +81,7 @@ locus where the control-cohort distribution differs from the disease-cohort dist
 | Signal statistic | Hellinger / J-divergence (Bayesian, coverage-weighted) | KS / Mann-Whitney on reconstructed ECDFs |
 | Noise model | Parametric fit (GGamma3P / Weibull) to divergence | Distribution-free (empirical quantiles + Storey FDR) |
 | Effect-size gate | Total-variation cut (`tv_cut`) | Heuristic effect size `|dmu|*(1-overlap)*exp(...)` + effect-mass trim |
-| Where ML enters | Cutpoint step, but **optional**: Youden index by default, logistic/RF only if `simple = FALSE` (0.4.0 config opts in) | Downstream only (ECDF Naive-Bayes classifier) |
+| Where ML enters | Cutpoint step. In R it is **optional** (Youden index by default, logistic/RF only if `simple = FALSE`); the **Python port implements only the ML path** (`simple = True` raises `NotImplementedError`) | Downstream only (ECDF Naive-Bayes classifier) |
 | Reference | Manually flagged (`is_reference`), pooled, fixed | None; control-cohort centroid rebuilt per split |
 | Stability / freeze | Sidecar experiment scripts (`exp_wand.py`) | First-class Monte Carlo recurrence → freeze → train (DomainProgram or legacy `methyl-validation`) |
 | Held-out evaluation | True holdout in `exp_wand.py` | Workflow 3 / hold-out DomainProgram path (legacy: `--holdout-eval`) with bootstrap CIs |
@@ -489,6 +492,85 @@ or the independent-critique section changes; the divergence formula, the coverag
 mechanism behind the downsampling critique, the beta-binomial Bayesian levels, and the manual pooled
 reference are all confirmed verbatim in the code.
 
+## Cross-check against the current Python source (methylit 0.4.2)
+
+The R cross-check above verified the *lineage*. The **Python port itself** is now readable
+(`methylit` 0.4.2), so the claims specific to "MethylIT_py 0.4.0" can be checked against the actual
+modules (`methylit/pipeline/{divergence,gof,potential_dimp,cutpoint,coverage,selection}.py`,
+`methylit/models/{classifier,distributions}.py`) rather than the stage YAML alone. The port is an
+explicit, function-by-function R-parity migration (its own docstrings cite the R functions), and it
+confirms most of the reconstruction — but three details need correcting or sharpening, and one of
+them (the missing Youden path) cuts *against* the R cross-check's conclusion.
+
+### What the Python code confirms
+
+- **Divergence formulas match the R source.** `divergence.py::_hellinger` computes the
+  coverage-weighted Hellinger with the same `2·(n1+1)(n2+1)/(n1+n2+2)` weight (gated by
+  `idiv_prior`), `_jdiv` uses the leading-factor-1 weight for the JD statistic (the port comments
+  the exact R discrepancy), and `_beta_bin_meth_counts` reproduces the beta-binomial posterior
+  `(a + mC)/(a + b + n)` with method-of-moments start and `scipy` least-squares/BFGS fitting. The
+  `config_test6.yaml` divergence block (`weight: cov`, `Bayesian/bayesian_p: true`, `idiv_prior:
+  true`, `JD/jd_stat: true`) confirms the coverage-weighted, Bayesian, J-divergence path used in
+  practice.
+- **The parametric tail and its ECDF fallback are both present.** `gof.py` fits `GGamma3P` with
+  `alt_model = [Weibull2P, Weibull3P, Gamma2P]` and picks by `R.Cross.val` then `AIC`;
+  `potential_dimp.py::_tail_prob_from_model` implements `Weibull2P/3P`, `Gamma2P/3P`, `GGamma3P/4P`
+  tail probabilities **and** an ECDF branch (`dist_name in {ECDF, None, NA}` or `nlm is None`), and
+  can even take `min(model_p, ecdf_p)`. So the ECDF alternative from section A is a first-class code
+  path in the Python port too, not just in R.
+- **pDMP is a tail-α gate plus an optional TV cut.** `get_potential_dimp(alpha=0.05, tv_col, tv_cut)`
+  keeps `wprob < alpha` then filters `|TV| > tv_cut`; `config_test6.yaml` sets `alpha: 0.05`,
+  `tv_cut: 0.2`, and the production/`dmp` stage uses `tv_cut: 0.3`. Two-gate structure confirmed.
+- **Reference pooling is manual and configurable** (`centroid.stat` ∈ `mean/median/jackmean/sum`),
+  matching the R `poolFromGRlist` behavior and the "manually chosen reference" point.
+
+### What the Python code corrects or sharpens
+
+1. **The Youden cutpoint is *not implemented* in the port — the ML path is the only one that runs.**
+   In R, `estimateCutPoint(simple = TRUE)` (Youden) is the default. The Python
+   `estimate_cutpoint(...)` **defaults to `simple = False` and raises `NotImplementedError` for
+   `simple = True`** ("deferred to Phase B"). So for the current Python port the earlier
+   "MethylIT bakes ML into detection" framing is *literally true today*: there is no shipped
+   single-variable Youden option, only the logistic/LDA/QDA/RF/XGBoost path
+   (`models/classifier.py`). This is the reverse of the R correction — and it makes section B's
+   recommendation actionable: the parsimonious Youden cutpoint the R package offers by default is
+   exactly the piece the Python port has not yet ported. (The port also adds an `xgboost` classifier
+   not present in the R enumeration.)
+2. **"Downsampling 30x → ~10x" is the wrong number; the cap is `target_sum = 500` per site.**
+   `coverage.py::cap_coverage` proportionally rescales only sites with `mC+uC > target_cov` down to
+   `target_cov`, preserving the methylation fraction — and both `production.yaml` and
+   `config_test6.yaml` set `cap_coverage.target_sum: 500.0`. So the mechanism the critique names
+   (coverage capping that discards depth) is real and confirmed, but the magnitude "~10x" is not
+   what the code does; typical WGBS sites (well under 500x) are **untouched**, and only extreme-depth
+   sites are rescaled. The section-2 critique should be restated as "capping at `target_sum` (500 by
+   default)" rather than "downsample to 10x." The statistical-efficiency argument (coverage-in-weight
+   vs coverage-in-likelihood) still stands; its quantitative sting is much smaller at 500 than at 10.
+3. **Gene-level testing is explicitly out of MVP scope in the port.** The Python project plan lists
+   "DMG (differentially methylated gene) calling" and "gene annotation intersection" under
+   *Out of Scope for MVP*; there is no `getDMGs`/`countTest2` equivalent in `methylit/`, only the
+   `g2dmp_m34.py` / `pdmp_gene_subset_module34.py` sidecars that **subset detection to gene
+   coordinates** (the masking pattern). This confirms the "no weighted gene propagation in the
+   Python core" claim and dates it precisely: gene-level analysis is deferred, not merely unused.
+
+### FDA-relevant additions visible in the port
+
+The Python port is explicitly positioned for a regulated workflow, which is new signal for the
+verification/reproducibility comparison (previously the note said MethylIT_py had "no comparable
+regression gate"):
+
+- a `tests/` suite with a dedicated **parity tier** (`tests/parity/test_gof_parity.py`) plus
+  per-stage tests (`test_divergence`, `test_cutpoint`, `test_potential_dimp`, …);
+- named **profiles** (`smoke`, `dev`, `parity`, `production`) and a `recycle`/`strict_fingerprint`
+  mechanism for run reproducibility;
+- release-manager and DHF-oriented docs (`RELEASE_MANAGER_CHECKLIST.md`, LOOP change-request intake),
+  and a README that frames the tool as internal pre-production validation software with run-receipt
+  retention for "FDA-trial traceability."
+
+This does not establish independent reproduction (the code is still first-party), but the
+"MethylPipeline is audited / MethylIT is only inferred" asymmetry is now weaker: both sides expose a
+test suite and reproducibility controls. The remaining asymmetry is scope (MethylPipeline's stability
+→ freeze → holdout workflow and weighted interpretation stack have no counterpart in the port).
+
 ## Independent corroboration and open critiques
 
 The analysis so far took MethylIT's own framing at face value. This section steps back and asks two
@@ -533,31 +615,42 @@ Three clarifications keep this fair:
   reproduction of a tool. MethylIT has the former (its own published theory); what remains unmet is
   the latter (third-party reproduction of the pipeline's performance claims).
 
-### 2. Counts vs methylation levels, and the forced downsampling to ~10x
+### 2. Counts vs methylation levels, and coverage capping (`target_sum`, default 500)
 
-The observation that MethylIT "works with counts, not levels" and therefore **caps/downsamples 30x to
-~10x** is a real limitation, and the external literature both explains why capping hurts and shows the
-standard way to avoid it.
+> **Corrected against the Python source.** An earlier version of this section asserted MethylIT
+> "caps/downsamples 30x to ~10x." Reading `methylit/pipeline/coverage.py` shows the cap is a
+> per-site `target_sum` (default **500**, in both `production.yaml` and `config_test6.yaml`), applied
+> only to sites whose `mC+uC` exceeds it, by proportional rescaling that preserves the methylation
+> fraction. The "~10x" figure was wrong. The structural critique below — coverage entering as a
+> *weight on a divergence* rather than the *denominator of a count model* — is still valid and
+> confirmed by the code (`_hellinger_weight`), but its practical bite is small at a 500x cap, since
+> ordinary WGBS sites are left untouched.
 
-- **Why low depth is costly.** Methylation level is a proportion $m/(m+u)$; at depth 10 it can only
-  take values $\{0, 0.1, \dots, 1.0\}$, so it *cannot* be within 5% of a true value like 0.85
-  (BoostMe, Zou et al., BMC Genomics 2018; "Characterizing the properties of bisulfite sequencing
-  data," BMC Genomics 2021). Downsampling 30x → 10x therefore throws away real precision and injects
-  quantization error into exactly the small/moderate $\Delta p$ regime where DMP calling is hardest.
-- **The field standard avoids downsampling by modeling coverage in the likelihood.** DSS
+The observation that MethylIT "works with counts, not levels" and applies **coverage capping** is
+accurate; the external literature explains the trade-off and the standard alternative.
+
+- **Why extreme capping would be costly (bounds the concern).** Methylation level is a proportion
+  $m/(m+u)$; at depth 10 it can only take values $\{0, 0.1, \dots, 1.0\}$, so it *cannot* be within
+  5% of a true value like 0.85 (BoostMe, Zou et al., BMC Genomics 2018; "Characterizing the
+  properties of bisulfite sequencing data," BMC Genomics 2021). This quantization argument is why an
+  aggressive cap (e.g. to ~10x) *would* be harmful — but MethylIT's default `target_sum = 500` sits
+  far above the depth range where quantization matters, so in practice this cost is largely
+  hypothetical for typical WGBS.
+- **The field standard avoids capping entirely by modeling coverage in the likelihood.** DSS
   (Feng, Conneely & Wu, *Nucleic Acids Res.* 2014), methylSig (Park et al. 2014), methylKit
   (Akalin et al., *Genome Biol.* 2012), bsseq/BSmooth (Hansen, Langmead & Irizarry, *Genome Biol.*
   2012), and dmrseq (Korthauer et al., *Biostatistics* 2018) all model the methylated/total read
   counts with a **beta-binomial** (a per-site methylation mean plus a dispersion parameter, with
   coverage entering as the binomial denominator). Deeper sites automatically receive more weight;
-  no reads are discarded and no coverage equalization by capping is needed. MethylIT does use
-  coverage weighting and a Bayesian level estimate, but its need to *cap* coverage to keep the
-  weighted Hellinger divergence comparable across samples is precisely the problem the beta-binomial
-  likelihood solves without information loss. In other words, downsampling is a symptom of putting
-  coverage into a weight on a divergence rather than into the denominator of a count model.
-- **Practical consequence.** Capping to 10x is defensible as a crude cross-sample normalization, but
-  it is strictly dominated, on statistical-efficiency grounds, by depth-aware count models that the
-  rest of the field has used for a decade.
+  no reads are discarded and no coverage cap is needed. MethylIT does use coverage weighting and a
+  Bayesian level estimate, but the reason it caps at all — to keep the coverage-weighted Hellinger
+  divergence comparable across samples — is precisely the problem the beta-binomial likelihood
+  solves without any cap. Capping is a symptom of putting coverage into a *weight* on a divergence
+  rather than into the *denominator* of a count model.
+- **Practical consequence.** Capping at `target_sum = 500` is a mild, defensible cross-sample
+  normalization; it is still, on statistical-efficiency grounds, dominated by depth-aware count
+  models that the rest of the field has used for a decade — but the gap is far narrower than the
+  earlier "~10x" framing implied.
 
 ### 3. Few samples at low coverage: replicates, not depth, are the binding constraint
 
@@ -886,8 +979,10 @@ require, and per-analyte samples let the cfDNA and buffy-coat regimes be compare
    inside each fold versus selected once on all data, for both products' selection steps. *Prediction:
    optimistic bias when selection is outside the loop.*
 5. **Beta-binomial baseline.** Add a depth-aware count model (e.g. DSS-style beta-binomial) as a third
-   detector and score it through the same harness, at full depth versus capped 10x. *Prediction:
-   count model matches or beats the capped divergence pipeline, especially in small-$\Delta p$ regimes.*
+   detector and score it through the same harness, at full depth versus the port's `target_sum = 500`
+   cap (and, as a stress test, an aggressive low cap). *Prediction: count model matches or beats the
+   capped divergence pipeline, with the gap widening as the cap is lowered toward the quantization
+   regime.*
 
 Suggested comparison table to populate under one nested resampling design (same folds, same metric,
 bootstrap CIs):
@@ -912,13 +1007,14 @@ See [Part 0](#part-0--when-to-prefer-which-product) for the decision table. In o
 
 Expanded:
 
-- **MethylIT_py 0.4.0** = information-thermodynamics + signal detection: per-sample Hellinger/J
+- **MethylIT_py 0.4.x** = information-thermodynamics + signal detection: per-sample Hellinger/J
   divergence from a designated reference, a fitted GGamma/Weibull noise model, tail-based potential
   DMPs gated by total variation, and an optimal cutpoint separating control-like from treatment-like
-  DMPs (a **single-variable Youden index by default** in the R source; the logistic + random-forest
-  route is the opt-in path the 0.4.0 config selects). Statistically principled *if* the parametric
-  divergence law holds, individual-centric, and critically dependent on a **manually chosen
-  reference** that is not auto-selected or auto-validated.
+  DMPs. In the mature R source that cutpoint is a **single-variable Youden index by default**; the
+  **Python port (0.4.2) implements only the logistic/RF ML path** (`simple = True` raises
+  `NotImplementedError`). Statistically principled *if* the parametric divergence law holds,
+  individual-centric, and critically dependent on a **manually chosen reference** that is not
+  auto-selected or auto-validated.
 - **MethylPipeline** = nonparametric empirical distributions + resampling stability: cohort-vs-cohort
   ECDF two-sample tests with FDR, heuristic biological ranking, ECDF Naive-Bayes classification, and
   a formalized Monte-Carlo-stability → freeze → train workflow with rich biological interpretation.
@@ -927,23 +1023,23 @@ Expanded:
 
 Watch-items when comparing their DMPs directly: results need not agree, because (a) MethylIT DMPs are
 per-sample tail events against a reference while MethylPipeline DMPs are per-comparison distributional
-differences, and (b) MethylIT's DMP set depends on its cutpoint (a Youden threshold by default, or a
-classifier when `simple = FALSE`) whereas MethylPipeline's depends on FDR-controlled tests plus a
-heuristic effect filter.
+differences, and (b) MethylIT's DMP set depends on its cutpoint — a classifier in the Python port
+(the Youden threshold is R-only and not yet ported) — whereas MethylPipeline's depends on
+FDR-controlled tests plus a heuristic effect filter.
 
 A fairness note on tone: MethylPipeline is described from its source code (the repo is the source of
-truth). MethylIT_py 0.4.0 was first reconstructed from release artifacts (configs, sample sheets,
-runner scripts), and its estimator internals have now been **verified against the original R source**
-(`MethylIT` 0.3.2.8; see [Scope and evidence boundary](#scope-and-evidence-boundary) and
-[Cross-check against the original R source](#cross-check-against-the-original-r-source)). The
-algorithm and its formulas are therefore no longer inferred; what remains deployment-specific is how
-the 0.4.0 Python bundle *wires* those functions (e.g. choosing the ML cutpoint over the default
-Youden route, and shipping only the masking-style gene harness). The MethylPipeline side reads as
-audited — and is now additionally guarded by a per-pull-request regression + coverage gate and a
-designated real-sample test tier (see [Verification and reproducibility posture](#engineering-and-interpretation-differences)).
-Where this note still reaches *performance* conclusions (Jaccard overlap, AUC gaps), those remain
-predictions to be confirmed by the [Empirical tests needed](#empirical-tests-needed), not settled
-findings.
+truth). MethylIT_py was first reconstructed from release artifacts, then **verified against both the
+Python source (`methylit` 0.4.2) and the original R source (`MethylIT` 0.3.2.8)** — see
+[Scope and evidence boundary](#scope-and-evidence-boundary),
+[Cross-check against the current Python source (methylit 0.4.2)](#cross-check-against-the-current-python-source-methylit-042),
+and [Cross-check against the original R source](#cross-check-against-the-original-r-source). The
+algorithm and its formulas are no longer inferred. The Python port also ships its own test suite
+(including a parity tier), named profiles, and reproducibility/DHF controls, so the earlier
+"MethylPipeline is audited / MethylIT is only inferred" asymmetry is now weaker; the durable
+difference is **scope** (MethylPipeline's stability → freeze → holdout workflow and weighted
+interpretation stack have no counterpart in the port). Where this note still reaches *performance*
+conclusions (Jaccard overlap, AUC gaps), those remain predictions to be confirmed by the
+[Empirical tests needed](#empirical-tests-needed), not settled findings.
 
 ## References supporting the MethylIT_py theory
 
@@ -992,10 +1088,11 @@ The 0.4.0 `stages` config maps one-to-one onto the published MethylIT methodolog
 - MethylPipeline: `docs/theory/chapters/01-methylutils.qmd`, `02-methylcentroid.qmd`,
   `03-methyldetector.qmd`, `04-methylclassifier.qmd`, `05-methylpredictor-and-validation.qmd`,
   `12-two-workflows.qmd`, `15-model-creation-and-validation.qmd`; package `docs/THEORY.md` files.
-- MethylIT_py 0.4.0 release bundle: `examples/config_test6.yaml`, `config_test5.yaml`,
-  `config_smoke.yaml`, `config_example_score_only.yaml`; `examples/sample_sheet_*.{csv,tsv}`;
-  `scripts/g2dmp_m34.py`, `exp_wand.py`, `pred_h5.py`, `prediction_tsv_to_cupy_h5.py`;
-  `README_INSTALL.txt`.
+- MethylIT_py Python source (`methylit` 0.4.2, external checkout e.g. `EDFi/`):
+  `methylit/pipeline/{divergence,gof,potential_dimp,cutpoint,coverage,selection,predict}.py`,
+  `methylit/models/{classifier,distributions}.py`, `profiles/{production,parity,smoke,dev}.yaml`,
+  `examples/config_test6.yaml`, `docs/V0_4_RELEASE_NOTES.md`, `docs/methylit_python_project_plan.md`,
+  `pyproject.toml`; companion scripts `scripts/{g2dmp_m34,exp_wand,pdmp_gene_subset_module34,pred_h5,prediction_tsv_to_cupy_h5}.py`.
 - MethylIT R source (`MethylIT` 0.3.2.8, external checkout e.g. `MethylIT2/`): `R/estimateDivergence.R`,
   `estimateBayesianDivergence.R`, `estimateHellingerDiv.R`, `estimateJDiv.R`, `beta_bin_meth.R`,
   `betaBinPosteriors.R`, `estimateBetaDist.R`, `nonlinearFitDist.R`, `gofReport.R`,
