@@ -154,15 +154,15 @@ def test_enrich_preserves_profile_validation_when_single_pipeline_flag_set(local
 @pytest.mark.parametrize(
     "program_path",
     [
-        DOMAIN / "checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json",
-        DOMAIN / "checks/pca1_5_cg/configs/mc_gene_enricher_stability.program.json",
-        DOMAIN / "checks/buffy_healthy_vs_pca/configs/buffy_interpretation.program.json",
+        DOMAIN / "fixtures/mc_stability_staged.program.json",
+        DOMAIN / "fixtures/mc_gene_enricher_stability.program.json",
+        DOMAIN / "fixtures/interpretation.program.json",
         DOMAIN / "fixtures/dmp_select_optional.program.json",
     ],
 )
 def test_composable_programs_compile_with_if_nodes(program_path: Path, local_project) -> None:
     src_project = DOMAIN / "checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json"
-    if "pca1_5" in str(program_path):
+    if "staged" in program_path.name or "gene_enricher" in program_path.name:
         src_project = DOMAIN / "checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG_smoke.json"
     project = local_project(src_project)
     result = compile_domain_program_file(program_path, enrich_context=False)
@@ -181,7 +181,7 @@ def test_composable_programs_compile_with_if_nodes(program_path: Path, local_pro
 
 
 def test_mc_gene_enricher_program_has_enricher_not_dmp_select() -> None:
-    program = DOMAIN / "checks/pca1_5_cg/configs/mc_gene_enricher_stability.program.json"
+    program = DOMAIN / "fixtures/mc_gene_enricher_stability.program.json"
     raw = json.loads(program.read_text(encoding="utf-8"))
     body = json.dumps(raw["body"])
     assert "pipeline.enricher" in body

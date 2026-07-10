@@ -186,7 +186,7 @@ User-selected pattern: **two explicit phases**, not an in-loop switch inside one
 
 **Phase B profile** (`phase_b_gene_from_stable_dmps`): Context references Phase A artifact path; mapper + optional gene FeatureCuts; gene stability on classifier panels or mapper ranks.
 
-No new domain check per study—same [`mc_stability.program.json`](workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json) topology with different profile + context. Study manifests supply paths and regulatory metadata only.
+No new domain check per study—same [`mc_stability.program.json`](workflow_engine/domain/fixtures/mc_stability_staged.program.json) topology with different profile + context. Study manifests supply paths and regulatory metadata only.
 
 ```mermaid
 flowchart LR

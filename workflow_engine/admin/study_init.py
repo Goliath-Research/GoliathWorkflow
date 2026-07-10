@@ -166,7 +166,7 @@ methyl-study-validate-manifest --project {manifest_path} --profile samd_holdout_
 
 ```bash
 methyl-workflow-run \\
-  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \\
+  --program workflow_engine/domain/fixtures/samd_research.program.json \\
   --context-file workflow_engine/domain/profiles/samd_research.profile.json \\
   --context '{{"projectPath":"{manifest_path}","pipelineProfile":"samd_research"}}'
 ```

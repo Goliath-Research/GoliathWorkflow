@@ -107,7 +107,7 @@ python workflow_engine/sql_mssql/seed_action_catalog.py --use-db
 | Selection | `validation.select_best_model` → binds `selectedBackend` |
 | Hold-out | `validation.post_model_validation` |
 
-DomainProgram: `workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json`
+DomainProgram: `workflow_engine/domain/fixtures/study_validation_lifecycle.program.json`
 
 Compiler output bindings (scope write-back on task complete):
 

@@ -75,7 +75,7 @@ def test_compiler_emits_root_scope_defaults():
 def test_compiler_preserves_iteration_dotted_refs_for_mc_gene_select():
     program_path = (
         Path(__file__).resolve().parents[1]
-        / "domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json"
+        / "domain/fixtures/mc_stability.program.json"
     )
     result = compile_domain_program_file(program_path, enrich_context=False)
     gene_select = next(n for n in result.workflow.nodes if n.node_key == "gene_select")
@@ -175,10 +175,11 @@ def test_sample_prep_remediate_typed_gates_compile():
     assert result.workflow.variable_schemas.get("qcPass") == "schemas/vars/bool.schema.json"
 
 
-def test_buffy_action_templates_are_self_contained_when_resolved():
+def test_data_driven_action_templates_are_self_contained_when_resolved():
     """Resolved scope should satisfy catalog required keys (parity check helper)."""
-    check = Path(__file__).resolve().parents[1] / "domain" / "checks" / "buffy_healthy_vs_pca"
-    program_path = check / "configs" / "buffy_data_driven.program.json"
+    program_path = (
+        Path(__file__).resolve().parents[1] / "domain" / "fixtures" / "data_driven.program.json"
+    )
     result = compile_domain_program_file(program_path, enrich_context=True)
     wf = result.workflow
 
@@ -206,13 +207,14 @@ def test_buffy_action_templates_are_self_contained_when_resolved():
         assert errors == [], f"{node.node_key}: {errors}"
 
 
-def test_buffy_check_bundle_compiles_full_pipeline():
-    check = Path(__file__).resolve().parents[1] / "domain" / "checks" / "buffy_healthy_vs_pca"
-    program_path = check / "configs" / "buffy_data_driven.program.json"
+def test_data_driven_fixture_compiles_full_pipeline():
+    program_path = (
+        Path(__file__).resolve().parents[1] / "domain" / "fixtures" / "data_driven.program.json"
+    )
     result = compile_domain_program_file(program_path)
     wf = result.workflow
 
-    assert wf.name == "BuffyHealthyVsPCa"
+    assert wf.name == "DataDriven"
     action_names = [n.action_name for n in wf.nodes if n.node_type == "ACTION"]
     assert action_names.count("pipeline.centroid") == 2
     assert "pipeline.detector" in action_names

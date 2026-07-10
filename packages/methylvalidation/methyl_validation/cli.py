@@ -2792,7 +2792,7 @@ def main() -> None:
             repo = Path(__file__).resolve().parents[3]
             default_program = (
                 repo
-                / "workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability_smoke.program.json"
+                / "workflow_engine/domain/fixtures/mc_stability_smoke.program.json"
             )
             program = args.workflow_program or default_program
             if not program.is_file():

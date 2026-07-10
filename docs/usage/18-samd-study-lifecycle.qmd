@@ -86,7 +86,7 @@ methyl-study-validate-manifest \
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --program workflow_engine/domain/fixtures/mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/samd_research.profile.json \
   --context '{"projectPath":"/work/projects/my-disease/configs/project_Healthy_vs_Disease.json","pipelineProfile":"samd_research"}' \
   --parallel-workers 1
@@ -96,7 +96,7 @@ methyl-workflow-run \
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json \
+  --program workflow_engine/domain/fixtures/mc_stability_staged.program.json \
   --context-file workflow_engine/domain/profiles/samd_research.profile.json \
   --context '{"projectPath":"/work/projects/my-disease/configs/project_Healthy_vs_Disease.json","pipelineProfile":"samd_research"}' \
   --parallel-workers 1
@@ -133,7 +133,7 @@ methyl-workflow-run \
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  --program workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
   --context-file workflow_engine/domain/profiles/samd_pivotal.profile.json \
   --context '{"projectPath":"/work/projects/my-disease/configs/project_Healthy_vs_Disease.json","pipelineProfile":"samd_pivotal"}' \
   --parallel-workers 1
@@ -145,7 +145,7 @@ methyl-workflow-run \
 
 | Tier | Binary DomainProgram | Staged DomainProgram |
 |------|----------------------|----------------------|
-| research / enrichment MC | `buffy_healthy_vs_pca/.../buffy_mc_stability.program.json` | `pca1_5_cg/.../pca1_5_mc_stability.program.json` |
+| research / enrichment MC | `buffy_healthy_vs_pca/.../mc_stability.program.json` | `pca1_5_cg/.../mc_stability_staged.program.json` |
 | freeze + model + post-model | `pca1_5_cg/.../study_validation_lifecycle.program.json` | same |
 | Presets | `scripts/workflow_presets.sh show samd_research_binary` (etc.) | `samd_research_staged` |
 

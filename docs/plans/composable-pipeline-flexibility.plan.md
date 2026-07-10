@@ -81,8 +81,8 @@ flowchart TB
 
 | Gap | Impact |
 |-----|--------|
-| [buffy_data_driven.program.json](workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_data_driven.program.json) uses **legacy inline detector** only | No composable split path for Buffy |
-| [pca1_5_mc_stability.program.json](workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json) uses **invalid IF syntax** (`{ condition: { ref } }` + single `do`) | Optional `gene_select` / `biomarker_filter` never compile ([IfStep](packages/methyldomain/methyl_domain/program.py) requires `"if": "${var}"`, `then`/`else` lists) |
+| [buffy_data_driven.program.json](workflow_engine/domain/fixtures/data_driven.program.json) uses **legacy inline detector** only | No composable split path for Buffy |
+| [mc_stability_staged.program.json](workflow_engine/domain/fixtures/mc_stability_staged.program.json) uses **invalid IF syntax** (`{ condition: { ref } }` + single `do`) | Optional `gene_select` / `biomarker_filter` never compile ([IfStep](packages/methyldomain/methyl_domain/program.py) requires `"if": "${var}"`, `then`/`else` lists) |
 | Scope flags like `project.stabilityGeneFeaturecutsEnabled` are **not seeded** from `step_config.validation` | IF branches cannot resolve |
 | `step_config.dmp_selection` / `gene_selection` **absent** from bundle project JSONs | Split CLIs fall back to legacy `detection` keys inconsistently |
 | `pipeline.gene_feature_select` is a **Phase 3 scaffold** ([runner.py](packages/methylgenefeatureselect/methyl_gene_feature_select/core/runner.py)) | Promoter/exon/intron/terminator k-search not production-ready |
@@ -185,7 +185,7 @@ Alternatively add `collection_bindings` jsonPath reads from inline `project` for
 
 ### 2. Fix mc_stability programs
 
-Rewrite [pca1_5_mc_stability.program.json](workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json) and [healthy_pca_mc_stability.program.json](workflow_engine/domain/checks/pca1_5_cg/configs/healthy_pca_mc_stability.program.json):
+Rewrite [mc_stability_staged.program.json](workflow_engine/domain/fixtures/mc_stability_staged.program.json) and [healthy_pca_mc_stability.program.json](workflow_engine/domain/fixtures/mc_stability.program.json):
 
 - Replace invalid IF blocks with `"if": "${flag}"`, `"then": [...]`, `"else": []`.
 - Add sibling program `mc_gene_enricher_stability.program.json` without dmp_select/gene_select.
@@ -252,14 +252,14 @@ Update [docs/reference/domain-program-language.md](docs/reference/domain-program
 **Acceptance (Buffy single-run):**
 
 ```bash
-methyl-workflow-run --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_interpretation.program.json \
+methyl-workflow-run --program workflow_engine/domain/fixtures/interpretation.program.json \
   --context-file workflow_engine/domain/profiles/gene_enricher_single_run.context.json
 ```
 
 **Acceptance (MC gene-enricher stability):**
 
 ```bash
-methyl-validation run-workflow --program workflow_engine/domain/checks/pca1_5_cg/configs/mc_gene_enricher_stability.program.json \
+methyl-validation run-workflow --program workflow_engine/domain/fixtures/mc_gene_enricher_stability.program.json \
   --context-file workflow_engine/domain/profiles/gene_enricher_stability.profile.json
 ```
 

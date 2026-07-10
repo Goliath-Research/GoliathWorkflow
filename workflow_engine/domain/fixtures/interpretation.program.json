@@ -1,8 +1,7 @@
 {
   "programVersion": 2,
-  "name": "BuffyHealthyVsPCaSmoke",
-  "description": "Smoke: chromosome 21 only.",
-  "projectPath": "/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json",
+  "name": "Interpretation",
+  "description": "Single-run interpretation: discovery detector, mapper, enricher (no MC).",
   "body": [
     {
       "for": {
@@ -76,9 +75,37 @@
                     },
                     "comparison": {
                       "ref": "comparison.label"
+                    },
+                    "stepOverride": {
+                      "detection_mode": "discovery_only",
+                      "export_classifier": false
                     }
                   },
                   "node_key": "detect"
+                },
+                {
+                  "if": "${runDmpSelection}",
+                  "then": [
+                    {
+                      "do": "pipeline.dmp_select",
+                      "with": {
+                        "chromosome": {
+                          "ref": "chromosome"
+                        },
+                        "context": {
+                          "ref": "context"
+                        },
+                        "comparison": {
+                          "ref": "comparison.label"
+                        },
+                        "group": {
+                          "ref": "comparison.label"
+                        }
+                      },
+                      "node_key": "dmp_select"
+                    }
+                  ],
+                  "else": []
                 }
               ]
             }
@@ -94,5 +121,6 @@
       "do": "pipeline.enricher",
       "node_key": "enricher"
     }
-  ]
+  ],
+  "projectPath": "workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json"
 }

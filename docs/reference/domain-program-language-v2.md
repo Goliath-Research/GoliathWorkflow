@@ -282,7 +282,7 @@ Declare a path variable; assign once; pass `${var.artifactPath}` into two differ
 
 ### 6. Contrast: methylation MC without assign
 
-Programs such as `buffy_mc_stability.program.json` / `h_pca_good` style remain **FOREACH + `validation.plan_iterations` + bindings**. That pattern is preferred for cohort science: collections come from the study manifest and planner, not from assign loops. **Do not** rewrite MC DomainPrograms to use typed assign.
+Programs such as `mc_stability.program.json` / `h_pca_good` style remain **FOREACH + `validation.plan_iterations` + bindings**. That pattern is preferred for cohort science: collections come from the study manifest and planner, not from assign loops. **Do not** rewrite MC DomainPrograms to use typed assign.
 
 ---
 

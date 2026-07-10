@@ -23,7 +23,8 @@ WORK_DATA = WORK_ROOT / "data"
 
 PROJECT_NAME = "project_Buffy_healthy_vs_PCa.json"
 LEGACY_ALIAS = "Buffy_healthy_vs_PCa.json"
-PROGRAM_NAME = "buffy_data_driven.program.json"
+PROGRAM_NAME = "data_driven.program.json"
+FIXTURES = REPO_ROOT / "workflow_engine" / "domain" / "fixtures"
 
 
 def _ensure_import_paths() -> None:
@@ -41,7 +42,7 @@ def _ensure_import_paths() -> None:
 def load_bundle_paths() -> dict[str, Path]:
     return {
         "project": CONFIGS / PROJECT_NAME,
-        "program": CONFIGS / PROGRAM_NAME,
+        "program": FIXTURES / PROGRAM_NAME,
         "instance_context": INSTANCE / "context.json",
         "healthy_csv": DATA / "healthy_b.csv",
         "pca_csv": DATA / "pca_b.csv",

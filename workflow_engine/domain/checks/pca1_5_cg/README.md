@@ -23,7 +23,7 @@ DomainProgram fixtures and harness for `Healthy_vs_PCa1-5-CG` (hierarchical mult
 source .venv/bin/activate
 python workflow_engine/domain/checks/pca1_5_cg/check_pipeline.py
 python workflow_engine/domain/checks/pca1_5_cg/check_pipeline.py \
-  --program workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability_smoke.program.json
+  --program workflow_engine/domain/fixtures/mc_stability_smoke.program.json
 ```
 
 ## Centroid efficiency and parallel MC

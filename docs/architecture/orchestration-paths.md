@@ -19,7 +19,7 @@
 |---------|---------|
 | `workflow_engine/domain/fixtures/sample_prep.program.json` | Per-sample QC, remediation, extract, archive |
 | `workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability*.program.json` | MC stability |
-| `workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json` | Full study lifecycle |
+| `workflow_engine/domain/fixtures/study_validation_lifecycle.program.json` | Full study lifecycle |
 
 Deploy compiled specs: `bash scripts/deploy_workflow_definitions.sh`
 

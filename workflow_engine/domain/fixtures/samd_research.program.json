@@ -1,8 +1,7 @@
 {
   "programVersion": 2,
-  "name": "H_PCa_good_MC_Stability",
-  "description": "Healthy vs PCa (good cohort): MC stability with split detector, dmp_select, mapper, biomarker filter, gene FeatureCuts.",
-  "projectPath": "/work/projects/prostate-cancer/configs/project_H_PCa_good.json",
+  "name": "SaMD_Research",
+  "description": "SaMD research-tier entry point (MC stability topology). Set pipelineProfile=samd_research and projectPath in context.",
   "body": [
     {
       "do": "validation.plan_iterations",
@@ -271,5 +270,6 @@
       "do": "validation.stability_freeze_readiness",
       "node_key": "readiness"
     }
-  ]
+  ],
+  "projectPath": "workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json"
 }

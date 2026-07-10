@@ -1,8 +1,7 @@
 {
   "programVersion": 2,
-  "name": "BuffyHealthyVsPCa_MC_Stability",
-  "description": "Buffy-coat healthy vs PCa: MC stability with split detector, dmp_select, mapper, gene FeatureCuts (balanced-accuracy tuning).",
-  "projectPath": "/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json",
+  "name": "MC_Stability_Staged",
+  "description": "Staged / one-vs-rest Monte Carlo stability (includes optional gene_feature_select).",
   "body": [
     {
       "do": "validation.plan_iterations",
@@ -116,14 +115,14 @@
                         "outputDir": {
                           "ref": "group.centroidDir"
                         },
+                        "centroidSeedDir": {
+                          "ref": "group.centroidSeedDir"
+                        },
                         "addSamples": {
                           "ref": "group.addSamples"
                         },
                         "removeSamples": {
                           "ref": "group.removeSamples"
-                        },
-                        "centroidSeedDir": {
-                          "ref": "group.centroidSeedDir"
                         }
                       },
                       "node_key": "centroid"
@@ -260,6 +259,24 @@
             }
           ],
           "else": []
+        },
+        {
+          "if": "${runGeneFeatureSelect}",
+          "then": [
+            {
+              "do": "pipeline.gene_feature_select",
+              "with": {
+                "mapperDir": {
+                  "ref": "iteration.runDir"
+                },
+                "outputDir": {
+                  "ref": "iteration.runDir"
+                }
+              },
+              "node_key": "gene_feature_select"
+            }
+          ],
+          "else": []
         }
       ]
     },
@@ -271,5 +288,6 @@
       "do": "validation.stability_freeze_readiness",
       "node_key": "readiness"
     }
-  ]
+  ],
+  "projectPath": "workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG_smoke.json"
 }

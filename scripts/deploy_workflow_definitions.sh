@@ -40,10 +40,19 @@ if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
   PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
 fi
 
-SAMPLE_PREP="$REPO_ROOT/workflow_engine/domain/fixtures/sample_prep.program.json"
-REMEDIATE="$REPO_ROOT/workflow_engine/domain/fixtures/sample_prep_remediate.program.json"
-LIFECYCLE="$REPO_ROOT/workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json"
-
+RUNTIME_DOMAIN="${METHYL_RUNTIME_ROOT:-${EPIMETHYL_ROOT:-/work/epimethyl}/current/runtime-bundle}/domain"
+REPO_FIXTURES="$REPO_ROOT/workflow_engine/domain/fixtures"
+if [[ -f "$RUNTIME_DOMAIN/fixtures/sample_prep.program.json" ]]; then
+  FIXTURES="$RUNTIME_DOMAIN/fixtures"
+else
+  FIXTURES="$REPO_FIXTURES"
+fi
+SAMPLE_PREP="$FIXTURES/sample_prep.program.json"
+REMEDIATE="$FIXTURES/sample_prep_remediate.program.json"
+LIFECYCLE="$FIXTURES/study_validation_lifecycle.program.json"
+[[ -f "$LIFECYCLE" ]] || LIFECYCLE="$REPO_FIXTURES/study_validation_lifecycle.program.json"
+[[ -f "$SAMPLE_PREP" ]] || SAMPLE_PREP="$REPO_FIXTURES/sample_prep.program.json"
+[[ -f "$REMEDIATE" ]] || REMEDIATE="$REPO_FIXTURES/sample_prep_remediate.program.json"
 for f in "$SAMPLE_PREP" "$REMEDIATE" "$LIFECYCLE"; do
   [[ -f "$f" ]] || { echo "Missing $f" >&2; exit 1; }
 done

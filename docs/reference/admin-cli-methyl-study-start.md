@@ -41,7 +41,7 @@ Compile a `*.program.json` to raw `WorkflowDefinitionSpec` JSON (stdout or `-o`)
 
 ```bash
 methyl-study-start compile \
-  workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
   --project-path /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json \
   -o /tmp/lifecycle_spec.json
 ```
@@ -55,7 +55,7 @@ methyl-study-start validation-start - <<'JSON'
 {
   "projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
   "pipelineProfile": "mc_gene_fc",
-  "program_path": "workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json"
+  "program_path": "workflow_engine/domain/fixtures/study_validation_lifecycle.program.json"
 }
 JSON
 ```

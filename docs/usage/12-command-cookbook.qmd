@@ -9,7 +9,7 @@ Provide copy-ready command sequences for the full solution lifecycle. **Prefer `
 ```bash
 source .venv/bin/activate
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  --program workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
   --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json","pipelineProfile":"mc_dmp_gene_fc"}' \
   --parallel-workers 1
@@ -20,7 +20,7 @@ MC stability only (freeze-readiness gate included):
 ```bash
 source .venv/bin/activate
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --program workflow_engine/domain/fixtures/mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"mc_dmp_gene_fc"}'
 ```

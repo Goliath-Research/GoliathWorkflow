@@ -183,7 +183,11 @@ The runtime-bundle ships `workflow_engine/domain/` (profiles, DomainPrograms, co
 
 `/work/epimethyl/current/runtime-bundle/domain/`
 
-Use these paths for operator CLI runs and for `METHYL_PROFILE=<name>` resolution. GPU workers executing gateway-dispatched tasks rely on **materialized `resolvedConfig`** in task input, not on reading profile files at runtime.
+- **Profiles / modes:** `domain/profiles/*.profile.json` and `domain/profiles/modes/*.mode.json` (SaMD ladder + researchMode overlays). Resolved via `METHYL_PROFILE_DIR` (set in `worker.env` by promote).
+- **Algorithm DomainPrograms:** `domain/fixtures/mc_stability*.program.json`, `samd_*.program.json`, SamplePrep, lifecycle — disease-agnostic names; study identity is only in instance `projectPath`.
+- **Site manifests** stay under `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) — not part of the release bundle.
+
+Use these paths for operator CLI runs and for `METHYL_PROFILE=<name>` resolution. GPU workers executing gateway-dispatched tasks rely on **materialized `resolvedConfig`** in task input, not on reading profile files at claim time. The database may publish any of these graphs as `wf.workflow_def` rows without encoding disease or SaMD semantics in SQL NodeTypes.
 
 ## Rollback
 

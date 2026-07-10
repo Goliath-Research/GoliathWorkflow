@@ -21,22 +21,23 @@ def _run_check_pipeline(*args: str) -> subprocess.CompletedProcess[str]:
 @pytest.mark.parametrize(
     "program_name",
     [
-        "pca1_5_mc_stability.program.json",
-        "pca1_5_mc_stability_smoke.program.json",
-        "pca1_5_freeze.program.json",
-        "pca1_5_model.program.json",
-        "pca1_5_full_lifecycle.program.json",
+        "mc_stability_staged.program.json",
+        "mc_stability_smoke.program.json",
+        "validation_freeze.program.json",
+        "validation_model.program.json",
+        "full_lifecycle.program.json",
     ],
 )
 def test_pca1_5_programs_compile(program_name: str) -> None:
+    fixtures = REPO_ROOT / "workflow_engine" / "domain" / "fixtures"
     project = CHECK_ROOT / "configs" / "project_Healthy_vs_PCa1-5-CG_smoke.json"
-    if program_name == "pca1_5_mc_stability.program.json":
+    if program_name == "mc_stability_staged.program.json":
         project = CHECK_ROOT / "configs" / "project_Healthy_vs_PCa1-5-CG.json"
     proc = _run_check_pipeline(
         "--project",
         str(project),
         "--program",
-        str(CHECK_ROOT / "configs" / program_name),
+        str(fixtures / program_name),
         "--write-spec",
         str(CHECK_ROOT / "compiled" / program_name.replace(".program.json", "")),
     )
@@ -105,13 +106,14 @@ def _collect_step_actions(steps: list) -> list[str]:
 @pytest.mark.parametrize(
     "program_name",
     [
-        "pca1_5_mc_stability.program.json",
-        "healthy_pca_mc_stability.program.json",
+        "mc_stability_staged.program.json",
+        "mc_stability.program.json",
     ],
 )
 def test_gene_steps_run_once_per_iteration_not_per_comparison(program_name: str) -> None:
     """Biomarker filter and gene_select operate on iteration runDir, not per comparison."""
-    program = json.loads((CHECK_ROOT / "configs" / program_name).read_text(encoding="utf-8"))
+    fixtures = REPO_ROOT / "workflow_engine" / "domain" / "fixtures"
+    program = json.loads((fixtures / program_name).read_text(encoding="utf-8"))
     comparison_loops = _find_comparison_for_loops(program.get("body", []))
     assert comparison_loops, f"expected comparison loop in {program_name}"
     iteration_only_actions = {"validation.biomarker_filter", "pipeline.gene_select"}
@@ -136,12 +138,13 @@ def test_gene_steps_run_once_per_iteration_not_per_comparison(program_name: str)
 
 
 def test_mc_gene_enricher_stability_program_compiles() -> None:
+    fixtures = REPO_ROOT / "workflow_engine" / "domain" / "fixtures"
     project = CHECK_ROOT / "configs" / "project_Healthy_vs_PCa1-5-CG_smoke.json"
     proc = _run_check_pipeline(
         "--project",
         str(project),
         "--program",
-        str(CHECK_ROOT / "configs" / "mc_gene_enricher_stability.program.json"),
+        str(fixtures / "mc_gene_enricher_stability.program.json"),
         "--write-spec",
         str(CHECK_ROOT / "compiled" / "mc_gene_enricher_stability"),
     )

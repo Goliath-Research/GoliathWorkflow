@@ -1,8 +1,7 @@
 {
   "programVersion": 2,
-  "name": "PCa1_5_MC_StabilitySmoke",
-  "description": "Smoke: chr 21, 2 MC iterations via smoke project config.",
-  "projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG_smoke.json",
+  "name": "MC_Stability_Smoke",
+  "description": "Smoke Monte Carlo stability DomainProgram for CI / compile checks.",
   "body": [
     {
       "do": "validation.plan_iterations",
@@ -166,5 +165,6 @@
       "do": "validation.stability",
       "node_key": "stability"
     }
-  ]
+  ],
+  "projectPath": "workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG_smoke.json"
 }

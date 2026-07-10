@@ -1,8 +1,7 @@
 {
   "programVersion": 2,
-  "name": "PCa1_5_Full_Lifecycle",
-  "description": "Compose MC stability, freeze, and model phases for Healthy_vs_PCa1-5-CG.",
-  "projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
+  "name": "FullLifecycle",
+  "description": "Full validation lifecycle: MC stability \u2192 freeze \u2192 model.",
   "body": [
     {
       "do": "validation.plan_iterations",
@@ -277,5 +276,6 @@
       "do": "validation.post_model_validation",
       "node_key": "post_model_validation"
     }
-  ]
+  ],
+  "projectPath": "workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG_smoke.json"
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compile and deploy MC / lifecycle DomainPrograms with parallel centroid seed phase.
+# Compile and deploy algorithm-generic MC / lifecycle / SaMD DomainPrograms.
 #
 # Usage:
 #   source .venv/bin/activate
@@ -40,25 +40,42 @@ done
 PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
 [[ -x "$PYTHON_BIN" ]] || PYTHON_BIN=python3
 
+# Prefer runtime-bundle fixtures when present (no-git workers / operators).
+RUNTIME_DOMAIN="${METHYL_RUNTIME_ROOT:-${EPIMETHYL_ROOT:-/work/epimethyl}/current/runtime-bundle}/domain"
+if [[ -d "$RUNTIME_DOMAIN/fixtures" ]]; then
+  DOMAIN_ROOT="$RUNTIME_DOMAIN"
+else
+  DOMAIN_ROOT="$REPO_ROOT/workflow_engine/domain"
+fi
+
 COMPILE="$REPO_ROOT/scripts/compile_workflow_program.py"
 OUT_ROOT="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}/compiled/mc"
+VERSIONS_OUT="${EPIMETHYL_ENV_DIR:-/work/epimethyl/env}/workflow_versions_mc.json"
 
 PROGRAMS=(
-  "workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json"
-  "workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability_smoke.program.json"
-  "workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json"
-  "workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_full_lifecycle.program.json"
-  "workflow_engine/domain/checks/pca1_5_cg/configs/mc_gene_enricher_stability.program.json"
-  "workflow_engine/domain/checks/pca1_5_cg/configs/healthy_pca_mc_stability.program.json"
-  "workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json"
-  "workflow_engine/domain/checks/h_pca_good/configs/h_pca_good_mc_stability.program.json"
+  "fixtures/mc_stability.program.json"
+  "fixtures/mc_stability_staged.program.json"
+  "fixtures/mc_stability_smoke.program.json"
+  "fixtures/mc_stability_ppi.program.json"
+  "fixtures/mc_gene_enricher_stability.program.json"
+  "fixtures/study_validation_lifecycle.program.json"
+  "fixtures/full_lifecycle.program.json"
+  "fixtures/validation_freeze.program.json"
+  "fixtures/validation_model.program.json"
+  "fixtures/data_driven.program.json"
+  "fixtures/interpretation.program.json"
+  "fixtures/legacy_dual.program.json"
+  "fixtures/samd_research.program.json"
+  "fixtures/samd_holdout_enrichment.program.json"
+  "fixtures/samd_pivotal.program.json"
 )
 
 mkdir -p "$OUT_ROOT"
 COMPILED=()
 for rel in "${PROGRAMS[@]}"; do
-  src="$REPO_ROOT/$rel"
-  [[ -f "$src" ]] || { echo "Missing $src" >&2; exit 1; }
+  src="$DOMAIN_ROOT/$rel"
+  [[ -f "$src" ]] || src="$REPO_ROOT/workflow_engine/domain/$rel"
+  [[ -f "$src" ]] || { echo "Missing $rel (looked under $DOMAIN_ROOT and repo)" >&2; exit 1; }
   stem="$(basename "$rel" .program.json)"
   out="$OUT_ROOT/${stem}_compiled.json"
   "$PYTHON_BIN" "$COMPILE" "$src" -o "$out"
@@ -71,14 +88,15 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
   exit 0
 fi
 
-"$PYTHON_BIN" - "$REPO_ROOT" "$DELETE_INSTANCES" "${COMPILED[@]}" <<'PY'
+"$PYTHON_BIN" - "$REPO_ROOT" "$DELETE_INSTANCES" "$VERSIONS_OUT" "${COMPILED[@]}" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 repo = Path(sys.argv[1])
 delete_instances = sys.argv[2] == "1"
-compiled_paths = [Path(p) for p in sys.argv[3:]]
+versions_out = Path(sys.argv[3])
+compiled_paths = [Path(p) for p in sys.argv[4:]]
 
 sys.path.insert(0, str(repo / "workflow_engine"))
 from ops.workflow_deploy import deploy_workflow_definition
@@ -88,6 +106,7 @@ from rest.db_client import create_workflow_definition, delete_workflow_definitio
 
 config = resolve_connection_config()
 db = open_gateway_db(config)
+results = {}
 try:
     for path in compiled_paths:
         spec = json.loads(path.read_text(encoding="utf-8"))
@@ -97,7 +116,13 @@ try:
             create_workflow_definition=create_workflow_definition,
             delete_workflow_definition=delete_workflow_definition,
         )
-        print(f"deployed {spec.get('name')}: workflow_version_id={result.get('workflow_version_id')}")
+        name = spec.get("name") or path.stem
+        results[name] = result
+        print(f"deployed {name}: workflow_version_id={result.get('workflow_version_id')}")
 finally:
     db.close()
+
+versions_out.parent.mkdir(parents=True, exist_ok=True)
+versions_out.write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
+print(f"wrote {versions_out}")
 PY

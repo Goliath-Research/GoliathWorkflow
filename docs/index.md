@@ -62,7 +62,7 @@ See table above. Package maintainers: [implementation/packages/](implementation/
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  --program workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
   --context '{"projectPath": "/work/<disease>/configs/project_*.json"}'
 ```
 

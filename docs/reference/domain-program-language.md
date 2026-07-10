@@ -52,13 +52,13 @@ source .venv/bin/activate
 
 # Compile only (inspect graph)
 python scripts/compile_workflow_program.py \
-  workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  workflow_engine/domain/fixtures/mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'
 
 # Run in-process (stub external GPU tools)
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --program workflow_engine/domain/fixtures/mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
   --stub-external
@@ -85,7 +85,7 @@ bash scripts/deploy_workflow_definitions.sh
 
 # 2) Inspect compiled spec (optional)
 methyl-study-start compile \
-  workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
   --project-path /work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json
 
 # 3) Start validation instance
@@ -370,11 +370,11 @@ Example:
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_interpretation.program.json \
+  --program workflow_engine/domain/fixtures/interpretation.program.json \
   --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json
 
 methyl-validation run-workflow \
-  --program workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json \
+  --program workflow_engine/domain/fixtures/mc_stability_staged.program.json \
   --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json
 ```
 
@@ -382,7 +382,7 @@ methyl-validation run-workflow \
 
 ```bash
 methyl-validation run-workflow \
-  --program workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json \
+  --program workflow_engine/domain/fixtures/mc_stability_staged.program.json \
   --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json
 ```
 

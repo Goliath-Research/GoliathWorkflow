@@ -39,7 +39,7 @@ todos:
 
 ## Problem
 
-Today [`workflow_planner.py`](packages/methylvalidation/methyl_validation/workflow_planner.py) chains iterations via `previous_train_by_label` and `prepare_incremental_centroid_baseline(previous_run_dir, …)`. MC DomainPrograms set `"parallel": false` on the outer `iterations` FOR loop ([`pca1_5_mc_stability.program.json`](workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json)) because parallel workers would race on incomplete centroids copied from the prior run.
+Today [`workflow_planner.py`](packages/methylvalidation/methyl_validation/workflow_planner.py) chains iterations via `previous_train_by_label` and `prepare_incremental_centroid_baseline(previous_run_dir, …)`. MC DomainPrograms set `"parallel": false` on the outer `iterations` FOR loop ([`mc_stability_staged.program.json`](workflow_engine/domain/fixtures/mc_stability_staged.program.json)) because parallel workers would race on incomplete centroids copied from the prior run.
 
 **Target behavior (engine-agnostic):** `validation.plan_iterations` materializes a **shared per-group seed** once, then each iteration applies cohort-relative deltas (`removeSamples = full_cohort \ train`) by copying that seed into the run’s `centroidDir` before `methyl-centroid` runs.
 
@@ -172,12 +172,12 @@ Mirror in [`pipeline_runner.py`](packages/methylvalidation/methyl_validation/pip
 
 **Programs to update** (configs + recompile):
 
-- [`pca1_5_mc_stability.program.json`](workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json) (+ smoke)
-- [`buffy_mc_stability.program.json`](workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json)
-- [`h_pca_good_mc_stability.program.json`](workflow_engine/domain/checks/h_pca_good/configs/h_pca_good_mc_stability.program.json)
-- [`healthy_pca_mc_stability.program.json`](workflow_engine/domain/checks/pca1_5_cg/configs/healthy_pca_mc_stability.program.json)
-- [`mc_gene_enricher_stability.program.json`](workflow_engine/domain/checks/pca1_5_cg/configs/mc_gene_enricher_stability.program.json)
-- [`pca1_5_full_lifecycle.program.json`](workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_full_lifecycle.program.json), [`study_validation_lifecycle.program.json`](workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json)
+- [`mc_stability_staged.program.json`](workflow_engine/domain/fixtures/mc_stability_staged.program.json) (+ smoke)
+- [`mc_stability.program.json`](workflow_engine/domain/fixtures/mc_stability.program.json)
+- [`h_pca_good_mc_stability.program.json`](workflow_engine/domain/fixtures/mc_stability.program.json)
+- [`healthy_pca_mc_stability.program.json`](workflow_engine/domain/fixtures/mc_stability.program.json)
+- [`mc_gene_enricher_stability.program.json`](workflow_engine/domain/fixtures/mc_gene_enricher_stability.program.json)
+- [`pca1_5_full_lifecycle.program.json`](workflow_engine/domain/fixtures/full_lifecycle.program.json), [`study_validation_lifecycle.program.json`](workflow_engine/domain/fixtures/study_validation_lifecycle.program.json)
 
 Recompile via [`check_pipeline.py`](workflow_engine/domain/checks/pca1_5_cg/check_pipeline.py) / `compile_workflow_program.py`; commit updated `compiled_workflow.json` trees.
 

@@ -76,6 +76,15 @@ if [[ "$RUNTIME_MODE" -eq 1 ]]; then
   require_dir "$CURRENT" "current release symlink/dir"
   require_dir "$RUNTIME" "runtime-bundle"
   require_dir "$RUNTIME/domain/profiles" "domain/profiles"
+  require_file "$RUNTIME/domain/profiles/samd_research.profile.json" "samd_research profile"
+  require_file "$RUNTIME/domain/profiles/samd_holdout_enrichment.profile.json" "samd_holdout_enrichment profile"
+  require_file "$RUNTIME/domain/profiles/samd_pivotal.profile.json" "samd_pivotal profile"
+  require_dir "$RUNTIME/domain/profiles/modes" "research mode overlays"
+  for mode in dmp_raw dmp_fc gene_enricher gene_fc dual_fc; do
+    require_file "$RUNTIME/domain/profiles/modes/${mode}.mode.json" "mode overlay ${mode}"
+  done
+  require_file "$RUNTIME/domain/fixtures/mc_stability.program.json" "MC_Stability DomainProgram"
+  require_file "$RUNTIME/domain/fixtures/samd_research.program.json" "SaMD_Research DomainProgram"
   require_dir "$RUNTIME/schemas" "schemas"
   require_dir "$RUNTIME/deploy" "deploy"
   require_file "$RUNTIME/deploy/env/gateway.postgres.env.example" "gateway env template"

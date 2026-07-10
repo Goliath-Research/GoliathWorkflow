@@ -504,7 +504,7 @@ After rewriting config keys, rerun staged validation with the **canonical** entr
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  --program workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
   --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
   --context '{"projectPath":"/work/.../configs/project.json","pipelineProfile":"mc_dmp_gene_fc"}'
 ```

@@ -84,7 +84,7 @@ Operational contracts: [idempotency/lease](../architecture/workflow-idempotency-
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json \
+  --program workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
   --context '{"projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json"}'
 ```
 

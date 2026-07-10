@@ -45,9 +45,9 @@ cmd_stability_binary() {
   cat <<EOF
 source .venv/bin/activate
 methyl-workflow-run \\
-  --program $(prog workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json) \\
-  --context-file $(profile mc_dmp_gene_fc) \\
-  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"mc_dmp_gene_fc"}' \\
+  --program $(prog workflow_engine/domain/fixtures/mc_stability.program.json) \\
+  --context-file $(profile samd_research) \\
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"samd_research","researchMode":"dual_fc"}' \\
   --parallel-workers 1
 EOF
 }
@@ -56,9 +56,9 @@ cmd_lifecycle() {
   cat <<EOF
 source .venv/bin/activate
 methyl-workflow-run \\
-  --program $(prog workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json) \\
-  --context-file $(profile mc_dmp_gene_fc) \\
-  --context '{"projectPath":"${PROJECT}","pipelineProfile":"mc_dmp_gene_fc"}' \\
+  --program $(prog workflow_engine/domain/fixtures/study_validation_lifecycle.program.json) \\
+  --context-file $(profile samd_research) \\
+  --context '{"projectPath":"${PROJECT}","pipelineProfile":"samd_research"}' \\
   --parallel-workers 1
 EOF
 }
@@ -67,7 +67,7 @@ cmd_mc_stability_multi() {
   cat <<EOF
 source .venv/bin/activate
 methyl-workflow-run \\
-  --program $(prog workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json) \\
+  --program $(prog workflow_engine/domain/fixtures/mc_stability_staged.program.json) \\
   --context-file $(profile staged_ovr_mc) \\
   --context '{"projectPath":"${PROJECT}","pipelineProfile":"staged_ovr_mc"}' \\
   --parallel-workers 1
@@ -80,7 +80,7 @@ cmd_samd_research_binary() {
   cat <<EOF
 source .venv/bin/activate
 methyl-workflow-run \\
-  --program $(prog workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json) \\
+  --program $(prog workflow_engine/domain/fixtures/samd_research.program.json) \\
   --context-file $(profile samd_research) \\
   --context '{"projectPath":"${SAMD_PROJECT}","pipelineProfile":"samd_research"}' \\
   --parallel-workers 1
@@ -91,7 +91,7 @@ cmd_samd_research_staged() {
   cat <<EOF
 source .venv/bin/activate
 methyl-workflow-run \\
-  --program $(prog workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json) \\
+  --program $(prog workflow_engine/domain/fixtures/mc_stability_staged.program.json) \\
   --context-file $(profile samd_research) \\
   --context '{"projectPath":"${SAMD_PROJECT}","pipelineProfile":"samd_research"}' \\
   --parallel-workers 1
@@ -103,7 +103,7 @@ cmd_samd_enrichment_binary() {
 source .venv/bin/activate
 methyl-study-validate-manifest --project "${SAMD_PROJECT}" --profile samd_holdout_enrichment && \\
 methyl-workflow-run \\
-  --program $(prog workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json) \\
+  --program $(prog workflow_engine/domain/fixtures/samd_holdout_enrichment.program.json) \\
   --context-file $(profile samd_holdout_enrichment) \\
   --context '{"projectPath":"${SAMD_PROJECT}","pipelineProfile":"samd_holdout_enrichment"}' \\
   --parallel-workers 1
@@ -115,7 +115,7 @@ cmd_samd_pivotal_lifecycle() {
 source .venv/bin/activate
 methyl-study-validate-manifest --project "${SAMD_PROJECT}" --profile samd_pivotal && \\
 methyl-workflow-run \\
-  --program $(prog workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json) \\
+  --program $(prog workflow_engine/domain/fixtures/samd_pivotal.program.json) \\
   --context-file $(profile samd_pivotal) \\
   --context '{"projectPath":"${SAMD_PROJECT}","pipelineProfile":"samd_pivotal"}' \\
   --parallel-workers 1

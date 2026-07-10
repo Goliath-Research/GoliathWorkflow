@@ -1,8 +1,7 @@
 {
   "programVersion": 2,
-  "name": "Healthy_PCa_MC_Stability",
-  "description": "MC stability for Healthy vs PCa: split detector, optional dmp_select, mapper, optional biomarker filter, gene_select.",
-  "projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_PCa.json",
+  "name": "MC_Stability",
+  "description": "Monte Carlo stability: plan iterations, parallel centroid seed, detector, optional dmp_select / biomarker filter / gene FeatureCuts, stability + freeze readiness.",
   "body": [
     {
       "do": "validation.plan_iterations",
@@ -86,38 +85,49 @@
             {
               "for": {
                 "in": {
-                  "ref": "project.chromosomes"
+                  "ref": "project.contexts"
                 },
-                "as": "chromosome",
+                "as": "context",
                 "parallel": true
               },
               "do": [
                 {
-                  "do": "pipeline.centroid",
-                  "with": {
-                    "group": {
-                      "ref": "group.label"
+                  "for": {
+                    "in": {
+                      "ref": "project.chromosomes"
                     },
-                    "chromosome": {
-                      "ref": "chromosome"
-                    },
-                    "context": {
-                      "ref": "context"
-                    },
-                    "outputDir": {
-                      "ref": "group.centroidDir"
-                    },
-                    "addSamples": {
-                      "ref": "group.addSamples"
-                    },
-                    "removeSamples": {
-                      "ref": "group.removeSamples"
-                    },
-                    "centroidSeedDir": {
-                      "ref": "group.centroidSeedDir"
-                    }
+                    "as": "chromosome",
+                    "parallel": true
                   },
-                  "node_key": "centroid"
+                  "do": [
+                    {
+                      "do": "pipeline.centroid",
+                      "with": {
+                        "group": {
+                          "ref": "group.label"
+                        },
+                        "chromosome": {
+                          "ref": "chromosome"
+                        },
+                        "context": {
+                          "ref": "context"
+                        },
+                        "outputDir": {
+                          "ref": "group.centroidDir"
+                        },
+                        "addSamples": {
+                          "ref": "group.addSamples"
+                        },
+                        "removeSamples": {
+                          "ref": "group.removeSamples"
+                        },
+                        "centroidSeedDir": {
+                          "ref": "group.centroidSeedDir"
+                        }
+                      },
+                      "node_key": "centroid"
+                    }
+                  ]
                 }
               ]
             }
@@ -135,36 +145,23 @@
             {
               "for": {
                 "in": {
-                  "ref": "project.chromosomes"
+                  "ref": "project.contexts"
                 },
-                "as": "chromosome",
+                "as": "context",
                 "parallel": true
               },
               "do": [
                 {
-                  "do": "pipeline.detector",
-                  "with": {
-                    "chromosome": {
-                      "ref": "chromosome"
+                  "for": {
+                    "in": {
+                      "ref": "project.chromosomes"
                     },
-                    "context": {
-                      "ref": "context"
-                    },
-                    "comparison": {
-                      "ref": "comparison.label"
-                    },
-                    "stepOverride": {
-                      "detection_mode": "discovery_only",
-                      "export_classifier": false
-                    }
+                    "as": "chromosome",
+                    "parallel": true
                   },
-                  "node_key": "detect"
-                },
-                {
-                  "if": "${runDmpSelection}",
-                  "then": [
+                  "do": [
                     {
-                      "do": "pipeline.dmp_select",
+                      "do": "pipeline.detector",
                       "with": {
                         "chromosome": {
                           "ref": "chromosome"
@@ -175,14 +172,38 @@
                         "comparison": {
                           "ref": "comparison.label"
                         },
-                        "group": {
-                          "ref": "comparison.label"
+                        "stepOverride": {
+                          "detection_mode": "discovery_only",
+                          "export_classifier": false
                         }
                       },
-                      "node_key": "dmp_select"
+                      "node_key": "detect"
+                    },
+                    {
+                      "if": "${runDmpSelection}",
+                      "then": [
+                        {
+                          "do": "pipeline.dmp_select",
+                          "with": {
+                            "chromosome": {
+                              "ref": "chromosome"
+                            },
+                            "context": {
+                              "ref": "context"
+                            },
+                            "comparison": {
+                              "ref": "comparison.label"
+                            },
+                            "group": {
+                              "ref": "comparison.label"
+                            }
+                          },
+                          "node_key": "dmp_select"
+                        }
+                      ],
+                      "else": []
                     }
-                  ],
-                  "else": []
+                  ]
                 }
               ]
             },
@@ -249,5 +270,6 @@
       "do": "validation.stability_freeze_readiness",
       "node_key": "readiness"
     }
-  ]
+  ],
+  "projectPath": "workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json"
 }

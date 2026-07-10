@@ -1,8 +1,7 @@
 {
   "programVersion": 2,
-  "name": "StudyValidationLifecycle",
-  "description": "Full study validation: MC stability, freeze, biological outputs, model MC, selection, hold-out.",
-  "projectPath": "/work/projects/prostate-cancer/configs/project_Healthy_vs_PCa1-5-CG.json",
+  "name": "MC_Gene_Enricher_Stability",
+  "description": "Monte Carlo stability focused on enricher gene recurrence (no dmp_select / gene FeatureCuts).",
   "body": [
     {
       "do": "validation.plan_iterations",
@@ -152,11 +151,39 @@
                     },
                     "comparison": {
                       "ref": "comparison.label"
+                    },
+                    "stepOverride": {
+                      "detection_mode": "discovery_only",
+                      "export_classifier": false
                     }
                   },
                   "node_key": "detect"
                 }
               ]
+            },
+            {
+              "do": "pipeline.mapper",
+              "with": {
+                "comparison": {
+                  "ref": "comparison.label"
+                },
+                "group": {
+                  "ref": "comparison.label"
+                }
+              },
+              "node_key": "mapper"
+            },
+            {
+              "do": "pipeline.enricher",
+              "with": {
+                "comparison": {
+                  "ref": "comparison.label"
+                },
+                "group": {
+                  "ref": "comparison.label"
+                }
+              },
+              "node_key": "enricher"
             }
           ]
         }
@@ -169,117 +196,7 @@
     {
       "do": "validation.stability_freeze_readiness",
       "node_key": "readiness"
-    },
-    {
-      "do": "validation.prepare_freeze_project",
-      "node_key": "prepare_freeze"
-    },
-    {
-      "for": {
-        "in": {
-          "ref": "groups"
-        },
-        "as": "group",
-        "parallel": true
-      },
-      "do": [
-        {
-          "for": {
-            "in": {
-              "ref": "project.chromosomes"
-            },
-            "as": "chromosome",
-            "parallel": true
-          },
-          "do": [
-            {
-              "do": "pipeline.centroid",
-              "with": {
-                "group": {
-                  "ref": "group.label"
-                },
-                "chromosome": {
-                  "ref": "chromosome"
-                },
-                "context": {
-                  "ref": "context"
-                }
-              },
-              "node_key": "freeze_centroid"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "for": {
-        "in": {
-          "ref": "project.comparisons"
-        },
-        "as": "comparison",
-        "parallel": true
-      },
-      "do": [
-        {
-          "for": {
-            "in": {
-              "ref": "project.chromosomes"
-            },
-            "as": "chromosome",
-            "parallel": true
-          },
-          "do": [
-            {
-              "do": "pipeline.detector",
-              "with": {
-                "chromosome": {
-                  "ref": "chromosome"
-                },
-                "context": {
-                  "ref": "context"
-                },
-                "comparison": {
-                  "ref": "comparison.label"
-                },
-                "fixedDmpPanel": "${var.fixedDmpPanel}"
-              },
-              "node_key": "freeze_detect"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "do": "pipeline.mapper",
-      "node_key": "mapper"
-    },
-    {
-      "do": "pipeline.derived_measures",
-      "node_key": "derived_measures"
-    },
-    {
-      "do": "pipeline.info_measures",
-      "node_key": "info_measures"
-    },
-    {
-      "do": "pipeline.enricher",
-      "node_key": "enricher"
-    },
-    {
-      "do": "pipeline.progression",
-      "node_key": "progression"
-    },
-    {
-      "do": "validation.model_mc",
-      "node_key": "model_mc"
-    },
-    {
-      "do": "validation.select_best_model",
-      "node_key": "select_best_model"
-    },
-    {
-      "do": "validation.post_model_validation",
-      "node_key": "post_model_validation"
     }
-  ]
+  ],
+  "projectPath": "workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG_smoke.json"
 }

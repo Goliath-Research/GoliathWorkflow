@@ -1,8 +1,7 @@
 {
   "programVersion": 2,
-  "name": "BuffyHealthyVsPCa_MC_Stability_PPI",
-  "description": "Buffy-coat healthy vs PCa MC stability variant that also runs the enricher inside each MC iteration so every run emits ppi_hubs.csv (importance-weighted PPI hubs) for analyte signature-recurrence comparison. Analyte-agnostic: override projectPath via context to run on the Plasma cohort.",
-  "projectPath": "/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json",
+  "name": "SaMD_Holdout_Enrichment",
+  "description": "SaMD holdout-enrichment entry point (MC stability topology). Set pipelineProfile=samd_holdout_enrichment and projectPath in context.",
   "body": [
     {
       "do": "validation.plan_iterations",
@@ -219,18 +218,6 @@
                 }
               },
               "node_key": "mapper"
-            },
-            {
-              "do": "pipeline.enricher",
-              "with": {
-                "comparison": {
-                  "ref": "comparison.label"
-                },
-                "group": {
-                  "ref": "comparison.label"
-                }
-              },
-              "node_key": "enricher"
             }
           ]
         },
@@ -283,5 +270,6 @@
       "do": "validation.stability_freeze_readiness",
       "node_key": "readiness"
     }
-  ]
+  ],
+  "projectPath": "workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json"
 }

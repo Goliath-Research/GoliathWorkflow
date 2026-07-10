@@ -161,7 +161,7 @@ flowchart LR
 | `methyl-export-action-catalog --check` | 37 actions | **PASS** |
 | PostgreSQL `wf.workflow_action_schema` | 33 input + 33 output = 66 rows | **PASS** (2 rows per action) |
 | Azure SQL `wf.workflow_action_schema` | Query succeeded; direction/group count returned | **Likely PASS** (row data not fully captured in MCP response) |
-| Compiled workflow vs program | `buffy_mc_stability` compiled JSON includes `centroid_seed`, `centroidSeedDir` bindings | **Consistent** with [buffy_mc_stability.program.json](workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json) |
+| Compiled workflow vs program | `buffy_mc_stability` compiled JSON includes `centroid_seed`, `centroidSeedDir` bindings | **Consistent** with [mc_stability.program.json](workflow_engine/domain/fixtures/mc_stability.program.json) |
 
 Task schema export: 66 artifacts — aligns with typed task input/output models.
 

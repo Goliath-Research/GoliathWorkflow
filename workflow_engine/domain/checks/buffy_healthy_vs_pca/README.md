@@ -15,7 +15,7 @@ Edit the **study manifest** on `/work` only. Programs and profiles stay in the r
 | Repo path | Role |
 |-----------|------|
 | `configs/buffy_data_driven.program.json` | Single-run discovery (centroid → detector → mapper → enricher) |
-| `configs/buffy_mc_stability.program.json` | 10-iteration MC stability (FeatureCuts + gene select) |
+| `configs/mc_stability.program.json` | 10-iteration MC stability (FeatureCuts + gene select) |
 | `../profiles/mc_dmp_gene_fc.profile.json` | Profile for Buffy MC (`runDmpSelection`, gene FeatureCuts, stability axes) |
 
 | `/work` path | Role |
@@ -37,7 +37,7 @@ Or validate against the live `/work` project (program still from repo):
 ```bash
 python workflow_engine/domain/checks/buffy_healthy_vs_pca/check_pipeline.py \
   --project /work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json \
-  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_data_driven.program.json
+  --program workflow_engine/domain/fixtures/data_driven.program.json
 ```
 
 ## Run analysis (`methyl-workflow-run`)
@@ -48,7 +48,7 @@ From repo root with `.venv` activated. Paths below are relative to repo root.
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_data_driven.program.json \
+  --program workflow_engine/domain/fixtures/data_driven.program.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}' \
   --parallel-workers 1
 ```
@@ -57,7 +57,7 @@ methyl-workflow-run \
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --program workflow_engine/domain/fixtures/mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"mc_dmp_gene_fc"}' \
   --parallel-workers 1

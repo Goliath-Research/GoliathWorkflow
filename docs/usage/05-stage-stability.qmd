@@ -11,7 +11,7 @@ Run repeated train/validation iterations to identify DMPs that recur across runs
 ```bash
 source .venv/bin/activate
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --program workflow_engine/domain/fixtures/mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/samd_research.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"samd_research","researchMode":"dual_fc"}' \
   --parallel-workers 1
@@ -73,7 +73,7 @@ Canonical invocation (same program; prefer SaMD research + mode):
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
+  --program workflow_engine/domain/fixtures/mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/samd_research.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"samd_research","researchMode":"dual_fc"}'
 ```
@@ -115,7 +115,7 @@ Where `<mc_root>` is:
 
 ```bash
 source .venv/bin/activate
-methyl-workflow-run --program workflow_engine/domain/checks/.../buffy_mc_stability.program.json \
+methyl-workflow-run --program workflow_engine/domain/checks/.../mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/your.profile.json
 ```
 

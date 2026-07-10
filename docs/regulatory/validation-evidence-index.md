@@ -281,8 +281,12 @@ Copy this template for each reviewed study/model.
 ### Configuration Inputs
 
 - Study manifest: `/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json`
-- MC snapshot: `…/Buffy_healthy_vs_PCa/monte_carlo_runs/queue/mc_config.json` (`n_iterations: 10`, `dmp_modeling_mode: raw_pool`, `gene_modeling_mode: none`)
-- Analyte: `buffy_coat`; `regulatory.stage: feasibility`; **no partitions**
+- **Migrated research context (2026-07-10):** `/work/projects/prostate-cancer/configs/context_samd_research_buffy.json`
+  - `pipelineProfile: samd_research`, `researchMode: dual_fc`
+  - DomainProgram: `fixtures/mc_stability.program.json` (DB names `MC_Stability` / `SaMD_Research`)
+- Legacy overlay `buffy_mc_gene_fc.json` deprecated (see sibling `.DEPRECATED.md`)
+- MC snapshot (historical run): `…/Buffy_healthy_vs_PCa/monte_carlo_runs/queue/mc_config.json` (`n_iterations: 10`, prior `raw_pool`/`none`)
+- Analyte: `buffy_coat`; manifest `regulatory.stage: expanded_development` with empty `validation_partitions` stubs; **no holdout IDs yet**
 
 ### Model Creation Artifacts
 

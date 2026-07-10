@@ -28,7 +28,7 @@ From repo root with `.venv` activated:
 
 ```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/checks/h_pca_good/configs/h_pca_good_mc_stability.program.json \
+  --program workflow_engine/domain/fixtures/mc_stability.program.json \
   --context-file workflow_engine/domain/profiles/full_biomarker_gene_fc.profile.json \
   --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_H_PCa_good.json","pipelineProfile":"full_biomarker_gene_fc"}' \
   --parallel-workers 1

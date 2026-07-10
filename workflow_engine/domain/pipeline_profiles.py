@@ -273,19 +273,45 @@ def load_profile_file(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _modes_dir() -> Path:
-    return Path(__file__).resolve().parent / "profiles" / "modes"
+def _mode_search_dirs() -> list[Path]:
+    """Directories that may contain ``modes/<id>.mode.json`` (honors METHYL_PROFILE_DIR)."""
+    from methyl_utils.profile_paths import profile_search_dirs
+
+    dirs: list[Path] = []
+    # Sibling of this module (repo checkout or runtime-bundle/domain on sys.path)
+    dirs.append(Path(__file__).resolve().parent / "profiles")
+    for d in profile_search_dirs():
+        dirs.append(d)
+    # Deduplicate while preserving order
+    seen: set[Path] = set()
+    out: list[Path] = []
+    for d in dirs:
+        resolved = d.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        out.append(resolved)
+    return out
 
 
 def load_mode_overlay(mode_id: str) -> Dict[str, Any]:
-    """Load a samd_research modeling-mode overlay (``profiles/modes/<id>.mode.json``)."""
-    path = _modes_dir() / f"{mode_id}.mode.json"
-    if not path.is_file():
-        known = sorted(p.stem.replace(".mode", "") for p in _modes_dir().glob("*.mode.json"))
-        raise FileNotFoundError(
-            f"Unknown research mode {mode_id!r} (expected one of {known}; looked in {path})"
-        )
-    return load_profile_file(path)
+    """Load a samd_research modeling-mode overlay (``…/profiles/modes/<id>.mode.json``)."""
+    candidates: list[Path] = []
+    for profiles_dir in _mode_search_dirs():
+        path = profiles_dir / "modes" / f"{mode_id}.mode.json"
+        candidates.append(path)
+        if path.is_file():
+            return load_profile_file(path)
+    known: list[str] = []
+    for profiles_dir in _mode_search_dirs():
+        modes_dir = profiles_dir / "modes"
+        if modes_dir.is_dir():
+            known.extend(p.stem for p in modes_dir.glob("*.mode.json"))
+    known_u = sorted(set(known))
+    raise FileNotFoundError(
+        f"Unknown research mode {mode_id!r} (expected one of {known_u}; "
+        f"searched: {', '.join(str(c) for c in candidates)})"
+    )
 
 
 def load_samd_research_with_mode(
