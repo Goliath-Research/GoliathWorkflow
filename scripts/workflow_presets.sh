@@ -101,7 +101,7 @@ EOF
 cmd_samd_enrichment_binary() {
   cat <<EOF
 source .venv/bin/activate
-methyl-study-validate-manifest --project "${SAMD_PROJECT}" --profile samd_holdout_enrichment
+methyl-study-validate-manifest --project "${SAMD_PROJECT}" --profile samd_holdout_enrichment && \\
 methyl-workflow-run \\
   --program $(prog workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json) \\
   --context-file $(profile samd_holdout_enrichment) \\
@@ -113,7 +113,7 @@ EOF
 cmd_samd_pivotal_lifecycle() {
   cat <<EOF
 source .venv/bin/activate
-methyl-study-validate-manifest --project "${SAMD_PROJECT}" --profile samd_pivotal
+methyl-study-validate-manifest --project "${SAMD_PROJECT}" --profile samd_pivotal && \\
 methyl-workflow-run \\
   --program $(prog workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json) \\
   --context-file $(profile samd_pivotal) \\
