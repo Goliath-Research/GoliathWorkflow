@@ -231,3 +231,57 @@ This is where the two protocols diverge sharply:
 | **Prostate Utility** | Low sensitivity for early/indolent disease | High sensitivity/NPV for $\ge$ Gleason 3+4 |
 
 **The Takeaway:** GRAIL proved that cell-free DNA methylation is the premier biomarker for liquid biopsy cancer detection. By taking that exact biological principle, shrinking the scope to a tight, prostate-specific gene set, and leveraging EM-seq with custom hybrid capture probes for extreme sequencing depth, you create a focused tool optimized for the exact early-stage clinical window where GRAIL is structurally quiet.
+
+Yes, absolutely. In fact, this is precisely how modular diagnostic pipelines are scaled.
+
+By upgrading your assay to a **"Foot Wide, Mile Deep"** matrix, you transition from a single-organ pre-biopsy gatekeeper to a highly targeted, pan-cancer screening or Minimal Residual Disease (MRD) tracker.
+
+The beauty of the hybrid-capture EM-seq protocol is that it is structurally **modular**. You do not need to invent a new laboratory workflow; you simply expand the probe library. However, scaling the panel width requires a few strategic adaptations to prevent the "mile deep" sequencing coverage from becoming cost-prohibitive or losing sensitivity.
+
+Here is how you expand the panel while keeping your diagnostic precision intact:
+
+---
+
+## 1. The Modular Probe "Plug-and-Play"
+
+When you want to add new cancers (e.g., colorectal, lung, or pancreatic), you don’t change your library preparation method. You still use EM-seq to convert the DNA gently without degrading it.
+
+* **The Scale Up:** You work with your probe vendor (like Twist or IDT) to synthesize an expanded pool of biotinylated oligos (probes).
+* Instead of capturing just your ~100 kb prostate panel, you pull down a ~1 Megabase (Mb) to 2 Mb pan-cancer panel targeting 5,000 to 10,000 localized CpG hypermethylation sites unique to other highly lethal tissues of origin.
+
+## 2. Managing the Sequencing Math (Keeping it "Deep")
+
+If you increase the target area (the width) by 10x, you theoretically need 10x more sequencing reads to maintain that ultra-sensitive 2,000x depth. To keep this financially viable, you utilize **High-Throughput Multiplexing**:
+
+* Instead of running samples on a smaller benchtop sequencer, an expanded panel is moved to ultra-high-output production sequencers (like the Illumina NovaSeq X series).
+* The massive data scale of these instruments allows you to pool dozens of patients' expanded panels into a single sequencing run, keeping your cost-per-patient stable while preserving the extreme raw coverage needed to find low-abundance circulating tumor DNA (ctDNA).
+
+## 3. Shifting the Bioinformatics: The Tissue of Origin (TOO) Classifier
+
+When you expand the panel, your downstream software architecture must evolve. In the prostate-only test, the algorithmic question is a binary gradient: *Is Pattern 4 present or not?*
+
+When you go "Foot Wide," the machine learning model must process the data through a two-step hierarchical neural network:
+
+1. **The Detector:** Is there an abnormal, hypermethylated, non-leukocyte signal present in the blood? (Cancer vs. No Cancer).
+2. **The Classifier:** If yes, what is the **Tissue of Origin (TOO)**? Because methylation is heavily tied to cell identity, colorectal cancer will show deep hypermethylation on entirely different genomic coordinates (like *SEPT9* or *IKZF1*) than lung or prostate tissue. The algorithm maps the methylation haplotype block back to its organ of origin.
+
+## 4. The Biological Catch: High vs. Low Shedders
+
+As you select which cancers to add to your "Foot Wide" panel, you must account for how aggressively different organs shed cfDNA into the blood stream.
+
+* **Easy to Add (High Shedders):** Colorectal, liver, lung, and ovarian cancers shed ctDNA relatively heavily. Your deep-coverage methylation panel will pick these up with stellar sensitivity even at Stage I or II.
+* **Difficult to Add (Low Shedders):** Brain tumors (isolated by the blood-brain barrier), renal cell carcinomas, and early-stage localized prostate cancer are notoriously low shedders. *This is exactly why your initial prostate tool requires such an ultra-focused, deep design.*
+
+---
+
+### The Evolution of Your Tech Stack
+
+```
+[ Inch Wide / Mile Deep ] ───► [ Foot Wide / Mile Deep ]
+- Target: ~50-100 regions       - Target: ~1,000-5,000 regions
+- Scope: Prostate triage        - Scope: 5-10 High-Risk Core Cancers
+- Output: Binary Go/No-Go       - Output: Cancer Signal + Tissue of Origin
+
+```
+
+By designing your initial prostate gatekeeper using **EM-seq + Hybrid Capture**, you are inherently future-proofing your venture. When you are ready to expand, you do not need to rebuild your wet-lab infrastructure—you simply update your probe order manifest, update your alignment reference coordinates, and train your classifier on the new tissue datasets.
