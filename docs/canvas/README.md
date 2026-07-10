@@ -9,6 +9,7 @@ Interactive architecture and documentation hubs built with [Cursor Canvas](https
 | [methylpipeline-db-runbook.canvas.tsx](methylpipeline-db-runbook.canvas.tsx) | Operator DB / workflow runbook |
 | [analyte-comparison.canvas.tsx](analyte-comparison.canvas.tsx) | Analyte comparison explorer |
 | [h-pca-good-mc-analysis.canvas.tsx](h-pca-good-mc-analysis.canvas.tsx) | H PCa good MC analysis |
+| [pca-detection-fitness.canvas.tsx](pca-detection-fitness.canvas.tsx) | PCa Detection doc × MethylPipeline fitness |
 
 ## Open in Cursor
 
