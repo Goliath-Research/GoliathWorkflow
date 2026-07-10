@@ -291,6 +291,7 @@ Five reusable **statistical alternatives** for methylation MC validation are enc
 | 4 | `mc_gene_fc` | `raw_pool` | `featurecuts` | Gene-axis BA gate on enricher/PPI genes |
 | 5 | `mc_dmp_gene_fc` | `featurecuts` | `featurecuts` | Full DMP + gene FeatureCuts (production dual-axis) |
 | 6 | `phase_a_dmp_stability` → `phase_b_gene_from_stable_dmps` | `featurecuts` → `stable_panel` | `none` → `from_stable_dmp_panel` | Two-stage panel lock before gene modeling |
+| SaMD | `samd_research` → `samd_holdout_enrichment` → `samd_pivotal` | `featurecuts` | `featurecuts` | Claim-bound ladder with real holdouts ([usage ch.18](../usage/18-samd-study-lifecycle.qmd)) |
 
 **PPI vs Enrichr (`mc_gene`, `mc_gene_fc`):** profiles default to `actionConfig.enricher.ppi_only: true` (STRING PPI hubs, fast). Set `ppi_only: false` in a site/profile/instance override to use Enrichr pathway libraries instead.
 
@@ -324,6 +325,9 @@ Named presets live in `workflow_engine/domain/profiles/*.profile.json`. Pass via
 | `mc_gene` | discovery_only | off | discovery | enricher gene recurrence (PPI or Enrichr) |
 | `mc_gene_fc` | discovery_only | off | discovery | gene FeatureCuts on enricher/PPI genes |
 | `mc_dmp_gene_fc` | discovery + dmp_select | on | discovery/selected | DMP + gene FeatureCuts stability (production) |
+| `samd_research` | discovery + dmp_select | on | discovery/selected | SaMD research (early-stop; exploratory BA) |
+| `samd_holdout_enrichment` | discovery + dmp_select | on | discovery/selected | SaMD enrichment (requires `locked_test`) |
+| `samd_pivotal` | discovery + dmp_select | on | discovery/selected | SaMD pivotal (requires `pivotal_validation`) |
 | `structural_features` | discovery_only | off | discovery + intersections | gene×region ranked catalog |
 | `staged_ovr_mc` | staged OvR + FeatureCuts | on | discovery | MC stability + progression |
 | `staged_full_lifecycle` | staged OvR + FeatureCuts | on | discovery | MC + freeze + model lifecycle |

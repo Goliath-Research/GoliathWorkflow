@@ -113,6 +113,25 @@ PROFILE_PRESETS: Dict[str, Dict[str, Any]] = {
         "stabilityFeaturecutsEnabled": True,
         "stabilityGeneFeaturecutsEnabled": True,
     },
+    # SaMD lifecycle ladder (healthy vs disease; partitions on study manifest)
+    "samd_research": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": True,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": True,
+    },
+    "samd_holdout_enrichment": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": True,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": True,
+    },
+    "samd_pivotal": {
+        "runDmpSelection": True,
+        "runGeneFeaturecuts": True,
+        "stabilityFeaturecutsEnabled": True,
+        "stabilityGeneFeaturecutsEnabled": True,
+    },
     # Deprecated alias — use mc_dmp_gene_fc
     "buffy_mc_gene_fc": {
         "runDmpSelection": True,

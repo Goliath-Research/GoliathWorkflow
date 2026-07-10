@@ -8,7 +8,7 @@ Navigation hub for the three documentation pillars (Theory, Usage, Implementatio
 
 | Role | Start |
 |------|-------|
-| **Operator** — run a study end-to-end | [Usage manual](usage/index.qmd) Part II (ch.05–09) |
+| **Operator** — run a study end-to-end | [Usage manual](usage/index.qmd) Part II (ch.05–09) · [SaMD lifecycle](usage/18-samd-study-lifecycle.qmd) |
 | **Statistician** — methods and assumptions | [Theory book](theory/index.qmd) — e.g. ch.03 DMP detection |
 | **Developer** — engine, workers, compiler | [Implementation guide](implementation/index.md) |
 | **Workflow author** — DomainPrograms | [DomainProgram language](reference/domain-program-language.md) · [full language v2](reference/domain-program-language-v2.md) + [Architecture: layer model](architecture/layer-model.md) |

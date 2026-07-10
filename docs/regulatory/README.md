@@ -21,6 +21,18 @@ discussions.
 | [Continuous integration and regression testing](continuous-integration-and-regression-testing.md) | Regression gate, test taxonomy, coverage measurement, per-package test expectation, and CI evidence |
 | [Traceability matrix](traceability-matrix.md) | Mapping from product claims and controls to source docs, schemas, tests, and runtime evidence |
 
+## Operational study path (SaMD ladder)
+
+For creating new healthy-vs-disease studies with real holdouts and a small profile progression
+(`samd_research` → `samd_holdout_enrichment` → `samd_pivotal`), use the operator SOP:
+
+- [`../usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd)
+- Scaffold: `methyl-study-init` / validate: `methyl-study-validate-manifest`
+- Example manifests: [`../examples/samd/`](../examples/samd/)
+
+Architecture and profiles are **not** FDA approval. Fill evidence packages in the
+[validation evidence index](validation-evidence-index.md) after pivotal runs.
+
 ## Relationship to Canonical Docs
 
 | Pillar | Canonical Location | Regulatory Use |

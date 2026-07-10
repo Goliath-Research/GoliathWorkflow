@@ -235,12 +235,13 @@ For a binary study the single comparison appears under `detections/all/PCa/`. Mo
 
 1. One CSV per group under `data/`.
 2. One manifest: `controls` + `diseases` (nest `stages[]` for increasing stages), `comparisons: "control_vs_each_disease"`.
-3. Pick a profile from the [full catalog](#step-4--pick-a-profile) (`mc_dmp_gene_fc` binary dual-axis, `mc_*` research axes, `staged_*` multi-stage).
+3. Pick a profile from the [full catalog](#step-4--pick-a-profile) (`mc_dmp_gene_fc` binary dual-axis, `mc_*` research axes, `staged_*` multi-stage). For FDA-style holdout/claim controls use the [SaMD ladder (ch.18)](18-samd-study-lifecycle.qmd) (`samd_research` → `samd_holdout_enrichment` → `samd_pivotal`).
 4. `methyl-workflow-run --program … --context-file …profile.json --context '{"projectPath":…,"pipelineProfile":…}'`.
 5. Read results per comparison under `<project_name>/detections/<control>/<disease>/`.
 
 ## See also
 
+- [SaMD study lifecycle (ch.18)](18-samd-study-lifecycle.qmd) — research → holdout enrichment → pivotal profile ladder, real holdouts, `methyl-study-init`
 - [Project config and layout](02-project-config-and-layout.qmd) — every manifest field
 - [Stage: Stability](05-stage-stability.qmd) — profiles, modeling modes, required `actionConfig` keys
 - [DomainProgram language](../reference/domain-program-language.md) — program vs. project vs. profile vs. context

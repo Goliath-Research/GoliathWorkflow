@@ -95,9 +95,28 @@ Requires DB roles that can call workflow repository procedures (`wf_repo_create_
 
 OpenAPI: [`contracts/openapi.yaml`](../../contracts/openapi.yaml) documents worker paths only.
 
+## SaMD study creation helpers
+
+| Command | Role |
+|---------|------|
+| `methyl-study-init` | Scaffold `/work/projects/<study-id>/` + slim `project_*.json` with `validation_partitions` |
+| `methyl-study-validate-manifest` | Refuse empty required holdouts for `samd_holdout_enrichment` / `samd_pivotal`; block pre-pivotal clinical claims |
+
+Operator SOP: [`../usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd). Presets: `scripts/workflow_presets.sh list` (`samd_*`).
+
+Example validation-start context for enrichment:
+
+```json
+{
+  "projectPath": "/work/projects/my-disease/configs/project_Healthy_vs_Disease.json",
+  "pipelineProfile": "samd_holdout_enrichment"
+}
+```
+
 ## Related
 
 - [DomainProgram language](domain-program-language.md)
 - [Workflow engine](../implementation/workflow-engine.md)
 - [Operator journey](../deployment/operator-journey.md)
 - [Component boundaries](../architecture/component-boundaries.md)
+- [SaMD study lifecycle](../usage/18-samd-study-lifecycle.qmd)

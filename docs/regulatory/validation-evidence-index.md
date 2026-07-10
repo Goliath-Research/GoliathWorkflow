@@ -9,6 +9,12 @@ This index ties real results to exact software, configuration, workflow, data,
 and model artifacts. It is the regulatory bridge between product controls and
 clinical or analytical performance claims.
 
+**When to add a package:** after a `samd_pivotal` (or equivalent) run that used a
+populated `pivotal_validation` partition, freeze readiness go/go_with_risks, and
+a reviewed intended-use statement. Operator path:
+[`../usage/18-samd-study-lifecycle.qmd`](../usage/18-samd-study-lifecycle.qmd).
+Example partition shapes: [`../examples/samd/`](../examples/samd/).
+
 Architecture and release controls show that the product is controlled. This
 index shows what evidence was produced by a specific controlled version.
 

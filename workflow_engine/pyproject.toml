@@ -18,6 +18,8 @@ dependencies = [
 methyl-gateway = "rest.gateway:main"
 methyl-workflow-run = "local.runner:main"
 methyl-study-start = "admin.study_start:main"
+methyl-study-init = "admin.study_init:main"
+methyl-study-validate-manifest = "admin.study_validate:main"
 
 [build-system]
 requires = ["setuptools>=61"]

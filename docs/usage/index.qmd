@@ -22,6 +22,7 @@ For statistical background, use [`docs/theory/`](../theory/index.qmd). For compi
 |------|------------|
 | Understand entry points | [Orchestration (ch.04)](04-orchestration-workflow-run.qmd) |
 | First end-to-end run | [Tutorial (ch.16)](16-tutorial-healthy-vs-cancer-stages.qmd) |
+| SaMD holdouts / pivotal path | [SaMD lifecycle (ch.18)](18-samd-study-lifecycle.qmd) |
 | One stage's artifacts and gates | Part II (ch.05–09) — each chapter links back to workflow-run |
 | Legacy CLI flags | `packages/methylvalidation/docs/USAGE.md` |
 
@@ -31,6 +32,7 @@ For statistical background, use [`docs/theory/`](../theory/index.qmd). For compi
 - **New project setup:** Chapters `01`, `02`, `04` (orchestration), then `05` or [Tutorial ch.16](16-tutorial-healthy-vs-cancer-stages.qmd).
 - **Fast path (stage execution):** [Orchestration ch.04](04-orchestration-workflow-run.qmd) → `methyl-workflow-run`; stage detail in ch.05–09.
 - **Guided tutorial (healthy vs. cancer stages):** Chapter `16` — end-to-end walkthrough; [profile catalog in ch.16](16-tutorial-healthy-vs-cancer-stages.qmd#step-4--pick-a-profile).
+- **SaMD study ladder (research → holdouts → pivotal):** Chapter `18` — [`18-samd-study-lifecycle.qmd`](18-samd-study-lifecycle.qmd); scaffold with `methyl-study-init`.
 - **Hyperparameter versioning (CAAS):** `17-content-addressed-action-store.qmd` (Part V; follows the tutorial).
 - **Daily operations:** `10-artifacts-and-qa-checks.qmd` through `12-command-cookbook.qmd`.
 - **Scaling MC across machines:** Chapter `13` — shared `/work` storage and queue subcommands.

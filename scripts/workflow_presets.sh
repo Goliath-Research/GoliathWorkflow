@@ -74,7 +74,63 @@ methyl-workflow-run \\
 EOF
 }
 
-PRESETS=(stability_binary lifecycle mc_stability_multi)
+SAMD_PROJECT="${METHYL_SAMD_PROJECT_PATH:-${METHYL_PROJECT_PATH:-/work/projects/example-disease/configs/project_Healthy_vs_Disease.json}}"
+
+cmd_samd_research_binary() {
+  cat <<EOF
+source .venv/bin/activate
+methyl-workflow-run \\
+  --program $(prog workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json) \\
+  --context-file $(profile samd_research) \\
+  --context '{"projectPath":"${SAMD_PROJECT}","pipelineProfile":"samd_research"}' \\
+  --parallel-workers 1
+EOF
+}
+
+cmd_samd_research_staged() {
+  cat <<EOF
+source .venv/bin/activate
+methyl-workflow-run \\
+  --program $(prog workflow_engine/domain/checks/pca1_5_cg/configs/pca1_5_mc_stability.program.json) \\
+  --context-file $(profile samd_research) \\
+  --context '{"projectPath":"${SAMD_PROJECT}","pipelineProfile":"samd_research"}' \\
+  --parallel-workers 1
+EOF
+}
+
+cmd_samd_enrichment_binary() {
+  cat <<EOF
+source .venv/bin/activate
+methyl-study-validate-manifest --project "${SAMD_PROJECT}" --profile samd_holdout_enrichment
+methyl-workflow-run \\
+  --program $(prog workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json) \\
+  --context-file $(profile samd_holdout_enrichment) \\
+  --context '{"projectPath":"${SAMD_PROJECT}","pipelineProfile":"samd_holdout_enrichment"}' \\
+  --parallel-workers 1
+EOF
+}
+
+cmd_samd_pivotal_lifecycle() {
+  cat <<EOF
+source .venv/bin/activate
+methyl-study-validate-manifest --project "${SAMD_PROJECT}" --profile samd_pivotal
+methyl-workflow-run \\
+  --program $(prog workflow_engine/domain/checks/pca1_5_cg/configs/study_validation_lifecycle.program.json) \\
+  --context-file $(profile samd_pivotal) \\
+  --context '{"projectPath":"${SAMD_PROJECT}","pipelineProfile":"samd_pivotal"}' \\
+  --parallel-workers 1
+EOF
+}
+
+PRESETS=(
+  stability_binary
+  lifecycle
+  mc_stability_multi
+  samd_research_binary
+  samd_research_staged
+  samd_enrichment_binary
+  samd_pivotal_lifecycle
+)
 
 list_presets() {
   printf '%s\n' "${PRESETS[@]}"
@@ -85,6 +141,10 @@ show_preset() {
     stability_binary) cmd_stability_binary ;;
     lifecycle) cmd_lifecycle ;;
     mc_stability_multi) cmd_mc_stability_multi ;;
+    samd_research_binary) cmd_samd_research_binary ;;
+    samd_research_staged) cmd_samd_research_staged ;;
+    samd_enrichment_binary) cmd_samd_enrichment_binary ;;
+    samd_pivotal_lifecycle) cmd_samd_pivotal_lifecycle ;;
     *) echo "Unknown preset: $1" >&2; list_presets >&2; exit 1 ;;
   esac
 }
