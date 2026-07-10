@@ -232,30 +232,6 @@
             "feature_family_set": "gene"
           }
         }
-      },
-      "stability_early_stop_enabled": false,
-      "holdout_eval": false,
-      "require_biological_review_for_model": false,
-      "biological_review_confirmed": false,
-      "regulatory": {
-        "stage": "feasibility",
-        "intended_use_summary": "Deprecated profile alias mc_dmp_gene_fc folded into samd_research mode dual_fc.",
-        "allow_clinical_performance_claims": false,
-        "claim_boundary": "Research axis via samd_research mode overlay; not pivotal claims.",
-        "primary_analyte": "buffy_coat"
-      },
-      "validation_partitions": {
-        "development_train": [],
-        "internal_validation": [],
-        "locked_test": [],
-        "pivotal_validation": [],
-        "post_market_monitoring": [],
-        "independence_keys": [
-          "sample_id",
-          "patient_id",
-          "site_id",
-          "batch"
-        ]
       }
     },
     "gene_selection": {

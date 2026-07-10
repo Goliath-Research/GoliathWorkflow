@@ -117,3 +117,19 @@ def test_samd_research_accepts_research_mode_overlay() -> None:
     assert enricher.get("ppi_only") is True
     validation = (ctx.get("actionConfig") or {}).get("validation") or {}
     assert validation.get("stability_dmp_freq") == 0.0
+    # Recommended path keeps samd_research early-stop (mode overlay must not clear it).
+    assert validation.get("stability_early_stop_enabled") is True
+
+
+@pytest.mark.parametrize(
+    "mode_id",
+    ["dmp_raw", "dmp_fc", "gene_enricher", "gene_fc", "dual_fc"],
+)
+def test_samd_research_mode_preserves_early_stop(mode_id: str) -> None:
+    ctx = apply_pipeline_profile(
+        {"projectPath": "/tmp/project.json", "researchMode": mode_id},
+        load_profile("samd_research"),
+    )
+    validation = (ctx.get("actionConfig") or {}).get("validation") or {}
+    assert validation.get("stability_early_stop_enabled") is True
+    assert ctx["researchMode"] == mode_id

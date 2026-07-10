@@ -293,13 +293,49 @@ def load_samd_research_with_mode(
     *,
     pipeline_profile: str = "samd_research",
 ) -> Dict[str, Any]:
-    """Merge ``samd_research.profile.json`` with a named mode overlay."""
+    """Merge ``samd_research.profile.json`` with a named mode overlay.
+
+    Mode overlays carry statistical axis knobs only. Legacy ``mc_*`` alias folds
+    additionally reset SaMD research lifecycle flags (early-stop, holdout eval,
+    regulatory stubs) so historical ``mc_*`` behavior is preserved. Prefer
+    ``pipelineProfile: samd_research`` + ``researchMode`` so early-stop stays on.
+    """
     from methyl_utils.profile_paths import resolve_profile_path
 
     base = load_profile_file(resolve_profile_path("samd_research"))
     merged = _deep_merge(base, load_mode_overlay(mode_id))
     merged["pipelineProfile"] = pipeline_profile
     merged["researchMode"] = mode_id
+    if pipeline_profile in _SAMD_RESEARCH_MODES:
+        # Deprecated mc_* path: do not inherit samd_research early-stop / claim shell.
+        ac = dict(merged.get("actionConfig") or {})
+        val = dict(ac.get("validation") or {})
+        val["stability_early_stop_enabled"] = False
+        val["holdout_eval"] = False
+        val["require_biological_review_for_model"] = False
+        val["biological_review_confirmed"] = False
+        val["regulatory"] = {
+            "stage": "feasibility",
+            "intended_use_summary": (
+                f"Deprecated profile alias {pipeline_profile} folded into "
+                f"samd_research mode {mode_id}."
+            ),
+            "allow_clinical_performance_claims": False,
+            "claim_boundary": (
+                "Research axis via samd_research mode overlay; not pivotal claims."
+            ),
+            "primary_analyte": "buffy_coat",
+        }
+        val["validation_partitions"] = {
+            "development_train": [],
+            "internal_validation": [],
+            "locked_test": [],
+            "pivotal_validation": [],
+            "post_market_monitoring": [],
+            "independence_keys": ["sample_id", "patient_id", "site_id", "batch"],
+        }
+        ac["validation"] = val
+        merged["actionConfig"] = ac
     return merged
 
 
