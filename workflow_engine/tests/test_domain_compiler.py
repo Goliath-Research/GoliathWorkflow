@@ -411,6 +411,40 @@ def test_nested_parallel_shared_assign_still_rejected():
         compile_domain_program(program)
 
 
+def test_nested_parallel_shared_assign_rejected_when_outer_assign_first():
+    """Outer sibling assign before nested parallel must still race-detect."""
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "NestedParallelAssignOuterFirst",
+            "projectPath": "/work/project.json",
+            "variables": {"flag": {"schemaRef": "schemas/vars/bool.schema.json"}},
+            "body": [
+                {
+                    "parallel": [
+                        {
+                            "assign": "flag",
+                            "using": "workflow.const_bool",
+                            "with": {"value": False},
+                        },
+                        {
+                            "parallel": [
+                                {
+                                    "assign": "flag",
+                                    "using": "workflow.const_bool",
+                                    "with": {"value": True},
+                                }
+                            ]
+                        },
+                    ]
+                }
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="parallel"):
+        compile_domain_program(program)
+
+
 def test_assign_schema_plug_mismatch_rejected():
     program = DomainProgram.model_validate(
         {
