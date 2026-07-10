@@ -555,8 +555,22 @@ def _compile_parallel(
     par_key = ctx.fresh_key("parallel")
     ctx.nodes.append(WorkflowNodeSpec(node_key=par_key, node_type="PARALLEL"))
     _link(parent_key, par_key, order, branch, ctx)
-    for idx, raw in enumerate(step.parallel):
-        _compile_one(ctx, _parse_step(raw), par_key, idx, branch="PARALLEL", in_parallel=True)
+    # Scope sibling-write tracking to this PARALLEL block. Sequential parallel
+    # blocks must not inherit each other's targets (no data race across time).
+    # When nested under a parallel ancestor, union local writes back so outer
+    # siblings still detect shared mutable assigns.
+    prev_targets = set(ctx.assign_targets_in_parallel)
+    ctx.assign_targets_in_parallel = set()
+    local_writes: Set[str] = set()
+    try:
+        for idx, raw in enumerate(step.parallel):
+            _compile_one(ctx, _parse_step(raw), par_key, idx, branch="PARALLEL", in_parallel=True)
+        local_writes = set(ctx.assign_targets_in_parallel)
+    finally:
+        if in_parallel:
+            ctx.assign_targets_in_parallel = prev_targets | local_writes
+        else:
+            ctx.assign_targets_in_parallel = prev_targets
     return par_key
 
 

@@ -339,6 +339,78 @@ def test_parallel_shared_assign_rejected():
         compile_domain_program(program)
 
 
+def test_sequential_parallel_blocks_may_reassign_same_var():
+    """Two sequential PARALLEL blocks writing the same var are not a data race."""
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "SequentialParallelAssign",
+            "projectPath": "/work/project.json",
+            "variables": {"flag": {"schemaRef": "schemas/vars/bool.schema.json"}},
+            "body": [
+                {
+                    "parallel": [
+                        {
+                            "assign": "flag",
+                            "using": "workflow.const_bool",
+                            "with": {"value": True},
+                        },
+                        {"do": "workflow.const_int", "with": {"value": 1}},
+                    ]
+                },
+                {
+                    "parallel": [
+                        {
+                            "assign": "flag",
+                            "using": "workflow.const_bool",
+                            "with": {"value": False},
+                        },
+                        {"do": "workflow.const_int", "with": {"value": 2}},
+                    ]
+                },
+            ],
+        }
+    )
+    result = compile_domain_program(program)
+    assert sum(1 for n in result.workflow.nodes if n.node_type == "PARALLEL") == 2
+    flag_bindings = [b for b in result.workflow.output_bindings if b.var_name == "flag"]
+    assert len(flag_bindings) == 2
+
+
+def test_nested_parallel_shared_assign_still_rejected():
+    """Nested PARALLEL under an outer PARALLEL must still detect sibling races."""
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "NestedParallelAssign",
+            "projectPath": "/work/project.json",
+            "variables": {"flag": {"schemaRef": "schemas/vars/bool.schema.json"}},
+            "body": [
+                {
+                    "parallel": [
+                        {
+                            "parallel": [
+                                {
+                                    "assign": "flag",
+                                    "using": "workflow.const_bool",
+                                    "with": {"value": True},
+                                }
+                            ]
+                        },
+                        {
+                            "assign": "flag",
+                            "using": "workflow.const_bool",
+                            "with": {"value": False},
+                        },
+                    ]
+                }
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="parallel"):
+        compile_domain_program(program)
+
+
 def test_assign_schema_plug_mismatch_rejected():
     program = DomainProgram.model_validate(
         {
