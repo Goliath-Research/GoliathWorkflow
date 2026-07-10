@@ -18,6 +18,21 @@ _PROFILE_ALIASES: Dict[str, str] = {
     "discovery_gene_featurecuts": "mc_dmp_gene_fc",
 }
 
+# Legacy mc_* research axes → samd_research + named mode overlay (profiles/modes/*.mode.json).
+_SAMD_RESEARCH_MODES: Dict[str, str] = {
+    "mc_dmp": "dmp_raw",
+    "mc_dmp_fc": "dmp_fc",
+    "mc_gene": "gene_enricher",
+    "mc_gene_fc": "gene_fc",
+    "mc_dmp_gene_fc": "dual_fc",
+}
+
+_RESEARCH_MODE_IDS = frozenset(_SAMD_RESEARCH_MODES.values())
+
+_STRING_SCOPE_KEYS = frozenset(
+    {"researchMode", "dmp_modeling_mode", "gene_modeling_mode"}
+)
+
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
     "usePangenome": False,
     "runDmpSelection": False,
@@ -258,21 +273,74 @@ def load_profile_file(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _modes_dir() -> Path:
+    return Path(__file__).resolve().parent / "profiles" / "modes"
+
+
+def load_mode_overlay(mode_id: str) -> Dict[str, Any]:
+    """Load a samd_research modeling-mode overlay (``profiles/modes/<id>.mode.json``)."""
+    path = _modes_dir() / f"{mode_id}.mode.json"
+    if not path.is_file():
+        known = sorted(p.stem.replace(".mode", "") for p in _modes_dir().glob("*.mode.json"))
+        raise FileNotFoundError(
+            f"Unknown research mode {mode_id!r} (expected one of {known}; looked in {path})"
+        )
+    return load_profile_file(path)
+
+
+def load_samd_research_with_mode(
+    mode_id: str,
+    *,
+    pipeline_profile: str = "samd_research",
+) -> Dict[str, Any]:
+    """Merge ``samd_research.profile.json`` with a named mode overlay."""
+    from methyl_utils.profile_paths import resolve_profile_path
+
+    base = load_profile_file(resolve_profile_path("samd_research"))
+    merged = _deep_merge(base, load_mode_overlay(mode_id))
+    merged["pipelineProfile"] = pipeline_profile
+    merged["researchMode"] = mode_id
+    return merged
+
+
 def load_profile(name_or_path: str | Path) -> Dict[str, Any]:
     from methyl_utils.profile_paths import resolve_profile_path
 
     p = Path(name_or_path)
     if p.is_file():
-        return load_profile_file(p)
+        data = load_profile_file(p)
+        key = str(data.get("pipelineProfile") or "")
+        if key in _PROFILE_ALIASES:
+            key = _PROFILE_ALIASES[key]
+        if key in _SAMD_RESEARCH_MODES:
+            return load_samd_research_with_mode(
+                _SAMD_RESEARCH_MODES[key],
+                pipeline_profile=key,
+            )
+        if key == "samd_research":
+            data.setdefault("researchMode", "dual_fc")
+        return data
+
     key = str(name_or_path)
     if key in _PROFILE_ALIASES:
         return load_profile(_PROFILE_ALIASES[key])
+    if key in _SAMD_RESEARCH_MODES:
+        return load_samd_research_with_mode(
+            _SAMD_RESEARCH_MODES[key],
+            pipeline_profile=key,
+        )
+    if key in _RESEARCH_MODE_IDS:
+        # Allow pipelineProfile / name = mode id → samd_research + overlay.
+        return load_samd_research_with_mode(key, pipeline_profile="samd_research")
     try:
-        return load_profile_file(resolve_profile_path(key))
+        data = load_profile_file(resolve_profile_path(key))
     except FileNotFoundError:
         if key in PROFILE_PRESETS:
             return {"pipelineProfile": key, **PROFILE_PRESETS[key]}
         raise FileNotFoundError(f"Unknown pipeline profile: {name_or_path!r}") from None
+    if key == "samd_research":
+        data.setdefault("researchMode", "dual_fc")
+    return data
 
 
 def profile_action_config(profile: Mapping[str, Any]) -> Dict[str, Any]:
@@ -412,14 +480,31 @@ def apply_pipeline_profile(
     """Merge a profile dict into workflow instance context (flags + actionConfig)."""
     out = dict(context)
     name = profile.get("pipelineProfile")
+    # Prefer context researchMode when applying samd_research (mode overlay path).
+    context_mode = out.get("researchMode")
+    if (
+        name == "samd_research"
+        and context_mode
+        and str(context_mode) != str(profile.get("researchMode") or "dual_fc")
+    ):
+        profile = load_samd_research_with_mode(
+            str(context_mode),
+            pipeline_profile="samd_research",
+        )
+        name = profile.get("pipelineProfile")
     if name:
         out["pipelineProfile"] = name
     preset = PROFILE_PRESETS.get(str(name), {}) if name else {}
     for key, val in {**preset, **profile}.items():
         if key in ("pipelineProfile", "actionConfig", "step_config_overrides"):
             continue
+        if key in _STRING_SCOPE_KEYS and val is not None:
+            out.setdefault(key, val)
+            continue
         if isinstance(val, bool) or key in PIPELINE_FLAG_DEFAULTS:
             out[key] = bool(val)
+    if profile.get("researchMode") and "researchMode" not in out:
+        out["researchMode"] = profile["researchMode"]
     profile_ac = profile_action_config(profile)
     if profile_ac:
         existing = dict(out.get("actionConfig") or {})

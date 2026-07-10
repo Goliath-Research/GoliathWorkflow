@@ -155,7 +155,160 @@ Copy this template for each reviewed study/model.
 
 | Evidence Package | Product Release | Study / Claim | Status | Primary Result Location |
 |------------------|-----------------|---------------|--------|-------------------------|
-| TBD | TBD | TBD | draft | TBD |
+| EV-PCA-PLASMA-2026-06 | `/work/epimethyl/current` manifest `2026.06.1` | Plasma healthy vs PCa (cfDNA); **feasibility only** | draft — engineering/feasibility | `/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/` |
+| EV-PCA-HGOOD-2026-06 | `/work/epimethyl/current` manifest `2026.06.1` | H_PCa_good buffy; **feasibility only** | draft — engineering/feasibility | `/work/projects/prostate-cancer/H_PCa_good/` |
+| EV-PCA-BUFFY-2026-07 | `/work/epimethyl/current` manifest `2026.06.1` | Buffy healthy vs PCa; **feasibility only** | draft — incomplete model chain | `/work/projects/prostate-cancer/Buffy_healthy_vs_PCa/` |
+
+> **Claim boundary:** All three packages are **feasibility / expanded-development engineering evidence**.
+> Study manifests have `regulatory.stage: feasibility`, **no** `validation_partitions`, and
+> `allow_clinical_performance_claims` must remain false. They are **not** pivotal clinical
+> performance evidence. See [`samd-submission-scaffold.md`](samd-submission-scaffold.md).
+>
+> **Profile provenance:** New packages should record both `pipelineProfile` and `researchMode`
+> (e.g. `samd_research` + `dual_fc`). Legacy `mc_*` names fold into those modes; historical
+> runs below may only list the MC snapshot path.
+
+---
+
+## Evidence Package: Plasma_healthy_vs_PCa (EV-PCA-PLASMA-2026-06)
+
+### Administrative Metadata
+
+- Evidence package ID: `EV-PCA-PLASMA-2026-06`
+- Review status: draft
+- Date: 2026-07-10 (index fill from on-disk artifacts)
+- Intended use / claim: Research-use cfDNA methylation healthy vs prostate cancer discrimination — **feasibility only; no clinical performance claim**
+
+### Software and Release
+
+- MethylPipeline release bundle: `/work/epimethyl/current/` (manifest version `2026.06.1`)
+- Release `manifest.json` path: `/work/epimethyl/current/manifest.json`
+- Release manifest SHA256: TBD (operator to record at package approval)
+- Git tag / commit: TBD
+- CI run / JUnit / coverage: TBD
+
+### Configuration Inputs
+
+- Study manifest path: `/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json`
+- Site manifest path: `/work/site/methyl_site.json` (typical)
+- Pipeline / MC snapshot: `/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/monte_carlo_runs/queue/mc_config.json` (`n_iterations: 10`)
+- DomainProgram: historical MC stability / freeze / model path (not SaMD ladder)
+
+### Data and Cohorts
+
+- Project/study: `Plasma_healthy_vs_PCa`
+- Analyte: `cfdna` (`regulatory.stage: feasibility`)
+- Validation partitions: **none declared** (`locked_test` / `pivotal_validation` empty/absent)
+
+### Model Creation Artifacts
+
+- Monte Carlo run root: `/work/projects/prostate-cancer/Plasma_healthy_vs_PCa/monte_carlo_runs/`
+- Stability summary: `…/stability/stability_summary.json` (10 runs; ~84 649 stable DMPs @ freq≥0.7; ~23 339 stable genes @ freq≥0.5; discovery/enricher axes)
+- Stable panels: `…/stability/stable_dmps_production.csv`, `…/stability/stable_genes_production.csv`
+- Freeze readiness AR: `…/.action_results/validation_stability_freeze_readiness.default.json` (`result_code: 0`)
+- Production: `…/monte_carlo_runs/production/` (`locked_model_spec.json`, `model_bundle/`, `pccp_draft.json`, `post_market_monitoring_scaffold.json`)
+
+### Validation Results
+
+- Internal stability: see `stability_summary.json`
+- Post-model / clinical reports: `…/monte_carlo_runs/post_model_validation/` (10× `clinical_performance_report.json`)
+- True holdout (WF3 `locked_test` / `pivotal_validation`): **not run** — partitions undeclared
+
+### Deviations and Limitations
+
+- Feasibility stage; no patient-disjoint holdout partitions
+- Post-model reports are frozen-model MC evaluation, not classical pivotal holdout
+- Release SHA / CI binding TBD at approval
+
+### Decision
+
+- Verdict: accepted with risks (engineering/feasibility registry only)
+- Required follow-up: declare partitions; promote via `samd_holdout_enrichment` / `samd_pivotal` before any clinical claim
+
+---
+
+## Evidence Package: H_PCa_good (EV-PCA-HGOOD-2026-06)
+
+### Administrative Metadata
+
+- Evidence package ID: `EV-PCA-HGOOD-2026-06`
+- Review status: draft
+- Date: 2026-07-10
+- Intended use / claim: Buffy-coat healthy vs PCa (good cohort) — **feasibility only**
+
+### Software and Release
+
+- Same release root as Plasma (`2026.06.1`); SHA/CI TBD
+
+### Configuration Inputs
+
+- Study manifest: `/work/projects/prostate-cancer/configs/project_H_PCa_good.json`
+- MC snapshot: `…/H_PCa_good/monte_carlo_runs/queue/mc_config.json` (`n_iterations: 10`)
+- Analyte: `buffy_coat`; `regulatory.stage: feasibility`; **no partitions**
+
+### Model Creation Artifacts
+
+- Stability: `…/H_PCa_good/monte_carlo_runs/stability/stability_summary.json` (classifier DMP/gene axes; **5** runs analyzed for DMP panel ~3 824 stable DMPs; **gene_stable_at_threshold: 0** with BA skips)
+- Freeze readiness AR: `…/.action_results/validation_stability_freeze_readiness.default.json` (`result_code: 0`)
+- Production: `…/monte_carlo_runs/production/` (`locked_model_spec.json`, `production_summary.json`, `model_bundle/`, `pccp_draft.*`, `post_market_monitoring_scaffold.*`)
+- Post-model validation dir: **absent**
+
+### Deviations and Limitations
+
+- Empty stable gene panel at threshold; gene-axis BA filtering skipped many panels
+- No true holdout partitions; feasibility only
+
+### Decision
+
+- Verdict: accepted with risks (feasibility registry)
+- Required follow-up: gene-axis review; partitions; SaMD ladder before claims
+
+---
+
+## Evidence Package: Buffy_healthy_vs_PCa (EV-PCA-BUFFY-2026-07)
+
+### Administrative Metadata
+
+- Evidence package ID: `EV-PCA-BUFFY-2026-07`
+- Review status: draft
+- Date: 2026-07-10
+- Intended use / claim: Buffy healthy vs PCa — **feasibility; incomplete freeze→model chain**
+
+### Software and Release
+
+- Same release root (`2026.06.1`); SHA/CI TBD
+
+### Configuration Inputs
+
+- Study manifest: `/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json`
+- MC snapshot: `…/Buffy_healthy_vs_PCa/monte_carlo_runs/queue/mc_config.json` (`n_iterations: 10`, `dmp_modeling_mode: raw_pool`, `gene_modeling_mode: none`)
+- Analyte: `buffy_coat`; `regulatory.stage: feasibility`; **no partitions**
+
+### Model Creation Artifacts
+
+- Stability: `…/stability/stability_summary.json` (10 runs; ~79 646 stable DMPs; ~22 647 stable genes; discovery/enricher axes)
+- Freeze readiness AR: present (`result_code: 0`)
+- Production / locked model / PCCP under `monte_carlo_runs/production/`: **absent**
+- Post-model validation: **absent**
+
+### Deviations and Limitations
+
+- Stability + freeze-readiness only; no production freeze/model bundle on disk for this package
+- Not suitable even as internal model-claim evidence until freeze→model completes
+
+### Decision
+
+- Verdict: accepted with risks (stability-only registry entry)
+- Required follow-up: complete freeze/model; partitions; SaMD ladder
+
+---
+
+## Gap list (ops follow-up)
+
+1. Populate `validation_partitions` on live prostate manifests (patient-disjoint `locked_test`, later `pivotal_validation`).
+2. Re-run enrichment/pivotal tiers with `samd_holdout_enrichment` / `samd_pivotal` when cohorts allow.
+3. Bind release manifest SHA256 + CI JUnit into each package at approval.
+4. Complete Buffy freeze→model chain before elevating that package.
 
 ## Minimum Evidence Set For A Model Claim
 

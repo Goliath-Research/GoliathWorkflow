@@ -1,10 +1,18 @@
 {
-  "programVersion": 1,
+  "programVersion": 2,
   "name": "SamplePrepRemediationPipeline",
-  "description": "Batch remediation: re-download FASTQs, R2 front-trim, realign, and final QC before extract.",
+  "description": "Batch remediation: re-download FASTQs, R2 front-trim, realign, and final QC before extract. Typed gate variables document the QC bus (catalog bindings populate them).",
   "projectPath": "${var.projectPath}",
   "variables": {
-    "primaryAnalyte": "cfdna"
+    "primaryAnalyte": "cfdna",
+    "qcPass": {
+      "schemaRef": "schemas/vars/bool.schema.json",
+      "description": "Alignment QC overall_pass from sample.methyl_qc"
+    },
+    "extractionQcPass": {
+      "schemaRef": "schemas/vars/bool.schema.json",
+      "description": "Extraction QC overall_pass from sample.extraction_qc"
+    }
   },
   "phases": [
     {

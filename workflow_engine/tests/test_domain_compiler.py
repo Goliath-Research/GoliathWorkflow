@@ -160,6 +160,19 @@ def test_sample_prep_still_compiles():
     wf = result.workflow
     assert wf.name == "SamplePrepPipeline"
     assert any(n.node_type == "FOREACH" for n in wf.nodes)
+    # Hybrid typed assign: gate booleans declared; catalog bindings still emit
+    assert wf.variable_schemas.get("qcPass") == "schemas/vars/bool.schema.json"
+    assert wf.variable_schemas.get("remediateAlignment") == "schemas/vars/bool.schema.json"
+    assert wf.variable_schemas.get("extractionQcPass") == "schemas/vars/bool.schema.json"
+    assert "primaryAnalyte" in result.context_json
+    binding_vars = {b.var_name for b in wf.output_bindings}
+    assert "qcPass" in binding_vars
+    assert "extractionQcPass" in binding_vars
+
+
+def test_sample_prep_remediate_typed_gates_compile():
+    result = compile_domain_program(_load("sample_prep_remediate.program.json"))
+    assert result.workflow.variable_schemas.get("qcPass") == "schemas/vars/bool.schema.json"
 
 
 def test_buffy_action_templates_are_self_contained_when_resolved():

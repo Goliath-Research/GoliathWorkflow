@@ -12,8 +12,8 @@ Run repeated train/validation iterations to identify DMPs that recur across runs
 source .venv/bin/activate
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
-  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"mc_dmp_gene_fc"}' \
+  --context-file workflow_engine/domain/profiles/samd_research.profile.json \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"samd_research","researchMode":"dual_fc"}' \
   --parallel-workers 1
 ```
 
@@ -56,31 +56,31 @@ In the pipeline profile **`actionConfig.validation`** (set `METHYL_PROFILE` or p
   - `dmp_modeling_mode`, `gene_modeling_mode`
   - `stability_gene_featurecuts_max_dmps`, `stability_gene_featurecuts_max_genes` (site/profile caps)
 
-## Statistical modeling modes (generic profiles)
+## Statistical modeling modes (`samd_research` + `researchMode`)
 
-Profiles are **process-agnostic**; study facts stay in the study manifest. See `docs/reference/domain-program-language.md` for the full matrix.
+Profiles are **process-agnostic**; study facts stay in the study manifest. Prefer `samd_research` with a named `researchMode` overlay; legacy `mc_*` names fold into the same modes. See `docs/reference/domain-program-language.md` for the full matrix.
 
-| Goal | Profile | Key modes |
-|------|---------|-----------|
-| DMP recurrence only | `mc_dmp` | `dmp_modeling_mode: raw_pool` |
-| BA-gated DMP panel | `mc_dmp_fc` | `dmp_modeling_mode: featurecuts` |
-| Enricher gene recurrence (PPI or Enrichr) | `mc_gene` | `stability_gene_recurrence_source: enricher`, `enricher.ppi_only` |
-| Gene FeatureCuts on enricher/PPI genes | `mc_gene_fc` | `gene_modeling_mode: featurecuts` |
-| Full DMP + gene FC (production) | `mc_dmp_gene_fc` | both axes featurecuts |
+| Goal | `researchMode` (legacy profile) | Key modes |
+|------|----------------------------------|-----------|
+| DMP recurrence only | `dmp_raw` (`mc_dmp`) | `dmp_modeling_mode: raw_pool` |
+| BA-gated DMP panel | `dmp_fc` (`mc_dmp_fc`) | `dmp_modeling_mode: featurecuts` |
+| Enricher gene recurrence (PPI or Enrichr) | `gene_enricher` (`mc_gene`) | `stability_gene_recurrence_source: enricher`, `enricher.ppi_only` |
+| Gene FeatureCuts on enricher/PPI genes | `gene_fc` (`mc_gene_fc`) | `gene_modeling_mode: featurecuts` |
+| Full DMP + gene FC | `dual_fc` (`mc_dmp_gene_fc`) | both axes featurecuts |
 | Two-phase panel lock | `phase_a_dmp_stability` → `phase_b_gene_from_stable_dmps` | stable DMP panel then gene FC |
 
-Canonical invocation (same program/profile as above):
+Canonical invocation (same program; prefer SaMD research + mode):
 
 ```bash
 methyl-workflow-run \
   --program workflow_engine/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
-  --context-file workflow_engine/domain/profiles/mc_dmp_gene_fc.profile.json \
-  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json"}'
+  --context-file workflow_engine/domain/profiles/samd_research.profile.json \
+  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json","pipelineProfile":"samd_research","researchMode":"dual_fc"}'
 ```
 
 Mapper CSV pattern follows modeling mode: discovery → `dmps-*-discovery.csv`; featurecuts → `dmps-*-selected.csv`. Downstream consumers should prefer **`dmps-*-selected.csv`**.
 
-Deprecated names (`mc_dmp_discovery`, `mc_dmp_featurecuts`, `mc_gene_mapper`, `mc_gene_featurecuts`, `discovery_gene_featurecuts`, `dmp_panel_stability`, `gene_enricher_stability`, `buffy_mc_gene_fc`) alias to the canonical `mc_*` presets in `pipeline_profiles.py`.
+Deprecated `mc_*` names and older aliases (`mc_dmp_discovery`, `mc_dmp_featurecuts`, `mc_gene_mapper`, `mc_gene_featurecuts`, `discovery_gene_featurecuts`, `dmp_panel_stability`, `gene_enricher_stability`, `buffy_mc_gene_fc`) fold into `samd_research` + mode overlays in `pipeline_profiles.py`.
 
 ## Process model
 

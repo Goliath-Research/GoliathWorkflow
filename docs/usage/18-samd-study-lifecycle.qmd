@@ -35,7 +35,7 @@ flowchart LR
 | `samd_holdout_enrichment` | `internal_validation` | **Required** non-empty `locked_test`; excluded from training | Lock BA/caps/`n_iterations` from research; freeze readiness before model |
 | `samd_pivotal` | `pivotal_validation` | **Required** non-empty `pivotal_validation` (never used in research/enrichment training) | Fully locked; hard BA fail; biological review required |
 
-Existing `mc_*` profiles remain for deep statistical exploration. Prefer the `samd_*` ladder for claim-bound studies.
+Existing `mc_*` profile names remain as **deprecated aliases** that fold into `samd_research` + a `researchMode` overlay (`dmp_raw`, `dmp_fc`, `gene_enricher`, `gene_fc`, `dual_fc`). Prefer `pipelineProfile: samd_research` with an explicit `researchMode` for research axes; keep the three-profile SaMD ladder (`samd_research` → `samd_holdout_enrichment` → `samd_pivotal`) for claim-bound studies—do not fold holdout/pivotal into research modes.
 
 Clinical performance claims (`allow_clinical_performance_claims: true`) are **code-blocked** before `pivotal_validation` stage.
 
@@ -139,7 +139,7 @@ methyl-workflow-run \
   --parallel-workers 1
 ```
 
-6. Fill an evidence package in [`docs/regulatory/validation-evidence-index.md`](../regulatory/validation-evidence-index.md) (release SHA, profile, partitions, metrics paths).
+6. Fill an evidence package in [`docs/regulatory/validation-evidence-index.md`](../regulatory/validation-evidence-index.md) (release SHA, profile, partitions, metrics paths). Submission topic map: [`docs/regulatory/samd-submission-scaffold.md`](../regulatory/samd-submission-scaffold.md) (scaffold only — not FDA clearance).
 
 ## Program pairing
 

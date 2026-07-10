@@ -281,36 +281,42 @@ New runs combine four artifacts (see [`reference/config-parameter-matrix.md`](re
 
 ### Statistical modeling modes (process-agnostic)
 
-Five reusable **statistical alternatives** for methylation MC validation are encoded as generic profiles—not tied to any cohort or analyte. Study facts (groups, comparisons, paths, regulatory metadata) stay in **`project.json`**; profiles select **which statistical branch** runs.
+Five reusable **statistical alternatives** for methylation MC validation are encoded as **`samd_research` modeling-mode overlays** (`workflow_engine/domain/profiles/modes/*.mode.json`). Prefer:
 
-| Mode | Profile | `dmp_modeling_mode` | `gene_modeling_mode` | Regulatory intent |
-|------|---------|---------------------|----------------------|-------------------|
-| 1 | `mc_dmp` | `raw_pool` | `none` | Exploratory DMP recurrence (no FeatureCuts) |
-| 2 | `mc_dmp_fc` | `featurecuts` | `none` | BA-gated DMP panel stability |
-| 3 | `mc_gene` | `raw_pool` | `none` | Enricher gene recurrence (PPI hubs or Enrichr via `enricher.ppi_only`) |
-| 4 | `mc_gene_fc` | `raw_pool` | `featurecuts` | Gene-axis BA gate on enricher/PPI genes |
-| 5 | `mc_dmp_gene_fc` | `featurecuts` | `featurecuts` | Full DMP + gene FeatureCuts (production dual-axis) |
-| 6 | `phase_a_dmp_stability` → `phase_b_gene_from_stable_dmps` | `featurecuts` → `stable_panel` | `none` → `from_stable_dmp_panel` | Two-stage panel lock before gene modeling |
-| SaMD | `samd_research` → `samd_holdout_enrichment` → `samd_pivotal` | `featurecuts` | `featurecuts` | Claim-bound ladder with real holdouts ([usage ch.18](../usage/18-samd-study-lifecycle.qmd)) |
+```json
+{ "pipelineProfile": "samd_research", "researchMode": "gene_fc" }
+```
 
-**PPI vs Enrichr (`mc_gene`, `mc_gene_fc`):** profiles default to `actionConfig.enricher.ppi_only: true` (STRING PPI hubs, fast). Set `ppi_only: false` in a site/profile/instance override to use Enrichr pathway libraries instead.
+Legacy `mc_*` profile names remain **deprecated aliases** that load `samd_research` + the matching mode (same IF flags / mode matrix). Study facts stay in **`project.json`**; modes select **which statistical branch** runs. Do **not** fold `samd_holdout_enrichment` / `samd_pivotal` into research modes—the claim ladder stays three profiles.
 
-**Artifact ladder:** DomainProgram (topology) → Profile (statistical procedure + `actionConfig`) → Study manifest (cohort/paths) → Instance context (`projectPath`, `pipelineProfile`, optional `stableDmpCsv` for Phase B).
+| Mode preset | Legacy profile | `dmp_modeling_mode` | `gene_modeling_mode` | Regulatory intent |
+|-------------|----------------|---------------------|----------------------|-------------------|
+| `dmp_raw` (default via `mc_dmp`) | `mc_dmp` | `raw_pool` | `none` | Exploratory DMP recurrence (no FeatureCuts) |
+| `dmp_fc` | `mc_dmp_fc` | `featurecuts` | `none` | BA-gated DMP panel stability |
+| `gene_enricher` | `mc_gene` | `raw_pool` | `none` | Enricher gene recurrence (PPI hubs or Enrichr via `enricher.ppi_only`) |
+| `gene_fc` | `mc_gene_fc` | `raw_pool` | `featurecuts` | Gene-axis BA gate on enricher/PPI genes |
+| `dual_fc` (default `samd_research`) | `mc_dmp_gene_fc` | `featurecuts` | `featurecuts` | Full DMP + gene FeatureCuts |
+| `phase_a_dmp_stability` → `phase_b_gene_from_stable_dmps` | (unchanged) | `featurecuts` → `stable_panel` | `none` → `from_stable_dmp_panel` | Two-stage panel lock before gene modeling |
+| SaMD ladder | `samd_research` → `samd_holdout_enrichment` → `samd_pivotal` | (research mode) | (research mode) | Claim-bound ladder with real holdouts ([usage ch.18](../usage/18-samd-study-lifecycle.qmd)) |
+
+**PPI vs Enrichr (`gene_enricher` / `gene_fc`, legacy `mc_gene` / `mc_gene_fc`):** mode overlays default to `actionConfig.enricher.ppi_only: true` (STRING PPI hubs, fast). Set `ppi_only: false` in a site/profile/instance override to use Enrichr pathway libraries instead.
+
+**Artifact ladder:** DomainProgram (topology) → Profile + optional `researchMode` → Study manifest (cohort/paths) → Instance context (`projectPath`, `pipelineProfile`, `researchMode`, optional `stableDmpCsv` for Phase B).
 
 **DMP export simplification:** downstream consumers should prefer `dmps-*-selected.csv` (FeatureCuts panel). Legacy `dmps-*-classifier.csv` / `-classifier-extended.csv` remain for one release.
 
 **Two-phase mode 6:** run Phase A with `phase_a_dmp_stability`; pass `stable_dmps_production.csv` via context `stableDmpCsv` (or `freeze_stable_dmp_csv` in validation overrides) for Phase B `phase_b_gene_from_stable_dmps`.
 
 ```bash
-# Mode 4 example (fixture paths only)
+# gene_fc example (prefer samd_research + researchMode)
 methyl-workflow-run \
   --program workflow_engine/domain/fixtures/dmp_select_optional.program.json \
-  --context-file workflow_engine/domain/profiles/mc_gene_fc.profile.json \
-  --context '{"projectPath":"workflow_engine/domain/fixtures/project_smoke.json"}' \
+  --context-file workflow_engine/domain/profiles/samd_research.profile.json \
+  --context '{"projectPath":"workflow_engine/domain/fixtures/project_smoke.json","pipelineProfile":"samd_research","researchMode":"gene_fc"}' \
   --stub-external
 ```
 
-Deprecated profile names (`mc_dmp_discovery`, `mc_dmp_featurecuts`, `mc_gene_mapper`, `mc_gene_featurecuts`, `gene_enricher_stability`, `dmp_panel_stability`, `discovery_gene_featurecuts`, `buffy_mc_gene_fc`) alias to the canonical `mc_*` presets above.
+Deprecated profile names (`mc_dmp`, `mc_dmp_fc`, `mc_gene`, `mc_gene_fc`, `mc_dmp_gene_fc`, plus older aliases `mc_dmp_discovery`, `mc_dmp_featurecuts`, `mc_gene_mapper`, `mc_gene_featurecuts`, `gene_enricher_stability`, `dmp_panel_stability`, `discovery_gene_featurecuts`, `buffy_mc_gene_fc`) resolve to `samd_research` + the matching mode overlay. Evidence packages should record both `pipelineProfile` and `researchMode`.
 
 ### Profile presets (legacy names)
 
@@ -320,12 +326,12 @@ Named presets live in `workflow_engine/domain/profiles/*.profile.json`. Pass via
 |---------|----------|------------|------------|-------------------------|
 | `legacy_dual` | legacy inline FeatureCuts | off | discovery | DMP classifier panels |
 | `discovery_interpretation` | discovery_only | off | discovery | single-run mapper/enricher |
-| `mc_dmp` | discovery_only | off | discovery | DMP recurrence (raw pool) |
-| `mc_dmp_fc` | discovery + dmp_select | on | selected | DMP panel MC |
-| `mc_gene` | discovery_only | off | discovery | enricher gene recurrence (PPI or Enrichr) |
-| `mc_gene_fc` | discovery_only | off | discovery | gene FeatureCuts on enricher/PPI genes |
-| `mc_dmp_gene_fc` | discovery + dmp_select | on | discovery/selected | DMP + gene FeatureCuts stability (production) |
-| `samd_research` | discovery + dmp_select | on | discovery/selected | SaMD research (early-stop; exploratory BA) |
+| `mc_dmp` | discovery_only | off | discovery | DMP recurrence (raw pool); **deprecated** → `samd_research` + `dmp_raw` |
+| `mc_dmp_fc` | discovery + dmp_select | on | selected | DMP panel MC; **deprecated** → `samd_research` + `dmp_fc` |
+| `mc_gene` | discovery_only | off | discovery | enricher gene recurrence; **deprecated** → `samd_research` + `gene_enricher` |
+| `mc_gene_fc` | discovery_only | off | discovery | gene FeatureCuts; **deprecated** → `samd_research` + `gene_fc` |
+| `mc_dmp_gene_fc` | discovery + dmp_select | on | discovery/selected | dual-axis; **deprecated** → `samd_research` + `dual_fc` |
+| `samd_research` | discovery + dmp_select | on | discovery/selected | SaMD research (+ optional `researchMode` overlay; early-stop; exploratory BA) |
 | `samd_holdout_enrichment` | discovery + dmp_select | on | discovery/selected | SaMD enrichment (requires `locked_test`) |
 | `samd_pivotal` | discovery + dmp_select | on | discovery/selected | SaMD pivotal (requires `pivotal_validation`) |
 | `structural_features` | discovery_only | off | discovery + intersections | gene×region ranked catalog |

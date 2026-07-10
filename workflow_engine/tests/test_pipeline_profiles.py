@@ -71,22 +71,32 @@ def test_research_profile_presets() -> None:
     mc_dmp = apply_pipeline_profile({}, load_profile("mc_dmp"))
     assert mc_dmp["runDmpSelection"] is False
     assert mc_dmp["runGeneFeaturecuts"] is False
+    assert mc_dmp["researchMode"] == "dmp_raw"
 
     mc_dmp_fc = apply_pipeline_profile({}, load_profile("mc_dmp_fc"))
     assert mc_dmp_fc["runDmpSelection"] is True
     assert mc_dmp_fc["runGeneFeaturecuts"] is False
+    assert mc_dmp_fc["researchMode"] == "dmp_fc"
 
     mc_gene = apply_pipeline_profile({}, load_profile("mc_gene"))
     assert mc_gene["runDmpSelection"] is False
     assert mc_gene["runGeneFeaturecuts"] is False
+    assert mc_gene["researchMode"] == "gene_enricher"
 
     mc_gene_fc = apply_pipeline_profile({}, load_profile("mc_gene_fc"))
     assert mc_gene_fc["runDmpSelection"] is False
     assert mc_gene_fc["runGeneFeaturecuts"] is True
+    assert mc_gene_fc["researchMode"] == "gene_fc"
 
     mc_dmp_gene_fc = apply_pipeline_profile({}, load_profile("mc_dmp_gene_fc"))
     assert mc_dmp_gene_fc["runDmpSelection"] is True
     assert mc_dmp_gene_fc["runGeneFeaturecuts"] is True
+    assert mc_dmp_gene_fc["researchMode"] == "dual_fc"
+
+    samd = apply_pipeline_profile({}, load_profile("samd_research"))
+    assert samd["runDmpSelection"] is True
+    assert samd["runGeneFeaturecuts"] is True
+    assert samd["researchMode"] == "dual_fc"
 
 
 def test_gene_enricher_stability_profile_flags() -> None:

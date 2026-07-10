@@ -1,0 +1,54 @@
+{
+  "dmp_modeling_mode": "raw_pool",
+  "gene_modeling_mode": "none",
+  "runDmpSelection": false,
+  "runGeneFeaturecuts": false,
+  "stabilityFeaturecutsEnabled": false,
+  "stabilityGeneFeaturecutsEnabled": false,
+  "actionConfig": {
+    "detection": {
+      "detection_mode": "discovery_only",
+      "export_classifier": false,
+      "dmp_export_mode": "dual"
+    },
+    "mapper": {
+      "csv_pattern": "dmps-*-discovery.csv",
+      "enrich_disease": true
+    },
+    "validation": {
+      "run_stability": true,
+      "dmp_modeling_mode": "raw_pool",
+      "gene_modeling_mode": "none",
+      "stability_featurecuts_enabled": false,
+      "stability_gene_featurecuts_enabled": false,
+      "stability_gene_recurrence_source": "enricher",
+      "stability_dmp_freq": 0.8,
+      "stability_gene_freq": 0.7,
+      "stability_early_stop_enabled": false,
+      "holdout_eval": false,
+      "require_biological_review_for_model": false,
+      "biological_review_confirmed": false,
+      "regulatory": {
+        "stage": "feasibility",
+        "intended_use_summary": "Deprecated profile alias mc_dmp folded into samd_research mode dmp_raw.",
+        "allow_clinical_performance_claims": false,
+        "claim_boundary": "Research axis via samd_research mode overlay; not pivotal claims.",
+        "primary_analyte": "buffy_coat"
+      },
+      "validation_partitions": {
+        "development_train": [],
+        "internal_validation": [],
+        "locked_test": [],
+        "pivotal_validation": [],
+        "post_market_monitoring": [],
+        "independence_keys": [
+          "sample_id",
+          "patient_id",
+          "site_id",
+          "batch"
+        ]
+      }
+    }
+  },
+  "researchMode": "dmp_raw"
+}

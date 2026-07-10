@@ -17,6 +17,7 @@ discussions.
 | [Product and operational controls](methylpipeline-product-and-operational-controls.md) | Product scope, feature inventory, configuration-as-workflow model, and control summary |
 | [Deployment and supervision](deployment-and-supervision.md) | Production topology, worker supervision, portal monitoring, release bundles, rollback, and security controls |
 | [Validation evidence index](validation-evidence-index.md) | Template and registry structure for real study/model results tied to exact software and configuration versions |
+| [SaMD submission scaffold](samd-submission-scaffold.md) | 510(k)/De Novo-style content map → existing controls (not a filed submission) |
 | [Change management plan](change-management-plan.md) | Proposed change classification, impact assessment, CI gates, release controls, and model revalidation triggers |
 | [Continuous integration and regression testing](continuous-integration-and-regression-testing.md) | Regression gate, test taxonomy, coverage measurement, per-package test expectation, and CI evidence |
 | [Traceability matrix](traceability-matrix.md) | Mapping from product claims and controls to source docs, schemas, tests, and runtime evidence |

@@ -1,5 +1,4 @@
 {
-  "pipelineProfile": "mc_dmp_fc",
   "dmp_modeling_mode": "featurecuts",
   "gene_modeling_mode": "none",
   "runDmpSelection": true,
@@ -29,9 +28,32 @@
       "stability_gene_featurecuts_enabled": false,
       "dmp_featurecuts_target_ba": 0.95,
       "dmp_featurecuts_fail_if_below_target": true,
-      "stability_dmp_freq": 0.8
+      "stability_dmp_freq": 0.8,
+      "stability_early_stop_enabled": false,
+      "holdout_eval": false,
+      "require_biological_review_for_model": false,
+      "biological_review_confirmed": false,
+      "regulatory": {
+        "stage": "feasibility",
+        "intended_use_summary": "Deprecated profile alias mc_dmp_fc folded into samd_research mode dmp_fc.",
+        "allow_clinical_performance_claims": false,
+        "claim_boundary": "Research axis via samd_research mode overlay; not pivotal claims.",
+        "primary_analyte": "buffy_coat"
+      },
+      "validation_partitions": {
+        "development_train": [],
+        "internal_validation": [],
+        "locked_test": [],
+        "pivotal_validation": [],
+        "post_market_monitoring": [],
+        "independence_keys": [
+          "sample_id",
+          "patient_id",
+          "site_id",
+          "batch"
+        ]
+      }
     }
   },
-  "researchMode": "dmp_fc",
-  "deprecatedAliasOf": "samd_research+dmp_fc"
+  "researchMode": "dmp_fc"
 }

@@ -1,5 +1,4 @@
 {
-  "pipelineProfile": "samd_research",
   "dmp_modeling_mode": "featurecuts",
   "gene_modeling_mode": "featurecuts",
   "runDmpSelection": true,
@@ -97,8 +96,8 @@
       "w_exon": 1.5,
       "w_intron": 0.7,
       "w_unknown": 1.0,
-      "disease_term": "",
-      "enrich_disease": false,
+      "disease_term": "Prostate Cancer",
+      "enrich_disease": true,
       "enrich_source": "grok+opentargets",
       "enrich_profile": "permissive",
       "optimize_dmps": false,
@@ -110,7 +109,7 @@
     },
     "enricher": {
       "gene_column": "gene_name",
-      "disease_only": false,
+      "disease_only": true,
       "disease_association_type": [
         "direct",
         "indirect",
@@ -124,6 +123,7 @@
       "top": 150,
       "cutoff": 0.05,
       "organism": "Human",
+      "library_preset": "cancer-extended",
       "cisbp": {
         "enabled": false,
         "cisbp_modes": [
@@ -187,7 +187,7 @@
     },
     "validation": {
       "train_fraction": 0.8,
-      "n_iterations": 15,
+      "n_iterations": 10,
       "seed": 42,
       "run_stability": true,
       "dmp_modeling_mode": "featurecuts",
@@ -196,9 +196,9 @@
       "stability_gene_featurecuts_enabled": true,
       "stability_dmp_freq": 0.8,
       "stability_gene_freq": 0.7,
-      "stability_min_balanced_accuracy": 0.85,
-      "dmp_featurecuts_target_ba": 0.9,
-      "gene_featurecuts_target_ba": 0.88,
+      "stability_min_balanced_accuracy": 0.9,
+      "dmp_featurecuts_target_ba": 0.95,
+      "gene_featurecuts_target_ba": 0.9,
       "stability_min_selected_genes": 50,
       "stability_mapper_enrich_disease": false,
       "abort_on_step_failure": true,
@@ -233,25 +233,16 @@
           }
         }
       },
-      "stability_early_stop_enabled": true,
-      "stability_min_iterations": 8,
-      "stability_convergence_window": 3,
-      "stability_convergence_patience": 2,
-      "dmp_featurecuts_fail_if_below_target": false,
-      "holdout_exclude_from_training": true,
-      "holdout_partition": "locked_test",
+      "stability_early_stop_enabled": false,
       "holdout_eval": false,
       "require_biological_review_for_model": false,
       "biological_review_confirmed": false,
       "regulatory": {
-        "stage": "expanded_development",
-        "intended_use_summary": "Feasibility / expanded-development methylation classifier research (healthy vs disease). Not for clinical performance claims.",
-        "target_population": "Operator-defined study population.",
-        "sample_type": "Operator-defined analyte (see study regulatory.primary_analyte).",
-        "primary_analyte": "buffy_coat",
-        "reference_standard": "Operator-defined clinical/pathology reference.",
-        "claim_boundary": "Research and internal development evidence only; no pivotal clinical claims.",
-        "allow_clinical_performance_claims": false
+        "stage": "feasibility",
+        "intended_use_summary": "Deprecated profile alias mc_dmp_gene_fc folded into samd_research mode dual_fc.",
+        "allow_clinical_performance_claims": false,
+        "claim_boundary": "Research axis via samd_research mode overlay; not pivotal claims.",
+        "primary_analyte": "buffy_coat"
       },
       "validation_partitions": {
         "development_train": [],

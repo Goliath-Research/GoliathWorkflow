@@ -274,7 +274,7 @@ See fixture `workflow_engine/domain/fixtures/assign_map_reduce.program.json`: FO
 }
 ```
 
-Not a SamplePrep rewrite — pattern only.
+Not a full SamplePrep rewrite — pattern only. Production SamplePrep uses a **hybrid**: typed `variables` for QC gates (`qcPass`, `remediateAlignment`, `extractionQcPass`) with catalog `scope_bindings` writing those names, while **FOREACH samples + IF** remains the control flow. Explicit program `out` under `parallel: true` is avoided when the same gate is written again on QC retry (compiler parallel-assign rule). See `workflow_engine/domain/fixtures/sample_prep.program.json`.
 
 ### 5. Typed parameter bus
 
@@ -282,7 +282,7 @@ Declare a path variable; assign once; pass `${var.artifactPath}` into two differ
 
 ### 6. Contrast: methylation MC without assign
 
-Programs such as `buffy_mc_stability.program.json` / `h_pca_good` style remain **FOREACH + `validation.plan_iterations` + bindings**. That pattern is preferred for cohort science: collections come from the study manifest and planner, not from assign loops.
+Programs such as `buffy_mc_stability.program.json` / `h_pca_good` style remain **FOREACH + `validation.plan_iterations` + bindings**. That pattern is preferred for cohort science: collections come from the study manifest and planner, not from assign loops. **Do not** rewrite MC DomainPrograms to use typed assign.
 
 ---
 

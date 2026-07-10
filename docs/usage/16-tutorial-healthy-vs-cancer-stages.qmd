@@ -126,28 +126,28 @@ All shipped profiles live in `workflow_engine/domain/profiles/*.profile.json` (p
 
 ### Quick picks (this tutorial)
 
-| Goal | `pipelineProfile` |
-|------|-------------------|
-| Standard binary Monte-Carlo stability (DMP + gene FeatureCuts) | `mc_dmp_gene_fc` |
+| Goal | `pipelineProfile` / mode |
+|------|--------------------------|
+| Standard binary Monte-Carlo stability (DMP + gene FeatureCuts) | `samd_research` (default `researchMode: dual_fc`) or legacy `mc_dmp_gene_fc` |
 | Multi-stage, one-vs-rest Monte-Carlo stability | `staged_ovr_mc` |
 | Multi-stage end-to-end (stability + freeze + model) | `staged_full_lifecycle` |
 | Progression / interpretation only (no MC) | `staged_progression_interpretation` |
 
-### Statistical modeling modes (`mc_*`)
+### Statistical modeling modes (`samd_research` + `researchMode`)
 
-Five reusable **research axes** for Monte-Carlo stability. See also [Stage: Stability](05-stage-stability.qmd).
+Five reusable **research axes** for Monte-Carlo stability. Prefer `pipelineProfile: samd_research` with `researchMode`; legacy `mc_*` names are deprecated aliases that fold into the same overlays. See also [Stage: Stability](05-stage-stability.qmd) and [SaMD lifecycle (ch.18)](18-samd-study-lifecycle.qmd).
 
-| Mode | Profile | `dmp_modeling_mode` | `gene_modeling_mode` | Use when |
-|------|---------|---------------------|----------------------|----------|
-| 1 | `mc_dmp` | `raw_pool` | `none` | Exploratory DMP recurrence (no FeatureCuts) |
-| 2 | `mc_dmp_fc` | `featurecuts` | `none` | BA-gated DMP panel stability |
-| 3 | `mc_gene` | `raw_pool` | `none` | Enricher gene recurrence (PPI hubs or Enrichr) |
-| 4 | `mc_gene_fc` | `raw_pool` | `featurecuts` | Gene-axis BA gate on enricher/PPI genes |
-| 5 | `mc_dmp_gene_fc` | `featurecuts` | `featurecuts` | Full DMP + gene FeatureCuts (production dual-axis) |
+| Mode | `researchMode` | Legacy profile | `dmp_modeling_mode` | `gene_modeling_mode` | Use when |
+|------|----------------|----------------|---------------------|----------------------|----------|
+| 1 | `dmp_raw` | `mc_dmp` | `raw_pool` | `none` | Exploratory DMP recurrence (no FeatureCuts) |
+| 2 | `dmp_fc` | `mc_dmp_fc` | `featurecuts` | `none` | BA-gated DMP panel stability |
+| 3 | `gene_enricher` | `mc_gene` | `raw_pool` | `none` | Enricher gene recurrence (PPI hubs or Enrichr) |
+| 4 | `gene_fc` | `mc_gene_fc` | `raw_pool` | `featurecuts` | Gene-axis BA gate on enricher/PPI genes |
+| 5 | `dual_fc` | `mc_dmp_gene_fc` | `featurecuts` | `featurecuts` | Full DMP + gene FeatureCuts |
 
-: Statistical modeling modes {tbl-colwidths="[6,14,18,18,44]"}
+: Statistical modeling modes {tbl-colwidths="[6,12,14,14,14,40]"}
 
-`mc_gene` and `mc_gene_fc` default to `actionConfig.enricher.ppi_only: true` (STRING PPI hubs). Set `ppi_only: false` in a site/profile/instance override for Enrichr pathway libraries.
+`gene_enricher` / `gene_fc` (and legacy `mc_gene` / `mc_gene_fc`) default to `actionConfig.enricher.ppi_only: true` (STRING PPI hubs). Set `ppi_only: false` in a site/profile/instance override for Enrichr pathway libraries.
 
 ### Full profile catalog
 
@@ -155,11 +155,12 @@ Every profile file in the repo/runtime bundle:
 
 | Profile | Detector / selection | Mapper CSV | Stability / lifecycle | Typical use |
 |---------|---------------------|------------|----------------------|-------------|
-| `mc_dmp` | discovery only | `dmps-*-discovery.csv` | DMP recurrence (raw pool) | DMP-axis research |
-| `mc_dmp_fc` | discovery + `dmp_select` | `dmps-*-selected.csv` | DMP panel MC + FeatureCuts | BA-gated DMP panel |
-| `mc_gene` | discovery only | discovery | enricher gene recurrence | Gene-axis research (PPI/Enrichr) |
-| `mc_gene_fc` | discovery only | discovery | gene FeatureCuts on enricher genes | Gene-axis BA gate |
-| `mc_dmp_gene_fc` | discovery + `dmp_select` | discovery / selected | DMP + gene FeatureCuts MC | **Production** binary stability |
+| `mc_dmp` | discovery only | `dmps-*-discovery.csv` | DMP recurrence (raw pool) | **Deprecated** → `samd_research` + `dmp_raw` |
+| `mc_dmp_fc` | discovery + `dmp_select` | `dmps-*-selected.csv` | DMP panel MC + FeatureCuts | **Deprecated** → `samd_research` + `dmp_fc` |
+| `mc_gene` | discovery only | discovery | enricher gene recurrence | **Deprecated** → `samd_research` + `gene_enricher` |
+| `mc_gene_fc` | discovery only | discovery | gene FeatureCuts on enricher genes | **Deprecated** → `samd_research` + `gene_fc` |
+| `mc_dmp_gene_fc` | discovery + `dmp_select` | discovery / selected | DMP + gene FeatureCuts MC | **Deprecated** → `samd_research` + `dual_fc` |
+| `samd_research` | discovery + `dmp_select` | discovery / selected | SaMD research (+ `researchMode`) | Preferred binary research path |
 | `phase_a_dmp_stability` | discovery + `dmp_select` | selected | DMP panel lock (phase A) | Two-phase: lock DMP panel first |
 | `phase_b_gene_from_stable_dmps` | stable-panel detector | discovery | gene FC from frozen DMPs (phase B) | Phase B after `stable_dmps_production.csv` |
 | `staged_ovr_mc` | staged OvR + FeatureCuts | discovery | MC stability + progression | Multi-stage healthy vs. stages |
@@ -175,7 +176,7 @@ Every profile file in the repo/runtime bundle:
 
 : Shipped pipeline profiles {tbl-colwidths="[14,20,14,22,30]"}
 
-**Deprecated aliases** (resolve to canonical `mc_*` files in `pipeline_profiles.py`): `mc_dmp_discovery` → `mc_dmp`, `mc_dmp_featurecuts` → `mc_dmp_fc`, `mc_gene_mapper` → `mc_gene`, `mc_gene_featurecuts` → `mc_gene_fc`, `discovery_gene_featurecuts` → `mc_dmp_gene_fc`, `dmp_panel_stability` → `mc_dmp_fc`, `gene_enricher_stability` → `mc_dmp`, `buffy_mc_gene_fc` → `mc_dmp_gene_fc`.
+**Deprecated aliases** (fold into `samd_research` + mode via `pipeline_profiles.py`): `mc_dmp` → `dmp_raw`, `mc_dmp_fc` → `dmp_fc`, `mc_gene` → `gene_enricher`, `mc_gene_fc` → `gene_fc`, `mc_dmp_gene_fc` / `buffy_mc_gene_fc` / `discovery_gene_featurecuts` → `dual_fc`, plus older names `mc_dmp_discovery` → `mc_dmp`, `mc_dmp_featurecuts` → `mc_dmp_fc`, `mc_gene_mapper` → `mc_gene`, `mc_gene_featurecuts` → `mc_gene_fc`, `dmp_panel_stability` → `mc_dmp_fc`, `gene_enricher_stability` → `mc_dmp`.
 
 **Two-phase workflow:** run Phase A with `phase_a_dmp_stability`; pass `stable_dmps_production.csv` via context `stableDmpCsv` (or `freeze_stable_dmp_csv` in validation overrides) for Phase B `phase_b_gene_from_stable_dmps`.
 

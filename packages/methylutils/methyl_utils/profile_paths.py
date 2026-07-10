@@ -54,6 +54,8 @@ def resolve_profile_path(name_or_path: Union[str, Path]) -> Path:
     if not key:
         raise FileNotFoundError("Empty pipeline profile name")
 
+    # Deprecated names → canonical mc_* shim files (loader folds mc_* into
+    # samd_research + profiles/modes/<researchMode>.mode.json).
     aliases = {
         "buffy_mc_gene_fc": "mc_dmp_gene_fc",
         "mc_dmp_discovery": "mc_dmp",

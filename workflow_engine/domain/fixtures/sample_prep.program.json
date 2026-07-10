@@ -1,10 +1,26 @@
 {
-  "programVersion": 1,
+  "programVersion": 2,
   "name": "SamplePrepPipeline",
-  "description": "Per-sample upstream preprocessing with alignment QC screening, trim remediation, extraction QC, and sample archive.",
+  "description": "Per-sample upstream preprocessing with alignment QC screening, trim remediation, extraction QC, and sample archive. Gate booleans are typed DomainProgram variables (catalog scope_bindings write them; FOREACH+IF remains the control flow \u2014 hybrid typed assign, not science-in-assign).",
   "projectPath": "${var.projectPath}",
   "variables": {
-    "primaryAnalyte": "cfdna"
+    "primaryAnalyte": "cfdna",
+    "qcPass": {
+      "schemaRef": "schemas/vars/bool.schema.json",
+      "description": "Alignment QC overall_pass from sample.methyl_qc (catalog binding $.guardrails.overall_pass)"
+    },
+    "remediateAlignment": {
+      "schemaRef": "schemas/vars/bool.schema.json",
+      "description": "Whether trim+realign remediation is indicated (catalog binding $.remediateAlignment)"
+    },
+    "extractionQcPass": {
+      "schemaRef": "schemas/vars/bool.schema.json",
+      "description": "Extraction QC overall_pass from sample.extraction_qc (catalog binding $.guardrails.overall_pass)"
+    },
+    "sampleArchived": {
+      "schemaRef": "schemas/vars/bool.schema.json",
+      "description": "Archive completion flag from sample.archive_sample"
+    }
   },
   "phases": [
     {

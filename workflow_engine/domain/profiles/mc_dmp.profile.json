@@ -26,5 +26,7 @@
       "stability_dmp_freq": 0.8,
       "stability_gene_freq": 0.7
     }
-  }
+  },
+  "researchMode": "dmp_raw",
+  "deprecatedAliasOf": "samd_research+dmp_raw"
 }

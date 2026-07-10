@@ -77,3 +77,43 @@ def test_mc_gene_profile_defaults_ppi_only() -> None:
     assert enricher.get("ppi_only") is True
     validation = (profile.get("actionConfig") or {}).get("validation") or {}
     assert validation.get("stability_gene_recurrence_source") == "enricher"
+    assert validation.get("stability_dmp_freq") == 0.0
+    assert profile.get("researchMode") == "gene_enricher"
+
+
+@pytest.mark.parametrize(
+    ("legacy_name", "mode_id"),
+    [
+        ("mc_dmp", "dmp_raw"),
+        ("mc_dmp_fc", "dmp_fc"),
+        ("mc_gene", "gene_enricher"),
+        ("mc_gene_fc", "gene_fc"),
+        ("mc_dmp_gene_fc", "dual_fc"),
+    ],
+)
+def test_mc_profiles_fold_into_samd_research_modes(legacy_name: str, mode_id: str) -> None:
+    profile = load_profile(legacy_name)
+    assert profile["pipelineProfile"] == legacy_name
+    assert profile["researchMode"] == mode_id
+    # Folded profiles keep legacy early-stop off (samd_research shell must not leak).
+    validation = (profile.get("actionConfig") or {}).get("validation") or {}
+    assert validation.get("stability_early_stop_enabled") is False
+    ctx = apply_pipeline_profile({"projectPath": "/tmp/project.json"}, profile)
+    assert ctx["researchMode"] == mode_id
+
+
+def test_samd_research_accepts_research_mode_overlay() -> None:
+    profile = load_profile("samd_research")
+    assert profile.get("researchMode") == "dual_fc"
+    ctx = apply_pipeline_profile(
+        {"projectPath": "/tmp/project.json", "researchMode": "gene_enricher"},
+        profile,
+    )
+    assert ctx["pipelineProfile"] == "samd_research"
+    assert ctx["researchMode"] == "gene_enricher"
+    assert ctx["runDmpSelection"] is False
+    assert ctx["runGeneFeaturecuts"] is False
+    enricher = (ctx.get("actionConfig") or {}).get("enricher") or {}
+    assert enricher.get("ppi_only") is True
+    validation = (ctx.get("actionConfig") or {}).get("validation") or {}
+    assert validation.get("stability_dmp_freq") == 0.0
