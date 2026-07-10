@@ -126,6 +126,8 @@ class WorkflowDefinitionSpec(BaseModel):
     output_bindings: List[WorkflowOutputBindingSpec] = Field(default_factory=list)
     scope_defaults: List[WorkflowScopeDefaultSpec] = Field(default_factory=list)
     collection_bindings: List[CollectionBindingSpec] = Field(default_factory=list)
+    # name → schemaRef string or inline JSON Schema object (from DomainProgram variable decls)
+    variable_schemas: Dict[str, Any] = Field(default_factory=dict)
 
     def to_db_spec(self) -> Dict[str, Any]:
         return self.model_dump(mode="json", exclude_none=True)

@@ -13,6 +13,7 @@ Authoring format for MethylPipeline workflows.
 
 Compiler: `workflow_engine/domain/compiler.py` → `WorkflowDefinitionSpec` (Pydantic: `workflow_engine/contract/workflow_definition_spec.py`).
 
+**Full language (assign / WHILE / SWITCH / REPEAT / typed variables):** [`domain-program-language-v2.md`](domain-program-language-v2.md)  
 **Architecture overview:** [`docs/architecture/index.md`](architecture/index.md)  
 **Operator deployment:** [Usage ch.14](usage/14-deployment-and-distributed-workflow.qmd)  
 **Admin CLI:** [admin-cli-methyl-study-start.md](admin-cli-methyl-study-start.md)
@@ -109,9 +110,10 @@ See [implementation/domain-program-compiler.md](../implementation/domain-program
 | `parallel: [...]` | `PARALLEL` | Run children concurrently |
 | sequence of steps | `SEQUENCE` | Ordered execution |
 | `if` / `then` / `else` | `IF` | Branch on scope variable truthiness |
-| `switch` | `SWITCH` | Integer case selection |
-| `while` | `WHILE` | Loop while condition var truthy |
-| `repeat` | `REPEAT` | Fixed iteration count |
+| `switch` | `SWITCH` | Integer case selection — see [v2](domain-program-language-v2.md) (compiler support) |
+| `while` | `WHILE` | Loop while condition var truthy — see [v2](domain-program-language-v2.md) |
+| `repeat` | `REPEAT` | Fixed iteration count — see [v2](domain-program-language-v2.md) |
+| `assign` / `variables` | `ACTION` + binding | Typed worker-delegated assign — see [v2](domain-program-language-v2.md) |
 
 ## Conditions (IF)
 

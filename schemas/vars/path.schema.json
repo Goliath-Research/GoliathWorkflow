@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/vars/path.schema.json",
+  "title": "PathVar",
+  "type": "string",
+  "minLength": 1,
+  "description": "Typed DomainProgram scope variable: filesystem path string."
+}

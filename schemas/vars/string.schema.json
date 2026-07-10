@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/vars/string.schema.json",
+  "title": "StringVar",
+  "type": "string",
+  "description": "Typed DomainProgram scope variable: string."
+}

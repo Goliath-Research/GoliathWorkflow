@@ -103,7 +103,7 @@ See [Admin CLI reference](../reference/admin-cli-methyl-study-start.md).
 ## Related
 
 - [Distributed runtime](../architecture/distributed-runtime.md)
-- [DomainProgram language](../reference/domain-program-language.md)
+- [DomainProgram language](../reference/domain-program-language.md) · [full language v2](../reference/domain-program-language-v2.md) (typed assign, WHILE/SWITCH/REPEAT)
 - [Pipeline architecture (full)](../../workflow_engine/docs/pipeline_architecture.md)
 - [IMPLEMENTATION.md](../../workflow_engine/docs/IMPLEMENTATION.md)
 - [workflow_engine/README.md](../../workflow_engine/README.md)

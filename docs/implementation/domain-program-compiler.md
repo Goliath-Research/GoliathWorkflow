@@ -4,9 +4,12 @@ DomainPrograms (`.program.json`) are the canonical pipeline IR. The compiler low
 
 ## Language reference
 
-Full syntax, control flow, and schema: [`../reference/domain-program-language.md`](../reference/domain-program-language.md)
+- Operator summary: [`../reference/domain-program-language.md`](../reference/domain-program-language.md)
+- Full language (assign / WHILE / SWITCH / REPEAT / typed `variables`): [`../reference/domain-program-language-v2.md`](../reference/domain-program-language-v2.md)
 
-Schemas: `schemas/domain/domain_program.schema.json`, `schemas/workflow/`
+The compiler lowers `assign` to catalog `ACTION` + output bindings; emits `SWITCH` / `WHILE` / `REPEAT` to match the DB engine. Parallel shared assign targets are rejected.
+
+Schemas: `schemas/domain/domain_program.schema.json`, `schemas/vars/`, `schemas/workflow/`
 
 ## Compiler code
 

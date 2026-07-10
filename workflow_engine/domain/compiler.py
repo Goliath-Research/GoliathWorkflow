@@ -16,12 +16,16 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from methyl_domain.program import (
     ActionStep,
+    AssignStep,
     CollectionInSpec,
     DomainProgram,
     ForeachSpec,
     ForeachStep,
     IfStep,
     ParallelStep,
+    RepeatStep,
+    SwitchStep,
+    WhileStep,
 )
 
 _CONTRACT = Path(__file__).resolve().parents[1] / "contract"
@@ -53,6 +57,19 @@ class CompileResult:
     context_json: Dict[str, Any]
 
 
+# Exact schemaRef strings for typed workflow.compute assign actions (MVP plug check).
+_ASSIGN_ACTION_SCHEMA_REF: Dict[str, str] = {
+    "workflow.const_bool": "schemas/vars/bool.schema.json",
+    "workflow.const_int": "schemas/vars/int.schema.json",
+    "workflow.const_string": "schemas/vars/string.schema.json",
+    "workflow.const_path": "schemas/vars/path.schema.json",
+    "workflow.json_path_bool": "schemas/vars/bool.schema.json",
+    "workflow.json_path_int": "schemas/vars/int.schema.json",
+    "workflow.json_path_string": "schemas/vars/string.schema.json",
+    "workflow.fs_stat": "schemas/vars/bool.schema.json",
+}
+
+
 @dataclass
 class _CompileCtx:
     nodes: List[WorkflowNodeSpec] = field(default_factory=list)
@@ -61,22 +78,37 @@ class _CompileCtx:
     scope_defaults: List[WorkflowScopeDefaultSpec] = field(default_factory=list)
     input_bindings: List[WorkflowInputBindingSpec] = field(default_factory=list)
     collection_bindings: List[CollectionBindingSpec] = field(default_factory=list)
+    declared_vars: Set[str] = field(default_factory=set)
+    variable_schema_refs: Dict[str, str] = field(default_factory=dict)
+    assign_targets_in_parallel: Set[str] = field(default_factory=set)
+    foreach_bound_names: Set[str] = field(default_factory=set)
     _counter: int = 0
 
     def fresh_key(self, prefix: str) -> str:
         self._counter += 1
         return f"{prefix}_{self._counter}"
 
-
-def _parse_step(raw: Any) -> Union[ActionStep, IfStep, ForeachStep, ParallelStep]:
-    if isinstance(raw, (ActionStep, IfStep, ForeachStep, ParallelStep)):
+def _parse_step(
+    raw: Any,
+) -> Union[ActionStep, AssignStep, IfStep, SwitchStep, WhileStep, RepeatStep, ForeachStep, ParallelStep]:
+    if isinstance(
+        raw, (ActionStep, AssignStep, IfStep, SwitchStep, WhileStep, RepeatStep, ForeachStep, ParallelStep)
+    ):
         return raw
     if not isinstance(raw, dict):
         raise ValueError(f"unsupported program step: {raw!r}")
+    if "assign" in raw:
+        return AssignStep.model_validate(raw)
     if "parallel" in raw and isinstance(raw.get("parallel"), list):
         return ParallelStep.model_validate(raw)
     if "for" in raw or "foreach" in raw:
         return ForeachStep.model_validate(raw)
+    if "switch" in raw:
+        return SwitchStep.model_validate(raw)
+    if "while" in raw:
+        return WhileStep.model_validate(raw)
+    if "repeat" in raw:
+        return RepeatStep.model_validate(raw)
     if "if" in raw:
         return IfStep.model_validate(raw)
     if "do" in raw or "action" in raw:
@@ -158,6 +190,12 @@ def _collect_bindings_from_steps(steps: List[Any], bindings: Dict[str, Collectio
         elif isinstance(step, IfStep):
             _collect_bindings_from_steps(step.then, bindings)
             _collect_bindings_from_steps(step.else_, bindings)
+        elif isinstance(step, SwitchStep):
+            for case_steps in step.cases.values():
+                _collect_bindings_from_steps(case_steps, bindings)
+            _collect_bindings_from_steps(step.default, bindings)
+        elif isinstance(step, (WhileStep, RepeatStep)):
+            _collect_bindings_from_steps(step.steps(), bindings)
         elif isinstance(step, ParallelStep):
             _collect_bindings_from_steps(step.parallel, bindings)
 
@@ -270,7 +308,13 @@ def _link(parent: str, child: str, order: int, branch: str, ctx: _CompileCtx) ->
 
 
 def _compile_action(
-    ctx: _CompileCtx, step: ActionStep, parent_key: str, order: int, *, branch: str = "SEQUENCE"
+    ctx: _CompileCtx,
+    step: ActionStep,
+    parent_key: str,
+    order: int,
+    *,
+    branch: str = "SEQUENCE",
+    in_parallel: bool = False,
 ) -> str:
     action_name = step.action_name()
     entry = find_catalog_entry(action_name)
@@ -306,11 +350,66 @@ def _compile_action(
                     source_json_path=binding.output_json_path,
                 )
             )
+    if step.out:
+        for var_name, json_path in step.out.items():
+            if in_parallel:
+                if var_name in ctx.assign_targets_in_parallel:
+                    raise ValueError(
+                        f"assign/out target {var_name!r} cannot be written under a parallel "
+                        f"ancestor (shared mutable assign is forbidden)"
+                    )
+                ctx.assign_targets_in_parallel.add(var_name)
+            ctx.output_bindings.append(
+                WorkflowOutputBindingSpec(
+                    node_key=node_key,
+                    var_name=var_name,
+                    source_kind="output_path",
+                    source_json_path=json_path,
+                )
+            )
     return node_key
 
 
+def _compile_assign(
+    ctx: _CompileCtx,
+    step: AssignStep,
+    parent_key: str,
+    order: int,
+    *,
+    branch: str = "SEQUENCE",
+    in_parallel: bool = False,
+) -> str:
+    target = step.assign
+    if target not in ctx.declared_vars:
+        raise ValueError(
+            f"assign target {target!r} is not declared in program variables "
+            f"(need schemaRef/schema declaration)"
+        )
+    if target in ctx.foreach_bound_names:
+        raise ValueError(
+            f"assign target {target!r} collides with FOREACH as/index name in the same scope"
+        )
+    action_name = step.action_name()
+    expected = _ASSIGN_ACTION_SCHEMA_REF.get(action_name)
+    declared = ctx.variable_schema_refs.get(target)
+    if expected and declared and declared != expected:
+        raise ValueError(
+            f"assign target {target!r} schemaRef {declared!r} is incompatible with "
+            f"action {action_name!r} (expected exact match {expected!r})"
+        )
+    return _compile_action(
+        ctx, step.as_action_step(), parent_key, order, branch=branch, in_parallel=in_parallel
+    )
+
+
 def _compile_if(
-    ctx: _CompileCtx, step: IfStep, parent_key: str, order: int, *, branch: str = "SEQUENCE"
+    ctx: _CompileCtx,
+    step: IfStep,
+    parent_key: str,
+    order: int,
+    *,
+    branch: str = "SEQUENCE",
+    in_parallel: bool = False,
 ) -> str:
     if_key = ctx.fresh_key("if")
     cond_var = _condition_var_from_expr(step.if_)
@@ -318,50 +417,175 @@ def _compile_if(
         WorkflowNodeSpec(node_key=if_key, node_type="IF", condition_var=cond_var)
     )
     _link(parent_key, if_key, order, branch, ctx)
-    _compile_steps(ctx, step.then, if_key, branch="THEN")
+    _compile_steps(ctx, step.then, if_key, branch="THEN", in_parallel=in_parallel)
     if step.else_:
-        _compile_steps(ctx, step.else_, if_key, branch="ELSE")
+        _compile_steps(ctx, step.else_, if_key, branch="ELSE", in_parallel=in_parallel)
     return if_key
 
 
+def _compile_switch(
+    ctx: _CompileCtx,
+    step: SwitchStep,
+    parent_key: str,
+    order: int,
+    *,
+    branch: str = "SEQUENCE",
+    in_parallel: bool = False,
+) -> str:
+    sw_key = ctx.fresh_key("switch")
+    switch_var: Optional[str] = None
+    switch_ref: Optional[str] = None
+    if isinstance(step.switch, dict) and "ref" in step.switch:
+        switch_ref = str(step.switch["ref"])
+    else:
+        switch_var = _condition_var_from_expr(str(step.switch))
+    ctx.nodes.append(
+        WorkflowNodeSpec(
+            node_key=sw_key,
+            node_type="SWITCH",
+            switch_var=switch_var,
+            switch_ref_node_key=switch_ref,
+        )
+    )
+    _link(parent_key, sw_key, order, branch, ctx)
+    case_order = 0
+    for case_key, case_steps in step.cases.items():
+        case_val = int(case_key)
+        case_seq = _compile_steps(ctx, case_steps, sw_key, branch="CASE", in_parallel=in_parallel)
+        # Retarget last link to include switch_case_value
+        for edge in reversed(ctx.edges):
+            if edge.parent_node_key == sw_key and edge.child_node_key == case_seq:
+                edge.switch_case_value = case_val
+                edge.child_order = case_order
+                break
+        case_order += 1
+    if step.default:
+        def_seq = _compile_steps(ctx, step.default, sw_key, branch="DEFAULT", in_parallel=in_parallel)
+        for edge in reversed(ctx.edges):
+            if edge.parent_node_key == sw_key and edge.child_node_key == def_seq:
+                edge.is_default = True
+                edge.child_order = case_order
+                break
+    return sw_key
+
+
+def _compile_while(
+    ctx: _CompileCtx,
+    step: WhileStep,
+    parent_key: str,
+    order: int,
+    *,
+    branch: str = "SEQUENCE",
+    in_parallel: bool = False,
+) -> str:
+    wh_key = ctx.fresh_key("while")
+    cond_var = _condition_var_from_expr(step.while_)
+    ctx.nodes.append(
+        WorkflowNodeSpec(node_key=wh_key, node_type="WHILE", condition_var=cond_var)
+    )
+    _link(parent_key, wh_key, order, branch, ctx)
+    _compile_steps(ctx, step.steps(), wh_key, branch="BODY", in_parallel=in_parallel)
+    return wh_key
+
+
+def _compile_repeat(
+    ctx: _CompileCtx,
+    step: RepeatStep,
+    parent_key: str,
+    order: int,
+    *,
+    branch: str = "SEQUENCE",
+    in_parallel: bool = False,
+) -> str:
+    rp_key = ctx.fresh_key("repeat")
+    count = step.count()
+    if count < 0:
+        raise ValueError(f"repeat count must be >= 0, got {count}")
+    ctx.nodes.append(
+        WorkflowNodeSpec(node_key=rp_key, node_type="REPEAT", repeat_count=count)
+    )
+    _link(parent_key, rp_key, order, branch, ctx)
+    _compile_steps(ctx, step.steps(), rp_key, branch="BODY", in_parallel=in_parallel)
+    return rp_key
+
+
 def _compile_foreach(
-    ctx: _CompileCtx, step: ForeachStep, parent_key: str, order: int, *, branch: str = "SEQUENCE"
+    ctx: _CompileCtx,
+    step: ForeachStep,
+    parent_key: str,
+    order: int,
+    *,
+    branch: str = "SEQUENCE",
+    in_parallel: bool = False,
 ) -> str:
     fe_key = ctx.fresh_key("foreach")
     spec = step.spec()
     item = spec.resolved_item()
+    index_var = spec.index or f"{item}Index"
+    child_parallel = in_parallel or bool(spec.parallel)
     ctx.nodes.append(
         WorkflowNodeSpec(
             node_key=fe_key,
             node_type="FOREACH",
             foreach_collection_var=spec.resolved_collection_var(),
             foreach_item_var=item,
-            foreach_index_var=spec.index or f"{item}Index",
+            foreach_index_var=index_var,
             foreach_parallel=spec.parallel,
         )
     )
     _link(parent_key, fe_key, order, branch, ctx)
-    _compile_steps(ctx, step.body(), fe_key, branch="BODY")
+    prev_bound = set(ctx.foreach_bound_names)
+    ctx.foreach_bound_names = prev_bound | {item, index_var}
+    try:
+        _compile_steps(ctx, step.body(), fe_key, branch="BODY", in_parallel=child_parallel)
+    finally:
+        ctx.foreach_bound_names = prev_bound
     return fe_key
 
 
 def _compile_parallel(
-    ctx: _CompileCtx, step: ParallelStep, parent_key: str, order: int, *, branch: str = "SEQUENCE"
+    ctx: _CompileCtx,
+    step: ParallelStep,
+    parent_key: str,
+    order: int,
+    *,
+    branch: str = "SEQUENCE",
+    in_parallel: bool = False,
 ) -> str:
     par_key = ctx.fresh_key("parallel")
     ctx.nodes.append(WorkflowNodeSpec(node_key=par_key, node_type="PARALLEL"))
     _link(parent_key, par_key, order, branch, ctx)
     for idx, raw in enumerate(step.parallel):
-        child = _parse_step(raw)
-        if isinstance(child, ActionStep):
-            _compile_action(ctx, child, par_key, idx, branch="PARALLEL")
-        elif isinstance(child, IfStep):
-            _compile_if(ctx, child, par_key, idx, branch="PARALLEL")
-        elif isinstance(child, ForeachStep):
-            _compile_foreach(ctx, child, par_key, idx, branch="PARALLEL")
-        elif isinstance(child, ParallelStep):
-            _compile_parallel(ctx, child, par_key, idx, branch="PARALLEL")
+        _compile_one(ctx, _parse_step(raw), par_key, idx, branch="PARALLEL", in_parallel=True)
     return par_key
+
+
+def _compile_one(
+    ctx: _CompileCtx,
+    step: Any,
+    parent_key: str,
+    order: int,
+    *,
+    branch: str = "SEQUENCE",
+    in_parallel: bool = False,
+) -> str:
+    if isinstance(step, AssignStep):
+        return _compile_assign(ctx, step, parent_key, order, branch=branch, in_parallel=in_parallel)
+    if isinstance(step, ActionStep):
+        return _compile_action(ctx, step, parent_key, order, branch=branch, in_parallel=in_parallel)
+    if isinstance(step, IfStep):
+        return _compile_if(ctx, step, parent_key, order, branch=branch, in_parallel=in_parallel)
+    if isinstance(step, SwitchStep):
+        return _compile_switch(ctx, step, parent_key, order, branch=branch, in_parallel=in_parallel)
+    if isinstance(step, WhileStep):
+        return _compile_while(ctx, step, parent_key, order, branch=branch, in_parallel=in_parallel)
+    if isinstance(step, RepeatStep):
+        return _compile_repeat(ctx, step, parent_key, order, branch=branch, in_parallel=in_parallel)
+    if isinstance(step, ForeachStep):
+        return _compile_foreach(ctx, step, parent_key, order, branch=branch, in_parallel=in_parallel)
+    if isinstance(step, ParallelStep):
+        return _compile_parallel(ctx, step, parent_key, order, branch=branch, in_parallel=in_parallel)
+    raise ValueError(f"unsupported step type: {type(step)!r}")
 
 
 def _compile_steps(
@@ -370,26 +594,29 @@ def _compile_steps(
     parent_key: str,
     *,
     branch: str = "SEQUENCE",
+    in_parallel: bool = False,
 ) -> str:
     seq_key = ctx.fresh_key("seq")
     ctx.nodes.append(WorkflowNodeSpec(node_key=seq_key, node_type="SEQUENCE"))
     if branch != "SEQUENCE":
         _link(parent_key, seq_key, 0, branch, ctx)
     for order, raw in enumerate(steps):
-        step = _parse_step(raw)
-        if isinstance(step, ActionStep):
-            _compile_action(ctx, step, seq_key, order)
-        elif isinstance(step, IfStep):
-            _compile_if(ctx, step, seq_key, order)
-        elif isinstance(step, ForeachStep):
-            _compile_foreach(ctx, step, seq_key, order)
-        elif isinstance(step, ParallelStep):
-            _compile_parallel(ctx, step, seq_key, order)
+        _compile_one(ctx, _parse_step(raw), seq_key, order, in_parallel=in_parallel)
     return seq_key
 
 
 def compile_domain_program(program: DomainProgram, *, enrich_context: bool = False) -> CompileResult:
     ctx = _CompileCtx()
+    context_seeds, decls = program.split_variables()
+    ctx.declared_vars = set(decls.keys())
+    variable_schemas: Dict[str, Any] = {}
+    for name, decl in decls.items():
+        ref = decl.resolved_schema_ref()
+        body = decl.resolved_schema_body()
+        variable_schemas[name] = body if body is not None else ref
+        if ref:
+            ctx.variable_schema_refs[name] = ref
+
     root_key = "root"
     ctx.nodes.append(WorkflowNodeSpec(node_key=root_key, node_type="SEQUENCE"))
 
@@ -401,6 +628,7 @@ def compile_domain_program(program: DomainProgram, *, enrich_context: bool = Fal
             if phase.foreach:
                 fe_key = ctx.fresh_key(f"phase_{phase.name}")
                 spec = phase.foreach
+                child_parallel = bool(spec.parallel)
                 ctx.nodes.append(
                     WorkflowNodeSpec(
                         node_key=fe_key,
@@ -412,13 +640,13 @@ def compile_domain_program(program: DomainProgram, *, enrich_context: bool = Fal
                     )
                 )
                 _link(root_key, fe_key, order, "SEQUENCE", ctx)
-                _compile_steps(ctx, phase.steps, fe_key, branch="BODY")
+                _compile_steps(ctx, phase.steps, fe_key, branch="BODY", in_parallel=child_parallel)
             else:
                 phase_seq = _compile_steps(ctx, phase.steps, root_key)
                 _link(root_key, phase_seq, order, "SEQUENCE", ctx)
 
     collection_bindings = _build_collection_bindings(program)
-    context_json: Dict[str, Any] = {"projectPath": program.projectPath, **program.variables}
+    context_json: Dict[str, Any] = {"projectPath": program.projectPath, **context_seeds}
     if enrich_context:
         try:
             context_json = enrich_instance_context(context_json)
@@ -437,6 +665,7 @@ def compile_domain_program(program: DomainProgram, *, enrich_context: bool = Fal
         scope_defaults=ctx.scope_defaults,
         input_bindings=ctx.input_bindings,
         collection_bindings=collection_bindings,
+        variable_schemas=variable_schemas,
     )
     return CompileResult(workflow=workflow, context_json=context_json)
 

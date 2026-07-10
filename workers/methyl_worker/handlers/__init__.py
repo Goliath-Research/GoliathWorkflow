@@ -38,6 +38,16 @@ from .sample_prep import (
     _handle_trim_fastq,
 )
 from .stub import _handle_stub_external
+from .workflow_compute import (
+    _handle_workflow_const_bool,
+    _handle_workflow_const_int,
+    _handle_workflow_const_path,
+    _handle_workflow_const_string,
+    _handle_workflow_fs_stat,
+    _handle_workflow_json_path_bool,
+    _handle_workflow_json_path_int,
+    _handle_workflow_json_path_string,
+)
 from .validation import (
     _handle_validation_biomarker_filter,
     _handle_validation_link_artifacts,
@@ -86,5 +96,13 @@ __all__ = [
     "_handle_validation_select_best_model",
     "_handle_validation_stability",
     "_handle_validation_stability_freeze_readiness",
+    "_handle_workflow_const_bool",
+    "_handle_workflow_const_int",
+    "_handle_workflow_const_path",
+    "_handle_workflow_const_string",
+    "_handle_workflow_fs_stat",
+    "_handle_workflow_json_path_bool",
+    "_handle_workflow_json_path_int",
+    "_handle_workflow_json_path_string",
     "_load_mc_config",
 ]

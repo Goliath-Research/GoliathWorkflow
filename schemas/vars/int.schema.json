@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "schemas/vars/int.schema.json",
+  "title": "IntVar",
+  "type": "integer",
+  "description": "Typed DomainProgram scope variable: integer."
+}

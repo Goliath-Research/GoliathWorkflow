@@ -209,3 +209,179 @@ def test_buffy_check_bundle_compiles_full_pipeline():
     binding_vars = {b.scope_var for b in wf.collection_bindings}
     assert binding_vars >= {"project", "chromosomes", "contexts", "comparisons"}
     assert result.context_json["projectPath"].endswith("project_Buffy_healthy_vs_PCa.json")
+
+
+def test_assign_while_pagination_compiles():
+    result = compile_domain_program(_load("assign_while_pagination.program.json"))
+    wf = result.workflow
+    assert any(n.node_type == "WHILE" for n in wf.nodes)
+    actions = [n.action_name for n in wf.nodes if n.node_type == "ACTION"]
+    assert "workflow.const_bool" in actions
+    assert "workflow.json_path_bool" in actions
+    assert wf.variable_schemas["hasMore"] == "schemas/vars/bool.schema.json"
+    bindings = {(b.var_name, b.source_json_path) for b in wf.output_bindings}
+    assert ("hasMore", "$.value") in bindings
+
+
+def test_assign_map_reduce_compiles():
+    result = compile_domain_program(_load("assign_map_reduce.program.json"))
+    wf = result.workflow
+    assert any(n.node_type == "FOREACH" for n in wf.nodes)
+    assert any(n.action_name == "workflow.fs_stat" for n in wf.nodes if n.node_type == "ACTION")
+    assert result.context_json["artifactPaths"] == ["/work/cache/a.json", "/work/cache/b.json"]
+    assert "summary" in wf.variable_schemas
+
+
+def test_compile_switch_while_repeat():
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "ControlFlow",
+            "projectPath": "/work/project.json",
+            "variables": {
+                "gate": {"schemaRef": "schemas/vars/int.schema.json"},
+                "flag": {"schemaRef": "schemas/vars/bool.schema.json"},
+            },
+            "body": [
+                {
+                    "assign": "gate",
+                    "using": "workflow.const_int",
+                    "with": {"value": 1},
+                    "node_key": "set_gate",
+                },
+                {
+                    "switch": "${gate}",
+                    "cases": {
+                        "0": [{"do": "workflow.const_bool", "with": {"value": False}}],
+                        "1": [{"do": "workflow.const_bool", "with": {"value": True}}],
+                    },
+                    "default": [{"do": "workflow.const_bool", "with": {"value": False}}],
+                },
+                {
+                    "assign": "flag",
+                    "using": "workflow.const_bool",
+                    "with": {"value": True},
+                },
+                {"while": "${flag}", "do": [{"do": "workflow.const_int", "with": {"value": 0}}]},
+                {"repeat": 2, "do": [{"do": "workflow.const_string", "with": {"value": "x"}}]},
+            ],
+        }
+    )
+    result = compile_domain_program(program)
+    types = {n.node_type for n in result.workflow.nodes}
+    assert {"SWITCH", "WHILE", "REPEAT", "ACTION"} <= types
+    sw = next(n for n in result.workflow.nodes if n.node_type == "SWITCH")
+    case_edges = [e for e in result.workflow.edges if e.parent_node_key == sw.node_key]
+    assert any(e.switch_case_value == 0 for e in case_edges)
+    assert any(e.switch_case_value == 1 for e in case_edges)
+    assert any(e.is_default for e in case_edges)
+    rp = next(n for n in result.workflow.nodes if n.node_type == "REPEAT")
+    assert rp.repeat_count == 2
+
+
+def test_assign_undeclared_target_rejected():
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "BadAssign",
+            "projectPath": "/work/project.json",
+            "body": [
+                {"assign": "missing", "using": "workflow.const_bool", "with": {"value": True}},
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="not declared"):
+        compile_domain_program(program)
+
+
+def test_assign_unknown_action_rejected():
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "BadAction",
+            "projectPath": "/work/project.json",
+            "variables": {"x": {"schemaRef": "schemas/vars/bool.schema.json"}},
+            "body": [
+                {"assign": "x", "using": "workflow.no_such_action", "with": {"value": True}},
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="unknown action"):
+        compile_domain_program(program)
+
+
+def test_parallel_shared_assign_rejected():
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "ParallelAssign",
+            "projectPath": "/work/project.json",
+            "variables": {"flag": {"schemaRef": "schemas/vars/bool.schema.json"}},
+            "body": [
+                {
+                    "parallel": [
+                        {
+                            "assign": "flag",
+                            "using": "workflow.const_bool",
+                            "with": {"value": True},
+                        },
+                        {
+                            "assign": "flag",
+                            "using": "workflow.const_bool",
+                            "with": {"value": False},
+                        },
+                    ]
+                }
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="parallel"):
+        compile_domain_program(program)
+
+
+def test_assign_schema_plug_mismatch_rejected():
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "PlugMismatch",
+            "projectPath": "/work/project.json",
+            "variables": {"flag": {"schemaRef": "schemas/vars/int.schema.json"}},
+            "body": [
+                {
+                    "assign": "flag",
+                    "using": "workflow.const_bool",
+                    "with": {"value": True},
+                }
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="incompatible"):
+        compile_domain_program(program)
+
+
+def test_assign_foreach_as_collision_rejected():
+    program = DomainProgram.model_validate(
+        {
+            "programVersion": 2,
+            "name": "ForeachCollision",
+            "projectPath": "/work/project.json",
+            "variables": {
+                "paths": ["/a"],
+                "item": {"schemaRef": "schemas/vars/string.schema.json"},
+            },
+            "body": [
+                {
+                    "for": {"in": {"ref": "paths"}, "as": "item", "parallel": False},
+                    "do": [
+                        {
+                            "assign": "item",
+                            "using": "workflow.const_string",
+                            "with": {"value": "x"},
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    with pytest.raises(ValueError, match="collides with FOREACH"):
+        compile_domain_program(program)

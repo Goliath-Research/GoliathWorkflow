@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CollectionInSpec(BaseModel):
@@ -46,6 +46,34 @@ class ForeachSpec(BaseModel):
         raise ValueError("foreach requires collection or in")
 
 
+class VariableDecl(BaseModel):
+    """Typed scope variable declaration (JSON Schema reference or inline schema)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    schemaRef: Optional[str] = None
+    schema_: Optional[Union[str, Dict[str, Any]]] = Field(default=None, alias="schema")
+    description: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _require_schema(self) -> "VariableDecl":
+        if not self.schemaRef and self.schema_ is None:
+            raise ValueError("VariableDecl requires schemaRef or schema")
+        return self
+
+    def resolved_schema_ref(self) -> Optional[str]:
+        if self.schemaRef:
+            return self.schemaRef
+        if isinstance(self.schema_, str):
+            return self.schema_
+        return None
+
+    def resolved_schema_body(self) -> Optional[Dict[str, Any]]:
+        if isinstance(self.schema_, dict):
+            return self.schema_
+        return None
+
+
 class ActionStep(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -63,12 +91,76 @@ class ActionStep(BaseModel):
         return name
 
 
+class AssignStep(BaseModel):
+    """Worker-delegated assignment: catalog ACTION + output binding into a declared variable."""
+
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    assign: str
+    using: Optional[str] = None
+    do: Optional[str] = None
+    with_: Optional[Dict[str, Any]] = Field(default=None, alias="with")
+    from_path: str = Field(default="$.value", alias="fromPath")
+    node_key: Optional[str] = None
+
+    def action_name(self) -> str:
+        name = self.using or self.do
+        if not name:
+            raise ValueError("assign step requires using or do (catalog action)")
+        return name
+
+    def as_action_step(self) -> ActionStep:
+        return ActionStep(
+            do=self.action_name(),
+            with_=self.with_,
+            out={self.assign: self.from_path},
+            node_key=self.node_key,
+        )
+
+
 class IfStep(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     if_: str = Field(alias="if")
     then: List["ProgramStep"] = Field(default_factory=list)
     else_: List["ProgramStep"] = Field(default_factory=list, alias="else")
+
+
+class SwitchStep(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    switch: Union[str, Dict[str, Any]]
+    cases: Dict[str, List["ProgramStep"]] = Field(default_factory=dict)
+    default: List["ProgramStep"] = Field(default_factory=list)
+
+
+class WhileStep(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    while_: str = Field(alias="while")
+    do: List["ProgramStep"] = Field(default_factory=list)
+    body: List["ProgramStep"] = Field(default_factory=list)
+
+    def steps(self) -> List[Any]:
+        return self.do if self.do else self.body
+
+
+class RepeatStep(BaseModel):
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
+
+    repeat: Union[int, Dict[str, Any]]
+    do: List["ProgramStep"] = Field(default_factory=list)
+    body: List["ProgramStep"] = Field(default_factory=list)
+
+    def count(self) -> int:
+        if isinstance(self.repeat, int):
+            return self.repeat
+        if isinstance(self.repeat, dict) and "count" in self.repeat:
+            return int(self.repeat["count"])
+        raise ValueError("repeat requires integer count or {\"count\": N}")
+
+    def steps(self) -> List[Any]:
+        return self.do if self.do else self.body
 
 
 class ForeachStep(BaseModel):
@@ -95,7 +187,17 @@ class ParallelStep(BaseModel):
     parallel: List["ProgramStep"] = Field(default_factory=list)
 
 
-ProgramStep = Union[ActionStep, IfStep, ForeachStep, ParallelStep, Dict[str, Any]]
+ProgramStep = Union[
+    ActionStep,
+    AssignStep,
+    IfStep,
+    SwitchStep,
+    WhileStep,
+    RepeatStep,
+    ForeachStep,
+    ParallelStep,
+    Dict[str, Any],
+]
 
 
 class ProgramPhase(BaseModel):
@@ -115,12 +217,30 @@ class DomainProgram(BaseModel):
     name: str
     description: Optional[str] = None
     projectPath: str
+    # Legacy context seeds (scalars/lists) and/or VariableDecl objects (schemaRef/schema).
     variables: Dict[str, Any] = Field(default_factory=dict)
     declarations: Dict[str, Any] = Field(default_factory=dict)
     phases: List[ProgramPhase] = Field(default_factory=list)
     body: List[Any] = Field(default_factory=list)
 
+    def split_variables(self) -> tuple[Dict[str, Any], Dict[str, VariableDecl]]:
+        """Split ``variables`` into context seeds vs typed declarations."""
+        context: Dict[str, Any] = {}
+        decls: Dict[str, VariableDecl] = {}
+        for key, value in self.variables.items():
+            if isinstance(value, VariableDecl):
+                decls[key] = value
+            elif isinstance(value, dict) and ("schemaRef" in value or "schema" in value):
+                decls[key] = VariableDecl.model_validate(value)
+            else:
+                context[key] = value
+        return context, decls
+
 
 IfStep.model_rebuild()
+SwitchStep.model_rebuild()
+WhileStep.model_rebuild()
+RepeatStep.model_rebuild()
 ForeachStep.model_rebuild()
 ParallelStep.model_rebuild()
+AssignStep.model_rebuild()

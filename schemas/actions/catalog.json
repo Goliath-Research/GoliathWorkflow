@@ -1303,6 +1303,206 @@
       "input_schema_ref": "schemas/tasks/validation_post_model_validation.input.schema.json",
       "output_schema_ref": "schemas/tasks/validation_post_model_validation.output.schema.json",
       "schema_id": "validation.post_model_validation"
+    },
+    {
+      "action_name": "workflow.const_bool",
+      "argv_map": {},
+      "capability": "workflow.const-bool",
+      "category": "validation",
+      "context_vars": [
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Publish a boolean constant into scope (typed assign helper).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": []
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_workflow_const_bool",
+      "input_schema_ref": "schemas/tasks/workflow_const_bool.input.schema.json",
+      "output_schema_ref": "schemas/tasks/workflow_const_bool.output.schema.json",
+      "schema_id": "workflow.const_bool",
+      "tool": "WorkflowConstBool"
+    },
+    {
+      "action_name": "workflow.const_int",
+      "argv_map": {},
+      "capability": "workflow.const-int",
+      "category": "validation",
+      "context_vars": [
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Publish an integer constant into scope (typed assign helper).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": []
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_workflow_const_int",
+      "input_schema_ref": "schemas/tasks/workflow_const_int.input.schema.json",
+      "output_schema_ref": "schemas/tasks/workflow_const_int.output.schema.json",
+      "schema_id": "workflow.const_int",
+      "tool": "WorkflowConstInt"
+    },
+    {
+      "action_name": "workflow.const_string",
+      "argv_map": {},
+      "capability": "workflow.const-string",
+      "category": "validation",
+      "context_vars": [
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Publish a string constant into scope (typed assign helper).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": []
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_workflow_const_string",
+      "input_schema_ref": "schemas/tasks/workflow_const_string.input.schema.json",
+      "output_schema_ref": "schemas/tasks/workflow_const_string.output.schema.json",
+      "schema_id": "workflow.const_string",
+      "tool": "WorkflowConstString"
+    },
+    {
+      "action_name": "workflow.const_path",
+      "argv_map": {},
+      "capability": "workflow.const-path",
+      "category": "validation",
+      "context_vars": [
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Publish a filesystem path string into scope (typed assign helper).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": []
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_workflow_const_path",
+      "input_schema_ref": "schemas/tasks/workflow_const_path.input.schema.json",
+      "output_schema_ref": "schemas/tasks/workflow_const_path.output.schema.json",
+      "schema_id": "workflow.const_path",
+      "tool": "WorkflowConstPath"
+    },
+    {
+      "action_name": "workflow.json_path_bool",
+      "argv_map": {},
+      "capability": "workflow.json-path-bool",
+      "category": "validation",
+      "context_vars": [
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Extract a boolean from a JSON file via dotted path (typed assign helper).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": []
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_workflow_json_path_bool",
+      "input_schema_ref": "schemas/tasks/workflow_json_path_bool.input.schema.json",
+      "output_schema_ref": "schemas/tasks/workflow_json_path_bool.output.schema.json",
+      "schema_id": "workflow.json_path_bool",
+      "tool": "WorkflowJsonPathBool"
+    },
+    {
+      "action_name": "workflow.json_path_int",
+      "argv_map": {},
+      "capability": "workflow.json-path-int",
+      "category": "validation",
+      "context_vars": [
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Extract an integer from a JSON file via dotted path (typed assign helper).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": []
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_workflow_json_path_int",
+      "input_schema_ref": "schemas/tasks/workflow_json_path_int.input.schema.json",
+      "output_schema_ref": "schemas/tasks/workflow_json_path_int.output.schema.json",
+      "schema_id": "workflow.json_path_int",
+      "tool": "WorkflowJsonPathInt"
+    },
+    {
+      "action_name": "workflow.json_path_string",
+      "argv_map": {},
+      "capability": "workflow.json-path-string",
+      "category": "validation",
+      "context_vars": [
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Extract a string from a JSON file via dotted path (typed assign helper).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": []
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_workflow_json_path_string",
+      "input_schema_ref": "schemas/tasks/workflow_json_path_string.input.schema.json",
+      "output_schema_ref": "schemas/tasks/workflow_json_path_string.output.schema.json",
+      "schema_id": "workflow.json_path_string",
+      "tool": "WorkflowJsonPathString"
+    },
+    {
+      "action_name": "workflow.fs_stat",
+      "argv_map": {},
+      "capability": "workflow.fs-stat",
+      "category": "validation",
+      "context_vars": [
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Stat a filesystem path; value=exists (mtime included \u2014 CAAS skip may be inappropriate).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": []
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_workflow_fs_stat",
+      "input_schema_ref": "schemas/tasks/workflow_fs_stat.input.schema.json",
+      "output_schema_ref": "schemas/tasks/workflow_fs_stat.output.schema.json",
+      "schema_id": "workflow.fs_stat",
+      "tool": "WorkflowFsStat"
     }
   ],
   "version": 1
