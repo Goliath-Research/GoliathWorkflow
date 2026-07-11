@@ -23,6 +23,10 @@ AS $$
   FROM wf.wf_repo_list_actions();
 $$;
 
+-- OUT column order must match wf.wf_repo_get_action_schema; DROP if a prior
+-- deploy declared schema_json before schema_id (CREATE OR REPLACE cannot swap).
+DROP FUNCTION IF EXISTS portal.sp_get_action_schema(text, text);
+
 CREATE OR REPLACE FUNCTION portal.sp_get_action_schema(
   p_action_name text,
   p_direction text
@@ -30,13 +34,14 @@ CREATE OR REPLACE FUNCTION portal.sp_get_action_schema(
 RETURNS TABLE (
   action_name text,
   direction text,
-  schema_json jsonb,
-  schema_id text
+  schema_id text,
+  schema_json jsonb
 )
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT * FROM wf.wf_repo_get_action_schema(p_action_name, p_direction);
+  SELECT action_name, direction, schema_id, schema_json
+  FROM wf.wf_repo_get_action_schema(p_action_name, p_direction);
 $$;
 
 CREATE OR REPLACE FUNCTION portal.sp_list_workflow_definitions(
