@@ -58,6 +58,7 @@ def deploy_postgres(dsn: str) -> None:
         "04_admin.sql",
         "wf_action_schema.sql",
         "wf_repo_upsert_workflow_action.sql",
+        "wf_action_dispatch_metadata.sql",
         "wf_repo_create_workflow_graph.sql",
         "wf_sql_collection_bindings.sql",
     )

@@ -1,9 +1,11 @@
 /*
-  PostgreSQL: dispatch metadata columns on wf.workflow_action + canonical 7-arg upsert.
+  PostgreSQL: dispatch metadata columns on wf.workflow_action + canonical 7-arg upsert
+  and wf.wf_repo_list_actions (8-column RETURNS TABLE).
 
   Deploy after wf_repo_upsert_workflow_action.sql (3-arg bootstrap). This script is
   required for seed_action_catalog.py / admin catalog seed / GET /v1/actions dispatch fields.
-  Prerequisites: 00_schema.sql
+  Prerequisites: 00_schema.sql, wf_action_schema.sql (schema table; list_actions lives here only
+  so re-deploys do not hit 42P13 from a narrower CREATE OR REPLACE earlier in the set).
 */
 
 ALTER TABLE wf.workflow_action

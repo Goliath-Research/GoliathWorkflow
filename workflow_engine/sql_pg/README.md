@@ -15,9 +15,9 @@ Deploy **in order**:
 | 7 | [`01_worker_api.sql`](01_worker_api.sql) | Worker claim/submit/heartbeat |
 | 8 | [`02_repository_api.sql`](02_repository_api.sql) | Middle-tier repository wrappers |
 | 9 | [`04_admin.sql`](04_admin.sql) | Admin (`sp_delete_workflow_def`) |
-| 10 | [`wf_action_schema.sql`](wf_action_schema.sql) | Action I/O JSON Schema storage + repo procs |
+| 10 | [`wf_action_schema.sql`](wf_action_schema.sql) | Action I/O JSON Schema storage + get/upsert schema (not list_actions) |
 | 11 | [`wf_repo_upsert_workflow_action.sql`](wf_repo_upsert_workflow_action.sql) | Bootstrap 3-arg upsert (name / capability / schema ref) |
-| 11a | [`wf_action_dispatch_metadata.sql`](wf_action_dispatch_metadata.sql) | Dispatch columns + 7-arg upsert / list_actions |
+| 11a | [`wf_action_dispatch_metadata.sql`](wf_action_dispatch_metadata.sql) | Dispatch columns + 7-arg upsert + canonical `wf_repo_list_actions` |
 | 12 | [`wf_repo_create_workflow_graph.sql`](wf_repo_create_workflow_graph.sql) | Programmatic workflow definition builder |
 | 13 | [`wf_sql_collection_bindings.sql`](wf_sql_collection_bindings.sql) | Collection binding resolution at instance start |
 | 14 | [`portal_resource_profile.sql`](portal_resource_profile.sql) | Portal archive storage profiles (domain config) |
@@ -135,7 +135,7 @@ Production OvR at scale uses **DataDrivenPipeline** / **ValidationPipeline** wit
 
 ```bash
 docker run -d --name methyl-pg -e POSTGRES_PASSWORD=methyl -e POSTGRES_DB=methylpipeline -p 5432:5432 postgres:17
-for f in 00_schema.sql 03_engine_core.sql 05_runtime_parity.sql 06_scope_writepath_parity.sql 07_scope_encoding_parity.sql 01_worker_api.sql 02_repository_api.sql 04_admin.sql wf_action_schema.sql; do
+for f in 00_schema.sql 03_engine_core.sql 05_runtime_parity.sql 06_scope_writepath_parity.sql 07_scope_encoding_parity.sql 01_worker_api.sql 02_repository_api.sql 04_admin.sql wf_action_schema.sql wf_repo_upsert_workflow_action.sql wf_action_dispatch_metadata.sql; do
   psql "postgresql://postgres:methyl@localhost:5432/methylpipeline" -f "workflow_engine/sql_pg/$f"
 done
 ```

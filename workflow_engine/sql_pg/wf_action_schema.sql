@@ -1,6 +1,11 @@
 /*
   PostgreSQL: workflow action JSON Schema storage.
   Prerequisites: 00_schema.sql (workflow_action)
+
+  Note: wf.wf_repo_list_actions is NOT defined here. A 4-column bootstrap would
+  collide on re-deploy with the 8-column canonical version from
+  wf_action_dispatch_metadata.sql (PostgreSQL 42P13: CREATE OR REPLACE cannot
+  change RETURNS TABLE). Deploy that script next in the ordered set.
 */
 
 CREATE TABLE IF NOT EXISTS wf.workflow_action_schema (
@@ -72,29 +77,4 @@ AS $$
   INNER JOIN wf.workflow_action_schema s ON s.workflow_action_id = a.id
   WHERE a.action_name = p_action_name
     AND s.direction = p_direction;
-$$;
-
-CREATE OR REPLACE FUNCTION wf.wf_repo_list_actions()
-RETURNS TABLE (
-  action_name text,
-  capability text,
-  has_input_schema boolean,
-  has_output_schema boolean
-)
-LANGUAGE sql
-STABLE
-AS $$
-  SELECT
-    a.action_name,
-    a.capability,
-    EXISTS (
-      SELECT 1 FROM wf.workflow_action_schema si
-      WHERE si.workflow_action_id = a.id AND si.direction = 'input'
-    ) AS has_input_schema,
-    EXISTS (
-      SELECT 1 FROM wf.workflow_action_schema so
-      WHERE so.workflow_action_id = a.id AND so.direction = 'output'
-    ) AS has_output_schema
-  FROM wf.workflow_action a
-  ORDER BY a.action_name;
 $$;
