@@ -12,6 +12,9 @@ ALTER TABLE wf.workflow_action
   ADD COLUMN IF NOT EXISTS in_process_handler text NULL,
   ADD COLUMN IF NOT EXISTS argv_map jsonb NULL;
 
+-- Supersede the 3-arg bootstrap (different arg list = separate overload in PG).
+DROP PROCEDURE IF EXISTS wf.wf_repo_upsert_workflow_action(text, text, text);
+
 CREATE OR REPLACE PROCEDURE wf.wf_repo_upsert_workflow_action(
   IN p_action_name text,
   IN p_capability text,
@@ -55,6 +58,10 @@ BEGIN
     argv_map = COALESCE(EXCLUDED.argv_map, wf.workflow_action.argv_map);
 END;
 $$;
+
+-- CREATE OR REPLACE cannot widen RETURNS TABLE (42P13). Drop first; CASCADE
+-- removes dependents such as portal.sp_list_workflow_actions (reapplied later).
+DROP FUNCTION IF EXISTS wf.wf_repo_list_actions() CASCADE;
 
 CREATE OR REPLACE FUNCTION wf.wf_repo_list_actions()
 RETURNS TABLE (

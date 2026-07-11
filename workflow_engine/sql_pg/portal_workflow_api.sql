@@ -8,6 +8,7 @@ CREATE SCHEMA IF NOT EXISTS portal;
 ALTER TABLE wf.workflow_def
   ADD COLUMN IF NOT EXISTS source varchar(32) NOT NULL DEFAULT 'system';
 
+-- Explicit columns: wf.wf_repo_list_actions also returns dispatch metadata.
 CREATE OR REPLACE FUNCTION portal.sp_list_workflow_actions()
 RETURNS TABLE (
   action_name text,
@@ -18,7 +19,8 @@ RETURNS TABLE (
 LANGUAGE sql
 STABLE
 AS $$
-  SELECT * FROM wf.wf_repo_list_actions();
+  SELECT action_name, capability, has_input_schema, has_output_schema
+  FROM wf.wf_repo_list_actions();
 $$;
 
 CREATE OR REPLACE FUNCTION portal.sp_get_action_schema(
