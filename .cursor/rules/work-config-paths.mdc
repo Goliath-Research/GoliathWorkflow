@@ -1,19 +1,25 @@
 ---
-description: Study manifests and data on /work; profiles, schemas, and DomainPrograms in the repo
+description: cfg DB registry is SoT; materialize to /work; git keeps code and schema contracts
 alwaysApply: true
 ---
 
-# Repo vs `/work` (four-layer config)
+# Repo vs `/work` vs `cfg` registry (four-layer config)
 
-## Repository (versioned, documented, default for developers)
+## Configuration registry (production source of truth)
 
-- **Pipeline profiles:** `workflow_engine/domain/profiles/*.profile.json`
-- **DomainPrograms:** `workflow_engine/domain/fixtures/*.program.json`, `workflow_engine/domain/checks/*/configs/*.program.json`
-- **JSON schemas:** `schemas/config/`, generated `*.schema.json` under packages
-- **Documentation:** `docs/`, `docs/usage/`, `docs/reference/domain-program-language.md`
-- **CI smoke mirrors:** `workflow_engine/domain/checks/*/configs/project_*.json` (validate compile/bindings only — not production)
+- **`cfg` schema** (Azure SQL / PostgreSQL) owns sites, pipeline profiles, DomainProgram IR, studies, storage endpoints/credentials, reference assets, and action definitions.
+- Operators use **`methyl-cfg`** (`import-fs`, `upsert`, `materialize`, `publish-program`, `sync-actions`, `provision-assets`).
+- **`methyl-cfg materialize`** writes **non-secret** published objects onto `/work` (and runtime-bundle domain paths). **Credentials never materialize** to shared storage; they are expanded into task `input_json` at schedule time.
+- File-backed store for local/CI: `METHYL_CFG_STORE` (default `/work/epimethyl/cfg-store`). See `docs/architecture/config-registry.md`.
 
-Developers point `methyl-workflow-run --program` at repo paths. In **production**, the same JSON is shipped inside the release **runtime-bundle** (see below) — workers and operators must not depend on a git checkout.
+## Repository (versioned contracts + CI fixtures)
+
+- **Pipeline profiles / DomainPrograms:** authored in git for CI and as import seeds (`methyl-cfg import-fs`)
+- **JSON schemas:** `schemas/config/`, `schemas/domain/` (including `storage_location.schema.json`)
+- **Documentation:** `docs/`, `docs/usage/19-config-registry.qmd`
+- **CI smoke mirrors:** `workflow_engine/domain/checks/*/configs/project_*.json`
+
+Developers may still point `methyl-workflow-run --program` at repo paths. In **production**, workers read **materialized** paths under `/work` / runtime-bundle after `methyl-cfg materialize` (or release promote + cfg materialize).
 
 ## Production release bundle (workers + operators, no git)
 
@@ -21,7 +27,7 @@ Each promoted release under `/work/epimethyl/current/` includes:
 
 ```
 /work/epimethyl/current/runtime-bundle/
-  domain/profiles/*.profile.json     # version-pinned with release
+  domain/profiles/*.profile.json     # also refreshed by methyl-cfg materialize
   domain/fixtures/*.program.json
   domain/checks/*/configs/*.program.json
   schemas/  scripts/  deploy/
@@ -33,43 +39,40 @@ Each promoted release under `/work/epimethyl/current/` includes:
 
 ```bash
 methyl-workflow-run \
-  --program /work/epimethyl/current/runtime-bundle/domain/checks/buffy_healthy_vs_pca/configs/buffy_mc_stability.program.json \
-  --context '{"projectPath":"/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json","pipelineProfile":"mc_gene_fc"}' \
+  --program /work/epimethyl/current/runtime-bundle/domain/fixtures/samd_research.program.json \
+  --context '{"projectPath":"/work/projects/my-study/configs/project_Healthy_vs_Disease.json","pipelineProfile":"samd_research"}' \
   --parallel-workers 1 -v
 ```
 
-Or set `METHYL_PROFILE=mc_gene_fc` (name resolves under `METHYL_PROFILE_DIR`).
+Or set `METHYL_PROFILE=samd_research` (name resolves under `METHYL_PROFILE_DIR`).
 
 **Distributed workers** receive `resolvedConfig` in task payloads from instance `actionConfig`; they do not read profiles or programs at claim time when the gateway enriched context at start.
 
 ## `/work` layout (operator / cluster storage, not git)
 
 ```
-/work/epimethyl/              # deployed runtime (releases, venv, env, docker)
-/work/site/methyl_site.json   # site manifest (genomes, GTF, caches) — METHYL_SITE_CONFIG
-/work/genomes/                # reference genomes by species
+/work/epimethyl/              # deployed runtime (releases, venv, env, docker, cfg-store)
+/work/site/methyl_site.json   # materialized site (genomes, GTF, caches) — METHYL_SITE_CONFIG
+/work/site/storage_endpoints/ # non-secret endpoint metadata only
+/work/genomes/                # reference genomes by species (provision recipes)
 /work/cache/                   # shared mapper/enricher caches
 /work/samples/{sample_id}/    # flat sample archive (not by laboratory)
-/work/projects/<disease>/      # study-specific science
+/work/projects/<study>/        # study-specific science
   configs/project_*.json       # study manifests only
   data/                        # cohort CSVs
   <project_name>/              # outputs (monte_carlo_runs, …)
 ```
 
-Examples for prostate cancer:
-
-- `/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json`
-- `/work/projects/prostate-cancer/data/healthy_b.csv`, `pca_b.csv`
-
 Optional: a small instance context JSON on `/work` that only sets `projectPath` (and study-only overrides). **Do not** copy `*.program.json` to `/work/projects/.../configs/`.
 
 ## When implementing or documenting runs
 
-- **Do** read and edit **study manifests** (`project_*.json`) under `/work/projects/<disease>/configs/`.
-- **Do** keep **profiles, schemas, and DomainPrograms** in the repo and document them for users.
+- **Do** treat **`cfg` + `methyl-cfg materialize`** as the production path for profiles/programs/sites.
+- **Do** keep credentials in `cfg.credential` (never under `/work/projects`).
 - **Do** pass `projectPath` in `--context` pointing at `/work/projects/.../project_*.json`.
 - **Do** set `METHYL_SITE_CONFIG` (or install site manifest under `/work/site/`).
 - **Do not** treat repo `project_*.json` smoke copies or `tools/methyl-config-editor/configs/` as production source of truth.
 - **Do not** ship or document `*.program.json` under `/work/projects/<disease>/configs/` as canonical.
 
 Migration: `docs/deployment/work_layout_migration.md`, `scripts/migrate_work_layout.py`.
+Docs: `docs/architecture/config-registry.md`, `docs/usage/19-config-registry.qmd`.

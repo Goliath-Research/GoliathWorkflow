@@ -144,6 +144,22 @@ if [[ "$SKIP_SEED" -eq 0 ]]; then
   "$PYTHON_BIN" "$REPO_ROOT/workflow_engine/sql_mssql/seed_action_catalog.py" --regenerate-catalog --use-db
 fi
 
+# Configuration registry: import FS → cfg store → materialize onto /work (never secrets)
+SKIP_CFG="${SKIP_CFG:-0}"
+if [[ "$SKIP_CFG" -eq 0 ]]; then
+  echo "==> Importing profiles/programs into cfg store and materializing onto /work ..."
+  CFG_STORE="${METHYL_CFG_STORE:-/work/epimethyl/cfg-store}"
+  WORK_ROOT="${METHYL_WORK_ROOT:-/work}"
+  export PYTHONPATH="${REPO_ROOT}/workflow_engine:${PYTHONPATH:-}"
+  "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" import-fs \
+    --repo-root "$REPO_ROOT" \
+    --work-root "$WORK_ROOT" || echo "WARN: methyl-cfg import-fs failed (non-fatal)"
+  "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" sync-actions \
+    --repo-root "$REPO_ROOT" --from-json || echo "WARN: methyl-cfg sync-actions failed (non-fatal)"
+  "$PYTHON_BIN" -m cfg.cli --store-dir "$CFG_STORE" materialize \
+    --work-root "$WORK_ROOT" || echo "WARN: methyl-cfg materialize failed (non-fatal)"
+fi
+
 if [[ "$SKIP_WORKFLOWS" -eq 0 ]]; then
   echo "==> Deploying DomainProgram workflows (direct DB) ..."
   bash "$SCRIPT_DIR/deploy_workflow_definitions.sh"

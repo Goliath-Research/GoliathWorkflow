@@ -5,16 +5,16 @@ Four-layer architecture: company portal, workflow database, stateless middle-tie
 ```mermaid
 flowchart TB
   subgraph portal ["Company Portal"]
-    editor["Schema config editor"]
+    editor["Schema / DomainProgram tree editor"]
     runPrep["Start SamplePrepPipeline"]
     runDdp["Start validation lifecycle"]
   end
   subgraph database ["Backend Database"]
+    cfgReg["cfg registry"]
     wfPrep["SamplePrepPipeline"]
     wfDef["StudyValidationLifecycle"]
     inst["workflow_instance"]
     hpset["hyperparameter_set"]
-    hpentry["hyperparameter_set_action_entry"]
     nexec["node_execution + scope_variable"]
   end
   subgraph mt ["Middle-Tier"]
@@ -28,11 +28,13 @@ flowchart TB
   end
   storage[("Shared /work storage")]
 
-  editor --> runPrep --> wfPrep
+  editor --> cfgReg
+  cfgReg -->|"materialize"| storage
+  cfgReg -->|"compile"| wfPrep
+  cfgReg -->|"compile"| wfDef
+  runPrep --> wfPrep
   wfPrep --> runDdp --> wfDef --> inst --> nexec
   inst --> hpset
-  inst --> hpentry
-  hpset --> hpentry
   rest --> engine --> nexec
   w0 & w1 & w3 --> rest
   w0 & w1 & w3 --> storage
@@ -41,9 +43,10 @@ flowchart TB
 
 | Layer | Technology | Responsibility |
 |-------|------------|----------------|
-| Portal | `methyl-config-editor` web | Edit study manifest against JSON Schema; start runs |
-| Database | Azure SQL or PostgreSQL (`wf` schema) | Workflow tree, instances, executions, leases; optional `hyperparameter_set` registry and action ledger for idempotent cross-instance reuse (CAAS) |
-| Middle-tier | `methyl-gateway` (uvicorn) | Stateless HTTP; invokes engine procedures |
+| Portal | config editor + SQL portal API | Edit study/program/action config; start runs |
+| Config registry | `cfg` schema + `methyl-cfg` | Sites, profiles, programs, studies, storage endpoints/credentials, assets |
+| Database engine | Azure SQL or PostgreSQL (`wf`) | Workflow tree, instances, executions, leases |
+| Middle-tier | `methyl-gateway` (uvicorn) | Stateless HTTP; worker claim/submit only |
 | Workers | `methyl-worker` + package CLIs | Poll tasks by capability; read/write shared paths |
 
 Pre-rendered figure: [`../diagrams/out/distributed-runtime.svg`](../diagrams/out/distributed-runtime.svg)

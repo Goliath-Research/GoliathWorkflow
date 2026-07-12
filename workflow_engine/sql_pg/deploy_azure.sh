@@ -70,6 +70,10 @@ SCRIPTS=(
   portal_resource_profile.sql
   portal_workflow_api.sql
   wf_drop_platform_sample_storage.sql
+  cfg_schema.sql
+  cfg_registry_tables.sql
+  cfg_repo_api.sql
+  cfg_portal_api.sql
 )
 
 echo "Target: host=$PGHOST db=$PGDATABASE user=$PGUSER sslmode=$PGSSLMODE"

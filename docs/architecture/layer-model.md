@@ -15,7 +15,7 @@ Study configuration is split across layers so pipeline structure stays in versio
 | Execution | Action catalog + `methyl_worker.handlers` | CLI / in-process dispatch |
 | Orchestration | DB engine + agnostic gateway **or** `LocalWorkflowEngine` | Graph scheduling; gateway does not resolve config at claim |
 
-**Storage rule:** DomainPrograms, profiles, and schemas live in the **git repository**. Study manifests (`project_*.json`), sample CSVs, and run artifacts live on **`/work/<disease>/`**.
+**Storage rule:** The **`cfg` registry** (database) is the source of truth for DomainPrograms, pipeline profiles, sites, studies, storage endpoints/credentials, and reference assets. Shared storage **`/work`** is a **materialization** of published non-secret objects for workers. Git keeps code, JSON Schema contracts, and CI fixtures. See [config-registry.md](config-registry.md). Study sample CSVs and run artifacts still live on `/work/projects/<study>/`.
 
 Parameter precedence (highest wins): instance override → program `with` / `stepOverride` → profile `actionConfig` → analyte defaults → site manifest → *(no Python fallback for tunable science knobs)*. Code **resolves and validates** merged config; it must not inject operational defaults when config is missing (see [`config-not-code`](../../.cursor/rules/config-not-code.mdc)). Non-tunable structural constants (paths, storage keys) may still live in code.
 

@@ -57,6 +57,21 @@
       "title": "AzureDefaultCredentialCredentials",
       "type": "object"
     },
+    "AzureSasTokenCredentials": {
+      "$ref": "storage_location.schema.json#/$defs/AzureSasTokenCredentials"
+    },
+    "AzureSasUrlCredentials": {
+      "$ref": "storage_location.schema.json#/$defs/AzureSasUrlCredentials"
+    },
+    "GcsServiceAccountCredentials": {
+      "$ref": "storage_location.schema.json#/$defs/GcsServiceAccountCredentials"
+    },
+    "GcsHmacCredentials": {
+      "$ref": "storage_location.schema.json#/$defs/GcsHmacCredentials"
+    },
+    "GcsApplicationDefaultCredentials": {
+      "$ref": "storage_location.schema.json#/$defs/GcsApplicationDefaultCredentials"
+    },
     "AzureFastqSource": {
       "additionalProperties": false,
       "properties": {
@@ -73,7 +88,9 @@
             "mapping": {
               "account_key": "#/$defs/AzureAccountKeyCredentials",
               "connection_string": "#/$defs/AzureConnectionStringCredentials",
-              "default_credential": "#/$defs/AzureDefaultCredentialCredentials"
+              "default_credential": "#/$defs/AzureDefaultCredentialCredentials",
+              "sas_token": "#/$defs/AzureSasTokenCredentials",
+              "sas_url": "#/$defs/AzureSasUrlCredentials"
             },
             "propertyName": "authMode"
           },
@@ -86,6 +103,12 @@
             },
             {
               "$ref": "#/$defs/AzureDefaultCredentialCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureSasTokenCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureSasUrlCredentials"
             }
           ],
           "title": "Credentials"
@@ -110,6 +133,9 @@
       "title": "AzureFastqSource",
       "type": "object"
     },
+    "GcsFastqSource": {
+      "$ref": "storage_location.schema.json#/$defs/GcsLocation"
+    },
     "AzureFastqStorageDefaults": {
       "additionalProperties": false,
       "properties": {
@@ -126,7 +152,9 @@
             "mapping": {
               "account_key": "#/$defs/AzureAccountKeyCredentials",
               "connection_string": "#/$defs/AzureConnectionStringCredentials",
-              "default_credential": "#/$defs/AzureDefaultCredentialCredentials"
+              "default_credential": "#/$defs/AzureDefaultCredentialCredentials",
+              "sas_token": "#/$defs/AzureSasTokenCredentials",
+              "sas_url": "#/$defs/AzureSasUrlCredentials"
             },
             "propertyName": "authMode"
           },
@@ -139,6 +167,12 @@
             },
             {
               "$ref": "#/$defs/AzureDefaultCredentialCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureSasTokenCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureSasUrlCredentials"
             }
           ],
           "title": "Credentials"
@@ -408,7 +442,8 @@
       "mapping": {
         "azure_blob": "#/$defs/AzureFastqSource",
         "file": "#/$defs/FileFastqSource",
-        "s3": "#/$defs/S3FastqSource"
+        "s3": "#/$defs/S3FastqSource",
+        "gcs": "#/$defs/GcsFastqSource"
       },
       "propertyName": "type"
     },
@@ -421,6 +456,9 @@
       },
       {
         "$ref": "#/$defs/AzureFastqSource"
+      },
+      {
+        "$ref": "#/$defs/GcsFastqSource"
       }
     ]
   },
@@ -429,7 +467,8 @@
       "mapping": {
         "azure_blob": "#/$defs/AzureFastqStorageDefaults",
         "file": "#/$defs/FileFastqStorageDefaults",
-        "s3": "#/$defs/S3FastqStorageDefaults"
+        "s3": "#/$defs/S3FastqStorageDefaults",
+        "gcs": "#/$defs/GcsFastqSource"
       },
       "propertyName": "type"
     },
@@ -442,6 +481,9 @@
       },
       {
         "$ref": "#/$defs/AzureFastqStorageDefaults"
+      },
+      {
+        "$ref": "#/$defs/GcsFastqSource"
       }
     ]
   },

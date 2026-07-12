@@ -7,6 +7,7 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [Component boundaries](component-boundaries.md) | Gateway vs DB vs admin CLI vs MCP vs pipeline knowledge |
 | [Action provider registry](action-provider-registry.md) | Process-pack registry vs engine; why not DI |
 | [Layer model](layer-model.md) | manifest → profile → program → instance → worker |
+| [Config registry](config-registry.md) | `cfg` SoT → materialize `/work`; storage endpoints/credentials |
 | [Distributed runtime](distributed-runtime.md) | portal, DB, gateway, workers, shared storage |
 | [Orchestration paths](orchestration-paths.md) | local, gateway, legacy CLI matrix |
 | [Pipeline stages](pipeline-stages.md) | sample prep through validation stage DAG |
@@ -21,7 +22,7 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 
 ## Quick audience routing
 
-- **Config author** → [layer-model.md](layer-model.md)
-- **DevOps / cluster** → [distributed-runtime.md](distributed-runtime.md) + [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd)
+- **Config author** → [layer-model.md](layer-model.md) + [config-registry.md](config-registry.md)
+- **DevOps / cluster** → [distributed-runtime.md](distributed-runtime.md) + [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd) + [Usage ch.19](../usage/19-config-registry.qmd)
 - **Workflow author** → [orchestration-paths.md](orchestration-paths.md) + [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.qmd) + [DomainProgram reference](../reference/domain-program-language.md)
 - **Experimentation / result versioning** → [Usage ch.17](../usage/17-content-addressed-action-store.qmd) + [pipeline architecture — hyperparameter sets](../../workflow_engine/docs/pipeline_architecture.md#hyperparameter-sets-and-caas)

@@ -81,8 +81,13 @@ Credentials are supplied in `fastqSource.credentials` — there is **no** env-va
 | `s3` | `instance_profile` | boto3 default chain (IAM role on worker node) |
 | `azure_blob` | `account_key` | `accountKey` (write-only in Portal schema) |
 | `azure_blob` | `connection_string` | `connectionString` (write-only) |
+| `azure_blob` | `sas_token` | `sasToken` (SAS query string) |
+| `azure_blob` | `sas_url` | `sasUrl` (full SAS URL) |
 | `azure_blob` | `default_credential` | `DefaultAzureCredential` (managed identity, Azure CLI dev) |
+| `gcs` | `service_account_json` / `hmac_keys` / `application_default` | See `schemas/domain/storage_location.schema.json` |
 | `file` | — | `basePath` + `prefix` on shared NFS/local storage |
+
+Named endpoints and secrets belong in the **`cfg` registry** (`methyl-cfg upsert credential|storage_endpoint`); expand with `methyl-cfg expand-endpoint` into this wire format. Do not write secrets under `/work/projects`.
 
 Portal / planner JSON: instance-level `fastqStorage` (laboratory-owned ingress — **required** on every study start) plus per-sample `fastqPrefix` (materialized into `samples[].fastqSource`). Internal HDF5 archive (`h5Storage`) may default from `portal.resource_profile`. See `schemas/domain/fastq_storage.schema.json` and [portal_resource_profile.md](../../docs/deployment/portal_resource_profile.md).
 

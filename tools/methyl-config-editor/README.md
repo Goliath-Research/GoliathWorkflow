@@ -37,22 +37,20 @@ Custom sorting passes an anonymous comparison function directly to **`IList<T>.S
 
 ## Workflow action schemas (remote catalog)
 
-When editing workflow task templates (with `${var.*}` placeholders), enable the gateway catalog in `methyl-config-editor.ini` (VCL) or `methyl-config-editor-web.ini` (uniGUI):
+The worker gateway (`methyl-gateway`) is **claim/submit only** and does **not** expose `/v1/actions`.
 
-```ini
-[Gateway]
-Enabled=true
-BaseUrl=http://localhost:8080/v1
-```
+Prefer one of:
 
-On catalog reload, the editor calls `GET /v1/actions` and fetches each registered schema. Action entries appear in the schema dropdown as `action: pipeline.centroid (input)` etc. Filesystem schemas under **Schemas root** remain available; remote entries use virtual `remote://` paths.
+1. **Filesystem schemas** under **Schemas root** (`schemas/tasks/*.schema.json`, `schemas/domain/*`).
+2. **Config registry / portal SQL** — list actions via `portal.sp_list_cfg_actions` / `portal.sp_get_cfg_action` (backed by `cfg.action_definition`), or materialize action JSON under `/work/site/action_definitions/` with `methyl-cfg materialize`.
+3. Legacy ini `[Gateway] BaseUrl=.../v1` remote catalog is **deprecated**; do not point the editor at the worker gateway for action schemas.
 
 `TSchemaValidator.AllowTemplatePlaceholders` (default **true**) accepts string values matching `${...}` for any declared type so unresolved template tokens validate at edit time.
 
 | Unit | Role |
 |------|------|
-| `Schema/RemoteSchemaCatalog.pas` | HTTP client for gateway action schemas |
-| `App/SchemaCatalog.pas` | Merges filesystem + remote entries |
+| `Schema/RemoteSchemaCatalog.pas` | HTTP client (legacy; prefer cfg/portal or filesystem) |
+| `App/SchemaCatalog.pas` | Merges filesystem + optional remote entries |
 | `Schema/SchemaValidator.pas` | Optional `${...}` placeholder tolerance |
 
 ## Architecture

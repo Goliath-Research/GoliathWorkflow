@@ -20,6 +20,7 @@ methyl-workflow-run = "local.runner:main"
 methyl-study-start = "admin.study_start:main"
 methyl-study-init = "admin.study_init:main"
 methyl-study-validate-manifest = "admin.study_validate:main"
+methyl-cfg = "cfg.cli:main"
 
 [build-system]
 requires = ["setuptools>=61"]
@@ -27,7 +28,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["rest*", "local*", "admin*", "ops*"]
+include = ["rest*", "local*", "admin*", "ops*", "cfg*"]
 
 [tool.setuptools.package-dir]
 "" = "."

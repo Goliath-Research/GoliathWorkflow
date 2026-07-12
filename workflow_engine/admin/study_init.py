@@ -139,6 +139,27 @@ def write_study(
     manifest_path = configs / f"project_{project_name}.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
+    # DB-first / registry: also upsert into cfg store then ensure materialize path matches.
+    try:
+        from cfg.store import FileConfigStore
+
+        store_dir = Path(
+            __import__("os").environ.get(
+                "METHYL_CFG_STORE",
+                str(Path("/work/epimethyl/cfg-store")),
+            )
+        )
+        store = FileConfigStore(store_dir)
+        store.upsert(
+            "study",
+            project_name,
+            manifest,
+            status="published",
+            extra={"studyId": study_id},
+        )
+    except Exception as exc:  # pragma: no cover - best-effort registry mirror
+        print(f"warning: cfg study upsert skipped: {exc}", file=sys.stderr)
+
     readme = configs / "README.md"
     readme.write_text(
         f"""# Study `{project_name}` (SaMD ladder)
@@ -211,11 +232,22 @@ def main(argv: Optional[List[str]] = None) -> int:
         action="store_true",
         help="Overwrite manifest/README if the study directory already exists",
     )
+    parser.add_argument(
+        "--cfg-store",
+        type=Path,
+        default=None,
+        help="cfg FileConfigStore dir (default: METHYL_CFG_STORE or /work/epimethyl/cfg-store)",
+    )
     args = parser.parse_args(argv)
 
     stages = None if args.binary else int(args.stages)
     if stages is not None and stages < 1:
         parser.error("--stages must be >= 1")
+
+    if args.cfg_store is not None:
+        import os
+
+        os.environ["METHYL_CFG_STORE"] = str(args.cfg_store.resolve())
 
     try:
         path = write_study(

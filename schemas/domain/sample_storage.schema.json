@@ -11,6 +11,12 @@
     "AzureDefaultCredentialCredentials": {
       "$ref": "fastq_storage.schema.json#/$defs/AzureDefaultCredentialCredentials"
     },
+    "AzureSasTokenCredentials": {
+      "$ref": "storage_location.schema.json#/$defs/AzureSasTokenCredentials"
+    },
+    "AzureSasUrlCredentials": {
+      "$ref": "storage_location.schema.json#/$defs/AzureSasUrlCredentials"
+    },
     "AzureSampleDestination": {
       "additionalProperties": false,
       "properties": {
@@ -20,7 +26,9 @@
           "oneOf": [
             { "$ref": "#/$defs/AzureAccountKeyCredentials" },
             { "$ref": "#/$defs/AzureConnectionStringCredentials" },
-            { "$ref": "#/$defs/AzureDefaultCredentialCredentials" }
+            { "$ref": "#/$defs/AzureDefaultCredentialCredentials" },
+            { "$ref": "#/$defs/AzureSasTokenCredentials" },
+            { "$ref": "#/$defs/AzureSasUrlCredentials" }
           ]
         },
         "prefix": { "type": "string" },
@@ -38,13 +46,18 @@
           "oneOf": [
             { "$ref": "#/$defs/AzureAccountKeyCredentials" },
             { "$ref": "#/$defs/AzureConnectionStringCredentials" },
-            { "$ref": "#/$defs/AzureDefaultCredentialCredentials" }
+            { "$ref": "#/$defs/AzureDefaultCredentialCredentials" },
+            { "$ref": "#/$defs/AzureSasTokenCredentials" },
+            { "$ref": "#/$defs/AzureSasUrlCredentials" }
           ]
         },
         "type": { "const": "azure_blob", "default": "azure_blob", "type": "string" }
       },
       "required": ["account", "container", "credentials"],
       "type": "object"
+    },
+    "GcsSampleDestination": {
+      "$ref": "storage_location.schema.json#/$defs/GcsLocation"
     },
     "FileSampleDestination": {
       "additionalProperties": false,
@@ -109,14 +122,16 @@
     "oneOf": [
       { "$ref": "#/$defs/FileSampleDestination" },
       { "$ref": "#/$defs/S3SampleDestination" },
-      { "$ref": "#/$defs/AzureSampleDestination" }
+      { "$ref": "#/$defs/AzureSampleDestination" },
+      { "$ref": "#/$defs/GcsSampleDestination" }
     ]
   },
   "SampleStorageDefaults": {
     "oneOf": [
       { "$ref": "#/$defs/FileSampleStorageDefaults" },
       { "$ref": "#/$defs/S3SampleStorageDefaults" },
-      { "$ref": "#/$defs/AzureSampleStorageDefaults" }
+      { "$ref": "#/$defs/AzureSampleStorageDefaults" },
+      { "$ref": "#/$defs/GcsSampleDestination" }
     ]
   }
 }

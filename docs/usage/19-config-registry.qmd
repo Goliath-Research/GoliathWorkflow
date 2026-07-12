@@ -1,0 +1,39 @@
+# Config registry (`methyl-cfg`)
+
+## What this chapter is
+
+Operator path for the **configuration registry**: database (or file-backed store) owns sites, profiles, DomainPrograms, studies, storage endpoints/credentials, and reference assets; `methyl-cfg materialize` writes non-secret files onto `/work` for cluster workers.
+
+Architecture detail: [`../architecture/config-registry.md`](../architecture/config-registry.md).
+
+## Bootstrap
+
+```bash
+source .venv/bin/activate
+bash scripts/bootstrap_distributed_workers.sh
+# includes: cfg import-fs → sync-actions → materialize (set SKIP_CFG=1 to skip)
+```
+
+## Day-2 operations
+
+```bash
+export METHYL_CFG_STORE=/work/epimethyl/cfg-store
+export PYTHONPATH=workflow_engine:$PYTHONPATH
+
+# After editing a profile in the store
+methyl-cfg materialize --work-root /work
+
+# Publish a DomainProgram (compile + write fixtures under runtime-bundle)
+methyl-cfg publish-program StudyValidationLifecycle --work-root /work
+
+# Rotate cloud keys: upsert new credential version, publish, new tasks pick it up
+methyl-cfg upsert credential --file new_keys.json --name lab-aws-keys --version 2 --provider s3 --publish
+```
+
+## Study scaffold
+
+`methyl-study-init` still writes `/work/projects/<study-id>/` and **also** upserts `cfg.study` when the cfg store is available (`--cfg-store` or `METHYL_CFG_STORE`).
+
+## Credentials
+
+Never put AccessKeys / SAS URLs in project JSON under `/work/projects`. Store them as `cfg.credential` and reference via `cfg.storage_endpoint.credentialName`. Expand only into task `input_json` at schedule time.
