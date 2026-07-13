@@ -166,9 +166,93 @@ CREATE OR ALTER PROCEDURE cfg.cfg_repo_set_compiled_version
 AS
 BEGIN
     SET NOCOUNT ON;
+    DECLARE @def_id bigint;
+    DECLARE @program_id bigint;
+    DECLARE @hash nvarchar(128);
+
+    SELECT @def_id = workflow_def_id
+    FROM wf.workflow_version
+    WHERE id = @workflow_version_id;
+
+    IF @def_id IS NULL
+    BEGIN
+        RAISERROR(N'workflow_version_id not found', 16, 1);
+        RETURN;
+    END
+
     UPDATE cfg.domain_program
-    SET compiled_workflow_version_id = @workflow_version_id, updated_at_utc = SYSUTCDATETIME()
+    SET compiled_workflow_version_id = @workflow_version_id,
+        workflow_def_id = @def_id,
+        updated_at_utc = SYSUTCDATETIME()
     WHERE name = @name AND version = @version;
+
+    SELECT @program_id = id, @hash = content_hash
+    FROM cfg.domain_program
+    WHERE name = @name AND version = @version;
+
+    IF @program_id IS NULL
+    BEGIN
+        RAISERROR(N'domain_program not found', 16, 1);
+        RETURN;
+    END
+
+    IF NOT EXISTS (
+        SELECT 1 FROM cfg.program_publish
+        WHERE domain_program_id = @program_id AND workflow_version_id = @workflow_version_id
+    )
+    BEGIN
+        INSERT INTO cfg.program_publish (domain_program_id, workflow_def_id, workflow_version_id, content_hash)
+        VALUES (@program_id, @def_id, @workflow_version_id, @hash);
+    END
+
     SELECT id FROM cfg.domain_program WHERE name = @name AND version = @version;
 END
 GO
+
+CREATE OR ALTER PROCEDURE cfg.cfg_repo_link_action
+    @action_name nvarchar(256),
+    @version nvarchar(64) = N'1'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @wa_id bigint = (SELECT id FROM wf.workflow_action WHERE action_name = @action_name);
+    IF @wa_id IS NULL
+    BEGIN
+        RAISERROR(N'wf.workflow_action not found for action_name', 16, 1);
+        RETURN;
+    END
+    UPDATE cfg.action_definition
+    SET workflow_action_id = @wa_id, updated_at_utc = SYSUTCDATETIME()
+    WHERE name = @action_name AND version = @version;
+    SELECT id, workflow_action_id FROM cfg.action_definition WHERE name = @action_name AND version = @version;
+END
+GO
+
+CREATE OR ALTER PROCEDURE cfg.cfg_repo_link_study_instance
+    @study_row_id bigint,
+    @workflow_instance_id bigint,
+    @domain_program_id bigint = NULL,
+    @pipeline_profile_id bigint = NULL,
+    @site_id bigint = NULL,
+    @storage_profile_id bigint = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    MERGE cfg.study_instance_link AS t
+    USING (SELECT @workflow_instance_id AS workflow_instance_id) AS s
+    ON t.workflow_instance_id = s.workflow_instance_id
+    WHEN MATCHED THEN UPDATE SET
+        study_row_id = @study_row_id,
+        domain_program_id = COALESCE(@domain_program_id, t.domain_program_id),
+        pipeline_profile_id = COALESCE(@pipeline_profile_id, t.pipeline_profile_id),
+        site_id = COALESCE(@site_id, t.site_id),
+        storage_profile_id = COALESCE(@storage_profile_id, t.storage_profile_id)
+    WHEN NOT MATCHED THEN INSERT (
+        study_row_id, workflow_instance_id, domain_program_id, pipeline_profile_id, site_id, storage_profile_id
+    ) VALUES (
+        @study_row_id, @workflow_instance_id, @domain_program_id, @pipeline_profile_id, @site_id, @storage_profile_id
+    );
+    SELECT id FROM cfg.study_instance_link WHERE workflow_instance_id = @workflow_instance_id;
+END
+GO
+

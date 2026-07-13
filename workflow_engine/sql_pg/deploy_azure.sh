@@ -72,6 +72,7 @@ SCRIPTS=(
   wf_drop_platform_sample_storage.sql
   cfg_schema.sql
   cfg_registry_tables.sql
+  cfg_wf_relationships.sql
   cfg_repo_api.sql
   cfg_portal_api.sql
 )

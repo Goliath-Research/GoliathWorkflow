@@ -284,7 +284,15 @@ objects:
     - name: cfg.cfg_repo_set_compiled_version
       kind: procedure
       required: true
-      notes: Link published DomainProgram to wf.workflow_version id
+      notes: Link published DomainProgram to wf.workflow_version + wf.workflow_def; inserts cfg.program_publish
+    - name: cfg.cfg_repo_link_action
+      kind: procedure
+      required: true
+      notes: Set cfg.action_definition.workflow_action_id from wf.workflow_action by action_name
+    - name: cfg.cfg_repo_link_study_instance
+      kind: procedure
+      required: true
+      notes: Upsert cfg.study_instance_link (study/profile/program/site → wf.workflow_instance)
 
   domain:
     - name: dbo.spMapDMP2Genes

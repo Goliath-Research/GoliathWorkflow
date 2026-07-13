@@ -307,16 +307,92 @@ CREATE OR REPLACE FUNCTION cfg.cfg_repo_set_compiled_version(
 RETURNS TABLE(id bigint)
 LANGUAGE plpgsql
 AS $$
-DECLARE v_id bigint;
+DECLARE
+  v_id bigint;
+  v_def_id bigint;
+  v_hash text;
 BEGIN
+  SELECT workflow_def_id INTO v_def_id
+  FROM wf.workflow_version
+  WHERE wf.workflow_version.id = p_workflow_version_id;
+  IF v_def_id IS NULL THEN
+    RAISE EXCEPTION 'workflow_version_id not found: %', p_workflow_version_id;
+  END IF;
+
   UPDATE cfg.domain_program
   SET compiled_workflow_version_id = p_workflow_version_id,
+      workflow_def_id = v_def_id,
       updated_at_utc = (now() AT TIME ZONE 'utc')
   WHERE name = p_name AND version = p_version
-  RETURNING cfg.domain_program.id INTO v_id;
+  RETURNING cfg.domain_program.id, cfg.domain_program.content_hash INTO v_id, v_hash;
+
   IF v_id IS NULL THEN
     RAISE EXCEPTION 'domain_program not found: %@%', p_name, p_version;
   END IF;
+
+  INSERT INTO cfg.program_publish (domain_program_id, workflow_def_id, workflow_version_id, content_hash)
+  VALUES (v_id, v_def_id, p_workflow_version_id, v_hash)
+  ON CONFLICT (domain_program_id, workflow_version_id) DO NOTHING;
+
+  id := v_id;
+  RETURN NEXT;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_action(
+  p_action_name text,
+  p_version text DEFAULT '1'
+)
+RETURNS TABLE(id bigint, workflow_action_id bigint)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_wa bigint;
+  v_id bigint;
+BEGIN
+  SELECT wa.id INTO v_wa FROM wf.workflow_action wa WHERE wa.action_name = p_action_name;
+  IF v_wa IS NULL THEN
+    RAISE EXCEPTION 'wf.workflow_action not found: %', p_action_name;
+  END IF;
+  UPDATE cfg.action_definition a
+  SET workflow_action_id = v_wa,
+      updated_at_utc = (now() AT TIME ZONE 'utc')
+  WHERE a.name = p_action_name AND a.version = p_version
+  RETURNING a.id INTO v_id;
+  IF v_id IS NULL THEN
+    RAISE EXCEPTION 'cfg.action_definition not found: %@%', p_action_name, p_version;
+  END IF;
+  id := v_id;
+  workflow_action_id := v_wa;
+  RETURN NEXT;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_study_instance(
+  p_study_row_id bigint,
+  p_workflow_instance_id bigint,
+  p_domain_program_id bigint DEFAULT NULL,
+  p_pipeline_profile_id bigint DEFAULT NULL,
+  p_site_id bigint DEFAULT NULL,
+  p_storage_profile_id bigint DEFAULT NULL
+)
+RETURNS TABLE(id bigint)
+LANGUAGE plpgsql
+AS $$
+DECLARE v_id bigint;
+BEGIN
+  INSERT INTO cfg.study_instance_link (
+    study_row_id, workflow_instance_id, domain_program_id, pipeline_profile_id, site_id, storage_profile_id
+  ) VALUES (
+    p_study_row_id, p_workflow_instance_id, p_domain_program_id, p_pipeline_profile_id, p_site_id, p_storage_profile_id
+  )
+  ON CONFLICT (workflow_instance_id) DO UPDATE SET
+    study_row_id = EXCLUDED.study_row_id,
+    domain_program_id = COALESCE(EXCLUDED.domain_program_id, cfg.study_instance_link.domain_program_id),
+    pipeline_profile_id = COALESCE(EXCLUDED.pipeline_profile_id, cfg.study_instance_link.pipeline_profile_id),
+    site_id = COALESCE(EXCLUDED.site_id, cfg.study_instance_link.site_id),
+    storage_profile_id = COALESCE(EXCLUDED.storage_profile_id, cfg.study_instance_link.storage_profile_id)
+  RETURNING cfg.study_instance_link.id INTO v_id;
   id := v_id;
   RETURN NEXT;
 END;

@@ -7,18 +7,34 @@
 | Layer | Role |
 |-------|------|
 | **`cfg` schema** | Source of truth for sites, profiles, DomainProgram IR, studies, storage endpoints/credentials, reference assets, action definitions |
-| **`wf` schema** | Compiled workflow graphs, instances, task queue (unchanged) |
+| **`wf` schema** | Compiled workflow graphs, instances, task queue |
 | **`/work`** | Materialization target for workers (paths only; **no secrets**) |
 | **Git** | Code, JSON Schema contracts, CI fixtures |
+
+### Relationships (`cfg` ↔ `wf`)
+
+Deployed by `cfg_wf_relationships.sql` (after `cfg_registry_tables.sql`):
+
+| From | To | Purpose |
+|------|----|---------|
+| `cfg.domain_program.workflow_def_id` | `wf.workflow_def.id` | Stable published graph identity |
+| `cfg.domain_program.compiled_workflow_version_id` | `wf.workflow_version.id` | Active compiled IR revision |
+| `cfg.program_publish` | `domain_program` + `workflow_def` + `workflow_version` | Audit of each publish |
+| `cfg.action_definition.workflow_action_id` | `wf.workflow_action.id` | Catalog row used by engine nodes |
+| `cfg.study_instance_link` | `cfg.study` + `wf.workflow_instance` (+ optional program/profile/site) | Which study/config started a run |
+| `cfg.storage_endpoint.credential_id` | `cfg.credential.id` | Internal (not wf) |
+
+Views: `cfg.v_domain_program_wf`, `cfg.v_action_definition_wf`, `cfg.v_study_instance`.
+
+Procs: `cfg.cfg_repo_set_compiled_version`, `cfg.cfg_repo_link_action`, `cfg.cfg_repo_link_study_instance`.
 
 ```mermaid
 flowchart LR
   authoring["Client JSON / Portal tree"] --> cfg["cfg registry"]
   cfg -->|"materialize"| work["/work site profiles projects"]
-  cfg -->|"compile publish"| wf["wf graphs"]
+  cfg -->|"FK publish"| wf["wf graphs + instances"]
   cfg -->|"expand at schedule"| task["task input_json with credentials"]
 ```
-
 ## CLI
 
 ```bash
