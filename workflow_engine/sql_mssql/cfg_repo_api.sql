@@ -375,7 +375,7 @@ BEGIN
         COALESCE(
             NULLIF(LTRIM(RTRIM(ls.Sample)), N''),
             r.processing_sample_key,
-            NULLIF(LTRIM(RTRIM(s.ParticipantID)), N'')
+            NULLIF(LTRIM(RTRIM(s.PatientID)), N'')
         )
     FROM raw r
     INNER JOIN portal.Samples s ON s.ID = r.portal_sample_id

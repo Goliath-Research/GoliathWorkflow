@@ -161,7 +161,7 @@ BEGIN
     SET NOCOUNT ON;
     SELECT
         s.ID AS portal_sample_id,
-        s.ParticipantID,
+        s.PatientID,
         s.CustomerID,
         s.DiseaseID,
         ls.ID AS lab_sample_id,
