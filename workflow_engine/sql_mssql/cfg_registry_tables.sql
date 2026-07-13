@@ -137,6 +137,8 @@ BEGIN
         status varchar(32) NOT NULL CONSTRAINT DF_cfg_ra_status DEFAULT ('draft'),
         content_hash nvarchar(128) NOT NULL,
         document_json nvarchar(max) NOT NULL,
+        storage_endpoint_id bigint NULL,
+        asset_type nvarchar(64) NULL,
         created_at_utc datetime2(3) NOT NULL CONSTRAINT DF_cfg_ra_created DEFAULT (SYSUTCDATETIME()),
         updated_at_utc datetime2(3) NULL,
         CONSTRAINT uq_cfg_reference_asset_name_version UNIQUE (name, version),

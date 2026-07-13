@@ -398,6 +398,56 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_reference_asset(
+  p_asset_name text,
+  p_version text DEFAULT '1',
+  p_storage_endpoint_id bigint DEFAULT NULL,
+  p_asset_type text DEFAULT NULL
+)
+RETURNS TABLE(id bigint, storage_endpoint_id bigint, asset_type text)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_id bigint;
+  v_se bigint;
+  v_at text;
+BEGIN
+  UPDATE cfg.reference_asset ra
+  SET storage_endpoint_id = COALESCE(p_storage_endpoint_id, ra.storage_endpoint_id),
+      asset_type = COALESCE(p_asset_type, ra.asset_type),
+      updated_at_utc = (now() AT TIME ZONE 'utc')
+  WHERE ra.name = p_asset_name AND ra.version = p_version
+  RETURNING ra.id, ra.storage_endpoint_id, ra.asset_type INTO v_id, v_se, v_at;
+  IF v_id IS NULL THEN
+    RAISE EXCEPTION 'reference_asset not found: %@%', p_asset_name, p_version;
+  END IF;
+  id := v_id;
+  storage_endpoint_id := v_se;
+  asset_type := v_at;
+  RETURN NEXT;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION cfg.cfg_repo_link_site_asset(
+  p_site_id bigint,
+  p_reference_asset_id bigint,
+  p_asset_role text
+)
+RETURNS TABLE(id bigint)
+LANGUAGE plpgsql
+AS $$
+DECLARE v_id bigint;
+BEGIN
+  INSERT INTO cfg.site_reference_asset (site_id, reference_asset_id, asset_role)
+  VALUES (p_site_id, p_reference_asset_id, p_asset_role)
+  ON CONFLICT (site_id, asset_role) DO UPDATE
+    SET reference_asset_id = EXCLUDED.reference_asset_id
+  RETURNING cfg.site_reference_asset.id INTO v_id;
+  id := v_id;
+  RETURN NEXT;
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION cfg.cfg_repo_get_credential_secret(
   p_name text,
   p_version text DEFAULT NULL

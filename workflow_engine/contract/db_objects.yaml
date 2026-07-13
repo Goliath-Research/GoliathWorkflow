@@ -293,6 +293,14 @@ objects:
       kind: procedure
       required: true
       notes: Upsert cfg.study_instance_link (study/profile/program/site → wf.workflow_instance)
+    - name: cfg.cfg_repo_link_reference_asset
+      kind: procedure
+      required: true
+      notes: Set cfg.reference_asset.storage_endpoint_id / asset_type
+    - name: cfg.cfg_repo_link_site_asset
+      kind: procedure
+      required: true
+      notes: Upsert cfg.site_reference_asset (site role → reference_asset)
 
   domain:
     - name: dbo.spMapDMP2Genes

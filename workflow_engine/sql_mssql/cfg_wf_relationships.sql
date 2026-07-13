@@ -72,6 +72,70 @@ BEGIN
 END
 GO
 
+/* One published cfg action maps to at most one wf.workflow_action */
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes WHERE name = N'UQ_cfg_ad_workflow_action' AND object_id = OBJECT_ID(N'cfg.action_definition')
+)
+BEGIN
+    CREATE UNIQUE INDEX UQ_cfg_ad_workflow_action
+      ON cfg.action_definition (workflow_action_id)
+      WHERE workflow_action_id IS NOT NULL;
+END
+GO
+
+/* --- reference_asset → storage_endpoint (primary download source) --- */
+IF COL_LENGTH(N'cfg.reference_asset', N'storage_endpoint_id') IS NULL
+BEGIN
+    ALTER TABLE cfg.reference_asset ADD storage_endpoint_id bigint NULL;
+END
+GO
+
+IF COL_LENGTH(N'cfg.reference_asset', N'asset_type') IS NULL
+BEGIN
+    ALTER TABLE cfg.reference_asset ADD asset_type nvarchar(64) NULL;
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.foreign_keys WHERE name = N'FK_cfg_ra_storage_endpoint'
+)
+BEGIN
+    ALTER TABLE cfg.reference_asset
+      ADD CONSTRAINT FK_cfg_ra_storage_endpoint
+      FOREIGN KEY (storage_endpoint_id) REFERENCES cfg.storage_endpoint (id);
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1 FROM sys.indexes WHERE name = N'IX_cfg_ra_storage_endpoint' AND object_id = OBJECT_ID(N'cfg.reference_asset')
+)
+BEGIN
+    CREATE INDEX IX_cfg_ra_storage_endpoint ON cfg.reference_asset (storage_endpoint_id);
+END
+GO
+
+/* --- site ↔ reference_asset (M:N; genome/GTF/pangenome roles) --- */
+IF OBJECT_ID(N'cfg.site_reference_asset', N'U') IS NULL
+BEGIN
+    CREATE TABLE cfg.site_reference_asset (
+        id bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        site_id bigint NOT NULL,
+        reference_asset_id bigint NOT NULL,
+        asset_role nvarchar(64) NOT NULL,
+        created_at_utc datetime2(3) NOT NULL CONSTRAINT DF_cfg_sra_created DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT uq_cfg_sra_site_role UNIQUE (site_id, asset_role),
+        CONSTRAINT uq_cfg_sra_site_asset UNIQUE (site_id, reference_asset_id),
+        CONSTRAINT FK_cfg_sra_site FOREIGN KEY (site_id) REFERENCES cfg.site (id) ON DELETE CASCADE,
+        CONSTRAINT FK_cfg_sra_asset FOREIGN KEY (reference_asset_id) REFERENCES cfg.reference_asset (id),
+        CONSTRAINT ck_cfg_sra_role CHECK (asset_role IN (
+            N'reference_genome', N'annotation_gtf', N'pangenome_bundle',
+            N'mapper_cache', N'other'
+        ))
+    );
+    CREATE INDEX IX_cfg_sra_asset ON cfg.site_reference_asset (reference_asset_id);
+END
+GO
+
 /* --- storage_endpoint → cfg.credential (internal) --- */
 IF COL_LENGTH(N'cfg.storage_endpoint', N'credential_id') IS NULL
 BEGIN
@@ -161,9 +225,45 @@ SELECT
     a.implementation_status,
     a.workflow_action_id,
     wa.action_name AS wf_action_name,
-    wa.capability
+    wa.capability,
+    si.schema_id AS input_schema_id,
+    so.schema_id AS output_schema_id
 FROM cfg.action_definition a
-LEFT JOIN wf.workflow_action wa ON wa.id = a.workflow_action_id;
+LEFT JOIN wf.workflow_action wa ON wa.id = a.workflow_action_id
+LEFT JOIN wf.workflow_action_schema si
+  ON si.workflow_action_id = a.workflow_action_id AND si.direction = N'input'
+LEFT JOIN wf.workflow_action_schema so
+  ON so.workflow_action_id = a.workflow_action_id AND so.direction = N'output';
+GO
+
+CREATE OR ALTER VIEW cfg.v_reference_asset AS
+SELECT
+    ra.id AS reference_asset_id,
+    ra.name AS asset_name,
+    ra.version AS asset_version,
+    ra.status,
+    ra.asset_type,
+    ra.storage_endpoint_id,
+    se.name AS storage_endpoint_name,
+    se.provider AS storage_provider,
+    se.credential_id
+FROM cfg.reference_asset ra
+LEFT JOIN cfg.storage_endpoint se ON se.id = ra.storage_endpoint_id;
+GO
+
+CREATE OR ALTER VIEW cfg.v_site_reference_asset AS
+SELECT
+    sra.id AS link_id,
+    sra.site_id,
+    s.name AS site_name,
+    sra.reference_asset_id,
+    ra.name AS asset_name,
+    sra.asset_role,
+    ra.storage_endpoint_id,
+    ra.status AS asset_status
+FROM cfg.site_reference_asset sra
+INNER JOIN cfg.site s ON s.id = sra.site_id
+INNER JOIN cfg.reference_asset ra ON ra.id = sra.reference_asset_id;
 GO
 
 CREATE OR ALTER VIEW cfg.v_study_instance AS

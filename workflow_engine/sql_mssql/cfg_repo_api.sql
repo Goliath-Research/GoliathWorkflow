@@ -261,3 +261,39 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER PROCEDURE cfg.cfg_repo_link_reference_asset
+    @asset_name nvarchar(256),
+    @version nvarchar(64) = N'1',
+    @storage_endpoint_id bigint = NULL,
+    @asset_type nvarchar(64) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE cfg.reference_asset
+    SET storage_endpoint_id = COALESCE(@storage_endpoint_id, storage_endpoint_id),
+        asset_type = COALESCE(@asset_type, asset_type),
+        updated_at_utc = SYSUTCDATETIME()
+    WHERE name = @asset_name AND version = @version;
+    SELECT id, storage_endpoint_id, asset_type
+    FROM cfg.reference_asset
+    WHERE name = @asset_name AND version = @version;
+END
+GO
+
+CREATE OR ALTER PROCEDURE cfg.cfg_repo_link_site_asset
+    @site_id bigint,
+    @reference_asset_id bigint,
+    @asset_role nvarchar(64)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    MERGE cfg.site_reference_asset AS t
+    USING (SELECT @site_id AS site_id, @asset_role AS asset_role) AS s
+    ON t.site_id = s.site_id AND t.asset_role = s.asset_role
+    WHEN MATCHED THEN UPDATE SET reference_asset_id = @reference_asset_id
+    WHEN NOT MATCHED THEN INSERT (site_id, reference_asset_id, asset_role)
+        VALUES (@site_id, @reference_asset_id, @asset_role);
+    SELECT id FROM cfg.site_reference_asset WHERE site_id = @site_id AND asset_role = @asset_role;
+END
+GO
+

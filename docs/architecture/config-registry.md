@@ -20,13 +20,16 @@ Deployed by `cfg_wf_relationships.sql` (after `cfg_registry_tables.sql`):
 | `cfg.domain_program.workflow_def_id` | `wf.workflow_def.id` | Stable published graph identity |
 | `cfg.domain_program.compiled_workflow_version_id` | `wf.workflow_version.id` | Active compiled IR revision |
 | `cfg.program_publish` | `domain_program` + `workflow_def` + `workflow_version` | Audit of each publish |
-| `cfg.action_definition.workflow_action_id` | `wf.workflow_action.id` | Catalog row used by engine nodes |
+| `cfg.action_definition.workflow_action_id` | `wf.workflow_action.id` | Catalog row used by engine nodes (unique when set) |
+| *(via `workflow_action_id`)* | `wf.workflow_action_schema` (input/output) | Task I/O JSON Schemas — see `cfg.v_action_definition_wf` |
+| `cfg.reference_asset.storage_endpoint_id` | `cfg.storage_endpoint.id` | Primary download/provision source |
+| `cfg.site_reference_asset` | `cfg.site` + `cfg.reference_asset` | Site roles: `reference_genome`, `annotation_gtf`, `pangenome_bundle`, … |
 | `cfg.study_instance_link` | `cfg.study` + `wf.workflow_instance` (+ optional program/profile/site) | Which study/config started a run |
 | `cfg.storage_endpoint.credential_id` | `cfg.credential.id` | Internal (not wf) |
 
-Views: `cfg.v_domain_program_wf`, `cfg.v_action_definition_wf`, `cfg.v_study_instance`.
+Views: `cfg.v_domain_program_wf`, `cfg.v_action_definition_wf`, `cfg.v_reference_asset`, `cfg.v_site_reference_asset`, `cfg.v_study_instance`.
 
-Procs: `cfg.cfg_repo_set_compiled_version`, `cfg.cfg_repo_link_action`, `cfg.cfg_repo_link_study_instance`.
+Procs: `cfg.cfg_repo_set_compiled_version`, `cfg.cfg_repo_link_action`, `cfg.cfg_repo_link_study_instance`, `cfg.cfg_repo_link_reference_asset`, `cfg.cfg_repo_link_site_asset`.
 
 ```mermaid
 flowchart LR

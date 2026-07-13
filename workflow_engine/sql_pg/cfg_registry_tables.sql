@@ -106,6 +106,8 @@ CREATE TABLE IF NOT EXISTS cfg.reference_asset (
   status varchar(32) NOT NULL DEFAULT 'draft',
   content_hash text NOT NULL,
   document_json jsonb NOT NULL,
+  storage_endpoint_id bigint NULL,
+  asset_type text NULL,
   created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
   updated_at_utc timestamptz NULL,
   CONSTRAINT uq_cfg_reference_asset_name_version UNIQUE (name, version),

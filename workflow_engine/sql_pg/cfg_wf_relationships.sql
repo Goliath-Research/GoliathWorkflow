@@ -47,6 +47,10 @@ END $$;
 CREATE INDEX IF NOT EXISTS ix_cfg_ad_workflow_action
   ON cfg.action_definition (workflow_action_id);
 
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cfg_ad_workflow_action
+  ON cfg.action_definition (workflow_action_id)
+  WHERE workflow_action_id IS NOT NULL;
+
 ALTER TABLE cfg.storage_endpoint
   ADD COLUMN IF NOT EXISTS credential_id bigint NULL;
 
@@ -60,6 +64,41 @@ BEGIN
       FOREIGN KEY (credential_id) REFERENCES cfg.credential(id);
   END IF;
 END $$;
+
+ALTER TABLE cfg.reference_asset
+  ADD COLUMN IF NOT EXISTS storage_endpoint_id bigint NULL;
+ALTER TABLE cfg.reference_asset
+  ADD COLUMN IF NOT EXISTS asset_type text NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'fk_cfg_ra_storage_endpoint'
+  ) THEN
+    ALTER TABLE cfg.reference_asset
+      ADD CONSTRAINT fk_cfg_ra_storage_endpoint
+      FOREIGN KEY (storage_endpoint_id) REFERENCES cfg.storage_endpoint(id);
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS ix_cfg_ra_storage_endpoint
+  ON cfg.reference_asset (storage_endpoint_id);
+
+CREATE TABLE IF NOT EXISTS cfg.site_reference_asset (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  site_id bigint NOT NULL REFERENCES cfg.site(id) ON DELETE CASCADE,
+  reference_asset_id bigint NOT NULL REFERENCES cfg.reference_asset(id),
+  asset_role text NOT NULL,
+  created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  CONSTRAINT uq_cfg_sra_site_role UNIQUE (site_id, asset_role),
+  CONSTRAINT uq_cfg_sra_site_asset UNIQUE (site_id, reference_asset_id),
+  CONSTRAINT ck_cfg_sra_role CHECK (asset_role IN (
+    'reference_genome', 'annotation_gtf', 'pangenome_bundle',
+    'mapper_cache', 'other'
+  ))
+);
+
+CREATE INDEX IF NOT EXISTS ix_cfg_sra_asset ON cfg.site_reference_asset (reference_asset_id);
 
 CREATE TABLE IF NOT EXISTS cfg.study_instance_link (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -114,9 +153,43 @@ SELECT
   a.implementation_status,
   a.workflow_action_id,
   wa.action_name AS wf_action_name,
-  wa.capability
+  wa.capability,
+  si.schema_id AS input_schema_id,
+  so.schema_id AS output_schema_id
 FROM cfg.action_definition a
-LEFT JOIN wf.workflow_action wa ON wa.id = a.workflow_action_id;
+LEFT JOIN wf.workflow_action wa ON wa.id = a.workflow_action_id
+LEFT JOIN wf.workflow_action_schema si
+  ON si.workflow_action_id = a.workflow_action_id AND si.direction = 'input'
+LEFT JOIN wf.workflow_action_schema so
+  ON so.workflow_action_id = a.workflow_action_id AND so.direction = 'output';
+
+CREATE OR REPLACE VIEW cfg.v_reference_asset AS
+SELECT
+  ra.id AS reference_asset_id,
+  ra.name AS asset_name,
+  ra.version AS asset_version,
+  ra.status,
+  ra.asset_type,
+  ra.storage_endpoint_id,
+  se.name AS storage_endpoint_name,
+  se.provider AS storage_provider,
+  se.credential_id
+FROM cfg.reference_asset ra
+LEFT JOIN cfg.storage_endpoint se ON se.id = ra.storage_endpoint_id;
+
+CREATE OR REPLACE VIEW cfg.v_site_reference_asset AS
+SELECT
+  sra.id AS link_id,
+  sra.site_id,
+  s.name AS site_name,
+  sra.reference_asset_id,
+  ra.name AS asset_name,
+  sra.asset_role,
+  ra.storage_endpoint_id,
+  ra.status AS asset_status
+FROM cfg.site_reference_asset sra
+INNER JOIN cfg.site s ON s.id = sra.site_id
+INNER JOIN cfg.reference_asset ra ON ra.id = sra.reference_asset_id;
 
 CREATE OR REPLACE VIEW cfg.v_study_instance AS
 SELECT
