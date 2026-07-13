@@ -6,7 +6,7 @@ A sample is an **ID + directory on shared storage**. Sample **identity** is impo
 |-------|------|
 | **`portal.Samples`** (+ `LabSamples`) | Import registry from institutions/labs; clinical metadata; lab run id (`LabSamples.Sample` → processing key) |
 | **`cfg.study` / `cfg.study_group` / `cfg.study_group_member`** | Which portal samples belong to which analysis arm (`control` / `disease`) |
-| **CSV lists** (`data/*.csv`) | Worker-facing lists written by `methyl-cfg materialize` |
+| **CSV lists** (`data/*.csv`) | Worker-facing lists rewritten from cfg on **study start** (also via admin `methyl-cfg materialize`) |
 | **`portal.Groups` / `GroupSamples`** | Customer UI cohorts — **not** study science arms |
 
 ```text
@@ -18,7 +18,7 @@ portal.Samples ──► portal.LabSamples.Sample (= BC-H-001)
        │ enroll (cfg)
        ▼
 cfg.study_group_member
-       │ materialize
+       │ sync on study start
        ▼
 /work/projects/<study>/data/*.csv  →  /work/samples/{id}/
 ```
@@ -26,7 +26,7 @@ cfg.study_group_member
 ### Study → groups → samples
 
 ```text
-project_*.json  (materialized from cfg.study)
+project_*.json  (synced from cfg.study on start)
   controls / diseases
     groups[]
       label
@@ -71,22 +71,21 @@ methyl-cfg set-study-group-members Buffy_healthy_vs_PCa \
 #   {"portalSampleId": 1, "labSampleId": 10},
 #   {"portalSampleId": 2, "processingSampleKey": "BC-H-002"}
 # ]
-
-methyl-cfg materialize --work-root /work
 ```
+
+Enrollment updates **cfg only**. `/work` CSVs are refreshed when you **start** the study (below). Optional admin preview: `methyl-cfg materialize --work-root /work` or `methyl-cfg materialize-study-lists`.
 
 Portal procs: `portal.sp_set_study_group`, `sp_set_study_group_members`, `sp_list_samples_for_study_enrollment` (MSSQL picker over `portal.Samples` / `LabSamples`).
 
 ### Sync on study start (mandatory)
 
-Starting a run **always** synchronizes the published study from cfg onto `/work` before the instance is created or the local engine runs:
+Starting a run **always** synchronizes the published study from cfg onto `/work` before the instance is created or the local engine runs (`ensure_study_work_synced`):
 
-- `finalize_instance_context` → `ensure_study_work_synced`
+- `finalize_instance_context` (validation start + `methyl-workflow-run`)
 - `rest.db_client.create_workflow_instance` (admin / portal Python path)
 - `start_sample_prep` / `start_study_validation`
-- `methyl-workflow-run` (via local engine enrichment)
 
-That rewrite of membership CSVs + `project_*.json` is the guarantee against out-of-sync `/work`. Explicit `methyl-cfg materialize` remains for bootstrap/admin only.
+That rewrite of membership CSVs + `project_*.json` is the guarantee against out-of-sync `/work`. Explicit `methyl-cfg materialize` is bootstrap/admin only — not required for run correctness.
 
 Do **not** edit a published study mid-run; clone → edit draft → publish, then start (start syncs the published version).
 
@@ -136,4 +135,4 @@ At schedule time: `expand_storage_profile` / `expand_storage_endpoint` → today
 
 Processing workspace for that ID: staged FASTQs, alignment products, chromosome `*.h5`, extraction/QC JSON, prep log. Science workflows (centroid/detector/…) read those H5s via the study’s resolved sample dirs.
 
-**Short version:** import samples into **portal**; enroll them into study arms in **cfg**; materialize **CSVs** for workers; each ID has one **processing home** on shared storage; ingress/archive are **named cloud endpoints** with per-sample prefixes.
+**Short version:** import samples into **portal**; enroll them into study arms in **cfg**; **start** syncs CSVs onto `/work` for workers; each ID has one **processing home** on shared storage; ingress/archive are **named cloud endpoints** with per-sample prefixes.
