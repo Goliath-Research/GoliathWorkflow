@@ -355,10 +355,18 @@ BEGIN
         RETURN;
     END
 
+    DECLARE @expected int = (
+        SELECT COUNT(*)
+        FROM OPENJSON(CONVERT(nvarchar(max), @members_json))
+    );
+
+    -- Nullable staging so missing portal rows / unresolved keys can be detected
+    -- before DELETE (INNER JOIN would silently drop bad portalSampleId values).
     DECLARE @resolved TABLE (
-        portal_sample_id int NOT NULL,
+        portal_sample_id int NULL,
         lab_sample_id int NULL,
-        processing_sample_key nvarchar(128) NOT NULL
+        processing_sample_key nvarchar(128) NULL,
+        portal_sample_found bit NOT NULL
     );
 
     ;WITH raw AS (
@@ -368,7 +376,7 @@ BEGIN
             NULLIF(LTRIM(RTRIM(JSON_VALUE(j.value, '$.processingSampleKey'))), N'') AS processing_sample_key
         FROM OPENJSON(CONVERT(nvarchar(max), @members_json)) AS j
     )
-    INSERT INTO @resolved (portal_sample_id, lab_sample_id, processing_sample_key)
+    INSERT INTO @resolved (portal_sample_id, lab_sample_id, processing_sample_key, portal_sample_found)
     SELECT
         r.portal_sample_id,
         r.lab_sample_id,
@@ -376,10 +384,24 @@ BEGIN
             NULLIF(LTRIM(RTRIM(ls.Sample)), N''),
             r.processing_sample_key,
             NULLIF(LTRIM(RTRIM(s.PatientID)), N'')
-        )
+        ),
+        CASE WHEN s.ID IS NULL THEN 0 ELSE 1 END
     FROM raw r
-    INNER JOIN portal.Samples s ON s.ID = r.portal_sample_id
+    LEFT JOIN portal.Samples s ON s.ID = r.portal_sample_id
     LEFT JOIN portal.LabSamples ls ON ls.ID = r.lab_sample_id AND ls.SampleID = r.portal_sample_id;
+
+    IF (SELECT COUNT(*) FROM @resolved) <> @expected
+       OR EXISTS (SELECT 1 FROM @resolved WHERE portal_sample_id IS NULL)
+    BEGIN
+        RAISERROR(N'invalid member payload: portalSampleId required for every member', 16, 1);
+        RETURN;
+    END
+
+    IF EXISTS (SELECT 1 FROM @resolved WHERE portal_sample_found = 0)
+    BEGIN
+        RAISERROR(N'portal.Samples not found for one or more portalSampleId values', 16, 1);
+        RETURN;
+    END
 
     IF EXISTS (SELECT 1 FROM @resolved WHERE processing_sample_key IS NULL)
     BEGIN
