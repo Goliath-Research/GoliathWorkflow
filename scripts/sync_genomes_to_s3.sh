@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# Sync /work/genomes (human_genome + pangenome) to myQNAPcloud S3.
+# Sync /work/genomes <-> myQNAPcloud S3 (human_genome + pangenome).
 #
 # myQNAPcloud is S3-compatible object storage — use aws s3 sync (not rsync).
 # Credentials must come from the environment; never pass keys on the CLI or
 # commit them to git.
 #
-# Operator usage:
+# Operator usage (upload local → QNAP):
 #   export AWS_ACCESS_KEY_ID=...
 #   export AWS_SECRET_ACCESS_KEY=...
 #   scripts/sync_genomes_to_s3.sh --dry-run
 #   scripts/sync_genomes_to_s3.sh
 #   scripts/sync_genomes_to_s3.sh --only pangenome
+#
+# Operator usage (download QNAP → local, fill missing files):
+#   scripts/sync_genomes_to_s3.sh --download --dry-run
+#   scripts/sync_genomes_to_s3.sh --download
 #
 # Optional env overrides:
 #   GENOMES_SRC=/work/genomes
@@ -39,16 +43,18 @@ export AWS_DEFAULT_REGION
 DRY_RUN=0
 DO_DELETE=0
 ONLY=""
+DIRECTION="upload"  # upload = local→S3, download = S3→local
 
 usage() {
   cat <<'EOF'
 Usage: scripts/sync_genomes_to_s3.sh [options]
 
-Sync local genomes to myQNAPcloud (S3-compatible).
+Sync genomes between local /work/genomes and myQNAPcloud (S3-compatible).
 
 Options:
-  --dry-run              Pass --dryrun to aws s3 sync (no uploads)
-  --delete               Pass --delete (remove remote keys absent locally; off by default)
+  --download             Sync S3 → local (fill missing/outdated under /work/genomes)
+  --dry-run              Pass --dryrun to aws s3 sync (no transfers)
+  --delete               Pass --delete (remove destination extras absent on source; off by default)
   --only NAME            Sync only a subtree: human_genome | pangenome
   -h, --help             Show this help
 
@@ -62,6 +68,7 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --download) DIRECTION="download"; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     --delete) DO_DELETE=1; shift ;;
     --only)
@@ -91,13 +98,8 @@ if [[ -z "${AWS_ACCESS_KEY_ID:-}" || -z "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
   exit 1
 fi
 
-if [[ ! -d "$GENOMES_SRC" ]]; then
-  echo "ERROR: genomes source not found: $GENOMES_SRC" >&2
-  exit 1
-fi
-
-SRC="$GENOMES_SRC"
-DEST_KEY="$S3_PREFIX"
+LOCAL="$GENOMES_SRC"
+REMOTE_KEY="$S3_PREFIX"
 if [[ -n "$ONLY" ]]; then
   case "$ONLY" in
     human_genome|pangenome) ;;
@@ -106,23 +108,39 @@ if [[ -n "$ONLY" ]]; then
       exit 2
       ;;
   esac
-  SRC="${GENOMES_SRC}/${ONLY}"
-  DEST_KEY="${S3_PREFIX}/${ONLY}"
-  if [[ ! -d "$SRC" ]]; then
-    echo "ERROR: subtree not found: $SRC" >&2
-    exit 1
-  fi
+  LOCAL="${GENOMES_SRC}/${ONLY}"
+  REMOTE_KEY="${S3_PREFIX}/${ONLY}"
 fi
 
-# Normalize trailing slash on local source for sync semantics
-SRC_SYNC="${SRC%/}/"
-DEST_URI="s3://${S3_BUCKET}/${DEST_KEY%/}/"
+if [[ "$DIRECTION" == "upload" && ! -d "$LOCAL" ]]; then
+  echo "ERROR: genomes source not found: $LOCAL" >&2
+  exit 1
+fi
 
+# Ensure local dest exists for downloads
+if [[ "$DIRECTION" == "download" ]]; then
+  mkdir -p "$LOCAL"
+fi
+
+LOCAL_SYNC="${LOCAL%/}/"
+REMOTE_URI="s3://${S3_BUCKET}/${REMOTE_KEY%/}/"
+
+if [[ "$DIRECTION" == "download" ]]; then
+  SRC_SYNC="$REMOTE_URI"
+  DEST_SYNC="$LOCAL_SYNC"
+else
+  SRC_SYNC="$LOCAL_SYNC"
+  DEST_SYNC="$REMOTE_URI"
+fi
+
+echo "Direction:   $DIRECTION"
 echo "Source:      $SRC_SYNC"
-echo "Destination: $DEST_URI"
+echo "Destination: $DEST_SYNC"
 echo "Endpoint:    $S3_ENDPOINT_URL"
 echo "Region:      $AWS_DEFAULT_REGION"
-du -sh "$SRC" 2>/dev/null || true
+if [[ -d "$LOCAL" ]]; then
+  du -sh "$LOCAL" 2>/dev/null || true
+fi
 
 # QNAP / custom S3 often needs path-style addressing (do not mutate ~/.aws)
 AWS_CONFIG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/aws-genomes-sync.XXXXXX")"
@@ -140,7 +158,7 @@ export AWS_SHARED_CREDENTIALS_FILE="${AWS_CONFIG_DIR}/empty_credentials"
 : >"${AWS_SHARED_CREDENTIALS_FILE}"
 
 AWS_ARGS=(
-  s3 sync "$SRC_SYNC" "$DEST_URI"
+  s3 sync "$SRC_SYNC" "$DEST_SYNC"
   --endpoint-url "$S3_ENDPOINT_URL"
   --region "$AWS_DEFAULT_REGION"
 )
@@ -151,7 +169,7 @@ if [[ "$DRY_RUN" -eq 1 ]]; then
 fi
 if [[ "$DO_DELETE" -eq 1 ]]; then
   AWS_ARGS+=(--delete)
-  echo "Mode:        delete remote extras"
+  echo "Mode:        delete destination extras"
 fi
 
 echo "Running: aws ${AWS_ARGS[*]}"
