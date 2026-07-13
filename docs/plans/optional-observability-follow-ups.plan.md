@@ -4,22 +4,32 @@ overview: "Plan for the four deferred items from typed action observability: aut
 
 > **Status: IMPLEMENTED.** Golden fixtures under [`workers/tests/golden/`](../../workers/tests/golden/); CI drift gate in [`.github/workflows/db-parity.yml`](../../.github/workflows/db-parity.yml).
 
+azure_devops:
+  type: Feature
+  title: "Observability follow-ups (golden fixtures, CI, MC log)"
+  work_item_id: 461
+  epic_id: 413
 todos:
   - id: doc-result-code-dpl
     content: Add result_code / branching section to docs/reference/domain-program-language.md with IF vs SWITCH examples and cross-links
     status: completed
+    work_item_id: 462
   - id: golden-fixtures-test
     content: Create workers/tests/golden/*.json fixtures and parametrized test_golden_task_outputs.py validating all catalog I/O models
     status: completed
+    work_item_id: 463
   - id: ci-worker-tests
     content: Add workers pytest + methyl-export-task-schemas --check to .github/workflows/db-parity.yml
     status: completed
+    work_item_id: 464
   - id: mc-action-run-log
     content: Add action_run_log.py and append from execute_task for validation-category actions
     status: completed
+    work_item_id: 465
   - id: handler-input-model
     content: Pass InputModel to in-process handlers; update signatures and stub path; keep dict adapter only in shared helpers
     status: completed
+    work_item_id: 466
 ---
 
 # Optional Observability Follow-ups

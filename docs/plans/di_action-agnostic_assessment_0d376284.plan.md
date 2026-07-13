@@ -1,16 +1,24 @@
 ---
 name: DI action-agnostic assessment
 overview: "Assess whether dependency injection (e.g. fast_depends) would make MethylPipeline’s Workflow Engine more action-agnostic. Conclusion: the engine is already process-agnostic; adopt a catalog-driven action provider registry for worker dispatch, not FastAPI-style DI as the primary lever."
+azure_devops:
+  type: Feature
+  title: "DI action-agnostic assessment"
+  work_item_id: 664
+  epic_id: 413
 todos:
   - id: phase1-registry
     content: Catalog-driven CliAction/handler registry; remove build_action_from_catalog if/elif; split handlers modules
     status: in_progress
+    work_item_id: 665
   - id: phase2-compiler
     content: Move centroid/detector template special-cases into catalog domain_effects / template metadata
     status: pending
+    work_item_id: 666
   - id: phase3-optional-di
     content: "Only if needed: worker-local Depends for TaskRuntimeContext in in-process handlers (not engine-wide fast_depends)"
     status: pending
+    work_item_id: 667
 isProject: false
 ---
 

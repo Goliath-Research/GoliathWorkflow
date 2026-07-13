@@ -1,31 +1,44 @@
 ---
 name: Chromosome Sample Derived Measures
 overview: "Add per-chromosome and per-sample derived methylation measures (entropy, sample-vs-centroid Hellinger/Jensen-Shannon/Wasserstein, global hypo/hyper burden, distributional shape, CN-shadow, PDR) and incorporate them into MethylPipeline's tabular, generative, and ECDF models via two complementary seams: activating the reserved \"chromosome\" feature family in the observed-hybrid builder, and a new derived-measures action that emits a per-sample sidecar consumed through the existing covariate join."
+azure_devops:
+  type: Feature
+  title: "Chromosome sample derived measures"
+  work_item_id: 644
+  epic_id: 413
 todos:
   - id: seam-a-chromosome-family
     content: "Activate reserved chromosome family in observed_feature_builder.py: add chromosome tokens to HYBRID_FEATURE_FAMILY_SETS/_family_flags, implement _build_chromosome_features over X_raw using metrics_core (entropy, JS/Hellinger/Wasserstein to class centroids, global hypo/intermediate fractions, margins), register feature names, flip feature_families report"
     status: pending
+    work_item_id: 645
   - id: seam-a-config
     content: Add chromosome-family tunables to the validation step-config schema (beta cutoffs, distances list, which chromosomes) with default=None; expose feature_family_set values dmp_scored+chromosome and hybrid-all in profiles; regenerate schemas via scripts/export_config_schemas.sh
     status: pending
+    work_item_id: 646
   - id: seam-a-leakage
     content: Ensure chromosome-family centroid-referenced measures are computed inside the MC train-fold loop (pipeline_runner.py) and re-derived from frozen references at predict time; add tests for train/predict schema freezing
     status: pending
+    work_item_id: 647
   - id: seam-b-package
     content: Create packages/methylderivedmeasures with methyl-derived-measures CLI (--resolved-config contract) that scans whole-sample H5 for genome-wide measures (global hypomethylation blocks/PMD load, arm-level coverage CN-shadow z-scores, PDR/adjacent-CpG disagreement, imprinting/X signals) and writes per-sample derived_measures.csv keyed by sample_id
     status: pending
+    work_item_id: 648
   - id: seam-b-action-wiring
     content: "Register pipeline.derived_measures: task I/O models in pipeline_models.py, step-config in config_schema_registry.py, catalog entry in action_catalog.py (action_config_key=derived_measures), export task+config schemas and re-seed catalog, add node to freeze/lifecycle DomainProgram between mapper and model steps"
     status: pending
+    work_item_id: 649
   - id: seam-b-incorporate
     content: Incorporate derived_measures.csv into tabular and generative backends via existing covariates_path/fit_covariates join (optionally merged with clinical age/BMI sidecar); add profile examples
     status: pending
+    work_item_id: 650
   - id: ecdf-pickle-extend
     content: "Extend the ECDF model bundle: MethylDetector._save_unified_model persists a derived-measures schema (ordered names + train-fold reference stats + per-locus effect_size/region weights); ECDFClassifier/MethylClassifier/data_loader.extract_sample_features append effect_size-weighted derived columns at train and blind-predict; enforce feature-order fingerprint"
     status: pending
+    work_item_id: 651
   - id: ab-eval
     content: A/B evaluate DMP-only vs DMP+chromosome vs DMP+chromosome+sidecar using the existing feature_family_ablation.json mechanism; add fusion option (meta-stacking) if concatenation underperforms
     status: pending
+    work_item_id: 652
 isProject: false
 ---
 

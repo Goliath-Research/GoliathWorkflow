@@ -3,25 +3,36 @@ name: Typed Assign DomainProgram Language
 overview: Extend DomainProgram toward a typed, worker-delegated assign model (ACTION + scope binding + JSON Schema variable registry), expose WHILE/SWITCH/REPEAT in the compiler to match the DB engine, and publish a complete language reference with worked generic use cases—without rewriting existing methylation FOREACH pipelines.
 > **Status: COMPLETED** — language v2 + MVP runtime (IR/compiler/catalog/fixtures/tests).
 
+azure_devops:
+  type: Feature
+  title: "Typed assign DomainProgram language"
+  work_item_id: 525
+  epic_id: 413
 todos:
   - id: lang-doc-v2
     content: Write docs/reference/domain-program-language-v2.md; promote plan; link from index
     status: completed
+    work_item_id: 526
   - id: ir-schema
     content: Add VariableDecl/AssignStep/SwitchStep/WhileStep/RepeatStep; export schema; variable_schemas on WorkflowDefinitionSpec
     status: completed
+    work_item_id: 527
   - id: compiler-control-assign
     content: Extend compiler for assign/switch/while/repeat; parallel-assign rejection; honor ActionStep.out; unit tests
     status: completed
+    work_item_id: 528
   - id: compute-actions
     content: Add typed workflow.* catalog entries, task models, handlers
     status: completed
+    work_item_id: 529
   - id: fixtures-tests
     content: Add assign_while_pagination and assign_map_reduce fixtures; smoke tests
     status: completed
+    work_item_id: 530
   - id: docs-align
     content: Update domain-program-compiler.md, workflow-engine.md, plans/README; clarify operator summary vs v2
     status: completed
+    work_item_id: 531
 ---
 
 # Typed Assign DomainProgram Language

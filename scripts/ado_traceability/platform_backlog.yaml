@@ -1,0 +1,1495 @@
+organization: https://dev.azure.com/EpiMethyl
+project: Development
+epic:
+  title: MethylPipeline platform
+  description: 'Reverse-engineered platform backlog for MethylPipeline. Features map 1:1 to docs/plans/*.plan.md;
+    User Stories map to plan todos. Related to historical Epic #283 (package-era backlog) — supersedes
+    that structure for new work.'
+  related_historical_epic_id: 283
+  tags:
+  - methylpipeline-platform
+features:
+- plan_file: docs/plans/production-gpu-worker-layout.plan.md
+  plan_stem: production-gpu-worker-layout
+  title: Production GPU worker layout
+  legacy_ado_type: Epic
+  state: Closed
+  overview: 'A three-tier production deployment model: host GPU stack (driver + Docker + Parabricks),
+    arch-specific MethylExtractor binaries without sources, and a pinned Python venv with packaged MethylPipeline/worker
+    code—phased from shared-storage releases to Azure Artifacts.'
+  code_anchors:
+  - workers/docs/methyl_extractor.md
+  - scripts/platform_matrix.env
+  - scripts/verify_methyl_extractor.sh
+  - scripts/packages.list
+  - workers/pyproject.toml
+  - packages/*
+  - workers/WORKER_PROTOCOL.md
+  - scripts/verify_*.sh
+  - deploy/systemd/
+  - workflow_engine/domain/
+  - deploy/systemd/methyl-worker.service
+  - scripts/install_release.sh
+  stories:
+  - id: define-layout
+    title: Document /work/epimethyl/releases/<ver>/ layout + manifest.json schema in docs/deployment/production_release.md
+    state: Closed
+  - id: extractor-ci
+    title: 'MethylExtractor Azure pipeline: per-arch build, tarball, publish to shared storage then Artifacts'
+    state: Closed
+  - id: pipeline-ci
+    title: 'MethylPipeline release pipeline: wheel build, requirements-worker.lock, runtime-bundle tarball'
+    state: Closed
+  - id: install-release
+    title: Add scripts/install_release.sh (non-editable wheel install) and bootstrap --release-dir mode
+    state: Closed
+  - id: gpu-node-runbook
+    title: 'Runbook: driver + shared Docker data-root + NVIDIA toolkit + Parabricks pin matrix per arch'
+    state: Closed
+  - id: docker-shared
+    title: 'Extend setup_gpu_node.sh: --docker-data-root /work/epimethyl/docker, single-node pull during
+      release promote'
+    state: Closed
+  - id: worker-provision
+    title: 'Node playbook: point Docker at shared data-root, venv + extractor already on /work, register_worker,
+      systemd, verify_e2e'
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/devops-ci-cd-release.plan.md
+  plan_stem: devops-ci-cd-release
+  title: DevOps CI/CD release pipeline
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Move artifact builds fully into Azure DevOps with independent repo versioning (MethylExtractor
+    and MethylPipeline each publish on their own tags), then add a gated release-assembly + promote pipeline
+    that composes a worker release bundle and deploys to `/work/epimethyl` after manual approval.
+  code_anchors:
+  - docs/deployment/production_release.md
+  - ci/azure-pipelines-release-arm64.yml
+  - ci/azure-pipelines-release-x64.yml
+  - ci/azure-pipelines-pr.yml
+  - scripts/package_methyl_extractor.sh
+  - scripts/detect_platform.sh
+  - ci/azure-pipelines-release.yml
+  - scripts/assemble_release.sh
+  - schemas/deployment/epimethyl_release_manifest.schema.json
+  - ci/azure-pipelines-release-assemble.yml
+  - ci/azure-pipelines-release-deploy.yml
+  - ci/azure-pipelines-release-*.yml
+  stories:
+  - id: me-release-ci
+    title: Register MethylExtractor release + PR pipelines; enable Universal Package publish per arch;
+      multi-repo checkout for packaging scripts
+    state: Closed
+  - id: mp-release-ci
+    title: Register MethylPipeline release + PR pipelines; enable PyPI feed publish via twine; keep pipeline
+      artifact for runtime-bundle
+    state: Closed
+  - id: assemble-script
+    title: Add scripts/assemble_release.sh + manifest components schema; wire download from both feeds
+      by version pin
+    state: Closed
+  - id: assemble-pipeline
+    title: 'Add ci/azure-pipelines-release-assemble.yml (manual params: releaseVersion, methylPipelineVersion,
+      methylExtractorVersion)'
+    state: Closed
+  - id: deploy-pipeline
+    title: Add ci/azure-pipelines-release-deploy.yml with production-work environment approval + self-hosted
+      agent promote_release.sh
+    state: Closed
+  - id: docs-ci-cd
+    title: Update production_release.md with full CI/CD workflow, rollback, and deprecation of client-side
+      build as primary path
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/alignment-qc-screening.plan.md
+  plan_stem: alignment-qc-screening
+  title: Alignment QC screening and remediation
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Extend MethylAlignmentQC with read-end-aware cycle screening and structured remediation dispositions,
+    then wire fastp Read-2 trimming and forced realign into SamplePrep (plus a remediation workflow for
+    the existing prostate cohort).
+  code_anchors:
+  - packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py
+  - packages/methylalignmentqc/data/003772_8C9_3/003772_8C9_3.json
+  - workflow_engine/domain/fixtures/sample_prep.program.json
+  - packages/methylalignmentqc/methyl_alignment_qc/core/cycle_quality_screening.py
+  - schemas/config/alignment_qc/exported_sample_qc_v2.schema.json
+  - schemas/config/alignment_qc.schema.json
+  - workers/methyl_worker/sample_prep_log.py
+  - scripts/alignment_qc_cohort_screening.py
+  - scripts/compare_alignment_qc_groups.py
+  - workers/methyl_worker/fastq_trim_runner.py
+  - schemas/tasks/sample.trim_fastq.*.json
+  - scripts/setup_host.sh
+  stories:
+  - id: screening-core
+    title: Add cycle_quality_screening, QcScreeningReport, qc_history audit models, writer merge-on-retry,
+      and unit tests
+    state: Closed
+  - id: guardrail-enhance
+    title: Add optional duplication_rate/min_pf_reads guardrails and disposition-specific recommendation
+      text
+    state: Closed
+  - id: cohort-report
+    title: Create alignment_qc_cohort_screening.py + extend compare_alignment_qc_groups.py for manifest
+      output
+    state: Closed
+  - id: trim-action
+    title: Implement sample.trim_fastq, parabricks forceRealign, sample_prep_log.jsonl append helper,
+      and handler wiring
+    state: Closed
+  - id: workflow-remediation
+    title: Reorder SamplePrepPipeline — delete_fastqs only after final QC; add REALIGN_READ2_TRIM branch;
+      SamplePrepRemediationPipeline; compiler bindings
+    state: Closed
+  - id: validate-docs
+    title: Pilot validation docs and prostate cohort screening smoke tests
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/composable-pipeline-flexibility.plan.md
+  plan_stem: composable-pipeline-flexibility
+  title: Composable pipeline profiles and MC paths
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Introduce composable DomainProgram profiles and config presets so single-run and MC workflows
+    can mix discovery-only detection, optional DMP/gene FeatureCuts, mapper/enricher interpretation, and
+    gene stability from enricher outputs—without requiring stable DMP panels when the goal is stable genes
+    only.
+  code_anchors:
+  - workflow_engine/domain/profiles/
+  - workflow_engine/domain/profiles/mc_*.profile.json
+  - docs/reference/domain-program-language.md
+  - workflow_engine/domain/
+  stories:
+  - id: profiles-config
+    title: Add pipeline profile JSON + migrate bundle project step_config (detection / dmp_selection /
+      gene_selection / validation flags)
+    state: Closed
+  - id: scope-if-fix
+    title: Seed camelCase scope flags from validation/gene_selection; fix mc_stability IF syntax to then/else
+      lists
+    state: Closed
+  - id: programs-gene-enricher
+    title: Add mc_gene_enricher_stability.program.json and buffy_interpretation.program.json (discovery
+      → mapper → enricher → stability)
+    state: Closed
+  - id: programs-composable
+    title: 'Add fixture fragments: detection_discovery_only, dmp_select_optional, mapper_only, enricher_overrides'
+    state: Closed
+  - id: validation-alignment
+    title: Align mc_manifest and methyl-validation CLI with profile booleans; document stability axis
+      metadata
+    state: Closed
+  - id: tests-docs
+    title: Compiler/integration tests + update reference/domain-program-language.md and usage pipeline
+      profile section
+    state: Closed
+  - id: phase2-structural
+    title: 'Phase 2: complete gene_feature_select ECDF k-search; decouple biomarker_filter from gene FeatureCuts
+      requirement'
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/typed-action-observability.plan.md
+  plan_stem: typed-action-observability
+  title: Typed worker action observability
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Replace loose dict-based worker I/O with strict Pydantic models end-to-end, wire CLI tools
+    to persist typed result manifests under /work, and have workers collect/validate those manifests so
+    every successful action submits a traceable result_code plus a complete output_json (timing, files,
+    counts).
+  code_anchors:
+  - workers/methyl_worker/actions/base.py
+  - packages/methyldomain/methyl_domain/action_result.py
+  - workers/methyl_worker/runner.py
+  - workers/methyl_worker/task_models/pipeline/
+  - workers/WORKER_PROTOCOL.md
+  - docs/reference/domain-program-language.md
+  stories:
+  - id: infra-action-result
+    title: Add methyl_domain.action_result (ActionTelemetry, ArtifactRef, atomic write/read) and typed
+      ActionBase.execute -> tuple[int, OutputModel]
+    state: Closed
+  - id: runner-result-code
+    title: Refactor WorkerRunner to validate InputModel, submit OutputModel.result_code, forbid dict boundaries
+    state: Closed
+  - id: cli-manifest-dmp-detector-mapper
+    title: Write typed manifests from run_dmp_selection, detector core, mapper.run; add worker collectors
+      with legacy fallback
+    state: Closed
+  - id: strict-pipeline-schemas
+    title: Replace PipelineCliTaskInput/Output with per-action forbid-extra models; re-export schemas
+      and CI drift check
+    state: Closed
+  - id: validation-typed-outputs
+    title: Replace ValidationTaskOutput summary dict with per-action OutputModels sourced from stability/planner
+      return values
+    state: Closed
+  - id: sample-prep-result-codes
+    title: Strict QC nested models; methyl_qc result_code 0/1/2; align output_json with sample_prep_log
+    state: Closed
+  - id: docs-observability
+    title: Document manifest paths, result_code tables, and /work traceability in WORKER_PROTOCOL and
+      user manual
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/finish-typed-follow-ups.plan.md
+  plan_stem: finish-typed-follow-ups
+  title: CLI manifests + typed in-process handlers
+  legacy_ado_type: Task
+  state: Closed
+  overview: 'Complete the two deferred tracks from typed action observability: (A) write `.action_results/`
+    manifests from detector, centroid, and enricher CLIs so workers stop scraping legacy artifacts, and
+    (B) migrate remaining in-process handlers to return catalog Pydantic models directly, then remove
+    the dict path in `InProcessAction`.'
+  code_anchors:
+  - packages/methyldomain/methyl_domain/action_result.py
+  - packages/methyldmpselect/methyl_dmp_select/core/runner.py
+  - packages/methylmapper/methyl_mapper/mapper.py
+  - packages/methyldetector/pyproject.toml
+  - packages/methylcentroid/pyproject.toml
+  - packages/methylenricher/pyproject.toml
+  - packages/methyldetector
+  - packages/methylcentroid
+  - packages/methylenricher
+  - workers/tests/test_collectors_manifest.py
+  - docs/reference/domain-program-language.md
+  - workers/WORKER_PROTOCOL.md
+  stories:
+  - id: deps-methyl-domain
+    title: Add methyl-domain dependency to methyldetector, methylcentroid, methylenricher pyprojects
+    state: Closed
+  - id: detector-manifest
+    title: Write pipeline.detector manifest in MethylDetector._save_results() matching DetectorTaskOutput
+      + run_key
+    state: Closed
+  - id: centroid-manifest
+    title: Write pipeline.centroid manifest in run_single_processing() matching CentroidTaskOutput + run_key
+    state: Closed
+  - id: enricher-manifest-collector
+    title: Write enricher manifest in ensure_complete; add EnricherLegacyCollector + ManifestFirstCollector
+      wiring
+    state: Closed
+  - id: handlers-sample-prep
+    title: Convert sample-prep handlers to return task_models sample_prep_models outputs
+    state: Closed
+  - id: handlers-validation
+    title: Convert validation + stub handlers to return validation_models outputs
+    state: Closed
+  - id: inprocess-strict
+    title: Remove dict return path from InProcessAction after all handlers migrated
+    state: Closed
+  - id: tests-manifest-collectors
+    title: Add collector manifest-first tests and handler output type assertions; run pytest + schema
+      check
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/optional-observability-follow-ups.plan.md
+  plan_stem: optional-observability-follow-ups
+  title: Observability follow-ups (golden fixtures, CI, MC log)
+  legacy_ado_type: Task
+  state: Closed
+  overview: 'Plan for the four deferred items from typed action observability: author-facing result_code
+    docs, CI golden output fixtures per catalog action, MC run-dir action_run_log.jsonl, and passing validated
+    InputModel directly to in-process handlers.'
+  code_anchors:
+  - docs/reference/domain-program-language.md
+  - workers/WORKER_PROTOCOL.md
+  - docs/usage/09-artifacts-and-qa-checks.qmd
+  - schemas/actions/catalog.json
+  - workflow_engine/domain/fixtures/sample_prep.program.json
+  - workers/tests/golden/{action_name}.output.json
+  - workers/tests/test_golden_task_outputs.py
+  - workers/tests/golden/{action_name}.input.json
+  - workers/**
+  - scripts/generate_golden_fixtures.py
+  - workers/tests/golden/
+  stories:
+  - id: doc-result-code-dpl
+    title: Add result_code / branching section to docs/reference/domain-program-language.md with IF vs
+      SWITCH examples and cross-links
+    state: Closed
+  - id: golden-fixtures-test
+    title: Create workers/tests/golden/*.json fixtures and parametrized test_golden_task_outputs.py validating
+      all catalog I/O models
+    state: Closed
+  - id: ci-worker-tests
+    title: Add workers pytest + methyl-export-task-schemas --check to .github/workflows/db-parity.yml
+    state: Closed
+  - id: mc-action-run-log
+    title: Add action_run_log.py and append from execute_task for validation-category actions
+    state: Closed
+  - id: handler-input-model
+    title: Pass InputModel to in-process handlers; update signatures and stub path; keep dict adapter
+      only in shared helpers
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/gene-feature-effect-size.plan.md
+  plan_stem: gene-feature-effect-size
+  title: Biology-weighted gene/feature importance
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Implement biology-weighted (feature × hyper/hypo) aggregation of DMP effect_size into gene
+    and per-feature importance scores, remove legacy heuristic columns and duplicate score paths, and
+    wire all downstream consumers to the single canonical biological model.
+  code_anchors:
+  - packages/methylutils/methyl_utils/statistical_tests.py
+  - packages/methyldetector/methyl_detector/core/methyldetector.py
+  - packages/methylmapper/methyl_mapper/config.py
+  - packages/methylmapper/methyl_mapper/bedtools_mapper.py
+  - packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md
+  stories:
+  - id: biology-weight-matrix
+    title: Add configurable (feature × direction) biology weight matrix in methylmapper config; apply
+      in _build_compound_effect_metrics as w_i = frequency × bio_weight(feature, sign)
+    state: Closed
+  - id: remove-legacy-mapper
+    title: Remove calculate_biological_importance, _build_feature_effect_scores, and legacy export columns
+      (mean_effect_size, gene_score, gene_feature_importance, effect_size_{feature}, direction_balance_{feature},
+      gene_feature_effect_compound)
+    state: Closed
+  - id: canonical-gene-feature-formulas
+    title: Recompute gene_importance and feature_importance_* from biology-weighted DMP contributions;
+      keep interpretive component columns (direction, coherence, support_n, signed_wsum)
+    state: Closed
+  - id: fix-downstream-consumers
+    title: Update methyl-gene-select, methyl-gene-feature-select, methyl-enricher, methylvalidation tests/config
+      to use gene_importance and feature_importance_* only; remove mean_effect_size fallbacks
+    state: Closed
+  - id: doc-biological-model
+    title: Rewrite BIOLOGICAL_IMPORTANCE_AUDIT, IMPLEMENTATION, theory/usage with single propagation story
+      DMP effect_size → biology-weighted gene/feature importance and hyper/hypo matrix glossary
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/simplify-study-config.plan.md
+  plan_stem: simplify-study-config
+  title: Simplify study config (four-layer model)
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Replace monolithic project step_config with a four-layer stack (site, profile, program, study
+    manifest), materialize action config at plan time, and remove step_config entirely. Existing /work
+    artifacts remain; all new runs require the new config method.
+  code_anchors:
+  - workflow_engine/domain/**/*.program.json
+  - workflow_engine/domain/profiles/*.profile.json
+  - docs/plans/simplify-study-config.plan.md
+  - schemas/config/project_config.schema.json
+  - schemas/config/site_manifest.schema.json
+  - schemas/config/profile.schema.json
+  - packages/methylutils/methyl_utils/action_config_resolver.py
+  - workflow_engine/domain/checks/
+  - scripts/migrate_project_config.py
+  stories:
+  - id: contract-docs
+    title: 'Phase 1: Study manifest + site schemas; remove step_config from project_config.schema.json;
+      docs and config_parameter_matrix rewrite'
+    state: Closed
+  - id: site-resolver
+    title: 'Phase 2: action_config_resolver.py + site manifest; replace get_step_config() read paths in
+      package resolvers and workers'
+    state: Closed
+  - id: profiles-progression
+    title: 'Phase 3: Expand profiles with actionConfig blocks (rename from step_config_overrides); staged
+      + Buffy parameter packs; runProgressionAnalysis flag'
+    state: Closed
+  - id: materialize-input
+    title: 'Phase 4: Materialize resolvedConfig on every workflow task; workers require resolvedConfig
+      (no project step_config fallback)'
+    state: Closed
+  - id: purge-step-config
+    title: 'Phase 5: Delete step_config from ProjectConfig, progression auto_gleason, migrate_detection_config
+      aliases, legacy CLI --project-only paths; update all tests/fixtures'
+    state: Closed
+  - id: migrate-manifests
+    title: 'Phase 6: migrate_project_config.py one-way converter (step_config → site + profile + slim
+      manifest); replace repo and /work reference projects'
+    state: Closed
+  - id: editor-manual
+    title: 'Phase 7: methyl-config-editor + usage/theory for new-only workflow (program + profile + site
+      + manifest)'
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/streamline-action-parameters.plan.md
+  plan_stem: streamline-action-parameters
+  title: Streamline workflow action parameters
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Audit and slim all catalog actions so external task inputs carry only workflow-bound identity,
+    internal tool parameters live exclusively in resolvedConfig/stepOverride, and handlers/CLIs shed legacy
+    dual-path resolution—using a hard-cut policy aligned with the completed step_config retirement.
+  code_anchors:
+  - docs/implementation/sample-preparation-flow.md
+  - workers/methyl_worker/action_catalog.py
+  - docs/reference/action-parameter-contract.md
+  - scripts/check_task_input_config_boundary.py
+  - scripts/migrate_profile_action_config.py
+  - workers/methyl_worker/task_models/
+  stories:
+  - id: contract-audit-ci
+    title: Add action-parameter-contract.md + check_task_input_config_boundary.py CI guard; fix catalog
+      typing/doc drift (extraction_qc, stale descriptions)
+    state: Closed
+  - id: canonical-config-keys
+    title: Document canonical homes for duplicated knobs; migrate profiles (dmp_selection/validation mirrors,
+      gene caps, backend_profiles); remove materialize_action_input cap bridge
+    state: Closed
+  - id: retire-mc-sidecars
+    title: Remove mapper_step_override.json / detector_step_override.json read/write paths; rely on mc_config.json
+      + stepOverride only
+    state: Closed
+  - id: slim-sample-prep-inputs
+    title: Split SamplePrepTaskInput; gut MethylExtractTaskInput/ParabricksFq2bamTaskInput wire tunables;
+      remove sample.upload_h5; update sample_prep programs
+    state: Closed
+  - id: slim-pipeline-inputs
+    title: Per-action minimal pipeline TaskInputs + argv builders; DmpSelectStepOverride; remove wire
+      caps from gene_select/gene_feature_select
+    state: Closed
+  - id: slim-validation-inputs
+    title: Replace shared ValidationTaskInput with per-action models; mark or remove internal-only validation
+      sub-actions
+    state: Closed
+  - id: slim-implementations
+    title: Refactor extract_runner, QC handlers, validation handlers to single resolvedConfig path; thin
+      handlers; drop legacy collectors where manifest-first
+    state: Closed
+  - id: docs-promote-plan
+    title: Update sample-preparation-flow + config-parameter-matrix; promote plan to docs/plans/streamline-action-parameters.plan.md
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/parallel-mc-centroid-seed.plan.md
+  plan_stem: parallel-mc-centroid-seed
+  title: Parallel MC centroid seed
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Add a per-group centroid seed phase
+  code_anchors:
+  - schemas/domain/
+  - schemas/tasks/*.schema.json
+  - schemas/actions/catalog.json
+  - schemas/tasks/validation_plan_iterations.output.schema.json
+  - schemas/domain/centroid_seed_group.schema.json
+  - schemas/config/queue_discovery_task_v1.schema.json
+  - packages/methylvalidation/methyl_validation/planner_models.py
+  - workers/.../validation_models.py
+  - schemas/tasks/pipeline_centroid.input.schema.json
+  - workflow_engine/sql/seed_action_catalog.py
+  - schemas/tasks/
+  - scripts/deploy_workflow_definitions.sh
+  stories:
+  - id: typed-models
+    title: Replace all generic Dict/List[Dict] MC planner/queue parameters with explicit Pydantic models;
+      remove extra=allow fallbacks; export matching JSON schemas
+    state: Closed
+  - id: planner-models
+    title: Add CentroidSeedGroup/CentroidGroupScope models; build seed groups + cohort-relative iteration
+      deltas in workflow_planner.py and project_gen.py
+    state: Closed
+  - id: handler-output
+    title: Fix validation.plan_iterations handler + ValidationPlanTaskOutput to emit typed ValidationPlannedIteration
+      and CentroidSeedGroup lists; update _DE_PLAN_ITERATIONS scope_bindings
+    state: Closed
+  - id: centroid-worker
+    title: Add centroidSeedDir/addSamples/removeSamples to CentroidTaskInput; implement seed copy before
+      methyl-centroid in worker + queue executor
+    state: Closed
+  - id: domain-programs
+    title: Update MC/lifecycle DomainPrograms with seed FOR loop and parallel iterations; recompile compiled_workflow.json
+    state: Closed
+  - id: schema-export
+    title: Regenerate schemas/tasks, schemas/actions/catalog.json; update config_schema_registry for DiscoveryRunTaskV1
+      if needed
+    state: Closed
+  - id: tests
+    title: Extend planner, handler, centroid, and parallel-seed tests; keep methyl-export-* --check green
+    state: Closed
+  - id: db-catalog-seed
+    title: Run seed_action_catalog.py against Azure SQL and PostgreSQL after schema export; verify rows
+      via Azure SQL MCP and PostgreSQL MCP parity queries
+    state: Closed
+  - id: db-workflow-deploy
+    title: Deploy new compiled MC workflow versions to both DBs; verify variable_output_binding and workflow
+      versions via both MCPs
+    state: Closed
+  - id: docs-plan-promote
+    title: Update validation_planner_capabilities, DISTRIBUTED_QUEUE, README; promote plan to docs/plans/parallel-mc-centroid-seed.plan.md
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/docs-refresh-and-guardrails.plan.md
+  plan_stem: docs-refresh-and-guardrails
+  title: Documentation refresh and CI guardrails
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Produce a documentation audit, remediate stale docs (config-not-code, four-layer config, modeling
+    modes, dmps-*-selected exports, canonical profile names), finalize the Quarto decision record and
+    TikZ->SVG migration, and add CI guardrails so drift can't recur. Quarto is kept as-is; the decision
+    record is updated and validated.
+  code_anchors:
+  - docs/architecture/documentation-audit-2026-07.md
+  - scripts/check_doc_freshness.sh
+  - docs/**
+  - packages/**/docs/**
+  - workflow_engine/docs/**
+  - docs/plans/**
+  - scripts/tests/test_check_doc_freshness.py
+  - docs/theory/_book/
+  - docs/usage/_book/
+  - docs/plans/
+  stories:
+  - id: audit-report
+    title: Write docs/architecture/documentation-audit-2026-07.md (findings by severity + Quarto keep-analysis
+      + fix checklist); link from DOCUMENTATION_AUDIT.md and architecture/index.md
+    state: Closed
+  - id: fix-precedence
+    title: Align precedence wording (drop 'package defaults', no Python fallback) in 02-project-config-and-layout.qmd,
+      domain-program-language.md, config-parameter-matrix.md
+    state: Closed
+  - id: fix-config-theory
+    title: Rewrite theory ch.11-project-configuration.qmd and reframe configuration-reference.qmd around
+      four-layer/actionConfig; fix output tree to dmps-*-selected.csv
+    state: Closed
+  - id: fix-analyte
+    title: Rewrite ANALYTE_PROFILES.md around regulatory.primary_analyte + profile/site actionConfig
+    state: Closed
+  - id: modeling-modes
+    title: Document modeling modes, split BA targets, recurrence source, and generic profiles in usage
+      ch.05 + theory ch.12
+    state: Closed
+  - id: profile-names
+    title: Replace deprecated profile names with canonical (mc_dmp_*, mc_gene_*, mc_gene_fc) in usage
+      ch.05, check READMEs, and domain-program-language.md examples/tables
+    state: Closed
+  - id: dmp-exports
+    title: Make dmps-*-selected.csv the primary export narrative in detector theory/usage, configuration-reference,
+      methyldmpselect README; mark classifier-extended transitional
+    state: Closed
+  - id: workflow-engine-docs
+    title: Update pipeline_architecture.md, portal_study_lifecycle.md, and contract capability docs to
+      drop step_config as authoritative
+    state: Closed
+  - id: validation-usage
+    title: Rewrite methylvalidation USAGE.md config section to profile/resolvedConfig/mc_config.json flow;
+      remove max_dmps:500 and package-defaults claims
+    state: Closed
+  - id: package-sweep
+    title: Sweep remaining step_config/defaults references across methylenricher/methylpredictor/methyldetector/methylmapper/methyldiseaseprogression
+      docs and theory ch.04/05/15
+    state: Closed
+  - id: quarto-record
+    title: 'Update documentation-toolchain.md: keep Option A, add Validated-2026-07 note, record Usage
+      stays Quarto'
+    state: Closed
+  - id: tikz-svg
+    title: Migrate remaining usage-chapter inline TikZ workflow figures to Mermaid src + pre-rendered
+      SVG
+    state: Closed
+  - id: ci-freshness
+    title: Add scripts/check_doc_freshness.sh + test for stale tokens; wire into ci/azure-pipelines-pr.yml
+    state: Closed
+  - id: ci-quarto
+    title: Add guarded 'quarto render docs/theory docs/usage --to html' step to CI
+    state: Closed
+  - id: regen-verify
+    title: Regenerate _book/ and SVGs; run all doc checks; promote plan to docs/plans/
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/documentation-and-deployment-reliability.plan.md
+  plan_stem: documentation-and-deployment-reliability
+  title: Documentation and deployment reliability
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Make documentation a trustworthy, role-based map of the complete MethylPipeline system and
+    repair deployment/runtime paths so setup instructions are executable. Align canonical docs with worker-only
+    gateway, backend-agnostic Admin CLI, database workflow engine, and current action/config contracts;
+    enforce in CI.
+  code_anchors: []
+  stories:
+  - id: canonical-map
+    title: Publish the comprehensive audit, refresh canonical navigation, and label historical/derived
+      documentation
+    state: Closed
+  - id: setup-reliability
+    title: Repair and document executable developer, database bootstrap, release, gateway, and worker
+      setup paths
+    state: Closed
+  - id: domain-program-guide
+    title: Document DomainProgram authoring, compilation, deployment, and Admin CLI workflows end to end
+    state: Closed
+  - id: engine-reference
+    title: Expand the database-resident agnostic workflow engine and dual-backend contract documentation
+    state: Closed
+  - id: operational-contracts
+    title: Add canonical traceability, logging, idempotency/retry/lease, and distributed recovery documentation
+    state: Closed
+  - id: stale-cleanup
+    title: Remove stale gateway routes, retired actions/config surfaces, and conflicting generated documentation
+    state: Closed
+  - id: docs-guardrails
+    title: Extend documentation freshness checks and validate all canonical and generated artifacts
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/typed-assign-domain-program.plan.md
+  plan_stem: typed-assign-domain-program
+  title: Typed assign DomainProgram language
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Extend DomainProgram toward a typed, worker-delegated assign model (ACTION + scope binding
+    + JSON Schema variable registry), expose WHILE/SWITCH/REPEAT in the compiler to match the DB engine,
+    and publish a complete language reference with worked generic use cases—without rewriting existing
+    methylation FOREACH pipelines.
+  code_anchors:
+  - docs/reference/domain-program-language-v2.md
+  - packages/methyldomain/methyl_domain/program.py
+  - workflow_engine/domain/compiler.py
+  - workers/methyl_worker/task_models/workflow_compute_models.py
+  - workflow_engine/domain/fixtures/assign_*.program.json
+  stories:
+  - id: lang-doc-v2
+    title: Write docs/reference/domain-program-language-v2.md; promote plan; link from index
+    state: Closed
+  - id: ir-schema
+    title: Add VariableDecl/AssignStep/SwitchStep/WhileStep/RepeatStep; export schema; variable_schemas
+      on WorkflowDefinitionSpec
+    state: Closed
+  - id: compiler-control-assign
+    title: Extend compiler for assign/switch/while/repeat; parallel-assign rejection; honor ActionStep.out;
+      unit tests
+    state: Closed
+  - id: compute-actions
+    title: Add typed workflow.* catalog entries, task models, handlers
+    state: Closed
+  - id: fixtures-tests
+    title: Add assign_while_pagination and assign_map_reduce fixtures; smoke tests
+    state: Closed
+  - id: docs-align
+    title: Update domain-program-compiler.md, workflow-engine.md, plans/README; clarify operator summary
+      vs v2
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/samd-study-profile-ladder.plan.md
+  plan_stem: samd-study-profile-ladder
+  title: SaMD study profile ladder
+  legacy_ado_type: Epic
+  state: Closed
+  overview: 'Define a small, FDA-aligned study creation path: three disease-agnostic pipeline profiles
+    (research → holdout enrichment → pivotal), a study scaffold that always provisions real holdout partitions,
+    and an operator SOP for growing cohorts without leaking holdouts into training—while unknown hyperparameters
+    are discovered via early-stop and hyperparam search only in the research tier.'
+  code_anchors:
+  - docs/usage/18-samd-study-lifecycle.qmd
+  - workflow_engine/domain/profiles/samd_*.profile.json
+  - docs/examples/samd/
+  - scripts/workflow_presets.sh
+  stories:
+  - id: sop-doc
+    title: Write docs/usage/18-samd-study-lifecycle.qmd; link from tutorial 16, index, regulatory README
+    state: Closed
+  - id: samd-profiles
+    title: Add samd_research, samd_holdout_enrichment, samd_pivotal profiles; register aliases; update
+      DPL + config-parameter-matrix
+    state: Closed
+  - id: study-scaffold
+    title: Implement methyl-study-init scaffold + partition/claim validation helper
+    state: Closed
+  - id: presets-cli-docs
+    title: Add workflow_presets + Admin CLI start recipes for the three tiers
+    state: Closed
+  - id: examples-evidence
+    title: Add generic example manifests with non-empty partition stubs; document evidence-index package
+      steps
+    state: Closed
+  - id: promote-plan
+    title: Promote to docs/plans/samd-study-profile-ladder.plan.md and update docs/plans/README.md
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/samd-follow-on-assign-evidence-modes.plan.md
+  plan_stem: samd-follow-on-assign-evidence-modes
+  title: SaMD follow-on (assign → evidence → fold mc_*)
+  legacy_ado_type: Epic
+  state: Closed
+  overview: 'Phased follow-on (D + Fold): hybrid typed-assign adoption for SamplePrep only (MC stays FOREACH+planner),
+    fill real prostate evidence packages and 510(k)/De Novo scaffolding from existing runs, then fold
+    the five mc_* research axes into samd_research as modeling-mode overlays—without any new SQL NodeTypes.'
+  code_anchors:
+  - workflow_engine/domain/fixtures/sample_prep.program.json
+  - schemas/vars/bool.schema.json
+  - workflow_engine/tests/test_domain_compiler.py
+  - docs/reference/domain-program-language-v2.md
+  - docs/regulatory/validation-evidence-index.md
+  - docs/regulatory/samd-submission-scaffold.md
+  - workflow_engine/domain/profiles/modes/*.mode.json
+  stories:
+  - id: phase-a-sampleprep-assign
+    title: Hybrid SamplePrep typed variables/out/optional SWITCH; leave MC FOREACH+planner; compiler tests
+      + v2 doc
+    state: Closed
+  - id: phase-b-evidence-packages
+    title: Fill validation-evidence-index for Plasma, H_PCa_good, Buffy; add 510(k)/De Novo scaffold doc;
+      link regulatory README
+    state: Closed
+  - id: phase-c-fold-mc-modes
+    title: Add samd_research mode overlays; alias mc_* → samd_research+mode; preserve gene-only/PPI behavior;
+      update tests/docs
+    state: Closed
+  - id: promote-follow-on-plan
+    title: Promote to docs/plans/samd-follow-on-assign-evidence-modes.plan.md and README mapping
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/samd-deploy-buffy-research-migrate.plan.md
+  plan_stem: samd-deploy-buffy-research-migrate
+  title: SaMD deploy + generic programs + Buffy research migrate
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Ship SaMD profiles/modes on shared storage; depersonalize all DomainPrograms (MC + historical
+    check demos) to algorithm names; publish algorithm and SaMD-named workflow_def graphs to the DB (process-agnostic);
+    fix mode overlay resolution; migrate Buffy to samd_research + dual_fc. No new SQL NodeTypes.
+  code_anchors:
+  - workflow_engine/domain/fixtures/
+  - scripts/deploy_mc_workflow_definitions.sh
+  - scripts/deploy_workflow_definitions.sh
+  stories:
+  - id: depersonalize-all-programs
+    title: Rename/move all study-prefixed DomainPrograms to algorithm-generic fixtures; update refs/tests/docs
+    state: Closed
+  - id: publish-db-graphs
+    title: Deploy algorithm graphs + SaMD-named workflow_def entry points to Azure SQL; write workflow_versions.json;
+      no new NodeTypes
+    state: Closed
+  - id: sync-runtime-bundle-samd
+    title: Rsync samd profiles/modes + generic fixtures + pipeline_profiles.py into /work/epimethyl/current/runtime-bundle/domain;
+      verify files present
+    state: Closed
+  - id: fix-mode-path-resolution
+    title: Resolve mode overlays via METHYL_PROFILE_DIR/profile_search_dirs; add verify_setup asserts;
+      doc note
+    state: Closed
+  - id: migrate-buffy-research
+    title: Update Buffy manifest (regulatory + partition stubs); add context_samd_research_buffy.json
+      (dual_fc); point runs at fixtures/mc_stability + SaMD_Research def
+    state: Closed
+  - id: promote-plan-docs
+    title: Promote plan to docs/plans/samd-deploy-buffy-research-migrate.plan.md + README mapping
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/agnostic-gateway-and-boundaries.plan.md
+  plan_stem: agnostic-gateway-and-boundaries
+  title: Agnostic gateway and documented boundaries
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Strip all pipeline knowledge out of the REST gateway so it is a pure worker-to-database passthrough,
+    moving config resolution to instance-configuration time (DB-served) and domain compile/lifecycle to
+    admin tooling; then document the architectural boundaries (agnostic gateway, dev-only MCP, DB-owned
+    engine/RBAC/portal/instances).
+  code_anchors: []
+  stories:
+  - id: resolve-at-config
+    title: Emit generic resolvedConfig scope binding in compiler and compute resolvedConfigByKey at instance
+      creation so the DB serves fully-resolved input_json; verify SQL object-valued scope ref parity
+    state: Closed
+  - id: gateway-claim-clean
+    title: Remove materialize_claimed_task_input from worker_request_task in db_client.py (return DB claim
+      verbatim) and drop it from __all__
+    state: Closed
+  - id: gateway-catalog-clean
+    title: Remove catalog loading and _merge_action_catalog from gateway.py; serve /v1/actions from DB
+      rows, persisting execution_mode/cli_tool/etc into wf.workflow_action via seed
+    state: Closed
+  - id: move-lifecycle-out
+    title: Delete domain compile/lifecycle routes from gateway.py and relocate study/sample-prep/compile
+      logic into an admin-tier CLI that calls generic gateway/DB endpoints
+    state: Closed
+  - id: repoint-callers
+    title: Update CI/smoke/scripts/docs that call /v1/studies/* or /v1/admin/workflows/compile to use
+      the new admin CLI
+    state: Closed
+  - id: docs-boundaries
+    title: Add component-boundaries doc (agnostic gateway, dev-only MCP, DB-owned engine/RBAC/portal/instances)
+      and update index, orchestration-paths, layer-model, pipeline_architecture.qmd, AGENTS.md, config-not-code
+      rule
+    state: Closed
+  - id: promote-plan
+    title: Promote plan to docs/plans/agnostic-gateway-and-boundaries.plan.md and update docs/plans/README.md
+    state: Closed
+  - id: verify
+    title: Run gateway/worker/domain pytest suites, contract parity, and an end-to-end DB-backed claim
+      confirming resolvedConfig is present with no gateway enrichment
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/db-config-registry.plan.md
+  plan_stem: db-config-registry
+  title: Database configuration registry + shared-storage materialization
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Make the database the authoritative store for all workflow-execution configuration (sites,
+    reference assets and their provision recipes, sample origins, profiles, studies, DomainProgram source,
+    and action schemas), with bidirectional authoring for DomainPrograms and actions, and a deploy path
+    that materializes those objects onto shared `/work` storage for cluster workers.
+  code_anchors: []
+  stories:
+  - id: phase1-cfg-ddl
+    title: Add cfg schema + registry tables/procs (MSSQL + PG); wire deploy_azure.sh
+    state: Closed
+  - id: phase1-methyl-cfg-cli
+    title: Implement methyl-cfg import-fs / upsert / materialize for site, profiles, DomainProgram IR,
+      studies
+    state: Closed
+  - id: phase1-roundtrip-tests
+    title: 'Round-trip tests: import → materialize → existing loaders resolve'
+    state: Closed
+  - id: phase2-publish-program
+    title: 'publish-program: compile DomainProgram from cfg → wf graph deploy + bundle materialize'
+    state: Closed
+  - id: phase2-sync-actions
+    title: 'sync-actions: cfg ↔ wf.workflow_action/schema ↔ client catalog; bootstrap integration'
+    state: Closed
+  - id: phase3-storage-credentials
+    title: 'cfg.storage_endpoint + cfg.credential: provider-discriminated locations (S3/Azure/GCS/file)
+      and secrets; extend JSON Schema with Azure SAS + GCS; never materialize secrets to /work'
+    state: Closed
+  - id: phase3-assets-storage
+    title: reference_asset recipes + provision runner; storage_profile refs endpoints; site refs expand
+      on materialize; planner injects credentials into task input only
+    state: Closed
+  - id: phase4-bidirectional-scaffold
+    title: DB→client action scaffold CLI; portal cfg DomainProgram tree API; config-editor catalog rewire
+    state: Closed
+  - id: phase5-cutover-docs
+    title: DB-first admin create paths; update layer-model, work-config-paths, distributed-runtime, docs/plans
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/cfg-study-sample-mapping.plan.md
+  plan_stem: cfg-study-sample-mapping
+  title: cfg study membership from portal.Samples
+  legacy_ado_type: Task
+  state: Closed
+  overview: Make study group membership a first-class `cfg` concern that references `portal.Samples` (import
+    registry from institutions/labs), then materialize the existing CSV lists under `/work` so workers
+    keep their current contract.
+  code_anchors: []
+  stories:
+  - id: ddl-study-groups
+    title: Add cfg.study_group + cfg.study_group_member (MSSQL/PG) with FKs to cfg.study, portal.Samples,
+      portal.LabSamples
+    state: Closed
+  - id: procs-materialize
+    title: 'Repo procs + methyl-cfg materialize: write CSVs and sync study document_json sample_paths'
+    state: Closed
+  - id: cli-portal-api
+    title: CLI/store + portal API to enroll/remove members from portal.Samples/LabSamples
+    state: Closed
+  - id: docs-user-manual
+    title: Fix How to define samples.md + config-registry.md for portal→cfg→CSV flow
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/action-provider-registry.plan.md
+  plan_stem: action-provider-registry
+  title: Action provider registry (process pack)
+  legacy_ado_type: Task
+  state: Closed
+  overview: Harden the process-pack boundary with a catalog-driven CLI action provider registry, catalog
+    template rules, and worker-local Depends for in-process handlers — without adopting engine-wide fast_depends.
+  code_anchors:
+  - workers/methyl_worker/actions/registry.py
+  - workers/methyl_worker/handlers/
+  - workers/methyl_worker/depends.py
+  - docs/architecture/action-provider-registry.md
+  stories:
+  - id: phase1-registry
+    title: Catalog-driven CliAction/handler registry; remove build_action_from_catalog if/elif; split
+      handlers modules
+    state: Closed
+  - id: phase2-compiler
+    title: Move centroid/detector template special-cases into catalog domain_effects / template metadata
+    state: Closed
+  - id: docs
+    title: Promote plan + update component-boundaries + ADR for registry over DI
+    state: Closed
+  - id: phase3-optional-di
+    title: Worker-local Depends for TaskRuntimeContext / logger / path helpers in in-process handlers
+      (not engine-wide fast_depends)
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/read-level-info-measures.plan.md
+  plan_stem: read-level-info-measures
+  title: Read-level information-theoretic measures
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Add read-level (co-methylation) information-theoretic measures to MethylPipeline by (1) extending
+    MethylExtractor to emit a per-tile methylation-pattern HDF5 sidecar, (2) adding a native Python package
+    that computes pragmatic read-level measures (methylation entropy, epipolymorphism, true PDR, cohort
+    Jensen-Shannon distance) with no full Ising fit, and (3) wiring it as a new pipeline action that produces
+    a covariates sidecar CSV first and a DMP/gene concordance confirmation report second.
+  code_anchors:
+  - docs/reference/read_level_pattern_contract.md
+  - packages/methylutils/methyl_utils/core/read_level_io.py
+  - packages/methylinfotheory/
+  - workers/methyl_worker/actions/info_measures.py
+  - schemas/config/info_measures.schema.json
+  - workflow_engine/domain/checks/pca1_5_cg/configs/
+  - scripts/export_config_schemas.sh
+  - workflow_engine/sql_mssql/seed_action_catalog.py
+  - docs/plans/read-level-info-measures.plan.md
+  - docs/plans/README.md
+  - packages/methylinfotheory/methyl_infotheory/core/ising.py
+  stories:
+  - id: contract-loader
+    title: Write read-level sidecar HDF5 contract doc (docs/reference/read_level_pattern_contract.md)
+      and loader methyl_utils/core/read_level_io.py (load_read_level_patterns) + export from methyl_utils
+      __init__.
+    state: Closed
+  - id: extractor-flags
+    title: Add read_level/tile_size to MethylExtractConfig + resolve/build_methyl_extractor_command in
+      workers/methyl_worker/extract_runner.py; update workers/docs/methyl_extractor.md and completeness
+      checks for {chrom}-{ctx}.patterns.h5.
+    state: Closed
+  - id: package-core
+    title: 'Create packages/methylinfotheory with config.py (InfoTheoryStepConfig), core/patterns.py (entropy/epipolymorphism/PDR),
+      core/sample_measures.py (readlevel:: columns), core/cohort_jsd.py (per-tile JSD), core/confirmation.py
+      (DMP + gene_importance concordance), runner.py, cli.py, project_resolver.py.'
+    state: Closed
+  - id: outputs
+    title: Emit readlevel_measures.csv (+manifest) first, then confirmation_report.json; graceful skip
+      when no *.patterns.h5 present.
+    state: Closed
+  - id: action-registration
+    title: 'Register pipeline.info_measures: action_catalog.py (+PROJECT_ACTION_CONFIG_KEYS), pipeline_models
+      task I/O, workers actions/info_measures.py + base.py, config_schema_registry.py.'
+    state: Closed
+  - id: covariate-list
+    title: Extend methylvalidation covariate_preprocessor _load_covariate_table to accept a list of covariate
+      CSV paths (backward compatible join on sample_id).
+    state: Closed
+  - id: config-program-wiring
+    title: Update mc_gene_fc.profile.json (methyl_extract.read_level, actionConfig.info_measures, covariates_path
+      list) and add pipeline.info_measures node after mapper in pca1_5_cg lifecycle programs.
+    state: Closed
+  - id: regen-seed
+    title: Regenerate config/task schemas + action catalog (export scripts) and run seed_action_catalog.py.
+    state: Closed
+  - id: tests
+    title: Add unit tests (patterns math, cohort JSD, loader round-trip, read_level=false skip) run under
+      .venv.
+    state: Closed
+  - id: plan-promotion
+    title: Copy approved plan to docs/plans/read-level-info-measures.plan.md and add row to docs/plans/README.md.
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/ci-regression-testing.plan.md
+  plan_stem: ci-regression-testing
+  title: CI regression testing and coverage
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Add a Continuous Integration regression + coverage stage to the Azure DevOps PR pipeline (measure-and-report
+    first, no failing threshold), fix the coverage/testpaths gaps in the root pytest config, author missing
+    tests so every used package covers its most important classes/features, and document CI/regression
+    testing as a first-class regulatory control alongside Traceability, Validation, Deployment, and Change
+    Management.
+  code_anchors:
+  - ci/azure-pipelines-pr.yml
+  - scripts/tests
+  - packages/methylcentroid/methyl_centroid/tests
+  - packages/methylutils/methyl_utils/tests
+  - scripts/run_tests_ci.sh
+  - schemas/config/info_measures.schema.json
+  - schemas/config/test_data_registry.schema.json
+  stories:
+  - id: pytest-config
+    title: 'Fix root pyproject.toml: drop unconditional --cov-report from addopts, broaden testpaths (scripts/tests
+      + nested package tests), and expand coverage source to packages/workers/workflow_engine.'
+    state: Closed
+  - id: ci-script
+    title: Add scripts/run_tests_ci.sh emitting JUnit XML + Cobertura coverage XML, running with -m 'not
+      gpu' and no --cov-fail-under.
+    state: Closed
+  - id: test-gap-analysis
+    title: Rank packages/classes by import frequency across the repo and produce a prioritized per-package
+      list of the most-used untested classes/features to cover.
+    state: Closed
+  - id: author-missing-tests
+    title: Author unit tests for the highest-priority untested classes/features per used package, starting
+      with zero-test (methylcluster, methylgenefeatureselect) and thin packages (methylderivedmeasures,
+      methylfragmentomics, methylgeneselect, methyldiseaseprogression, methyldomain).
+    state: Closed
+  - id: azure-pipeline
+    title: Extend ci/azure-pipelines-pr.yml with a full-suite regression + coverage step and PublishTestResults@2
+      / PublishCodeCoverageResults@2.
+    state: Closed
+  - id: ci-readme
+    title: Update ci/README.md to describe the regression + coverage stage and baseline-only policy.
+    state: Closed
+  - id: regulatory-doc
+    title: Author docs/regulatory/continuous-integration-and-regression-testing.md as a new regulatory
+      pillar.
+    state: Closed
+  - id: regulatory-wiring
+    title: Wire the new doc into docs/regulatory/README.md, change-management-plan.md, traceability-matrix.md,
+      and validation-evidence-index.md.
+    state: Closed
+  - id: verify
+    title: Run scripts/run_tests_ci.sh in .venv to confirm full collection and artifact generation with
+      no import collisions or new failures.
+    state: Closed
+  - id: real-data-registry
+    title: Add typed TestDataRegistry (per-analyte reference samples + named groups), schema export, site
+      manifest 'testing' block, and pytest real-data helpers/marker.
+    state: Closed
+  - id: real-data-tests
+    title: Add real_data tests (loader, derived measures, cohort group) that skip when unmounted, plus
+      registry unit tests; add self-hosted real-data CI pipeline.
+    state: Closed
+  - id: real-data-docs
+    title: Author docs/reference/test-data-registry.md and wire real-data testing + provenance into the
+      regulatory CI/traceability/evidence docs.
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/regression-protection-test-coverage.plan.md
+  plan_stem: regression-protection-test-coverage
+  title: Regression-protection test coverage
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Add targeted tier-1 tests to the shared "spine" that a wrong PR could silently break across
+    many actions — the config resolution/merge layer, contract-drift guards, and untested shared MethylUtils/MethylDomain
+    helpers — rather than chasing line-rate on GPU numerical cores that other tiers cover.
+  code_anchors:
+  - workers/methyl_worker/task_models/*
+  - packages/methylutils/methyl_utils/action_config_resolver.py
+  - workflow_engine/domain/pipeline_profiles.py
+  - workflow_engine/domain/workflow_context.py
+  - packages/methylvalidation/tests/test_config_schema_export.py
+  - scripts/run_tests_ci.sh
+  - workers/methyl_worker/task_schema_export.py
+  - schemas/tasks/*.schema.json
+  - scripts/check_task_input_config_boundary.py
+  - packages/methylutils/methyl_utils/cli_resolved_config.py
+  - packages/methylutils/methyl_utils/logging_utils.py
+  - packages/methylutils/methyl_utils/memory_manager.py
+  stories:
+  - id: p1-resolver-merge
+    title: 'Add precedence tests for action_config_resolver.py: deep_merge, resolve_action_config layer
+      order (site<profile<program<instance<analyte), resolve_from_task_input (both branches), load_resolved_config/resolve_for_project
+      routing, site_slice_for_action path derivation'
+    state: Closed
+  - id: p1-workflow-merge
+    title: Add merge tests for workflow_engine pipeline_profiles.apply_pipeline_profile/_deep_merge and
+      extend build_resolved_config_scope_vars precedence coverage in workflow_context.py
+    state: Closed
+  - id: p2-task-schema-drift-pytest
+    title: Add pytest calling check_task_schema_drift (workers task_schema_export) so schemas/tasks drift
+      fails on the PR tier; add pytest wrapper around scripts/check_task_input_config_boundary.py; confirm
+      config-schema drift test runs in run_tests_ci.sh
+    state: Closed
+  - id: p3-cli-resolved-config
+    title: Test cli_resolved_config.py (resolve_cli_step_config routing + error paths, read_json_object)
+      and add tests for logging_utils.py, memory_manager.py, beta_analytics.py
+    state: Closed
+  - id: p4-action-result
+    title: 'Add dedicated unit tests for methyl_domain/action_result.py: manifest construction and atomic-write
+      behavior'
+    state: Closed
+  - id: p5-resolver-model-handshake
+    title: Add a parametrized meta-test asserting each catalog action's resolved config slice validates
+      against its config Pydantic model
+    state: Closed
+  - id: p6-ratchet-scope
+    title: Optionally enable branch coverage and a narrow coverage ratchet scoped to the shared-spine
+      modules (resolver, cli_resolved_config, action_result, pipeline_profiles)
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/hyperparameter-result-versioning.plan.md
+  plan_stem: hyperparameter-result-versioning
+  title: Hyperparameter result versioning (CAAS)
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Introduce content-addressed action storage (CAAS) keyed by a cumulative signature so results
+    of every idempotent action are physically versioned by their hyperparameters, canonical paths become
+    symlinks into the store, and identical intermediate results are shared across workflow instances to
+    preserve idempotency.
+  code_anchors:
+  - workflow_engine/sql_pg/wf_hyperparameter_set.sql
+  - packages/methyldomain/methyl_domain/action_result.py
+  - packages/methyldomain/methyl_domain/content_store.py
+  - workers/methyl_worker/action_skip.py
+  - workers/methyl_worker/handlers.py
+  - workflow_engine/domain/workflow_context.py
+  - workflow_engine/domain/compiler.py
+  stories:
+  - id: record-schema
+    title: Bump ActionExecutionRecord to schema 1.2 with content_key + hyperparam_set_id fields; add CAAS
+      path helpers (caas_root, caas_entry_dir, instance_ledger_path) in packages/methyldomain/methyl_domain/action_result.py.
+    state: Closed
+  - id: content-store
+    title: Create packages/methyldomain/methyl_domain/content_store.py implementing atomic, concurrency-safe
+      commit_artifacts_to_store, link_entry_into_place, entry validation, and instance-ledger append.
+    state: Closed
+  - id: content-key
+    title: Add compute_content_key in workers/methyl_worker/action_skip.py (sha256 of action_revision
+      + input_signature); verify _normalize_path_strings resolves symlinks so keys stay cumulative.
+    state: Closed
+  - id: skip-reuse
+    title: Make maybe_skip_action consult the CAAS entry for the content_key (cross-instance reuse), relink
+      canonical paths, and replay; make record_action_execution commit product artifacts into CAAS and
+      stamp content_key.
+    state: Closed
+  - id: execute-orchestrate
+    title: Wire commit/relink + ledger append into execute_task in workers/methyl_worker/handlers.py around
+      the existing skip/run/record calls; gate on METHYL_CAAS_ENABLED.
+    state: Closed
+  - id: hpset-id
+    title: Compute + bake hyperparamSetId in finalize_instance_context (hash of resolvedConfig__* slices
+      + optional name); add hyperparamSetId to RUNTIME_INPUT_KEYS; inject it into ACTION templates in
+      compiler._action_template.
+    state: Closed
+  - id: tests
+    title: Add unit tests (content-key stability, cross-instance reuse, config-change fork, symlink cumulative
+      signatures, ledger) and an MC smoke end-to-end check; run under .venv.
+    state: Closed
+  - id: docs
+    title: Promote plan to docs/plans/hyperparameter-result-versioning.plan.md, update docs/plans/README.md,
+      and document CAAS layout + hyperparamSetId in domain-program-language.md and 10-artifacts-and-qa-checks.qmd.
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/workflow-engine-sql-design.plan.md
+  plan_stem: workflow-engine-sql-design
+  title: Workflow engine SQL design
+  legacy_ado_type: Epic
+  state: Closed
+  overview: Design a SQL Server schema for workflow definitions and runtime execution that supports tree-structured
+    control-flow nodes (sequence, parallel, if/else, switch, repeat, while), plus worker-facing stored
+    procedures to pull executable tasks and submit JSON output with integer control-flow results.
+  code_anchors:
+  - workflow_engine/sql_pg/wf_hyperparameter_set.sql
+  stories:
+  - id: define-definition-schema
+    title: Design workflow definition tables (workflow/version/node/edge/action) with node-type discriminator
+      and branch metadata.
+    state: Closed
+  - id: define-runtime-schema
+    title: Design runtime tables for instances, node executions, attempts, iteration state, and result
+      storage.
+    state: Closed
+  - id: add-constraints-indexes
+    title: Add SQL Server constraints and indexes enforcing valid trees/branches and fast scheduler queries.
+    state: Closed
+  - id: design-worker-stored-procs
+    title: Design worker-facing stored procedures for task claim/lease and task completion with JSON input/output
+      and integer result code.
+    state: Closed
+  - id: design-json-parameterization
+    title: Design JSON template/binding model to derive task input values from runtime context (loop index,
+      branch index, prior task outputs).
+    state: Closed
+  - id: author-examples-and-validation
+    title: Provide sample workflow data and verification queries to demonstrate IF/SWITCH/PARALLEL/REPEAT/WHILE
+      behavior.
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/alignment-derived-guardrails.plan.md
+  plan_stem: alignment-derived-guardrails
+  title: Alignment-derived guardrails
+  legacy_ado_type: Task
+  state: Closed
+  overview: Add alignment-layer guardrails to methylalignmentqc — Phase 1 derived Picard metrics and Phase
+    2 samtools flagstat — with analyte profile defaults for cfdna and buffy_coat.
+  code_anchors:
+  - scripts/calibrate_alignment_guardrails.py
+  - packages/methylalignmentqc/methyl_alignment_qc/core/alignment_derived_qc.py
+  - packages/methylalignmentqc/methyl_alignment_qc/core/bam_flagstat.py
+  - packages/methylalignmentqc/methyl_alignment_qc/models/config.py
+  - packages/methylutils/methyl_utils/analyte_profiles.py
+  stories:
+  - id: calibrate-thresholds
+    title: Add calibrate_alignment_guardrails.py and extend compare_alignment_qc_groups.py
+    state: Closed
+  - id: alignment-derived-qc
+    title: Implement alignment_derived_qc.py and AlignmentGuardrailsConfig
+    state: Closed
+  - id: bam-flagstat
+    title: Implement bam_flagstat.py and properly-paired guardrails
+    state: Closed
+  - id: writer-wiring
+    title: Wire into writer, handlers, project_resolver, CLI; Pydantic models and schemas
+    state: Closed
+  - id: analyte-profiles
+    title: Enable alignment_guardrails defaults in analyte_profiles for cfdna and buffy_coat
+    state: Closed
+  - id: tests-docs
+    title: Unit tests and documentation updates
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/dmp_gene_modeling_modes_c0d0bad6.plan.md
+  plan_stem: dmp_gene_modeling_modes_c0d0bad6
+  title: DMP/gene modeling modes (historical)
+  legacy_ado_type: Task
+  state: Closed
+  overview: 'Formalize five statistically distinct DMP/gene modeling alternatives as process-agnostic
+    engine capabilities and generic pipeline profiles—decoupled from any single study, analyte, or domain
+    check deployment.
+
+
+    Superseded by composable-pipeline-flexibility and docs-refresh-and-guardrails.'
+  code_anchors:
+  - docs/reference/domain-program-language.md
+  - docs/plans/composable-pipeline-flexibility.plan.md
+  - docs/theory/chapters/12-two-workflows.qmd
+  - workflow_engine/domain/fixtures/
+  - workflow_engine/domain/profiles/
+  stories:
+  - id: architecture-layers-doc
+    title: Document engine vs generic profile vs study manifest vs domain program in domain-program-language.md
+      and composable-pipeline plan (no study-specific runbooks)
+    state: Closed
+  - id: modeling-mode-enums
+    title: Add dmp_modeling_mode / gene_modeling_mode + separate dmp/gene BA targets to MonteCarloConfig;
+      seed generic profiles from pipeline_profiles.py only
+    state: Closed
+  - id: generic-profile-presets
+    title: Add/rename profile presets by statistical role (mc_dmp_discovery, mc_dmp_featurecuts, mc_gene_mapper,
+      mc_gene_featurecuts, mc_two_phase_dmp_then_gene)—not by cohort name
+    state: Closed
+  - id: mapper-gene-stability
+    title: Add load_mapper_genes() and gene_axis=mapper in stability.py for mode 3 (mapper-ranked gene
+      recurrence)
+    state: Closed
+  - id: dmp-source-stable
+    title: Extend gene FeatureCuts DMP source to stable panel for mode 5 Phase B (artifact-driven, not
+      study-hardcoded)
+    state: Closed
+  - id: dmp-export-simplify
+    title: Replace classifier/core/extended consumer surface with dmps-*-selected.csv + strict min/max
+      BA behavior in methyldmpselect/detector
+    state: Closed
+  - id: two-phase-orchestration
+    title: Generic two-phase profile pair (phase_a_dmp_stability + phase_b_gene_from_stable_dmps) wired
+      via artifact paths in context, not domain-specific programs
+    state: Closed
+  - id: tests-modes
+    title: Unit/integration tests for all five statistical modes using fixture manifests only (workflow_engine/domain/fixtures)
+    state: Closed
+  superseded: true
+- plan_file: docs/plans/chromosome_sample_derived_measures_a9b33eac.plan.md
+  plan_stem: chromosome_sample_derived_measures_a9b33eac
+  title: Chromosome sample derived measures
+  legacy_ado_type: Task
+  state: New
+  overview: 'Add per-chromosome and per-sample derived methylation measures (entropy, sample-vs-centroid
+    Hellinger/Jensen-Shannon/Wasserstein, global hypo/hyper burden, distributional shape, CN-shadow, PDR)
+    and incorporate them into MethylPipeline''s tabular, generative, and ECDF models via two complementary
+    seams: activating the reserved "chromosome" feature family in the observed-hybrid builder, and a new
+    derived-measures action that emits a per-sample sidecar consumed through the existing covariate join.'
+  code_anchors:
+  - packages/methylutils/methyl_utils/metrics_core.py
+  - packages/methylderivedmeasures/
+  - schemas/config/derived_measures.schema.json
+  - schemas/config/*.schema.json
+  - scripts/export_config_schemas.sh
+  - packages/methylutils/methyl_utils/ecdf_classifier.py
+  stories:
+  - id: seam-a-chromosome-family
+    title: 'Activate reserved chromosome family in observed_feature_builder.py: add chromosome tokens
+      to HYBRID_FEATURE_FAMILY_SETS/_family_flags, implement _build_chromosome_features over X_raw using
+      metrics_core (entropy, JS/Hellinger/Wasserstein to class centroids, global hypo/intermediate fractions,
+      margins), register feature names, flip feature_families report'
+    state: New
+  - id: seam-a-config
+    title: Add chromosome-family tunables to the validation step-config schema (beta cutoffs, distances
+      list, which chromosomes) with default=None; expose feature_family_set values dmp_scored+chromosome
+      and hybrid-all in profiles; regenerate schemas via scripts/export_config_schemas.sh
+    state: New
+  - id: seam-a-leakage
+    title: Ensure chromosome-family centroid-referenced measures are computed inside the MC train-fold
+      loop (pipeline_runner.py) and re-derived from frozen references at predict time; add tests for train/predict
+      schema freezing
+    state: New
+  - id: seam-b-package
+    title: Create packages/methylderivedmeasures with methyl-derived-measures CLI (--resolved-config contract)
+      that scans whole-sample H5 for genome-wide measures (global hypomethylation blocks/PMD load, arm-level
+      coverage CN-shadow z-scores, PDR/adjacent-CpG disagreement, imprinting/X signals) and writes per-sample
+      derived_measures.csv keyed by sample_id
+    state: New
+  - id: seam-b-action-wiring
+    title: 'Register pipeline.derived_measures: task I/O models in pipeline_models.py, step-config in
+      config_schema_registry.py, catalog entry in action_catalog.py (action_config_key=derived_measures),
+      export task+config schemas and re-seed catalog, add node to freeze/lifecycle DomainProgram between
+      mapper and model steps'
+    state: New
+  - id: seam-b-incorporate
+    title: Incorporate derived_measures.csv into tabular and generative backends via existing covariates_path/fit_covariates
+      join (optionally merged with clinical age/BMI sidecar); add profile examples
+    state: New
+  - id: ecdf-pickle-extend
+    title: 'Extend the ECDF model bundle: MethylDetector._save_unified_model persists a derived-measures
+      schema (ordered names + train-fold reference stats + per-locus effect_size/region weights); ECDFClassifier/MethylClassifier/data_loader.extract_sample_features
+      append effect_size-weighted derived columns at train and blind-predict; enforce feature-order fingerprint'
+    state: New
+  - id: ab-eval
+    title: A/B evaluate DMP-only vs DMP+chromosome vs DMP+chromosome+sidecar using the existing feature_family_ablation.json
+      mechanism; add fusion option (meta-stacking) if concatenation underperforms
+    state: New
+  superseded: false
+- plan_file: docs/plans/ising_mrf_v2_gpu_5f06ccb7.plan.md
+  plan_stem: ising_mrf_v2_gpu_5f06ccb7
+  title: Ising MRF v2 GPU
+  legacy_ado_type: Task
+  state: Closed
+  overview: Add a phased v2 to methylinfotheory that fits a per-tile equilibrium Ising/max-entropy model
+    to the read-level pattern sidecars and derives informME-class measures (MML, NME, ESI, MSI, differential
+    dMML/dNME, model-based JSD, mutual-information gene ranking), batched across tiles on GPU via the
+    existing methyl_utils array-backend abstraction, while scaffolding the dynamic measures (channel capacity,
+    RDE, turnover) behind the same pipeline.info_measures action for a later cut.
+  code_anchors: []
+  stories:
+  - id: config-knobs
+    title: Extend InfoTheoryStepConfig with ising_enabled, ising_max_iter, ising_tol, ising_l2, ising_coupling,
+      ising_min_tile_reads, prefer_gpu, ising_batch_tiles, dynamics_enabled (all default=None); regenerate
+      info_measures.schema.json.
+    state: Closed
+  - id: core-ising
+    title: 'Add core/ising.py: state-design matrix builder, sparse->dense (n_tiles,2^k) batcher, and batched
+      max-entropy/MLE Ising fit using methyl_utils get_array_module/to_cpu (CuPy or NumPy).'
+    state: Closed
+  - id: core-measures
+    title: 'Add core/ising_measures.py: batched MML, NME, ESI, MSI from fitted P(x) with xp-vectorized
+      sensitivities; return CPU arrays.'
+    state: Closed
+  - id: core-differential
+    title: 'Add core/differential.py: cohort group fits, dMML/dNME/model-JSD per tile, and mutual-information
+      gene ranking (reuse _accumulate_group_histograms + mapper CSV).'
+    state: Closed
+  - id: core-dynamics-scaffold
+    title: Add core/dynamics.py scaffold (channel_capacity, RDE, turnover) gated by dynamics_enabled returning
+      status=not_computed.
+    state: Closed
+  - id: wire-sample-measures
+    title: Add readlevel::*_nme/mml/esi/msi global and per-chrom columns to core/sample_measures.py when
+      ising_enabled (v1 columns unchanged).
+    state: Closed
+  - id: wire-runner-report
+    title: Update core/runner.py to emit ising_regions.csv and enrich confirmation_report.json (dNME windows,
+      MI ranking) when ising_enabled; keep skip gate; add gpu_used + cleanup_gpu_memory; extend core/confirmation.py.
+    state: Closed
+  - id: profile-schema-regen
+    title: Add v2 actionConfig.info_measures block to mc_gene_fc.profile.json; regenerate config/task
+      schemas + action catalog (no new action).
+    state: Closed
+  - id: tests
+    title: 'Add tests: ising fit, measures, differential, CPU/GPU parity (METHYL_DISABLE_GPU), runner
+      ising on/off; run under .venv.'
+    state: Closed
+  - id: docs
+    title: Update informME integration note, read_level_pattern_contract (contract unchanged), and the
+      promoted plan with the v2 equilibrium/deferred-dynamics split and GPU approach.
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/di_action-agnostic_assessment_0d376284.plan.md
+  plan_stem: di_action-agnostic_assessment_0d376284
+  title: DI action-agnostic assessment
+  legacy_ado_type: Task
+  state: New
+  overview: 'Assess whether dependency injection (e.g. fast_depends) would make MethylPipeline’s Workflow
+    Engine more action-agnostic. Conclusion: the engine is already process-agnostic; adopt a catalog-driven
+    action provider registry for worker dispatch, not FastAPI-style DI as the primary lever.'
+  code_anchors:
+  - workflow_engine/contract/workflow_definition_spec.py
+  - docs/architecture/component-boundaries.md
+  - workers/methyl_worker/action_catalog.py
+  - schemas/actions/catalog.json
+  - docs/architecture/
+  stories:
+  - id: phase1-registry
+    title: Catalog-driven CliAction/handler registry; remove build_action_from_catalog if/elif; split
+      handlers modules
+    state: New
+  - id: phase2-compiler
+    title: Move centroid/detector template special-cases into catalog domain_effects / template metadata
+    state: New
+  - id: phase3-optional-di
+    title: 'Only if needed: worker-local Depends for TaskRuntimeContext in in-process handlers (not engine-wide
+      fast_depends)'
+    state: New
+  superseded: false
+- plan_file: docs/plans/methylit-standalone-doc.plan.md
+  plan_stem: methylit-standalone-doc
+  title: MethylIT Standalone Doc
+  legacy_ado_type: Task
+  state: Closed
+  overview: Create a standalone research note on MethylIT (R 0.3.2.8 + Python methylit 0.4.2) by extracting
+    and rewriting MethylIT content from the existing comparison, with every MethylPipeline reference removed.
+  code_anchors:
+  - docs/research/methylit.md
+  - docs/research/README.md
+  - docs/research/methylpipeline_vs_methylit_comparison.md
+  stories:
+  - id: draft-methylit-md
+    title: Write docs/research/methylit.md from comparison, MethylIT-only rewrite
+    state: Closed
+  - id: update-research-readme
+    title: Add methylit.md row to docs/research/README.md
+    state: Closed
+  - id: grep-bleed
+    title: Grep new doc for MethylPipeline / related product terms and fix any bleed
+    state: Closed
+  superseded: false
+- plan_file: docs/plans/worker-transport-security.plan.md
+  plan_stem: worker-transport-security
+  title: Worker Transport Security
+  legacy_ado_type: Task
+  state: Closed
+  overview: Evaluate worker transport; implement capability-based dispatch, security hardening, and multi-cloud
+    Terraform IaC for GPU worker fleets.
+  code_anchors:
+  - deploy/terraform/
+  stories:
+  - id: doc-transport
+    title: Write docs/architecture/worker-transport-decision.md
+    state: Closed
+  - id: doc-security
+    title: Write docs/architecture/worker-security-review.md
+    state: Closed
+  - id: impl-capability-detect
+    title: Add resolve_worker_capabilities() and registration auto-detect
+    state: Closed
+  - id: impl-db-capabilities
+    title: Capability-based sp_worker_request_task (PostgreSQL + Azure SQL)
+    state: Closed
+  - id: impl-exec-guard
+    title: Execute-time GPU guard in handlers.py
+    state: Closed
+  - id: impl-arc-header
+    title: Send X-Arc-Resource-Id from worker client
+    state: Closed
+  - id: impl-token-hardening
+    title: Per-VM token file, deploy/env examples, verify_arc_prereqs.sh
+    state: Closed
+  - id: impl-provisioning
+    title: Capability-aware provision_worker_node.sh / install_worker_systemd.sh
+    state: Closed
+  - id: iac-scaffold
+    title: Scaffold deploy/terraform/
+    state: Closed
+  - id: iac-control-plane
+    title: control-plane-azure module
+    state: Closed
+  - id: iac-worker-common
+    title: worker-common cloud-init module
+    state: Closed
+  - id: iac-worker-nebius
+    title: worker-nebius module
+    state: Closed
+  - id: iac-worker-lambda
+    title: worker-lambda module
+    state: Closed
+  - id: iac-ci-validate
+    title: CI terraform fmt/validate
+    state: Closed
+  - id: iac-coreweave-design
+    title: CoreWeave CKS follow-on in multicloud doc
+    state: Closed
+  - id: doc-multicloud
+    title: Write docs/deployment/multicloud-iac.md
+    state: Closed
+  - id: verify
+    title: Run pytest, parity, terraform validate
+    state: Closed
+  superseded: false

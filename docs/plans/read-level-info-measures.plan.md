@@ -9,37 +9,52 @@ overview: Add read-level (co-methylation) information-theoretic measures to Meth
 > (`dynamics_enabled` scaffold). External MethylExtractor `--read-level` C implementation remains
 > a separate follow-up.
 
+azure_devops:
+  type: Feature
+  title: "Read-level information-theoretic measures"
+  work_item_id: 580
+  epic_id: 413
 todos:
   - id: contract-loader
     content: Write read-level sidecar HDF5 contract doc (docs/reference/read_level_pattern_contract.md) and loader methyl_utils/core/read_level_io.py (load_read_level_patterns) + export from methyl_utils __init__.
     status: completed
+    work_item_id: 581
   - id: extractor-flags
     content: Add read_level/tile_size to MethylExtractConfig + resolve/build_methyl_extractor_command in workers/methyl_worker/extract_runner.py; update workers/docs/methyl_extractor.md and completeness checks for {chrom}-{ctx}.patterns.h5.
     status: completed
+    work_item_id: 582
   - id: package-core
     content: "Create packages/methylinfotheory with config.py (InfoTheoryStepConfig), core/patterns.py (entropy/epipolymorphism/PDR), core/sample_measures.py (readlevel:: columns), core/cohort_jsd.py (per-tile JSD), core/confirmation.py (DMP + gene_importance concordance), runner.py, cli.py, project_resolver.py."
     status: completed
+    work_item_id: 583
   - id: outputs
     content: Emit readlevel_measures.csv (+manifest) first, then confirmation_report.json; graceful skip when no *.patterns.h5 present.
     status: completed
+    work_item_id: 584
   - id: action-registration
     content: "Register pipeline.info_measures: action_catalog.py (+PROJECT_ACTION_CONFIG_KEYS), pipeline_models task I/O, workers actions/info_measures.py + base.py, config_schema_registry.py."
     status: completed
+    work_item_id: 585
   - id: covariate-list
     content: Extend methylvalidation covariate_preprocessor _load_covariate_table to accept a list of covariate CSV paths (backward compatible join on sample_id).
     status: completed
+    work_item_id: 586
   - id: config-program-wiring
     content: Update mc_gene_fc.profile.json (methyl_extract.read_level, actionConfig.info_measures, covariates_path list) and add pipeline.info_measures node after mapper in pca1_5_cg lifecycle programs.
     status: completed
+    work_item_id: 587
   - id: regen-seed
     content: Regenerate config/task schemas + action catalog (export scripts) and run seed_action_catalog.py.
     status: completed
+    work_item_id: 588
   - id: tests
     content: Add unit tests (patterns math, cohort JSD, loader round-trip, read_level=false skip) run under .venv.
     status: completed
+    work_item_id: 589
   - id: plan-promotion
     content: Copy approved plan to docs/plans/read-level-info-measures.plan.md and add row to docs/plans/README.md.
     status: completed
+    work_item_id: 590
 ---
 
 ## Read-level information-theoretic measures

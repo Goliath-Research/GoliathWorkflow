@@ -2,37 +2,52 @@
 name: Parallel MC Centroid Seed
 overview: Add a per-group centroid seed phase
 > **Status: completed** (2026-06-29). Catalog seeded + MC workflows deployed on Azure SQL and PostgreSQL. so Monte Carlo iterations can run in parallel without chaining on `run_0001`, propagating new fields through strictly typed Pydantic models (no generic Dict parameters), exported JSON schemas, DomainPrograms, workers, queue tasks, and both Azure SQL and PostgreSQL catalog/workflow deployments.
+azure_devops:
+  type: Feature
+  title: "Parallel MC centroid seed"
+  work_item_id: 490
+  epic_id: 413
 todos:
   - id: typed-models
     content: Replace all generic Dict/List[Dict] MC planner/queue parameters with explicit Pydantic models; remove extra=allow fallbacks; export matching JSON schemas
     status: completed
+    work_item_id: 491
   - id: planner-models
     content: Add CentroidSeedGroup/CentroidGroupScope models; build seed groups + cohort-relative iteration deltas in workflow_planner.py and project_gen.py
     status: completed
+    work_item_id: 492
   - id: handler-output
     content: Fix validation.plan_iterations handler + ValidationPlanTaskOutput to emit typed ValidationPlannedIteration and CentroidSeedGroup lists; update _DE_PLAN_ITERATIONS scope_bindings
     status: completed
+    work_item_id: 493
   - id: centroid-worker
     content: Add centroidSeedDir/addSamples/removeSamples to CentroidTaskInput; implement seed copy before methyl-centroid in worker + queue executor
     status: completed
+    work_item_id: 494
   - id: domain-programs
     content: Update MC/lifecycle DomainPrograms with seed FOR loop and parallel iterations; recompile compiled_workflow.json
     status: completed
+    work_item_id: 495
   - id: schema-export
     content: Regenerate schemas/tasks, schemas/actions/catalog.json; update config_schema_registry for DiscoveryRunTaskV1 if needed
     status: completed
+    work_item_id: 496
   - id: tests
     content: Extend planner, handler, centroid, and parallel-seed tests; keep methyl-export-* --check green
     status: completed
+    work_item_id: 497
   - id: db-catalog-seed
     content: Run seed_action_catalog.py against Azure SQL and PostgreSQL after schema export; verify rows via Azure SQL MCP and PostgreSQL MCP parity queries
     status: completed
+    work_item_id: 498
   - id: db-workflow-deploy
     content: Deploy new compiled MC workflow versions to both DBs; verify variable_output_binding and workflow versions via both MCPs
     status: completed
+    work_item_id: 499
   - id: docs-plan-promote
     content: Update validation_planner_capabilities, DISTRIBUTED_QUEUE, README; promote plan to docs/plans/parallel-mc-centroid-seed.plan.md
     status: completed
+    work_item_id: 500
 ---
 
 # Parallel MC centroid seed (schemas + DB propagation)

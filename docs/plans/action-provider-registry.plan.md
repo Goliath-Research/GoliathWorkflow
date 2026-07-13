@@ -1,19 +1,28 @@
 ---
 name: Action provider registry
 overview: Harden the process-pack boundary with a catalog-driven CLI action provider registry, catalog template rules, and worker-local Depends for in-process handlers — without adopting engine-wide fast_depends.
+azure_devops:
+  type: Feature
+  title: "Action provider registry (process pack)"
+  work_item_id: 575
+  epic_id: 413
 todos:
   - id: phase1-registry
     content: Catalog-driven CliAction/handler registry; remove build_action_from_catalog if/elif; split handlers modules
     status: completed
+    work_item_id: 576
   - id: phase2-compiler
     content: Move centroid/detector template special-cases into catalog domain_effects / template metadata
     status: completed
+    work_item_id: 577
   - id: docs
     content: Promote plan + update component-boundaries + ADR for registry over DI
     status: completed
+    work_item_id: 578
   - id: phase3-optional-di
     content: "Worker-local Depends for TaskRuntimeContext / logger / path helpers in in-process handlers (not engine-wide fast_depends)"
     status: completed
+    work_item_id: 579
 ---
 
 > **Status: Implemented (Phase 1–3)**

@@ -1,43 +1,60 @@
 ---
 name: CI Regression Testing
 overview: Add a Continuous Integration regression + coverage stage to the Azure DevOps PR pipeline (measure-and-report first, no failing threshold), fix the coverage/testpaths gaps in the root pytest config, author missing tests so every used package covers its most important classes/features, and document CI/regression testing as a first-class regulatory control alongside Traceability, Validation, Deployment, and Change Management.
+azure_devops:
+  type: Feature
+  title: "CI regression testing and coverage"
+  work_item_id: 591
+  epic_id: 413
 todos:
   - id: pytest-config
     content: "Fix root pyproject.toml: drop unconditional --cov-report from addopts, broaden testpaths (scripts/tests + nested package tests), and expand coverage source to packages/workers/workflow_engine."
     status: completed
+    work_item_id: 592
   - id: ci-script
     content: Add scripts/run_tests_ci.sh emitting JUnit XML + Cobertura coverage XML, running with -m 'not gpu' and no --cov-fail-under.
     status: completed
+    work_item_id: 593
   - id: test-gap-analysis
     content: Rank packages/classes by import frequency across the repo and produce a prioritized per-package list of the most-used untested classes/features to cover.
     status: completed
+    work_item_id: 594
   - id: author-missing-tests
     content: Author unit tests for the highest-priority untested classes/features per used package, starting with zero-test (methylcluster, methylgenefeatureselect) and thin packages (methylderivedmeasures, methylfragmentomics, methylgeneselect, methyldiseaseprogression, methyldomain).
     status: completed
+    work_item_id: 595
   - id: azure-pipeline
     content: Extend ci/azure-pipelines-pr.yml with a full-suite regression + coverage step and PublishTestResults@2 / PublishCodeCoverageResults@2.
     status: completed
+    work_item_id: 596
   - id: ci-readme
     content: Update ci/README.md to describe the regression + coverage stage and baseline-only policy.
     status: completed
+    work_item_id: 597
   - id: regulatory-doc
     content: Author docs/regulatory/continuous-integration-and-regression-testing.md as a new regulatory pillar.
     status: completed
+    work_item_id: 598
   - id: regulatory-wiring
     content: Wire the new doc into docs/regulatory/README.md, change-management-plan.md, traceability-matrix.md, and validation-evidence-index.md.
     status: completed
+    work_item_id: 599
   - id: verify
     content: Run scripts/run_tests_ci.sh in .venv to confirm full collection and artifact generation with no import collisions or new failures.
     status: completed
+    work_item_id: 600
   - id: real-data-registry
     content: Add typed TestDataRegistry (per-analyte reference samples + named groups), schema export, site manifest 'testing' block, and pytest real-data helpers/marker.
     status: completed
+    work_item_id: 601
   - id: real-data-tests
     content: Add real_data tests (loader, derived measures, cohort group) that skip when unmounted, plus registry unit tests; add self-hosted real-data CI pipeline.
     status: completed
+    work_item_id: 602
   - id: real-data-docs
     content: Author docs/reference/test-data-registry.md and wire real-data testing + provenance into the regulatory CI/traceability/evidence docs.
     status: completed
+    work_item_id: 603
 ---
 
 # Continuous Integration and Regression Testing

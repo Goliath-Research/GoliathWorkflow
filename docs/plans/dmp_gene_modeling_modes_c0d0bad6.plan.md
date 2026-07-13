@@ -1,31 +1,44 @@
 ---
 name: DMP Gene Modeling Modes
 overview: Formalize five statistically distinct DMP/gene modeling alternatives as process-agnostic engine capabilities and generic pipeline profiles—decoupled from any single study, analyte, or domain check deployment.
+azure_devops:
+  type: Feature
+  title: "DMP/gene modeling modes (historical)"
+  work_item_id: 635
+  epic_id: 413
 todos:
   - id: architecture-layers-doc
     content: Document engine vs generic profile vs study manifest vs domain program in domain-program-language.md and composable-pipeline plan (no study-specific runbooks)
     status: pending
+    work_item_id: 636
   - id: modeling-mode-enums
     content: Add dmp_modeling_mode / gene_modeling_mode + separate dmp/gene BA targets to MonteCarloConfig; seed generic profiles from pipeline_profiles.py only
     status: pending
+    work_item_id: 637
   - id: generic-profile-presets
     content: Add/rename profile presets by statistical role (mc_dmp_discovery, mc_dmp_featurecuts, mc_gene_mapper, mc_gene_featurecuts, mc_two_phase_dmp_then_gene)—not by cohort name
     status: pending
+    work_item_id: 638
   - id: mapper-gene-stability
     content: Add load_mapper_genes() and gene_axis=mapper in stability.py for mode 3 (mapper-ranked gene recurrence)
     status: pending
+    work_item_id: 639
   - id: dmp-source-stable
     content: Extend gene FeatureCuts DMP source to stable panel for mode 5 Phase B (artifact-driven, not study-hardcoded)
     status: pending
+    work_item_id: 640
   - id: dmp-export-simplify
     content: Replace classifier/core/extended consumer surface with dmps-*-selected.csv + strict min/max BA behavior in methyldmpselect/detector
     status: pending
+    work_item_id: 641
   - id: two-phase-orchestration
     content: Generic two-phase profile pair (phase_a_dmp_stability + phase_b_gene_from_stable_dmps) wired via artifact paths in context, not domain-specific programs
     status: pending
+    work_item_id: 642
   - id: tests-modes
     content: Unit/integration tests for all five statistical modes using fixture manifests only (workflow_engine/domain/fixtures)
     status: pending
+    work_item_id: 643
 isProject: false
 ---
 

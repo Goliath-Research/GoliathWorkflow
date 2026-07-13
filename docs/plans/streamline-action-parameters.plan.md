@@ -4,31 +4,44 @@ overview: Audit and slim all catalog actions so external task inputs carry only 
 
 > **Status: COMPLETE.** Wire tunables removed, per-action task models split, MC sidecar overrides retired, CI boundary guard added.
 
+azure_devops:
+  type: Feature
+  title: "Streamline workflow action parameters"
+  work_item_id: 481
+  epic_id: 413
 todos:
   - id: contract-audit-ci
     content: Add action-parameter-contract.md + check_task_input_config_boundary.py CI guard; fix catalog typing/doc drift (extraction_qc, stale descriptions)
     status: completed
+    work_item_id: 482
   - id: canonical-config-keys
     content: Document canonical homes for duplicated knobs; migrate profiles (dmp_selection/validation mirrors, gene caps, backend_profiles); remove materialize_action_input cap bridge
     status: completed
+    work_item_id: 483
   - id: retire-mc-sidecars
     content: Remove mapper_step_override.json / detector_step_override.json read/write paths; rely on mc_config.json + stepOverride only
     status: completed
+    work_item_id: 484
   - id: slim-sample-prep-inputs
     content: Split SamplePrepTaskInput; gut MethylExtractTaskInput/ParabricksFq2bamTaskInput wire tunables; remove sample.upload_h5; update sample_prep programs
     status: completed
+    work_item_id: 485
   - id: slim-pipeline-inputs
     content: Per-action minimal pipeline TaskInputs + argv builders; DmpSelectStepOverride; remove wire caps from gene_select/gene_feature_select
     status: completed
+    work_item_id: 486
   - id: slim-validation-inputs
     content: Replace shared ValidationTaskInput with per-action models; mark or remove internal-only validation sub-actions
     status: completed
+    work_item_id: 487
   - id: slim-implementations
     content: Refactor extract_runner, QC handlers, validation handlers to single resolvedConfig path; thin handlers; drop legacy collectors where manifest-first
     status: completed
+    work_item_id: 488
   - id: docs-promote-plan
     content: Update sample-preparation-flow + config-parameter-matrix; promote plan to docs/plans/streamline-action-parameters.plan.md
     status: completed
+    work_item_id: 489
 ---
 
 # Streamline workflow actions (parameters + implementations)

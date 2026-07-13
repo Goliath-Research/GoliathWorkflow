@@ -3,16 +3,24 @@ name: MethylIT Standalone Doc
 overview: Create a standalone research note on MethylIT (R 0.3.2.8 + Python methylit 0.4.2) by extracting and rewriting MethylIT content from the existing comparison, with every MethylPipeline reference removed.
 
 > **Status: completed** — `docs/research/methylit.md` + README index row.
+azure_devops:
+  type: Feature
+  title: "MethylIT Standalone Doc"
+  work_item_id: 668
+  epic_id: 413
 todos:
   - id: draft-methylit-md
     content: Write docs/research/methylit.md from comparison, MethylIT-only rewrite
     status: completed
+    work_item_id: 669
   - id: update-research-readme
     content: Add methylit.md row to docs/research/README.md
     status: completed
+    work_item_id: 670
   - id: grep-bleed
     content: Grep new doc for MethylPipeline / related product terms and fix any bleed
     status: completed
+    work_item_id: 671
 ---
 
 # Standalone MethylIT research note

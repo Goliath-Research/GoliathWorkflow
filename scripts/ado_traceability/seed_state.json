@@ -1,0 +1,446 @@
+{
+  "epic_id": 413,
+  "features": {
+    "action-provider-registry": {
+      "stories": {
+        "docs": 578,
+        "phase1-registry": 576,
+        "phase2-compiler": 577,
+        "phase3-optional-di": 579
+      },
+      "title": "Action provider registry (process pack)",
+      "work_item_id": 575
+    },
+    "agnostic-gateway-and-boundaries": {
+      "stories": {
+        "docs-boundaries": 557,
+        "gateway-catalog-clean": 554,
+        "gateway-claim-clean": 553,
+        "move-lifecycle-out": 555,
+        "promote-plan": 558,
+        "repoint-callers": 556,
+        "resolve-at-config": 552,
+        "verify": 559
+      },
+      "title": "Agnostic gateway and documented boundaries",
+      "work_item_id": 551
+    },
+    "alignment-derived-guardrails": {
+      "stories": {
+        "alignment-derived-qc": 630,
+        "analyte-profiles": 633,
+        "bam-flagstat": 631,
+        "calibrate-thresholds": 629,
+        "tests-docs": 634,
+        "writer-wiring": 632
+      },
+      "title": "Alignment-derived guardrails",
+      "work_item_id": 628
+    },
+    "alignment-qc-screening": {
+      "stories": {
+        "cohort-report": 432,
+        "guardrail-enhance": 431,
+        "screening-core": 430,
+        "trim-action": 433,
+        "validate-docs": 435,
+        "workflow-remediation": 434
+      },
+      "title": "Alignment QC screening and remediation",
+      "work_item_id": 429
+    },
+    "cfg-study-sample-mapping": {
+      "stories": {
+        "cli-portal-api": 573,
+        "ddl-study-groups": 571,
+        "docs-user-manual": 574,
+        "procs-materialize": 572
+      },
+      "title": "cfg study membership from portal.Samples",
+      "work_item_id": 570
+    },
+    "chromosome_sample_derived_measures_a9b33eac": {
+      "stories": {
+        "ab-eval": 652,
+        "ecdf-pickle-extend": 651,
+        "seam-a-chromosome-family": 645,
+        "seam-a-config": 646,
+        "seam-a-leakage": 647,
+        "seam-b-action-wiring": 649,
+        "seam-b-incorporate": 650,
+        "seam-b-package": 648
+      },
+      "title": "Chromosome sample derived measures",
+      "work_item_id": 644
+    },
+    "ci-regression-testing": {
+      "stories": {
+        "author-missing-tests": 595,
+        "azure-pipeline": 596,
+        "ci-readme": 597,
+        "ci-script": 593,
+        "pytest-config": 592,
+        "real-data-docs": 603,
+        "real-data-registry": 601,
+        "real-data-tests": 602,
+        "regulatory-doc": 598,
+        "regulatory-wiring": 599,
+        "test-gap-analysis": 594,
+        "verify": 600
+      },
+      "title": "CI regression testing and coverage",
+      "work_item_id": 591
+    },
+    "composable-pipeline-flexibility": {
+      "stories": {
+        "phase2-structural": 443,
+        "profiles-config": 437,
+        "programs-composable": 440,
+        "programs-gene-enricher": 439,
+        "scope-if-fix": 438,
+        "tests-docs": 442,
+        "validation-alignment": 441
+      },
+      "title": "Composable pipeline profiles and MC paths",
+      "work_item_id": 436
+    },
+    "db-config-registry": {
+      "stories": {
+        "phase1-cfg-ddl": 561,
+        "phase1-methyl-cfg-cli": 562,
+        "phase1-roundtrip-tests": 563,
+        "phase2-publish-program": 564,
+        "phase2-sync-actions": 565,
+        "phase3-assets-storage": 567,
+        "phase3-storage-credentials": 566,
+        "phase4-bidirectional-scaffold": 568,
+        "phase5-cutover-docs": 569
+      },
+      "title": "Database configuration registry + shared-storage materialization",
+      "work_item_id": 560
+    },
+    "devops-ci-cd-release": {
+      "stories": {
+        "assemble-pipeline": 426,
+        "assemble-script": 425,
+        "deploy-pipeline": 427,
+        "docs-ci-cd": 428,
+        "me-release-ci": 423,
+        "mp-release-ci": 424
+      },
+      "title": "DevOps CI/CD release pipeline",
+      "work_item_id": 422
+    },
+    "di_action-agnostic_assessment_0d376284": {
+      "stories": {
+        "phase1-registry": 665,
+        "phase2-compiler": 666,
+        "phase3-optional-di": 667
+      },
+      "title": "DI action-agnostic assessment",
+      "work_item_id": 664
+    },
+    "dmp_gene_modeling_modes_c0d0bad6": {
+      "stories": {
+        "architecture-layers-doc": 636,
+        "dmp-export-simplify": 641,
+        "dmp-source-stable": 640,
+        "generic-profile-presets": 638,
+        "mapper-gene-stability": 639,
+        "modeling-mode-enums": 637,
+        "tests-modes": 643,
+        "two-phase-orchestration": 642
+      },
+      "title": "DMP/gene modeling modes (historical)",
+      "work_item_id": 635
+    },
+    "docs-refresh-and-guardrails": {
+      "stories": {
+        "audit-report": 502,
+        "ci-freshness": 514,
+        "ci-quarto": 515,
+        "dmp-exports": 508,
+        "fix-analyte": 505,
+        "fix-config-theory": 504,
+        "fix-precedence": 503,
+        "modeling-modes": 506,
+        "package-sweep": 511,
+        "profile-names": 507,
+        "quarto-record": 512,
+        "regen-verify": 516,
+        "tikz-svg": 513,
+        "validation-usage": 510,
+        "workflow-engine-docs": 509
+      },
+      "title": "Documentation refresh and CI guardrails",
+      "work_item_id": 501
+    },
+    "documentation-and-deployment-reliability": {
+      "stories": {
+        "canonical-map": 518,
+        "docs-guardrails": 524,
+        "domain-program-guide": 520,
+        "engine-reference": 521,
+        "operational-contracts": 522,
+        "setup-reliability": 519,
+        "stale-cleanup": 523
+      },
+      "title": "Documentation and deployment reliability",
+      "work_item_id": 517
+    },
+    "finish-typed-follow-ups": {
+      "stories": {
+        "centroid-manifest": 455,
+        "deps-methyl-domain": 453,
+        "detector-manifest": 454,
+        "enricher-manifest-collector": 456,
+        "handlers-sample-prep": 457,
+        "handlers-validation": 458,
+        "inprocess-strict": 459,
+        "tests-manifest-collectors": 460
+      },
+      "title": "CLI manifests + typed in-process handlers",
+      "work_item_id": 452
+    },
+    "gene-feature-effect-size": {
+      "stories": {
+        "biology-weight-matrix": 468,
+        "canonical-gene-feature-formulas": 470,
+        "doc-biological-model": 472,
+        "fix-downstream-consumers": 471,
+        "remove-legacy-mapper": 469
+      },
+      "title": "Biology-weighted gene/feature importance",
+      "work_item_id": 467
+    },
+    "hyperparameter-result-versioning": {
+      "stories": {
+        "content-key": 615,
+        "content-store": 614,
+        "docs": 620,
+        "execute-orchestrate": 617,
+        "hpset-id": 618,
+        "record-schema": 613,
+        "skip-reuse": 616,
+        "tests": 619
+      },
+      "title": "Hyperparameter result versioning (CAAS)",
+      "work_item_id": 612
+    },
+    "ising_mrf_v2_gpu_5f06ccb7": {
+      "stories": {
+        "config-knobs": 654,
+        "core-differential": 657,
+        "core-dynamics-scaffold": 658,
+        "core-ising": 655,
+        "core-measures": 656,
+        "docs": 663,
+        "profile-schema-regen": 661,
+        "tests": 662,
+        "wire-runner-report": 660,
+        "wire-sample-measures": 659
+      },
+      "title": "Ising MRF v2 GPU",
+      "work_item_id": 653
+    },
+    "methylit-standalone-doc": {
+      "stories": {
+        "draft-methylit-md": 669,
+        "grep-bleed": 671,
+        "update-research-readme": 670
+      },
+      "title": "MethylIT Standalone Doc",
+      "work_item_id": 668
+    },
+    "optional-observability-follow-ups": {
+      "stories": {
+        "ci-worker-tests": 464,
+        "doc-result-code-dpl": 462,
+        "golden-fixtures-test": 463,
+        "handler-input-model": 466,
+        "mc-action-run-log": 465
+      },
+      "title": "Observability follow-ups (golden fixtures, CI, MC log)",
+      "work_item_id": 461
+    },
+    "parallel-mc-centroid-seed": {
+      "stories": {
+        "centroid-worker": 494,
+        "db-catalog-seed": 498,
+        "db-workflow-deploy": 499,
+        "docs-plan-promote": 500,
+        "domain-programs": 495,
+        "handler-output": 493,
+        "planner-models": 492,
+        "schema-export": 496,
+        "tests": 497,
+        "typed-models": 491
+      },
+      "title": "Parallel MC centroid seed",
+      "work_item_id": 490
+    },
+    "production-gpu-worker-layout": {
+      "stories": {
+        "define-layout": 415,
+        "docker-shared": 420,
+        "extractor-ci": 416,
+        "gpu-node-runbook": 419,
+        "install-release": 418,
+        "pipeline-ci": 417,
+        "worker-provision": 421
+      },
+      "title": "Production GPU worker layout",
+      "work_item_id": 414
+    },
+    "read-level-info-measures": {
+      "stories": {
+        "action-registration": 585,
+        "config-program-wiring": 587,
+        "contract-loader": 581,
+        "covariate-list": 586,
+        "extractor-flags": 582,
+        "outputs": 584,
+        "package-core": 583,
+        "plan-promotion": 590,
+        "regen-seed": 588,
+        "tests": 589
+      },
+      "title": "Read-level information-theoretic measures",
+      "work_item_id": 580
+    },
+    "regression-protection-test-coverage": {
+      "stories": {
+        "p1-resolver-merge": 605,
+        "p1-workflow-merge": 606,
+        "p2-task-schema-drift-pytest": 607,
+        "p3-cli-resolved-config": 608,
+        "p4-action-result": 609,
+        "p5-resolver-model-handshake": 610,
+        "p6-ratchet-scope": 611
+      },
+      "title": "Regression-protection test coverage",
+      "work_item_id": 604
+    },
+    "samd-deploy-buffy-research-migrate": {
+      "stories": {
+        "depersonalize-all-programs": 545,
+        "fix-mode-path-resolution": 548,
+        "migrate-buffy-research": 549,
+        "promote-plan-docs": 550,
+        "publish-db-graphs": 546,
+        "sync-runtime-bundle-samd": 547
+      },
+      "title": "SaMD deploy + generic programs + Buffy research migrate",
+      "work_item_id": 544
+    },
+    "samd-follow-on-assign-evidence-modes": {
+      "stories": {
+        "phase-a-sampleprep-assign": 540,
+        "phase-b-evidence-packages": 541,
+        "phase-c-fold-mc-modes": 542,
+        "promote-follow-on-plan": 543
+      },
+      "title": "SaMD follow-on (assign \u2192 evidence \u2192 fold mc_*)",
+      "work_item_id": 539
+    },
+    "samd-study-profile-ladder": {
+      "stories": {
+        "examples-evidence": 537,
+        "presets-cli-docs": 536,
+        "promote-plan": 538,
+        "samd-profiles": 534,
+        "sop-doc": 533,
+        "study-scaffold": 535
+      },
+      "title": "SaMD study profile ladder",
+      "work_item_id": 532
+    },
+    "simplify-study-config": {
+      "stories": {
+        "contract-docs": 474,
+        "editor-manual": 480,
+        "materialize-input": 477,
+        "migrate-manifests": 479,
+        "profiles-progression": 476,
+        "purge-step-config": 478,
+        "site-resolver": 475
+      },
+      "title": "Simplify study config (four-layer model)",
+      "work_item_id": 473
+    },
+    "streamline-action-parameters": {
+      "stories": {
+        "canonical-config-keys": 483,
+        "contract-audit-ci": 482,
+        "docs-promote-plan": 489,
+        "retire-mc-sidecars": 484,
+        "slim-implementations": 488,
+        "slim-pipeline-inputs": 486,
+        "slim-sample-prep-inputs": 485,
+        "slim-validation-inputs": 487
+      },
+      "title": "Streamline workflow action parameters",
+      "work_item_id": 481
+    },
+    "typed-action-observability": {
+      "stories": {
+        "cli-manifest-dmp-detector-mapper": 447,
+        "docs-observability": 451,
+        "infra-action-result": 445,
+        "runner-result-code": 446,
+        "sample-prep-result-codes": 450,
+        "strict-pipeline-schemas": 448,
+        "validation-typed-outputs": 449
+      },
+      "title": "Typed worker action observability",
+      "work_item_id": 444
+    },
+    "typed-assign-domain-program": {
+      "stories": {
+        "compiler-control-assign": 528,
+        "compute-actions": 529,
+        "docs-align": 531,
+        "fixtures-tests": 530,
+        "ir-schema": 527,
+        "lang-doc-v2": 526
+      },
+      "title": "Typed assign DomainProgram language",
+      "work_item_id": 525
+    },
+    "worker-transport-security": {
+      "stories": {
+        "doc-multicloud": 688,
+        "doc-security": 674,
+        "doc-transport": 673,
+        "iac-ci-validate": 686,
+        "iac-control-plane": 682,
+        "iac-coreweave-design": 687,
+        "iac-scaffold": 681,
+        "iac-worker-common": 683,
+        "iac-worker-lambda": 685,
+        "iac-worker-nebius": 684,
+        "impl-arc-header": 678,
+        "impl-capability-detect": 675,
+        "impl-db-capabilities": 676,
+        "impl-exec-guard": 677,
+        "impl-provisioning": 680,
+        "impl-token-hardening": 679,
+        "verify": 689
+      },
+      "title": "Worker Transport Security",
+      "work_item_id": 672
+    },
+    "workflow-engine-sql-design": {
+      "stories": {
+        "add-constraints-indexes": 624,
+        "author-examples-and-validation": 627,
+        "define-definition-schema": 622,
+        "define-runtime-schema": 623,
+        "design-json-parameterization": 626,
+        "design-worker-stored-procs": 625
+      },
+      "title": "Workflow engine SQL design",
+      "work_item_id": 621
+    }
+  }
+}

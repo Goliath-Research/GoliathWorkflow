@@ -4,31 +4,44 @@ overview: "Complete the two deferred tracks from typed action observability: (A)
 
 > **Status: IMPLEMENTED.** CLI manifest writers and typed in-process handlers; see [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md).
 
+azure_devops:
+  type: Feature
+  title: "CLI manifests + typed in-process handlers"
+  work_item_id: 452
+  epic_id: 413
 todos:
   - id: deps-methyl-domain
     content: Add methyl-domain dependency to methyldetector, methylcentroid, methylenricher pyprojects
     status: completed
+    work_item_id: 453
   - id: detector-manifest
     content: Write pipeline.detector manifest in MethylDetector._save_results() matching DetectorTaskOutput + run_key
     status: completed
+    work_item_id: 454
   - id: centroid-manifest
     content: Write pipeline.centroid manifest in run_single_processing() matching CentroidTaskOutput + run_key
     status: completed
+    work_item_id: 455
   - id: enricher-manifest-collector
     content: Write enricher manifest in ensure_complete; add EnricherLegacyCollector + ManifestFirstCollector wiring
     status: completed
+    work_item_id: 456
   - id: handlers-sample-prep
     content: Convert sample-prep handlers to return task_models sample_prep_models outputs
     status: completed
+    work_item_id: 457
   - id: handlers-validation
     content: Convert validation + stub handlers to return validation_models outputs
     status: completed
+    work_item_id: 458
   - id: inprocess-strict
     content: Remove dict return path from InProcessAction after all handlers migrated
     status: completed
+    work_item_id: 459
   - id: tests-manifest-collectors
     content: Add collector manifest-first tests and handler output type assertions; run pytest + schema check
     status: completed
+    work_item_id: 460
 ---
 
 # Finish CLI Manifest Writers and Typed Handlers

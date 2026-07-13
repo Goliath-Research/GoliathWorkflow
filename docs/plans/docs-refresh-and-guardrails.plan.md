@@ -4,52 +4,72 @@ overview: Produce a documentation audit, remediate stale docs (config-not-code, 
 
 > **Status: COMPLETE.** Audit published; active docs aligned to four-layer `actionConfig`; CI gates `check_doc_freshness.sh` and guarded Quarto book smoke.
 
+azure_devops:
+  type: Feature
+  title: "Documentation refresh and CI guardrails"
+  work_item_id: 501
+  epic_id: 413
 todos:
   - id: audit-report
     content: Write docs/architecture/documentation-audit-2026-07.md (findings by severity + Quarto keep-analysis + fix checklist); link from DOCUMENTATION_AUDIT.md and architecture/index.md
     status: completed
+    work_item_id: 502
   - id: fix-precedence
     content: Align precedence wording (drop 'package defaults', no Python fallback) in 02-project-config-and-layout.qmd, domain-program-language.md, config-parameter-matrix.md
     status: completed
+    work_item_id: 503
   - id: fix-config-theory
     content: Rewrite theory ch.11-project-configuration.qmd and reframe configuration-reference.qmd around four-layer/actionConfig; fix output tree to dmps-*-selected.csv
     status: completed
+    work_item_id: 504
   - id: fix-analyte
     content: Rewrite ANALYTE_PROFILES.md around regulatory.primary_analyte + profile/site actionConfig
     status: completed
+    work_item_id: 505
   - id: modeling-modes
     content: Document modeling modes, split BA targets, recurrence source, and generic profiles in usage ch.05 + theory ch.12
     status: completed
+    work_item_id: 506
   - id: profile-names
     content: Replace deprecated profile names with canonical (mc_dmp_*, mc_gene_*, mc_gene_fc) in usage ch.05, check READMEs, and domain-program-language.md examples/tables
     status: completed
+    work_item_id: 507
   - id: dmp-exports
     content: Make dmps-*-selected.csv the primary export narrative in detector theory/usage, configuration-reference, methyldmpselect README; mark classifier-extended transitional
     status: completed
+    work_item_id: 508
   - id: workflow-engine-docs
     content: Update pipeline_architecture.md, portal_study_lifecycle.md, and contract capability docs to drop step_config as authoritative
     status: completed
+    work_item_id: 509
   - id: validation-usage
     content: Rewrite methylvalidation USAGE.md config section to profile/resolvedConfig/mc_config.json flow; remove max_dmps:500 and package-defaults claims
     status: completed
+    work_item_id: 510
   - id: package-sweep
     content: Sweep remaining step_config/defaults references across methylenricher/methylpredictor/methyldetector/methylmapper/methyldiseaseprogression docs and theory ch.04/05/15
     status: completed
+    work_item_id: 511
   - id: quarto-record
     content: "Update documentation-toolchain.md: keep Option A, add Validated-2026-07 note, record Usage stays Quarto"
     status: completed
+    work_item_id: 512
   - id: tikz-svg
     content: Migrate remaining usage-chapter inline TikZ workflow figures to Mermaid src + pre-rendered SVG
     status: completed
+    work_item_id: 513
   - id: ci-freshness
     content: Add scripts/check_doc_freshness.sh + test for stale tokens; wire into ci/azure-pipelines-pr.yml
     status: completed
+    work_item_id: 514
   - id: ci-quarto
     content: Add guarded 'quarto render docs/theory docs/usage --to html' step to CI
     status: completed
+    work_item_id: 515
   - id: regen-verify
     content: Regenerate _book/ and SVGs; run all doc checks; promote plan to docs/plans/
     status: completed
+    work_item_id: 516
 ---
 
 # Documentation Full Refresh + Guardrails

@@ -4,28 +4,40 @@ overview: Replace loose dict-based worker I/O with strict Pydantic models end-to
 
 > **Status: IMPLEMENTED.** Parent plan for typed worker I/O; follow-ups in [`optional-observability-follow-ups.plan.md`](optional-observability-follow-ups.plan.md) and [`finish-typed-follow-ups.plan.md`](finish-typed-follow-ups.plan.md).
 
+azure_devops:
+  type: Feature
+  title: "Typed worker action observability"
+  work_item_id: 444
+  epic_id: 413
 todos:
   - id: infra-action-result
     content: Add methyl_domain.action_result (ActionTelemetry, ArtifactRef, atomic write/read) and typed ActionBase.execute -> tuple[int, OutputModel]
     status: completed
+    work_item_id: 445
   - id: runner-result-code
     content: Refactor WorkerRunner to validate InputModel, submit OutputModel.result_code, forbid dict boundaries
     status: completed
+    work_item_id: 446
   - id: cli-manifest-dmp-detector-mapper
     content: Write typed manifests from run_dmp_selection, detector core, mapper.run; add worker collectors with legacy fallback
     status: completed
+    work_item_id: 447
   - id: strict-pipeline-schemas
     content: Replace PipelineCliTaskInput/Output with per-action forbid-extra models; re-export schemas and CI drift check
     status: completed
+    work_item_id: 448
   - id: validation-typed-outputs
     content: Replace ValidationTaskOutput summary dict with per-action OutputModels sourced from stability/planner return values
     status: completed
+    work_item_id: 449
   - id: sample-prep-result-codes
     content: Strict QC nested models; methyl_qc result_code 0/1/2; align output_json with sample_prep_log
     status: completed
+    work_item_id: 450
   - id: docs-observability
     content: Document manifest paths, result_code tables, and /work traceability in WORKER_PROTOCOL and user manual
     status: completed
+    work_item_id: 451
 ---
 
 # Typed action results and CLI observability

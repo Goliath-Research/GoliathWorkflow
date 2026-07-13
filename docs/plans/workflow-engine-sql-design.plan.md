@@ -1,25 +1,36 @@
 ---
 name: workflow-engine-sql-design
 overview: Design a SQL Server schema for workflow definitions and runtime execution that supports tree-structured control-flow nodes (sequence, parallel, if/else, switch, repeat, while), plus worker-facing stored procedures to pull executable tasks and submit JSON output with integer control-flow results.
+azure_devops:
+  type: Feature
+  title: "Workflow engine SQL design"
+  work_item_id: 621
+  epic_id: 413
 todos:
   - id: define-definition-schema
     content: Design workflow definition tables (workflow/version/node/edge/action) with node-type discriminator and branch metadata.
     status: completed
+    work_item_id: 622
   - id: define-runtime-schema
     content: Design runtime tables for instances, node executions, attempts, iteration state, and result storage.
     status: completed
+    work_item_id: 623
   - id: add-constraints-indexes
     content: Add SQL Server constraints and indexes enforcing valid trees/branches and fast scheduler queries.
     status: completed
+    work_item_id: 624
   - id: design-worker-stored-procs
     content: Design worker-facing stored procedures for task claim/lease and task completion with JSON input/output and integer result code.
     status: pending
+    work_item_id: 625
   - id: design-json-parameterization
     content: Design JSON template/binding model to derive task input values from runtime context (loop index, branch index, prior task outputs).
     status: pending
+    work_item_id: 626
   - id: author-examples-and-validation
     content: Provide sample workflow data and verification queries to demonstrate IF/SWITCH/PARALLEL/REPEAT/WHILE behavior.
     status: completed
+    work_item_id: 627
 isProject: false
 ---
 

@@ -5,28 +5,35 @@ overview: Extend MethylAlignmentQC with read-end-aware cycle screening and struc
 > **Status: IMPLEMENTED.** This plan is historical reference. The live workflow is [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json) (deploy via `scripts/deploy_workflow_definitions.sh`). Operator guide: usage ch.03 [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.qmd) and [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md).
 
 azure_devops:
-  type: Epic
-  title: Alignment QC screening and remediation
-  work_item_id: null  # set to AB# after creating Epic in Azure DevOps Boards
+  type: Feature
+  title: "Alignment QC screening and remediation"
+  work_item_id: 429
+  epic_id: 413
 todos:
   - id: screening-core
     content: Add cycle_quality_screening, QcScreeningReport, qc_history audit models, writer merge-on-retry, and unit tests
     status: completed
+    work_item_id: 430
   - id: guardrail-enhance
     content: Add optional duplication_rate/min_pf_reads guardrails and disposition-specific recommendation text
     status: completed
+    work_item_id: 431
   - id: cohort-report
     content: Create alignment_qc_cohort_screening.py + extend compare_alignment_qc_groups.py for manifest output
     status: completed
+    work_item_id: 432
   - id: trim-action
     content: Implement sample.trim_fastq, parabricks forceRealign, sample_prep_log.jsonl append helper, and handler wiring
     status: completed
+    work_item_id: 433
   - id: workflow-remediation
     content: Reorder SamplePrepPipeline — delete_fastqs only after final QC; add REALIGN_READ2_TRIM branch; SamplePrepRemediationPipeline; compiler bindings
     status: completed
+    work_item_id: 434
   - id: validate-docs
     content: Pilot validation docs and prostate cohort screening smoke tests
     status: completed
+    work_item_id: 435
 isProject: false
 ---
 

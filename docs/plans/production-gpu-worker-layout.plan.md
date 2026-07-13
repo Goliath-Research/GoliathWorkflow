@@ -3,31 +3,39 @@ name: Production GPU Worker Layout
 overview: "A three-tier production deployment model: host GPU stack (driver + Docker + Parabricks), arch-specific MethylExtractor binaries without sources, and a pinned Python venv with packaged MethylPipeline/worker code—phased from shared-storage releases to Azure Artifacts."
 status: IMPLEMENTED
 azure_devops:
-  type: Epic
-  title: Production GPU worker layout
-  work_item_id: null  # set to AB# after creating Epic in Azure DevOps Boards
+  type: Feature
+  title: "Production GPU worker layout"
+  work_item_id: 414
+  epic_id: 413
 todos:
   - id: define-layout
     content: Document /work/epimethyl/releases/<ver>/ layout + manifest.json schema in docs/deployment/production_release.md
     status: completed
+    work_item_id: 415
   - id: extractor-ci
     content: "MethylExtractor Azure pipeline: per-arch build, tarball, publish to shared storage then Artifacts"
     status: completed
+    work_item_id: 416
   - id: pipeline-ci
     content: "MethylPipeline release pipeline: wheel build, requirements-worker.lock, runtime-bundle tarball"
     status: completed
+    work_item_id: 417
   - id: install-release
     content: Add scripts/install_release.sh (non-editable wheel install) and bootstrap --release-dir mode
     status: completed
+    work_item_id: 418
   - id: gpu-node-runbook
     content: "Runbook: driver + shared Docker data-root + NVIDIA toolkit + Parabricks pin matrix per arch"
     status: completed
+    work_item_id: 419
   - id: docker-shared
     content: "Extend setup_gpu_node.sh: --docker-data-root /work/epimethyl/docker, single-node pull during release promote"
     status: completed
+    work_item_id: 420
   - id: worker-provision
     content: "Node playbook: point Docker at shared data-root, venv + extractor already on /work, register_worker, systemd, verify_e2e"
     status: completed
+    work_item_id: 421
 isProject: false
 ---
 

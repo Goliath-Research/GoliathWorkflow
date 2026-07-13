@@ -3,19 +3,28 @@ name: SaMD Follow-on Epic
 overview: "Phased follow-on (D + Fold): hybrid typed-assign adoption for SamplePrep only (MC stays FOREACH+planner), fill real prostate evidence packages and 510(k)/De Novo scaffolding from existing runs, then fold the five mc_* research axes into samd_research as modeling-mode overlays—without any new SQL NodeTypes."
 > **Status: COMPLETED** — 2026-07-10.
 
+azure_devops:
+  type: Feature
+  title: "SaMD follow-on (assign → evidence → fold mc_*)"
+  work_item_id: 539
+  epic_id: 413
 todos:
   - id: phase-a-sampleprep-assign
     content: Hybrid SamplePrep typed variables/out/optional SWITCH; leave MC FOREACH+planner; compiler tests + v2 doc
     status: completed
+    work_item_id: 540
   - id: phase-b-evidence-packages
     content: Fill validation-evidence-index for Plasma, H_PCa_good, Buffy; add 510(k)/De Novo scaffold doc; link regulatory README
     status: completed
+    work_item_id: 541
   - id: phase-c-fold-mc-modes
     content: Add samd_research mode overlays; alias mc_* → samd_research+mode; preserve gene-only/PPI behavior; update tests/docs
     status: completed
+    work_item_id: 542
   - id: promote-follow-on-plan
     content: Promote to docs/plans/samd-follow-on-assign-evidence-modes.plan.md and README mapping
     status: completed
+    work_item_id: 543
 ---
 
 # SaMD follow-on epic (assign → evidence → fold mc_*)

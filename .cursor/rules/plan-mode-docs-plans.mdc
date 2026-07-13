@@ -15,13 +15,13 @@ When using **Plan Mode** (or when the user attaches a `.plan.md` from Cursor):
    - Keep `name`, `overview`, `todos` (with `id`, `content`, `status`).
    - Add a `> **Status: …**` line under `overview` when implementation starts or finishes.
    - Remove `isProject: false` (repo-local plans do not need it).
-   - Optionally add `azure_devops:` block for Epics (see `alignment-qc-screening.plan.md`).
+   - Add `azure_devops:` block as a **Feature** under Epic **AB#413** (MethylPipeline platform); see [`docs/plans/alignment-qc-screening.plan.md`](docs/plans/alignment-qc-screening.plan.md). Set `work_item_id` / per-todo `work_item_id` after creating Boards items (or re-run `scripts/ado_traceability/`).
 
-3. **Update `docs/plans/README.md`** — add a row to the work-item mapping table when the plan is epic-sized.
+3. **Update `docs/plans/README.md`** — add a row to the work-item mapping table when the plan is Feature-sized under AB#413.
 
 4. **On merge / task completion** — set each finished todo to `status: completed` in the plan file in the same commit as the code when practical.
 
-5. **Commit messages** — reference the plan file and todo id (see `docs/plans/README.md`).
+5. **Commit messages** — reference the plan file and todo / `AB#` id (see `docs/plans/README.md`).
 
 Example promotion:
 
@@ -29,4 +29,4 @@ Example promotion:
 docs/plans/gene-feature-effect-size.plan.md
 ```
 
-Reference in PR body: `Implements gene-feature-effect-size plan (biology-weight-matrix, …).`
+Reference in PR body: `Implements gene-feature-effect-size plan (biology-weight-matrix, …) (AB#467)`.

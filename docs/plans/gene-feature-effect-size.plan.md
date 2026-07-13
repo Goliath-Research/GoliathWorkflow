@@ -4,22 +4,32 @@ overview: Implement biology-weighted (feature × hyper/hypo) aggregation of DMP 
 
 > **Status: IMPLEMENTED.** Canonical columns are `gene_importance` and `feature_importance_*`; biology weights live in `MapperStepConfig.biology_weights`. See [`packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md`](../../packages/methylmapper/docs/BIOLOGICAL_IMPORTANCE_AUDIT.md).
 
+azure_devops:
+  type: Feature
+  title: "Biology-weighted gene/feature importance"
+  work_item_id: 467
+  epic_id: 413
 todos:
   - id: biology-weight-matrix
     content: Add configurable (feature × direction) biology weight matrix in methylmapper config; apply in _build_compound_effect_metrics as w_i = frequency × bio_weight(feature, sign)
     status: completed
+    work_item_id: 468
   - id: remove-legacy-mapper
     content: Remove calculate_biological_importance, _build_feature_effect_scores, and legacy export columns (mean_effect_size, gene_score, gene_feature_importance, effect_size_{feature}, direction_balance_{feature}, gene_feature_effect_compound)
     status: completed
+    work_item_id: 469
   - id: canonical-gene-feature-formulas
     content: Recompute gene_importance and feature_importance_* from biology-weighted DMP contributions; keep interpretive component columns (direction, coherence, support_n, signed_wsum)
     status: completed
+    work_item_id: 470
   - id: fix-downstream-consumers
     content: Update methyl-gene-select, methyl-gene-feature-select, methyl-enricher, methylvalidation tests/config to use gene_importance and feature_importance_* only; remove mean_effect_size fallbacks
     status: completed
+    work_item_id: 471
   - id: doc-biological-model
     content: Rewrite BIOLOGICAL_IMPORTANCE_AUDIT, IMPLEMENTATION, theory/usage with single propagation story DMP effect_size → biology-weighted gene/feature importance and hyper/hypo matrix glossary
     status: completed
+    work_item_id: 472
 ---
 
 # Gene and feature biological importance — implementation plan

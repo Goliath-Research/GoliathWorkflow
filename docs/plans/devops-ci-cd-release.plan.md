@@ -3,28 +3,35 @@ name: DevOps CI/CD Release
 overview: Move artifact builds fully into Azure DevOps with independent repo versioning (MethylExtractor and MethylPipeline each publish on their own tags), then add a gated release-assembly + promote pipeline that composes a worker release bundle and deploys to `/work/epimethyl` after manual approval.
 status: IMPLEMENTED
 azure_devops:
-  type: Epic
-  title: DevOps CI/CD release pipeline
-  work_item_id: null  # set to AB# after creating Epic in Azure DevOps Boards
+  type: Feature
+  title: "DevOps CI/CD release pipeline"
+  work_item_id: 422
+  epic_id: 413
 todos:
   - id: me-release-ci
     content: Register MethylExtractor release + PR pipelines; enable Universal Package publish per arch; multi-repo checkout for packaging scripts
     status: completed
+    work_item_id: 423
   - id: mp-release-ci
     content: Register MethylPipeline release + PR pipelines; enable PyPI feed publish via twine; keep pipeline artifact for runtime-bundle
     status: completed
+    work_item_id: 424
   - id: assemble-script
     content: Add scripts/assemble_release.sh + manifest components schema; wire download from both feeds by version pin
     status: completed
+    work_item_id: 425
   - id: assemble-pipeline
     content: "Add ci/azure-pipelines-release-assemble.yml (manual params: releaseVersion, methylPipelineVersion, methylExtractorVersion)"
     status: completed
+    work_item_id: 426
   - id: deploy-pipeline
     content: Add ci/azure-pipelines-release-deploy.yml with production-work environment approval + self-hosted agent promote_release.sh
     status: completed
+    work_item_id: 427
   - id: docs-ci-cd
     content: Update production_release.md with full CI/CD workflow, rollback, and deprecation of client-side build as primary path
     status: completed
+    work_item_id: 428
 isProject: false
 ---
 

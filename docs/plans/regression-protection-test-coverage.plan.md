@@ -1,28 +1,40 @@
 ---
 name: Regression-Protection Test Coverage
 overview: Add targeted tier-1 tests to the shared "spine" that a wrong PR could silently break across many actions — the config resolution/merge layer, contract-drift guards, and untested shared MethylUtils/MethylDomain helpers — rather than chasing line-rate on GPU numerical cores that other tiers cover.
+azure_devops:
+  type: Feature
+  title: "Regression-protection test coverage"
+  work_item_id: 604
+  epic_id: 413
 todos:
   - id: p1-resolver-merge
     content: "Add precedence tests for action_config_resolver.py: deep_merge, resolve_action_config layer order (site<profile<program<instance<analyte), resolve_from_task_input (both branches), load_resolved_config/resolve_for_project routing, site_slice_for_action path derivation"
     status: completed
+    work_item_id: 605
   - id: p1-workflow-merge
     content: Add merge tests for workflow_engine pipeline_profiles.apply_pipeline_profile/_deep_merge and extend build_resolved_config_scope_vars precedence coverage in workflow_context.py
     status: completed
+    work_item_id: 606
   - id: p2-task-schema-drift-pytest
     content: Add pytest calling check_task_schema_drift (workers task_schema_export) so schemas/tasks drift fails on the PR tier; add pytest wrapper around scripts/check_task_input_config_boundary.py; confirm config-schema drift test runs in run_tests_ci.sh
     status: completed
+    work_item_id: 607
   - id: p3-cli-resolved-config
     content: Test cli_resolved_config.py (resolve_cli_step_config routing + error paths, read_json_object) and add tests for logging_utils.py, memory_manager.py, beta_analytics.py
     status: completed
+    work_item_id: 608
   - id: p4-action-result
     content: "Add dedicated unit tests for methyl_domain/action_result.py: manifest construction and atomic-write behavior"
     status: completed
+    work_item_id: 609
   - id: p5-resolver-model-handshake
     content: Add a parametrized meta-test asserting each catalog action's resolved config slice validates against its config Pydantic model
     status: completed
+    work_item_id: 610
   - id: p6-ratchet-scope
     content: Optionally enable branch coverage and a narrow coverage ratchet scoped to the shared-spine modules (resolver, cli_resolved_config, action_result, pipeline_profiles)
     status: completed
+    work_item_id: 611
 ---
 
 > **Status: implemented.** Tier-1 regression-protection tests were added across

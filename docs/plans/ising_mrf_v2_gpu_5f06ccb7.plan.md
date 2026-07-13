@@ -1,37 +1,52 @@
 ---
 name: Ising MRF v2 GPU
 overview: Add a phased v2 to methylinfotheory that fits a per-tile equilibrium Ising/max-entropy model to the read-level pattern sidecars and derives informME-class measures (MML, NME, ESI, MSI, differential dMML/dNME, model-based JSD, mutual-information gene ranking), batched across tiles on GPU via the existing methyl_utils array-backend abstraction, while scaffolding the dynamic measures (channel capacity, RDE, turnover) behind the same pipeline.info_measures action for a later cut.
+azure_devops:
+  type: Feature
+  title: "Ising MRF v2 GPU"
+  work_item_id: 653
+  epic_id: 413
 todos:
   - id: config-knobs
     content: Extend InfoTheoryStepConfig with ising_enabled, ising_max_iter, ising_tol, ising_l2, ising_coupling, ising_min_tile_reads, prefer_gpu, ising_batch_tiles, dynamics_enabled (all default=None); regenerate info_measures.schema.json.
     status: completed
+    work_item_id: 654
   - id: core-ising
     content: "Add core/ising.py: state-design matrix builder, sparse->dense (n_tiles,2^k) batcher, and batched max-entropy/MLE Ising fit using methyl_utils get_array_module/to_cpu (CuPy or NumPy)."
     status: completed
+    work_item_id: 655
   - id: core-measures
     content: "Add core/ising_measures.py: batched MML, NME, ESI, MSI from fitted P(x) with xp-vectorized sensitivities; return CPU arrays."
     status: completed
+    work_item_id: 656
   - id: core-differential
     content: "Add core/differential.py: cohort group fits, dMML/dNME/model-JSD per tile, and mutual-information gene ranking (reuse _accumulate_group_histograms + mapper CSV)."
     status: completed
+    work_item_id: 657
   - id: core-dynamics-scaffold
     content: Add core/dynamics.py scaffold (channel_capacity, RDE, turnover) gated by dynamics_enabled returning status=not_computed.
     status: completed
+    work_item_id: 658
   - id: wire-sample-measures
     content: Add readlevel::*_nme/mml/esi/msi global and per-chrom columns to core/sample_measures.py when ising_enabled (v1 columns unchanged).
     status: completed
+    work_item_id: 659
   - id: wire-runner-report
     content: Update core/runner.py to emit ising_regions.csv and enrich confirmation_report.json (dNME windows, MI ranking) when ising_enabled; keep skip gate; add gpu_used + cleanup_gpu_memory; extend core/confirmation.py.
     status: completed
+    work_item_id: 660
   - id: profile-schema-regen
     content: Add v2 actionConfig.info_measures block to mc_gene_fc.profile.json; regenerate config/task schemas + action catalog (no new action).
     status: completed
+    work_item_id: 661
   - id: tests
     content: "Add tests: ising fit, measures, differential, CPU/GPU parity (METHYL_DISABLE_GPU), runner ising on/off; run under .venv."
     status: completed
+    work_item_id: 662
   - id: docs
     content: Update informME integration note, read_level_pattern_contract (contract unchanged), and the promoted plan with the v2 equilibrium/deferred-dynamics split and GPU approach.
     status: completed
+    work_item_id: 663
 isProject: false
 ---
 

@@ -1,31 +1,44 @@
 ---
 name: Hyperparameter Result Versioning
 overview: Introduce content-addressed action storage (CAAS) keyed by a cumulative signature so results of every idempotent action are physically versioned by their hyperparameters, canonical paths become symlinks into the store, and identical intermediate results are shared across workflow instances to preserve idempotency.
+azure_devops:
+  type: Feature
+  title: "Hyperparameter result versioning (CAAS)"
+  work_item_id: 612
+  epic_id: 413
 todos:
   - id: record-schema
     content: Bump ActionExecutionRecord to schema 1.2 with content_key + hyperparam_set_id fields; add CAAS path helpers (caas_root, caas_entry_dir, instance_ledger_path) in packages/methyldomain/methyl_domain/action_result.py.
     status: completed
+    work_item_id: 613
   - id: content-store
     content: Create packages/methyldomain/methyl_domain/content_store.py implementing atomic, concurrency-safe commit_artifacts_to_store, link_entry_into_place, entry validation, and instance-ledger append.
     status: completed
+    work_item_id: 614
   - id: content-key
     content: Add compute_content_key in workers/methyl_worker/action_skip.py (sha256 of action_revision + input_signature); verify _normalize_path_strings resolves symlinks so keys stay cumulative.
     status: completed
+    work_item_id: 615
   - id: skip-reuse
     content: Make maybe_skip_action consult the CAAS entry for the content_key (cross-instance reuse), relink canonical paths, and replay; make record_action_execution commit product artifacts into CAAS and stamp content_key.
     status: completed
+    work_item_id: 616
   - id: execute-orchestrate
     content: Wire commit/relink + ledger append into execute_task in workers/methyl_worker/handlers.py around the existing skip/run/record calls; gate on METHYL_CAAS_ENABLED.
     status: completed
+    work_item_id: 617
   - id: hpset-id
     content: Compute + bake hyperparamSetId in finalize_instance_context (hash of resolvedConfig__* slices + optional name); add hyperparamSetId to RUNTIME_INPUT_KEYS; inject it into ACTION templates in compiler._action_template.
     status: completed
+    work_item_id: 618
   - id: tests
     content: Add unit tests (content-key stability, cross-instance reuse, config-change fork, symlink cumulative signatures, ledger) and an MC smoke end-to-end check; run under .venv.
     status: completed
+    work_item_id: 619
   - id: docs
     content: Promote plan to docs/plans/hyperparameter-result-versioning.plan.md, update docs/plans/README.md, and document CAAS layout + hyperparamSetId in domain-program-language.md and 10-artifacts-and-qa-checks.qmd.
     status: completed
+    work_item_id: 620
 ---
 
 # Hyperparameter Result Versioning — First Step

@@ -1,25 +1,36 @@
 ---
 name: Alignment Derived Guardrails
 overview: Add alignment-layer guardrails to methylalignmentqc — Phase 1 derived Picard metrics and Phase 2 samtools flagstat — with analyte profile defaults for cfdna and buffy_coat.
+azure_devops:
+  type: Feature
+  title: "Alignment-derived guardrails"
+  work_item_id: 628
+  epic_id: 413
 todos:
   - id: calibrate-thresholds
     content: Add calibrate_alignment_guardrails.py and extend compare_alignment_qc_groups.py
     status: completed
+    work_item_id: 629
   - id: alignment-derived-qc
     content: Implement alignment_derived_qc.py and AlignmentGuardrailsConfig
     status: completed
+    work_item_id: 630
   - id: bam-flagstat
     content: Implement bam_flagstat.py and properly-paired guardrails
     status: completed
+    work_item_id: 631
   - id: writer-wiring
     content: Wire into writer, handlers, project_resolver, CLI; Pydantic models and schemas
     status: completed
+    work_item_id: 632
   - id: analyte-profiles
     content: Enable alignment_guardrails defaults in analyte_profiles for cfdna and buffy_coat
     status: completed
+    work_item_id: 633
   - id: tests-docs
     content: Unit tests and documentation updates
     status: completed
+    work_item_id: 634
 ---
 
 > **Status: IMPLEMENTED.** Alignment-layer guardrails ship in `methylalignmentqc` with profile defaults. Operator guide: [sample-preparation-flow.md](../implementation/sample-preparation-flow.md).

@@ -4,28 +4,40 @@ overview: Replace monolithic project step_config with a four-layer stack (site, 
 
 > **Status: COMPLETE.** Four-layer config is the only path for new runs; `step_config` removed from study manifests and runtime.
 
+azure_devops:
+  type: Feature
+  title: "Simplify study config (four-layer model)"
+  work_item_id: 473
+  epic_id: 413
 todos:
   - id: contract-docs
     content: "Phase 1: Study manifest + site schemas; remove step_config from project_config.schema.json; docs and config_parameter_matrix rewrite"
     status: completed
+    work_item_id: 474
   - id: site-resolver
     content: "Phase 2: action_config_resolver.py + site manifest; replace get_step_config() read paths in package resolvers and workers"
     status: completed
+    work_item_id: 475
   - id: profiles-progression
     content: "Phase 3: Expand profiles with actionConfig blocks (rename from step_config_overrides); staged + Buffy parameter packs; runProgressionAnalysis flag"
     status: completed
+    work_item_id: 476
   - id: materialize-input
     content: "Phase 4: Materialize resolvedConfig on every workflow task; workers require resolvedConfig (no project step_config fallback)"
     status: completed
+    work_item_id: 477
   - id: purge-step-config
     content: "Phase 5: Delete step_config from ProjectConfig, progression auto_gleason, migrate_detection_config aliases, legacy CLI --project-only paths; update all tests/fixtures"
     status: completed
+    work_item_id: 478
   - id: migrate-manifests
     content: "Phase 6: migrate_project_config.py one-way converter (step_config → site + profile + slim manifest); replace repo and /work reference projects"
     status: completed
+    work_item_id: 479
   - id: editor-manual
     content: "Phase 7: methyl-config-editor + usage/theory for new-only workflow (program + profile + site + manifest)"
     status: completed
+    work_item_id: 480
 ---
 
 # Simplify Study Configuration (Four-Layer Model, Hard Cut)

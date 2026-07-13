@@ -3,25 +3,36 @@ name: SaMD Deploy Buffy Migrate
 overview: Ship SaMD profiles/modes on shared storage; depersonalize all DomainPrograms (MC + historical check demos) to algorithm names; publish algorithm and SaMD-named workflow_def graphs to the DB (process-agnostic); fix mode overlay resolution; migrate Buffy to samd_research + dual_fc. No new SQL NodeTypes.
 > **Status: COMPLETED** — 2026-07-10 (DB upsert pending host→Azure SQL network; compiled specs + deploy scripts ready).
 
+azure_devops:
+  type: Feature
+  title: "SaMD deploy + generic programs + Buffy research migrate"
+  work_item_id: 544
+  epic_id: 413
 todos:
   - id: depersonalize-all-programs
     content: Rename/move all study-prefixed DomainPrograms to algorithm-generic fixtures; update refs/tests/docs
     status: completed
+    work_item_id: 545
   - id: publish-db-graphs
     content: Deploy algorithm graphs + SaMD-named workflow_def entry points to Azure SQL; write workflow_versions.json; no new NodeTypes
     status: completed
+    work_item_id: 546
   - id: sync-runtime-bundle-samd
     content: Rsync samd profiles/modes + generic fixtures + pipeline_profiles.py into /work/epimethyl/current/runtime-bundle/domain; verify files present
     status: completed
+    work_item_id: 547
   - id: fix-mode-path-resolution
     content: Resolve mode overlays via METHYL_PROFILE_DIR/profile_search_dirs; add verify_setup asserts; doc note
     status: completed
+    work_item_id: 548
   - id: migrate-buffy-research
     content: Update Buffy manifest (regulatory + partition stubs); add context_samd_research_buffy.json (dual_fc); point runs at fixtures/mc_stability + SaMD_Research def
     status: completed
+    work_item_id: 549
   - id: promote-plan-docs
     content: Promote plan to docs/plans/samd-deploy-buffy-research-migrate.plan.md + README mapping
     status: completed
+    work_item_id: 550
 ---
 
 # SaMD shared-storage deploy + generic programs + DB publish + Buffy migration

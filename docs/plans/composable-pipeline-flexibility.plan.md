@@ -4,28 +4,40 @@ overview: Introduce composable DomainProgram profiles and config presets so sing
 
 > **Status: IMPLEMENTED.** Domain programs and profile fixtures under [`workflow_engine/domain/`](../../workflow_engine/domain/).
 
+azure_devops:
+  type: Feature
+  title: "Composable pipeline profiles and MC paths"
+  work_item_id: 436
+  epic_id: 413
 todos:
   - id: profiles-config
     content: Add pipeline profile JSON + migrate bundle project step_config (detection / dmp_selection / gene_selection / validation flags)
     status: completed
+    work_item_id: 437
   - id: scope-if-fix
     content: Seed camelCase scope flags from validation/gene_selection; fix mc_stability IF syntax to then/else lists
     status: completed
+    work_item_id: 438
   - id: programs-gene-enricher
     content: Add mc_gene_enricher_stability.program.json and buffy_interpretation.program.json (discovery → mapper → enricher → stability)
     status: completed
+    work_item_id: 439
   - id: programs-composable
     content: "Add fixture fragments: detection_discovery_only, dmp_select_optional, mapper_only, enricher_overrides"
     status: completed
+    work_item_id: 440
   - id: validation-alignment
     content: Align mc_manifest and methyl-validation CLI with profile booleans; document stability axis metadata
     status: completed
+    work_item_id: 441
   - id: tests-docs
     content: Compiler/integration tests + update reference/domain-program-language.md and usage pipeline profile section
     status: completed
+    work_item_id: 442
   - id: phase2-structural
     content: "Phase 2: complete gene_feature_select ECDF k-search; decouple biomarker_filter from gene FeatureCuts requirement"
     status: completed
+    work_item_id: 443
 ---
 
 # Composable Pipeline Flexibility Plan
