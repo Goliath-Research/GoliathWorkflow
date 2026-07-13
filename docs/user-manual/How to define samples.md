@@ -77,6 +77,21 @@ methyl-cfg materialize --work-root /work
 
 Portal procs: `portal.sp_set_study_group`, `sp_set_study_group_members`, `sp_list_samples_for_study_enrollment` (MSSQL picker over `portal.Samples` / `LabSamples`).
 
+### Sync on study start (mandatory)
+
+Starting a run **always** synchronizes the published study from cfg onto `/work` before the instance is created or the local engine runs:
+
+- `finalize_instance_context` → `ensure_study_work_synced`
+- `rest.db_client.create_workflow_instance` (admin / portal Python path)
+- `start_sample_prep` / `start_study_validation`
+- `methyl-workflow-run` (via local engine enrichment)
+
+That rewrite of membership CSVs + `project_*.json` is the guarantee against out-of-sync `/work`. Explicit `methyl-cfg materialize` remains for bootstrap/admin only.
+
+Do **not** edit a published study mid-run; clone → edit draft → publish, then start (start syncs the published version).
+
+SQL-only `portal.sp_create_and_start_instance` cannot write `/work` — portal must call the Python start path (or sync first).
+
 ### Three locations (same samples, different roles)
 
 ```mermaid

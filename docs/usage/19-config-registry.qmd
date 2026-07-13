@@ -40,4 +40,4 @@ Never put AccessKeys / SAS URLs in project JSON under `/work/projects`. Store th
 
 ## Study membership
 
-Enroll `portal.Samples` into study arms with `methyl-cfg set-study-group` / `set-study-group-members`, then `materialize` to write CSVs. See [How to define samples](../user-manual/How%20to%20define%20samples.md).
+Enroll `portal.Samples` into study arms with `methyl-cfg set-study-group` / `set-study-group-members`. **Starting a study always syncs** cfg → `/work` (`ensure_study_work_synced`); you do not rely on a separate materialize step for correctness. See [How to define samples](../user-manual/How%20to%20define%20samples.md).

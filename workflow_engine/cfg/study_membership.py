@@ -260,8 +260,6 @@ def materialize_study_membership(
 
     for rec in studies:
         groups = _groups_extra(rec)
-        if not groups:
-            continue
         study_id = (
             rec.extra.get("studyId")
             or rec.document.get("study_id")
@@ -270,34 +268,38 @@ def materialize_study_membership(
         )
         data_dir = work_root / "projects" / str(study_id) / "data"
         data_dir_str = str(data_dir)
+        data_dir.mkdir(parents=True, exist_ok=True)
 
-        for g in groups:
-            filename = g.get("listFilename") or "samples.csv"
-            keys = [
-                str(m["processingSampleKey"])
-                for m in (g.get("members") or [])
-                if m.get("processingSampleKey")
-            ]
-            csv_path = data_dir / filename
-            write_group_csv(csv_path, keys)
-            written.append(str(csv_path))
+        if groups:
+            for g in groups:
+                filename = g.get("listFilename") or "samples.csv"
+                keys = [
+                    str(m["processingSampleKey"])
+                    for m in (g.get("members") or [])
+                    if m.get("processingSampleKey")
+                ]
+                csv_path = data_dir / filename
+                write_group_csv(csv_path, keys)
+                written.append(str(csv_path))
 
-        synced = sync_document_sample_paths(rec.document, groups, data_dir=data_dir_str)
-        # Persist synced document back into store (same version)
-        store.upsert(
-            "study",
-            rec.name,
-            synced,
-            version=rec.version,
-            status=rec.status,
-            extra=rec.extra,
-        )
-        # Also write project JSON now so materialize_store sees updated paths
+            synced = sync_document_sample_paths(rec.document, groups, data_dir=data_dir_str)
+            store.upsert(
+                "study",
+                rec.name,
+                synced,
+                version=rec.version,
+                status=rec.status,
+                extra=rec.extra,
+            )
+            doc_to_write = synced
+        else:
+            doc_to_write = rec.document
+
         cfg_dir = work_root / "projects" / str(study_id) / "configs"
         cfg_dir.mkdir(parents=True, exist_ok=True)
         out = cfg_dir / f"project_{rec.name}.json"
         out.write_text(
-            __import__("json").dumps(synced, indent=2, sort_keys=True) + "\n",
+            __import__("json").dumps(doc_to_write, indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         written.append(str(out))

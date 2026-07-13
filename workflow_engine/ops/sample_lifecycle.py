@@ -49,6 +49,9 @@ def start_sample_prep(
     )
 
     context = plan_sample_prep_context(planner_payload)
+    from cfg.sync_on_start import ensure_study_work_synced
+
+    context = ensure_study_work_synced(context)
     context.update(build_resolved_config_scope_vars(context))
 
     program_path = body.get("program_path")

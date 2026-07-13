@@ -342,8 +342,20 @@ def finalize_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
 
     Call before ``create_workflow_instance`` when the workflow engine will resolve
     action input templates from scope (distributed path).
+
+    Always attempts cfg → /work study sync first so membership CSVs and project
+    JSON match the published registry before the instance is created.
     """
-    out = enrich_instance_context(context)
+    import sys
+    from pathlib import Path as _Path
+
+    _we = _Path(__file__).resolve().parents[1]
+    if str(_we) not in sys.path:
+        sys.path.insert(0, str(_we))
+    from cfg.sync_on_start import ensure_study_work_synced
+
+    out = ensure_study_work_synced(context)
+    out = enrich_instance_context(out)
     out.update(build_resolved_config_scope_vars(out))
     out["hyperparamSetId"] = compute_hyperparam_set_id(out)
     return out

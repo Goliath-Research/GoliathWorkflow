@@ -117,6 +117,14 @@ BEGIN
 END
 GO
 
+/*
+  Create + start instance.
+
+  IMPORTANT: Azure SQL cannot write /work. Callers (portal app, methyl-study-start,
+  rest.db_client.create_workflow_instance) MUST run cfg → /work study sync
+  (ensure_study_work_synced / materialize_study_lists) before invoking this proc
+  so membership CSVs match cfg.study_group_member.
+*/
 IF OBJECT_ID(N'portal.sp_create_and_start_instance', N'P') IS NOT NULL
     DROP PROCEDURE portal.sp_create_and_start_instance;
 GO

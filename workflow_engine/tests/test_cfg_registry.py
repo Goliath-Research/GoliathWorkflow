@@ -328,6 +328,68 @@ def test_study_membership_materializes_csv(
     assert proj.get("cfgStudyGroups")
 
 
+def test_ensure_study_work_synced_rewrites_stale_csv(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from cfg.study_membership import set_study_group, set_study_group_members
+    from cfg.sync_on_start import ensure_study_work_synced
+
+    work = tmp_path / "work"
+    monkeypatch.setenv("METHYL_CFG_STORE", str(tmp_path / "cfg-store"))
+    monkeypatch.setenv("METHYL_WORK_ROOT", str(work))
+    store2 = FileConfigStore(tmp_path / "cfg-store")
+    store2.upsert(
+        "study",
+        "Buffy_healthy_vs_PCa",
+        {
+            "project_name": "Buffy_healthy_vs_PCa",
+            "output_base": str(work / "projects" / "prostate-cancer"),
+            "samples_base_path": str(work / "samples"),
+            "controls": {"label": "healthy", "groups": []},
+            "diseases": {"label": "cancer", "groups": []},
+        },
+        status="published",
+        extra={"studyId": "prostate-cancer"},
+    )
+    set_study_group(
+        store2,
+        "Buffy_healthy_vs_PCa",
+        role="control",
+        label="all",
+        list_filename="healthy_b.csv",
+    )
+    set_study_group_members(
+        store2,
+        "Buffy_healthy_vs_PCa",
+        role="control",
+        label="all",
+        members=[{"portalSampleId": 1, "processingSampleKey": "BC-H-001"}],
+    )
+
+    data = work / "projects" / "prostate-cancer" / "data"
+    data.mkdir(parents=True)
+    (data / "healthy_b.csv").write_text("sample\nSTALE\n", encoding="utf-8")
+
+    ctx = ensure_study_work_synced({"cfgStudyName": "Buffy_healthy_vs_PCa"})
+    assert ctx.get("cfgWorkSynced") is True
+    text = (data / "healthy_b.csv").read_text()
+    assert "BC-H-001" in text
+    assert "STALE" not in text
+
+
+def test_ensure_study_work_synced_noop_without_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from cfg.sync_on_start import ensure_study_work_synced
+
+    monkeypatch.delenv("METHYL_CFG_STORE", raising=False)
+    monkeypatch.setenv("METHYL_WORK_ROOT", str(tmp_path / "work"))
+    # Ensure default store path does not exist
+    out = ensure_study_work_synced(
+        {"projectPath": str(tmp_path / "project_Foo.json"), "skipCfgWorkSync": False}
+    )
+    assert out.get("cfgWorkSynced") is True
+    assert out.get("cfgWorkSync", {}).get("written") == []
+
+
 def test_sync_and_scaffold_action(store: FileConfigStore, tmp_path: Path) -> None:
     # Use committed catalog if present; else define server-side
     catalog = REPO / "schemas" / "actions" / "catalog.json"

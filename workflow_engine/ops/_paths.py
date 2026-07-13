@@ -12,6 +12,7 @@ WF_ENGINE = REPO_ROOT / "workflow_engine"
 def ensure_import_paths() -> None:
     """Add repo sibling paths when packages are not pip-installed."""
     for rel in (
+        WF_ENGINE,
         WF_ENGINE / "domain",
         WF_ENGINE / "contract",
         WF_ENGINE / "portal",

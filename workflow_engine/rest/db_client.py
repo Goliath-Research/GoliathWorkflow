@@ -108,8 +108,16 @@ def create_workflow_instance(
     workflow_version_id: int,
     context_json: Optional[dict[str, Any]],
 ) -> int:
+    """Create instance after mandatory cfg → /work study sync."""
+    ensure_import = Path(__file__).resolve().parents[1]
+    if str(ensure_import) not in sys.path:
+        sys.path.insert(0, str(ensure_import))
+    from cfg.sync_on_start import ensure_study_work_synced
+
+    ctx = dict(context_json or {})
     with _use_db(db_or_dsn) as db:
-        return db.create_workflow_instance(workflow_version_id, context_json)
+        ctx = ensure_study_work_synced(ctx, db=db)
+        return db.create_workflow_instance(workflow_version_id, ctx)
 
 
 def start_workflow_instance(db_or_dsn: Union[GatewayDb, str], instance_id: int) -> None:

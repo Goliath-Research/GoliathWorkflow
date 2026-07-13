@@ -12,6 +12,7 @@ from .study_membership import (
     set_study_group,
     set_study_group_members,
 )
+from .sync_on_start import ensure_study_work_synced
 
 __all__ = [
     "CFG_KINDS",
@@ -28,4 +29,5 @@ __all__ = [
     "list_study_groups",
     "list_study_group_members",
     "materialize_study_membership",
+    "ensure_study_work_synced",
 ]

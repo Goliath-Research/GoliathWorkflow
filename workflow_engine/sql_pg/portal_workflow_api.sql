@@ -117,6 +117,8 @@ BEGIN
 END;
 $$;
 
+-- IMPORTANT: PostgreSQL cannot write /work. Callers must run ensure_study_work_synced
+-- (Python) before this function so membership CSVs match cfg.
 CREATE OR REPLACE FUNCTION portal.sp_create_and_start_instance(
   p_workflow_version_id bigint,
   p_context_json jsonb DEFAULT NULL
