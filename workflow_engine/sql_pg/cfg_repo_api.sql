@@ -467,3 +467,181 @@ BEGIN
   LIMIT 1;
 END;
 $$;
+
+CREATE OR REPLACE FUNCTION cfg.cfg_repo_set_study_group(
+  p_study_row_id bigint,
+  p_role text,
+  p_label text,
+  p_list_filename text
+)
+RETURNS TABLE(id bigint, study_row_id bigint, role text, label text, list_filename text)
+LANGUAGE plpgsql
+AS $$
+DECLARE v_id bigint;
+BEGIN
+  IF p_role NOT IN ('control', 'disease') THEN
+    RAISE EXCEPTION 'study_group role must be control or disease';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM cfg.study s WHERE s.id = p_study_row_id) THEN
+    RAISE EXCEPTION 'cfg.study not found: %', p_study_row_id;
+  END IF;
+  INSERT INTO cfg.study_group (study_row_id, role, label, list_filename)
+  VALUES (p_study_row_id, p_role, p_label, p_list_filename)
+  ON CONFLICT (study_row_id, role, label) DO UPDATE SET
+    list_filename = EXCLUDED.list_filename,
+    updated_at_utc = (now() AT TIME ZONE 'utc')
+  RETURNING cfg.study_group.id INTO v_id;
+  RETURN QUERY
+  SELECT g.id, g.study_row_id, g.role::text, g.label, g.list_filename
+  FROM cfg.study_group g WHERE g.id = v_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION cfg.cfg_repo_set_study_group_members(
+  p_study_group_id bigint,
+  p_members jsonb
+)
+RETURNS TABLE(
+  id bigint,
+  study_group_id bigint,
+  portal_sample_id int,
+  lab_sample_id int,
+  processing_sample_key text
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  elem jsonb;
+  v_portal int;
+  v_lab int;
+  v_key text;
+  v_resolved text;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM cfg.study_group g WHERE g.id = p_study_group_id) THEN
+    RAISE EXCEPTION 'cfg.study_group not found: %', p_study_group_id;
+  END IF;
+
+  DELETE FROM cfg.study_group_member WHERE study_group_id = p_study_group_id;
+
+  FOR elem IN SELECT * FROM jsonb_array_elements(COALESCE(p_members, '[]'::jsonb))
+  LOOP
+    v_portal := (elem->>'portalSampleId')::int;
+    v_lab := NULLIF(elem->>'labSampleId', '')::int;
+    v_key := NULLIF(btrim(elem->>'processingSampleKey'), '');
+    -- Soft resolve: prefer explicit key; portal LabSamples lookup when table exists is app-side.
+    v_resolved := v_key;
+    IF v_resolved IS NULL THEN
+      RAISE EXCEPTION 'cannot resolve processing_sample_key for portalSampleId=%', v_portal;
+    END IF;
+    INSERT INTO cfg.study_group_member (
+      study_group_id, portal_sample_id, lab_sample_id, processing_sample_key
+    ) VALUES (p_study_group_id, v_portal, v_lab, v_resolved);
+  END LOOP;
+
+  UPDATE cfg.study_group SET updated_at_utc = (now() AT TIME ZONE 'utc')
+  WHERE id = p_study_group_id;
+
+  RETURN QUERY
+  SELECT m.id, m.study_group_id, m.portal_sample_id, m.lab_sample_id, m.processing_sample_key
+  FROM cfg.study_group_member m
+  WHERE m.study_group_id = p_study_group_id
+  ORDER BY m.processing_sample_key;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION cfg.cfg_repo_list_study_groups(p_study_row_id bigint)
+RETURNS TABLE(
+  id bigint,
+  study_row_id bigint,
+  role text,
+  label text,
+  list_filename text,
+  member_count bigint
+)
+LANGUAGE sql
+AS $$
+  SELECT g.id, g.study_row_id, g.role::text, g.label, g.list_filename,
+         (SELECT COUNT(*) FROM cfg.study_group_member m WHERE m.study_group_id = g.id)
+  FROM cfg.study_group g
+  WHERE g.study_row_id = p_study_row_id
+  ORDER BY g.role, g.label;
+$$;
+
+CREATE OR REPLACE FUNCTION cfg.cfg_repo_list_study_group_members(p_study_group_id bigint)
+RETURNS TABLE(
+  id bigint,
+  study_group_id bigint,
+  portal_sample_id int,
+  lab_sample_id int,
+  processing_sample_key text
+)
+LANGUAGE sql
+AS $$
+  SELECT m.id, m.study_group_id, m.portal_sample_id, m.lab_sample_id, m.processing_sample_key
+  FROM cfg.study_group_member m
+  WHERE m.study_group_id = p_study_group_id
+  ORDER BY m.processing_sample_key;
+$$;
+
+CREATE OR REPLACE FUNCTION cfg.cfg_repo_materialize_study_lists(
+  p_study_row_id bigint,
+  p_work_root text DEFAULT '/work'
+)
+RETURNS TABLE(
+  study_group_id bigint,
+  role text,
+  label text,
+  list_filename text,
+  csv_path text,
+  sample_keys text
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_study_id text;
+  v_doc jsonb;
+  v_data_root text;
+  v_groups jsonb;
+BEGIN
+  SELECT COALESCE(s.study_id, s.name), s.document_json
+  INTO v_study_id, v_doc
+  FROM cfg.study s WHERE s.id = p_study_row_id;
+  IF v_study_id IS NULL THEN
+    RAISE EXCEPTION 'cfg.study not found: %', p_study_row_id;
+  END IF;
+
+  v_data_root := p_work_root || '/projects/' || v_study_id || '/data';
+
+  SELECT COALESCE(jsonb_agg(
+    jsonb_build_object(
+      'role', g.role,
+      'label', g.label,
+      'listFilename', g.list_filename,
+      'samplePath', v_data_root || '/' || g.list_filename
+    ) ORDER BY g.role, g.label
+  ), '[]'::jsonb)
+  INTO v_groups
+  FROM cfg.study_group g
+  WHERE g.study_row_id = p_study_row_id;
+
+  v_doc := jsonb_set(COALESCE(v_doc, '{}'::jsonb), '{cfgStudyGroups}', v_groups, true);
+  UPDATE cfg.study
+  SET document_json = v_doc,
+      content_hash = md5(v_doc::text),
+      updated_at_utc = (now() AT TIME ZONE 'utc')
+  WHERE id = p_study_row_id;
+
+  RETURN QUERY
+  SELECT
+    g.id,
+    g.role::text,
+    g.label,
+    g.list_filename,
+    v_data_root || '/' || g.list_filename,
+    (SELECT string_agg(m.processing_sample_key, E'\n' ORDER BY m.processing_sample_key)
+     FROM cfg.study_group_member m WHERE m.study_group_id = g.id)
+  FROM cfg.study_group g
+  WHERE g.study_row_id = p_study_row_id
+  ORDER BY g.role, g.label;
+END;
+$$;

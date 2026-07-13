@@ -78,6 +78,13 @@ def materialize_store(
             written.append(f"domain_program:{rec.name}@{rec.version}->{out}")
 
     if "study" in selected:
+        from .study_membership import materialize_study_membership
+
+        # Membership CSVs + synced sample_paths (when extra.studyGroups present)
+        mem = materialize_study_membership(store, work_root)
+        for path in mem.get("written") or []:
+            written.append(f"study_membership:{path}")
+
         for rec in store.list("study", published_only=True):
             study_id = (
                 rec.extra.get("studyId")

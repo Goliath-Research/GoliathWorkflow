@@ -94,3 +94,82 @@ BEGIN
     ORDER BY id DESC;
 END
 GO
+
+CREATE OR ALTER PROCEDURE portal.sp_set_study_group
+    @study_row_id bigint,
+    @role varchar(32),
+    @label nvarchar(128),
+    @list_filename nvarchar(256)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_set_study_group
+        @study_row_id = @study_row_id,
+        @role = @role,
+        @label = @label,
+        @list_filename = @list_filename;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_set_study_group_members
+    @study_group_id bigint,
+    @members_json json
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_set_study_group_members
+        @study_group_id = @study_group_id,
+        @members_json = @members_json;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_list_study_groups
+    @study_row_id bigint
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_list_study_groups @study_row_id = @study_row_id;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_list_study_group_members
+    @study_group_id bigint
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_list_study_group_members @study_group_id = @study_group_id;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_materialize_study_lists
+    @study_row_id bigint,
+    @work_root nvarchar(512) = N'/work'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_materialize_study_lists
+        @study_row_id = @study_row_id,
+        @work_root = @work_root;
+END
+GO
+
+/* Picker: portal samples (+ optional lab runs) for study enrollment UI. */
+CREATE OR ALTER PROCEDURE portal.sp_list_samples_for_study_enrollment
+    @customer_id int = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        s.ID AS portal_sample_id,
+        s.ParticipantID,
+        s.CustomerID,
+        s.DiseaseID,
+        ls.ID AS lab_sample_id,
+        ls.Sample AS processing_sample_key,
+        ls.BatchID
+    FROM portal.Samples s
+    LEFT JOIN portal.LabSamples ls ON ls.SampleID = s.ID
+    WHERE (@customer_id IS NULL OR s.CustomerID = @customer_id)
+    ORDER BY s.ID, ls.ID;
+END
+GO

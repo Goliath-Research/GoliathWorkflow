@@ -37,3 +37,7 @@ methyl-cfg upsert credential --file new_keys.json --name lab-aws-keys --version 
 ## Credentials
 
 Never put AccessKeys / SAS URLs in project JSON under `/work/projects`. Store them as `cfg.credential` and reference via `cfg.storage_endpoint.credentialName`. Expand only into task `input_json` at schedule time.
+
+## Study membership
+
+Enroll `portal.Samples` into study arms with `methyl-cfg set-study-group` / `set-study-group-members`, then `materialize` to write CSVs. See [How to define samples](../user-manual/How%20to%20define%20samples.md).

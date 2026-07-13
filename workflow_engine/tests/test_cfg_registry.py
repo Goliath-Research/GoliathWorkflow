@@ -238,6 +238,96 @@ def test_publish_program_compiles(store: FileConfigStore, tmp_path: Path) -> Non
     assert "nodes" in spec or "name" in spec
 
 
+def test_study_membership_materializes_csv(
+    store: FileConfigStore, tmp_path: Path
+) -> None:
+    from cfg.study_membership import (
+        list_study_groups,
+        materialize_study_membership,
+        set_study_group,
+        set_study_group_members,
+    )
+
+    store.upsert(
+        "study",
+        "Buffy_healthy_vs_PCa",
+        {
+            "project_name": "Buffy_healthy_vs_PCa",
+            "samples_base_path": "/work/samples",
+            "controls": {"label": "healthy", "groups": []},
+            "diseases": {"label": "cancer", "groups": []},
+        },
+        status="published",
+        extra={"studyId": "prostate-cancer"},
+    )
+    set_study_group(
+        store,
+        "Buffy_healthy_vs_PCa",
+        role="control",
+        label="all",
+        list_filename="healthy_b.csv",
+    )
+    set_study_group(
+        store,
+        "Buffy_healthy_vs_PCa",
+        role="disease",
+        label="PCa",
+        list_filename="pca_b.csv",
+    )
+    set_study_group_members(
+        store,
+        "Buffy_healthy_vs_PCa",
+        role="control",
+        label="all",
+        members=[
+            {"portalSampleId": 1, "processingSampleKey": "BC-H-001"},
+            {
+                "portalSampleId": 2,
+                "labSampleId": 10,
+                "labSampleName": "BC-H-002",
+            },
+        ],
+    )
+    set_study_group_members(
+        store,
+        "Buffy_healthy_vs_PCa",
+        role="disease",
+        label="PCa",
+        members=[{"portalSampleId": 3, "participantId": "BC-P-001"}],
+    )
+    groups = list_study_groups(store, "Buffy_healthy_vs_PCa")
+    assert len(groups) == 2
+    assert groups[0]["memberCount"] == 2 or any(g["memberCount"] == 2 for g in groups)
+
+    work = tmp_path / "work"
+    result = materialize_study_membership(store, work)
+    assert result["written"]
+    healthy = work / "projects" / "prostate-cancer" / "data" / "healthy_b.csv"
+    pca = work / "projects" / "prostate-cancer" / "data" / "pca_b.csv"
+    assert healthy.is_file()
+    assert pca.is_file()
+    healthy_text = healthy.read_text()
+    assert "BC-H-001" in healthy_text
+    assert "BC-H-002" in healthy_text
+    assert "BC-P-001" in pca.read_text()
+
+    # Full materialize path also syncs project JSON
+    bundle = work / "epimethyl" / "current" / "runtime-bundle" / "domain"
+    materialize_store(store, work, runtime_bundle_domain=bundle)
+    proj = json.loads(
+        (
+            work
+            / "projects"
+            / "prostate-cancer"
+            / "configs"
+            / "project_Buffy_healthy_vs_PCa.json"
+        ).read_text()
+    )
+    assert "healthy_b.csv" in proj["controls"]["groups"][0]["sample_paths"][0]
+    assert "pca_b.csv" in proj["diseases"]["groups"][0]["sample_paths"][0]
+    assert proj.get("cfgStudyGroups")
+
+
 def test_sync_and_scaffold_action(store: FileConfigStore, tmp_path: Path) -> None:
     # Use committed catalog if present; else define server-side
     catalog = REPO / "schemas" / "actions" / "catalog.json"

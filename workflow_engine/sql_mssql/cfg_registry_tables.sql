@@ -168,3 +168,41 @@ BEGIN
     );
 END
 GO
+
+/* Study analysis arms: enroll portal.Samples into control/disease groups; CSVs are materialized. */
+IF OBJECT_ID(N'cfg.study_group', N'U') IS NULL
+BEGIN
+    CREATE TABLE cfg.study_group (
+        id bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        study_row_id bigint NOT NULL,
+        role varchar(32) NOT NULL,
+        label nvarchar(128) NOT NULL,
+        list_filename nvarchar(256) NOT NULL,
+        created_at_utc datetime2(3) NOT NULL CONSTRAINT DF_cfg_sg_created DEFAULT (SYSUTCDATETIME()),
+        updated_at_utc datetime2(3) NULL,
+        CONSTRAINT FK_cfg_study_group_study FOREIGN KEY (study_row_id) REFERENCES cfg.study (id) ON DELETE CASCADE,
+        CONSTRAINT uq_cfg_study_group_role_label UNIQUE (study_row_id, role, label),
+        CONSTRAINT ck_cfg_study_group_role CHECK (role IN ('control', 'disease'))
+    );
+    CREATE INDEX IX_cfg_study_group_study ON cfg.study_group (study_row_id);
+END
+GO
+
+IF OBJECT_ID(N'cfg.study_group_member', N'U') IS NULL
+BEGIN
+    CREATE TABLE cfg.study_group_member (
+        id bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        study_group_id bigint NOT NULL,
+        portal_sample_id int NOT NULL,
+        lab_sample_id int NULL,
+        processing_sample_key nvarchar(128) NOT NULL,
+        created_at_utc datetime2(3) NOT NULL CONSTRAINT DF_cfg_sgm_created DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT FK_cfg_sgm_group FOREIGN KEY (study_group_id) REFERENCES cfg.study_group (id) ON DELETE CASCADE,
+        CONSTRAINT FK_cfg_sgm_portal_sample FOREIGN KEY (portal_sample_id) REFERENCES portal.Samples (ID),
+        CONSTRAINT FK_cfg_sgm_lab_sample FOREIGN KEY (lab_sample_id) REFERENCES portal.LabSamples (ID),
+        CONSTRAINT uq_cfg_sgm_processing_key UNIQUE (study_group_id, processing_sample_key)
+    );
+    CREATE INDEX IX_cfg_sgm_group ON cfg.study_group_member (study_group_id);
+    CREATE INDEX IX_cfg_sgm_portal_sample ON cfg.study_group_member (portal_sample_id);
+END
+GO

@@ -129,3 +129,31 @@ CREATE TABLE IF NOT EXISTS cfg.action_definition (
   CONSTRAINT ck_cfg_action_definition_status CHECK (status IN ('draft', 'published', 'retired')),
   CONSTRAINT ck_cfg_action_implementation CHECK (implementation_status IN ('scaffolded', 'present', 'retired'))
 );
+
+-- Study analysis arms (portal.Samples FKs are soft refs on PG; MSSQL enforces portal FKs).
+CREATE TABLE IF NOT EXISTS cfg.study_group (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  study_row_id bigint NOT NULL REFERENCES cfg.study (id) ON DELETE CASCADE,
+  role varchar(32) NOT NULL,
+  label text NOT NULL,
+  list_filename text NOT NULL,
+  created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  updated_at_utc timestamptz NULL,
+  CONSTRAINT uq_cfg_study_group_role_label UNIQUE (study_row_id, role, label),
+  CONSTRAINT ck_cfg_study_group_role CHECK (role IN ('control', 'disease'))
+);
+
+CREATE INDEX IF NOT EXISTS IX_cfg_study_group_study ON cfg.study_group (study_row_id);
+
+CREATE TABLE IF NOT EXISTS cfg.study_group_member (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  study_group_id bigint NOT NULL REFERENCES cfg.study_group (id) ON DELETE CASCADE,
+  portal_sample_id int NOT NULL,
+  lab_sample_id int NULL,
+  processing_sample_key text NOT NULL,
+  created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  CONSTRAINT uq_cfg_sgm_processing_key UNIQUE (study_group_id, processing_sample_key)
+);
+
+CREATE INDEX IF NOT EXISTS IX_cfg_sgm_group ON cfg.study_group_member (study_group_id);
+CREATE INDEX IF NOT EXISTS IX_cfg_sgm_portal_sample ON cfg.study_group_member (portal_sample_id);

@@ -1,13 +1,36 @@
-A sample is **not** a blob row in `cfg`/`wf`. It is an **ID + directory on shared storage**, referenced by study groups through CSV lists. Cloud locations are **group/study-level defaults** that expand into per-sample prefixes.
+A sample is an **ID + directory on shared storage**. Sample **identity** is imported into **`portal.Samples`** (from Institutions / Labs); the **study** enrolls those samples into analysis groups in **`cfg`**. CSV list files under `/work` are a **materialization** for workers — not the source of truth.
+
+### Layers
+
+| Layer | Owns |
+|-------|------|
+| **`portal.Samples`** (+ `LabSamples`) | Import registry from institutions/labs; clinical metadata; lab run id (`LabSamples.Sample` → processing key) |
+| **`cfg.study` / `cfg.study_group` / `cfg.study_group_member`** | Which portal samples belong to which analysis arm (`control` / `disease`) |
+| **CSV lists** (`data/*.csv`) | Worker-facing lists written by `methyl-cfg materialize` |
+| **`portal.Groups` / `GroupSamples`** | Customer UI cohorts — **not** study science arms |
+
+```text
+Institutions/Labs
+       │ import
+       ▼
+portal.Samples ──► portal.LabSamples.Sample (= BC-H-001)
+       │
+       │ enroll (cfg)
+       ▼
+cfg.study_group_member
+       │ materialize
+       ▼
+/work/projects/<study>/data/*.csv  →  /work/samples/{id}/
+```
 
 ### Study → groups → samples
 
 ```text
-project_*.json
+project_*.json  (materialized from cfg.study)
   controls / diseases
     groups[]
       label
-      sample_paths: [ ".../data/healthy.csv" ]   ← list files, not cloud URIs
+      sample_paths: [ ".../data/healthy.csv" ]   ← derived from cfg membership
   samples_base_path: "/work/samples"             ← default
 ```
 
@@ -23,7 +46,36 @@ That resolves to processing dirs:
 
 `/work/samples/BC-H-001/`, `/work/samples/BC-H-002/`, …
 
-So the study owns **which samples belong to which group**; membership is the CSV, not `portal.Samples` (that table is portal/clinical UI only).
+**Processing key resolution** (when enrolling a member):
+
+1. `portal.LabSamples.Sample` if a lab run is linked  
+2. Else explicit `processingSampleKey`  
+3. Else `portal.Samples.ParticipantID`  
+4. Else fail (do not invent IDs)
+
+### Enroll via cfg (CLI)
+
+```bash
+source .venv/bin/activate
+export METHYL_CFG_STORE=/work/epimethyl/cfg-store
+export PYTHONPATH=workflow_engine:$PYTHONPATH
+
+methyl-cfg set-study-group Buffy_healthy_vs_PCa \
+  --role control --label all --list-filename healthy_b.csv
+
+methyl-cfg set-study-group-members Buffy_healthy_vs_PCa \
+  --role control --label all --file members_healthy.json
+
+# members_healthy.json:
+# [
+#   {"portalSampleId": 1, "labSampleId": 10},
+#   {"portalSampleId": 2, "processingSampleKey": "BC-H-002"}
+# ]
+
+methyl-cfg materialize --work-root /work
+```
+
+Portal procs: `portal.sp_set_study_group`, `sp_set_study_group_members`, `sp_list_samples_for_study_enrollment` (MSSQL picker over `portal.Samples` / `LabSamples`).
 
 ### Three locations (same samples, different roles)
 
@@ -59,7 +111,9 @@ Overrides are allowed per sample (`fastqSource` already set), but the common cas
 | `cfg.storage_endpoint` | Named location (bucket/account/…), no secrets on `/work` |
 | `cfg.credential` | Keys / SAS / etc. |
 | `cfg.storage_profile` | Pairs endpoints: `fastqStorageEndpoint` + `sampleStorageEndpoint` |
-| `cfg.study` | Manifest with groups + CSV paths; references a storage profile by name |
+| `cfg.study` | Manifest; references a storage profile by name |
+| `cfg.study_group` | Analysis arm (`control`/`disease`) + CSV filename |
+| `cfg.study_group_member` | FK to `portal.Samples` (+ optional `LabSamples`) + `processing_sample_key` |
 
 At schedule time: `expand_storage_profile` / `expand_storage_endpoint` → today’s `fastqStorage` / `sampleStorage` wire format → planner stamps every sample in `context_json.samples[]`.
 
@@ -67,4 +121,4 @@ At schedule time: `expand_storage_profile` / `expand_storage_endpoint` → today
 
 Processing workspace for that ID: staged FASTQs, alignment products, chromosome `*.h5`, extraction/QC JSON, prep log. Science workflows (centroid/detector/…) read those H5s via the study’s resolved sample dirs.
 
-**Short version:** groups hold **lists of sample IDs**; each ID has one **processing home** on shared storage; ingress and archive are **named cloud endpoints** (usually one per study/lab) with per-sample prefixes—not separate DB sample blobs.
+**Short version:** import samples into **portal**; enroll them into study arms in **cfg**; materialize **CSVs** for workers; each ID has one **processing home** on shared storage; ingress/archive are **named cloud endpoints** with per-sample prefixes.

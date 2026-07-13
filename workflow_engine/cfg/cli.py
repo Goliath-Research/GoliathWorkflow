@@ -243,6 +243,79 @@ def _cmd_get(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_set_study_group(args: argparse.Namespace) -> int:
+    from cfg.study_membership import set_study_group
+
+    store = _open_store(args.store_dir)
+    result = set_study_group(
+        store,
+        args.study,
+        role=args.role,
+        label=args.label,
+        list_filename=args.list_filename,
+        version=args.version,
+    )
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def _cmd_set_study_group_members(args: argparse.Namespace) -> int:
+    from cfg.study_membership import set_study_group_members
+
+    store = _open_store(args.store_dir)
+    members = json.loads(Path(args.file).read_text(encoding="utf-8"))
+    if isinstance(members, dict):
+        members = members.get("members") or members.get("items") or []
+    result = set_study_group_members(
+        store,
+        args.study,
+        role=args.role,
+        label=args.label,
+        members=members,
+        version=args.version,
+    )
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def _cmd_list_study_groups(args: argparse.Namespace) -> int:
+    from cfg.study_membership import list_study_groups
+
+    store = _open_store(args.store_dir)
+    print(json.dumps(list_study_groups(store, args.study, version=args.version), indent=2))
+    return 0
+
+
+def _cmd_list_study_group_members(args: argparse.Namespace) -> int:
+    from cfg.study_membership import list_study_group_members
+
+    store = _open_store(args.store_dir)
+    print(
+        json.dumps(
+            list_study_group_members(
+                store,
+                args.study,
+                role=args.role,
+                label=args.label,
+                version=args.version,
+            ),
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _cmd_materialize_study_lists(args: argparse.Namespace) -> int:
+    from cfg.study_membership import materialize_study_membership
+
+    store = _open_store(args.store_dir)
+    result = materialize_study_membership(
+        store, args.work_root, study_name=args.study
+    )
+    print(json.dumps(result, indent=2))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="methyl-cfg", description="Configuration registry CLI")
     p.add_argument(
@@ -323,6 +396,52 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--version", default=None)
     s.add_argument("--include-secret", action="store_true")
     s.set_defaults(func=_cmd_get)
+
+    s = sub.add_parser(
+        "set-study-group",
+        help="Define a study analysis group (control/disease) and CSV list filename",
+    )
+    s.add_argument("study", help="cfg.study name")
+    s.add_argument("--role", required=True, choices=["control", "disease"])
+    s.add_argument("--label", required=True)
+    s.add_argument("--list-filename", required=True, help="e.g. healthy_b.csv")
+    s.add_argument("--version", default=None)
+    s.set_defaults(func=_cmd_set_study_group)
+
+    s = sub.add_parser(
+        "set-study-group-members",
+        help="Replace group members from portal.Samples (JSON array)",
+    )
+    s.add_argument("study")
+    s.add_argument("--role", required=True, choices=["control", "disease"])
+    s.add_argument("--label", required=True)
+    s.add_argument(
+        "--file",
+        required=True,
+        help='JSON array of {portalSampleId, labSampleId?, processingSampleKey?, ...}',
+    )
+    s.add_argument("--version", default=None)
+    s.set_defaults(func=_cmd_set_study_group_members)
+
+    s = sub.add_parser("list-study-groups", help="List analysis groups for a study")
+    s.add_argument("study")
+    s.add_argument("--version", default=None)
+    s.set_defaults(func=_cmd_list_study_groups)
+
+    s = sub.add_parser("list-study-group-members", help="List enrolled samples in a group")
+    s.add_argument("study")
+    s.add_argument("--role", required=True, choices=["control", "disease"])
+    s.add_argument("--label", required=True)
+    s.add_argument("--version", default=None)
+    s.set_defaults(func=_cmd_list_study_group_members)
+
+    s = sub.add_parser(
+        "materialize-study-lists",
+        help="Write membership CSVs and sync study sample_paths under /work",
+    )
+    s.add_argument("--work-root", default="/work")
+    s.add_argument("--study", default=None, help="Limit to one study name")
+    s.set_defaults(func=_cmd_materialize_study_lists)
 
     return p
 

@@ -5,6 +5,13 @@ from .store import ConfigStore, FileConfigStore, content_hash
 from .materialize import materialize_store
 from .import_fs import import_filesystem
 from .storage_expand import expand_storage_endpoint, redact_credential
+from .study_membership import (
+    list_study_group_members,
+    list_study_groups,
+    materialize_study_membership,
+    set_study_group,
+    set_study_group_members,
+)
 
 __all__ = [
     "CFG_KINDS",
@@ -16,4 +23,9 @@ __all__ = [
     "import_filesystem",
     "expand_storage_endpoint",
     "redact_credential",
+    "set_study_group",
+    "set_study_group_members",
+    "list_study_groups",
+    "list_study_group_members",
+    "materialize_study_membership",
 ]

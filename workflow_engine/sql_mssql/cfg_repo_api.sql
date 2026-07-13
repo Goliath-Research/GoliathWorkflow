@@ -311,3 +311,180 @@ BEGIN
 END
 GO
 
+CREATE OR ALTER PROCEDURE cfg.cfg_repo_set_study_group
+    @study_row_id bigint,
+    @role varchar(32),
+    @label nvarchar(128),
+    @list_filename nvarchar(256)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF @role NOT IN ('control', 'disease')
+    BEGIN
+        RAISERROR(N'study_group role must be control or disease', 16, 1);
+        RETURN;
+    END
+    IF NOT EXISTS (SELECT 1 FROM cfg.study WHERE id = @study_row_id)
+    BEGIN
+        RAISERROR(N'cfg.study not found: %I64d', 16, 1, @study_row_id);
+        RETURN;
+    END
+    MERGE cfg.study_group AS t
+    USING (SELECT @study_row_id AS study_row_id, @role AS role, @label AS label) AS s
+    ON t.study_row_id = s.study_row_id AND t.role = s.role AND t.label = s.label
+    WHEN MATCHED THEN UPDATE SET
+        list_filename = @list_filename,
+        updated_at_utc = SYSUTCDATETIME()
+    WHEN NOT MATCHED THEN INSERT (study_row_id, role, label, list_filename)
+        VALUES (@study_row_id, @role, @label, @list_filename);
+    SELECT id, study_row_id, role, label, list_filename
+    FROM cfg.study_group
+    WHERE study_row_id = @study_row_id AND role = @role AND label = @label;
+END
+GO
+
+CREATE OR ALTER PROCEDURE cfg.cfg_repo_set_study_group_members
+    @study_group_id bigint,
+    @members_json json
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT EXISTS (SELECT 1 FROM cfg.study_group WHERE id = @study_group_id)
+    BEGIN
+        RAISERROR(N'cfg.study_group not found: %I64d', 16, 1, @study_group_id);
+        RETURN;
+    END
+
+    DECLARE @resolved TABLE (
+        portal_sample_id int NOT NULL,
+        lab_sample_id int NULL,
+        processing_sample_key nvarchar(128) NOT NULL
+    );
+
+    ;WITH raw AS (
+        SELECT
+            CAST(JSON_VALUE(j.value, '$.portalSampleId') AS int) AS portal_sample_id,
+            CAST(JSON_VALUE(j.value, '$.labSampleId') AS int) AS lab_sample_id,
+            NULLIF(LTRIM(RTRIM(JSON_VALUE(j.value, '$.processingSampleKey'))), N'') AS processing_sample_key
+        FROM OPENJSON(CONVERT(nvarchar(max), @members_json)) AS j
+    )
+    INSERT INTO @resolved (portal_sample_id, lab_sample_id, processing_sample_key)
+    SELECT
+        r.portal_sample_id,
+        r.lab_sample_id,
+        COALESCE(
+            NULLIF(LTRIM(RTRIM(ls.Sample)), N''),
+            r.processing_sample_key,
+            NULLIF(LTRIM(RTRIM(s.ParticipantID)), N'')
+        )
+    FROM raw r
+    INNER JOIN portal.Samples s ON s.ID = r.portal_sample_id
+    LEFT JOIN portal.LabSamples ls ON ls.ID = r.lab_sample_id AND ls.SampleID = r.portal_sample_id;
+
+    IF EXISTS (SELECT 1 FROM @resolved WHERE processing_sample_key IS NULL)
+    BEGIN
+        RAISERROR(N'cannot resolve processing_sample_key for one or more members', 16, 1);
+        RETURN;
+    END
+
+    DELETE FROM cfg.study_group_member WHERE study_group_id = @study_group_id;
+
+    INSERT INTO cfg.study_group_member (
+        study_group_id, portal_sample_id, lab_sample_id, processing_sample_key
+    )
+    SELECT @study_group_id, portal_sample_id, lab_sample_id, processing_sample_key
+    FROM @resolved;
+
+    UPDATE cfg.study_group SET updated_at_utc = SYSUTCDATETIME() WHERE id = @study_group_id;
+
+    SELECT id, study_group_id, portal_sample_id, lab_sample_id, processing_sample_key
+    FROM cfg.study_group_member
+    WHERE study_group_id = @study_group_id
+    ORDER BY processing_sample_key;
+END
+GO
+
+CREATE OR ALTER PROCEDURE cfg.cfg_repo_list_study_groups
+    @study_row_id bigint
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT g.id, g.study_row_id, g.role, g.label, g.list_filename,
+           (SELECT COUNT(*) FROM cfg.study_group_member m WHERE m.study_group_id = g.id) AS member_count
+    FROM cfg.study_group g
+    WHERE g.study_row_id = @study_row_id
+    ORDER BY g.role, g.label;
+END
+GO
+
+CREATE OR ALTER PROCEDURE cfg.cfg_repo_list_study_group_members
+    @study_group_id bigint
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT id, study_group_id, portal_sample_id, lab_sample_id, processing_sample_key
+    FROM cfg.study_group_member
+    WHERE study_group_id = @study_group_id
+    ORDER BY processing_sample_key;
+END
+GO
+
+CREATE OR ALTER PROCEDURE cfg.cfg_repo_materialize_study_lists
+    @study_row_id bigint,
+    @work_root nvarchar(512) = N'/work'
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @study_id nvarchar(256);
+    DECLARE @name nvarchar(256);
+    DECLARE @doc nvarchar(max);
+    DECLARE @data_root nvarchar(1024);
+    DECLARE @groups_json nvarchar(max);
+
+    SELECT @study_id = COALESCE(study_id, name), @name = name,
+           @doc = CONVERT(nvarchar(max), document_json)
+    FROM cfg.study
+    WHERE id = @study_row_id;
+
+    IF @name IS NULL
+    BEGIN
+        RAISERROR(N'cfg.study not found: %I64d', 16, 1, @study_row_id);
+        RETURN;
+    END
+
+    SET @data_root = @work_root + N'/projects/' + @study_id + N'/data';
+
+    SELECT
+        g.id AS study_group_id,
+        g.role,
+        g.label,
+        g.list_filename,
+        @data_root + N'/' + g.list_filename AS csv_path,
+        (
+            SELECT STRING_AGG(m.processing_sample_key, CHAR(10)) WITHIN GROUP (ORDER BY m.processing_sample_key)
+            FROM cfg.study_group_member m
+            WHERE m.study_group_id = g.id
+        ) AS sample_keys
+    FROM cfg.study_group g
+    WHERE g.study_row_id = @study_row_id
+    ORDER BY g.role, g.label;
+
+    /* Hint array for portal; Python methyl-cfg materialize rewrites controls/diseases sample_paths. */
+    SELECT @groups_json = COALESCE((
+        SELECT g.role AS role, g.label AS label, g.list_filename AS listFilename,
+               @data_root + N'/' + g.list_filename AS samplePath
+        FROM cfg.study_group g
+        WHERE g.study_row_id = @study_row_id
+        FOR JSON PATH
+    ), N'[]');
+
+    SET @doc = JSON_MODIFY(@doc, '$.cfgStudyGroups', JSON_QUERY(@groups_json));
+
+    UPDATE cfg.study
+    SET document_json = CAST(@doc AS json),
+        content_hash = CONVERT(nvarchar(128), HASHBYTES('SHA2_256', @doc), 2),
+        updated_at_utc = SYSUTCDATETIME()
+    WHERE id = @study_row_id;
+END
+GO
+
