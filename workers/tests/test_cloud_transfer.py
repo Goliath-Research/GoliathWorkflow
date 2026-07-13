@@ -112,6 +112,34 @@ def test_resolve_vault_ref_mocked() -> None:
     assert resolved["accessKeyId"] == "AKIA"
 
 
+def test_connection_string_with_port_not_parsed_as_s3_keys() -> None:
+    """Azure CS with host:port must not hit accessKeyId:secret colon split."""
+    from methyl_domain.storage_secrets import _payload_from_vault_or_file_value
+
+    raw = (
+        "DefaultEndpointsProtocol=https;AccountName=acct;"
+        "AccountKey=abc/+/=;BlobEndpoint=https://host:8443/account;"
+    )
+    resolved = _payload_from_vault_or_file_value(raw, {"authMode": "azure_key_vault"})
+    assert resolved["authMode"] == "connection_string"
+    assert resolved["connectionString"] == raw
+    assert "accessKeyId" not in resolved
+
+
+def test_plain_s3_access_key_pair_still_parsed() -> None:
+    from methyl_domain.storage_secrets import _payload_from_vault_or_file_value
+
+    resolved = _payload_from_vault_or_file_value(
+        "AKIATEST:secret/with+chars=",
+        {"authMode": "azure_key_vault"},
+    )
+    assert resolved == {
+        "authMode": "explicit_keys",
+        "accessKeyId": "AKIATEST",
+        "secretAccessKey": "secret/with+chars=",
+    }
+
+
 def test_s3_transfer_config_uses_resolved_knobs() -> None:
     from methyl_worker.cloud_transfer import _s3_transfer_config
 

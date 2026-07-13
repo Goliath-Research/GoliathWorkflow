@@ -129,24 +129,50 @@ def _payload_from_vault_or_file_value(
         return {"authMode": "account_key", "accountKey": raw}
     if target == "connection_string":
         return {"authMode": "connection_string", "connectionString": raw}
-    # Default: S3 access key pair encoded as "accessKeyId:secretAccessKey"
-    if ":" in raw and target in (None, "explicit_keys", "s3"):
+    # Azure connection strings often contain "https://host:port" — detect before
+    # any accessKeyId:secretAccessKey colon split (otherwise first ":" wins).
+    if _looks_like_azure_connection_string(raw):
+        return {"authMode": "connection_string", "connectionString": raw}
+    # S3 access key pair encoded as "accessKeyId:secretAccessKey"
+    if target in (None, "explicit_keys", "s3") and _looks_like_s3_access_key_pair(raw):
         access, _, secret = raw.partition(":")
-        if access and secret:
-            return {
-                "authMode": "explicit_keys",
-                "accessKeyId": access,
-                "secretAccessKey": secret,
-            }
+        return {
+            "authMode": "explicit_keys",
+            "accessKeyId": access,
+            "secretAccessKey": secret,
+        }
     if target == "explicit_keys":
         raise RuntimeError(
             "Key Vault/encrypted secret for explicit_keys must be JSON or "
             "accessKeyId:secretAccessKey"
         )
-    # Fall back: treat as connection string if looks like one
-    if "AccountKey=" in raw or "AccountName=" in raw:
-        return {"authMode": "connection_string", "connectionString": raw}
     raise RuntimeError(
         "Unable to interpret vault/encrypted secret; store JSON with authMode "
         "or accessKeyId:secretAccessKey / account key / connection string"
     )
+
+
+def _looks_like_azure_connection_string(raw: str) -> bool:
+    """True when a non-JSON secret is an Azure Storage connection string."""
+    markers = (
+        "AccountKey=",
+        "AccountName=",
+        "BlobEndpoint=",
+        "DefaultEndpointsProtocol=",
+        "SharedAccessSignature=",
+        "EndpointSuffix=",
+    )
+    return any(marker in raw for marker in markers)
+
+
+def _looks_like_s3_access_key_pair(raw: str) -> bool:
+    """True for ``accessKeyId:secretAccessKey`` (not key=value / URL forms)."""
+    if ":" not in raw or "=" in raw.split(":", 1)[0]:
+        return False
+    access, _, secret = raw.partition(":")
+    if not access or not secret:
+        return False
+    # Reject URL-like left sides (e.g. "https")
+    if access.lower() in ("http", "https") or access.endswith("/"):
+        return False
+    return True
