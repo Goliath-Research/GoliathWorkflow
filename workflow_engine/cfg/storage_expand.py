@@ -68,7 +68,28 @@ def expand_storage_endpoint(
         )
         if cred is None or not cred.secret:
             raise KeyError(f"credential not found: {cred_name}")
-        location["credentials"] = deepcopy(cred.secret)
+        secret = deepcopy(cred.secret)
+        auth = str(secret.get("authMode") or "")
+        # Vault / encrypted refs stay as references — workers resolve with MI / Fernet.
+        # Do not pull Key Vault secrets into the planner / task JSON.
+        if auth in ("azure_key_vault", "encrypted_file"):
+            location["credentials"] = {
+                k: v
+                for k, v in secret.items()
+                if k
+                in (
+                    "authMode",
+                    "vaultUrl",
+                    "secretName",
+                    "path",
+                    "materializeAs",
+                    "azure_key_vault_url",
+                    "azure_secret_name",
+                    "encrypted_file_path",
+                )
+            }
+        else:
+            location["credentials"] = secret
     elif provider in ("file",):
         pass
     elif auth_hint in ("instance_profile", "default_credential", "application_default"):

@@ -97,7 +97,7 @@ def test_local_download_refreshes_when_size_changes(tmp_path: Path) -> None:
     assert (dest / "S1_1.fastq.gz").read_bytes() == b"new-content"
 
 
-@patch("methyl_worker.fastq_source._s3_client")
+@patch("methyl_worker.fastq_source.build_s3_client")
 def test_s3_folder_download(mock_s3_client: MagicMock, tmp_path: Path) -> None:
     client = MagicMock()
     mock_s3_client.return_value = client
@@ -118,7 +118,7 @@ def test_s3_folder_download(mock_s3_client: MagicMock, tmp_path: Path) -> None:
         }
     ]
 
-    def fake_download(bucket: str, key: str, target: str) -> None:
+    def fake_download(bucket: str, key: str, target: str, **kwargs) -> None:
         Path(target).write_bytes(key.encode())
 
     client.download_file.side_effect = fake_download
@@ -129,9 +129,10 @@ def test_s3_folder_download(mock_s3_client: MagicMock, tmp_path: Path) -> None:
     assert sorted(Path(p).name for p in files) == ["S1_1.fastq.gz", "S1_2.fastq.gz"]
     assert client.download_file.call_count == 2
     assert mock_s3_client.call_count == 1
+    assert "Config" in client.download_file.call_args.kwargs
 
 
-@patch("methyl_worker.fastq_source._s3_client")
+@patch("methyl_worker.fastq_source.build_s3_client")
 def test_s3_preserves_subprefix_paths_when_basenames_collide(
     mock_s3_client: MagicMock, tmp_path: Path
 ) -> None:
@@ -154,7 +155,7 @@ def test_s3_preserves_subprefix_paths_when_basenames_collide(
         }
     ]
 
-    def fake_download(bucket: str, key: str, target: str) -> None:
+    def fake_download(bucket: str, key: str, target: str, **kwargs) -> None:
         Path(target).write_bytes(key.encode())
 
     client.download_file.side_effect = fake_download
@@ -172,7 +173,7 @@ def test_s3_preserves_subprefix_paths_when_basenames_collide(
     assert (dest / "lane2" / "S1_1.fastq.gz").read_bytes() == b"plasma/S1/lane2/S1_1.fastq.gz"
 
 
-@patch("methyl_worker.fastq_source._s3_client")
+@patch("methyl_worker.fastq_source.build_s3_client")
 def test_s3_skips_download_when_size_and_mtime_match(mock_s3_client: MagicMock, tmp_path: Path) -> None:
     client = MagicMock()
     mock_s3_client.return_value = client
@@ -202,7 +203,7 @@ def test_s3_skips_download_when_size_and_mtime_match(mock_s3_client: MagicMock, 
     assert mock_s3_client.call_count == 1
 
 
-@patch("methyl_worker.fastq_source._azure_blob_service")
+@patch("methyl_worker.fastq_source.build_azure_blob_service")
 def test_azure_folder_download(mock_azure_service: MagicMock, tmp_path: Path) -> None:
     service = MagicMock()
     mock_azure_service.return_value = service
@@ -241,7 +242,7 @@ def test_azure_folder_download(mock_azure_service: MagicMock, tmp_path: Path) ->
     mock_azure_service.assert_called_once()
 
 
-@patch("methyl_worker.fastq_source._azure_blob_service")
+@patch("methyl_worker.fastq_source.build_azure_blob_service")
 def test_azure_preserves_subprefix_paths_when_basenames_collide(
     mock_azure_service: MagicMock, tmp_path: Path
 ) -> None:
@@ -291,7 +292,7 @@ def test_azure_preserves_subprefix_paths_when_basenames_collide(
     mock_azure_service.assert_called_once()
 
 
-@patch("methyl_worker.fastq_source._azure_blob_service")
+@patch("methyl_worker.fastq_source.build_azure_blob_service")
 def test_azure_empty_prefix_lists_container(mock_azure_service: MagicMock, tmp_path: Path) -> None:
     service = MagicMock()
     mock_azure_service.return_value = service

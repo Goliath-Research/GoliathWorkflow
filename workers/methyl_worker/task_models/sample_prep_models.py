@@ -18,6 +18,10 @@ class DownloadFastqTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     fastqSource: FastqSourceLocation
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig slice (may include storage_transfer knobs).",
+    )
 
 
 class ParabricksFq2bamTaskInput(BaseModel):

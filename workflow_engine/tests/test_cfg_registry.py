@@ -111,6 +111,42 @@ def test_storage_endpoint_credentials_never_materialized(
     assert expanded["credentials"]["secretAccessKey"] == "secret-value"
 
 
+def test_expand_azure_key_vault_emits_ref_without_keys(store: FileConfigStore) -> None:
+    store.upsert(
+        "credential",
+        "qnap-vault",
+        {"authMode": "azure_key_vault"},
+        status="published",
+        secret={
+            "authMode": "azure_key_vault",
+            "vaultUrl": "https://kv.vault.azure.net/",
+            "secretName": "epimethyl-s3",
+            "accessKeyId": "SHOULD_NOT_LEAK",
+            "secretAccessKey": "SHOULD_NOT_LEAK",
+        },
+        extra={"provider": "s3"},
+    )
+    store.upsert(
+        "storage_endpoint",
+        "qnap",
+        {
+            "type": "s3",
+            "bucket": "epimethyl",
+            "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
+            "region": "us-east-1",
+        },
+        status="published",
+        extra={"provider": "s3", "credentialName": "qnap-vault"},
+    )
+    loc = expand_storage_endpoint(store, "qnap")
+    creds = loc["credentials"]
+    assert creds["authMode"] == "azure_key_vault"
+    assert "accessKeyId" not in creds
+    assert "secretAccessKey" not in creds
+    assert creds["secretName"] == "epimethyl-s3"
+    assert creds["vaultUrl"] == "https://kv.vault.azure.net/"
+
+
 def test_azure_sas_and_gcs_expand(store: FileConfigStore) -> None:
     store.upsert(
         "credential",

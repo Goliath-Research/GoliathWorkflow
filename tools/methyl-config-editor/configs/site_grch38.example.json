@@ -7,6 +7,12 @@
     "gene_selection": {
       "max_dmps": 1000,
       "max_genes": 200
+    },
+    "storage_transfer": {
+      "max_concurrency": 8,
+      "multipart_chunksize_mb": 16,
+      "multipart_threshold_mb": 32,
+      "max_attempts": 10
     }
   },
   "reference_genome": {

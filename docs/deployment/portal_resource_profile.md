@@ -22,7 +22,7 @@ The workflow engine only stores resolved `fastqStorage` / `h5Storage` in `workfl
 | `profile_json` | JSON matching [`schemas/domain/h5_storage.schema.json`](../../schemas/domain/h5_storage.schema.json) defaults |
 | `status` | `ACTIVE` / `DISABLED` |
 
-Seed `profile_json` for myQNAPcloud:
+Seed `profile_json` for myQNAPcloud (**prefer Key Vault ref** after bootstrap):
 
 ```json
 {
@@ -32,12 +32,30 @@ Seed `profile_json` for myQNAPcloud:
   "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
   "prefixBase": "samples/",
   "credentials": {
+    "authMode": "azure_key_vault",
+    "vaultUrl": "https://YOUR-VAULT.vault.azure.net/",
+    "secretName": "epimethyl-s3-keys"
+  }
+}
+```
+
+Bootstrap (plain keys once, then migrate to vault):
+
+```json
+{
+  "credentials": {
     "authMode": "explicit_keys",
     "accessKeyId": "REPLACE_WITH_ACCESS_KEY",
     "secretAccessKey": "REPLACE_WITH_SECRET_KEY"
   }
 }
 ```
+
+Vault secret value should be JSON
+`{"authMode":"explicit_keys","accessKeyId":"...","secretAccessKey":"..."}`
+or `accessKeyId:secretAccessKey`. Worker nodes need Managed Identity with Key Vault Secrets User.
+
+Transfer tuning (optional): site/profile `actionConfig.storage_transfer` (`max_concurrency`, `multipart_chunksize_mb`, …). Bulk genomes mirror remains [`scripts/sync_genomes_to_s3.sh`](../../scripts/sync_genomes_to_s3.sh); sample FASTQ/H5 I/O uses the hardened worker transfer layer.
 
 ### Configure credentials (operator)
 

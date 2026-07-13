@@ -57,21 +57,6 @@
       "title": "AzureDefaultCredentialCredentials",
       "type": "object"
     },
-    "AzureSasTokenCredentials": {
-      "$ref": "storage_location.schema.json#/$defs/AzureSasTokenCredentials"
-    },
-    "AzureSasUrlCredentials": {
-      "$ref": "storage_location.schema.json#/$defs/AzureSasUrlCredentials"
-    },
-    "GcsServiceAccountCredentials": {
-      "$ref": "storage_location.schema.json#/$defs/GcsServiceAccountCredentials"
-    },
-    "GcsHmacCredentials": {
-      "$ref": "storage_location.schema.json#/$defs/GcsHmacCredentials"
-    },
-    "GcsApplicationDefaultCredentials": {
-      "$ref": "storage_location.schema.json#/$defs/GcsApplicationDefaultCredentials"
-    },
     "AzureFastqSource": {
       "additionalProperties": false,
       "properties": {
@@ -87,10 +72,10 @@
           "discriminator": {
             "mapping": {
               "account_key": "#/$defs/AzureAccountKeyCredentials",
+              "azure_key_vault": "#/$defs/AzureKeyVaultCredentials",
               "connection_string": "#/$defs/AzureConnectionStringCredentials",
               "default_credential": "#/$defs/AzureDefaultCredentialCredentials",
-              "sas_token": "#/$defs/AzureSasTokenCredentials",
-              "sas_url": "#/$defs/AzureSasUrlCredentials"
+              "encrypted_file": "#/$defs/EncryptedFileCredentials"
             },
             "propertyName": "authMode"
           },
@@ -105,10 +90,10 @@
               "$ref": "#/$defs/AzureDefaultCredentialCredentials"
             },
             {
-              "$ref": "#/$defs/AzureSasTokenCredentials"
+              "$ref": "#/$defs/AzureKeyVaultCredentials"
             },
             {
-              "$ref": "#/$defs/AzureSasUrlCredentials"
+              "$ref": "#/$defs/EncryptedFileCredentials"
             }
           ],
           "title": "Credentials"
@@ -133,9 +118,6 @@
       "title": "AzureFastqSource",
       "type": "object"
     },
-    "GcsFastqSource": {
-      "$ref": "storage_location.schema.json#/$defs/GcsLocation"
-    },
     "AzureFastqStorageDefaults": {
       "additionalProperties": false,
       "properties": {
@@ -151,10 +133,10 @@
           "discriminator": {
             "mapping": {
               "account_key": "#/$defs/AzureAccountKeyCredentials",
+              "azure_key_vault": "#/$defs/AzureKeyVaultCredentials",
               "connection_string": "#/$defs/AzureConnectionStringCredentials",
               "default_credential": "#/$defs/AzureDefaultCredentialCredentials",
-              "sas_token": "#/$defs/AzureSasTokenCredentials",
-              "sas_url": "#/$defs/AzureSasUrlCredentials"
+              "encrypted_file": "#/$defs/EncryptedFileCredentials"
             },
             "propertyName": "authMode"
           },
@@ -169,10 +151,10 @@
               "$ref": "#/$defs/AzureDefaultCredentialCredentials"
             },
             {
-              "$ref": "#/$defs/AzureSasTokenCredentials"
+              "$ref": "#/$defs/AzureKeyVaultCredentials"
             },
             {
-              "$ref": "#/$defs/AzureSasUrlCredentials"
+              "$ref": "#/$defs/EncryptedFileCredentials"
             }
           ],
           "title": "Credentials"
@@ -190,6 +172,92 @@
         "credentials"
       ],
       "title": "AzureFastqStorageDefaults",
+      "type": "object"
+    },
+    "AzureKeyVaultCredentials": {
+      "additionalProperties": false,
+      "description": "Credential *reference* resolved on the worker via Managed Identity.",
+      "properties": {
+        "authMode": {
+          "const": "azure_key_vault",
+          "default": "azure_key_vault",
+          "title": "Authmode",
+          "type": "string"
+        },
+        "materializeAs": {
+          "anyOf": [
+            {
+              "enum": [
+                "explicit_keys",
+                "account_key",
+                "connection_string"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional hint for how to interpret a plain-string secret value.",
+          "title": "Materializeas"
+        },
+        "secretName": {
+          "description": "Secret name holding JSON or accessKeyId:secret.",
+          "title": "Secretname",
+          "type": "string"
+        },
+        "vaultUrl": {
+          "description": "Azure Key Vault URL (https://\u2026.vault.azure.net/).",
+          "title": "Vaulturl",
+          "type": "string"
+        }
+      },
+      "required": [
+        "vaultUrl",
+        "secretName"
+      ],
+      "title": "AzureKeyVaultCredentials",
+      "type": "object"
+    },
+    "EncryptedFileCredentials": {
+      "additionalProperties": false,
+      "description": "Credential *reference* to a Fernet-encrypted local file (bootstrap / air-gapped).",
+      "properties": {
+        "authMode": {
+          "const": "encrypted_file",
+          "default": "encrypted_file",
+          "title": "Authmode",
+          "type": "string"
+        },
+        "materializeAs": {
+          "anyOf": [
+            {
+              "enum": [
+                "explicit_keys",
+                "account_key",
+                "connection_string"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional hint for how to interpret a plain-string secret value.",
+          "title": "Materializeas"
+        },
+        "path": {
+          "description": "Path to encrypted credential file (owner rw only).",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "EncryptedFileCredentials",
       "type": "object"
     },
     "FileFastqSource": {
@@ -289,6 +357,8 @@
         "credentials": {
           "discriminator": {
             "mapping": {
+              "azure_key_vault": "#/$defs/AzureKeyVaultCredentials",
+              "encrypted_file": "#/$defs/EncryptedFileCredentials",
               "explicit_keys": "#/$defs/S3ExplicitKeysCredentials",
               "instance_profile": "#/$defs/S3InstanceProfileCredentials"
             },
@@ -300,6 +370,12 @@
             },
             {
               "$ref": "#/$defs/S3InstanceProfileCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureKeyVaultCredentials"
+            },
+            {
+              "$ref": "#/$defs/EncryptedFileCredentials"
             }
           ],
           "title": "Credentials"
@@ -357,6 +433,8 @@
         "credentials": {
           "discriminator": {
             "mapping": {
+              "azure_key_vault": "#/$defs/AzureKeyVaultCredentials",
+              "encrypted_file": "#/$defs/EncryptedFileCredentials",
               "explicit_keys": "#/$defs/S3ExplicitKeysCredentials",
               "instance_profile": "#/$defs/S3InstanceProfileCredentials"
             },
@@ -368,6 +446,12 @@
             },
             {
               "$ref": "#/$defs/S3InstanceProfileCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureKeyVaultCredentials"
+            },
+            {
+              "$ref": "#/$defs/EncryptedFileCredentials"
             }
           ],
           "title": "Credentials"
@@ -442,8 +526,7 @@
       "mapping": {
         "azure_blob": "#/$defs/AzureFastqSource",
         "file": "#/$defs/FileFastqSource",
-        "s3": "#/$defs/S3FastqSource",
-        "gcs": "#/$defs/GcsFastqSource"
+        "s3": "#/$defs/S3FastqSource"
       },
       "propertyName": "type"
     },
@@ -456,9 +539,6 @@
       },
       {
         "$ref": "#/$defs/AzureFastqSource"
-      },
-      {
-        "$ref": "#/$defs/GcsFastqSource"
       }
     ]
   },
@@ -467,8 +547,7 @@
       "mapping": {
         "azure_blob": "#/$defs/AzureFastqStorageDefaults",
         "file": "#/$defs/FileFastqStorageDefaults",
-        "s3": "#/$defs/S3FastqStorageDefaults",
-        "gcs": "#/$defs/GcsFastqSource"
+        "s3": "#/$defs/S3FastqStorageDefaults"
       },
       "propertyName": "type"
     },
@@ -481,9 +560,6 @@
       },
       {
         "$ref": "#/$defs/AzureFastqStorageDefaults"
-      },
-      {
-        "$ref": "#/$defs/GcsFastqSource"
       }
     ]
   },

@@ -29,6 +29,21 @@ def test_merge_file_storage() -> None:
     assert source.prefix == "S1/"
 
 
+def test_merge_s3_vault_credentials() -> None:
+    defaults = S3FastqStorageDefaults(
+        bucket="epimethyl",
+        endpointUrl="https://s3.us-east-1.myqnapcloud.io",
+        credentials={
+            "authMode": "azure_key_vault",
+            "vaultUrl": "https://kv.vault.azure.net/",
+            "secretName": "epimethyl-s3",
+        },
+    )
+    source = merge_fastq_source(defaults, "S1")
+    assert source.credentials.authMode == "azure_key_vault"
+    assert source.credentials.secretName == "epimethyl-s3"
+
+
 def test_merge_s3_storage() -> None:
     defaults = S3FastqStorageDefaults(
         bucket="cohort",

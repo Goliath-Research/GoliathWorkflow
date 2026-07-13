@@ -69,8 +69,40 @@ class S3InstanceProfileCredentials(BaseModel):
     authMode: Literal["instance_profile"] = "instance_profile"
 
 
+class AzureKeyVaultCredentials(BaseModel):
+    """Credential *reference* resolved on the worker via Managed Identity."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    authMode: Literal["azure_key_vault"] = "azure_key_vault"
+    vaultUrl: str = Field(description="Azure Key Vault URL (https://….vault.azure.net/).")
+    secretName: str = Field(description="Secret name holding JSON or accessKeyId:secret.")
+    materializeAs: Literal["explicit_keys", "account_key", "connection_string"] | None = Field(
+        default=None,
+        description="Optional hint for how to interpret a plain-string secret value.",
+    )
+
+
+class EncryptedFileCredentials(BaseModel):
+    """Credential *reference* to a Fernet-encrypted local file (bootstrap / air-gapped)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    authMode: Literal["encrypted_file"] = "encrypted_file"
+    path: str = Field(description="Path to encrypted credential file (owner rw only).")
+    materializeAs: Literal["explicit_keys", "account_key", "connection_string"] | None = Field(
+        default=None,
+        description="Optional hint for how to interpret a plain-string secret value.",
+    )
+
+
 S3Credentials = Annotated[
-    Union[S3ExplicitKeysCredentials, S3InstanceProfileCredentials],
+    Union[
+        S3ExplicitKeysCredentials,
+        S3InstanceProfileCredentials,
+        AzureKeyVaultCredentials,
+        EncryptedFileCredentials,
+    ],
     Field(discriminator="authMode"),
 ]
 
@@ -100,6 +132,8 @@ AzureCredentials = Annotated[
         AzureAccountKeyCredentials,
         AzureConnectionStringCredentials,
         AzureDefaultCredentialCredentials,
+        AzureKeyVaultCredentials,
+        EncryptedFileCredentials,
     ],
     Field(discriminator="authMode"),
 ]

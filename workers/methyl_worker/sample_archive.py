@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +17,17 @@ from methyl_domain.sample_storage import (
     SampleDestinationLocation,
     S3SampleDestination,
     resolve_file_local_root,
+)
+from methyl_worker.cloud_transfer import (
+    TransferSettings,
+    azure_upload_blob,
+    build_azure_blob_service,
+    build_s3_client,
+    credentials_mapping,
+    file_md5_hex,
+    s3_upload_file,
+    should_skip_azure_upload,
+    should_skip_s3_upload,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,6 +53,7 @@ class UploadTarget:
 class _CloudClients:
     s3: Any = field(default=None, repr=False)
     azure: Any = field(default=None, repr=False)
+    settings: TransferSettings = field(default_factory=TransferSettings)
 
 
 def _remote_key(prefix: str, relative_path: str) -> str:
@@ -53,74 +65,36 @@ def _remote_key(prefix: str, relative_path: str) -> str:
 
 
 def _file_md5(path: Path) -> str:
-    digest = hashlib.md5()
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+    return file_md5_hex(path)
 
 
 def _should_skip_s3(client: Any, bucket: str, key: str, local: Path) -> bool:
-    try:
-        head = client.head_object(Bucket=bucket, Key=key)
-    except Exception:
-        return False
-    if int(head["ContentLength"]) != local.stat().st_size:
-        return False
-    etag = str(head.get("ETag", "")).strip('"')
-    return len(etag) == 32 and etag == _file_md5(local)
+    return should_skip_s3_upload(client, bucket=bucket, key=key, local=local)
 
 
 def _should_skip_azure(blob_client: Any, local: Path) -> bool:
-    try:
-        props = blob_client.get_blob_properties()
-    except Exception:
-        return False
-    return int(props.size) == local.stat().st_size
+    return should_skip_azure_upload(blob_client, local)
 
 
-def _s3_client(dest: S3SampleDestination):
-    try:
-        import boto3
-    except ImportError as exc:
-        raise RuntimeError("boto3 is required for s3 sampleDestination") from exc
-
-    from methyl_domain.fastq_storage import S3ExplicitKeysCredentials
-
-    client_kwargs: dict[str, Any] = {}
-    if dest.endpointUrl:
-        client_kwargs["endpoint_url"] = dest.endpointUrl
-    if dest.region:
-        client_kwargs["region_name"] = dest.region
-    creds = dest.credentials
-    if creds.authMode == "explicit_keys":
-        assert isinstance(creds, S3ExplicitKeysCredentials)
-        session_token = creds.sessionToken.get_secret_value() if creds.sessionToken else None
-        return boto3.client(
-            "s3",
-            aws_access_key_id=creds.accessKeyId,
-            aws_secret_access_key=creds.secretAccessKey.get_secret_value(),
-            aws_session_token=session_token,
-            **client_kwargs,
+def _ensure_s3(clients: _CloudClients, dest: S3SampleDestination) -> Any:
+    if clients.s3 is None:
+        clients.s3 = build_s3_client(
+            credentials=credentials_mapping(dest.credentials),
+            region=dest.region,
+            endpoint_url=dest.endpointUrl,
+            settings=clients.settings,
         )
-    return boto3.client("s3", **client_kwargs)
+    return clients.s3
 
 
-def _azure_service(dest: AzureSampleDestination):
-    try:
-        from azure.identity import DefaultAzureCredential
-        from azure.storage.blob import BlobServiceClient
-    except ImportError as exc:
-        raise RuntimeError("azure-storage-blob required for azure_blob sampleDestination") from exc
-
-    creds = dest.credentials
-    if creds.authMode == "connection_string":
-        return BlobServiceClient.from_connection_string(creds.connectionString.get_secret_value())
-    if creds.authMode == "account_key":
-        account_url = f"https://{dest.account}.blob.core.windows.net"
-        return BlobServiceClient(account_url, credential=creds.accountKey.get_secret_value())
-    account_url = f"https://{dest.account}.blob.core.windows.net"
-    return BlobServiceClient(account_url, credential=DefaultAzureCredential())
+def _ensure_azure(clients: _CloudClients, dest: AzureSampleDestination) -> Any:
+    if clients.azure is None:
+        clients.azure = build_azure_blob_service(
+            account=dest.account,
+            credentials=credentials_mapping(dest.credentials),
+            settings=clients.settings,
+        )
+    return clients.azure
 
 
 def _target_from_model(dest: SampleDestinationLocation) -> UploadTarget:
@@ -153,9 +127,12 @@ def _upload_one(
     relative_path: str,
     target: UploadTarget,
     clients: _CloudClients,
-) -> bool:
-    """Upload file; return True if uploaded, False if skipped unchanged."""
+    *,
+    local_md5: str | None = None,
+) -> Tuple[bool, str]:
+    """Upload file; return (uploaded?, md5_hex)."""
     key = _remote_key(target.prefix, relative_path)
+    md5 = local_md5 if local_md5 is not None else _file_md5(local)
     if target.scheme == "file":
         root = target.local_root
         if root is None:
@@ -163,31 +140,42 @@ def _upload_one(
         dest_path = root / relative_path
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         if dest_path.is_file() and dest_path.stat().st_size == local.stat().st_size:
-            return False
+            return False, md5
         shutil.copy2(local, dest_path)
-        return True
+        return True, md5
 
     if target.scheme == "s3":
-        if clients.s3 is None:
-            assert target.s3_dest is not None
-            clients.s3 = _s3_client(target.s3_dest)
-        if _should_skip_s3(clients.s3, target.bucket, key, local):
+        assert target.s3_dest is not None
+        client = _ensure_s3(clients, target.s3_dest)
+        if should_skip_s3_upload(
+            client, bucket=target.bucket, key=key, local=local, local_md5=md5
+        ):
             logger.info("Skipping unchanged s3://%s/%s", target.bucket, key)
-            return False
-        clients.s3.upload_file(str(local), target.bucket, key)
-        return True
+            return False, md5
+        s3_upload_file(
+            client,
+            bucket=target.bucket,
+            key=key,
+            local=local,
+            settings=clients.settings,
+            extra_args={"Metadata": {"md5": md5}},
+        )
+        return True, md5
 
     if target.scheme == "az":
         assert target.azure_dest is not None
-        if clients.azure is None:
-            clients.azure = _azure_service(target.azure_dest)
-        blob_client = clients.azure.get_blob_client(container=target.container, blob=key)
-        if _should_skip_azure(blob_client, local):
+        service = _ensure_azure(clients, target.azure_dest)
+        blob_client = service.get_blob_client(container=target.container, blob=key)
+        if should_skip_azure_upload(blob_client, local, local_md5=md5):
             logger.info("Skipping unchanged %s/%s", target.container, key)
-            return False
-        with open(local, "rb") as handle:
-            blob_client.upload_blob(handle, overwrite=True)
-        return True
+            return False, md5
+        azure_upload_blob(
+            blob_client,
+            local,
+            settings=clients.settings,
+            content_md5=bytes.fromhex(md5),
+        )
+        return True, md5
 
     raise RuntimeError(f"Unsupported destination scheme {target.scheme!r}")
 
@@ -264,6 +252,15 @@ def _artifact_entries(
     return entries
 
 
+def _settings_from_resolved(resolved_config: Mapping[str, Any] | None) -> TransferSettings:
+    if not resolved_config:
+        return TransferSettings()
+    slice_ = resolved_config.get("storage_transfer") or resolved_config.get(
+        "storageTransfer"
+    )
+    return TransferSettings.from_config(slice_)
+
+
 def archive_sample(
     *,
     sample_dir: str | Path,
@@ -273,6 +270,7 @@ def archive_sample(
     reject_reason: Optional[str] = None,
     alignment_qc_path: Optional[str | Path] = None,
     project_path: Optional[str | Path] = None,
+    resolved_config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if mode not in {"full", "qc_only"}:
         raise RuntimeError(f"archive mode must be 'full' or 'qc_only', got {mode!r}")
@@ -283,12 +281,14 @@ def archive_sample(
     if not sample_path.is_dir():
         raise RuntimeError(f"sampleDir not found: {sample_path}")
 
+    settings = _settings_from_resolved(resolved_config)
     target = _target_from_model(sample_destination)
-    clients = _CloudClients()
+    clients = _CloudClients(settings=settings)
     uploaded: List[str] = []
     skipped: List[str] = []
     manifest_files: List[dict[str, Any]] = []
 
+    entries: List[Tuple[Path, str]] = []
     for local, rel in _artifact_entries(
         sample_dir=sample_path,
         sample_id=sample_id,
@@ -300,13 +300,27 @@ def archive_sample(
             continue
         if local.suffix == ".json" and any(local.name.endswith(s) for s in RAW_METRICS_SUFFIXES):
             continue
-        did_upload = _upload_one(local, rel, target, clients)
-        entry = {
-            "path": rel,
-            "size": local.stat().st_size,
-            "md5": _file_md5(local),
-        }
-        manifest_files.append(entry)
+        entries.append((local, rel))
+
+    def _do_one(item: Tuple[Path, str]) -> Tuple[str, bool, str, int]:
+        local, rel = item
+        did_upload, md5 = _upload_one(local, rel, target, clients)
+        return rel, did_upload, md5, local.stat().st_size
+
+    max_workers = settings.max_concurrency if settings.max_concurrency else 1
+    if max_workers > 1 and len(entries) > 1:
+        results: List[Tuple[str, bool, str, int]] = []
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(entries))) as pool:
+            futs = [pool.submit(_do_one, e) for e in entries]
+            for fut in as_completed(futs):
+                results.append(fut.result())
+        # Stable order by relative path
+        results.sort(key=lambda r: r[0])
+    else:
+        results = [_do_one(e) for e in entries]
+
+    for rel, did_upload, md5, size in results:
+        manifest_files.append({"path": rel, "size": size, "md5": md5})
         if did_upload:
             uploaded.append(rel)
         else:
@@ -391,6 +405,7 @@ def archive_from_task_input(input_json: Mapping[str, Any]) -> dict[str, Any]:
             mode=mode,
             reject_reason=input_json.get("rejectReason"),
         )
+    resolved = input_json.get("resolvedConfig")
     return archive_sample(
         sample_dir=str(sample_dir),
         sample_id=sample_id,
@@ -399,6 +414,7 @@ def archive_from_task_input(input_json: Mapping[str, Any]) -> dict[str, Any]:
         reject_reason=input_json.get("rejectReason"),
         alignment_qc_path=input_json.get("alignmentQcPath") or input_json.get("qcPath"),
         project_path=input_json.get("projectPath") or input_json.get("project"),
+        resolved_config=resolved if isinstance(resolved, Mapping) else None,
     )
 
 
@@ -419,18 +435,21 @@ def upload_h5_files(
     sample_dir: str | Path,
     h5_destination: SampleDestinationLocation,
     h5_files: Sequence[str] | None = None,
+    resolved_config: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Upload only HDF5 files to the destination prefix (legacy flat layout)."""
     sample_path = Path(sample_dir)
     local_files = _local_h5_files(sample_path, h5_files)
+    settings = _settings_from_resolved(resolved_config)
     target = _target_from_model(h5_destination)
-    clients = _CloudClients()
+    clients = _CloudClients(settings=settings)
     uploaded: List[str] = []
     skipped: List[str] = []
 
     for local in local_files:
         rel = local.name
-        if _upload_one(local, rel, target, clients):
+        did_upload, _ = _upload_one(local, rel, target, clients)
+        if did_upload:
             uploaded.append(rel)
         else:
             skipped.append(rel)
@@ -454,10 +473,12 @@ def upload_h5_from_task_input(input_json: Mapping[str, Any]) -> dict[str, Any]:
     h5_files = input_json.get("h5Files")
     if isinstance(h5_files, str):
         h5_files = [h5_files]
+    resolved = input_json.get("resolvedConfig")
     result = upload_h5_files(
         sample_dir=str(sample_dir),
         h5_destination=destination,
         h5_files=h5_files,
+        resolved_config=resolved if isinstance(resolved, Mapping) else None,
     )
     result["sampleId"] = input_json.get("sampleId") or Path(str(sample_dir)).name
     return result

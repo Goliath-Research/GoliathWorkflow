@@ -11,6 +11,12 @@
     "AzureDefaultCredentialCredentials": {
       "$ref": "fastq_storage.schema.json#/$defs/AzureDefaultCredentialCredentials"
     },
+    "AzureKeyVaultCredentials": {
+      "$ref": "fastq_storage.schema.json#/$defs/AzureKeyVaultCredentials"
+    },
+    "EncryptedFileCredentials": {
+      "$ref": "fastq_storage.schema.json#/$defs/EncryptedFileCredentials"
+    },
     "AzureSasTokenCredentials": {
       "$ref": "storage_location.schema.json#/$defs/AzureSasTokenCredentials"
     },
@@ -28,7 +34,9 @@
             { "$ref": "#/$defs/AzureConnectionStringCredentials" },
             { "$ref": "#/$defs/AzureDefaultCredentialCredentials" },
             { "$ref": "#/$defs/AzureSasTokenCredentials" },
-            { "$ref": "#/$defs/AzureSasUrlCredentials" }
+            { "$ref": "#/$defs/AzureSasUrlCredentials" },
+            { "$ref": "#/$defs/AzureKeyVaultCredentials" },
+            { "$ref": "#/$defs/EncryptedFileCredentials" }
           ]
         },
         "prefix": { "type": "string" },
@@ -48,7 +56,9 @@
             { "$ref": "#/$defs/AzureConnectionStringCredentials" },
             { "$ref": "#/$defs/AzureDefaultCredentialCredentials" },
             { "$ref": "#/$defs/AzureSasTokenCredentials" },
-            { "$ref": "#/$defs/AzureSasUrlCredentials" }
+            { "$ref": "#/$defs/AzureSasUrlCredentials" },
+            { "$ref": "#/$defs/AzureKeyVaultCredentials" },
+            { "$ref": "#/$defs/EncryptedFileCredentials" }
           ]
         },
         "type": { "const": "azure_blob", "default": "azure_blob", "type": "string" }
@@ -88,7 +98,9 @@
         "credentials": {
           "oneOf": [
             { "$ref": "#/$defs/S3ExplicitKeysCredentials" },
-            { "$ref": "fastq_storage.schema.json#/$defs/S3InstanceProfileCredentials" }
+            { "$ref": "fastq_storage.schema.json#/$defs/S3InstanceProfileCredentials" },
+            { "$ref": "#/$defs/AzureKeyVaultCredentials" },
+            { "$ref": "#/$defs/EncryptedFileCredentials" }
           ]
         },
         "endpointUrl": { "type": ["string", "null"] },
@@ -106,7 +118,9 @@
         "credentials": {
           "oneOf": [
             { "$ref": "#/$defs/S3ExplicitKeysCredentials" },
-            { "$ref": "fastq_storage.schema.json#/$defs/S3InstanceProfileCredentials" }
+            { "$ref": "fastq_storage.schema.json#/$defs/S3InstanceProfileCredentials" },
+            { "$ref": "#/$defs/AzureKeyVaultCredentials" },
+            { "$ref": "#/$defs/EncryptedFileCredentials" }
           ]
         },
         "endpointUrl": { "type": ["string", "null"] },

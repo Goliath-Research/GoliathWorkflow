@@ -73,21 +73,24 @@ After `sample.extraction_qc`, scope receives **`extractionQcPass`** from **`outp
 
 ### Authentication (typed JSON only)
 
-Credentials are supplied in `fastqSource.credentials` — there is **no** env-var fallback on the worker.
+Credentials are supplied in `fastqSource.credentials` — there is **no** env-var fallback on the worker for Access Keys.
 
 | `type` | `credentials.authMode` | Notes |
 |--------|------------------------|-------|
-| `s3` | `explicit_keys` | `accessKeyId`, `secretAccessKey`, optional `sessionToken` |
+| `s3` | `explicit_keys` | Bootstrap only: `accessKeyId`, `secretAccessKey`, optional `sessionToken` |
 | `s3` | `instance_profile` | boto3 default chain (IAM role on worker node) |
-| `azure_blob` | `account_key` | `accountKey` (write-only in Portal schema) |
-| `azure_blob` | `connection_string` | `connectionString` (write-only) |
-| `azure_blob` | `sas_token` | `sasToken` (SAS query string) |
-| `azure_blob` | `sas_url` | `sasUrl` (full SAS URL) |
-| `azure_blob` | `default_credential` | `DefaultAzureCredential` (managed identity, Azure CLI dev) |
-| `gcs` | `service_account_json` / `hmac_keys` / `application_default` | See `schemas/domain/storage_location.schema.json` |
+| `s3` / `azure_blob` | `azure_key_vault` | `{ vaultUrl, secretName }` — worker resolves with Managed Identity; **no plaintext keys in task JSON** |
+| `s3` / `azure_blob` | `encrypted_file` | `{ path }` Fernet file (air-gapped bootstrap); worker decrypts locally |
+| `azure_blob` | `account_key` | Bootstrap: `accountKey` (write-only in Portal schema) |
+| `azure_blob` | `connection_string` | Bootstrap: `connectionString` (write-only) |
+| `azure_blob` | `default_credential` | `DefaultAzureCredential` (managed identity, Azure CLI dev) — **preferred for Azure** |
 | `file` | — | `basePath` + `prefix` on shared NFS/local storage |
 
-Named endpoints and secrets belong in the **`cfg` registry** (`methyl-cfg upsert credential|storage_endpoint`); expand with `methyl-cfg expand-endpoint` into this wire format. Do not write secrets under `/work/projects`.
+**Prefer Key Vault / MI** over embedding long-lived keys. Upsert `cfg.credential` with `authMode: azure_key_vault` (or `encrypted_file`); `methyl-cfg expand-endpoint` emits the **ref only**. Workers resolve secrets at transfer time ([`cloud_transfer.py`](../../workers/methyl_worker/cloud_transfer.py)).
+
+Transfer performance knobs (multipart / concurrency): site or profile `actionConfig.storage_transfer` — see `schemas/config/storage_transfer.schema.json`.
+
+Named endpoints and secrets belong in the **`cfg` registry** (`methyl-cfg upsert credential|storage_endpoint`). Do not write secrets under `/work/projects`.
 
 Portal / planner JSON: instance-level `fastqStorage` (laboratory-owned ingress — **required** on every study start) plus per-sample `fastqPrefix` (materialized into `samples[].fastqSource`). Internal HDF5 archive (`h5Storage`) may default from `portal.resource_profile`. See `schemas/domain/fastq_storage.schema.json` and [portal_resource_profile.md](../../docs/deployment/portal_resource_profile.md).
 

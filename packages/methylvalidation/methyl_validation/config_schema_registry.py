@@ -182,6 +182,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         filename="test_data_registry.schema.json",
         title="TestDataRegistry",
     ),
+    ConfigSchemaSpec(
+        schema_id="storage_transfer",
+        module="methyl_domain.storage_transfer_config",
+        class_name="StorageTransferStepConfig",
+        filename="storage_transfer.schema.json",
+        title="StorageTransferStepConfig",
+    ),
 )
 
 

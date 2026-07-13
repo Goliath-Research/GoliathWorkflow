@@ -72,6 +72,41 @@
         "authMode": { "const": "default_credential", "default": "default_credential", "type": "string" }
       }
     },
+    "AzureKeyVaultCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Credential reference resolved on the worker via Managed Identity + Key Vault (no plaintext keys in task JSON).",
+      "properties": {
+        "authMode": { "const": "azure_key_vault", "default": "azure_key_vault", "type": "string" },
+        "vaultUrl": { "type": "string", "description": "Azure Key Vault URL (https://….vault.azure.net/)." },
+        "secretName": { "type": "string", "description": "Secret name holding JSON or accessKeyId:secret." },
+        "materializeAs": {
+          "anyOf": [
+            { "type": "string", "enum": ["explicit_keys", "account_key", "connection_string"] },
+            { "type": "null" }
+          ],
+          "default": null
+        }
+      },
+      "required": ["vaultUrl", "secretName"]
+    },
+    "EncryptedFileCredentials": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Fernet-encrypted local credential file (bootstrap / air-gapped).",
+      "properties": {
+        "authMode": { "const": "encrypted_file", "default": "encrypted_file", "type": "string" },
+        "path": { "type": "string", "description": "Path to encrypted credential file (owner rw only)." },
+        "materializeAs": {
+          "anyOf": [
+            { "type": "string", "enum": ["explicit_keys", "account_key", "connection_string"] },
+            { "type": "null" }
+          ],
+          "default": null
+        }
+      },
+      "required": ["path"]
+    },
     "GcsServiceAccountCredentials": {
       "type": "object",
       "additionalProperties": false,
@@ -121,7 +156,9 @@
         "credentials": {
           "oneOf": [
             { "$ref": "#/$defs/S3ExplicitKeysCredentials" },
-            { "$ref": "#/$defs/S3InstanceProfileCredentials" }
+            { "$ref": "#/$defs/S3InstanceProfileCredentials" },
+            { "$ref": "#/$defs/AzureKeyVaultCredentials" },
+            { "$ref": "#/$defs/EncryptedFileCredentials" }
           ]
         }
       },
@@ -142,7 +179,9 @@
             { "$ref": "#/$defs/AzureConnectionStringCredentials" },
             { "$ref": "#/$defs/AzureSasTokenCredentials" },
             { "$ref": "#/$defs/AzureSasUrlCredentials" },
-            { "$ref": "#/$defs/AzureDefaultCredentialCredentials" }
+            { "$ref": "#/$defs/AzureDefaultCredentialCredentials" },
+            { "$ref": "#/$defs/AzureKeyVaultCredentials" },
+            { "$ref": "#/$defs/EncryptedFileCredentials" }
           ]
         }
       },

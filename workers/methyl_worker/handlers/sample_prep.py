@@ -284,7 +284,9 @@ def _handle_download_fastq(_capability: str, _action_name: str, input: BaseModel
         input.model_dump(mode="json")
     )
     dest = Path(str(task.sampleDir))
-    fastq_files = download_from_source(task.fastqSource, dest)
+    fastq_files = download_from_source(
+        task.fastqSource, dest, resolved_config=task.resolvedConfig
+    )
     sample_id = task.sampleId or dest.name
     return DownloadFastqTaskOutput(
         status="ok",

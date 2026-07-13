@@ -8,22 +8,30 @@ import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, List, Sequence
+from typing import Any, List, Mapping, Optional, Sequence
 
 from methyl_domain.fastq_storage import (
     AzureFastqSource,
     FastqSourceLocation,
     FileFastqSource,
-    S3ExplicitKeysCredentials,
     S3FastqSource,
     resolve_file_local_root,
+)
+from methyl_worker.cloud_transfer import (
+    TransferSettings,
+    azure_download_blob,
+    build_azure_blob_service,
+    build_s3_client,
+    credentials_mapping,
+    run_parallel,
+    s3_download_file,
+    should_skip_download,
 )
 
 logger = logging.getLogger(__name__)
 
 FASTQ_GLOB_PATTERNS: Sequence[str] = ("*.fastq.gz", "*.fq.gz", "*.fastq", "*.fq")
 FASTQ_SUFFIXES: Sequence[str] = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
-_MTIME_TOLERANCE_S = 1.0
 
 
 @dataclass(frozen=True)
@@ -68,15 +76,6 @@ def _is_folder_uri(key_or_prefix: str) -> bool:
     return not _matches_fastq(leaf)
 
 
-def _should_skip_download(local: Path, remote_size: int, remote_mtime: float) -> bool:
-    if not local.is_file():
-        return False
-    stat = local.stat()
-    if stat.st_size != remote_size:
-        return False
-    return abs(stat.st_mtime - remote_mtime) <= _MTIME_TOLERANCE_S
-
-
 def _touch_mtime(local: Path, remote_mtime: float) -> None:
     os.utime(local, (remote_mtime, remote_mtime))
 
@@ -103,25 +102,49 @@ def _relative_to_prefix(key: str, prefix: str) -> str:
     return _basename_from_key(normalized_key)
 
 
-def download_from_source(source: FastqSourceLocation, dest_dir: Path) -> List[str]:
+def _settings_from_resolved(resolved_config: Mapping[str, Any] | None) -> TransferSettings:
+    if not resolved_config:
+        return TransferSettings()
+    slice_ = resolved_config.get("storage_transfer") or resolved_config.get(
+        "storageTransfer"
+    )
+    return TransferSettings.from_config(slice_)
+
+
+def download_from_source(
+    source: FastqSourceLocation,
+    dest_dir: Path,
+    *,
+    resolved_config: Mapping[str, Any] | None = None,
+) -> List[str]:
     """Copy or download all FASTQs for one sample into ``dest_dir``."""
     dest_dir.mkdir(parents=True, exist_ok=True)
+    settings = _settings_from_resolved(resolved_config)
     runtime = _runtime_source_from_model(source)
     clients = _CloudClients()
-    objects = _list_objects(runtime, clients)
+    objects = _list_objects(runtime, clients, settings)
     if not objects:
         raise RuntimeError(f"No FASTQ files found at {source.model_dump(mode='json')}")
 
-    paths: List[str] = []
-    for obj in sorted(objects, key=lambda item: item.name):
+    def _one(obj: RemoteObject) -> str:
         target = dest_dir / obj.name
-        if _should_skip_download(target, obj.size, obj.mtime):
+        if should_skip_download(
+            target,
+            obj.size,
+            obj.mtime,
+            mtime_tolerance_s=settings.mtime_tolerance_s,
+        ):
             logger.info("Skipping unchanged FASTQ %s", target)
         else:
-            _fetch_object(runtime, obj, target, clients)
+            _fetch_object(runtime, obj, target, clients, settings)
             _touch_mtime(target, obj.mtime)
-        paths.append(str(target))
-    return paths
+        return str(target)
+
+    ordered = sorted(objects, key=lambda item: item.name)
+    paths = run_parallel(
+        ordered, _one, max_workers=settings.max_concurrency
+    )
+    return list(paths)
 
 
 def _runtime_source_from_model(source: FastqSourceLocation) -> FastqSource:
@@ -150,13 +173,15 @@ def _runtime_source_from_model(source: FastqSourceLocation) -> FastqSource:
     raise RuntimeError(f"Unsupported fastq source type: {type(source)!r}")
 
 
-def _list_objects(source: FastqSource, clients: _CloudClients) -> List[RemoteObject]:
+def _list_objects(
+    source: FastqSource, clients: _CloudClients, settings: TransferSettings
+) -> List[RemoteObject]:
     if source.scheme == "file":
         return _list_local_objects(source)
     if source.scheme == "s3":
-        return _list_s3_objects(source, clients)
+        return _list_s3_objects(source, clients, settings)
     if source.scheme == "az":
-        return _list_azure_objects(source, clients)
+        return _list_azure_objects(source, clients, settings)
     raise RuntimeError(f"Unsupported source scheme {source.scheme!r}")
 
 
@@ -187,7 +212,11 @@ def _list_local_objects(source: FastqSource) -> List[RemoteObject]:
 
 
 def _fetch_object(
-    source: FastqSource, obj: RemoteObject, target: Path, clients: _CloudClients
+    source: FastqSource,
+    obj: RemoteObject,
+    target: Path,
+    clients: _CloudClients,
+    settings: TransferSettings,
 ) -> None:
     if source.scheme == "file":
         root = source.local_root
@@ -198,48 +227,53 @@ def _fetch_object(
         shutil.copy2(src, target)
         return
     if source.scheme == "s3":
-        _download_s3_object(source.bucket, obj.locator, target, clients, source.s3_source)
+        if clients.s3 is None:
+            if source.s3_source is None:
+                raise RuntimeError("S3 download requires typed s3_source")
+            clients.s3 = build_s3_client(
+                credentials=credentials_mapping(source.s3_source.credentials),
+                region=source.s3_source.region,
+                endpoint_url=source.s3_source.endpointUrl,
+                settings=settings,
+            )
+        s3_download_file(
+            clients.s3,
+            bucket=source.bucket,
+            key=obj.locator,
+            target=target,
+            settings=settings,
+        )
         return
     if source.scheme == "az":
-        _download_azure_object(source, obj.locator, target, clients)
+        if source.azure_source is None:
+            raise RuntimeError("Azure download requires typed azure_source")
+        if clients.azure is None:
+            clients.azure = build_azure_blob_service(
+                account=source.account,
+                credentials=credentials_mapping(source.azure_source.credentials),
+                settings=settings,
+            )
+        blob_client = clients.azure.get_blob_client(
+            container=source.container, blob=obj.locator
+        )
+        azure_download_blob(blob_client, target, settings=settings)
         return
     raise RuntimeError(f"Unsupported source scheme {source.scheme!r}")
 
 
-def _s3_client(source: S3FastqSource):
-    try:
-        import boto3
-    except ImportError as exc:
-        raise RuntimeError(
-            "boto3 is required for s3 fastqSource; install methyl-worker with cloud dependencies"
-        ) from exc
-
-    client_kwargs: dict[str, Any] = {}
-    if source.endpointUrl:
-        client_kwargs["endpoint_url"] = source.endpointUrl
-    if source.region:
-        client_kwargs["region_name"] = source.region
-
-    creds = source.credentials
-    if creds.authMode == "explicit_keys":
-        assert isinstance(creds, S3ExplicitKeysCredentials)
-        session_token = creds.sessionToken.get_secret_value() if creds.sessionToken else None
-        return boto3.client(
-            "s3",
-            aws_access_key_id=creds.accessKeyId,
-            aws_secret_access_key=creds.secretAccessKey.get_secret_value(),
-            aws_session_token=session_token,
-            **client_kwargs,
-        )
-    return boto3.client("s3", **client_kwargs)
-
-
-def _list_s3_objects(source: FastqSource, clients: _CloudClients) -> List[RemoteObject]:
+def _list_s3_objects(
+    source: FastqSource, clients: _CloudClients, settings: TransferSettings
+) -> List[RemoteObject]:
     if source.s3_source is None:
         raise RuntimeError("S3 fastq source missing typed configuration")
     prefix = source.prefix
     if clients.s3 is None:
-        clients.s3 = _s3_client(source.s3_source)
+        clients.s3 = build_s3_client(
+            credentials=credentials_mapping(source.s3_source.credentials),
+            region=source.s3_source.region,
+            endpoint_url=source.s3_source.endpointUrl,
+            settings=settings,
+        )
     client = clients.s3
 
     if not _is_folder_uri(prefix):
@@ -275,45 +309,17 @@ def _list_s3_objects(source: FastqSource, clients: _CloudClients) -> List[Remote
     return objects
 
 
-def _download_s3_object(
-    bucket: str,
-    key: str,
-    target: Path,
-    clients: _CloudClients,
-    s3_source: S3FastqSource | None,
-) -> None:
-    if clients.s3 is None:
-        if s3_source is None:
-            raise RuntimeError("S3 download requires typed s3_source")
-        clients.s3 = _s3_client(s3_source)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    clients.s3.download_file(bucket, key, str(target))
-
-
-def _azure_blob_service(source: AzureFastqSource):
-    try:
-        from azure.identity import DefaultAzureCredential
-        from azure.storage.blob import BlobServiceClient
-    except ImportError as exc:
-        raise RuntimeError(
-            "azure-identity and azure-storage-blob are required for azure_blob fastqSource"
-        ) from exc
-
-    creds = source.credentials
-    if creds.authMode == "connection_string":
-        return BlobServiceClient.from_connection_string(creds.connectionString.get_secret_value())
-    if creds.authMode == "account_key":
-        account_url = f"https://{source.account}.blob.core.windows.net"
-        return BlobServiceClient(account_url, credential=creds.accountKey.get_secret_value())
-    account_url = f"https://{source.account}.blob.core.windows.net"
-    return BlobServiceClient(account_url, credential=DefaultAzureCredential())
-
-
-def _list_azure_objects(source: FastqSource, clients: _CloudClients) -> List[RemoteObject]:
+def _list_azure_objects(
+    source: FastqSource, clients: _CloudClients, settings: TransferSettings
+) -> List[RemoteObject]:
     if source.azure_source is None:
         raise RuntimeError("Azure fastq source missing typed configuration")
     if clients.azure is None:
-        clients.azure = _azure_blob_service(source.azure_source)
+        clients.azure = build_azure_blob_service(
+            account=source.account,
+            credentials=credentials_mapping(source.azure_source.credentials),
+            settings=settings,
+        )
     service = clients.azure
     container_client = service.get_container_client(source.container)
     prefix = source.prefix
@@ -352,14 +358,5 @@ def _list_azure_objects(source: FastqSource, clients: _CloudClients) -> List[Rem
     return objects
 
 
-def _download_azure_object(
-    source: FastqSource, blob_name: str, target: Path, clients: _CloudClients
-) -> None:
-    if source.azure_source is None:
-        raise RuntimeError("Azure fastq source missing typed configuration")
-    if clients.azure is None:
-        clients.azure = _azure_blob_service(source.azure_source)
-    blob_client = clients.azure.get_blob_client(container=source.container, blob=blob_name)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    with open(target, "wb") as handle:
-        blob_client.download_blob().readinto(handle)
+# Re-export for tests that imported private helpers
+_should_skip_download = should_skip_download

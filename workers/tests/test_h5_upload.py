@@ -175,7 +175,7 @@ def test_upload_h5_s3_skips_unchanged(tmp_path: Path) -> None:
         "ETag": f'"{etag}"',
     }
 
-    with patch("methyl_worker.sample_archive._s3_client", return_value=mock_client):
+    with patch("methyl_worker.sample_archive.build_s3_client", return_value=mock_client):
         dest = _dest(
             {
                 "type": "s3",
