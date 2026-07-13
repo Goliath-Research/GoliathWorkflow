@@ -6,7 +6,9 @@ Plans in this folder are the **source of truth** for large features. Each plan m
 
 **Historical backlog:** Epic [#283 MethylPipeline](https://dev.azure.com/EpiMethyl/Development/_workitems/edit/283) (package-era Features such as MethylUtils / MethylCentroid) is retained for history and is **Related** to AB#413. New work goes under AB#413.
 
-**Seed tooling:** [`scripts/ado_traceability/`](../../scripts/ado_traceability/) — generate manifest, idempotent Boards seed, backfill plan IDs.
+**Seed tooling:** [`scripts/ado_traceability/`](../../scripts/ado_traceability/) — generate manifest, idempotent Boards seed, backfill plan IDs, link commits (`link_commits.py --apply`).
+
+Commits are attached as **Fixed in Commit** artifact links (no git history rewrite). Open a work item → **Development** to see them.
 
 ## Work item mapping
 

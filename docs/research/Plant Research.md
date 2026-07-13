@@ -110,3 +110,73 @@ With a high-throughput phenotype screening center, your ultimate data objective 
 3. **Targeted Filter:** You search for stable, heritable **CG and CHG alterations** that consistently appear in the high-performing plants but are absent in the low-performing ones. (While CHH is highly active during the initial *MSH1* shock, stable transgenerational traits are usually anchored by permanent changes in genic CG and CHG methylation).
 
 Once your pipeline identifies these specific diagnostic epialleles, you can transition away from processing massive whole-genome HDF5 files for every generation. You can design a lean, targeted **Custom Hybridization Capture Panel** (like the EM-seq panel discussed earlier) to track *only* those high-value yield-predictive regions across your commercial breeding lines—saving massive amounts of data storage and compute time.
+
+# Inheriting features (drought) from an inferior variety
+
+That completely flips the strategy—and honestly, it makes a ton of sense commercially. You want to preserve the exceptional yield, fruit quality, or disease resistance of your premium commercial variety by keeping it as the **scion** (the top part), but you want to upgrade its root system by grafting it onto a rugged, drought-resistant rootstock.
+
+The twist here is that the high-performing commercial rootstock line *doesn't* have the drought trait yet—you need to train it using the inferior variety as an **epigenetic donor**.
+
+Because your final product is a **modified commercial rootstock**, your workflow shifts focus from the foliage down to the root system, using a transient **"sandwich" graft (interstem)** or a temporary donor shoot to alter the commercial line's epigenome.
+
+Here is how you adjust your experimental design, Grow Center workflow, and HDF5 data analysis for this inverted approach:
+
+---
+
+## 1. The "Reverse Training" Experimental Setup
+
+To introduce drought resistance into the commercial rootstock line using an inferior donor variety, you will use a **temporary induction graft**. You have two main architectural choices in your Grow Center:
+
+### Option A: The Temporary Two-Tier Graft
+
+You grow the commercial rootstock variety as the base, and graft the inferior, drought-resistant variety on top as a temporary scion.
+
+```
+[ Inferior, Drought-Resistant Variety ]  ◄── (Acts as the Epigenetic Donor Shoot)
+                 │
+           (Graft Junction)
+                 │
+[ Commercial Rootstock Line ]            ◄── (The Target: Receives the Root Signal)
+
+```
+
+### Option B: The Interstem "Sandwich" (If you want a permanent pipeline)
+
+You use the inferior variety as a small middle segment (interstem) between your final commercial scion and the commercial rootstock.
+
+---
+
+## 2. Grow Center Workflow: The Shock and Harvest
+
+Your objective is to force the inferior donor variety to experience drought, generate stress-responsive **24-nt siRNAs**, and send them down into the commercial root tissue to alter its `CHH` methylation landscape.
+
+```
+[ Grow & Graft ] ──► [ Severe Drought Stress ] ──► [ De-capitate / Recover ] ──► [ Clone Root Tissue ]
+   (Heal Vascular)       (Targeted to Donor)          (Remove Donor)             (Propagate Lines)
+
+```
+
+1. **Graft & Heal:** Connect the inferior donor to the commercial rootstock.
+2. **Targeted Drought Shock:** Apply a sharp water deficit. The inferior variety thrives under the stress and generates a massive wave of mobile silencing signals, sending them down through the phloem into the commercial root meristems.
+3. **De-capitation (For Option A):** Once the epigenetic signaling window closes, cut off the inferior donor completely. Allow the commercial rootstock to regenerate new shoots from its now-reprogrammed root tissue.
+4. **Clonal Propagation:** Take cuttings or tissue cultures from those regenerated shoots. These are your new **Epi-Commercial Rootstocks**.
+
+---
+
+## 3. Adapting Your HDF5 Pipeline: The Root Methylome
+
+Analyzing roots presents a distinct epigenetic profile compared to leaf tissue. Roots naturally have lower baseline methylation levels, which means a targeted stress signature will pop out against the background data much more clearly in your `{chr}-{ctx}.h5` files.
+
+* **The Baseline Baseline Correction:** You must run an un-grafted, unstressed commercial rootstock through your MethylDackel pipeline to serve as your absolute baseline.
+* **The CHH / CHG Footprint:** As the downward mobile siRNAs from the inferior donor hit the root meristem, they utilize the RNA-directed DNA Methylation (RdDM) pathway. In your `chr*-CHH.h5` and `chr*-CHG.h5` matrix blocks, you are looking for highly localized **"islands" of hypermethylation** near the promoter regions of known root-architectural genes (like auxin transporters or aquaporins).
+* **The *MSH1* Layer:** If you layer your existing *MSH1* suppression technology into the commercial rootstock *prior* to this graft, the root cells will be in a hyper-plastic state. This makes them significantly more receptive to accepting and permanently locking in the incoming epigenetic formatting from the inferior donor.
+
+## 4. Screening for the Winning Root System
+
+Once your regenerated, cloned commercial rootstocks are growing in the Grow Center, you test them *without* any graft components:
+
+1. Run the cloned lines through a automated drought trial in your Grow Center.
+2. Use root imaging arrays to track lateral root branching and deep taproot extension under water-limited conditions.
+3. Pull the `{chr}-{ctx}.h5` files for the top-performing commercial root clones.
+
+By comparing the HDF5 files of the successful clones against the failed clones, your pipeline will pinpoint the exact **epigenetic marks** transferred from the inferior variety that successfully modernized the commercial rootstock's drought response—giving you a premium, highly resilient commercial product ready for the market.
