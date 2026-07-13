@@ -224,6 +224,11 @@ BEGIN
     UPDATE cfg.action_definition
     SET workflow_action_id = @wa_id, updated_at_utc = SYSUTCDATETIME()
     WHERE name = @action_name AND version = @version;
+    IF @@ROWCOUNT = 0
+    BEGIN
+        RAISERROR(N'cfg.action_definition not found: %s@%s', 16, 1, @action_name, @version);
+        RETURN;
+    END
     SELECT id, workflow_action_id FROM cfg.action_definition WHERE name = @action_name AND version = @version;
 END
 GO
