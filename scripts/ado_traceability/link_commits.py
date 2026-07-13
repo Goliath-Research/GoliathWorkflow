@@ -74,6 +74,11 @@ def commit_url(project_id: str, repo_id: str, sha: str) -> str:
     return f"vstfs:///Git/Commit/{project_id}%2F{repo_id}%2F{sha}"
 
 
+def sha_from_commit_url(url: str) -> str:
+    """Extract the commit SHA from a vstfs:///Git/Commit/... URL."""
+    return url.rsplit("%2F", 1)[-1]
+
+
 def is_broad_anchor(path: str) -> bool:
     p = path.strip().rstrip("/")
     if BROAD_ANCHOR_RE.match(p):
@@ -146,7 +151,8 @@ def paths_from_text(text: str) -> list[str]:
     return found
 
 
-def existing_commit_urls(work_item_id: int) -> set[str]:
+def existing_commit_shas(work_item_id: int) -> set[str]:
+    """SHAs already attached to the work item as Fixed-in-Commit artifact links."""
     proc = run(
         [
             "az",
@@ -165,11 +171,12 @@ def existing_commit_urls(work_item_id: int) -> set[str]:
     if proc.returncode != 0:
         return set()
     data = json.loads(proc.stdout)
-    urls: set[str] = set()
+    shas: set[str] = set()
     for rel in data.get("relations") or []:
-        if rel.get("rel") == "ArtifactLink" and "Git/Commit" in (rel.get("url") or ""):
-            urls.add(rel["url"])
-    return urls
+        url = rel.get("url") or ""
+        if rel.get("rel") == "ArtifactLink" and "Git/Commit" in url:
+            shas.add(sha_from_commit_url(url))
+    return shas
 
 
 def patch_commit_links(
@@ -177,9 +184,10 @@ def patch_commit_links(
     work_item_id: int,
     urls: list[str],
     apply: bool,
-) -> int:
+) -> list[str]:
+    """Attach commit artifact links. Returns URLs confirmed present (new or duplicate)."""
     if not urls:
-        return 0
+        return []
     ops = [
         {
             "op": "add",
@@ -194,8 +202,7 @@ def patch_commit_links(
     ]
     body = json.dumps(ops)
     if not apply:
-        print(f"  [dry-run] WI {work_item_id}: link {len(urls)} commit(s)")
-        return len(urls)
+        return list(urls)
     proc = subprocess.run(
         [
             "az",
@@ -217,54 +224,57 @@ def patch_commit_links(
         capture_output=True,
         check=False,
     )
-    if proc.returncode != 0:
-        # Retry one-by-one on batch failure (duplicate link, etc.)
-        linked = 0
-        for u in urls:
-            one = json.dumps(
-                [
-                    {
-                        "op": "add",
-                        "path": "/relations/-",
-                        "value": {
-                            "rel": "ArtifactLink",
-                            "url": u,
-                            "attributes": {"name": "Fixed in Commit"},
-                        },
-                    }
-                ]
-            )
-            p2 = subprocess.run(
-                [
-                    "az",
-                    "rest",
-                    "--method",
-                    "patch",
-                    "--url",
-                    f"{ORG}/{PROJECT}/_apis/wit/workitems/{work_item_id}?api-version=7.1",
-                    "--resource",
-                    ADO_RESOURCE,
-                    "--headers",
-                    "Content-Type=application/json-patch+json",
-                    "--body",
-                    one,
-                    "-o",
-                    "none",
-                ],
-                text=True,
-                capture_output=True,
-                check=False,
-            )
-            if p2.returncode == 0:
-                linked += 1
+    if proc.returncode == 0:
+        return list(urls)
+
+    # Retry one-by-one on batch failure (duplicate link, etc.)
+    confirmed: list[str] = []
+    for u in urls:
+        one = json.dumps(
+            [
+                {
+                    "op": "add",
+                    "path": "/relations/-",
+                    "value": {
+                        "rel": "ArtifactLink",
+                        "url": u,
+                        "attributes": {"name": "Fixed in Commit"},
+                    },
+                }
+            ]
+        )
+        p2 = subprocess.run(
+            [
+                "az",
+                "rest",
+                "--method",
+                "patch",
+                "--url",
+                f"{ORG}/{PROJECT}/_apis/wit/workitems/{work_item_id}?api-version=7.1",
+                "--resource",
+                ADO_RESOURCE,
+                "--headers",
+                "Content-Type=application/json-patch+json",
+                "--body",
+                one,
+                "-o",
+                "none",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if p2.returncode == 0:
+            confirmed.append(u)
+        else:
+            err = (p2.stderr or p2.stdout or "").strip()
+            # Already on the work item — treat as confirmed for link_state
+            if "already exists" in err.lower() or "duplicate" in err.lower():
+                confirmed.append(u)
             else:
-                err = (p2.stderr or p2.stdout or "").strip()
-                if "already exists" in err.lower() or "duplicate" in err.lower():
-                    continue
                 print(f"  WARN WI {work_item_id}: {err[:200]}", file=sys.stderr)
-            time.sleep(0.05)
-        return linked
-    return len(urls)
+        time.sleep(0.05)
+    return confirmed
 
 
 def unique(seq: list[str]) -> list[str]:
@@ -291,25 +301,30 @@ def link_work_item(
     if not shas:
         return 0
     key = str(work_item_id)
+    # link_state stores bare SHAs; compare in SHA space (not vstfs URLs)
     already = set(link_state.get("linked", {}).get(key, []))
-    existing = already
+    existing_shas = set(already)
     if apply:
-        existing = existing | existing_commit_urls(work_item_id)
-    wanted_urls = [commit_url(project_id, repo_id, s) for s in shas]
-    to_add = [u for u in wanted_urls if u not in existing]
-    if not to_add:
-        print(f"  WI {work_item_id}: already linked ({len(wanted_urls)} candidates)")
+        existing_shas |= existing_commit_shas(work_item_id)
+    to_add_shas = [s for s in shas if s not in existing_shas]
+    if not to_add_shas:
+        print(f"  WI {work_item_id}: already linked ({len(shas)} candidates)")
         return 0
-    n = patch_commit_links(work_item_id=work_item_id, urls=to_add, apply=apply)
-    if apply and n:
+    to_add_urls = [commit_url(project_id, repo_id, s) for s in to_add_shas]
+    confirmed_urls = patch_commit_links(
+        work_item_id=work_item_id, urls=to_add_urls, apply=apply
+    )
+    n = len(confirmed_urls)
+    if apply and confirmed_urls:
         linked = link_state.setdefault("linked", {}).setdefault(key, [])
-        for u in to_add[:n]:
-            # store sha portion
-            sha = u.rsplit("%2F", 1)[-1]
+        for u in confirmed_urls:
+            sha = sha_from_commit_url(u)
             if sha not in linked:
                 linked.append(sha)
         print(f"  WI {work_item_id}: linked {n} commit(s)")
         time.sleep(0.15)
+    elif not apply:
+        print(f"  [dry-run] WI {work_item_id}: would link {n} commit(s)")
     return n
 
 
