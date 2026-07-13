@@ -12,6 +12,8 @@ Migrate study science from `/work/<disease>/` to `/work/projects/<disease>/` and
 | `/work/samples/{sample_id}/` | Flat sample archive (unchanged) |
 | `/work/projects/<disease>/` | Study configs, data, and run outputs |
 
+Off-cluster durable copy of genomes (myQNAPcloud S3): [`scripts/sync_genomes_to_s3.sh`](../../scripts/sync_genomes_to_s3.sh) → `s3://epimethyl/genomes/`.
+
 Programs (`*.program.json`) and profiles (`*.profile.json`) stay in the **git repo** under `workflow_engine/domain/`.
 
 ## Prerequisites
