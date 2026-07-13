@@ -2,12 +2,15 @@
 
 Navigation hub for the three documentation pillars (Theory, Usage, Implementation) plus cross-cutting reference, architecture, deployment, and regulatory/product-control docs.
 
+**Quick platform overview:** [Platform Overview](overview/methylpipeline-platform-overview.md) · [companion canvas](canvas/methylpipeline-platform-overview.canvas.tsx)
+
 **Interactive hub:** [methylpipeline-docs canvas](canvas/methylpipeline-docs.canvas.tsx) — [canvas index](canvas/README.md)
 
 ## Start here by role
 
 | Role | Start |
 |------|-------|
+| **Anyone new** — concise platform + SaMD fitness synthesis | [Platform Overview](overview/methylpipeline-platform-overview.md) |
 | **Operator** — run a study end-to-end | [Usage manual](usage/index.qmd) Part II (ch.05–09) · [SaMD lifecycle](usage/18-samd-study-lifecycle.qmd) |
 | **Statistician** — methods and assumptions | [Theory book](theory/index.qmd) — e.g. ch.03 DMP detection |
 | **Developer** — engine, workers, compiler | [Implementation guide](implementation/index.md) |
@@ -51,6 +54,7 @@ See table above. Package maintainers: [implementation/packages/](implementation/
 | Area | Location |
 |------|----------|
 | Architecture | [`architecture/`](architecture/index.md) |
+| Platform overview (quick synthesis) | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) |
 | Reference lookup | [`reference/documentation-toolchain.md`](reference/documentation-toolchain.md), [`reference/configuration-reference.qmd`](reference/configuration-reference.qmd) |
 | Deployment | [`deployment/operator-journey.md`](deployment/operator-journey.md), [`deployment/production_runbook.md`](deployment/production_runbook.md) |
 | Regulatory / product controls | [`regulatory/`](regulatory/README.md) |

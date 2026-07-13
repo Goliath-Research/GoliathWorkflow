@@ -5,6 +5,7 @@ Interactive architecture and documentation hubs built with [Cursor Canvas](https
 | Canvas | Purpose |
 |--------|---------|
 | [methylpipeline-docs.canvas.tsx](methylpipeline-docs.canvas.tsx) | Documentation pillar navigation |
+| [methylpipeline-platform-overview.canvas.tsx](methylpipeline-platform-overview.canvas.tsx) | Quick platform + SaMD overview companion |
 | [methylpipeline-architecture.canvas.tsx](methylpipeline-architecture.canvas.tsx) | Config layers, local vs gateway, DB contract |
 | [methylpipeline-db-runbook.canvas.tsx](methylpipeline-db-runbook.canvas.tsx) | Operator DB / workflow runbook |
 | [analyte-comparison.canvas.tsx](analyte-comparison.canvas.tsx) | Analyte comparison explorer |

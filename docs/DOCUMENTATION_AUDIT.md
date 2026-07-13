@@ -24,12 +24,14 @@ This document is the canonical register of documentation coverage, canonical sou
 | **July 2026 audit** | [`architecture/documentation-audit-2026-07-09.md`](architecture/documentation-audit-2026-07-09.md) | Active | Supersedes partial 2026-07 config audit items |
 | **Schemas / contracts** | [`reference/schema-index.md`](reference/schema-index.md), [`contracts/openapi.yaml`](../contracts/openapi.yaml) | Machine-readable | |
 | **Regulatory / product controls** | [`regulatory/`](regulatory/README.md) | New synthesis pillar | Product controls, validation evidence index, change management, deployment supervision, traceability |
+| **Platform overview** | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) | Canonical quick synthesis | Few-dozen-page Markdown + [companion canvas](canvas/methylpipeline-platform-overview.canvas.tsx); not a fourth Quarto book |
 | **Diagrams** | [`docs/diagrams/src/*.mmd`](diagrams/src/), [`docs/diagrams/out/*.svg`](diagrams/out/), [`docs/diagrams/out/*.png`](diagrams/out/) | Pre-render pipeline | `scripts/render_diagrams.sh` (`htmlLabels: false`, PNG for Quarto PDF) |
 
 ## Canonical doc map (“read this for X”)
 
 | Question | Start here |
 |----------|------------|
+| What is the end-to-end platform + SaMD fitness story? | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) |
 | How do I set up the dev environment? | [`DEPLOYMENT.md`](DEPLOYMENT.md), Usage ch.01 |
 | Where do project configs vs programs live? | Usage ch.02, [work-config-paths](../.cursor/rules/work-config-paths.mdc), [layer model](architecture/layer-model.md) |
 | How does SamplePrep QC work? | Usage ch.03, theory ch.09 |

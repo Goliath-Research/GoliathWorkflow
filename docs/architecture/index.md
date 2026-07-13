@@ -16,6 +16,8 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 
 **Interactive hub:** [methylpipeline-architecture canvas](../canvas/methylpipeline-architecture.canvas.tsx) (local vs gateway, config layers, DB contract)
 
+**Platform overview:** [Platform Overview](../overview/methylpipeline-platform-overview.md) · [overview canvas](../canvas/methylpipeline-platform-overview.canvas.tsx)
+
 **Documentation hub:** [methylpipeline-docs canvas](../canvas/methylpipeline-docs.canvas.tsx) — [all canvases](../canvas/README.md)
 
 **Implementation detail:** [Implementation guide](../implementation/index.md). **Operator runbooks:** [Usage manual](../usage/index.qmd).
