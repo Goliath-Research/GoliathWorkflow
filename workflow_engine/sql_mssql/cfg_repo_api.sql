@@ -130,8 +130,10 @@ BEGIN
             VALUES (@name, @ver, @st, @hash, @document_json, COALESCE(@implementation_status, 'present'));
         SELECT id FROM cfg.action_definition WHERE name = @name AND version = @ver;
         RETURN;
-    END
-    THROW 50001, N'unknown cfg kind', 1;
+    END;
+
+    RAISERROR(N'unknown cfg kind', 16, 1);
+    RETURN;
 END
 GO
 
@@ -151,7 +153,9 @@ BEGIN
     IF @kind = N'storage_profile' BEGIN UPDATE cfg.storage_profile SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.storage_profile WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'reference_asset' BEGIN UPDATE cfg.reference_asset SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.reference_asset WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'action_definition' BEGIN UPDATE cfg.action_definition SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.action_definition WHERE name = @name AND version = @version; RETURN; END
-    THROW 50001, N'unknown cfg kind', 1;
+
+    RAISERROR(N'unknown cfg kind', 16, 1);
+    RETURN;
 END
 GO
 
