@@ -1,14 +1,15 @@
 /*
   cfg repository API (Azure SQL): upsert / get / list / publish via result sets.
-  Wire params may be nvarchar(max); storage columns are native json (CAST on write).
+  JSON payloads use native json parameters and columns (same as wf.* procs).
+  CONVERT to nvarchar only where a string is required (content hash).
 */
 CREATE OR ALTER PROCEDURE cfg.cfg_repo_upsert
     @kind nvarchar(64),
     @name nvarchar(256),
     @version nvarchar(64) = N'1',
     @status varchar(32) = 'draft',
-    @document_json nvarchar(max) = NULL,
-    @secret_json nvarchar(max) = NULL,
+    @document_json json = NULL,
+    @secret_json json = NULL,
     @provider nvarchar(64) = NULL,
     @auth_mode nvarchar(64) = NULL,
     @credential_name nvarchar(256) = NULL,
@@ -17,16 +18,17 @@ CREATE OR ALTER PROCEDURE cfg.cfg_repo_upsert
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @payload_text nvarchar(max) = COALESCE(@document_json, @secret_json, N'{}');
-    DECLARE @hash nvarchar(128) = CONVERT(nvarchar(128), HASHBYTES('SHA2_256', @payload_text), 2);
+    DECLARE @empty json = CAST(N'{}' AS json);
+    DECLARE @doc json = COALESCE(@document_json, @empty);
+    DECLARE @sec json = COALESCE(@secret_json, @document_json, @empty);
+    -- HASHBYTES needs a string; convert only for hashing, not for storage.
+    DECLARE @hash nvarchar(128) = CONVERT(
+        nvarchar(128),
+        HASHBYTES('SHA2_256', CONVERT(nvarchar(max), COALESCE(@secret_json, @document_json, @empty))),
+        2
+    );
     DECLARE @ver nvarchar(64) = COALESCE(NULLIF(@version, N''), N'1');
     DECLARE @st varchar(32) = COALESCE(NULLIF(@status, ''), 'draft');
-    DECLARE @doc json = CAST(COALESCE(@document_json, N'{}') AS json);
-    DECLARE @sec json = CASE
-        WHEN @secret_json IS NOT NULL THEN CAST(@secret_json AS json)
-        WHEN @document_json IS NOT NULL THEN CAST(@document_json AS json)
-        ELSE CAST(N'{}' AS json)
-    END;
 
     IF @kind = N'site'
     BEGIN

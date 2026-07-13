@@ -1,6 +1,6 @@
 /*
   Portal-facing DomainProgram tree CRUD against cfg.domain_program.
-  document_json columns are native json; wire @document_json may be nvarchar(max).
+  JSON parameters and columns use native json (aligned with wf.* APIs).
 */
 CREATE OR ALTER PROCEDURE portal.sp_list_domain_programs
     @published_only bit = 0
@@ -45,7 +45,7 @@ CREATE OR ALTER PROCEDURE portal.sp_upsert_domain_program
     @name nvarchar(256),
     @version nvarchar(64),
     @status varchar(32),
-    @document_json nvarchar(max)
+    @document_json json
 AS
 BEGIN
     SET NOCOUNT ON;
