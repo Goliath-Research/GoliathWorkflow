@@ -1,5 +1,6 @@
 /*
   cfg repository API (Azure SQL): upsert / get / list / publish via result sets.
+  Wire params may be nvarchar(max); storage columns are native json (CAST on write).
 */
 CREATE OR ALTER PROCEDURE cfg.cfg_repo_upsert
     @kind nvarchar(64),
@@ -16,19 +17,25 @@ CREATE OR ALTER PROCEDURE cfg.cfg_repo_upsert
 AS
 BEGIN
     SET NOCOUNT ON;
-    DECLARE @hash nvarchar(128) = CONVERT(nvarchar(128), HASHBYTES('SHA2_256', COALESCE(@document_json, @secret_json, N'{}')), 2);
+    DECLARE @payload_text nvarchar(max) = COALESCE(@document_json, @secret_json, N'{}');
+    DECLARE @hash nvarchar(128) = CONVERT(nvarchar(128), HASHBYTES('SHA2_256', @payload_text), 2);
     DECLARE @ver nvarchar(64) = COALESCE(NULLIF(@version, N''), N'1');
     DECLARE @st varchar(32) = COALESCE(NULLIF(@status, ''), 'draft');
-    DECLARE @id bigint;
+    DECLARE @doc json = CAST(COALESCE(@document_json, N'{}') AS json);
+    DECLARE @sec json = CASE
+        WHEN @secret_json IS NOT NULL THEN CAST(@secret_json AS json)
+        WHEN @document_json IS NOT NULL THEN CAST(@document_json AS json)
+        ELSE CAST(N'{}' AS json)
+    END;
 
     IF @kind = N'site'
     BEGIN
         MERGE cfg.site AS t
         USING (SELECT @name AS name, @ver AS version) AS s
         ON t.name = s.name AND t.version = s.version
-        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @document_json, updated_at_utc = SYSUTCDATETIME()
+        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc, updated_at_utc = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json)
-            VALUES (@name, @ver, @st, @hash, @document_json);
+            VALUES (@name, @ver, @st, @hash, @doc);
         SELECT id FROM cfg.site WHERE name = @name AND version = @ver;
         RETURN;
     END
@@ -37,9 +44,9 @@ BEGIN
         MERGE cfg.pipeline_profile AS t
         USING (SELECT @name AS name, @ver AS version) AS s
         ON t.name = s.name AND t.version = s.version
-        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @document_json, updated_at_utc = SYSUTCDATETIME()
+        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc, updated_at_utc = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json)
-            VALUES (@name, @ver, @st, @hash, @document_json);
+            VALUES (@name, @ver, @st, @hash, @doc);
         SELECT id FROM cfg.pipeline_profile WHERE name = @name AND version = @ver;
         RETURN;
     END
@@ -48,9 +55,9 @@ BEGIN
         MERGE cfg.domain_program AS t
         USING (SELECT @name AS name, @ver AS version) AS s
         ON t.name = s.name AND t.version = s.version
-        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @document_json, updated_at_utc = SYSUTCDATETIME()
+        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc, updated_at_utc = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json)
-            VALUES (@name, @ver, @st, @hash, @document_json);
+            VALUES (@name, @ver, @st, @hash, @doc);
         SELECT id FROM cfg.domain_program WHERE name = @name AND version = @ver;
         RETURN;
     END
@@ -59,10 +66,10 @@ BEGIN
         MERGE cfg.study AS t
         USING (SELECT @name AS name, @ver AS version) AS s
         ON t.name = s.name AND t.version = s.version
-        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @document_json,
+        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc,
             study_id = COALESCE(@study_id, t.study_id), updated_at_utc = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json, study_id)
-            VALUES (@name, @ver, @st, @hash, @document_json, @study_id);
+            VALUES (@name, @ver, @st, @hash, @doc, @study_id);
         SELECT id FROM cfg.study WHERE name = @name AND version = @ver;
         RETURN;
     END
@@ -74,10 +81,10 @@ BEGIN
         WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash,
             provider = COALESCE(@provider, N'unknown'),
             auth_mode = COALESCE(@auth_mode, N'unknown'),
-            secret_json = COALESCE(@secret_json, @document_json),
+            secret_json = @sec,
             updated_at_utc = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, provider, auth_mode, secret_json)
-            VALUES (@name, @ver, @st, @hash, COALESCE(@provider, N'unknown'), COALESCE(@auth_mode, N'unknown'), COALESCE(@secret_json, @document_json));
+            VALUES (@name, @ver, @st, @hash, COALESCE(@provider, N'unknown'), COALESCE(@auth_mode, N'unknown'), @sec);
         SELECT id FROM cfg.credential WHERE name = @name AND version = @ver;
         RETURN;
     END
@@ -88,11 +95,11 @@ BEGIN
         ON t.name = s.name AND t.version = s.version
         WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash,
             provider = COALESCE(@provider, N'unknown'),
-            location_json = @document_json,
+            location_json = @doc,
             credential_name = COALESCE(@credential_name, t.credential_name),
             updated_at_utc = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, provider, location_json, credential_name)
-            VALUES (@name, @ver, @st, @hash, COALESCE(@provider, N'unknown'), @document_json, @credential_name);
+            VALUES (@name, @ver, @st, @hash, COALESCE(@provider, N'unknown'), @doc, @credential_name);
         SELECT id FROM cfg.storage_endpoint WHERE name = @name AND version = @ver;
         RETURN;
     END
@@ -101,9 +108,9 @@ BEGIN
         MERGE cfg.storage_profile AS t
         USING (SELECT @name AS name, @ver AS version) AS s
         ON t.name = s.name AND t.version = s.version
-        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @document_json, updated_at_utc = SYSUTCDATETIME()
+        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc, updated_at_utc = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json)
-            VALUES (@name, @ver, @st, @hash, @document_json);
+            VALUES (@name, @ver, @st, @hash, @doc);
         SELECT id FROM cfg.storage_profile WHERE name = @name AND version = @ver;
         RETURN;
     END
@@ -112,9 +119,9 @@ BEGIN
         MERGE cfg.reference_asset AS t
         USING (SELECT @name AS name, @ver AS version) AS s
         ON t.name = s.name AND t.version = s.version
-        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @document_json, updated_at_utc = SYSUTCDATETIME()
+        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc, updated_at_utc = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json)
-            VALUES (@name, @ver, @st, @hash, @document_json);
+            VALUES (@name, @ver, @st, @hash, @doc);
         SELECT id FROM cfg.reference_asset WHERE name = @name AND version = @ver;
         RETURN;
     END
@@ -123,11 +130,11 @@ BEGIN
         MERGE cfg.action_definition AS t
         USING (SELECT @name AS name, @ver AS version) AS s
         ON t.name = s.name AND t.version = s.version
-        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @document_json,
+        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc,
             implementation_status = COALESCE(@implementation_status, 'present'),
             updated_at_utc = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json, implementation_status)
-            VALUES (@name, @ver, @st, @hash, @document_json, COALESCE(@implementation_status, 'present'));
+            VALUES (@name, @ver, @st, @hash, @doc, COALESCE(@implementation_status, 'present'));
         SELECT id FROM cfg.action_definition WHERE name = @name AND version = @ver;
         RETURN;
     END;
@@ -274,6 +281,11 @@ BEGIN
         asset_type = COALESCE(@asset_type, asset_type),
         updated_at_utc = SYSUTCDATETIME()
     WHERE name = @asset_name AND version = @version;
+    IF @@ROWCOUNT = 0
+    BEGIN
+        RAISERROR(N'reference_asset not found: %s@%s', 16, 1, @asset_name, @version);
+        RETURN;
+    END
     SELECT id, storage_endpoint_id, asset_type
     FROM cfg.reference_asset
     WHERE name = @asset_name AND version = @version;

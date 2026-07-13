@@ -1,5 +1,6 @@
 /*
   Portal-facing DomainProgram tree CRUD against cfg.domain_program.
+  document_json columns are native json; wire @document_json may be nvarchar(max).
 */
 CREATE OR ALTER PROCEDURE portal.sp_list_domain_programs
     @published_only bit = 0
@@ -19,9 +20,21 @@ CREATE OR ALTER PROCEDURE portal.sp_get_domain_program
 AS
 BEGIN
     SET NOCOUNT ON;
-    SELECT TOP 1 id, name, version, status, content_hash, document_json AS document_json,
-           CAST(NULL AS nvarchar(max)) AS secret_redacted,
-           CONCAT(N'{"compiledWorkflowVersionId":', COALESCE(CAST(compiled_workflow_version_id AS nvarchar(32)), N'null'), N'}') AS extra
+    SELECT TOP 1
+           id,
+           name,
+           version,
+           status,
+           content_hash,
+           document_json,
+           CAST(NULL AS json) AS secret_redacted,
+           CAST(
+               CONCAT(
+                   N'{"compiledWorkflowVersionId":',
+                   COALESCE(CAST(compiled_workflow_version_id AS nvarchar(32)), N'null'),
+                   N'}'
+               ) AS json
+           ) AS extra
     FROM cfg.domain_program
     WHERE name = @name AND (@version IS NULL OR version = @version)
     ORDER BY id DESC;
@@ -61,9 +74,21 @@ CREATE OR ALTER PROCEDURE portal.sp_get_cfg_action
 AS
 BEGIN
     SET NOCOUNT ON;
-    SELECT TOP 1 id, name, version, status, content_hash, document_json,
-           CAST(NULL AS nvarchar(max)) AS secret_redacted,
-           CONCAT(N'{"implementationStatus":"', implementation_status, N'"}') AS extra
+    SELECT TOP 1
+           id,
+           name,
+           version,
+           status,
+           content_hash,
+           document_json,
+           CAST(NULL AS json) AS secret_redacted,
+           CAST(
+               CONCAT(
+                   N'{"implementationStatus":"',
+                   implementation_status,
+                   N'"}'
+               ) AS json
+           ) AS extra
     FROM cfg.action_definition
     WHERE name = @name AND (@version IS NULL OR version = @version)
     ORDER BY id DESC;
