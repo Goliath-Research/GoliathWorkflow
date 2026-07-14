@@ -18,3 +18,4 @@ methylvalidation
 methyldomain
 methylfragmentomics
 workflow_engine
+workers
