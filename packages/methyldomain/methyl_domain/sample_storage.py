@@ -10,11 +10,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
 from .fastq_storage import (
     AzureCredentials,
     S3Credentials,
+    StorageChangeTokens,
+    _token_kwargs,
     normalize_sample_prefix,
 )
 
@@ -36,16 +38,12 @@ __all__ = [
 ]
 
 
-class FileSampleStorageDefaults(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class FileSampleStorageDefaults(StorageChangeTokens):
     type: Literal["file"] = "file"
     basePath: str
 
 
-class S3SampleStorageDefaults(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class S3SampleStorageDefaults(StorageChangeTokens):
     type: Literal["s3"] = "s3"
     bucket: str
     region: str | None = None
@@ -54,9 +52,7 @@ class S3SampleStorageDefaults(BaseModel):
     credentials: S3Credentials
 
 
-class AzureSampleStorageDefaults(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class AzureSampleStorageDefaults(StorageChangeTokens):
     type: Literal["azure_blob"] = "azure_blob"
     account: str
     container: str
@@ -69,9 +65,7 @@ SampleStorageDefaults = Annotated[
 ]
 
 
-class FileSampleDestination(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class FileSampleDestination(StorageChangeTokens):
     type: Literal["file"] = "file"
     basePath: str
     prefix: str = ""
@@ -83,9 +77,7 @@ class FileSampleDestination(BaseModel):
         return self
 
 
-class S3SampleDestination(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class S3SampleDestination(StorageChangeTokens):
     type: Literal["s3"] = "s3"
     bucket: str
     prefix: str
@@ -99,9 +91,7 @@ class S3SampleDestination(BaseModel):
         return self
 
 
-class AzureSampleDestination(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class AzureSampleDestination(StorageChangeTokens):
     type: Literal["azure_blob"] = "azure_blob"
     account: str
     container: str
@@ -126,8 +116,9 @@ def merge_sample_destination(
 ) -> SampleDestinationLocation:
     """Materialize per-sample destination from instance defaults and sample prefix."""
     norm = normalize_sample_prefix(prefix)
+    tokens = _token_kwargs(defaults)
     if isinstance(defaults, FileSampleStorageDefaults):
-        return FileSampleDestination(basePath=defaults.basePath, prefix=norm)
+        return FileSampleDestination(basePath=defaults.basePath, prefix=norm, **tokens)
     if isinstance(defaults, S3SampleStorageDefaults):
         return S3SampleDestination(
             bucket=defaults.bucket,
@@ -135,6 +126,7 @@ def merge_sample_destination(
             region=defaults.region,
             endpointUrl=defaults.endpointUrl,
             credentials=defaults.credentials,
+            **tokens,
         )
     if isinstance(defaults, AzureSampleStorageDefaults):
         return AzureSampleDestination(
@@ -142,6 +134,7 @@ def merge_sample_destination(
             container=defaults.container,
             prefix=norm,
             credentials=defaults.credentials,
+            **tokens,
         )
     raise TypeError(f"unsupported sample storage defaults: {type(defaults)!r}")
 

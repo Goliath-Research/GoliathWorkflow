@@ -25,6 +25,7 @@ This document is the canonical register of documentation coverage, canonical sou
 | **Schemas / contracts** | [`reference/schema-index.md`](reference/schema-index.md), [`contracts/openapi.yaml`](../contracts/openapi.yaml) | Machine-readable | |
 | **Regulatory / product controls** | [`regulatory/`](regulatory/README.md) | New synthesis pillar | Product controls, validation evidence index, change management, deployment supervision, traceability |
 | **Platform overview** | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) | Canonical quick synthesis | Few-dozen-page Markdown + [companion canvas](canvas/methylpipeline-platform-overview.canvas.tsx); not a fourth Quarto book |
+| **Storage credentials (DB SoT)** | [`architecture/config-registry.md`](architecture/config-registry.md), [`deployment/portal_resource_profile.md`](deployment/portal_resource_profile.md), plan [`plans/storage-db-sot.plan.md`](plans/storage-db-sot.plan.md) | Active | Portal `sp_*` authoring; expand + `contentHash` + node-local cache; Key Vault optional |
 | **Diagrams** | [`docs/diagrams/src/*.mmd`](diagrams/src/), [`docs/diagrams/out/*.svg`](diagrams/out/), [`docs/diagrams/out/*.png`](diagrams/out/) | Pre-render pipeline | `scripts/render_diagrams.sh` (`htmlLabels: false`, PNG for Quarto PDF) |
 
 ## Canonical doc map (“read this for X”)

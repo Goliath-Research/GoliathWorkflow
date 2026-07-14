@@ -124,22 +124,22 @@ class ResourceProfileReader:
             or location.get("provider")
             or "file"
         )
-        prefix = None
-        if prefix_base:
-            prefix = str(prefix_base)
-        elif location.get("prefixBase") and not location.get("prefix"):
-            prefix = str(location.get("prefixBase"))
+        # sampleStorage defaults use prefixBase (not per-sample prefix). Leave
+        # prefix unset so SampleStorageDefaults (extra=forbid) accepts the dict.
         assembled = assemble_storage_location(
             location,
             provider=str(provider),
-            prefix=prefix,
+            prefix=None,
             credential_name=credential_name,
             credential_version=row.get("cred_version"),
             content_hash=row.get("content_hash"),
             secret=secret,
         )
-        if prefix_base and "prefixBase" not in assembled:
-            assembled["prefixBase"] = prefix_base
+        assembled.pop("prefix", None)
+        if prefix_base:
+            assembled["prefixBase"] = str(prefix_base)
+        elif assembled.get("prefixBase") is None and location.get("prefixBase"):
+            assembled["prefixBase"] = location.get("prefixBase")
         return assembled
 
     def h5_storage_defaults(self, profile_key: str) -> Optional[dict[str, Any]]:

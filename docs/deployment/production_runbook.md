@@ -37,7 +37,7 @@ methyl-study-start sample-prep-start request.json
 # request.json: projectPath, workflow_version_id, fastqStorage, sampleCsvs, ...
 ```
 
-**Ingress vs retention:** `fastqStorage` must point at **laboratory-owned** storage (never inferred from myQNAPcloud). HDF5 archive (`h5Storage`) defaults from `portal.resource_profile` when omitted. See [portal_resource_profile.md](portal_resource_profile.md).
+**Ingress vs retention:** `fastqStorage` must point at **laboratory-owned** storage (never inferred from myQNAPcloud). HDF5/sample archive (`sampleStorage` / `h5Storage`) defaults from `portal.resource_profile` → published `cfg.storage_endpoint` (e.g. `epimethyl-archive`) when omitted. See [portal_resource_profile.md](portal_resource_profile.md).
 
 **Local smoke (stub worker):**
 

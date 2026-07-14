@@ -367,18 +367,21 @@ flowchart TB
 | Published non-secret objects for workers | `/work` via `methyl-cfg materialize` / release promote |
 | Sites, profiles, programs, studies, credentials | `cfg` database (production SoT) |
 | Sample CSVs and run artifacts | `/work/projects/<study>/` |
-| Secrets | `cfg.credential` / vault — never under project trees |
+| Secrets | `cfg.credential` (DB SoT) — never under project trees; Key Vault optional escape hatch |
 
 ### Configuration registry (`cfg`)
 
 Production source of truth for sites, profiles, DomainPrograms, studies, storage
 endpoints/credentials, and reference assets is the **`cfg` schema** (Azure SQL or
-PostgreSQL), operated via `methyl-cfg` (`import-fs`, `upsert`, `materialize`,
-`publish-program`, `sync-actions`).
+PostgreSQL). **Storage accounts and credentials** are authored by lab/infra admins
+via EpiPortal (`portal.sp_*` upsert/publish). `methyl-cfg` (`import-fs`, `upsert`,
+`materialize`, `publish-program`, `sync-actions`) remains the **dev/CI/bootstrap** path.
 
 - **Materialize** writes non-secret published objects onto `/work` / runtime-bundle.
-- **Credentials never materialize** to shared storage; schedule-time expand may emit
-  vault/encrypted **refs** for workers to resolve (Managed Identity / Fernet).
+- **Credentials never materialize** to shared storage. Schedule-time expand embeds
+  concrete auth fields (plus `credentialName` / `contentHash`) into task `input_json`
+  over gateway TLS; dumb workers refresh a **node-local** Fernet cache. Azure Key Vault
+  / `encrypted_file` remain optional escape hatches—not the default production path.
 - Git keeps contracts, CI fixtures, and import seeds.
 
 See [config-registry](../architecture/config-registry.md) and
@@ -544,7 +547,7 @@ flowchart TB
 | Layer | Responsibility |
 |-------|----------------|
 | Portal | Study/program editing; start SamplePrep / validation instances via SQL |
-| `cfg` | Published config objects and credential refs |
+| `cfg` | Published config objects; credentials in `cfg.credential` (DB SoT) |
 | `wf` | Workflow versions, instances, node executions, leases, hyperparameter sets |
 | Gateway | Stateless worker claim/submit (no science merge at claim) |
 | Workers | Capability-matched execution; read/write `/work` |
@@ -576,15 +579,17 @@ and rollback are operator-gated (see [production release](../deployment/producti
 |---------|------|
 | Study science | `/work/projects/<study>/` |
 | References | `/work/genomes`, `/work/cache` |
-| Secrets | `cfg.credential` / vault refs — **not** under `/work/projects` |
-| Sample ingress | Laboratory `fastqStorage` (S3 / Azure / file) |
-| Retention archive | Portal resource profile / sample storage |
+| Secrets | `cfg.credential` via portal admin upsert — **not** under `/work/projects` or shared `/work` |
+| Sample ingress | Laboratory `fastqStorage` (S3 / Azure / file), selected from published endpoints |
+| Retention archive | `portal.resource_profile` → named `cfg.storage_endpoint` (e.g. `epimethyl-archive`) |
 | Bulk genomes mirror | Operator `aws s3 sync` via `scripts/sync_genomes_to_s3.sh` |
-| Per-sample transfers | Hardened worker transfer layer (multipart, skip, vault/encrypted modes) |
+| Per-sample transfers | Hardened worker transfer layer (multipart, skip, node-local cache via `contentHash`) |
 
-Prefer `authMode: azure_key_vault` or ambient identity over embedding long-lived
-keys in task JSON. Workers forbid env-var fallback for storage Access Keys on the
-typed ingress path.
+Production default: expand embeds concrete keys in claim `input_json` over TLS with
+`contentHash` for node-local cache refresh. Prefer ambient identity
+(`instance_profile` / `default_credential`) when the deployment supports it. Do **not**
+persist cloud keys under `/work`. Azure Key Vault on workers is an optional escape hatch.
+Workers forbid env-var fallback for storage Access Keys on the typed ingress path.
 
 ### Observability (honest inventory)
 
@@ -832,7 +837,7 @@ sequenceDiagram
 
 - Hide operational thresholds in package constants.
 - Require workers to re-read study manifests for tool knobs.
-- Put long-lived cloud keys in task JSON or under `/work/projects`.
+- Persist cloud keys under `/work/projects` or shared `/work` (claim `input_json` over TLS with `contentHash` is the intentional delivery path; node-local cache only).
 - Cite smoke/stub runs as analytical or clinical validation.
 - Fold pivotal claim stages into exploratory research modes.
 

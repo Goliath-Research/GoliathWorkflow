@@ -14,6 +14,41 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 _SECRET_JSON_SCHEMA = {"writeOnly": True}
 
+StorageScope = Literal["lab_ingress", "archive", "shared"]
+
+
+class StorageChangeTokens(BaseModel):
+    """Optional schedule-time expand tokens for credential rotation / RBAC scope."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scope: StorageScope | None = Field(
+        default=None,
+        description="Admin RBAC hint: lab_ingress vs archive vs shared.",
+    )
+    credentialName: str | None = Field(
+        default=None,
+        description="cfg.credential name bound at expand time.",
+    )
+    credentialVersion: str | None = Field(
+        default=None,
+        description="Published credential version bound into task JSON.",
+    )
+    contentHash: str | None = Field(
+        default=None,
+        description="cfg.credential.content_hash; workers refresh node-local cache when this changes.",
+    )
+
+
+class CredentialChangeTokens(BaseModel):
+    """Change tokens nested on credentials by assemble_storage_location."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    credentialName: str | None = None
+    credentialVersion: str | None = None
+    contentHash: str | None = None
+
 
 def reveal_secrets(value: Any) -> Any:
     """Recursively expand SecretStr for workflow context_json / worker task payloads."""
@@ -28,7 +63,7 @@ def reveal_secrets(value: Any) -> Any:
 
 def dump_storage_model(model: BaseModel) -> dict[str, Any]:
     """Serialize storage models with credential secrets visible to workers."""
-    return reveal_secrets(model.model_dump(mode="python"))
+    return reveal_secrets(model.model_dump(mode="python", exclude_none=True))
 
 
 def normalize_sample_prefix(prefix: str) -> str:
@@ -54,25 +89,28 @@ def resolve_sample_storage_prefix(
     return normalize_sample_prefix(sample_id)
 
 
-class S3ExplicitKeysCredentials(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+def _token_kwargs(model: StorageChangeTokens) -> dict[str, Any]:
+    return {
+        "scope": model.scope,
+        "credentialName": model.credentialName,
+        "credentialVersion": model.credentialVersion,
+        "contentHash": model.contentHash,
+    }
 
+
+class S3ExplicitKeysCredentials(CredentialChangeTokens):
     authMode: Literal["explicit_keys"] = "explicit_keys"
     accessKeyId: str
     secretAccessKey: SecretStr = Field(json_schema_extra=_SECRET_JSON_SCHEMA)
     sessionToken: SecretStr | None = Field(default=None, json_schema_extra=_SECRET_JSON_SCHEMA)
 
 
-class S3InstanceProfileCredentials(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class S3InstanceProfileCredentials(CredentialChangeTokens):
     authMode: Literal["instance_profile"] = "instance_profile"
 
 
-class AzureKeyVaultCredentials(BaseModel):
-    """Credential *reference* resolved on the worker via Managed Identity."""
-
-    model_config = ConfigDict(extra="forbid")
+class AzureKeyVaultCredentials(CredentialChangeTokens):
+    """Credential *reference* resolved on the worker via Managed Identity (optional escape hatch)."""
 
     authMode: Literal["azure_key_vault"] = "azure_key_vault"
     vaultUrl: str = Field(description="Azure Key Vault URL (https://….vault.azure.net/).")
@@ -83,10 +121,8 @@ class AzureKeyVaultCredentials(BaseModel):
     )
 
 
-class EncryptedFileCredentials(BaseModel):
-    """Credential *reference* to a Fernet-encrypted local file (bootstrap / air-gapped)."""
-
-    model_config = ConfigDict(extra="forbid")
+class EncryptedFileCredentials(CredentialChangeTokens):
+    """Credential *reference* to a Fernet-encrypted local file (node-local / air-gapped)."""
 
     authMode: Literal["encrypted_file"] = "encrypted_file"
     path: str = Field(description="Path to encrypted credential file (owner rw only).")
@@ -107,23 +143,17 @@ S3Credentials = Annotated[
 ]
 
 
-class AzureAccountKeyCredentials(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class AzureAccountKeyCredentials(CredentialChangeTokens):
     authMode: Literal["account_key"] = "account_key"
     accountKey: SecretStr = Field(json_schema_extra=_SECRET_JSON_SCHEMA)
 
 
-class AzureConnectionStringCredentials(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class AzureConnectionStringCredentials(CredentialChangeTokens):
     authMode: Literal["connection_string"] = "connection_string"
     connectionString: SecretStr = Field(json_schema_extra=_SECRET_JSON_SCHEMA)
 
 
-class AzureDefaultCredentialCredentials(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class AzureDefaultCredentialCredentials(CredentialChangeTokens):
     authMode: Literal["default_credential"] = "default_credential"
 
 
@@ -139,16 +169,12 @@ AzureCredentials = Annotated[
 ]
 
 
-class FileFastqStorageDefaults(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class FileFastqStorageDefaults(StorageChangeTokens):
     type: Literal["file"] = "file"
     basePath: str
 
 
-class S3FastqStorageDefaults(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class S3FastqStorageDefaults(StorageChangeTokens):
     type: Literal["s3"] = "s3"
     bucket: str
     region: str | None = None
@@ -157,9 +183,7 @@ class S3FastqStorageDefaults(BaseModel):
     credentials: S3Credentials
 
 
-class AzureFastqStorageDefaults(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class AzureFastqStorageDefaults(StorageChangeTokens):
     type: Literal["azure_blob"] = "azure_blob"
     account: str
     container: str
@@ -172,9 +196,7 @@ FastqStorageDefaults = Annotated[
 ]
 
 
-class FileFastqSource(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class FileFastqSource(StorageChangeTokens):
     type: Literal["file"] = "file"
     basePath: str
     prefix: str = ""
@@ -186,9 +208,7 @@ class FileFastqSource(BaseModel):
         return self
 
 
-class S3FastqSource(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class S3FastqSource(StorageChangeTokens):
     type: Literal["s3"] = "s3"
     bucket: str
     prefix: str
@@ -202,9 +222,7 @@ class S3FastqSource(BaseModel):
         return self
 
 
-class AzureFastqSource(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+class AzureFastqSource(StorageChangeTokens):
     type: Literal["azure_blob"] = "azure_blob"
     account: str
     container: str
@@ -226,8 +244,9 @@ FastqSourceLocation = Annotated[
 def merge_fastq_source(defaults: FastqStorageDefaults, prefix: str) -> FastqSourceLocation:
     """Materialize per-sample source from instance defaults and sample prefix."""
     norm = normalize_sample_prefix(prefix)
+    tokens = _token_kwargs(defaults)
     if isinstance(defaults, FileFastqStorageDefaults):
-        return FileFastqSource(basePath=defaults.basePath, prefix=norm)
+        return FileFastqSource(basePath=defaults.basePath, prefix=norm, **tokens)
     if isinstance(defaults, S3FastqStorageDefaults):
         return S3FastqSource(
             bucket=defaults.bucket,
@@ -235,6 +254,7 @@ def merge_fastq_source(defaults: FastqStorageDefaults, prefix: str) -> FastqSour
             region=defaults.region,
             endpointUrl=defaults.endpointUrl,
             credentials=defaults.credentials,
+            **tokens,
         )
     if isinstance(defaults, AzureFastqStorageDefaults):
         return AzureFastqSource(
@@ -242,6 +262,7 @@ def merge_fastq_source(defaults: FastqStorageDefaults, prefix: str) -> FastqSour
             container=defaults.container,
             prefix=norm,
             credentials=defaults.credentials,
+            **tokens,
         )
     raise TypeError(f"unsupported fastq storage defaults: {type(defaults)!r}")
 

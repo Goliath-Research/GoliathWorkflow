@@ -7,69 +7,283 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "authMode": { "const": "explicit_keys", "default": "explicit_keys", "type": "string" },
-        "accessKeyId": { "type": "string" },
-        "secretAccessKey": { "type": "string", "format": "password", "writeOnly": true },
+        "authMode": {
+          "const": "explicit_keys",
+          "default": "explicit_keys",
+          "type": "string"
+        },
+        "accessKeyId": {
+          "type": "string"
+        },
+        "secretAccessKey": {
+          "type": "string",
+          "format": "password",
+          "writeOnly": true
+        },
         "sessionToken": {
           "anyOf": [
-            { "type": "string", "format": "password", "writeOnly": true },
-            { "type": "null" }
+            {
+              "type": "string",
+              "format": "password",
+              "writeOnly": true
+            },
+            {
+              "type": "null"
+            }
           ],
           "default": null
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
         }
       },
-      "required": ["accessKeyId", "secretAccessKey"]
+      "required": [
+        "accessKeyId",
+        "secretAccessKey"
+      ]
     },
     "S3InstanceProfileCredentials": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "authMode": { "const": "instance_profile", "default": "instance_profile", "type": "string" }
+        "authMode": {
+          "const": "instance_profile",
+          "default": "instance_profile",
+          "type": "string"
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
+        }
       }
     },
     "AzureAccountKeyCredentials": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "authMode": { "const": "account_key", "default": "account_key", "type": "string" },
-        "accountKey": { "type": "string", "format": "password", "writeOnly": true }
+        "authMode": {
+          "const": "account_key",
+          "default": "account_key",
+          "type": "string"
+        },
+        "accountKey": {
+          "type": "string",
+          "format": "password",
+          "writeOnly": true
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
+        }
       },
-      "required": ["accountKey"]
+      "required": [
+        "accountKey"
+      ]
     },
     "AzureConnectionStringCredentials": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "authMode": { "const": "connection_string", "default": "connection_string", "type": "string" },
-        "connectionString": { "type": "string", "format": "password", "writeOnly": true }
+        "authMode": {
+          "const": "connection_string",
+          "default": "connection_string",
+          "type": "string"
+        },
+        "connectionString": {
+          "type": "string",
+          "format": "password",
+          "writeOnly": true
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
+        }
       },
-      "required": ["connectionString"]
+      "required": [
+        "connectionString"
+      ]
     },
     "AzureSasTokenCredentials": {
       "type": "object",
       "additionalProperties": false,
       "description": "Azure Blob SAS token (query string, with or without leading ?).",
       "properties": {
-        "authMode": { "const": "sas_token", "default": "sas_token", "type": "string" },
-        "sasToken": { "type": "string", "format": "password", "writeOnly": true }
+        "authMode": {
+          "const": "sas_token",
+          "default": "sas_token",
+          "type": "string"
+        },
+        "sasToken": {
+          "type": "string",
+          "format": "password",
+          "writeOnly": true
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
+        }
       },
-      "required": ["sasToken"]
+      "required": [
+        "sasToken"
+      ]
     },
     "AzureSasUrlCredentials": {
       "type": "object",
       "additionalProperties": false,
       "description": "Full Azure Blob SAS URL (container or blob).",
       "properties": {
-        "authMode": { "const": "sas_url", "default": "sas_url", "type": "string" },
-        "sasUrl": { "type": "string", "format": "password", "writeOnly": true }
+        "authMode": {
+          "const": "sas_url",
+          "default": "sas_url",
+          "type": "string"
+        },
+        "sasUrl": {
+          "type": "string",
+          "format": "password",
+          "writeOnly": true
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
+        }
       },
-      "required": ["sasUrl"]
+      "required": [
+        "sasUrl"
+      ]
     },
     "AzureDefaultCredentialCredentials": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "authMode": { "const": "default_credential", "default": "default_credential", "type": "string" }
+        "authMode": {
+          "const": "default_credential",
+          "default": "default_credential",
+          "type": "string"
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
+        }
       }
     },
     "AzureKeyVaultCredentials": {
@@ -77,199 +291,561 @@
       "additionalProperties": false,
       "description": "Optional escape hatch: credential reference resolved on the worker via Managed Identity + Key Vault. Preferred production path for dumb workers is concrete keys over TLS + node-local Fernet cache (contentHash).",
       "properties": {
-        "authMode": { "const": "azure_key_vault", "default": "azure_key_vault", "type": "string" },
-        "vaultUrl": { "type": "string", "description": "Azure Key Vault URL (https://….vault.azure.net/)." },
-        "secretName": { "type": "string", "description": "Secret name holding JSON or accessKeyId:secret." },
+        "authMode": {
+          "const": "azure_key_vault",
+          "default": "azure_key_vault",
+          "type": "string"
+        },
+        "vaultUrl": {
+          "type": "string",
+          "description": "Azure Key Vault URL (https://\u2026.vault.azure.net/)."
+        },
+        "secretName": {
+          "type": "string",
+          "description": "Secret name holding JSON or accessKeyId:secret."
+        },
         "materializeAs": {
           "anyOf": [
-            { "type": "string", "enum": ["explicit_keys", "account_key", "connection_string"] },
-            { "type": "null" }
+            {
+              "type": "string",
+              "enum": [
+                "explicit_keys",
+                "account_key",
+                "connection_string"
+              ]
+            },
+            {
+              "type": "null"
+            }
           ],
           "default": null
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
         }
       },
-      "required": ["vaultUrl", "secretName"]
+      "required": [
+        "vaultUrl",
+        "secretName"
+      ]
     },
     "EncryptedFileCredentials": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Fernet-encrypted credential file (node-local cache or air-gapped bootstrap). Prefer /var/lib/methyl or /etc/methyl — never shared /work.",
+      "description": "Fernet-encrypted credential file (node-local cache or air-gapped bootstrap). Prefer /var/lib/methyl or /etc/methyl \u2014 never shared /work.",
       "properties": {
-        "authMode": { "const": "encrypted_file", "default": "encrypted_file", "type": "string" },
-        "path": { "type": "string", "description": "Path to encrypted credential file (owner rw only)." },
+        "authMode": {
+          "const": "encrypted_file",
+          "default": "encrypted_file",
+          "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to encrypted credential file (owner rw only)."
+        },
         "materializeAs": {
           "anyOf": [
-            { "type": "string", "enum": ["explicit_keys", "account_key", "connection_string"] },
-            { "type": "null" }
+            {
+              "type": "string",
+              "enum": [
+                "explicit_keys",
+                "account_key",
+                "connection_string"
+              ]
+            },
+            {
+              "type": "null"
+            }
           ],
           "default": null
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
         }
       },
-      "required": ["path"]
+      "required": [
+        "path"
+      ]
     },
     "GcsServiceAccountCredentials": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "authMode": { "const": "service_account_json", "default": "service_account_json", "type": "string" },
-        "serviceAccountJson": { "type": "string", "format": "password", "writeOnly": true }
+        "authMode": {
+          "const": "service_account_json",
+          "default": "service_account_json",
+          "type": "string"
+        },
+        "serviceAccountJson": {
+          "type": "string",
+          "format": "password",
+          "writeOnly": true
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
+        }
       },
-      "required": ["serviceAccountJson"]
+      "required": [
+        "serviceAccountJson"
+      ]
     },
     "GcsHmacCredentials": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "authMode": { "const": "hmac_keys", "default": "hmac_keys", "type": "string" },
-        "accessId": { "type": "string" },
-        "secret": { "type": "string", "format": "password", "writeOnly": true }
+        "authMode": {
+          "const": "hmac_keys",
+          "default": "hmac_keys",
+          "type": "string"
+        },
+        "accessId": {
+          "type": "string"
+        },
+        "secret": {
+          "type": "string",
+          "format": "password",
+          "writeOnly": true
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
+        }
       },
-      "required": ["accessId", "secret"]
+      "required": [
+        "accessId",
+        "secret"
+      ]
     },
     "GcsApplicationDefaultCredentials": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "authMode": { "const": "application_default", "default": "application_default", "type": "string" }
+        "authMode": {
+          "const": "application_default",
+          "default": "application_default",
+          "type": "string"
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
+        }
       }
     },
     "HttpsBearerCredentials": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "authMode": { "const": "bearer", "default": "bearer", "type": "string" },
-        "token": { "type": "string", "format": "password", "writeOnly": true }
+        "authMode": {
+          "const": "bearer",
+          "default": "bearer",
+          "type": "string"
+        },
+        "token": {
+          "type": "string",
+          "format": "password",
+          "writeOnly": true
+        },
+        "credentialName": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential name; nested by schedule-time expand"
+        },
+        "credentialVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Published credential version"
+        },
+        "contentHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "cfg.credential.content_hash for node-local cache refresh"
+        }
       },
-      "required": ["token"]
+      "required": [
+        "token"
+      ]
     },
     "S3Location": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "s3", "default": "s3", "type": "string" },
-        "bucket": { "type": "string" },
-        "region": { "type": ["string", "null"], "default": null },
-        "endpointUrl": { "type": ["string", "null"], "default": null },
-        "prefix": { "type": "string" },
-        "prefixBase": { "type": ["string", "null"] },
+        "type": {
+          "const": "s3",
+          "default": "s3",
+          "type": "string"
+        },
+        "bucket": {
+          "type": "string"
+        },
+        "region": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "endpointUrl": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "prefixBase": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "scope": {
           "type": "string",
-          "enum": ["lab_ingress", "archive", "shared"],
+          "enum": [
+            "lab_ingress",
+            "archive",
+            "shared"
+          ],
           "description": "Admin RBAC hint: lab_admin mutates lab_ingress; infrastructure_admin mutates archive/shared"
         },
-        "credentialName": { "type": "string", "description": "cfg.credential name (registry); expanded at schedule time" },
-        "credentialVersion": { "type": "string", "description": "Published credential version bound into task JSON" },
+        "credentialName": {
+          "type": "string",
+          "description": "cfg.credential name (registry); expanded at schedule time"
+        },
+        "credentialVersion": {
+          "type": "string",
+          "description": "Published credential version bound into task JSON"
+        },
         "contentHash": {
           "type": "string",
           "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes"
         },
         "credentials": {
           "oneOf": [
-            { "$ref": "#/$defs/S3ExplicitKeysCredentials" },
-            { "$ref": "#/$defs/S3InstanceProfileCredentials" },
-            { "$ref": "#/$defs/AzureKeyVaultCredentials" },
-            { "$ref": "#/$defs/EncryptedFileCredentials" }
+            {
+              "$ref": "#/$defs/S3ExplicitKeysCredentials"
+            },
+            {
+              "$ref": "#/$defs/S3InstanceProfileCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureKeyVaultCredentials"
+            },
+            {
+              "$ref": "#/$defs/EncryptedFileCredentials"
+            }
           ]
         }
       },
-      "required": ["bucket"]
+      "required": [
+        "bucket"
+      ]
     },
     "AzureBlobLocation": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "azure_blob", "default": "azure_blob", "type": "string" },
-        "account": { "type": "string" },
-        "container": { "type": "string" },
-        "prefix": { "type": "string" },
+        "type": {
+          "const": "azure_blob",
+          "default": "azure_blob",
+          "type": "string"
+        },
+        "account": {
+          "type": "string"
+        },
+        "container": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
         "scope": {
           "type": "string",
-          "enum": ["lab_ingress", "archive", "shared"]
+          "enum": [
+            "lab_ingress",
+            "archive",
+            "shared"
+          ]
         },
-        "credentialName": { "type": "string" },
-        "credentialVersion": { "type": "string" },
-        "contentHash": { "type": "string" },
+        "credentialName": {
+          "type": "string"
+        },
+        "credentialVersion": {
+          "type": "string"
+        },
+        "contentHash": {
+          "type": "string"
+        },
         "credentials": {
           "oneOf": [
-            { "$ref": "#/$defs/AzureAccountKeyCredentials" },
-            { "$ref": "#/$defs/AzureConnectionStringCredentials" },
-            { "$ref": "#/$defs/AzureSasTokenCredentials" },
-            { "$ref": "#/$defs/AzureSasUrlCredentials" },
-            { "$ref": "#/$defs/AzureDefaultCredentialCredentials" },
-            { "$ref": "#/$defs/AzureKeyVaultCredentials" },
-            { "$ref": "#/$defs/EncryptedFileCredentials" }
+            {
+              "$ref": "#/$defs/AzureAccountKeyCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureConnectionStringCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureSasTokenCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureSasUrlCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureDefaultCredentialCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureKeyVaultCredentials"
+            },
+            {
+              "$ref": "#/$defs/EncryptedFileCredentials"
+            }
           ]
         }
       },
-      "required": ["account", "container"]
+      "required": [
+        "account",
+        "container"
+      ]
     },
     "GcsLocation": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "gcs", "default": "gcs", "type": "string" },
-        "bucket": { "type": "string" },
-        "prefix": { "type": "string" },
-        "projectId": { "type": ["string", "null"], "default": null },
+        "type": {
+          "const": "gcs",
+          "default": "gcs",
+          "type": "string"
+        },
+        "bucket": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string"
+        },
+        "projectId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "scope": {
           "type": "string",
-          "enum": ["lab_ingress", "archive", "shared"]
+          "enum": [
+            "lab_ingress",
+            "archive",
+            "shared"
+          ]
         },
-        "credentialName": { "type": "string" },
-        "credentialVersion": { "type": "string" },
-        "contentHash": { "type": "string" },
+        "credentialName": {
+          "type": "string"
+        },
+        "credentialVersion": {
+          "type": "string"
+        },
+        "contentHash": {
+          "type": "string"
+        },
         "credentials": {
           "oneOf": [
-            { "$ref": "#/$defs/GcsServiceAccountCredentials" },
-            { "$ref": "#/$defs/GcsHmacCredentials" },
-            { "$ref": "#/$defs/GcsApplicationDefaultCredentials" }
+            {
+              "$ref": "#/$defs/GcsServiceAccountCredentials"
+            },
+            {
+              "$ref": "#/$defs/GcsHmacCredentials"
+            },
+            {
+              "$ref": "#/$defs/GcsApplicationDefaultCredentials"
+            }
           ]
         }
       },
-      "required": ["bucket"]
+      "required": [
+        "bucket"
+      ]
     },
     "FileLocation": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "file", "default": "file", "type": "string" },
-        "basePath": { "type": "string" },
-        "prefix": { "type": "string", "default": "" },
+        "type": {
+          "const": "file",
+          "default": "file",
+          "type": "string"
+        },
+        "basePath": {
+          "type": "string"
+        },
+        "prefix": {
+          "type": "string",
+          "default": ""
+        },
         "scope": {
           "type": "string",
-          "enum": ["lab_ingress", "archive", "shared"]
+          "enum": [
+            "lab_ingress",
+            "archive",
+            "shared"
+          ]
         }
       },
-      "required": ["basePath"]
+      "required": [
+        "basePath"
+      ]
     },
     "HttpsLocation": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "type": { "const": "https", "default": "https", "type": "string" },
-        "baseUrl": { "type": "string" },
+        "type": {
+          "const": "https",
+          "default": "https",
+          "type": "string"
+        },
+        "baseUrl": {
+          "type": "string"
+        },
         "scope": {
           "type": "string",
-          "enum": ["lab_ingress", "archive", "shared"]
+          "enum": [
+            "lab_ingress",
+            "archive",
+            "shared"
+          ]
         },
-        "credentialName": { "type": "string" },
-        "credentialVersion": { "type": "string" },
-        "contentHash": { "type": "string" },
+        "credentialName": {
+          "type": "string"
+        },
+        "credentialVersion": {
+          "type": "string"
+        },
+        "contentHash": {
+          "type": "string"
+        },
         "credentials": {
           "oneOf": [
-            { "$ref": "#/$defs/HttpsBearerCredentials" }
+            {
+              "$ref": "#/$defs/HttpsBearerCredentials"
+            }
           ]
         }
       },
-      "required": ["baseUrl"]
+      "required": [
+        "baseUrl"
+      ]
     },
     "StorageLocation": {
       "oneOf": [
-        { "$ref": "#/$defs/S3Location" },
-        { "$ref": "#/$defs/AzureBlobLocation" },
-        { "$ref": "#/$defs/GcsLocation" },
-        { "$ref": "#/$defs/FileLocation" },
-        { "$ref": "#/$defs/HttpsLocation" }
+        {
+          "$ref": "#/$defs/S3Location"
+        },
+        {
+          "$ref": "#/$defs/AzureBlobLocation"
+        },
+        {
+          "$ref": "#/$defs/GcsLocation"
+        },
+        {
+          "$ref": "#/$defs/FileLocation"
+        },
+        {
+          "$ref": "#/$defs/HttpsLocation"
+        }
       ]
     },
     "ArchiveProfileEndpointRef": {
@@ -285,10 +861,20 @@
           "type": "string",
           "description": "Alias of sampleStorageEndpoint"
         },
-        "prefixBase": { "type": ["string", "null"] },
-        "scope": { "const": "archive", "type": "string" }
+        "prefixBase": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scope": {
+          "const": "archive",
+          "type": "string"
+        }
       },
-      "required": ["sampleStorageEndpoint"]
+      "required": [
+        "sampleStorageEndpoint"
+      ]
     },
     "StorageProfileDocument": {
       "type": "object",
@@ -312,7 +898,9 @@
           "type": "string",
           "description": "e.g. linear_genome, gtf, pangenome_bundle"
         },
-        "destRoot": { "type": "string" },
+        "destRoot": {
+          "type": "string"
+        },
         "recipe": {
           "type": "object",
           "properties": {
@@ -320,22 +908,52 @@
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["op"],
+                "required": [
+                  "op"
+                ],
                 "properties": {
                   "op": {
                     "type": "string",
-                    "enum": ["mkdir", "download", "checksum", "run"]
+                    "enum": [
+                      "mkdir",
+                      "download",
+                      "checksum",
+                      "run"
+                    ]
                   },
-                  "uri": { "type": "string" },
-                  "storageEndpoint": { "type": "string" },
-                  "key": { "type": "string" },
-                  "prefix": { "type": "string" },
-                  "dest": { "type": "string" },
-                  "path": { "type": "string" },
-                  "sha256": { "type": "string" },
-                  "md5": { "type": "string" },
-                  "argv": { "type": "array", "items": { "type": "string" } },
-                  "cwd": { "type": "string" }
+                  "uri": {
+                    "type": "string"
+                  },
+                  "storageEndpoint": {
+                    "type": "string"
+                  },
+                  "key": {
+                    "type": "string"
+                  },
+                  "prefix": {
+                    "type": "string"
+                  },
+                  "dest": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "type": "string"
+                  },
+                  "md5": {
+                    "type": "string"
+                  },
+                  "argv": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "cwd": {
+                    "type": "string"
+                  }
                 }
               }
             }
@@ -345,6 +963,8 @@
     }
   },
   "oneOf": [
-    { "$ref": "#/$defs/StorageLocation" }
+    {
+      "$ref": "#/$defs/StorageLocation"
+    }
   ]
 }

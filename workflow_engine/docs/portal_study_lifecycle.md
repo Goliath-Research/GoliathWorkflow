@@ -29,7 +29,7 @@ EXEC portal.sp_create_and_start_instance
   @context_json = @planned_context_json;
 ```
 
-Read `portal.resource_profile` for archive defaults when building context (same rules as [`archive_profile_resolver.py`](../portal/archive_profile_resolver.py)).
+Read `portal.resource_profile` for archive defaults when building context (resolves named `cfg.storage_endpoint` when `sampleStorageEndpoint` is set — same rules as [`archive_profile_resolver.py`](../portal/archive_profile_resolver.py) / [`resource_profile.py`](../portal/resource_profile.py)).
 
 Monitor:
 

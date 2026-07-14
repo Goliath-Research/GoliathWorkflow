@@ -1,7 +1,8 @@
 ---
 name: Storage Transfer Hardening
-overview: Restore high-performance multipart S3/Azure transfers with strong idempotent skips and retries in a shared worker transfer layer, and stop embedding long-lived cloud keys in task JSON by resolving cfg.credential via Azure Key Vault (MI) or locally encrypted files—aligned with existing worker isolation and config-not-code.
+overview: Restore high-performance multipart S3/Azure transfers with strong idempotent skips and retries in a shared worker transfer layer, plus azure_key_vault/encrypted_file credential refs as optional escape hatches.
 > **Status: COMPLETED** — cloud_transfer + vault/encrypted credential refs + schemas/docs.
+> **Superseded credential delivery:** see [`storage-db-sot.plan.md`](storage-db-sot.plan.md) — production expands concrete auth + `contentHash` into task JSON; DB is SoT via portal `sp_*`; Key Vault refs are no longer the default path.
 
 azure_devops:
   type: Feature
@@ -30,7 +31,7 @@ todos:
 - Shared [`workers/methyl_worker/cloud_transfer.py`](../../workers/methyl_worker/cloud_transfer.py): S3 `TransferConfig`, Azure `max_concurrency`, partial+replace downloads, strong multipart skip, within-sample parallelism
 - Wired [`fastq_source.py`](../../workers/methyl_worker/fastq_source.py) + [`sample_archive.py`](../../workers/methyl_worker/sample_archive.py)
 - Tunables: `actionConfig.storage_transfer` → [`StorageTransferStepConfig`](../../packages/methyldomain/methyl_domain/storage_transfer_config.py) / [`schemas/config/storage_transfer.schema.json`](../../schemas/config/storage_transfer.schema.json)
-- Credential refs: `azure_key_vault` / `encrypted_file` in [`fastq_storage.py`](../../packages/methyldomain/methyl_domain/fastq_storage.py); expand emits refs only ([`storage_expand.py`](../../workflow_engine/cfg/storage_expand.py)); worker resolve via [`storage_secrets.py`](../../packages/methyldomain/methyl_domain/storage_secrets.py)
+- Credential refs (historical): `azure_key_vault` / `encrypted_file` in [`fastq_storage.py`](../../packages/methyldomain/methyl_domain/fastq_storage.py); worker resolve via [`storage_secrets.py`](../../packages/methyldomain/methyl_domain/storage_secrets.py). **Current production path:** expand embeds concrete auth + `contentHash` ([`storage_expand.py`](../../workflow_engine/cfg/storage_expand.py)); see [`storage-db-sot.plan.md`](storage-db-sot.plan.md).
 - Docs: [`sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md), [`portal_resource_profile.md`](../../docs/deployment/portal_resource_profile.md)
 
 Bulk genomes still use [`scripts/sync_genomes_to_s3.sh`](../../scripts/sync_genomes_to_s3.sh); pipeline sample I/O uses the hardened worker layer.

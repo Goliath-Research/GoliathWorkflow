@@ -94,7 +94,7 @@ Top-level keys become scope-0 variables. FOREACH object elements flatten into pe
 | `referenceGtf` | string | no | GTF for Parabricks |
 | `alignmentMode` | string | no | `linear` (default) or `pangenome` — binds `usePangenome` for Giraffe vs fq2bam |
 | `fastqStorage` | object | yes | Laboratory-owned ingress (never inferred from archive profile) |
-| `sampleStorage` | object | no | Internal archive defaults from `portal.resource_profile` when omitted (`h5Storage` alias) |
+| `sampleStorage` | object | no | Internal archive defaults from `portal.resource_profile` → `cfg.storage_endpoint` when omitted (`h5Storage` alias) |
 | `samples` | array | yes | Each object: `sampleId`, `sampleDir`, materialized `fastqSource`, optional `sampleDestination` |
 
 After `sample.methyl_qc`: `qcPass`, `qcDisposition`, `trimFront1`, `trimTail1`, `trimFront2`, `trimTail2`, `qcAttemptReason`, `remediateAlignment`.

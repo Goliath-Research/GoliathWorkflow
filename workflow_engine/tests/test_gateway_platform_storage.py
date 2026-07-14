@@ -130,7 +130,8 @@ def test_resource_profile_reader_expands_cfg_endpoint_ref() -> None:
     assert h5["credentials"]["secretAccessKey"] == "secret"
     assert h5["contentHash"] == "abc123"
     assert h5["credentialName"] == "epimethyl-archive-keys"
-    assert h5["prefix"] == "samples/"
+    assert h5["prefixBase"] == "samples/"
+    assert "prefix" not in h5 or h5.get("prefix") in (None, "")
 
 
 def test_resource_profile_reader_missing_credential_raises() -> None:
@@ -167,3 +168,108 @@ def test_resource_profile_reader_missing_credential_raises() -> None:
     reader = ResourceProfileReader(db)
     with pytest.raises(KeyError, match="credential not found: missing-keys"):
         reader.h5_storage_defaults("epimethyl-samples")
+
+
+def test_expanded_archive_defaults_validate_as_sample_storage() -> None:
+    """P0 fix: ResourceProfileReader output must pass SamplePrepPlanRequest storage models."""
+    from methyl_domain.sample_storage import SampleStorageDefaults
+    from pydantic import TypeAdapter
+
+    db = MagicMock()
+    db.backend = "postgres"
+
+    def fetch(sql: str, params: tuple = ()):
+        if "portal.resource_profile" in sql:
+            return {
+                "profile_key": "epimethyl-samples",
+                "profile_type": "cfg_storage_endpoint_ref",
+                "profile_json": {
+                    "sampleStorageEndpoint": "epimethyl-archive",
+                    "prefixBase": "samples/",
+                    "scope": "archive",
+                },
+                "status": "ACTIVE",
+            }
+        if "cfg.storage_endpoint" in sql:
+            return {
+                "location_json": {
+                    "type": "s3",
+                    "bucket": "epimethyl",
+                    "region": "us-east-1",
+                    "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
+                    "scope": "archive",
+                    "prefixBase": "samples/",
+                },
+                "provider": "s3",
+                "credential_name": "epimethyl-archive-keys",
+                "endpoint_version": "1",
+                "secret_json": {
+                    "authMode": "explicit_keys",
+                    "accessKeyId": "AKIA",
+                    "secretAccessKey": "secret",
+                },
+                "content_hash": "abc123",
+                "cred_version": "1",
+                "auth_mode": "explicit_keys",
+            }
+        return None
+
+    db._fetch_one.side_effect = fetch
+    reader = ResourceProfileReader(db)
+    h5 = reader.h5_storage_defaults("epimethyl-samples")
+    assert h5 is not None
+    model = TypeAdapter(SampleStorageDefaults).validate_python(h5)
+    assert model.contentHash == "abc123"
+    assert model.credentialName == "epimethyl-archive-keys"
+    assert model.scope == "archive"
+    assert model.prefixBase == "samples/"
+
+
+def test_download_and_archive_task_inputs_accept_expanded_locations() -> None:
+    from methyl_worker.task_models.sample_prep_models import (
+        ArchiveSampleTaskInput,
+        DownloadFastqTaskInput,
+    )
+
+    source = {
+        "type": "s3",
+        "bucket": "cohort",
+        "prefix": "S1/",
+        "credentialName": "lab-keys",
+        "contentHash": "hash1",
+        "credentials": {
+            "authMode": "explicit_keys",
+            "accessKeyId": "AKIA",
+            "secretAccessKey": "sec",
+            "credentialName": "lab-keys",
+            "contentHash": "hash1",
+        },
+    }
+    dl = DownloadFastqTaskInput(
+        sampleId="S1",
+        sampleDir="/work/samples/S1",
+        fastqSource=source,
+    )
+    assert dl.fastqSource.contentHash == "hash1"
+
+    dest = {
+        "type": "s3",
+        "bucket": "epimethyl",
+        "prefix": "samples/S1/",
+        "scope": "archive",
+        "credentialName": "archive-keys",
+        "contentHash": "hash2",
+        "credentials": {
+            "authMode": "explicit_keys",
+            "accessKeyId": "AKIA",
+            "secretAccessKey": "sec",
+            "contentHash": "hash2",
+        },
+    }
+    ar = ArchiveSampleTaskInput(
+        sampleId="S1",
+        sampleDir="/work/samples/S1",
+        sampleDestination=dest,
+    )
+    assert ar.sampleDestination.contentHash == "hash2"
+    assert ar.sampleDestination.scope == "archive"

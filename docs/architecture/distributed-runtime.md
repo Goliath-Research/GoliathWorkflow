@@ -44,7 +44,7 @@ flowchart TB
 | Layer | Technology | Responsibility |
 |-------|------------|----------------|
 | Portal | config editor + SQL portal API | Edit study/program/action config; start runs |
-| Config registry | `cfg` schema + `methyl-cfg` | Sites, profiles, programs, studies, storage endpoints/credentials, assets |
+| Config registry | `cfg` schema + `methyl-cfg` (dev) / EpiPortal `portal.sp_*` (prod storage/credentials) | Sites, profiles, programs, studies, storage endpoints/credentials, assets |
 | Database engine | Azure SQL or PostgreSQL (`wf`) | Workflow tree, instances, executions, leases |
 | Middle-tier | `methyl-gateway` (uvicorn) | Stateless HTTP; worker claim/submit only |
 | Workers | `methyl-worker` + package CLIs | Poll tasks by capability; read/write shared paths |

@@ -96,12 +96,12 @@ BEGIN
         USING (SELECT @name AS name, @ver AS version) AS s
         ON t.name = s.name AND t.version = s.version
         WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash,
-            provider = COALESCE(@provider, N'unknown'),
+            provider = COALESCE(@provider, JSON_VALUE(CONVERT(nvarchar(max), @doc), N'$.type'), N'unknown'),
             location_json = @doc,
             credential_name = COALESCE(@credential_name, t.credential_name),
             updated_at_utc = SYSUTCDATETIME()
         WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, provider, location_json, credential_name)
-            VALUES (@name, @ver, @st, @hash, COALESCE(@provider, N'unknown'), @doc, @credential_name);
+            VALUES (@name, @ver, @st, @hash, COALESCE(@provider, JSON_VALUE(CONVERT(nvarchar(max), @doc), N'$.type'), N'unknown'), @doc, @credential_name);
         SELECT id FROM cfg.storage_endpoint WHERE name = @name AND version = @ver;
         RETURN;
     END

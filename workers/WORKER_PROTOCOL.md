@@ -110,7 +110,7 @@ Python package [`methyl_worker/`](methyl_worker/):
 source .venv/bin/activate
 pip install -e workers/
 
-# Poll for methyl-qc tasks (credentials from portal worker registration)
+# Poll for methyl-qc tasks (worker_token from registration; storage secrets arrive in claim input_json)
 export WORKER_ID=1 WORKER_TOKEN='...' WORKER_CAPABILITY=methyl-qc
 methyl-worker --api-base http://localhost:8080/v1
 

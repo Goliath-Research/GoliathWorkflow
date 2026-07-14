@@ -51,8 +51,9 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`worker-transport-security.plan.md`](worker-transport-security.plan.md) | **AB#672** | Worker Transport Security | (see plan frontmatter) |
 | [`ado-boards-traceability.plan.md`](ado-boards-traceability.plan.md) | _(meta)_ | ADO Boards Traceability (seed tooling) | `manifest`, `seed-script`, `ado-create`, `backfill-docs`, `promote-plan` |
 | [`sync-genomes-to-qnap.plan.md`](sync-genomes-to-qnap.plan.md) | _(ops)_ | Sync /work/genomes to myQNAPcloud | `sync-script`, `doc-note` |
-| [`storage-transfer-hardening.plan.md`](storage-transfer-hardening.plan.md) | _(ops)_ | Storage transfer hardening + credential refs | `cloud-transfer-module`, `transfer-config-schema`, `cred-auth-modes`, `tests-docs` |
+| [`storage-transfer-hardening.plan.md`](storage-transfer-hardening.plan.md) | _(ops)_ | Storage transfer hardening (+ historical credential refs; superseded delivery in storage-db-sot) | `cloud-transfer-module`, `transfer-config-schema`, `cred-auth-modes`, `tests-docs` |
 | [`storage-db-sot.plan.md`](storage-db-sot.plan.md) | _(ops)_ | Storage accounts DB SoT + dumb workers | `portal-storage-procs`, `unify-archive-cfg`, `expand-content-hash`, `worker-node-cache`, `arc-prod-boundary`, `dev-prod-docs`, `tests-promote-plan` |
+| [`storage-sot-consistency-fixes.plan.md`](storage-sot-consistency-fixes.plan.md) | _(ops)_ | Storage SoT consistency (token fields + schema/docs) | `models-accept-tokens`, `regen-reconcile-schema`, `mssql-pg-parity`, `regression-tests`, `docs-destale` |
 | [`methylpipeline-platform-overview.plan.md`](methylpipeline-platform-overview.plan.md) | _(docs)_ | MethylPipeline platform overview | `outline-source-map`, `platform-capabilities`, `samd-evidence`, `extension-example`, `docs-canvas`, `verify-promote` |
 
 Create each **User Story** under its Feature in Azure DevOps Boards. Copy the story title from the plan `todos[].content` field (seed prefixes `[todo-id]`). Mark stories **Closed** when the corresponding code is merged; close the Feature when all child stories are done.

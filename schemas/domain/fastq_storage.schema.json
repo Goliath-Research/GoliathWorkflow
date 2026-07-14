@@ -14,6 +14,42 @@
           "default": "account_key",
           "title": "Authmode",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         }
       },
       "required": [
@@ -36,6 +72,42 @@
           "title": "Connectionstring",
           "type": "string",
           "writeOnly": true
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         }
       },
       "required": [
@@ -52,6 +124,42 @@
           "default": "default_credential",
           "title": "Authmode",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         }
       },
       "title": "AzureDefaultCredentialCredentials",
@@ -67,6 +175,45 @@
         "container": {
           "title": "Container",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes.",
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential name bound at expand time.",
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Published credential version bound into task JSON.",
+          "title": "Credentialversion"
         },
         "credentials": {
           "discriminator": {
@@ -102,6 +249,24 @@
           "title": "Prefix",
           "type": "string"
         },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "lab_ingress",
+                "archive",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Admin RBAC hint: lab_ingress vs archive vs shared.",
+          "title": "Scope"
+        },
         "type": {
           "const": "azure_blob",
           "default": "azure_blob",
@@ -128,6 +293,45 @@
         "container": {
           "title": "Container",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes.",
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential name bound at expand time.",
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Published credential version bound into task JSON.",
+          "title": "Credentialversion"
         },
         "credentials": {
           "discriminator": {
@@ -159,6 +363,24 @@
           ],
           "title": "Credentials"
         },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "lab_ingress",
+                "archive",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Admin RBAC hint: lab_ingress vs archive vs shared.",
+          "title": "Scope"
+        },
         "type": {
           "const": "azure_blob",
           "default": "azure_blob",
@@ -176,13 +398,49 @@
     },
     "AzureKeyVaultCredentials": {
       "additionalProperties": false,
-      "description": "Credential *reference* resolved on the worker via Managed Identity.",
+      "description": "Credential *reference* resolved on the worker via Managed Identity (optional escape hatch).",
       "properties": {
         "authMode": {
           "const": "azure_key_vault",
           "default": "azure_key_vault",
           "title": "Authmode",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         },
         "materializeAs": {
           "anyOf": [
@@ -222,13 +480,49 @@
     },
     "EncryptedFileCredentials": {
       "additionalProperties": false,
-      "description": "Credential *reference* to a Fernet-encrypted local file (bootstrap / air-gapped).",
+      "description": "Credential *reference* to a Fernet-encrypted local file (node-local / air-gapped).",
       "properties": {
         "authMode": {
           "const": "encrypted_file",
           "default": "encrypted_file",
           "title": "Authmode",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         },
         "materializeAs": {
           "anyOf": [
@@ -267,10 +561,67 @@
           "title": "Basepath",
           "type": "string"
         },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes.",
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential name bound at expand time.",
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Published credential version bound into task JSON.",
+          "title": "Credentialversion"
+        },
         "prefix": {
           "default": "",
           "title": "Prefix",
           "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "lab_ingress",
+                "archive",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Admin RBAC hint: lab_ingress vs archive vs shared.",
+          "title": "Scope"
         },
         "type": {
           "const": "file",
@@ -291,6 +642,63 @@
         "basePath": {
           "title": "Basepath",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes.",
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential name bound at expand time.",
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Published credential version bound into task JSON.",
+          "title": "Credentialversion"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "lab_ingress",
+                "archive",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Admin RBAC hint: lab_ingress vs archive vs shared.",
+          "title": "Scope"
         },
         "type": {
           "const": "file",
@@ -317,6 +725,42 @@
           "default": "explicit_keys",
           "title": "Authmode",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         },
         "secretAccessKey": {
           "format": "password",
@@ -353,6 +797,45 @@
         "bucket": {
           "title": "Bucket",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes.",
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential name bound at expand time.",
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Published credential version bound into task JSON.",
+          "title": "Credentialversion"
         },
         "credentials": {
           "discriminator": {
@@ -408,6 +891,24 @@
           "default": null,
           "title": "Region"
         },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "lab_ingress",
+                "archive",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Admin RBAC hint: lab_ingress vs archive vs shared.",
+          "title": "Scope"
+        },
         "type": {
           "const": "s3",
           "default": "s3",
@@ -429,6 +930,45 @@
         "bucket": {
           "title": "Bucket",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes.",
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential name bound at expand time.",
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Published credential version bound into task JSON.",
+          "title": "Credentialversion"
         },
         "credentials": {
           "discriminator": {
@@ -492,6 +1032,24 @@
           "default": null,
           "title": "Region"
         },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "lab_ingress",
+                "archive",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Admin RBAC hint: lab_ingress vs archive vs shared.",
+          "title": "Scope"
+        },
         "type": {
           "const": "s3",
           "default": "s3",
@@ -514,6 +1072,42 @@
           "default": "instance_profile",
           "title": "Authmode",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         }
       },
       "title": "S3InstanceProfileCredentials",

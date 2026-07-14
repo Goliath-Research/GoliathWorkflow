@@ -2,7 +2,7 @@
 
 ## What this chapter is
 
-Operator path for the **configuration registry**: database (or file-backed store) owns sites, profiles, DomainPrograms, studies, storage endpoints/credentials, and reference assets; `methyl-cfg materialize` writes non-secret files onto `/work` for cluster workers.
+Operator path for the **configuration registry**: database (or file-backed store) owns sites, profiles, DomainPrograms, studies, storage endpoints/credentials, and reference assets; `methyl-cfg materialize` writes non-secret files onto `/work` for cluster workers. **Production storage/credential authoring** is EpiPortal → `portal.sp_*` (lab/infra admins); `methyl-cfg upsert` is for **dev/CI/bootstrap** only.
 
 Architecture detail: [`../architecture/config-registry.md`](../architecture/config-registry.md).
 
@@ -26,7 +26,7 @@ methyl-cfg materialize --work-root /work
 # Publish a DomainProgram (compile + write fixtures under runtime-bundle)
 methyl-cfg publish-program StudyValidationLifecycle --work-root /work
 
-# Rotate cloud keys: upsert new credential version, publish, new tasks pick it up
+# Dev/CI: rotate cloud keys via methyl-cfg (production uses portal.sp_upsert_credential)
 methyl-cfg upsert credential --file new_keys.json --name lab-aws-keys --version 2 --provider s3 --publish
 ```
 

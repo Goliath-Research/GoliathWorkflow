@@ -91,3 +91,91 @@ def test_fastq_source_discriminator() -> None:
         }
     )
     assert source.prefix == "S1/"
+
+
+_EXPANDED_S3 = {
+    "type": "s3",
+    "bucket": "epimethyl",
+    "region": "us-east-1",
+    "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
+    "scope": "archive",
+    "prefixBase": "samples/",
+    "credentialName": "epimethyl-archive-keys",
+    "credentialVersion": "1",
+    "contentHash": "abc123",
+    "credentials": {
+        "authMode": "explicit_keys",
+        "accessKeyId": "AKIA",
+        "secretAccessKey": "secret",
+        "credentialName": "epimethyl-archive-keys",
+        "credentialVersion": "1",
+        "contentHash": "abc123",
+    },
+}
+
+
+def test_expanded_storage_defaults_accept_change_tokens() -> None:
+    from methyl_domain.sample_storage import SampleStorageDefaults
+
+    defaults = TypeAdapter(FastqStorageDefaults).validate_python(_EXPANDED_S3)
+    assert defaults.contentHash == "abc123"
+    assert defaults.credentialName == "epimethyl-archive-keys"
+    assert defaults.scope == "archive"
+    assert defaults.credentials.contentHash == "abc123"
+
+    sample = TypeAdapter(SampleStorageDefaults).validate_python(_EXPANDED_S3)
+    assert sample.contentHash == "abc123"
+    assert sample.prefixBase == "samples/"
+
+
+def test_merge_propagates_change_tokens() -> None:
+    defaults = TypeAdapter(FastqStorageDefaults).validate_python(_EXPANDED_S3)
+    source = merge_fastq_source(defaults, "S1")
+    assert source.contentHash == "abc123"
+    assert source.credentialName == "epimethyl-archive-keys"
+    assert source.scope == "archive"
+    assert source.prefix == "S1/"
+
+
+def test_expanded_source_and_destination_validate() -> None:
+    from methyl_domain.sample_storage import SampleDestinationLocation, merge_sample_destination
+
+    src = {
+        "type": "s3",
+        "bucket": "cohort",
+        "prefix": "S1/",
+        "credentialName": "lab-keys",
+        "contentHash": "deadbeef",
+        "credentials": {
+            "authMode": "explicit_keys",
+            "accessKeyId": "AKIA",
+            "secretAccessKey": "sec",
+            "contentHash": "deadbeef",
+            "credentialName": "lab-keys",
+        },
+    }
+    source = TypeAdapter(FastqSourceLocation).validate_python(src)
+    assert source.contentHash == "deadbeef"
+
+    defaults = TypeAdapter(S3FastqStorageDefaults).validate_python(
+        {**_EXPANDED_S3}
+    )
+    dest = merge_sample_destination(
+        __import__(
+            "methyl_domain.sample_storage", fromlist=["S3SampleStorageDefaults"]
+        ).S3SampleStorageDefaults.model_validate(
+            {
+                "type": "s3",
+                "bucket": "epimethyl",
+                "prefixBase": "samples/",
+                "credentialName": "epimethyl-archive-keys",
+                "contentHash": "abc123",
+                "credentials": _EXPANDED_S3["credentials"],
+            }
+        ),
+        "S1",
+    )
+    assert dest.contentHash == "abc123"
+    assert TypeAdapter(SampleDestinationLocation).validate_python(
+        dest.model_dump(mode="python")
+    )

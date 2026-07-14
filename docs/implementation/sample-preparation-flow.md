@@ -104,13 +104,15 @@ Every sample carries a typed `fastqSource` (discriminated union in [`packages/me
 
 | Scheme | `authMode` | Notes |
 |--------|------------|-------|
-| `s3` | `explicit_keys` | `accessKeyId`, `secretAccessKey`, optional `sessionToken` |
+| `s3` | `explicit_keys` | `accessKeyId`, `secretAccessKey`, optional `sessionToken`; expand may attach `contentHash` / `credentialName` |
 | `s3` | `instance_profile` | IAM role / boto3 default credential chain |
+| `s3` / `azure_blob` | `azure_key_vault` | Optional escape hatch: `{ vaultUrl, secretName }` |
+| `s3` / `azure_blob` | `encrypted_file` | Node-local / air-gapped Fernet file (never under `/work`) |
 | `azure_blob` | `account_key` | Storage account key |
 | `azure_blob` | `connection_string` | Full connection string |
 | `azure_blob` | `default_credential` | `DefaultAzureCredential` (managed identity, etc.) |
 
-Secrets are marked `writeOnly` in the JSON schema and expanded for workers at runtime. They do **not** belong in the site manifest (`/work/site/methyl_site.json`) or `METHYL_*` environment variables.
+Secrets are marked `writeOnly` in JSON schema. **Production:** DB SoT (`cfg.credential`) via portal admins; schedule-time expand embeds secrets in claim `input_json` with `contentHash` for node-local cache refresh. They do **not** belong in the site manifest (`/work/site/methyl_site.json`) or `METHYL_*` environment variables. Archive defaults resolve `portal.resource_profile` → named `cfg.storage_endpoint`.
 
 **Instance defaults:** top-level `fastqStorage` (with optional `prefixBase`) merges with each sample's `fastqPrefix` into the resolved `fastqSource`. See [`workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json`](../../workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json) for a full S3 ingress example.
 
