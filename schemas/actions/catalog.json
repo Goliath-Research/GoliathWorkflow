@@ -233,6 +233,12 @@
       "action_config_key": "cell_deconvolution",
       "action_name": "pipeline.cell_deconvolution",
       "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
         "outputDir": "--output-dir",
         "project": "--project",
         "projectPath": "--project",
