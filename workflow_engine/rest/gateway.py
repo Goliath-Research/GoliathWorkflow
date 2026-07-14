@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import secrets
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -30,6 +31,7 @@ from .db import open_gateway_db
 from .db.base import GatewayDb
 from .db_client import (
     worker_authenticate,
+    worker_enroll,
     worker_fail_task,
     worker_heartbeat,
     worker_request_task,
@@ -51,6 +53,8 @@ class RestGateway:
         path: str,
         body: dict[str, Any],
         query: Optional[dict[str, list[str]]] = None,
+        *,
+        client_ip: Optional[str] = None,
     ) -> tuple[int, Any]:
         _ = query  # worker routes do not use query params today
 
@@ -61,6 +65,29 @@ class RestGateway:
                 "backend": self.backend,
                 "api_base": "/v1",
                 "identities": ["worker"],
+            }
+
+        if method == "POST" and path == "/v1/workers/enroll":
+            token = secrets.token_hex(32)
+            caps = body.get("capabilities")
+            if caps is not None and not isinstance(caps, list):
+                return 400, {"error": "capabilities must be a JSON array"}
+            worker_id = worker_enroll(
+                self.db,
+                cluster_key=str(body["cluster_key"]),
+                external_worker_key=str(body["external_worker_key"]),
+                client_ip=str(client_ip or body.get("client_ip") or ""),
+                worker_token=token,
+                capabilities=caps,
+                arc_resource_id=(
+                    str(body["arc_resource_id"]) if body.get("arc_resource_id") else None
+                ),
+            )
+            return 200, {
+                "worker_id": worker_id,
+                "worker_token": token,
+                "external_worker_key": str(body["external_worker_key"]),
+                "cluster_key": str(body["cluster_key"]),
             }
 
         if method == "POST" and path == "/v1/workers/authenticate":

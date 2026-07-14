@@ -73,7 +73,25 @@ Deploy SQL (if not already applied):
 - Azure SQL: [`workflow_engine/sql_mssql/wf_cluster_security_columns.sql`](../../workflow_engine/sql_mssql/wf_cluster_security_columns.sql)
 - PostgreSQL: [`workflow_engine/sql_pg/wf_cluster_security_columns.sql`](../../workflow_engine/sql_pg/wf_cluster_security_columns.sql)
 
-Register worker (auto-loads `/etc/methyl/arc.env` when present):
+Register worker after portal preregisters this VM's **public IP**
+(`portal.sp_upsert_worker_enrollment`). Production path (no SQL on the worker):
+
+```bash
+export WORKER_API_BASE=https://gateway.example.com/v1
+methyl-worker enroll \
+  --api-base "$WORKER_API_BASE" \
+  --cluster gpu-west \
+  --key "$(hostname -s)"
+# writes /etc/methyl/worker-token (mode 600)
+```
+
+Optional Arc Connected check before enroll:
+
+```bash
+bash scripts/verify_arc_prereqs.sh
+```
+
+**Dev/bootstrap only** (direct DB — do not put `AZURE_SQL_*` on Lambda/Nebius workers):
 
 ```bash
 bash scripts/register_worker.sh \
@@ -83,7 +101,7 @@ bash scripts/register_worker.sh \
   --env-file /work/epimethyl/env/worker.env
 ```
 
-Manual override:
+Manual Arc resource id override (DB path / client header source):
 
 ```bash
 bash scripts/register_worker.sh \

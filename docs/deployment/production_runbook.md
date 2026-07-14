@@ -160,23 +160,37 @@ python workflow_engine/sql_mssql/seed_action_catalog.py --use-db
 
 ### Cluster registration + Tier C IP bind (phase 3)
 
-Deploy [`workflow_engine/sql_mssql/wf_cluster_security_columns.sql`](../../workflow_engine/sql_mssql/wf_cluster_security_columns.sql) (Azure SQL) or [`workflow_engine/sql_pg/wf_cluster_security_columns.sql`](../../workflow_engine/sql_pg/wf_cluster_security_columns.sql) (PostgreSQL).
+Deploy security columns and worker enrollment:
 
-Register workers (both backends via gateway DB env):
+- [`workflow_engine/sql_mssql/wf_cluster_security_columns.sql`](../../workflow_engine/sql_mssql/wf_cluster_security_columns.sql)
+- [`workflow_engine/sql_mssql/wf_worker_enrollment.sql`](../../workflow_engine/sql_mssql/wf_worker_enrollment.sql)
+- [`workflow_engine/sql_mssql/portal_worker_enrollment_api.sql`](../../workflow_engine/sql_mssql/portal_worker_enrollment_api.sql)
+
+(PostgreSQL: `sql_pg/` counterparts.)
+
+**Production:** Portal upserts each VM public IP (`portal.sp_upsert_worker_enrollment`).
+On the worker (no DB credentials):
 
 ```bash
-bash scripts/register_worker.sh --cluster gpu-west --key "$(hostname -s)" \
-  --allowed-cidr 203.0.113.0/24 --allowed-cidr 198.51.100.10/32 \
-  --require-arc
+export WORKER_API_BASE=https://gateway.example.com/v1
+methyl-worker enroll --api-base "$WORKER_API_BASE" --cluster gpu-west --key "$(hostname -s)"
 ```
 
-On the gateway VM for public-tier clusters:
+Day-2 claim/submit uses the issued token. Enable IP bind on the gateway:
 
 ```bash
 GATEWAY_WORKER_IP_BIND=1
 GATEWAY_TRUSTED_PROXY_CIDRS=127.0.0.1/32
 # Optional Arc attestation:
 # GATEWAY_REQUIRE_ARC_ATTEST=1
+```
+
+**Dev/bootstrap only** (`scripts/register_worker.py` with Azure SQL / Postgres env on a trusted host):
+
+```bash
+bash scripts/register_worker.sh --cluster gpu-west --key "$(hostname -s)" \
+  --allowed-cidr 203.0.113.0/24 --allowed-cidr 198.51.100.10/32 \
+  --require-arc
 ```
 
 ### Azure SQL private endpoint (data plane)

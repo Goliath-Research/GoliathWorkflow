@@ -14,7 +14,7 @@ from psycopg_pool import ConnectionPool
 
 from ..azure_auth import get_database_access_token
 from ..connection import DatabaseBackend
-from .base import GatewayDbBase, WorkerAuthError, parse_json_value
+from .base import GatewayDbBase, WorkerAuthError, WorkerEnrollError, parse_json_value
 
 
 class _PgPool:
@@ -147,6 +147,44 @@ class PostgresGatewayDb(GatewayDbBase):
             f"CALL {self._qual('wf_worker_authenticate')}(%s, %s)",
             (worker_id, worker_token),
         )
+
+    def worker_enroll(
+        self,
+        *,
+        cluster_key: str,
+        external_worker_key: str,
+        client_ip: str,
+        worker_token: str,
+        capabilities: Optional[list[Any]] = None,
+        arc_resource_id: Optional[str] = None,
+    ) -> int:
+        import hashlib
+
+        token_hash_hex = hashlib.sha256(worker_token.encode("utf-8")).hexdigest()
+        caps = json.dumps(capabilities if capabilities is not None else [])
+        try:
+            row = self._fetch_one(
+                f"""
+                SELECT worker_id FROM {self._qual('sp_worker_enroll')}(
+                    %s, %s, %s, %s, %s::jsonb, %s
+                )
+                """,
+                (
+                    cluster_key,
+                    external_worker_key,
+                    client_ip,
+                    token_hash_hex,
+                    caps,
+                    arc_resource_id,
+                ),
+            )
+        except Exception as exc:
+            if self._is_enroll_forbidden(exc):
+                raise WorkerEnrollError(str(exc), forbidden=True) from exc
+            raise
+        if not row or row.get("worker_id") is None:
+            raise WorkerEnrollError("worker enroll failed", forbidden=False)
+        return int(row["worker_id"])
 
     def worker_request_task(
         self,

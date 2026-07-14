@@ -6,18 +6,98 @@ import argparse
 import json
 import logging
 import os
+import stat
 import sys
 from pathlib import Path
+from typing import Any, Optional
 
 from .capabilities import assert_node_can_serve_capability
 from .client import WorkflowRestClient
 from .runner import WorkerRunner
+
+DEFAULT_TOKEN_FILE = Path("/etc/methyl/worker-token")
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="MethylPipeline REST workflow worker (poll middle-tier API)",
     )
+    sub = parser.add_subparsers(dest="command")
+
+    poll = sub.add_parser("poll", help="Poll gateway for READY tasks (default)")
+    _add_poll_args(poll)
+
+    enroll = sub.add_parser(
+        "enroll",
+        help="Enroll via POST /workers/enroll (portal IP allowlist; no SQL)",
+    )
+    enroll.add_argument(
+        "--api-base",
+        default=os.environ.get("METHYL_API_BASE")
+        or os.environ.get("WORKER_API_BASE", "http://localhost:8080/v1"),
+        help="Gateway base URL (METHYL_API_BASE / WORKER_API_BASE)",
+    )
+    enroll.add_argument(
+        "--cluster",
+        "--cluster-key",
+        dest="cluster_key",
+        default=os.environ.get("CLUSTER_KEY", ""),
+        help="Cluster key (or CLUSTER_KEY)",
+    )
+    enroll.add_argument(
+        "--key",
+        "--external-worker-key",
+        dest="external_worker_key",
+        default=os.environ.get("WORKER_KEY", ""),
+        help="External worker key matching portal enrollment (or WORKER_KEY)",
+    )
+    enroll.add_argument(
+        "--capabilities-json",
+        default="",
+        help="Optional JSON array of capabilities",
+    )
+    enroll.add_argument(
+        "--token-file",
+        default=os.environ.get("METHYL_WORKER_TOKEN_FILE", str(DEFAULT_TOKEN_FILE)),
+        help=f"Write credentials here (default: {DEFAULT_TOKEN_FILE})",
+    )
+    enroll.add_argument(
+        "--env-file",
+        default="",
+        help="Optional env file to append WORKER_ID= / WORKER_TOKEN= (e.g. worker.env)",
+    )
+
+    plan = sub.add_parser("plan-iterations", help="Monte Carlo planner CLI")
+    plan.add_argument(
+        "--plan-input",
+        help="JSON file for plan-iterations (default: stdin or PROJECT_PATH)",
+    )
+    plan.add_argument(
+        "--api-base",
+        default=os.environ.get("METHYL_API_BASE", "http://localhost:8080/v1"),
+    )
+
+    # Backward compatible: `methyl-worker` / `methyl-worker --once` → poll
+    args = parser.parse_args(argv)
+    if args.command is None:
+        # Re-parse treating argv as poll flags (legacy default command).
+        poll_parser = argparse.ArgumentParser(
+            description="MethylPipeline REST workflow worker (poll middle-tier API)",
+        )
+        _add_poll_args(poll_parser)
+        poll_parser.set_defaults(command="poll")
+        args = poll_parser.parse_args(argv)
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    if args.command == "plan-iterations":
+        return _run_plan_iterations_cli(args)
+    if args.command == "enroll":
+        return _run_enroll_cli(args)
+    return _run_poll_cli(args)
+
+
+def _add_poll_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--worker-id", type=int, default=int(os.environ.get("WORKER_ID", "0")))
     parser.add_argument("--worker-token", default=os.environ.get("WORKER_TOKEN", ""))
     parser.add_argument("--capability", default=os.environ.get("WORKER_CAPABILITY"))
@@ -42,26 +122,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Call POST /workers/authenticate before polling",
     )
-    parser.add_argument(
-        "command",
-        nargs="?",
-        default="poll",
-        choices=("poll", "plan-iterations"),
-        help="poll (default): workflow task loop; plan-iterations: Monte Carlo planner CLI",
-    )
-    parser.add_argument(
-        "--plan-input",
-        help="JSON file for plan-iterations command (default: stdin or minimal from flags)",
-    )
-    args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-    if args.command == "plan-iterations":
-        return _run_plan_iterations_cli(args)
-
+def _run_poll_cli(args: argparse.Namespace) -> int:
     if args.worker_id <= 0 or not args.worker_token:
-        parser.error("Set --worker-id and --worker-token (or WORKER_ID / WORKER_TOKEN env vars)")
+        print(
+            "Set --worker-id and --worker-token (or WORKER_ID / WORKER_TOKEN env vars)",
+            file=sys.stderr,
+        )
+        return 2
 
     if args.capability:
         assert_node_can_serve_capability(args.capability)
@@ -85,6 +154,52 @@ def main(argv: list[str] | None = None) -> int:
     )
     runner.run_forever()
     return 0
+
+
+def _run_enroll_cli(args: argparse.Namespace) -> int:
+    if not args.cluster_key or not args.external_worker_key:
+        print("Set --cluster and --key (or CLUSTER_KEY / WORKER_KEY)", file=sys.stderr)
+        return 2
+
+    capabilities: Optional[list[Any]] = None
+    if args.capabilities_json.strip():
+        capabilities = json.loads(args.capabilities_json)
+
+    client = WorkflowRestClient(args.api_base)
+    result = client.enroll(
+        args.cluster_key,
+        args.external_worker_key,
+        capabilities=capabilities,
+    )
+    worker_id = int(result["worker_id"])
+    token = str(result["worker_token"])
+    token_path = Path(args.token_file)
+    _write_token_file(token_path, worker_id, token)
+    if args.env_file:
+        _append_worker_env(Path(args.env_file), worker_id, token)
+    print(f"Enrolled worker_id={worker_id}")
+    print(f"  Wrote credentials to {token_path}")
+    print(f"  WORKER_ID={worker_id}")
+    return 0
+
+
+def _write_token_file(path: Path, worker_id: int, token: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"WORKER_ID={worker_id}\nWORKER_TOKEN={token}\n", encoding="utf-8")
+    os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+
+
+def _append_worker_env(path: Path, worker_id: int, token: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = path.read_text(encoding="utf-8") if path.is_file() else ""
+    lines = [
+        line
+        for line in existing.splitlines()
+        if not line.startswith("WORKER_ID=") and not line.startswith("WORKER_TOKEN=")
+    ]
+    lines.append(f"WORKER_ID={worker_id}")
+    lines.append(f"WORKER_TOKEN={token}")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _claim_dict(claim) -> dict | None:

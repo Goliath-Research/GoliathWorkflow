@@ -98,6 +98,26 @@ class WorkflowRestClient:
             {"worker_id": worker_id, "worker_token": worker_token},
         )
 
+    def enroll(
+        self,
+        cluster_key: str,
+        external_worker_key: str,
+        *,
+        capabilities: Optional[list[Any]] = None,
+        arc_resource_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """POST /workers/enroll — mint worker_id + token from portal IP allowlist."""
+        payload: Dict[str, Any] = {
+            "cluster_key": cluster_key,
+            "external_worker_key": external_worker_key,
+        }
+        if capabilities is not None:
+            payload["capabilities"] = capabilities
+        rid = arc_resource_id if arc_resource_id is not None else self.arc_resource_id
+        if rid:
+            payload["arc_resource_id"] = rid
+        return self._post_json("/workers/enroll", payload)
+
     def request_task(
         self,
         worker_id: int,

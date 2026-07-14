@@ -71,7 +71,10 @@ Log root resolution: explicit `monteCarloRunsRoot`, any path under `monte_carlo_
 ## Implementing a worker in any language
 
 1. Load OpenAPI spec from `contracts/openapi.yaml`
-2. Register with `scripts/register_worker.py` (auto-detect capabilities on the VM by default)
+2. **Production:** Portal preregisters `(cluster_key, public_ip, external_worker_key)` via
+   `portal.sp_upsert_worker_enrollment`, then the VM calls
+   `POST /workers/enroll` (`methyl-worker enroll --api-base … --cluster … --key …`) and stores
+   `/etc/methyl/worker-token` (mode 600). **Dev only:** `scripts/register_worker.py` with DB env.
 3. Poll `POST /workers/tasks/request` with `worker_id`, `worker_token`, optional `capability` **narrowing filter**
 4. Parse `input_json` from the claim response
 5. Execute domain logic
@@ -92,7 +95,8 @@ The poll request's optional `capability` field **narrows** within the registered
 (e.g. `methyl-worker@methyl-centroid.service` sets `WORKER_CAPABILITY=methyl-centroid`).
 It cannot widen beyond registration.
 
-Auto-detect on the VM: `scripts/register_worker.py` (default) or `methyl_worker.capabilities.resolve_worker_capabilities()`.
+Auto-detect capabilities on enroll/register when supported, or
+`methyl_worker.capabilities.resolve_worker_capabilities()`.
 
 Workers send `X-Arc-Resource-Id` (from `/etc/methyl/arc.env`) when polling if the gateway
 has `GATEWAY_REQUIRE_ARC_ATTEST=1`. **Production clusters should leave this enabled.**

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Provision a GPU worker VM: Arc → MethylPipeline bundle → register → systemd daemon.
+# Provision a GPU worker VM: Arc → MethylPipeline bundle → enroll → systemd daemon.
 set -euo pipefail
 
 usage() {
@@ -7,7 +7,10 @@ usage() {
 Usage: scripts/provision_worker_node.sh [options]
 
 Orchestrates worker onboarding on a VM with shared /work storage.
-Requires sudo for Arc install and systemd; gateway DB env for registration.
+Requires sudo for Arc install and systemd.
+
+Production workers are dumb HTTPS clients: portal preregisters the VM public IP,
+then this script enrolls via the gateway (no Azure SQL credentials on the host).
 
 Options:
   --root PATH              Epimethyl root (default: /work/epimethyl)
@@ -16,16 +19,19 @@ Options:
   --cluster KEY            wf.cluster cluster_key (default: epimethyl)
   --gpu                    Pass --gpu to bootstrap/setup_host
   --arc-onboard            Run install_arc_agent.sh (needs Azure env)
-  --require-arc            Pass --require-arc to bootstrap
+  --require-arc            Pass --require-arc to bootstrap / enroll
   --skip-promote           Use existing venv on /work (second+ VM)
-  --register-worker        Run register_worker.sh after verify (auto-detect capabilities)
+  --enroll-worker          Enroll via methyl-worker enroll / register_worker enroll path
+  --register-worker        Alias for --enroll-worker (legacy name; prefer enroll)
   --enable-systemd         Install and start methyl-worker units
   --capability NAME        Single capability (overrides auto-detect)
   --detect-capabilities    Install one systemd unit per detected capability
   --dry-run
   -h, --help
 
-Env: WORKER_API_BASE, AZ_SUBSCRIPTION_ID, AZ_RESOURCE_GROUP, AZURE_TENANT_ID, gateway DB vars
+Env: WORKER_API_BASE (required for production enroll), AZ_SUBSCRIPTION_ID,
+     AZ_RESOURCE_GROUP, AZURE_TENANT_ID.
+     Direct DB vars (AZURE_SQL_*) are DEV-only for register_worker.py.
 EOF
 }
 
@@ -58,7 +64,7 @@ while [[ $# -gt 0 ]]; do
     --arc-onboard) ARC_ONBOARD=1; shift ;;
     --require-arc) REQUIRE_ARC=1; shift ;;
     --skip-promote) SKIP_PROMOTE=1; shift ;;
-    --register-worker) REGISTER=1; shift ;;
+    --enroll-worker|--register-worker) REGISTER=1; shift ;;
     --enable-systemd) ENABLE_SYSTEMD=1; shift ;;
     --capability) CAPABILITY="${2:-}"; shift 2 ;;
     --detect-capabilities) DETECT_CAPABILITIES=1; shift ;;
@@ -128,13 +134,30 @@ set +a
 run bash "$SCRIPTS/verify_e2e_node.sh"
 
 if [[ "$REGISTER" -eq 1 ]]; then
-  echo "=== Register worker ==="
-  REG_ARGS=(--cluster "$CLUSTER" --key "$(hostname -s)")
-  if [[ -n "$CAPABILITY" ]]; then
-    REG_ARGS+=(--capability "$CAPABILITY")
+  echo "=== Enroll worker (gateway) ==="
+  WORKER_KEY="$(hostname -s)"
+  API_BASE="${WORKER_API_BASE:-${METHYL_API_BASE:-}}"
+  VENV_PY=""
+  for cand in "$ROOT/venv-$ARCH/bin/python" "$ROOT/venv/bin/python" "$REPO_ROOT/.venv/bin/python"; do
+    if [[ -x "$cand" ]]; then
+      VENV_PY="$cand"
+      break
+    fi
+  done
+  if [[ -n "$API_BASE" && -n "$VENV_PY" ]]; then
+    ENROLL_ARGS=(enroll --api-base "$API_BASE" --cluster "$CLUSTER" --key "$WORKER_KEY")
+    [[ -n "$CAPABILITY" ]] && ENROLL_ARGS+=(--capabilities-json "[\"$CAPABILITY\"]")
+    [[ "$REQUIRE_ARC" -eq 1 ]] && run bash "$SCRIPTS/verify_arc_prereqs.sh"
+    run "$VENV_PY" -m methyl_worker "${ENROLL_ARGS[@]}"
+  else
+    echo "WARN: WORKER_API_BASE unset or venv missing — falling back to register_worker.sh (dev/bootstrap)." >&2
+    REG_ARGS=(--cluster "$CLUSTER" --key "$WORKER_KEY")
+    if [[ -n "$CAPABILITY" ]]; then
+      REG_ARGS+=(--capability "$CAPABILITY")
+    fi
+    [[ "$REQUIRE_ARC" -eq 1 ]] && REG_ARGS+=(--require-arc)
+    run bash "$SCRIPTS/register_worker.sh" "${REG_ARGS[@]}"
   fi
-  [[ "$REQUIRE_ARC" -eq 1 ]] && REG_ARGS+=(--require-arc)
-  run bash "$SCRIPTS/register_worker.sh" "${REG_ARGS[@]}"
 fi
 
 if [[ "$ENABLE_SYSTEMD" -eq 1 ]]; then

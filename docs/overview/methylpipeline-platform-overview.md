@@ -555,6 +555,9 @@ flowchart TB
 
 **Boundary:** portal does **not** call the gateway for worker tasks. Gateway is
 worker-facing. Admin compile/start uses DB clients (`methyl-study-start`).
+**Worker credentials:** portal preregisters each VM public IP; the VM calls
+`POST /v1/workers/enroll` once to mint `worker_id`/`worker_token`; day-2
+`authenticate` / claim / submit use that token (no SQL on the worker).
 
 ### Operator journey (compressed)
 

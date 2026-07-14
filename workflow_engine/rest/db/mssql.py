@@ -10,7 +10,7 @@ from typing import Any, Generator, Optional
 
 import pyodbc
 
-from .base import GatewayDbBase, WorkerAuthError, parse_json_value, row_to_dict
+from .base import GatewayDbBase, WorkerAuthError, WorkerEnrollError, parse_json_value, row_to_dict
 
 # Required for pyodbc anonymous batches that read OUTPUT params via a trailing SELECT.
 _MSSQL_OUTPUT_BATCH_PREFIX = "SET NOCOUNT ON;\n"
@@ -182,6 +182,54 @@ class MssqlGatewayDb(GatewayDbBase):
             f"EXEC {self._qual('wf_worker_authenticate')} @worker_id=?, @worker_token=?",
             (worker_id, worker_token),
         )
+
+    def worker_enroll(
+        self,
+        *,
+        cluster_key: str,
+        external_worker_key: str,
+        client_ip: str,
+        worker_token: str,
+        capabilities: Optional[list[Any]] = None,
+        arc_resource_id: Optional[str] = None,
+    ) -> int:
+        caps_text = json.dumps(capabilities if capabilities is not None else [])
+        sql = f"""{_MSSQL_OUTPUT_BATCH_PREFIX}
+DECLARE @worker_id bigint;
+BEGIN TRY
+    EXEC {self._qual('sp_worker_enroll')}
+        @cluster_key=?,
+        @external_worker_key=?,
+        @client_ip=?,
+        @worker_token=?,
+        @capabilities_json=?,
+        @arc_resource_id=?,
+        @worker_id=@worker_id OUTPUT;
+END TRY
+BEGIN CATCH
+    THROW;
+END CATCH
+SELECT @worker_id AS worker_id;
+"""
+        try:
+            row = self._fetch_one(
+                sql,
+                (
+                    cluster_key,
+                    external_worker_key,
+                    client_ip,
+                    worker_token,
+                    caps_text,
+                    arc_resource_id,
+                ),
+            )
+        except pyodbc.Error as exc:
+            if self._is_enroll_forbidden(exc):
+                raise WorkerEnrollError(str(exc), forbidden=True) from exc
+            raise
+        if not row or row.get("worker_id") is None:
+            raise WorkerEnrollError("worker enroll failed", forbidden=False)
+        return int(row["worker_id"])
 
     def worker_request_task(
         self,

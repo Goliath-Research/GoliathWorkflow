@@ -29,7 +29,7 @@ architecture decision.
 
 ### 1. REST gateway (current)
 
-**Shape:** `POST /v1/workers/{authenticate,tasks/request,tasks/{id}/submit,heartbeat,fail}` →
+**Shape:** `POST /v1/workers/{enroll,authenticate,tasks/request,tasks/{id}/submit,heartbeat,fail}` →
 `wf.sp_worker_*` procs. Contract: [`contracts/openapi.yaml`](../../contracts/openapi.yaml),
 [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md).
 

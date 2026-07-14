@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Register wf.cluster / wf.worker / wf.worker_token (PostgreSQL or Azure SQL)."""
+"""Register wf.cluster / wf.worker / wf.worker_token (PostgreSQL or Azure SQL).
+
+**DEV / bootstrap only.** Production workers must not hold DB credentials.
+Use portal IP preregistration + ``methyl-worker enroll`` (``POST /v1/workers/enroll``)
+instead. This script remains for lab/CI when gateway DB env is available.
+
+When ``WORKER_API_BASE`` (or ``METHYL_API_BASE``) is set and Azure SQL /
+PostgreSQL connection env is absent, this script delegates to gateway enroll.
+"""
 
 from __future__ import annotations
 
@@ -50,6 +58,60 @@ def _verify_arc_connected() -> None:
     arc_id = _load_arc_env()
     if not arc_id:
         raise RuntimeError("Arc not Connected; run install_arc_agent.sh or omit --require-arc")
+
+
+def _direct_db_configured() -> bool:
+    if os.environ.get("AZURE_SQL_SERVER") or os.environ.get("AZURE_SQL_CONNECTION_STRING"):
+        return True
+    if os.environ.get("POSTGRES_HOST") or os.environ.get("POSTGRES_DSN") or os.environ.get("DATABASE_URL"):
+        return True
+    return False
+
+
+def _gateway_api_base() -> str:
+    return (
+        os.environ.get("WORKER_API_BASE")
+        or os.environ.get("METHYL_API_BASE")
+        or ""
+    ).strip().rstrip("/")
+
+
+def enroll_via_gateway(
+    *,
+    api_base: str,
+    worker_key: str,
+    cluster_key: str,
+    capabilities: Optional[list[str]],
+    require_arc: bool,
+    env_file: Path,
+    dry_run: bool,
+) -> int:
+    """Production path: POST /workers/enroll (no SQL drivers on the worker)."""
+    if require_arc:
+        _verify_arc_connected()
+    if dry_run:
+        print(
+            f"[enroll] api_base={api_base} cluster={cluster_key} worker={worker_key} "
+            f"capabilities={capabilities}"
+        )
+        return 0
+
+    sys.path.insert(0, str(REPO_ROOT / "workers"))
+    from methyl_worker.client import WorkflowRestClient
+
+    client = WorkflowRestClient(api_base)
+    result = client.enroll(
+        cluster_key,
+        worker_key,
+        capabilities=list(capabilities) if capabilities is not None else None,
+    )
+    worker_id = int(result["worker_id"])
+    token = str(result["worker_token"])
+    print("Enrolled worker via gateway (no DB credentials on this host):")
+    print(f"  WORKER_ID={worker_id}")
+    print(f"  WORKER_KEY={worker_key}")
+    _write_worker_credentials(env_file, worker_id, token)
+    return 0
 
 
 def register_worker(
@@ -323,7 +385,13 @@ SELECT @worker_id AS worker_id;
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Register a workflow worker in wf schema")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Register a workflow worker (DEV/bootstrap with DB env). "
+            "Production: portal preregisters IP, then methyl-worker enroll / this "
+            "script with WORKER_API_BASE and no AZURE_SQL_*/POSTGRES_*."
+        )
+    )
     parser.add_argument("--key", default="", help="external_worker_key")
     parser.add_argument("--cluster", default=os.environ.get("CLUSTER_KEY", "epimethyl"))
     parser.add_argument("--capability", action="append", default=[])
@@ -350,6 +418,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args(argv)
 
+    print(
+        "NOTE: register_worker.py direct-DB path is DEV/bootstrap only. "
+        "Production workers use POST /v1/workers/enroll (methyl-worker enroll).",
+        file=sys.stderr,
+    )
+
     worker_key = args.key or socket.gethostname().split(".")[0] or "worker-1"
     token = args.token or secrets.token_hex(32)
     entra = args.entra_client_id.strip() or None
@@ -367,6 +441,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         capabilities = resolve_worker_capabilities()
 
     env_path = _resolve_token_env_file(Path(args.env_file) if args.env_file else None)
+
+    api_base = _gateway_api_base()
+    if api_base and not _direct_db_configured():
+        return enroll_via_gateway(
+            api_base=api_base,
+            worker_key=worker_key,
+            cluster_key=args.cluster,
+            capabilities=capabilities,
+            require_arc=args.require_arc,
+            env_file=env_path,
+            dry_run=args.dry_run,
+        )
 
     return register_worker(
         worker_key=worker_key,

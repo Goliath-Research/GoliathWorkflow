@@ -7,23 +7,26 @@ usage() {
   cat <<'EOF'
 Usage: scripts/register_worker.sh [options]
 
+DEV/bootstrap: upserts wf.worker via direct DB env.
+Production: set WORKER_API_BASE (and omit AZURE_SQL_*/POSTGRES_*); script calls
+gateway POST /v1/workers/enroll. Prefer: methyl-worker enroll --api-base … --cluster … --key …
+
 Options:
   --key NAME           external_worker_key (default: hostname)
   --cluster KEY        cluster_key (default: epimethyl)
   --capability NAME    Repeatable capability (omit for auto-detect on this VM)
   --omnibus            Register wildcard '*' capability (legacy omnibus worker)
-  --allowed-cidr CIDR  Repeatable cluster source CIDR (Tier C public workers)
+  --allowed-cidr CIDR  Repeatable cluster source CIDR (Tier C public workers; DB path only)
   --entra-client-id ID Optional Entra application (client) id for cluster
   --arc-resource-id ID Azure Arc resource id (default: /etc/methyl/arc.env)
   --require-arc          Fail if Arc agent is not Connected
-  --env-file PATH      Append WORKER_ID and WORKER_TOKEN (default: /work/epimethyl/env/worker.env)
-  --token TOKEN        Use fixed token (default: random hex)
+  --env-file PATH      Credential file (default: /etc/methyl/worker-token)
+  --token TOKEN        Use fixed token (DB path only; default: random hex)
   --dry-run            Print plan only
   -h, --help           Show this help
 
-Uses BACKEND_DB / connection env (see deploy/env/gateway.*.env.example).
-PostgreSQL: PGHOST, PGUSER, PGPASSWORD, PGDATABASE.
-Azure SQL: AZURE_SQL_SERVER, AZURE_SQL_DB, AZURE_SQL_USER, AZURE_SQL_PASSWORD.
+Direct DB (dev): BACKEND_DB / AZURE_SQL_* or POSTGRES_*.
+Gateway enroll (prod): WORKER_API_BASE or METHYL_API_BASE; portal must preregister this VM's public IP.
 EOF
 }
 

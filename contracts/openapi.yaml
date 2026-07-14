@@ -2,12 +2,13 @@ openapi: 3.0.3
 info:
   title: MethylPipeline Workflow Gateway API
   description: "REST contract for the workflow **gateway** (worker-only):\n\n- **Workers** \u2014 `/workers/*`\
-    \ with `worker_id` + `worker_token` (poll, submit, heartbeat, fail).\n\n**EpiPortal never calls this\
-    \ API.** Catalog seed, workflow deploy, and study lifecycle use direct DB (`workflow_engine/ops`,\
-    \ `seed_action_catalog.py`, `deploy_workflow_definitions.sh`) or portal SQL (`portal.sp_*`). Interactive\
-    \ inspection uses Cursor MCP.\n\nMaps to DB objects in `workflow_engine/contract/db_objects.yaml`.\n\
+    \ with `worker_id` + `worker_token` (poll, submit, heartbeat, fail).\n- **Enroll** \u2014 `POST /workers/enroll`\
+    \ from a portal-preregistered public IP (no worker_token yet; gateway mints credentials once).\n\n\
+    **EpiPortal never calls this API.** Catalog seed, workflow deploy, and study lifecycle use direct\
+    \ DB (`workflow_engine/ops`, `seed_action_catalog.py`, `deploy_workflow_definitions.sh`) or portal\
+    \ SQL (`portal.sp_*`). Interactive inspection uses Cursor MCP.\n\nMaps to DB objects in `workflow_engine/contract/db_objects.yaml`.\n\
     Production: Python gateway on Linux (`methyl-gateway`, systemd, uvicorn)."
-  version: 1.2.0
+  version: 1.3.0
 servers:
 - url: https://api.example.com/v1
   description: Production
@@ -43,6 +44,36 @@ paths:
           description: Worker authenticated
         '401':
           description: Invalid credentials
+  /workers/enroll:
+    post:
+      tags:
+      - workers
+      summary: Enroll worker from preregistered public IP (wf.sp_worker_enroll)
+      description: |
+        Portal preregisters `(cluster_key, public_ip, external_worker_key)` via
+        `portal.sp_upsert_worker_enrollment`. The worker VM calls this endpoint from
+        that IP with matching `cluster_key` / `external_worker_key`. Gateway mints
+        `worker_id` + plaintext `worker_token` once (token hash stored in DB).
+        No `worker_id` or `worker_token` is required on the request.
+      operationId: workerEnroll
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkerEnrollRequest'
+      responses:
+        '200':
+          description: Worker enrolled; store worker_token securely (shown once)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkerEnrollResponse'
+        '403':
+          description: IP/key mismatch, revoked enrollment, or unknown allowlist row
+        '400':
+          description: Missing or invalid request fields
   /workers/tasks/request:
     post:
       tags:
@@ -141,6 +172,43 @@ paths:
           description: Task failed
 components:
   schemas:
+    WorkerEnrollRequest:
+      type: object
+      required:
+      - cluster_key
+      - external_worker_key
+      properties:
+        cluster_key:
+          type: string
+          description: Cluster key matching portal enrollment row
+        external_worker_key:
+          type: string
+          description: Stable worker key matching portal enrollment for this IP
+        capabilities:
+          type: array
+          items: {}
+          description: Optional capability list (JSON array); stored on wf.worker
+        arc_resource_id:
+          type: string
+          description: Optional Azure Arc connected-machine resource ID
+    WorkerEnrollResponse:
+      type: object
+      required:
+      - worker_id
+      - worker_token
+      - external_worker_key
+      - cluster_key
+      properties:
+        worker_id:
+          type: integer
+          format: int64
+        worker_token:
+          type: string
+          description: Plaintext token returned once; write to /etc/methyl/worker-token
+        external_worker_key:
+          type: string
+        cluster_key:
+          type: string
     WorkerAuthRequest:
       type: object
       required:

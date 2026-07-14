@@ -78,6 +78,70 @@ class AuthorizeRequestTests(unittest.TestCase):
                 scope,
             )
 
+    def test_enroll_skips_worker_id_ip_bind(self) -> None:
+        config = GatewayAuthConfig(worker_ip_bind=True, trusted_proxy_cidrs=("127.0.0.1/32",))
+        scope = {"client": ("127.0.0.1", 0)}
+        headers = [(b"x-real-ip", b"198.51.100.10")]
+        # No worker_id yet — enroll IP check lives in wf.sp_worker_enroll.
+        authorize_request(
+            _StubDb(),
+            config,
+            "POST",
+            "/v1/workers/enroll",
+            headers,
+            {"cluster_key": "lambda", "external_worker_key": "vm-1"},
+            scope,
+        )
+
+    def test_enroll_route_is_worker_tier(self) -> None:
+        self.assertEqual(classify_route("POST", "/v1/workers/enroll"), RouteTier.WORKER)
+
+
+class AsgiEnrollTests(unittest.IsolatedAsyncioTestCase):
+    async def test_enroll_success_returns_token(self) -> None:
+        gateway = RestGateway(_StubDb())
+
+        def _enroll(*args: object, **kwargs: object) -> int:
+            return 99
+
+        with patch("rest.gateway.worker_enroll", side_effect=_enroll):
+            app = create_app(
+                gateway,
+                auth_config=GatewayAuthConfig(trusted_proxy_cidrs=("127.0.0.1/32",)),
+            )
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
+                    "/v1/workers/enroll",
+                    json={"cluster_key": "lambda", "external_worker_key": "vm-1"},
+                    headers={"X-Real-IP": "203.0.113.9"},
+                )
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertEqual(body["worker_id"], 99)
+        self.assertEqual(body["cluster_key"], "lambda")
+        self.assertEqual(body["external_worker_key"], "vm-1")
+        self.assertTrue(body["worker_token"])
+
+    async def test_enroll_forbidden_maps_403(self) -> None:
+        from rest.db.base import WorkerEnrollError
+
+        gateway = RestGateway(_StubDb())
+
+        def _boom(*args: object, **kwargs: object) -> int:
+            raise WorkerEnrollError("client IP does not match preregistered enrollment IP.")
+
+        with patch("rest.gateway.worker_enroll", side_effect=_boom):
+            app = create_app(gateway)
+            transport = httpx.ASGITransport(app=app)
+            async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+                response = await client.post(
+                    "/v1/workers/enroll",
+                    json={"cluster_key": "lambda", "external_worker_key": "vm-1"},
+                )
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("does not match", response.json()["error"])
+
 
 class AsgiEntraMiddlewareTests(unittest.IsolatedAsyncioTestCase):
     async def test_admin_route_404_without_handler(self) -> None:

@@ -49,6 +49,27 @@ def worker_authenticate(db_or_dsn: Union[GatewayDb, str], worker_id: int, worker
         db.worker_authenticate(worker_id, worker_token)
 
 
+def worker_enroll(
+    db_or_dsn: Union[GatewayDb, str],
+    *,
+    cluster_key: str,
+    external_worker_key: str,
+    client_ip: str,
+    worker_token: str,
+    capabilities: Optional[list[Any]] = None,
+    arc_resource_id: Optional[str] = None,
+) -> int:
+    with _use_db(db_or_dsn) as db:
+        return db.worker_enroll(
+            cluster_key=cluster_key,
+            external_worker_key=external_worker_key,
+            client_ip=client_ip,
+            worker_token=worker_token,
+            capabilities=capabilities,
+            arc_resource_id=arc_resource_id,
+        )
+
+
 def worker_request_task(
     db_or_dsn: Union[GatewayDb, str],
     worker_id: int,

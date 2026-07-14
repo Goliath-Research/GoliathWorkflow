@@ -195,6 +195,9 @@ def authorize_request(
     client_ip = extract_client_ip(scope, headers, config.trusted_proxy_cidrs)
 
     if tier == RouteTier.WORKER:
+        # Enroll has no worker_id yet; IP allowlist is enforced inside wf.sp_worker_enroll.
+        if path.rstrip("/") == "/v1/workers/enroll":
+            return None
         if body.get("worker_id") is not None:
             wid = int(body["worker_id"])
             if config.worker_ip_bind:

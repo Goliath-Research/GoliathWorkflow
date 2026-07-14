@@ -7,8 +7,8 @@ from typing import Any, Callable, Optional
 
 from anyio.to_thread import run_sync
 
-from .auth import AuthError, AuthForbidden, GatewayAuthConfig, authorize_request
-from .db.base import GatewayDb, WorkerAuthError
+from .auth import AuthError, AuthForbidden, GatewayAuthConfig, authorize_request, extract_client_ip
+from .db.base import GatewayDb, WorkerAuthError, WorkerEnrollError
 from .gateway import RestGateway
 
 
@@ -60,17 +60,19 @@ def create_app(
                 body,
                 scope,
             )
-            status, payload = await run_sync(
-                gateway.dispatch,
-                method,
-                path,
-                body,
-                query,
-            )
+            client_ip = extract_client_ip(scope, headers, config.trusted_proxy_cidrs)
+
+            def _dispatch() -> tuple[int, Any]:
+                return gateway.dispatch(method, path, body, query, client_ip=client_ip)
+
+            status, payload = await run_sync(_dispatch)
         except AuthForbidden as exc:
             status, payload = 403, {"error": exc.message}
         except AuthError as exc:
             status, payload = 401, {"error": exc.message}
+        except WorkerEnrollError as exc:
+            status = 403 if exc.forbidden else 400
+            payload = {"error": exc.message}
         except WorkerAuthError as exc:
             status, payload = 401, {"error": str(exc)}
         except KeyError as exc:

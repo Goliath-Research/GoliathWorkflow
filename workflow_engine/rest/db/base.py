@@ -11,6 +11,15 @@ class WorkerAuthError(Exception):
     """Raised when wf.wf_worker_authenticate rejects credentials."""
 
 
+class WorkerEnrollError(Exception):
+    """Raised when wf.sp_worker_enroll rejects enroll (IP/allowlist/revoked)."""
+
+    def __init__(self, message: str, *, forbidden: bool = True) -> None:
+        super().__init__(message)
+        self.message = message
+        self.forbidden = forbidden
+
+
 class GatewayDbError(Exception):
     """Generic database gateway failure."""
 
@@ -51,6 +60,17 @@ class GatewayDb(Protocol):
     def close(self) -> None: ...
 
     def worker_authenticate(self, worker_id: int, worker_token: str) -> None: ...
+
+    def worker_enroll(
+        self,
+        *,
+        cluster_key: str,
+        external_worker_key: str,
+        client_ip: str,
+        worker_token: str,
+        capabilities: Optional[list[Any]] = None,
+        arc_resource_id: Optional[str] = None,
+    ) -> int: ...
 
     def worker_request_task(
         self,
@@ -189,11 +209,38 @@ class GatewayDbBase(ABC):
         sqlstate = getattr(exc, "sqlstate", None) or getattr(exc, "pgcode", None)
         return sqlstate == "50003"
 
+    @staticmethod
+    def _is_enroll_forbidden(exc: BaseException) -> bool:
+        message = str(exc).lower()
+        markers = (
+            "50053",
+            "50054",
+            "50055",
+            "50052",
+            "no enrollment allowlist",
+            "does not match preregistered",
+            "has been revoked",
+            "unknown or disabled cluster",
+        )
+        return any(m in message for m in markers)
+
     @abstractmethod
     def close(self) -> None: ...
 
     @abstractmethod
     def worker_authenticate(self, worker_id: int, worker_token: str) -> None: ...
+
+    @abstractmethod
+    def worker_enroll(
+        self,
+        *,
+        cluster_key: str,
+        external_worker_key: str,
+        client_ip: str,
+        worker_token: str,
+        capabilities: Optional[list[Any]] = None,
+        arc_resource_id: Optional[str] = None,
+    ) -> int: ...
 
     @abstractmethod
     def worker_request_task(
