@@ -83,6 +83,7 @@ SCRIPTS=(
   wf_json_native_params.sql
   wf_workflow_edge_index_fixup.sql
   wf_worker_api_contract.sql
+  wf_cluster_security_columns.sql
   wf_worker_enrollment.sql
   portal_worker_enrollment_api.sql
   wf_action_schema.sql

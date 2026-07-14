@@ -1,4 +1,10 @@
 -- Portal cluster + worker enrollment allowlist (PostgreSQL)
+-- Ensure security columns exist on older DBs where 00_schema predated them.
+ALTER TABLE wf.cluster
+  ADD COLUMN IF NOT EXISTS allowed_source_cidrs jsonb NULL,
+  ADD COLUMN IF NOT EXISTS entra_client_id text NULL,
+  ADD COLUMN IF NOT EXISTS arc_resource_id text NULL;
+
 CREATE OR REPLACE FUNCTION portal.sp_upsert_cluster(
   p_cluster_key text,
   p_name text DEFAULT NULL,

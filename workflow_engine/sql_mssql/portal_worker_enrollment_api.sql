@@ -1,6 +1,25 @@
 /*
   Portal API: clusters + worker enrollment allowlist (dumb-worker IP preregistration).
+  Requires wf.cluster security columns (additive if missing).
 */
+IF COL_LENGTH('wf.cluster', 'allowed_source_cidrs') IS NULL
+BEGIN
+    ALTER TABLE wf.cluster ADD allowed_source_cidrs nvarchar(max) NULL;
+END
+GO
+
+IF COL_LENGTH('wf.cluster', 'entra_client_id') IS NULL
+BEGIN
+    ALTER TABLE wf.cluster ADD entra_client_id nvarchar(64) NULL;
+END
+GO
+
+IF COL_LENGTH('wf.cluster', 'arc_resource_id') IS NULL
+BEGIN
+    ALTER TABLE wf.cluster ADD arc_resource_id nvarchar(256) NULL;
+END
+GO
+
 CREATE OR ALTER PROCEDURE portal.sp_upsert_cluster
     @cluster_key nvarchar(128),
     @name nvarchar(256) = NULL,
