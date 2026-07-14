@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from methyl_deconv.config import CellDeconvStepConfig
+from methyl_deconv.config import CellDeconvRuntimeParams, CellDeconvStepConfig
 from methyl_deconv.core.houseman import SeedBasis, deconvolve_sample, houseman_qp
 from methyl_deconv.core.runner import run_cell_deconv_for_samples
 
@@ -84,10 +84,12 @@ def test_deconvolve_sample_from_h5(tmp_path: Path):
     row = deconvolve_sample(
         sample_dir,
         basis,
-        contexts=["CG"],
-        min_coverage=1,
-        min_marker_fraction=0.5,
-        use_gpu=False,
+        CellDeconvRuntimeParams(
+            contexts=["CG"],
+            marker_min_coverage=1,
+            min_marker_fraction=0.5,
+            use_gpu=False,
+        ),
     )
     assert row["qp_status"] == "ok"
     est = np.array([row[ct] for ct in basis.cell_types], dtype=np.float64)

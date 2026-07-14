@@ -24,7 +24,9 @@ Writes `{output_base}/cell_fractions/cell_fractions.csv` with columns:
 | `min_marker_fraction` | Required min fraction of markers observed |
 | `use_gpu` | MethylUtils CuPy path when available |
 
-Missing `contexts` / `marker_min_coverage` / `min_marker_fraction` raises at the action boundary (no code fallbacks).
+Missing `contexts` / `marker_min_coverage` / `min_marker_fraction` raises when building
+`CellDeconvRuntimeParams` from the step config (no code fallbacks). Core APIs take that
+typed Pydantic model — not loose kwargs.
 
 ## DomainProgram / profile
 

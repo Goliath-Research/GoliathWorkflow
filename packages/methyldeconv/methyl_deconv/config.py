@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class CellDeconvStepConfig(BaseModel):
+    """Schema-facing actionConfig (tunable knobs default to None until site/profile set them)."""
+
     model_config = ConfigDict(extra="ignore")
 
     output_dir: Optional[str] = Field(
@@ -57,3 +59,59 @@ class CellDeconvStepConfig(BaseModel):
         default="sample_id",
         description="Column name for sample identifier in cell_fractions.csv.",
     )
+
+    def require_runtime(self) -> "CellDeconvRuntimeParams":
+        """Validate operator-required knobs and return a typed runtime model (no code defaults)."""
+        return CellDeconvRuntimeParams.from_step_config(self)
+
+
+class CellDeconvRuntimeParams(BaseModel):
+    """Resolved deconvolution knobs after site/profile merge; science thresholds are required."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    contexts: List[Literal["CG", "CHG", "CHH"]] = Field(
+        min_length=1,
+        description="Methylation contexts to read from sample H5.",
+    )
+    marker_min_coverage: int = Field(
+        ge=1,
+        description="Minimum coverage at a marker CpG for inclusion in Y.",
+    )
+    min_marker_fraction: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Minimum fraction of seed markers observed required to emit Ω.",
+    )
+    use_gpu: Optional[bool] = Field(
+        default=None,
+        description="Prefer MethylUtils CuPy/GPU when available.",
+    )
+    sample_id_column: str = Field(
+        default="sample_id",
+        description="Column name for sample identifier in cell_fractions.csv.",
+    )
+
+    @classmethod
+    def from_step_config(cls, cfg: CellDeconvStepConfig) -> "CellDeconvRuntimeParams":
+        missing = [
+            name
+            for name, value in (
+                ("contexts", cfg.contexts),
+                ("marker_min_coverage", cfg.marker_min_coverage),
+                ("min_marker_fraction", cfg.min_marker_fraction),
+            )
+            if value is None
+        ]
+        if missing:
+            raise ValueError(
+                "cell_deconvolution requires operator-set config (site/profile actionConfig): "
+                f"missing {', '.join(missing)}"
+            )
+        return cls(
+            contexts=list(cfg.contexts),
+            marker_min_coverage=int(cfg.marker_min_coverage),
+            min_marker_fraction=float(cfg.min_marker_fraction),
+            use_gpu=cfg.use_gpu,
+            sample_id_column=str(cfg.sample_id_column or "sample_id"),
+        )
