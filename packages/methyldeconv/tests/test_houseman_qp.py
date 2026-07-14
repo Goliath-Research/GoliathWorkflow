@@ -20,6 +20,9 @@ def test_packaged_seed_basis_loads():
     assert basis.M.shape[1] == 6
     assert basis.cell_types == ("CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu")
     assert np.all((basis.M >= 0.0) & (basis.M <= 1.0))
+    assert basis.provenance["coordinate_convention"] == "1-based"
+    assert basis.probe_ids[0] == "cg08769189"
+    assert basis.positions[0] == 55270205
 
 
 def test_houseman_qp_recovers_known_mixture():

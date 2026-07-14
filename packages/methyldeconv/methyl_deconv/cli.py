@@ -7,6 +7,7 @@ import json
 import sys
 from pathlib import Path
 
+from methyl_utils import load_project
 from methyl_utils.cli_resolved_config import add_resolved_config_argument, resolve_cli_step_config
 
 from .core.runner import run_cell_deconv_for_samples
@@ -27,7 +28,13 @@ def main() -> None:
         print(f"Project not found: {args.project}", file=sys.stderr)
         sys.exit(1)
 
-    resolved = resolve_cli_step_config(args)
+    project = load_project(args.project)
+    resolved = resolve_cli_step_config(
+        "cell_deconvolution",
+        project,
+        resolved_config_path=args.resolved_config,
+        step_override_path=args.step_override,
+    )
     cfg, samples, out_dir = resolve_cell_deconv_step_config(
         args.project,
         args.step_override,

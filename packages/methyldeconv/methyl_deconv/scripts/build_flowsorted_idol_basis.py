@@ -64,7 +64,8 @@ def main() -> None:
             if not chrom or chrom == "NA" or not pos or pos == "NA":
                 continue
             chrom_n = chrom[3:] if chrom.startswith("chr") else chrom
-            coord[pid] = (chrom_n, int(float(pos)))
+            # CpG_beg is BED-style zero-based; sample H5 positions are one-based.
+            coord[pid] = (chrom_n, int(float(pos)) + 1)
 
     markers = []
     for pid in comp.index.astype(str):
@@ -92,6 +93,7 @@ def main() -> None:
         ),
         "genome_build": "hg38",
         "coordinate_source": "Zhou lab EPIC.hg38.manifest (zhouserver InfiniumAnnotation)",
+        "coordinate_convention": "1-based",
         "cell_types": cell_types,
         "n_markers": len(markers),
         "markers": markers,

@@ -56,6 +56,7 @@ def load_seed_basis(path: Optional[str | Path] = None) -> SeedBasis:
         "gse": raw.get("gse"),
         "citation": raw.get("citation"),
         "genome_build": raw.get("genome_build"),
+        "coordinate_convention": raw.get("coordinate_convention"),
         "n_markers": len(markers),
         "cell_types": list(cell_types),
     }
