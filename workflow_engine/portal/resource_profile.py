@@ -112,6 +112,12 @@ class ResourceProfileReader:
         secret = _parse_json_field(row.get("secret_json"))
         if secret is not None and not isinstance(secret, dict):
             secret = None
+        credential_name = row.get("credential_name")
+        # Match expand_storage_endpoint: named credential must resolve to a
+        # published secret. LEFT JOIN + missing/unpublished cred must not fall
+        # through to ambient auth (e.g. instance_profile) with credentialName set.
+        if credential_name and secret is None:
+            raise KeyError(f"credential not found: {credential_name}")
         provider = (
             row.get("provider")
             or location.get("type")
@@ -127,7 +133,7 @@ class ResourceProfileReader:
             location,
             provider=str(provider),
             prefix=prefix,
-            credential_name=row.get("credential_name"),
+            credential_name=credential_name,
             credential_version=row.get("cred_version"),
             content_hash=row.get("content_hash"),
             secret=secret,

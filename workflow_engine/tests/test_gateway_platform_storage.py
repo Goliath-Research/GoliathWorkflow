@@ -131,3 +131,39 @@ def test_resource_profile_reader_expands_cfg_endpoint_ref() -> None:
     assert h5["contentHash"] == "abc123"
     assert h5["credentialName"] == "epimethyl-archive-keys"
     assert h5["prefix"] == "samples/"
+
+
+def test_resource_profile_reader_missing_credential_raises() -> None:
+    """Named credential_name with no published secret must not ambient-fallback."""
+    db = MagicMock()
+    db.backend = "postgres"
+
+    def fetch(sql: str, params: tuple = ()):
+        if "portal.resource_profile" in sql:
+            return {
+                "profile_key": "epimethyl-samples",
+                "profile_type": "cfg_storage_endpoint_ref",
+                "profile_json": {"sampleStorageEndpoint": "epimethyl-archive"},
+                "status": "ACTIVE",
+            }
+        if "cfg.storage_endpoint" in sql:
+            return {
+                "location_json": {
+                    "type": "s3",
+                    "bucket": "epimethyl",
+                    "region": "us-east-1",
+                },
+                "provider": "s3",
+                "credential_name": "missing-keys",
+                "endpoint_version": "1",
+                "secret_json": None,
+                "content_hash": None,
+                "cred_version": None,
+                "auth_mode": None,
+            }
+        return None
+
+    db._fetch_one.side_effect = fetch
+    reader = ResourceProfileReader(db)
+    with pytest.raises(KeyError, match="credential not found: missing-keys"):
+        reader.h5_storage_defaults("epimethyl-samples")
