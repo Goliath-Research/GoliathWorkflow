@@ -68,6 +68,10 @@ class RestGateway:
             }
 
         if method == "POST" and path == "/v1/workers/enroll":
+            # Client IP must come from extract_client_ip (ASGI/proxy), never from the body.
+            ip = (client_ip or "").strip()
+            if not ip:
+                return 400, {"error": "client IP unavailable; enroll requires proxy-derived client address"}
             token = secrets.token_hex(32)
             caps = body.get("capabilities")
             if caps is not None and not isinstance(caps, list):
@@ -76,7 +80,7 @@ class RestGateway:
                 self.db,
                 cluster_key=str(body["cluster_key"]),
                 external_worker_key=str(body["external_worker_key"]),
-                client_ip=str(client_ip or body.get("client_ip") or ""),
+                client_ip=ip,
                 worker_token=token,
                 capabilities=caps,
                 arc_resource_id=(

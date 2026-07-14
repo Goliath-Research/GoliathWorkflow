@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
 import unittest
@@ -11,7 +12,12 @@ from unittest.mock import MagicMock, patch
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "workers"))
 
-from methyl_worker.__main__ import _run_enroll_cli, _write_token_file  # noqa: E402
+from methyl_worker.__main__ import (  # noqa: E402
+    _default_api_base,
+    _run_enroll_cli,
+    _write_token_file,
+    main,
+)
 from methyl_worker.client import WorkflowRestClient  # noqa: E402
 
 
@@ -40,6 +46,58 @@ class EnrollClientTests(unittest.TestCase):
             },
         )
         self.assertEqual(out["worker_id"], 1)
+
+
+class ApiBasePrecedenceTests(unittest.TestCase):
+    def test_worker_api_base_wins_over_methyl_api_base(self) -> None:
+        with patch.dict(
+            os.environ,
+            {
+                "WORKER_API_BASE": "http://worker-first/v1",
+                "METHYL_API_BASE": "http://methyl-second/v1",
+            },
+            clear=False,
+        ):
+            self.assertEqual(_default_api_base(), "http://worker-first/v1")
+
+    def test_falls_back_to_methyl_api_base(self) -> None:
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in ("WORKER_API_BASE", "METHYL_API_BASE")
+        }
+        env["METHYL_API_BASE"] = "http://methyl-only/v1"
+        with patch.dict(os.environ, env, clear=True):
+            self.assertEqual(_default_api_base(), "http://methyl-only/v1")
+
+
+class LegacyCliTests(unittest.TestCase):
+    def test_once_flag_without_subcommand_is_poll(self) -> None:
+        """systemd-style `methyl-worker --once` must not die as unrecognized args."""
+        with patch("methyl_worker.__main__._run_poll_cli", return_value=0) as poll:
+            rc = main(
+                [
+                    "--once",
+                    "--worker-id",
+                    "1",
+                    "--worker-token",
+                    "tok",
+                    "--api-base",
+                    "http://gw/v1",
+                ]
+            )
+        self.assertEqual(rc, 0)
+        poll.assert_called_once()
+        ns = poll.call_args[0][0]
+        self.assertEqual(ns.command, "poll")
+        self.assertTrue(ns.once)
+        self.assertEqual(ns.worker_id, 1)
+
+    def test_explicit_enroll_subcommand(self) -> None:
+        with patch("methyl_worker.__main__._run_enroll_cli", return_value=0) as enroll:
+            rc = main(["enroll", "--cluster", "lambda", "--key", "vm-1"])
+        self.assertEqual(rc, 0)
+        enroll.assert_called_once()
 
 
 class EnrollCliTests(unittest.TestCase):

@@ -16,13 +16,31 @@ from .client import WorkflowRestClient
 from .runner import WorkerRunner
 
 DEFAULT_TOKEN_FILE = Path("/etc/methyl/worker-token")
+_SUBCOMMANDS = frozenset({"poll", "enroll", "plan-iterations"})
+
+
+def _default_api_base() -> str:
+    """Match register_worker / provision: WORKER_API_BASE then METHYL_API_BASE."""
+    return (
+        os.environ.get("WORKER_API_BASE")
+        or os.environ.get("METHYL_API_BASE")
+        or "http://localhost:8080/v1"
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv_list = list(sys.argv[1:] if argv is None else argv)
+    # Legacy: flags without a subcommand mean poll (e.g. `methyl-worker --once`).
+    # Detect before parse_args so poll-only flags are not rejected as unknown.
+    if not argv_list or (
+        argv_list[0] not in _SUBCOMMANDS and argv_list[0] not in ("-h", "--help")
+    ):
+        argv_list = ["poll", *argv_list]
+
     parser = argparse.ArgumentParser(
         description="MethylPipeline REST workflow worker (poll middle-tier API)",
     )
-    sub = parser.add_subparsers(dest="command")
+    sub = parser.add_subparsers(dest="command", required=True)
 
     poll = sub.add_parser("poll", help="Poll gateway for READY tasks (default)")
     _add_poll_args(poll)
@@ -33,9 +51,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     enroll.add_argument(
         "--api-base",
-        default=os.environ.get("METHYL_API_BASE")
-        or os.environ.get("WORKER_API_BASE", "http://localhost:8080/v1"),
-        help="Gateway base URL (METHYL_API_BASE / WORKER_API_BASE)",
+        default=_default_api_base(),
+        help="Gateway base URL (WORKER_API_BASE, then METHYL_API_BASE)",
     )
     enroll.add_argument(
         "--cluster",
@@ -74,19 +91,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     plan.add_argument(
         "--api-base",
-        default=os.environ.get("METHYL_API_BASE", "http://localhost:8080/v1"),
+        default=_default_api_base(),
     )
 
-    # Backward compatible: `methyl-worker` / `methyl-worker --once` → poll
-    args = parser.parse_args(argv)
-    if args.command is None:
-        # Re-parse treating argv as poll flags (legacy default command).
-        poll_parser = argparse.ArgumentParser(
-            description="MethylPipeline REST workflow worker (poll middle-tier API)",
-        )
-        _add_poll_args(poll_parser)
-        poll_parser.set_defaults(command="poll")
-        args = poll_parser.parse_args(argv)
+    args = parser.parse_args(argv_list)
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -97,14 +105,24 @@ def main(argv: list[str] | None = None) -> int:
     return _run_poll_cli(args)
 
 
+def _env_int(name: str, default: int = 0) -> int:
+    raw = os.environ.get(name, "").strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
 def _add_poll_args(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--worker-id", type=int, default=int(os.environ.get("WORKER_ID", "0")))
+    parser.add_argument("--worker-id", type=int, default=_env_int("WORKER_ID", 0))
     parser.add_argument("--worker-token", default=os.environ.get("WORKER_TOKEN", ""))
     parser.add_argument("--capability", default=os.environ.get("WORKER_CAPABILITY"))
     parser.add_argument(
         "--api-base",
-        default=os.environ.get("METHYL_API_BASE", "http://localhost:8080/v1"),
-        help="Middle-tier base URL (default: METHYL_API_BASE or http://localhost:8080/v1)",
+        default=_default_api_base(),
+        help="Middle-tier base URL (WORKER_API_BASE, then METHYL_API_BASE)",
     )
     parser.add_argument(
         "--poll-seconds",
