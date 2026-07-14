@@ -167,6 +167,14 @@
       "pdr_disagreement_threshold": 0.25,
       "min_coverage": 1
     },
+    "cell_deconvolution": {
+      "contexts": [
+        "CG"
+      ],
+      "marker_min_coverage": 4,
+      "min_marker_fraction": 0.25,
+      "use_gpu": true
+    },
     "info_measures": {
       "contexts": [
         "CG"
@@ -209,6 +217,7 @@
             "feature_mode": "observed_hybrid",
             "feature_family_set": "dmp_scored+chromosome",
             "covariates_path": [
+              "{output_base}/cell_fractions/cell_fractions.csv",
               "{output_base}/derived_measures/derived_measures.csv",
               "{output_base}/info_measures/readlevel_measures.csv"
             ]
@@ -220,6 +229,7 @@
             "feature_mode": "observed_hybrid",
             "feature_family_set": "dmp_scored+chromosome",
             "covariates_path": [
+              "{output_base}/cell_fractions/cell_fractions.csv",
               "{output_base}/derived_measures/derived_measures.csv",
               "{output_base}/info_measures/readlevel_measures.csv"
             ]

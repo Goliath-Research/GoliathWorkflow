@@ -134,6 +134,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="DerivedMeasuresStepConfig",
     ),
     ConfigSchemaSpec(
+        schema_id="cell_deconvolution",
+        module="methyl_deconv.config",
+        class_name="CellDeconvStepConfig",
+        filename="cell_deconvolution.schema.json",
+        title="CellDeconvStepConfig",
+    ),
+    ConfigSchemaSpec(
         schema_id="info_measures",
         module="methyl_infotheory.config",
         class_name="InfoTheoryStepConfig",

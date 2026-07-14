@@ -199,3 +199,153 @@ For your bioinformaticians and assay designers, these peer-reviewed papers map o
 - **On systemic heritable methylation risk profiles in blood cells:**
 - *Minerva Access (University of Melbourne Archive).* **Heritable methylation marks associated with breast and prostate cancer risk.** Documentation tracking how pre-diagnostic buffy coat and PBMC samples harbor constitutional methylation marks (*VTRNA2-1* promoter region) specifically predictive of developing aggressive prostate variants.
 
+---
+
+Assuming that plasma-derived cfDNA is completely off the table, the diagnostic strategy must pivot entirely to treating the **buffy coat as a complex biosensor**.
+
+Without tumor DNA shedding directly into the blood, you are left with bulk leukocyte DNA. The challenge is that a raw, uncorrected buffy coat methylome is massively confounded: the differences in methylation you see between a Gleason 3+3 and a 3+4 patient are often just reflections of changing white blood cell proportions (e.g., an elevated neutrophil-to-lymphocyte ratio driven by tumor-induced systemic inflammation).
+
+This is precisely where the **Houseman algorithm** (and its modern iterations like *EpiDISH* or *HiTIMED*) becomes the core engine of the bioinformatics pipeline.
+
+---
+
+## What the Houseman Algorithm Does (The Mathematical Deconvolution)
+
+The Houseman algorithm is a reference-based **cell-type deconvolution algorithm**. It models the bulk methylation data ($Y$) of your buffy coat sample as a linear combination of pure leukocyte cell-type methylation profiles ($M$) multiplied by their unknown proportions ($\Omega$):
+
+$$Y = M\Omega^T$$
+
+By running a constrained quadratic programming (QP) projection, it reconstructs the exact cellular composition (proportions of T-cells, B-cells, NK-cells, monocytes, and granulocytes) out of your mixed blood sample using only a handful of cell-lineage specific CpG sites.
+
+In a cfDNA-free buffy coat pipeline, Houseman helps you in two distinct ways:
+
+---
+
+## 1. The Confounder Strategy (Correcting the Noise)
+
+If you want to find a true, direct "epigenetic footprint" left by a Gleason 3+4 tumor on the immune system, you have to strip away the noise of shifting cell counts.
+
+* **The Workflow:** You use Houseman to calculate the exact cellular fractions ($\Omega$) for each patient. You then input these fractions as *covariates* into your Epigenome-Wide Association Study (EWAS) regression models.
+* **The Value:** This allows your machine learning models to isolate **cell-type-independent aberrant DNA methylation**. It answers the question: *“Holding the number of T-cells and monocytes perfectly constant, which specific CpG sites are being hyper-methylated by the presence of a Pattern 4 tumor?”*
+
+## 2. The Biomarker Strategy (Treating Proportions as the Signal)
+
+Alternatively, the shifting cell proportions calculated by Houseman can *become* the diagnostic test itself. The tumor microenvironment of an aggressive prostate cancer systemically reprograms systemic immunity.
+
+* **The Workflow:** Instead of looking at individual CpGs, your diagnostic features become the calculated cell proportions themselves (e.g., tracking subtle drops in CD8+ T-cells or shifts in specific monocyte subsets derived via Houseman deconvolution).
+* **The Value:** You are using the algorithm to perform a "virtual flow cytometry" on frozen or archived buffy coat DNA. These algorithmic proportions are fed into a random forest or neural network to predict if the systemic immune profile matches a dangerous 3+4 gradient or an indolent 3+3 baseline.
+
+---
+
+## MethylPipeline implementation (Ω → tabular)
+
+Buffy-coat composition is implemented as a **separate track** from DMP/gene SaMD MC (no centroid/detector):
+
+| Piece | Location |
+|-------|----------|
+| Action | `pipeline.cell_deconvolution` / CLI `methyl-cell-deconv` |
+| Package | `packages/methyldeconv` |
+| Reference \(M\) | Packaged FlowSorted.Blood.EPIC **IDOL** (~450 markers × CD8T, CD4T, NK, Bcell, Mono, Neu), hg38-mapped |
+| Output | `{output_base}/cell_fractions/cell_fractions.csv` — always all six Ω per sample |
+| Modeling | Profile `cell_deconv` (or lifecycle covariates_path): tabular backend; Ω columns + clinical (sex/age/BMI) via `covariates_path` |
+| Program | `workflow_engine/domain/fixtures/cell_deconv_tabular.program.json`; also nodes on study/samd lifecycle programs |
+| Plan | [`docs/plans/buffy-cell-deconvolution.plan.md`](../plans/buffy-cell-deconvolution.plan.md) |
+
+This is the **biomarker (proportions-as-signal)** path. Cell-type–adjusted DMP discovery (confounder residualization) is not in this action.
+
+---
+
+## Key References for Your Pipeline
+
+To implement or adapt this algorithm into your current pipeline, your software team should reference these foundational publications:
+
+* **The Original Houseman Methodology Paper:**
+* *Houseman, E. A., et al.* **DNA methylation arrays as surrogate measures of cell mixture distribution.** *BMC Bioinformatics*. This is the core reference paper detailing the mathematical framework of using quadratic programming to project mixed whole-blood/buffy coat samples onto purified cell lines.
+
+
+* **Comparative Assessment & Package Implementations (EpiDISH):**
+* *Teschendorff, A. E., et al.* **A comparison of reference-based algorithms for correcting cell-type heterogeneity in Epigenome-Wide Association Studies.** *BMC Bioinformatics*. This study compares Houseman to Robust Partial Correlation (RPC) and outlines the `EpiDISH` R/Python package library, which updates the Houseman algorithm for faster compute speeds.
+
+
+* **Application directly to Prostate Cancer Deconvolution:**
+* *HiTIMED Framework:* **Tumor microenvironment deconvolution identifies cell-type-independent aberrant DNA methylation and gene expression in prostate cancer.** *PMC/ResearchGate (2023/2024 archive)*. This research explicitly demonstrates using advanced reference-based deconvolution matrices on prostate patient tissues and buffy coats to pull out clean, disease-specific signatures past cellular confounding.
+
+---
+
+Since the initial rollout of **HiTIMED** (Hierarchical Tumor Immune Microenvironment Deconvolution) around 2023, the field of epigenetic deconvolution has expanded past R-centric packages (like `minfi`, `EpiDISH`, and `FlowSorted.Blood.EPIC`) toward unified pythonic pipelines, native matrix optimizations, and cross-modal models.
+
+If you want a modern alternative that bypasses R entirely or implements reference-based / machine-learning deconvolution frameworks natively in Python, the best path forward depends on your architectural goals:
+
+---
+
+## 1. Native Python Matrix Alternatives (For Custom Arrays)
+
+If you already have your data structured into `{chr}-{ctx}.h5` HDF5 files or target tables, you don't necessarily need a monolithic packaging wrapper. The Houseman algorithm itself is fundamentally **Constrained Quadratic Programming (QP)**.
+
+In Python, the direct, robust equivalent to Houseman's linear combination projection is implemented using **`scipy.optimize.minimize`** (using the Sequential Least Squares Programming or 'SLSQP' method) or **`cvxpy`**.
+
+Your team can write a lightweight pythonic deconvolution function natively matching Houseman's operational matrix constraints ($Y = M\Omega^T$) like this:
+
+```python
+import numpy as np
+import cvxpy as cp
+
+def houseman_deconvolute(bulk_beta, reference_matrix):
+    """
+    Python implementation of Houseman Constrained Quadratic Programming.
+    bulk_beta: Array of shape (n_CpGs,) representing the patient sample
+    reference_matrix: Array of shape (n_CpGs, n_cell_types) 
+    """
+    n_cells = reference_matrix.shape[1]
+    omega = cp.Variable(n_cells)
+    
+    # Constraints: Proportions must be non-negative and sum to 1
+    constraints = [omega >= 0, cp.sum(omega) == 1]
+    
+    # Objective: Minimize the sum of squared residuals
+    objective = cp.Minimize(cp.sum_squares(reference_matrix @ omega - bulk_beta))
+    
+    problem = cp.Problem(objective, constraints)
+    problem.solve()
+    
+    return omega.value # Returns cell-type proportions array
+
+```
+
+## 2. Deep Learning / Multilayer Perceptron Classifiers: HiTAIC
+
+If your ultimate goal isn't just counting T-cells but predicting whether the buffy coat or cellular fraction indicates a tumor classification, look at **HiTAIC** (Hierarchical Tumor Artificial Intelligence Classifier) (Zhang et al., 2023).
+
+* **What it is:** Developed out of the same core academic environments as HiTIMED, HiTAIC moves away from linear Houseman regression entirely and transitions to a Python-driven **Multilayer Perceptron (MLP) Neural Network** using selective DNA methylation libraries.
+* **Why it matches:** It employs a hierarchical structure specifically trained on tumor-type discriminative CpGs to chart tissue configurations and tumor tracking with accuracies scaling past 96%.
+
+## 3. High-Performance HDF5/BAM Native Processing: `wgbstools`
+
+Since your engineering stack relies heavily on sub-chromosome `.h5` matrices and speed, look at the computational framework **`wgbstools`** (Loyfer, 2026).
+
+* **What it is:** A highly optimized computational suite specifically designed for fast access and fragment-level indexing of high-throughput methylome sequencing data.
+* **Why it matches your infrastructure:** It bypasses old micro-array assumptions and deals directly with BAM and fragment-level data configurations. It features native, automated commands for biomarker and differentially methylated block (DMB) identification, enabling fast genomic segmentation directly compatible with custom Python alignment scripts.
+
+## 4. Cross-Modal Deconvolution Pipelines: STED
+
+If you want to pull down complex cell-state properties out of bulk arrays by leveraging external references, a state-of-the-art framework is **STED** (Single-cell Topic modeling and Epigenetic Deconvolution) (Liao, 2026).
+
+* **What it is:** A flexible, Python-compatible probabilistic framework built for cross-modal cell-type deconvolution and signal inference.
+* **How it works:** STED maps cell-type-specific references using a shared latent space framework, allowing you to run Bayesian inference matrices to estimate cell fractions and reconstruct exact cell-type-specific regulatory landscapes out of bulk data layers.
+
+---
+
+### Suggested Engineering Pivot
+
+Given that you already have an optimized Python pipeline handling parallelized `{chr}-{ctx}.h5` HDF5 files:
+
+1. **Do not back-port to R.** Avoid wrapping your code in R-based execution bridges (`rpy2`) to run old `EpiDISH` or `HiTIMED` scripts, as this will crush your parallel data streaming performance.
+2. **Extract the reference matrix.** Download the validated CpG lookup indexes (the $M$ matrix) directly from the published HiTIMED or FlowSorted/EPIC data sets.
+3. **Run deconvolution natively.** Stream your `.h5` arrays straight into an optimized vector processing loop in Python using **`cvxpy`** or **`scipy`** to calculate the local tissue proportions.
+
+### References
+
+* Liao, Y. (2026). STED: flexible cross-modal topic modeling infers cell-type-specific regulatory landscapes from bulk epigenomics. *Briefings in Bioinformatics*, *27*(3), bbag347.
+* Loyfer, N. (2026). wgbstools: a computational suite for DNA methylation sequencing data analysis. *Life Science Alliance*, *9*(4), e202503514.
+* Zhang, Z., Lu, Y., Vosoughi, S., Levy, J. J., Christensen, B. C., & Salas, L. A. (2023). HiTAIC: hierarchical tumor artificial intelligence classifier traces tissue of origin and tumor type in primary and metastasized tumors using DNA methylation. *NAR Cancer*, *5*(2), zcad017. [https://doi.org/10.1093/narcan/zcad017](https://doi.org/10.1093/narcan/zcad017)
+Cited by: 21

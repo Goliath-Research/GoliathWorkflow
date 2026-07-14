@@ -17,5 +17,8 @@ methylgenefeatureselect
 methylvalidation
 methyldomain
 methylfragmentomics
+methylderivedmeasures
+methyldeconv
+methylinfotheory
 workflow_engine
 workers

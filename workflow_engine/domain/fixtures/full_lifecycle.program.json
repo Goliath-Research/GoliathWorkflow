@@ -257,6 +257,10 @@
       "node_key": "derived_measures"
     },
     {
+      "do": "pipeline.cell_deconvolution",
+      "node_key": "cell_deconvolution"
+    },
+    {
       "do": "pipeline.info_measures",
       "node_key": "info_measures"
     },

@@ -115,6 +115,24 @@ class DerivedMeasuresTaskOutput(ActionOutputBase):
     n_columns: Optional[int] = None
 
 
+class CellDeconvolutionTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str
+    project: Optional[str] = None
+    projectPath: Optional[str] = None
+    outputDir: Optional[str] = None
+    stepOverride: Optional[Dict[str, Any]] = None
+
+
+class CellDeconvolutionTaskOutput(ActionOutputBase):
+    output_dir: Optional[str] = None
+    output_csv: Optional[str] = None
+    n_samples: Optional[int] = None
+    n_columns: Optional[int] = None
+    n_ok: Optional[int] = None
+
+
 class InfoMeasuresTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

@@ -14,6 +14,42 @@
           "default": "account_key",
           "title": "Authmode",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         }
       },
       "required": [
@@ -36,6 +72,42 @@
           "title": "Connectionstring",
           "type": "string",
           "writeOnly": true
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         }
       },
       "required": [
@@ -52,9 +124,127 @@
           "default": "default_credential",
           "title": "Authmode",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         }
       },
       "title": "AzureDefaultCredentialCredentials",
+      "type": "object"
+    },
+    "AzureKeyVaultCredentials": {
+      "additionalProperties": false,
+      "description": "Credential *reference* resolved on the worker via Managed Identity (optional escape hatch).",
+      "properties": {
+        "authMode": {
+          "const": "azure_key_vault",
+          "default": "azure_key_vault",
+          "title": "Authmode",
+          "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
+        },
+        "materializeAs": {
+          "anyOf": [
+            {
+              "enum": [
+                "explicit_keys",
+                "account_key",
+                "connection_string"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional hint for how to interpret a plain-string secret value.",
+          "title": "Materializeas"
+        },
+        "secretName": {
+          "description": "Secret name holding JSON or accessKeyId:secret.",
+          "title": "Secretname",
+          "type": "string"
+        },
+        "vaultUrl": {
+          "description": "Azure Key Vault URL (https://\u2026.vault.azure.net/).",
+          "title": "Vaulturl",
+          "type": "string"
+        }
+      },
+      "required": [
+        "vaultUrl",
+        "secretName"
+      ],
+      "title": "AzureKeyVaultCredentials",
       "type": "object"
     },
     "AzureSampleDestination": {
@@ -68,12 +258,53 @@
           "title": "Container",
           "type": "string"
         },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes.",
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential name bound at expand time.",
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Published credential version bound into task JSON.",
+          "title": "Credentialversion"
+        },
         "credentials": {
           "discriminator": {
             "mapping": {
               "account_key": "#/$defs/AzureAccountKeyCredentials",
+              "azure_key_vault": "#/$defs/AzureKeyVaultCredentials",
               "connection_string": "#/$defs/AzureConnectionStringCredentials",
-              "default_credential": "#/$defs/AzureDefaultCredentialCredentials"
+              "default_credential": "#/$defs/AzureDefaultCredentialCredentials",
+              "encrypted_file": "#/$defs/EncryptedFileCredentials"
             },
             "propertyName": "authMode"
           },
@@ -86,6 +317,12 @@
             },
             {
               "$ref": "#/$defs/AzureDefaultCredentialCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureKeyVaultCredentials"
+            },
+            {
+              "$ref": "#/$defs/EncryptedFileCredentials"
             }
           ],
           "title": "Credentials"
@@ -93,6 +330,24 @@
         "prefix": {
           "title": "Prefix",
           "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "lab_ingress",
+                "archive",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Admin RBAC hint: lab_ingress vs archive vs shared.",
+          "title": "Scope"
         },
         "type": {
           "const": "azure_blob",
@@ -110,6 +365,82 @@
       "title": "AzureSampleDestination",
       "type": "object"
     },
+    "EncryptedFileCredentials": {
+      "additionalProperties": false,
+      "description": "Credential *reference* to a Fernet-encrypted local file (node-local / air-gapped).",
+      "properties": {
+        "authMode": {
+          "const": "encrypted_file",
+          "default": "encrypted_file",
+          "title": "Authmode",
+          "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
+        },
+        "materializeAs": {
+          "anyOf": [
+            {
+              "enum": [
+                "explicit_keys",
+                "account_key",
+                "connection_string"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional hint for how to interpret a plain-string secret value.",
+          "title": "Materializeas"
+        },
+        "path": {
+          "description": "Path to encrypted credential file (owner rw only).",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "EncryptedFileCredentials",
+      "type": "object"
+    },
     "FileSampleDestination": {
       "additionalProperties": false,
       "properties": {
@@ -117,10 +448,67 @@
           "title": "Basepath",
           "type": "string"
         },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes.",
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential name bound at expand time.",
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Published credential version bound into task JSON.",
+          "title": "Credentialversion"
+        },
         "prefix": {
           "default": "",
           "title": "Prefix",
           "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "lab_ingress",
+                "archive",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Admin RBAC hint: lab_ingress vs archive vs shared.",
+          "title": "Scope"
         },
         "type": {
           "const": "file",
@@ -147,6 +535,42 @@
           "default": "explicit_keys",
           "title": "Authmode",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         },
         "secretAccessKey": {
           "format": "password",
@@ -185,6 +609,42 @@
           "default": "instance_profile",
           "title": "Authmode",
           "type": "string"
+        },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Credentialversion"
         }
       },
       "title": "S3InstanceProfileCredentials",
@@ -197,9 +657,50 @@
           "title": "Bucket",
           "type": "string"
         },
+        "contentHash": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes.",
+          "title": "Contenthash"
+        },
+        "credentialName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "cfg.credential name bound at expand time.",
+          "title": "Credentialname"
+        },
+        "credentialVersion": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Published credential version bound into task JSON.",
+          "title": "Credentialversion"
+        },
         "credentials": {
           "discriminator": {
             "mapping": {
+              "azure_key_vault": "#/$defs/AzureKeyVaultCredentials",
+              "encrypted_file": "#/$defs/EncryptedFileCredentials",
               "explicit_keys": "#/$defs/S3ExplicitKeysCredentials",
               "instance_profile": "#/$defs/S3InstanceProfileCredentials"
             },
@@ -211,6 +712,12 @@
             },
             {
               "$ref": "#/$defs/S3InstanceProfileCredentials"
+            },
+            {
+              "$ref": "#/$defs/AzureKeyVaultCredentials"
+            },
+            {
+              "$ref": "#/$defs/EncryptedFileCredentials"
             }
           ],
           "title": "Credentials"
@@ -242,6 +749,24 @@
           ],
           "default": null,
           "title": "Region"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "enum": [
+                "lab_ingress",
+                "archive",
+                "shared"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Admin RBAC hint: lab_ingress vs archive vs shared.",
+          "title": "Scope"
         },
         "type": {
           "const": "s3",

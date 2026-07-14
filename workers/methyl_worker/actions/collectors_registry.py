@@ -12,6 +12,7 @@ from ..collectors import (
     _resolve_enricher_output_dir,
 )
 from ..task_models.pipeline_models import (
+    CellDeconvolutionTaskOutput,
     CentroidTaskOutput,
     DerivedMeasuresTaskOutput,
     DetectorTaskOutput,
@@ -60,6 +61,13 @@ def collector_mapper(_entry: ActionCatalogEntry) -> ArtifactCollector:
 def collector_derived_measures(_entry: ActionCatalogEntry) -> ArtifactCollector:
     return ManifestFirstCollector(
         output_model=DerivedMeasuresTaskOutput,
+        resolve_output_dir=_output_dir,
+    )
+
+
+def collector_cell_deconvolution(_entry: ActionCatalogEntry) -> ArtifactCollector:
+    return ManifestFirstCollector(
+        output_model=CellDeconvolutionTaskOutput,
         resolve_output_dir=_output_dir,
     )
 

@@ -34,6 +34,7 @@ GOLDEN_INPUTS: Dict[str, Dict[str, Any]] = {
     "pipeline.classifier": {"tool": "MethylClassifier", "projectPath": "/work/p/project.json"},
     "pipeline.predictor": {"tool": "MethylPredictor", "projectPath": "/work/p/project.json"},
     "pipeline.derived_measures": {"tool": "MethylDerivedMeasures", "projectPath": "/work/p/project.json"},
+    "pipeline.cell_deconvolution": {"tool": "MethylCellDeconv", "projectPath": "/work/p/project.json"},
     "pipeline.info_measures": {"tool": "MethylInfoTheory", "projectPath": "/work/p/project.json"},
     "context.resolve_project": {"tool": "ContextResolveProject", "projectPath": "/work/p/project.json"},
     "sample.parabricks_giraffe": {
@@ -144,6 +145,14 @@ GOLDEN_OUTPUTS: Dict[str, Dict[str, Any]] = {
         "output_csv": "/work/p/derived_measures/genome_measures.csv",
         "n_samples": 10,
         "n_columns": 40,
+    },
+    "pipeline.cell_deconvolution": {
+        "status": "ok",
+        "output_dir": "/work/p/cell_fractions",
+        "output_csv": "/work/p/cell_fractions/cell_fractions.csv",
+        "n_samples": 10,
+        "n_columns": 10,
+        "n_ok": 10,
     },
     "pipeline.info_measures": {
         "status": "ok",

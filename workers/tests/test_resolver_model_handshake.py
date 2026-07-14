@@ -40,6 +40,7 @@ SLICE_MODELS: dict[str, str] = {
     "progression": "methyl_disease_progression.config:ProgressionStepConfig",
     "fragmentomics": "methyl_fragmentomics.config:FragmentomicsStepConfig",
     "derived_measures": "methyl_derived_measures.config:DerivedMeasuresStepConfig",
+    "cell_deconvolution": "methyl_deconv.config:CellDeconvStepConfig",
     "info_measures": "methyl_infotheory.config:InfoTheoryStepConfig",
 }
 

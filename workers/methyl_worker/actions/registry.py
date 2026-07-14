@@ -78,6 +78,7 @@ def ensure_providers_loaded() -> None:
     """Import action modules so ``register_cli_provider`` side effects run once."""
     # Local imports avoid circular import at package load; each module registers itself.
     from . import (  # noqa: F401
+        cell_deconvolution,
         centroid,
         derived_measures,
         detector,

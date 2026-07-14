@@ -230,6 +230,28 @@
       "tool": "MethylDerivedMeasures"
     },
     {
+      "action_config_key": "cell_deconvolution",
+      "action_name": "pipeline.cell_deconvolution",
+      "argv_map": {
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-cell-deconv",
+      "category": "modeling",
+      "cli_tool": "methyl-cell-deconv",
+      "context_vars": [],
+      "default_node_type": "ACTION",
+      "description": "Houseman leukocyte cell-type deconvolution (FlowSorted.Blood.EPIC IDOL).",
+      "execution_mode": "cli",
+      "input_schema_ref": "schemas/tasks/pipeline_cell_deconvolution.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_cell_deconvolution.output.schema.json",
+      "schema_id": "pipeline.cell_deconvolution",
+      "tool": "MethylCellDeconv"
+    },
+    {
       "action_config_key": "info_measures",
       "action_name": "pipeline.info_measures",
       "argv_map": {

@@ -1,0 +1,43 @@
+{
+  "pipelineProfile": "cell_deconv",
+  "actionConfig": {
+    "cell_deconvolution": {
+      "contexts": ["CG"],
+      "marker_min_coverage": 4,
+      "min_marker_fraction": 0.25,
+      "use_gpu": true
+    },
+    "validation": {
+      "backend_profiles": {
+        "ecdf": {
+          "enabled": false
+        },
+        "tabular_sklearn": {
+          "enabled": true,
+          "params": {
+            "feature_mode": "observed_hybrid",
+            "feature_family_set": "dmp_scored",
+            "covariates_path": [
+              "{output_base}/cell_fractions/cell_fractions.csv",
+              "{output_base}/clinical_covariates.csv"
+            ],
+            "covariate_numeric_columns": [
+              "CD8T",
+              "CD4T",
+              "NK",
+              "Bcell",
+              "Mono",
+              "Neu",
+              "age",
+              "bmi"
+            ],
+            "covariate_id_column": "sample_id"
+          }
+        },
+        "generative_hybrid": {
+          "enabled": false
+        }
+      }
+    }
+  }
+}
