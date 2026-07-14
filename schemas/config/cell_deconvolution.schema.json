@@ -19,7 +19,7 @@
         }
       ],
       "default": null,
-      "description": "Methylation contexts to read from sample H5; default CG only.",
+      "description": "Methylation contexts to read from sample H5. Required in site/profile actionConfig.cell_deconvolution (no code default).",
       "title": "Contexts"
     },
     "marker_min_coverage": {
@@ -33,7 +33,7 @@
         }
       ],
       "default": null,
-      "description": "Minimum coverage at a marker CpG for inclusion in Y. Operator-set per profile/site.",
+      "description": "Minimum coverage at a marker CpG for inclusion in Y. Required in site/profile actionConfig.cell_deconvolution (no code default).",
       "title": "Marker Min Coverage"
     },
     "min_marker_fraction": {
@@ -48,7 +48,7 @@
         }
       ],
       "default": null,
-      "description": "Minimum fraction of seed markers observed (with coverage) required to emit \u03a9; below this, proportions are NaN. Operator-set per profile/site.",
+      "description": "Minimum fraction of seed markers observed (with coverage) required to emit \u03a9; below this, proportions are NaN. Required in site/profile actionConfig.cell_deconvolution (no code default).",
       "title": "Min Marker Fraction"
     },
     "output_dir": {

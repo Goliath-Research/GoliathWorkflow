@@ -8,6 +8,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 import pandas as pd
+import pytest
 
 from methyl_deconv.config import CellDeconvStepConfig
 from methyl_deconv.core.houseman import SeedBasis, deconvolve_sample, houseman_qp
@@ -94,6 +95,13 @@ def test_deconvolve_sample_from_h5(tmp_path: Path):
     assert float(np.max(np.abs(est - true))) < 0.12
 
 
+def test_runner_requires_operator_thresholds(tmp_path: Path):
+    basis_path = _tiny_basis(tmp_path)
+    cfg = CellDeconvStepConfig(seed_basis_path=str(basis_path), use_gpu=False)
+    with pytest.raises(ValueError, match="missing contexts, marker_min_coverage, min_marker_fraction"):
+        run_cell_deconv_for_samples([("S", str(tmp_path))], tmp_path / "out", cfg)
+
+
 def test_runner_writes_csv(tmp_path: Path):
     basis_path = _tiny_basis(tmp_path)
     from methyl_deconv.core.houseman import load_seed_basis
@@ -106,6 +114,7 @@ def test_runner_writes_csv(tmp_path: Path):
     out = tmp_path / "out"
     cfg = CellDeconvStepConfig(
         seed_basis_path=str(basis_path),
+        contexts=["CG"],
         marker_min_coverage=1,
         min_marker_fraction=0.5,
         use_gpu=False,

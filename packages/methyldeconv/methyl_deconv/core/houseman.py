@@ -143,13 +143,14 @@ def extract_marker_vector(
     sample_dir: str | Path,
     basis: SeedBasis,
     *,
-    contexts: Sequence[str] = ("CG",),
-    min_coverage: int = 1,
+    contexts: Sequence[str],
+    min_coverage: int,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Build Y and coverage mask aligned to ``basis`` marker order from sample H5 files.
 
     Returns ``(y, observed)`` where ``observed`` is bool mask of markers with coverage.
+    ``contexts`` and ``min_coverage`` are required (operator-set; no code defaults).
     """
     from methyl_utils import MethylSample
 
@@ -195,11 +196,17 @@ def deconvolve_sample(
     sample_dir: str | Path,
     basis: SeedBasis,
     *,
-    contexts: Sequence[str] = ("CG",),
-    min_coverage: int = 1,
-    min_marker_fraction: float = 0.25,
+    contexts: Sequence[str],
+    min_coverage: int,
+    min_marker_fraction: float,
     use_gpu: Optional[bool] = None,
 ) -> Dict[str, Any]:
+    """
+    Estimate Ω for one sample.
+
+    ``contexts``, ``min_coverage``, and ``min_marker_fraction`` are required
+    (operator-set via site/profile ``actionConfig``; no code defaults).
+    """
     y, observed = extract_marker_vector(
         sample_dir,
         basis,

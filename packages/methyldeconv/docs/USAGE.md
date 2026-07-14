@@ -19,10 +19,12 @@ Writes `{output_base}/cell_fractions/cell_fractions.csv` with columns:
 | Field | Role |
 |-------|------|
 | `seed_basis_path` | Override packaged IDOL JSON (site/profile) |
-| `marker_min_coverage` | Min coverage at marker CpGs |
-| `min_marker_fraction` | Min fraction of markers observed |
+| `contexts` | Required (e.g. `["CG"]`) — set in site/profile |
+| `marker_min_coverage` | Required min coverage at marker CpGs |
+| `min_marker_fraction` | Required min fraction of markers observed |
 | `use_gpu` | MethylUtils CuPy path when available |
-| `contexts` | Default `["CG"]` |
+
+Missing `contexts` / `marker_min_coverage` / `min_marker_fraction` raises at the action boundary (no code fallbacks).
 
 ## DomainProgram / profile
 

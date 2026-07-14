@@ -23,12 +23,18 @@ class CellDeconvStepConfig(BaseModel):
     )
     contexts: Optional[List[Literal["CG", "CHG", "CHH"]]] = Field(
         default=None,
-        description="Methylation contexts to read from sample H5; default CG only.",
+        description=(
+            "Methylation contexts to read from sample H5. "
+            "Required in site/profile actionConfig.cell_deconvolution (no code default)."
+        ),
     )
     marker_min_coverage: Optional[int] = Field(
         default=None,
         ge=1,
-        description="Minimum coverage at a marker CpG for inclusion in Y. Operator-set per profile/site.",
+        description=(
+            "Minimum coverage at a marker CpG for inclusion in Y. "
+            "Required in site/profile actionConfig.cell_deconvolution (no code default)."
+        ),
     )
     min_marker_fraction: Optional[float] = Field(
         default=None,
@@ -36,7 +42,8 @@ class CellDeconvStepConfig(BaseModel):
         le=1.0,
         description=(
             "Minimum fraction of seed markers observed (with coverage) required to emit Ω; "
-            "below this, proportions are NaN. Operator-set per profile/site."
+            "below this, proportions are NaN. "
+            "Required in site/profile actionConfig.cell_deconvolution (no code default)."
         ),
     )
     use_gpu: Optional[bool] = Field(

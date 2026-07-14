@@ -20,9 +20,23 @@ def run_cell_deconv_for_samples(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     basis = load_seed_basis(cfg.seed_basis_path)
-    contexts = [str(c) for c in (cfg.contexts or ["CG"])]
-    min_cov = int(cfg.marker_min_coverage) if cfg.marker_min_coverage is not None else 1
-    min_frac = float(cfg.min_marker_fraction) if cfg.min_marker_fraction is not None else 0.25
+    missing = [
+        name
+        for name, value in (
+            ("contexts", cfg.contexts),
+            ("marker_min_coverage", cfg.marker_min_coverage),
+            ("min_marker_fraction", cfg.min_marker_fraction),
+        )
+        if value is None
+    ]
+    if missing:
+        raise ValueError(
+            "cell_deconvolution requires operator-set config (site/profile actionConfig): "
+            f"missing {', '.join(missing)}"
+        )
+    contexts = [str(c) for c in cfg.contexts]
+    min_cov = int(cfg.marker_min_coverage)
+    min_frac = float(cfg.min_marker_fraction)
     id_col = str(cfg.sample_id_column or "sample_id")
 
     rows: List[Dict[str, Any]] = []
