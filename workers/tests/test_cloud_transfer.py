@@ -9,8 +9,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from methyl_domain.storage_secrets import (
+    apply_node_credential_cache,
+    read_node_credential_cache,
     resolve_secret_payload,
     write_encrypted_secret_file,
+    write_node_credential_cache,
 )
 from methyl_domain.storage_transfer_config import StorageTransferStepConfig
 from methyl_worker.cloud_transfer import (
@@ -180,3 +183,62 @@ def test_should_skip_s3_multipart_with_metadata_md5(tmp_path: Path) -> None:
         "Metadata": {"md5": md5},
     }
     assert should_skip_s3_upload(client, bucket="b", key="k", local=local) is True
+
+
+def test_node_credential_cache_updates_on_hash_change(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("METHYL_STORAGE_CREDENTIAL_PASSWORD", "test-wrap-key")
+    monkeypatch.delenv("METHYL_WORK_ROOT", raising=False)
+    cache_dir = tmp_path / "cred-cache"
+    creds_v1 = {
+        "authMode": "explicit_keys",
+        "accessKeyId": "AKIA1",
+        "secretAccessKey": "sec1",
+        "credentialName": "lab-aws-keys",
+        "contentHash": "hash-one",
+    }
+    apply_node_credential_cache(creds_v1, cache_dir=cache_dir)
+    cached = read_node_credential_cache("lab-aws-keys", cache_dir=cache_dir)
+    assert cached is not None
+    assert cached[0] == "hash-one"
+    assert cached[1]["accessKeyId"] == "AKIA1"
+
+    creds_v2 = {**creds_v1, "accessKeyId": "AKIA2", "contentHash": "hash-two"}
+    apply_node_credential_cache(creds_v2, cache_dir=cache_dir)
+    cached2 = read_node_credential_cache("lab-aws-keys", cache_dir=cache_dir)
+    assert cached2 is not None
+    assert cached2[0] == "hash-two"
+    assert cached2[1]["accessKeyId"] == "AKIA2"
+
+
+def test_node_credential_cache_refuses_shared_work(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("METHYL_STORAGE_CREDENTIAL_PASSWORD", "test-wrap-key")
+    work = tmp_path / "work"
+    work.mkdir()
+    monkeypatch.setenv("METHYL_WORK_ROOT", str(work))
+    with pytest.raises(RuntimeError, match="shared work root"):
+        write_node_credential_cache(
+            "x",
+            "h",
+            {"authMode": "explicit_keys", "accessKeyId": "a", "secretAccessKey": "b"},
+            cache_dir=work / "secrets",
+        )
+
+
+def test_resolve_secret_payload_refreshes_cache(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("METHYL_STORAGE_CREDENTIAL_PASSWORD", "test-wrap-key")
+    cache_dir = tmp_path / "c"
+    monkeypatch.setattr(
+        "methyl_domain.storage_secrets.DEFAULT_NODE_CACHE_DIR",
+        cache_dir,
+    )
+    resolved = resolve_secret_payload(
+        {
+            "authMode": "explicit_keys",
+            "accessKeyId": "AKIA",
+            "secretAccessKey": "sec",
+            "credentialName": "epimethyl-archive-keys",
+            "contentHash": "deadbeef",
+        }
+    )
+    assert resolved["accessKeyId"] == "AKIA"
+    assert read_node_credential_cache("epimethyl-archive-keys", cache_dir=cache_dir)[0] == "deadbeef"

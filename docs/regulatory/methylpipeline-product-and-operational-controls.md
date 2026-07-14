@@ -37,6 +37,7 @@ must all be traceable to one another.
 | Distributed runtime | Portal, database, stateless gateway, remote workers, shared storage | [`../architecture/distributed-runtime.md`](../architecture/distributed-runtime.md) |
 | Worker execution | Capability-based polling, leases, heartbeats, typed outputs, action result manifests | [`../../workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md) |
 | Configuration contracts | JSON Schema, Pydantic task I/O, action catalog, config boundary checks | [`../reference/schema-index.md`](../reference/schema-index.md), [`../reference/action-parameter-contract.md`](../reference/action-parameter-contract.md) |
+| Storage accounts | DB SoT (`cfg.storage_endpoint` / `cfg.credential`); portal admin authoring; workers receive secrets via gateway only; node-local credential cache | [`../architecture/config-registry.md`](../architecture/config-registry.md), [`../deployment/portal_resource_profile.md`](../deployment/portal_resource_profile.md) |
 | CI/CD and release | PR checks, versioned wheels, runtime bundle, manifest hashes, gated deployment | [`../../ci/README.md`](../../ci/README.md), [`../deployment/production_release.md`](../deployment/production_release.md) |
 
 ## Configuration-As-Workflow Model
@@ -53,6 +54,7 @@ resulting graph.
 | Pipeline profile | `*.profile.json` | Reusable `actionConfig` packs and procedure-level defaults |
 | DomainProgram | `*.program.json` | Workflow topology: loops, branches, parallel blocks, actions |
 | Instance context | `context_json` | Frozen run bindings, planned iterations, selected profile, resolved paths |
+| Storage registry | `cfg.storage_endpoint` + `cfg.credential` | Lab/infra-admin authored locations and secrets (portal → DB); expanded into task JSON at schedule |
 | Task payload | `input_json`, `resolvedConfig`, `resolvedProject` | Worker-executable action input and merged action parameters |
 
 The canonical layer model is [`../architecture/layer-model.md`](../architecture/layer-model.md).

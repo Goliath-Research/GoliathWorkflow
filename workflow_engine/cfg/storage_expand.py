@@ -13,6 +13,89 @@ def redact_credential(secret: Dict[str, Any]) -> Dict[str, Any]:
     return {"authMode": secret.get("authMode", "unknown")}
 
 
+def assemble_storage_location(
+    location: Dict[str, Any],
+    *,
+    provider: str,
+    prefix: Optional[str] = None,
+    credential_name: Optional[str] = None,
+    credential_version: Optional[str] = None,
+    content_hash: Optional[str] = None,
+    secret: Optional[Dict[str, Any]] = None,
+    auth_hint: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Build typed ``fastqSource`` / destination JSON for workers.
+
+    Concrete secrets are embedded for transfer modes. Vault / encrypted_file
+    refs stay as references (workers resolve locally). Always attach change
+    tokens ``credentialName`` / ``credentialVersion`` / ``contentHash`` when
+    a named credential is used so dumb workers can refresh node-local caches.
+    """
+    out = deepcopy(location)
+    out["type"] = provider
+
+    if prefix is not None:
+        out["prefix"] = prefix
+
+    out.pop("credentialName", None)
+    out.pop("credential_name", None)
+    out.pop("authMode", None)
+
+    if secret is not None:
+        auth = str(secret.get("authMode") or "")
+        # Vault / encrypted refs stay as references — workers resolve with
+        # MI / Fernet / node-local cache. Do not pull Key Vault secrets into
+        # the planner / task JSON.
+        if auth in ("azure_key_vault", "encrypted_file"):
+            out["credentials"] = {
+                k: v
+                for k, v in secret.items()
+                if k
+                in (
+                    "authMode",
+                    "vaultUrl",
+                    "secretName",
+                    "path",
+                    "materializeAs",
+                    "azure_key_vault_url",
+                    "azure_secret_name",
+                    "encrypted_file_path",
+                )
+            }
+        else:
+            out["credentials"] = deepcopy(secret)
+    elif provider in ("file",):
+        pass
+    elif auth_hint in ("instance_profile", "default_credential", "application_default"):
+        out["credentials"] = {"authMode": auth_hint}
+    elif "credentials" not in out:
+        if provider == "s3":
+            out["credentials"] = {"authMode": "instance_profile"}
+        elif provider == "azure_blob":
+            out["credentials"] = {"authMode": "default_credential"}
+        elif provider == "gcs":
+            out["credentials"] = {"authMode": "application_default"}
+
+    if credential_name:
+        out["credentialName"] = credential_name
+        if credential_version is not None:
+            out["credentialVersion"] = credential_version
+        if content_hash is not None:
+            out["contentHash"] = content_hash
+        creds = out.get("credentials")
+        if isinstance(creds, dict):
+            creds = dict(creds)
+            creds["credentialName"] = credential_name
+            if credential_version is not None:
+                creds["credentialVersion"] = credential_version
+            if content_hash is not None:
+                creds["contentHash"] = content_hash
+            out["credentials"] = creds
+
+    return out
+
+
 def expand_storage_endpoint(
     store: ConfigStore,
     endpoint_name: str,
@@ -46,18 +129,16 @@ def expand_storage_endpoint(
         or location.get("provider")
         or "file"
     )
-    location["type"] = provider
-
-    if prefix is not None:
-        location["prefix"] = prefix
-
     cred_name = (
         ep.extra.get("credentialName")
-        or location.pop("credentialName", None)
-        or location.pop("credential_name", None)
+        or location.get("credentialName")
+        or location.get("credential_name")
     )
-    auth_hint = location.pop("authMode", None)
+    auth_hint = location.get("authMode")
 
+    secret: Optional[Dict[str, Any]] = None
+    cred_ver: Optional[str] = None
+    cred_hash: Optional[str] = None
     if cred_name:
         cred = store.get(
             "credential",
@@ -69,41 +150,19 @@ def expand_storage_endpoint(
         if cred is None or not cred.secret:
             raise KeyError(f"credential not found: {cred_name}")
         secret = deepcopy(cred.secret)
-        auth = str(secret.get("authMode") or "")
-        # Vault / encrypted refs stay as references — workers resolve with MI / Fernet.
-        # Do not pull Key Vault secrets into the planner / task JSON.
-        if auth in ("azure_key_vault", "encrypted_file"):
-            location["credentials"] = {
-                k: v
-                for k, v in secret.items()
-                if k
-                in (
-                    "authMode",
-                    "vaultUrl",
-                    "secretName",
-                    "path",
-                    "materializeAs",
-                    "azure_key_vault_url",
-                    "azure_secret_name",
-                    "encrypted_file_path",
-                )
-            }
-        else:
-            location["credentials"] = secret
-    elif provider in ("file",):
-        pass
-    elif auth_hint in ("instance_profile", "default_credential", "application_default"):
-        location["credentials"] = {"authMode": auth_hint}
-    elif "credentials" not in location:
-        # Non-secret auth modes may live on the endpoint document
-        if provider == "s3":
-            location["credentials"] = {"authMode": "instance_profile"}
-        elif provider == "azure_blob":
-            location["credentials"] = {"authMode": "default_credential"}
-        elif provider == "gcs":
-            location["credentials"] = {"authMode": "application_default"}
+        cred_ver = cred.version
+        cred_hash = cred.content_hash
 
-    return location
+    return assemble_storage_location(
+        location,
+        provider=str(provider),
+        prefix=prefix,
+        credential_name=cred_name,
+        credential_version=cred_ver,
+        content_hash=cred_hash,
+        secret=secret,
+        auth_hint=str(auth_hint) if auth_hint else None,
+    )
 
 
 def expand_storage_profile(

@@ -1,93 +1,61 @@
 # Portal resource profiles (archive storage)
 
-Internal **retention** storage for processed sample artifacts (methylation HDF5, future archives) lives in **`portal.resource_profile`** — not in the `wf` workflow engine schema.
+Internal **retention** storage for processed sample artifacts (methylation HDF5, future archives) is configured in the **`cfg` registry** (`cfg.storage_endpoint` + `cfg.credential`). `portal.resource_profile` holds a thin **pointer** used when study start omits `sampleStorage`.
 
 ## Ingress vs retention
 
 | Stage | Storage owner | Config source |
 |-------|---------------|---------------|
-| **First processing** — download FASTQs | Laboratory (external S3, Azure Blob, etc.) | **`fastqStorage` required** on every study start |
-| **After extract** — archive FASTQs, QC JSON, `{chr}-{ctx}.h5` | MethylPipeline (myQNAPcloud) | **`sampleStorage`** from `portal.resource_profile` when omitted (`h5Storage` alias) |
+| **First processing** — download FASTQs | Laboratory (external S3, Azure Blob, etc.) | **`fastqStorage` required** on every study start (published lab endpoint selected in portal) |
+| **After extract** — archive FASTQs, QC JSON, `{chr}-{ctx}.h5` | MethylPipeline (e.g. myQNAPcloud) | **`sampleStorage`** from named `cfg.storage_endpoint` via `portal.resource_profile` when omitted (`h5Storage` alias) |
 
-The workflow engine only stores resolved `fastqStorage` / `h5Storage` in `workflow_instance.context_json`. It does not read portal tables.
+The workflow engine stores resolved `fastqStorage` / `h5Storage` in `workflow_instance.context_json`. Workers never query SQL for storage accounts.
 
-## Database table
+## Production authoring (EpiPortal only)
 
-`portal.resource_profile` (deploy [`workflow_engine/sql_mssql/portal_resource_profile.sql`](../../workflow_engine/sql_mssql/portal_resource_profile.sql) on Azure SQL or [`workflow_engine/sql_pg/portal_resource_profile.sql`](../../workflow_engine/sql_pg/portal_resource_profile.sql) on PostgreSQL).
+All storage accounts (lab ingress, archive, shared) are managed by **lab admins** or **infrastructure admins** (RBAC). EpiPortal validates JSON against [`schemas/domain/storage_location.schema.json`](../../schemas/domain/storage_location.schema.json) and calls:
+
+| Proc | Purpose |
+|------|---------|
+| `portal.sp_upsert_credential` / `sp_publish_credential` | Write/publish secret body (`secret_json`) |
+| `portal.sp_list_credentials` / `sp_get_credential` | **Redacted** — `authMode`, `content_hash`, never secret body |
+| `portal.sp_upsert_storage_endpoint` / `sp_publish_storage_endpoint` | Location JSON + `credential_name` |
+| `portal.sp_list_storage_endpoints` / `sp_get_storage_endpoint` | Location + credential name; never secret body |
+
+`methyl-cfg upsert credential|storage_endpoint` is **dev / CI / bootstrap only**.
+
+## Database: `portal.resource_profile`
+
+Deploy [`workflow_engine/sql_mssql/portal_resource_profile.sql`](../../workflow_engine/sql_mssql/portal_resource_profile.sql) or PG twin (after `cfg` tables). Seed profile references the archive endpoint:
+
+```json
+{
+  "sampleStorageEndpoint": "epimethyl-archive",
+  "prefixBase": "samples/",
+  "scope": "archive"
+}
+```
+
+Bootstrap also seeds `cfg.storage_endpoint` `epimethyl-archive` + `cfg.credential` `epimethyl-archive-keys` with `REPLACE_WITH_*` placeholders — replace via portal before production use.
+
+Legacy inline `credentials` inside `profile_json` still work for compatibility but are **not** the preferred shape.
 
 | Column | Purpose |
 |--------|---------|
 | `profile_key` | Logical name (`epimethyl-samples` default) |
-| `profile_type` | Opaque tag for portal UI (e.g. `s3_object_storage`) |
-| `profile_json` | JSON matching [`schemas/domain/h5_storage.schema.json`](../../schemas/domain/h5_storage.schema.json) defaults |
+| `profile_type` | e.g. `cfg_storage_endpoint_ref` |
+| `profile_json` | Endpoint ref or legacy full storage JSON |
 | `status` | `ACTIVE` / `DISABLED` |
-
-Seed `profile_json` for myQNAPcloud (**prefer Key Vault ref** after bootstrap):
-
-```json
-{
-  "type": "s3",
-  "bucket": "epimethyl",
-  "region": "us-east-1",
-  "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
-  "prefixBase": "samples/",
-  "credentials": {
-    "authMode": "azure_key_vault",
-    "vaultUrl": "https://YOUR-VAULT.vault.azure.net/",
-    "secretName": "epimethyl-s3-keys"
-  }
-}
-```
-
-Bootstrap (plain keys once, then migrate to vault):
-
-```json
-{
-  "credentials": {
-    "authMode": "explicit_keys",
-    "accessKeyId": "REPLACE_WITH_ACCESS_KEY",
-    "secretAccessKey": "REPLACE_WITH_SECRET_KEY"
-  }
-}
-```
-
-Vault secret value should be JSON
-`{"authMode":"explicit_keys","accessKeyId":"...","secretAccessKey":"..."}`
-or `accessKeyId:secretAccessKey`. Worker nodes need Managed Identity with Key Vault Secrets User.
-
-Transfer tuning (optional): site/profile `actionConfig.storage_transfer` (`max_concurrency`, `multipart_chunksize_mb`, …). Bulk genomes mirror remains [`scripts/sync_genomes_to_s3.sh`](../../scripts/sync_genomes_to_s3.sh); sample FASTQ/H5 I/O uses the hardened worker transfer layer.
-
-### Configure credentials (operator)
-
-```sql
-UPDATE portal.resource_profile
-SET profile_json = JSON_MODIFY(
-      JSON_MODIFY(profile_json, '$.credentials.accessKeyId', '<ACCESS_KEY>'),
-      '$.credentials.secretAccessKey', '<SECRET_KEY>'),
-    updated_at_utc = SYSUTCDATETIME()
-WHERE profile_key = 'epimethyl-samples';
-```
-
-PostgreSQL:
-
-```sql
-UPDATE portal.resource_profile
-SET profile_json = jsonb_set(
-      jsonb_set(profile_json, '{credentials,accessKeyId}', '"<ACCESS_KEY>"'),
-      '{credentials,secretAccessKey}', '"<SECRET_KEY>"'),
-    updated_at_utc = (now() AT TIME ZONE 'utc')
-WHERE profile_key = 'epimethyl-samples';
-```
 
 ## Sample prep API
 
-**Required:** laboratory `fastqStorage` on every start request.
+**Required:** laboratory `fastqStorage` on every start request (endpoint selected by operator among published redacted list; expansion injects secrets at schedule/study-start).
 
-**Optional default:** `sampleStorage` from portal profile when omitted (`archiveProfileKey` defaults to `epimethyl-samples`). Legacy `h5Storage` accepted.
+**Optional default:** `sampleStorage` from portal profile → cfg endpoint when omitted (`archiveProfileKey` defaults to `epimethyl-samples`).
 
 ```json
 {
-  "projectPath": "/work/epimethyl/data/project_....json",
+  "projectPath": "/work/projects/.../project_....json",
   "workflow_version_id": "<sample_prep_version>",
   "fastqStorage": {
     "type": "s3",
@@ -99,20 +67,16 @@ WHERE profile_key = 'epimethyl-samples';
 }
 ```
 
-Start via portal SQL or `methyl-study-start sample-prep-start request.json`.
+## Worker delivery (dumb workers)
 
-Legacy aliases: `archiveStorageKey`, `storageKey` → `archiveProfileKey`.
-
-## Migration from wf.platform_sample_storage
-
-If the mistaken `wf.platform_sample_storage` table was deployed:
-
-1. Deploy `portal.resource_profile` and copy credentials into `profile_json`
-2. Deploy code that reads portal schema
-3. Run [`wf_drop_platform_sample_storage.sql`](../../workflow_engine/sql_mssql/wf_drop_platform_sample_storage.sql)
+1. Study start / schedule expand embeds auth fields + `contentHash` into task `input_json`.
+2. Workers authenticate to the gateway only (production: `GATEWAY_REQUIRE_ARC_ATTEST=1`, `X-Arc-Resource-Id`).
+3. On transfer, workers refresh **node-local** Fernet cache under `/var/lib/methyl/storage-credentials/` when `contentHash` changes. Do **not** store secrets on `/work`.
+4. Azure Key Vault on workers is optional, not required.
 
 ## Security
 
-- Archive credentials appear in task `input_json` for upload steps only (after planner materialization).
-- Laboratory credentials are supplied per study in `fastqStorage`, never from portal archive profiles.
-- Portal RBAC users should not receive raw secrets; gateway middle tier reads profiles when starting sample prep.
+- Portal list/get APIs never return raw cloud keys.
+- Gateway must not log credential bodies from claim/submit payloads.
+- Laboratory credentials are study-bound; archive credentials come from infrastructure-admin endpoints.
+- Do not put AccessKeys in project JSON under `/work/projects`.

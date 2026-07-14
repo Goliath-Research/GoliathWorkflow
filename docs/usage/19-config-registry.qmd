@@ -36,7 +36,11 @@ methyl-cfg upsert credential --file new_keys.json --name lab-aws-keys --version 
 
 ## Credentials
 
-Never put AccessKeys / SAS URLs in project JSON under `/work/projects`. Store them as `cfg.credential` and reference via `cfg.storage_endpoint.credentialName`. Expand only into task `input_json` at schedule time.
+**Production:** EpiPortal admins (`portal.sp_upsert_credential` / `sp_upsert_storage_endpoint` + publish). Never put AccessKeys / SAS URLs in project JSON under `/work/projects`.
+
+**Development / CI:** `methyl-cfg upsert credential` / `storage_endpoint` against `METHYL_CFG_STORE` or DB seed is allowed for bootstrap. Materialize writes **redacted** endpoint metadata only.
+
+Expand at schedule/study-start binds secrets into task `input_json` with `contentHash`. Workers cache node-locally; they never read SQL.
 
 ## Study membership
 

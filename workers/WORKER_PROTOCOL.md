@@ -95,9 +95,12 @@ It cannot widen beyond registration.
 Auto-detect on the VM: `scripts/register_worker.py` (default) or `methyl_worker.capabilities.resolve_worker_capabilities()`.
 
 Workers send `X-Arc-Resource-Id` (from `/etc/methyl/arc.env`) when polling if the gateway
-has `GATEWAY_REQUIRE_ARC_ATTEST=1`.
+has `GATEWAY_REQUIRE_ARC_ATTEST=1`. **Production clusters should leave this enabled.**
 
 Credentials: prefer `/etc/methyl/worker-token` (mode 600), not shared `/work` env files.
+Storage cloud keys arrive in claim `input_json` only; optional node-local Fernet cache lives under
+`/var/lib/methyl/storage-credentials/` with wrap key `/etc/methyl/storage-credential.key`.
+Never write cloud secrets under `/work`. Do not log credential bodies.
 
 ## Reference implementation
 

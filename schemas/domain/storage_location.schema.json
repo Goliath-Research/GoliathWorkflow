@@ -75,7 +75,7 @@
     "AzureKeyVaultCredentials": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Credential reference resolved on the worker via Managed Identity + Key Vault (no plaintext keys in task JSON).",
+      "description": "Optional escape hatch: credential reference resolved on the worker via Managed Identity + Key Vault. Preferred production path for dumb workers is concrete keys over TLS + node-local Fernet cache (contentHash).",
       "properties": {
         "authMode": { "const": "azure_key_vault", "default": "azure_key_vault", "type": "string" },
         "vaultUrl": { "type": "string", "description": "Azure Key Vault URL (https://….vault.azure.net/)." },
@@ -93,7 +93,7 @@
     "EncryptedFileCredentials": {
       "type": "object",
       "additionalProperties": false,
-      "description": "Fernet-encrypted local credential file (bootstrap / air-gapped).",
+      "description": "Fernet-encrypted credential file (node-local cache or air-gapped bootstrap). Prefer /var/lib/methyl or /etc/methyl — never shared /work.",
       "properties": {
         "authMode": { "const": "encrypted_file", "default": "encrypted_file", "type": "string" },
         "path": { "type": "string", "description": "Path to encrypted credential file (owner rw only)." },
@@ -152,7 +152,17 @@
         "endpointUrl": { "type": ["string", "null"], "default": null },
         "prefix": { "type": "string" },
         "prefixBase": { "type": ["string", "null"] },
+        "scope": {
+          "type": "string",
+          "enum": ["lab_ingress", "archive", "shared"],
+          "description": "Admin RBAC hint: lab_admin mutates lab_ingress; infrastructure_admin mutates archive/shared"
+        },
         "credentialName": { "type": "string", "description": "cfg.credential name (registry); expanded at schedule time" },
+        "credentialVersion": { "type": "string", "description": "Published credential version bound into task JSON" },
+        "contentHash": {
+          "type": "string",
+          "description": "cfg.credential.content_hash; workers refresh node-local cache when this changes"
+        },
         "credentials": {
           "oneOf": [
             { "$ref": "#/$defs/S3ExplicitKeysCredentials" },
@@ -172,7 +182,13 @@
         "account": { "type": "string" },
         "container": { "type": "string" },
         "prefix": { "type": "string" },
+        "scope": {
+          "type": "string",
+          "enum": ["lab_ingress", "archive", "shared"]
+        },
         "credentialName": { "type": "string" },
+        "credentialVersion": { "type": "string" },
+        "contentHash": { "type": "string" },
         "credentials": {
           "oneOf": [
             { "$ref": "#/$defs/AzureAccountKeyCredentials" },
@@ -195,7 +211,13 @@
         "bucket": { "type": "string" },
         "prefix": { "type": "string" },
         "projectId": { "type": ["string", "null"], "default": null },
+        "scope": {
+          "type": "string",
+          "enum": ["lab_ingress", "archive", "shared"]
+        },
         "credentialName": { "type": "string" },
+        "credentialVersion": { "type": "string" },
+        "contentHash": { "type": "string" },
         "credentials": {
           "oneOf": [
             { "$ref": "#/$defs/GcsServiceAccountCredentials" },
@@ -212,7 +234,11 @@
       "properties": {
         "type": { "const": "file", "default": "file", "type": "string" },
         "basePath": { "type": "string" },
-        "prefix": { "type": "string", "default": "" }
+        "prefix": { "type": "string", "default": "" },
+        "scope": {
+          "type": "string",
+          "enum": ["lab_ingress", "archive", "shared"]
+        }
       },
       "required": ["basePath"]
     },
@@ -222,7 +248,13 @@
       "properties": {
         "type": { "const": "https", "default": "https", "type": "string" },
         "baseUrl": { "type": "string" },
+        "scope": {
+          "type": "string",
+          "enum": ["lab_ingress", "archive", "shared"]
+        },
         "credentialName": { "type": "string" },
+        "credentialVersion": { "type": "string" },
+        "contentHash": { "type": "string" },
         "credentials": {
           "oneOf": [
             { "$ref": "#/$defs/HttpsBearerCredentials" }
@@ -239,6 +271,24 @@
         { "$ref": "#/$defs/FileLocation" },
         { "$ref": "#/$defs/HttpsLocation" }
       ]
+    },
+    "ArchiveProfileEndpointRef": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "portal.resource_profile shape that points at a published cfg.storage_endpoint (preferred over inline secrets).",
+      "properties": {
+        "sampleStorageEndpoint": {
+          "type": "string",
+          "description": "cfg.storage_endpoint name for long-term sample/H5 archive"
+        },
+        "storageEndpoint": {
+          "type": "string",
+          "description": "Alias of sampleStorageEndpoint"
+        },
+        "prefixBase": { "type": ["string", "null"] },
+        "scope": { "const": "archive", "type": "string" }
+      },
+      "required": ["sampleStorageEndpoint"]
     },
     "StorageProfileDocument": {
       "type": "object",

@@ -36,10 +36,12 @@ Procs: `cfg.cfg_repo_set_compiled_version`, `cfg.cfg_repo_link_action`, `cfg.cfg
 
 ```mermaid
 flowchart LR
-  authoring["Client JSON / Portal tree"] --> cfg["cfg registry"]
-  cfg -->|"materialize"| work["/work site profiles projects"]
+  portal["EpiPortal_admins"] --> cfg["cfg registry DB SoT"]
+  cli["methyl-cfg DEV only"] -.-> cfg
+  cfg -->|"materialize redacted"| work["/work site profiles"]
   cfg -->|"FK publish"| wf["wf graphs + instances"]
-  cfg -->|"expand at schedule"| task["task input_json with credentials"]
+  cfg -->|"expand at schedule"| task["task input_json + contentHash"]
+  task -->|"gateway TLS Arc"| worker["dumb worker node-local cache"]
 ```
 ## CLI
 
@@ -67,17 +69,27 @@ methyl-cfg provision-assets --name grch38 --work-root /work --dry-run
 
 ## Storage endpoints and credentials
 
+**Production source of truth:** Azure SQL `cfg.storage_endpoint` + `cfg.credential`, authored only by **lab admins** / **infrastructure admins** via EpiPortal (`portal.sp_*` upsert/publish). Secrets are **not** authored with `methyl-cfg` in production (CLI remains for **dev / CI / bootstrap** only).
+
 See [`schemas/domain/storage_location.schema.json`](../schemas/domain/storage_location.schema.json):
 
 | Provider | Location fields | Credential `authMode` |
 |----------|-----------------|----------------------|
-| `s3` | bucket, region, endpointUrl | `explicit_keys`, `instance_profile` |
+| `s3` | bucket, region, endpointUrl, optional `scope` | `explicit_keys`, `instance_profile` (+ optional `azure_key_vault` / `encrypted_file`) |
 | `azure_blob` | account, container | `account_key`, `connection_string`, **`sas_token`**, **`sas_url`**, `default_credential` |
 | `gcs` | bucket, projectId | `service_account_json`, `hmac_keys`, `application_default` |
 | `file` | basePath | (none) |
 | `https` | baseUrl | optional `bearer` |
 
-Workers still receive typed `fastqSource` / destination JSON; `cfg.storage_expand.expand_storage_endpoint` builds that payload at schedule time.
+**Schedule-time expand** (`cfg.storage_expand.expand_storage_endpoint`) builds worker `fastqSource` / destination JSON with concrete auth fields (or vault/encrypted **refs**) plus change tokens `credentialName`, `credentialVersion`, `contentHash`. Materialize to `/work/site/storage_endpoints/` stays **redacted** (no secret bodies).
+
+**Dumb workers:** receive credentials only via gateway claim `input_json` (TLS). They compare `contentHash` to a **node-local** Fernet cache under `/var/lib/methyl/storage-credentials/` (wrap key `/etc/methyl/storage-credential.key`). Never cache secrets on shared `/work`. Azure Key Vault on the worker is an optional escape hatch, not the default.
+
+**Portal RBAC (EpiPortal):** lab admin → lab ingress endpoints; infrastructure admin → archive / shared / site storage; other users → select published redacted endpoints only.
+
+Portal procs: `portal.sp_list/get/upsert/publish_storage_endpoint`, `portal.sp_list/get/upsert/publish_credential` (list/get never return `secret_json`).
+
+Archive defaults: `portal.resource_profile` should reference `sampleStorageEndpoint` (cfg name); study start expands via `ResourceProfileReader`.
 
 ## Study membership (portal.Samples → cfg → CSV)
 
@@ -95,9 +107,11 @@ File-backed store keeps the same structure under `study.extra.studyGroups`. CLI:
 - `portal.sp_list_cfg_actions` / `sp_get_cfg_action` — action catalog from `cfg.action_definition` (not the worker gateway)
 - `portal.sp_set_study_group` / `sp_set_study_group_members` / `sp_list_study_groups` / `sp_materialize_study_lists` — study arm enrollment
 - `portal.sp_list_samples_for_study_enrollment` (MSSQL) — picker over `portal.Samples` + `LabSamples`
+- `portal.sp_list/get/upsert/publish_storage_endpoint` + `…_credential` — storage SoT for EpiPortal admins
 
 ## Related
 
 - [layer-model.md](layer-model.md)
 - [distributed-runtime.md](distributed-runtime.md)
+- [portal_resource_profile.md](../deployment/portal_resource_profile.md)
 - Usage: [docs/usage/19-config-registry.qmd](../usage/19-config-registry.qmd)

@@ -173,3 +173,162 @@ BEGIN
     ORDER BY s.ID, ls.ID;
 END
 GO
+
+/*
+  Storage accounts + credentials (DB SoT for EpiPortal).
+  Lab/infra admins upsert+publish; list/get never return secret bodies.
+  RBAC enforcement lives in EpiPortal (lab_admin vs infrastructure_admin).
+*/
+
+CREATE OR ALTER PROCEDURE portal.sp_list_storage_endpoints
+    @published_only bit = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT
+        e.id,
+        e.name,
+        e.version,
+        e.status,
+        e.content_hash,
+        e.provider,
+        e.credential_name,
+        e.location_json
+    FROM cfg.storage_endpoint e
+    WHERE (@published_only = 0 OR e.status = 'published')
+    ORDER BY e.name, e.version;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_get_storage_endpoint
+    @name nvarchar(256),
+    @version nvarchar(64) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT TOP 1
+        e.id,
+        e.name,
+        e.version,
+        e.status,
+        e.content_hash,
+        e.provider,
+        e.credential_name,
+        e.location_json
+    FROM cfg.storage_endpoint e
+    WHERE e.name = @name AND (@version IS NULL OR e.version = @version)
+    ORDER BY e.id DESC;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_upsert_storage_endpoint
+    @name nvarchar(256),
+    @version nvarchar(64),
+    @status varchar(32),
+    @location_json json,
+    @provider nvarchar(64) = NULL,
+    @credential_name nvarchar(256) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_upsert
+        @kind = N'storage_endpoint',
+        @name = @name,
+        @version = @version,
+        @status = @status,
+        @document_json = @location_json,
+        @provider = @provider,
+        @credential_name = @credential_name;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_publish_storage_endpoint
+    @name nvarchar(256),
+    @version nvarchar(64)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_publish
+        @kind = N'storage_endpoint',
+        @name = @name,
+        @version = @version;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_list_credentials
+    @published_only bit = 1
+AS
+BEGIN
+    SET NOCOUNT ON;
+    /* Redacted: no secret_json */
+    SELECT
+        c.id,
+        c.name,
+        c.version,
+        c.status,
+        c.content_hash,
+        c.provider,
+        c.auth_mode
+    FROM cfg.credential c
+    WHERE (@published_only = 0 OR c.status = 'published')
+    ORDER BY c.name, c.version;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_get_credential
+    @name nvarchar(256),
+    @version nvarchar(64) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    /* Redacted: never return secret_json to portal list/get */
+    SELECT TOP 1
+        c.id,
+        c.name,
+        c.version,
+        c.status,
+        c.content_hash,
+        c.provider,
+        c.auth_mode
+    FROM cfg.credential c
+    WHERE c.name = @name AND (@version IS NULL OR c.version = @version)
+    ORDER BY c.id DESC;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_upsert_credential
+    @name nvarchar(256),
+    @version nvarchar(64),
+    @status varchar(32),
+    @secret_json json,
+    @provider nvarchar(64) = NULL,
+    @auth_mode nvarchar(64) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @am nvarchar(64) = @auth_mode;
+    IF @am IS NULL
+        SET @am = JSON_VALUE(CONVERT(nvarchar(max), @secret_json), '$.authMode');
+    EXEC cfg.cfg_repo_upsert
+        @kind = N'credential',
+        @name = @name,
+        @version = @version,
+        @status = @status,
+        @secret_json = @secret_json,
+        @provider = @provider,
+        @auth_mode = @am;
+END
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_publish_credential
+    @name nvarchar(256),
+    @version nvarchar(64)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC cfg.cfg_repo_publish
+        @kind = N'credential',
+        @name = @name,
+        @version = @version;
+END
+GO

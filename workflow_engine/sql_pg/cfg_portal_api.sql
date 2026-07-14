@@ -140,3 +140,151 @@ LANGUAGE sql
 AS $$
   SELECT * FROM cfg.cfg_repo_materialize_study_lists(p_study_row_id, p_work_root);
 $$;
+
+/*
+  Storage accounts + credentials (DB SoT for EpiPortal).
+  Lab/infra admins upsert+publish; list/get never return secret bodies.
+*/
+
+CREATE OR REPLACE FUNCTION portal.sp_list_storage_endpoints(
+  p_published_only boolean DEFAULT true
+)
+RETURNS TABLE(
+  id bigint,
+  name text,
+  version text,
+  status text,
+  content_hash text,
+  provider text,
+  credential_name text,
+  location_json jsonb
+)
+LANGUAGE sql
+AS $$
+  SELECT e.id, e.name, e.version, e.status::text, e.content_hash,
+         e.provider, e.credential_name, e.location_json
+  FROM cfg.storage_endpoint e
+  WHERE (NOT p_published_only OR e.status = 'published')
+  ORDER BY e.name, e.version;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_get_storage_endpoint(
+  p_name text,
+  p_version text DEFAULT NULL
+)
+RETURNS TABLE(
+  id bigint,
+  name text,
+  version text,
+  status text,
+  content_hash text,
+  provider text,
+  credential_name text,
+  location_json jsonb
+)
+LANGUAGE sql
+AS $$
+  SELECT e.id, e.name, e.version, e.status::text, e.content_hash,
+         e.provider, e.credential_name, e.location_json
+  FROM cfg.storage_endpoint e
+  WHERE e.name = p_name AND (p_version IS NULL OR e.version = p_version)
+  ORDER BY e.id DESC
+  LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_upsert_storage_endpoint(
+  p_name text,
+  p_version text,
+  p_status text,
+  p_location jsonb,
+  p_provider text DEFAULT NULL,
+  p_credential_name text DEFAULT NULL
+)
+RETURNS TABLE(id bigint)
+LANGUAGE sql
+AS $$
+  SELECT * FROM cfg.cfg_repo_upsert(
+    'storage_endpoint', p_name, p_version, p_status, p_location,
+    NULL, p_provider, NULL, p_credential_name
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_publish_storage_endpoint(
+  p_name text,
+  p_version text
+)
+RETURNS TABLE(id bigint)
+LANGUAGE sql
+AS $$
+  SELECT * FROM cfg.cfg_repo_publish('storage_endpoint', p_name, p_version);
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_list_credentials(
+  p_published_only boolean DEFAULT true
+)
+RETURNS TABLE(
+  id bigint,
+  name text,
+  version text,
+  status text,
+  content_hash text,
+  provider text,
+  auth_mode text
+)
+LANGUAGE sql
+AS $$
+  SELECT c.id, c.name, c.version, c.status::text, c.content_hash, c.provider, c.auth_mode
+  FROM cfg.credential c
+  WHERE (NOT p_published_only OR c.status = 'published')
+  ORDER BY c.name, c.version;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_get_credential(
+  p_name text,
+  p_version text DEFAULT NULL
+)
+RETURNS TABLE(
+  id bigint,
+  name text,
+  version text,
+  status text,
+  content_hash text,
+  provider text,
+  auth_mode text
+)
+LANGUAGE sql
+AS $$
+  SELECT c.id, c.name, c.version, c.status::text, c.content_hash, c.provider, c.auth_mode
+  FROM cfg.credential c
+  WHERE c.name = p_name AND (p_version IS NULL OR c.version = p_version)
+  ORDER BY c.id DESC
+  LIMIT 1;
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_upsert_credential(
+  p_name text,
+  p_version text,
+  p_status text,
+  p_secret jsonb,
+  p_provider text DEFAULT NULL,
+  p_auth_mode text DEFAULT NULL
+)
+RETURNS TABLE(id bigint)
+LANGUAGE sql
+AS $$
+  SELECT * FROM cfg.cfg_repo_upsert(
+    'credential', p_name, p_version, p_status, NULL, p_secret,
+    p_provider,
+    COALESCE(p_auth_mode, p_secret->>'authMode')
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION portal.sp_publish_credential(
+  p_name text,
+  p_version text
+)
+RETURNS TABLE(id bigint)
+LANGUAGE sql
+AS $$
+  SELECT * FROM cfg.cfg_repo_publish('credential', p_name, p_version);
+$$;

@@ -48,7 +48,8 @@ Applies parity scripts in dependency order, including:
 - Runtime / scope / FOREACH parity (`wf_sql_runtime_parity.sql`, `wf_sql_foreach_support.sql`, …)
 - Repository API + action schema (`wf_action_schema.sql`, `wf_repo_upsert_workflow_action.sql`, `wf_action_dispatch_metadata.sql`, `wf_repo_create_workflow_graph.sql`)
 - Collection bindings (`wf_sql_collection_bindings.sql`) — jsonPath; jsonFile requires gateway-enriched `context_json`
-- Portal DDL (`portal_resource_profile.sql`, `portal_workflow_api.sql`)
+- Portal DDL (`portal_workflow_api.sql`, `portal_resource_profile.sql` after `cfg` tables — seeds archive endpoint refs)
+- Config registry (`cfg_*`, including `cfg_portal_api.sql` storage/credential procs)
 
 `wf_repo_upsert_workflow_action.sql` is a 3-arg bootstrap; `wf_action_dispatch_metadata.sql` (applied next) replaces it with the 7-arg upsert that stores `execution_mode` / `cli_tool` / `in_process_handler` / `argv_map`.
 

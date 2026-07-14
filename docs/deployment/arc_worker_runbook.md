@@ -99,7 +99,17 @@ On the gateway VM, enable header check against `wf.cluster.arc_resource_id`:
 GATEWAY_REQUIRE_ARC_ATTEST=1
 ```
 
-Workers should send `X-Arc-Resource-Id: /subscriptions/.../machines/...` on every `POST /v1/workers/*` request (future worker client versions may set this automatically from `/etc/methyl/arc.env`).
+Workers should send `X-Arc-Resource-Id: /subscriptions/.../machines/...` on every `POST /v1/workers/*` request (the Python client sets this from `/etc/methyl/arc.env`).
+
+## Production posture (storage + Arc)
+
+| Control | Requirement |
+|---------|-------------|
+| Gateway Arc attest | Set `GATEWAY_REQUIRE_ARC_ATTEST=1` so only Arc-enrolled VMs may poll/claim |
+| Worker SQL | **Forbidden** — OpenAPI/gateway only |
+| Storage SoT | Database (`cfg.*`) via portal admins; workers receive secrets only in claim `input_json` |
+| Secret logging | Do **not** log `input_json.credentials` / AccessKeys on gateway or workers |
+| Node-local cache | `/var/lib/methyl/storage-credentials/` + `/etc/methyl/storage-credential.key` (mode 600); never under `/work` |
 
 ## Phase A3 — Defender and Sentinel
 

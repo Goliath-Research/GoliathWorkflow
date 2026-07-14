@@ -1,4 +1,10 @@
-"""Resolve storage credential refs (Key Vault / encrypted file) for workers."""
+"""Resolve storage credential refs (Key Vault / encrypted file) for workers.
+
+Preferred dumb-worker path: concrete credentials arrive in task JSON over the
+gateway TLS channel. When ``contentHash`` / ``credentialName`` are present,
+workers refresh a **node-local** Fernet cache under ``/var/lib/methyl`` (never
+shared ``/work``). Azure Key Vault remains an optional escape hatch.
+"""
 
 from __future__ import annotations
 
@@ -7,9 +13,22 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_NODE_CACHE_DIR = Path(
+    os.environ.get(
+        "METHYL_STORAGE_CRED_CACHE_DIR",
+        "/var/lib/methyl/storage-credentials",
+    )
+)
+DEFAULT_NODE_KEY_PATH = Path(
+    os.environ.get(
+        "METHYL_STORAGE_CREDENTIAL_KEY_FILE",
+        "/etc/methyl/storage-credential.key",
+    )
+)
 
 
 def _fernet_key_from_password(password: Optional[str] = None) -> bytes:
@@ -80,13 +99,136 @@ def read_key_vault_secret(vault_url: str, secret_name: str) -> str:
     return secret.value
 
 
+def _node_cache_password() -> Optional[str]:
+    """Wrap key for node-local Fernet cache (host file or env)."""
+    key_path = DEFAULT_NODE_KEY_PATH
+    if key_path.is_file():
+        return key_path.read_text(encoding="utf-8").strip()
+    return os.environ.get("METHYL_STORAGE_CREDENTIAL_PASSWORD") or None
+
+
+def _cache_file_for(credential_name: str, cache_dir: Path) -> Path:
+    safe = "".join(ch if ch.isalnum() or ch in "-._" else "_" for ch in credential_name)
+    return cache_dir / f"{safe}.encrypted"
+
+
+def read_node_credential_cache(
+    credential_name: str,
+    *,
+    cache_dir: Optional[Path] = None,
+) -> Optional[Tuple[str, dict[str, Any]]]:
+    """
+    Return ``(content_hash, credentials_dict)`` from node-local cache, or None.
+    """
+    cache_dir = cache_dir or DEFAULT_NODE_CACHE_DIR
+    path = _cache_file_for(credential_name, cache_dir)
+    meta_path = path.with_suffix(".hash")
+    if not path.is_file() or not meta_path.is_file():
+        return None
+    try:
+        content_hash = meta_path.read_text(encoding="utf-8").strip()
+        raw = read_encrypted_secret_file(path, password=_node_cache_password())
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return None
+        return content_hash, parsed
+    except Exception as exc:  # noqa: BLE001 — treat corrupt cache as miss
+        logger.warning("Ignoring corrupt storage credential cache %s: %s", path, exc)
+        return None
+
+
+def write_node_credential_cache(
+    credential_name: str,
+    content_hash: str,
+    credentials: Mapping[str, Any],
+    *,
+    cache_dir: Optional[Path] = None,
+) -> Path:
+    """
+    Persist credentials under a node-local directory (never under ``/work``).
+
+    Raises if ``cache_dir`` resolves under a shared work root.
+    """
+    cache_dir = Path(cache_dir or DEFAULT_NODE_CACHE_DIR)
+    resolved = cache_dir.resolve()
+    work_root = Path(os.environ.get("METHYL_WORK_ROOT", "/work")).resolve()
+    try:
+        resolved.relative_to(work_root)
+        raise RuntimeError(
+            f"Refusing to write storage credential cache under shared work root "
+            f"{work_root}; use node-local path (got {resolved})"
+        )
+    except ValueError:
+        pass  # not under /work — ok
+
+    path = _cache_file_for(credential_name, cache_dir)
+    # Strip change-token fields from encrypted body (payload is auth fields only)
+    body = {
+        k: v
+        for k, v in credentials.items()
+        if k
+        not in (
+            "credentialName",
+            "credentialVersion",
+            "contentHash",
+            "content_hash",
+        )
+    }
+    write_encrypted_secret_file(
+        path, json.dumps(body, sort_keys=True), password=_node_cache_password()
+    )
+    meta = path.with_suffix(".hash")
+    meta.write_text(str(content_hash).strip() + "\n", encoding="utf-8")
+    os.chmod(meta, 0o600)
+    return path
+
+
+def apply_node_credential_cache(
+    credentials: Mapping[str, Any],
+    *,
+    cache_dir: Optional[Path] = None,
+) -> Mapping[str, Any]:
+    """
+    Compare task ``contentHash`` to node-local cache and refresh when changed.
+
+    Prefer the task payload (gateway SoT for this claim). Cache is updated when
+    the hash differs so restarts can reuse last-known secrets.
+    """
+    name = credentials.get("credentialName") or credentials.get("credential_name")
+    content_hash = credentials.get("contentHash") or credentials.get("content_hash")
+    if not name or not content_hash:
+        return credentials
+
+    cache_dir = cache_dir or DEFAULT_NODE_CACHE_DIR
+    cached = read_node_credential_cache(str(name), cache_dir=cache_dir)
+    if cached is None or cached[0] != str(content_hash).strip():
+        try:
+            write_node_credential_cache(
+                str(name), str(content_hash), credentials, cache_dir=cache_dir
+            )
+            logger.info(
+                "Updated node-local storage credential cache for %s (hash=%s)",
+                name,
+                content_hash,
+            )
+        except Exception as exc:  # noqa: BLE001 — transfers still use payload
+            logger.warning(
+                "Could not write node-local credential cache for %s: %s", name, exc
+            )
+        return credentials
+    # Hash matches — prefer payload (may include fresh non-secret fields)
+    return credentials
+
+
 def resolve_secret_payload(credentials: Mapping[str, Any]) -> Mapping[str, Any]:
     """
     Expand vault / encrypted_file credential refs into concrete auth fields.
 
     Returns a new mapping suitable for building boto3 / Azure clients.
     Passes through explicit_keys / account_key / connection_string / ambient modes.
+    Refreshes node-local cache when ``contentHash`` is present.
     """
+    credentials = apply_node_credential_cache(credentials)
     auth = str(credentials.get("authMode") or "")
     if auth == "azure_key_vault":
         vault_url = credentials.get("vaultUrl") or credentials.get("azure_key_vault_url")

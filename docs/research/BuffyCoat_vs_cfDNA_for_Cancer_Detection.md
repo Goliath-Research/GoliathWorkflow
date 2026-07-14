@@ -1,20 +1,24 @@
 # Buffy coat vs cfDNA methylation (MethylPipeline analyte choice)
 
 **Status:** research / design note (not operator runbook).  
-**Canonical config:** [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md) — set `regulatory.primary_analyte` to `buffy_coat`, `cfdna`, or `combined`.  
-**Empirical comparison canvas:** [`docs/canvas/analyte-comparison.canvas.tsx`](../canvas/analyte-comparison.canvas.tsx).  
-**Landscape context:** [`Gemini_on_Cancer_Detection.md`](Gemini_on_Cancer_Detection.md) (MCED competitors / analytes) and [`Grok_on_Gemini_conclusions.md`](Grok_on_Gemini_conclusions.md) (verification + caveats).
+**Canonical config:** `[docs/ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md)` — set `regulatory.primary_analyte` to `buffy_coat`, `cfdna`, or `combined`.  
+**Empirical comparison canvas:** `[docs/canvas/analyte-comparison.canvas.tsx](../canvas/analyte-comparison.canvas.tsx)`.  
+**Landscape context:** `[Gemini_on_Cancer_Detection.md](Gemini_on_Cancer_Detection.md)` (MCED competitors / analytes) and `[Grok_on_Gemini_conclusions.md](Grok_on_Gemini_conclusions.md)` (verification + caveats).
 
 MethylPipeline is **analyte-agnostic**: the same DomainProgram + profile path runs for leukocyte DNA and plasma cfDNA. Analyte choice changes biology, QC defaults, and how you interpret features — not which CLI you use.
 
 ---
 
+
+
 ## Biological roles (not competitors by default)
 
-| Analyte | What the methylation signal mainly reflects | Typical detection role |
-|---------|---------------------------------------------|------------------------|
-| **cfDNA (plasma)** | DNA shed into circulation, including tumor-derived fragments when tumor fraction is high enough; tissue-of-origin and fragmentomic structure | Direct tumor / MCED / monitoring / MRD-oriented signal |
-| **Buffy coat (leukocyte DNA)** | Host immune / systemic epigenome (inflammation, aging, exposures, cell-type mix); also matched hematopoietic background for plasma assays | Indirect risk / host-response; CHIP / germline noise filter; complementary layer |
+
+| Analyte                        | What the methylation signal mainly reflects                                                                                                  | Typical detection role                                                           |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **cfDNA (plasma)**             | DNA shed into circulation, including tumor-derived fragments when tumor fraction is high enough; tissue-of-origin and fragmentomic structure | Direct tumor / MCED / monitoring / MRD-oriented signal                           |
+| **Buffy coat (leukocyte DNA)** | Host immune / systemic epigenome (inflammation, aging, exposures, cell-type mix); also matched hematopoietic background for plasma assays    | Indirect risk / host-response; CHIP / germline noise filter; complementary layer |
+
 
 cfDNA methylation assays can carry **tumor-derived** patterns and support tissue-of-origin style inference when tumor fraction and assay design allow it ([Liu et al., PNAS 2023](https://www.pnas.org/doi/10.1073/pnas.2209852119); MCED methylation reviews such as [Chen et al., Cancer Cell 2022](https://www.sciencedirect.com/science/article/pii/S153561082200513X)). Buffy-coat methylation is usually **not tumor DNA**; it tracks host state that may correlate with cancer risk or presence ([WBC methylation epidemiology overview](https://pmc.ncbi.nlm.nih.gov/articles/PMC6896050/)).
 
@@ -22,16 +26,20 @@ cfDNA methylation assays can carry **tumor-derived** patterns and support tissue
 
 ---
 
+
+
 ## What the MCED landscape implies (Gemini + Grok)
 
-The commercial MCED / liquid-biopsy field has moved past “cfDNA methylation alone” (GRAIL Galleri-style) toward **multiomics** and **noise control**. Summarized from [`Gemini_on_Cancer_Detection.md`](Gemini_on_Cancer_Detection.md); accuracy and caveats in [`Grok_on_Gemini_conclusions.md`](Grok_on_Gemini_conclusions.md):
+The commercial MCED / liquid-biopsy field has moved past “cfDNA methylation alone” (GRAIL Galleri-style) toward **multiomics** and **noise control**. Summarized from `[Gemini_on_Cancer_Detection.md](Gemini_on_Cancer_Detection.md)`; accuracy and caveats in `[Grok_on_Gemini_conclusions.md](Grok_on_Gemini_conclusions.md)`:
 
-| Industry pattern | Examples (landscape notes) | Relevance to MethylPipeline |
-|------------------|----------------------------|-----------------------------|
-| **cfDNA methylation ± fragmentomics** | Gene Solutions SPOT-MAS; Delfi (fragmentomics-first); Freenome multiomic stack | Pipeline already supports methylation + **cfDNA fragmentomics** QC/features when `primary_analyte: cfdna` |
-| **Multiomics beyond DNA methylation** | Exact Cancerguard (methylation + mutations + proteins); Freenome (+ cfRNA, proteins, immune) | Out of scope as first-class analytes today; do not invent protein/RNA steps in Python — keep study design honest about methylation±fragmentomics coverage |
+
+| Industry pattern                         | Examples (landscape notes)                                                                                                     | Relevance to MethylPipeline                                                                                                                                                                |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **cfDNA methylation ± fragmentomics**    | Gene Solutions SPOT-MAS; Delfi (fragmentomics-first); Freenome multiomic stack                                                 | Pipeline already supports methylation + **cfDNA fragmentomics** QC/features when `primary_analyte: cfdna`                                                                                  |
+| **Multiomics beyond DNA methylation**    | Exact Cancerguard (methylation + mutations + proteins); Freenome (+ cfRNA, proteins, immune)                                   | Out of scope as first-class analytes today; do not invent protein/RNA steps in Python — keep study design honest about methylation±fragmentomics coverage                                  |
 | **Buffy coat as CHIP / germline filter** | Guardant (plasma + buffy to subtract hematopoietic mutations); Freenome / Exact use WBC DNA for background noise in validation | Critical for **mutation** assays. For **methylation** studies, paired buffy still helps: matched host epigenome, cell-type confounding, and “is this plasma signal leukocyte-like?” checks |
-| **Bisulfite vs enrichment chemistry** | Adela cfMeDIP (affinity, bisulfite-free) vs chemical conversion | MethylPipeline assumes **bisulfite WGBS / extractor** inputs from Illumina sequencing; chemistry choice is upstream of this repo |
+| **Bisulfite vs enrichment chemistry**    | Adela cfMeDIP (affinity, bisulfite-free) vs chemical conversion                                                                | MethylPipeline assumes **bisulfite WGBS / extractor** inputs from Illumina sequencing; chemistry choice is upstream of this repo                                                           |
+
 
 Grok’s caveats apply here too: published sensitivity/specificity are stage- and cohort-dependent; commercial status differs by product (e.g. Guardant Shield is CRC-focused in its approved form); do not copy vendor AUCs into pipeline success metrics.
 
@@ -39,19 +47,25 @@ Grok’s caveats apply here too: published sensitivity/specificity are stage- an
 
 ---
 
+
+
 ## Goal → preferred analyte (within MethylPipeline)
 
-| Goal | Prefer | Why in this stack |
-|------|--------|-------------------|
-| Early detection / MCED-like tumor signal, localization, response / MRD | **`cfdna`** | Tumor-shed DNA + fragmentomics (`methyl-fragmentomics`) and cfDNA enricher defaults — aligned with methylation+fragmentomics industry direction |
-| Host-risk / systemic signatures, abundant DNA, simpler preanalytics | **`buffy_coat`** | Stable leukocyte DNA; alignment/bisulfite guardrails without cfDNA fragmentomics profile |
-| CHIP / germline / leukocyte-background control for plasma work | **Paired `cfdna` + `buffy_coat`** | Same subjects: plasma for tumor-oriented signal, buffy for host/hematopoietic background (industry pattern; methylation analogue of Guardant-style pairing) |
-| Host score + tumor burden / ToO | **`combined`** or **paired projects** | Same workflow engine; separate manifests or matched cohort IDs |
-| Assay development / feature stability under MC | Either, then compare | MC gene recurrence + cross-analyte concordance (analyte-comparison canvas) |
+
+| Goal                                                                   | Prefer                                | Why in this stack                                                                                                                                           |
+| ---------------------------------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Early detection / MCED-like tumor signal, localization, response / MRD | `cfdna`                               | Tumor-shed DNA + fragmentomics (`methyl-fragmentomics`) and cfDNA enricher defaults — aligned with methylation+fragmentomics industry direction             |
+| Host-risk / systemic signatures, abundant DNA, simpler preanalytics    | `buffy_coat`                          | Stable leukocyte DNA; alignment/bisulfite guardrails without cfDNA fragmentomics profile                                                                    |
+| CHIP / germline / leukocyte-background control for plasma work         | **Paired** `cfdna` **+** `buffy_coat` | Same subjects: plasma for tumor-oriented signal, buffy for host/hematopoietic background (industry pattern; methylation analogue of Guardant-style pairing) |
+| Host score + tumor burden / ToO                                        | `combined` or **paired projects**     | Same workflow engine; separate manifests or matched cohort IDs                                                                                              |
+| Assay development / feature stability under MC                         | Either, then compare                  | MC gene recurrence + cross-analyte concordance (analyte-comparison canvas)                                                                                  |
+
 
 Published MCED performance claims are **assay- and cohort-specific**. Use MethylPipeline MC stability, hold-out, and analyte-match guards — not vendor brochure numbers.
 
 ---
+
+
 
 ## How MethylPipeline encodes the choice
 
@@ -65,18 +79,22 @@ Set once in the study manifest:
 
 Allowed tokens normalize to `cfdna`, `buffy_coat`, or `combined` (`packages/methylutils/methyl_utils/analyte_profiles.py`). With `auto_apply_analyte_profile` left on, the resolver merges analyte defaults into `actionConfig` (profile/site keys still win).
 
-| Layer | `cfdna` | `buffy_coat` |
-|-------|---------|--------------|
-| Alignment QC | Guardrails + bisulfite + **cfDNA fragmentomics** | Guardrails + bisulfite (no cfDNA fragmentomics profile) |
-| Fragmentomics action | Enabled (`profile: cfdna`) | Disabled |
-| Enricher defaults | `cancer-core` + broader CIS-BP modes | CIS-BP gene_sets emphasis |
-| Validation | `enforce_training_analyte_match: true` | Typically `false` |
 
-Sample prep is shared: SamplePrepPipeline → alignment QC → (optional fragmentomics) → extract → extraction QC. See [`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md).
+| Layer                | `cfdna`                                          | `buffy_coat`                                            |
+| -------------------- | ------------------------------------------------ | ------------------------------------------------------- |
+| Alignment QC         | Guardrails + bisulfite + **cfDNA fragmentomics** | Guardrails + bisulfite (no cfDNA fragmentomics profile) |
+| Fragmentomics action | Enabled (`profile: cfdna`)                       | Disabled                                                |
+| Enricher defaults    | `cancer-core` + broader CIS-BP modes             | CIS-BP gene_sets emphasis                               |
+| Validation           | `enforce_training_analyte_match: true`           | Typically `false`                                       |
+
+
+Sample prep is shared: SamplePrepPipeline → alignment QC → (optional fragmentomics) → extract → extraction QC. See `[docs/implementation/sample-preparation-flow.md](../implementation/sample-preparation-flow.md)`.
 
 Orchestration stays DomainProgram-first (`methyl-workflow-run`); analyte does not select a legacy CLI.
 
 ---
+
+
 
 ## Depth: is ~30× enough?
 
@@ -94,10 +112,12 @@ Clarify what “depth” means here:
 
 ---
 
+
+
 ## Recommended study designs on this pipeline
 
 1. **Buffy-first development** — `primary_analyte: buffy_coat`, MC stability + freeze on leukocyte cohorts; use for host markers and operational learning with abundant DNA.
-2. **Plasma / cfDNA production path** — `primary_analyte: cfdna`, fragmentomics on, enforce training analyte match; see [`packages/methylvalidation/docs/PLASMA_RETRAIN_PATH.md`](../../packages/methylvalidation/docs/PLASMA_RETRAIN_PATH.md). Aligns with methylation + fragmentomics MCED direction (SPOT-MAS / Freenome-style DNA layers — not full protein/RNA multiomics).
+2. **Plasma / cfDNA production path** — `primary_analyte: cfdna`, fragmentomics on, enforce training analyte match; see `[packages/methylvalidation/docs/PLASMA_RETRAIN_PATH.md](../../packages/methylvalidation/docs/PLASMA_RETRAIN_PATH.md)`. Aligns with methylation + fragmentomics MCED direction (SPOT-MAS / Freenome-style DNA layers — not full protein/RNA multiomics).
 3. **Paired plasma + buffy (preferred when both tubes exist)** — separate study manifests (or `combined`) with matched subject IDs: cfDNA for tumor-oriented signal; buffy for host epigenome and leukocyte-background control (methylation analogue of industry CHIP/germline filtering). Compare with the analyte-comparison rubric (MC gene recurrence, cross-analyte concordance, discovery direction agreement).
 4. **Do not** assume a buffy-trained panel transfers to plasma without retrain and analyte-match validation.
 5. **Do not** treat MethylPipeline as a full Cancerguard/Freenome multiomic stack — proteins, cfRNA, and mutation CHIP subtraction are outside the current DomainProgram surface; document study claims accordingly.
@@ -105,6 +125,8 @@ Clarify what “depth” means here:
 Empirical prostate buffy vs plasma MC comparison (marginal separation on one rubric; shared gene core) lives in the canvas and on-disk under `/work/projects/prostate-cancer/analyte_comparison/` when present — use it as **assay-development evidence**, not a clinical performance claim.
 
 ---
+
+
 
 ## Bottom line
 
@@ -114,10 +136,66 @@ Empirical prostate buffy vs plasma MC comparison (marginal separation on one rub
 
 ---
 
+
+
 ## Related
 
-- [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md) — analyte defaults and study examples
-- [`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md) — shared prep + cfDNA fragmentomics QC
-- [`docs/canvas/analyte-comparison.canvas.tsx`](../canvas/analyte-comparison.canvas.tsx) — buffy vs plasma MC comparison explorer
-- [`Gemini_on_Cancer_Detection.md`](Gemini_on_Cancer_Detection.md) — MCED competitors, multiomics, buffy as CHIP filter
-- [`Grok_on_Gemini_conclusions.md`](Grok_on_Gemini_conclusions.md) — verification of that landscape note and performance/regulatory caveats
+- `[docs/ANALYTE_PROFILES.md](../ANALYTE_PROFILES.md)` — analyte defaults and study examples
+- `[docs/implementation/sample-preparation-flow.md](../implementation/sample-preparation-flow.md)` — shared prep + cfDNA fragmentomics QC
+- `[docs/canvas/analyte-comparison.canvas.tsx](../canvas/analyte-comparison.canvas.tsx)` — buffy vs plasma MC comparison explorer
+- `[Gemini_on_Cancer_Detection.md](Gemini_on_Cancer_Detection.md)` — MCED competitors, multiomics, buffy as CHIP filter
+- `[Grok_on_Gemini_conclusions.md](Grok_on_Gemini_conclusions.md)` — verification of that landscape note and performance/regulatory caveats
+
+---
+
+It is biologically possible to find prostate cancer signals in the buffy coat (leukocytes), but **not in the form of physical prostate tumor cells or direct prostate tumor DNA.**
+
+Instead, the buffy coat acts as an epigenetic mirror reflecting a systemic host response to the cancer.
+
+The biology of how cancer presents in the buffy coat is distinct from how it appears in tissue or cfDNA, operating through entirely different diagnostic mechanisms:
+
+---
+
+
+
+## 1. The Biological Mechanism: The Systemic Immune Response
+
+The buffy coat contains peripheral blood mononuclear cells (PBMCs) and granulocytes. These immune cells are constantly interacting with the tumor microenvironment or responding to circulating inflammatory signals shed by a growing prostate tumor.
+
+- **Immune Cell Reprogramming:** When an aggressive prostate tumor starts proliferating (especially transitioning to Pattern 4), it releases systemic cytokines and chemokines. The bone marrow and circulating leukocytes alter their transcription profile to adapt, which physically alters the **leukocyte DNA methylation patterns**.
+- **The Field Effect:** In epidemiology, this is referred to as a "constitutional" or "soma-wide" epigenetic reflection. The leukocytes act as a proxy sensor—they change their epigenetic landscape in response to the malignancy elsewhere in the body.
+
+
+
+## 2. Direct Tissue Markers vs. Buffy Coat Markers
+
+Direct prostate cancer tissue genes do not transfer their methylation status to the buffy coat.
+
+A prominent study evaluating *GADD45a* methylation in prostate cancer demonstrated this boundary explicitly:
+
+> While *GADD45a* hypermethylation was found at extremely high levels in the serum (cfDNA) of malignant prostate cancer patients, **there was no significant difference in buffy coat methylation between cancer and benign patients**.
+
+Therefore, you cannot look for *GSTP1*, *APC*, or *GADD45a* hypermethylation in the buffy coat to diagnose prostate cancer. If you find *GSTP1* methylation in the buffy coat, it is likely a false positive caused by age-related mutations in the blood itself (Clonal Hematopoiesis of Indeterminate Potential, or CHIP).
+
+## 3. What the Buffy Coat *Can* Detect: Aggressiveness Gradients
+
+Instead of looking for tissue-specific anchors, Epigenome-Wide Association Studies (EWAS) looking at leukocyte DNA have found completely unique sets of differentially methylated regions (DMRs) that correlate with high Gleason scores:
+
+- **Transcription Factor Alterations:** An EWAS profiling leukocyte DNA from prostate cancer patients identified **77 differentially methylated regions/genes (DMRs)** in the blood cells that directly trended upwards with increasing Gleason scores. These were heavily enriched for homeobox genes (*HOXD8*) and zinc finger proteins (*ZNF-471*) controlling immune-system transcription pathways.
+- **Global Hypomethylation:** Some research points to a general, systemic loss of global methylation (measured via LINE-1 repetitive elements) in leukocytes as an indicator of genomic instability or high cancer risk, though its ability to finely distinguish a 3+3 from a 3+4 remains a point of active study.
+
+---
+
+
+
+## References for Your Team
+
+For your bioinformaticians and assay designers, these peer-reviewed papers map out exactly what is—and isn't—possible in the buffy coat:
+
+- **On the divergence of serum (cfDNA) vs. Buffy Coat markers:**
+- *Reis, I. M., Ramachandran, K., Speer, C., Gordian, E., & Singal, R.* **Serum GADD45a methylation is a useful biomarker to distinguish benign vs malignant prostate disease.** *British Journal of Cancer*. This study highlights why direct tumor suppressor methylation scales beautifully in serum cfDNA but fails completely when looked for in matching patient buffy coats.
+- **On using leukocyte DNA methylation arrays to predict Gleason severity:**
+- *Wang, X., et al.* **Epigenome-Wide Association Study of Prostate Cancer Identifies DNA Methylation Biomarkers for Aggressive Disease.** *Biomolecules*. This paper maps out the 77 unique immune/leukocyte DMRs (like *HOXD8* and *SOX11*) that track directly with higher Gleason scores, proving that leukocyte DNA has a distinct "aggressiveness signature" separate from tissue markers.
+- **On systemic heritable methylation risk profiles in blood cells:**
+- *Minerva Access (University of Melbourne Archive).* **Heritable methylation marks associated with breast and prostate cancer risk.** Documentation tracking how pre-diagnostic buffy coat and PBMC samples harbor constitutional methylation marks (*VTRNA2-1* promoter region) specifically predictive of developing aggressive prostate variants.
+

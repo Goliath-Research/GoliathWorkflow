@@ -1,6 +1,6 @@
 /*
   Portal resource profiles (domain config — NOT wf workflow engine).
-  Used for internal archive storage defaults (e.g. myQNAPcloud S3 h5Storage).
+  Archive defaults prefer a named cfg.storage_endpoint (DB SoT).
 */
 
 CREATE SCHEMA IF NOT EXISTS portal;
@@ -15,23 +15,45 @@ CREATE TABLE IF NOT EXISTS portal.resource_profile (
   CHECK (status IN ('ACTIVE','DISABLED'))
 );
 
+INSERT INTO cfg.credential (name, version, status, content_hash, provider, auth_mode, secret_json)
+SELECT
+  'epimethyl-archive-keys',
+  '1',
+  'published',
+  md5('{"authMode":"explicit_keys","accessKeyId":"REPLACE_WITH_ACCESS_KEY","secretAccessKey":"REPLACE_WITH_SECRET_KEY"}'),
+  's3',
+  'explicit_keys',
+  '{"authMode":"explicit_keys","accessKeyId":"REPLACE_WITH_ACCESS_KEY","secretAccessKey":"REPLACE_WITH_SECRET_KEY"}'::jsonb
+WHERE NOT EXISTS (
+  SELECT 1 FROM cfg.credential WHERE name = 'epimethyl-archive-keys' AND version = '1'
+);
+
+INSERT INTO cfg.storage_endpoint (name, version, status, content_hash, provider, location_json, credential_name)
+SELECT
+  'epimethyl-archive',
+  '1',
+  'published',
+  md5('{"type":"s3","bucket":"epimethyl","region":"us-east-1","endpointUrl":"https://s3.us-east-1.myqnapcloud.io","prefixBase":"samples/","scope":"archive"}'),
+  's3',
+  '{"type":"s3","bucket":"epimethyl","region":"us-east-1","endpointUrl":"https://s3.us-east-1.myqnapcloud.io","prefixBase":"samples/","scope":"archive"}'::jsonb,
+  'epimethyl-archive-keys'
+WHERE NOT EXISTS (
+  SELECT 1 FROM cfg.storage_endpoint WHERE name = 'epimethyl-archive' AND version = '1'
+);
+
 INSERT INTO portal.resource_profile (profile_key, profile_type, profile_json, status)
 SELECT
   'epimethyl-samples',
-  's3_object_storage',
-  '{
-    "type": "s3",
-    "bucket": "epimethyl",
-    "region": "us-east-1",
-    "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
-    "prefixBase": "samples/",
-    "credentials": {
-      "authMode": "explicit_keys",
-      "accessKeyId": "REPLACE_WITH_ACCESS_KEY",
-      "secretAccessKey": "REPLACE_WITH_SECRET_KEY"
-    }
-  }'::jsonb,
+  'cfg_storage_endpoint_ref',
+  '{"sampleStorageEndpoint":"epimethyl-archive","prefixBase":"samples/","scope":"archive"}'::jsonb,
   'ACTIVE'
 WHERE NOT EXISTS (
   SELECT 1 FROM portal.resource_profile WHERE profile_key = 'epimethyl-samples'
 );
+
+UPDATE portal.resource_profile
+SET profile_json = '{"sampleStorageEndpoint":"epimethyl-archive","prefixBase":"samples/","scope":"archive"}'::jsonb,
+    profile_type = 'cfg_storage_endpoint_ref',
+    updated_at_utc = (now() AT TIME ZONE 'utc')
+WHERE profile_key = 'epimethyl-samples'
+  AND profile_json::text LIKE '%REPLACE_WITH_ACCESS_KEY%';

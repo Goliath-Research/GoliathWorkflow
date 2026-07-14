@@ -109,6 +109,10 @@ def test_storage_endpoint_credentials_never_materialized(
     assert expanded["type"] == "s3"
     assert expanded["prefix"] == "plasma/S1/"
     assert expanded["credentials"]["secretAccessKey"] == "secret-value"
+    assert expanded["credentialName"] == "lab-aws-keys"
+    assert expanded["contentHash"]
+    assert expanded["credentials"]["contentHash"] == expanded["contentHash"]
+    assert expanded["credentialVersion"] == "1"
 
 
 def test_expand_azure_key_vault_emits_ref_without_keys(store: FileConfigStore) -> None:

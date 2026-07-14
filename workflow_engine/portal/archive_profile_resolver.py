@@ -19,6 +19,10 @@ def apply_archive_profile_storage(
     """
     Fill ``sampleStorage`` from ``portal.resource_profile`` when omitted.
 
+    Prefer profiles that name a published ``cfg.storage_endpoint``
+    (``sampleStorageEndpoint``); ``ResourceProfileReader`` expands secrets from
+    the DB. Legacy inline credential JSON still works.
+
     ``fastqStorage`` is never inferred — initial FASTQs must come from
     laboratory-owned storage on each study start request.
     """

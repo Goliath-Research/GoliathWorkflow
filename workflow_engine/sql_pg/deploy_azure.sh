@@ -67,13 +67,13 @@ SCRIPTS=(
   wf_action_dispatch_metadata.sql
   wf_repo_create_workflow_graph.sql
   wf_sql_collection_bindings.sql
-  portal_resource_profile.sql
   portal_workflow_api.sql
   wf_drop_platform_sample_storage.sql
   cfg_schema.sql
   cfg_registry_tables.sql
   cfg_wf_relationships.sql
   cfg_repo_api.sql
+  portal_resource_profile.sql
   cfg_portal_api.sql
 )
 

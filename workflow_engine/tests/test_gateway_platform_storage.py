@@ -81,3 +81,53 @@ def test_resource_profile_reader_parses_json() -> None:
     assert h5["bucket"] == "epimethyl"
     assert h5["endpointUrl"] == "https://s3.us-east-1.myqnapcloud.io"
     assert h5["credentials"]["secretAccessKey"] == "secret"
+
+
+def test_resource_profile_reader_expands_cfg_endpoint_ref() -> None:
+    db = MagicMock()
+    db.backend = "postgres"
+
+    def fetch(sql: str, params: tuple = ()):
+        if "portal.resource_profile" in sql:
+            return {
+                "profile_key": "epimethyl-samples",
+                "profile_type": "cfg_storage_endpoint_ref",
+                "profile_json": {
+                    "sampleStorageEndpoint": "epimethyl-archive",
+                    "prefixBase": "samples/",
+                    "scope": "archive",
+                },
+                "status": "ACTIVE",
+            }
+        if "cfg.storage_endpoint" in sql:
+            return {
+                "location_json": {
+                    "type": "s3",
+                    "bucket": "epimethyl",
+                    "region": "us-east-1",
+                    "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
+                    "scope": "archive",
+                },
+                "provider": "s3",
+                "credential_name": "epimethyl-archive-keys",
+                "endpoint_version": "1",
+                "secret_json": {
+                    "authMode": "explicit_keys",
+                    "accessKeyId": "AKIA",
+                    "secretAccessKey": "secret",
+                },
+                "content_hash": "abc123",
+                "cred_version": "1",
+                "auth_mode": "explicit_keys",
+            }
+        return None
+
+    db._fetch_one.side_effect = fetch
+    reader = ResourceProfileReader(db)
+    h5 = reader.h5_storage_defaults("epimethyl-samples")
+    assert h5 is not None
+    assert h5["bucket"] == "epimethyl"
+    assert h5["credentials"]["secretAccessKey"] == "secret"
+    assert h5["contentHash"] == "abc123"
+    assert h5["credentialName"] == "epimethyl-archive-keys"
+    assert h5["prefix"] == "samples/"
