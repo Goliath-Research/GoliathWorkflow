@@ -19,22 +19,13 @@ def run_cell_deconv_for_samples(
 ) -> Dict[str, Any]:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    runtime = cfg.require_runtime()
     basis = load_seed_basis(cfg.seed_basis_path)
-    contexts = [str(c) for c in (cfg.contexts or ["CG"])]
-    min_cov = int(cfg.marker_min_coverage) if cfg.marker_min_coverage is not None else 1
-    min_frac = float(cfg.min_marker_fraction) if cfg.min_marker_fraction is not None else 0.25
-    id_col = str(cfg.sample_id_column or "sample_id")
+    id_col = runtime.sample_id_column
 
     rows: List[Dict[str, Any]] = []
     for sample_id, sample_dir in samples:
-        props = deconvolve_sample(
-            sample_dir,
-            basis,
-            contexts=contexts,
-            min_coverage=min_cov,
-            min_marker_fraction=min_frac,
-            use_gpu=cfg.use_gpu,
-        )
+        props = deconvolve_sample(sample_dir, basis, runtime)
         row = {id_col: str(sample_id)}
         for ct in basis.cell_types:
             row[ct] = props.get(ct)
@@ -56,12 +47,12 @@ def run_cell_deconv_for_samples(
         "n_samples": int(len(rows)),
         "n_columns": int(len(df.columns)),
         "n_ok": n_ok,
-        "contexts": contexts,
+        "contexts": list(runtime.contexts),
         "cell_types": list(basis.cell_types),
         "seed_basis": basis.provenance,
-        "marker_min_coverage": min_cov,
-        "min_marker_fraction": min_frac,
-        "use_gpu": cfg.use_gpu,
+        "marker_min_coverage": runtime.marker_min_coverage,
+        "min_marker_fraction": runtime.min_marker_fraction,
+        "use_gpu": runtime.use_gpu,
     }
     manifest_path = output_dir / "cell_fractions.manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")

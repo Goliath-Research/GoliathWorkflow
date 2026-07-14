@@ -1,5 +1,5 @@
 """Leukocyte cell-type deconvolution for MethylPipeline."""
 
-from .config import CellDeconvStepConfig
+from .config import CellDeconvRuntimeParams, CellDeconvStepConfig
 
-__all__ = ["CellDeconvStepConfig"]
+__all__ = ["CellDeconvRuntimeParams", "CellDeconvStepConfig"]

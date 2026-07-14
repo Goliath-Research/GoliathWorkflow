@@ -5,12 +5,14 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy.optimize import minimize
 
 from methyl_utils.gpu_detection import get_cupy, is_gpu_available
+
+from ..config import CellDeconvRuntimeParams
 
 DEFAULT_SEED_BASIS = (
     Path(__file__).resolve().parent.parent / "data" / "flowsorted_blood_epic_idol_v1.json"
@@ -143,14 +145,13 @@ def markers_by_chrom(basis: SeedBasis) -> Dict[str, np.ndarray]:
 def extract_marker_vector(
     sample_dir: str | Path,
     basis: SeedBasis,
-    *,
-    contexts: Sequence[str] = ("CG",),
-    min_coverage: int = 1,
+    cfg: CellDeconvRuntimeParams,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Build Y and coverage mask aligned to ``basis`` marker order from sample H5 files.
 
     Returns ``(y, observed)`` where ``observed`` is bool mask of markers with coverage.
+    Thresholds come from typed ``CellDeconvRuntimeParams`` (no code defaults).
     """
     from methyl_utils import MethylSample
 
@@ -158,11 +159,12 @@ def extract_marker_vector(
     y = np.full(basis.M.shape[0], np.nan, dtype=np.float64)
     observed = np.zeros(basis.M.shape[0], dtype=bool)
     by_chrom = markers_by_chrom(basis)
+    min_coverage = int(cfg.marker_min_coverage)
 
     for chrom, row_idx in by_chrom.items():
         want_pos = basis.positions[row_idx].astype(np.uint32)
         loaded = False
-        for ctx in contexts:
+        for ctx in cfg.contexts:
             path = sample_dir / f"{chrom}-{ctx}.h5"
             if not path.is_file():
                 # also try chr-prefixed names
@@ -195,18 +197,10 @@ def extract_marker_vector(
 def deconvolve_sample(
     sample_dir: str | Path,
     basis: SeedBasis,
-    *,
-    contexts: Sequence[str] = ("CG",),
-    min_coverage: int = 1,
-    min_marker_fraction: float = 0.25,
-    use_gpu: Optional[bool] = None,
+    cfg: CellDeconvRuntimeParams,
 ) -> Dict[str, Any]:
-    y, observed = extract_marker_vector(
-        sample_dir,
-        basis,
-        contexts=contexts,
-        min_coverage=min_coverage,
-    )
+    """Estimate Ω for one sample using typed runtime params (no code defaults)."""
+    y, observed = extract_marker_vector(sample_dir, basis, cfg)
     n_obs = int(np.sum(observed))
     frac = float(n_obs) / float(basis.M.shape[0]) if basis.M.shape[0] else 0.0
     row: Dict[str, Any] = {
@@ -214,7 +208,7 @@ def deconvolve_sample(
         "n_markers_observed": n_obs,
         "marker_fraction": frac,
     }
-    if frac < float(min_marker_fraction) or n_obs < len(basis.cell_types):
+    if frac < float(cfg.min_marker_fraction) or n_obs < len(basis.cell_types):
         for ct in basis.cell_types:
             row[ct] = float("nan")
         row["qp_status"] = "insufficient_markers"
@@ -222,7 +216,7 @@ def deconvolve_sample(
 
     M_obs = basis.M[observed]
     y_obs = y[observed]
-    omega = houseman_qp(M_obs, y_obs, use_gpu=use_gpu)
+    omega = houseman_qp(M_obs, y_obs, use_gpu=cfg.use_gpu)
     for ct, w in zip(basis.cell_types, omega):
         row[ct] = float(w)
     row["qp_status"] = "ok"
