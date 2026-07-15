@@ -2257,7 +2257,7 @@
         }
       ],
       "default": null,
-      "description": "Optional explicit numeric covariate columns. When omitted, numeric/categorical role is inferred.",
+      "description": "Optional explicit numeric covariate columns. When unset, numeric roles are auto-inferred (excluding label/diagnostic columns such as group, qp_status, n_markers_observed, marker_fraction).",
       "title": "Covariate Numeric Columns"
     },
     "covariate_ordinal_columns": {
@@ -2337,7 +2337,7 @@
         }
       ],
       "default": null,
-      "description": "Optional covariates sidecar path or list of paths (HDF5 preferred, CSV accepted). Multiple CSVs are merged on sample_id. Rows should include sample identifier column for join with sample basename. For model_backend=ecdf, covariates are fused in the optional second-stage stacker (ECDF probabilities + covariates \u00b1 observed_hybrid).",
+      "description": "Optional covariates sidecar path or list of paths (HDF5 preferred, CSV accepted). Multiple CSVs are merged on sample_id. Rows should include sample identifier column for join with sample basename. For model_backend=ecdf, covariates are fused in the optional second-stage stacker (ECDF probabilities + covariates \u00b1 observed_hybrid). CellDeconv cell_fractions.csv is supported; auto-infer excludes group/qp_status/marker diagnostics (pin covariate_numeric_columns to CD8T..Neu when using \u03a9 alone).",
       "title": "Covariates Path"
     },
     "covariates_strict_join": {

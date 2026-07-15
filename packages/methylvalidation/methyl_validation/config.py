@@ -1651,7 +1651,9 @@ class MonteCarloConfig(BaseModel):
             "Multiple CSVs are merged on sample_id. "
             "Rows should include sample identifier column for join with sample basename. "
             "For model_backend=ecdf, covariates are fused in the optional second-stage stacker "
-            "(ECDF probabilities + covariates ± observed_hybrid)."
+            "(ECDF probabilities + covariates ± observed_hybrid). "
+            "CellDeconv cell_fractions.csv is supported; auto-infer excludes group/qp_status/"
+            "marker diagnostics (pin covariate_numeric_columns to CD8T..Neu when using Ω alone)."
         ),
     )
     covariate_id_column: str = Field(
@@ -1662,7 +1664,8 @@ class MonteCarloConfig(BaseModel):
         default=None,
         description=(
             "Optional explicit numeric covariate columns. "
-            "When omitted, numeric/categorical role is inferred."
+            "When unset, numeric roles are auto-inferred (excluding label/diagnostic columns "
+            "such as group, qp_status, n_markers_observed, marker_fraction)."
         ),
     )
     covariate_ordinal_columns: Optional[List[str]] = Field(

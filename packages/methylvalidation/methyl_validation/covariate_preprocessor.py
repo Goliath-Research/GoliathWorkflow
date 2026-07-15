@@ -80,6 +80,37 @@ def _load_covariate_table(
     return _load_single_covariate_table(Path(str(covariates_path)), covariate_id_column)
 
 
+# Never auto-include as covariates (label leakage / non-feature metadata).
+# Operators may still opt in by listing these in covariate_*_columns explicitly.
+_AUTO_EXCLUDE_COVARIATE_COLUMNS = frozenset(
+    {
+        "group",
+        "label",
+        "y",
+        "class",
+        "expected_class",
+        "phenotype",
+        "disease",
+        "disease_status",
+        "qp_status",
+        "n_markers_observed",
+        "marker_fraction",
+    }
+)
+
+
+def _filter_auto_candidate_columns(candidate_cols: Sequence[str]) -> Tuple[List[str], List[str]]:
+    """Drop known label/diagnostic columns from auto-inference candidates."""
+    kept: List[str] = []
+    excluded: List[str] = []
+    for col in candidate_cols:
+        if str(col) in _AUTO_EXCLUDE_COVARIATE_COLUMNS:
+            excluded.append(str(col))
+        else:
+            kept.append(str(col))
+    return kept, excluded
+
+
 def _infer_column_roles(df: pd.DataFrame, candidate_cols: List[str]) -> Tuple[List[str], List[str]]:
     numeric: List[str] = []
     categorical: List[str] = []
@@ -234,6 +265,7 @@ def fit_covariates(
     if not candidate_cols:
         raise ValueError("Covariates table has no feature columns")
 
+    auto_excluded: List[str] = []
     if numeric_columns is not None:
         numeric = [str(c) for c in numeric_columns]
         unknown = sorted(set(numeric) - set(candidate_cols))
@@ -259,7 +291,13 @@ def fit_covariates(
     # Default inference only touches numeric/categorical. Ordinal must be explicit
     # or auto-discovered via known label sets for non-numeric columns.
     if numeric_columns is None and categorical_columns is None and ordinal_columns is None:
-        numeric, categorical = _infer_column_roles(aligned, candidate_cols)
+        infer_cols, auto_excluded = _filter_auto_candidate_columns(candidate_cols)
+        if not infer_cols:
+            raise ValueError(
+                "No usable covariate columns after excluding label/diagnostic metadata "
+                f"({auto_excluded}). Set covariate_numeric_columns explicitly if needed."
+            )
+        numeric, categorical = _infer_column_roles(aligned, infer_cols)
         auto_ord: List[str] = []
         for col in list(categorical):
             series_vals = aligned[col].astype(object)
@@ -408,6 +446,7 @@ def fit_covariates(
         "numeric_columns": list(numeric),
         "ordinal_columns": list(ordinal),
         "categorical_columns": list(categorical),
+        "auto_excluded_columns": list(auto_excluded),
         "unknown_ordinal_values_mapped": int(unknown_ordinal_count),
         "missing_numeric_strategy": missing_numeric_strategy,
         "standardize_numeric": bool(standardize_numeric),

@@ -33,7 +33,7 @@ flowchart TD
 | Baseline | Single logistic on CLR Ω: healthy vs disease |
 | Follow-on gate | Matched beats baseline by >0.01 BA **and** ≥2 usable strata |
 
-This run uses **Ω-only** logits (no methylation ECDF panel) so the stratum effect is isolated. Later work can fuse ECDF second-stage covariates once leaves exist.
+This run uses **Ω-only** logits (no methylation ECDF panel) so the stratum effect is isolated. Production fusion is already available: first-stage ECDF stays methylation-only; `covariates_path` (e.g. `cell_fractions.csv`) triggers the second-stage stacker. Auto-infer **excludes** `group` / `qp_status` / marker diagnostics to avoid label leakage; pin `covariate_numeric_columns` to the six Ω columns when using deconv alone (see `cell_deconv.profile.json`).
 
 ## How to re-run (Buffy PCa)
 

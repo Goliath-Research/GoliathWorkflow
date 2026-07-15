@@ -18,6 +18,11 @@ Writes `{output_base}/cell_fractions/cell_fractions.csv` with columns:
 (for example, `all` or `PCa`). Existing output files are not modified in place;
 rerun `methyl-cell-deconv` to produce the column.
 
+**Covariate use:** when pointing `covariates_path` at this CSV, do **not** feed `group`
+(or `qp_status` / marker diagnostics) into models — that leaks the cohort label.
+Pin `covariate_numeric_columns` to the six Ω columns (as in `cell_deconv.profile.json`),
+or rely on methylvalidation auto-infer which excludes those metadata columns.
+
 ## Config (`actionConfig.cell_deconvolution`)
 
 | Field | Role |
