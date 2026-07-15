@@ -695,14 +695,20 @@ def _try_write_pca_plot(
         return
     X = _fit_space(_omega_matrix(assignments), use_clr=cfg.use_clr)
     pcs = PCA(n_components=2, random_state=cfg.random_state).fit_transform(X)
+    stratum = assignments["healthy_stratum"].to_numpy()
+    # Shared color scale so healthy/disease markers map the same stratum id to the same color.
+    vmin = float(np.nanmin(stratum))
+    vmax = float(np.nanmax(stratum))
     fig, ax = plt.subplots(figsize=(7, 5))
     for y_val, marker in ((0, "o"), (1, "^")):
         m = assignments["y"].to_numpy() == y_val
         sc = ax.scatter(
             pcs[m, 0],
             pcs[m, 1],
-            c=assignments.loc[m, "healthy_stratum"],
+            c=stratum[m],
             cmap="tab10",
+            vmin=vmin,
+            vmax=vmax,
             marker=marker,
             alpha=0.75,
             edgecolors="k",
