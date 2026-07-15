@@ -419,6 +419,7 @@ Covariates are backend-specific:
 - **Column roles:** inferred by default, or fixed via `covariate_numeric_columns`, `covariate_ordinal_columns`, and `covariate_categorical_columns`.
 - **Auto-infer safety:** when roles are not pinned, these columns are **excluded** (label leakage / deconv diagnostics): `group`, `label`, `y`, `class`, `expected_class`, `phenotype`, `disease`, `disease_status`, `qp_status`, `n_markers_observed`, `marker_fraction`. Opt in by listing them explicitly in `covariate_*_columns`.
 - **CellDeconv Ω:** `cell_fractions.csv` is a valid `covariates_path` entry. Prefer pinning `covariate_numeric_columns` to `CD8T,CD4T,NK,Bcell,Mono,Neu` (see profile `cell_deconv`) when that file is the only sidecar; multi-path lists (e.g. `samd_research`) may rely on auto-infer plus the exclusions above.
+- **Missing sidecars in a path list:** absent files (e.g. `readlevel_measures.csv` when `info_measures` skipped) are skipped with a warning; at least one listed file must exist.
 - **Numeric preprocessing:** impute via `covariate_missing_numeric_strategy` (`mean`, `median`, `zero`) then optional z-score (`covariate_standardize_numeric`).
 - **Ordinal preprocessing:** mapped to ordered numeric codes (single feature per column) using `covariate_ordinal_maps`; if omitted, known label sets like `low/medium/high` are auto-mapped; unknown/missing values use `covariate_ordinal_unknown_value`.
 - **Categorical preprocessing:** one-hot with frozen vocab and `__UNKNOWN__` bucket at inference.

@@ -12,12 +12,15 @@ Contract:
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 
 def _import_h5py_with_plugins():
@@ -65,8 +68,20 @@ def _load_covariate_table(
         paths = [Path(str(p)) for p in covariates_path if str(p).strip()]
         if not paths:
             raise ValueError("covariates_path list is empty")
-        merged = _load_single_covariate_table(paths[0], covariate_id_column)
-        for extra in paths[1:]:
+        existing = [p for p in paths if p.is_file()]
+        missing = [p for p in paths if not p.is_file()]
+        if missing:
+            logger.warning(
+                "Skipping missing covariates_path entries: %s",
+                ", ".join(str(p) for p in missing),
+            )
+        if not existing:
+            raise FileNotFoundError(
+                "covariates_path list has no existing files: "
+                + ", ".join(str(p) for p in paths)
+            )
+        merged = _load_single_covariate_table(existing[0], covariate_id_column)
+        for extra in existing[1:]:
             other = _load_single_covariate_table(extra, covariate_id_column)
             overlap = [
                 c

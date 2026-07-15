@@ -343,6 +343,19 @@ def resolve_bam_path(sample_dir: Path, sample_id: str) -> Path:
     raise RuntimeError(f"BAM not found for methyl extract under {sample_dir}")
 
 
+def find_bam_path(sample_dir: Path, sample_id: str) -> Optional[Path]:
+    """Return BAM path if present; None otherwise (no error)."""
+    candidates = [
+        sample_dir / f"{sample_id}.bam",
+        sample_dir / f"{sample_id}.BAM",
+        sample_dir / f"{sample_id}.clara_parabrics.duplicates_marked.bam",
+    ]
+    for path in candidates:
+        if path.is_file():
+            return path
+    return None
+
+
 def _resolve_paths(sample_dir: Path, sample_id: str, bam_path: Path) -> MethylExtractPaths:
     return MethylExtractPaths(
         sample_dir=sample_dir,
@@ -433,15 +446,32 @@ def run_methyl_extract(
         if cfg.read_level
         else []
     )
-    if extract_outputs_complete(cfg.sample_dir, expected) and (
-        not pattern_expected
+    marginals_ok = extract_outputs_complete(cfg.sample_dir, expected)
+    patterns_ok = (
+        (not pattern_expected)
         or extract_pattern_outputs_complete(cfg.sample_dir, pattern_expected)
-    ):
+    )
+    if marginals_ok and patterns_ok:
         logger.info("Skipping MethylExtractor; outputs already present for %s", cfg.sample_id)
         return {
             "sampleId": cfg.sample_id,
             "h5Files": expected,
         }
+    if marginals_ok and pattern_expected and not patterns_ok:
+        # Prefer re-extract when BAM is available so *.patterns.h5 can be emitted.
+        # If BAM is gone, do not fail the pipeline — info_measures skips without patterns.
+        bam_existing = find_bam_path(cfg.sample_dir, cfg.sample_id)
+        if bam_existing is None:
+            logger.warning(
+                "read_level enabled but *.patterns.h5 incomplete for %s and no BAM present; "
+                "keeping existing marginal HDF5s (pipeline.info_measures will skip or partial)",
+                cfg.sample_id,
+            )
+            return {
+                "sampleId": cfg.sample_id,
+                "h5Files": expected,
+                "patternsIncomplete": True,
+            }
 
     bam_path = resolve_bam_path(cfg.sample_dir, cfg.sample_id)
     paths = _resolve_paths(cfg.sample_dir, cfg.sample_id, bam_path)
@@ -467,11 +497,16 @@ def run_methyl_extract(
         ]
         if cfg.read_level and not pattern_files:
             logger.warning(
-                "MethylExtractor read_level enabled but no *.patterns.h5 files produced for %s",
+                "MethylExtractor read_level enabled but no *.patterns.h5 files produced for %s "
+                "(continuing; pipeline.info_measures will skip if cohort has no patterns)",
                 cfg.sample_id,
             )
     if not h5_files:
-        h5_files = sorted(p.name for p in cfg.sample_dir.glob("*-*.h5"))
+        h5_files = sorted(
+            p.name
+            for p in cfg.sample_dir.glob("*-*.h5")
+            if not p.name.endswith(".patterns.h5")
+        )
     if not h5_files:
         raise RuntimeError(f"MethylExtractor did not produce HDF5 files under {cfg.sample_dir}")
 

@@ -22,7 +22,7 @@
       "split": true,
       "output_format": "hdf5",
       "read_level": {
-        "enabled": false,
+        "enabled": true,
         "tile_size": 4
       }
     },

@@ -65,6 +65,10 @@ When profile `actionConfig.methyl_extract.read_level.enabled` is true (or `--rea
 is passed), MethylExtractor also writes `{chrom}-{ctx}.patterns.h5` files. Schema:
 [`docs/reference/read_level_pattern_contract.md`](../../docs/reference/read_level_pattern_contract.md).
 
+SaMD / research profiles enable read-level **by default**. Missing `*.patterns.h5` does **not**
+fail sample prep or the validation lifecycle: extract warns and continues; `pipeline.info_measures`
+skips with status `no_pattern_sidecars`; multi-path `covariates_path` lists omit missing sidecars.
+
 Profile example:
 
 ```json

@@ -68,3 +68,24 @@ def test_explicit_numeric_can_include_marker_fraction(tmp_path: Path):
     assert prep.numeric_columns == ["CD8T", "Neu", "marker_fraction"]
     assert report["auto_excluded_columns"] == []
     assert X is not None and X.shape == (8, 3)
+
+
+def test_covariate_list_skips_missing_sidecar(tmp_path: Path):
+    present = tmp_path / "cell_fractions.csv"
+    pd.DataFrame(
+        {
+            "sample_id": ["S0", "S1"],
+            "CD8T": [0.1, 0.2],
+            "Neu": [0.4, 0.3],
+        }
+    ).to_csv(present, index=False)
+    missing = tmp_path / "readlevel_measures.csv"
+    X, prep, _report = fit_covariates(
+        [str(present), str(missing)],
+        ["S0", "S1"],
+        covariate_id_column="sample_id",
+        strict_join=True,
+        numeric_columns=["CD8T", "Neu"],
+    )
+    assert X is not None and X.shape == (2, 2)
+    assert prep is not None

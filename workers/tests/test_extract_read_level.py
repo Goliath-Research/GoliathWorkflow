@@ -58,3 +58,46 @@ def test_expected_pattern_files():
         "1-CG.patterns.h5",
         "2-CG.patterns.h5",
     ]
+
+
+def test_skip_when_patterns_missing_without_bam(tmp_path, monkeypatch):
+    """Marginals present + read_level on + no BAM → soft skip (no fail)."""
+    from methyl_worker import extract_runner as er
+
+    sample_id = "s1"
+    sample_dir = tmp_path / sample_id
+    sample_dir.mkdir()
+    (sample_dir / "1-CG.h5").write_text("x", encoding="utf-8")
+    project = tmp_path / "project.json"
+    project.write_text("{}", encoding="utf-8")
+
+    cfg = er.MethylExtractConfig(
+        sample_id=sample_id,
+        sample_dir=sample_dir,
+        project_path=project,
+        chromosomes=("1",),
+        extract_contexts=("CG",),
+        reference_fasta=tmp_path / "ref.fa",
+        chrom_mapping=tmp_path / "map.json",
+        extractor_bin="MethylExtractor",
+        threads=None,
+        min_mapq=None,
+        min_phred=None,
+        min_cov=None,
+        cap_cov=None,
+        compression=None,
+        chunk_size=None,
+        output_format="hdf5",
+        split=True,
+        read_level=True,
+        tile_size=4,
+    )
+    monkeypatch.setattr(er, "resolve_methyl_extract_config", lambda *a, **k: cfg)
+    out = er.run_methyl_extract(
+        sample_id=sample_id,
+        sample_dir=sample_dir,
+        project=project,
+    )
+    assert out["sampleId"] == sample_id
+    assert out.get("patternsIncomplete") is True
+
