@@ -209,6 +209,7 @@
         },
         "ecdf_second_stage_enabled": {
           "default": false,
+          "description": "Include observed-hybrid features in the ECDF second-stage stacker. Second stage also runs when covariates_path is set.",
           "title": "Ecdf Second Stage Enabled",
           "type": "boolean"
         },

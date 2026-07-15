@@ -463,7 +463,13 @@ class BackendSharedParams(BaseModel):
 
 class EcdfBackendParams(BackendSharedParams):
     model_config = ConfigDict(extra="forbid")
-    ecdf_second_stage_enabled: bool = Field(default=False)
+    ecdf_second_stage_enabled: bool = Field(
+        default=False,
+        description=(
+            "Include observed-hybrid features in the ECDF second-stage stacker. "
+            "Second stage also runs when covariates_path is set."
+        ),
+    )
     ecdf_aggregated_enabled: Optional[bool] = Field(
         default=None,
         description=(
@@ -1620,8 +1626,9 @@ class MonteCarloConfig(BaseModel):
     ecdf_second_stage_enabled: bool = Field(
         default=False,
         description=(
-            "If true for model_backend=ecdf, train optional second-stage binary refiner "
-            "using observed_hybrid features and append extra prediction columns."
+            "If true for model_backend=ecdf, include observed-hybrid features in the optional "
+            "second-stage logistic stacker (ECDF probs ± covariates ± observed_hybrid). "
+            "Second stage also runs when covariates_path is set even if this flag is false."
         ),
     )
     ecdf_aggregated_enabled: Optional[bool] = Field(
@@ -1642,7 +1649,9 @@ class MonteCarloConfig(BaseModel):
         description=(
             "Optional covariates sidecar path or list of paths (HDF5 preferred, CSV accepted). "
             "Multiple CSVs are merged on sample_id. "
-            "Rows should include sample identifier column for join with sample basename."
+            "Rows should include sample identifier column for join with sample basename. "
+            "For model_backend=ecdf, covariates are fused in the optional second-stage stacker "
+            "(ECDF probabilities + covariates ± observed_hybrid)."
         ),
     )
     covariate_id_column: str = Field(

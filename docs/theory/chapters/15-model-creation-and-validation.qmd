@@ -55,14 +55,14 @@ Current `--model` backend semantics:
 
 Covariate fusion is backend-specific:
 
-- `ecdf`: DMP-only reference path.
-- `tabular_sklearn` / `generative_hybrid`: DMP features plus optional covariates.
+- `ecdf`: methylation-only first stage (DMP / gene / aggregated); optional second-stage stacker fuses ECDF probabilities with covariates (and optionally observed-hybrid features when `ecdf_second_stage_enabled`).
+- `tabular_sklearn` / `generative_hybrid`: methylation / observed-hybrid features plus optional covariates.
 
 ---
 
 ## Covariate-Aware Validation Contract
 
-When covariates are enabled for tabular/generative backends:
+When covariates are enabled for tabular/generative backends (or the ECDF second-stage stacker):
 
 - join key is sample basename against `covariate_id_column`,
 - numeric/ordinal/categorical role assignment is fixed at training and reused at inference,

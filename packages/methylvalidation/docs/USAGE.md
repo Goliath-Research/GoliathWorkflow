@@ -407,9 +407,12 @@ Use this profile when you want conservative run filtering and classifier-panel-a
 
 This keeps runtime mostly bounded while enforcing high per-run detector quality and explicit classifier-panel constraints.
 
-### Covariate contract for `tabular_sklearn` / `generative_hybrid`
+### Covariate contract for `tabular_sklearn` / `generative_hybrid` / ECDF second stage
 
-Covariates are backend-specific and are **not** used by the ECDF Bayesian path.
+Covariates are backend-specific:
+
+- **`tabular_sklearn` / `generative_hybrid`**: concatenated onto methylation / observed-hybrid features during first-stage train/predict.
+- **`ecdf`**: first-stage Bayesian/ECDF remains methylation-only. When `covariates_path` is set (and/or `ecdf_second_stage_enabled`), an optional **second-stage** logistic stacker fuses ECDF class probabilities with covariates and optionally observed-hybrid features.
 
 - **Join key:** `covariate_id_column` must match sample folder basename (for example `S123` from `/path/to/S123`).
 - **Input formats:** `.csv` / `.tsv` or `.h5`/`.hdf5` sidecar (`sample_id`, `values`, optional `columns`).
@@ -417,7 +420,7 @@ Covariates are backend-specific and are **not** used by the ECDF Bayesian path.
 - **Numeric preprocessing:** impute via `covariate_missing_numeric_strategy` (`mean`, `median`, `zero`) then optional z-score (`covariate_standardize_numeric`).
 - **Ordinal preprocessing:** mapped to ordered numeric codes (single feature per column) using `covariate_ordinal_maps`; if omitted, known label sets like `low/medium/high` are auto-mapped; unknown/missing values use `covariate_ordinal_unknown_value`.
 - **Categorical preprocessing:** one-hot with frozen vocab and `__UNKNOWN__` bucket at inference.
-- **Strictness:** `covariates_strict_join` (tabular) and `generative_covariates_strict` (generative) enforce one-to-one sample id coverage.
+- **Strictness:** `covariates_strict_join` (tabular / ECDF second stage) and `generative_covariates_strict` (generative) enforce one-to-one sample id coverage.
 
 Example (profile `actionConfig.validation`) using all covariate types:
 

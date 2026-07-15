@@ -512,6 +512,53 @@ def build_model_backend_steps(
         else False
     )
 
+    def _run_ecdf_second_stage() -> tuple[int, str, str]:
+        from .ecdf_second_stage import (
+            EcdfSecondStageParams,
+            ecdf_second_stage_should_run,
+            train_and_apply_ecdf_second_stage,
+        )
+
+        classifier_output_dir = _classifier_output_dir(project_json, predictor_output_dir)
+        # Classic raw_dmp path still records training metrics even when second-stage is off.
+        write_training_metrics = backend == "ecdf" and feature_mode != "raw_gene" and not ecdf_aggregated_enabled
+        tm_ok, tm_msg = (False, "")
+        if write_training_metrics:
+            tm_ok, tm_msg = _write_ecdf_training_metrics(project_json, classifier_output_dir)
+        try:
+            if not ecdf_second_stage_should_run(config):
+                if write_training_metrics:
+                    if tm_ok:
+                        return 0, f"ECDF second-stage scorer disabled. Training metrics saved: {tm_msg}", ""
+                    return 0, f"ECDF second-stage scorer disabled. {tm_msg}", ""
+                return (
+                    0,
+                    "ECDF second-stage scorer skipped (set ecdf_second_stage_enabled or covariates_path).",
+                    "",
+                )
+            params = EcdfSecondStageParams.from_monte_carlo_config(
+                config,
+                feature_family_set=feature_family_set,
+            )
+            out = train_and_apply_ecdf_second_stage(
+                project_json=project_json,
+                predictor_output_dir=(predictor_output_dir or (project_json.parent / "predictors")),
+                classifier_output_dir=classifier_output_dir,
+                params=params,
+            )
+            if isinstance(out, dict):
+                out["training_metrics_saved"] = bool(tm_ok)
+                out["training_metrics_path"] = tm_msg if tm_ok else None
+                out["training_metrics_note"] = None if tm_ok else (tm_msg or None)
+            return 0, json.dumps(out), ""
+        except Exception as e:
+            # Optional refinement must not fail the primary ECDF build.
+            if write_training_metrics and not tm_ok:
+                return 0, "", f"ECDF second-stage skipped: {e}. {tm_msg}"
+            if write_training_metrics and tm_ok:
+                return 0, "", f"ECDF second-stage skipped: {e}. Training metrics saved: {tm_msg}"
+            return 0, "", f"ECDF second-stage skipped: {e}"
+
     if backend == "ecdf" and feature_mode == "raw_gene":
         model_dir = (
             predictor_output_dir.parent / "classifiers"
@@ -584,14 +631,11 @@ def build_model_backend_steps(
             except Exception as e:
                 return 1, "", str(e)
 
-        def _skip_ecdf_second_stage_gene() -> tuple[int, str, str]:
-            return 0, "ECDF second-stage scorer skipped for raw-gene ECDF OvR mode.", ""
-
         return [
             ("model-bundle", _run_ecdf_gene_bundle),
             ("ecdf-gene-train", _run_ecdf_gene_train),
             ("ecdf-gene-predictor", _run_ecdf_gene_predict),
-            ("ecdf-second-stage", _skip_ecdf_second_stage_gene),
+            ("ecdf-second-stage", _run_ecdf_second_stage),
         ]
 
     if backend == "ecdf" and ecdf_aggregated_enabled:
@@ -676,75 +720,12 @@ def build_model_backend_steps(
             except Exception as e:
                 return 1, "", str(e)
 
-        def _skip_ecdf_second_stage_aggregated() -> tuple[int, str, str]:
-            return 0, "ECDF second-stage scorer skipped for aggregated ECDF OvR mode.", ""
-
         return [
             ("model-bundle", _run_ecdf_aggregated_bundle),
             ("ecdf-aggregated-train", _run_ecdf_aggregated_train),
             ("ecdf-aggregated-predictor", _run_ecdf_aggregated_predict),
-            ("ecdf-second-stage", _skip_ecdf_second_stage_aggregated),
+            ("ecdf-second-stage", _run_ecdf_second_stage),
         ]
-
-    def _run_ecdf_second_stage() -> tuple[int, str, str]:
-        classifier_output_dir = _classifier_output_dir(project_json, predictor_output_dir)
-        tm_ok, tm_msg = _write_ecdf_training_metrics(project_json, classifier_output_dir)
-        try:
-            if config is None or not bool(config.ecdf_second_stage_enabled):
-                if tm_ok:
-                    return 0, f"ECDF second-stage scorer disabled. Training metrics saved: {tm_msg}", ""
-                return 0, f"ECDF second-stage scorer disabled. {tm_msg}", ""
-            from .ecdf_second_stage import train_and_apply_ecdf_second_stage
-
-            out = train_and_apply_ecdf_second_stage(
-                project_json=project_json,
-                predictor_output_dir=(predictor_output_dir or (project_json.parent / "predictors")),
-                classifier_output_dir=classifier_output_dir,
-                max_dmps=(config.tabular_max_dmps if config is not None else 0),
-                quantiles=(config.observed_feature_quantiles if config is not None else None),
-                min_coverage=(config.observed_feature_min_coverage if config is not None else 1),
-                include_dmp_features=(config.observed_feature_include_dmp if config is not None else True),
-                include_chromosome_features=(
-                    config.observed_feature_include_chromosome if config is not None else True
-                ),
-                include_dmr_features=(config.observed_feature_include_dmr if config is not None else True),
-                include_gene_features=(config.observed_feature_include_gene if config is not None else True),
-                dmr_window_bp=(config.observed_feature_dmr_window_bp if config is not None else 100000),
-                max_dmr_features=(config.observed_feature_max_dmrs if config is not None else 32),
-                max_gene_features=(config.observed_feature_max_genes if config is not None else 32),
-                hist_eps=(config.observed_hist_eps if config is not None else 1e-6),
-                hist_alpha=(config.observed_hist_alpha if config is not None else 0.5),
-                hist_evidence_clip_cap=(
-                    config.observed_hist_evidence_clip_cap if config is not None else 5.0
-                ),
-                hist_tail_agreement_threshold=(
-                    config.observed_hist_tail_agreement_threshold if config is not None else 0.10
-                ),
-                chromosome_hypo_beta_threshold=(
-                    config.chromosome_hypo_beta_threshold if config is not None else None
-                ),
-                chromosome_intermediate_beta_lo=(
-                    config.chromosome_intermediate_beta_lo if config is not None else None
-                ),
-                chromosome_intermediate_beta_hi=(
-                    config.chromosome_intermediate_beta_hi if config is not None else None
-                ),
-                chromosome_distance_metrics=(
-                    config.chromosome_distance_metrics if config is not None else None
-                ),
-                chromosome_list=(config.chromosome_list if config is not None else None),
-                feature_family_set=feature_family_set,
-            )
-            if isinstance(out, dict):
-                out["training_metrics_saved"] = bool(tm_ok)
-                out["training_metrics_path"] = tm_msg if tm_ok else None
-                out["training_metrics_note"] = None if tm_ok else tm_msg
-            return 0, json.dumps(out), ""
-        except Exception as e:
-            # Optional refinement must not fail the primary ECDF build.
-            if not tm_ok:
-                return 0, "", f"ECDF second-stage skipped: {e}. {tm_msg}"
-            return 0, "", f"ECDF second-stage skipped: {e}. Training metrics saved: {tm_msg}"
 
     return [
         ("methyl-classifier", lambda: run_classifier_fn(project_json, per_cancer_group)),

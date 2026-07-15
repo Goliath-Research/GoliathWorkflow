@@ -69,8 +69,10 @@ def test_build_model_backend_steps_ecdf_includes_second_stage(tmp_path: Path, mo
     assert tm_called["n"] == 1
     assert called["kwargs"] is not None
     assert tm_called["args"] is not None
-    assert called["kwargs"]["max_dmr_features"] == 7
-    assert called["kwargs"]["max_gene_features"] == 9
+    params = called["kwargs"]["params"]
+    assert params.include_observed_hybrid is True
+    assert params.max_dmr_features == 7
+    assert params.max_gene_features == 9
 
 
 def test_build_model_backend_steps_ecdf_second_stage_disabled(tmp_path: Path, monkeypatch):

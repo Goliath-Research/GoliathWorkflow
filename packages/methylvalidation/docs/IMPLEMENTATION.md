@@ -74,14 +74,14 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 - **`--freeze`**: runs `run_pipeline_for_production`: `methyl-centroid` -> `methyl-detector` (fixed panel) -> `methyl-mapper` -> `methyl-enricher`, then optional `methyl-disease-progression`.
 - **`--model-mc`**: full retrain+test MC for model selection. With `--model-mc-all`, MethylValidation first builds a shared iteration set (`model_mc/shared/run_XXXX`) for split + centroid + detector, then runs backend-specific train/predict stages under `model_mc/<backend>/run_XXXX`. When split source is reusable from primary MC runs, centroid/detector artifacts are linked into shared/backend run roots instead of recomputing.
 - **`--model`**: runs `run_pipeline_for_model`. Backend comes from `actionConfig.validation.backend_profiles` (or validated CLI override). For `ecdf`, steps are `methyl-classifier` -> `methyl-predictor`. For `tabular_sklearn` and `generative_hybrid`, steps are in-process bundle -> train -> predict and do not re-run `methyl-detector`.
-- **Aggregated ECDF observed-hybrid mode**: when `model_backend=ecdf` and observed-hybrid mapped features are active (`feature_family_set != dmp_scored`), trainer API runs `ecdf-aggregated-train` -> `ecdf-aggregated-predictor` and intentionally skips `ecdf-second-stage`.
+- **Aggregated ECDF observed-hybrid mode**: when `model_backend=ecdf` and `ecdf_aggregated_enabled=true`, trainer API runs `ecdf-aggregated-train` -> `ecdf-aggregated-predictor`, then optional `ecdf-second-stage` when `ecdf_second_stage_enabled` and/or `covariates_path` is set.
 - **`--select-best-model`**: ranks backend model-MC summaries and runs final all-data production model build using selected backend.
 - **`--post-model-validation`**: runs MC holdout evaluation against frozen production artifacts only (no retraining). `ecdf` dispatches predictor-only runs; `tabular_sklearn` and `generative_hybrid` dispatch frozen model inference via backend predictors.
 - Legacy flat backend keys under `actionConfig.validation` are now rejected; migration is handled by `methyl-validation-migrate-backend-config`.
 - **`--predictor-only`**: MC iterations that run only `methyl-predictor` using frozen artifacts.
 - **`--rollout-compare`**: compares baseline/candidate `metrics_summary.json` and writes promotion/hold report using rollout thresholds in `MonteCarloConfig`.
 
-ECDF/Bayesian remains DMP-only by design at the first stage. The optional ECDF second stage and the `observed_hybrid` path used by ECDF-aggregated/tabular/generative backends share a unified mapped-feature builder with explicit family toggles:
+ECDF/Bayesian remains methylation-only by design at the first stage. The optional ECDF second stage (observed-hybrid and/or covariates) and the `observed_hybrid` path used by ECDF-aggregated/tabular/generative backends share a unified mapped-feature builder with explicit family toggles:
 
 - `feature_family_set=dmp_scored`: aggregated DMP-family observed metrics (`max_weighted_directional_score`, etc.). Legacy alias: `dmp`.
 - `feature_family_set=gene`: dynamic one-feature-per-mapped-gene keys (`gene::<GENE>`).

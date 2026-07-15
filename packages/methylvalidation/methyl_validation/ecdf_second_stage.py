@@ -1,22 +1,27 @@
 """
-Optional ECDF second-stage scorer using observed-only hybrid features.
+Optional ECDF second-stage scorer.
+
+Stacks first-stage ECDF class probabilities with optional observed-hybrid features
+and/or covariates (``fit_covariates``) into a logistic refiner.
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import joblib
 import numpy as np
 import pandas as pd
+from pydantic import BaseModel, ConfigDict, Field
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score
 
 from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
 
+from .covariate_preprocessor import fit_covariates
 from .model_bundle import build_model_feature_bundle, load_bundle_dmp_index
 from .observed_feature_builder import (
     apply_feature_fill_values,
@@ -26,6 +31,140 @@ from .observed_feature_builder import (
     select_training_feature_matrix,
     verify_feature_schema,
 )
+
+
+class EcdfSecondStageParams(BaseModel):
+    """Typed knobs for the ECDF second-stage stacker (no invented science defaults)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    include_observed_hybrid: bool = Field(
+        default=False,
+        description="When true, include observed-hybrid methylation features (ecdf_second_stage_enabled).",
+    )
+    max_dmps: Optional[int] = Field(default=None, ge=0)
+    quantiles: Optional[List[float]] = Field(default=None)
+    min_coverage: int = Field(default=1, ge=1)
+    include_dmp_features: bool = Field(default=True)
+    include_chromosome_features: bool = Field(default=True)
+    include_dmr_features: bool = Field(default=True)
+    include_gene_features: bool = Field(default=True)
+    dmr_window_bp: int = Field(default=100000, ge=1)
+    max_dmr_features: int = Field(default=32, ge=0)
+    max_gene_features: int = Field(default=32, ge=0)
+    hist_eps: float = Field(default=1e-6)
+    hist_alpha: float = Field(default=0.5)
+    hist_evidence_clip_cap: float = Field(default=5.0)
+    hist_tail_agreement_threshold: float = Field(default=0.10)
+    chromosome_hypo_beta_threshold: Optional[float] = Field(default=None)
+    chromosome_intermediate_beta_lo: Optional[float] = Field(default=None)
+    chromosome_intermediate_beta_hi: Optional[float] = Field(default=None)
+    chromosome_distance_metrics: Optional[List[str]] = Field(default=None)
+    chromosome_list: Optional[List[str]] = Field(default=None)
+    feature_family_set: str = Field(default="dmp_scored")
+
+    covariates_path: Optional[Union[str, List[str]]] = Field(default=None)
+    covariate_id_column: str = Field(default="sample_id")
+    covariate_numeric_columns: Optional[List[str]] = Field(default=None)
+    covariate_ordinal_columns: Optional[List[str]] = Field(default=None)
+    covariate_ordinal_maps: Optional[Dict[str, Dict[str, float]]] = Field(default=None)
+    covariate_ordinal_unknown_value: float = Field(default=0.0)
+    covariate_categorical_columns: Optional[List[str]] = Field(default=None)
+    covariate_missing_numeric_strategy: str = Field(default="mean")
+    covariate_standardize_numeric: bool = Field(default=True)
+    covariates_strict_join: bool = Field(default=False)
+
+    def has_covariates(self) -> bool:
+        if self.covariates_path is None:
+            return False
+        if isinstance(self.covariates_path, (list, tuple)):
+            return any(str(p).strip() for p in self.covariates_path)
+        return bool(str(self.covariates_path).strip())
+
+    def validate_stack_components(self) -> None:
+        if not self.include_observed_hybrid and not self.has_covariates():
+            raise ValueError(
+                "ECDF second-stage requires include_observed_hybrid and/or covariates_path "
+                "(probabilities alone are not a useful stacker)."
+            )
+
+    @classmethod
+    def from_monte_carlo_config(
+        cls,
+        config: Any,
+        *,
+        feature_family_set: Optional[str] = None,
+    ) -> "EcdfSecondStageParams":
+        """Build params from synced MonteCarloConfig / backend profile fields."""
+        if config is None:
+            raise ValueError("MonteCarloConfig is required to build EcdfSecondStageParams")
+        return cls(
+            include_observed_hybrid=bool(getattr(config, "ecdf_second_stage_enabled", False)),
+            max_dmps=getattr(config, "tabular_max_dmps", None),
+            quantiles=getattr(config, "observed_feature_quantiles", None),
+            min_coverage=int(getattr(config, "observed_feature_min_coverage", 1) or 1),
+            include_dmp_features=bool(getattr(config, "observed_feature_include_dmp", True)),
+            include_chromosome_features=bool(
+                getattr(config, "observed_feature_include_chromosome", True)
+            ),
+            include_dmr_features=bool(getattr(config, "observed_feature_include_dmr", True)),
+            include_gene_features=bool(getattr(config, "observed_feature_include_gene", True)),
+            dmr_window_bp=int(getattr(config, "observed_feature_dmr_window_bp", 100000) or 100000),
+            max_dmr_features=int(getattr(config, "observed_feature_max_dmrs", 32) or 0),
+            max_gene_features=int(getattr(config, "observed_feature_max_genes", 32) or 0),
+            hist_eps=float(getattr(config, "observed_hist_eps", 1e-6) or 1e-6),
+            hist_alpha=float(getattr(config, "observed_hist_alpha", 0.5) or 0.5),
+            hist_evidence_clip_cap=float(
+                getattr(config, "observed_hist_evidence_clip_cap", 5.0) or 5.0
+            ),
+            hist_tail_agreement_threshold=float(
+                getattr(config, "observed_hist_tail_agreement_threshold", 0.10) or 0.10
+            ),
+            chromosome_hypo_beta_threshold=getattr(config, "chromosome_hypo_beta_threshold", None),
+            chromosome_intermediate_beta_lo=getattr(
+                config, "chromosome_intermediate_beta_lo", None
+            ),
+            chromosome_intermediate_beta_hi=getattr(
+                config, "chromosome_intermediate_beta_hi", None
+            ),
+            chromosome_distance_metrics=getattr(config, "chromosome_distance_metrics", None),
+            chromosome_list=getattr(config, "chromosome_list", None),
+            feature_family_set=str(
+                feature_family_set
+                if feature_family_set is not None
+                else getattr(config, "feature_family_set", "dmp_scored")
+            ),
+            covariates_path=getattr(config, "covariates_path", None),
+            covariate_id_column=str(getattr(config, "covariate_id_column", "sample_id") or "sample_id"),
+            covariate_numeric_columns=getattr(config, "covariate_numeric_columns", None),
+            covariate_ordinal_columns=getattr(config, "covariate_ordinal_columns", None),
+            covariate_ordinal_maps=getattr(config, "covariate_ordinal_maps", None),
+            covariate_ordinal_unknown_value=float(
+                getattr(config, "covariate_ordinal_unknown_value", 0.0) or 0.0
+            ),
+            covariate_categorical_columns=getattr(config, "covariate_categorical_columns", None),
+            covariate_missing_numeric_strategy=str(
+                getattr(config, "covariate_missing_numeric_strategy", "mean") or "mean"
+            ),
+            covariate_standardize_numeric=bool(
+                getattr(config, "covariate_standardize_numeric", True)
+            ),
+            covariates_strict_join=bool(getattr(config, "covariates_strict_join", False)),
+        )
+
+
+def ecdf_second_stage_should_run(config: Any) -> bool:
+    """True when observed-hybrid second stage and/or covariates_path is configured."""
+    if config is None:
+        return False
+    if bool(getattr(config, "ecdf_second_stage_enabled", False)):
+        return True
+    path = getattr(config, "covariates_path", None)
+    if path is None:
+        return False
+    if isinstance(path, (list, tuple)):
+        return any(str(p).strip() for p in path)
+    return bool(str(path).strip())
 
 
 def _resolve_eval_paths_and_labels(project_json: str | Path) -> Tuple[List[str], Optional[np.ndarray]]:
@@ -60,8 +199,12 @@ def _resolve_eval_paths_and_labels(project_json: str | Path) -> Tuple[List[str],
         if samples:
             return samples, np.asarray(y_true, dtype=np.int32)
 
-    control = list(getattr(cfg, "test_control_paths", []) or []) + list(getattr(cfg, "holdout_control_paths", []) or [])
-    disease = list(getattr(cfg, "test_disease_paths", []) or []) + list(getattr(cfg, "holdout_disease_paths", []) or [])
+    control = list(getattr(cfg, "test_control_paths", []) or []) + list(
+        getattr(cfg, "holdout_control_paths", []) or []
+    )
+    disease = list(getattr(cfg, "test_disease_paths", []) or []) + list(
+        getattr(cfg, "holdout_disease_paths", []) or []
+    )
     if control or disease:
         samples = [str(p) for p in control + disease]
         y_true = [0] * len(control) + [1] * len(disease)
@@ -109,14 +252,18 @@ def _sample_paths_from_predictions(
     Build per-row sample paths directly from predictions rows.
 
     This avoids train/holdout/test group-resolution ambiguity and guarantees row
-    parity between ECDF probabilities and observed-hybrid features.
+    parity between ECDF probabilities and observed-hybrid / covariate features.
     """
     with open(project_json, encoding="utf-8") as f:
         project_data = json.load(f)
     samples_base = str(project_data.get("samples_base_path") or "").strip()
     samples_base_path = Path(samples_base) if samples_base else None
 
-    resolved_eval_paths, _ = _resolve_eval_paths_and_labels(project_json)
+    resolved_eval_paths: List[str] = []
+    try:
+        resolved_eval_paths, _ = _resolve_eval_paths_and_labels(project_json)
+    except Exception:
+        resolved_eval_paths = []
     eval_by_name: Dict[str, str] = {Path(str(p)).name: str(p) for p in resolved_eval_paths}
     eval_by_stem: Dict[str, str] = {Path(str(p)).stem: str(p) for p in resolved_eval_paths}
 
@@ -136,7 +283,6 @@ def _sample_paths_from_predictions(
                 chosen = str(p)
 
         if not chosen and sample:
-            # Prefer exact match from predictor-resolved lineage when available.
             if sample in eval_by_name:
                 chosen = eval_by_name[sample]
             elif sample in eval_by_stem:
@@ -147,9 +293,26 @@ def _sample_paths_from_predictions(
                 chosen = sample
 
         if not chosen:
-            raise ValueError("Encountered prediction row without sample identifier for second-stage scorer.")
+            raise ValueError(
+                "Encountered prediction row without sample identifier for second-stage scorer."
+            )
         out.append(chosen)
     return out
+
+
+def _prob_columns(df: pd.DataFrame) -> List[str]:
+    cols = [c for c in df.columns if str(c).startswith("prob_class")]
+    if "prob_class0" in cols and "prob_class1" in cols:
+        # Stable binary order first, then any extra multiclass heads.
+        ordered = ["prob_class0", "prob_class1"] + [
+            c for c in sorted(cols) if c not in ("prob_class0", "prob_class1")
+        ]
+        return ordered
+    if cols:
+        return sorted(cols)
+    raise ValueError(
+        "Second-stage scorer requires ECDF probability columns (prob_class0/prob_class1 or prob_class*)."
+    )
 
 
 def train_and_apply_ecdf_second_stage(
@@ -157,27 +320,9 @@ def train_and_apply_ecdf_second_stage(
     project_json: str | Path,
     predictor_output_dir: str | Path,
     classifier_output_dir: str | Path,
-    max_dmps: Optional[int] = None,
-    quantiles: Optional[List[float]] = None,
-    min_coverage: int = 1,
-    include_dmp_features: bool = True,
-    include_chromosome_features: bool = True,
-    include_dmr_features: bool = True,
-    include_gene_features: bool = True,
-    dmr_window_bp: int = 100000,
-    max_dmr_features: int = 32,
-    max_gene_features: int = 32,
-    hist_eps: float = 1e-6,
-    hist_alpha: float = 0.5,
-    hist_evidence_clip_cap: float = 5.0,
-    hist_tail_agreement_threshold: float = 0.10,
-    chromosome_hypo_beta_threshold: Optional[float] = None,
-    chromosome_intermediate_beta_lo: Optional[float] = None,
-    chromosome_intermediate_beta_hi: Optional[float] = None,
-    chromosome_distance_metrics: Optional[List[str]] = None,
-    chromosome_list: Optional[List[str]] = None,
-    feature_family_set: str = "dmp_scored",
+    params: EcdfSecondStageParams,
 ) -> Dict[str, Any]:
+    params.validate_stack_components()
     project_json = Path(project_json).resolve()
     predictor_output_dir = Path(predictor_output_dir).resolve()
     classifier_output_dir = Path(classifier_output_dir).resolve()
@@ -187,97 +332,203 @@ def train_and_apply_ecdf_second_stage(
     if not pred_csv.is_file():
         raise FileNotFoundError(f"Missing predictions.csv under {predictor_output_dir}")
     df = pd.read_csv(pred_csv)
-    if "prob_class0" not in df.columns or "prob_class1" not in df.columns:
-        raise ValueError("Second-stage scorer requires binary ECDF probabilities: prob_class0/prob_class1.")
     if "expected_class" not in df.columns:
         raise ValueError("Second-stage scorer requires expected_class column in predictions.csv.")
     if "sample" not in df.columns:
         raise ValueError("Second-stage scorer requires sample column in predictions.csv.")
 
-    bundle_dir = project_json.parent / "model_bundle"
-    bundle_h5 = _ensure_bundle_h5(project_json, bundle_dir)
-    dmp_df = load_bundle_dmp_index(bundle_h5)
-    max_dmps_norm = int(max_dmps) if (max_dmps is not None and int(max_dmps) > 0) else 0
-    if max_dmps_norm and len(dmp_df) > max_dmps_norm:
-        dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
+    prob_cols = _prob_columns(df)
+    X_prob = df[prob_cols].astype(np.float32).to_numpy()
 
     sample_paths = _sample_paths_from_predictions(df, project_json)
     if not sample_paths:
         raise ValueError("No sample paths were derived from predictions.csv for ECDF second-stage scorer.")
-    y_for_anchor = pd.to_numeric(df["expected_class"], errors="coerce").fillna(0).astype(int).to_numpy()
-    y_for_anchor = np.where(y_for_anchor > 0, 1, 0).astype(np.int32)
-    centroid_dirs = _resolve_class_centroid_dirs(project_json)
-    healthy_label = "healthy"
-    cancer_labels = ["cancer"]
-    if centroid_dirs:
-        labels = list(centroid_dirs.keys())
-        if labels:
-            healthy_label = labels[0]
-            if len(labels) > 1:
-                cancer_labels = [labels[1]]
+    sample_ids = [Path(str(p)).name for p in sample_paths]
 
-    anchors = derive_observed_hybrid_anchors(
-        sample_paths=sample_paths,
-        sample_class_indices=y_for_anchor.tolist(),
-        class_names=[healthy_label] + cancer_labels,
-        dmp_df=dmp_df,
-        min_coverage=int(max(1, min_coverage)),
-    )
-    feat = build_observed_hybrid_feature_table(
-        sample_paths,
-        dmp_df,
-        quantiles=quantiles,
-        min_coverage=int(max(1, min_coverage)),
-        include_dmp_features=bool(include_dmp_features),
-        include_chromosome_features=bool(include_chromosome_features),
-        include_dmr_features=bool(include_dmr_features),
-        include_gene_features=bool(include_gene_features),
-        dmr_window_bp=int(max(1, dmr_window_bp)),
-        max_dmr_features=int(max(0, max_dmr_features)),
-        max_gene_features=int(max(0, max_gene_features)),
-        healthy_reference_vector=anchors.healthy_reference_vector,
-        cancer_reference_vector=anchors.cancer_reference_vector,
-        per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
-        healthy_class_label=anchors.healthy_class_label,
-        cancer_class_labels=anchors.cancer_class_labels,
-        all_class_labels=[healthy_label] + cancer_labels,
-        anchor_strategy=anchors.anchor_strategy,
-        expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
-        centroid_dir_by_class_label=centroid_dirs,
-        hist_eps=float(hist_eps),
-        hist_alpha=float(hist_alpha),
-        hist_evidence_clip_cap=float(hist_evidence_clip_cap),
-        hist_tail_agreement_threshold=float(hist_tail_agreement_threshold),
-        feature_family_set=str(feature_family_set),
-        chromosome_hypo_beta_threshold=chromosome_hypo_beta_threshold,
-        chromosome_intermediate_beta_lo=chromosome_intermediate_beta_lo,
-        chromosome_intermediate_beta_hi=chromosome_intermediate_beta_hi,
-        chromosome_distance_metrics=chromosome_distance_metrics,
-        chromosome_list=chromosome_list,
-    )
-    X_obs_full = np.asarray(feat.X, dtype=np.float32)
-    fill_values = fit_feature_fill_values(X_obs_full)
-    X_obs_full = apply_feature_fill_values(X_obs_full, fill_values)
-    X_obs = select_training_feature_matrix(
-        X_obs_full,
-        feat.feature_names,
-        feat.training_feature_names,
-    )
+    blocks: List[np.ndarray] = [X_prob]
+    block_names: List[str] = list(prob_cols)
+    meta_extra: Dict[str, Any] = {
+        "prob_feature_names": list(prob_cols),
+        "n_prob_features": int(X_prob.shape[1]),
+        "include_observed_hybrid": bool(params.include_observed_hybrid),
+        "include_covariates": bool(params.has_covariates()),
+    }
 
-    X_prob = df[["prob_class0", "prob_class1"]].astype(np.float32).to_numpy()
-    X = np.concatenate([X_prob, X_obs], axis=1)
+    bundle_h5: Optional[Path] = None
+    if params.include_observed_hybrid:
+        bundle_dir = project_json.parent / "model_bundle"
+        bundle_h5 = _ensure_bundle_h5(project_json, bundle_dir)
+        dmp_df = load_bundle_dmp_index(bundle_h5)
+        max_dmps_norm = (
+            int(params.max_dmps) if (params.max_dmps is not None and int(params.max_dmps) > 0) else 0
+        )
+        if max_dmps_norm and len(dmp_df) > max_dmps_norm:
+            dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
+
+        y_for_anchor = pd.to_numeric(df["expected_class"], errors="coerce").fillna(0).astype(int).to_numpy()
+        y_for_anchor = np.where(y_for_anchor > 0, 1, 0).astype(np.int32)
+        centroid_dirs = _resolve_class_centroid_dirs(project_json)
+        healthy_label = "healthy"
+        cancer_labels = ["cancer"]
+        if centroid_dirs:
+            labels = list(centroid_dirs.keys())
+            if labels:
+                healthy_label = labels[0]
+                if len(labels) > 1:
+                    cancer_labels = [labels[1]]
+
+        anchors = derive_observed_hybrid_anchors(
+            sample_paths=sample_paths,
+            sample_class_indices=y_for_anchor.tolist(),
+            class_names=[healthy_label] + cancer_labels,
+            dmp_df=dmp_df,
+            min_coverage=int(max(1, params.min_coverage)),
+        )
+        feat = build_observed_hybrid_feature_table(
+            sample_paths,
+            dmp_df,
+            quantiles=params.quantiles,
+            min_coverage=int(max(1, params.min_coverage)),
+            include_dmp_features=bool(params.include_dmp_features),
+            include_chromosome_features=bool(params.include_chromosome_features),
+            include_dmr_features=bool(params.include_dmr_features),
+            include_gene_features=bool(params.include_gene_features),
+            dmr_window_bp=int(max(1, params.dmr_window_bp)),
+            max_dmr_features=int(max(0, params.max_dmr_features)),
+            max_gene_features=int(max(0, params.max_gene_features)),
+            healthy_reference_vector=anchors.healthy_reference_vector,
+            cancer_reference_vector=anchors.cancer_reference_vector,
+            per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
+            healthy_class_label=anchors.healthy_class_label,
+            cancer_class_labels=anchors.cancer_class_labels,
+            all_class_labels=[healthy_label] + cancer_labels,
+            anchor_strategy=anchors.anchor_strategy,
+            expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+            centroid_dir_by_class_label=centroid_dirs,
+            hist_eps=float(params.hist_eps),
+            hist_alpha=float(params.hist_alpha),
+            hist_evidence_clip_cap=float(params.hist_evidence_clip_cap),
+            hist_tail_agreement_threshold=float(params.hist_tail_agreement_threshold),
+            feature_family_set=str(params.feature_family_set),
+            chromosome_hypo_beta_threshold=params.chromosome_hypo_beta_threshold,
+            chromosome_intermediate_beta_lo=params.chromosome_intermediate_beta_lo,
+            chromosome_intermediate_beta_hi=params.chromosome_intermediate_beta_hi,
+            chromosome_distance_metrics=params.chromosome_distance_metrics,
+            chromosome_list=params.chromosome_list,
+        )
+        X_obs_full = np.asarray(feat.X, dtype=np.float32)
+        fill_values = fit_feature_fill_values(X_obs_full)
+        X_obs_full = apply_feature_fill_values(X_obs_full, fill_values)
+        X_obs = select_training_feature_matrix(
+            X_obs_full,
+            feat.feature_names,
+            feat.training_feature_names,
+        )
+        blocks.append(X_obs)
+        block_names.extend(list(feat.training_feature_names))
+        verify_feature_schema(
+            feat.feature_names,
+            list(feat.feature_names),
+            context="ecdf second-stage train/apply",
+        )
+        meta_extra.update(
+            {
+                "bundle_h5": str(bundle_h5),
+                "n_observed_features": int(X_obs.shape[1]),
+                "observed_feature_names": list(feat.feature_names),
+                "training_feature_names": list(feat.training_feature_names),
+                "quality_feature_names": list(feat.quality_feature_names),
+                "observed_feature_report": dict(feat.report),
+                "observed_feature_fill_values": [float(v) for v in fill_values.tolist()],
+                "observed_healthy_reference_vector": [
+                    float(v) for v in anchors.healthy_reference_vector.tolist()
+                ],
+                "observed_cancer_reference_vector": [
+                    float(v) for v in anchors.cancer_reference_vector.tolist()
+                ],
+                "observed_healthy_class_label": str(anchors.healthy_class_label),
+                "observed_cancer_class_labels": [str(x) for x in anchors.cancer_class_labels],
+                "observed_anchor_strategy": str(anchors.anchor_strategy),
+                "observed_feature_order_fingerprint": str(anchors.feature_order_fingerprint),
+                "max_dmps": int(max_dmps_norm),
+                "quantiles": [float(q) for q in (feat.report.get("quantiles") or [])],
+                "min_coverage": int(max(1, params.min_coverage)),
+                "observed_feature_include_dmp": bool(params.include_dmp_features),
+                "observed_feature_include_chromosome": bool(params.include_chromosome_features),
+                "observed_feature_include_dmr": bool(params.include_dmr_features),
+                "observed_feature_include_gene": bool(params.include_gene_features),
+                "observed_feature_dmr_window_bp": int(max(1, params.dmr_window_bp)),
+                "observed_feature_max_dmrs": int(max(0, params.max_dmr_features)),
+                "observed_feature_max_genes": int(max(0, params.max_gene_features)),
+                "observed_hist_eps": float(params.hist_eps),
+                "observed_hist_alpha": float(params.hist_alpha),
+                "observed_hist_evidence_clip_cap": float(params.hist_evidence_clip_cap),
+                "observed_hist_tail_agreement_threshold": float(params.hist_tail_agreement_threshold),
+            }
+        )
+    else:
+        meta_extra["n_observed_features"] = 0
+        meta_extra["observed_feature_names"] = []
+        meta_extra["training_feature_names"] = []
+
+    cov_report: Dict[str, Any] = {"used": False}
+    preprocessor = None
+    if params.has_covariates():
+        cov, preprocessor, cov_report = fit_covariates(
+            params.covariates_path,
+            sample_ids,
+            covariate_id_column=params.covariate_id_column,
+            strict_join=params.covariates_strict_join,
+            numeric_columns=params.covariate_numeric_columns,
+            ordinal_columns=params.covariate_ordinal_columns,
+            ordinal_maps=params.covariate_ordinal_maps,
+            ordinal_unknown_value=params.covariate_ordinal_unknown_value,
+            categorical_columns=params.covariate_categorical_columns,
+            missing_numeric_strategy=params.covariate_missing_numeric_strategy,
+            standardize_numeric=params.covariate_standardize_numeric,
+        )
+        if cov is None:
+            raise ValueError("covariates_path was set but fit_covariates returned no matrix")
+        cov = np.asarray(cov, dtype=np.float32)
+        blocks.append(cov)
+        cov_names = list(preprocessor.output_columns) if preprocessor is not None else [
+            f"cov_{i}" for i in range(cov.shape[1])
+        ]
+        block_names.extend(cov_names)
+        meta_extra["n_covariate_features"] = int(cov.shape[1])
+        meta_extra["covariate_feature_names"] = cov_names
+        meta_extra["covariate_report"] = dict(cov_report)
+        meta_extra["covariates_path"] = (
+            [str(p) for p in params.covariates_path]
+            if isinstance(params.covariates_path, (list, tuple))
+            else str(params.covariates_path)
+        )
+        preprocessor_path = classifier_output_dir / "covariate-preprocessor.json"
+        if preprocessor is not None:
+            preprocessor_path.write_text(
+                json.dumps(preprocessor.to_dict(), indent=2) + "\n",
+                encoding="utf-8",
+            )
+            meta_extra["covariate_preprocessor_path"] = str(preprocessor_path)
+    else:
+        meta_extra["n_covariate_features"] = 0
+        meta_extra["covariate_feature_names"] = []
+
+    X_full = np.concatenate(blocks, axis=1)
     y = pd.to_numeric(df["expected_class"], errors="coerce").fillna(-1).astype(int).to_numpy()
     valid = np.isin(y, [0, 1])
     if int(np.sum(valid)) < 4:
         raise ValueError("Second-stage scorer requires at least 4 valid binary labeled rows.")
-    X = X[valid, :]
-    y = y[valid]
+    X = X_full[valid, :]
+    y_fit = y[valid]
 
     clf = LogisticRegression(max_iter=1000, class_weight="balanced", random_state=13)
-    clf.fit(X, y)
-    probs = clf.predict_proba(np.concatenate([X_prob, X_obs], axis=1))
+    clf.fit(X, y_fit)
+    probs = clf.predict_proba(X_full)
     y_hat = np.asarray(np.argmax(probs, axis=1), dtype=np.int32)
-    refined_balanced_accuracy = float(balanced_accuracy_score(y, y_hat[valid])) if int(np.sum(valid)) > 0 else None
+    refined_balanced_accuracy = (
+        float(balanced_accuracy_score(y_fit, y_hat[valid])) if int(np.sum(valid)) > 0 else None
+    )
 
     df["prob_refined_class0"] = probs[:, 0].astype(float)
     df["prob_refined_class1"] = probs[:, 1].astype(float)
@@ -291,53 +542,27 @@ def train_and_apply_ecdf_second_stage(
         "second_stage_type": "logistic_regression",
         "project_json": str(project_json),
         "predictor_output_dir": str(predictor_output_dir),
-        "bundle_h5": str(bundle_h5),
         "n_features": int(X.shape[1]),
-        "n_observed_features": int(X_obs.shape[1]),
-        "observed_feature_names": list(feat.feature_names),
-        "training_feature_names": list(feat.training_feature_names),
-        "quality_feature_names": list(feat.quality_feature_names),
-        "observed_feature_report": dict(feat.report),
-        "observed_feature_fill_values": [float(v) for v in fill_values.tolist()],
-        "observed_healthy_reference_vector": [float(v) for v in anchors.healthy_reference_vector.tolist()],
-        "observed_cancer_reference_vector": [float(v) for v in anchors.cancer_reference_vector.tolist()],
-        "observed_healthy_class_label": str(anchors.healthy_class_label),
-        "observed_cancer_class_labels": [str(x) for x in anchors.cancer_class_labels],
-        "observed_anchor_strategy": str(anchors.anchor_strategy),
-        "observed_feature_order_fingerprint": str(anchors.feature_order_fingerprint),
-        "max_dmps": int(max_dmps_norm),
-        "quantiles": [float(q) for q in (feat.report.get("quantiles") or [])],
-        "min_coverage": int(max(1, min_coverage)),
+        "stack_feature_names": block_names,
         "refined_balanced_accuracy_labeled_rows": refined_balanced_accuracy,
-        "observed_feature_include_dmp": bool(include_dmp_features),
-        "observed_feature_include_chromosome": bool(include_chromosome_features),
-        "observed_feature_include_dmr": bool(include_dmr_features),
-        "observed_feature_include_gene": bool(include_gene_features),
-        "observed_feature_dmr_window_bp": int(max(1, dmr_window_bp)),
-        "observed_feature_max_dmrs": int(max(0, max_dmr_features)),
-        "observed_feature_max_genes": int(max(0, max_gene_features)),
-        "observed_hist_eps": float(hist_eps),
-        "observed_hist_alpha": float(hist_alpha),
-        "observed_hist_evidence_clip_cap": float(hist_evidence_clip_cap),
-        "observed_hist_tail_agreement_threshold": float(hist_tail_agreement_threshold),
+        **meta_extra,
     }
-    verify_feature_schema(
-        feat.feature_names,
-        meta["observed_feature_names"],
-        context="ecdf second-stage train/apply",
-    )
     meta_path = classifier_output_dir / "ecdf-second-stage-metadata.json"
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
+
     ablation_report = {
         "backend": "ecdf",
         "stage": "second_stage",
         "balanced_accuracy_labeled_rows": refined_balanced_accuracy,
         "active_feature_families": {
-            "dmp": bool(include_dmp_features),
-            "chromosome": bool(include_chromosome_features),
-            "dmr": bool(include_dmr_features),
-            "gene": bool(include_gene_features),
+            "dmp": bool(params.include_dmp_features) if params.include_observed_hybrid else False,
+            "chromosome": bool(params.include_chromosome_features)
+            if params.include_observed_hybrid
+            else False,
+            "dmr": bool(params.include_dmr_features) if params.include_observed_hybrid else False,
+            "gene": bool(params.include_gene_features) if params.include_observed_hybrid else False,
+            "covariates": bool(params.has_covariates()),
         },
         "recommended_ablation_matrix": [
             {"name": "baseline", "include_dmp": False, "include_dmr": False, "include_gene": False},
@@ -355,5 +580,7 @@ def train_and_apply_ecdf_second_stage(
         "metadata_path": str(meta_path),
         "predictions_csv": str(pred_csv),
         "n_rows": int(df.shape[0]),
+        "n_features": int(X.shape[1]),
+        "include_observed_hybrid": bool(params.include_observed_hybrid),
+        "include_covariates": bool(params.has_covariates()),
     }
-
