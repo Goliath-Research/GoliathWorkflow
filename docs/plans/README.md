@@ -47,6 +47,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`chromosome_sample_derived_measures_a9b33eac.plan.md`](chromosome_sample_derived_measures_a9b33eac.plan.md) | **AB#644** | Chromosome sample derived measures | (see plan frontmatter) |
 | [`ising_mrf_v2_gpu_5f06ccb7.plan.md`](ising_mrf_v2_gpu_5f06ccb7.plan.md) | **AB#653** | Ising MRF v2 GPU | (see plan frontmatter) |
 | [`buffy-cell-deconvolution.plan.md`](buffy-cell-deconvolution.plan.md) | _(pending ADO)_ | Buffy-coat cell deconvolution (Houseman / FlowSorted) | `pkg-qp-core`, `flowsorted-basis-asset`, `action-wiring`, `program-profile`, `tests`, `docs-plan-promote` |
+| [`cell-fraction-group-column.plan.md`](cell-fraction-group-column.plan.md) | _(pending ADO)_ | Cell fraction group column | `propagate-group-label`, `verify-group-column` |
 | [`di_action-agnostic_assessment_0d376284.plan.md`](di_action-agnostic_assessment_0d376284.plan.md) | **AB#664** | DI action-agnostic assessment | (see plan frontmatter) |
 | [`methylit-standalone-doc.plan.md`](methylit-standalone-doc.plan.md) | **AB#668** | MethylIT Standalone Doc | (see plan frontmatter) |
 | [`worker-transport-security.plan.md`](worker-transport-security.plan.md) | **AB#672** | Worker Transport Security | (see plan frontmatter) |

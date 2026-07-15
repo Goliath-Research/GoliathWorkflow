@@ -34,7 +34,7 @@ def test_main_uses_shared_resolved_config_contract(tmp_path: Path, monkeypatch) 
         "resolve_cell_deconv_step_config",
         lambda *args, **kwargs: (
             CellDeconvStepConfig(marker_min_coverage=4),
-            [("S1", str(tmp_path / "S1"))],
+            [("S1", str(tmp_path / "S1"), "healthy")],
             str(output_dir),
         ),
     )

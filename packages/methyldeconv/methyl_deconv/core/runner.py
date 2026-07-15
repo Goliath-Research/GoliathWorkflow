@@ -13,7 +13,7 @@ from .houseman import deconvolve_sample, load_seed_basis
 
 
 def run_cell_deconv_for_samples(
-    samples: Sequence[Tuple[str, str]],
+    samples: Sequence[Tuple[str, str, str]],
     output_dir: Path,
     cfg: CellDeconvStepConfig,
 ) -> Dict[str, Any]:
@@ -24,9 +24,9 @@ def run_cell_deconv_for_samples(
     id_col = runtime.sample_id_column
 
     rows: List[Dict[str, Any]] = []
-    for sample_id, sample_dir in samples:
+    for sample_id, sample_dir, group in samples:
         props = deconvolve_sample(sample_dir, basis, runtime)
-        row = {id_col: str(sample_id)}
+        row = {id_col: str(sample_id), "group": str(group)}
         for ct in basis.cell_types:
             row[ct] = props.get(ct)
         row["n_markers_observed"] = props.get("n_markers_observed")
@@ -35,8 +35,15 @@ def run_cell_deconv_for_samples(
         rows.append(row)
 
     df = pd.DataFrame(rows)
-    # Stable column order: id, cell types, diagnostics
-    ordered = [id_col, *list(basis.cell_types), "n_markers_observed", "marker_fraction", "qp_status"]
+    # Stable column order: id, resolved project group, cell types, diagnostics
+    ordered = [
+        id_col,
+        "group",
+        *list(basis.cell_types),
+        "n_markers_observed",
+        "marker_fraction",
+        "qp_status",
+    ]
     df = df.reindex(columns=ordered)
     csv_path = output_dir / "cell_fractions.csv"
     df.to_csv(csv_path, index=False)

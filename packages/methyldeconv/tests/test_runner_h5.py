@@ -101,7 +101,7 @@ def test_runner_requires_operator_thresholds(tmp_path: Path):
     basis_path = _tiny_basis(tmp_path)
     cfg = CellDeconvStepConfig(seed_basis_path=str(basis_path), use_gpu=False)
     with pytest.raises(ValueError, match="missing contexts, marker_min_coverage, min_marker_fraction"):
-        run_cell_deconv_for_samples([("S", str(tmp_path))], tmp_path / "out", cfg)
+        run_cell_deconv_for_samples([("S", str(tmp_path), "healthy")], tmp_path / "out", cfg)
 
 
 def test_runner_writes_csv(tmp_path: Path):
@@ -121,19 +121,25 @@ def test_runner_writes_csv(tmp_path: Path):
         min_marker_fraction=0.5,
         use_gpu=False,
     )
-    summary = run_cell_deconv_for_samples([("S2", str(sample_dir))], out, cfg)
+    summary = run_cell_deconv_for_samples([("S2", str(sample_dir), "healthy")], out, cfg)
     assert summary["n_samples"] == 1
     assert summary["n_ok"] == 1
     csv_path = Path(summary["output_csv"])
     assert csv_path.is_file()
     df = pd.read_csv(csv_path)
-    assert list(df.columns)[:7] == [
+    assert list(df.columns) == [
         "sample_id",
+        "group",
         "CD8T",
         "CD4T",
         "NK",
         "Bcell",
         "Mono",
         "Neu",
+        "n_markers_observed",
+        "marker_fraction",
+        "qp_status",
     ]
     assert df.loc[0, "sample_id"] == "S2"
+    assert df.loc[0, "group"] == "healthy"
+    assert summary["n_columns"] == 11

@@ -12,16 +12,17 @@ from methyl_utils.action_config_resolver import resolve_for_project
 from .config import CellDeconvStepConfig
 
 
-def _all_sample_dirs(project) -> List[Tuple[str, str]]:  # noqa: ANN001
+def _all_sample_dirs(project) -> List[Tuple[str, str, str]]:  # noqa: ANN001
+    """Return (sample_id, sample_dir, resolved_group_label) for project samples."""
     seen: set[str] = set()
-    out: List[Tuple[str, str]] = []
-    for _label, group_paths in project.get_resolved_groups():
+    out: List[Tuple[str, str, str]] = []
+    for label, group_paths in project.get_resolved_groups():
         for p in group_paths:
             if p in seen:
                 continue
             seen.add(p)
             sample_id = Path(p).name
-            out.append((sample_id, p))
+            out.append((sample_id, p, str(label)))
     return out
 
 
@@ -29,7 +30,7 @@ def resolve_cell_deconv_step_config(
     project_path: Union[str, Path],
     step_override_path: Optional[Union[str, Path]] = None,
     resolved_config: Optional[Dict[str, Any]] = None,
-) -> Tuple[CellDeconvStepConfig, List[Tuple[str, str]], str]:
+) -> Tuple[CellDeconvStepConfig, List[Tuple[str, str, str]], str]:
     project = load_project(project_path)
     paths = project.get_derived_paths()
     step_cfg: Dict[str, Any] = dict(resolve_for_project("cell_deconvolution", project))

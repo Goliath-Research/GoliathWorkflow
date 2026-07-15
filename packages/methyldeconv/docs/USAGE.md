@@ -12,7 +12,11 @@ methyl-cell-deconv --project /work/projects/<study>/configs/project_Buffy_*.json
 
 Writes `{output_base}/cell_fractions/cell_fractions.csv` with columns:
 
-`sample_id`, `CD8T`, `CD4T`, `NK`, `Bcell`, `Mono`, `Neu`, plus marker diagnostics.
+`sample_id`, `group`, `CD8T`, `CD4T`, `NK`, `Bcell`, `Mono`, `Neu`, plus marker diagnostics.
+
+`group` is the resolved project subgroup label returned by `get_resolved_groups()`
+(for example, `all` or `PCa`). Existing output files are not modified in place;
+rerun `methyl-cell-deconv` to produce the column.
 
 ## Config (`actionConfig.cell_deconvolution`)
 
