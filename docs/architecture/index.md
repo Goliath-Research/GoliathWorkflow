@@ -11,6 +11,7 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [Distributed runtime](distributed-runtime.md) | portal, DB, gateway, workers, shared storage |
 | [Orchestration paths](orchestration-paths.md) | local, gateway, legacy CLI matrix |
 | [Pipeline stages](pipeline-stages.md) | sample prep through validation stage DAG |
+| [End-to-end workflow](end-to-end-workflow.md) | Ingest → SamplePrep (QC/trim/extract) → MC → DeConv/info measures → model → holdouts (Mermaid) |
 | [Hyperparameter sets & CAAS](../usage/17-content-addressed-action-store.qmd) | Experiment with the same workflow under varied config; idempotent cross-instance reuse ([deep dive](../../workflow_engine/docs/pipeline_architecture.md#hyperparameter-sets-and-caas)) |
 | [Documentation audit (2026-07)](documentation-audit-2026-07.md) | Staleness findings + Quarto validation + remediation checklist |
 
@@ -26,5 +27,5 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 
 - **Config author** → [layer-model.md](layer-model.md) + [config-registry.md](config-registry.md)
 - **DevOps / cluster** → [distributed-runtime.md](distributed-runtime.md) + [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd) + [Usage ch.19](../usage/19-config-registry.qmd)
-- **Workflow author** → [orchestration-paths.md](orchestration-paths.md) + [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.qmd) + [DomainProgram reference](../reference/domain-program-language.md)
+- **Workflow author** → [orchestration-paths.md](orchestration-paths.md) + [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.qmd) + [DomainProgram reference](../reference/domain-program-language.md) + [end-to-end workflow](end-to-end-workflow.md)
 - **Experimentation / result versioning** → [Usage ch.17](../usage/17-content-addressed-action-store.qmd) + [pipeline architecture — hyperparameter sets](../../workflow_engine/docs/pipeline_architecture.md#hyperparameter-sets-and-caas)

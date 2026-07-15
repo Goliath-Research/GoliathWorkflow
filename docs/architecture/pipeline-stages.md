@@ -14,6 +14,8 @@ flowchart LR
   prep --> qc --> stability --> freeze --> model --> validation --> blind
 ```
 
+**Detailed Mermaid walkthrough (ingest → holdouts):** [`end-to-end-workflow.md`](end-to-end-workflow.md)
+
 | Stage | Usage chapter | Primary packages |
 |-------|---------------|------------------|
 | Sample prep | [ch.03](../usage/03-sample-prep-and-qc.qmd) | workers, `methylalignmentqc`, external Parabricks/extract |

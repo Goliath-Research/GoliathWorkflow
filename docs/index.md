@@ -27,7 +27,7 @@ See table above. Package maintainers: [implementation/packages/](implementation/
 
 ### By pipeline stage
 
-[Architecture: pipeline stages](architecture/pipeline-stages.md) ↔ [Usage ch.03–09](usage/index.qmd)
+[Architecture: pipeline stages](architecture/pipeline-stages.md) · **[End-to-end workflow (Mermaid)](architecture/end-to-end-workflow.md)** ↔ [Usage ch.03–09](usage/index.qmd)
 
 ### By system layer
 

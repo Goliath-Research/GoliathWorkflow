@@ -13,6 +13,8 @@ Each sample is aligned on GPU using either **linear** (`fq2bam_meth`) or **pange
 
 **Workflow source of truth:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
 
+**Full study path (prep → MC → DeConv/info → holdouts):** [`docs/architecture/end-to-end-workflow.md`](../architecture/end-to-end-workflow.md)
+
 **Operator reference:** [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md)
 
 **Implementation detail (alignment modes, storage, guardrails):** [`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md)
