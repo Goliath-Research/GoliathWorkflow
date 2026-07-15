@@ -23,18 +23,23 @@ Two DomainPrograms run in sequence for a typical study:
 
 ```mermaid
 flowchart TB
-  subgraph ingest["0 · External storage"]
-    EXT["Cloud / QNAP / portal object store<br/>FASTQ or sequenced library IDs"]
+  subgraph src["0a · FASTQ source storage<br/>fastqSource — may be lab cloud / QNAP / NFS"]
+    FQSRC["file | s3 | azure_blob<br/>raw FASTQs only"]
   end
 
-  subgraph prep["1 · SamplePrepPipeline (per sample)"]
+  subgraph prep["1 · SamplePrepPipeline (per sample on /work scratch)"]
     DL["download_fastq"]
     ALN["Parabricks align<br/>fq2bam_meth or giraffe"]
     AQC["methyl_qc"]
     REM["trim_fastq → realign → methyl_qc retry"]
     EXT2["methyl_extract<br/>*.h5 + *.patterns.h5"]
     EQC["extraction_qc"]
-    ARC["archive + delete FASTQ/BAM"]
+    ARC["archive_sample<br/>success → full · fail → qc_only"]
+    DEL["delete_fastqs + delete_bam<br/>local scratch cleanup"]
+  end
+
+  subgraph dst["0b · Result archive storage<br/>sampleDestination — often a different endpoint"]
+    ARCH["qc/ · fastq/ · h5/<br/>NO BAM"]
   end
 
   subgraph study["2 · Study validation lifecycle (cohort)"]
@@ -47,13 +52,16 @@ flowchart TB
     VAL["post_model_validation<br/>locked_test / pivotal holdouts"]
   end
 
-  EXT --> DL --> ALN --> AQC
+  FQSRC -->|"download"| DL --> ALN --> AQC
   AQC -->|pass| EXT2
   AQC -->|remediate| REM --> EXT2
   EXT2 --> EQC --> ARC
-  ARC --> MC --> STAB --> FRZ --> COV --> ENR --> MOD --> VAL
+  ARC -->|"upload curated bundle"| ARCH
+  ARC --> DEL
+  DEL --> MC --> STAB --> FRZ --> COV --> ENR --> MOD --> VAL
 ```
 
+**Storage split:** ingress (`fastqSource`) and egress (`sampleDestination`) are independent typed locations in the `cfg` registry. They may be the same bucket/prefix or two different accounts; BAM stays on `/work` only and is deleted after archive — it is never part of the remote archive bundle.
 ```mermaid
 flowchart LR
   subgraph layers["Configuration layers (highest wins on the right)"]
@@ -69,31 +77,62 @@ Study science lives under `/work/projects/<study>/`; sample archives under `/wor
 
 ## 2. Where data lives
 
+SamplePrep uses **two storage endpoints** plus a local scratch tree:
+
 ```mermaid
-flowchart TB
-  subgraph external["External / portal"]
-    OBJ["Object storage endpoint<br/>cfg.storage + credentials"]
+flowchart LR
+  subgraph src["fastqSource (ingress)"]
+    S1["Lab / portal object store<br/>or NFS path"]
+  end
+  subgraph scratch["/work scratch (GPU node shared FS)"]
+    W["/work/samples/{sample_id}/<br/>FASTQ · BAM · QC · h5 · patterns"]
+  end
+  subgraph dst["sampleDestination (egress)"]
+    D1["Durable archive<br/>often different account/bucket"]
   end
 
-  subgraph work["Shared /work"]
-    SAMP["/work/samples/{sample_id}/<br/>BAM → then *.h5 + *.patterns.h5"]
-    PROJ["/work/projects/{study}/<br/>configs/, data/, outputs/"]
-    SITE["/work/site/methyl_site.json<br/>genomes, caches"]
-    EPI["/work/epimethyl/current/<br/>runtime-bundle, venv"]
-  end
-
-  OBJ -->|"sample.download_fastq"| SAMP
-  SAMP -->|"paths in project groups"| PROJ
-  SITE -.->|"METHYL_SITE_CONFIG"| EPI
-  PROJ -->|"projectPath in --context"| EPI
+  S1 -->|"sample.download_fastq"| W
+  W -->|"sample.archive_sample<br/>full or qc_only"| D1
+  W -.->|"delete_bam<br/>never uploaded"| X["BAM discarded"]
 ```
 
-| Path | Role |
-|------|------|
-| `/work/samples/{id}/` | Per-sample BAM (transient), `{chrom}-{ctx}.h5`, `{chrom}-{ctx}.patterns.h5`, QC JSON |
-| `/work/projects/{study}/configs/project_*.json` | Cohorts, comparisons, `validation_partitions` |
-| `/work/projects/{study}/{project_name}/` | MC runs, freeze, cell_fractions, info_measures, models |
-| `/work/site/` | Genomes, site `actionConfig` defaults |
+```mermaid
+flowchart TB
+  subgraph work["Shared /work also holds"]
+    PROJ["/work/projects/{study}/<br/>configs/, data/, MC outputs/"]
+    SITE["/work/site/methyl_site.json"]
+    EPI["/work/epimethyl/current/"]
+  end
+  W2["/work/samples/..."] -->|"group paths in project"| PROJ
+  SITE -.-> EPI
+  PROJ -->|"projectPath"| EPI
+```
+
+| Location | Config key | Role |
+|----------|------------|------|
+| FASTQ source | `fastqSource` on download task / study sample mapping | Read-only ingress (`file` / `s3` / `azure_blob`) |
+| Local scratch | `/work/samples/{id}/` | Align, QC, extract; BAM is **transient** |
+| Result archive | `sampleDestination` (alias `sampleStorage` / deprecated `h5Destination`) | Durable egress after success **or** terminal failure |
+| Study outputs | `/work/projects/{study}/…` | MC, freeze, covariates, models |
+
+If `sampleDestination` is unset, archive is skipped (`skipReason: sample_destination_not_configured`); local `/work` files remain for analysis. Details: [sample-preparation-flow — storage topology](../implementation/sample-preparation-flow.md#storage-topology-sample-sources-and-result-archival).
+
+### Archive bundle (no BAM)
+
+```mermaid
+flowchart TD
+  DISP{"QC disposition"}
+  DISP -->|extraction pass| FULL["mode=full"]
+  DISP -->|terminal fail| QCO["mode=qc_only"]
+  FULL --> F1["qc/*.json + sample_prep_log"]
+  FULL --> F2["fastq/*.fastq.gz"]
+  FULL --> F3["h5/*.h5 including *.patterns.h5"]
+  FULL --> F4["archive_manifest.json"]
+  QCO --> Q1["qc/*.json + reject_reason"]
+  QCO --> Q2["archive_manifest.json"]
+  FULL --> NOBAM["BAM never in archive<br/>local delete_bam only"]
+  QCO --> NOBAM
+```
 
 ---
 
@@ -103,7 +142,7 @@ flowchart TB
 
 ```mermaid
 flowchart TD
-  A["sample.download_fastq<br/>from storage endpoint"] --> B{"usePangenome?"}
+  A["sample.download_fastq<br/>fastqSource → /work/samples/id"] --> B{"usePangenome?"}
   B -->|no| C["sample.parabricks_fq2bam<br/>pbrun fq2bam_meth"]
   B -->|yes| D["sample.parabricks_giraffe<br/>vg giraffe → GRCh38"]
   C --> E["sample.methyl_qc"]
@@ -115,10 +154,11 @@ flowchart TD
   H --> I
   I --> J["sample.extraction_qc"]
   J --> K{"extractionQcPass?"}
-  K -->|yes| L["archive_sample full"]
+  K -->|yes| L["archive_sample mode=full<br/>→ sampleDestination<br/>qc + fastq + h5 · no BAM"]
   L --> M["delete_fastqs"]
   M --> N["delete_bam"]
-  K -->|no| O["archive qc_only + qc_failed"]
+  K -->|no| O["archive_sample mode=qc_only<br/>→ sampleDestination<br/>qc + reject_reason · no BAM"]
+  O --> P["delete_fastqs + delete_bam + qc_failed"]
 ```
 
 **Extract outputs** (read-level enabled by default on SaMD/research profiles):
@@ -154,24 +194,25 @@ Typical remediation trigger: Read-2 start low quality (`READ2_START_LOW_QUALITY`
 
 ```mermaid
 sequenceDiagram
-  participant Ext as External storage
+  participant Src as fastqSource storage
   participant W as Worker
   participant S as /work/samples/id
-  participant Q as QC reports
+  participant Dst as sampleDestination storage
 
-  Ext->>W: download_fastq
-  W->>S: *.fastq.gz
+  Src->>W: download_fastq
+  W->>S: stage *.fastq.gz
   W->>S: align → *.bam + metrics
-  W->>Q: methyl_qc JSON / disposition
-  alt remediate
-    W->>S: trim FASTQ in place / sidecar
-    W->>S: forceRealign BAM
-    W->>Q: methyl_qc retry
-  end
+  W->>S: methyl_qc (± trim/realign)
   W->>S: methyl_extract → *.h5 + *.patterns.h5
-  W->>Q: extraction_qc
-  W->>S: archive; delete FASTQ + BAM
-  Note over S: Durable inputs for MC: HDF5 + patterns
+  W->>S: extraction_qc
+  alt pass → mode=full
+    W->>Dst: upload qc/ + fastq/ + h5/ + manifest
+  else fail → mode=qc_only
+    W->>Dst: upload qc/ + reject_reason + manifest
+  end
+  Note over Dst: BAM never uploaded
+  W->>S: delete_fastqs + delete_bam
+  Note over S: Keep h5/patterns for MC on /work
 ```
 
 ---
@@ -328,14 +369,16 @@ sequenceDiagram
   participant GW as Gateway
   participant W as GPU workers
   participant Stor as Shared /work
-  participant Ext as External object store
+  participant Src as fastqSource
+  participant Dst as sampleDestination
 
   Portal->>GW: Start SamplePrep instance
   GW->>W: Claim download_fastq
-  W->>Ext: Fetch FASTQ
-  W->>Stor: /work/samples/id/*.fastq.gz
-  W->>Stor: Align BAM
-  W->>Stor: QC + extract h5/patterns
+  W->>Src: Fetch FASTQ
+  W->>Stor: Stage under /work/samples/id
+  W->>Stor: Align BAM · QC · extract h5/patterns
+  W->>Dst: archive_sample full or qc_only without BAM
+  W->>Stor: delete_fastqs + delete_bam
   W->>GW: Complete sample
   Portal->>GW: Start study lifecycle
   GW->>W: MC centroid/detector tasks
