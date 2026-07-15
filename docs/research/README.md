@@ -5,6 +5,7 @@ Informal background research used during pipeline design (analyte choice, MCED l
 | Note | Topic |
 |------|--------|
 | [BuffyCoat_vs_cfDNA_for_Cancer_Detection.md](BuffyCoat_vs_cfDNA_for_Cancer_Detection.md) | Buffy vs cfDNA as MethylPipeline analytes; CHIP/paired designs; synthesizes Gemini + Grok landscape notes |
+| [omega-cluster-detection.md](omega-cluster-detection.md) | Train-healthy Ω clustering → matched-stratum vs all-pairs detection; Buffy results + DomainProgram gate |
 | [Prostate Cancer Detection.md](Prostate%20Cancer%20Detection.md) | Gatekeeper / csPCa clinical framing and wet-lab SOW (source note) |
 | [Prostate_Cancer_Detection_MethylPipeline_Fitness.md](Prostate_Cancer_Detection_MethylPipeline_Fitness.md) | Fitness analysis of that note vs MethylPipeline (adopt-with-caveats; extensions) |
 | [Gemini_on_Cancer_Detection.md](Gemini_on_Cancer_Detection.md) | MCED competitors, multiomics platforms, buffy-coat as CHIP filter |

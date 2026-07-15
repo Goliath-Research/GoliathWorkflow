@@ -7,6 +7,8 @@
 
 MethylPipeline is **analyte-agnostic**: the same DomainProgram + profile path runs for leukocyte DNA and plasma cfDNA. Analyte choice changes biology, QC defaults, and how you interpret features — not which CLI you use.
 
+**Ω set-point clustering (research):** leukocyte proportions may form healthy composition clusters; see [`omega-cluster-detection.md`](omega-cluster-detection.md) for a leakage-safe matched-stratum analysis on Buffy PCa (pipeline leave expansion deferred).
+
 ---
 
 
