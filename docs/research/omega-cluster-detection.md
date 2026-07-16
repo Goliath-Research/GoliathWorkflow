@@ -45,7 +45,7 @@ python scripts/omega_cluster_detection.py \
   --healthy-group all --disease-group PCa
 ```
 
-Artifacts: `omega_cluster_summary.json`, `omega_stratum_assignments.csv`, `omega_stratum_sizes.csv`, `omega_pca_by_stratum.png`, optional `multi_seed_sensitivity.csv`.
+Artifacts: `omega_cluster_summary.json`, `omega_stratum_assignments.csv`, `omega_stratum_sizes.csv`, `omega_pca_by_stratum.html` (interactive Plotly), optional `multi_seed_sensitivity.csv`.
 
 ## Buffy results (seed 13, min_train=8)
 
