@@ -690,9 +690,13 @@ def _try_write_pca_plot(
     *,
     cfg: OmegaClusterConfig,
 ) -> Optional[Path]:
-    """Write an interactive Plotly HTML scatter (PC1/PC2 × stratum × label)."""
+    """Write an interactive Plotly HTML scatter (PC1/PC2 × stratum × label).
+
+    Includes All / Train / Test buttons so analysts can filter by holdout split.
+    """
     try:
-        import plotly.express as px
+        import plotly.graph_objects as go
+        from plotly.colors import qualitative
         from sklearn.decomposition import PCA
     except Exception:
         return None
@@ -702,34 +706,136 @@ def _try_write_pca_plot(
     plot_df["PC1"] = pcs[:, 0]
     plot_df["PC2"] = pcs[:, 1]
     plot_df["label"] = plot_df["y"].map({0: "healthy", 1: "disease"})
-    # Discrete colors so the same stratum id shares a legend entry across labels.
     plot_df["healthy_stratum"] = plot_df["healthy_stratum"].astype(str)
-    hover_cols = [
-        c
-        for c in ("sample_id", "group", "split", "healthy_stratum", "disease_stratum")
-        if c in plot_df.columns
+    if "split" not in plot_df.columns:
+        plot_df["split"] = "all"
+    plot_df["split"] = plot_df["split"].astype(str)
+
+    def _stratum_key(s: str) -> Tuple[int, str]:
+        try:
+            return (0, f"{int(s):05d}")
+        except (TypeError, ValueError):
+            return (1, str(s))
+
+    strata = sorted(plot_df["healthy_stratum"].unique().tolist(), key=_stratum_key)
+    labels = ["healthy", "disease"]
+    symbols = {"healthy": "circle", "disease": "triangle-up"}
+    colors = qualitative.Plotly
+    splits = [s for s in ("train", "test") if s in set(plot_df["split"])]
+    if not splits:
+        splits = sorted(plot_df["split"].unique().tolist())
+
+    fig = go.Figure()
+    split_per_trace: List[str] = []
+    legend_seen: set[str] = set()
+    for si, stratum in enumerate(strata):
+        color = colors[si % len(colors)]
+        for label in labels:
+            for split in splits:
+                sub = plot_df[
+                    (plot_df["healthy_stratum"] == stratum)
+                    & (plot_df["label"] == label)
+                    & (plot_df["split"] == split)
+                ]
+                if sub.empty:
+                    continue
+                legend_key = f"{stratum}|{label}"
+                show_legend = legend_key not in legend_seen
+                if show_legend:
+                    legend_seen.add(legend_key)
+                custom = np.column_stack(
+                    [
+                        sub["sample_id"].astype(str).to_numpy(),
+                        sub["group"].astype(str).to_numpy()
+                        if "group" in sub.columns
+                        else np.array([""] * len(sub)),
+                        sub["split"].astype(str).to_numpy(),
+                        sub["healthy_stratum"].astype(str).to_numpy(),
+                        sub["disease_stratum"].astype(str).to_numpy()
+                        if "disease_stratum" in sub.columns
+                        else np.array([""] * len(sub)),
+                    ]
+                )
+                fig.add_trace(
+                    go.Scatter(
+                        x=sub["PC1"],
+                        y=sub["PC2"],
+                        mode="markers",
+                        name=f"stratum {stratum} · {label}",
+                        legendgroup=legend_key,
+                        showlegend=show_legend,
+                        marker=dict(
+                            symbol=symbols.get(label, "circle"),
+                            color=color,
+                            size=9,
+                            line=dict(width=0.5, color="#333"),
+                        ),
+                        customdata=custom,
+                        hovertemplate=(
+                            "sample_id=%{customdata[0]}<br>"
+                            "group=%{customdata[1]}<br>"
+                            "split=%{customdata[2]}<br>"
+                            "healthy_stratum=%{customdata[3]}<br>"
+                            "disease_stratum=%{customdata[4]}<br>"
+                            "PC1=%{x:.3f}<br>PC2=%{y:.3f}"
+                            "<extra></extra>"
+                        ),
+                    )
+                )
+                split_per_trace.append(split)
+
+    n_traces = len(split_per_trace)
+    filter_buttons = [
+        {
+            "label": "All",
+            "method": "update",
+            "args": [{"visible": [True] * n_traces}],
+        }
     ]
-    fig = px.scatter(
-        plot_df,
-        x="PC1",
-        y="PC2",
-        color="healthy_stratum",
-        symbol="label",
-        hover_data=hover_cols,
-        title="Ω PCA colored by healthy-derived stratum",
-        labels={
-            "PC1": "PC1 (CLR Ω)",
-            "PC2": "PC2 (CLR Ω)",
-            "healthy_stratum": "healthy_stratum",
-            "label": "group",
-        },
-        category_orders={"label": ["healthy", "disease"]},
-    )
-    fig.update_traces(marker=dict(size=9, line=dict(width=0.5, color="#333")))
+    for split in splits:
+        filter_buttons.append(
+            {
+                "label": split.capitalize(),
+                "method": "update",
+                "args": [{"visible": [s == split for s in split_per_trace]}],
+            }
+        )
+
     fig.update_layout(
+        title="Ω PCA colored by healthy-derived stratum",
+        xaxis_title="PC1 (CLR Ω)",
+        yaxis_title="PC2 (CLR Ω)",
         template="plotly_white",
-        legend_title_text="",
+        legend_title_text="stratum · group",
         hovermode="closest",
+        margin=dict(t=80),
+        updatemenus=[
+            {
+                "type": "buttons",
+                "direction": "right",
+                "x": 0.0,
+                "y": 1.12,
+                "xanchor": "left",
+                "yanchor": "top",
+                "pad": {"r": 8, "t": 0},
+                "showactive": True,
+                "active": 0,
+                "buttons": filter_buttons,
+            }
+        ],
+        annotations=[
+            {
+                "text": "Split filter:",
+                "xref": "paper",
+                "yref": "paper",
+                "x": 0.0,
+                "y": 1.18,
+                "xanchor": "left",
+                "yanchor": "bottom",
+                "showarrow": False,
+                "font": {"size": 12},
+            }
+        ],
     )
     fig.write_html(str(path), include_plotlyjs="cdn", full_html=True)
     return path

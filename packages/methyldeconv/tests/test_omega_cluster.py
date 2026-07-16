@@ -95,7 +95,12 @@ def test_run_analysis_writes_artifacts(tmp_path: Path):
     if _plotly_available():
         assert pca_html.is_file()
         assert summary["artifacts"].get("pca_by_stratum_html") == str(pca_html)
-        assert "<html" in pca_html.read_text(encoding="utf-8").lower()
+        html = pca_html.read_text(encoding="utf-8")
+        assert "<html" in html.lower()
+        # Analyst split filter (All / Train / Test buttons)
+        assert "Split filter" in html
+        assert '"label":"Train"' in html or '"label": "Train"' in html
+        assert '"label":"Test"' in html or '"label": "Test"' in html
     assert summary["clustering"]["dimensions"] == "all_6"
     assert summary["clustering"]["healthy_k"] >= 2
     names = {r["strategy"] for r in summary["results"]}
