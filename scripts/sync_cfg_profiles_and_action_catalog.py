@@ -133,6 +133,9 @@ def seed_action_catalog() -> None:
 
 def verify_profiles(db, names: Iterable[str]) -> None:
     names_list = list(names)
+    if not names_list:
+        raise SystemExit("verify_profiles: no profile names requested")
+
     backend = os.environ.get("BACKEND_DB", "mssql").lower()
     if backend == "postgres":
         rows = db._fetch_all(  # noqa: SLF001
@@ -159,14 +162,26 @@ def verify_profiles(db, names: Iterable[str]) -> None:
             """,
             (f"%{_REMOVED_KEY}%", f"%{_CANONICAL_KEY}%", *names_list),
         )
+
+    found = {str(r.get("name")) for r in rows if r.get("name") is not None}
+    expected = set(names_list)
+    absent = sorted(expected - found)
+    if absent:
+        raise SystemExit(
+            "verify_profiles: expected profile(s) missing from cfg.pipeline_profile: "
+            f"{absent} (got {sorted(found) if found else 'no rows'})"
+        )
+
     for row in rows:
         print("verify profile", row)
     bad = [r for r in rows if r.get("has_removed") in (True, 1)]
     if bad:
         raise SystemExit(f"removed key {_REMOVED_KEY!r} still present: {bad}")
-    missing = [r for r in rows if r.get("has_canonical") not in (True, 1)]
-    if missing:
-        raise SystemExit(f"canonical key {_CANONICAL_KEY!r} missing: {missing}")
+    missing_canonical = [r for r in rows if r.get("has_canonical") not in (True, 1)]
+    if missing_canonical:
+        raise SystemExit(
+            f"canonical key {_CANONICAL_KEY!r} missing: {missing_canonical}"
+        )
 
 
 def verify_biomarker_schema(db) -> None:
