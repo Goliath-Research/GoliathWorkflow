@@ -63,8 +63,10 @@ class SamplePrepPlanRequest(BaseModel):
     deleteFastqs: Optional[bool] = Field(
         default=None,
         description=(
-            "When true (default if unset), SamplePrep runs sample.delete_fastqs after "
-            "archive/terminal QC. Set false to keep FASTQs under /work/samples/{id}/."
+            "Optional override for SamplePrep local FASTQ deletion. When unset, leave "
+            "context without deleteFastqs so finalize/seed can resolve "
+            "actionConfig.sample_prep.delete_fastqs (default true). Set true/false to "
+            "force delete or retain under /work/samples/{id}/."
         ),
     )
 
@@ -416,9 +418,11 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
         "isCfdna": is_cfdna,
         "fastqStorage": dump_storage_model(storage),
         "samples": samples,
-        # Default delete local FASTQs after archive; operators may set false to retain.
-        "deleteFastqs": True if request.deleteFastqs is None else bool(request.deleteFastqs),
     }
+    # Only set when explicit: leave unset so seed_pipeline_scope_flags can apply
+    # actionConfig.sample_prep.delete_fastqs (default true) at finalize time.
+    if request.deleteFastqs is not None:
+        context["deleteFastqs"] = bool(request.deleteFastqs)
     if sample_storage is not None:
         dumped = dump_storage_model(sample_storage)
         context["sampleStorage"] = dumped

@@ -65,7 +65,7 @@ def test_explicit_samples_with_s3_storage(tmp_path: Path) -> None:
     )
     assert ctx["primaryAnalyte"] == "buffy_coat"
     assert ctx["isCfdna"] is False
-    assert ctx["deleteFastqs"] is True
+    assert "deleteFastqs" not in ctx
     assert ctx["fastqStorage"]["type"] == "s3"
     assert len(ctx["samples"]) == 2
     s1 = ctx["samples"][0]
@@ -75,6 +75,47 @@ def test_explicit_samples_with_s3_storage(tmp_path: Path) -> None:
     assert s1["fastqSource"]["prefix"] == "S1/"
     assert s1["fastqSource"]["bucket"] == "bucket"
     assert s1["sampleDir"].endswith("/S1")
+
+
+def test_planner_leaves_delete_fastqs_unset_for_profile_resolution(tmp_path: Path) -> None:
+    """Unset planner field must not block actionConfig.sample_prep.delete_fastqs."""
+    import sys
+    from pathlib import Path as P
+
+    domain = P(__file__).resolve().parents[3] / "workflow_engine" / "domain"
+    if str(domain) not in sys.path:
+        sys.path.insert(0, str(domain))
+    from pipeline_profiles import seed_pipeline_scope_flags
+
+    project_path = _write_project(tmp_path)
+    ctx = plan_sample_prep_context(
+        {
+            "projectPath": str(project_path),
+            "samples": [{"sampleId": "S1"}],
+            "fastqStorage": S3_STORAGE,
+        }
+    )
+    assert "deleteFastqs" not in ctx
+    seeded = seed_pipeline_scope_flags(
+        ctx,
+        action_config={"sample_prep": {"delete_fastqs": False}},
+    )
+    assert seeded["deleteFastqs"] is False
+
+    forced = plan_sample_prep_context(
+        {
+            "projectPath": str(project_path),
+            "samples": [{"sampleId": "S1"}],
+            "fastqStorage": S3_STORAGE,
+            "deleteFastqs": True,
+        }
+    )
+    assert forced["deleteFastqs"] is True
+    seeded_forced = seed_pipeline_scope_flags(
+        forced,
+        action_config={"sample_prep": {"delete_fastqs": False}},
+    )
+    assert seeded_forced["deleteFastqs"] is True
 
 
 def test_csv_plus_azure_storage(tmp_path: Path) -> None:
