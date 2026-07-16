@@ -626,7 +626,12 @@ def run_omega_cluster_analysis(
     summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     summary["artifacts"]["summary_json"] = str(summary_path)
 
-    _try_write_pca_plot(assignments, output_dir / "omega_pca_by_stratum.png", cfg=cfg)
+    pca_plot = _try_write_pca_plot(
+        assignments, output_dir / "omega_pca_by_stratum.html", cfg=cfg
+    )
+    if pca_plot is not None:
+        summary["artifacts"]["pca_by_stratum_html"] = str(pca_plot)
+        summary_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     return summary
 
 
@@ -684,42 +689,47 @@ def _try_write_pca_plot(
     path: Path,
     *,
     cfg: OmegaClusterConfig,
-) -> None:
+) -> Optional[Path]:
+    """Write an interactive Plotly HTML scatter (PC1/PC2 × stratum × label)."""
     try:
-        import matplotlib
-
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
+        import plotly.express as px
         from sklearn.decomposition import PCA
     except Exception:
-        return
+        return None
     X = _fit_space(_omega_matrix(assignments), use_clr=cfg.use_clr)
     pcs = PCA(n_components=2, random_state=cfg.random_state).fit_transform(X)
-    stratum = assignments["healthy_stratum"].to_numpy()
-    # Shared color scale so healthy/disease markers map the same stratum id to the same color.
-    vmin = float(np.nanmin(stratum))
-    vmax = float(np.nanmax(stratum))
-    fig, ax = plt.subplots(figsize=(7, 5))
-    for y_val, marker in ((0, "o"), (1, "^")):
-        m = assignments["y"].to_numpy() == y_val
-        sc = ax.scatter(
-            pcs[m, 0],
-            pcs[m, 1],
-            c=stratum[m],
-            cmap="tab10",
-            vmin=vmin,
-            vmax=vmax,
-            marker=marker,
-            alpha=0.75,
-            edgecolors="k",
-            linewidths=0.3,
-            label="healthy" if y_val == 0 else "disease",
-        )
-    ax.set_xlabel("PC1 (CLR Ω)")
-    ax.set_ylabel("PC2 (CLR Ω)")
-    ax.set_title("Ω PCA colored by healthy-derived stratum")
-    ax.legend(loc="best")
-    fig.colorbar(sc, ax=ax, label="healthy_stratum")
-    fig.tight_layout()
-    fig.savefig(path, dpi=120)
-    plt.close(fig)
+    plot_df = assignments.copy()
+    plot_df["PC1"] = pcs[:, 0]
+    plot_df["PC2"] = pcs[:, 1]
+    plot_df["label"] = plot_df["y"].map({0: "healthy", 1: "disease"})
+    # Discrete colors so the same stratum id shares a legend entry across labels.
+    plot_df["healthy_stratum"] = plot_df["healthy_stratum"].astype(str)
+    hover_cols = [
+        c
+        for c in ("sample_id", "group", "split", "healthy_stratum", "disease_stratum")
+        if c in plot_df.columns
+    ]
+    fig = px.scatter(
+        plot_df,
+        x="PC1",
+        y="PC2",
+        color="healthy_stratum",
+        symbol="label",
+        hover_data=hover_cols,
+        title="Ω PCA colored by healthy-derived stratum",
+        labels={
+            "PC1": "PC1 (CLR Ω)",
+            "PC2": "PC2 (CLR Ω)",
+            "healthy_stratum": "healthy_stratum",
+            "label": "group",
+        },
+        category_orders={"label": ["healthy", "disease"]},
+    )
+    fig.update_traces(marker=dict(size=9, line=dict(width=0.5, color="#333")))
+    fig.update_layout(
+        template="plotly_white",
+        legend_title_text="",
+        hovermode="closest",
+    )
+    fig.write_html(str(path), include_plotlyjs="cdn", full_html=True)
+    return path

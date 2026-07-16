@@ -17,6 +17,15 @@ from methyl_deconv.analysis.omega_cluster import (
 )
 
 
+def _plotly_available() -> bool:
+    try:
+        import plotly  # noqa: F401
+
+        return True
+    except Exception:
+        return False
+
+
 def _synthetic_fractions(tmp_path: Path, *, n_h: int = 40, n_d: int = 40) -> Path:
     """Two healthy Ω modes + disease shifted within/near them."""
     rng = np.random.default_rng(7)
@@ -82,6 +91,11 @@ def test_run_analysis_writes_artifacts(tmp_path: Path):
     assert (out / "omega_cluster_summary.json").is_file()
     assert (out / "omega_stratum_assignments.csv").is_file()
     assert (out / "omega_stratum_sizes.csv").is_file()
+    pca_html = out / "omega_pca_by_stratum.html"
+    if _plotly_available():
+        assert pca_html.is_file()
+        assert summary["artifacts"].get("pca_by_stratum_html") == str(pca_html)
+        assert "<html" in pca_html.read_text(encoding="utf-8").lower()
     assert summary["clustering"]["dimensions"] == "all_6"
     assert summary["clustering"]["healthy_k"] >= 2
     names = {r["strategy"] for r in summary["results"]}
