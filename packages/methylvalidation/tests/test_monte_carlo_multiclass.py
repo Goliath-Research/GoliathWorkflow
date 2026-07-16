@@ -38,21 +38,22 @@ def test_stratified_split_multiclass_unique_labels_required():
         )
 
 
-def test_monte_carlo_config_legacy_healthy_disease():
-    c = MonteCarloConfig.model_validate(
-        {
-            "samples_base_path": "/tmp/s",
-            "healthy_csv": "h.csv",
-            "disease_csv": "d.csv",
-            "train_fraction": 0.8,
-            "n_iterations": 2,
-            "base_project": "p.json",
-            "output_base": "/tmp/out",
-        }
-    )
-    assert len(c.cohorts) == 2
-    assert c.cohorts[0].label == "healthy"
-    assert c.cohorts[1].csv == "d.csv"
+def test_monte_carlo_config_rejects_legacy_healthy_disease():
+    import pytest
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="Removed legacy Monte Carlo config keys"):
+        MonteCarloConfig.model_validate(
+            {
+                "samples_base_path": "/tmp/s",
+                "healthy_csv": "h.csv",
+                "disease_csv": "d.csv",
+                "train_fraction": 0.8,
+                "n_iterations": 2,
+                "base_project": "p.json",
+                "output_base": "/tmp/out",
+            }
+        )
 
 
 def test_monte_carlo_config_explicit_cohorts():

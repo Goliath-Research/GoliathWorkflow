@@ -33,7 +33,7 @@ Let \(\theta\) denote tunable parameters (merged into `MonteCarloConfig` and/or 
 
 | Tier | Scope | Examples |
 |------|--------|----------|
-| **A** | `MonteCarloConfig` / `actionConfig.validation` | `train_fraction`, `n_iterations`, `stability_dmp_freq`, `stability_gene_freq`, `stability_min_balanced_accuracy`, adaptive stop (`stability_early_stop_enabled`, `stability_min_iterations`, `stability_convergence_*`), FeatureCuts: `stability_featurecuts_enabled`, `stability_target_balanced_accuracy`, `stability_min_selected_dmps` |
+| **A** | `MonteCarloConfig` / `actionConfig.validation` | `train_fraction`, `n_iterations`, `stability_dmp_freq`, `stability_gene_freq`, `stability_min_balanced_accuracy`, adaptive stop (`stability_early_stop_enabled`, `stability_min_iterations`, `stability_convergence_*`), FeatureCuts: `stability_featurecuts_enabled`, `stability_target_balanced_accuracy`, `stability_min_core_dmps` |
 | **B** | Project `actionConfig` for detector/classifier | Thresholds, k for DMPs, options exposed in JSON |
 | **C** | Model backend | `model_backend`, `tabular_methods`, `generative_*` — use **nested** search after Tier A, often on a **fixed** frozen panel |
 

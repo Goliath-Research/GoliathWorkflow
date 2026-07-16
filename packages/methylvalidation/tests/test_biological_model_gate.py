@@ -8,8 +8,10 @@ from methyl_validation.config import MonteCarloConfig, assert_production_model_b
 def _minimal_mc_dict(**extra):
     return {
         "samples_base_path": "/tmp/s",
-        "healthy_csv": "h.csv",
-        "disease_csv": "d.csv",
+        "cohorts": [
+            {"label": "healthy", "csv": "h.csv"},
+            {"label": "disease", "csv": "d.csv"},
+        ],
         "train_fraction": 0.8,
         "n_iterations": 1,
         "base_project": "p.json",

@@ -14,28 +14,10 @@ GeneModelingMode = Literal["none", "mapper_ranked", "featurecuts", "from_stable_
 GeneRecurrenceSource = Literal["enricher", "mapper", "classifier"]
 GeneFeaturecutsLociSource = Literal["raw_pool", "featurecuts_selected", "stable_panel"]
 
-_DMP_MODE_ALIASES = {
-    "discovery": "raw_pool",
-    "classifier": "featurecuts",
-    "stable": "stable_panel",
-}
-_GENE_MODE_ALIASES = {
-    "mapper": "mapper_ranked",
-    "stable_dmp_mapped": "from_stable_dmp_panel",
-}
-_LOCi_ALIASES = {
-    "discovery": "raw_pool",
-    "classifier": "featurecuts_selected",
-    "stable": "stable_panel",
-}
-
-
 def normalize_dmp_modeling_mode(value: Optional[str]) -> Optional[DmpModelingMode]:
     if value is None:
         return None
     key = str(value).strip().lower()
-    if key in _DMP_MODE_ALIASES:
-        key = _DMP_MODE_ALIASES[key]
     if key in ("raw_pool", "featurecuts", "stable_panel"):
         return key  # type: ignore[return-value]
     return None
@@ -45,8 +27,6 @@ def normalize_gene_modeling_mode(value: Optional[str]) -> Optional[GeneModelingM
     if value is None:
         return None
     key = str(value).strip().lower()
-    if key in _GENE_MODE_ALIASES:
-        key = _GENE_MODE_ALIASES[key]
     if key in ("none", "mapper_ranked", "featurecuts", "from_stable_dmp_panel"):
         return key  # type: ignore[return-value]
     return None
@@ -56,8 +36,13 @@ def normalize_gene_featurecuts_loci_source(value: Optional[str]) -> GeneFeaturec
     if value is None:
         return "raw_pool"
     key = str(value).strip().lower()
-    if key in _LOCi_ALIASES:
-        key = _LOCi_ALIASES[key]
+    # Map historical detector tokens still stored on stability_gene_featurecuts_dmp_source.
+    if key == "discovery":
+        key = "raw_pool"
+    elif key == "classifier":
+        key = "featurecuts_selected"
+    elif key == "stable":
+        key = "stable_panel"
     if key in ("raw_pool", "featurecuts_selected", "stable_panel"):
         return key  # type: ignore[return-value]
     return "raw_pool"
@@ -81,8 +66,6 @@ def infer_gene_modeling_mode(config: Mapping[str, Any]) -> GeneModelingMode:
     loci = config.get("gene_featurecuts_loci_source") or config.get("stability_gene_featurecuts_dmp_source")
     if normalize_gene_featurecuts_loci_source(str(loci) if loci else None) == "stable_panel":
         return "from_stable_dmp_panel"
-    if bool(config.get("run_mapper_and_enricher")) and not bool(config.get("skip_enricher")):
-        return "none"  # enricher path handled separately
     return "none"
 
 
@@ -123,8 +106,13 @@ def apply_modeling_modes_to_validation_dict(validation: Dict[str, Any]) -> Dict[
             str(out.get("gene_featurecuts_loci_source") or out.get("stability_gene_featurecuts_dmp_source") or "")
         )
         out["gene_featurecuts_loci_source"] = loci
+        # stability_gene_featurecuts_dmp_source retains historical detector tokens.
         out["stability_gene_featurecuts_dmp_source"] = (
-            "discovery" if loci == "raw_pool" else "classifier" if loci == "featurecuts_selected" else "stable"
+            "discovery"
+            if loci == "raw_pool"
+            else "classifier"
+            if loci == "featurecuts_selected"
+            else "stable"
         )
     elif gene_mode == "mapper_ranked":
         out["stability_gene_recurrence_source"] = "mapper"

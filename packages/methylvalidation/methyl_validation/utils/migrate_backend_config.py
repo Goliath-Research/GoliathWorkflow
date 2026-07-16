@@ -9,72 +9,9 @@ from methyl_validation.cohort_inference import infer_monte_carlo_cohorts_from_pr
 from methyl_validation.config import BackendProfilesConfig, MonteCarloConfig
 
 
-LEGACY_BACKEND_KEYS = {
-    "model_backend",
-    "model_bundle_dir",
-    "model_weight_column",
-    "tabular_model_type",
-    "tabular_methods",
-    "tabular_method_selection_metric",
-    "tabular_method_selection_stat",
-    "tabular_max_dmps",
-    "tabular_save_train_dataset",
-    "tabular_reuse_train_dataset",
-    "tabular_train_dataset_path",
-    "tabular_save_test_dataset",
-    "tabular_test_dataset_path",
-    "feature_mode",
-    "feature_family_set",
-    "gene_feature_loading",
-    "observed_feature_quantiles",
-    "observed_feature_min_coverage",
-    "observed_feature_min_obs_fraction",
-    "observed_feature_include_dmp",
-    "observed_feature_include_chromosome",
-    "observed_feature_include_dmr",
-    "observed_feature_include_gene",
-    "observed_feature_dmr_window_bp",
-    "observed_feature_max_dmrs",
-    "observed_feature_max_genes",
-    "observed_hist_eps",
-    "observed_hist_alpha",
-    "observed_hist_evidence_clip_cap",
-    "observed_hist_tail_agreement_threshold",
-    "gene_scored_min_support_n",
-    "gene_scored_use_region_weight",
-    "gene_scored_gene_weight",
-    "gene_scored_ordered_comparison_labels",
-    "gene_scored_contrast_pairs",
-    "structural_scored_min_support_n",
-    "structural_scored_use_region_weight",
-    "structural_scored_weight",
-    "structural_scored_ordered_comparison_labels",
-    "structural_scored_contrast_pairs",
-    "region_directional_region_types",
-    "region_directional_min_loci",
-    "mapper_annotation_collapse_mode",
-    "mapper_annotation_unknown_fallback",
-    "mapper_gene_columns",
-    "observed_feature_quality_columns",
-    "ecdf_second_stage_enabled",
-    "covariates_path",
-    "covariate_id_column",
-    "covariate_numeric_columns",
-    "covariate_ordinal_columns",
-    "covariate_ordinal_maps",
-    "covariate_ordinal_unknown_value",
-    "covariate_categorical_columns",
-    "covariate_missing_numeric_strategy",
-    "covariate_standardize_numeric",
-    "covariates_strict_join",
-    "generative_latent_dim",
-    "generative_kl_weight",
-    "generative_density_type",
-    "generative_epochs",
-    "generative_batch_size",
-    "generative_seed",
-    "generative_calibrate",
-    "generative_covariates_strict",
+# Offline migrator key set must cover every key the runtime model rejects.
+LEGACY_BACKEND_KEYS = set(MonteCarloConfig._REMOVED_FLAT_KEYS) | {
+    "model_backend",  # still a runtime field, but migrator relocates enabled backends from it
 }
 
 SHARED_PARAM_KEYS = {
@@ -114,6 +51,11 @@ SHARED_PARAM_KEYS = {
     "mapper_annotation_unknown_fallback",
     "mapper_gene_columns",
     "observed_feature_quality_columns",
+    "chromosome_hypo_beta_threshold",
+    "chromosome_intermediate_beta_lo",
+    "chromosome_intermediate_beta_hi",
+    "chromosome_distance_metrics",
+    "chromosome_list",
     "covariates_path",
     "covariate_id_column",
     "covariate_numeric_columns",
@@ -150,13 +92,24 @@ GENERATIVE_PARAM_KEYS = {
 }
 
 
+_OFFLINE_FEATURE_FAMILY_ALIASES = {
+    "dmp": "dmp_scored",
+    "dmp+gene": "dmp_scored+gene",
+    "dmp+structural": "dmp_scored+structural",
+    "dmp+gene_scored": "dmp_scored+gene_scored",
+    "dmp+structural_scored": "dmp_scored+structural_scored",
+}
+
+
 def _canonicalize_feature_family_set_value(value: Any) -> Any:
+    """Offline-only alias rewrite; runtime MonteCarloConfig rejects legacy tokens."""
     if not isinstance(value, str):
         return value
     from methyl_validation.observed_feature_builder import normalize_feature_family_set
 
+    token = _OFFLINE_FEATURE_FAMILY_ALIASES.get(value.strip().lower(), value)
     try:
-        return normalize_feature_family_set(value)
+        return normalize_feature_family_set(token)
     except ValueError:
         return value
 
@@ -192,8 +145,13 @@ def _apply_legacy_keys_to_backend_profiles(
     for key in GENERATIVE_PARAM_KEYS:
         if key in before:
             backend_profiles["generative_hybrid"]["params"][key] = before[key]
-    if "ecdf_second_stage_enabled" in before:
-        backend_profiles["ecdf"]["params"]["ecdf_second_stage_enabled"] = before["ecdf_second_stage_enabled"]
+    for key in (
+        "ecdf_second_stage_enabled",
+        "ecdf_aggregated_enabled",
+        "ecdf_aggregated_n_bins",
+    ):
+        if key in before:
+            backend_profiles["ecdf"]["params"][key] = before[key]
 
 
 def merge_legacy_validation_keys_into_backend_profiles(

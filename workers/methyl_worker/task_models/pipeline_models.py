@@ -308,8 +308,17 @@ class BiomarkerFilterSummary(BaseModel):
     region_hits: List[str] = Field(default_factory=list)
     biomarker_pool_size: Optional[int] = None
     n_genes_in_mapper_after_intersect: Optional[int] = None
+    n_mapper_genes_input: Optional[int] = None
+    n_after_csv_filters: Optional[int] = None
+    n_after_region_hits: Optional[int] = None
+    n_after_top_genes_cap: Optional[int] = None
+    ppi_fetch_attempted: Optional[bool] = None
     ppi_cache_path: Optional[str] = None
     ppi_score_threshold: Optional[float] = None
+    n_string_edges: Optional[int] = None
+    n_ppi_hubs: Optional[int] = None
+    ppi_skip_reason: Optional[str] = None
+    empty_reason: Optional[str] = None
 
 
 class BiomarkerFilterTaskInput(BaseModel):

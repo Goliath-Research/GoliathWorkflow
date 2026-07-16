@@ -17,7 +17,7 @@ class CohortCsv(BaseModel):
         min_length=1,
         description="Cohort label: for hierarchical MC must match get_resolved_groups() (e.g. all, pca_pca1).",
     )
-    csv: str = Field(..., min_length=1, description="Path to CSV of samples (same format as healthy_csv).")
+    csv: str = Field(..., min_length=1, description="Path to CSV of samples (one sample id per row).")
 
 
 class RandomForestMethodParams(BaseModel):
@@ -727,17 +727,10 @@ class MonteCarloConfig(BaseModel):
         ...,
         description="Base directory for resolving sample names from CSVs (same as project samples_base_path).",
     )
-    healthy_csv: Optional[str] = Field(
-        default=None,
-        description="Legacy: CSV listing control/healthy samples. Use with disease_csv, or use cohorts instead.",
-    )
-    disease_csv: Optional[str] = Field(
-        default=None,
-        description="Legacy: CSV listing disease samples. Use with healthy_csv, or use cohorts instead.",
-    )
     cohorts: List[CohortCsv] = Field(
-        default_factory=list,
-        description="Ordered list of at least 2 cohorts {label, csv}. Populated from legacy healthy_csv+disease_csv when omitted.",
+        ...,
+        min_length=2,
+        description="Ordered list of at least 2 cohorts {label, csv}.",
     )
     train_fraction: float = Field(
         ...,
@@ -1127,14 +1120,6 @@ class MonteCarloConfig(BaseModel):
             "on detector validation splits. Also enables binary-search k selection in MC gene FeatureCuts."
         ),
     )
-    stability_min_selected_dmps: Optional[int] = Field(
-        default=None,
-        ge=1,
-        description=(
-            "Deprecated alias for stability_min_core_dmps when that field is unset. "
-            "Does not widen mapper exports; use stability_classifier_export_margin_* instead."
-        ),
-    )
     stability_min_core_dmps: Optional[int] = Field(
         default=None,
         ge=1,
@@ -1157,14 +1142,6 @@ class MonteCarloConfig(BaseModel):
         default=None,
         ge=1,
         description="MC detector override: per-chromosome cap on extended classifier CSV size.",
-    )
-    run_mapper_and_enricher: bool = Field(
-        default=False,
-        description="Deprecated: use DomainProgram workflow for mapper/enricher. If True, run mapper/enricher inside each MC iteration.",
-    )
-    skip_enricher: bool = Field(
-        default=False,
-        description="Deprecated: use workflow IF/FOREACH for optional enricher. Skips enricher when run_mapper_and_enricher is true.",
     )
     freeze_stable_dmp_csv: Optional[str] = Field(
         default=None,
@@ -1289,465 +1266,6 @@ class MonteCarloConfig(BaseModel):
             "Project JSON must not define this key directly; use backend_profiles + CLI override semantics."
         ),
     )
-    model_bundle_dir: Optional[str] = Field(
-        default=None,
-        description=(
-            "Optional output directory for ModelFeatureBundle files. "
-            "Default: <production_output_dir>/model_bundle."
-        ),
-    )
-    model_weight_column: str = Field(
-        default="effect_size",
-        description=(
-            "Legacy compatibility field. Model bundle weighting is canonicalized to detector "
-            "effect_size for tabular/generative backends."
-        ),
-    )
-    tabular_model_type: str = Field(
-        default="random_forest",
-        description=(
-            "For model_backend=tabular_sklearn: "
-            "random_forest | hist_gradient_boosting | logistic_regression | xgboost."
-        ),
-    )
-    tabular_methods: Optional[List[TabularMethodConfig]] = Field(
-        default=None,
-        description=(
-            "Optional ordered list of tabular methods with method-specific parameters. "
-            "When absent, synthesized from tabular_model_type for backward compatibility."
-        ),
-    )
-    tabular_method_selection_metric: str = Field(
-        default="balanced_accuracy",
-        description=(
-            "When multiple tabular_methods are evaluated sequentially, select best method "
-            "using this metric from validation_metrics."
-        ),
-    )
-    tabular_method_selection_stat: str = Field(
-        default="mean",
-        description=(
-            "Selection stat label for method ranking metadata (mean|median). "
-            "Current per-run selection uses direct metric values."
-        ),
-    )
-    tabular_max_dmps: Optional[int] = Field(
-        default=None,
-        ge=0,
-        description=(
-            "For model_backend=tabular_sklearn: optional cap on number of loci selected from bundle index. "
-            "Set null or 0 to keep all stable DMPs."
-        ),
-    )
-    tabular_save_train_dataset: bool = Field(
-        default=True,
-        description=(
-            "For model_backend=tabular_sklearn: if true, export the assembled training dataset "
-            "(features + labels + sample_id) for reproducibility/auditing."
-        ),
-    )
-    tabular_reuse_train_dataset: bool = Field(
-        default=True,
-        description=(
-            "For model_backend=tabular_sklearn: when true and tabular_save_train_dataset is enabled, "
-            "reuse a previously exported training dataset if its fingerprint matches current inputs."
-        ),
-    )
-    tabular_train_dataset_path: Optional[str] = Field(
-        default=None,
-        description=(
-            "Optional output file for exported tabular training dataset. "
-            "When omitted and tabular_save_train_dataset=true, defaults to "
-            "<model_bundle_dir>/tabular_train_dataset.parquet."
-        ),
-    )
-    tabular_save_test_dataset: bool = Field(
-        default=True,
-        description=(
-            "For model_backend=tabular_sklearn: when an explicit evaluation split is configured, "
-            "export the assembled test/eval dataset."
-        ),
-    )
-    tabular_test_dataset_path: Optional[str] = Field(
-        default=None,
-        description=(
-            "Optional output file for exported tabular test/eval dataset. "
-            "When omitted and tabular_save_test_dataset=true, defaults to the same directory as "
-            "tabular_train_dataset_path with filename tabular_test_dataset.<ext> "
-            "(or <model_bundle_dir>/tabular_test_dataset.parquet when train path is also omitted)."
-        ),
-    )
-    feature_mode: str = Field(
-        default="raw_dmp",
-        description=(
-            "Feature construction mode for tabular/generative backends: "
-            "raw_dmp (legacy per-locus matrix with methylation fill) or "
-            "observed_hybrid (observed-only aggregated features)."
-        ),
-    )
-    feature_family_set: str = Field(
-        default="dmp_scored",
-        description=(
-            "For feature_mode=observed_hybrid, controls active feature families: "
-            "dmp_scored | gene | structural | gene_scored | structural_scored | chromosome | "
-            "dmp_scored+gene | dmp_scored+structural | dmp_scored+gene_scored | "
-            "dmp_scored+structural_scored | dmp_scored+chromosome | hybrid-all. "
-            "Legacy aliases (dmp, dmp+gene_scored, etc.) are accepted and normalized."
-        ),
-    )
-    gene_feature_loading: str = Field(
-        default="frozen",
-        description=(
-            "For feature_mode=observed_hybrid with gene family features, controls locus loading: "
-            "frozen (exact frozen DMP loci) or range (all loci in frozen gene-feature ranges)."
-        ),
-    )
-    mapper_gene_columns: List[str] = Field(
-        default_factory=lambda: list(DEFAULT_MAPPER_GENE_COLUMNS),
-        description=(
-            "Per-gene columns to carry from mapper all-gene_name-combined.csv into "
-            "mapper_dmp_annotations.csv and model bundle mapped-locus rows. "
-            "Set [] to disable this join."
-        ),
-    )
-    observed_feature_quantiles: List[float] = Field(
-        default_factory=lambda: [0.10, 0.25, 0.50, 0.75, 0.90],
-        description=(
-            "Quantiles used by observed_hybrid feature mode when summarizing observed methylation."
-        ),
-    )
-    observed_feature_min_coverage: int = Field(
-        default=1,
-        ge=1,
-        description="Minimum coverage passed to methyl extraction for observed_hybrid features.",
-    )
-    observed_feature_min_obs_fraction: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Minimum observed-fraction evidence threshold for observed_hybrid predictions. "
-            "Used for reporting/optional rejection in backend outputs."
-        ),
-    )
-    observed_feature_include_dmp: bool = Field(
-        default=True,
-        description="Enable DMP-derived observed_hybrid features (global, quantiles, and disease comparison summaries).",
-    )
-    observed_feature_include_chromosome: bool = Field(
-        default=True,
-        description="Enable chromosome-level observed_hybrid summaries.",
-    )
-    observed_feature_include_dmr: bool = Field(
-        default=True,
-        description="Enable DMR/region-level observed_hybrid summaries.",
-    )
-    observed_feature_include_gene: bool = Field(
-        default=True,
-        description="Enable gene-level observed_hybrid summaries when gene metadata is available.",
-    )
-    observed_feature_dmr_window_bp: int = Field(
-        default=100000,
-        ge=1,
-        description=(
-            "Fallback DMR window size (bp) used to construct region identifiers when explicit DMR labels are missing."
-        ),
-    )
-    observed_feature_max_dmrs: int = Field(
-        default=32,
-        ge=0,
-        description="Maximum number of DMR regions retained in observed_hybrid schema (top-weighted).",
-    )
-    observed_feature_max_genes: int = Field(
-        default=32,
-        ge=0,
-        description="Maximum number of genes retained in observed_hybrid schema (top-weighted).",
-    )
-    observed_hist_eps: float = Field(
-        default=1e-6,
-        gt=0.0,
-        description="Observed-hybrid histogram ECDF epsilon for boundary clamp and log safety.",
-    )
-    observed_hist_alpha: float = Field(
-        default=0.5,
-        ge=0.0,
-        description="Observed-hybrid histogram additive smoothing alpha applied to bin counts.",
-    )
-    observed_hist_evidence_clip_cap: float = Field(
-        default=5.0,
-        ge=0.0,
-        description="Observed-hybrid cap for per-locus tail/outlier evidence prior to weighted averaging.",
-    )
-    observed_hist_tail_agreement_threshold: float = Field(
-        default=0.10,
-        ge=0.0,
-        le=1.0,
-        description="Observed-hybrid threshold for cancer-direction tail agreement indicator.",
-    )
-    gene_scored_min_support_n: int = Field(
-        default=2,
-        ge=1,
-        description=(
-            "Minimum gene_support_n for a gene to enter the gene_scored comparison panel "
-            "(feature_family_set gene_scored or dmp_scored+gene_scored)."
-        ),
-    )
-    gene_scored_use_region_weight: bool = Field(
-        default=True,
-        description="Multiply per-locus weights by region_weight when building gene_directional_score features.",
-    )
-    gene_scored_gene_weight: str = Field(
-        default="importance_x_sqrt_support",
-        description=(
-            "Gene-level weighting when pooling to gene_directional_score: "
-            "importance_x_sqrt_support or importance_only."
-        ),
-    )
-    gene_scored_ordered_comparison_labels: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Optional override for gene_scored progression order. When null, order is taken from "
-            "step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels()."
-        ),
-    )
-    gene_scored_contrast_pairs: Optional[List[List[str]]] = Field(
-        default=None,
-        description=(
-            "Optional extra directional contrast pairs [[left, right], ...]; emits "
-            "gene_directional_contrast__{left}__{right} = score(right)-score(left). "
-            "Auto extreme pair added when K>=2 unless already listed."
-        ),
-    )
-    structural_scored_min_support_n: int = Field(
-        default=2,
-        ge=1,
-        description=(
-            "Minimum n_dmps_in_feature for a gene-feature row to enter the structural_scored panel "
-            "(feature_family_set structural_scored or dmp_scored+structural_scored)."
-        ),
-    )
-    structural_scored_use_region_weight: bool = Field(
-        default=True,
-        description="Multiply per-locus weights by region_weight when building structural_directional_score features.",
-    )
-    structural_scored_weight: str = Field(
-        default="compound_x_sqrt_support",
-        description=(
-            "Gene-feature weighting when pooling to structural_directional_score: "
-            "compound_x_sqrt_support or compound_only."
-        ),
-    )
-    structural_scored_ordered_comparison_labels: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Optional override for structural_scored progression order. When null, order is taken from "
-            "step_config.progression.ordered_comparison_labels or project get_ordered_comparison_labels()."
-        ),
-    )
-    structural_scored_contrast_pairs: Optional[List[List[str]]] = Field(
-        default=None,
-        description=(
-            "Optional extra directional contrast pairs [[left, right], ...] per region type; emits "
-            "structural_directional_contrast__{left}__{right}__{region}. "
-            "Auto extreme pair added when K>=2 unless already listed."
-        ),
-    )
-    region_directional_region_types: List[str] = Field(
-        default_factory=lambda: ["promoter", "exon", "intron", "gene_body", "terminator"],
-        description=(
-            "Structural region types considered when building structural_scored features "
-            "(feature_family_set structural_scored or dmp_scored+structural_scored)."
-        ),
-    )
-    region_directional_min_loci: int = Field(
-        default=1,
-        ge=1,
-        description=(
-            "Minimum panel loci in the classifier DMP index required to emit structural_scored "
-            "columns for a (comparison, region) pair."
-        ),
-    )
-    mapper_annotation_collapse_mode: str = Field(
-        default="priority",
-        description=(
-            "How to collapse multi-feature mapper intersections to one row per locus in "
-            "mapper_dmp_annotations.csv: priority (promoter>exon>intron>gene_body>terminator) "
-            "or weight (legacy highest combined_weight wins)."
-        ),
-    )
-    mapper_annotation_unknown_fallback: Optional[str] = Field(
-        default="gene_body",
-        description=(
-            "Parent feature bucket assigned to classifier loci with unknown or missing "
-            "feature_type after mapper merge. Set null to leave unknown loci uncovered."
-        ),
-    )
-    observed_feature_quality_columns: List[str] = Field(
-        default_factory=lambda: ["obs_fraction", "n_obs_dmps", "n_total_dmps"],
-        description=(
-            "Observed-hybrid columns computed and exported but excluded from model training."
-        ),
-    )
-    chromosome_hypo_beta_threshold: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Beta cutoff for hypomethylation burden features (chromosome family). "
-            "Operator-set per profile/site; builder uses 0.2 when null."
-        ),
-    )
-    chromosome_intermediate_beta_lo: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Lower bound for intermediate-methylation fraction (chromosome family). Default 0.25 when null.",
-    )
-    chromosome_intermediate_beta_hi: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Upper bound for intermediate-methylation fraction (chromosome family). Default 0.75 when null.",
-    )
-    chromosome_distance_metrics: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Non-parametric sample-vs-centroid distance metrics for chromosome family: "
-            "subset of js, hellinger, wasserstein. Default all three when null."
-        ),
-    )
-    chromosome_list: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Optional chromosome allow-list for chromosome-family features. "
-            "When null, chromosomes are inferred from the DMP panel."
-        ),
-    )
-    ecdf_second_stage_enabled: bool = Field(
-        default=False,
-        description=(
-            "If true for model_backend=ecdf, include observed-hybrid features in the optional "
-            "second-stage logistic stacker (ECDF probs ± covariates ± observed_hybrid). "
-            "Second stage also runs when covariates_path is set even if this flag is false."
-        ),
-    )
-    ecdf_aggregated_enabled: Optional[bool] = Field(
-        default=None,
-        description=(
-            "If set for model_backend=ecdf, force enable/disable aggregated observed-hybrid ECDF OvR. "
-            "When null/false, aggregated mode is disabled (use raw_dmp or raw_gene instead)."
-        ),
-    )
-    ecdf_aggregated_n_bins: int = Field(
-        default=100,
-        ge=8,
-        le=512,
-        description="Histogram bin count per feature for aggregated ECDF OvR heads.",
-    )
-    covariates_path: Optional[Union[str, List[str]]] = Field(
-        default=None,
-        description=(
-            "Optional covariates sidecar path or list of paths (HDF5 preferred, CSV accepted). "
-            "Multiple CSVs are merged on sample_id. "
-            "Rows should include sample identifier column for join with sample basename. "
-            "For model_backend=ecdf, covariates are fused in the optional second-stage stacker "
-            "(ECDF probabilities + covariates ± observed_hybrid). "
-            "CellDeconv cell_fractions.csv is supported; auto-infer excludes group/qp_status/"
-            "marker diagnostics (pin covariate_numeric_columns to CD8T..Neu when using Ω alone)."
-        ),
-    )
-    covariate_id_column: str = Field(
-        default="sample_id",
-        description="Column name in covariates table used to join with sample basename.",
-    )
-    covariate_numeric_columns: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Optional explicit numeric covariate columns. "
-            "When unset, numeric roles are auto-inferred (excluding label/diagnostic columns "
-            "such as group, qp_status, n_markers_observed, marker_fraction)."
-        ),
-    )
-    covariate_ordinal_columns: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Optional explicit ordinal covariate columns (ordered categories such as low/medium/high). "
-            "These are encoded as single numeric features using covariate_ordinal_maps or known defaults."
-        ),
-    )
-    covariate_ordinal_maps: Optional[Dict[str, Dict[str, float]]] = Field(
-        default=None,
-        description=(
-            "Optional mapping per ordinal column from raw level -> code, e.g. "
-            "{'risk_band': {'low': 1, 'medium': 2, 'high': 3}}."
-        ),
-    )
-    covariate_ordinal_unknown_value: float = Field(
-        default=0.0,
-        description=(
-            "Fallback code used when an ordinal value is missing/unknown at train or inference time."
-        ),
-    )
-    covariate_categorical_columns: Optional[List[str]] = Field(
-        default=None,
-        description=(
-            "Optional explicit categorical covariate columns. "
-            "Columns are one-hot encoded with frozen vocab."
-        ),
-    )
-    covariate_missing_numeric_strategy: str = Field(
-        default="mean",
-        description="How numeric covariate NaNs are imputed: mean | median | zero.",
-    )
-    covariate_standardize_numeric: bool = Field(
-        default=True,
-        description="If true, z-score standardize numeric covariates using train-set statistics.",
-    )
-    covariates_strict_join: bool = Field(
-        default=False,
-        description=(
-            "For covariate-aware tabular/generic paths: require every sample id to exist in "
-            "covariates sidecar during train/predict."
-        ),
-    )
-    generative_latent_dim: int = Field(
-        default=16,
-        ge=2,
-        description="For model_backend=generative_hybrid: latent dimensionality.",
-    )
-    generative_kl_weight: float = Field(
-        default=0.1,
-        ge=0.0,
-        description=(
-            "For model_backend=generative_hybrid: KL-like regularization weight in hybrid loss/selection metadata."
-        ),
-    )
-    generative_density_type: str = Field(
-        default="diag_gaussian",
-        description="For model_backend=generative_hybrid: latent class density family (currently diag_gaussian).",
-    )
-    generative_epochs: int = Field(
-        default=50,
-        ge=1,
-        description="For model_backend=generative_hybrid: training epochs metadata/control.",
-    )
-    generative_batch_size: int = Field(
-        default=64,
-        ge=1,
-        description="For model_backend=generative_hybrid: mini-batch size metadata/control.",
-    )
-    generative_seed: int = Field(
-        default=13,
-        description="For model_backend=generative_hybrid: random seed.",
-    )
-    generative_calibrate: bool = Field(
-        default=False,
-        description="For model_backend=generative_hybrid: enable probability calibration stage when available.",
-    )
-    generative_covariates_strict: bool = Field(
-        default=True,
-        description="For model_backend=generative_hybrid: require all sample IDs to exist in covariates sidecar when used.",
-    )
     rollout_balanced_accuracy_drop_max: float = Field(
         default=0.005,
         ge=0.0,
@@ -1774,15 +1292,14 @@ class MonteCarloConfig(BaseModel):
         description="Dual-run promotion target: minimum relative ECE improvement.",
     )
 
-    # Support for step_config.validation when loading from a project JSON
-    validation: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Validation/Monte Carlo settings when embedded in a project as step_config.validation.",
-    )
-
-    _LEGACY_BACKEND_KEYS: ClassVar[FrozenSet[str]] = frozenset(
+    _REMOVED_FLAT_KEYS: ClassVar[FrozenSet[str]] = frozenset(
         {
-            "model_backend",
+            "healthy_csv",
+            "disease_csv",
+            "stability_min_selected_dmps",
+            "run_mapper_and_enricher",
+            "skip_enricher",
+            "validation",
             "model_bundle_dir",
             "model_weight_column",
             "tabular_model_type",
@@ -1828,7 +1345,14 @@ class MonteCarloConfig(BaseModel):
             "mapper_annotation_collapse_mode",
             "mapper_annotation_unknown_fallback",
             "observed_feature_quality_columns",
+            "chromosome_hypo_beta_threshold",
+            "chromosome_intermediate_beta_lo",
+            "chromosome_intermediate_beta_hi",
+            "chromosome_distance_metrics",
+            "chromosome_list",
             "ecdf_second_stage_enabled",
+            "ecdf_aggregated_enabled",
+            "ecdf_aggregated_n_bins",
             "covariates_path",
             "covariate_id_column",
             "covariate_numeric_columns",
@@ -1849,39 +1373,45 @@ class MonteCarloConfig(BaseModel):
             "generative_covariates_strict",
         }
     )
+    _LEGACY_BACKEND_KEYS: ClassVar[FrozenSet[str]] = _REMOVED_FLAT_KEYS
+    _RUNTIME_BACKEND_ATTRS: ClassVar[FrozenSet[str]] = frozenset(
+        k for k in _REMOVED_FLAT_KEYS
+        if k
+        not in {
+            "healthy_csv",
+            "disease_csv",
+            "stability_min_selected_dmps",
+            "run_mapper_and_enricher",
+            "skip_enricher",
+            "validation",
+        }
+    )
 
     @model_validator(mode="before")
     @classmethod
-    def _synthesize_cohorts_from_legacy(cls, data: object) -> object:
+    def _reject_removed_flat_keys(cls, data: object) -> object:
         if not isinstance(data, dict):
             return data
         data = dict(data)
-        legacy_backend_keys = sorted(k for k in cls._LEGACY_BACKEND_KEYS if k in data)
-        if legacy_backend_keys:
+        removed = sorted(k for k in cls._REMOVED_FLAT_KEYS if k in data)
+        if removed:
             raise ValueError(
-                "Legacy backend config keys are no longer supported. "
-                "Use step_config.validation.backend_profiles instead. "
-                f"Found: {legacy_backend_keys}"
+                "Removed legacy Monte Carlo config keys are not supported on this release. "
+                "Use backend_profiles / cohorts; older snapshots require the release that created them. "
+                f"Found: {removed}"
             )
         cohorts = data.get("cohorts")
-        if isinstance(cohorts, list) and len(cohorts) >= 2:
-            return data
-        if isinstance(cohorts, list) and len(cohorts) == 1:
-            raise ValueError("cohorts must contain at least two entries")
-        hc, dc = data.get("healthy_csv"), data.get("disease_csv")
-        if hc and dc:
-            data["cohorts"] = [
-                {"label": "healthy", "csv": hc},
-                {"label": "disease", "csv": dc},
-            ]
+        if not isinstance(cohorts, list) or len(cohorts) < 2:
+            raise ValueError(
+                "Monte Carlo config requires cohorts: [{label, csv}, ...] with at least two entries."
+            )
         return data
 
     @model_validator(mode="after")
     def _require_cohorts(self) -> "MonteCarloConfig":
         if len(self.cohorts) < 2:
             raise ValueError(
-                "Monte Carlo config needs at least two cohorts: set cohorts: [{label, csv}, ...] "
-                "or legacy healthy_csv and disease_csv."
+                "Monte Carlo config needs at least two cohorts: set cohorts: [{label, csv}, ...]."
             )
         return self
 
@@ -1930,7 +1460,6 @@ class MonteCarloConfig(BaseModel):
             self.model_backend = self.get_enabled_backends()[0]
         if self.model_backend == "tabular_sklearn" and not self.backend_profiles.tabular_sklearn.params.tabular_methods:
             raise ValueError("backend_profiles.tabular_sklearn.params.tabular_methods must contain at least one entry")
-        self._sync_runtime_backend_fields()
         return self
 
     def get_enabled_backends(self) -> List[str]:
@@ -1959,91 +1488,40 @@ class MonteCarloConfig(BaseModel):
         backend = str(backend_name).strip().lower()
         if backend not in {"ecdf", "tabular_sklearn", "generative_hybrid"}:
             raise ValueError(f"Unknown backend: {backend_name}")
-        updated = self.model_copy(update={"model_backend": backend})
-        updated._sync_runtime_backend_fields()
-        return updated
+        return self.model_copy(update={"model_backend": backend})
 
-    def _sync_runtime_backend_fields(self) -> None:
-        params = self.get_backend_params(self.model_backend)
-        shared_fields = [
-            "model_bundle_dir",
-            "model_weight_column",
-            "tabular_max_dmps",
-            "feature_mode",
-            "feature_family_set",
-            "gene_feature_loading",
-            "mapper_gene_columns",
-            "observed_feature_quantiles",
-            "observed_feature_min_coverage",
-            "observed_feature_min_obs_fraction",
-            "observed_feature_include_dmp",
-            "observed_feature_include_chromosome",
-            "observed_feature_include_dmr",
-            "observed_feature_include_gene",
-            "observed_feature_dmr_window_bp",
-            "observed_feature_max_dmrs",
-            "observed_feature_max_genes",
-            "observed_hist_eps",
-            "observed_hist_alpha",
-            "observed_hist_evidence_clip_cap",
-            "observed_hist_tail_agreement_threshold",
-            "gene_scored_min_support_n",
-            "gene_scored_use_region_weight",
-            "gene_scored_gene_weight",
-            "gene_scored_ordered_comparison_labels",
-            "gene_scored_contrast_pairs",
-            "structural_scored_min_support_n",
-            "structural_scored_use_region_weight",
-            "structural_scored_weight",
-            "structural_scored_ordered_comparison_labels",
-            "structural_scored_contrast_pairs",
-            "region_directional_region_types",
-            "region_directional_min_loci",
-            "mapper_annotation_collapse_mode",
-            "mapper_annotation_unknown_fallback",
-            "observed_feature_quality_columns",
-            "chromosome_hypo_beta_threshold",
-            "chromosome_intermediate_beta_lo",
-            "chromosome_intermediate_beta_hi",
-            "chromosome_distance_metrics",
-            "chromosome_list",
-            "covariates_path",
-            "covariate_id_column",
-            "covariate_numeric_columns",
-            "covariate_ordinal_columns",
-            "covariate_ordinal_maps",
-            "covariate_ordinal_unknown_value",
-            "covariate_categorical_columns",
-            "covariate_missing_numeric_strategy",
-            "covariate_standardize_numeric",
-            "covariates_strict_join",
-        ]
-        for field_name in shared_fields:
-            setattr(self, field_name, getattr(params, field_name))
-        self.ecdf_second_stage_enabled = bool(
-            self.backend_profiles.ecdf.params.ecdf_second_stage_enabled
-        )
-        self.ecdf_aggregated_enabled = self.backend_profiles.ecdf.params.ecdf_aggregated_enabled
-        self.ecdf_aggregated_n_bins = int(self.backend_profiles.ecdf.params.ecdf_aggregated_n_bins)
-        tab_params = self.backend_profiles.tabular_sklearn.params
-        self.tabular_model_type = tab_params.tabular_model_type
-        self.tabular_methods = tab_params.tabular_methods
-        self.tabular_method_selection_metric = tab_params.tabular_method_selection_metric
-        self.tabular_method_selection_stat = tab_params.tabular_method_selection_stat
-        self.tabular_save_train_dataset = bool(tab_params.tabular_save_train_dataset)
-        self.tabular_reuse_train_dataset = bool(tab_params.tabular_reuse_train_dataset)
-        self.tabular_train_dataset_path = tab_params.tabular_train_dataset_path
-        self.tabular_save_test_dataset = bool(tab_params.tabular_save_test_dataset)
-        self.tabular_test_dataset_path = tab_params.tabular_test_dataset_path
-        gen_params = self.backend_profiles.generative_hybrid.params
-        self.generative_latent_dim = int(gen_params.generative_latent_dim)
-        self.generative_kl_weight = float(gen_params.generative_kl_weight)
-        self.generative_density_type = str(gen_params.generative_density_type)
-        self.generative_epochs = int(gen_params.generative_epochs)
-        self.generative_batch_size = int(gen_params.generative_batch_size)
-        self.generative_seed = int(gen_params.generative_seed)
-        self.generative_calibrate = bool(gen_params.generative_calibrate)
-        self.generative_covariates_strict = bool(gen_params.generative_covariates_strict)
+    def _resolve_runtime_backend_attr(self, name: str) -> Any:
+        if name in {
+            "tabular_model_type",
+            "tabular_methods",
+            "tabular_method_selection_metric",
+            "tabular_method_selection_stat",
+            "tabular_save_train_dataset",
+            "tabular_reuse_train_dataset",
+            "tabular_train_dataset_path",
+            "tabular_save_test_dataset",
+            "tabular_test_dataset_path",
+        }:
+            return getattr(self.backend_profiles.tabular_sklearn.params, name)
+        if name in {
+            "generative_latent_dim",
+            "generative_kl_weight",
+            "generative_density_type",
+            "generative_epochs",
+            "generative_batch_size",
+            "generative_seed",
+            "generative_calibrate",
+            "generative_covariates_strict",
+        }:
+            return getattr(self.backend_profiles.generative_hybrid.params, name)
+        if name in {"ecdf_second_stage_enabled", "ecdf_aggregated_enabled", "ecdf_aggregated_n_bins"}:
+            return getattr(self.backend_profiles.ecdf.params, name)
+        return getattr(self.get_backend_params(self.model_backend), name)
+
+    def __getattr__(self, item: str) -> Any:
+        if item in type(self)._RUNTIME_BACKEND_ATTRS:
+            return self._resolve_runtime_backend_attr(item)
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {item!r}")
 
     @field_validator("model_backend")
     @classmethod
@@ -2054,200 +1532,26 @@ class MonteCarloConfig(BaseModel):
             raise ValueError(f"model_backend must be one of {sorted(allowed)}")
         return normalized
 
-    @field_validator("tabular_method_selection_metric")
-    @classmethod
-    def _validate_tabular_method_selection_metric(cls, value: str) -> str:
-        allowed = {"balanced_accuracy", "accuracy", "macro_f1", "weighted_f1"}
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"tabular_method_selection_metric must be one of {sorted(allowed)}")
-        return normalized
-
-    @field_validator("tabular_method_selection_stat")
-    @classmethod
-    def _validate_tabular_method_selection_stat(cls, value: str) -> str:
-        allowed = {"mean", "median"}
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"tabular_method_selection_stat must be one of {sorted(allowed)}")
-        return normalized
-
-    @field_validator("feature_mode")
-    @classmethod
-    def _validate_feature_mode(cls, value: str) -> str:
-        allowed = {"raw_dmp", "raw_gene", "observed_hybrid"}
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"feature_mode must be one of {sorted(allowed)}")
-        return normalized
-
-    @field_validator("feature_family_set")
-    @classmethod
-    def _validate_feature_family_set(cls, value: str) -> str:
-        from .observed_feature_builder import normalize_feature_family_set
-
-        return normalize_feature_family_set(value)
-
-    @field_validator("gene_feature_loading")
-    @classmethod
-    def _validate_gene_feature_loading(cls, value: str) -> str:
-        allowed = {"frozen", "range"}
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"gene_feature_loading must be one of {sorted(allowed)}")
-        return normalized
-
-    @field_validator("gene_scored_gene_weight")
-    @classmethod
-    def _validate_gene_scored_gene_weight_profile(cls, value: str) -> str:
-        allowed = {"importance_x_sqrt_support", "importance_only"}
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"gene_scored_gene_weight must be one of {sorted(allowed)}")
-        return normalized
-
-    @field_validator("gene_scored_contrast_pairs")
-    @classmethod
-    def _validate_gene_scored_contrast_pairs_profile(
-        cls, value: Optional[List[List[str]]]
-    ) -> Optional[List[List[str]]]:
-        if value is None:
-            return None
-        from .gene_scored_features import normalize_gene_scored_contrast_pairs
-
-        return [[left, right] for left, right in normalize_gene_scored_contrast_pairs(value)]
-
-    @field_validator("structural_scored_weight")
-    @classmethod
-    def _validate_structural_scored_weight(cls, value: str) -> str:
-        allowed = {"compound_x_sqrt_support", "compound_only"}
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"structural_scored_weight must be one of {sorted(allowed)}")
-        return normalized
-
-    @field_validator("structural_scored_contrast_pairs")
-    @classmethod
-    def _validate_structural_scored_contrast_pairs(
-        cls, value: Optional[List[List[str]]]
-    ) -> Optional[List[List[str]]]:
-        if value is None:
-            return None
-        from .structural_scored_features import normalize_structural_scored_contrast_pairs
-
-        return [[left, right] for left, right in normalize_structural_scored_contrast_pairs(value)]
-
-    @field_validator("region_directional_region_types")
-    @classmethod
-    def _validate_region_directional_region_types(cls, value: List[str]) -> List[str]:
-        from .gene_scored_features import DEFAULT_REGION_DIRECTIONAL_TYPES, _normalize_structural_feature
-
-        if not value:
-            return list(DEFAULT_REGION_DIRECTIONAL_TYPES)
-        out: List[str] = []
-        for raw in value:
-            token = _normalize_structural_feature(raw)
-            if token == "unknown":
-                raise ValueError(f"Unknown region_directional_region_type: {raw!r}")
-            if token not in out:
-                out.append(token)
-        if not out:
-            raise ValueError("region_directional_region_types cannot be empty")
-        return out
-
-    @field_validator("mapper_annotation_collapse_mode")
-    @classmethod
-    def _validate_mapper_annotation_collapse_mode(cls, value: str) -> str:
-        token = str(value or "priority").strip().lower()
-        if token not in {"priority", "weight"}:
-            raise ValueError("mapper_annotation_collapse_mode must be 'priority' or 'weight'")
-        return token
-
-    @field_validator("mapper_annotation_unknown_fallback")
-    @classmethod
-    def _validate_mapper_annotation_unknown_fallback(cls, value: Optional[str]) -> Optional[str]:
-        if value is None:
-            return None
-        from .gene_scored_features import _normalize_structural_feature
-
-        token = _normalize_structural_feature(value)
-        if token == "unknown":
-            raise ValueError(f"Invalid mapper_annotation_unknown_fallback: {value!r}")
-        return token
-
-    @field_validator("mapper_gene_columns")
-    @classmethod
-    def _validate_mapper_gene_columns(cls, value: List[str]) -> List[str]:
-        cleaned: List[str] = []
-        seen: set[str] = set()
-        for raw in value:
-            token = str(raw).strip()
-            if not token:
-                continue
-            if token in seen:
-                continue
-            seen.add(token)
-            cleaned.append(token)
-        return cleaned
-
-    @field_validator("observed_feature_quantiles")
-    @classmethod
-    def _validate_observed_feature_quantiles(cls, value: List[float]) -> List[float]:
-        out: List[float] = []
-        for q in value:
-            fq = float(q)
-            if 0.0 <= fq <= 1.0:
-                out.append(fq)
-        if not out:
-            out = [0.5]
-        return out
-
-    @field_validator("generative_density_type")
-    @classmethod
-    def _validate_generative_density_type(cls, value: str) -> str:
-        allowed = {"diag_gaussian"}
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"generative_density_type must be one of {sorted(allowed)}")
-        return normalized
-
-    @field_validator("covariate_missing_numeric_strategy")
-    @classmethod
-    def _validate_covariate_missing_numeric_strategy(cls, value: str) -> str:
-        allowed = {"mean", "median", "zero"}
-        normalized = str(value).strip().lower()
-        if normalized not in allowed:
-            raise ValueError(f"covariate_missing_numeric_strategy must be one of {sorted(allowed)}")
-        return normalized
-
-    @field_validator("covariate_ordinal_maps")
-    @classmethod
-    def _normalize_covariate_ordinal_maps(cls, value: Optional[Dict[str, Dict[str, float]]]) -> Optional[Dict[str, Dict[str, float]]]:
-        if value is None:
-            return None
-        out: Dict[str, Dict[str, float]] = {}
-        for col, mapping in value.items():
-            c = str(col)
-            if not isinstance(mapping, dict) or not mapping:
-                raise ValueError(f"covariate_ordinal_maps[{c!r}] must be a non-empty object")
-            out[c] = {str(k).strip().lower(): float(v) for k, v in mapping.items()}
-        return out
-
     @model_validator(mode="after")
     def _validate_covariate_roles(self) -> "MonteCarloConfig":
-        numeric = set(self.covariate_numeric_columns or [])
-        ordinal = set(self.covariate_ordinal_columns or [])
-        categorical = set(self.covariate_categorical_columns or [])
-        overlap = (numeric & ordinal) | (numeric & categorical) | (ordinal & categorical)
-        if overlap:
-            raise ValueError(f"covariate role columns overlap across types: {sorted(overlap)}")
-        if self.covariate_ordinal_maps:
-            missing = sorted(set(self.covariate_ordinal_maps.keys()) - ordinal)
-            if missing:
+        for backend_name in self.get_enabled_backends():
+            params = self.get_backend_params(backend_name)
+            numeric = set(getattr(params, "covariate_numeric_columns", None) or [])
+            ordinal = set(getattr(params, "covariate_ordinal_columns", None) or [])
+            categorical = set(getattr(params, "covariate_categorical_columns", None) or [])
+            overlap = (numeric & ordinal) | (numeric & categorical) | (ordinal & categorical)
+            if overlap:
                 raise ValueError(
-                    "covariate_ordinal_maps has columns not listed in covariate_ordinal_columns: "
-                    f"{missing}"
+                    f"{backend_name} covariate role columns overlap across types: {sorted(overlap)}"
                 )
+            maps = getattr(params, "covariate_ordinal_maps", None)
+            if maps:
+                missing = sorted(set(maps.keys()) - ordinal)
+                if missing:
+                    raise ValueError(
+                        f"{backend_name} covariate_ordinal_maps has columns not listed in "
+                        f"covariate_ordinal_columns: {missing}"
+                    )
         return self
 
     @model_validator(mode="after")
@@ -2309,19 +1613,12 @@ class MonteCarloConfig(BaseModel):
         return cls.model_validate(data)
 
     def dump_clean_json(self, indent: int = 2) -> str:
-        """Serialize to JSON without deprecated legacy backend keys.
-
-        The legacy backend fields are still declared for backward-compatible attribute
-        reads, but they are rejected on input and their real values live in
-        ``backend_profiles``. Persisted artifacts must not carry them, otherwise a
-        round-trip (``model_validate(model_dump())``) fails and stale snapshots keep
-        re-seeding deprecated values. This is the canonical writer for on-disk configs.
-        """
-        return self.model_dump_json(indent=indent, exclude=set(self._LEGACY_BACKEND_KEYS))
+        """Serialize the canonical Monte Carlo config (backend params only under backend_profiles)."""
+        return self.model_dump_json(indent=indent)
 
     def dump_clean_dict(self) -> Dict[str, Any]:
-        """Dict form of :meth:`dump_clean_json` (deprecated legacy keys omitted)."""
-        return self.model_dump(mode="json", exclude=set(self._LEGACY_BACKEND_KEYS))
+        """Dict form of :meth:`dump_clean_json`."""
+        return self.model_dump(mode="json")
 
 
 def assert_production_model_build_allowed(config: MonteCarloConfig) -> None:
@@ -2340,9 +1637,7 @@ _VALIDATION_STEP_EXCLUDE: FrozenSet[str] = frozenset(
         "base_project",
         "output_base",
         "cohorts",
-        "healthy_csv",
-        "disease_csv",
-        "validation",
+        "model_backend",
     }
 )
 

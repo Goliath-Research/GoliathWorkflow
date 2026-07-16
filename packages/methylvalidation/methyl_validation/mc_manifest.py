@@ -120,8 +120,6 @@ def build_detector_featurecuts_override(
     min_core_dmps = config.dmp_featurecuts_min_dmps
     if min_core_dmps is None:
         min_core_dmps = config.stability_min_core_dmps
-    if min_core_dmps is None:
-        min_core_dmps = config.stability_min_selected_dmps
     margin_pct = config.stability_classifier_export_margin_pct
     margin_abs = config.stability_classifier_export_margin_abs
     margin_max = config.dmp_featurecuts_max_dmps

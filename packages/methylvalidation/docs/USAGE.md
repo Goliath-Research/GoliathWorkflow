@@ -2,6 +2,10 @@
 
 > **Orchestration:** For new studies and production runs, use **`methyl-workflow-run`** with a DomainProgram and pipeline profile. This document describes the **`methyl-validation`** CLI — stage flags (`--stability`, `--freeze`, `--model`, …) are **legacy**; they remain documented because each flag maps to a workflow action and is still used in transitional scripts and narrow recovery. Start with [`docs/usage/04-orchestration-workflow-run.qmd`](../../../docs/usage/04-orchestration-workflow-run.qmd).
 
+## Breaking change: Monte Carlo config snapshots
+
+This release removes legacy Monte Carlo keys (`healthy_csv`/`disease_csv`, `run_mapper_and_enricher`/`skip_enricher`, `stability_min_selected_dmps`, flat backend mirrors, embedded `validation`). Old `mc_config.json` snapshots are not upgraded automatically — resume them with the release that created them. New runs write canonical `queue/mc_config.json` plus informational `queue/mc_config.effective.json`.
+
 ## Overview
 
 MethylValidation orchestrates repeated train/validation splits, **methyl-centroid + methyl-detector** per iteration, backend model training/evaluation loops, and production freeze/model build. It supports the staged workflow below:
@@ -209,7 +213,6 @@ When to change defaults:
 | `--post-model-validation` | Run descriptive MC holdout evaluation with frozen production artifacts (no retraining). | `ecdf`: predictor-only evaluation; tabular/generative: in-process frozen model predict. Outputs to `monte_carlo_runs/post_model_validation/`. |
 | `--model-backend` / `--post-model-backend` | Override backend used by `--model`, `--model-mc`, or `--post-model-validation`. Backend must be enabled in profile `actionConfig.validation.backend_profiles`. | `ecdf` \| `tabular_sklearn` \| `generative_hybrid` |
 | `--predictor-only` | Run only `methyl-predictor` per iteration using the frozen model (Workflow 2). | Monte Carlo iterations, predictor only. |
-| `--skip-enricher` | Skip the enricher inside MC iterations even when `run_mapper_and_enricher: true`. | Also short-circuits enricher (and therefore progression) in `--freeze`. |
 | `--iterations N` | Override `n_iterations` from config. | Affects MC loop count (`--stability` and `--predictor-only`). |
 | `--seed S` | Override `seed` from config. | Affects MC split reproducibility. |
 | `--output-base DIR` | Override `output_base` from config. | Affects all output roots. |
@@ -297,7 +300,7 @@ Common fields for production staging:
 - `stability_min_selected_genes`: optional lower bound for gene FeatureCuts selected gene count.
 - `freeze_stable_gene_csv`: optional override for stable gene panel path (default: `monte_carlo_runs/stability/stable_genes_production.csv` when present).
 - `stability_featurecuts_enabled`: force detector FeatureCuts policy in MC (`classifier_dmp_selection=featurecuts_validation`).
-- `stability_target_balanced_accuracy` / `stability_min_selected_dmps`: optional FeatureCuts constraints used in MC detector overrides.
+- `stability_target_balanced_accuracy` / `stability_min_core_dmps`: optional FeatureCuts constraints used in MC detector overrides.
 - `stability_dual_cutoff_enabled`: enable dual strict/relaxed post-MC panels using `combined_score = effect_size * sqrt(frequency)`.
 - `stability_relaxed_cutoff_mode`: relaxed cutoff rule: `elbow_log_score` (tail elbow) or `strict_multiplier`.
 - `stability_relaxed_multiplier`: multiplier used when `stability_relaxed_cutoff_mode = strict_multiplier`.
@@ -400,7 +403,7 @@ Use this profile when you want conservative run filtering and classifier-panel-a
     "stability_gene_freq": 0.5,
     "stability_featurecuts_enabled": true,
     "stability_target_balanced_accuracy": 0.95,
-    "stability_min_selected_dmps": 1000
+    "stability_min_core_dmps": 1000
   }
 }
 ```
@@ -461,7 +464,7 @@ When profile `actionConfig.validation.backend_profiles.<backend>.params.feature_
   - `structural_scored`: comparison×region pooled features from `frozen_gene_features.csv`: `structural_directional_score__{comparison}__{region}`, `structural_panel_obs_fraction__*`, `structural_directional_iqr__*`, `structural_weighted_sign_agreement__*`; default regions include `gene_body`; progression contrasts per region when **K ≥ 2**; columns omitted when a region has insufficient panel loci in the classifier index; mapper cache uses priority-based locus assignment by default
   - `dmp_scored+gene_scored`: DMP-family metrics plus gene-directional scores (legacy alias: `dmp+gene_scored`)
   - `dmp_scored+structural_scored`: DMP-family metrics plus structural-directional scores (legacy alias: `dmp+structural_scored`)
-  - `dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`: deterministic concatenation of families (legacy aliases: `dmp+gene`, `dmp+structural`)
+  - `dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`: deterministic concatenation of families (canonical tokens only; legacy aliases rejected)
 
 | Legacy alias | Canonical token |
 |--------------|-----------------|

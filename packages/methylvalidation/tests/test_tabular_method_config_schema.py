@@ -41,7 +41,7 @@ def test_tabular_methods_discriminated_union_parses():
 def test_rejects_legacy_tabular_model_type():
     payload = _base_payload()
     payload["tabular_model_type"] = "hist_gradient_boosting"
-    with pytest.raises(ValueError, match="Legacy backend config keys"):
+    with pytest.raises(ValueError, match="Removed legacy Monte Carlo config keys"):
         MonteCarloConfig.model_validate(payload)
 
 

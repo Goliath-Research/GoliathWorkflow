@@ -34,6 +34,41 @@ def _read_json(path: Path) -> Dict[str, Any]:
         return {}
 
 
+def _backend_ecdf_params(config: Optional[Any], project_payload: Dict[str, Any]) -> Dict[str, Any]:
+    if config is not None:
+        try:
+            params = config.get_backend_params("ecdf")
+            return params.model_dump(mode="python") if hasattr(params, "model_dump") else dict(params)
+        except Exception:
+            pass
+        profiles = getattr(config, "backend_profiles", None)
+        if profiles is not None:
+            ecdf = getattr(profiles, "ecdf", None)
+            params = getattr(ecdf, "params", None)
+            if params is not None and hasattr(params, "model_dump"):
+                return params.model_dump(mode="python")
+    action = project_payload.get("actionConfig") or {}
+    validation = action.get("validation") if isinstance(action, dict) else {}
+    if isinstance(validation, dict):
+        ecdf = ((validation.get("backend_profiles") or {}).get("ecdf") or {}).get("params") or {}
+        if isinstance(ecdf, dict):
+            return ecdf
+    return {}
+
+
+def _regulatory_block(config: Optional[Any], project_payload: Dict[str, Any]) -> Dict[str, Any]:
+    if config is not None:
+        reg = getattr(config, "regulatory", None)
+        if reg is not None and hasattr(reg, "model_dump"):
+            return reg.model_dump(mode="python", exclude_none=True)
+        if isinstance(reg, dict):
+            return dict(reg)
+    top = project_payload.get("regulatory")
+    if isinstance(top, dict):
+        return dict(top)
+    return {}
+
+
 def write_locked_model_spec(
     *,
     production_dir: Path,
@@ -50,12 +85,19 @@ def write_locked_model_spec(
     production_summary = _read_json(production_dir / "production_summary.json")
     selected_backend = _read_json(production_dir / "selected_backend.json")
     project_payload = _read_json(project_json)
-    step_cfg = (project_payload.get("step_config") or {}) if isinstance(project_payload, dict) else {}
-    val_cfg = (step_cfg.get("validation") or {}) if isinstance(step_cfg, dict) else {}
-    reg_cfg = (val_cfg.get("regulatory") or {}) if isinstance(val_cfg, dict) else {}
-    model_bundle_cfg = (step_cfg.get("model_bundle") or {}) if isinstance(step_cfg, dict) else {}
+    reg_cfg = _regulatory_block(config, project_payload)
+    ecdf_params = _backend_ecdf_params(config, project_payload)
 
-    stable_panel = Path(str(production_summary.get("fixed_dmp_panel") or production_dir / "stable_dmps_genomewide.csv"))
+    # Optional model_bundle paths may still appear on study manifests under actionConfig.
+    action = project_payload.get("actionConfig") if isinstance(project_payload, dict) else {}
+    model_bundle_cfg = (action.get("model_bundle") or {}) if isinstance(action, dict) else {}
+    if not model_bundle_cfg:
+        # Older production copies may still list paths in production_summary only.
+        model_bundle_cfg = {}
+
+    stable_panel = Path(
+        str(production_summary.get("fixed_dmp_panel") or production_dir / "stable_dmps_genomewide.csv")
+    )
     stable_gene_panel = Path(
         str(
             production_summary.get("stable_gene_panel")
@@ -67,14 +109,7 @@ def write_locked_model_spec(
     fixed_gene_panel = Path(str(model_bundle_cfg.get("fixed_gene_panel") or ""))
     fixed_gene_features = Path(str(model_bundle_cfg.get("fixed_gene_features") or ""))
 
-    ecdf_params = (
-        ((val_cfg.get("backend_profiles") or {}).get("ecdf") or {}).get("params") or {}
-    )
-    feature_mode = str(
-        ecdf_params.get("feature_mode")
-        or (getattr(config, "feature_mode", "") if config is not None else "")
-        or "raw_dmp"
-    ).strip().lower()
+    feature_mode = str(ecdf_params.get("feature_mode") or "raw_dmp").strip().lower()
     if feature_mode == "raw_gene":
         classifier_artifact = production_dir / "classifiers" / "ecdf_gene_ovr.pkl"
         classifier_kind = "ecdf_gene_one_vs_rest"
@@ -84,6 +119,14 @@ def write_locked_model_spec(
     else:
         classifier_artifact = production_dir / "classifiers"
         classifier_kind = "ecdf_one_vs_rest"
+
+    feature_family_set = ecdf_params.get("feature_family_set")
+    covariates_path = ecdf_params.get("covariates_path")
+    validation_partitions = None
+    if config is not None and getattr(config, "validation_partitions", None) is not None:
+        partitions = getattr(config, "validation_partitions")
+        if hasattr(partitions, "model_dump"):
+            validation_partitions = partitions.model_dump(mode="python", exclude_none=True)
 
     payload: Dict[str, Any] = {
         "spec_version": "locked_model_spec_v1",
@@ -137,18 +180,10 @@ def write_locked_model_spec(
         "selection": selected_backend or None,
         "runtime": {
             "model_backend": str(getattr(config, "model_backend", "")) if config is not None else None,
-            "feature_mode": feature_mode or (
-                str(getattr(config, "feature_mode", "")) if config is not None else None
-            ),
-            "feature_family_set": str(getattr(config, "feature_family_set", "")) if config is not None else None,
-            "covariates_path": str(getattr(config, "covariates_path", "")) if config is not None else None,
-            "validation_partitions": (
-                getattr(getattr(config, "validation_partitions", None), "model_dump", lambda **_: None)(
-                    mode="python", exclude_none=True
-                )
-                if config is not None and getattr(config, "validation_partitions", None) is not None
-                else None
-            ),
+            "feature_mode": feature_mode,
+            "feature_family_set": feature_family_set,
+            "covariates_path": str(covariates_path) if covariates_path else None,
+            "validation_partitions": validation_partitions,
         },
     }
     if extra:
@@ -173,4 +208,3 @@ def write_locked_model_spec(
         lines.append(f"- {name}: path=`{spec.get('path')}`, sha256=`{spec.get('sha256')}`")
     md_path.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")
     return {"json_path": str(json_path), "md_path": str(md_path), "payload": payload}
-

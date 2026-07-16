@@ -2937,9 +2937,8 @@ def main() -> None:
     previous_train_control: List[str] | None = None
     previous_train_disease: List[str] | None = None
 
-    n_step_tasks = 1 if config.predictor_only else (
-        (5 if config.skip_enricher else 6) if config.run_mapper_and_enricher else 4
-    )
+    # MC iterations: centroid + detector (+ optional gene FeatureCuts). Mapper/enricher are freeze/DomainProgram.
+    n_step_tasks = 1 if config.predictor_only else 4
     if not config.predictor_only and bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
         n_step_tasks += 2
 

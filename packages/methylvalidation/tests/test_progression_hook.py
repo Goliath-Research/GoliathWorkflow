@@ -23,7 +23,7 @@ def test_run_pipeline_for_production_includes_progression_when_enabled(monkeypat
 
     ok, errors, timings = pipeline_runner.run_pipeline_for_production(
         Path("/tmp/project.json"),
-        config=SimpleNamespace(skip_enricher=False),
+        config=None,
     )
     assert ok
     assert not errors
@@ -31,7 +31,7 @@ def test_run_pipeline_for_production_includes_progression_when_enabled(monkeypat
     assert calls[-1] == "methyl-disease-progression"
 
 
-def test_run_pipeline_for_production_skips_progression_when_skip_enricher(monkeypatch):
+def test_run_pipeline_for_production_skips_progression_when_enricher_skip(monkeypatch):
     calls = []
 
     def _ok(name):
@@ -47,10 +47,11 @@ def test_run_pipeline_for_production_skips_progression_when_skip_enricher(monkey
     monkeypatch.setattr(pipeline_runner, "run_enricher", _ok("methyl-enricher"))
     monkeypatch.setattr(pipeline_runner, "run_progression", _ok("methyl-disease-progression"))
     monkeypatch.setattr(pipeline_runner, "_progression_settings", lambda _p: {"enabled": True})
+    monkeypatch.setattr(pipeline_runner, "_enricher_config", lambda _p: {"skip": True})
 
     ok, errors, timings = pipeline_runner.run_pipeline_for_production(
         Path("/tmp/project.json"),
-        config=SimpleNamespace(skip_enricher=True),
+        config=None,
     )
     assert ok
     assert not errors
@@ -78,7 +79,7 @@ def test_run_pipeline_for_production_supports_skip_centroid(monkeypatch):
     ok, errors, timings = pipeline_runner.run_pipeline_for_production(
         Path("/tmp/project.json"),
         skip_centroid=True,
-        config=SimpleNamespace(skip_enricher=False),
+        config=None,
     )
     assert ok
     assert not errors
@@ -106,7 +107,7 @@ def test_run_pipeline_for_production_supports_skip_detection(monkeypatch):
     ok, errors, timings = pipeline_runner.run_pipeline_for_production(
         Path("/tmp/project.json"),
         skip_detection=True,
-        config=SimpleNamespace(skip_enricher=False),
+        config=None,
     )
     assert ok
     assert not errors
@@ -134,7 +135,7 @@ def test_run_pipeline_for_production_excludes_fragmentomics(monkeypatch):
 
     ok, errors, timings = pipeline_runner.run_pipeline_for_production(
         Path("/tmp/project.json"),
-        config=SimpleNamespace(skip_enricher=False),
+        config=None,
     )
     assert ok
     assert not errors

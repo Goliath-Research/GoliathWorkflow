@@ -1148,10 +1148,10 @@ def run_pipeline_for_production(
     steps.append(
         ("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=False))
     )
-    skip_enricher = config.skip_enricher if config is not None else False
+    enricher_cfg = _enricher_config(project_json)
+    skip_enricher = bool(enricher_cfg.get("skip"))
     progression_cfg = _progression_settings(project_json)
     progression_enabled = bool(progression_cfg.get("enabled", False))
-    enricher_cfg = _enricher_config(project_json)
     enricher_distributed = bool(enricher_cfg.get("distributed", False))
     if not skip_enricher:
         if enricher_distributed:

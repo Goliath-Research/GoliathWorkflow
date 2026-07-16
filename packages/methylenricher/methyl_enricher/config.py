@@ -102,6 +102,14 @@ class EnricherStepConfig(BaseModel):
 
     model_config = ConfigDict(extra="ignore")
 
+    skip: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When true, freeze/production runners omit enricher (and progression that depends on it). "
+            "Prefer DomainProgram IF nodes for workflow topology; set via actionConfig.enricher."
+        ),
+    )
+
     # I/O (often overridden by project paths)
     input: Optional[str] = None
     input_file: Optional[str] = None

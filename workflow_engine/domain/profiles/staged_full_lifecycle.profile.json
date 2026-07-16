@@ -204,7 +204,7 @@
       "stability_min_balanced_accuracy": 0.9,
       "stability_gene_freq": 0.8,
       "stability_featurecuts_enabled": true,
-      "stability_min_selected_dmps": 500,
+      "stability_min_core_dmps": 500,
       "abort_on_step_failure": true,
       "regulatory": {
         "stage": "expanded_development",

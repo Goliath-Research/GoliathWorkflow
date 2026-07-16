@@ -5,6 +5,7 @@ Conventions (under each project's ``.../monte_carlo_runs/``)::
 
   queue/
     mc_config.json              # Pydantic snapshot of MonteCarloConfig
+    mc_config.effective.json    # Informational activation-aware operator view
     plan_runs.json              # Machine-readable list of planned runs
     tasks/                      # Per-run task JSON for ``run-task --task ...``
     queue_manifest.jsonl        # (export-queue) one JSON object per line

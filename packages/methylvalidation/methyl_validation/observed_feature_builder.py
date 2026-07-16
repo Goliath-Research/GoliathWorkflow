@@ -74,25 +74,13 @@ HYBRID_FEATURE_FAMILY_SETS = (
     "dmp_scored+chromosome",
     "hybrid-all",
 )
-LEGACY_FEATURE_FAMILY_ALIASES: Dict[str, str] = {
-    "dmp": "dmp_scored",
-    "dmp+gene": "dmp_scored+gene",
-    "dmp+structural": "dmp_scored+structural",
-    "dmp+gene_scored": "dmp_scored+gene_scored",
-    "dmp+structural_scored": "dmp_scored+structural_scored",
-}
-
-
 def normalize_feature_family_set(value: Optional[str]) -> str:
-    """Return canonical feature_family_set token (legacy aliases accepted)."""
+    """Return canonical feature_family_set token (legacy aliases rejected)."""
     token = str(value or "dmp_scored").strip().lower()
-    token = LEGACY_FEATURE_FAMILY_ALIASES.get(token, token)
     if token not in HYBRID_FEATURE_FAMILY_SETS:
-        legacy = ", ".join(sorted(LEGACY_FEATURE_FAMILY_ALIASES.keys()))
         canonical = ", ".join(HYBRID_FEATURE_FAMILY_SETS)
         raise ValueError(
-            f"Unsupported feature_family_set={value!r}; "
-            f"canonical values: {canonical}. Legacy aliases also accepted: {legacy}."
+            f"Unsupported feature_family_set={value!r}; canonical values: {canonical}."
         )
     return token
 

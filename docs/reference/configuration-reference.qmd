@@ -10,6 +10,17 @@ Parameters are listed with their JSON/Python name, type, default value, constrai
 
 ---
 
+## Breaking change: Effective Monte Carlo config
+
+Legacy Monte Carlo parameters were removed from `MonteCarloConfig` and generated schemas. Existing `monte_carlo_runs/queue/mc_config.json` snapshots from prior releases are **not** automatically migrated; resume those runs on the release that wrote them. New planners write canonical `mc_config.json` and an informational `mc_config.effective.json` (nested activation-aware view for operators).
+
+Canonical replacements:
+
+- `healthy_csv` / `disease_csv` → `cohorts: [{label, csv}, ...]`
+- `stability_min_selected_dmps` → `stability_min_core_dmps` (or `dmp_featurecuts_min_dmps`)
+- `run_mapper_and_enricher` / `skip_enricher` → DomainProgram topology / `actionConfig.enricher.skip`
+- Flat backend fields → `backend_profiles.<backend>.params`
+
 ## `actionConfig.centroid` {#sec-ref-centroid}
 
 *See @sec-methylcentroid for theoretical background.*
@@ -282,8 +293,6 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `stability_convergence_max_size_delta` | float | `0.02` | [0, 1] | Maximum allowed relative panel-size change between checkpoints. |
 | `stability_convergence_patience` | int | `3` | ≥ 1 | Consecutive passing checkpoints required before early stop triggers. |
 | `stability_gene_freq` | float | `0.5` | [0, 1] | Minimum recurrence frequency for a gene (enricher output) to be declared stable. |
-| `run_mapper_and_enricher` | bool | `false` | — | Legacy field; MC iterations now run centroid+detector only. Mapper/enricher are part of `--freeze`. |
-| `skip_enricher` | bool | `false` | — | Skip the enricher step even when `run_mapper_and_enricher` is `true`. |
 | `freeze_stable_dmp_csv` | str \| null | `null` | — | Path to the stable DMP CSV for `--freeze`. Defaults to `monte_carlo_runs/stability/stable_dmps_production.csv`. |
 | `production_output_dir` | str \| null | `null` | — | Override directory for the production freeze output. Defaults to `monte_carlo_runs/production`. |
 | `predictor_only` | bool | `false` | — | If `true`, only run `methyl-predictor` per iteration (Workflow 2). |
@@ -296,7 +305,7 @@ These parameters are **stripped before** `MethylDetectorConfig` is constructed; 
 | `model_weight_column` | str | `"effect_size"` | — | Legacy compatibility field. Tabular/generative model bundle weighting is canonicalized to detector `effect_size`. |
 | `tabular_model_type` | str | `"random_forest"` | `"random_forest"`, `"hist_gradient_boosting"`, `"logistic_regression"`, `"xgboost"` | Model type when `model_backend="tabular_sklearn"`. |
 | `tabular_max_dmps` | int \| null | `null` | null, `0`, or ≥ 10 | DMP cap for tabular/generative backend training. `null`/`0` keeps all stable loci from the bundle index; positive values keep top loci by descending effect size. |
-| `feature_family_set` | str | `"dmp_scored"` | `dmp_scored`, `gene`, `structural`, `gene_scored`, `dmp_scored+gene`, `dmp_scored+structural`, `dmp_scored+gene_scored`, `hybrid-all` (legacy aliases `dmp`, `dmp+gene`, `dmp+structural`, `dmp+gene_scored` accepted) | Feature-family contract for observed-hybrid model bundles and predictors. Applies only when `feature_mode=observed_hybrid`. |
+| `feature_family_set` | str | `"dmp_scored"` | `dmp_scored`, `gene`, `structural`, `gene_scored`, `dmp_scored+gene`, `dmp_scored+structural`, `dmp_scored+gene_scored`, `hybrid-all` (canonical only) | Feature-family contract under `backend_profiles.*.params`. Applies when `feature_mode=observed_hybrid`. |
 | `ecdf_aggregated_enabled` | bool \| null | `null` | — | Toggle aggregated ECDF OvR for `model_backend=ecdf`. `null` auto-enables when `feature_mode=observed_hybrid` and `feature_family_set!=dmp_scored`. |
 | `ecdf_aggregated_n_bins` | int | `100` | [8, 512] | Histogram bin count for aggregated ECDF OvR package training. |
 | `covariates_path` | str \| null | `null` | — | Optional covariates sidecar (`.h5` preferred, `.csv` accepted) for tabular or generative backend. |
@@ -365,8 +374,8 @@ This roadmap aligns deprecations with the current production workflow (`--stabil
 
 | Key / pattern | Current state | Proposed disposition |
 |---|---|---|
-| `actionConfig.validation.run_mapper_and_enricher` | Legacy behavior flag | Deprecate, then remove. Freeze stage owns mapper/enricher execution. |
-| `actionConfig.validation.skip_enricher` | Legacy companion flag | Deprecate, then remove. Use explicit freeze/enricher step policy instead. |
+| `actionConfig.validation.run_mapper_and_enricher` | **Removed** | Mapper/enricher belong to DomainProgram / `--freeze`. |
+| `actionConfig.validation.skip_enricher` | **Removed** | Use DomainProgram IF or `actionConfig.enricher.skip`. |
 | `actionConfig.validator` | Deprecated alias of `actionConfig.predictor` | Remove after one full release cycle of warnings. |
 | Flat schema (`group1`/`group2`/`groups`) for new configs | Backward-compatible | Keep loader compatibility; stop documenting as a preferred authoring pattern. |
 
@@ -437,7 +446,7 @@ After:
 }
 ```
 
-#### 2) Remove `run_mapper_and_enricher` / `skip_enricher` from `actionConfig.validation`
+#### 2) `run_mapper_and_enricher` / `skip_enricher` removed from `actionConfig.validation`
 
 Before:
 
@@ -466,7 +475,8 @@ After:
     "gtf": "/path/to/annotation.gtf"
   },
   "enricher": {
-    "libraries": ["KEGG_2021_Human", "Reactome_2022"]
+    "libraries": ["KEGG_2021_Human", "Reactome_2022"],
+    "skip": false
   }
 }
 ```

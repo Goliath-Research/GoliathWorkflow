@@ -47,7 +47,11 @@ def _add_common_config_args(
         p.add_argument("--stability-featurecuts", action="store_true", help="FeatureCuts / detector overrides for planning.")
         p.add_argument("--stability-target-ba", type=float, default=None)
         p.add_argument("--stability-min-selected-dmps", type=int, default=None)
-    p.add_argument("--skip-enricher", action="store_true", help="(config) skip enricher in downstream runs.")
+    p.add_argument(
+        "--skip-enricher",
+        action="store_true",
+        help="Removed: use DomainProgram topology or actionConfig.enricher.skip (errors if set).",
+    )
     p.add_argument("--predictor-only", action="store_true", help="Plan/run predictor-only iterations.")
     p.add_argument("--model-backend", choices=["ecdf", "tabular_sklearn", "generative_hybrid"], default=None)
     p.add_argument("--post-model-backend", choices=["ecdf", "tabular_sklearn", "generative_hybrid"], default=None)
@@ -151,7 +155,11 @@ def cmd_export_queue(argv: List[str]) -> None:
     p.add_argument("--stability-featurecuts", action="store_true")
     p.add_argument("--stability-target-ba", type=float, default=None)
     p.add_argument("--stability-min-selected-dmps", type=int, default=None)
-    p.add_argument("--skip-enricher", action="store_true")
+    p.add_argument(
+        "--skip-enricher",
+        action="store_true",
+        help="Removed: use DomainProgram topology or actionConfig.enricher.skip (errors if set).",
+    )
     p.add_argument("--predictor-only", action="store_true")
     p.add_argument("--model-backend", choices=["ecdf", "tabular_sklearn", "generative_hybrid"], default=None)
     p.add_argument("--post-model-backend", choices=["ecdf", "tabular_sklearn", "generative_hybrid"], default=None)

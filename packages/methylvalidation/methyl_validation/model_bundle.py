@@ -1671,8 +1671,8 @@ def build_model_feature_bundle(
         ascending=[False, True, True, True],
     ).reset_index(drop=True)
 
-    includes_gene = family_token in {"gene", "dmp+gene", "hybrid-all"}
-    includes_structural = family_token in {"structural", "dmp+structural", "hybrid-all"}
+    includes_gene = family_token in {"gene", "dmp_scored+gene", "hybrid-all"}
+    includes_structural = family_token in {"structural", "dmp_scored+structural", "hybrid-all"}
     gene_non_unknown = int((dmp_df["gene_name"].astype(str).str.strip().str.lower() != "unknown").sum())
     feat_non_unknown = int((dmp_df["feature_type"].astype(str).str.strip().str.lower() != "unknown").sum())
     if strict_mapper:

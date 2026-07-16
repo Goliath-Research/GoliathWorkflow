@@ -59,6 +59,18 @@
           "default": null,
           "title": "Biomarker Pool Size"
         },
+        "empty_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Empty Reason"
+        },
         "enabled": {
           "default": true,
           "title": "Enabled",
@@ -76,6 +88,42 @@
           "default": null,
           "title": "Mode"
         },
+        "n_after_csv_filters": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N After Csv Filters"
+        },
+        "n_after_region_hits": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N After Region Hits"
+        },
+        "n_after_top_genes_cap": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N After Top Genes Cap"
+        },
         "n_genes_in_mapper_after_intersect": {
           "anyOf": [
             {
@@ -87,6 +135,42 @@
           ],
           "default": null,
           "title": "N Genes In Mapper After Intersect"
+        },
+        "n_mapper_genes_input": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Mapper Genes Input"
+        },
+        "n_ppi_hubs": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N Ppi Hubs"
+        },
+        "n_string_edges": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "N String Edges"
         },
         "ppi_cache_path": {
           "anyOf": [
@@ -100,6 +184,18 @@
           "default": null,
           "title": "Ppi Cache Path"
         },
+        "ppi_fetch_attempted": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ppi Fetch Attempted"
+        },
         "ppi_score_threshold": {
           "anyOf": [
             {
@@ -111,6 +207,18 @@
           ],
           "default": null,
           "title": "Ppi Score Threshold"
+        },
+        "ppi_skip_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ppi Skip Reason"
         },
         "region_hits": {
           "items": {

@@ -146,7 +146,7 @@ def test_anchor_and_feature_table_do_not_diverge_for_dmp_family_with_range_loadi
         class_names=class_names,
         dmp_df=dmp_df,
         min_coverage=1,
-        feature_family_set="dmp",
+        feature_family_set="dmp_scored",
         gene_feature_loading="range",
         fixed_gene_features_df=fixed_gene_features_df,
     )
@@ -160,7 +160,7 @@ def test_anchor_and_feature_table_do_not_diverge_for_dmp_family_with_range_loadi
         cancer_class_labels=anchors.cancer_class_labels,
         anchor_strategy=anchors.anchor_strategy,
         expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
-        feature_family_set="dmp",
+        feature_family_set="dmp_scored",
         gene_feature_loading="range",
         fixed_gene_features_df=fixed_gene_features_df,
     )
@@ -701,7 +701,7 @@ def test_observed_feature_builder_dynamic_schema_is_deterministic(monkeypatch):
         cancer_class_labels=anchors.cancer_class_labels,
         anchor_strategy=anchors.anchor_strategy,
         expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
-        feature_family_set="dmp+gene",
+        feature_family_set="dmp_scored+gene",
     )
     feat_b = observed_feature_builder.build_observed_hybrid_feature_table(
         sample_paths,
@@ -712,7 +712,7 @@ def test_observed_feature_builder_dynamic_schema_is_deterministic(monkeypatch):
         cancer_class_labels=anchors.cancer_class_labels,
         anchor_strategy=anchors.anchor_strategy,
         expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
-        feature_family_set="dmp+gene",
+        feature_family_set="dmp_scored+gene",
     )
     assert feat_a.feature_names == feat_b.feature_names
     assert feat_a.report["schema_fingerprint"] == feat_b.report["schema_fingerprint"]
@@ -728,27 +728,16 @@ def test_family_flags_gene_scored_tokens():
     assert observed_feature_builder._family_flags("dmp_scored+chromosome") == (True, False, False, False, False, True)
 
 
-def test_normalize_feature_family_set_canonical_and_legacy_aliases():
+def test_normalize_feature_family_set_rejects_legacy_aliases():
     assert observed_feature_builder.normalize_feature_family_set("dmp_scored") == "dmp_scored"
-    assert observed_feature_builder.normalize_feature_family_set("dmp") == "dmp_scored"
     assert (
-        observed_feature_builder.normalize_feature_family_set("dmp+gene_scored")
+        observed_feature_builder.normalize_feature_family_set("dmp_scored+gene_scored")
         == "dmp_scored+gene_scored"
     )
-    assert observed_feature_builder.normalize_feature_family_set("dmp+gene") == "dmp_scored+gene"
-    assert (
-        observed_feature_builder.normalize_feature_family_set("dmp+structural")
-        == "dmp_scored+structural"
-    )
-    assert (
-        observed_feature_builder.normalize_feature_family_set("dmp+structural_scored")
-        == "dmp_scored+structural_scored"
-    )
-    assert observed_feature_builder._family_flags("dmp") == observed_feature_builder._family_flags(
-        "dmp_scored"
-    )
-    with pytest.raises(ValueError, match="Unsupported feature_family_set"):
-        observed_feature_builder.normalize_feature_family_set("unknown_family")
+    import pytest
+    for legacy in ("dmp", "dmp+gene", "dmp+structural", "dmp+gene_scored", "dmp+structural_scored"):
+        with pytest.raises(ValueError, match="Unsupported feature_family_set"):
+            observed_feature_builder.normalize_feature_family_set(legacy)
 
 
 def test_gene_scored_feature_names_and_fingerprint():
@@ -1087,7 +1076,7 @@ def test_observed_feature_builder_dmp_plus_gene_scored_includes_both_families(mo
         cancer_class_labels=anchors.cancer_class_labels,
         anchor_strategy=anchors.anchor_strategy,
         expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
-        feature_family_set="dmp+gene_scored",
+        feature_family_set="dmp_scored+gene_scored",
         frozen_gene_panel_df=frozen_panel,
     )
     assert "max_weighted_directional_score" in feat.feature_names

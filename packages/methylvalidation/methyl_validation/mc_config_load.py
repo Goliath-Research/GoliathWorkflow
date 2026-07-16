@@ -14,12 +14,6 @@ from methyl_utils import load_project
 
 from .cohort_inference import infer_monte_carlo_cohorts_from_project
 from .config import MonteCarloConfig
-from .utils.migrate_backend_config import (
-    LEGACY_BACKEND_KEYS,
-    merge_legacy_validation_keys_into_backend_profiles,
-)
-
-
 def validate_stability_gene_biomarker_config(config: MonteCarloConfig) -> None:
     """Validate biomarker filter configuration."""
     if not bool(getattr(config, "stability_gene_biomarker_filter_enabled", False)):
@@ -50,9 +44,7 @@ def _update_backend_params(config: MonteCarloConfig, backend: str, updates: dict
         profiles.generative_hybrid = profiles.generative_hybrid.model_copy(update={"params": params})
     else:
         raise ValueError(f"Unsupported backend {backend!r}")
-    updated = config.model_copy(update={"backend_profiles": profiles})
-    updated._sync_runtime_backend_fields()
-    return updated
+    return config.model_copy(update={"backend_profiles": profiles})
 
 
 def apply_project_regulatory_to_mc_dict(
@@ -103,10 +95,6 @@ def load_monte_carlo_config(
             _err(
                 f"Error: Project {args.project} missing resolved validation action config "
                 "(set METHYL_PROFILE or pass --config)."
-            )
-        if any(k in validation_settings for k in LEGACY_BACKEND_KEYS):
-            validation_settings, _ = merge_legacy_validation_keys_into_backend_profiles(
-                validation_settings
             )
         cohorts = infer_monte_carlo_cohorts_from_project(project_data, args.project)
         if len(cohorts) < 2:
@@ -174,8 +162,9 @@ def apply_monte_carlo_config_overrides(
             update={"stability_target_balanced_accuracy": float(args.stability_target_ba)}
         )
     if getattr(args, "stability_min_selected_dmps", None) is not None:
+        # Deprecated CLI alias; canonical field is stability_min_core_dmps.
         config = config.model_copy(
-            update={"stability_min_selected_dmps": int(args.stability_min_selected_dmps)}
+            update={"stability_min_core_dmps": int(args.stability_min_selected_dmps)}
         )
     if getattr(args, "stability_min_core_dmps", None) is not None:
         config = config.model_copy(
@@ -222,7 +211,12 @@ def apply_monte_carlo_config_overrides(
             update={"stability_min_selected_genes": int(args.stability_min_selected_genes)}
         )
     if getattr(args, "skip_enricher", None):
-        config = config.model_copy(update={"skip_enricher": True})
+        print(
+            "Error: --skip-enricher was removed. Control enricher via DomainProgram "
+            "topology or actionConfig.enricher.skip.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     if getattr(args, "predictor_only", None):
         config = config.model_copy(update={"predictor_only": True})
     if getattr(args, "holdout_eval", None):
@@ -348,10 +342,10 @@ def write_mc_config_snapshot(
     config: MonteCarloConfig,
     path: Path,
 ) -> None:
-    """Write MonteCarloConfig for workers (Pydantic JSON, UTF-8).
-
-    Deprecated legacy backend keys are omitted so snapshots never re-seed them.
-    """
+    """Write canonical MonteCarloConfig and informational effective snapshot for operators."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         f.write(config.dump_clean_json(indent=2))
+    from .effective_config import write_effective_mc_config_snapshot
+
+    write_effective_mc_config_snapshot(config, path.with_name("mc_config.effective.json"))

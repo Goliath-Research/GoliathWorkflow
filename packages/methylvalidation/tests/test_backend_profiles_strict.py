@@ -31,22 +31,14 @@ def test_merge_strips_mapper_gene_columns() -> None:
 
 
 def test_dump_clean_json_omits_legacy_keys_and_round_trips() -> None:
-    """Clean serialization drops deprecated keys and reloads without error.
-
-    A plain model_dump() re-emits the 65 legacy fields, which the strict validator
-    rejects — so persisted snapshots must use dump_clean_json to stay reloadable.
-    """
+    """Canonical serialization has no removed flat keys and reloads cleanly."""
     import json
 
     cfg = MonteCarloConfig.model_validate(_base_payload())
-
-    plain = json.loads(cfg.model_dump_json())
-    assert set(plain) & set(MonteCarloConfig._LEGACY_BACKEND_KEYS), "precondition: plain dump has legacy keys"
-
     clean = json.loads(cfg.dump_clean_json())
-    assert set(clean) & set(MonteCarloConfig._LEGACY_BACKEND_KEYS) == set()
-
-    # The previously-broken round-trip now succeeds on clean output.
+    assert set(clean) & set(MonteCarloConfig._REMOVED_FLAT_KEYS) == set()
+    schema_props = set(MonteCarloConfig.model_json_schema().get("properties", {}))
+    assert schema_props & set(MonteCarloConfig._REMOVED_FLAT_KEYS) == set()
     reloaded = MonteCarloConfig.model_validate(clean)
     assert reloaded.train_fraction == cfg.train_fraction
     assert reloaded.n_iterations == cfg.n_iterations
@@ -87,9 +79,9 @@ def test_merge_legacy_keys_preserves_backend_enabled_flags():
         "train_fraction": 0.8,
         "gene_scored_min_support_n": 5,
         "backend_profiles": {
-            "ecdf": {"enabled": True, "params": {"feature_family_set": "dmp"}},
-            "tabular_sklearn": {"enabled": True, "params": {"feature_family_set": "dmp+gene_scored"}},
-            "generative_hybrid": {"enabled": True, "params": {"feature_family_set": "dmp"}},
+            "ecdf": {"enabled": True, "params": {"feature_family_set": "dmp_scored"}},
+            "tabular_sklearn": {"enabled": True, "params": {"feature_family_set": "dmp_scored+gene_scored"}},
+            "generative_hybrid": {"enabled": True, "params": {"feature_family_set": "dmp_scored"}},
         },
     }
     migrated, moved = merge_legacy_validation_keys_into_backend_profiles(validation)

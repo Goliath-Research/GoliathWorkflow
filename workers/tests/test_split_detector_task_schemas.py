@@ -121,10 +121,19 @@ def test_biomarker_filter_output_accepts_structured_payload() -> None:
                 enabled=True,
                 mode="ppi_only",
                 biomarker_pool_size=42,
+                n_mapper_genes_input=100,
+                n_after_csv_filters=80,
+                n_after_region_hits=60,
+                n_after_top_genes_cap=50,
+                ppi_fetch_attempted=True,
+                n_string_edges=120,
+                n_ppi_hubs=42,
             ),
         ),
     )
     assert out.n_genes == 42
+    assert out.biomarker_filter.n_mapper_genes_input == 100
+    assert out.biomarker_filter.n_ppi_hubs == 42
 
 
 def test_gene_feature_select_input_strict() -> None:

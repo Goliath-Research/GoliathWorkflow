@@ -60,12 +60,20 @@ def test_validation_step_schema_has_no_runner_required_fields():
     assert "train_fraction" in props
     assert "backend_profiles" in props
 
-    # Constraints must propagate from MonteCarloConfig Field(ge/le/...) metadata.
-    ecdf_bins = props["ecdf_aggregated_n_bins"]["anyOf"][0]
+    # Backend knobs live under backend_profiles; constraints still propagate there.
+    ecdf_bins = schema["$defs"]["EcdfBackendParams"]["properties"]["ecdf_aggregated_n_bins"]
     assert ecdf_bins.get("minimum") == 8
     assert ecdf_bins.get("maximum") == 512
     with pytest.raises(ValidationError):
-        ValidationStepConfig.model_validate({"ecdf_aggregated_n_bins": 3})
+        ValidationStepConfig.model_validate(
+            {
+                "backend_profiles": {
+                    "ecdf": {"enabled": True, "params": {"ecdf_aggregated_n_bins": 3}},
+                    "tabular_sklearn": {"enabled": False, "params": {}},
+                    "generative_hybrid": {"enabled": False, "params": {}},
+                }
+            }
+        )
 
 
 def test_progression_step_schema_artifact_registered():

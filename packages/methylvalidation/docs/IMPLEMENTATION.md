@@ -163,7 +163,7 @@ The main components are:
 4. **Pipeline Execution**: Uses `pipeline_runner.py` to run the appropriate steps.
 5. **Aggregation**: Collects metrics and timings from all runs.
 
-During stability MC runs, `stability_featurecuts_enabled` and related `stability_target_balanced_accuracy` / `stability_min_selected_dmps` settings are materialized per iteration as `detector_step_override.json` so detector selection policy is explicit and auditable in each `run_XXXX`.
+During stability MC runs, `stability_featurecuts_enabled` and related `stability_target_balanced_accuracy` / `stability_min_core_dmps` settings are materialized per iteration as detector step overrides so detector selection policy is explicit and auditable in each `run_XXXX`.
 
 The `--freeze` path uses `run_pipeline_for_production()` which runs: centroid → detector(with `fixed_dmp_panel`) → mapper → enricher; when `actionConfig.progression.enabled=true`, it then runs `methyl-disease-progression`.
 During freeze, model-bundle preparation materializes:
@@ -225,7 +225,7 @@ Sample path resolution is done locally in MethylValidation ([split.py](../methyl
 
 | Module | Role |
 |--------|------|
-| **config.py** | `MonteCarloConfig` — `cohorts` (preferred) or legacy `healthy_csv`/`disease_csv`, plus train_fraction, n_iterations, seed, base_project, output_base, path_remap, abort_on_step_failure. |
+| **config.py** | `MonteCarloConfig` — required `cohorts`, plus train_fraction, n_iterations, seed, base_project, output_base, path_remap, abort_on_step_failure. Backend knobs live under `backend_profiles` only. |
 | **predictor_policy.py** | `assert_monte_carlo_predictor_allowed` — reject `predictor.blind` / `test_blind_paths` for MC. |
 | **split.py** | `load_and_resolve_sample_paths`; `stratified_split` (binary); `stratified_split_multiclass` (per-label train/val). |
 | **project_gen.py** | `infer_monte_carlo_layout` (rejects 2 cohorts when project resolves to >2 leaves); `generate_run_project` (binary CSV names unchanged); `generate_run_project_multiclass` / `generate_run_project_hierarchical_multiclass` (`training_<label>.csv`, `testing_<label>.csv`, `val_test_groups.json`). Each run’s `project.json` rewrites `actionConfig.predictor` to the holdout CSVs: **flat** MC also sets `test_group_paths`; **hierarchical** MC only updates nested `controls`/`diseases` (keeps template parent labels, e.g. `prostate_cancer` vs top-level `pca`). MethylPredictor zips predictor list expansion with resolved centroid labels when `test_group_paths` is absent. |
