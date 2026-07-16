@@ -30,6 +30,19 @@ methyl-cfg publish-program StudyValidationLifecycle --work-root /work
 methyl-cfg upsert credential --file new_keys.json --name lab-aws-keys --version 2 --provider s3 --publish
 ```
 
+### Push git profiles + action catalog into the databases
+
+`methyl-cfg import-fs` updates the **file-backed** cfg store. After breaking profile/schema changes, also refresh the **database** registry and `wf` action catalog on each backend:
+
+```bash
+source .venv/bin/activate
+# Azure SQL (AZURE_SQL_* or DB_*); PostgreSQL (POSTGRES_*; URL-encode @ in AAD users)
+python scripts/sync_cfg_profiles_and_action_catalog.py --backend mssql
+python scripts/sync_cfg_profiles_and_action_catalog.py --backend postgres
+```
+
+This upserts `cfg.pipeline_profile` from `workflow_engine/domain/profiles/` and re-seeds `wf.workflow_action` / schemas from `schemas/actions/catalog.json` + `schemas/tasks/`. See the sync log under the [effective Monte Carlo config plan](../plans/effective-monte-carlo-config.plan.md#database-propagation-azure-sql--postgresql).
+
 ## Study scaffold
 
 `methyl-study-init` still writes `/work/projects/<study-id>/` and **also** upserts `cfg.study` when the cfg store is available (`--cfg-store` or `METHYL_CFG_STORE`).

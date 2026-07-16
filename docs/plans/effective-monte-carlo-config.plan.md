@@ -2,7 +2,7 @@
 name: Effective Monte Carlo Config
 overview: Remove legacy Monte Carlo parameters from the core model/schema as an intentional breaking change, then add a compact human-facing configuration that nests dependent parameters under their enabling feature. Existing snapshots require the old release; no compatibility adapter or automatic migration will be retained.
 
-> **Status: IMPLEMENTED.** Canonical `MonteCarloConfig` rejects removed keys; planners write `mc_config.json` + informational `mc_config.effective.json`. Resume old snapshots on the release that created them.
+> **Status: IMPLEMENTED.** Canonical `MonteCarloConfig` rejects removed keys; planners write `mc_config.json` + informational `mc_config.effective.json`. Resume old snapshots on the release that created them. **DB sync (2026-07-16):** Azure SQL + PostgreSQL `cfg.pipeline_profile` and `wf` action catalog re-seeded via [`scripts/sync_cfg_profiles_and_action_catalog.py`](../../scripts/sync_cfg_profiles_and_action_catalog.py).
 
 azure_devops:
   type: Feature
@@ -21,6 +21,9 @@ todos:
     status: completed
   - id: breaking-change-verification
     content: Add rejection, projection, integration, and clean-repository scans; document the breaking release and old-run boundary.
+    status: completed
+  - id: db-config-sync
+    content: Re-sync cfg.pipeline_profile + wf action catalog/schemas to Azure SQL and PostgreSQL after legacy-parameter removal; leave a reusable sync script and plan note.
     status: completed
 ---
 
@@ -87,3 +90,26 @@ Apply the same pattern to dual cutoffs, stability tiers, biomarker filtering, ho
 - Mark the change as breaking: existing Monte Carlo runs remain tied to the release that created their snapshots.
 - Document canonical replacements and the release boundary; do not promise transparent resume across the boundary.
 - After approval, promote this plan to `docs/plans/effective-monte-carlo-config.plan.md`, add AB#413 Feature metadata, and update `docs/plans/README.md` as required by repository conventions.
+
+## Database propagation (Azure SQL + PostgreSQL)
+
+Repo JSON is not enough for distributed runs: operators also need published rows in `cfg.pipeline_profile` and seeded `wf.workflow_action` / `wf.workflow_action_schema`.
+
+**Reusable sync (commit this with the feature):**
+
+```bash
+source .venv/bin/activate
+# Azure SQL: AZURE_SQL_* (or DB_* from local mssql-mcp .env)
+python scripts/sync_cfg_profiles_and_action_catalog.py --backend mssql
+# PostgreSQL: POSTGRES_* (URL-encode @ in AAD usernames as %40)
+python scripts/sync_cfg_profiles_and_action_catalog.py --backend postgres
+```
+
+### Sync log — 2026-07-16
+
+| Target | Profiles | Catalog | Verification |
+|--------|----------|---------|--------------|
+| Azure SQL (`em-maindb`) | Upserted `staged_ovr_mc`, `staged_full_lifecycle` from repo (`stability_min_selected_dmps` → `stability_min_core_dmps`) | Seeded 46 actions / 92 schemas | No removed key; biomarker output has `empty_reason` |
+| PostgreSQL (`epimethyl`) | Renamed legacy key on the same two profiles | Seeded 46 actions / 92 schemas | Same checks |
+
+Old Monte Carlo `mc_config.json` snapshots remain bound to the release that wrote them; this sync only refreshes registry/catalog rows.
