@@ -18,6 +18,7 @@ import {
   Text,
   computeDAGLayout,
   useCanvasAction,
+  useCanvasState,
   useHostTheme,
 } from "cursor/canvas";
 
@@ -69,13 +70,101 @@ function DocLink({ path, children }: { path: string; children?: string }) {
 
 /* ── Diagrams ─────────────────────────────────────────────────────────── */
 
+function EndToEndDag() {
+  const theme = useHostTheme();
+  const nodes = [
+    { id: "src", label: "fastqSource" },
+    { id: "dl", label: "download" },
+    { id: "aln", label: "align + QC" },
+    { id: "ext", label: "extract h5" },
+    { id: "arc", label: "archive" },
+    { id: "dst", label: "sampleDest" },
+    { id: "mc", label: "MC / freeze" },
+    { id: "cov", label: "Ω + info" },
+    { id: "mod", label: "model" },
+    { id: "val", label: "holdouts" },
+  ];
+  const edges = [
+    { from: "src", to: "dl" },
+    { from: "dl", to: "aln" },
+    { from: "aln", to: "ext" },
+    { from: "ext", to: "arc" },
+    { from: "arc", to: "dst" },
+    { from: "arc", to: "mc" },
+    { from: "mc", to: "cov" },
+    { from: "cov", to: "mod" },
+    { from: "mod", to: "val" },
+  ];
+  const layout = computeDAGLayout({
+    nodes: nodes.map((n) => ({ id: n.id })),
+    edges,
+    direction: "horizontal",
+    nodeWidth: 88,
+    nodeHeight: 32,
+    rankGap: 18,
+    nodeGap: 8,
+    padding: 6,
+  });
+  const labelById = Object.fromEntries(nodes.map((n) => [n.id, n.label]));
+  const accent = new Set(["src", "dst", "cov", "val"]);
+
+  return (
+    <svg
+      width={layout.width}
+      height={layout.height}
+      style={{ display: "block", maxWidth: "100%" }}
+      aria-label="End-to-end: ingest through holdout validation"
+    >
+      <defs>
+        <marker id="e2e-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L0,6 L6,3 z" fill={theme.stroke.primary} />
+        </marker>
+      </defs>
+      {layout.edges.map((e) => (
+        <line
+          key={`${e.from}-${e.to}`}
+          x1={e.sourceX}
+          y1={e.sourceY}
+          x2={e.targetX}
+          y2={e.targetY}
+          stroke={theme.stroke.primary}
+          strokeWidth={1.4}
+          markerEnd="url(#e2e-arrow)"
+        />
+      ))}
+      {layout.nodes.map((n) => (
+        <g key={n.id}>
+          <rect
+            x={n.x}
+            y={n.y}
+            width={88}
+            height={32}
+            rx={4}
+            fill={accent.has(n.id) ? theme.fill.tertiary : theme.bg.elevated}
+            stroke={accent.has(n.id) ? theme.accent.primary : theme.stroke.primary}
+          />
+          <text
+            x={n.x + 44}
+            y={n.y + 20}
+            textAnchor="middle"
+            fontSize={9}
+            fill={theme.text.primary}
+          >
+            {labelById[n.id]}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function ConfigPrecedenceDiagram() {
   const theme = useHostTheme();
   const nodes = [
-    { id: "site", label: "Site manifest" },
+    { id: "site", label: "Site" },
     { id: "profile", label: "Profile" },
     { id: "program", label: "DomainProgram" },
-    { id: "instance", label: "Instance context" },
+    { id: "instance", label: "Instance" },
     { id: "resolved", label: "resolvedConfig" },
   ];
   const edges = [
@@ -88,9 +177,9 @@ function ConfigPrecedenceDiagram() {
     nodes: nodes.map((n) => ({ id: n.id })),
     edges,
     direction: "horizontal",
-    nodeWidth: 118,
+    nodeWidth: 110,
     nodeHeight: 34,
-    rankGap: 28,
+    rankGap: 24,
     nodeGap: 10,
     padding: 8,
   });
@@ -101,7 +190,7 @@ function ConfigPrecedenceDiagram() {
       width={layout.width}
       height={layout.height}
       style={{ display: "block", maxWidth: "100%" }}
-      aria-label="Configuration merge precedence from site to worker task"
+      aria-label="Configuration merge precedence"
     >
       <defs>
         <marker id="cfg-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
@@ -125,14 +214,14 @@ function ConfigPrecedenceDiagram() {
           <rect
             x={n.x}
             y={n.y}
-            width={118}
+            width={110}
             height={34}
             rx={4}
             fill={n.id === "resolved" ? theme.fill.tertiary : theme.bg.elevated}
             stroke={n.id === "resolved" ? theme.accent.primary : theme.stroke.primary}
           />
           <text
-            x={n.x + 59}
+            x={n.x + 55}
             y={n.y + 21}
             textAnchor="middle"
             fontSize={10}
@@ -149,34 +238,29 @@ function ConfigPrecedenceDiagram() {
 function DistributedRuntimeDiagram() {
   const theme = useHostTheme();
   const w = 720;
-  const h = 340;
-
+  const h = 300;
   type Box = { x: number; y: number; w: number; h: number; label: string; sub?: string; accent?: boolean };
   const boxes: Box[] = [
-    { x: 24, y: 24, w: 150, h: 56, label: "EpiPortal / operator", sub: "SQL direct (portal.sp_*)" },
-    { x: 220, y: 24, w: 170, h: 72, label: "Central database", sub: "Azure SQL or PostgreSQL", accent: true },
-    { x: 430, y: 24, w: 130, h: 56, label: "methyl-gateway", sub: "REST :8080" },
-    { x: 590, y: 24, w: 110, h: 56, label: "Remote workers", sub: "methyl-worker" },
-    { x: 220, y: 140, w: 340, h: 52, label: "wf schema engine", sub: "instances, node_execution, scope, leases" },
-    { x: 120, y: 240, w: 480, h: 56, label: "Shared /work storage", sub: "samples, HDF5, monte_carlo_runs, site manifest" },
+    { x: 24, y: 20, w: 150, h: 52, label: "EpiPortal", sub: "portal.sp_*" },
+    { x: 220, y: 20, w: 170, h: 64, label: "Central database", sub: "Azure SQL / PostgreSQL", accent: true },
+    { x: 430, y: 20, w: 120, h: 52, label: "methyl-gateway", sub: "REST :8080" },
+    { x: 580, y: 20, w: 120, h: 52, label: "Remote workers", sub: "methyl-worker" },
+    { x: 220, y: 120, w: 340, h: 48, label: "wf schema engine", sub: "instances · leases · scope" },
+    { x: 140, y: 210, w: 460, h: 52, label: "Shared /work", sub: "samples · projects · site · runtime-bundle" },
   ];
-
-  type Arrow = { x1: number; y1: number; x2: number; y2: number; label?: string };
-  const arrows: Arrow[] = [
-    { x1: 174, y1: 52, x2: 220, y2: 52, label: "plan + start" },
-    { x1: 390, y1: 52, x2: 430, y2: 52, label: "admin deploy" },
-    { x1: 560, y1: 52, x2: 590, y2: 52, label: "poll/submit" },
-    { x1: 495, y1: 80, x2: 495, y2: 140 },
-    { x1: 305, y1: 96, x2: 305, y2: 140 },
-    { x1: 645, y1: 80, x2: 645, y2: 200 },
-    { x1: 645, y1: 200, x2: 495, y2: 200 },
-    { x1: 495, y1: 192, x2: 495, y2: 240 },
-    { x1: 645, y1: 200, x2: 645, y2: 268 },
-    { x1: 645, y1: 268, x2: 600, y2: 268 },
+  const arrows: { x1: number; y1: number; x2: number; y2: number; label?: string }[] = [
+    { x1: 174, y1: 46, x2: 220, y2: 46, label: "plan+start" },
+    { x1: 390, y1: 46, x2: 430, y2: 46 },
+    { x1: 550, y1: 46, x2: 580, y2: 46, label: "poll" },
+    { x1: 305, y1: 84, x2: 305, y2: 120 },
+    { x1: 495, y1: 84, x2: 495, y2: 120 },
+    { x1: 640, y1: 72, x2: 640, y2: 236 },
+    { x1: 640, y1: 236, x2: 600, y2: 236 },
+    { x1: 390, y1: 168, x2: 390, y2: 210 },
   ];
 
   return (
-    <svg width={w} height={h} style={{ display: "block", maxWidth: "100%" }} aria-label="Distributed runtime: portal, database, gateway, workers, shared storage">
+    <svg width={w} height={h} style={{ display: "block", maxWidth: "100%" }} aria-label="Distributed runtime">
       <defs>
         <marker id="rt-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
           <path d="M0,0 L0,6 L6,3 z" fill={theme.stroke.secondary} />
@@ -196,7 +280,7 @@ function DistributedRuntimeDiagram() {
           {a.label ? (
             <text
               x={(a.x1 + a.x2) / 2}
-              y={(a.y1 + a.y2) / 2 - 6}
+              y={(a.y1 + a.y2) / 2 - 5}
               textAnchor="middle"
               fontSize={9}
               fill={theme.text.secondary}
@@ -217,18 +301,18 @@ function DistributedRuntimeDiagram() {
             fill={b.accent ? theme.fill.tertiary : theme.bg.elevated}
             stroke={b.accent ? theme.accent.primary : theme.stroke.primary}
           />
-          <text x={b.x + b.w / 2} y={b.y + 22} textAnchor="middle" fontSize={11} fontWeight={600} fill={theme.text.primary}>
+          <text x={b.x + b.w / 2} y={b.y + 20} textAnchor="middle" fontSize={11} fontWeight={600} fill={theme.text.primary}>
             {b.label}
           </text>
           {b.sub ? (
-            <text x={b.x + b.w / 2} y={b.y + 38} textAnchor="middle" fontSize={9} fill={theme.text.secondary}>
+            <text x={b.x + b.w / 2} y={b.y + 36} textAnchor="middle" fontSize={9} fill={theme.text.secondary}>
               {b.sub}
             </text>
           ) : null}
         </g>
       ))}
-      <text x={24} y={328} fontSize={9} fill={theme.text.secondary}>
-        Portal does not dispatch workers in production — workers poll the gateway; both read/write /work
+      <text x={24} y={288} fontSize={9} fill={theme.text.secondary}>
+        Workers never open SQL — they poll the gateway; portal and workers share /work paths
       </text>
     </svg>
   );
@@ -236,18 +320,16 @@ function DistributedRuntimeDiagram() {
 
 function LocalRuntimeDiagram() {
   const theme = useHostTheme();
-  const w = 720;
-  const h = 120;
   const boxes = [
-    { x: 24, y: 32, w: 130, h: 48, label: "Developer / CI" },
-    { x: 180, y: 32, w: 150, h: 48, label: "methyl-workflow-run" },
-    { x: 356, y: 32, w: 160, h: 48, label: "LocalWorkflowEngine" },
-    { x: 542, y: 32, w: 154, h: 48, label: "Same action handlers" },
+    { x: 24, y: 28, w: 130, h: 44, label: "Developer / CI" },
+    { x: 180, y: 28, w: 150, h: 44, label: "methyl-workflow-run" },
+    { x: 356, y: 28, w: 160, h: 44, label: "LocalWorkflowEngine" },
+    { x: 542, y: 28, w: 154, h: 44, label: "Same action handlers" },
   ];
-  const xs = [154, 330, 516, 696];
+  const xs = [154, 330, 516];
 
   return (
-    <svg width={w} height={h} style={{ display: "block", maxWidth: "100%" }} aria-label="Local runtime path">
+    <svg width={720} height={100} style={{ display: "block", maxWidth: "100%" }} aria-label="Local runtime">
       <defs>
         <marker id="loc-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
           <path d="M0,0 L0,6 L6,3 z" fill={theme.stroke.primary} />
@@ -258,22 +340,22 @@ function LocalRuntimeDiagram() {
           {i < boxes.length - 1 ? (
             <line
               x1={xs[i]}
-              y1={56}
+              y1={50}
               x2={xs[i] + 26}
-              y2={56}
+              y2={50}
               stroke={theme.stroke.primary}
               strokeWidth={1.5}
               markerEnd="url(#loc-arrow)"
             />
           ) : null}
           <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={4} fill={theme.bg.elevated} stroke={theme.stroke.primary} />
-          <text x={b.x + b.w / 2} y={b.y + 28} textAnchor="middle" fontSize={10} fill={theme.text.primary}>
+          <text x={b.x + b.w / 2} y={b.y + 26} textAnchor="middle" fontSize={10} fill={theme.text.primary}>
             {b.label}
           </text>
         </g>
       ))}
-      <text x={24} y={104} fontSize={9} fill={theme.text.secondary}>
-        Same DomainPrograms and profiles as production; optional DB; artifacts under /work
+      <text x={24} y={92} fontSize={9} fill={theme.text.secondary}>
+        Same DomainPrograms and profiles; optional DB; artifacts under /work
       </text>
     </svg>
   );
@@ -281,255 +363,343 @@ function LocalRuntimeDiagram() {
 
 /* ── Data ───────────────────────────────────────────────────────────────── */
 
-const STAGES = [
-  { name: "Sample prep", pkg: "workers, alignment QC, extract" },
-  { name: "QC gates", pkg: "methylalignmentqc, methylextractionqc" },
-  { name: "MC stability", pkg: "centroid, detector, validation" },
-  { name: "Freeze", pkg: "mapper, enricher, progression" },
-  { name: "Model", pkg: "classifier, predictor" },
-  { name: "Validation", pkg: "methylvalidation" },
-  { name: "Blind predict", pkg: "methylpredictor" },
-];
+type SectionId =
+  | "overview"
+  | "e2e"
+  | "storage"
+  | "paths"
+  | "config"
+  | "stages"
+  | "db"
+  | "refs";
 
-const CONFIG_LAYERS = [
-  ["Site", "/work/site/methyl_site.json", "Genomes, caches, deployment-wide actionConfig defaults"],
-  ["Profile", "runtime-bundle/domain/profiles/*.profile.json", "Procedure packs: actionConfig + scope booleans"],
-  ["Study manifest", "/work/projects/<study>/configs/project_*.json", "Cohorts, paths, regulatory — no tool params"],
-  ["DomainProgram", "workflow_engine/domain/**/*.program.json", "Control flow: for, if, parallel, do"],
-  ["Instance", "wf.workflow_instance.context_json", "projectPath, pipelineProfile, per-run overlays"],
-  ["Task", "node_execution.input_json.resolvedConfig", "Merged params at worker claim time"],
+const TOC: { id: SectionId; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "e2e", label: "End-to-end flow" },
+  { id: "storage", label: "Dual storage" },
+  { id: "paths", label: "Execution paths" },
+  { id: "config", label: "Config layers" },
+  { id: "stages", label: "Science stages" },
+  { id: "db", label: "Database" },
+  { id: "refs", label: "References" },
 ];
 
 const STORAGE_ROWS = [
-  ["Git repo / runtime-bundle", "DomainPrograms, profiles, schemas, action catalog"],
-  ["/work/site/", "methyl_site.json — cluster defaults"],
-  ["/work/projects/<study>/", "project_*.json, data CSVs"],
-  ["/work/projects/<study>/<name>/", "monte_carlo_runs/, stability/, model bundles"],
-  ["/work/samples/<id>/", "Flat sample archive (FASTQ, BAM, HDF5)"],
-  ["/work/epimethyl/current/", "Promoted release: venv, env, runtime-bundle"],
+  ["fastqSource", "Ingress", "Lab / portal / NFS — FASTQs only"],
+  ["/work/samples/{id}/", "Scratch", "FASTQ · BAM · QC · *.h5 · *.patterns.h5"],
+  ["sampleDestination", "Egress", "qc/ · fastq/ · h5/ — never BAM"],
+  ["/work/projects/{study}/", "Science", "MC · freeze · Ω · models · holdouts"],
 ];
 
-const DB_OBJECTS = [
-  ["wf.workflow_definition", "Compiled graph (nodes, FOREACH, bindings)"],
-  ["wf.workflow_instance", "Running study run; context_json + status"],
-  ["wf.node_execution", "Per-action task row; input_json, result_code, lease"],
-  ["wf.scope_variable", "IF / FOREACH branch state"],
-  ["wf.workflow_action", "Catalog capability → handler metadata"],
-  ["portal.sp_create_and_start_instance", "Portal middle-tier: plan + start without REST"],
-  ["portal.resource_profile", "Archive / S3 defaults for sample prep"],
+const CONFIG_LAYERS = [
+  ["Site", "/work/site/methyl_site.json", "Genomes, caches, deployment defaults"],
+  ["Profile", "runtime-bundle/domain/profiles/*.profile.json", "Procedure packs + actionConfig"],
+  ["Study", "/work/projects/<study>/configs/project_*.json", "Cohorts, partitions — no tool knobs"],
+  ["DomainProgram", "workflow_engine/domain/**/*.program.json", "Control flow: for, if, parallel"],
+  ["Instance", "wf.workflow_instance.context_json", "projectPath, profile, overlays"],
+  ["Task", "input_json.resolvedConfig", "Merged params at worker claim"],
 ];
 
 const PATH_COMPARE = [
-  ["Entry", "methyl-workflow-run --program … --context …", "portal.sp_* or admin POST /v1/workflows/instances"],
-  ["Scheduler", "LocalWorkflowEngine (in-process thread pool)", "DB stored procedures (wf_engine_*)"],
-  ["Worker transport", "Direct handler dispatch", "POST /v1/workers/tasks/request|submit"],
-  ["Database", "Optional (none for pure local)", "Azure SQL or PostgreSQL (same wf contract)"],
-  ["Config source", "Profile file + site manifest + context", "Enriched context_json in DB + mc_config snapshot"],
-  ["Artifacts", "Shared /work paths", "Same /work layout (NFS/object mount)"],
-  ["Typical use", "Dev, smoke, debugging single programs", "Production cluster, GPU workers, portal UI"],
+  ["Entry", "methyl-workflow-run", "portal.sp_* / admin REST"],
+  ["Scheduler", "LocalWorkflowEngine", "DB wf_engine_* procs"],
+  ["Workers", "In-process handlers", "Gateway poll / submit"],
+  ["Database", "Optional", "Azure SQL or PostgreSQL"],
+  ["Use", "Dev · CI · smoke", "Production cluster"],
+];
+
+const STAGES = [
+  { name: "Sample prep", detail: "download → align → QC → trim/realign → extract" },
+  { name: "MC stability", detail: "centroid + detector iterations; holdouts excluded" },
+  { name: "Freeze", detail: "fixed panels + mapper" },
+  { name: "Covariates", detail: "derived · CellDeconv Ω · info_measures" },
+  { name: "Model", detail: "ECDF ± second-stage covariates" },
+  { name: "Holdouts", detail: "locked_test / pivotal_validation" },
+];
+
+const DB_OBJECTS = [
+  ["wf.workflow_definition", "Compiled graph"],
+  ["wf.workflow_instance", "Run + context_json"],
+  ["wf.node_execution", "Task lease + result"],
+  ["wf.scope_variable", "IF / FOREACH state"],
+  ["portal.sp_create_and_start_instance", "Portal start without REST"],
 ];
 
 /* ── Canvas ─────────────────────────────────────────────────────────────── */
 
 export default function MethylPipelineArchitectureCanvas() {
+  const [section, setSection] = useCanvasState<SectionId>("archSection", "overview");
+  const theme = useHostTheme();
+
   return (
-    <Stack gap={28} style={{ padding: 24, maxWidth: 980 }}>
+    <Stack gap={20} style={{ padding: 20, maxWidth: 980 }}>
       <Stack gap={8}>
-        <H1>MethylPipeline Architecture</H1>
+        <H1>MethylPipeline architecture</H1>
         <Text tone="secondary">
-          Disease-agnostic methylation workflow platform: four-layer configuration, shared /work storage,
-          and two orchestration paths — local in-process engine vs distributed gateway + database + remote workers.
+          Interactive docs hub: ingest → SamplePrep → MC → DeConv/info covariates → model → holdouts,
+          plus config layers and local vs distributed orchestration.
         </Text>
         <Row gap={8} style={{ flexWrap: "wrap" }}>
           <Pill tone="info">DomainProgram-first</Pill>
-          <Pill tone="neutral">MSSQL · PostgreSQL</Pill>
           <Pill tone="neutral">Config not code</Pill>
+          <Pill tone="neutral">MSSQL · PostgreSQL</Pill>
         </Row>
       </Stack>
 
-      <Grid columns={3} gap={12}>
-        <Stat value="4+" label="Config layers" />
-        <Stat value="2" label="Orchestration paths" />
-        <Stat value="7" label="Science stages" />
-      </Grid>
+      <Card>
+        <CardHeader trailing={<Pill tone="info">navigate</Pill>}>Table of contents</CardHeader>
+        <CardBody>
+          <Row gap={8} style={{ flexWrap: "wrap" }}>
+            {TOC.map((t) => (
+              <span key={t.id}>
+                <Pill active={section === t.id} size="sm" onClick={() => setSection(t.id)}>
+                  {t.label}
+                </Pill>
+              </span>
+            ))}
+          </Row>
+        </CardBody>
+      </Card>
 
-      {/* ── Execution paths ── */}
-      <Stack gap={16}>
-        <H2>Execution paths</H2>
-        <Text tone="secondary" size="small">
-          Both paths run the same catalog actions and DomainPrograms; only scheduling and transport differ.
-        </Text>
+      {section === "overview" ? (
+        <Stack gap={16}>
+          <H2>Overview</H2>
+          <Grid columns={3} gap={12}>
+            <Stat value="2" label="DomainPrograms (prep + study)" />
+            <Stat value="2" label="Storage endpoints (in/out)" />
+            <Stat value="2" label="Orchestration paths" />
+          </Grid>
+          <Callout tone="info" title="Audience">
+            Operators, workflow authors, and DevOps. Markdown deep-dives live under{" "}
+            <DocLink path="docs/architecture/index.md">docs/architecture/</DocLink>. This canvas is the
+            navigable summary.
+          </Callout>
+          <Text>
+            SamplePrep turns external FASTQs into durable{" "}
+            <Code>{`{chrom}-{ctx}.h5`}</Code> (+ optional <Code>.patterns.h5</Code>). The study lifecycle
+            then runs Monte Carlo stability, freezes panels, attaches CellDeconv Ω and MethylInfoTheory
+            covariates, trains ECDF models, and evaluates holdouts.
+          </Text>
+        </Stack>
+      ) : null}
 
-        <CollapsibleSection
-          title="Local — methyl-workflow-run"
-          defaultOpen
-          trailing={<Pill tone="info">dev · CI · smoke</Pill>}
-        >
-          <Stack gap={12}>
-            <LocalRuntimeDiagram />
-            <Text size="small">
-              Compiles or loads a DomainProgram, expands <Code>context_json</Code>, materializes{" "}
-              <Code>resolvedConfig</Code> per action, executes handlers in-process. Use{" "}
-              <Code>--parallel-workers 1</Code> on NFS/GPU. No gateway required.
-            </Text>
-            <Code>methyl-workflow-run --program …/buffy_mc_stability.program.json --context-file …/mc_gene_fc.profile.json --context '{`{"projectPath":"/work/projects/…/project.json"}`}'</Code>
-          </Stack>
-        </CollapsibleSection>
+      {section === "e2e" ? (
+        <Stack gap={16}>
+          <H2>End-to-end flow</H2>
+          <EndToEndDag />
+          <Text size="small" tone="secondary">
+            Source: docs/architecture/end-to-end-workflow.md
+          </Text>
+          <Grid columns={2} gap={12}>
+            <Card>
+              <CardHeader>1 · SamplePrepPipeline</CardHeader>
+              <CardBody>
+                <Stack gap={6}>
+                  <Text size="small">
+                    Per sample (parallel): download → Parabricks → methyl_qc → optional trim/realign →
+                    extract → archive → delete_fastqs (if <Code>deleteFastqs</Code>) → delete_bam
+                  </Text>
+                  <DocLink path="workflow_engine/domain/fixtures/sample_prep.program.json">
+                    sample_prep.program.json
+                  </DocLink>
+                </Stack>
+              </CardBody>
+            </Card>
+            <Card>
+              <CardHeader>2 · Study validation lifecycle</CardHeader>
+              <CardBody>
+                <Stack gap={6}>
+                  <Text size="small">
+                    MC centroid/detector → stability → freeze → mapper → derived → cell_deconvolution →
+                    info_measures → enricher → select_best_model → post_model_validation
+                  </Text>
+                  <DocLink path="workflow_engine/domain/fixtures/study_validation_lifecycle.program.json">
+                    study_validation_lifecycle.program.json
+                  </DocLink>
+                </Stack>
+              </CardBody>
+            </Card>
+          </Grid>
+          <Callout tone="warning" title="Patterns optional">
+            Missing <Code>*.patterns.h5</Code> does not fail the study — <Code>info_measures</Code> skips;
+            covariate path lists omit absent CSVs.
+          </Callout>
+        </Stack>
+      ) : null}
 
-        <CollapsibleSection
-          title="Distributed — portal + database + gateway + workers"
-          defaultOpen
-          trailing={<Pill tone="neutral">production</Pill>}
-        >
-          <Stack gap={12}>
-            <DistributedRuntimeDiagram />
-            <Callout tone="info" title="Transport split">
-              EpiPortal talks to the database directly (<Code>portal.sp_*</Code>). Remote workers never
-              connect to SQL — they poll <Code>methyl-gateway</Code> only. Both portal and workers read/write
-              the same <Code>/work</Code> paths referenced in <Code>context_json</Code>.
-            </Callout>
-          </Stack>
-        </CollapsibleSection>
-
-        <Table
-          headers={["Dimension", "Local", "Distributed (gateway)"]}
-          rows={PATH_COMPARE}
-        />
-      </Stack>
-
-      <Divider />
-
-      {/* ── Configuration dimensions ── */}
-      <Stack gap={12}>
-        <H2>Configuration dimensions</H2>
-        <Text tone="secondary" size="small">
-          Precedence (highest wins): program/instance override → profile actionConfig → analyte defaults → site
-          actionConfig. No Python fallbacks for tunable science parameters.
-        </Text>
-        <ConfigPrecedenceDiagram />
-        <Table headers={["Layer", "Artifact", "Owns"]} rows={CONFIG_LAYERS} />
-        <DocLink path="docs/architecture/layer-model.md">Layer model (architecture doc)</DocLink>
-        {" · "}
-        <DocLink path="AGENTS.md">AGENTS.md — config-not-code principles</DocLink>
-      </Stack>
-
-      <Divider />
-
-      {/* ── Storage ── */}
-      <Stack gap={12}>
-        <H2>Storage layout (/work vs repo)</H2>
-        <Table headers={["Location", "Contents"]} rows={STORAGE_ROWS} />
-        <Callout tone="warning" title="Production rule">
-          Workers use <Code>/work/epimethyl/current/runtime-bundle/</Code> for profiles and programs — not a
-          git checkout. Study science lives under <Code>/work/projects/&lt;study&gt;/</Code>.
-        </Callout>
-      </Stack>
-
-      <Divider />
-
-      {/* ── Science pipeline ── */}
-      <Stack gap={12}>
-        <H2>Science pipeline (study lifecycle)</H2>
-        <Row gap={6} style={{ flexWrap: "wrap", alignItems: "center" }}>
-          {STAGES.map((s, i) => (
-            <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Pill tone={i === 2 ? "info" : "neutral"}>{s.name}</Pill>
-              {i < STAGES.length - 1 ? (
-                <Text tone="secondary" size="small">
-                  →
-                </Text>
-              ) : null}
-            </div>
-          ))}
-        </Row>
-        <Grid columns={2} gap={8}>
-          {STAGES.map((s) => (
-            <div key={s.name}>
-              <Text size="small" tone="secondary">
-                <Text weight="semibold" size="small">
-                  {s.name}
-                </Text>
-                {" — "}
-                {s.pkg}
+      {section === "storage" ? (
+        <Stack gap={16}>
+          <H2>Dual storage (ingress ≠ egress)</H2>
+          <Table headers={["Location", "Role", "Contents"]} rows={STORAGE_ROWS} />
+          <Callout tone="warning" title="BAM never archived">
+            Alignments stay on <Code>/work</Code> only and are removed by <Code>delete_bam</Code>. Success
+            archives <Code>mode=full</Code> (qc + fastq + h5); failure uses <Code>mode=qc_only</Code>.
+          </Callout>
+          <CollapsibleSection title="deleteFastqs flag" defaultOpen>
+            <Stack gap={8}>
+              <Text size="small">
+                Default <Code>true</Code>: run <Code>sample.delete_fastqs</Code> after archive/terminal QC.
+                Set instance <Code>deleteFastqs: false</Code> or profile{" "}
+                <Code>actionConfig.sample_prep.delete_fastqs: false</Code> to retain FASTQs on scratch.
+                Planner leaves the key unset so profile resolution can win.
               </Text>
-            </div>
-          ))}
-        </Grid>
-        <DocLink path="docs/architecture/pipeline-stages.md">Pipeline stages</DocLink>
-      </Stack>
+              <DocLink path="workflow_engine/contract/sample_prep_capabilities.md">
+                sample_prep_capabilities — FASTQ retention
+              </DocLink>
+            </Stack>
+          </CollapsibleSection>
+        </Stack>
+      ) : null}
 
-      <Divider />
+      {section === "paths" ? (
+        <Stack gap={16}>
+          <H2>Execution paths</H2>
+          <Text tone="secondary" size="small">
+            Same catalog actions and DomainPrograms; scheduling and transport differ.
+          </Text>
+          <CollapsibleSection title="Local — methyl-workflow-run" defaultOpen trailing={<Pill tone="info">dev</Pill>}>
+            <Stack gap={10}>
+              <LocalRuntimeDiagram />
+              <Code>
+                {`methyl-workflow-run --program …/study_validation_lifecycle.program.json --context '{"projectPath":"/work/projects/…/project.json","pipelineProfile":"samd_research"}'`}
+              </Code>
+            </Stack>
+          </CollapsibleSection>
+          <CollapsibleSection
+            title="Distributed — portal + DB + gateway + workers"
+            defaultOpen
+            trailing={<Pill tone="neutral">prod</Pill>}
+          >
+            <Stack gap={10}>
+              <DistributedRuntimeDiagram />
+              <Callout tone="info" title="Transport split">
+                Portal uses SQL (<Code>portal.sp_*</Code>). Workers poll <Code>methyl-gateway</Code> only —
+                never open the database.
+              </Callout>
+            </Stack>
+          </CollapsibleSection>
+          <Table headers={["Dimension", "Local", "Distributed"]} rows={PATH_COMPARE} />
+        </Stack>
+      ) : null}
 
-      {/* ── Database contract ── */}
-      <Stack gap={12}>
-        <H2>Database contract (dual backend)</H2>
-        <Text tone="secondary" size="small">
-          Azure SQL and PostgreSQL implement the same <Code>wf</Code> schema. Choose one primary backend per
-          environment; CI and dev often use PostgreSQL.
-        </Text>
-        <Grid columns={2} gap={12}>
-          <Card>
-            <CardHeader>Azure SQL</CardHeader>
-            <CardBody>
-              <Stack gap={6}>
-                <Text size="small">Production gateway + portal; scripts under workflow_engine/sql/</Text>
-                <DocLink path="workflow_engine/sql/README.md">sql/README.md</DocLink>
-              </Stack>
-            </CardBody>
-          </Card>
-          <Card>
-            <CardHeader>PostgreSQL</CardHeader>
-            <CardBody>
-              <Stack gap={6}>
-                <Text size="small">Parity / dev; deploy via sql_pg/deploy_azure.sh</Text>
-                <DocLink path="workflow_engine/sql_pg/README.md">sql_pg/README.md</DocLink>
-              </Stack>
-            </CardBody>
-          </Card>
-        </Grid>
-        <Table headers={["Object", "Role"]} rows={DB_OBJECTS} />
-      </Stack>
+      {section === "config" ? (
+        <Stack gap={16}>
+          <H2>Configuration layers</H2>
+          <Text tone="secondary" size="small">
+            Highest wins: program/instance → profile actionConfig → analyte → site. No Python science
+            defaults.
+          </Text>
+          <ConfigPrecedenceDiagram />
+          <Table headers={["Layer", "Artifact", "Owns"]} rows={CONFIG_LAYERS} />
+          <Row gap={12} style={{ flexWrap: "wrap" }}>
+            <DocLink path="docs/architecture/layer-model.md">Layer model</DocLink>
+            <DocLink path="docs/architecture/config-registry.md">Config registry</DocLink>
+            <DocLink path="AGENTS.md">AGENTS.md</DocLink>
+          </Row>
+        </Stack>
+      ) : null}
 
-      <Divider />
+      {section === "stages" ? (
+        <Stack gap={16}>
+          <H2>Science stages</H2>
+          <Row gap={6} style={{ flexWrap: "wrap", alignItems: "center" }}>
+            {STAGES.map((s, i) => (
+              <div key={s.name} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Pill tone={i === 3 ? "info" : "neutral"}>{s.name}</Pill>
+                {i < STAGES.length - 1 ? (
+                  <Text tone="secondary" size="small">
+                    →
+                  </Text>
+                ) : null}
+              </div>
+            ))}
+          </Row>
+          <Table
+            headers={["Stage", "What happens"]}
+            rows={STAGES.map((s) => [s.name, s.detail])}
+          />
+          <H3>Covariate fusion (ECDF)</H3>
+          <Text size="small">
+            First-stage ECDF stays methylation-only. Second-stage stacker fuses class probs with Ω (
+            <Code>cell_fractions.csv</Code>), <Code>readlevel_measures.csv</Code>, and derived measures when
+            listed on <Code>covariates_path</Code>. Auto-infer excludes <Code>group</Code> / QC columns.
+          </Text>
+          <DocLink path="docs/architecture/pipeline-stages.md">Pipeline stages</DocLink>
+          {" · "}
+          <DocLink path="docs/architecture/end-to-end-workflow.md">End-to-end workflow</DocLink>
+        </Stack>
+      ) : null}
 
-      {/* ── Worker task flow ── */}
-      <Stack gap={12}>
-        <H3>Worker task flow (distributed)</H3>
-        <Table
-          headers={["Step", "Actor", "Action"]}
-          rows={[
-            ["1", "Portal / admin", "Create workflow_instance with enriched context_json (projectPath, actionConfig)"],
-            ["2", "Engine (DB)", "Materialize READY node_execution rows; bind input_json + resolvedConfig"],
-            ["3", "Worker", "POST /v1/workers/tasks/request with capability (e.g. methyl-detector)"],
-            ["4", "Gateway → DB", "sp_worker_request_task — lease task or empty"],
-            ["5", "Worker", "Run package CLI; write artifacts to /work; optional action manifest"],
-            ["6", "Worker", "POST /v1/workers/tasks/{id}/submit with result_code + output_json"],
-            ["7", "Engine (DB)", "Update scope_variable; activate IF/FOREACH downstream nodes"],
-          ]}
-        />
-        <Row gap={16} style={{ flexWrap: "wrap" }}>
-          <DocLink path="workers/WORKER_PROTOCOL.md">Worker protocol</DocLink>
-          <DocLink path="contracts/openapi.yaml">OpenAPI contract</DocLink>
-          <DocLink path="docs/usage/14-deployment-and-distributed-workflow.qmd">Deployment ch.14</DocLink>
-          <DocLink path="docs/architecture/distributed-runtime.md">Distributed runtime</DocLink>
-        </Row>
-      </Stack>
+      {section === "db" ? (
+        <Stack gap={16}>
+          <H2>Database contract</H2>
+          <Text tone="secondary" size="small">
+            Azure SQL and PostgreSQL share the same <Code>wf</Code> contract. Pick one primary backend per
+            environment.
+          </Text>
+          <Grid columns={2} gap={12}>
+            <Card>
+              <CardHeader>Azure SQL</CardHeader>
+              <CardBody>
+                <Text size="small">Production portal + gateway. See workflow_engine/sql/</Text>
+              </CardBody>
+            </Card>
+            <Card>
+              <CardHeader>PostgreSQL</CardHeader>
+              <CardBody>
+                <Text size="small">Dev / parity. See workflow_engine/sql_pg/</Text>
+              </CardBody>
+            </Card>
+          </Grid>
+          <Table headers={["Object", "Role"]} rows={DB_OBJECTS} />
+          <Table
+            headers={["Step", "Actor", "Action"]}
+            rows={[
+              ["1", "Portal", "Create instance with enriched context_json"],
+              ["2", "Engine", "READY node_execution + resolvedConfig"],
+              ["3", "Worker", "Claim task via gateway"],
+              ["4", "Worker", "Write /work artifacts; submit result"],
+              ["5", "Engine", "Advance IF/FOREACH scope"],
+            ]}
+          />
+        </Stack>
+      ) : null}
 
-      <Divider />
-
-      <Stack gap={8}>
-        <H3>Related canvases & docs</H3>
-        <Row gap={16} style={{ flexWrap: "wrap" }}>
-          <DocLink path="docs/architecture/index.md">Architecture index</DocLink>
-          <DocLink path="docs/architecture/orchestration-paths.md">Orchestration paths</DocLink>
-          <DocLink path="docs/reference/domain-program-language.md">DomainProgram reference</DocLink>
-          <DocLink path="docs/reference/config-parameter-matrix.md">Config parameter matrix</DocLink>
-        </Row>
-        <Text size="small" tone="secondary">
-          Also see methylpipeline-docs.canvas.tsx (documentation hub) and methylpipeline-db-runbook.canvas.tsx
-          (DB bootstrap).
-        </Text>
-      </Stack>
+      {section === "refs" ? (
+        <Stack gap={16}>
+          <H2>References</H2>
+          <Stack gap={8}>
+            <H3>Architecture markdown</H3>
+            <Row gap={12} style={{ flexWrap: "wrap" }}>
+              <DocLink path="docs/architecture/index.md">Index</DocLink>
+              <DocLink path="docs/architecture/end-to-end-workflow.md">End-to-end</DocLink>
+              <DocLink path="docs/architecture/distributed-runtime.md">Distributed runtime</DocLink>
+              <DocLink path="docs/architecture/orchestration-paths.md">Orchestration paths</DocLink>
+              <DocLink path="docs/architecture/layer-model.md">Layer model</DocLink>
+            </Row>
+            <H3>Usage</H3>
+            <Row gap={12} style={{ flexWrap: "wrap" }}>
+              <DocLink path="docs/usage/03-sample-prep-and-qc.qmd">ch.03 Sample prep</DocLink>
+              <DocLink path="docs/usage/04-orchestration-workflow-run.qmd">ch.04 Orchestration</DocLink>
+              <DocLink path="docs/usage/14-deployment-and-distributed-workflow.qmd">ch.14 Deploy</DocLink>
+              <DocLink path="docs/usage/18-samd-study-lifecycle.qmd">ch.18 SaMD ladder</DocLink>
+            </Row>
+            <H3>Sister canvases</H3>
+            <Text size="small" tone="secondary">
+              Sync with <Code>bash scripts/sync_cursor_canvases.sh</Code>, then open from{" "}
+              <Code>~/.cursor/projects/…/canvases/</Code> (not <Code>docs/canvas/</Code>) so Cursor renders
+              the live panel instead of TypeScript source.
+            </Text>
+            <Row gap={12} style={{ flexWrap: "wrap" }}>
+              <Text size="small">methylpipeline-docs · platform-overview · db-runbook</Text>
+            </Row>
+          </Stack>
+          <Divider />
+          <Text size="small" tone="secondary" style={{ color: theme.text.tertiary }}>
+            Git source of truth: docs/canvas/methylpipeline-architecture.canvas.tsx
+          </Text>
+        </Stack>
+      ) : null}
     </Stack>
   );
 }
