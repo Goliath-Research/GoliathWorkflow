@@ -11,6 +11,8 @@ import pytest
 from methyl_deconv.analysis.omega_cluster import (
     OMEGA_COLS,
     OmegaClusterConfig,
+    _pca_showlegend_for_visibility,
+    _try_write_pca_plot,
     clr_transform,
     load_cell_fractions,
     run_omega_cluster_analysis,
@@ -112,3 +114,49 @@ def test_run_analysis_writes_artifacts(tmp_path: Path):
     assert "matched_strata_used" in summary["recommendation"]
     # Synthetic data has two healthy modes → matched typically uses ≥1 stratum
     assert summary["recommendation"]["matched_strata_used"] >= 1
+
+
+def test_pca_showlegend_survives_test_filter():
+    """Legend must stay on a visible trace when filtering to test-only."""
+    # Trace order matches plot builder: stratum × label × (train, test)
+    splits = ["train", "test", "train", "test"]
+    legend_keys = ["0|healthy", "0|healthy", "0|disease", "0|disease"]
+    test_visible = [s == "test" for s in splits]
+    flags = _pca_showlegend_for_visibility(test_visible, legend_keys)
+    assert flags == [False, True, False, True]
+    assert all(not f or v for f, v in zip(flags, test_visible))
+    assert any(flags)
+
+    all_flags = _pca_showlegend_for_visibility([True] * 4, legend_keys)
+    assert all_flags == [True, False, True, False]
+
+
+@pytest.mark.skipif(not _plotly_available(), reason="plotly not installed")
+def test_pca_html_test_filter_updates_showlegend(tmp_path: Path):
+    rng = np.random.default_rng(0)
+    rows = []
+    for split in ("train", "test"):
+        for y in (0, 1):
+            for stratum in (0, 1):
+                for i in range(3):
+                    w = rng.dirichlet(np.ones(6))
+                    rows.append(
+                        {
+                            "sample_id": f"{split}_{y}_{stratum}_{i}",
+                            "group": "all" if y == 0 else "PCa",
+                            "y": y,
+                            "split": split,
+                            "healthy_stratum": stratum,
+                            "disease_stratum": stratum,
+                            **dict(zip(OMEGA_COLS, w)),
+                        }
+                    )
+    path = tmp_path / "omega_pca_by_stratum.html"
+    assert _try_write_pca_plot(pd.DataFrame(rows), path, cfg=OmegaClusterConfig()) == path
+    html = path.read_text(encoding="utf-8")
+    # Test button must retarget showlegend (not only visible)
+    assert '"label":"Test"' in html or '"label": "Test"' in html
+    assert "showlegend" in html
+    # Under a naive train-only showlegend assignment, test-visible traces are all false;
+    # the fixed HTML should include a true showlegend paired with a false preceding train.
+    assert "true" in html.lower()

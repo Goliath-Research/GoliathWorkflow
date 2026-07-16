@@ -684,6 +684,25 @@ def _recommend(results: Sequence[FoldResult]) -> Dict[str, Any]:
     }
 
 
+def _pca_showlegend_for_visibility(
+    visible: Sequence[bool], legend_keys: Sequence[str]
+) -> List[bool]:
+    """One legend entry per group among currently visible traces.
+
+    Plotly drops legend rows for invisible traces, so each split filter must
+    re-assign ``showlegend`` to a visible member of the legendgroup.
+    """
+    seen: set[str] = set()
+    flags: List[bool] = []
+    for vis, key in zip(visible, legend_keys):
+        if vis and key not in seen:
+            flags.append(True)
+            seen.add(key)
+        else:
+            flags.append(False)
+    return flags
+
+
 def _try_write_pca_plot(
     assignments: pd.DataFrame,
     path: Path,
@@ -727,7 +746,7 @@ def _try_write_pca_plot(
 
     fig = go.Figure()
     split_per_trace: List[str] = []
-    legend_seen: set[str] = set()
+    legend_keys: List[str] = []
     for si, stratum in enumerate(strata):
         color = colors[si % len(colors)]
         for label in labels:
@@ -740,9 +759,6 @@ def _try_write_pca_plot(
                 if sub.empty:
                     continue
                 legend_key = f"{stratum}|{label}"
-                show_legend = legend_key not in legend_seen
-                if show_legend:
-                    legend_seen.add(legend_key)
                 custom = np.column_stack(
                     [
                         sub["sample_id"].astype(str).to_numpy(),
@@ -763,7 +779,8 @@ def _try_write_pca_plot(
                         mode="markers",
                         name=f"stratum {stratum} · {label}",
                         legendgroup=legend_key,
-                        showlegend=show_legend,
+                        # Initial flags filled below for the default "All" view.
+                        showlegend=False,
                         marker=dict(
                             symbol=symbols.get(label, "circle"),
                             color=color,
@@ -783,21 +800,40 @@ def _try_write_pca_plot(
                     )
                 )
                 split_per_trace.append(split)
+                legend_keys.append(legend_key)
 
     n_traces = len(split_per_trace)
+    all_visible = [True] * n_traces
+    initial_showlegend = _pca_showlegend_for_visibility(all_visible, legend_keys)
+    for i, show in enumerate(initial_showlegend):
+        fig.data[i].showlegend = show
+
     filter_buttons = [
         {
             "label": "All",
             "method": "update",
-            "args": [{"visible": [True] * n_traces}],
+            "args": [
+                {
+                    "visible": all_visible,
+                    "showlegend": initial_showlegend,
+                }
+            ],
         }
     ]
     for split in splits:
+        visible = [s == split for s in split_per_trace]
         filter_buttons.append(
             {
                 "label": split.capitalize(),
                 "method": "update",
-                "args": [{"visible": [s == split for s in split_per_trace]}],
+                "args": [
+                    {
+                        "visible": visible,
+                        "showlegend": _pca_showlegend_for_visibility(
+                            visible, legend_keys
+                        ),
+                    }
+                ],
             }
         )
 
