@@ -12,6 +12,10 @@
     "extractionQcPass": {
       "schemaRef": "schemas/vars/bool.schema.json",
       "description": "Extraction QC overall_pass from sample.extraction_qc"
+    },
+    "deleteFastqs": {
+      "schemaRef": "schemas/vars/bool.schema.json",
+      "description": "When true (default), delete local FASTQs after archive or terminal QC. Set false (instance context or actionConfig.sample_prep.delete_fastqs) to retain under /work/samples."
     }
   },
   "phases": [
@@ -66,8 +70,13 @@
           "if": "${qcPass}",
           "then": [
             {
-              "action": "sample.delete_fastqs",
-              "node_key": "delete_fastqs"
+              "if": "${deleteFastqs}",
+              "then": [
+                {
+                  "action": "sample.delete_fastqs",
+                  "node_key": "delete_fastqs"
+                }
+              ]
             },
             {
               "if": "${isCfdna}",
@@ -114,8 +123,13 @@
           ],
           "else": [
             {
-              "action": "sample.delete_fastqs",
-              "node_key": "delete_fastqs_fail"
+              "if": "${deleteFastqs}",
+              "then": [
+                {
+                  "action": "sample.delete_fastqs",
+                  "node_key": "delete_fastqs_fail"
+                }
+              ]
             },
             {
               "action": "sample.qc_failed",

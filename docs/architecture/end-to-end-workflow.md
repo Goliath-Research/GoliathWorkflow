@@ -62,6 +62,8 @@ flowchart TB
 ```
 
 **Storage split:** ingress (`fastqSource`) and egress (`sampleDestination`) are independent typed locations in the `cfg` registry. They may be the same bucket/prefix or two different accounts; BAM stays on `/work` only and is deleted after archive — it is never part of the remote archive bundle.
+
+**Local FASTQ cleanup:** `sample.delete_fastqs` runs after archive/terminal QC when scope `deleteFastqs` is true (**default**). Set instance `deleteFastqs: false` or profile `actionConfig.sample_prep.delete_fastqs: false` to keep FASTQs under `/work/samples/{id}/` (BAM deletion is unchanged).
 ```mermaid
 flowchart LR
   subgraph layers["Configuration layers (highest wins on the right)"]
@@ -155,10 +157,17 @@ flowchart TD
   I --> J["sample.extraction_qc"]
   J --> K{"extractionQcPass?"}
   K -->|yes| L["archive_sample mode=full<br/>→ sampleDestination<br/>qc + fastq + h5 · no BAM"]
-  L --> M["delete_fastqs"]
-  M --> N["delete_bam"]
-  K -->|no| O["archive_sample mode=qc_only<br/>→ sampleDestination<br/>qc + reject_reason · no BAM"]
-  O --> P["delete_fastqs + delete_bam + qc_failed"]
+  L --> M{"deleteFastqs?<br/>default true"}
+  M -->|yes| N["delete_fastqs"]
+  M -->|no| O["retain FASTQs on /work"]
+  N --> P["delete_bam"]
+  O --> P
+  K -->|no| Q["archive_sample mode=qc_only<br/>→ sampleDestination"]
+  Q --> R{"deleteFastqs?"}
+  R -->|yes| S["delete_fastqs"]
+  R -->|no| T["retain FASTQs"]
+  S --> U["delete_bam + qc_failed"]
+  T --> U
 ```
 
 **Extract outputs** (read-level enabled by default on SaMD/research profiles):

@@ -18,7 +18,15 @@ After `sample.extraction_qc`, scope receives **`extractionQcPass`** from **`outp
 
 ## FASTQ retention
 
-**Do not delete FASTQs before final QC.** `sample.delete-fastqs` runs only after QC pass or final fail (including post-trim retry). Trimming (`sample.trim-fastq`) requires original `*_1.fastq.gz` / `*_2.fastq.gz` still present.
+**Do not delete FASTQs before final QC.** `sample.delete_fastqs` runs only after QC pass or final fail (including post-trim retry), and only when scope **`deleteFastqs` is true** (default). Trimming (`sample.trim-fastq`) requires original `*_1.fastq.gz` / `*_2.fastq.gz` still present.
+
+| Setting | Where | Effect |
+|---------|--------|--------|
+| `deleteFastqs: true` (default) | Instance context (seeded from `PIPELINE_FLAG_DEFAULTS` / planner) | Delete local FASTQs after archive/terminal path |
+| `deleteFastqs: false` | Instance context | Skip all `sample.delete_fastqs` nodes; keep FASTQs on `/work/samples/{id}/` |
+| `actionConfig.sample_prep.delete_fastqs` | Profile / site | Same boolean; context key wins if already set |
+
+BAM deletion (`sample.delete_bam`) is **not** gated by this flag. Durable copies of FASTQs may still exist on `sampleDestination` after `archive_sample` mode=`full`.
 
 ## Audit trail
 

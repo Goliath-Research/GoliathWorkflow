@@ -177,7 +177,7 @@ Historically, a single **`min(mq[20:])`** over the combined cycle series could f
 
 Screening writes `guardrails.screening` with recommended trim bases (`trim_front1`, `trim_tail1`, `trim_front2`, `trim_tail2`). SamplePrep binds `remediateAlignment` when disposition is trim-eligible and FASTQs are still on disk.
 
-**Important:** FASTQs must **not** be deleted before final alignment QC disposition. The workflow deletes FASTQs only after pass or final reject (including post-remediation retry).
+**Important:** FASTQs must **not** be deleted before final alignment QC disposition. The workflow deletes FASTQs only after pass or final reject (including post-remediation retry), and only when instance/profile **`deleteFastqs`** is true (default). Set `deleteFastqs: false` or `actionConfig.sample_prep.delete_fastqs: false` to retain them under `/work/samples/{sample_id}/`.
 
 Offline cohort review (no re-align):
 
@@ -231,7 +231,7 @@ A sample can pass alignment but fail extraction (e.g., coverage collapse on cert
 
 | Outcome | Alignment QC | Extraction QC | Next step |
 |---------|--------------|---------------|-----------|
-| Pass both | `qcPass: true` | `extractionQcPass: true` | Optional full archive → delete FASTQs/BAM → sample ready for DataDrivenPipeline |
+| Pass both | `qcPass: true` | `extractionQcPass: true` | Optional full archive → `delete_fastqs` if `deleteFastqs` (default true) → delete BAM → sample ready for DataDrivenPipeline |
 | Fail alignment (not fixable) | `qcPass: false` | — | QC-only archive, mark failed, skip extract |
 | Fail after remediation | `qcPass: false` (attempt 2) | — | Same as above |
 | Pass alignment, fail extraction | `qcPass: true` | `extractionQcPass: false` | QC-only archive, mark failed; H5 may exist but must not enter production cohorts |

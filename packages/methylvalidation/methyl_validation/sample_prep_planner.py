@@ -60,6 +60,13 @@ class SamplePrepPlanRequest(BaseModel):
     referenceFasta: Optional[str] = None
     referenceGtf: Optional[str] = None
     primaryAnalyte: Optional[str] = None
+    deleteFastqs: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When true (default if unset), SamplePrep runs sample.delete_fastqs after "
+            "archive/terminal QC. Set false to keep FASTQs under /work/samples/{id}/."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -409,6 +416,8 @@ def plan_sample_prep_context(body: Dict[str, Any] | SamplePrepPlanRequest) -> Di
         "isCfdna": is_cfdna,
         "fastqStorage": dump_storage_model(storage),
         "samples": samples,
+        # Default delete local FASTQs after archive; operators may set false to retain.
+        "deleteFastqs": True if request.deleteFastqs is None else bool(request.deleteFastqs),
     }
     if sample_storage is not None:
         dumped = dump_storage_model(sample_storage)

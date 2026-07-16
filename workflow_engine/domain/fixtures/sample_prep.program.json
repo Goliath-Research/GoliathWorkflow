@@ -20,6 +20,10 @@
     "sampleArchived": {
       "schemaRef": "schemas/vars/bool.schema.json",
       "description": "Archive completion flag from sample.archive_sample"
+    },
+    "deleteFastqs": {
+      "schemaRef": "schemas/vars/bool.schema.json",
+      "description": "When true (default), delete local FASTQs after archive or terminal QC. Set false (instance context or actionConfig.sample_prep.delete_fastqs) to retain under /work/samples."
     }
   },
   "phases": [
@@ -86,8 +90,13 @@
                   }
                 },
                 {
-                  "action": "sample.delete_fastqs",
-                  "node_key": "delete_fastqs"
+                  "if": "${deleteFastqs}",
+                  "then": [
+                    {
+                      "action": "sample.delete_fastqs",
+                      "node_key": "delete_fastqs"
+                    }
+                  ]
                 },
                 {
                   "action": "sample.delete_bam",
@@ -104,8 +113,13 @@
                   }
                 },
                 {
-                  "action": "sample.delete_fastqs",
-                  "node_key": "delete_fastqs_extraction_fail"
+                  "if": "${deleteFastqs}",
+                  "then": [
+                    {
+                      "action": "sample.delete_fastqs",
+                      "node_key": "delete_fastqs_extraction_fail"
+                    }
+                  ]
                 },
                 {
                   "action": "sample.delete_bam",
@@ -213,8 +227,13 @@
                           }
                         },
                         {
-                          "action": "sample.delete_fastqs",
-                          "node_key": "delete_fastqs_after_retry"
+                          "if": "${deleteFastqs}",
+                          "then": [
+                            {
+                              "action": "sample.delete_fastqs",
+                              "node_key": "delete_fastqs_after_retry"
+                            }
+                          ]
                         },
                         {
                           "action": "sample.delete_bam",
@@ -231,8 +250,13 @@
                           }
                         },
                         {
-                          "action": "sample.delete_fastqs",
-                          "node_key": "delete_fastqs_extraction_fail_retry"
+                          "if": "${deleteFastqs}",
+                          "then": [
+                            {
+                              "action": "sample.delete_fastqs",
+                              "node_key": "delete_fastqs_extraction_fail_retry"
+                            }
+                          ]
                         },
                         {
                           "action": "sample.delete_bam",
@@ -258,8 +282,13 @@
                       }
                     },
                     {
-                      "action": "sample.delete_fastqs",
-                      "node_key": "delete_fastqs_retry_fail"
+                      "if": "${deleteFastqs}",
+                      "then": [
+                        {
+                          "action": "sample.delete_fastqs",
+                          "node_key": "delete_fastqs_retry_fail"
+                        }
+                      ]
                     },
                     {
                       "action": "sample.delete_bam",
@@ -282,8 +311,13 @@
                   }
                 },
                 {
-                  "action": "sample.delete_fastqs",
-                  "node_key": "delete_fastqs_fail"
+                  "if": "${deleteFastqs}",
+                  "then": [
+                    {
+                      "action": "sample.delete_fastqs",
+                      "node_key": "delete_fastqs_fail"
+                    }
+                  ]
                 },
                 {
                   "action": "sample.delete_bam",

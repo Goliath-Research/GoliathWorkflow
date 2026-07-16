@@ -43,6 +43,33 @@ def test_pipeline_profiles_seed_use_pangenome_from_alignment_mode() -> None:
     assert linear["usePangenome"] is False
 
 
+def test_pipeline_profiles_seed_delete_fastqs_default_and_override() -> None:
+    from pipeline_profiles import seed_pipeline_scope_flags
+
+    default = seed_pipeline_scope_flags({"pipelineProfile": "legacy_dual"}, action_config={})
+    assert default["deleteFastqs"] is True
+
+    retain = seed_pipeline_scope_flags(
+        {"pipelineProfile": "legacy_dual"},
+        action_config={"sample_prep": {"delete_fastqs": False}},
+    )
+    assert retain["deleteFastqs"] is False
+
+    explicit = seed_pipeline_scope_flags(
+        {"pipelineProfile": "legacy_dual", "deleteFastqs": False},
+        action_config={"sample_prep": {"delete_fastqs": True}},
+    )
+    assert explicit["deleteFastqs"] is False
+
+
+def test_sample_prep_delete_fastqs_gated_in_program() -> None:
+    program = _load("sample_prep.program.json")
+    assert "deleteFastqs" in program["variables"]
+    text = json.dumps(program)
+    assert text.count('"sample.delete_fastqs"') == 6
+    assert text.count('"${deleteFastqs}"') == 6
+
+
 def test_pipeline_profiles_empty_alignment_mode_uses_profile_fallback() -> None:
     from pipeline_profiles import seed_pipeline_scope_flags
 

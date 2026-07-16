@@ -65,6 +65,7 @@ def test_explicit_samples_with_s3_storage(tmp_path: Path) -> None:
     )
     assert ctx["primaryAnalyte"] == "buffy_coat"
     assert ctx["isCfdna"] is False
+    assert ctx["deleteFastqs"] is True
     assert ctx["fastqStorage"]["type"] == "s3"
     assert len(ctx["samples"]) == 2
     s1 = ctx["samples"][0]

@@ -35,6 +35,7 @@ _STRING_SCOPE_KEYS = frozenset(
 
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
     "usePangenome": False,
+    "deleteFastqs": True,
     "runDmpSelection": False,
     "runGeneFeaturecuts": False,
     "runBiomarkerFilter": False,
@@ -512,6 +513,16 @@ def seed_pipeline_scope_flags(
             "usePangenome",
             str(alignment_mode).strip().lower() == "pangenome",
         )
+
+    sample_prep_cfg = dict(ac.get("sample_prep") or {})
+    if "deleteFastqs" in out:
+        out["deleteFastqs"] = bool(out["deleteFastqs"])
+    else:
+        raw_del = sample_prep_cfg.get("delete_fastqs", sample_prep_cfg.get("deleteFastqs"))
+        if raw_del is None:
+            out.setdefault("deleteFastqs", True)
+        else:
+            out["deleteFastqs"] = bool(raw_del)
 
     stable_csv = out.get("stableDmpCsv") or validation.get("freeze_stable_dmp_csv")
     if stable_csv and out.get("pipelineProfile") in (
