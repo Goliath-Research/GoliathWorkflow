@@ -30,6 +30,15 @@ def _node_keys_by_type(workflow, node_type: str) -> list[str]:
     return [n.node_key for n in workflow.nodes if n.node_type == node_type]
 
 
+def test_validation_model_mc_is_single_strict_reuse_action():
+    result = compile_domain_program(_load("validation_model_mc.program.json"))
+    actions = [node for node in result.workflow.nodes if node.node_type == "ACTION"]
+
+    assert [node.action_name for node in actions] == ["validation.model_mc"]
+    assert actions[0].node_key == "model_mc"
+    assert actions[0].input_template["requireArtifactReuse"] is True
+
+
 def test_two_group_compiles_nested_foreach_and_parallel():
     result = compile_domain_program(_load("two_group_comparison.program.json"))
     wf = result.workflow

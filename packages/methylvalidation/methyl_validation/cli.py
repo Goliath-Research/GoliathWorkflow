@@ -378,6 +378,7 @@ def _build_model_mc_shared_runs(
     resume_arg: Optional[int],
     per_cancer_group: bool,
     primary_monte_carlo_runs_root: Path,
+    require_artifact_reuse: bool = False,
 ) -> List[Dict[str, Any]]:
     shared_root.mkdir(parents=True, exist_ok=True)
     write_baseline_manifest(
@@ -512,6 +513,11 @@ def _build_model_mc_shared_runs(
             else:
                 train_m, val_m = split_payload  # type: ignore[misc]
         except ValueError as e:
+            if require_artifact_reuse:
+                raise RuntimeError(
+                    f"Strict model-MC artifact reuse required for {run_id}, but its "
+                    f"primary split is missing or incompatible: {e}"
+                ) from e
             print(f"[model-mc:shared] Warning: iteration {i + 1} skipped: {e}", file=sys.stderr)
             continue
 
@@ -523,7 +529,23 @@ def _build_model_mc_shared_runs(
             n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
 
         source_run_dir = primary_monte_carlo_runs_root / run_id
-        if split_src == "reused" and _has_reusable_source_run(source_run_dir):
+        can_reuse_artifacts = split_src == "reused" and _has_reusable_source_run(source_run_dir)
+        if require_artifact_reuse and not can_reuse_artifacts:
+            missing: List[str] = []
+            if split_src != "reused":
+                missing.append("compatible primary split")
+            if not (source_run_dir / "project.json").is_file():
+                missing.append("project.json")
+            if not (source_run_dir / "centroids").is_dir():
+                missing.append("centroids/")
+            if not (source_run_dir / "detections").is_dir():
+                missing.append("detections/")
+            raise RuntimeError(
+                f"Strict model-MC artifact reuse required for {run_id}; cannot reuse "
+                f"{source_run_dir} (missing/incompatible: {', '.join(missing)}). "
+                "Centroid/detector recomputation is disabled."
+            )
+        if can_reuse_artifacts:
             _clean_path(run_dir)
             run_dir.mkdir(parents=True, exist_ok=True)
             if layout == "binary":

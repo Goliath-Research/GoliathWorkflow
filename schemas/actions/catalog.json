@@ -1286,7 +1286,7 @@
         "productionOutputDir"
       ],
       "default_node_type": "ACTION",
-      "description": "Monte Carlo model training across backends (shared centroid/detector + per-backend model loops).",
+      "description": "Monte Carlo model training across backends, optionally requiring strict reuse of primary centroid/detector artifacts.",
       "domain_effects": {
         "output_bindings": [],
         "reads_types": [

@@ -54,6 +54,18 @@
       "default": null,
       "title": "Montecarlorunsroot"
     },
+    "productionOutputDir": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Productionoutputdir"
+    },
     "project": {
       "anyOf": [
         {
@@ -90,6 +102,25 @@
       ],
       "default": null,
       "title": "Qualityiterations"
+    },
+    "requireArtifactReuse": {
+      "default": false,
+      "description": "Require every model-MC split to reuse existing primary MC centroids and detections; fail instead of recomputing when artifacts are missing or incompatible.",
+      "title": "Requireartifactreuse",
+      "type": "boolean"
+    },
+    "resume": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resume"
     },
     "tool": {
       "anyOf": [

@@ -684,6 +684,7 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
         resume_arg=None,
         per_cancer_group=False,
         primary_monte_carlo_runs_root=primary_root,
+        require_artifact_reuse=True,
     )
 
     assert len(rows) == 1
@@ -698,6 +699,98 @@ def test_build_model_mc_shared_runs_symlinks_reusable_primary_runs(tmp_path: Pat
     assert (linked_run / "detections").resolve() == (run1 / "detections").resolve()
     assert calls["generated_project"] == 1
     assert calls["ran_pipeline"] == 0
+
+
+def test_build_model_mc_shared_runs_strict_reuse_rejects_missing_artifacts(
+    tmp_path: Path, monkeypatch
+):
+    primary_root = tmp_path / "primary_mc"
+
+    monkeypatch.setattr(
+        cli,
+        "resolve_iteration_split",
+        lambda **_kwargs: (
+            (["h1", "h2"], ["d1", "d2"], ["h3"], ["d3"]),
+            "reused",
+        ),
+    )
+
+    def _forbidden_run_pipeline(*_args, **_kwargs):
+        raise AssertionError("strict reuse must fail before centroid/detector execution")
+
+    monkeypatch.setattr(cli, "run_pipeline_for_iteration", _forbidden_run_pipeline)
+
+    config = SimpleNamespace(
+        n_iterations=1,
+        train_fraction=0.8,
+        seed=42,
+        samples_base_path=str(tmp_path),
+        abort_on_step_failure=True,
+    )
+
+    with pytest.raises(RuntimeError, match="Centroid/detector recomputation is disabled"):
+        cli._build_model_mc_shared_runs(
+            base_project_for_runs=tmp_path / "production_project.json",
+            config=config,
+            layout="binary",
+            cohort_paths_list=[
+                ("healthy", ["h1", "h2", "h3"]),
+                ("disease", ["d1", "d2", "d3"]),
+            ],
+            cohort_labels=["healthy", "disease"],
+            control_paths=["h1", "h2", "h3"],
+            disease_paths=["d1", "d2", "d3"],
+            shared_root=tmp_path / "model_mc" / "shared",
+            resume_arg=None,
+            per_cancer_group=False,
+            primary_monte_carlo_runs_root=primary_root,
+            require_artifact_reuse=True,
+        )
+
+
+def test_build_model_mc_shared_runs_strict_reuse_rejects_generated_split(
+    tmp_path: Path, monkeypatch
+):
+    primary_root = tmp_path / "primary_mc"
+    run1 = primary_root / "run_0001"
+    (run1 / "centroids").mkdir(parents=True)
+    (run1 / "detections").mkdir()
+    (run1 / "project.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(
+        cli,
+        "resolve_iteration_split",
+        lambda **_kwargs: (
+            (["h1", "h2"], ["d1", "d2"], ["h3"], ["d3"]),
+            "generated",
+        ),
+    )
+
+    config = SimpleNamespace(
+        n_iterations=1,
+        train_fraction=0.8,
+        seed=42,
+        samples_base_path=str(tmp_path),
+        abort_on_step_failure=True,
+    )
+
+    with pytest.raises(RuntimeError, match="compatible primary split"):
+        cli._build_model_mc_shared_runs(
+            base_project_for_runs=tmp_path / "production_project.json",
+            config=config,
+            layout="binary",
+            cohort_paths_list=[
+                ("healthy", ["h1", "h2", "h3"]),
+                ("disease", ["d1", "d2", "d3"]),
+            ],
+            cohort_labels=["healthy", "disease"],
+            control_paths=["h1", "h2", "h3"],
+            disease_paths=["d1", "d2", "d3"],
+            shared_root=tmp_path / "model_mc" / "shared",
+            resume_arg=None,
+            per_cancer_group=False,
+            primary_monte_carlo_runs_root=primary_root,
+            require_artifact_reuse=True,
+        )
 
 
 def test_run_model_mc_backend_reuses_primary_centroid_detector_artifacts(tmp_path: Path, monkeypatch):

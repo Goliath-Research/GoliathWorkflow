@@ -100,6 +100,15 @@ class ModelMcTaskInput(BaseModel):
     monteCarloRunsRoot: Optional[str] = None
     modelMcRoot: Optional[str] = None
     backends: Optional[List[str]] = None
+    productionOutputDir: Optional[str] = None
+    resume: Optional[int] = Field(default=None, ge=0)
+    requireArtifactReuse: bool = Field(
+        default=False,
+        description=(
+            "Require every model-MC split to reuse existing primary MC centroids and "
+            "detections; fail instead of recomputing when artifacts are missing or incompatible."
+        ),
+    )
     featureIterations: Optional[int] = Field(default=None, ge=0)
     qualityIterations: Optional[int] = Field(default=None, ge=0)
 

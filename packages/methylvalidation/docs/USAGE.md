@@ -34,6 +34,18 @@ For production migration policy, see [`ROLLOUT.md`](ROLLOUT.md).
 | `--select-best-model` | `validation.select_best_model` | Binds `selectedBackend` |
 | `--post-model-validation` | `validation.post_model_validation` | |
 
+For model-MC only after stability/freeze, use the canonical strict-reuse graph:
+
+```bash
+methyl-workflow-run \
+  --program workflow_engine/domain/fixtures/validation_model_mc.program.json \
+  --context-file /work/projects/<study>/configs/context.json
+```
+
+It runs only `validation.model_mc`. Existing primary MC splits, centroids, and
+detections are mandatory; missing/incompatible artifacts fail instead of triggering
+scientific recomputation. ECDF covariates are taken from the resolved backend profile.
+
 Staged portal orchestration: [`workflow_engine/docs/portal_study_lifecycle.md`](../../../workflow_engine/docs/portal_study_lifecycle.md).
 
 **Hyperparameter search:** objective function over `metrics_summary.json` / optional stability outputs, small-grid driver `methyl-hyperparam-search`, see [`HYPERPARAMETER_SEARCH.md`](HYPERPARAMETER_SEARCH.md).

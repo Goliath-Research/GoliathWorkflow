@@ -41,6 +41,30 @@ methyl-validation --project /work/projects/prostate-cancer/configs/project_Healt
   --select-best-model --model-mc-all --selection-metric balanced_accuracy --selection-stat median
 ```
 
+### Pattern D: Model-MC only with strict artifact reuse (canonical)
+
+Use the slim program when stability/freeze already completed and model-MC must not
+recompute centroids or detections:
+
+```bash
+source .venv/bin/activate
+methyl-workflow-run \
+  --program workflow_engine/domain/fixtures/validation_model_mc.program.json \
+  --context-file /work/projects/prostate-cancer/configs/context_H_PCa_good_ecdf_covariates.json \
+  --parallel-workers 1 -v
+```
+
+This graph contains only `validation.model_mc`. It requires every primary
+`monte_carlo_runs/run_XXXX/` split to have a compatible split plus `project.json`,
+`centroids/`, and `detections/`. Missing or incompatible artifacts fail the action;
+centroid/detector fallback is disabled. Enabled backends and covariates come from
+`actionConfig.validation.backend_profiles` in the resolved context.
+
+With `n_iterations: 10` and ECDF enabled, outputs are written under
+`monte_carlo_runs/model_mc/shared/run_0001` … `run_0010` and
+`monte_carlo_runs/model_mc/ecdf/run_0001` … `run_0010`, with
+`ecdf/metrics_summary.json`, `ecdf/all_metrics.csv`, and the model-MC manifest.
+
 ## Backend behavior
 
 - `ecdf`: `methyl-classifier` -> `methyl-predictor`

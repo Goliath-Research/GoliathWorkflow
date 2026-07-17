@@ -1138,7 +1138,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "validation.model_mc",
         "validation.model-mc",
         "validation.model_mc",
-        "Monte Carlo model training across backends (shared centroid/detector + per-backend model loops).",
+        "Monte Carlo model training across backends, optionally requiring strict reuse of primary centroid/detector artifacts.",
         "validation",
         _VALIDATION_MODULE,
         "ModelMcTaskInput",
@@ -1146,7 +1146,12 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "ValidationModelMcOutput",
         in_process_handler="_handle_validation_model_mc",
         action_config_key="validation",
-        context_vars=("projectPath", "monteCarloRunsRoot", "backends", "productionOutputDir"),
+        context_vars=(
+            "projectPath",
+            "monteCarloRunsRoot",
+            "backends",
+            "productionOutputDir",
+        ),
         domain_effects=_DE_VALIDATION,
     ),
     _in_process(

@@ -24,6 +24,7 @@ def run_model_mc_all(
     config: MonteCarloConfig,
     backends: Optional[Sequence[str]] = None,
     resume: Optional[int] = None,
+    require_artifact_reuse: bool = False,
 ) -> Dict[str, Any]:
     """Run shared model-mc iterations then per-backend model training loops."""
     from methyl_validation.cli import (
@@ -73,6 +74,7 @@ def run_model_mc_all(
         resume_arg=resume,
         per_cancer_group=False,
         primary_monte_carlo_runs_root=monte_carlo_runs_root,
+        require_artifact_reuse=require_artifact_reuse,
     )
     backend_roots: Dict[str, str] = {}
     for backend in configured:

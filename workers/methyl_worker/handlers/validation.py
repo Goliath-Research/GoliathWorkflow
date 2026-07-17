@@ -455,6 +455,7 @@ def _handle_validation_model_mc(
         config=config,
         backends=list(backends) if backends else None,
         resume=int(resume) if resume is not None else None,
+        require_artifact_reuse=bool(input_json.get("requireArtifactReuse", False)),
     )
     return ValidationModelMcOutput(
         status="ok",

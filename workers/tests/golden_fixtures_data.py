@@ -108,7 +108,11 @@ GOLDEN_INPUTS: Dict[str, Dict[str, Any]] = {
     "validation.model_train": {"projectPath": "/work/p/project.json", "backend": "tabular_sklearn"},
     "validation.model_predict": {"projectPath": "/work/p/project.json", "backend": "tabular_sklearn"},
     "validation.select_best_model": {"projectPath": "/work/p/project.json", "monteCarloRunsRoot": "/work/p/monte_carlo_runs"},
-    "validation.model_mc": {"projectPath": "/work/p/project.json", "monteCarloRunsRoot": "/work/p/monte_carlo_runs"},
+    "validation.model_mc": {
+        "projectPath": "/work/p/project.json",
+        "monteCarloRunsRoot": "/work/p/monte_carlo_runs",
+        "requireArtifactReuse": True,
+    },
     "validation.post_model_validation": {
         "projectPath": "/work/p/project.json",
         "monteCarloRunsRoot": "/work/p/monte_carlo_runs",
