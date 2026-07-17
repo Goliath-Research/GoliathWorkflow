@@ -346,44 +346,58 @@ def _move_artifacts_into_entry(
     return updated
 
 
+def _blob_under_entry(candidate: Path, entry_dir: Path) -> Optional[Path]:
+    """Return ``candidate`` resolved only when it is a real file inside ``entry_dir``.
+
+    ``Path.is_file()`` follows symlinks, so a stale entry symlink can point outside
+    the content-key directory. Always resolve + ``_is_under`` before accepting.
+    """
+    try:
+        if not candidate.is_file():
+            return None
+        resolved = candidate.resolve()
+    except OSError:
+        return None
+    if not resolved.is_file() or not _is_under(resolved, entry_dir):
+        return None
+    return resolved
+
+
 def _resolve_blob_in_entry(ref_path: Path, entry_dir: Path) -> Optional[Path]:
     """Map an artifact ref to a real file under ``entry_dir`` (CAAS blob)."""
     entry_dir = entry_dir.resolve()
     path = Path(ref_path).expanduser()
 
-    # Already a blob path under this entry.
+    # Already a blob path under this entry (reject leaf symlinks that escape).
     try:
-        if path.is_file() and not path.is_symlink() and _is_under(path, entry_dir):
-            return path.resolve()
+        if path.is_file() and not path.is_symlink():
+            under = _blob_under_entry(path, entry_dir)
+            if under is not None:
+                return under
     except OSError:
         pass
 
     # Product symlink / path that resolves into this entry.
-    try:
-        if path.exists():
-            resolved = path.resolve()
-            if resolved.is_file() and _is_under(resolved, entry_dir):
-                return resolved
-    except OSError:
-        pass
+    under = _blob_under_entry(path, entry_dir)
+    if under is not None:
+        return under
 
     # Recover from durable entry layout when the product path was wiped or a prior
     # buggy commit recorded product locations in the CAAS manifest.
     run_rel = _caas_run_relative(path)
-    if run_rel is not None and (entry_dir / run_rel).is_file():
-        return (entry_dir / run_rel).resolve()
+    if run_rel is not None:
+        under = _blob_under_entry(entry_dir / run_rel, entry_dir)
+        if under is not None:
+            return under
     # Prefer preserving run_####/name when the abs path contains that segment.
     parts = path.parts
     for i, part in enumerate(parts):
         if part.startswith("run_") and i + 1 < len(parts):
-            rel = Path(*parts[i:])
-            if (entry_dir / rel).is_file():
-                return (entry_dir / rel).resolve()
+            under = _blob_under_entry(entry_dir / Path(*parts[i:]), entry_dir)
+            if under is not None:
+                return under
             break
-    candidate = entry_dir / path.name
-    if candidate.is_file():
-        return candidate.resolve()
-    return None
+    return _blob_under_entry(entry_dir / path.name, entry_dir)
 
 
 def _relink_artifacts_from_entry(
@@ -405,7 +419,17 @@ def _relink_artifacts_from_entry(
         stored = _resolve_blob_in_entry(Path(ref.path), entry_dir)
         if stored is None:
             continue
-        rel = stored.relative_to(entry_dir)
+        try:
+            rel = stored.relative_to(entry_dir)
+        except ValueError:
+            # Defense in depth: skip blobs that somehow escaped entry_dir (e.g. via
+            # a stale symlink). Falling back to basename would reintroduce flatten bugs.
+            logger.warning(
+                "Skipping CAAS artifact outside entry_dir (%s not under %s)",
+                stored,
+                entry_dir,
+            )
+            continue
         if output_dir is not None:
             _ensure_symlink(Path(output_dir) / rel, stored)
         relinked.append(

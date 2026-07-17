@@ -284,6 +284,26 @@ def test_plan_iterations_preserves_run_relative_paths(tmp_path: Path, monkeypatc
         assert train_link.read_text(encoding="utf-8").startswith("sample")
 
 
+def test_resolve_blob_rejects_stale_symlink_escaping_entry(tmp_path: Path) -> None:
+    """Stale CAAS entry symlinks must not escape entry_dir or crash relink."""
+    from methyl_domain.content_store import _relink_artifacts_from_entry, _resolve_blob_in_entry
+
+    entry = tmp_path / "Study" / ".caas" / "validation_plan_iterations" / "key"
+    entry.mkdir(parents=True)
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"x": 1}', encoding="utf-8")
+    (entry / "project.json").symlink_to(outside)
+
+    assert _resolve_blob_in_entry(tmp_path / "monte_carlo_runs" / "run_0001" / "project.json", entry) is None
+    # Relink must skip the escaping symlink without raising.
+    relinked = _relink_artifacts_from_entry(
+        [ArtifactRef(path=str(tmp_path / "monte_carlo_runs" / "run_0001" / "project.json"), bytes=1)],
+        entry,
+        output_dir=tmp_path / "monte_carlo_runs",
+    )
+    assert relinked == []
+
+
 def test_caas_skip_relinks_after_product_tree_wipe(tmp_path: Path, monkeypatch) -> None:
     """Manifests must record CAAS blob paths so verify/relink works without product files."""
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
