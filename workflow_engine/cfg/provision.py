@@ -197,9 +197,10 @@ def provision_asset(
         elif op == "s3_sync":
             if not step.get("storageEndpoint"):
                 raise ValueError(f"s3_sync step {i} needs storageEndpoint")
-            loc = expand_storage_endpoint(
-                store, step["storageEndpoint"], prefix=step.get("prefix")
-            )
+            # The step key/prefix is the sync key relative to the endpoint's own
+            # base (prefixBase); do not also bake it onto loc["prefix"], or
+            # _s3_uri would double-apply it for endpoints without prefixBase.
+            loc = expand_storage_endpoint(store, step["storageEndpoint"])
             if loc.get("type") != "s3":
                 raise ValueError(
                     f"s3_sync step {i} requires s3 endpoint, got {loc.get('type')}"

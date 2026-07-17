@@ -454,13 +454,51 @@ def _detector_mean_balanced_accuracy(run_dir: Path) -> Optional[float]:
     return sum(values) / len(values) if values else None
 
 
+def _featurecuts_mean_balanced_accuracy(run_dir: Path) -> Optional[float]:
+    """Mean classifier-panel balanced accuracy from detector FeatureCuts exports.
+
+    In ``dmp_modeling_mode=featurecuts`` runs the detector validates the selected
+    classifier panel and writes the result to ``dmp-export-*.meta.json`` under
+    ``featurecuts_validation_summary.balanced_accuracy`` (with
+    ``classifier_panel_audit.balanced_accuracy_at_k_target`` as a fallback), rather
+    than to a predictor ``validation_metrics.json`` or to the detector ``result*.json``
+    top level. Aggregate those per-chromosome values so stability gating can score
+    discovery-plus-FeatureCuts iterations.
+    """
+    values: List[float] = []
+    for det_root in run_dir.rglob("detections"):
+        if not det_root.is_dir():
+            continue
+        for p in det_root.rglob("dmp-export-*.meta.json"):
+            try:
+                with open(p, encoding="utf-8") as f:
+                    d = json.load(f)
+            except Exception:
+                continue
+            ba: Any = None
+            fc = d.get("featurecuts_validation_summary")
+            if isinstance(fc, dict):
+                ba = fc.get("balanced_accuracy")
+            if not isinstance(ba, (int, float)):
+                audit = d.get("classifier_panel_audit")
+                if isinstance(audit, dict):
+                    ba = audit.get("balanced_accuracy_at_k_target")
+            if isinstance(ba, (int, float)):
+                fv = float(ba)
+                if fv == fv:
+                    values.append(fv)
+    return sum(values) / len(values) if values else None
+
+
 def iteration_scalar_metrics_from_run_dir(run_dir: Path) -> Dict[str, Any]:
     """
     Scalar metrics for one Monte Carlo run directory.
 
     Prefer ``predictors/**/validation_metrics.json`` (after ``--predictor-only`` or ``--model``).
     Otherwise use the mean of ``balanced_accuracy`` from MethylDetector ``result*.json``
-    files under ``detections/`` (centroid+detector iterations).
+    files under ``detections/`` (centroid+detector iterations), and finally the
+    FeatureCuts classifier-panel balanced accuracy from ``dmp-export-*.meta.json``
+    (discovery-plus-FeatureCuts profiles without a predictor stage).
     """
     run_dir = Path(run_dir)
     vm = _find_validation_metrics_json_under_run(run_dir)
@@ -477,4 +515,7 @@ def iteration_scalar_metrics_from_run_dir(run_dir: Path) -> Dict[str, Any]:
     ba = _detector_mean_balanced_accuracy(run_dir)
     if ba is not None:
         return {"balanced_accuracy": ba, "metrics_source": "detector"}
+    ba = _featurecuts_mean_balanced_accuracy(run_dir)
+    if ba is not None:
+        return {"balanced_accuracy": ba, "metrics_source": "detector_featurecuts"}
     return {}

@@ -148,6 +148,69 @@ def test_provision_s3_sync_dry_run(store: FileConfigStore, tmp_path: Path) -> No
     assert any("s3_sync" in line for line in result["log"])
 
 
+def test_s3_sync_step_prefix_no_prefixbase_not_doubled(
+    store: FileConfigStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Endpoint without prefixBase + step `prefix` must not double-apply the key."""
+    from cfg import provision as provision_mod
+
+    store.upsert(
+        "credential",
+        "epimethyl-archive-keys",
+        {
+            "authMode": "explicit_keys",
+            "accessKeyId": "AKIATEST",
+            "secretAccessKey": "secret",
+            "provider": "s3",
+        },
+        status="published",
+        extra={"provider": "s3"},
+    )
+    # No prefixBase on the endpoint — this is the case that triggered the bug.
+    store.upsert(
+        "storage_endpoint",
+        "bare-bucket",
+        {
+            "type": "s3",
+            "bucket": "epimethyl",
+            "region": "us-east-1",
+            "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
+        },
+        status="published",
+        extra={"provider": "s3", "credentialName": "epimethyl-archive-keys"},
+    )
+    store.upsert(
+        "reference_asset",
+        "bare-asset",
+        {
+            "assetType": "linear_genome",
+            "destRoot": str(tmp_path / "work" / "genomes" / "bare"),
+            "recipe": {
+                "steps": [
+                    {
+                        "op": "s3_sync",
+                        "storageEndpoint": "bare-bucket",
+                        "prefix": "linear/GRCh38/ensembl-114/",
+                    }
+                ]
+            },
+        },
+        status="published",
+    )
+
+    captured: dict[str, str] = {}
+
+    def _fake_run_aws_s3(args, *, loc, dry_run):  # noqa: ANN001
+        # args = ["s3", "sync", <uri>, <dest>/]
+        captured["uri"] = args[2]
+
+    monkeypatch.setattr(provision_mod, "_run_aws_s3", _fake_run_aws_s3)
+
+    provision_asset(store, "bare-asset", work_root=tmp_path / "work", dry_run=False)
+
+    assert captured["uri"] == "s3://epimethyl/linear/GRCh38/ensembl-114/"
+
+
 def test_provision_selected_from_site(store: FileConfigStore, tmp_path: Path) -> None:
     import_filesystem(
         store,
