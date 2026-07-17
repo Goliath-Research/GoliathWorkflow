@@ -2,6 +2,8 @@
 
 Operational guide for registering GPU worker VMs with **Microsoft Arc** before they join a MethylPipeline cluster. Arc provides inventory, policy compliance, Defender EDR, and Sentinel telemetry — it **does not** replace gateway TLS or `worker_token` auth.
 
+**Production requires** Arc Connected workers in the company Azure tenant/subscription, plus `GATEWAY_REQUIRE_ARC_ATTEST=1` on the gateway. Full ordered deploy: [production-platform.md](production-platform.md).
+
 Related: [worker_provision.md](worker_provision.md), [production_runbook.md](production_runbook.md).
 
 ## Prerequisites

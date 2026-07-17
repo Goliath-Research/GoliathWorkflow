@@ -26,6 +26,6 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 ## Quick audience routing
 
 - **Config author** → [layer-model.md](layer-model.md) + [config-registry.md](config-registry.md)
-- **DevOps / cluster** → [distributed-runtime.md](distributed-runtime.md) + [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd) + [Usage ch.19](../usage/19-config-registry.qmd)
+- **DevOps / cluster** → [production-platform.md](../deployment/production-platform.md) + [distributed-runtime.md](distributed-runtime.md) + [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd) + [Usage ch.19](../usage/19-config-registry.qmd)
 - **Workflow author** → [orchestration-paths.md](orchestration-paths.md) + [Usage ch.04 orchestration](../usage/04-orchestration-workflow-run.qmd) + [DomainProgram reference](../reference/domain-program-language.md) + [end-to-end workflow](end-to-end-workflow.md)
 - **Experimentation / result versioning** → [Usage ch.17](../usage/17-content-addressed-action-store.qmd) + [pipeline architecture — hyperparameter sets](../../workflow_engine/docs/pipeline_architecture.md#hyperparameter-sets-and-caas)
