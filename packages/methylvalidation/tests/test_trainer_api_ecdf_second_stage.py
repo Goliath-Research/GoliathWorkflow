@@ -170,6 +170,59 @@ def test_build_model_backend_steps_ecdf_raw_gene_uses_gene_ecdf_path(tmp_path: P
     ]
 
 
+def test_raw_gene_predictor_emits_train_then_test_partitions(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [
+                {"label": "healthy", "csv": "h.csv"},
+                {"label": "disease", "csv": "d.csv"},
+            ],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": str(tmp_path / "project.json"),
+            "output_base": str(tmp_path),
+            "backend_profiles": {
+                "ecdf": {
+                    "enabled": True,
+                    "params": {
+                        "feature_mode": "raw_gene",
+                        "feature_family_set": "gene",
+                    },
+                },
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
+        }
+    )
+    partitions: list[str] = []
+
+    def _fake_predict(**kwargs):
+        partitions.append(kwargs["evaluation_partition"])
+        return {"evaluation_partition": kwargs["evaluation_partition"]}
+
+    monkeypatch.setattr(
+        "methyl_validation.ecdf_gene_backend.predict_ecdf_gene_ovr_from_project",
+        _fake_predict,
+    )
+    steps = build_model_backend_steps(
+        project_json=tmp_path / "project.json",
+        predictor_output_dir=tmp_path / "predictors",
+        config=cfg,
+        per_cancer_group=False,
+        run_classifier_fn=lambda _p, _g: (0, "", ""),
+        run_predictor_fn=lambda _p, _o: (0, "", ""),
+    )
+
+    rc, _out, err = steps[2][1]()
+
+    assert rc == 0
+    assert err == ""
+    assert partitions == ["train", "test"]
+
+
 def test_build_model_backend_steps_ecdf_observed_hybrid_uses_aggregated_path_when_explicit(tmp_path: Path):
     cfg = MonteCarloConfig.model_validate(
         {

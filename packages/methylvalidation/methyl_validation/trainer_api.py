@@ -9,6 +9,7 @@ later with minimal CLI/workflow changes.
 from __future__ import annotations
 
 import json
+import shutil
 import tempfile
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Tuple
@@ -98,9 +99,10 @@ def _write_ecdf_training_metrics(project_json: Path, classifier_output_dir: Path
                 n_train_samples += len(paths)
         payload["n_train_samples"] = int(n_train_samples)
         payload["n_train_groups"] = int(len(test_group_paths))
-        out_path = classifier_output_dir / "training_metrics.json"
+        out_path = classifier_output_dir / "train_metrics.json"
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(payload, f, indent=2)
+        shutil.copy2(out_path, classifier_output_dir / "training_metrics.json")
         return True, str(out_path)
     except Exception as e:
         return False, f"ECDF training metrics unavailable: {e}"
@@ -622,12 +624,20 @@ def build_model_backend_steps(
                 from .ecdf_gene_backend import predict_ecdf_gene_ovr_from_project
 
                 model_path = model_dir / "ecdf_gene_ovr.pkl"
-                metrics = predict_ecdf_gene_ovr_from_project(
+                output_dir = predictor_output_dir or (project_json.parent / "predictors")
+                train_metrics = predict_ecdf_gene_ovr_from_project(
                     project_json=project_json,
                     model_path=model_path,
-                    output_dir=(predictor_output_dir or (project_json.parent / "predictors")),
+                    output_dir=output_dir,
+                    evaluation_partition="train",
                 )
-                return 0, json.dumps(metrics), ""
+                test_metrics = predict_ecdf_gene_ovr_from_project(
+                    project_json=project_json,
+                    model_path=model_path,
+                    output_dir=output_dir,
+                    evaluation_partition="test",
+                )
+                return 0, json.dumps({"train": train_metrics, "test": test_metrics}), ""
             except Exception as e:
                 return 1, "", str(e)
 
@@ -711,12 +721,20 @@ def build_model_backend_steps(
                 from .ecdf_aggregated_backend import predict_ecdf_aggregated_ovr_from_project
 
                 model_path = model_dir / "ecdf_aggregated_ovr.pkl"
-                metrics = predict_ecdf_aggregated_ovr_from_project(
+                output_dir = predictor_output_dir or (project_json.parent / "predictors")
+                train_metrics = predict_ecdf_aggregated_ovr_from_project(
                     project_json=project_json,
                     model_path=model_path,
-                    output_dir=(predictor_output_dir or (project_json.parent / "predictors")),
+                    output_dir=output_dir,
+                    evaluation_partition="train",
                 )
-                return 0, json.dumps(metrics), ""
+                test_metrics = predict_ecdf_aggregated_ovr_from_project(
+                    project_json=project_json,
+                    model_path=model_path,
+                    output_dir=output_dir,
+                    evaluation_partition="test",
+                )
+                return 0, json.dumps({"train": train_metrics, "test": test_metrics}), ""
             except Exception as e:
                 return 1, "", str(e)
 

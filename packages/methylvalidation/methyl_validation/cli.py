@@ -261,10 +261,16 @@ def _count_csv_data_rows(path: Path) -> int:
 
 def _count_run_samples_from_existing_files(run_dir: Path) -> Tuple[int, int]:
     train_files = sorted(set(list(run_dir.glob("train_*.csv")) + list(run_dir.glob("training_*.csv"))))
-    val_files = sorted(set(list(run_dir.glob("val_*.csv")) + list(run_dir.glob("testing_*.csv"))))
+    canonical_test = sorted(run_dir.glob("test_*.csv"))
+    if canonical_test:
+        test_files = canonical_test
+    else:
+        test_files = sorted(
+            set(list(run_dir.glob("val_*.csv")) + list(run_dir.glob("testing_*.csv")))
+        )
     n_train = sum(_count_csv_data_rows(p) for p in train_files)
-    n_val = sum(_count_csv_data_rows(p) for p in val_files)
-    return int(n_train), int(n_val)
+    n_test = sum(_count_csv_data_rows(p) for p in test_files)
+    return int(n_train), int(n_test)
 
 
 def _deep_merge_dicts(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
@@ -915,7 +921,18 @@ def _run_model_mc_backend_from_shared_runs(
             if config.abort_on_step_failure:
                 raise RuntimeError(f"[model-mc:{backend}] abort_on_step_failure=true and model stage failed")
             continue
+        if backend == "ecdf" and not any(
+            (backend_run_dir / "predictors").rglob("test_metrics.json")
+        ):
+            raise RuntimeError(
+                f"[model-mc:{backend}] {run_id} produced no test_metrics.json; "
+                "refusing to aggregate training or detector metrics as model-MC performance."
+            )
         scalar = iteration_scalar_metrics_from_run_dir(backend_run_dir)
+        if backend == "ecdf" and scalar.get("metrics_source") != "model_test":
+            raise RuntimeError(
+                f"[model-mc:{backend}] {run_id} metrics did not resolve from the test partition."
+            )
         rows.append({"iteration": i + 1, "run_id": run_id, "run_dir": str(backend_run_dir), "model_backend": backend, **scalar})
         elapsed = time.perf_counter() - iteration_t0
         completed_iteration_seconds.append(elapsed)

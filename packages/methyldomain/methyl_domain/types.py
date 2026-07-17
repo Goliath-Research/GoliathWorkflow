@@ -131,6 +131,7 @@ class MethylGroup(DomainTaggedModel):
     sampleRefs: Optional[List[MethylSampleRef]] = None
     sampleCsv: Optional[str] = None
     trainCsv: Optional[str] = None
+    testCsv: Optional[str] = None
     valCsv: Optional[str] = None
     count: Optional[int] = None
     projectPath: Optional[str] = None
@@ -171,6 +172,9 @@ class McIterationTaskConfig(BaseModel):
     runDir: str
     monteCarloRunsRoot: str
     detectorStepOverride: Optional[str] = None
+    testControlCsv: Optional[str] = None
+    testDiseaseCsv: Optional[str] = None
+    testGroupsJson: Optional[str] = None
     valControlCsv: Optional[str] = None
     valDiseaseCsv: Optional[str] = None
     valGroupsJson: Optional[str] = None

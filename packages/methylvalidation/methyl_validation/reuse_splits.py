@@ -95,8 +95,16 @@ def try_load_binary_split_from_run_dir(
     """
     tc_csv = run_dir / "train_control.csv"
     td_csv = run_dir / "train_disease.csv"
-    vc_csv = run_dir / "val_control.csv"
-    vd_csv = run_dir / "val_disease.csv"
+    vc_csv = (
+        run_dir / "test_control.csv"
+        if (run_dir / "test_control.csv").is_file()
+        else run_dir / "val_control.csv"
+    )
+    vd_csv = (
+        run_dir / "test_disease.csv"
+        if (run_dir / "test_disease.csv").is_file()
+        else run_dir / "val_disease.csv"
+    )
     if not all(p.is_file() for p in (tc_csv, td_csv, vc_csv, vd_csv)):
         return None
 
@@ -130,7 +138,8 @@ def try_load_multiclass_split_from_run_dir(
             return None
         safe = _safe_cohort_filename_label(lbl)
         tr = run_dir / f"training_{safe}.csv"
-        te = run_dir / f"testing_{safe}.csv"
+        canonical_test = run_dir / f"test_{safe}.csv"
+        te = canonical_test if canonical_test.is_file() else run_dir / f"testing_{safe}.csv"
         if not tr.is_file() or not te.is_file():
             return None
         train_m[lbl] = load_and_resolve_sample_paths(tr, samples_base_path)

@@ -370,6 +370,42 @@
           "default": null,
           "title": "Seed"
         },
+        "testControlCsv": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Testcontrolcsv"
+        },
+        "testDiseaseCsv": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Testdiseasecsv"
+        },
+        "testGroupsJson": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Testgroupsjson"
+        },
         "trainFraction": {
           "exclusiveMaximum": 1.0,
           "exclusiveMinimum": 0.0,
@@ -507,6 +543,18 @@
           ],
           "default": null,
           "title": "Samplerefs"
+        },
+        "testCsv": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Testcsv"
         },
         "trainCsv": {
           "anyOf": [

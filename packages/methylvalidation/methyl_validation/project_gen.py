@@ -90,6 +90,9 @@ def prepare_model_mc_backend_run_from_shared(
     for name in (
         "train_control.csv",
         "train_disease.csv",
+        "test_control.csv",
+        "test_disease.csv",
+        "test_groups.json",
         "val_control.csv",
         "val_disease.csv",
         "val_test_groups.json",
@@ -676,13 +679,17 @@ def generate_run_project(
 
     train_control_csv = run_dir / "train_control.csv"
     train_disease_csv = run_dir / "train_disease.csv"
+    test_control_csv = run_dir / "test_control.csv"
+    test_disease_csv = run_dir / "test_disease.csv"
     val_control_csv = run_dir / "val_control.csv"
     val_disease_csv = run_dir / "val_disease.csv"
 
     write_train_csv(train_control_csv, train_control_paths, samples_base_path)
     write_train_csv(train_disease_csv, train_disease_paths, samples_base_path)
-    write_val_csv(val_control_csv, val_control_paths)
-    write_val_csv(val_disease_csv, val_disease_paths)
+    write_val_csv(test_control_csv, val_control_paths)
+    write_val_csv(test_disease_csv, val_disease_paths)
+    shutil.copy2(test_control_csv, val_control_csv)
+    shutil.copy2(test_disease_csv, val_disease_csv)
 
     control_group, disease_group = _first_control_and_disease_labels(base)
     control_side, disease_side = _control_disease_side_labels(base)
@@ -709,7 +716,7 @@ def generate_run_project(
         {"control_group": control_group, "disease_group": disease_group}
     ]
 
-    _write_binary_val_test_groups_json(
+    _write_binary_test_groups_json(
         run_dir,
         val_control_paths,
         val_disease_paths,
@@ -862,9 +869,11 @@ def generate_run_project_multiclass(
         p = run_dir / f"training_{safe}.csv"
         write_train_csv(p, train_by_label[lbl], samples_base_path)
         train_csv_by_label[lbl] = p
+        test_csv = run_dir / f"test_{safe}.csv"
+        write_val_csv(test_csv, val_by_label[lbl])
         testing_csv = run_dir / f"testing_{safe}.csv"
-        write_val_csv(testing_csv, val_by_label[lbl])
-        testing_csv_by_label[lbl] = testing_csv
+        shutil.copy2(test_csv, testing_csv)
+        testing_csv_by_label[lbl] = test_csv
 
     val_payload: List[Dict[str, Any]] = []
     for lbl in cohort_labels:
@@ -874,10 +883,12 @@ def generate_run_project_multiclass(
                 "paths": [str(Path(p).resolve()) for p in val_by_label[lbl]],
             }
         )
-    val_groups_json = run_dir / "val_test_groups.json"
-    val_groups_json.parent.mkdir(parents=True, exist_ok=True)
-    with open(val_groups_json, "w", encoding="utf-8") as f:
+    test_groups_json = run_dir / "test_groups.json"
+    test_groups_json.parent.mkdir(parents=True, exist_ok=True)
+    with open(test_groups_json, "w", encoding="utf-8") as f:
         json.dump(val_payload, f, indent=2)
+    val_groups_json = run_dir / "val_test_groups.json"
+    shutil.copy2(test_groups_json, val_groups_json)
 
     project = dict(base)
     project.pop("step_config", None)
@@ -1172,7 +1183,7 @@ def _patch_step_config_predictor_multiclass_holdouts(
             pred[key] = side
 
 
-def _write_binary_val_test_groups_json(
+def _write_binary_test_groups_json(
     run_dir: Path,
     val_control_paths: List[str],
     val_disease_paths: List[str],
@@ -1190,9 +1201,10 @@ def _write_binary_val_test_groups_json(
             "paths": [str(Path(p).resolve()) for p in val_disease_paths],
         },
     ]
-    path = run_dir / "val_test_groups.json"
+    path = run_dir / "test_groups.json"
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
+    shutil.copy2(path, run_dir / "val_test_groups.json")
     return path
 
 
@@ -1268,9 +1280,11 @@ def generate_run_project_hierarchical_multiclass(
         p = run_dir / f"training_{safe}.csv"
         write_train_csv(p, train_by_label[lbl], samples_base_path)
         train_csv_by_label[lbl] = p
+        test_csv = run_dir / f"test_{safe}.csv"
+        write_val_csv(test_csv, val_by_label[lbl])
         testing_csv = run_dir / f"testing_{safe}.csv"
-        write_val_csv(testing_csv, val_by_label[lbl])
-        testing_csv_by_label[lbl] = testing_csv
+        shutil.copy2(test_csv, testing_csv)
+        testing_csv_by_label[lbl] = test_csv
 
     val_payload: List[Dict[str, Any]] = []
     for lbl in cohort_labels:
@@ -1280,10 +1294,12 @@ def generate_run_project_hierarchical_multiclass(
                 "paths": [str(Path(p).resolve()) for p in val_by_label[lbl]],
             }
         )
-    val_groups_json = run_dir / "val_test_groups.json"
-    val_groups_json.parent.mkdir(parents=True, exist_ok=True)
-    with open(val_groups_json, "w", encoding="utf-8") as f:
+    test_groups_json = run_dir / "test_groups.json"
+    test_groups_json.parent.mkdir(parents=True, exist_ok=True)
+    with open(test_groups_json, "w", encoding="utf-8") as f:
         json.dump(val_payload, f, indent=2)
+    val_groups_json = run_dir / "val_test_groups.json"
+    shutil.copy2(test_groups_json, val_groups_json)
 
     project = dict(base)
     project.pop("step_config", None)

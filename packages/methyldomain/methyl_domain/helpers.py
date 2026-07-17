@@ -282,16 +282,18 @@ def groups_from_mc_run_dir(
             or "disease"
         )
         pairs = (
-            (control_label, "control", run_dir / "train_control.csv", run_dir / "val_control.csv"),
-            (disease_label, "disease", run_dir / "train_disease.csv", run_dir / "val_disease.csv"),
+            (control_label, "control", run_dir / "train_control.csv", run_dir / "test_control.csv", run_dir / "val_control.csv"),
+            (disease_label, "disease", run_dir / "train_disease.csv", run_dir / "test_disease.csv", run_dir / "val_disease.csv"),
         )
-        for label, role, train_csv, val_csv in pairs:
+        for label, role, train_csv, test_csv, val_csv in pairs:
+            resolved_test = test_csv if test_csv.is_file() else val_csv
             groups.append(
                 MethylGroup(
                     label=str(label),
                     role=role,  # type: ignore[arg-type]
                     trainCsv=str(train_csv.resolve()) if train_csv.is_file() else None,
-                    valCsv=str(val_csv.resolve()) if val_csv.is_file() else None,
+                    testCsv=str(resolved_test.resolve()) if resolved_test.is_file() else None,
+                    valCsv=str(resolved_test.resolve()) if resolved_test.is_file() else None,
                     count=_csv_sample_count(train_csv) if train_csv.is_file() else None,
                     projectPath=project_str,
                 )
@@ -307,13 +309,16 @@ def groups_from_mc_run_dir(
     for label in labels:
         safe = _safe_cohort_filename_label(label)
         train_csv = run_dir / f"training_{safe}.csv"
+        test_csv = run_dir / f"test_{safe}.csv"
         val_csv = run_dir / f"testing_{safe}.csv"
+        resolved_test = test_csv if test_csv.is_file() else val_csv
         groups.append(
             MethylGroup(
                 label=label,
                 role="other",
                 trainCsv=str(train_csv.resolve()) if train_csv.is_file() else None,
-                valCsv=str(val_csv.resolve()) if val_csv.is_file() else None,
+                testCsv=str(resolved_test.resolve()) if resolved_test.is_file() else None,
+                valCsv=str(resolved_test.resolve()) if resolved_test.is_file() else None,
                 count=_csv_sample_count(train_csv) if train_csv.is_file() else None,
                 projectPath=project_str,
             )

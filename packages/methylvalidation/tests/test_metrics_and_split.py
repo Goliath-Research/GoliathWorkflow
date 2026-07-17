@@ -158,6 +158,14 @@ def test_iteration_scalar_metrics_prefers_predictor_then_detector(tmp_path):
     assert m.get("recall_cancer") == 0.81
     assert m.get("metrics_source") == "predictor"
 
+    (pred / "test_metrics.json").write_text(
+        json.dumps({"balanced_accuracy": 0.71, "evaluation_partition": "test"}),
+        encoding="utf-8",
+    )
+    test_metrics = iteration_scalar_metrics_from_run_dir(run_dir)
+    assert test_metrics["balanced_accuracy"] == 0.71
+    assert test_metrics["metrics_source"] == "model_test"
+
     run2 = tmp_path / "run_0002"
     det = run2 / "detections" / "healthy" / "cancer"
     det.mkdir(parents=True)

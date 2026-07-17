@@ -64,6 +64,11 @@ With `n_iterations: 10` and ECDF enabled, outputs are written under
 `monte_carlo_runs/model_mc/shared/run_0001` … `run_0010` and
 `monte_carlo_runs/model_mc/ecdf/run_0001` … `run_0010`, with
 `ecdf/metrics_summary.json`, `ecdf/all_metrics.csv`, and the model-MC manifest.
+Each backend run writes `train_metrics.json` for diagnostics and
+`test_metrics.json` for the disjoint held-out partition. Only test metrics feed
+`all_metrics.csv`, summaries, and backend ranking. Canonical split files are
+`test_control.csv`, `test_disease.csv`, and `test_groups.json`; `val_*` names are
+compatibility aliases.
 
 ## Backend behavior
 

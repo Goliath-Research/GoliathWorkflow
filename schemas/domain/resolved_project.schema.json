@@ -229,6 +229,18 @@
           "default": null,
           "title": "Samplerefs"
         },
+        "testCsv": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Testcsv"
+        },
         "trainCsv": {
           "anyOf": [
             {

@@ -4,6 +4,7 @@ import os
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, List, Optional, Tuple
+import json
 
 import numpy as np
 
@@ -27,6 +28,7 @@ def resolve_eval_paths_and_labels(
     class_names: List[str],
     predictor_cfg: Optional[Any] = None,
     project_loader: Optional[Any] = None,
+    evaluation_partition: Optional[str] = None,
 ) -> Tuple[List[str], Optional[np.ndarray]]:
     """
     Resolve evaluation samples with unified precedence used by model backends.
@@ -40,6 +42,64 @@ def resolve_eval_paths_and_labels(
       6) binary test_control/disease (only for binary class_names)
       7) project.get_resolved_groups() fallback
     """
+    partition = str(evaluation_partition or "").strip().lower()
+    if partition == "test":
+        project_path = Path(project_json).resolve()
+        manifest = project_path.parent / "test_groups.json"
+        if not manifest.is_file():
+            manifest = project_path.parent / "val_test_groups.json"
+        if not manifest.is_file():
+            raise FileNotFoundError(
+                f"Model-MC test evaluation requires test_groups.json under {project_path.parent}"
+            )
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        if not isinstance(payload, list) or not payload:
+            raise ValueError(f"Model-MC test manifest is empty or invalid: {manifest}")
+        samples: List[str] = []
+        y_true: List[int] = []
+        for idx, entry in enumerate(payload):
+            if not isinstance(entry, dict):
+                raise ValueError(f"Invalid test group entry {idx} in {manifest}")
+            cls_idx = int(entry.get("class_index", idx))
+            for path in entry.get("paths") or []:
+                samples.append(str(path))
+                y_true.append(cls_idx)
+        if not samples:
+            raise ValueError(f"Model-MC test manifest contains no samples: {manifest}")
+        loader = project_loader or load_project
+        with _project_cwd(project_json):
+            project = loader(project_json)
+        train_paths = [
+            str(path)
+            for _label, paths in project.get_resolved_groups()
+            for path in (paths or [])
+        ]
+        train_resolved = {str(Path(path).resolve()) for path in train_paths}
+        test_resolved = {str(Path(path).resolve()) for path in samples}
+        overlap = sorted(train_resolved & test_resolved)
+        if overlap:
+            raise ValueError(
+                "Model-MC train/test partitions overlap; refusing to score test metrics. "
+                f"First overlap(s): {overlap[:5]}"
+            )
+        return samples, np.asarray(y_true, dtype=np.int32)
+
+    if partition == "train":
+        loader = project_loader or load_project
+        with _project_cwd(project_json):
+            project = loader(project_json)
+        samples = []
+        y_true = []
+        for cls_idx, (_label, paths) in enumerate(project.get_resolved_groups()):
+            if cls_idx >= len(class_names):
+                continue
+            for path in paths:
+                samples.append(str(path))
+                y_true.append(cls_idx)
+        if not samples:
+            raise ValueError(f"Model-MC training partition contains no samples: {project_json}")
+        return samples, np.asarray(y_true, dtype=np.int32)
+
     if predictor_cfg is None:
         predictor_cfg = resolve_predictor_config(project_json)
     samples: List[str] = []

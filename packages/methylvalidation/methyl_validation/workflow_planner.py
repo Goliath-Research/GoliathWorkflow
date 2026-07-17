@@ -185,10 +185,13 @@ def _build_task_config(
         "monteCarloRunsRoot": str(monte_carlo_runs_root.resolve()),
     }
     if val_control_csv is not None:
+        payload["testControlCsv"] = str(val_control_csv)
         payload["valControlCsv"] = str(val_control_csv)
     if val_disease_csv is not None:
+        payload["testDiseaseCsv"] = str(val_disease_csv)
         payload["valDiseaseCsv"] = str(val_disease_csv)
     if val_groups_json is not None:
+        payload["testGroupsJson"] = str(val_groups_json)
         payload["valGroupsJson"] = str(val_groups_json)
     if c1 is not None:
         payload["centroidGroup1Override"] = str(c1)

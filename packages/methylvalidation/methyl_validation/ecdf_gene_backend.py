@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import pickle
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -123,6 +124,7 @@ def predict_ecdf_gene_ovr_from_project(
     project_json: str | Path,
     model_path: str | Path,
     output_dir: str | Path,
+    evaluation_partition: Optional[str] = None,
 ) -> Dict[str, Any]:
     with open(model_path, "rb") as f:
         package = pickle.load(f)
@@ -140,7 +142,12 @@ def predict_ecdf_gene_ovr_from_project(
     if frozen_gene_panel is None or not hasattr(frozen_gene_panel, "columns"):
         raise ValueError("Gene ECDF package missing raw_gene.frozen_gene_panel")
 
-    eval_paths, eval_y = _build_predictor_eval_paths(project_json, class_names)
+    partition = str(evaluation_partition or "").strip().lower()
+    eval_paths, eval_y = _build_predictor_eval_paths(
+        project_json,
+        class_names,
+        evaluation_partition=partition or None,
+    )
     if not eval_paths:
         raise ValueError("No evaluation paths resolved for gene ECDF predictor")
 
@@ -164,7 +171,8 @@ def predict_ecdf_gene_ovr_from_project(
 
     out_dir = Path(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    pred_csv = out_dir / "predictions.csv"
+    pred_name = f"{partition}_predictions.csv" if partition in {"train", "test"} else "predictions.csv"
+    pred_csv = out_dir / pred_name
     df = pd.DataFrame(
         {
             "sample": [str(p) for p in eval_paths],
@@ -184,12 +192,20 @@ def predict_ecdf_gene_ovr_from_project(
         "n_samples": int(len(df)),
         "n_classes": int(len(class_names)),
         "class_names": [str(x) for x in class_names],
+        "evaluation_partition": partition or "unspecified",
         "probability_semantics": {
             "posterior_source": "gene_ecdf_ovr_softmax",
             "evidence_columns": [f"evidence_class{i}" for i in range(len(class_names))],
             "note": "evidence_class* are pre-softmax OvR log-evidence diagnostics, not p-values.",
         },
     }
+    if partition in {"train", "test"}:
+        train_count = sum(
+            len(paths or []) for _label, paths in load_project(project_json).get_resolved_groups()
+        )
+        metrics["n_train_samples"] = int(train_count)
+        metrics["n_test_samples"] = int(len(df)) if partition == "test" else None
+        metrics["train_test_overlap_count"] = 0 if partition == "test" else None
     if "expected_class" in df.columns:
         y_true = df["expected_class"].to_numpy(dtype=int)
         y_pred = df["prediction"].to_numpy(dtype=int)
@@ -201,9 +217,13 @@ def predict_ecdf_gene_ovr_from_project(
         )
         metrics.update(scored)
 
-    metrics_path = out_dir / "validation_metrics.json"
+    metrics_name = f"{partition}_metrics.json" if partition in {"train", "test"} else "validation_metrics.json"
+    metrics_path = out_dir / metrics_name
     with open(metrics_path, "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=2)
+    if partition == "test":
+        shutil.copy2(pred_csv, out_dir / "predictions.csv")
+        shutil.copy2(metrics_path, out_dir / "validation_metrics.json")
     report_path = out_dir / "prediction_report.json"
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(

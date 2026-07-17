@@ -100,6 +100,50 @@ def test_ecdf_second_stage_covariates_only(tmp_path: Path):
     assert "prediction_refined" in pred.columns
 
 
+def test_ecdf_second_stage_fits_train_and_scores_disjoint_test(tmp_path: Path):
+    project = _minimal_project(tmp_path)
+    pred_dir = tmp_path / "predictors"
+    clf_dir = tmp_path / "classifiers"
+    _write_predictions(pred_dir / "train_predictions.csv", n=8)
+    _write_predictions(pred_dir / "test_predictions.csv", n=4)
+    test_df = pd.read_csv(pred_dir / "test_predictions.csv")
+    test_df["sample"] = [f"T{i}" for i in range(len(test_df))]
+    test_df["sample_path"] = [str(tmp_path / f"T{i}") for i in range(len(test_df))]
+    test_df.to_csv(pred_dir / "test_predictions.csv", index=False)
+    cov_csv = tmp_path / "covariates.csv"
+    _write_covariates(
+        cov_csv,
+        [f"S{i}" for i in range(8)] + [f"T{i}" for i in range(4)],
+    )
+
+    out = train_and_apply_ecdf_second_stage(
+        project_json=project,
+        predictor_output_dir=pred_dir,
+        classifier_output_dir=clf_dir,
+        params=EcdfSecondStageParams(
+            include_observed_hybrid=False,
+            covariates_path=str(cov_csv),
+            covariate_id_column="sample_id",
+            covariate_numeric_columns=["age", "bmi"],
+            covariates_strict_join=True,
+        ),
+    )
+
+    assert out["test_predictions_csv"] == str(pred_dir / "test_predictions.csv")
+    assert len(pd.read_csv(pred_dir / "train_predictions.csv")) == 8
+    assert len(pd.read_csv(pred_dir / "test_predictions.csv")) == 4
+    test_metrics = json.loads(
+        (pred_dir / "test_metrics.json").read_text(encoding="utf-8")
+    )
+    assert test_metrics["evaluation_partition"] == "test"
+    assert test_metrics["n_train_samples"] == 8
+    assert test_metrics["n_test_samples"] == 4
+    assert test_metrics["train_test_overlap_count"] == 0
+    assert (pred_dir / "validation_metrics.json").read_text(encoding="utf-8") == (
+        pred_dir / "test_metrics.json"
+    ).read_text(encoding="utf-8")
+
+
 def test_ecdf_second_stage_strict_join_missing_ids(tmp_path: Path):
     project = _minimal_project(tmp_path)
     pred_dir = tmp_path / "predictors"

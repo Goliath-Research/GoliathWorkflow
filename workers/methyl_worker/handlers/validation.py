@@ -579,8 +579,24 @@ def _handle_validation_post_model_validation(
     output_dir.mkdir(parents=True, exist_ok=True)
     predictor_output_dir = output_dir / "predictors"
     if layout == "binary":
-        val_control_csv = Path(input_json.get("valControlCsv") or mc_root / "val_control.csv")
-        val_disease_csv = Path(input_json.get("valDiseaseCsv") or mc_root / "val_disease.csv")
+        raw_test_control = input_json.get("testControlCsv") or input_json.get("valControlCsv")
+        raw_test_disease = input_json.get("testDiseaseCsv") or input_json.get("valDiseaseCsv")
+        val_control_csv = Path(
+            raw_test_control
+            or (
+                mc_root / "test_control.csv"
+                if (mc_root / "test_control.csv").is_file()
+                else mc_root / "val_control.csv"
+            )
+        )
+        val_disease_csv = Path(
+            raw_test_disease
+            or (
+                mc_root / "test_disease.csv"
+                if (mc_root / "test_disease.csv").is_file()
+                else mc_root / "val_disease.csv"
+            )
+        )
         if not val_control_csv.is_file() or not val_disease_csv.is_file():
             raise RuntimeError(
                 f"post_model_validation binary requires val cohort CSVs "

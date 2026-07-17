@@ -75,6 +75,30 @@
       "description": "Deprecated alias for outputDir; retained for existing compiled workflows.",
       "title": "Rundir"
     },
+    "testControlCsv": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Testcontrolcsv"
+    },
+    "testDiseaseCsv": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Testdiseasecsv"
+    },
     "testGroupsJson": {
       "anyOf": [
         {
@@ -109,6 +133,7 @@
         }
       ],
       "default": null,
+      "description": "Deprecated alias for testControlCsv.",
       "title": "Valcontrolcsv"
     },
     "valDiseaseCsv": {
@@ -121,6 +146,7 @@
         }
       ],
       "default": null,
+      "description": "Deprecated alias for testDiseaseCsv.",
       "title": "Valdiseasecsv"
     }
   },

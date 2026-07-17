@@ -8,6 +8,7 @@ and/or covariates (``fit_covariates``) into a logistic refiner.
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -21,7 +22,8 @@ from sklearn.metrics import balanced_accuracy_score
 from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
 
-from .covariate_preprocessor import fit_covariates
+from .classification_metrics import compute_validation_metrics
+from .covariate_preprocessor import fit_covariates, transform_covariates
 from .model_bundle import build_model_feature_bundle, load_bundle_dmp_index
 from .observed_feature_builder import (
     apply_feature_fill_values,
@@ -328,14 +330,17 @@ def train_and_apply_ecdf_second_stage(
     classifier_output_dir = Path(classifier_output_dir).resolve()
     classifier_output_dir.mkdir(parents=True, exist_ok=True)
 
-    pred_csv = predictor_output_dir / "predictions.csv"
-    if not pred_csv.is_file():
-        raise FileNotFoundError(f"Missing predictions.csv under {predictor_output_dir}")
-    df = pd.read_csv(pred_csv)
+    train_pred_csv = predictor_output_dir / "train_predictions.csv"
+    test_pred_csv = predictor_output_dir / "test_predictions.csv"
+    if not train_pred_csv.is_file():
+        train_pred_csv = predictor_output_dir / "predictions.csv"
+    if not train_pred_csv.is_file():
+        raise FileNotFoundError(f"Missing train_predictions.csv under {predictor_output_dir}")
+    df = pd.read_csv(train_pred_csv)
     if "expected_class" not in df.columns:
-        raise ValueError("Second-stage scorer requires expected_class column in predictions.csv.")
+        raise ValueError("Second-stage scorer requires expected_class column in train_predictions.csv.")
     if "sample" not in df.columns:
-        raise ValueError("Second-stage scorer requires sample column in predictions.csv.")
+        raise ValueError("Second-stage scorer requires sample column in train_predictions.csv.")
 
     prob_cols = _prob_columns(df)
     X_prob = df[prob_cols].astype(np.float32).to_numpy()
@@ -355,6 +360,9 @@ def train_and_apply_ecdf_second_stage(
     }
 
     bundle_h5: Optional[Path] = None
+    feat = None
+    anchors = None
+    fill_values = None
     if params.include_observed_hybrid:
         bundle_dir = project_json.parent / "model_bundle"
         bundle_h5 = _ensure_bundle_h5(project_json, bundle_dir)
@@ -533,15 +541,165 @@ def train_and_apply_ecdf_second_stage(
     df["prob_refined_class0"] = probs[:, 0].astype(float)
     df["prob_refined_class1"] = probs[:, 1].astype(float)
     df["prediction_refined"] = y_hat.astype(int)
-    df.to_csv(pred_csv, index=False)
+    df.to_csv(train_pred_csv, index=False)
 
     model_path = classifier_output_dir / "ecdf-second-stage.joblib"
     joblib.dump(clf, model_path)
+
+    train_metrics_path = predictor_output_dir / "train_metrics.json"
+    train_refined = compute_validation_metrics(
+        y_fit,
+        y_hat[valid],
+        ["class0", "class1"],
+    )
+    train_payload = (
+        json.loads(train_metrics_path.read_text(encoding="utf-8"))
+        if train_metrics_path.is_file()
+        else {}
+    )
+    train_payload.update(train_refined)
+    train_payload.update(
+        {
+            "evaluation_partition": "train",
+            "metrics_source": "ecdf_second_stage_train",
+            "n_train_samples": int(len(y_fit)),
+        }
+    )
+    train_metrics_path.write_text(json.dumps(train_payload, indent=2) + "\n", encoding="utf-8")
+
+    test_metrics_path: Optional[Path] = None
+    if test_pred_csv.is_file():
+        test_df = pd.read_csv(test_pred_csv)
+        if "sample" not in test_df.columns or "expected_class" not in test_df.columns:
+            raise ValueError(
+                "Second-stage test application requires sample and expected_class columns."
+            )
+        test_prob_cols = _prob_columns(test_df)
+        test_blocks: List[np.ndarray] = [
+            test_df[test_prob_cols].astype(np.float32).to_numpy()
+        ]
+        test_sample_paths = _sample_paths_from_predictions(test_df, project_json)
+        test_sample_ids = [Path(str(path)).name for path in test_sample_paths]
+
+        if params.include_observed_hybrid:
+            if bundle_h5 is None or feat is None or anchors is None or fill_values is None:
+                raise RuntimeError("Observed second-stage training state was not retained.")
+            test_feat = build_observed_hybrid_feature_table(
+                test_sample_paths,
+                load_bundle_dmp_index(bundle_h5),
+                min_coverage=int(max(1, params.min_coverage)),
+                include_dmp_features=bool(params.include_dmp_features),
+                include_chromosome_features=bool(params.include_chromosome_features),
+                include_dmr_features=bool(params.include_dmr_features),
+                include_gene_features=bool(params.include_gene_features),
+                dmr_window_bp=int(max(1, params.dmr_window_bp)),
+                max_dmr_features=int(max(0, params.max_dmr_features)),
+                max_gene_features=int(max(0, params.max_gene_features)),
+                healthy_reference_vector=anchors.healthy_reference_vector,
+                cancer_reference_vector=anchors.cancer_reference_vector,
+                per_cancer_reference_vectors=anchors.per_cancer_reference_vectors,
+                healthy_class_label=anchors.healthy_class_label,
+                cancer_class_labels=anchors.cancer_class_labels,
+                all_class_labels=[healthy_label] + cancer_labels,
+                anchor_strategy=anchors.anchor_strategy,
+                expected_feature_order_fingerprint=anchors.feature_order_fingerprint,
+                centroid_dir_by_class_label=centroid_dirs,
+                hist_eps=float(params.hist_eps),
+                hist_alpha=float(params.hist_alpha),
+                hist_evidence_clip_cap=float(params.hist_evidence_clip_cap),
+                hist_tail_agreement_threshold=float(params.hist_tail_agreement_threshold),
+                feature_family_set=str(params.feature_family_set),
+                chromosome_hypo_beta_threshold=params.chromosome_hypo_beta_threshold,
+                chromosome_intermediate_beta_lo=params.chromosome_intermediate_beta_lo,
+                chromosome_intermediate_beta_hi=params.chromosome_intermediate_beta_hi,
+                chromosome_distance_metrics=params.chromosome_distance_metrics,
+                chromosome_list=params.chromosome_list,
+            )
+            verify_feature_schema(
+                feat.feature_names,
+                test_feat.feature_names,
+                context="ecdf second-stage test apply",
+            )
+            test_obs_full = apply_feature_fill_values(
+                np.asarray(test_feat.X, dtype=np.float32),
+                fill_values,
+            )
+            test_blocks.append(
+                select_training_feature_matrix(
+                    test_obs_full,
+                    test_feat.feature_names,
+                    test_feat.training_feature_names,
+                )
+            )
+
+        if preprocessor is not None:
+            test_cov, _test_cov_report = transform_covariates(
+                params.covariates_path,
+                test_sample_ids,
+                preprocessor,
+                strict_join=params.covariates_strict_join,
+            )
+            if test_cov is None:
+                raise ValueError("Second-stage covariate transform returned no test matrix.")
+            test_blocks.append(np.asarray(test_cov, dtype=np.float32))
+
+        test_matrix = np.concatenate(test_blocks, axis=1)
+        if int(test_matrix.shape[1]) != int(X.shape[1]):
+            raise ValueError(
+                "Second-stage train/test feature count mismatch: "
+                f"train={X.shape[1]} test={test_matrix.shape[1]}"
+            )
+        test_probs = clf.predict_proba(test_matrix)
+        test_hat = np.asarray(np.argmax(test_probs, axis=1), dtype=np.int32)
+        test_df["prob_refined_class0"] = test_probs[:, 0].astype(float)
+        test_df["prob_refined_class1"] = test_probs[:, 1].astype(float)
+        test_df["prediction_refined"] = test_hat.astype(int)
+        test_df.to_csv(test_pred_csv, index=False)
+
+        test_y = (
+            pd.to_numeric(test_df["expected_class"], errors="coerce")
+            .fillna(-1)
+            .astype(int)
+            .to_numpy()
+        )
+        test_valid = np.isin(test_y, [0, 1])
+        test_scored = compute_validation_metrics(
+            test_y[test_valid],
+            test_hat[test_valid],
+            ["class0", "class1"],
+        )
+        test_metrics_path = predictor_output_dir / "test_metrics.json"
+        test_payload = (
+            json.loads(test_metrics_path.read_text(encoding="utf-8"))
+            if test_metrics_path.is_file()
+            else {}
+        )
+        test_payload.update(test_scored)
+        test_payload.update(
+            {
+                "evaluation_partition": "test",
+                "metrics_source": "ecdf_second_stage_test",
+                "n_train_samples": int(len(y_fit)),
+                "n_test_samples": int(np.sum(test_valid)),
+                "train_test_overlap_count": 0,
+            }
+        )
+        test_metrics_path.write_text(
+            json.dumps(test_payload, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        shutil.copy2(test_pred_csv, predictor_output_dir / "predictions.csv")
+        shutil.copy2(test_metrics_path, predictor_output_dir / "validation_metrics.json")
+
     meta = {
         "model_backend": "ecdf",
         "second_stage_type": "logistic_regression",
         "project_json": str(project_json),
         "predictor_output_dir": str(predictor_output_dir),
+        "train_predictions_csv": str(train_pred_csv),
+        "test_predictions_csv": str(test_pred_csv) if test_pred_csv.is_file() else None,
+        "train_metrics_json": str(train_metrics_path),
+        "test_metrics_json": str(test_metrics_path) if test_metrics_path else None,
         "n_features": int(X.shape[1]),
         "stack_feature_names": block_names,
         "refined_balanced_accuracy_labeled_rows": refined_balanced_accuracy,
@@ -578,7 +736,8 @@ def train_and_apply_ecdf_second_stage(
     return {
         "model_path": str(model_path),
         "metadata_path": str(meta_path),
-        "predictions_csv": str(pred_csv),
+        "train_predictions_csv": str(train_pred_csv),
+        "test_predictions_csv": str(test_pred_csv) if test_pred_csv.is_file() else None,
         "n_rows": int(df.shape[0]),
         "n_features": int(X.shape[1]),
         "include_observed_hybrid": bool(params.include_observed_hybrid),

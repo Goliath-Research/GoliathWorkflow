@@ -137,8 +137,16 @@ class PostModelValidationTaskInput(BaseModel):
         description="Deprecated alias for outputDir; retained for existing compiled workflows.",
     )
     productionOutputDir: Optional[str] = None
-    valControlCsv: Optional[str] = None
-    valDiseaseCsv: Optional[str] = None
+    testControlCsv: Optional[str] = None
+    testDiseaseCsv: Optional[str] = None
+    valControlCsv: Optional[str] = Field(
+        default=None,
+        description="Deprecated alias for testControlCsv.",
+    )
+    valDiseaseCsv: Optional[str] = Field(
+        default=None,
+        description="Deprecated alias for testDiseaseCsv.",
+    )
     testGroupsJson: Optional[str] = None
 
 

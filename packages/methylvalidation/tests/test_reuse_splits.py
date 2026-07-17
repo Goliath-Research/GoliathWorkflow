@@ -56,6 +56,12 @@ def test_try_load_binary_matches_generated_run(tmp_path: Path) -> None:
         val_d,
         str(samples),
     )
+    assert (run_dir / "test_control.csv").is_file()
+    assert (run_dir / "test_disease.csv").is_file()
+    assert (run_dir / "test_groups.json").is_file()
+    assert (run_dir / "val_control.csv").read_text(encoding="utf-8") == (
+        run_dir / "test_control.csv"
+    ).read_text(encoding="utf-8")
 
     loaded = try_load_binary_split_from_run_dir(
         run_dir, control_paths, disease_paths, str(samples)

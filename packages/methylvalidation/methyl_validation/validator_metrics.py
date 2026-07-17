@@ -422,10 +422,14 @@ def write_metrics_distribution_plotly(df: pd.DataFrame, path: str | Path) -> Non
 def _find_validation_metrics_json_under_run(run_dir: Path) -> Optional[Path]:
     predictors = run_dir / "predictors"
     if predictors.is_dir():
+        for path in predictors.rglob("test_metrics.json"):
+            return path
         for path in predictors.rglob("validation_metrics.json"):
             return path
     for p in run_dir.glob("**/predictors"):
         if p.is_dir():
+            for path in p.rglob("test_metrics.json"):
+                return path
             for path in p.rglob("validation_metrics.json"):
                 return path
     return None
@@ -464,7 +468,9 @@ def iteration_scalar_metrics_from_run_dir(run_dir: Path) -> Dict[str, Any]:
         try:
             out = dict(_scalar_metrics_from_dict(load_metrics_from_json(vm)))
             if out:
-                out["metrics_source"] = "predictor"
+                out["metrics_source"] = (
+                    "model_test" if vm.name == "test_metrics.json" else "predictor"
+                )
             return out
         except Exception:
             pass
