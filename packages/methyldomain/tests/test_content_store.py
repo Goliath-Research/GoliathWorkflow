@@ -284,6 +284,51 @@ def test_plan_iterations_preserves_run_relative_paths(tmp_path: Path, monkeypatc
         assert train_link.read_text(encoding="utf-8").startswith("sample")
 
 
+def test_caas_skip_relinks_after_product_tree_wipe(tmp_path: Path, monkeypatch) -> None:
+    """Manifests must record CAAS blob paths so verify/relink works without product files."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    project_root = tmp_path / "Study"
+    stability_dir = project_root / "monte_carlo_runs" / "stability"
+    stability_dir.mkdir(parents=True)
+    summary = stability_dir / "stability_summary.json"
+    summary.write_text('{"n": 1}', encoding="utf-8")
+
+    record = _record(
+        artifacts=[ArtifactRef(path=str(summary), bytes=summary.stat().st_size)],
+        input_sig="sig-wipe",
+        output_sig="out-wipe",
+    )
+    committed = commit_artifacts_to_store(
+        project_root,
+        "validation.stability",
+        "key-wipe",
+        record,
+        output_dir=stability_dir,
+    )
+    entry_dir = caas_entry_dir(project_root, "validation.stability", "key-wipe")
+    assert all(Path(a.path).is_relative_to(entry_dir.resolve()) for a in committed.artifacts)
+
+    import shutil
+
+    shutil.rmtree(stability_dir)
+    stability_dir.mkdir(parents=True)
+
+    from methyl_domain.content_store import read_caas_entry, verify_entry_artifacts
+
+    entry = read_caas_entry(project_root, "validation.stability", "key-wipe")
+    assert entry is not None
+    assert verify_entry_artifacts(entry)
+    linked = link_entry_into_place(
+        project_root,
+        "validation.stability",
+        "key-wipe",
+        output_dir=stability_dir,
+    )
+    assert linked is not None
+    assert (stability_dir / "stability_summary.json").is_symlink()
+    assert json.loads((stability_dir / "stability_summary.json").read_text()) == {"n": 1}
+
+
 def test_plan_iterations_recommit_through_existing_caas_symlinks_does_not_steal(
     tmp_path: Path, monkeypatch
 ) -> None:

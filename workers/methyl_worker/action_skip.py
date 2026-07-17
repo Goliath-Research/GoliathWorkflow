@@ -386,12 +386,65 @@ def verify_artifacts(artifacts: List[ArtifactRef]) -> bool:
     return True
 
 
+def _iteration_project_path_candidate(item: Mapping[str, Any]) -> Optional[Path]:
+    """Prefer a readable per-run ``project.json`` without requiring CAAS blob paths."""
+    candidates: List[Path] = []
+    project_path = item.get("projectPath")
+    if project_path:
+        candidates.append(Path(str(project_path)))
+    run_dir = item.get("runDir")
+    if run_dir:
+        candidates.append(Path(str(run_dir)) / "project.json")
+    for candidate in candidates:
+        # Exist as real file or live symlink (Path.is_file follows the leaf).
+        if candidate.is_file():
+            return candidate.parent.resolve() / candidate.name
+    return None
+
+
+def _heal_plan_iteration_product_paths(
+    record: ActionExecutionRecord,
+) -> ActionExecutionRecord:
+    """Rewrite iteration projectPath values to live product paths after CAAS relink."""
+    task_output = dict(record.task_output or {})
+    iterations = task_output.get("iterations") or []
+    if not iterations:
+        return record
+    healed: List[Any] = []
+    changed = False
+    for item in iterations:
+        if not isinstance(item, Mapping):
+            healed.append(item)
+            continue
+        row = dict(item)
+        candidate = _iteration_project_path_candidate(row)
+        if candidate is not None:
+            new_path = str(candidate)
+            if row.get("projectPath") != new_path:
+                row["projectPath"] = new_path
+                changed = True
+            # Keep taskConfig.projectJson aligned when present.
+            task_config = row.get("taskConfig")
+            if isinstance(task_config, Mapping):
+                tc = dict(task_config)
+                if tc.get("projectJson") != new_path:
+                    tc["projectJson"] = new_path
+                    row["taskConfig"] = tc
+                    changed = True
+        healed.append(row)
+    if not changed:
+        return record
+    task_output["iterations"] = healed
+    return record.model_copy(update={"task_output": task_output})
+
+
 def _plan_iteration_project_paths_ready(record: ActionExecutionRecord) -> bool:
     """True when every planned iteration's ``projectPath`` exists on disk.
 
     CAAS manifests can retain artifact blobs while ``task_output.iterations[].projectPath``
-    still points at a stolen/deleted sibling content-key path. Centroid then fails with
-    "Project config not found". Refuse skip/replay in that case so plan_iterations re-runs.
+    still points at a stolen/deleted sibling content-key path. After relink we heal to
+    ``runDir/project.json`` when possible; only refuse skip when no readable project
+    remains for an iteration.
     """
     iterations = (record.task_output or {}).get("iterations") or []
     if not iterations:
@@ -399,8 +452,7 @@ def _plan_iteration_project_paths_ready(record: ActionExecutionRecord) -> bool:
     for item in iterations:
         if not isinstance(item, Mapping):
             return False
-        project_path = item.get("projectPath")
-        if not project_path or not Path(str(project_path)).is_file():
+        if _iteration_project_path_candidate(item) is None:
             return False
     return True
 
@@ -476,15 +528,15 @@ def _maybe_replay_from_caas(
     if linked is None:
         return None
 
-    if entry.action_name == "validation.plan_iterations" and not _plan_iteration_project_paths_ready(
-        linked
-    ):
-        logger.info(
-            "Not skipping %s: CAAS content_key %s has missing iteration projectPath files",
-            entry.action_name,
-            content_key[:12],
-        )
-        return None
+    if entry.action_name == "validation.plan_iterations":
+        linked = _heal_plan_iteration_product_paths(linked)
+        if not _plan_iteration_project_paths_ready(linked):
+            logger.info(
+                "Not skipping %s: CAAS content_key %s has missing iteration projectPath files",
+                entry.action_name,
+                content_key[:12],
+            )
+            return None
 
     try:
         action_results_dir(output_dir).mkdir(parents=True, exist_ok=True)

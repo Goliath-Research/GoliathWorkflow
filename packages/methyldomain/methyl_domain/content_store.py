@@ -346,37 +346,71 @@ def _move_artifacts_into_entry(
     return updated
 
 
+def _resolve_blob_in_entry(ref_path: Path, entry_dir: Path) -> Optional[Path]:
+    """Map an artifact ref to a real file under ``entry_dir`` (CAAS blob)."""
+    entry_dir = entry_dir.resolve()
+    path = Path(ref_path).expanduser()
+
+    # Already a blob path under this entry.
+    try:
+        if path.is_file() and not path.is_symlink() and _is_under(path, entry_dir):
+            return path.resolve()
+    except OSError:
+        pass
+
+    # Product symlink / path that resolves into this entry.
+    try:
+        if path.exists():
+            resolved = path.resolve()
+            if resolved.is_file() and _is_under(resolved, entry_dir):
+                return resolved
+    except OSError:
+        pass
+
+    # Recover from durable entry layout when the product path was wiped or a prior
+    # buggy commit recorded product locations in the CAAS manifest.
+    run_rel = _caas_run_relative(path)
+    if run_rel is not None and (entry_dir / run_rel).is_file():
+        return (entry_dir / run_rel).resolve()
+    # Prefer preserving run_####/name when the abs path contains that segment.
+    parts = path.parts
+    for i, part in enumerate(parts):
+        if part.startswith("run_") and i + 1 < len(parts):
+            rel = Path(*parts[i:])
+            if (entry_dir / rel).is_file():
+                return (entry_dir / rel).resolve()
+            break
+    candidate = entry_dir / path.name
+    if candidate.is_file():
+        return candidate.resolve()
+    return None
+
+
 def _relink_artifacts_from_entry(
     artifacts: Sequence[ArtifactRef],
     entry_dir: Path,
     *,
     output_dir: Optional[Path] = None,
 ) -> List[ArtifactRef]:
-    """Create symlinks at canonical artifact paths pointing into entry_dir."""
+    """Create symlinks at canonical artifact paths pointing into entry_dir.
+
+    Manifest artifact paths stay on the durable CAAS blobs under ``entry_dir`` so
+    ``verify_entry_artifacts`` / skip-replay still work after the product tree is
+    wiped. Product locations are restored as relative symlinks when ``output_dir``
+    is provided.
+    """
     entry_dir = entry_dir.resolve()
     relinked: List[ArtifactRef] = []
     for ref in artifacts:
-        stored = Path(ref.path)
-        if not stored.is_file():
-            if stored.is_symlink():
-                stored = stored.resolve()
-            if not stored.is_file():
-                continue
-        try:
-            rel = stored.relative_to(entry_dir)
-        except ValueError:
-            rel = Path(stored.name)
+        stored = _resolve_blob_in_entry(Path(ref.path), entry_dir)
+        if stored is None:
+            continue
+        rel = stored.relative_to(entry_dir)
         if output_dir is not None:
-            canonical = output_dir / rel
-        else:
-            # Prefer the non-followed absolute leaf path when the recorded path was a
-            # product location (avoids rewriting task consumers to CAAS blob paths).
-            canonical = Path(ref.path)
-        _ensure_symlink(canonical, stored)
-        canonical_str = str(canonical.parent.resolve() / canonical.name)
+            _ensure_symlink(Path(output_dir) / rel, stored)
         relinked.append(
             ArtifactRef(
-                path=canonical_str,
+                path=str(stored.resolve()),
                 kind=ref.kind,
                 bytes=stored.stat().st_size,
                 sha256=ref.sha256,
@@ -485,9 +519,13 @@ def commit_artifacts_to_store(
                     paths_ok = False
                     break
                 project_path = item.get("projectPath")
-                if not project_path or not Path(str(project_path)).is_file():
-                    paths_ok = False
-                    break
+                run_dir = item.get("runDir")
+                if project_path and Path(str(project_path)).is_file():
+                    continue
+                if run_dir and (Path(str(run_dir)) / "project.json").is_file():
+                    continue
+                paths_ok = False
+                break
             if paths_ok:
                 return reused
             logger.info(
