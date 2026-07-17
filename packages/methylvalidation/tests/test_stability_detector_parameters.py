@@ -20,6 +20,50 @@ def _write_discovery_csv(path: Path, rows: list[dict]) -> None:
     pd.DataFrame(rows).to_csv(path, index=False)
 
 
+def _write_dmp_export_meta(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_run_balanced_accuracy_reads_featurecuts_validation_summary(tmp_path):
+    """FeatureCuts DMP-modeling runs report BA in dmp-export meta, not result*.json."""
+    run_dir = tmp_path / "run_0001"
+    det = run_dir / "detections" / "all" / "PCa"
+    # Detector result*.json carries no usable balanced_accuracy for this mode.
+    _write_results_json(
+        det / "results-1.json",
+        {"n_dmps_exported": 1000, "optimization_validation": None},
+    )
+    _write_dmp_export_meta(
+        det / "dmp-export-1.meta.json",
+        {"featurecuts_validation_summary": {"balanced_accuracy": 0.95}},
+    )
+    _write_dmp_export_meta(
+        det / "dmp-export-2.meta.json",
+        {"featurecuts_validation_summary": {"balanced_accuracy": 0.97}},
+    )
+
+    ba = run_balanced_accuracy(run_dir)
+    assert ba is not None
+    assert abs(ba - 0.96) < 1e-9
+
+
+def test_run_balanced_accuracy_falls_back_to_classifier_panel_audit(tmp_path):
+    """When featurecuts_validation_summary lacks BA, use classifier_panel_audit target."""
+    run_dir = tmp_path / "run_0001"
+    det = run_dir / "detections" / "all" / "PCa"
+    _write_dmp_export_meta(
+        det / "dmp-export-1.meta.json",
+        {
+            "featurecuts_validation_summary": None,
+            "classifier_panel_audit": {"balanced_accuracy_at_k_target": 0.93},
+        },
+    )
+    ba = run_balanced_accuracy(run_dir)
+    assert ba is not None
+    assert abs(ba - 0.93) < 1e-9
+
+
 def test_extract_detector_parameters_for_run_summarizes_multichromosome_results(tmp_path):
     run_dir = tmp_path / "run_0001"
     base_cfg = {
