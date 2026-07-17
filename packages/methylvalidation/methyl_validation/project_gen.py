@@ -121,6 +121,34 @@ def prepare_model_mc_backend_run_from_shared(
         raise FileNotFoundError(f"Missing shared project.json: {shared_project_path}")
     with open(shared_project_path, encoding="utf-8") as f:
         payload = json.load(f)
+
+    # Model-MC reuses frozen production support artifacts for non-DMP feature
+    # families. Materialize stable links beside the backend bundle because
+    # package-level model builders do not re-resolve study/profile config.
+    model_bundle_cfg = (
+        (payload.get("actionConfig") or {}).get("model_bundle") or {}
+        if isinstance(payload, dict)
+        else {}
+    )
+    backend_bundle_dir = backend_run_dir / "model_bundle"
+    for config_key in (
+        "mapper_annotation_csv",
+        "stability_gene_panel",
+        "fixed_gene_panel",
+        "fixed_gene_features",
+    ):
+        configured_path = model_bundle_cfg.get(config_key)
+        if not configured_path:
+            continue
+        source = Path(str(configured_path))
+        if not source.is_file():
+            continue
+        backend_bundle_dir.mkdir(parents=True, exist_ok=True)
+        destination = backend_bundle_dir / source.name
+        if destination.exists() or destination.is_symlink():
+            _replace_path(destination)
+        destination.symlink_to(source.resolve())
+
     payload["output_base"] = str(backend_root)
     payload["project_name"] = backend_run_dir.name
     payload.pop("step_config", None)

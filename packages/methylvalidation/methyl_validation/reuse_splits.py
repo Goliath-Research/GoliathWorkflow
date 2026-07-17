@@ -31,6 +31,56 @@ def _partition_matches_pool(train: List[str], val: List[str], pool: List[str]) -
     return rt | rv == rp
 
 
+def resolve_run_metadata_dir(run_dir: Path) -> Path:
+    """Resolve split metadata from the run or its recorded planner CAAS provenance."""
+    if (run_dir / "project.json").is_file():
+        return run_dir
+
+    run_id = run_dir.name
+    study_root = run_dir.parent.parent
+    action_logs = [
+        run_dir / "action_run_log.jsonl",
+        run_dir.parent / "action_run_log.jsonl",
+    ]
+    for action_log in action_logs:
+        if not action_log.is_file():
+            continue
+        try:
+            rows = action_log.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in reversed(rows):
+            try:
+                output = json.loads(line).get("outputs") or {}
+            except (json.JSONDecodeError, AttributeError):
+                continue
+            values = [output.get("manifest_path")]
+            values.extend(
+                artifact.get("path")
+                for artifact in output.get("artifacts") or []
+                if isinstance(artifact, dict)
+            )
+            for value in values:
+                if not isinstance(value, str) or "/validation_plan_iterations/" not in value:
+                    continue
+                parts = Path(value).parts
+                try:
+                    marker = parts.index("validation_plan_iterations")
+                    cache_key = parts[marker + 1]
+                except (ValueError, IndexError):
+                    continue
+                candidate = (
+                    study_root
+                    / ".caas"
+                    / "validation_plan_iterations"
+                    / cache_key
+                    / run_id
+                )
+                if (candidate / "project.json").is_file():
+                    return candidate
+    return run_dir
+
+
 def try_load_binary_split_from_run_dir(
     run_dir: Path,
     control_paths: List[str],
@@ -111,7 +161,9 @@ def resolve_iteration_split(
 
     ``split_payload`` is a 4-tuple for binary layout, or ``(train_m, val_m)`` dict pair for multiclass.
     """
-    run_dir = split_source_root / f"run_{iteration_index + 1:04d}"
+    run_dir = resolve_run_metadata_dir(
+        split_source_root / f"run_{iteration_index + 1:04d}"
+    )
     if layout == "binary":
         loaded = try_load_binary_split_from_run_dir(
             run_dir, control_paths, disease_paths, samples_base_path

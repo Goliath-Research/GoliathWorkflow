@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from methyl_validation.project_gen import generate_run_project, generate_run_project_multiclass
@@ -110,6 +111,66 @@ def test_resolve_iteration_split_falls_back_when_run_missing(tmp_path: Path) -> 
 
     expected = stratified_split(control_paths, disease_paths, 0.5, seed=7)
     assert payload == expected
+
+
+def test_resolve_iteration_split_recovers_planner_metadata_from_provenance(
+    tmp_path: Path,
+) -> None:
+    samples = tmp_path / "samples"
+    for name in ("c0", "c1", "d0", "d1"):
+        (samples / name).mkdir(parents=True)
+    control_paths = [str(samples / "c0"), str(samples / "c1")]
+    disease_paths = [str(samples / "d0"), str(samples / "d1")]
+    split = stratified_split(control_paths, disease_paths, train_fraction=0.5, seed=42)
+
+    study_root = tmp_path / "study"
+    mc_root = study_root / "monte_carlo_runs"
+    source_run = mc_root / "run_0001"
+    source_run.mkdir(parents=True)
+    (source_run / "project.json").symlink_to("missing-project.json")
+
+    cache_key = "planner-cache-key"
+    cached_run = (
+        study_root
+        / ".caas"
+        / "validation_plan_iterations"
+        / cache_key
+        / "run_0001"
+    )
+    base = tmp_path / "base.json"
+    _write_minimal_binary_base_project(base, samples)
+    generate_run_project(
+        base,
+        cached_run,
+        "run_0001",
+        str(mc_root),
+        *split,
+        str(samples),
+    )
+    provenance_path = (
+        f"/legacy/site/study/.caas/validation_plan_iterations/{cache_key}/"
+        "run_0001/.action_results/pipeline_detector.json"
+    )
+    (mc_root / "action_run_log.jsonl").write_text(
+        json.dumps({"outputs": {"manifest_path": provenance_path}}) + "\n",
+        encoding="utf-8",
+    )
+
+    payload, source = resolve_iteration_split(
+        layout="binary",
+        iteration_index=0,
+        split_source_root=mc_root,
+        cohort_paths_list=[("healthy", control_paths), ("cancer", disease_paths)],
+        cohort_labels=["healthy", "cancer"],
+        control_paths=control_paths,
+        disease_paths=disease_paths,
+        train_fraction=0.5,
+        seed_i=999,
+        samples_base_path=str(samples),
+    )
+
+    assert source == "reused"
+    assert payload == split
 
 
 def test_try_load_multiclass_matches_generated_run(tmp_path: Path) -> None:

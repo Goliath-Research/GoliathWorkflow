@@ -48,7 +48,11 @@ from .project_gen import (
     infer_monte_carlo_layout,
     prepare_model_mc_backend_run_from_shared,
 )
-from .reuse_splits import resolve_iteration_split, write_split_reuse_summary
+from .reuse_splits import (
+    resolve_iteration_split,
+    resolve_run_metadata_dir,
+    write_split_reuse_summary,
+)
 from .split import load_and_resolve_sample_paths, stratified_split, stratified_split_multiclass
 from .validator_metrics import (
     build_metrics_table,
@@ -453,10 +457,10 @@ def _build_model_mc_shared_runs(
         if rid:
             primary_timings_by_run.setdefault(rid, []).append(row)
 
-    def _has_reusable_source_run(run_path: Path) -> bool:
+    def _has_reusable_source_run(run_path: Path, metadata_path: Path) -> bool:
         return (
             run_path.is_dir()
-            and (run_path / "project.json").is_file()
+            and (metadata_path / "project.json").is_file()
             and (run_path / "detections").is_dir()
             and (run_path / "centroids").is_dir()
         )
@@ -529,12 +533,15 @@ def _build_model_mc_shared_runs(
             n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
 
         source_run_dir = primary_monte_carlo_runs_root / run_id
-        can_reuse_artifacts = split_src == "reused" and _has_reusable_source_run(source_run_dir)
+        metadata_run_dir = resolve_run_metadata_dir(source_run_dir)
+        can_reuse_artifacts = split_src == "reused" and _has_reusable_source_run(
+            source_run_dir, metadata_run_dir
+        )
         if require_artifact_reuse and not can_reuse_artifacts:
             missing: List[str] = []
             if split_src != "reused":
                 missing.append("compatible primary split")
-            if not (source_run_dir / "project.json").is_file():
+            if not (metadata_run_dir / "project.json").is_file():
                 missing.append("project.json")
             if not (source_run_dir / "centroids").is_dir():
                 missing.append("centroids/")

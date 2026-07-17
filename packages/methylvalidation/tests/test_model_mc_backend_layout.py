@@ -42,6 +42,47 @@ def test_prepare_model_mc_backend_run_from_shared_routes_output_base(tmp_path: P
     assert (backend_run / "detections").is_symlink()
 
 
+def test_prepare_model_mc_backend_run_links_frozen_bundle_support(tmp_path: Path) -> None:
+    shared_run = tmp_path / "model_mc" / "shared" / "run_0001"
+    backend_root = tmp_path / "model_mc" / "ecdf"
+    backend_run = backend_root / "run_0001"
+    production_bundle = tmp_path / "production" / "model_bundle"
+    production_bundle.mkdir(parents=True)
+    mapper_annotations = production_bundle / "mapper_dmp_annotations.csv"
+    frozen_genes = production_bundle / "frozen_genes_production.csv"
+    mapper_annotations.write_text("chromosome,position\n1,10\n", encoding="utf-8")
+    frozen_genes.write_text("gene_name\nTP53\n", encoding="utf-8")
+    shared_run.mkdir(parents=True)
+    (shared_run / "project.json").write_text(
+        json.dumps(
+            {
+                "output_base": str(shared_run.parent),
+                "project_name": "run_0001",
+                "actionConfig": {
+                    "model_bundle": {
+                        "mapper_annotation_csv": str(mapper_annotations),
+                        "fixed_gene_panel": str(frozen_genes),
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    prepare_model_mc_backend_run_from_shared(
+        shared_run,
+        backend_run,
+        backend_root=backend_root,
+    )
+
+    linked_mapper = backend_run / "model_bundle" / mapper_annotations.name
+    linked_genes = backend_run / "model_bundle" / frozen_genes.name
+    assert linked_mapper.is_symlink()
+    assert linked_mapper.resolve() == mapper_annotations.resolve()
+    assert linked_genes.is_symlink()
+    assert linked_genes.resolve() == frozen_genes.resolve()
+
+
 def test_classifier_output_dir_uses_project_parent(tmp_path: Path) -> None:
     run_dir = tmp_path / "ecdf" / "run_0001"
     run_dir.mkdir(parents=True)
