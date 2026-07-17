@@ -20,7 +20,8 @@ Deploy **in order**:
 | 11a | [`wf_action_dispatch_metadata.sql`](wf_action_dispatch_metadata.sql) | Dispatch columns + 7-arg upsert + canonical `wf_repo_list_actions` |
 | 12 | [`wf_repo_create_workflow_graph.sql`](wf_repo_create_workflow_graph.sql) | Programmatic workflow definition builder |
 | 13 | [`wf_sql_collection_bindings.sql`](wf_sql_collection_bindings.sql) | Collection binding resolution at instance start |
-| 14 | [`portal_resource_profile.sql`](portal_resource_profile.sql) | Portal archive storage profiles (domain config) |
+| 14 | [`portal_resource_profile.sql`](portal_resource_profile.sql) | Portal archive storage profiles + `epimethyl-genomes` endpoint |
+| 14b | [`cfg_reference_assets_seed.sql`](cfg_reference_assets_seed.sql) | Linear / GENCODE / pangenome `cfg.reference_asset` recipes |
 | 14a | [`portal_workflow_api.sql`](portal_workflow_api.sql) | Portal workflow builder + instance lifecycle (`portal.sp_*`) |
 | 15 | [`wf_drop_platform_sample_storage.sql`](wf_drop_platform_sample_storage.sql) | Drop legacy wf.platform_sample_storage if present |
 

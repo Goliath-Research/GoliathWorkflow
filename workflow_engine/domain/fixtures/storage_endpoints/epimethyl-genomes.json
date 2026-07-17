@@ -1,0 +1,11 @@
+{
+  "name": "epimethyl-genomes",
+  "version": "1",
+  "type": "s3",
+  "bucket": "epimethyl",
+  "region": "us-east-1",
+  "endpointUrl": "https://s3.us-east-1.myqnapcloud.io",
+  "prefixBase": "genomes/",
+  "scope": "shared",
+  "credentialName": "epimethyl-archive-keys"
+}

@@ -254,18 +254,18 @@ When instance/profile sets `alignmentMode: "pangenome"` (scope flag `usePangenom
 
 ```json
 "pangenome_genome": {
-  "gbz": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.gbz",
-  "dist": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.autoindex.1.70.dist",
-  "min": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.withzip.min",
-  "zipcodes": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.zipcodes",
-  "ref_paths": "/work/genomes/pangenome/hprc-v1.1-mc-grch38.d9.paths.sub",
-  "linear_ref_fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+  "gbz": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.gbz",
+  "dist": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.autoindex.1.70.dist",
+  "min": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.withzip.min",
+  "zipcodes": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.zipcodes",
+  "ref_paths": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.paths.sub",
+  "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
 }
 ```
 
 Profile override: `actionConfig.parabricks.alignment_mode: "pangenome"`.
 
-**Staging the graph bundle:** run [`scripts/download_pangenome_hprc_grch38.sh`](../../scripts/download_pangenome_hprc_grch38.sh) on the worker/GPU node to download `hprc-v1.1-mc-grch38.d9.gbz` from the [HPRC public S3 bucket](https://github.com/human-pangenomics/hpp_pangenome_resources) and build `vg autoindex` + `ref_paths` files under `/work/genomes/pangenome/`. For WGBS, point `PANGENOME_GBZ` at your bisulfite C→T graph and re-run indexing (`SKIP_DOWNLOAD=1` or `FORCE=1`).
+**Staging the graph bundle:** run [`scripts/download_pangenome_hprc_grch38.sh`](../../scripts/download_pangenome_hprc_grch38.sh) on the worker/GPU node to download `hprc-v1.1-mc-grch38.d9.gbz` from the [HPRC public S3 bucket](https://github.com/human-pangenomics/hpp_pangenome_resources) and build `vg autoindex` + `ref_paths` files under `/work/genomes/pangenome/GRCh38/d9/1.70/`. For WGBS, point `PANGENOME_GBZ` at your bisulfite C→T graph and re-run indexing (`SKIP_DOWNLOAD=1` or `FORCE=1`).
 
 Implementation: [`workers/methyl_worker/giraffe_runner.py`](../../workers/methyl_worker/giraffe_runner.py).
 

@@ -41,6 +41,19 @@ WHERE NOT EXISTS (
   SELECT 1 FROM cfg.storage_endpoint WHERE name = 'epimethyl-archive' AND version = '1'
 );
 
+INSERT INTO cfg.storage_endpoint (name, version, status, content_hash, provider, location_json, credential_name)
+SELECT
+  'epimethyl-genomes',
+  '1',
+  'published',
+  md5('{"type":"s3","bucket":"epimethyl","region":"us-east-1","endpointUrl":"https://s3.us-east-1.myqnapcloud.io","prefixBase":"genomes/","scope":"shared"}'),
+  's3',
+  '{"type":"s3","bucket":"epimethyl","region":"us-east-1","endpointUrl":"https://s3.us-east-1.myqnapcloud.io","prefixBase":"genomes/","scope":"shared"}'::jsonb,
+  'epimethyl-archive-keys'
+WHERE NOT EXISTS (
+  SELECT 1 FROM cfg.storage_endpoint WHERE name = 'epimethyl-genomes' AND version = '1'
+);
+
 INSERT INTO portal.resource_profile (profile_key, profile_type, profile_json, status)
 SELECT
   'epimethyl-samples',

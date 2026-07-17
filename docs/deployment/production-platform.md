@@ -77,8 +77,28 @@ Dev/bootstrap may still use direct-DB `register_worker.sh` on a **trusted** host
 
 1. Mount fast shared storage at `/work` on the gateway VM and every GPU worker.
 2. Ensure study trees and samples layouts exist (`/work/projects/<study>/`, `/work/samples/`).
-3. Install site manifest: `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`).
-4. Provision genomes under `/work/genomes/` (see production_runbook genome sync notes).
+3. Install site manifest: `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`), including **`reference_selection`** pins and concrete paths (see [`site_grch38.example.json`](../../tools/methyl-config-editor/configs/site_grch38.example.json)).
+4. Provision **selected** genomes under `/work/genomes/` from company storage when local pins are incomplete:
+
+```
+epimethyl/genomes/          # myQNAPcloud (same bucket as samples/)
+  linear/GRCh38/ensembl-114/
+  annotation/gencode/v49/
+  pangenome/GRCh38/d9/1.70/
+        ↓  sync once onto shared /work
+/work/genomes/              # same tree
+```
+
+```bash
+# Prefer skip when selected paths already exist:
+export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=...
+scripts/provision_selected_genomes.sh          # verify; sync only if missing
+# or force / dry-run:
+scripts/provision_selected_genomes.sh --dry-run
+scripts/sync_genomes_to_s3.sh --download       # full inventory mirror
+```
+
+Site pins (not “latest in bucket”) decide which versions workers use. Portal wires `samples/` via `epimethyl-archive`; genomes use sibling endpoint `epimethyl-genomes` (`prefixBase: genomes/`) plus `cfg.reference_asset` recipes (`methyl-cfg provision-assets --selected-only`). Details: [production_runbook.md](production_runbook.md), [config-registry.md](../architecture/config-registry.md).
 
 ---
 

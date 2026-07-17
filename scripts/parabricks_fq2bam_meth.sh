@@ -8,7 +8,7 @@
 #   METHYL_PARABRICKS_IMAGE          Required unless --image is passed
 #   METHYL_PARABRICKS_GPU_FLAGS      Default: --gpus all
 #   METHYL_PARABRICKS_BWA_THREADS    Default: 16
-#   METHYL_GENOMES_DIR               Default: /work/genomes/human_genome/release-114
+#   METHYL_GENOMES_DIR               Default: /work/genomes/linear/GRCh38/ensembl-114
 #   METHYL_REFERENCE_FASTA           Overrides default GRCh38 primary assembly path
 
 set -euo pipefail

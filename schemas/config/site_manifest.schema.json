@@ -4,6 +4,25 @@
   "description": "Site-wide infrastructure defaults for MethylPipeline (genomes, caches, cluster settings). Not study-specific.",
   "type": "object",
   "properties": {
+    "reference_selection": {
+      "type": "object",
+      "description": "Pinned inventory paths under /work/genomes (and epimethyl/genomes/). Inventory may hold many versions; only these pins are active. Operators set this at site/cfg — not Python defaults.",
+      "properties": {
+        "linear": {
+          "type": "string",
+          "description": "Relative path under genomes/ for the linear FASTA+indexes (e.g. linear/GRCh38/ensembl-114)"
+        },
+        "gene_annotation": {
+          "type": "string",
+          "description": "Relative path under genomes/ for GENCODE GTF (e.g. annotation/gencode/v49)"
+        },
+        "pangenome": {
+          "type": "string",
+          "description": "Relative path under genomes/ for the Giraffe bundle (e.g. pangenome/GRCh38/d9/1.70)"
+        }
+      },
+      "additionalProperties": false
+    },
     "reference_genome": {
       "type": "object",
       "properties": {

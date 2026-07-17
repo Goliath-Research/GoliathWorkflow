@@ -173,12 +173,27 @@ def _cmd_scaffold_action(args: argparse.Namespace) -> int:
 
 
 def _cmd_provision(args: argparse.Namespace) -> int:
-    from cfg.provision import provision_all_published, provision_asset
+    from cfg.provision import (
+        provision_all_published,
+        provision_asset,
+        provision_selected_from_site,
+    )
 
     store = _open_store(args.store_dir)
-    if args.name:
+    if args.selected_only:
+        result = provision_selected_from_site(
+            store,
+            work_root=args.work_root,
+            site_name=args.site,
+            dry_run=args.dry_run,
+        )
+    elif args.name:
         result = provision_asset(
-            store, args.name, work_root=args.work_root, dry_run=args.dry_run
+            store,
+            args.name,
+            work_root=args.work_root,
+            version=args.version,
+            dry_run=args.dry_run,
         )
     else:
         result = provision_all_published(store, args.work_root, dry_run=args.dry_run)
@@ -375,7 +390,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=_cmd_scaffold_action)
 
     s = sub.add_parser("provision-assets", help="Run reference_asset provision recipes")
-    s.add_argument("--name", default=None)
+    s.add_argument("--name", default=None, help="Asset name (omit to provision all published)")
+    s.add_argument("--version", default=None, help="Asset version (with --name)")
+    s.add_argument(
+        "--selected-only",
+        action="store_true",
+        help="Provision assets pinned by site reference_selection only",
+    )
+    s.add_argument("--site", default="default", help="Site name for --selected-only")
     s.add_argument("--work-root", default="/work")
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(func=_cmd_provision)

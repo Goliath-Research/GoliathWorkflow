@@ -3,7 +3,7 @@
   "output_base": "/work/data/example",
   "step_config": {
     "alignment_qc": {
-      "genome_fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+      "genome_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
     },
     "mapper": {
       "gtf": "/path/to/annotation.gtf"

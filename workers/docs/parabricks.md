@@ -35,7 +35,7 @@ export METHYL_PARABRICKS_IMAGE=nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1
 export METHYL_PARABRICKS_IMAGE=nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1
 ./scripts/parabricks_fq2bam_meth.sh DPLST-051425-111148 \
   --sample-dir /work/samples/DPLST-051425-111148 \
-  --reference /work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa
+  --reference /work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa
 ```
 
 Equivalent CLI (after `pip install -e workers`):

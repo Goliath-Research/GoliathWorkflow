@@ -8,7 +8,7 @@ Migrate study science from `/work/<disease>/` to `/work/projects/<disease>/` and
 |------|------|
 | `/work/epimethyl/` | Deployed runtime (unchanged) |
 | `/work/site/methyl_site.json` | Site manifest — genomes, GTF, caches (`METHYL_SITE_CONFIG`) |
-| `/work/genomes/`, `/work/cache/` | Shared references and caches (unchanged) |
+| `/work/genomes/`, `/work/cache/` | Shared references (`linear/`, `annotation/`, `pangenome/`) and caches |
 | `/work/samples/{sample_id}/` | Flat sample archive (unchanged) |
 | `/work/projects/<disease>/` | Study configs, data, and run outputs |
 

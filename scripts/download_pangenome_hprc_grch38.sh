@@ -3,7 +3,7 @@
 # Parabricks giraffe short-read indexes for MethylPipeline sample prep.
 #
 # Produces files matching tools/methyl-config-editor/configs/site_grch38.example.json
-# under PANGENOME_DIR (default /work/genomes/pangenome).
+# under PANGENOME_DIR (default /work/genomes/pangenome/GRCh38/d9/1.70).
 #
 # WGBS CAVEAT: the stock HPRC d9.gbz is NOT bisulfite-converted. For production
 # WGBS, replace GBZ with your operator-built C->T graph and re-run the index steps
@@ -12,11 +12,12 @@
 # Requirements: aws CLI (or curl), docker, ~200GB+ free disk (autoindex temp space)
 #
 # Usage:
-#   sudo mkdir -p /work/genomes/pangenome && sudo chown "$USER" /work/genomes/pangenome
+#   sudo mkdir -p /work/genomes/pangenome/GRCh38/d9/1.70
+#   sudo chown "$USER" /work/genomes/pangenome/GRCh38/d9/1.70
 #   scripts/download_pangenome_hprc_grch38.sh
 #
 # Optional env:
-#   PANGENOME_DIR=/work/genomes/pangenome
+#   PANGENOME_DIR=/work/genomes/pangenome/GRCh38/d9/1.70
 #   VG_IMAGE=quay.io/vgteam/vg:v1.70.0
 #   SKIP_DOWNLOAD=1          # only (re)build indexes from existing GBZ
 #   PANGENOME_GBZ=/path/to/custom.bs.gbz
@@ -24,7 +25,7 @@
 
 set -euo pipefail
 
-PANGENOME_DIR="${PANGENOME_DIR:-/work/genomes/pangenome}"
+PANGENOME_DIR="${PANGENOME_DIR:-/work/genomes/pangenome/GRCh38/d9/1.70}"
 VG_IMAGE="${VG_IMAGE:-quay.io/vgteam/vg:v1.70.0}"
 VG_VERSION_TAG="${VG_VERSION_TAG:-1.70}"
 PREFIX="hprc-v1.1-mc-grch38.d9"
@@ -40,7 +41,7 @@ Usage: scripts/download_pangenome_hprc_grch38.sh
 Download HPRC GRCh38 d9.gbz and build vg autoindex + ref_paths for Parabricks giraffe.
 
 Environment:
-  PANGENOME_DIR     Output directory (default: /work/genomes/pangenome)
+  PANGENOME_DIR     Output directory (default: /work/genomes/pangenome/GRCh38/d9/1.70)
   VG_IMAGE          vg Docker image (default: quay.io/vgteam/vg:v1.70.0)
   PANGENOME_GBZ     Override GBZ path (for custom WGBS graphs)
   SKIP_DOWNLOAD=1   Skip S3/curl download; index from existing GBZ only
@@ -203,7 +204,7 @@ Add to /work/site/methyl_site.json (adjust linear_ref_fasta to your site FASTA):
     "min": "${MIN}",
     "zipcodes": "${ZIP}",
     "ref_paths": "${PATHS_SUB}",
-    "linear_ref_fasta": "/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+    "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   }
 
 Enable pangenome alignment in profile/context:

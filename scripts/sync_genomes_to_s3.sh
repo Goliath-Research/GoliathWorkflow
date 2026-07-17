@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
-# Sync /work/genomes <-> myQNAPcloud S3 (human_genome + pangenome).
+# Sync /work/genomes <-> myQNAPcloud S3 (linear / annotation / pangenome).
 #
 # myQNAPcloud is S3-compatible object storage — use aws s3 sync (not rsync).
 # Credentials must come from the environment; never pass keys on the CLI or
 # commit them to git.
+#
+# Canonical tree under genomes/:
+#   linear/GRCh38/ensembl-114/
+#   annotation/gencode/v49/
+#   pangenome/GRCh38/d9/1.70/
 #
 # Operator usage (upload local → QNAP):
 #   export AWS_ACCESS_KEY_ID=...
@@ -26,9 +31,11 @@
 #
 # Verify after sync:
 #   aws s3 ls s3://epimethyl/genomes/ --endpoint-url https://s3.us-east-1.myqnapcloud.io
-#   aws s3 ls s3://epimethyl/genomes/human_genome/release-114/ \
+#   aws s3 ls s3://epimethyl/genomes/linear/GRCh38/ensembl-114/ \
 #     --endpoint-url https://s3.us-east-1.myqnapcloud.io
-#   aws s3 ls s3://epimethyl/genomes/pangenome/ \
+#   aws s3 ls s3://epimethyl/genomes/annotation/gencode/v49/ \
+#     --endpoint-url https://s3.us-east-1.myqnapcloud.io
+#   aws s3 ls s3://epimethyl/genomes/pangenome/GRCh38/d9/1.70/ \
 #     --endpoint-url https://s3.us-east-1.myqnapcloud.io
 
 set -euo pipefail
@@ -55,7 +62,7 @@ Options:
   --download             Sync S3 → local (fill missing/outdated under /work/genomes)
   --dry-run              Pass --dryrun to aws s3 sync (no transfers)
   --delete               Pass --delete (remove destination extras absent on source; off by default)
-  --only NAME            Sync only a subtree: human_genome | pangenome
+  --only NAME            Sync only a subtree: linear | annotation | pangenome
   -h, --help             Show this help
 
 Required env:
@@ -74,7 +81,7 @@ while [[ $# -gt 0 ]]; do
     --only)
       ONLY="${2:-}"
       if [[ -z "$ONLY" ]]; then
-        echo "ERROR: --only requires human_genome or pangenome" >&2
+        echo "ERROR: --only requires linear, annotation, or pangenome" >&2
         exit 2
       fi
       shift 2
@@ -102,9 +109,9 @@ LOCAL="$GENOMES_SRC"
 REMOTE_KEY="$S3_PREFIX"
 if [[ -n "$ONLY" ]]; then
   case "$ONLY" in
-    human_genome|pangenome) ;;
+    linear|annotation|pangenome) ;;
     *)
-      echo "ERROR: --only must be human_genome or pangenome (got: $ONLY)" >&2
+      echo "ERROR: --only must be linear, annotation, or pangenome (got: $ONLY)" >&2
       exit 2
       ;;
   esac

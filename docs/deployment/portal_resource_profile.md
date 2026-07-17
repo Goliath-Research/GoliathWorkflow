@@ -36,7 +36,13 @@ Deploy [`workflow_engine/sql_mssql/portal_resource_profile.sql`](../../workflow_
 }
 ```
 
-Bootstrap also seeds `cfg.storage_endpoint` `epimethyl-archive` + `cfg.credential` `epimethyl-archive-keys` with `REPLACE_WITH_*` placeholders — replace via portal before production use.
+Bootstrap also seeds:
+
+- `cfg.credential` `epimethyl-archive-keys` with `REPLACE_WITH_*` placeholders — replace via portal before production use
+- `cfg.storage_endpoint` `epimethyl-archive` (`prefixBase: samples/`, scope archive)
+- `cfg.storage_endpoint` `epimethyl-genomes` (`prefixBase: genomes/`, scope shared; **same credential**) for reference inventory sync
+
+Reference asset recipes (linear / GENCODE / pangenome) are seeded by [`cfg_reference_assets_seed.sql`](../../workflow_engine/sql_mssql/cfg_reference_assets_seed.sql) (PG twin under `sql_pg/`) and repo fixtures under `workflow_engine/domain/fixtures/reference_assets/`.
 
 Legacy inline `credentials` inside `profile_json` still work for compatibility but are **not** the preferred shape.
 
