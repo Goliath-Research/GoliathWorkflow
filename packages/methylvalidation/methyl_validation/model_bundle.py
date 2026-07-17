@@ -1588,7 +1588,9 @@ def build_model_feature_bundle(
             )
         )
         detector_pointer["comparisons"].append(cmp_items[-1].model_dump(mode="json"))
-        for csv_path in classifier_csvs:
+        # Freeze/fixed-panel detectors often emit discovery CSVs only (no *-classifier).
+        preferred = classifier_csvs or discovery_csvs
+        for csv_path in preferred:
             rows.append(_load_dmps_table(csv_path, str(cmp_label), weight_column=weight_column))
 
     # Flat projects or missing explicit comparisons: use root detection dir fallback.
@@ -1596,8 +1598,10 @@ def build_model_feature_bundle(
         det_dir = Path(paths.detection_dir)
         csvs = _choose_detector_csvs(det_dir)
         classifier_csvs = [p for p in csvs["classifier"] if p.is_file()]
-        if classifier_csvs:
-            for csv_path in classifier_csvs:
+        discovery_csvs = [p for p in csvs["discovery"] if p.is_file()]
+        preferred = classifier_csvs or discovery_csvs
+        if preferred:
+            for csv_path in preferred:
                 rows.append(_load_dmps_table(csv_path, "default", weight_column=weight_column))
             cmp_items.append(
                 BundleComparison(
@@ -1605,17 +1609,18 @@ def build_model_feature_bundle(
                     control_group="group1",
                     disease_group="group2",
                     detection_dir=str(det_dir),
-                    classifier_dmps_csv=str(classifier_csvs[0].absolute()),
-                    discovery_dmps_csv=None,
+                    classifier_dmps_csv=str(classifier_csvs[0].absolute()) if classifier_csvs else None,
+                    discovery_dmps_csv=str(discovery_csvs[0].absolute()) if discovery_csvs else None,
                     classifier_dmps_csvs=[str(p.absolute()) for p in classifier_csvs],
-                    discovery_dmps_csvs=[],
+                    discovery_dmps_csvs=[str(p.absolute()) for p in discovery_csvs],
                 )
             )
             detector_pointer["comparisons"].append(cmp_items[-1].model_dump(mode="json"))
 
     if not rows:
         raise FileNotFoundError(
-            "No detector DMP CSVs found for bundle build. Expected dmps-*-classifier.csv or dmps-*.csv under detection dirs."
+            "No detector DMP CSVs found for bundle build. Expected dmps-*-classifier.csv, "
+            "dmps-*-discovery.csv, or dmps-*.csv under detection dirs."
         )
 
     from .observed_feature_builder import normalize_feature_family_set

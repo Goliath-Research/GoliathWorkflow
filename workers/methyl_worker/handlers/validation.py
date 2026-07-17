@@ -261,12 +261,20 @@ def _handle_validation_prepare_freeze(
         production_output_dir=input_json.get("productionOutputDir") or config.production_output_dir,
         config=config,
     )
+    production_project = result.get("productionProject") or result.get("projectPath")
+    if not production_project:
+        out_dir = result.get("outputDir") or result.get("productionOutputDir") or result.get("production_output_dir")
+        production_project = str(Path(out_dir) / "project.json") if out_dir else str(base_project)
     return ValidationPrepareFreezeOutput(
         status="ok",
-        productionOutputDir=result.get("productionOutputDir") or result.get("production_output_dir"),
+        productionOutputDir=result.get("outputDir")
+        or result.get("productionOutputDir")
+        or result.get("production_output_dir"),
         sourceRunDir=result.get("sourceRunDir"),
         targetRunDir=result.get("targetRunDir"),
-        projectPath=result.get("projectPath") or str(base_project),
+        # Downstream freeze nodes must use production/project.json, not the study manifest.
+        projectPath=str(production_project),
+        fixedDmpPanel=result.get("fixedDmpPanel"),
     )
 
 
@@ -473,16 +481,51 @@ def _handle_validation_select_best_model(
         profile_overrides=runtime.validationProfile,
     )
     model_mc_root = Path(input_json.get("modelMcRoot") or mc_root / "model_mc")
-    backends = list(input_json.get("backends") or ["ecdf", "tabular_sklearn", "generative_hybrid"])
+    enabled = list(config.get_enabled_backends())
+    # Prefer enabled backends from resolved config; ignore stale multi-backend task defaults
+    # when the profile/context only enables one (typical ECDF+covariates studies).
+    requested = list(input_json.get("backends") or [])
+    if enabled:
+        backends = enabled
+    elif requested:
+        backends = requested
+    else:
+        backends = ["ecdf"]
     metric = str(input_json.get("selectionMetric") or "balanced_accuracy")
     stat = str(input_json.get("selectionStat") or "median")
-    ranking = _write_backend_ranking(model_mc_root, backends, metric=metric, stat=stat)
-    best_backend = str(ranking[0]["backend"])
+    summaries_ready = bool(backends) and all(
+        (model_mc_root / b / "metrics_summary.json").is_file() for b in backends
+    )
+    if summaries_ready:
+        ranking = _write_backend_ranking(model_mc_root, backends, metric=metric, stat=stat)
+        best_backend = str(ranking[0]["backend"])
+        selection_stat = ranking[0].get(stat) if ranking else None
+    elif len(backends) == 1:
+        # Direct production model build: no model-MC bake-off required.
+        best_backend = backends[0]
+        ranking = [
+            {
+                "backend": best_backend,
+                "selection_metric": metric,
+                "selection_stat": stat,
+                "note": "single enabled backend; skipped model_mc ranking",
+            }
+        ]
+        selection_stat = None
+    else:
+        raise RuntimeError(
+            f"Missing model_mc metrics under {model_mc_root} for backends {backends}. "
+            "Run validation.model_mc first, or enable exactly one backend_profiles.*.enabled "
+            "for a direct production model build."
+        )
     summary = build_production_model(
         monte_carlo_runs_root=mc_root,
         production_output_dir=config.production_output_dir,
         config=config.with_backend_selection(best_backend),
     )
+    if not summary.get("success", False):
+        errs = "; ".join(str(e) for e in (summary.get("errors") or [])[:5]) or "unknown error"
+        raise RuntimeError(f"Production model build failed for backend {best_backend}: {errs}")
     production_dir = Path(summary.get("output_dir") or mc_root / "production")
     selection_path = production_dir / "selected_backend.json"
     selection_payload = {
@@ -492,7 +535,6 @@ def _handle_validation_select_best_model(
         "ranking": ranking,
     }
     selection_path.write_text(json.dumps(selection_payload, indent=2) + "\n", encoding="utf-8")
-    selection_stat = ranking[0].get(stat) if ranking else None
     return ValidationSelectBestModelOutput(
         status="ok",
         selectedBackend=best_backend,
@@ -530,17 +572,42 @@ def _handle_validation_post_model_validation(
     layout = infer_monte_carlo_layout(production_project, len(config.cohorts))
     run_dir = Path(input_json.get("runDir") or mc_root / "post_model_validation" / "run_0001")
     run_dir.mkdir(parents=True, exist_ok=True)
+    predictor_output_dir = run_dir / "predictors"
     if layout == "binary":
+        val_control_csv = Path(input_json.get("valControlCsv") or mc_root / "val_control.csv")
+        val_disease_csv = Path(input_json.get("valDiseaseCsv") or mc_root / "val_disease.csv")
+        if not val_control_csv.is_file() or not val_disease_csv.is_file():
+            raise RuntimeError(
+                f"post_model_validation binary requires val cohort CSVs "
+                f"(missing {val_control_csv} and/or {val_disease_csv})."
+            )
         success, errors, timings = run_post_model_validation_binary(
-            production_project,
-            run_dir,
+            project_json=production_project,
+            val_control_csv=val_control_csv,
+            val_disease_csv=val_disease_csv,
+            predictor_output_dir=predictor_output_dir,
+            production_output_dir=production_dir,
             logs_dir=run_dir / "logs",
             config=config,
         )
     else:
+        test_groups_json = Path(
+            input_json.get("testGroupsJson") or run_dir / "val_test_groups.json"
+        )
+        if not test_groups_json.is_file():
+            # Fall back to MC root artifact when present.
+            candidate = mc_root / "val_test_groups.json"
+            if candidate.is_file():
+                test_groups_json = candidate
+        if not test_groups_json.is_file():
+            raise RuntimeError(
+                f"post_model_validation multiclass requires testGroupsJson at {test_groups_json}"
+            )
         success, errors, timings = run_post_model_validation_multiclass(
-            production_project,
-            run_dir,
+            project_json=production_project,
+            test_groups_json=test_groups_json,
+            predictor_output_dir=predictor_output_dir,
+            production_output_dir=production_dir,
             logs_dir=run_dir / "logs",
             config=config,
         )

@@ -369,7 +369,10 @@ _DE_PLAN_ITERATIONS = DomainEffects(
 _DE_PREPARE_FREEZE = DomainEffects(
     reads_types=("StratifiedCohortDraw",),
     writes_types=("ValidationArtifactRef",),
-    scope_bindings=(("fixedDmpPanel", "$.fixedDmpPanel"),),
+    scope_bindings=(
+        ("fixedDmpPanel", "$.fixedDmpPanel"),
+        ("projectPath", "$.projectPath"),
+    ),
 )
 _DE_SELECT_BEST_MODEL = DomainEffects(
     reads_types=("StratifiedCohortDraw",),

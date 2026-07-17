@@ -101,8 +101,11 @@ def test_enricher_legacy_collector_reads_completeness_manifest(tmp_path: Path, m
     assert payload["n_comparisons"] == 1
 
 
-def test_manifest_first_collector_ignores_worker_idempotency_envelope(tmp_path: Path) -> None:
-    """Schema 1.1 manifests are checking skip/replay are not CLI task manifests."""
+@pytest.mark.parametrize("schema_version", ["1.1", "1.2"])
+def test_manifest_first_collector_ignores_worker_idempotency_envelope(
+    tmp_path: Path, schema_version: str
+) -> None:
+    """Idempotency envelopes wrap task_output; collectors must not treat them as CLI outputs."""
     run_dir = tmp_path / "run_0001"
     stability = run_dir / "gene_stability"
     stability.mkdir(parents=True)
@@ -115,7 +118,7 @@ def test_manifest_first_collector_ignores_worker_idempotency_envelope(tmp_path: 
     atomic_write_json(
         manifest,
         {
-            "schema_version": "1.1",
+            "schema_version": schema_version,
             "action_name": "pipeline.gene_select",
             "capability": "methyl-gene-select",
             "started_at_utc": "2026-06-26T00:30:27Z",
@@ -128,6 +131,8 @@ def test_manifest_first_collector_ignores_worker_idempotency_envelope(tmp_path: 
             "action_revision": "abc",
             "input_signature": "in",
             "output_signature": "out",
+            "content_key": "deadbeef",
+            "hyperparam_set_id": "hpset",
             "skipped": False,
             "skip_reason": None,
             "task_output": {"selected_k": 99, "run_dir": str(run_dir)},

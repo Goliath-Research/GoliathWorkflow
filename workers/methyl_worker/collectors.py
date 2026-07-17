@@ -45,9 +45,11 @@ def _try_read_manifest(
         return None
     with open(path, encoding="utf-8") as fh:
         raw = json.load(fh)
-    # Worker idempotency envelopes (1.1) wrap task_output for skip/replay; CLIs write
+    # Worker idempotency envelopes (1.1/1.2) wrap task_output for skip/replay; CLIs write
     # flat 1.0 manifests. After a fresh CLI run, fall back to legacy artifact scan.
-    if raw.get("schema_version") == "1.1":
+    # Never validate the envelope as ActionOutputBase (extra=forbid, schema_version=1.0).
+    schema_version = str(raw.get("schema_version") or "")
+    if schema_version in {"1.1", "1.2"} or isinstance(raw.get("task_output"), dict):
         return None
     model = output_model.model_validate(raw)
     data = model.model_dump(mode="json")

@@ -146,6 +146,7 @@ class ValidationPrepareFreezeOutput(ActionOutputBase):
     sourceRunDir: Optional[str] = None
     targetRunDir: Optional[str] = None
     projectPath: Optional[str] = None
+    fixedDmpPanel: Optional[str] = None
 
 
 class ValidationFreezeReadinessOutput(ActionOutputBase):

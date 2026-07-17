@@ -1968,8 +1968,9 @@ def _normalize_production_ecdf_backend(
     or a stable gene panel is present, defaults to raw_gene. Otherwise raw_dmp.
     Always disables auto aggregated observed-hybrid unless explicitly enabled.
     """
-    step_cfg = project_dict.setdefault("step_config", {})
-    validation_cfg = step_cfg.setdefault("validation", {})
+    # Production freeze projects must remain loadable by ProjectConfig (no step_config).
+    action_cfg = project_dict.setdefault("actionConfig", {})
+    validation_cfg = action_cfg.setdefault("validation", {})
     backend_profiles = validation_cfg.setdefault("backend_profiles", {})
     ecdf_profile = backend_profiles.setdefault("ecdf", {})
     params = ecdf_profile.setdefault("params", {})
@@ -1982,7 +1983,7 @@ def _normalize_production_ecdf_backend(
         elif stable_gene_csv is not None and Path(stable_gene_csv).is_file():
             use_raw_gene = True
         else:
-            model_bundle_cfg = step_cfg.get("model_bundle") or {}
+            model_bundle_cfg = action_cfg.get("model_bundle") or {}
             stability_gene_panel = model_bundle_cfg.get("stability_gene_panel")
             if stability_gene_panel and Path(str(stability_gene_panel)).is_file():
                 use_raw_gene = True
@@ -2038,11 +2039,11 @@ def prepare_freeze_project(
     if pr_dict is not None:
         remap_cohort_list_files_in_project(project_dict, pr_dict, prod_dir)
 
-    if "step_config" not in project_dict:
-        project_dict["step_config"] = {}
-    if "detection" not in project_dict["step_config"]:
-        project_dict["step_config"]["detection"] = {}
-    project_dict["step_config"]["detection"]["fixed_dmp_panel"] = str(merged_panel)
+    # Never write step_config: ProjectConfig rejects it. Bake freeze knobs under actionConfig.
+    project_dict.pop("step_config", None)
+    action_cfg = project_dict.setdefault("actionConfig", {})
+    detection_cfg = action_cfg.setdefault("detection", {})
+    detection_cfg["fixed_dmp_panel"] = str(merged_panel)
     project_dict["project_name"] = "production"
     if prod_dir.parent.name == "monte_carlo_runs":
         project_dict["output_base"] = str(prod_dir.parent)
@@ -2064,7 +2065,7 @@ def prepare_freeze_project(
         bundle_dir.mkdir(parents=True, exist_ok=True)
         stability_gene_panel_path = bundle_dir / "stable_genes_from_stability.csv"
         shutil.copy2(stable_gene_csv, stability_gene_panel_path)
-        model_bundle_cfg = project_dict.setdefault("step_config", {}).setdefault("model_bundle", {})
+        model_bundle_cfg = action_cfg.setdefault("model_bundle", {})
         model_bundle_cfg["stability_gene_panel"] = str(stability_gene_panel_path)
 
     _normalize_production_ecdf_backend(
@@ -2074,6 +2075,11 @@ def prepare_freeze_project(
     )
     with open(prod_project_path, "w", encoding="utf-8") as f:
         json.dump(project_dict, f, indent=2)
+    # Sidecar for operators / tooling that read freeze knobs without loading ProjectConfig.
+    (prod_dir / "freeze_action_config.json").write_text(
+        json.dumps(action_cfg, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     return {
         "status": "ok",
@@ -2135,15 +2141,14 @@ def freeze_production_model(
     if pr_dict is not None:
         remap_cohort_list_files_in_project(project_dict, pr_dict, prod_dir)
 
-    # Set fixed_dmp_panel in detection step config (bypasses discovery in MethylDetector)
-    if "step_config" not in project_dict:
-        project_dict["step_config"] = {}
-    if "detection" not in project_dict["step_config"]:
-        project_dict["step_config"]["detection"] = {}
+    # Bake freeze knobs under actionConfig (ProjectConfig rejects step_config).
+    project_dict.pop("step_config", None)
+    action_cfg = project_dict.setdefault("actionConfig", {})
+    detection_cfg = action_cfg.setdefault("detection", {})
     # Preserve configured path style (e.g., /work mount aliases) instead of
     # canonicalizing through OS realpath resolution, which can rewrite to
     # environment-specific NFS prefixes (e.g., /lambda/nfs/...).
-    project_dict["step_config"]["detection"]["fixed_dmp_panel"] = str(merged_panel)
+    detection_cfg["fixed_dmp_panel"] = str(merged_panel)
 
     # Production run uses full dataset (no MC train/val split), unique project name
     project_dict["project_name"] = "production"
@@ -2169,7 +2174,7 @@ def freeze_production_model(
         bundle_dir.mkdir(parents=True, exist_ok=True)
         stability_gene_panel_path = bundle_dir / "stable_genes_from_stability.csv"
         shutil.copy2(stable_gene_csv, stability_gene_panel_path)
-        model_bundle_cfg = project_dict.setdefault("step_config", {}).setdefault("model_bundle", {})
+        model_bundle_cfg = action_cfg.setdefault("model_bundle", {})
         model_bundle_cfg["stability_gene_panel"] = str(stability_gene_panel_path)
 
     _normalize_production_ecdf_backend(
@@ -2267,8 +2272,9 @@ def freeze_production_model(
             )
             with open(prod_project_path, encoding="utf-8") as f:
                 prod_project_payload = json.load(f)
-            step_cfg = prod_project_payload.setdefault("step_config", {})
-            model_bundle_cfg = step_cfg.setdefault("model_bundle", {})
+            prod_project_payload.pop("step_config", None)
+            action_cfg = prod_project_payload.setdefault("actionConfig", {})
+            model_bundle_cfg = action_cfg.setdefault("model_bundle", {})
             model_bundle_cfg["mapper_annotation_csv"] = str(
                 mapper_annotation_cache.get("path")
             )
@@ -2357,6 +2363,40 @@ def build_production_model(
         raise FileNotFoundError(f"Production project not found: {prod_project_path}. Run --freeze first.")
 
     logger.info(f"Production model output dir: {prod_dir}")
+
+    # DomainProgram freeze may not have run legacy --freeze mapper-cache prep; ensure gene-mode artifacts.
+    try:
+        feature_mode = (
+            str(getattr(config, "feature_mode", "") or "").strip().lower()
+            if config is not None
+            else ""
+        )
+        family = (
+            str(getattr(config, "feature_family_set", "") or "").strip().lower()
+            if config is not None
+            else ""
+        )
+        needs_mapper_cache = feature_mode == "raw_gene" or family not in ("", "dmp_scored")
+        ann_path = prod_dir / "model_bundle" / "mapper_dmp_annotations.csv"
+        if needs_mapper_cache and not ann_path.is_file():
+            from .model_bundle import MAPPER_ANNOTATION_NAME, build_mapper_annotation_cache
+
+            bundle_dir = prod_dir / "model_bundle"
+            bundle_dir.mkdir(parents=True, exist_ok=True)
+            cache = build_mapper_annotation_cache(
+                project_json=prod_project_path,
+                output_csv=bundle_dir / MAPPER_ANNOTATION_NAME,
+            )
+            with open(prod_project_path, encoding="utf-8") as f:
+                payload = json.load(f)
+            payload.pop("step_config", None)
+            mb = payload.setdefault("actionConfig", {}).setdefault("model_bundle", {})
+            mb["mapper_annotation_csv"] = str(cache.get("path") or (bundle_dir / MAPPER_ANNOTATION_NAME))
+            with open(prod_project_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, indent=2)
+            logger.info("Built missing mapper annotation cache for production model: %s", mb["mapper_annotation_csv"])
+    except Exception as exc:
+        logger.warning("Could not ensure mapper annotation cache before model build: %s", exc)
 
     from .pipeline_runner import run_pipeline_for_model
 

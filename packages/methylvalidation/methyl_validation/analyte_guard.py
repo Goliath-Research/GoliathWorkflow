@@ -62,7 +62,11 @@ def check_training_analyte_match(
     except Exception as exc:
         return True, f"analyte check skipped: {exc}"
 
-    project = load_project(project_json)
+    try:
+        project = load_project(project_json)
+    except Exception as exc:
+        # Production freeze snapshots historically embedded step_config; skip rather than abort model.
+        return True, f"analyte check skipped (project load failed): {exc}"
     reg = project.get_regulatory_config()
     current = effective_training_analyte(reg)
     if current is None:

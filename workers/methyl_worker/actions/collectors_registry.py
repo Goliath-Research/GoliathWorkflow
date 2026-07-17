@@ -7,6 +7,8 @@ from typing import Any, Mapping, Optional
 from ..action_catalog import ActionCatalogEntry
 from ..collectors import (
     ArtifactCollector,
+    CentroidLegacyCollector,
+    DetectorLegacyCollector,
     ManifestFirstCollector,
     _resolve_dmp_output_dir,
     _resolve_enricher_output_dir,
@@ -34,6 +36,7 @@ def collector_centroid(_entry: ActionCatalogEntry) -> ArtifactCollector:
     return ManifestFirstCollector(
         output_model=CentroidTaskOutput,
         resolve_output_dir=_output_dir,
+        legacy_collect=CentroidLegacyCollector(),
     )
 
 
@@ -41,6 +44,7 @@ def collector_detector(_entry: ActionCatalogEntry) -> ArtifactCollector:
     return ManifestFirstCollector(
         output_model=DetectorTaskOutput,
         resolve_output_dir=_output_dir,
+        legacy_collect=DetectorLegacyCollector(),
     )
 
 
