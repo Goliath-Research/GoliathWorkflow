@@ -165,8 +165,9 @@ def write_detector_featurecuts_override(
     payload = build_detector_featurecuts_override(config)
     if payload is None:
         return None
-    run_dir.mkdir(parents=True, exist_ok=True)
-    path = run_dir / "detector_step_override.json"
+    from .project_gen import prepare_path_for_write
+
+    path = prepare_path_for_write(run_dir / "detector_step_override.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
     return path
@@ -179,11 +180,11 @@ def resolve_detector_step_override_path(
     """Return absolute path to per-run detector override JSON, reusing or materializing sidecar."""
     sidecar = run_dir / "detector_step_override.json"
     if sidecar.is_file():
-        return str(sidecar.resolve())
+        return str(sidecar.parent.resolve() / sidecar.name)
     written = write_detector_featurecuts_override(run_dir, config)
     if written is None:
         return None
-    return str(written.resolve())
+    return str(written.parent.resolve() / written.name)
 
 
 CLASSIFIER_DMP_CSV_PATTERN = "dmps-*-classifier.csv"

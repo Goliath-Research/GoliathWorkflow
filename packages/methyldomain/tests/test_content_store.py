@@ -282,3 +282,154 @@ def test_plan_iterations_preserves_run_relative_paths(tmp_path: Path, monkeypatc
         train_link = mc_root / f"run_{i:04d}" / "train_control.csv"
         assert train_link.is_symlink()
         assert train_link.read_text(encoding="utf-8").startswith("sample")
+
+
+def test_plan_iterations_recommit_through_existing_caas_symlinks_does_not_steal(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """A second content-key must not flatten/steal blobs from the first via symlink resolve()."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    project_root = tmp_path / "Study"
+    mc_root = project_root / "monte_carlo_runs"
+    mc_root.mkdir(parents=True)
+    (mc_root / "queue").mkdir()
+    (mc_root / "action_run_log.jsonl").write_text("{}\n", encoding="utf-8")
+
+    artifacts_v1: list[ArtifactRef] = []
+    for i in (1, 2):
+        run_dir = mc_root / f"run_{i:04d}"
+        run_dir.mkdir()
+        project = run_dir / "project.json"
+        project.write_text(json.dumps({"run": i, "v": 1}), encoding="utf-8")
+        train = run_dir / "train_control.csv"
+        train.write_text(f"sample\ns{i}\n", encoding="utf-8")
+        artifacts_v1.append(ArtifactRef(path=str(project), bytes=project.stat().st_size))
+        artifacts_v1.append(ArtifactRef(path=str(train), bytes=train.stat().st_size))
+
+    record_v1 = _record(
+        artifacts=artifacts_v1,
+        input_sig="sig-plan-v1",
+        output_sig="out-plan-v1",
+    ).model_copy(
+        update={
+            "action_name": "validation.plan_iterations",
+            "task_output": {
+                "iterations": [
+                    {"projectPath": str(mc_root / "run_0001" / "project.json")},
+                    {"projectPath": str(mc_root / "run_0002" / "project.json")},
+                ]
+            },
+        }
+    )
+    commit_artifacts_to_store(
+        project_root,
+        "validation.plan_iterations",
+        "key-plan-v1",
+        record_v1,
+        output_dir=mc_root,
+    )
+    entry_v1 = caas_entry_dir(project_root, "validation.plan_iterations", "key-plan-v1")
+    assert (entry_v1 / "run_0001" / "project.json").is_file()
+    assert (entry_v1 / "run_0002" / "project.json").is_file()
+
+    # Simulate a fresh plan under a new content key while product paths are still CAAS symlinks.
+    artifacts_v2: list[ArtifactRef] = []
+    for i in (1, 2):
+        project = mc_root / f"run_{i:04d}" / "project.json"
+        assert project.is_symlink()
+        # Writers unlink the symlink then write a real file (prepare_path_for_write).
+        project.unlink()
+        project.write_text(json.dumps({"run": i, "v": 2}), encoding="utf-8")
+        train = mc_root / f"run_{i:04d}" / "train_control.csv"
+        train.unlink()
+        train.write_text(f"sample\ns{i}-v2\n", encoding="utf-8")
+        artifacts_v2.append(ArtifactRef(path=str(project), bytes=project.stat().st_size))
+        artifacts_v2.append(ArtifactRef(path=str(train), bytes=train.stat().st_size))
+
+    record_v2 = _record(
+        artifacts=artifacts_v2,
+        input_sig="sig-plan-v2",
+        output_sig="out-plan-v2",
+    ).model_copy(
+        update={
+            "action_name": "validation.plan_iterations",
+            "task_output": {
+                "iterations": [
+                    {"projectPath": str(mc_root / "run_0001" / "project.json")},
+                    {"projectPath": str(mc_root / "run_0002" / "project.json")},
+                ]
+            },
+        }
+    )
+    commit_artifacts_to_store(
+        project_root,
+        "validation.plan_iterations",
+        "key-plan-v2",
+        record_v2,
+        output_dir=mc_root,
+    )
+
+    entry_v2 = caas_entry_dir(project_root, "validation.plan_iterations", "key-plan-v2")
+    assert (entry_v2 / "run_0001" / "project.json").is_file()
+    assert (entry_v2 / "run_0002" / "project.json").is_file()
+    assert json.loads((entry_v2 / "run_0001" / "project.json").read_text()) == {"run": 1, "v": 2}
+    # Sibling content-key must remain intact (no steal via resolve()+move).
+    assert (entry_v1 / "run_0001" / "project.json").is_file()
+    assert json.loads((entry_v1 / "run_0001" / "project.json").read_text()) == {"run": 1, "v": 1}
+    for i in (1, 2):
+        link = mc_root / f"run_{i:04d}" / "project.json"
+        assert link.is_symlink()
+        assert json.loads(link.read_text(encoding="utf-8")) == {"run": i, "v": 2}
+
+
+def test_plan_iterations_commit_recovers_run_layout_from_caas_symlink_paths(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Artifact paths that already resolve into an old CAAS key must keep run_#### layout."""
+    monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
+    project_root = tmp_path / "Study"
+    mc_root = project_root / "monte_carlo_runs"
+    mc_root.mkdir(parents=True)
+    (mc_root / "queue").mkdir()
+
+    old_entry = caas_entry_dir(project_root, "validation.plan_iterations", "old-key")
+    artifacts: list[ArtifactRef] = []
+    for i in (1, 2):
+        blob_dir = old_entry / f"run_{i:04d}"
+        blob_dir.mkdir(parents=True)
+        blob = blob_dir / "project.json"
+        blob.write_text(json.dumps({"run": i}), encoding="utf-8")
+        logical = mc_root / f"run_{i:04d}" / "project.json"
+        logical.parent.mkdir(parents=True, exist_ok=True)
+        logical.symlink_to(os.path.relpath(blob, start=logical.parent))
+        # Bug reproduction: collectors/planners sometimes recorded the resolved CAAS path.
+        artifacts.append(ArtifactRef(path=str(blob.resolve()), bytes=blob.stat().st_size))
+
+    record = _record(
+        artifacts=artifacts,
+        input_sig="sig-resolved-caas",
+        output_sig="out-resolved-caas",
+    ).model_copy(
+        update={
+            "action_name": "validation.plan_iterations",
+            "task_output": {
+                "iterations": [
+                    {"projectPath": str((old_entry / "run_0001" / "project.json").resolve())},
+                    {"projectPath": str((old_entry / "run_0002" / "project.json").resolve())},
+                ]
+            },
+        }
+    )
+    commit_artifacts_to_store(
+        project_root,
+        "validation.plan_iterations",
+        "new-key",
+        record,
+        output_dir=mc_root,
+    )
+    new_entry = caas_entry_dir(project_root, "validation.plan_iterations", "new-key")
+    assert (new_entry / "run_0001" / "project.json").is_file()
+    assert (new_entry / "run_0002" / "project.json").is_file()
+    # Must copy, not steal, from the old content key.
+    assert (old_entry / "run_0001" / "project.json").is_file()
+    assert (old_entry / "run_0002" / "project.json").is_file()

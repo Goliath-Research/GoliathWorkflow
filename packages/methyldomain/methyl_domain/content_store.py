@@ -232,6 +232,36 @@ def _move_tree_into_entry(
     return moved
 
 
+def _abspath_nofollow(path: Path) -> Path:
+    """Absolute path without resolving a leaf symlink."""
+    path = Path(path).expanduser()
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    return Path(os.path.abspath(path))
+
+
+def _relative_to_root_nofollow(path: Path, root: Path) -> Optional[Path]:
+    """Return ``path`` relative to ``root`` without following a leaf symlink."""
+    path_abs = _abspath_nofollow(path)
+    root_abs = _abspath_nofollow(root)
+    try:
+        return path_abs.relative_to(root_abs)
+    except ValueError:
+        return None
+
+
+def _caas_run_relative(path: Path) -> Optional[Path]:
+    """Recover ``run_####/...`` from a path under ``.caas/.../validation_plan_iterations/<key>/``."""
+    parts = Path(path).parts
+    try:
+        marker = parts.index("validation_plan_iterations")
+    except ValueError:
+        return None
+    if len(parts) <= marker + 2:
+        return None
+    return Path(*parts[marker + 2 :])
+
+
 def _move_artifacts_into_entry(
     artifacts: Sequence[ArtifactRef],
     entry_dir: Path,
@@ -245,6 +275,10 @@ def _move_artifacts_into_entry(
     ``run_####/project.json`` files with the same basename). Flat basename storage
     would collapse those into a single CAAS blob and relink only at the MC root.
 
+    Leaf CAAS product symlinks under ``output_dir`` must keep that relative layout
+    and must be **copied** (not moved) so a re-commit under a new content_key cannot
+    steal blobs from a sibling entry.
+
     Without a usable relative root, fall back to basename (safe when names are
     unique in a shared directory, e.g. per-chromosome centroid HDF5s).
     """
@@ -252,20 +286,30 @@ def _move_artifacts_into_entry(
     out_root = output_dir.expanduser().resolve() if output_dir is not None else None
     updated: List[ArtifactRef] = []
     for ref in artifacts:
-        src = Path(ref.path)
-        if not src.is_file() or _ACTION_RESULTS_DIRNAME in src.parts:
+        src = Path(ref.path).expanduser()
+        if _ACTION_RESULTS_DIRNAME in src.parts:
             continue
+        if not (src.is_file() or src.is_symlink()):
+            continue
+        # Readable payload (follow leaf symlink only for content).
         try:
-            src_resolved = src.expanduser().resolve()
+            src_payload = src.resolve() if src.is_symlink() else src.resolve()
         except OSError:
-            src_resolved = src.expanduser()
-        if out_root is not None and _is_under(src_resolved, out_root):
-            dest = entry_dir / src_resolved.relative_to(out_root)
-        else:
-            dest = entry_dir / src.name
+            continue
+        if not src_payload.is_file():
+            continue
+
+        rel: Optional[Path] = None
+        if out_root is not None:
+            rel = _relative_to_root_nofollow(src, out_root)
+        if rel is None:
+            rel = _caas_run_relative(src_payload)
+        if rel is None and out_root is not None and _is_under(src_payload, out_root):
+            rel = src_payload.relative_to(out_root)
+        dest = entry_dir / rel if rel is not None else entry_dir / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
         try:
-            same_path = dest.exists() and dest.resolve() == src_resolved
+            same_path = dest.exists() and dest.resolve() == src_payload.resolve()
         except OSError:
             same_path = False
         if not same_path:
@@ -274,7 +318,23 @@ def _move_artifacts_into_entry(
                     shutil.rmtree(dest)
                 else:
                     dest.unlink()
-            shutil.move(str(src_resolved), str(dest))
+            # Never move a blob out of another CAAS content-key entry.
+            foreign_caas_blob = (
+                ".caas" in src_payload.parts
+                and not _is_under(src_payload, entry_dir)
+            )
+            if src.is_symlink() or foreign_caas_blob:
+                shutil.copy2(str(src_payload), str(dest))
+                # Remove only the logical product path (usually a symlink under
+                # output_dir). Never delete the foreign CAAS blob we copied from.
+                if src.is_symlink() or (
+                    out_root is not None and _relative_to_root_nofollow(src, out_root) is not None
+                ):
+                    if src.exists() or src.is_symlink():
+                        if not (src.is_dir() and not src.is_symlink()):
+                            src.unlink()
+            else:
+                shutil.move(str(src_payload), str(dest))
         updated.append(
             ArtifactRef(
                 path=str(dest.resolve()),
@@ -309,11 +369,14 @@ def _relink_artifacts_from_entry(
         if output_dir is not None:
             canonical = output_dir / rel
         else:
+            # Prefer the non-followed absolute leaf path when the recorded path was a
+            # product location (avoids rewriting task consumers to CAAS blob paths).
             canonical = Path(ref.path)
         _ensure_symlink(canonical, stored)
+        canonical_str = str(canonical.parent.resolve() / canonical.name)
         relinked.append(
             ArtifactRef(
-                path=str(canonical.resolve()),
+                path=canonical_str,
                 kind=ref.kind,
                 bytes=stored.stat().st_size,
                 sha256=ref.sha256,
@@ -405,13 +468,35 @@ def commit_artifacts_to_store(
     if existing is not None and verify_entry_artifacts(existing):
         out_dir = Path(output_dir).expanduser().resolve() if output_dir else None
         relinked = _relink_artifacts_from_entry(existing.artifacts, entry_dir, output_dir=out_dir)
-        return existing.model_copy(
+        reused = existing.model_copy(
             update={
                 "artifacts": relinked or existing.artifacts,
                 "content_key": content_key,
                 "hyperparam_set_id": record.hyperparam_set_id or existing.hyperparam_set_id,
             }
         )
+        # Corrupt plan_iterations entries can keep blob files while task_output still
+        # points at missing sibling-key paths (or a flattened run_#### layout). Recommit.
+        if action_name == "validation.plan_iterations":
+            iterations = (existing.task_output or {}).get("iterations") or []
+            paths_ok = bool(iterations)
+            for item in iterations:
+                if not isinstance(item, Mapping):
+                    paths_ok = False
+                    break
+                project_path = item.get("projectPath")
+                if not project_path or not Path(str(project_path)).is_file():
+                    paths_ok = False
+                    break
+            if paths_ok:
+                return reused
+            logger.info(
+                "Recommitting %s content_key %s: cached iteration projectPath files missing",
+                action_name,
+                content_key[:12],
+            )
+        else:
+            return reused
 
     entry_dir.mkdir(parents=True, exist_ok=True)
     out_dir = Path(output_dir).expanduser().resolve() if output_dir else None

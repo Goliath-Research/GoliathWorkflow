@@ -75,6 +75,18 @@ def resolve_base_project_json(project_path: str | Path) -> Path:
     raise FileNotFoundError(f"Could not resolve base project.json from projectPath={project_path!r}")
 
 
+def _product_path_str(path: Path | str) -> str:
+    """Absolute product path without following a leaf CAAS symlink.
+
+    ``Path.resolve()`` on ``monte_carlo_runs/run_XXXX/project.json`` follows the
+    content-store symlink into ``.caas/validation_plan_iterations/<key>/...``. Downstream
+    centroid/detector tasks then depend on CAAS blob paths that a later content-key
+    commit can steal or delete.
+    """
+    path = Path(path)
+    return str(path.parent.resolve() / path.name)
+
+
 def _parallel_mc_centroid_seed_enabled(config: MonteCarloConfig) -> bool:
     if config.parallel_mc_centroid_seed is None:
         return True
@@ -180,9 +192,9 @@ def _build_task_config(
         "layout": layout,
         "trainFraction": config.train_fraction,
         "seed": seed_i,
-        "projectJson": str(project_path.resolve()),
-        "runDir": str(run_dir.resolve()),
-        "monteCarloRunsRoot": str(monte_carlo_runs_root.resolve()),
+        "projectJson": _product_path_str(project_path),
+        "runDir": _product_path_str(run_dir),
+        "monteCarloRunsRoot": _product_path_str(monte_carlo_runs_root),
     }
     if val_control_csv is not None:
         payload["testControlCsv"] = str(val_control_csv)
@@ -291,7 +303,7 @@ def _tag_iteration_as_stratified_draw(
     tagged = build_stratified_cohort_draw(
         run_id=iteration.runId,
         phase=iteration.phase,
-        project_path=str(project_path.resolve()),
+        project_path=_product_path_str(project_path),
         groups=groups,
         comparisons=comparisons,
         seed=seed,
@@ -455,8 +467,8 @@ def _materialize_iteration(
         iteration = ValidationPlannedIteration(
             runId=display_run_id,
             phase=phase,
-            projectPath=str(project_path.resolve()),
-            runDir=str(run_dir.resolve()),
+            projectPath=_product_path_str(project_path),
+            runDir=_product_path_str(run_dir),
             taskConfig=task_config,
         )
         _rehydrate_iteration_centroid_scope(
@@ -473,7 +485,7 @@ def _materialize_iteration(
             previous_run_dir=previous_run_dir if not parallel_seed else None,
         )
         if not parallel_seed and previous_run_dir is not None:
-            iteration.previousRunDir = str(previous_run_dir.resolve())
+            iteration.previousRunDir = _product_path_str(previous_run_dir)
         return (
             _tag_iteration_as_stratified_draw(
                 iteration,
@@ -491,7 +503,7 @@ def _materialize_iteration(
 
     det_override_path = write_detector_featurecuts_override(run_dir, config)
     detector_path = (
-        str(det_override_path.resolve()) if det_override_path is not None else None
+        _product_path_str(det_override_path) if det_override_path is not None else None
     )
     if config.stability_gene_featurecuts_enabled:
         write_mapper_classifier_override(run_dir, config)
@@ -590,8 +602,8 @@ def _materialize_iteration(
     iteration = ValidationPlannedIteration(
         runId=display_run_id,
         phase=phase,
-        projectPath=str(project_path.resolve()),
-        runDir=str(run_dir.resolve()),
+        projectPath=_product_path_str(project_path),
+        runDir=_product_path_str(run_dir),
         taskConfig=task_config,
     )
     train_by_label_for_scope: Optional[Dict[str, List[str]]] = None
@@ -626,7 +638,7 @@ def _materialize_iteration(
             previous_train_by_label=previous_train_by_label_for_scope,
         )
     if not parallel_seed and previous_run_dir is not None:
-        iteration.previousRunDir = str(previous_run_dir.resolve())
+        iteration.previousRunDir = _product_path_str(previous_run_dir)
 
     return (
         _tag_iteration_as_stratified_draw(

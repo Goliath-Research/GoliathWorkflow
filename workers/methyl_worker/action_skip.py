@@ -386,6 +386,25 @@ def verify_artifacts(artifacts: List[ArtifactRef]) -> bool:
     return True
 
 
+def _plan_iteration_project_paths_ready(record: ActionExecutionRecord) -> bool:
+    """True when every planned iteration's ``projectPath`` exists on disk.
+
+    CAAS manifests can retain artifact blobs while ``task_output.iterations[].projectPath``
+    still points at a stolen/deleted sibling content-key path. Centroid then fails with
+    "Project config not found". Refuse skip/replay in that case so plan_iterations re-runs.
+    """
+    iterations = (record.task_output or {}).get("iterations") or []
+    if not iterations:
+        return False
+    for item in iterations:
+        if not isinstance(item, Mapping):
+            return False
+        project_path = item.get("projectPath")
+        if not project_path or not Path(str(project_path)).is_file():
+            return False
+    return True
+
+
 def _force_rerun_requested(input_json: Mapping[str, Any]) -> bool:
     if input_json.get("forceRerun") is True:
         return True
@@ -455,6 +474,16 @@ def _maybe_replay_from_caas(
         output_dir=output_dir,
     )
     if linked is None:
+        return None
+
+    if entry.action_name == "validation.plan_iterations" and not _plan_iteration_project_paths_ready(
+        linked
+    ):
+        logger.info(
+            "Not skipping %s: CAAS content_key %s has missing iteration projectPath files",
+            entry.action_name,
+            content_key[:12],
+        )
         return None
 
     try:
@@ -566,19 +595,27 @@ def maybe_skip_action(
         )
         return None
 
-    if entry.action_name == "validation.plan_iterations" and output_dir is not None:
-        try:
-            from methyl_validation.project_gen import monte_carlo_runs_have_legacy_projects
+    if entry.action_name == "validation.plan_iterations":
+        if not _plan_iteration_project_paths_ready(record):
+            logger.info(
+                "Not skipping %s: iteration projectPath files missing (manifest %s)",
+                entry.action_name,
+                manifest_path,
+            )
+            return None
+        if output_dir is not None:
+            try:
+                from methyl_validation.project_gen import monte_carlo_runs_have_legacy_projects
 
-            if monte_carlo_runs_have_legacy_projects(output_dir):
-                logger.info(
-                    "Not skipping %s: legacy step_config found under %s",
-                    entry.action_name,
-                    output_dir,
-                )
-                return None
-        except Exception:
-            logger.debug("legacy MC run scan failed for %s", output_dir, exc_info=True)
+                if monte_carlo_runs_have_legacy_projects(output_dir):
+                    logger.info(
+                        "Not skipping %s: legacy step_config found under %s",
+                        entry.action_name,
+                        output_dir,
+                    )
+                    return None
+            except Exception:
+                logger.debug("legacy MC run scan failed for %s", output_dir, exc_info=True)
 
     hyperparam_set_id = _hyperparam_set_id(input_json)
     if hyperparam_set_id and caas_enabled(input_json):

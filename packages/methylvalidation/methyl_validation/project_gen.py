@@ -14,12 +14,25 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from methyl_domain.types import CentroidGroupScope, CentroidSeedGroup
 
 
+def prepare_path_for_write(path: Path) -> Path:
+    """Ensure ``path`` can be opened for write without following a CAAS product symlink.
+
+    Monte Carlo run files are often symlinks into ``.caas/validation_plan_iterations/<key>/``.
+    Opening those for write would recreate blobs under the old content key (or fail if the
+    target was deleted). Replace the leaf first so writers always create a real file.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink() or path.is_file():
+        path.unlink()
+    return path
+
+
 def write_run_project_json(project: Dict[str, Any], project_path: Path) -> None:
     """Write per-iteration ``project.json`` (slim manifest; no embedded ``step_config``)."""
     payload = copy.deepcopy(project)
     payload.pop("step_config", None)
-    project_path = Path(project_path)
-    project_path.parent.mkdir(parents=True, exist_ok=True)
+    project_path = prepare_path_for_write(project_path)
     with open(project_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
 
@@ -197,7 +210,7 @@ def write_train_csv(path: Path, full_paths: List[str], base_path: str) -> None:
     detector / classifier resolve names with the run ``project.json`` ``samples_base_path``.
     Holdout lists use :func:`write_val_csv` instead (absolute paths) — see its docstring.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = prepare_path_for_write(path)
     names = [_sample_name_from_path(p, base_path) for p in full_paths]
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
@@ -219,7 +232,7 @@ def write_val_csv(path: Path, full_paths: List[str]) -> None:
     ``methyl-validation --freeze`` (or equivalent): production freeze remaps these paths in
     copied list files; see :func:`methyl_validation.path_remap.remap_cohort_list_files_in_project`.
     """
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = prepare_path_for_write(path)
     with open(path, "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["path"])
@@ -634,7 +647,7 @@ def write_centroid_step_override(
     previous_paths: Optional[List[str]],
     current_paths: List[str],
 ) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    path = prepare_path_for_write(path)
     payload = _build_centroid_step_override(previous_paths, current_paths)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
