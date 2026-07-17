@@ -290,6 +290,18 @@ class BackendSharedParams(BaseModel):
     covariate_missing_numeric_strategy: str = Field(default="mean")
     covariate_standardize_numeric: bool = Field(default=True)
     covariates_strict_join: bool = Field(default=False)
+    ecdf_second_stage_probability_transform: Optional[
+        Literal["logit_class1"]
+    ] = Field(default=None)
+    ecdf_second_stage_probability_epsilon: Optional[float] = Field(
+        default=None, gt=0.0, lt=0.5
+    )
+    covariate_composition_transform: Optional[Literal["alr"]] = Field(default=None)
+    covariate_composition_columns: Optional[List[str]] = Field(default=None)
+    covariate_composition_reference: Optional[str] = Field(default=None)
+    covariate_composition_pseudocount: Optional[float] = Field(
+        default=None, gt=0.0
+    )
 
     @field_validator("feature_mode")
     @classmethod

@@ -95,6 +95,59 @@
           "default": null,
           "title": "Covariate Categorical Columns"
         },
+        "covariate_composition_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Columns"
+        },
+        "covariate_composition_pseudocount": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Pseudocount"
+        },
+        "covariate_composition_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Reference"
+        },
+        "covariate_composition_transform": {
+          "anyOf": [
+            {
+              "const": "alr",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Transform"
+        },
         "covariate_id_column": {
           "default": "sample_id",
           "title": "Covariate Id Column",
@@ -212,6 +265,33 @@
           "description": "Include observed-hybrid features in the ECDF second-stage stacker. Second stage also runs when covariates_path is set.",
           "title": "Ecdf Second Stage Enabled",
           "type": "boolean"
+        },
+        "ecdf_second_stage_probability_epsilon": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 0.5,
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ecdf Second Stage Probability Epsilon"
+        },
+        "ecdf_second_stage_probability_transform": {
+          "anyOf": [
+            {
+              "const": "logit_class1",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ecdf Second Stage Probability Transform"
         },
         "feature_family_set": {
           "default": "dmp_scored",
@@ -614,6 +694,59 @@
           "default": null,
           "title": "Covariate Categorical Columns"
         },
+        "covariate_composition_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Columns"
+        },
+        "covariate_composition_pseudocount": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Pseudocount"
+        },
+        "covariate_composition_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Reference"
+        },
+        "covariate_composition_transform": {
+          "anyOf": [
+            {
+              "const": "alr",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Transform"
+        },
         "covariate_id_column": {
           "default": "sample_id",
           "title": "Covariate Id Column",
@@ -704,6 +837,33 @@
           "default": false,
           "title": "Covariates Strict Join",
           "type": "boolean"
+        },
+        "ecdf_second_stage_probability_epsilon": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 0.5,
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ecdf Second Stage Probability Epsilon"
+        },
+        "ecdf_second_stage_probability_transform": {
+          "anyOf": [
+            {
+              "const": "logit_class1",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ecdf Second Stage Probability Transform"
         },
         "feature_family_set": {
           "default": "dmp_scored",
@@ -1308,6 +1468,59 @@
           "default": null,
           "title": "Covariate Categorical Columns"
         },
+        "covariate_composition_columns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Columns"
+        },
+        "covariate_composition_pseudocount": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Pseudocount"
+        },
+        "covariate_composition_reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Reference"
+        },
+        "covariate_composition_transform": {
+          "anyOf": [
+            {
+              "const": "alr",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Covariate Composition Transform"
+        },
         "covariate_id_column": {
           "default": "sample_id",
           "title": "Covariate Id Column",
@@ -1398,6 +1611,33 @@
           "default": false,
           "title": "Covariates Strict Join",
           "type": "boolean"
+        },
+        "ecdf_second_stage_probability_epsilon": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 0.5,
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ecdf Second Stage Probability Epsilon"
+        },
+        "ecdf_second_stage_probability_transform": {
+          "anyOf": [
+            {
+              "const": "logit_class1",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ecdf Second Stage Probability Transform"
         },
         "feature_family_set": {
           "default": "dmp_scored",

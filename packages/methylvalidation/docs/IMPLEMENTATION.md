@@ -267,6 +267,7 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
 | **model_mc/shared/run_XXXX/test_*.csv**, **test_groups.json** | Canonical held-out test partition. `val_*` and `val_test_groups.json` remain deprecated compatibility aliases. |
 | **model_mc/shared/run_XXXX/centroids**, **model_mc/shared/run_XXXX/detections** | Symlinked from primary MC runs when split source is marked reusable; avoids duplicate detector execution. |
 | **model_mc/\<backend\>/run_XXXX/predictors/** | `train_predictions.csv` / `train_metrics.json` are training diagnostics; `test_predictions.csv` / `test_metrics.json` are held-out results used for model selection. Legacy names alias the test artifacts. |
+| **model_bundle/second_stage/** | Exact ECDF covariate-stacker design matrices: one clipped class-1 logit plus five standardized Neu-referenced ALR cell-composition features. `dataset_manifest.json` records ordered features, transform parameters, sample counts, and train/test overlap QC. |
 | **model_mc/<backend>/all_metrics.csv** | Per-backend model-stage MC metrics table produced from shared runs (or standalone backend runs when `--model-mc-all` is not used). |
 | **model_mc/<backend>/metrics_summary.json** | Per-backend summary statistics used for backend ranking. |
 | **model_mc/backend_ranking.csv** | Cross-backend ranking by configured metric/statistic. |

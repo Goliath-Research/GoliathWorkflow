@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
@@ -179,6 +179,10 @@ class CovariatePreprocessor:
     missing_numeric_strategy: str
     unknown_category_token: str = "__UNKNOWN__"
     missing_category_token: str = "__MISSING__"
+    composition_transform: Optional[str] = None
+    composition_columns: List[str] = field(default_factory=list)
+    composition_reference: Optional[str] = None
+    composition_pseudocount: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -200,6 +204,10 @@ class CovariatePreprocessor:
             "missing_numeric_strategy": str(self.missing_numeric_strategy),
             "unknown_category_token": str(self.unknown_category_token),
             "missing_category_token": str(self.missing_category_token),
+            "composition_transform": self.composition_transform,
+            "composition_columns": list(self.composition_columns),
+            "composition_reference": self.composition_reference,
+            "composition_pseudocount": self.composition_pseudocount,
         }
 
     @classmethod
@@ -223,6 +231,16 @@ class CovariatePreprocessor:
             missing_numeric_strategy=str(payload.get("missing_numeric_strategy", "mean")),
             unknown_category_token=str(payload.get("unknown_category_token", "__UNKNOWN__")),
             missing_category_token=str(payload.get("missing_category_token", "__MISSING__")),
+            composition_transform=payload.get("composition_transform"),
+            composition_columns=[
+                str(x) for x in payload.get("composition_columns", [])
+            ],
+            composition_reference=payload.get("composition_reference"),
+            composition_pseudocount=(
+                float(payload["composition_pseudocount"])
+                if payload.get("composition_pseudocount") is not None
+                else None
+            ),
         )
 
     def save_json(self, path: str | Path) -> None:
@@ -252,6 +270,46 @@ def _ordered_covariate_rows(
     return aligned, missing
 
 
+def _alr_transform(
+    frame: pd.DataFrame,
+    columns: Sequence[str],
+    reference: str,
+    pseudocount: float,
+) -> Tuple[pd.DataFrame, List[str]]:
+    ordered = [str(column) for column in columns]
+    if reference not in ordered:
+        raise ValueError("ALR reference must be included in composition columns.")
+    missing = sorted(set(ordered) - set(frame.columns))
+    if missing:
+        raise ValueError(f"ALR composition columns are missing: {missing}")
+    values = frame[ordered].apply(pd.to_numeric, errors="coerce").to_numpy(
+        dtype=np.float64
+    )
+    if not np.isfinite(values).all():
+        raise ValueError("ALR composition contains missing or non-finite values.")
+    if np.any(values < 0.0):
+        raise ValueError("ALR composition contains negative values.")
+    row_sums = np.sum(values, axis=1)
+    if np.any(row_sums <= 0.0):
+        raise ValueError("ALR composition contains a row with zero total mass.")
+    closed = values / row_sums[:, None]
+    ref_index = ordered.index(reference)
+    output_names = [
+        f"alr_{column}_vs_{reference}" for column in ordered if column != reference
+    ]
+    transformed = np.column_stack(
+        [
+            np.log(
+                (closed[:, index] + float(pseudocount))
+                / (closed[:, ref_index] + float(pseudocount))
+            )
+            for index, column in enumerate(ordered)
+            if column != reference
+        ]
+    )
+    return pd.DataFrame(transformed, index=frame.index, columns=output_names), output_names
+
+
 def fit_covariates(
     covariates_path: Optional[Union[str, Sequence[str]]],
     sample_ids: Sequence[str],
@@ -265,6 +323,10 @@ def fit_covariates(
     categorical_columns: Optional[Sequence[str]] = None,
     missing_numeric_strategy: str = "mean",
     standardize_numeric: bool = True,
+    composition_transform: Optional[str] = None,
+    composition_columns: Optional[Sequence[str]] = None,
+    composition_reference: Optional[str] = None,
+    composition_pseudocount: Optional[float] = None,
 ) -> Tuple[Optional[np.ndarray], Optional[CovariatePreprocessor], Dict[str, Any]]:
     if not covariates_path:
         return None, None, {"used": False}
@@ -337,6 +399,31 @@ def fit_covariates(
         numeric = [c for c in candidate_cols if c not in categorical and c not in ordinal]
     elif categorical_columns is None:
         categorical = [c for c in candidate_cols if c not in numeric and c not in ordinal]
+
+    composition_mode = (
+        str(composition_transform).strip().lower()
+        if composition_transform is not None
+        else None
+    )
+    composition_cols = [str(x) for x in (composition_columns or [])]
+    if composition_mode is not None:
+        if composition_mode != "alr":
+            raise ValueError("covariate composition transform must be 'alr'")
+        if not composition_cols or not composition_reference:
+            raise ValueError(
+                "ALR requires composition_columns and composition_reference."
+            )
+        if composition_pseudocount is None or float(composition_pseudocount) <= 0.0:
+            raise ValueError("ALR requires a positive composition_pseudocount.")
+        alr_frame, alr_names = _alr_transform(
+            aligned,
+            composition_cols,
+            str(composition_reference),
+            float(composition_pseudocount),
+        )
+        aligned = aligned.drop(columns=composition_cols).join(alr_frame)
+        numeric = [column for column in numeric if column not in composition_cols]
+        numeric.extend(alr_names)
 
     overlap = (set(numeric) & set(ordinal)) | (set(numeric) & set(categorical)) | (set(ordinal) & set(categorical))
     if overlap:
@@ -448,6 +535,10 @@ def fit_covariates(
         missing_numeric_strategy=missing_numeric_strategy,
         unknown_category_token=unknown_token,
         missing_category_token=missing_token,
+        composition_transform=composition_mode,
+        composition_columns=composition_cols,
+        composition_reference=composition_reference,
+        composition_pseudocount=composition_pseudocount,
     )
     report = {
         "used": True,
@@ -465,6 +556,11 @@ def fit_covariates(
         "unknown_ordinal_values_mapped": int(unknown_ordinal_count),
         "missing_numeric_strategy": missing_numeric_strategy,
         "standardize_numeric": bool(standardize_numeric),
+        "composition_transform": composition_mode,
+        "composition_reference": composition_reference,
+        "composition_output_columns": (
+            alr_names if composition_mode == "alr" else []
+        ),
     }
     return matrix, prep, report
 
@@ -488,6 +584,21 @@ def transform_covariates(
         preprocessor.id_column,
         strict_join=strict_join,
     )
+    if preprocessor.composition_transform == "alr":
+        if (
+            not preprocessor.composition_reference
+            or preprocessor.composition_pseudocount is None
+        ):
+            raise ValueError("Frozen ALR preprocessor metadata is incomplete.")
+        alr_frame, _ = _alr_transform(
+            aligned,
+            preprocessor.composition_columns,
+            preprocessor.composition_reference,
+            preprocessor.composition_pseudocount,
+        )
+        aligned = aligned.drop(columns=preprocessor.composition_columns).join(
+            alr_frame
+        )
     out_parts: List[np.ndarray] = []
 
     for col in preprocessor.numeric_columns:

@@ -75,6 +75,12 @@ class EcdfSecondStageParams(BaseModel):
     covariate_missing_numeric_strategy: str = Field(default="mean")
     covariate_standardize_numeric: bool = Field(default=True)
     covariates_strict_join: bool = Field(default=False)
+    probability_transform: Optional[str] = Field(default=None)
+    probability_epsilon: Optional[float] = Field(default=None, gt=0.0, lt=0.5)
+    composition_transform: Optional[str] = Field(default=None)
+    composition_columns: Optional[List[str]] = Field(default=None)
+    composition_reference: Optional[str] = Field(default=None)
+    composition_pseudocount: Optional[float] = Field(default=None, gt=0.0)
 
     def has_covariates(self) -> bool:
         if self.covariates_path is None:
@@ -152,6 +158,24 @@ class EcdfSecondStageParams(BaseModel):
                 getattr(config, "covariate_standardize_numeric", True)
             ),
             covariates_strict_join=bool(getattr(config, "covariates_strict_join", False)),
+            probability_transform=getattr(
+                config, "ecdf_second_stage_probability_transform", None
+            ),
+            probability_epsilon=getattr(
+                config, "ecdf_second_stage_probability_epsilon", None
+            ),
+            composition_transform=getattr(
+                config, "covariate_composition_transform", None
+            ),
+            composition_columns=getattr(
+                config, "covariate_composition_columns", None
+            ),
+            composition_reference=getattr(
+                config, "covariate_composition_reference", None
+            ),
+            composition_pseudocount=getattr(
+                config, "covariate_composition_pseudocount", None
+            ),
         )
 
 
@@ -317,6 +341,40 @@ def _prob_columns(df: pd.DataFrame) -> List[str]:
     )
 
 
+def _probability_design(
+    predictions: pd.DataFrame,
+    *,
+    transform: Optional[str],
+    epsilon: Optional[float],
+) -> Tuple[np.ndarray, List[str]]:
+    probability_columns = _prob_columns(predictions)
+    if transform is None:
+        return (
+            predictions[probability_columns].astype(np.float32).to_numpy(),
+            probability_columns,
+        )
+    if transform != "logit_class1":
+        raise ValueError(f"Unsupported ECDF probability transform: {transform!r}")
+    if epsilon is None:
+        raise ValueError("logit_class1 requires probability_epsilon.")
+    if "prob_class0" not in predictions or "prob_class1" not in predictions:
+        raise ValueError("logit_class1 requires prob_class0 and prob_class1.")
+    p0 = pd.to_numeric(predictions["prob_class0"], errors="coerce").to_numpy(
+        dtype=np.float64
+    )
+    p1 = pd.to_numeric(predictions["prob_class1"], errors="coerce").to_numpy(
+        dtype=np.float64
+    )
+    if not np.isfinite(p0).all() or not np.isfinite(p1).all():
+        raise ValueError("ECDF probabilities contain non-finite values.")
+    if not np.allclose(p0 + p1, 1.0, atol=1e-6):
+        raise ValueError("Binary ECDF probabilities do not sum to one.")
+    clipped = np.clip(p1, float(epsilon), 1.0 - float(epsilon))
+    logit = np.log(clipped / (1.0 - clipped)).astype(np.float32)
+    predictions["ecdf_logit_class1"] = logit.astype(float)
+    return logit.reshape(-1, 1), ["ecdf_logit_class1"]
+
+
 def _second_stage_dataset_frame(
     *,
     predictions: pd.DataFrame,
@@ -336,8 +394,10 @@ def _second_stage_dataset_frame(
         "expected_class": labels.astype(int),
     }
     for column in probability_columns:
-        data[column] = pd.to_numeric(predictions[column], errors="coerce").to_numpy(
-            dtype=np.float64
+        data[column] = (
+            pd.to_numeric(predictions[column], errors="coerce")
+            .to_numpy(dtype=np.float32)
+            .astype(float)
         )
 
     if transformed_covariates is not None:
@@ -477,8 +537,11 @@ def train_and_apply_ecdf_second_stage(
     if "sample" not in df.columns:
         raise ValueError("Second-stage scorer requires sample column in train_predictions.csv.")
 
-    prob_cols = _prob_columns(df)
-    X_prob = df[prob_cols].astype(np.float32).to_numpy()
+    X_prob, prob_cols = _probability_design(
+        df,
+        transform=params.probability_transform,
+        epsilon=params.probability_epsilon,
+    )
 
     sample_paths = _sample_paths_from_predictions(df, project_json)
     if not sample_paths:
@@ -630,6 +693,10 @@ def train_and_apply_ecdf_second_stage(
             categorical_columns=params.covariate_categorical_columns,
             missing_numeric_strategy=params.covariate_missing_numeric_strategy,
             standardize_numeric=params.covariate_standardize_numeric,
+            composition_transform=params.composition_transform,
+            composition_columns=params.composition_columns,
+            composition_reference=params.composition_reference,
+            composition_pseudocount=params.composition_pseudocount,
         )
         if cov is None:
             raise ValueError("covariates_path was set but fit_covariates returned no matrix")
@@ -716,10 +783,12 @@ def train_and_apply_ecdf_second_stage(
             raise ValueError(
                 "Second-stage test application requires sample and expected_class columns."
             )
-        test_prob_cols = _prob_columns(test_df)
-        test_blocks: List[np.ndarray] = [
-            test_df[test_prob_cols].astype(np.float32).to_numpy()
-        ]
+        test_probability_matrix, test_prob_cols = _probability_design(
+            test_df,
+            transform=params.probability_transform,
+            epsilon=params.probability_epsilon,
+        )
+        test_blocks: List[np.ndarray] = [test_probability_matrix]
         test_sample_paths = _sample_paths_from_predictions(test_df, project_json)
         test_sample_ids = [Path(str(path)).name for path in test_sample_paths]
         overlap = sorted(set(sample_ids) & set(test_sample_ids))
@@ -860,6 +929,28 @@ def train_and_apply_ecdf_second_stage(
         test_labels=test_y_for_dataset,
         test_valid_rows=test_valid_for_dataset,
         test_covariates=test_cov_for_dataset,
+    )
+    dataset_manifest_path = Path(dataset_artifacts["dataset_manifest_json"])
+    dataset_manifest = json.loads(
+        dataset_manifest_path.read_text(encoding="utf-8")
+    )
+    dataset_manifest.update(
+        {
+            "probability_transform": params.probability_transform,
+            "probability_epsilon": params.probability_epsilon,
+            "composition_transform": params.composition_transform,
+            "composition_columns": params.composition_columns,
+            "composition_reference": params.composition_reference,
+            "composition_pseudocount": params.composition_pseudocount,
+            "covariate_preprocessor": meta_extra.get(
+                "covariate_preprocessor_path"
+            ),
+            "second_stage_model": str(model_path),
+        }
+    )
+    dataset_manifest_path.write_text(
+        json.dumps(dataset_manifest, indent=2) + "\n",
+        encoding="utf-8",
     )
 
     meta = {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -63,6 +64,29 @@ def _write_covariates(path: Path, sample_ids: list[str], *, drop_one: bool = Fal
             "bmi": [22.0 + 0.3 * i for i in range(len(ids))],
         }
     ).to_csv(path, index=False)
+
+
+def _write_cell_composition(path: Path, sample_ids: list[str]) -> None:
+    rows = []
+    for index, sample_id in enumerate(sample_ids):
+        cd8 = 0.0 if index % 3 == 0 else 0.05 + 0.002 * index
+        cd4 = 0.15 + 0.002 * index
+        nk = 0.04 + 0.001 * index
+        bcell = 0.03 + 0.001 * index
+        mono = 0.10 + 0.001 * index
+        neu = 1.0 - (cd8 + cd4 + nk + bcell + mono)
+        rows.append(
+            {
+                "sample_id": sample_id,
+                "CD8T": cd8,
+                "CD4T": cd4,
+                "NK": nk,
+                "Bcell": bcell,
+                "Mono": mono,
+                "Neu": neu,
+            }
+        )
+    pd.DataFrame(rows).to_csv(path, index=False)
 
 
 def test_ecdf_second_stage_covariates_only(tmp_path: Path):
@@ -206,6 +230,86 @@ def test_ecdf_second_stage_rejects_overlapping_export_datasets(tmp_path: Path):
                 covariates_strict_join=True,
             ),
         )
+
+
+def test_ecdf_second_stage_uses_one_logit_and_five_alr_features(
+    tmp_path: Path,
+) -> None:
+    project = _minimal_project(tmp_path)
+    pred_dir = tmp_path / "predictors"
+    clf_dir = tmp_path / "classifiers"
+    _write_predictions(pred_dir / "train_predictions.csv", n=8)
+    _write_predictions(pred_dir / "test_predictions.csv", n=4)
+    test_df = pd.read_csv(pred_dir / "test_predictions.csv")
+    test_df["sample"] = [f"T{i}" for i in range(4)]
+    test_df["sample_path"] = [str(tmp_path / f"T{i}") for i in range(4)]
+    test_df.to_csv(pred_dir / "test_predictions.csv", index=False)
+    cov_csv = tmp_path / "cell_fractions.csv"
+    columns = ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"]
+    _write_cell_composition(
+        cov_csv,
+        [f"S{i}" for i in range(8)] + [f"T{i}" for i in range(4)],
+    )
+
+    train_and_apply_ecdf_second_stage(
+        project_json=project,
+        predictor_output_dir=pred_dir,
+        classifier_output_dir=clf_dir,
+        params=EcdfSecondStageParams(
+            include_observed_hybrid=False,
+            covariates_path=str(cov_csv),
+            covariate_numeric_columns=columns,
+            covariates_strict_join=True,
+            probability_transform="logit_class1",
+            probability_epsilon=1e-6,
+            composition_transform="alr",
+            composition_columns=columns,
+            composition_reference="Neu",
+            composition_pseudocount=1e-6,
+        ),
+    )
+
+    dataset_dir = tmp_path / "model_bundle" / "second_stage"
+    train_dataset = pd.read_csv(dataset_dir / "train_dataset.csv")
+    test_dataset = pd.read_csv(dataset_dir / "test_dataset.csv")
+    feature_columns = [
+        "ecdf_logit_class1",
+        "standardized_alr_CD8T_vs_Neu",
+        "standardized_alr_CD4T_vs_Neu",
+        "standardized_alr_NK_vs_Neu",
+        "standardized_alr_Bcell_vs_Neu",
+        "standardized_alr_Mono_vs_Neu",
+    ]
+    assert train_dataset.columns.tolist() == [
+        "sample_id",
+        "expected_class",
+        *feature_columns,
+    ]
+    assert test_dataset.columns.tolist() == [
+        "sample_id",
+        "expected_class",
+        *feature_columns,
+    ]
+    assert np.isfinite(train_dataset[feature_columns].to_numpy()).all()
+    assert np.isfinite(test_dataset[feature_columns].to_numpy()).all()
+    expected_logit = np.log(0.2 / 0.8)
+    assert train_dataset.loc[0, "ecdf_logit_class1"] == pytest.approx(
+        expected_logit
+    )
+    manifest = json.loads(
+        (dataset_dir / "dataset_manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["feature_columns"] == feature_columns
+    assert manifest["probability_transform"] == "logit_class1"
+    assert manifest["composition_transform"] == "alr"
+    assert manifest["composition_reference"] == "Neu"
+    assert manifest["train_test_overlap_count"] == 0
+    preprocessor = json.loads(
+        (clf_dir / "covariate-preprocessor.json").read_text(encoding="utf-8")
+    )
+    assert preprocessor["composition_columns"] == columns
+    assert preprocessor["composition_reference"] == "Neu"
+    assert len(preprocessor["output_columns"]) == 5
 
 
 def test_ecdf_second_stage_strict_join_missing_ids(tmp_path: Path):

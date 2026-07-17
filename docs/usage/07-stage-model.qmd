@@ -70,6 +70,12 @@ Each backend run writes `train_metrics.json` for diagnostics and
 `test_control.csv`, `test_disease.csv`, and `test_groups.json`; `val_*` names are
 compatibility aliases.
 
+For ECDF with leukocyte covariates, the second-stage LR uses six independent
+features: the clipped log-odds of `prob_class1` and five standardized additive
+log-ratios (`CD8T`, `CD4T`, `NK`, `Bcell`, `Mono`) relative to `Neu`. The exact
+matrices are saved under each run's `model_bundle/second_stage/`; its manifest
+records transform parameters and verifies zero train/test sample overlap.
+
 ## Backend behavior
 
 - `ecdf`: `methyl-classifier` -> `methyl-predictor`
