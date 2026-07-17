@@ -16,36 +16,48 @@ This page is the single ordered story. Deep dives stay in the linked runbooks; i
 
 ## Topology
 
+Two distinct access paths. **Preregistration ≠ enroll.**
+
 ```mermaid
 flowchart TB
-  subgraph companyAzure [Company Azure tenant]
-    Portal[EpiPortal]
-    SQL[(Azure SQL cfg + wf)]
-    ArcCtrl[Arc Policy Defender Sentinel]
+  subgraph pathA [Path A humans MFA]
+    Portal[EpiPortal_MFA]
   end
-  subgraph controlPlane [Control-plane VM]
-    Nginx[nginx TLS :443]
-    GW[methyl-gateway :8080 loopback]
-  end
-  subgraph shared ["/work shared storage"]
-    Rel["/work/epimethyl/current"]
-    Site["/work/site + /work/genomes"]
-    Proj["/work/projects + /work/samples"]
-  end
-  subgraph workers [GPU workers - Arc required]
+  subgraph pathB [Path B workers OpenAPI only]
     W1[methyl-worker]
-    W2[methyl-worker]
+    Nginx[nginx TLS :443]
+    GW[methyl-gateway OpenAPI]
   end
-  Portal -->|portal.sp_* studies + enroll rows| SQL
-  GW -->|managed identity| SQL
+  subgraph dataPlane [Azure SQL]
+    SQL[(cfg + wf)]
+  end
+  subgraph shared ["/work storage only"]
+    Rel["/work/epimethyl/current"]
+  end
+  subgraph arcGov [Arc governance not DB API]
+    ArcAgent[Arc agent + policy]
+  end
+
+  Portal -->|"portal.sp_* allowlist + studies"| SQL
+  W1 -->|"POST /v1/workers/enroll claim submit"| Nginx
   Nginx --> GW
-  W1 -->|HTTPS enroll + claim| Nginx
-  W2 -->|HTTPS enroll + claim| Nginx
-  W1 --> Rel
-  W2 --> Rel
-  W1 --> ArcCtrl
-  W2 --> ArcCtrl
+  GW -->|"MI: wf.sp_worker_enroll / claim / submit"| SQL
+  W1 -.->|read release artifacts| Rel
+  W1 -.->|Connected + X-Arc-Resource-Id attest| ArcAgent
 ```
+
+### Access model (code)
+
+| Actor | How they reach Azure SQL | Evidence |
+|-------|--------------------------|----------|
+| **EpiPortal** (MFA / company identity) | Direct `portal.sp_*` — preregisters `(cluster_key, public_ip, external_worker_key)` into `wf.worker_enrollment`; starts studies | `portal.sp_upsert_worker_enrollment` |
+| **methyl-worker** | **Only** gateway OpenAPI over HTTPS — no SQL drivers or DB secrets on the VM | `contracts/openapi.yaml`; `methyl-worker enroll` → `WorkflowRestClient` |
+| **methyl-gateway** | Managed identity → worker-facing procs (`wf.sp_worker_enroll`, claim/submit/heartbeat/fail) | `POST /v1/workers/enroll` in `gateway.py` → `wf.sp_worker_enroll` (rejects unknown IP/key) |
+
+- Portal **never** calls the gateway for enroll or admin catalog routes.
+- Workers **never** call SQL; enroll mints `worker_id` / `worker_token` once over TLS.
+- Azure Arc is inventory/policy/attest (`GATEWAY_REQUIRE_ARC_ATTEST=1` + `X-Arc-Resource-Id`), not a substitute enroll or DB API.
+- Shared `/work` is files only (release, samples, outputs).
 
 **Hard rules for production**
 
@@ -53,7 +65,7 @@ flowchart TB
 |------|--------|
 | One gateway | Workers never open SQL; portal never calls gateway admin HTTP |
 | Portal preregistration | Each worker’s **public IP** + cluster + key via `portal.sp_upsert_worker_enrollment` before enroll |
-| Gateway enroll | `methyl-worker enroll` issues `/etc/methyl/worker-token` — **no** `AZURE_SQL_*` / `POSTGRES_*` on workers |
+| Gateway enroll | `methyl-worker enroll` → OpenAPI → `wf.sp_worker_enroll`; writes `/etc/methyl/worker-token` — **no** `AZURE_SQL_*` / `POSTGRES_*` on workers |
 | Arc required | Every worker is an Azure Arc **Connected** machine in the company subscription; gateway sets `GATEWAY_REQUIRE_ARC_ATTEST=1` |
 | No git on workers | Runtime is `/work/epimethyl/current` only |
 
