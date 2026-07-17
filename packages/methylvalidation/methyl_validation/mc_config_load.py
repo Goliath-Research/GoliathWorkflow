@@ -51,14 +51,18 @@ def apply_project_regulatory_to_mc_dict(
     mc_config_dict: dict[str, Any],
     project: Any,
 ) -> dict[str, Any]:
-    """Copy study-manifest ``regulatory`` into MonteCarloConfig (not in profile validation slice)."""
+    """Copy study-owned lifecycle contracts into MonteCarloConfig."""
+    merged = dict(mc_config_dict)
     get_regulatory = getattr(project, "get_regulatory_config", None)
-    if not callable(get_regulatory):
-        return mc_config_dict
-    regulatory = get_regulatory()
-    if not regulatory:
-        return mc_config_dict
-    return {**mc_config_dict, "regulatory": regulatory}
+    if callable(get_regulatory):
+        regulatory = get_regulatory()
+        if regulatory:
+            merged["regulatory"] = regulatory
+
+    partitions = getattr(project, "validation_partitions", None)
+    if partitions:
+        merged["validation_partitions"] = partitions
+    return merged
 
 
 def load_monte_carlo_config(

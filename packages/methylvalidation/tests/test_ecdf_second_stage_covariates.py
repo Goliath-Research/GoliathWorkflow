@@ -142,6 +142,70 @@ def test_ecdf_second_stage_fits_train_and_scores_disjoint_test(tmp_path: Path):
     assert (pred_dir / "validation_metrics.json").read_text(encoding="utf-8") == (
         pred_dir / "test_metrics.json"
     ).read_text(encoding="utf-8")
+    dataset_dir = tmp_path / "model_bundle" / "second_stage"
+    train_dataset = pd.read_csv(dataset_dir / "train_dataset.csv")
+    test_dataset = pd.read_csv(dataset_dir / "test_dataset.csv")
+    expected_columns = [
+        "sample_id",
+        "expected_class",
+        "prob_class0",
+        "prob_class1",
+        "standardized_age",
+        "standardized_bmi",
+    ]
+    assert train_dataset.columns.tolist() == expected_columns
+    assert test_dataset.columns.tolist() == expected_columns
+    assert "evaluation_partition" not in train_dataset.columns
+    assert "evaluation_partition" not in test_dataset.columns
+    preprocessor = json.loads(
+        (clf_dir / "covariate-preprocessor.json").read_text(encoding="utf-8")
+    )
+    expected_train_age = (
+        40.0 - preprocessor["numeric_means"]["age"]
+    ) / preprocessor["numeric_stds"]["age"]
+    expected_test_age = (
+        48.0 - preprocessor["numeric_means"]["age"]
+    ) / preprocessor["numeric_stds"]["age"]
+    assert train_dataset.loc[0, "standardized_age"] == pytest.approx(
+        expected_train_age
+    )
+    assert test_dataset.loc[0, "standardized_age"] == pytest.approx(
+        expected_test_age
+    )
+    manifest = json.loads(
+        (dataset_dir / "dataset_manifest.json").read_text(encoding="utf-8")
+    )
+    assert manifest["n_train_samples"] == 8
+    assert manifest["n_test_samples"] == 4
+    assert manifest["train_test_overlap_count"] == 0
+    assert manifest["overlapping_sample_ids"] == []
+    assert out["dataset_manifest_json"] == str(
+        dataset_dir / "dataset_manifest.json"
+    )
+
+
+def test_ecdf_second_stage_rejects_overlapping_export_datasets(tmp_path: Path):
+    project = _minimal_project(tmp_path)
+    pred_dir = tmp_path / "predictors"
+    clf_dir = tmp_path / "classifiers"
+    _write_predictions(pred_dir / "train_predictions.csv", n=8)
+    _write_predictions(pred_dir / "test_predictions.csv", n=4)
+    cov_csv = tmp_path / "covariates.csv"
+    _write_covariates(cov_csv, [f"S{i}" for i in range(8)])
+
+    with pytest.raises(ValueError, match="train/test datasets overlap"):
+        train_and_apply_ecdf_second_stage(
+            project_json=project,
+            predictor_output_dir=pred_dir,
+            classifier_output_dir=clf_dir,
+            params=EcdfSecondStageParams(
+                include_observed_hybrid=False,
+                covariates_path=str(cov_csv),
+                covariate_id_column="sample_id",
+                covariate_numeric_columns=["age", "bmi"],
+                covariates_strict_join=True,
+            ),
+        )
 
 
 def test_ecdf_second_stage_strict_join_missing_ids(tmp_path: Path):

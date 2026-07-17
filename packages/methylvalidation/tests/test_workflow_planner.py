@@ -87,6 +87,52 @@ def test_plan_validation_context_materializes_iterations(tmp_path: Path) -> None
     assert context.projectPath.endswith("demo_mc")
 
 
+def test_plan_validation_context_excludes_locked_external_holdout(tmp_path: Path) -> None:
+    project_json = _write_minimal_binary_project(tmp_path)
+    project = json.loads(project_json.read_text(encoding="utf-8"))
+    samples = tmp_path / "samples"
+    for sample_id in ("H3", "H4", "D3", "D4"):
+        (samples / sample_id).mkdir()
+    (tmp_path / "healthy.csv").write_text(
+        "sample\nH1\nH2\nH3\nH4\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "disease.csv").write_text(
+        "sample\nD1\nD2\nD3\nD4\n",
+        encoding="utf-8",
+    )
+    project["validation_partitions"] = {
+        "development_train": [],
+        "internal_validation": [],
+        "locked_test": [str(samples / "H4"), str(samples / "D4")],
+        "pivotal_validation": [],
+        "post_market_monitoring": [],
+        "independence_keys": ["sample_id"],
+    }
+    project_json.write_text(json.dumps(project, indent=2), encoding="utf-8")
+
+    context = plan_validation_context(
+        ValidationPlanRequest(
+            projectPath=str(project_json),
+            featureIterations=1,
+            qualityIterations=0,
+        )
+    )
+
+    run_dir = Path(context.iterations[0].runDir)
+    split_text = "\n".join(
+        (run_dir / name).read_text(encoding="utf-8")
+        for name in (
+            "train_control.csv",
+            "train_disease.csv",
+            "test_control.csv",
+            "test_disease.csv",
+        )
+    )
+    assert "H4" not in split_text
+    assert "D4" not in split_text
+
+
 def test_plan_validation_context_requires_validation_block(tmp_path: Path) -> None:
     project_json = _write_minimal_binary_project(tmp_path)
     os.environ.pop("METHYL_PROFILE", None)
