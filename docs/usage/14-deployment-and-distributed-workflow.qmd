@@ -4,6 +4,7 @@
 
 Deploy the **control plane** (database, REST gateway) and **GPU workers** that execute SamplePrep and validation workflows. This chapter consolidates the dual-backend story (Azure SQL and PostgreSQL) and links to detailed runbooks.
 
+**Canonical production platform:** [`docs/deployment/production-platform.md`](../../deployment/production-platform.md)  
 **Deep dive:** [`docs/deployment/production_runbook.md`](../../deployment/production_runbook.md)  
 **Operator journey (day-1 → day-N):** [`docs/deployment/operator-journey.md`](../../deployment/operator-journey.md)  
 **Worker protocol:** [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md)  
@@ -17,26 +18,26 @@ Deploy the **control plane** (database, REST gateway) and **GPU workers** that e
 | Component | Role |
 |-----------|------|
 | **Database** | Stores workflow definitions, instances, scope, task queue |
-| **Portal SQL** (`portal.sp_*`) | Middle-tier orchestration; starts instances from study metadata |
-| **Gateway** (`methyl-gateway`) | REST API for workers (poll/submit) and admin (deploy definitions) |
-| **Workers** (`methyl-worker`) | Execute capabilities (Parabricks, methyl-qc, detector, …) |
-| **`/work` storage** | Shared FASTQs, BAMs, HDF5, MC outputs |
+| **Portal SQL** (`portal.sp_*`) | Middle-tier orchestration; starts instances; **preregisters worker IPs** |
+| **Gateway** (`methyl-gateway`) | Worker-only REST (`poll` / `submit` / `enroll`) — no catalog admin HTTP |
+| **Workers** (`methyl-worker`) | Execute capabilities (Parabricks, methyl-qc, detector, …); Arc Connected |
+| **`/work` storage** | Shared FASTQs, BAMs, HDF5, MC outputs, `/work/epimethyl` release |
 
-The portal does **not** call the gateway for routine worker dispatch in production; workers poll the gateway directly. Operator/admin routes may require Entra ID JWT when `GATEWAY_REQUIRE_ENTRA=1`.
+The portal does **not** call the gateway. Catalog and DomainProgram deploy use **direct DB** scripts on a privileged host. Workers enroll and claim over HTTPS with a token; production gateways set `GATEWAY_REQUIRE_ARC_ATTEST=1`.
 
 ## Greenfield checklist
 
-Use this ordered checklist once per environment:
+Use this ordered checklist once per environment (detail: [production-platform.md](../../deployment/production-platform.md)):
 
-1. [ ] Mount shared storage at `/work/epimethyl` (or study-specific `/work/<disease>/`)
-2. [ ] Deploy database schema (PostgreSQL **or** Azure SQL — see below)
-3. [ ] Run portal SQL scripts (`portal_resource_profile.sql`, `portal_workflow_api.sql`, cluster security if used)
-4. [ ] Seed action catalog: `methyl-export-task-schemas && methyl-export-action-catalog && python workflow_engine/sql_mssql/seed_action_catalog.py`
-5. [ ] Deploy workflow definitions: `bash scripts/deploy_workflow_definitions.sh`
-6. [ ] Install and configure gateway (`deploy/env/gateway.postgres.env.example` or `gateway.mssql.env.example` → `/work/epimethyl/env/gateway.env`)
-7. [ ] Enable `methyl-gateway` systemd + nginx TLS (see [`production_runbook.md`](../../deployment/production_runbook.md))
-8. [ ] Provision GPU workers: [`worker_provision.md`](../../deployment/worker_provision.md), [`gpu_worker_runbook.md`](../../deployment/gpu_worker_runbook.md)
-9. [ ] Register workers: `scripts/register_worker.sh`
+1. [ ] Mount shared storage at `/work/epimethyl` and study trees under `/work/projects/<study>/`
+2. [ ] Promote MethylPipeline + MethylExtractor release (`promote_release.sh`, pull Parabricks once)
+3. [ ] Deploy database schema (Azure SQL for production portal; PostgreSQL for parity/CI)
+4. [ ] Run portal SQL scripts (`portal_resource_profile.sql`, `portal_workflow_api.sql`, worker enrollment + cluster security)
+5. [ ] Bootstrap: `bash scripts/bootstrap_distributed_workers.sh` (catalog seed + workflow deploy)
+6. [ ] Install gateway (`gateway.mssql.env.example` → `/work/epimethyl/env/gateway.env`, managed identity)
+7. [ ] Enable `methyl-gateway` systemd + nginx TLS; set `GATEWAY_REQUIRE_ARC_ATTEST=1`
+8. [ ] Provision GPU workers (Arc in company Azure account): [`worker_provision.md`](../../deployment/worker_provision.md)
+9. [ ] Portal-preregister each worker public IP, then `methyl-worker enroll` (no SQL on workers)
 10. [ ] Smoke test: `scripts/smoke_sample_prep.sh`, `scripts/smoke_study_lifecycle.sh`
 
 ## Database deploy (dual-backend)
@@ -136,15 +137,16 @@ Each GPU worker runs one or more `methyl-worker` systemd units (see [`deploy/sys
 | Variable | Purpose |
 |----------|---------|
 | `WORKER_ID` | Unique worker name |
-| `WORKER_TOKEN` | Auth token from registration |
+| `WORKER_TOKEN` | Auth token from **gateway enroll** (`/etc/methyl/worker-token`) |
 | `WORKER_CAPABILITY` | e.g. `parabricks.fq2bam`, `methyl-qc`, `pipeline.detector` |
-| `WORKER_API_BASE` | Gateway URL (`https://gateway.example.com`) |
+| `WORKER_API_BASE` | Gateway URL (`https://gateway.example.com/v1`) |
 
-Registration and provisioning:
+Enrollment and provisioning (production = portal IP prereg + Arc + `methyl-worker enroll`):
 
+- [`docs/deployment/production-platform.md`](../../deployment/production-platform.md)
 - [`docs/deployment/worker_provision.md`](../../deployment/worker_provision.md)
-- [`docs/deployment/worker_node.md`](../../deployment/worker_node.md)
-- `scripts/register_worker.sh`, `scripts/provision_worker_node.sh`
+- [`docs/deployment/arc_worker_runbook.md`](../../deployment/arc_worker_runbook.md)
+- `scripts/provision_worker_node.sh`, `methyl-worker enroll`
 
 Worker poll/submit contract: [`workers/WORKER_PROTOCOL.md`](../../workers/WORKER_PROTOCOL.md)
 
@@ -186,6 +188,7 @@ methyl-workflow-run --program path/to/program.json \
 
 ## Related documentation
 
+- Production platform: [`docs/deployment/production-platform.md`](../../deployment/production-platform.md)
 - Production runbook: [`docs/deployment/production_runbook.md`](../../deployment/production_runbook.md)
 - Release layout: [`docs/deployment/production_release.md`](../../deployment/production_release.md)
 - Portal lifecycle: [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md)

@@ -126,32 +126,35 @@ set +a
 
 `worker.env` contains a **literal** `PATH` (venv prepended to the bootstrap host's PATH). Do not use `PATH=...:$PATH` in env files loaded by systemd `EnvironmentFile=` — variable expansion is not performed.
 
-## Register worker
+## Enroll worker (production)
 
-Clusters must be registered in `wf.cluster` before workers poll. Use HTTPS `WORKER_API_BASE` in production.
+Canonical path: [production-platform.md](production-platform.md) Phase 4.
+
+1. Portal preregisters this VM’s **public IP** (`portal.sp_upsert_worker_enrollment`).
+2. Worker is Azure Arc **Connected** (`verify_arc_prereqs.sh`).
+3. Enroll through the gateway (no SQL on the node):
 
 ```bash
-# Uses BACKEND_DB / gateway connection env (Azure SQL or PostgreSQL)
-bash scripts/register_worker.sh --key "$(hostname -s)"
-
-# Per-capability (production):
-bash scripts/register_worker.sh --key "gpu-1-methyl-qc" --capability methyl-qc
-
-# Tier C (public NSG): bind cluster to egress CIDR(s)
-bash scripts/register_worker.sh --cluster gpu-public --allowed-cidr 203.0.113.0/24
+export WORKER_API_BASE=https://<gateway-fqdn>/v1
+methyl-worker enroll \
+  --api-base "$WORKER_API_BASE" \
+  --cluster gpu-west \
+  --key "$(hostname -s)"
 ```
 
-Legacy PostgreSQL-only registration via `PGPASSWORD` still works when `BACKEND_DB=postgres` is set in the environment.
+`register_worker.sh` without DB env performs the same gateway enroll when `WORKER_API_BASE` is set.
+
+**Dev/bootstrap only** (trusted host): `register_worker.sh` with `BACKEND_DB` + `AZURE_SQL_*` or `POSTGRES_*`. Do not put those credentials on production GPU VMs.
 
 ## Gateway connectivity tiers
 
 | Tier | Network | `WORKER_API_BASE` | Worker auth |
 |------|---------|-------------------|-------------|
-| A | Azure VNet / internal LB | `https://gateway-internal/v1` | `WORKER_ID` + `WORKER_TOKEN` |
+| A | Azure VNet / internal LB | `https://gateway-internal/v1` | `WORKER_ID` + `WORKER_TOKEN` (+ Arc header) |
 | B | Site VPN | `https://gateway/v1` (VPN reachable) | same |
 | C | Public NSG | `https://gateway/v1` (HTTPS only) | same + cluster `allowed_source_cidrs` |
 
-Operator APIs (start SamplePrep, deploy definitions) require **Entra ID JWT** at the gateway when `GATEWAY_REQUIRE_ENTRA=1`. See [`production_runbook.md`](production_runbook.md#gateway-security-mixed-worker-topology).
+The gateway is **worker-only** HTTP. Study start and catalog/workflow deploy use **portal SQL** / **direct DB** scripts — not gateway admin routes. See [`production_runbook.md`](production_runbook.md#gateway-security-mixed-worker-topology).
 
 
 ## systemd
@@ -186,10 +189,11 @@ bash scripts/verify_e2e_node.sh
 
 ## Control plane (once per environment)
 
-1. [`workflow_engine/sql_pg/deploy_azure.sh`](../../workflow_engine/sql_pg/deploy_azure.sh) (PostgreSQL) or [`workflow_engine/sql_mssql/deploy_azure.sh`](../../workflow_engine/sql_mssql/deploy_azure.sh) (Azure SQL)
-2. `bash scripts/bootstrap_distributed_workers.sh --skip-schema` — seed 37 actions + deploy workflows
-3. `bash scripts/deploy_workflow_definitions.sh`
-4. Start gateway (`methyl-gateway` systemd on Linux) — see [`deploy/systemd/methyl-gateway.service`](../../deploy/systemd/methyl-gateway.service) and [`production_runbook.md`](production_runbook.md)
+Follow [production-platform.md](production-platform.md) Phases 2–3, or:
+
+1. [`workflow_engine/sql_mssql/deploy_azure.sh`](../../workflow_engine/sql_mssql/deploy_azure.sh) (production Azure SQL) or [`sql_pg/deploy_azure.sh`](../../workflow_engine/sql_pg/deploy_azure.sh) (parity/CI)
+2. `bash scripts/bootstrap_distributed_workers.sh` — schema + catalog seed + workflow deploy
+3. `sudo bash scripts/install_gateway_systemd.sh` + `setup_gateway_nginx.sh` — see [`production-platform.md`](production-platform.md#phase-3--single-gateway-vm)
 
 ## Staged lifecycle smoke
 

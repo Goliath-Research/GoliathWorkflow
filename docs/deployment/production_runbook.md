@@ -2,15 +2,17 @@
 
 End-to-end operator checklist for real FASTQ → HDF5 → validation on `/work/epimethyl`.
 
+**Platform install (gateway + Arc workers + enroll):** see [production-platform.md](production-platform.md) first. This page focuses on study execution and gateway security detail.
+
 ## Prerequisites
 
 - [ ] Shared storage mounted at `/work/epimethyl` on all worker nodes
 - [ ] `bash scripts/verify_e2e_node.sh` passes on GPU workers
-- [ ] Workflow REST gateway running on dedicated Linux VM (`methyl-gateway` systemd unit; see `deploy/env/gateway.postgres.env.example` or `gateway.mssql.env.example`)
-- [ ] Database schema deployed (Azure SQL phase 1 or Azure PostgreSQL phase 2)
+- [ ] Workflow REST gateway running on dedicated Linux VM (`methyl-gateway` systemd unit; see `deploy/env/gateway.mssql.env.example` / `gateway.security.env.example`)
+- [ ] Database schema deployed (Azure SQL for production portal)
 - [ ] Action catalog seeded (`seed_action_catalog.py`)
 - [ ] Workflow definitions deployed (`deploy_workflow_definitions.sh`)
-- [ ] Workers registered and systemd units running (`WORKER_API_BASE` → gateway VM)
+- [ ] Workers **Arc Connected**, portal-preregistered by public IP, enrolled via gateway, systemd running
 - [ ] Reference FASTA and project JSON on shared storage
 - [ ] Portal middle-tier using Azure SQL `portal.sp_*` (not the worker gateway)
 
@@ -176,13 +178,13 @@ export WORKER_API_BASE=https://gateway.example.com/v1
 methyl-worker enroll --api-base "$WORKER_API_BASE" --cluster gpu-west --key "$(hostname -s)"
 ```
 
-Day-2 claim/submit uses the issued token. Enable IP bind on the gateway:
+Day-2 claim/submit uses the issued token. Production gateway security:
 
 ```bash
 GATEWAY_WORKER_IP_BIND=1
 GATEWAY_TRUSTED_PROXY_CIDRS=127.0.0.1/32
-# Optional Arc attestation:
-# GATEWAY_REQUIRE_ARC_ATTEST=1
+# Required in production — reject workers without matching Arc resource id:
+GATEWAY_REQUIRE_ARC_ATTEST=1
 ```
 
 **Dev/bootstrap only** (`scripts/register_worker.py` with Azure SQL / Postgres env on a trusted host):
@@ -251,5 +253,5 @@ WHERE cluster_key = 'gpu-west';
 
 Re-enable only after Arc shows **Connected**, policy compliance is green, and security sign-off.
 
-Optional gateway hardening: `GATEWAY_REQUIRE_ARC_ATTEST=1` rejects worker polls when `X-Arc-Resource-Id` does not match `wf.cluster.arc_resource_id`.
+Production gateway hardening: `GATEWAY_REQUIRE_ARC_ATTEST=1` rejects worker polls when `X-Arc-Resource-Id` does not match the enrolled Arc machine (see [production-platform.md](production-platform.md)).
 

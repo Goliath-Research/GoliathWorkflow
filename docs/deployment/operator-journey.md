@@ -2,25 +2,27 @@
 
 Single navigation page for production operators. Each step links to the canonical deep-dive runbook — this file does not duplicate them.
 
+**Start here for a full production platform:** [production-platform.md](production-platform.md) (release → DB → gateway → Arc workers → portal enroll).
+
 ## Prerequisites
 
 | Step | Action | Deep dive |
 |------|--------|-----------|
-| 1 | Mount shared storage at `/work/epimethyl` and study trees under `/work/projects/<study>/` | [Production runbook — prerequisites](production_runbook.md) |
+| 1 | Mount shared storage at `/work/epimethyl` and study trees under `/work/projects/<study>/` | [Production platform — Phase 0](production-platform.md#phase-0--shared-storage-and-site) |
 | 2 | Install site manifest at `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | [Layer model](../architecture/layer-model.md) |
-| 3 | Choose DB backend (PostgreSQL recommended for greenfield; Azure SQL for portal phase-1) | [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd) |
+| 3 | Production DB = Azure SQL (portal); PostgreSQL for parity/CI | [Usage ch.14](../usage/14-deployment-and-distributed-workflow.qmd) |
 
 ## Greenfield control plane
 
 | Step | Script / command | Deep dive |
 |------|------------------|-----------|
-| 4 | Deploy DB schema | `workflow_engine/sql_pg/deploy_azure.sh` or `sql_mssql/deploy_azure.sh` |
-| 5 | Bootstrap catalog + workflows | `bash scripts/bootstrap_distributed_workers.sh` |
+| 4 | Promote MethylPipeline + MethylExtractor (+ Parabricks) | [production_release.md](production_release.md) |
+| 5 | Deploy DB schema + catalog + workflows | `bash scripts/bootstrap_distributed_workers.sh` |
 | 6 | Verify bootstrap (read-only) | `bash scripts/bootstrap_distributed_workers.sh --verify` |
-| 7 | Start gateway (systemd) | `scripts/install_gateway_systemd.sh` → `deploy/systemd/methyl-gateway.service` |
-| 8 | Register + start workers | `scripts/register_worker.sh`, `scripts/install_worker_systemd.sh` |
+| 7 | Start gateway (systemd + nginx TLS + Arc attest) | [production-platform.md — Phase 3](production-platform.md#phase-3--single-gateway-vm) |
+| 8 | Portal-preregister IP → Arc → `methyl-worker enroll` → systemd | [production-platform.md — Phase 4](production-platform.md#phase-4--each-gpu-worker-arc--enroll) |
 
-See [Distributed workers bootstrap](distributed-workers-bootstrap.md) and [GPU worker runbook](gpu_worker_runbook.md).
+See [Distributed workers bootstrap](distributed-workers-bootstrap.md), [arc_worker_runbook.md](arc_worker_runbook.md), and [GPU worker runbook](gpu_worker_runbook.md).
 
 ## Release promote
 
@@ -61,7 +63,8 @@ See [Production release](production_release.md).
 | `promote_release.sh` | Flip `/work/epimethyl/current`, refresh venv, worker env |
 | `deploy_workflow_definitions.sh` | Compile + deploy DomainPrograms via direct DB (`methyl-study-start` / `ops`) |
 | `install_gateway_systemd.sh` | Install arch-aware gateway unit (`venv-<arch>`) |
-| `register_worker.sh` | Register `wf.cluster` / worker row |
+| `provision_worker_node.sh` | Arc + host/Docker + gateway enroll + systemd |
+| `register_worker.sh` | Gateway enroll (no DB env) or **dev** direct-DB register |
 | `verify_setup.sh` | Release layout + script presence |
 | `verify_e2e_node.sh` | GPU worker pre-flight (Parabricks, HDF5 plugin, venv) |
 | `verify_work_layout.sh` | Four-layer path and env sanity |

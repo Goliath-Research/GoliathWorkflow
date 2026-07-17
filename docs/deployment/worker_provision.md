@@ -1,6 +1,8 @@
 # GPU worker provisioning playbook
 
-Step-by-step for joining a **new GPU VM** to an existing production release on shared storage, with **Azure Arc** governance before cluster registration.
+Step-by-step for joining a **new GPU VM** to an existing production release on shared storage, with **Azure Arc** governance before cluster enrollment.
+
+**Canonical production story:** [production-platform.md](production-platform.md) (portal IP prereg → Arc → gateway enroll). This page is the per-VM detail.
 
 Related: [production_release.md](production_release.md), [gpu_worker_runbook.md](gpu_worker_runbook.md), [arc_worker_runbook.md](arc_worker_runbook.md).
 
@@ -8,8 +10,8 @@ Related: [production_release.md](production_release.md), [gpu_worker_runbook.md]
 
 - Release already promoted: `/work/epimethyl/current` → valid `manifest.json`
 - Shared artifacts present: `venv-<arch>/`, `methyl-extractor-<arch>/`, `docker/` (if Parabricks pre-pulled)
-- Gateway (HTTPS) and PostgreSQL available for worker registration
-- Operator has sudo + Azure permissions for Arc onboarding (production)
+- Gateway HTTPS up (`WORKER_API_BASE`); portal has preregistered this VM’s **public IP**
+- Operator has sudo + Azure permissions for Arc onboarding (company tenant/subscription)
 
 ## Orchestrated path (recommended)
 
@@ -111,19 +113,33 @@ bash /work/epimethyl/current/runtime-bundle/scripts/write_worker_env.sh \
   --arch aarch64
 ```
 
-### 7. Register worker (once per VM)
+### 7. Enroll worker via gateway (once per VM)
+
+**Production:** portal must already have this VM’s public IP (`portal.sp_upsert_worker_enrollment`). No SQL credentials on the worker.
 
 ```bash
-export POSTGRES_HOST=… POSTGRES_USER=… POSTGRES_PASSWORD=… POSTGRES_DB=…
-export BACKEND_DB=postgres
+export WORKER_API_BASE=https://<gateway-fqdn>/v1
+bash /work/epimethyl/current/runtime-bundle/scripts/verify_arc_prereqs.sh
+methyl-worker enroll \
+  --api-base "$WORKER_API_BASE" \
+  --cluster gpu-west \
+  --key "$(hostname -s)"
+# writes /etc/methyl/worker-token (mode 600)
+```
+
+`register_worker.sh` without `AZURE_SQL_*` / `POSTGRES_*` also enrolls through the gateway when `WORKER_API_BASE` is set. It reads `ARC_RESOURCE_ID` from `/etc/methyl/arc.env` when present.
+
+**Dev/bootstrap only** (trusted host with DB env — never on production GPU VMs):
+
+```bash
+export BACKEND_DB=mssql   # or postgres + POSTGRES_*
+# AZURE_SQL_* …
 bash /work/epimethyl/current/runtime-bundle/scripts/register_worker.sh \
   --cluster gpu-west \
   --key "$(hostname -s)" \
   --require-arc \
   --env-file /work/epimethyl/env/worker.env
 ```
-
-`register_worker.sh` reads `ARC_RESOURCE_ID` from `/etc/methyl/arc.env` when `--arc-resource-id` is omitted.
 
 ### 8. Verify
 
@@ -161,7 +177,7 @@ Skip promote and venv install. Repeat Arc verify (if new VM) and steps **3–9**
 
 ## Omnibus vs capability workers
 
-| Mode | register_worker | systemd unit |
-|------|-----------------|--------------|
+| Mode | Enroll / register | systemd unit |
+|------|-------------------|--------------|
 | All capabilities | no `--capability` | `methyl-worker.service` |
-| Single capability | `--capability methyl-qc` | `methyl-worker@methyl-qc.service` via `install_worker_systemd.sh --capability methyl-qc` |
+| Single capability | `--capability methyl-qc` (dev DB path) or matching key | `methyl-worker@methyl-qc.service` via `install_worker_systemd.sh --capability methyl-qc` |

@@ -1,6 +1,8 @@
 # Distributed workers bootstrap
 
-Operator guide for seeding **PostgreSQL** or **Azure SQL** with the current action catalog (37 actions from `schemas/actions/catalog.json`) and deploying DomainProgram workflows for remote GPU worker testing.
+Operator guide for seeding **PostgreSQL** or **Azure SQL** with the current action catalog (from `schemas/actions/catalog.json`) and deploying DomainProgram workflows for remote GPU worker testing.
+
+For the full production platform (gateway + Arc enroll), see [production-platform.md](production-platform.md).
 
 ## Two-database layout (typical)
 
@@ -28,7 +30,7 @@ export POSTGRES_USER=dba
 export POSTGRES_PASSWORD='...'
 export PGSSLMODE=require
 
-# 1) Catalog from git (37 actions — preferred over stale MSSQL rows)
+# 1) Catalog from git (preferred over stale MSSQL rows)
 python scripts/populate_postgres_reference_data.py
 
 # 2) Optionally clone workflow definitions from production Azure SQL
@@ -79,26 +81,31 @@ The bootstrap script:
 4. Seeds `wf.workflow_action` + task JSON schemas via `workflow_engine/sql_mssql/seed_action_catalog.py`
 5. Deploys compiled SamplePrep + StudyValidation workflows via `scripts/deploy_workflow_definitions.sh` (direct DB)
 
-## Register remote workers
+## Enroll remote workers
 
-After bootstrap, on each GPU worker node:
+**Production:** do **not** put DB credentials on GPU workers. After bootstrap and gateway TLS are up:
+
+1. Portal-preregister each VM public IP (`portal.sp_upsert_worker_enrollment`).
+2. Arc-connect the VM ([arc_worker_runbook.md](arc_worker_runbook.md)).
+3. Enroll through the gateway:
 
 ```bash
-export BACKEND_DB=postgres   # or mssql — same as gateway
-# ... same DB connection env as gateway ...
-
-bash scripts/register_worker.sh \
+export WORKER_API_BASE=https://<gateway-fqdn>/v1
+methyl-worker enroll \
+  --api-base "$WORKER_API_BASE" \
   --cluster epimethyl \
-  --key "$(hostname -s)" \
-  --env-file /work/epimethyl/env/worker.env
-
+  --key "$(hostname -s)"
 bash scripts/install_worker_systemd.sh
 ```
 
-Or register from the operator host during bootstrap:
+Full story: [production-platform.md](production-platform.md) Phase 4.
+
+**Dev/bootstrap only** (trusted host with the same DB env as the gateway):
 
 ```bash
 bash scripts/bootstrap_distributed_workers.sh --register-worker --skip-schema
+# or: bash scripts/register_worker.sh --cluster epimethyl --key "$(hostname -s)" \
+#       --env-file /work/epimethyl/env/worker.env
 ```
 
 Read-only health check (no DDL/seed/deploy):
@@ -129,7 +136,7 @@ bash scripts/smoke_study_lifecycle.sh --api-base "$WORKER_API_BASE"
 
 ## Catalog contents (current)
 
-- **33+** workflow actions in `schemas/actions/catalog.json` (use `sample.archive_sample` for HDF5 archive)
+- Action count follows `schemas/actions/catalog.json` (seed with `seed_action_catalog.py`; use `sample.archive_sample` for HDF5 archive)
 - Typed task I/O under `schemas/tasks/*.schema.json`
 - Exported catalog: `schemas/actions/catalog.json`
 
@@ -142,6 +149,7 @@ bash scripts/refresh_sample_prep_test_bed.sh
 
 ## Related
 
+- [Production platform](production-platform.md)
 - [Production runbook](production_runbook.md)
 - [Worker node setup](worker_node.md)
 - [SamplePrep test bed](../../workflow_engine/docs/sample_prep_test_bed.md)
