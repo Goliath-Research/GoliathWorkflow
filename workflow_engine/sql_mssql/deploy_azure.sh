@@ -101,6 +101,7 @@ SCRIPTS=(
   cfg_wf_relationships.sql
   cfg_repo_api.sql
   portal_resource_profile.sql
+  cfg_reference_assets_seed.sql
   cfg_portal_api.sql
 )
 

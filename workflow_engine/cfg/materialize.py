@@ -56,13 +56,18 @@ def materialize_store(
     written: List[str] = []
 
     if "site" in selected:
+        from .reference_selection import apply_reference_selection
+
         sites = store.list("site", published_only=True)
         if site_name:
             sites = [s for s in sites if s.name == site_name]
         if sites:
             # Prefer name "default" else first
             site = next((s for s in sites if s.name == "default"), sites[0])
-            _write_json(paths["site"], site.document)
+            site_doc = apply_reference_selection(
+                site.document, work_root=work_root, overwrite=False
+            )
+            _write_json(paths["site"], site_doc)
             written.append(f"site:{site.name}@{site.version}->{paths['site']}")
 
     if "pipeline_profile" in selected:
@@ -121,8 +126,11 @@ def materialize_store(
 
     if "reference_asset" in selected:
         for rec in store.list("reference_asset", published_only=True):
-            out = paths["reference_assets"] / f"{rec.name}.json"
+            out = paths["reference_assets"] / f"{rec.name}@{rec.version}.json"
             _write_json(out, rec.document)
+            # Convenience alias for the published version (last write wins if multiple)
+            alias = paths["reference_assets"] / f"{rec.name}.json"
+            _write_json(alias, rec.document)
             written.append(f"reference_asset:{rec.name}@{rec.version}->{out}")
 
     if "action_definition" in selected:

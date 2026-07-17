@@ -912,15 +912,16 @@
                   "op"
                 ],
                 "properties": {
-                  "op": {
-                    "type": "string",
-                    "enum": [
-                      "mkdir",
-                      "download",
-                      "checksum",
-                      "run"
-                    ]
-                  },
+                    "op": {
+                      "type": "string",
+                      "enum": [
+                        "mkdir",
+                        "download",
+                        "s3_sync",
+                        "checksum",
+                        "run"
+                      ]
+                    },
                   "uri": {
                     "type": "string"
                   },

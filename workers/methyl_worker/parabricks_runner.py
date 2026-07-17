@@ -454,7 +454,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         genomes_dir = Path(
             os.environ.get(
                 "METHYL_GENOMES_DIR",
-                "/work/genomes/human_genome/release-114",
+                "/work/genomes/linear/GRCh38/ensembl-114",
             )
         )
         reference = str(genomes_dir / "Homo_sapiens.GRCh38.dna.primary_assembly.fa")

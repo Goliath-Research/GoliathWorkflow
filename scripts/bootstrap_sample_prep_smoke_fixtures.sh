@@ -36,7 +36,7 @@ FASTQ_DIR="$RUN_ROOT/fastq/$SAMPLE_ID"
 SAMPLE_DIR="$RUN_ROOT/samples/$SAMPLE_ID"
 OUT_BASE="$RUN_ROOT/out"
 PROJECT_PATH="$RUN_ROOT/project.json"
-REF_FASTA="${SMOKE_REFERENCE_FASTA:-/work/genomes/human_genome/release-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa}"
+REF_FASTA="${SMOKE_REFERENCE_FASTA:-/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa}"
 
 mkdir -p "$FASTQ_DIR" "$SAMPLE_DIR" "$OUT_BASE/alignment_qc"
 

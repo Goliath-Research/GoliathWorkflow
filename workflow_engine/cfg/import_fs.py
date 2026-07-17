@@ -23,11 +23,62 @@ def import_filesystem(
     include_profiles: bool = True,
     include_site: bool = True,
     include_studies: bool = True,
+    include_reference_assets: bool = True,
 ) -> Dict[str, Any]:
     repo_root = Path(repo_root)
     work_root_p = Path(work_root) if work_root else None
     imported: List[str] = []
     status = "published" if publish else "draft"
+
+    if include_reference_assets:
+        endpoints_dir = (
+            repo_root / "workflow_engine" / "domain" / "fixtures" / "storage_endpoints"
+        )
+        if endpoints_dir.is_dir():
+            for path in sorted(endpoints_dir.glob("*.json")):
+                doc = _load_json(path)
+                name = str(doc.get("name") or path.stem)
+                version = str(doc.get("version") or "1")
+                body = {
+                    k: v
+                    for k, v in doc.items()
+                    if k not in ("name", "version", "status", "credentialName")
+                }
+                store.upsert(
+                    "storage_endpoint",
+                    name,
+                    body,
+                    status=status,
+                    version=version,
+                    extra={
+                        "provider": body.get("type") or "s3",
+                        "credentialName": doc.get("credentialName"),
+                    },
+                )
+                imported.append(f"storage_endpoint:{name}@{version}")
+
+        assets_dir = (
+            repo_root / "workflow_engine" / "domain" / "fixtures" / "reference_assets"
+        )
+        if assets_dir.is_dir():
+            for path in sorted(assets_dir.glob("*.json")):
+                doc = _load_json(path)
+                name = str(doc.get("name") or path.stem)
+                version = str(doc.get("version") or "1")
+                # Store document without name/version wrapper keys if present
+                body = {
+                    k: v
+                    for k, v in doc.items()
+                    if k not in ("name", "version", "status")
+                }
+                store.upsert(
+                    "reference_asset",
+                    name,
+                    body,
+                    status=status,
+                    version=version,
+                )
+                imported.append(f"reference_asset:{name}@{version}")
 
     if include_profiles:
         profiles_dir = repo_root / "workflow_engine" / "domain" / "profiles"

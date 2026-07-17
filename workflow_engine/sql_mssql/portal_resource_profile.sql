@@ -56,6 +56,22 @@ BEGIN
 END
 GO
 
+/* Sibling genomes inventory endpoint (same bucket/keys; prefix genomes/). */
+IF NOT EXISTS (SELECT 1 FROM cfg.storage_endpoint WHERE name = N'epimethyl-genomes' AND version = N'1')
+BEGIN
+    INSERT INTO cfg.storage_endpoint (name, version, status, content_hash, provider, location_json, credential_name)
+    VALUES (
+        N'epimethyl-genomes',
+        N'1',
+        N'published',
+        CONVERT(nvarchar(128), HASHBYTES('SHA2_256', N'{"type":"s3","bucket":"epimethyl","region":"us-east-1","endpointUrl":"https://s3.us-east-1.myqnapcloud.io","prefixBase":"genomes/","scope":"shared"}'), 2),
+        N's3',
+        CAST(N'{"type":"s3","bucket":"epimethyl","region":"us-east-1","endpointUrl":"https://s3.us-east-1.myqnapcloud.io","prefixBase":"genomes/","scope":"shared"}' AS json),
+        N'epimethyl-archive-keys'
+    );
+END
+GO
+
 IF NOT EXISTS (
     SELECT 1 FROM portal.resource_profile WHERE profile_key = N'epimethyl-samples'
 )

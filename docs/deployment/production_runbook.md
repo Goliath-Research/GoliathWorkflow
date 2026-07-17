@@ -16,14 +16,14 @@ End-to-end operator checklist for real FASTQ → HDF5 → validation on `/work/e
 - [ ] Reference FASTA and project JSON on shared storage
 - [ ] Portal middle-tier using Azure SQL `portal.sp_*` (not the worker gateway)
 
-**Reference genomes on myQNAPcloud:** Keep a durable copy of `/work/genomes` (human_genome + pangenome) in bucket `epimethyl` for future deployments. Sync with Access Key / Secret Key via S3 (not rsync):
+**Reference genomes on myQNAPcloud:** Keep a durable copy of `/work/genomes` (linear + annotation + pangenome) in bucket `epimethyl` for future deployments. Sync with Access Key / Secret Key via S3 (not rsync):
 
 ```bash
 export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 scripts/sync_genomes_to_s3.sh --dry-run
 scripts/sync_genomes_to_s3.sh
-# optional: scripts/sync_genomes_to_s3.sh --only pangenome
+# optional: scripts/sync_genomes_to_s3.sh --only linear  # or annotation | pangenome
 ```
 
 Destination: `s3://epimethyl/genomes/` at `https://s3.us-east-1.myqnapcloud.io`. See script header for verify `aws s3 ls` commands.
