@@ -681,6 +681,26 @@ def plan_validation_context(
         if not paths:
             raise ValueError(f"Cohort {cohort.label!r} ({cohort.csv}) has no samples")
         cohort_paths_list.append((cohort.label, paths))
+    from .holdout_eval import filter_cohort_paths_excluding, holdout_basenames_from_config
+
+    holdout_basenames = holdout_basenames_from_config(config)
+    if holdout_basenames:
+        cohort_paths_list, removed_holdout = filter_cohort_paths_excluding(
+            cohort_paths_list,
+            holdout_basenames,
+        )
+        missing = sorted(holdout_basenames - set(removed_holdout))
+        if missing:
+            raise ValueError(
+                "Configured locked hold-out sample(s) were not found in the study cohorts: "
+                f"{missing[:10]}"
+            )
+        empty_labels = [label for label, paths in cohort_paths_list if not paths]
+        if empty_labels:
+            raise ValueError(
+                "Locked hold-out exclusion left empty cohort(s): "
+                f"{empty_labels}. Reduce or correct validation_partitions."
+            )
     cohort_labels = [c.label for c in config.cohorts]
     full_cohort_by_label = {label: list(paths) for label, paths in cohort_paths_list}
 

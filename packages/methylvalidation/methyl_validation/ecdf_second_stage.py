@@ -317,6 +317,141 @@ def _prob_columns(df: pd.DataFrame) -> List[str]:
     )
 
 
+def _second_stage_dataset_frame(
+    *,
+    predictions: pd.DataFrame,
+    probability_columns: List[str],
+    sample_ids: List[str],
+    labels: np.ndarray,
+    valid_rows: np.ndarray,
+    transformed_covariates: Optional[np.ndarray],
+    preprocessor: Any,
+) -> pd.DataFrame:
+    """Build the persisted matrix actually supplied to the covariate stacker."""
+    if len(predictions) != len(sample_ids) or len(predictions) != len(labels):
+        raise ValueError("Second-stage dataset row counts are inconsistent.")
+
+    data: Dict[str, Any] = {
+        "sample_id": sample_ids,
+        "expected_class": labels.astype(int),
+    }
+    for column in probability_columns:
+        data[column] = pd.to_numeric(predictions[column], errors="coerce").to_numpy(
+            dtype=np.float64
+        )
+
+    if transformed_covariates is not None:
+        covariates = np.asarray(transformed_covariates, dtype=np.float32)
+        if covariates.shape[0] != len(predictions):
+            raise ValueError("Second-stage covariate and prediction row counts differ.")
+        output_columns = list(getattr(preprocessor, "output_columns", []) or [])
+        if len(output_columns) != covariates.shape[1]:
+            raise ValueError(
+                "Second-stage covariate schema mismatch: "
+                f"names={len(output_columns)} matrix={covariates.shape[1]}"
+            )
+        numeric = set(getattr(preprocessor, "numeric_columns", []) or [])
+        ordinal = set(getattr(preprocessor, "ordinal_columns", []) or [])
+        standardized = bool(getattr(preprocessor, "standardize_numeric", False))
+        for index, name in enumerate(output_columns):
+            prefix = "standardized_" if standardized and name in (numeric | ordinal) else "transformed_"
+            data[f"{prefix}{name}"] = covariates[:, index].astype(float)
+
+    return pd.DataFrame(data).loc[np.asarray(valid_rows, dtype=bool)].reset_index(drop=True)
+
+
+def _write_second_stage_datasets(
+    *,
+    project_json: Path,
+    train_predictions: pd.DataFrame,
+    train_probability_columns: List[str],
+    train_sample_ids: List[str],
+    train_labels: np.ndarray,
+    train_valid_rows: np.ndarray,
+    train_covariates: Optional[np.ndarray],
+    preprocessor: Any,
+    test_predictions: Optional[pd.DataFrame],
+    test_probability_columns: Optional[List[str]],
+    test_sample_ids: Optional[List[str]],
+    test_labels: Optional[np.ndarray],
+    test_valid_rows: Optional[np.ndarray],
+    test_covariates: Optional[np.ndarray],
+) -> Dict[str, Any]:
+    output_dir = project_json.parent / "model_bundle" / "second_stage"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    train_dataset = _second_stage_dataset_frame(
+        predictions=train_predictions,
+        probability_columns=train_probability_columns,
+        sample_ids=train_sample_ids,
+        labels=train_labels,
+        valid_rows=train_valid_rows,
+        transformed_covariates=train_covariates,
+        preprocessor=preprocessor,
+    )
+    train_path = output_dir / "train_dataset.csv"
+    train_dataset.to_csv(train_path, index=False)
+
+    test_path: Optional[Path] = None
+    test_dataset: Optional[pd.DataFrame] = None
+    overlap: List[str] = []
+    if (
+        test_predictions is not None
+        and test_probability_columns is not None
+        and test_sample_ids is not None
+        and test_labels is not None
+        and test_valid_rows is not None
+    ):
+        test_dataset = _second_stage_dataset_frame(
+            predictions=test_predictions,
+            probability_columns=test_probability_columns,
+            sample_ids=test_sample_ids,
+            labels=test_labels,
+            valid_rows=test_valid_rows,
+            transformed_covariates=test_covariates,
+            preprocessor=preprocessor,
+        )
+        test_path = output_dir / "test_dataset.csv"
+        test_dataset.to_csv(test_path, index=False)
+        overlap = sorted(
+            set(train_dataset["sample_id"].astype(str))
+            & set(test_dataset["sample_id"].astype(str))
+        )
+
+    covariates_exported = train_covariates is not None
+    manifest = {
+        "schema_version": 1,
+        "train_dataset": str(train_path),
+        "test_dataset": str(test_path) if test_path is not None else None,
+        "n_train_samples": int(len(train_dataset)),
+        "n_test_samples": int(len(test_dataset)) if test_dataset is not None else None,
+        "train_test_overlap_count": int(len(overlap)) if test_dataset is not None else None,
+        "overlapping_sample_ids": overlap,
+        "feature_columns": [
+            column
+            for column in train_dataset.columns
+            if column not in {"sample_id", "expected_class"}
+        ],
+        "covariates_are_training_fitted_transforms": covariates_exported,
+    }
+    manifest_path = output_dir / "dataset_manifest.json"
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+    if overlap:
+        raise ValueError(
+            "Second-stage train/test datasets overlap; refusing model evaluation. "
+            f"First overlap(s): {overlap[:10]}"
+        )
+
+    return {
+        "train_dataset_csv": str(train_path),
+        "test_dataset_csv": str(test_path) if test_path is not None else None,
+        "dataset_manifest_json": str(manifest_path),
+        "train_test_overlap_count": int(len(overlap)) if test_dataset is not None else None,
+        "covariates_exported": covariates_exported,
+    }
+
+
 def train_and_apply_ecdf_second_stage(
     *,
     project_json: str | Path,
@@ -481,6 +616,7 @@ def train_and_apply_ecdf_second_stage(
 
     cov_report: Dict[str, Any] = {"used": False}
     preprocessor = None
+    cov: Optional[np.ndarray] = None
     if params.has_covariates():
         cov, preprocessor, cov_report = fit_covariates(
             params.covariates_path,
@@ -568,6 +704,12 @@ def train_and_apply_ecdf_second_stage(
     train_metrics_path.write_text(json.dumps(train_payload, indent=2) + "\n", encoding="utf-8")
 
     test_metrics_path: Optional[Path] = None
+    test_df_for_dataset: Optional[pd.DataFrame] = None
+    test_prob_cols_for_dataset: Optional[List[str]] = None
+    test_sample_ids_for_dataset: Optional[List[str]] = None
+    test_y_for_dataset: Optional[np.ndarray] = None
+    test_valid_for_dataset: Optional[np.ndarray] = None
+    test_cov_for_dataset: Optional[np.ndarray] = None
     if test_pred_csv.is_file():
         test_df = pd.read_csv(test_pred_csv)
         if "sample" not in test_df.columns or "expected_class" not in test_df.columns:
@@ -580,6 +722,12 @@ def train_and_apply_ecdf_second_stage(
         ]
         test_sample_paths = _sample_paths_from_predictions(test_df, project_json)
         test_sample_ids = [Path(str(path)).name for path in test_sample_paths]
+        overlap = sorted(set(sample_ids) & set(test_sample_ids))
+        if overlap:
+            raise ValueError(
+                "Second-stage train/test datasets overlap; refusing model evaluation. "
+                f"First overlap(s): {overlap[:10]}"
+            )
 
         if params.include_observed_hybrid:
             if bundle_h5 is None or feat is None or anchors is None or fill_values is None:
@@ -641,7 +789,8 @@ def train_and_apply_ecdf_second_stage(
             )
             if test_cov is None:
                 raise ValueError("Second-stage covariate transform returned no test matrix.")
-            test_blocks.append(np.asarray(test_cov, dtype=np.float32))
+            test_cov_for_dataset = np.asarray(test_cov, dtype=np.float32)
+            test_blocks.append(test_cov_for_dataset)
 
         test_matrix = np.concatenate(test_blocks, axis=1)
         if int(test_matrix.shape[1]) != int(X.shape[1]):
@@ -663,6 +812,11 @@ def train_and_apply_ecdf_second_stage(
             .to_numpy()
         )
         test_valid = np.isin(test_y, [0, 1])
+        test_df_for_dataset = test_df
+        test_prob_cols_for_dataset = test_prob_cols
+        test_sample_ids_for_dataset = test_sample_ids
+        test_y_for_dataset = test_y
+        test_valid_for_dataset = test_valid
         test_scored = compute_validation_metrics(
             test_y[test_valid],
             test_hat[test_valid],
@@ -691,6 +845,23 @@ def train_and_apply_ecdf_second_stage(
         shutil.copy2(test_pred_csv, predictor_output_dir / "predictions.csv")
         shutil.copy2(test_metrics_path, predictor_output_dir / "validation_metrics.json")
 
+    dataset_artifacts = _write_second_stage_datasets(
+        project_json=project_json,
+        train_predictions=df,
+        train_probability_columns=prob_cols,
+        train_sample_ids=sample_ids,
+        train_labels=y,
+        train_valid_rows=valid,
+        train_covariates=cov,
+        preprocessor=preprocessor,
+        test_predictions=test_df_for_dataset,
+        test_probability_columns=test_prob_cols_for_dataset,
+        test_sample_ids=test_sample_ids_for_dataset,
+        test_labels=test_y_for_dataset,
+        test_valid_rows=test_valid_for_dataset,
+        test_covariates=test_cov_for_dataset,
+    )
+
     meta = {
         "model_backend": "ecdf",
         "second_stage_type": "logistic_regression",
@@ -700,6 +871,7 @@ def train_and_apply_ecdf_second_stage(
         "test_predictions_csv": str(test_pred_csv) if test_pred_csv.is_file() else None,
         "train_metrics_json": str(train_metrics_path),
         "test_metrics_json": str(test_metrics_path) if test_metrics_path else None,
+        **dataset_artifacts,
         "n_features": int(X.shape[1]),
         "stack_feature_names": block_names,
         "refined_balanced_accuracy_labeled_rows": refined_balanced_accuracy,
@@ -738,6 +910,7 @@ def train_and_apply_ecdf_second_stage(
         "metadata_path": str(meta_path),
         "train_predictions_csv": str(train_pred_csv),
         "test_predictions_csv": str(test_pred_csv) if test_pred_csv.is_file() else None,
+        **dataset_artifacts,
         "n_rows": int(df.shape[0]),
         "n_features": int(X.shape[1]),
         "include_observed_hybrid": bool(params.include_observed_hybrid),
