@@ -6,6 +6,7 @@
   "duration_ms": null,
   "exit_code": 0,
   "finished_at_utc": null,
+  "fixedDmpPanel": null,
   "manifest_path": null,
   "productionOutputDir": "/work/p/monte_carlo_runs/production",
   "projectPath": "/work/p/project.json",

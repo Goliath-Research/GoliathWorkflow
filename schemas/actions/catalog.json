@@ -1067,6 +1067,10 @@
           {
             "output_json_path": "$.fixedDmpPanel",
             "var_name": "fixedDmpPanel"
+          },
+          {
+            "output_json_path": "$.projectPath",
+            "var_name": "projectPath"
           }
         ],
         "template_defaults": [],
@@ -1309,7 +1313,7 @@
       "category": "validation",
       "context_vars": [
         "projectPath",
-        "runDir",
+        "outputDir",
         "productionOutputDir"
       ],
       "default_node_type": "ACTION",

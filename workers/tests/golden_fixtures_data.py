@@ -268,7 +268,7 @@ GOLDEN_OUTPUTS: Dict[str, Dict[str, Any]] = {
     "validation.model_mc": {"status": "ok", "modelMcRoot": "/work/p/monte_carlo_runs/model_mc", "n_iterations": 3},
     "validation.post_model_validation": {
         "status": "ok",
-        "outputDir": "/work/p/post_model_validation/run_0001",
+        "outputDir": "/work/p/post_model_validation",
         "passed": True,
     },
 }

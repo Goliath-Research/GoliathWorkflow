@@ -1161,7 +1161,7 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         "ValidationPostModelValidationOutput",
         in_process_handler="_handle_validation_post_model_validation",
         action_config_key="validation",
-        context_vars=("projectPath", "runDir", "productionOutputDir"),
+        context_vars=("projectPath", "outputDir", "productionOutputDir"),
         domain_effects=_DE_VALIDATION,
     ),
     # --- Typed workflow.compute (assign / WHILE / SWITCH helpers) ---

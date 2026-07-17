@@ -804,8 +804,8 @@
         "hyperparamSetId": "${var.hyperparamSetId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
-        "runDir": "${var.runDir}",
-        "productionOutputDir": "${var.productionOutputDir}"
+        "productionOutputDir": "${var.productionOutputDir}",
+        "outputDir": "${var.outputDir}"
       }
     }
   ],

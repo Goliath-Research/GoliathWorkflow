@@ -1156,6 +1156,19 @@
           "default": null,
           "title": "Similarity Threshold"
         },
+        "skip": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When true, freeze/production runners omit enricher (and progression that depends on it). Prefer DomainProgram IF nodes for workflow topology; set via actionConfig.enricher.",
+          "title": "Skip"
+        },
         "sort_ascending": {
           "anyOf": [
             {

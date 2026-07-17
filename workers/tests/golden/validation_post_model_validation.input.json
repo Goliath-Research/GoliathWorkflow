@@ -1,7 +1,12 @@
 {
   "monteCarloRunsRoot": "/work/p/monte_carlo_runs",
   "outputDir": null,
+  "productionOutputDir": null,
   "project": null,
   "projectPath": "/work/p/project.json",
-  "tool": null
+  "runDir": null,
+  "testGroupsJson": null,
+  "tool": null,
+  "valControlCsv": null,
+  "valDiseaseCsv": null
 }

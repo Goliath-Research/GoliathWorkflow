@@ -37,16 +37,25 @@ methyl-validation --project /work/projects/prostate-cancer/configs/project_Healt
 
 ## Expected outputs
 
+Canonical one-shot DomainProgram action:
+
+- `<mc_root>/post_model_validation/predictors/...`
+- `<mc_root>/post_model_validation/logs/...`
+- `<mc_root>/post_model_validation/post_model_validation_report.json`
+
+The transitional CLI retains its repeated-evaluation layout:
+
 - `<mc_root>/post_model_validation/run_XXXX/...`
 - `<mc_root>/post_model_validation/all_metrics.csv`
 - `<mc_root>/post_model_validation/metrics_summary.json`
 - `<mc_root>/post_model_validation/metrics_distributions_plotly.html`
 
+Historical `run_0001` directories are not moved or deleted by the one-shot action.
+
 ## Success checks
 
-- run directories created under `post_model_validation`.
-- metrics summary includes key metrics (`balanced_accuracy`, `macro_f1`, plus available calibration metrics).
-- distribution plot generated.
+- One-shot workflow: `post_model_validation_report.json` and predictor metrics exist directly under `post_model_validation/`.
+- Legacy repeated CLI: metrics summary includes key metrics (`balanced_accuracy`, `macro_f1`, plus available calibration metrics), and the distribution plot is generated.
 
 ## Do not do this
 

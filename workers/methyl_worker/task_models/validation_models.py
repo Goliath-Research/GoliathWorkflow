@@ -123,6 +123,14 @@ class PostModelValidationTaskInput(BaseModel):
     project: Optional[str] = None
     monteCarloRunsRoot: Optional[str] = None
     outputDir: Optional[str] = None
+    runDir: Optional[str] = Field(
+        default=None,
+        description="Deprecated alias for outputDir; retained for existing compiled workflows.",
+    )
+    productionOutputDir: Optional[str] = None
+    valControlCsv: Optional[str] = None
+    valDiseaseCsv: Optional[str] = None
+    testGroupsJson: Optional[str] = None
 
 
 class StabilitySummary(BaseModel):

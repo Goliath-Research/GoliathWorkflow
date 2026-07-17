@@ -76,8 +76,8 @@
         "tool": "validation.post_model_validation",
         "projectPath": "${var.projectPath}",
         "project": "${var.projectPath}",
-        "runDir": "${var.runDir}",
-        "productionOutputDir": "${var.productionOutputDir}"
+        "productionOutputDir": "${var.productionOutputDir}",
+        "outputDir": "${var.outputDir}"
       }
     }
   ],

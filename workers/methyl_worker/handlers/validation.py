@@ -570,9 +570,13 @@ def _handle_validation_post_model_validation(
     if not production_project.is_file():
         raise RuntimeError(f"production project not found: {production_project}")
     layout = infer_monte_carlo_layout(production_project, len(config.cohorts))
-    run_dir = Path(input_json.get("runDir") or mc_root / "post_model_validation" / "run_0001")
-    run_dir.mkdir(parents=True, exist_ok=True)
-    predictor_output_dir = run_dir / "predictors"
+    output_dir = Path(
+        input_json.get("outputDir")
+        or input_json.get("runDir")
+        or mc_root / "post_model_validation"
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    predictor_output_dir = output_dir / "predictors"
     if layout == "binary":
         val_control_csv = Path(input_json.get("valControlCsv") or mc_root / "val_control.csv")
         val_disease_csv = Path(input_json.get("valDiseaseCsv") or mc_root / "val_disease.csv")
@@ -587,12 +591,12 @@ def _handle_validation_post_model_validation(
             val_disease_csv=val_disease_csv,
             predictor_output_dir=predictor_output_dir,
             production_output_dir=production_dir,
-            logs_dir=run_dir / "logs",
+            logs_dir=output_dir / "logs",
             config=config,
         )
     else:
         test_groups_json = Path(
-            input_json.get("testGroupsJson") or run_dir / "val_test_groups.json"
+            input_json.get("testGroupsJson") or output_dir / "val_test_groups.json"
         )
         if not test_groups_json.is_file():
             # Fall back to MC root artifact when present.
@@ -608,10 +612,10 @@ def _handle_validation_post_model_validation(
             test_groups_json=test_groups_json,
             predictor_output_dir=predictor_output_dir,
             production_output_dir=production_dir,
-            logs_dir=run_dir / "logs",
+            logs_dir=output_dir / "logs",
             config=config,
         )
-    report_path = run_dir / "post_model_validation_report.json"
+    report_path = output_dir / "post_model_validation_report.json"
     if not report_path.is_file():
         report_path.write_text(
             json.dumps({"success": success, "errors": errors, "timings": timings}, indent=2),
@@ -620,7 +624,7 @@ def _handle_validation_post_model_validation(
     return ValidationPostModelValidationOutput(
         status="ok" if success else "failed",
         result_code=0 if success else 1,
-        outputDir=str(run_dir),
+        outputDir=str(output_dir),
         report_path=str(report_path),
         passed=success,
     )

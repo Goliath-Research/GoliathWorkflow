@@ -650,7 +650,8 @@ All outputs are under `output_base/project_name/monte_carlo_runs/`:
 | `model_mc/<backend>/run_000N/predictors/feature_family_ablation.json` | Feature-family ablation scaffold with current balanced accuracy and recommended matrix (`baseline`, `+DMP`, `+DMR`, `+gene`, `all`). |
 | `model_mc/backend_ranking.csv` | Cross-backend ranking by `--selection-metric` and `--selection-stat`. |
 | `production/selected_backend.json` | Selected backend metadata and ranking used for final all-data training. |
-| `post_model_validation/run_000N/` | Per-iteration post-model holdout evaluation outputs and logs. |
+| `post_model_validation/predictors/`, `post_model_validation/logs/`, `post_model_validation/post_model_validation_report.json` | Canonical one-shot DomainProgram evaluation outputs. |
+| `post_model_validation/run_000N/` | Legacy CLI per-iteration post-model holdout evaluation outputs and logs; historical numbered runs remain valid and are not moved. |
 | `post_model_validation/all_metrics.csv` | One row per successful post-model iteration with scalar metrics. |
 | `post_model_validation/metrics_summary.json` | Empirical distribution summary of post-model metrics. |
 | `post_model_validation/metrics_distributions_plotly.html` | Plotly chart with KDE and ECDF for all numeric metrics. |

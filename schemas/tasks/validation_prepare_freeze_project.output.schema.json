@@ -119,6 +119,18 @@
       "default": null,
       "title": "Finished At Utc"
     },
+    "fixedDmpPanel": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fixeddmppanel"
+    },
     "manifest_path": {
       "anyOf": [
         {

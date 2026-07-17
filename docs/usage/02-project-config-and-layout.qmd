@@ -80,7 +80,12 @@ Important subtrees:
 - `stability/` (stable panel and summaries)
 - `production/` (freeze and final model outputs)
 - `model_mc/` (backend comparison runs)
-- `post_model_validation/` (frozen-model descriptive evaluation)
+- `post_model_validation/` (canonical one-shot DomainProgram evaluation: root-level report, logs, and `predictors/`)
+
+The transitional `methyl-validation --post-model-validation` CLI can perform repeated
+evaluations and retains numbered `post_model_validation/run_XXXX/` directories plus
+aggregate metrics at the parent root. Existing numbered directories are historical
+artifacts; the one-shot workflow does not move or delete them.
 
 ## Handoff model
 

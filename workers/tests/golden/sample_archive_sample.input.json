@@ -8,7 +8,11 @@
   "rejectReason": null,
   "sampleDestination": {
     "basePath": "/data/archive",
+    "contentHash": null,
+    "credentialName": null,
+    "credentialVersion": null,
     "prefix": "studies/demo/S1/",
+    "scope": null,
     "type": "file"
   },
   "sampleDir": "/work/samples/S1",

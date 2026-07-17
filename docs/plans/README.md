@@ -51,6 +51,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`ecdf-covariate-support.plan.md`](ecdf-covariate-support.plan.md) | _(pending ADO)_ | ECDF optional covariates (second-stage stacker) | `typed-second-stage-params`, `stack-covariates`, `trainer-gate-all-modes`, `profiles-docs-schema`, `tests` |
 | [`effective-monte-carlo-config.plan.md`](effective-monte-carlo-config.plan.md) | _(pending ADO)_ | Effective Monte Carlo configuration | `legacy-inventory-removal`, `canonical-schemas-configs`, `effective-schema-writer`, `breaking-change-verification`, `db-config-sync` |
 | [`cell-fraction-group-column.plan.md`](cell-fraction-group-column.plan.md) | _(pending ADO)_ | Cell fraction group column | `propagate-group-label`, `verify-group-column` |
+| [`post-model-output-layout.plan.md`](post-model-output-layout.plan.md) | _(pending ADO)_ | Post-model validation output layout | `fix-output-root`, `update-contracts-tests`, `document-layout` |
 | [`di_action-agnostic_assessment_0d376284.plan.md`](di_action-agnostic_assessment_0d376284.plan.md) | **AB#664** | DI action-agnostic assessment | (see plan frontmatter) |
 | [`methylit-standalone-doc.plan.md`](methylit-standalone-doc.plan.md) | **AB#668** | MethylIT Standalone Doc | (see plan frontmatter) |
 | [`worker-transport-security.plan.md`](worker-transport-security.plan.md) | **AB#672** | Worker Transport Security | (see plan frontmatter) |
