@@ -47,10 +47,30 @@ def test_apply_pipeline_profile_merges_action_config() -> None:
         "actionConfig": {"detection": {"alpha": 0.01}},
     }
     out = apply_pipeline_profile(ctx, profile)
-    # Profile actionConfig wins on the shared key, context-only key survives.
-    assert out["actionConfig"]["detection"]["alpha"] == 0.01
+    # Instance/context actionConfig wins on the shared key; profile-only keys survive.
+    assert out["actionConfig"]["detection"]["alpha"] == 0.05
     assert out["actionConfig"]["detection"]["min_coverage"] == 4
     assert out["pipelineProfile"] == "custom"
+
+
+def test_context_null_clears_profile_stability_min_balanced_accuracy() -> None:
+    """Explicit JSON null in context must unset a profile science knob."""
+    profile = load_profile("full_biomarker_gene_fc")
+    assert (profile.get("actionConfig") or {}).get("validation", {}).get(
+        "stability_min_balanced_accuracy"
+    ) == 0.95
+    out = apply_pipeline_profile(
+        {
+            "pipelineProfile": "full_biomarker_gene_fc",
+            "actionConfig": {
+                "validation": {"stability_min_balanced_accuracy": None},
+            },
+        },
+        profile,
+    )
+    validation = (out.get("actionConfig") or {}).get("validation") or {}
+    assert validation.get("stability_min_balanced_accuracy") is None
+    assert out.get("runDmpSelection") is True
 
 
 def test_apply_pipeline_profile_sets_flags_from_preset() -> None:

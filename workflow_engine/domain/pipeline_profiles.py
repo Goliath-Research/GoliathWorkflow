@@ -580,8 +580,11 @@ def apply_pipeline_profile(
         out["researchMode"] = profile["researchMode"]
     profile_ac = profile_action_config(profile)
     if profile_ac:
+        # Instance/context actionConfig is the higher layer (see layer-model precedence):
+        # profile provides the base, context overlays win — including explicit JSON nulls
+        # that clear a profile knob (e.g. stability_min_balanced_accuracy: null).
         existing = dict(out.get("actionConfig") or {})
-        out["actionConfig"] = _deep_merge(existing, profile_ac)
+        out["actionConfig"] = _deep_merge(dict(profile_ac), existing)
 
     effective: Dict[str, Any] = dict(action_config or {})
     ctx_ac = out.get("actionConfig")

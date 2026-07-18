@@ -159,12 +159,24 @@ def _handle_validation_stability(
         skipped_disc = int(dmp_block.get("skipped_no_discovery") or 0)
         run_dirs = list(mc_root.glob("run_*")) if mc_root is not None else []
         if run_dirs and n_runs == 0 and (skipped_ba + skipped_disc) >= len(run_dirs):
+            from methyl_validation.stability import run_balanced_accuracy
+
+            missing_ba = sum(1 for rd in run_dirs if run_balanced_accuracy(rd) is None)
+            min_ba = dmp_block.get("min_balanced_accuracy")
+            hint = (
+                "Per-run balanced_accuracy was missing on all/most runs (detector "
+                "discovery_only does not write BA; FeatureCuts/dmp_select must run, or "
+                "set actionConfig.validation.stability_min_balanced_accuracy to null)."
+                if missing_ba >= len(run_dirs)
+                else "Runs were below stability_min_balanced_accuracy, or BA metrics were absent."
+            )
             raise RuntimeError(
                 "validation.stability analyzed 0 Monte Carlo runs "
-                f"(skipped_low_balanced_accuracy={skipped_ba}, skipped_no_discovery={skipped_disc}). "
-                "Refusing empty stable panels. For raw_pool/discovery-only profiles, "
-                "stability_min_balanced_accuracy and FeatureCuts gates must be unset/false; "
-                "check resolvedConfig matches the DomainProgram profile."
+                f"(skipped_low_balanced_accuracy={skipped_ba}, skipped_no_discovery={skipped_disc}, "
+                f"missing_balanced_accuracy={missing_ba}, min_balanced_accuracy={min_ba!r}). "
+                f"Refusing empty stable panels. {hint} "
+                "Check resolvedConfig matches the DomainProgram profile "
+                "(instance/context overlays must win over profile defaults)."
             )
     summary_path = output_dir / "stability_summary.json"
     return ValidationStabilityOutput(
