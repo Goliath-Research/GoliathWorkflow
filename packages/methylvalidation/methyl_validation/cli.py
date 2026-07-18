@@ -464,6 +464,16 @@ def _build_model_mc_shared_runs(
         if rid:
             primary_timings_by_run.setdefault(rid, []).append(row)
 
+    expected_classifier_models = 0
+    if require_classifier_models:
+        try:
+            base_payload = json.loads(base_project_for_runs.read_text(encoding="utf-8"))
+            n_chromosomes = len(base_payload.get("chromosomes") or [])
+            n_comparisons = max(1, len(base_payload.get("comparisons") or []))
+            expected_classifier_models = max(1, n_chromosomes * n_comparisons)
+        except (OSError, json.JSONDecodeError, AttributeError):
+            expected_classifier_models = 1
+
     def _has_reusable_source_run(run_path: Path, metadata_path: Path) -> bool:
         reusable = (
             run_path.is_dir()
@@ -472,7 +482,10 @@ def _build_model_mc_shared_runs(
             and (run_path / "centroids").is_dir()
         )
         if reusable and require_classifier_models:
-            reusable = any((run_path / "detections").glob("**/classifier-*.pkl"))
+            classifier_count = sum(
+                1 for _ in (run_path / "detections").glob("**/classifier-*.pkl")
+            )
+            reusable = classifier_count >= expected_classifier_models
         return reusable
 
     def _clean_path(path: Path) -> None:
@@ -557,9 +570,9 @@ def _build_model_mc_shared_runs(
                 missing.append("centroids/")
             if not (source_run_dir / "detections").is_dir():
                 missing.append("detections/")
-            elif require_classifier_models and not any(
-                (source_run_dir / "detections").glob("**/classifier-*.pkl")
-            ):
+            elif require_classifier_models and sum(
+                1 for _ in (source_run_dir / "detections").glob("**/classifier-*.pkl")
+            ) < expected_classifier_models:
                 missing.append("classifier model files")
             raise RuntimeError(
                 f"Strict model-MC artifact reuse required for {run_id}; cannot reuse "
