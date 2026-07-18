@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 import pytest
 
 from methyl_validation.project_gen import generate_run_project
+from methyl_validation import pipeline_runner
 
 pytest.importorskip("methyl_utils", reason="pipeline_config.load_project")
 
@@ -92,3 +93,37 @@ def test_generate_run_project_comparisons_match_resolved_groups_staged_template(
 
         det = run_proj.get_detection_output_dir("all", "pca")
         assert det.endswith("/detections/all/pca")
+
+        payload = json.loads(project_path.read_text(encoding="utf-8"))
+        predictor = payload["actionConfig"]["predictor"]
+        assert predictor["train_control_paths"] == [str(root / "samples" / "a1")]
+        assert predictor["train_disease_paths"] == [str(root / "samples" / "b1")]
+        assert predictor["test_control_paths"] == [str(root / "samples" / "vc")]
+        assert predictor["test_disease_paths"] == [str(root / "samples" / "vd")]
+
+
+def test_run_predictor_from_project_passes_canonical_test_sidecars(tmp_path, monkeypatch):
+    project = tmp_path / "project.json"
+    project.write_text("{}\n", encoding="utf-8")
+    (tmp_path / "test_control.csv").write_text("sample\nC1\n", encoding="utf-8")
+    (tmp_path / "test_disease.csv").write_text("sample\nD1\n", encoding="utf-8")
+    captured = {}
+
+    def fake_run_cmd(command):
+        captured["command"] = command
+        return 0, "", ""
+
+    monkeypatch.setattr(pipeline_runner, "run_cmd", fake_run_cmd)
+    pipeline_runner.run_predictor_from_project(project, tmp_path / "predictors")
+
+    assert captured["command"] == [
+        "methyl-predictor",
+        "--project",
+        str(project),
+        "--test-control",
+        str(tmp_path / "test_control.csv"),
+        "--test-disease",
+        str(tmp_path / "test_disease.csv"),
+        "--output-dir",
+        str(tmp_path / "predictors"),
+    ]

@@ -728,6 +728,18 @@ def generate_run_project(
     project["comparisons"] = [
         {"control_group": control_group, "disease_group": disease_group}
     ]
+    action_config = copy.deepcopy(project.get("actionConfig") or {})
+    predictor_config = copy.deepcopy(action_config.get("predictor") or {})
+    predictor_config.update(
+        {
+            "train_control_paths": list(train_control_paths),
+            "train_disease_paths": list(train_disease_paths),
+            "test_control_paths": list(val_control_paths),
+            "test_disease_paths": list(val_disease_paths),
+        }
+    )
+    action_config["predictor"] = predictor_config
+    project["actionConfig"] = action_config
 
     _write_binary_test_groups_json(
         run_dir,

@@ -1337,7 +1337,22 @@ def run_predictor_from_project(
     Run ``methyl-predictor --project`` using cohorts from resolved predictor config.
     With control/disease comparisons, the predictor CLI auto-enables per-comparison runs.
     """
+    project_json = Path(project_json)
     cmd = ["methyl-predictor", "--project", str(project_json)]
+    test_control_csv = project_json.parent / "test_control.csv"
+    test_disease_csv = project_json.parent / "test_disease.csv"
+    test_groups_json = project_json.parent / "test_groups.json"
+    if test_control_csv.is_file() and test_disease_csv.is_file():
+        cmd.extend(
+            [
+                "--test-control",
+                str(test_control_csv),
+                "--test-disease",
+                str(test_disease_csv),
+            ]
+        )
+    elif test_groups_json.is_file():
+        cmd.extend(["--test-groups", str(test_groups_json)])
     if output_dir is not None:
         cmd.extend(["--output-dir", str(output_dir)])
     return run_cmd(cmd)
