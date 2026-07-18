@@ -25,7 +25,7 @@ todos:
     work_item_id: null
   - id: promote-plan-docs
     content: Promote the approved plan and update the plan index
-    status: in_progress
+    status: completed
     work_item_id: null
 ---
 
@@ -33,6 +33,31 @@ todos:
 
 > **Status: IN PROGRESS.** The DMP configuration uses the existing extval10
 > stability evidence; the gene configuration starts an independent study tree.
+
+## Execution checkpoint (2026-07-18)
+
+The workstation was intentionally stopped for reboot during DMP model-MC.
+
+- Freeze is complete and readiness is `go_with_risks`: stability, freeze, and
+  enricher pass; progression is skipped for this single-comparison feasibility
+  study.
+- The frozen production panel has exactly 4,608 loci.
+- DMP model-MC shared runs `run_0001` through `run_0006` completed.
+- `run_0007` was interrupted during `methyl-detector`; restart from run 7.
+- The workflow and detector processes were interrupted and verified stopped
+  before reboot.
+- Model-MC must run with `requireArtifactReuse: false` because the original
+  discovery-only MC runs have no `classifier-*.pkl`; primary train/validation
+  splits are still reused exactly.
+- Resume input: `resume: 7`. The resume helper repeats and replaces run 7,
+  preserves completed runs 1–6, and continues through run 10.
+- Run the resume command in `tmux` (or another host-managed session), not in a
+  Cursor-managed terminal.
+
+After DMP model-MC completes, run `validation_model.program.json` to select the
+single ECDF backend and perform post-model validation. Then start the independent
+gene MC experiment from
+`/work/projects/prostate-cancer/configs/context_H_PCa_ecdf_gene_covariates.json`.
 
 ## Goals
 
