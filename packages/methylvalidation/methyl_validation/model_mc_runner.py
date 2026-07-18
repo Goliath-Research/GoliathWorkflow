@@ -11,6 +11,25 @@ from methyl_validation.split import load_and_resolve_sample_paths
 from methyl_validation.mc_manifest import write_baseline_manifest
 
 
+def _exclude_configured_holdout(
+    cohort_paths_list: List[Tuple[str, List[str]]],
+    config: MonteCarloConfig,
+) -> List[Tuple[str, List[str]]]:
+    """Keep model-MC pools aligned with the primary MC development cohort."""
+    if not bool(getattr(config, "holdout_exclude_from_training", True)):
+        return cohort_paths_list
+    partitions = getattr(config, "validation_partitions", None)
+    partition_name = getattr(config, "holdout_partition", "locked_test")
+    holdout_paths = list(getattr(partitions, partition_name, []) or []) if partitions else []
+    if not holdout_paths:
+        return cohort_paths_list
+    holdout_ids = {Path(path).name for path in holdout_paths}
+    return [
+        (label, [path for path in paths if Path(str(path)).name not in holdout_ids])
+        for label, paths in cohort_paths_list
+    ]
+
+
 def resolve_model_mc_backends(config: MonteCarloConfig, *, run_all: bool) -> List[str]:
     from methyl_validation.cli import _resolve_model_mc_backends
 
@@ -42,6 +61,10 @@ def run_model_mc_all(
         if not paths:
             raise ValueError(f"cohort {cohort.label!r} ({cohort.csv}) must list at least one sample")
         cohort_paths_list.append((cohort.label, paths))
+    cohort_paths_list = _exclude_configured_holdout(cohort_paths_list, config)
+    for label, paths in cohort_paths_list:
+        if not paths:
+            raise ValueError(f"cohort {label!r} is empty after holdout exclusion")
     cohort_labels = [c.label for c in config.cohorts]
     control_paths: List[str] = []
     disease_paths: List[str] = []
@@ -75,6 +98,7 @@ def run_model_mc_all(
         per_cancer_group=False,
         primary_monte_carlo_runs_root=monte_carlo_runs_root,
         require_artifact_reuse=require_artifact_reuse,
+        require_classifier_models="ecdf" in configured,
     )
     backend_roots: Dict[str, str] = {}
     for backend in configured:

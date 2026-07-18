@@ -55,6 +55,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`strict-reuse-model-mc.plan.md`](strict-reuse-model-mc.plan.md) | _(pending ADO)_ | Strict Reuse Model MC | `strict-reuse-contract`, `slim-program`, `tests-schemas`, `docs-plan` |
 | [`model-mc-train-test.plan.md`](model-mc-train-test.plan.md) | _(pending ADO)_ | Model MC Train Test | `bind-test-partition`, `separate-ecdf-phases`, `aggregate-test-only`, `verify-document` |
 | [`independent-lr-stack-features.plan.md`](independent-lr-stack-features.plan.md) | _(pending ADO)_ | Independent LR Stack Features | `typed-transform-contract`, `fit-apply-independent-features`, `persist-exact-design-matrices`, `verify-document-contract` |
+| [`ecdf-dmp-and-gene-models.plan.md`](ecdf-dmp-and-gene-models.plan.md) | _(pending ADO)_ | ECDF DMP and gene models | `dmp-context`, `dmp-freeze-model`, `gene-project-context`, `gene-mc-run`, `promote-plan-docs` |
 | [`di_action-agnostic_assessment_0d376284.plan.md`](di_action-agnostic_assessment_0d376284.plan.md) | **AB#664** | DI action-agnostic assessment | (see plan frontmatter) |
 | [`methylit-standalone-doc.plan.md`](methylit-standalone-doc.plan.md) | **AB#668** | MethylIT Standalone Doc | (see plan frontmatter) |
 | [`worker-transport-security.plan.md`](worker-transport-security.plan.md) | **AB#672** | Worker Transport Security | (see plan frontmatter) |

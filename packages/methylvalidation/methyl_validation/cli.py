@@ -389,6 +389,7 @@ def _build_model_mc_shared_runs(
     per_cancer_group: bool,
     primary_monte_carlo_runs_root: Path,
     require_artifact_reuse: bool = False,
+    require_classifier_models: bool = False,
 ) -> List[Dict[str, Any]]:
     shared_root.mkdir(parents=True, exist_ok=True)
     write_baseline_manifest(
@@ -464,12 +465,15 @@ def _build_model_mc_shared_runs(
             primary_timings_by_run.setdefault(rid, []).append(row)
 
     def _has_reusable_source_run(run_path: Path, metadata_path: Path) -> bool:
-        return (
+        reusable = (
             run_path.is_dir()
             and (metadata_path / "project.json").is_file()
             and (run_path / "detections").is_dir()
             and (run_path / "centroids").is_dir()
         )
+        if reusable and require_classifier_models:
+            reusable = any((run_path / "detections").glob("**/classifier-*.pkl"))
+        return reusable
 
     def _clean_path(path: Path) -> None:
         if path.is_symlink() or path.is_file():
@@ -553,6 +557,10 @@ def _build_model_mc_shared_runs(
                 missing.append("centroids/")
             if not (source_run_dir / "detections").is_dir():
                 missing.append("detections/")
+            elif require_classifier_models and not any(
+                (source_run_dir / "detections").glob("**/classifier-*.pkl")
+            ):
+                missing.append("classifier model files")
             raise RuntimeError(
                 f"Strict model-MC artifact reuse required for {run_id}; cannot reuse "
                 f"{source_run_dir} (missing/incompatible: {', '.join(missing)}). "
