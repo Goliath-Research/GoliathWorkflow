@@ -75,6 +75,42 @@ def test_build_model_backend_steps_ecdf_includes_second_stage(tmp_path: Path, mo
     assert params.max_gene_features == 9
 
 
+def test_classic_ecdf_predictor_uses_partitioned_scoring_when_sidecars_exist(
+    tmp_path: Path, monkeypatch
+):
+    project = tmp_path / "project.json"
+    project.write_text(json.dumps({"samples_base_path": str(tmp_path)}), encoding="utf-8")
+    (tmp_path / "train_control.csv").write_text("sample\nC1\n", encoding="utf-8")
+    (tmp_path / "train_disease.csv").write_text("sample\nD1\n", encoding="utf-8")
+    (tmp_path / "test_control.csv").write_text("sample\nC2\n", encoding="utf-8")
+    (tmp_path / "test_disease.csv").write_text("sample\nD2\n", encoding="utf-8")
+    called = {"n": 0}
+
+    def _fake_partitioned(project_json, predictor_output_dir):
+        called["n"] += 1
+        assert project_json == project
+        assert predictor_output_dir == tmp_path / "predictors"
+        return 0, '{"ok": true}', ""
+
+    monkeypatch.setattr(
+        "methyl_validation.trainer_api._run_classic_ecdf_partitioned_predictor",
+        _fake_partitioned,
+    )
+    steps = build_model_backend_steps(
+        project_json=project,
+        predictor_output_dir=tmp_path / "predictors",
+        config=_base_config(tmp_path, enabled=False),
+        per_cancer_group=False,
+        run_classifier_fn=lambda _p, _g: (0, "classifier ok", ""),
+        run_predictor_fn=lambda _p, _o: (_ for _ in ()).throw(AssertionError("fallback")),
+    )
+    rc, out, err = steps[1][1]()
+    assert rc == 0
+    assert err == ""
+    assert called["n"] == 1
+    assert json.loads(out)["ok"] is True
+
+
 def test_build_model_backend_steps_ecdf_second_stage_disabled(tmp_path: Path, monkeypatch):
     tm_called = {"n": 0}
 

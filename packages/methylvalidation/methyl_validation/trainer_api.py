@@ -12,7 +12,7 @@ import json
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 StepFn = Callable[[], tuple[int, str, str]]
 TrainerStep = Tuple[str, StepFn]
@@ -111,6 +111,137 @@ def _write_ecdf_training_metrics(project_json: Path, classifier_output_dir: Path
 def _classifier_output_dir(project_json: Path, predictor_output_dir: Optional[Path]) -> Path:
     del predictor_output_dir  # predictor and classifier roots both derive from project_json.parent
     return project_json.parent / "classifiers"
+
+
+def _load_binary_partition_paths(project_json: Path, partition: str) -> tuple[List[str], List[str]]:
+    """Load control/disease sample paths for train or test from MC sidecar CSVs."""
+    from .split import load_and_resolve_sample_paths
+
+    run_dir = Path(project_json).resolve().parent
+    if partition == "train":
+        control_csv = run_dir / "train_control.csv"
+        disease_csv = run_dir / "train_disease.csv"
+    elif partition == "test":
+        control_csv = run_dir / "test_control.csv"
+        if not control_csv.is_file():
+            control_csv = run_dir / "val_control.csv"
+        disease_csv = run_dir / "test_disease.csv"
+        if not disease_csv.is_file():
+            disease_csv = run_dir / "val_disease.csv"
+    else:
+        raise ValueError(f"Unsupported partition {partition!r}")
+    if not control_csv.is_file() or not disease_csv.is_file():
+        raise FileNotFoundError(
+            f"Missing {partition} sidecars under {run_dir}: "
+            f"{control_csv.name}, {disease_csv.name}"
+        )
+    samples_base = ""
+    try:
+        payload = json.loads(Path(project_json).read_text(encoding="utf-8"))
+        samples_base = str(payload.get("samples_base_path") or "")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        samples_base = ""
+    return (
+        load_and_resolve_sample_paths(control_csv, samples_base),
+        load_and_resolve_sample_paths(disease_csv, samples_base),
+    )
+
+
+def _score_classic_ecdf_partition(
+    *,
+    project_json: Path,
+    output_dir: Path,
+    partition: str,
+    control_paths: List[str],
+    disease_paths: List[str],
+) -> Dict[str, Any]:
+    """Score one classic ECDF partition and write canonical train_/test_ artifacts."""
+    from methyl_predictor.core.predictor import run_prediction
+    from methyl_predictor.models.config import PredictorConfig
+    from methyl_predictor.project_resolver import resolve_predictor_config
+
+    if not control_paths or not disease_paths:
+        raise ValueError(f"{partition} partition requires non-empty control and disease paths")
+
+    base_predictor = resolve_predictor_config(project_json)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=str(output_dir), prefix=f".{partition}-eval-") as tmp_out:
+        tmp_path = Path(tmp_out)
+        cfg = PredictorConfig(
+            model_path=base_predictor.model_path,
+            model_dir=base_predictor.model_dir,
+            output_dir=str(tmp_path),
+            test_control_paths=list(control_paths),
+            test_disease_paths=list(disease_paths),
+            test_group_paths=None,
+            samples_base_path=base_predictor.samples_base_path,
+            path_remap=base_predictor.path_remap,
+            debug=bool(base_predictor.debug),
+            classifier_step_snapshot=base_predictor.classifier_step_snapshot,
+            panel=base_predictor.panel,
+            decision_enabled=bool(base_predictor.decision_enabled),
+            decision_min_margin=float(base_predictor.decision_min_margin),
+            decision_min_confidence=float(base_predictor.decision_min_confidence),
+        )
+        metrics = run_prediction(cfg)
+        pred_src = tmp_path / "predictions.csv"
+        metrics_src = tmp_path / "validation_metrics.json"
+        if not pred_src.is_file():
+            raise FileNotFoundError(f"Predictor did not write predictions.csv for {partition}")
+        pred_dst = output_dir / f"{partition}_predictions.csv"
+        metrics_dst = output_dir / f"{partition}_metrics.json"
+        shutil.copy2(pred_src, pred_dst)
+        if metrics_src.is_file():
+            payload = json.loads(metrics_src.read_text(encoding="utf-8"))
+        else:
+            payload = dict(metrics) if isinstance(metrics, dict) else {}
+        payload["evaluation_partition"] = partition
+        payload["metrics_source"] = f"ecdf_{partition}"
+        payload["n_samples"] = int(len(control_paths) + len(disease_paths))
+        metrics_dst.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+        if partition == "test":
+            shutil.copy2(pred_dst, output_dir / "predictions.csv")
+            shutil.copy2(metrics_dst, output_dir / "validation_metrics.json")
+            shutil.copy2(metrics_dst, output_dir / "test_metrics.json")
+        return {
+            "partition": partition,
+            "predictions_csv": str(pred_dst),
+            "metrics_json": str(metrics_dst),
+            "n_samples": int(len(control_paths) + len(disease_paths)),
+        }
+
+
+def _run_classic_ecdf_partitioned_predictor(
+    project_json: Path,
+    predictor_output_dir: Optional[Path],
+) -> tuple[int, str, str]:
+    """
+    Classic ECDF model-MC scoring: train then test, with canonical artifact names.
+
+    methyl-predictor alone writes undifferentiated predictions.csv; model-MC and the
+    covariate second stage require disjoint train_/test_ prediction files.
+    """
+    try:
+        output_dir = Path(predictor_output_dir or (Path(project_json).parent / "predictors"))
+        train_control, train_disease = _load_binary_partition_paths(project_json, "train")
+        test_control, test_disease = _load_binary_partition_paths(project_json, "test")
+        train_out = _score_classic_ecdf_partition(
+            project_json=project_json,
+            output_dir=output_dir,
+            partition="train",
+            control_paths=train_control,
+            disease_paths=train_disease,
+        )
+        test_out = _score_classic_ecdf_partition(
+            project_json=project_json,
+            output_dir=output_dir,
+            partition="test",
+            control_paths=test_control,
+            disease_paths=test_disease,
+        )
+        return 0, json.dumps({"train": train_out, "test": test_out}), ""
+    except Exception as e:
+        return 1, "", str(e)
 
 
 def build_model_backend_steps(
@@ -745,8 +876,17 @@ def build_model_backend_steps(
             ("ecdf-second-stage", _run_ecdf_second_stage),
         ]
 
+    def _run_classic_predictor() -> tuple[int, str, str]:
+        # Prefer partitioned train/test scoring when MC sidecars are present.
+        run_dir = Path(project_json).resolve().parent
+        if (run_dir / "train_control.csv").is_file() and (
+            (run_dir / "test_control.csv").is_file() or (run_dir / "val_control.csv").is_file()
+        ):
+            return _run_classic_ecdf_partitioned_predictor(project_json, predictor_output_dir)
+        return run_predictor_fn(project_json, predictor_output_dir)
+
     return [
         ("methyl-classifier", lambda: run_classifier_fn(project_json, per_cancer_group)),
-        ("methyl-predictor", lambda: run_predictor_fn(project_json, predictor_output_dir)),
+        ("methyl-predictor", _run_classic_predictor),
         ("ecdf-second-stage", _run_ecdf_second_stage),
     ]

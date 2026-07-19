@@ -465,14 +465,39 @@ def _build_model_mc_shared_runs(
             primary_timings_by_run.setdefault(rid, []).append(row)
 
     expected_classifier_models = 0
-    if require_classifier_models:
-        try:
-            base_payload = json.loads(base_project_for_runs.read_text(encoding="utf-8"))
+    base_detection_cfg: Dict[str, Any] = {}
+    try:
+        base_payload = json.loads(base_project_for_runs.read_text(encoding="utf-8"))
+        base_detection_cfg = dict((base_payload.get("actionConfig") or {}).get("detection") or {})
+        if require_classifier_models:
             n_chromosomes = len(base_payload.get("chromosomes") or [])
             n_comparisons = max(1, len(base_payload.get("comparisons") or []))
             expected_classifier_models = max(1, n_chromosomes * n_comparisons)
-        except (OSError, json.JSONDecodeError, AttributeError):
+    except (OSError, json.JSONDecodeError, AttributeError):
+        if require_classifier_models:
             expected_classifier_models = 1
+
+    def _detection_config_compatible(candidate_project: Path) -> bool:
+        """Reject reuse when detection contract differs (e.g. discovery vs fixed panel)."""
+        if not base_detection_cfg:
+            return True
+        try:
+            candidate = json.loads(candidate_project.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, AttributeError):
+            return False
+        candidate_det = dict((candidate.get("actionConfig") or {}).get("detection") or {})
+        for key in ("fixed_dmp_panel", "detection_mode"):
+            if base_detection_cfg.get(key) != candidate_det.get(key):
+                return False
+        if require_classifier_models and bool(base_detection_cfg.get("export_classifier", True)):
+            if not bool(candidate_det.get("export_classifier", True)):
+                return False
+        return True
+
+    def _classifier_count(detections_root: Path) -> int:
+        if not detections_root.is_dir():
+            return 0
+        return sum(1 for _ in detections_root.glob("**/classifier-*.pkl"))
 
     def _has_reusable_source_run(run_path: Path, metadata_path: Path) -> bool:
         reusable = (
@@ -480,13 +505,42 @@ def _build_model_mc_shared_runs(
             and (metadata_path / "project.json").is_file()
             and (run_path / "detections").is_dir()
             and (run_path / "centroids").is_dir()
+            and _detection_config_compatible(metadata_path / "project.json")
         )
         if reusable and require_classifier_models:
-            classifier_count = sum(
-                1 for _ in (run_path / "detections").glob("**/classifier-*.pkl")
-            )
-            reusable = classifier_count >= expected_classifier_models
+            reusable = _classifier_count(run_path / "detections") >= expected_classifier_models
         return reusable
+
+    def _shared_run_ready(run_path: Path) -> bool:
+        """Keep already-built shared runs that match the production detection contract."""
+        project_path = run_path / "project.json"
+        detections = run_path / "detections"
+        if not (
+            run_path.is_dir()
+            and project_path.is_file()
+            and detections.is_dir()
+            and (run_path / "centroids").is_dir()
+            and _detection_config_compatible(project_path)
+        ):
+            return False
+        if require_classifier_models and _classifier_count(detections) < expected_classifier_models:
+            return False
+        # Symlinks into primary MC are only valid when that primary project is compatible.
+        if detections.is_symlink():
+            try:
+                target = detections.resolve()
+            except OSError:
+                return False
+            primary_det = primary_monte_carlo_runs_root / run_path.name / "detections"
+            try:
+                if target == primary_det.resolve():
+                    return _has_reusable_source_run(
+                        primary_monte_carlo_runs_root / run_path.name,
+                        resolve_run_metadata_dir(primary_monte_carlo_runs_root / run_path.name),
+                    )
+            except OSError:
+                return False
+        return True
 
     def _clean_path(path: Path) -> None:
         if path.is_symlink() or path.is_file():
@@ -554,6 +608,30 @@ def _build_model_mc_shared_runs(
         else:
             n_train_samples = sum(len(train_m[k]) for k in cohort_labels)
             n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
+
+        if _shared_run_ready(run_dir):
+            rows.append(
+                {
+                    "iteration": i + 1,
+                    "run_id": run_id,
+                    "run_dir": str(run_dir),
+                    "n_train_samples": n_train_samples,
+                    "n_val_samples": n_val_samples,
+                    "detector_ok": True,
+                }
+            )
+            elapsed = time.perf_counter() - iteration_t0
+            completed_iteration_seconds.append(elapsed)
+            eta = _estimate_iteration_eta(completed_iteration_seconds, config.n_iterations - (i + 1))
+            print(
+                f"[model-mc:shared] Kept existing compatible shared artifacts for {run_id} "
+                f"in {_format_duration(elapsed)} (ETA {eta})",
+                file=sys.stderr,
+            )
+            if layout == "binary":
+                previous_train_control = list(train_control)
+                previous_train_disease = list(train_disease)
+            continue
 
         source_run_dir = primary_monte_carlo_runs_root / run_id
         metadata_run_dir = resolve_run_metadata_dir(source_run_dir)
