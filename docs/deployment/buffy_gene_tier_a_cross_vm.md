@@ -96,52 +96,55 @@ Record baseline duration, then rerun the identical stability command without `--
 
 The replay log must show signature-based skips or CAAS reuse for unchanged actions. Preserve the baseline and replay timings as the wall-clock evidence; do not delete `.action_results`.
 
-## BA-first Tier-A pilot
+## BA-first Tier-A search (gene FeatureCuts only)
 
-The baseline creates:
+Do **not** run freeze, model-MC, or locked_test during search. Score mean gene-FC BA from
+`run_*/gene_stability/gene_featurecuts_metrics.json` (aggregated automatically when
+`metrics_summary.json` is absent). ECDF + covariates come only after a winner.
+
+Slice 1 raises `stability_gene_featurecuts_max_dmps` (site 1000 was too restrictive):
+
+| Axis | Values |
+|------|--------|
+| `stability_gene_featurecuts_max_dmps` | 20000, 100000 |
+| `gene_featurecuts_target_ba` | 0.90, 0.95 |
+| `n_iterations` | 10 (full) |
+
+Base config (portable paths, uncapped default cleared by grid cells):
 
 ```text
-/work/projects/prostate-cancer/Buffy_ecdf_gene_covariates/monte_carlo_runs/queue/mc_config.json
+/work/projects/prostate-cancer/experiments/Buffy_ecdf_gene_covariates_tier_a/base_mc_config.json
 ```
-
-Extract one 2D slice from the grid and generate isolated trial configs:
 
 ```bash
 cd /home/ubuntu/MethylPipeline
 source .venv/bin/activate
 GRID_FILE=/work/projects/prostate-cancer/configs/grid_Buffy_ecdf_gene_covariates_tier_a.json
-BASE_CONFIG=/work/projects/prostate-cancer/Buffy_ecdf_gene_covariates/monte_carlo_runs/queue/mc_config.json
+BASE_CONFIG=/work/projects/prostate-cancer/experiments/Buffy_ecdf_gene_covariates_tier_a/base_mc_config.json
 WEIGHTS=/work/projects/prostate-cancer/configs/weights_Buffy_ecdf_gene_covariates_ba.json
-WORK_DIR=/work/projects/prostate-cancer/experiments/Buffy_ecdf_gene_covariates_tier_a/min_genes_by_recurrence
+WORK_DIR=/work/projects/prostate-cancer/experiments/Buffy_ecdf_gene_covariates_tier_a/max_dmps_by_target_ba
 GRID="$(
   python -c 'import json,sys; d=json.load(open(sys.argv[1])); print(json.dumps(d["slices"][0]["grid"]))' "$GRID_FILE"
 )"
+
+# Dry-run materializes trial_*/mc_config.json
 methyl-hyperparam-search \
   --config "$BASE_CONFIG" \
   --work-dir "$WORK_DIR" \
   --grid "$GRID" \
   --weights-json "$WEIGHTS" \
   --dry-run
+
+# Full 10-iter stability for all 4 trials (~1 day wall-clock)
+tmux new-session -d -s buffy-tier-a-slice1 \
+  /work/projects/prostate-cancer/experiments/Buffy_ecdf_gene_covariates_tier_a/run_slice1_search.sh
+# Log: .../max_dmps_by_target_ba.search.log
 ```
 
-For every generated `trial_*/mc_config.json`, run stability, freeze, and ECDF model-MC in order:
 
-```bash
-for cfg in "$WORK_DIR"/trial_*/mc_config.json; do
-  methyl-validation --config "$cfg" --stability
-  methyl-validation --config "$cfg" --freeze
-  methyl-validation --config "$cfg" --model-mc --model-mc-all
-done
-```
+After slice 1, inspect `search_summary.json` and per-trial `n_dmp_loci_for_features` (must be ≫ 1000).
+If mean gene-FC BA is still below ~0.90, run slice 2 (`min_genes_by_recurrence`) with the winning
+`max_dmps`/`target_ba` fixed in the base config. If a slice would exceed ~12 full trials, drop that
+slice to `n_iterations=5` then confirm the top two at 10-iter.
 
-Do not run post-model validation for search candidates: that would tune against `locked_test`. After model-MC has created each trial's `model_mc/ecdf/metrics_summary.json`, rerun the search command without `--dry-run`; the stability step resumes its existing trial tree and `search_summary.json` ranks candidates with the BA-dominant weights.
-
-```bash
-methyl-hyperparam-search \
-  --config "$BASE_CONFIG" \
-  --work-dir "$WORK_DIR" \
-  --grid "$GRID" \
-  --weights-json "$WEIGHTS"
-```
-
-Run the second slice only after choosing the minimum-gene neighborhood; change `["slices"][0]` to `["slices"][1]` and use a distinct `max_genes_by_recurrence` work directory. Confirm the winning candidate with the canonical workflow in a fresh final study tree, then evaluate its locked test exactly once.
+Only then freeze → model-MC (ECDF + covariates) → post-model on `locked_test` for the winning config.

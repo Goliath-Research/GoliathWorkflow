@@ -1,17 +1,19 @@
 """
 File-driven objective J(theta) for pipeline hyperparameter search.
 
-Reads primary ``metrics_summary.json`` or a single ``model_mc/*/metrics_summary.json``
-(and optionally ``stability/stability_summary.json``) under ``monte_carlo_runs``;
-optional constraints call :func:`rollout.evaluate_dual_run` against a baseline.
+Reads primary ``metrics_summary.json`` or a single ``model_mc/*/metrics_summary.json``,
+or aggregates ``run_*/gene_stability/gene_featurecuts_metrics.json`` when those are
+absent (Tier-A gene FeatureCuts search before model-MC). Optionally reads
+``stability/stability_summary.json``. Constraints call :func:`rollout.evaluate_dual_run`.
 """
 
 from __future__ import annotations
 
 import json
 import math
+import statistics
 from pathlib import Path
-from typing import Any, Dict, Literal, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -146,6 +148,76 @@ def _resolve_metrics_summary(root: Path) -> Path:
     return primary
 
 
+def _percentile_p50(values: List[float]) -> float:
+    if not values:
+        raise ValueError("empty values")
+    if len(values) == 1:
+        return float(values[0])
+    ordered = sorted(values)
+    mid = (len(ordered) - 1) / 2.0
+    lo = int(math.floor(mid))
+    hi = int(math.ceil(mid))
+    if lo == hi:
+        return float(ordered[lo])
+    return float(ordered[lo] + ordered[hi]) / 2.0
+
+
+def aggregate_gene_featurecuts_metrics_summary(root: Path) -> Optional[Dict[str, Any]]:
+    """
+    Build a metrics_summary-shaped dict from per-run gene FeatureCuts metrics.
+
+    Used for Tier-A search when detector/model-MC ``metrics_summary.json`` is absent.
+    """
+    ba_values: List[float] = []
+    f1_values: List[float] = []
+    run_ids: List[str] = []
+    for metrics_path in sorted(root.glob("run_*/gene_stability/gene_featurecuts_metrics.json")):
+        try:
+            payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict):
+            continue
+        ba = payload.get("balanced_accuracy")
+        if ba is None and isinstance(payload.get("validation_metrics"), dict):
+            ba = payload["validation_metrics"].get("balanced_accuracy")
+        if ba is None:
+            continue
+        try:
+            ba_values.append(float(ba))
+        except (TypeError, ValueError):
+            continue
+        run_ids.append(metrics_path.parent.parent.name)
+        f1 = None
+        if isinstance(payload.get("validation_metrics"), dict):
+            f1 = payload["validation_metrics"].get("macro_f1")
+        if f1 is not None:
+            try:
+                f1_values.append(float(f1))
+            except (TypeError, ValueError):
+                pass
+    if not ba_values:
+        return None
+    summary: Dict[str, Any] = {
+        "source": "gene_featurecuts_metrics",
+        "n_runs": len(ba_values),
+        "run_ids": run_ids,
+        "balanced_accuracy": {
+            "mean": float(statistics.fmean(ba_values)),
+            "percentiles": {"p50": _percentile_p50(ba_values)},
+        },
+    }
+    if f1_values:
+        summary["macro_f1"] = {
+            "mean": float(statistics.fmean(f1_values)),
+            "percentiles": {"p50": _percentile_p50(f1_values)},
+        }
+    summary["metrics"] = {
+        k: v for k, v in summary.items() if k in ("balanced_accuracy", "macro_f1")
+    }
+    return summary
+
+
 def objective_from_monte_carlo_artifacts(
     monte_carlo_runs_root: str | Path,
     weights: ObjectiveWeights,
@@ -159,34 +231,49 @@ def objective_from_monte_carlo_artifacts(
         "infeasible_value": weights.infeasible_value,
     }
 
-    if not ms.is_file():
-        return ObjectiveResult(
-            value=weights.infeasible_value,
-            feasible=False,
-            reason="missing_metrics_summary",
-            details=details,
-        )
-
-    if constraints is not None:
-        ok, why = constraints.check_paths(ms)
-        details["rollout_check"] = why
-        if not ok:
+    candidate: Optional[Dict[str, Any]] = None
+    if ms.is_file():
+        if constraints is not None:
+            ok, why = constraints.check_paths(ms)
+            details["rollout_check"] = why
+            if not ok:
+                return ObjectiveResult(
+                    value=weights.infeasible_value,
+                    feasible=False,
+                    reason=why,
+                    details=details,
+                )
+        with open(ms, encoding="utf-8") as f:
+            loaded = json.load(f)
+        if isinstance(loaded, dict):
+            candidate = loaded
+        else:
             return ObjectiveResult(
                 value=weights.infeasible_value,
                 feasible=False,
-                reason=why,
+                reason="invalid_metrics_summary",
                 details=details,
             )
-
-    with open(ms, encoding="utf-8") as f:
-        candidate = json.load(f)
-    if not isinstance(candidate, dict):
-        return ObjectiveResult(
-            value=weights.infeasible_value,
-            feasible=False,
-            reason="invalid_metrics_summary",
-            details=details,
-        )
+    else:
+        if constraints is not None:
+            return ObjectiveResult(
+                value=weights.infeasible_value,
+                feasible=False,
+                reason="missing_metrics_summary",
+                details=details,
+            )
+        gene_summary = aggregate_gene_featurecuts_metrics_summary(root)
+        if gene_summary is None:
+            return ObjectiveResult(
+                value=weights.infeasible_value,
+                feasible=False,
+                reason="missing_metrics_summary",
+                details=details,
+            )
+        candidate = gene_summary
+        details["metrics_summary_path"] = "gene_featurecuts_metrics"
+        details["metrics_source"] = "gene_featurecuts_metrics"
+        details["n_gene_featurecuts_runs"] = gene_summary.get("n_runs")
 
     stat = weights.stat
     j = 0.0

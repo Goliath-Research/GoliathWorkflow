@@ -36,7 +36,7 @@ def main(
         overrides["stability_gene_featurecuts_max_dmps"] = max_dmps
     if biomarker_filter:
         overrides["stability_gene_biomarker_filter_enabled"] = True
-    cfg = build_gene_select_config(project, **overrides)
+    cfg = build_gene_select_config(project, run_dir=run_dir, **overrides)
     rc, msg, err = run_gene_featurecuts_for_iteration(project, cfg, run_dir=run_dir)
     if rc != 0:
         click.echo(err or msg, err=True)

@@ -114,3 +114,39 @@ def test_objective_missing_metrics_file(tmp_path: Path) -> None:
     r = objective_from_monte_carlo_artifacts(tmp_path, w, None)
     assert not r.feasible
     assert r.reason == "missing_metrics_summary"
+
+
+def test_objective_aggregates_gene_featurecuts_ba_when_metrics_summary_missing(
+    tmp_path: Path,
+) -> None:
+    mcr = tmp_path / "mcr"
+    for i, ba in enumerate((0.70, 0.80, 0.90), start=1):
+        run = mcr / f"run_{i:04d}" / "gene_stability"
+        run.mkdir(parents=True)
+        (run / "gene_featurecuts_metrics.json").write_text(
+            json.dumps(
+                {
+                    "balanced_accuracy": ba,
+                    "validation_metrics": {"balanced_accuracy": ba, "macro_f1": ba - 0.05},
+                }
+            ),
+            encoding="utf-8",
+        )
+    (mcr / "stability").mkdir()
+    (mcr / "stability" / "stability_summary.json").write_text(
+        json.dumps({"gene_stability": {"stable_genes_at_threshold": 40}}),
+        encoding="utf-8",
+    )
+    w = ObjectiveWeights(
+        stat="mean",
+        w_balanced_accuracy=1.0,
+        w_macro_f1=0.0,
+        w_stable_genes=0.05,
+        stability_gene_cap=200.0,
+        min_stable_genes=30,
+    )
+    r = objective_from_monte_carlo_artifacts(mcr, w, None)
+    assert r.feasible
+    assert r.details["metrics_source"] == "gene_featurecuts_metrics"
+    assert r.details["metric_terms"]["balanced_accuracy"] == pytest.approx(0.80)
+    assert r.value == pytest.approx(0.80 + 0.05 * (40 / 200.0))
