@@ -6,29 +6,38 @@ After a baseline workflow-run (or legacy `methyl-validation` path) is understood
 
 ## What it is
 
-- A **read-only** scalar **objective** \(J\) is computed from artifacts under `monte_carlo_runs/` (mainly `metrics_summary.json`, optional `stability/stability_summary.json`).
+- A **read-only** scalar **objective** \(J\) is computed from artifacts under `monte_carlo_runs/`.
+  Metric sources (first match wins):
+  1. `metrics_summary.json` at the MC root (or a single `model_mc/*/metrics_summary.json`)
+  2. Else aggregate `run_*/gene_stability/gene_featurecuts_metrics.json` into a synthetic summary
+     (`balanced_accuracy` mean/median) — so **stability-only** Tier-A grids can score gene FeatureCuts BA
+     without freeze/model-MC
+  3. Optional `stability/stability_summary.json` for panel-size terms / min-stable constraints
 - The `methyl-hyperparam-search` entry point is a small **grid** driver: for each grid point it writes `work_dir/trial_NNNN/mc_config.json` with a merged `MonteCarloConfig` and a distinct `output_base`, runs `methyl-validation` (e.g. with `--stability`), then scores the run.
 - It does **not** use `sklearn.model_selection` CV: each evaluation is a subprocess and file read.
+- This is **worker-package** capability on a promoted release. Experiment knobs live as JSON under `/work` (grids, weights, base MC config). It does **not** change `wf`/`cfg` schemas.
 
 **Formula and weights:** `packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md` (full \(J\), `ObjectiveWeights`, constraint semantics).
 
 ## Command example
 
-Use a dedicated MC config and a work directory on shared storage if many trials:
+Use a dedicated MC config and a work directory on shared storage if many trials. Prefer the **release** worker venv (`/work/epimethyl/current/env/worker.env`), not a git checkout:
 
 ```bash
-source .venv/bin/activate
+set -a && source /work/epimethyl/current/env/worker.env && set +a
+export PATH=/work/epimethyl/venv-aarch64/bin:$PATH
 methyl-hyperparam-search \
   --config /work/experiments/my_mc_config.json \
   --work-dir /work/experiments/hp_run1 \
   --grid '{"stability_dmp_freq": [0.6, 0.7], "stability_min_balanced_accuracy": [null, 0.5]}' \
+  --weights-json /work/experiments/weights_ba.json \
   -- \
   --stability
 ```
 
-- JSON `null` in `--grid` omits that field so the base config value is kept.
+- JSON `null` in `--grid` omits that field so the base config value is kept (it does **not** mean “uncap”). To raise a site cap, put an explicit integer in the grid or base config.
 - Results: `work-dir/search_summary.json` (per-trial rows and best feasible trial, if any).
-- `--weights-json` can point to a file for `ObjectiveWeights`.
+- `--weights-json` can point to a file for `ObjectiveWeights` (e.g. BA-dominant: `w_balanced_accuracy=1`, `stat=mean`).
 - `--baseline-summary /path/to/metrics_summary.json` enforces **rollout-style** feasibility vs a baseline (same idea as `methyl-validation --rollout-compare`); see `packages/methylvalidation/docs/ROLLOUT.md` and `packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md`.
 - `--dry-run` only writes trial configs and paths; no pipeline subprocesses.
 

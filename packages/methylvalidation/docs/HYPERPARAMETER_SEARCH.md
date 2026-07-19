@@ -8,9 +8,16 @@ Let \(\theta\) denote tunable parameters (merged into `MonteCarloConfig` and/or 
 
 **Implemented in** `methyl_validation.optimization.objective_from_monte_carlo_artifacts`:
 
-- **Inputs (read-only):**
-  - `monte_carlo_runs/metrics_summary.json` — scalar metrics with `mean` and `percentiles.p50` per metric.
-  - Optional `monte_carlo_runs/stability/stability_summary.json` — `dmp_stability.stable_dmps_at_threshold`, `gene_stability.stable_genes_at_threshold`.
+- **Inputs (read-only), in order:**
+  1. `monte_carlo_runs/metrics_summary.json` — scalar metrics with `mean` and `percentiles.p50` per metric (preferred when present).
+  2. Else a single `monte_carlo_runs/model_mc/*/metrics_summary.json` if exactly one model-MC summary exists.
+  3. Else **gene FeatureCuts fallback:** aggregate every
+     `run_*/gene_stability/gene_featurecuts_metrics.json` via
+     `aggregate_gene_featurecuts_metrics_summary` into a synthetic summary with
+     `balanced_accuracy` (and related keys) `mean` / `percentiles.p50`.
+     Use this for **stability-only** Tier-A search before freeze/model-MC.
+  4. Optional `monte_carlo_runs/stability/stability_summary.json` —
+     `dmp_stability.stable_dmps_at_threshold`, `gene_stability.stable_genes_at_threshold`.
 
 - **Scalarization (maximize):**
   \[
@@ -21,7 +28,7 @@ Let \(\theta\) denote tunable parameters (merged into `MonteCarloConfig` and/or 
   where subscript \(s \in \{\mathrm{mean}, \mathrm{median}\}\) is chosen via `ObjectiveWeights.stat`, and
   \(f(n) = \min(n, \mathrm{cap})/\mathrm{cap}\) caps the reward for very large panels.
 
-- **Missing metrics:** If `w_nll > 0` but NLL is absent (e.g. detector-only runs), that term is skipped. `w_balanced_accuracy` and `w_macro_f1` require the corresponding metric when non-zero.
+- **Missing metrics:** If no metrics summary and no gene FeatureCuts per-run files exist, the trial is infeasible (`missing_metrics_summary`). If `w_nll > 0` but NLL is absent (e.g. detector-only or gene-FC-only runs), that term is skipped. `w_balanced_accuracy` and `w_macro_f1` require the corresponding metric when non-zero.
 
 - **Constraints:** Optional `ConstraintSet` delegates to `rollout.evaluate_dual_run` (same **mean**-based guards as rollout) comparing the **candidate** `metrics_summary.json` to a **baseline** file. If the recommendation is not `promote`, \(J\) is treated as infeasible (`feasible=False`, large negative value).
 
@@ -96,8 +103,9 @@ Set `output_base` in the base config (or per-trial under `--work-dir`) to shared
 
 - **Discovery vs calibration:** Best stability settings may not align with best NLL/ECE; prefer a two-stage search or strong constraints on rollout metrics.
 - **`n_iterations`:** Treat as **compute budget** to reduce variance of the median, not as a free hyperparameter to grid-search widely.
-- **Baseline for constraints:** The baseline `metrics_summary.json` must use the same metric schema (predictor vs detector-only) as candidates.
-- **`tabular_max_dmps` semantics:** `null`/`0` keeps all stable loci; positive values apply an effect-size-ranked cap. Keep this explicit in search grids to avoid accidental old-default assumptions.
+- **Baseline for constraints:** The baseline `metrics_summary.json` must use the same metric schema (predictor vs detector-only) as candidates. Gene-FC-only synthetic summaries are not interchangeable with model-MC summaries for rollout compare.
+- **`tabular_max_dmps` / gene FeatureCuts caps:** Grid JSON `null` means “omit / keep base”, not uncap. Prefer explicit raised integers in the grid on older releases; study/MC `"max_dmps": null` clearing a site cap requires a release that honors nullable overlays in gene-select.
+- **Release vs checkout:** Run `methyl-hyperparam-search` from the promoted worker venv. Grids/weights/base configs stay under `/work`. No `wf`/`cfg` schema changes are required for Tier-A grids.
 
 ## 7. References
 

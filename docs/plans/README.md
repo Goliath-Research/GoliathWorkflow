@@ -57,6 +57,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`independent-lr-stack-features.plan.md`](independent-lr-stack-features.plan.md) | _(pending ADO)_ | Independent LR Stack Features | `typed-transform-contract`, `fit-apply-independent-features`, `persist-exact-design-matrices`, `verify-document-contract` |
 | [`ecdf-dmp-and-gene-models.plan.md`](ecdf-dmp-and-gene-models.plan.md) | _(pending ADO)_ | ECDF DMP and gene models | `dmp-context`, `dmp-freeze-model`, `gene-project-context`, `gene-mc-run`, `promote-plan-docs` |
 | [`buffy-ecdf-gene-tier-a.plan.md`](buffy-ecdf-gene-tier-a.plan.md) | _(pending ADO)_ | Buffy gene Tier-A | `buffy-project-holdout`, `buffy-gene-context`, `buffy-tier-a-grid`, `buffy-plan-docs`, `buffy-vm-runbook` |
+| [`release-stable-tier-a-ops.plan.md`](release-stable-tier-a-ops.plan.md) | _(pending ADO)_ | Release-stable Tier-A experimentation | `docs-release-boundary`, `docs-hyperparam-gene-fc`, `ops-release-pin` |
 | [`di_action-agnostic_assessment_0d376284.plan.md`](di_action-agnostic_assessment_0d376284.plan.md) | **AB#664** | DI action-agnostic assessment | (see plan frontmatter) |
 | [`methylit-standalone-doc.plan.md`](methylit-standalone-doc.plan.md) | **AB#668** | MethylIT Standalone Doc | (see plan frontmatter) |
 | [`worker-transport-security.plan.md`](worker-transport-security.plan.md) | **AB#672** | Worker Transport Security | (see plan frontmatter) |

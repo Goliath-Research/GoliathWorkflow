@@ -1,25 +1,57 @@
 # Buffy gene Tier-A cross-VM runbook
 
-This runbook executes the Buffy gene+covariates study from a clean output tree, then confirms content-addressed action reuse and runs BA-first Tier-A slices. It uses only repository DomainPrograms and the study files under `/work/projects/prostate-cancer/configs/`.
+This runbook runs the Buffy gene+covariates Tier-A experiment from study JSON under
+`/work/projects/prostate-cancer/`, using a **promoted MethylPipeline release** (worker
+venv + runtime-bundle). It does **not** change `wf` / `cfg` database schemas, the action
+catalog, gateway contracts, or worker task models.
+
+## Architecture boundary (release-stable ops)
+
+| Layer | Role for this experiment |
+|-------|--------------------------|
+| `wf` / `cfg` schemas, gateway, action catalog | **Untouched** |
+| Study / experiment JSON on `/work` | **Operator surface** — grids, weights, context, `base_mc_config` |
+| Promoted worker packages (`methylvalidation`, `methylgeneselect`) | Generic platform capability (null cap clearing; gene-FC BA objective fallback) — must be **in the release**, not forked per study |
+| Repo checkout / `.venv` | Only a temporary fallback until a release includes those package fixes |
+
+**Do:** tune via `/work/.../configs/*.json` and `/work/.../experiments/...`; run CLIs from the release PATH.
+
+**Do not:** edit Python for Buffy-specific logic, invent study-only profiles, or migrate DB schemas for Tier-A grids.
+
+Platform gaps that belong in the next promote (already in git; not disease-specific):
+
+1. Study/MC explicit `null` clears site `gene_selection.max_dmps` (gene-select).
+2. Stability-only search scores mean BA from `run_*/gene_stability/gene_featurecuts_metrics.json` when `metrics_summary.json` is absent.
+
+Until that promote lands, prefer **explicit large** `stability_gene_featurecuts_max_dmps` in the grid (slice 1 already uses `20000` / `100000`). Gene-FC BA ranking requires a venv that has the objective fallback (release after promote, or repo `.venv` as interim).
 
 ## Prerequisites
 
-- The repository is checked out at `/home/ubuntu/MethylPipeline` and `.venv` is installed.
-- `/work/samples`, `/work/genomes`, `/work/site`, and the prostate-cancer project are mounted at the same paths.
-- These study files are present:
+- Release at `/work/epimethyl/current` with `runtime-bundle` and worker PATH from
+  `/work/epimethyl/current/env/worker.env` (typically `/work/epimethyl/venv-aarch64`).
+- `/work/samples`, `/work/genomes`, `/work/site`, and the prostate-cancer project are mounted.
+- These study files are present under `/work/projects/prostate-cancer/configs/`:
   - `project_Buffy_ecdf_gene_covariates.json`
   - `context_Buffy_ecdf_gene_covariates.json`
   - `grid_Buffy_ecdf_gene_covariates_tier_a.json`
   - `weights_Buffy_ecdf_gene_covariates_ba.json`
 - `/work/projects/prostate-cancer/Buffy_ecdf_gene_covariates` does not exist before the baseline run. Do not copy artifacts from another study tree.
 
-Run the workflow dry-run before consuming compute:
+Activate the release environment (preferred):
 
 ```bash
-cd /home/ubuntu/MethylPipeline
-source .venv/bin/activate
+set -a
+source /work/epimethyl/current/env/worker.env
+set +a
+# Ensure methyl-* resolve from the release venv first
+export PATH=/work/epimethyl/venv-aarch64/bin:$PATH
+```
+
+Dry-run before consuming compute (programs from **runtime-bundle**, not a git checkout):
+
+```bash
 methyl-workflow-run \
-  --program workflow_engine/domain/fixtures/mc_stability.program.json \
+  --program /work/epimethyl/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
   --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
   --parallel-workers 1 --dry-run -v
 ```
@@ -30,9 +62,10 @@ Start stability in a detached terminal. The log is outside the not-yet-created s
 
 ```bash
 tmux new-session -d -s buffy-gene-mc 'bash -lc "
-  cd /home/ubuntu/MethylPipeline && source .venv/bin/activate &&
+  set -a && source /work/epimethyl/current/env/worker.env && set +a &&
+  export PATH=/work/epimethyl/venv-aarch64/bin:\$PATH &&
   methyl-workflow-run \
-    --program workflow_engine/domain/fixtures/mc_stability.program.json \
+    --program /work/epimethyl/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
     --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
     --parallel-workers 1 -v \
     > /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.mc_stability.log 2>&1
@@ -44,9 +77,10 @@ Continue only after `stability/stability_summary.json` exists and `freeze_readin
 
 ```bash
 tmux new-session -d -s buffy-gene-freeze 'bash -lc "
-  cd /home/ubuntu/MethylPipeline && source .venv/bin/activate &&
+  set -a && source /work/epimethyl/current/env/worker.env && set +a &&
+  export PATH=/work/epimethyl/venv-aarch64/bin:\$PATH &&
   methyl-workflow-run \
-    --program workflow_engine/domain/fixtures/validation_freeze.program.json \
+    --program /work/epimethyl/current/runtime-bundle/domain/fixtures/validation_freeze.program.json \
     --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
     --parallel-workers 1 -v \
     > /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.freeze.log 2>&1
@@ -57,18 +91,20 @@ After freeze succeeds, run strict model-MC and then final post-model validation:
 
 ```bash
 tmux new-session -d -s buffy-gene-model-mc 'bash -lc "
-  cd /home/ubuntu/MethylPipeline && source .venv/bin/activate &&
+  set -a && source /work/epimethyl/current/env/worker.env && set +a &&
+  export PATH=/work/epimethyl/venv-aarch64/bin:\$PATH &&
   methyl-workflow-run \
-    --program workflow_engine/domain/fixtures/validation_model_mc.program.json \
+    --program /work/epimethyl/current/runtime-bundle/domain/fixtures/validation_model_mc.program.json \
     --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
     --parallel-workers 1 -v \
     > /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.model_mc.log 2>&1
 "'
 
 tmux new-session -d -s buffy-gene-model 'bash -lc "
-  cd /home/ubuntu/MethylPipeline && source .venv/bin/activate &&
+  set -a && source /work/epimethyl/current/env/worker.env && set +a &&
+  export PATH=/work/epimethyl/venv-aarch64/bin:\$PATH &&
   methyl-workflow-run \
-    --program workflow_engine/domain/fixtures/validation_model.program.json \
+    --program /work/epimethyl/current/runtime-bundle/domain/fixtures/validation_model.program.json \
     --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
     --parallel-workers 1 -v \
     > /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.model.log 2>&1
@@ -77,7 +113,7 @@ tmux new-session -d -s buffy-gene-model 'bash -lc "
 
 Start `buffy-gene-model` only after `buffy-gene-model-mc` exits successfully. The final phase is the only phase that evaluates `locked_test`.
 
-Do not use `/tmp` DomainPrograms, hand-written summaries, or `requireArtifactReuse: false`. Fix a reproducible incompatibility in code instead of modifying artifacts.
+Do not use `/tmp` DomainPrograms, hand-written summaries, or `requireArtifactReuse: false`. Fix a reproducible incompatibility in a **promoted** package release instead of modifying artifacts.
 
 ## Idempotency replay
 
@@ -86,9 +122,10 @@ Record baseline duration, then rerun the identical stability command without `--
 ```bash
 /usr/bin/time -o /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.replay.time \
   -f 'elapsed=%e' \
-  bash -lc 'cd /home/ubuntu/MethylPipeline && source .venv/bin/activate &&
+  bash -lc 'set -a && source /work/epimethyl/current/env/worker.env && set +a &&
+    export PATH=/work/epimethyl/venv-aarch64/bin:$PATH &&
     methyl-workflow-run \
-      --program workflow_engine/domain/fixtures/mc_stability.program.json \
+      --program /work/epimethyl/current/runtime-bundle/domain/fixtures/mc_stability.program.json \
       --context-file /work/projects/prostate-cancer/configs/context_Buffy_ecdf_gene_covariates.json \
       --parallel-workers 1 -v' \
   > /work/projects/prostate-cancer/Buffy_ecdf_gene_covariates.replay.log 2>&1
@@ -100,7 +137,8 @@ The replay log must show signature-based skips or CAAS reuse for unchanged actio
 
 Do **not** run freeze, model-MC, or locked_test during search. Score mean gene-FC BA from
 `run_*/gene_stability/gene_featurecuts_metrics.json` (aggregated automatically when
-`metrics_summary.json` is absent). ECDF + covariates come only after a winner.
+`metrics_summary.json` is absent — requires a release that includes that objective fallback).
+ECDF + covariates come only after a winner.
 
 Slice 1 raises `stability_gene_featurecuts_max_dmps` (site 1000 was too restrictive):
 
@@ -110,15 +148,14 @@ Slice 1 raises `stability_gene_featurecuts_max_dmps` (site 1000 was too restrict
 | `gene_featurecuts_target_ba` | 0.90, 0.95 |
 | `n_iterations` | 10 (full) |
 
-Base config (portable paths, uncapped default cleared by grid cells):
+Base config (portable paths; grid cells set explicit raised caps):
 
 ```text
 /work/projects/prostate-cancer/experiments/Buffy_ecdf_gene_covariates_tier_a/base_mc_config.json
 ```
 
 ```bash
-cd /home/ubuntu/MethylPipeline
-source .venv/bin/activate
+# Uses release venv when it has gene-FC BA scoring; else falls back to repo .venv (pre-promote)
 GRID_FILE=/work/projects/prostate-cancer/configs/grid_Buffy_ecdf_gene_covariates_tier_a.json
 BASE_CONFIG=/work/projects/prostate-cancer/experiments/Buffy_ecdf_gene_covariates_tier_a/base_mc_config.json
 WEIGHTS=/work/projects/prostate-cancer/configs/weights_Buffy_ecdf_gene_covariates_ba.json
@@ -140,7 +177,6 @@ tmux new-session -d -s buffy-tier-a-slice1 \
   /work/projects/prostate-cancer/experiments/Buffy_ecdf_gene_covariates_tier_a/run_slice1_search.sh
 # Log: .../max_dmps_by_target_ba.search.log
 ```
-
 
 After slice 1, inspect `search_summary.json` and per-trial `n_dmp_loci_for_features` (must be ≫ 1000).
 If mean gene-FC BA is still below ~0.90, run slice 2 (`min_genes_by_recurrence`) with the winning
