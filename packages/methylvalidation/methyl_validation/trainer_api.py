@@ -147,6 +147,45 @@ def _load_binary_partition_paths(project_json: Path, partition: str) -> tuple[Li
     )
 
 
+def _resolve_classic_ecdf_model_locations(
+    project_json: Path,
+) -> tuple[Optional[str], Optional[str], Any]:
+    """
+    Resolve model_path/model_dir the same way ``methyl-predictor --project`` does
+    for control/disease comparisons (comparison-scoped detection dir, not top-level
+    ``detections/``).
+    """
+    from methyl_predictor.project_resolver import (
+        resolve_predictor_config,
+        resolve_predictor_config_per_comparison,
+    )
+
+    try:
+        configs = resolve_predictor_config_per_comparison(project_json)
+    except Exception:
+        configs = []
+    if configs:
+        base = configs[0][0]
+        return base.model_path, base.model_dir, base
+
+    base = resolve_predictor_config(project_json)
+    model_path = base.model_path
+    model_dir = base.model_dir
+    # Fallback: if model_dir is the detections root, prefer nested comparison dirs
+    # that actually contain classifier-*.pkl files.
+    if model_path is None and model_dir is not None:
+        root = Path(model_dir)
+        if root.is_dir() and not any(root.glob("classifier-*.pkl")):
+            nested = sorted(
+                p.parent
+                for p in root.rglob("classifier-*.pkl")
+                if p.is_file()
+            )
+            if nested:
+                model_dir = str(nested[0])
+    return model_path, model_dir, base
+
+
 def _score_classic_ecdf_partition(
     *,
     project_json: Path,
@@ -158,18 +197,21 @@ def _score_classic_ecdf_partition(
     """Score one classic ECDF partition and write canonical train_/test_ artifacts."""
     from methyl_predictor.core.predictor import run_prediction
     from methyl_predictor.models.config import PredictorConfig
-    from methyl_predictor.project_resolver import resolve_predictor_config
 
     if not control_paths or not disease_paths:
         raise ValueError(f"{partition} partition requires non-empty control and disease paths")
 
-    base_predictor = resolve_predictor_config(project_json)
+    model_path, model_dir, base_predictor = _resolve_classic_ecdf_model_locations(project_json)
+    if model_path is None and model_dir is None:
+        raise FileNotFoundError(
+            f"Could not resolve classifier model_path/model_dir for {project_json}"
+        )
     output_dir.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=str(output_dir), prefix=f".{partition}-eval-") as tmp_out:
         tmp_path = Path(tmp_out)
         cfg = PredictorConfig(
-            model_path=base_predictor.model_path,
-            model_dir=base_predictor.model_dir,
+            model_path=model_path,
+            model_dir=model_dir,
             output_dir=str(tmp_path),
             test_control_paths=list(control_paths),
             test_disease_paths=list(disease_paths),

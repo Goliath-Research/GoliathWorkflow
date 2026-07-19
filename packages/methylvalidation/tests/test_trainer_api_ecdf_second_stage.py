@@ -121,8 +121,12 @@ def test_score_classic_ecdf_test_partition_does_not_self_copy_test_metrics(
     project.write_text("{}", encoding="utf-8")
     out_dir = tmp_path / "predictors"
     out_dir.mkdir()
+    model_dir = tmp_path / "detections" / "all" / "PCa"
+    model_dir.mkdir(parents=True)
+    (model_dir / "classifier-1-CG.pkl").write_bytes(b"x")
 
     def _fake_run_prediction(cfg):
+        assert cfg.model_dir == str(model_dir)
         pred = Path(cfg.output_dir) / "predictions.csv"
         metrics = Path(cfg.output_dir) / "validation_metrics.json"
         pred.write_text("sample,expected_class,prediction\ns1,0,0\n", encoding="utf-8")
@@ -134,20 +138,21 @@ def test_score_classic_ecdf_test_partition_does_not_self_copy_test_metrics(
             for key, value in kwargs.items():
                 setattr(self, key, value)
 
+    base = _FakePredictorConfig(
+        model_path=None,
+        model_dir=str(model_dir),
+        samples_base_path=str(tmp_path),
+        path_remap=None,
+        debug=False,
+        classifier_step_snapshot=None,
+        panel=None,
+        decision_enabled=False,
+        decision_min_margin=0.0,
+        decision_min_confidence=0.0,
+    )
     monkeypatch.setattr(
-        "methyl_predictor.project_resolver.resolve_predictor_config",
-        lambda _p: _FakePredictorConfig(
-            model_path=None,
-            model_dir=str(tmp_path / "models"),
-            samples_base_path=str(tmp_path),
-            path_remap=None,
-            debug=False,
-            classifier_step_snapshot=None,
-            panel=None,
-            decision_enabled=False,
-            decision_min_margin=0.0,
-            decision_min_confidence=0.0,
-        ),
+        "methyl_validation.trainer_api._resolve_classic_ecdf_model_locations",
+        lambda _p: (base.model_path, base.model_dir, base),
     )
     monkeypatch.setattr("methyl_predictor.models.config.PredictorConfig", _FakePredictorConfig)
     monkeypatch.setattr("methyl_predictor.core.predictor.run_prediction", _fake_run_prediction)
@@ -167,6 +172,28 @@ def test_score_classic_ecdf_test_partition_does_not_self_copy_test_metrics(
     assert json.loads((out_dir / "test_metrics.json").read_text(encoding="utf-8"))[
         "evaluation_partition"
     ] == "test"
+
+
+def test_resolve_classic_ecdf_model_locations_uses_comparison_detection_dir(tmp_path: Path):
+    from methyl_validation.trainer_api import _resolve_classic_ecdf_model_locations
+
+    project = Path(
+        "/work/projects/prostate-cancer/H_PCa_good_ecdf_covariates_extval10/"
+        "monte_carlo_runs/model_mc/ecdf/run_0001/project.json"
+    )
+    if not project.is_file():
+        import pytest
+
+        pytest.skip("ECDF run_0001 project not available")
+    model_path, model_dir, _base = _resolve_classic_ecdf_model_locations(project)
+    # Prefer unified classifier pkl when present, else comparison-scoped detections.
+    if model_path:
+        assert model_path.endswith("run_0001-classifier.pkl")
+        assert "classifiers/all/PCa" in model_path.replace("\\", "/")
+    else:
+        assert model_dir is not None
+        assert model_dir.rstrip("/").endswith("detections/all/PCa")
+        assert any(Path(model_dir).glob("classifier-*.pkl"))
 
 
 def test_build_model_backend_steps_ecdf_second_stage_disabled(tmp_path: Path, monkeypatch):
