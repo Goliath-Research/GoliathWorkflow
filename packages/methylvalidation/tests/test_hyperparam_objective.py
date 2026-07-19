@@ -47,6 +47,21 @@ def test_objective_median_ba_f1(tmp_path: Path) -> None:
     assert "metric_terms" in r.details
 
 
+def test_objective_uses_single_model_mc_backend_summary(tmp_path: Path) -> None:
+    mcr = tmp_path / "mcr"
+    backend = mcr / "model_mc" / "ecdf"
+    backend.mkdir(parents=True)
+    metrics = backend / "metrics_summary.json"
+    metrics.write_text(json.dumps(_summary(0.91, 0.86)), encoding="utf-8")
+
+    w = ObjectiveWeights(stat="median", w_balanced_accuracy=1.0, w_macro_f1=0.0)
+    result = objective_from_monte_carlo_artifacts(mcr, w, None)
+
+    assert result.feasible
+    assert result.value == pytest.approx(0.91)
+    assert result.details["metrics_summary_path"] == str(metrics)
+
+
 def test_objective_stability_panel(tmp_path: Path) -> None:
     mcr = tmp_path / "mcr"
     mcr.mkdir()

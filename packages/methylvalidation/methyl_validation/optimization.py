@@ -1,8 +1,9 @@
 """
 File-driven objective J(theta) for pipeline hyperparameter search.
 
-Reads ``metrics_summary.json`` (and optionally ``stability/stability_summary.json``) under
-``monte_carlo_runs``; optional constraints call :func:`rollout.evaluate_dual_run` against a baseline.
+Reads primary ``metrics_summary.json`` or a single ``model_mc/*/metrics_summary.json``
+(and optionally ``stability/stability_summary.json``) under ``monte_carlo_runs``;
+optional constraints call :func:`rollout.evaluate_dual_run` against a baseline.
 """
 
 from __future__ import annotations
@@ -123,7 +124,7 @@ class ObjectiveResult(BaseModel):
     def to_json_friendly(self) -> Dict[str, Any]:
         out = self.model_dump()
         v = out.get("value")
-        if isinstance(v, float) and (math.isneginf(v) or math.isnan(v)):
+        if isinstance(v, float) and ((math.isinf(v) and v < 0) or math.isnan(v)):
             out["value"] = float(self.details.get("infeasible_value", -1.0e9))
         return out
 
@@ -131,7 +132,18 @@ class ObjectiveResult(BaseModel):
 def _panel_reward(n: float, cap: float) -> float:
     if n <= 0.0 or cap <= 0:
         return 0.0
-    return float(min(n, cap) / cap)
+    return min(n, cap) / cap
+
+
+def _resolve_metrics_summary(root: Path) -> Path:
+    """Prefer primary MC metrics, then a single model-MC backend summary."""
+    primary = root / "metrics_summary.json"
+    if primary.is_file():
+        return primary
+    backend_summaries = sorted((root / "model_mc").glob("*/metrics_summary.json"))
+    if len(backend_summaries) == 1:
+        return backend_summaries[0]
+    return primary
 
 
 def objective_from_monte_carlo_artifacts(
@@ -140,9 +152,10 @@ def objective_from_monte_carlo_artifacts(
     constraints: Optional[ConstraintSet] = None,
 ) -> ObjectiveResult:
     root = Path(monte_carlo_runs_root)
-    ms = root / "metrics_summary.json"
+    ms = _resolve_metrics_summary(root)
     details: Dict[str, Any] = {
         "monte_carlo_runs_root": str(root),
+        "metrics_summary_path": str(ms),
         "infeasible_value": weights.infeasible_value,
     }
 
@@ -284,4 +297,4 @@ def objective_from_monte_carlo_artifacts(
         return ObjectiveResult(
             value=weights.infeasible_value, feasible=False, reason="nan_objective", details=details
         )
-    return ObjectiveResult(value=float(j), feasible=True, reason="ok", details=details)
+    return ObjectiveResult(value=j, feasible=True, reason="ok", details=details)

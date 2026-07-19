@@ -7,7 +7,10 @@ from methyl_validation.cli import (
     _load_model_mc_shared_rows,
     _shared_run_metadata_from_step_timings,
 )
-from methyl_validation.model_mc_runner import _exclude_configured_holdout
+from methyl_validation.model_mc_runner import (
+    _exclude_configured_holdout,
+    _requires_detector_classifier_models,
+)
 
 
 def test_model_mc_excludes_locked_holdout_from_reuse_pool() -> None:
@@ -42,6 +45,24 @@ def test_model_mc_keeps_full_pool_when_holdout_exclusion_disabled() -> None:
     )
 
     assert _exclude_configured_holdout(pools, config) == pools
+
+
+def test_raw_gene_ecdf_does_not_require_detector_classifier_models() -> None:
+    class Config:
+        def with_backend_selection(self, backend: str) -> SimpleNamespace:
+            assert backend == "ecdf"
+            return SimpleNamespace(feature_mode="raw_gene", ecdf_aggregated_enabled=False)
+
+    assert _requires_detector_classifier_models(Config(), ["ecdf"]) is False
+
+
+def test_classic_raw_dmp_ecdf_requires_detector_classifier_models() -> None:
+    class Config:
+        def with_backend_selection(self, backend: str) -> SimpleNamespace:
+            assert backend == "ecdf"
+            return SimpleNamespace(feature_mode="raw_dmp", ecdf_aggregated_enabled=False)
+
+    assert _requires_detector_classifier_models(Config(), ["ecdf"]) is True
 
 
 def test_shared_run_metadata_marks_detector_ok_from_synthetic_timing() -> None:

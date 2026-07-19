@@ -25,7 +25,7 @@ def _exclude_configured_holdout(
         return cohort_paths_list
     holdout_ids = {Path(path).name for path in holdout_paths}
     return [
-        (label, [path for path in paths if Path(str(path)).name not in holdout_ids])
+        (label, [path for path in paths if Path(path).name not in holdout_ids])
         for label, paths in cohort_paths_list
     ]
 
@@ -34,6 +34,20 @@ def resolve_model_mc_backends(config: MonteCarloConfig, *, run_all: bool) -> Lis
     from methyl_validation.cli import _resolve_model_mc_backends
 
     return _resolve_model_mc_backends(config, run_all)
+
+
+def _requires_detector_classifier_models(
+    config: MonteCarloConfig,
+    configured_backends: Sequence[str],
+) -> bool:
+    """Return whether a configured backend consumes detector classifier pickles."""
+    if "ecdf" not in configured_backends:
+        return False
+    ecdf_config = config.with_backend_selection("ecdf")
+    return (
+        ecdf_config.feature_mode != "raw_gene"
+        and not bool(ecdf_config.ecdf_aggregated_enabled)
+    )
 
 
 def run_model_mc_all(
@@ -98,7 +112,7 @@ def run_model_mc_all(
         per_cancer_group=False,
         primary_monte_carlo_runs_root=monte_carlo_runs_root,
         require_artifact_reuse=require_artifact_reuse,
-        require_classifier_models="ecdf" in configured,
+        require_classifier_models=_requires_detector_classifier_models(config, configured),
     )
     backend_roots: Dict[str, str] = {}
     for backend in configured:
