@@ -200,9 +200,9 @@ def _score_classic_ecdf_partition(
         payload["n_samples"] = int(len(control_paths) + len(disease_paths))
         metrics_dst.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         if partition == "test":
+            # metrics_dst is already test_metrics.json; only alias the legacy names.
             shutil.copy2(pred_dst, output_dir / "predictions.csv")
             shutil.copy2(metrics_dst, output_dir / "validation_metrics.json")
-            shutil.copy2(metrics_dst, output_dir / "test_metrics.json")
         return {
             "partition": partition,
             "predictions_csv": str(pred_dst),

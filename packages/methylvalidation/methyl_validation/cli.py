@@ -610,11 +610,26 @@ def _build_model_mc_shared_runs(
             n_val_samples = sum(len(val_m[k]) for k in cohort_labels)
 
         if _shared_run_ready(run_dir):
+            # Mirror can_reuse_artifacts: step_timings must record detector_ok so
+            # _load_model_mc_shared_rows keeps this run when backend is invoked alone.
+            all_timings.append(
+                {
+                    "step_name": "methyl-detector",
+                    "duration_seconds": 0.0,
+                    "return_code": 0,
+                    "run_id": run_id,
+                    "run_dir": str(run_dir),
+                    "n_train_samples": n_train_samples,
+                    "n_val_samples": n_val_samples,
+                    "model_backend": "shared",
+                }
+            )
             rows.append(
                 {
                     "iteration": i + 1,
                     "run_id": run_id,
                     "run_dir": str(run_dir),
+                    "project_json": str(run_dir / "project.json"),
                     "n_train_samples": n_train_samples,
                     "n_val_samples": n_val_samples,
                     "detector_ok": True,
