@@ -67,11 +67,46 @@ When covariates are enabled for tabular/generative backends (or the ECDF second-
 - join key is sample basename against `covariate_id_column`,
 - numeric/ordinal/categorical role assignment is fixed at training and reused at inference,
 - numeric imputation + optional standardization are frozen from training statistics,
-- ordinal columns use preserved label->code mappings (`covariate_ordinal_maps`) with unknown-value fallback,
-- categorical encoding uses frozen vocabulary with unknown-category handling,
+- ordinal columns use preserved label→code mappings (`covariate_ordinal_maps`) with unknown-value fallback — **one numeric feature per ordinal column** (no redundancy),
+- categorical (nominal) encoding uses frozen vocabulary with an unknown-category bucket and **drops one reference level** so $L$ levels become $L-1$ one-hot columns,
+- composition groups (ALR) and this non-redundant encoding apply to `tabular_sklearn`, `generative_hybrid`, and the ECDF second-stage stacker alike,
 - shape/schema consistency is enforced before prediction.
 
 This contract keeps training and inference feature spaces aligned while preserving reproducibility across reruns.
+
+### Composition (simplex) covariates and class probabilities
+
+Any feature set whose parts sum to one (a *composition*) carries a redundant
+degree of freedom: with $K$ parts summing to 1, only $K-1$ are free. Feeding all
+$K$ into a linear model creates perfect collinearity, and the parts are bounded
+to $[0,1]$ rather than the real line. MethylPipeline resolves both problems with
+one rule: every simplex is encoded by the **additive log-ratio (ALR)**. For
+parts $p_1,\dots,p_K$ and a reference part $p_r$,
+
+$$
+\mathrm{alr}_i = \log\frac{p_i + \varepsilon}{p_r + \varepsilon}, \qquad i \neq r,
+$$
+
+yielding $K-1$ unbounded coordinates and dropping the reference. A small
+pseudocount $\varepsilon$ guards against $\log 0$.
+
+Two simplex sources use this uniformly:
+
+- **First-stage ECDF class probabilities.** They sum to one, so they are always
+  ALR-encoded. For the binary case ($K=2$) the single coordinate
+  $\log\frac{p_1+\varepsilon}{p_0+\varepsilon}$ is the clipped class-1 log-odds;
+  raw dual probabilities are never stacked.
+- **Cell-type fractions and other declared groups.** Operators declare each
+  composition with `covariate_composition_groups` (name, ordered columns,
+  reference defaulting to the last column, pseudocount, and whether the ALR
+  coordinates are standardized). Parts must be disjoint from each other and from
+  numeric/ordinal/categorical roles, so raw proportions never enter the design
+  matrix. Deconvolution outputs (Houseman or HiTIMED, see @sec-methyldeconv) are
+  the primary example.
+
+ALR coordinates live on $\mathbb{R}$, so standardizing them (the default) is
+meaningful; probabilities and their ALR coordinate are left on their natural
+scale.
 
 ---
 

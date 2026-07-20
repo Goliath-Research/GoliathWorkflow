@@ -20,17 +20,14 @@
               "{output_base}/clinical_covariates.csv"
             ],
             "covariate_numeric_columns": ["age", "bmi"],
-            "covariate_composition_transform": "alr",
-            "covariate_composition_columns": [
-              "CD8T",
-              "CD4T",
-              "NK",
-              "Bcell",
-              "Mono",
-              "Neu"
+            "covariate_composition_groups": [
+              {
+                "name": "cell_fractions",
+                "columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+                "reference": "Neu",
+                "pseudocount": 1e-6
+              }
             ],
-            "covariate_composition_reference": "Neu",
-            "covariate_composition_pseudocount": 1e-6,
             "covariate_id_column": "sample_id"
           }
         },

@@ -105,6 +105,77 @@ DEFAULT_MAPPER_GENE_COLUMNS: List[str] = [
 ]
 
 
+class CompositionGroup(BaseModel):
+    """A simplex (sum-to-1) covariate set encoded by additive log-ratio (ALR).
+
+    Every proportion/probability vector has one redundant part; ALR drops the
+    ``reference`` (default: last column) and emits ``K - 1`` log-ratio coordinates.
+    Operators declare one group per composition (e.g. cell fractions); parts must
+    be disjoint across groups and from numeric/ordinal/categorical roles.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, description="Group name (feature-provenance label).")
+    columns: List[str] = Field(
+        min_length=2,
+        description="Ordered simplex parts (K >= 2); values are closed to sum 1 before ALR.",
+    )
+    reference: Optional[str] = Field(
+        default=None,
+        description="ALR denominator part; defaults to the last column when unset.",
+    )
+    pseudocount: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description="Numerical guard added before the log-ratio. Operator-set per group.",
+    )
+    standardize: Optional[bool] = Field(
+        default=None,
+        description="Z-score the ALR coordinates (default true). ALR coords are unbounded.",
+    )
+
+    @model_validator(mode="after")
+    def _validate_reference(self) -> "CompositionGroup":
+        cols = [str(c) for c in self.columns]
+        if len(set(cols)) != len(cols):
+            raise ValueError(f"composition group '{self.name}' has duplicate columns.")
+        if self.reference is not None and str(self.reference) not in cols:
+            raise ValueError(
+                f"composition group '{self.name}' reference '{self.reference}' not in columns."
+            )
+        return self
+
+
+def _validate_composition_group_columns(
+    groups: Optional[List["CompositionGroup"]],
+    *,
+    numeric: set,
+    ordinal: set,
+    categorical: set,
+    legacy_columns: Optional[List[str]] = None,
+    legacy_transform: Optional[str] = None,
+) -> None:
+    """Ensure composition parts are disjoint across groups and from other roles."""
+    all_parts: List[str] = []
+    if groups:
+        for group in groups:
+            all_parts.extend(str(c) for c in group.columns)
+    if legacy_transform is not None and legacy_columns:
+        all_parts.extend(str(c) for c in legacy_columns)
+    if not all_parts:
+        return
+    shared = sorted({c for c in all_parts if all_parts.count(c) > 1})
+    if shared:
+        raise ValueError(f"composition groups must not share columns: {shared}")
+    role_overlap = sorted(set(all_parts) & (numeric | ordinal | categorical))
+    if role_overlap:
+        raise ValueError(
+            "composition group columns overlap numeric/ordinal/categorical roles: "
+            f"{role_overlap}"
+        )
+
+
 class BackendSharedParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -302,6 +373,14 @@ class BackendSharedParams(BaseModel):
     covariate_composition_pseudocount: Optional[float] = Field(
         default=None, gt=0.0
     )
+    covariate_composition_groups: Optional[List[CompositionGroup]] = Field(
+        default=None,
+        description=(
+            "Typed simplex covariate groups (ALR). Preferred over the single-group "
+            "covariate_composition_* keys; parts must be disjoint from each other and "
+            "from numeric/ordinal/categorical roles."
+        ),
+    )
 
     @field_validator("feature_mode")
     @classmethod
@@ -470,6 +549,14 @@ class BackendSharedParams(BaseModel):
                     "covariate_ordinal_maps has columns not listed in covariate_ordinal_columns: "
                     f"{missing}"
                 )
+        _validate_composition_group_columns(
+            self.covariate_composition_groups,
+            numeric=numeric,
+            ordinal=ordinal,
+            categorical=categorical,
+            legacy_columns=self.covariate_composition_columns,
+            legacy_transform=self.covariate_composition_transform,
+        )
         return self
 
 
@@ -1564,6 +1651,17 @@ class MonteCarloConfig(BaseModel):
                         f"{backend_name} covariate_ordinal_maps has columns not listed in "
                         f"covariate_ordinal_columns: {missing}"
                     )
+            try:
+                _validate_composition_group_columns(
+                    getattr(params, "covariate_composition_groups", None),
+                    numeric=numeric,
+                    ordinal=ordinal,
+                    categorical=categorical,
+                    legacy_columns=getattr(params, "covariate_composition_columns", None),
+                    legacy_transform=getattr(params, "covariate_composition_transform", None),
+                )
+            except ValueError as exc:
+                raise ValueError(f"{backend_name} {exc}") from exc
         return self
 
     @model_validator(mode="after")

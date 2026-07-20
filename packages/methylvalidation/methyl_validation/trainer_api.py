@@ -359,6 +359,21 @@ def build_model_backend_steps(
                     covariate_categorical_columns=(config.covariate_categorical_columns if config is not None else None),
                     covariate_missing_numeric_strategy=(config.covariate_missing_numeric_strategy if config is not None else "mean"),
                     covariate_standardize_numeric=(config.covariate_standardize_numeric if config is not None else True),
+                    covariate_composition_groups=(
+                        config.covariate_composition_groups if config is not None else None
+                    ),
+                    covariate_composition_transform=(
+                        config.covariate_composition_transform if config is not None else None
+                    ),
+                    covariate_composition_columns=(
+                        config.covariate_composition_columns if config is not None else None
+                    ),
+                    covariate_composition_reference=(
+                        config.covariate_composition_reference if config is not None else None
+                    ),
+                    covariate_composition_pseudocount=(
+                        config.covariate_composition_pseudocount if config is not None else None
+                    ),
                     feature_mode=(config.feature_mode if config is not None else "raw_dmp"),
                     observed_feature_quantiles=(config.observed_feature_quantiles if config is not None else None),
                     observed_feature_min_coverage=(config.observed_feature_min_coverage if config is not None else 1),
@@ -562,6 +577,21 @@ def build_model_backend_steps(
                     covariate_categorical_columns=(config.covariate_categorical_columns if config is not None else None),
                     covariate_missing_numeric_strategy=(config.covariate_missing_numeric_strategy if config is not None else "mean"),
                     covariate_standardize_numeric=(config.covariate_standardize_numeric if config is not None else True),
+                    covariate_composition_groups=(
+                        config.covariate_composition_groups if config is not None else None
+                    ),
+                    covariate_composition_transform=(
+                        config.covariate_composition_transform if config is not None else None
+                    ),
+                    covariate_composition_columns=(
+                        config.covariate_composition_columns if config is not None else None
+                    ),
+                    covariate_composition_reference=(
+                        config.covariate_composition_reference if config is not None else None
+                    ),
+                    covariate_composition_pseudocount=(
+                        config.covariate_composition_pseudocount if config is not None else None
+                    ),
                     feature_mode=(config.feature_mode if config is not None else "raw_dmp"),
                     observed_feature_quantiles=(config.observed_feature_quantiles if config is not None else None),
                     observed_feature_min_coverage=(config.observed_feature_min_coverage if config is not None else 1),

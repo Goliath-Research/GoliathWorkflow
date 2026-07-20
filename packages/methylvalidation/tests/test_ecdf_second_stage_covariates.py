@@ -116,9 +116,11 @@ def test_ecdf_second_stage_covariates_only(tmp_path: Path):
     meta = json.loads((clf_dir / "ecdf-second-stage-metadata.json").read_text(encoding="utf-8"))
     assert meta["include_covariates"] is True
     assert meta["include_observed_hybrid"] is False
-    assert meta["n_prob_features"] == 2
+    # ECDF class probs are ALR-encoded: binary -> one coordinate (K-1).
+    assert meta["n_prob_features"] == 1
+    assert meta["prob_feature_names"] == ["alr_prob_class1_vs_prob_class0"]
     assert meta["n_covariate_features"] == 2
-    assert meta["n_features"] == 4
+    assert meta["n_features"] == 3
     pred = pd.read_csv(pred_dir / "predictions.csv")
     assert "prob_refined_class0" in pred.columns
     assert "prediction_refined" in pred.columns
@@ -172,8 +174,7 @@ def test_ecdf_second_stage_fits_train_and_scores_disjoint_test(tmp_path: Path):
     expected_columns = [
         "sample_id",
         "expected_class",
-        "prob_class0",
-        "prob_class1",
+        "alr_prob_class1_vs_prob_class0",
         "standardized_age",
         "standardized_bmi",
     ]
@@ -258,14 +259,16 @@ def test_ecdf_second_stage_uses_one_logit_and_five_alr_features(
         params=EcdfSecondStageParams(
             include_observed_hybrid=False,
             covariates_path=str(cov_csv),
-            covariate_numeric_columns=columns,
             covariates_strict_join=True,
-            probability_transform="logit_class1",
             probability_epsilon=1e-6,
-            composition_transform="alr",
-            composition_columns=columns,
-            composition_reference="Neu",
-            composition_pseudocount=1e-6,
+            composition_groups=[
+                {
+                    "name": "cell_fractions",
+                    "columns": columns,
+                    "reference": "Neu",
+                    "pseudocount": 1e-6,
+                }
+            ],
         ),
     )
 
@@ -273,7 +276,7 @@ def test_ecdf_second_stage_uses_one_logit_and_five_alr_features(
     train_dataset = pd.read_csv(dataset_dir / "train_dataset.csv")
     test_dataset = pd.read_csv(dataset_dir / "test_dataset.csv")
     feature_columns = [
-        "ecdf_logit_class1",
+        "alr_prob_class1_vs_prob_class0",
         "standardized_alr_CD8T_vs_Neu",
         "standardized_alr_CD4T_vs_Neu",
         "standardized_alr_NK_vs_Neu",
@@ -292,23 +295,24 @@ def test_ecdf_second_stage_uses_one_logit_and_five_alr_features(
     ]
     assert np.isfinite(train_dataset[feature_columns].to_numpy()).all()
     assert np.isfinite(test_dataset[feature_columns].to_numpy()).all()
-    expected_logit = np.log(0.2 / 0.8)
-    assert train_dataset.loc[0, "ecdf_logit_class1"] == pytest.approx(
-        expected_logit
+    # Binary ALR of the class-probability simplex equals the class-1 logit within epsilon.
+    expected_logit = np.log((0.2 + 1e-6) / (0.8 + 1e-6))
+    assert train_dataset.loc[0, "alr_prob_class1_vs_prob_class0"] == pytest.approx(
+        expected_logit, abs=1e-4
     )
     manifest = json.loads(
         (dataset_dir / "dataset_manifest.json").read_text(encoding="utf-8")
     )
     assert manifest["feature_columns"] == feature_columns
-    assert manifest["probability_transform"] == "logit_class1"
-    assert manifest["composition_transform"] == "alr"
-    assert manifest["composition_reference"] == "Neu"
+    assert manifest["probability_transform"] == "alr"
+    assert manifest["composition_groups"][0]["name"] == "cell_fractions"
+    assert manifest["composition_groups"][0]["reference"] == "Neu"
     assert manifest["train_test_overlap_count"] == 0
     preprocessor = json.loads(
         (clf_dir / "covariate-preprocessor.json").read_text(encoding="utf-8")
     )
-    assert preprocessor["composition_columns"] == columns
-    assert preprocessor["composition_reference"] == "Neu"
+    assert preprocessor["composition_groups"][0]["columns"] == columns
+    assert preprocessor["composition_groups"][0]["reference"] == "Neu"
     assert len(preprocessor["output_columns"]) == 5
 
 

@@ -70,11 +70,19 @@ Each backend run writes `train_metrics.json` for diagnostics and
 `test_control.csv`, `test_disease.csv`, and `test_groups.json`; `val_*` names are
 compatibility aliases.
 
-For ECDF with leukocyte covariates, the second-stage LR uses six independent
-features: the clipped log-odds of `prob_class1` and five standardized additive
-log-ratios (`CD8T`, `CD4T`, `NK`, `Bcell`, `Mono`) relative to `Neu`. The exact
-matrices are saved under each run's `model_bundle/second_stage/`; its manifest
-records transform parameters and verifies zero train/test sample overlap.
+Every sum-to-1 feature set (a simplex) is encoded by additive log-ratio (ALR),
+which drops the redundant reference part. The first-stage ECDF class
+probabilities are always ALR-encoded (binary gives one coordinate, the clipped
+class-1 log-odds); cell-type fractions and any other declared composition group
+give `K - 1` coordinates. For ECDF with leukocyte covariates the second-stage LR
+therefore uses six independent features: the class-probability ALR coordinate
+plus five standardized Neu-referenced ALR fractions (`CD8T`, `CD4T`, `NK`,
+`Bcell`, `Mono`). Declare composition groups with
+`covariate_composition_groups` (see the covariate contract in the
+[MethylValidation usage guide](../../packages/methylvalidation/docs/USAGE.md)).
+The exact matrices are saved under each run's `model_bundle/second_stage/`; its
+manifest records transform parameters and verifies zero train/test sample
+overlap.
 
 ## Backend behavior
 

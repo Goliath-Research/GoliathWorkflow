@@ -37,7 +37,12 @@ from .classification_metrics import (
     select_healthy_index_for_labels,
     write_classification_results_csv,
 )
-from .covariate_preprocessor import CovariatePreprocessor, fit_covariates, transform_covariates
+from .covariate_preprocessor import (
+    CovariatePreprocessor,
+    fit_covariates,
+    normalize_composition_groups,
+    transform_covariates,
+)
 from .eval_split_resolver import resolve_eval_paths_and_labels
 from .gene_scored_features import DEFAULT_REGION_DIRECTIONAL_TYPES, family_includes_gene_scored
 from .structural_scored_features import (
@@ -360,6 +365,11 @@ def train_tabular_model(
     covariate_categorical_columns: Optional[List[str]] = None,
     covariate_missing_numeric_strategy: str = "mean",
     covariate_standardize_numeric: bool = True,
+    covariate_composition_groups: Optional[Sequence[Any]] = None,
+    covariate_composition_transform: Optional[str] = None,
+    covariate_composition_columns: Optional[List[str]] = None,
+    covariate_composition_reference: Optional[str] = None,
+    covariate_composition_pseudocount: Optional[float] = None,
     feature_mode: str = "raw_dmp",
     observed_feature_quantiles: Optional[List[float]] = None,
     observed_feature_min_coverage: int = 1,
@@ -866,6 +876,17 @@ def train_tabular_model(
             X = np.asarray(X, dtype=np.float32)
             X = np.nan_to_num(X, nan=0.5, posinf=0.5, neginf=0.5)
 
+        composition_specs = normalize_composition_groups(
+            [
+                g.model_dump() if hasattr(g, "model_dump") else dict(g)
+                for g in (covariate_composition_groups or [])
+            ]
+            or None,
+            legacy_transform=covariate_composition_transform,
+            legacy_columns=covariate_composition_columns,
+            legacy_reference=covariate_composition_reference,
+            legacy_pseudocount=covariate_composition_pseudocount,
+        )
         cov, preprocessor, cov_report = fit_covariates(
             covariates_path,
             sample_ids,
@@ -878,6 +899,7 @@ def train_tabular_model(
             categorical_columns=covariate_categorical_columns,
             missing_numeric_strategy=covariate_missing_numeric_strategy,
             standardize_numeric=covariate_standardize_numeric,
+            composition_groups=composition_specs,
         )
         if feature_mode_norm == "observed_hybrid":
             X_export = X_obs_full

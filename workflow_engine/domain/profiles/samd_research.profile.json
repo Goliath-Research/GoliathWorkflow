@@ -221,6 +221,14 @@
               "{output_base}/derived_measures/derived_measures.csv",
               "{output_base}/info_measures/readlevel_measures.csv"
             ],
+            "covariate_composition_groups": [
+              {
+                "name": "cell_fractions",
+                "columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+                "reference": "Neu",
+                "pseudocount": 1e-6
+              }
+            ],
             "covariate_id_column": "sample_id"
           }
         },
@@ -234,6 +242,14 @@
               "{output_base}/derived_measures/derived_measures.csv",
               "{output_base}/info_measures/readlevel_measures.csv"
             ],
+            "covariate_composition_groups": [
+              {
+                "name": "cell_fractions",
+                "columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+                "reference": "Neu",
+                "pseudocount": 1e-6
+              }
+            ],
             "covariate_id_column": "sample_id"
           }
         },
@@ -246,6 +262,14 @@
               "{output_base}/cell_fractions/cell_fractions.csv",
               "{output_base}/derived_measures/derived_measures.csv",
               "{output_base}/info_measures/readlevel_measures.csv"
+            ],
+            "covariate_composition_groups": [
+              {
+                "name": "cell_fractions",
+                "columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+                "reference": "Neu",
+                "pseudocount": 1e-6
+              }
             ],
             "covariate_id_column": "sample_id"
           }

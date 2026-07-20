@@ -1,5 +1,72 @@
 {
   "$defs": {
+    "CompositionGroup": {
+      "additionalProperties": false,
+      "description": "A simplex (sum-to-1) covariate set encoded by additive log-ratio (ALR).\n\nEvery proportion/probability vector has one redundant part; ALR drops the\n``reference`` (default: last column) and emits ``K - 1`` log-ratio coordinates.\nOperators declare one group per composition (e.g. cell fractions); parts must\nbe disjoint across groups and from numeric/ordinal/categorical roles.",
+      "properties": {
+        "columns": {
+          "description": "Ordered simplex parts (K >= 2); values are closed to sum 1 before ALR.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "title": "Columns",
+          "type": "array"
+        },
+        "name": {
+          "description": "Group name (feature-provenance label).",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "pseudocount": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Numerical guard added before the log-ratio. Operator-set per group.",
+          "title": "Pseudocount"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ALR denominator part; defaults to the last column when unset.",
+          "title": "Reference"
+        },
+        "standardize": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Z-score the ALR coordinates (default true). ALR coords are unbounded.",
+          "title": "Standardize"
+        }
+      },
+      "required": [
+        "name",
+        "columns"
+      ],
+      "title": "CompositionGroup",
+      "type": "object"
+    },
     "EcdfBackendParams": {
       "additionalProperties": false,
       "properties": {
@@ -109,6 +176,22 @@
           ],
           "default": null,
           "title": "Covariate Composition Columns"
+        },
+        "covariate_composition_groups": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CompositionGroup"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Typed simplex covariate groups (ALR). Preferred over the single-group covariate_composition_* keys; parts must be disjoint from each other and from numeric/ordinal/categorical roles.",
+          "title": "Covariate Composition Groups"
         },
         "covariate_composition_pseudocount": {
           "anyOf": [
@@ -708,6 +791,22 @@
           ],
           "default": null,
           "title": "Covariate Composition Columns"
+        },
+        "covariate_composition_groups": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CompositionGroup"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Typed simplex covariate groups (ALR). Preferred over the single-group covariate_composition_* keys; parts must be disjoint from each other and from numeric/ordinal/categorical roles.",
+          "title": "Covariate Composition Groups"
         },
         "covariate_composition_pseudocount": {
           "anyOf": [
@@ -1482,6 +1581,22 @@
           ],
           "default": null,
           "title": "Covariate Composition Columns"
+        },
+        "covariate_composition_groups": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/CompositionGroup"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Typed simplex covariate groups (ALR). Preferred over the single-group covariate_composition_* keys; parts must be disjoint from each other and from numeric/ordinal/categorical roles.",
+          "title": "Covariate Composition Groups"
         },
         "covariate_composition_pseudocount": {
           "anyOf": [

@@ -5,8 +5,11 @@ Contract:
 - Join key is sample basename (or caller-provided sample id list) matched against
   ``covariate_id_column`` in sidecar.
 - Numeric columns are imputed then optionally standardized.
-- Ordinal columns are mapped to numeric codes while preserving user-defined order.
-- Categorical columns are one-hot encoded with frozen vocab and ``__UNKNOWN__`` bucket.
+- Ordinal columns are mapped to a single numeric code (one feature per column).
+- Categorical (nominal) columns are one-hot encoded with frozen vocab, an
+  ``__UNKNOWN__`` bucket, and **one dropped reference level** so the design is
+  non-redundant (L levels → L−1 columns).
+- Composition (simplex) groups are ALR-encoded (K parts → K−1 coordinates).
 """
 
 from __future__ import annotations
@@ -179,10 +182,9 @@ class CovariatePreprocessor:
     missing_numeric_strategy: str
     unknown_category_token: str = "__UNKNOWN__"
     missing_category_token: str = "__MISSING__"
-    composition_transform: Optional[str] = None
-    composition_columns: List[str] = field(default_factory=list)
-    composition_reference: Optional[str] = None
-    composition_pseudocount: Optional[float] = None
+    categorical_drop_levels: Dict[str, str] = field(default_factory=dict)
+    composition_groups: List[Dict[str, Any]] = field(default_factory=list)
+    composition_no_standardize_columns: List[str] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -199,15 +201,18 @@ class CovariatePreprocessor:
             "numeric_means": {k: float(v) for k, v in self.numeric_means.items()},
             "numeric_stds": {k: float(v) for k, v in self.numeric_stds.items()},
             "categorical_levels": {k: list(v) for k, v in self.categorical_levels.items()},
+            "categorical_drop_levels": {
+                str(k): str(v) for k, v in self.categorical_drop_levels.items()
+            },
             "output_columns": list(self.output_columns),
             "standardize_numeric": bool(self.standardize_numeric),
             "missing_numeric_strategy": str(self.missing_numeric_strategy),
             "unknown_category_token": str(self.unknown_category_token),
             "missing_category_token": str(self.missing_category_token),
-            "composition_transform": self.composition_transform,
-            "composition_columns": list(self.composition_columns),
-            "composition_reference": self.composition_reference,
-            "composition_pseudocount": self.composition_pseudocount,
+            "composition_groups": [dict(g) for g in self.composition_groups],
+            "composition_no_standardize_columns": list(
+                self.composition_no_standardize_columns
+            ),
         }
 
     @classmethod
@@ -226,21 +231,19 @@ class CovariatePreprocessor:
             numeric_means={str(k): float(v) for k, v in (payload.get("numeric_means") or {}).items()},
             numeric_stds={str(k): float(v) for k, v in (payload.get("numeric_stds") or {}).items()},
             categorical_levels={str(k): [str(x) for x in v] for k, v in (payload.get("categorical_levels") or {}).items()},
+            categorical_drop_levels={
+                str(k): str(v)
+                for k, v in (payload.get("categorical_drop_levels") or {}).items()
+            },
             output_columns=[str(x) for x in payload.get("output_columns", [])],
             standardize_numeric=bool(payload.get("standardize_numeric", True)),
             missing_numeric_strategy=str(payload.get("missing_numeric_strategy", "mean")),
             unknown_category_token=str(payload.get("unknown_category_token", "__UNKNOWN__")),
             missing_category_token=str(payload.get("missing_category_token", "__MISSING__")),
-            composition_transform=payload.get("composition_transform"),
-            composition_columns=[
-                str(x) for x in payload.get("composition_columns", [])
+            composition_groups=_composition_groups_from_payload(payload),
+            composition_no_standardize_columns=[
+                str(x) for x in payload.get("composition_no_standardize_columns", [])
             ],
-            composition_reference=payload.get("composition_reference"),
-            composition_pseudocount=(
-                float(payload["composition_pseudocount"])
-                if payload.get("composition_pseudocount") is not None
-                else None
-            ),
         )
 
     def save_json(self, path: str | Path) -> None:
@@ -310,6 +313,168 @@ def _alr_transform(
     return pd.DataFrame(transformed, index=frame.index, columns=output_names), output_names
 
 
+# Numerical guard added to closed proportions before the log-ratio (like ``hist_eps``).
+# Operators override per group via ``pseudocount``; this only prevents log(0).
+DEFAULT_COMPOSITION_PSEUDOCOUNT = 1e-6
+
+
+@dataclass(frozen=True)
+class CompositionGroupSpec:
+    """One simplex (sum-to-1) feature set encoded by additive log-ratio (ALR).
+
+    ``columns`` are the parts (K >= 2); ``reference`` is the ALR denominator part
+    (defaults to the last column). The transform drops the reference and emits
+    ``K - 1`` log-ratio coordinates named ``alr_<part>_vs_<reference>``.
+    ``standardize`` controls whether those coordinates are z-scored downstream.
+    """
+
+    name: str
+    columns: Tuple[str, ...]
+    reference: str
+    pseudocount: float
+    standardize: bool
+
+    def alr_names(self) -> List[str]:
+        return [f"alr_{c}_vs_{self.reference}" for c in self.columns if c != self.reference]
+
+
+def normalize_composition_groups(
+    groups: Optional[Sequence[Dict[str, Any]]] = None,
+    *,
+    legacy_transform: Optional[str] = None,
+    legacy_columns: Optional[Sequence[str]] = None,
+    legacy_reference: Optional[str] = None,
+    legacy_pseudocount: Optional[float] = None,
+) -> List[CompositionGroupSpec]:
+    """Resolve typed composition groups (plus the legacy single-group keys) to specs.
+
+    The legacy ``covariate_composition_transform``/``_columns``/``_reference``/
+    ``_pseudocount`` set is mapped to one group named ``default`` for one release.
+    """
+    specs: List[CompositionGroupSpec] = []
+    seen_names: set[str] = set()
+
+    def _add(
+        name: str,
+        columns: Optional[Sequence[str]],
+        reference: Optional[str],
+        pseudocount: Optional[float],
+        standardize: Optional[bool],
+    ) -> None:
+        cols = [str(c) for c in (columns or [])]
+        if len(cols) < 2:
+            raise ValueError(
+                f"composition group '{name}' requires at least 2 columns (a simplex)."
+            )
+        if len(set(cols)) != len(cols):
+            raise ValueError(f"composition group '{name}' has duplicate columns: {cols}")
+        ref = str(reference).strip() if reference else cols[-1]
+        if ref not in cols:
+            raise ValueError(
+                f"composition group '{name}' reference '{ref}' is not one of its columns."
+            )
+        pc = float(pseudocount) if pseudocount is not None else DEFAULT_COMPOSITION_PSEUDOCOUNT
+        if pc <= 0.0:
+            raise ValueError(f"composition group '{name}' pseudocount must be > 0.")
+        std = True if standardize is None else bool(standardize)
+        if name in seen_names:
+            raise ValueError(f"duplicate composition group name '{name}'.")
+        seen_names.add(name)
+        specs.append(
+            CompositionGroupSpec(
+                name=name,
+                columns=tuple(cols),
+                reference=ref,
+                pseudocount=pc,
+                standardize=std,
+            )
+        )
+
+    for index, group in enumerate(groups or []):
+        raw_name = str(group.get("name") or "").strip() or f"group{index}"
+        _add(
+            raw_name,
+            group.get("columns"),
+            group.get("reference"),
+            group.get("pseudocount"),
+            group.get("standardize"),
+        )
+
+    if legacy_transform is not None:
+        if str(legacy_transform).strip().lower() != "alr":
+            raise ValueError("covariate composition transform must be 'alr'")
+        _add("default", legacy_columns, legacy_reference, legacy_pseudocount, True)
+
+    all_cols: List[str] = [c for spec in specs for c in spec.columns]
+    shared = sorted({c for c in all_cols if all_cols.count(c) > 1})
+    if shared:
+        raise ValueError(f"composition groups must not share columns: {shared}")
+    return specs
+
+
+def _composition_groups_from_payload(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Read composition groups from a serialized preprocessor, honoring legacy fields."""
+    groups = payload.get("composition_groups")
+    if groups:
+        return [dict(g) for g in groups]
+    if payload.get("composition_transform"):
+        return [
+            {
+                "name": "default",
+                "columns": [str(x) for x in payload.get("composition_columns", [])],
+                "reference": payload.get("composition_reference"),
+                "pseudocount": payload.get("composition_pseudocount"),
+                "standardize": True,
+            }
+        ]
+    return []
+
+
+def _choose_categorical_drop_level(
+    levels: Sequence[str],
+    *,
+    unknown_token: str,
+) -> Optional[str]:
+    """Pick the reference level to drop for a non-redundant one-hot.
+
+    Prefer the first sorted observed level that is not ``unknown_token`` so the
+    unknown bucket remains an explicit column. Returns ``None`` when there is
+    only one level (nothing to emit after a drop would leave zero columns —
+    in that case the sole level is kept).
+    """
+    ordered = [str(x) for x in levels]
+    if len(ordered) <= 1:
+        return None
+    for level in ordered:
+        if level != unknown_token:
+            return level
+    return ordered[0]
+
+
+def resolve_composition_groups_from_config(config: Any) -> List[CompositionGroupSpec]:
+    """Resolve typed + legacy composition groups from a MonteCarlo/backend config object."""
+    if config is None:
+        return []
+    groups = getattr(config, "covariate_composition_groups", None)
+    group_dicts: Optional[List[Dict[str, Any]]] = None
+    if groups:
+        group_dicts = []
+        for group in groups:
+            if hasattr(group, "model_dump"):
+                group_dicts.append(group.model_dump())
+            elif isinstance(group, dict):
+                group_dicts.append(dict(group))
+            else:
+                raise TypeError(f"Unsupported composition group entry: {type(group)!r}")
+    return normalize_composition_groups(
+        group_dicts,
+        legacy_transform=getattr(config, "covariate_composition_transform", None),
+        legacy_columns=getattr(config, "covariate_composition_columns", None),
+        legacy_reference=getattr(config, "covariate_composition_reference", None),
+        legacy_pseudocount=getattr(config, "covariate_composition_pseudocount", None),
+    )
+
+
 def fit_covariates(
     covariates_path: Optional[Union[str, Sequence[str]]],
     sample_ids: Sequence[str],
@@ -323,10 +488,7 @@ def fit_covariates(
     categorical_columns: Optional[Sequence[str]] = None,
     missing_numeric_strategy: str = "mean",
     standardize_numeric: bool = True,
-    composition_transform: Optional[str] = None,
-    composition_columns: Optional[Sequence[str]] = None,
-    composition_reference: Optional[str] = None,
-    composition_pseudocount: Optional[float] = None,
+    composition_groups: Optional[Sequence[CompositionGroupSpec]] = None,
 ) -> Tuple[Optional[np.ndarray], Optional[CovariatePreprocessor], Dict[str, Any]]:
     if not covariates_path:
         return None, None, {"used": False}
@@ -342,12 +504,25 @@ def fit_covariates(
     if not candidate_cols:
         raise ValueError("Covariates table has no feature columns")
 
+    composition_specs = list(composition_groups or [])
+    composition_all_cols = [c for spec in composition_specs for c in spec.columns]
+    missing_comp = sorted(set(composition_all_cols) - set(candidate_cols))
+    if missing_comp:
+        raise ValueError(f"Composition group columns not found in covariates: {missing_comp}")
+    # Composition parts are handled only via ALR; they must not be claimed as plain roles.
+    candidate_role_cols = [c for c in candidate_cols if c not in set(composition_all_cols)]
+
     auto_excluded: List[str] = []
     if numeric_columns is not None:
         numeric = [str(c) for c in numeric_columns]
         unknown = sorted(set(numeric) - set(candidate_cols))
         if unknown:
             raise ValueError(f"Configured numeric covariate columns not found: {unknown}")
+        clash = sorted(set(numeric) & set(composition_all_cols))
+        if clash:
+            raise ValueError(
+                f"covariate_numeric_columns overlap composition group columns: {clash}"
+            )
     else:
         numeric = []
     if ordinal_columns is not None:
@@ -355,6 +530,11 @@ def fit_covariates(
         unknown = sorted(set(ordinal) - set(candidate_cols))
         if unknown:
             raise ValueError(f"Configured ordinal covariate columns not found: {unknown}")
+        clash = sorted(set(ordinal) & set(composition_all_cols))
+        if clash:
+            raise ValueError(
+                f"covariate_ordinal_columns overlap composition group columns: {clash}"
+            )
     else:
         ordinal = []
     if categorical_columns is not None:
@@ -362,14 +542,19 @@ def fit_covariates(
         unknown = sorted(set(categorical) - set(candidate_cols))
         if unknown:
             raise ValueError(f"Configured categorical covariate columns not found: {unknown}")
+        clash = sorted(set(categorical) & set(composition_all_cols))
+        if clash:
+            raise ValueError(
+                f"covariate_categorical_columns overlap composition group columns: {clash}"
+            )
     else:
         categorical = []
 
-    # Default inference only touches numeric/categorical. Ordinal must be explicit
-    # or auto-discovered via known label sets for non-numeric columns.
+    # Default inference only touches numeric/categorical (composition parts excluded).
+    # Ordinal must be explicit or auto-discovered via known label sets.
     if numeric_columns is None and categorical_columns is None and ordinal_columns is None:
-        infer_cols, auto_excluded = _filter_auto_candidate_columns(candidate_cols)
-        if not infer_cols:
+        infer_cols, auto_excluded = _filter_auto_candidate_columns(candidate_role_cols)
+        if not infer_cols and not composition_specs:
             raise ValueError(
                 "No usable covariate columns after excluding label/diagnostic metadata "
                 f"({auto_excluded}). Set covariate_numeric_columns explicitly if needed."
@@ -396,34 +581,27 @@ def fit_covariates(
     elif ordinal_columns is None:
         ordinal = []
     elif numeric_columns is None:
-        numeric = [c for c in candidate_cols if c not in categorical and c not in ordinal]
+        numeric = [c for c in candidate_role_cols if c not in categorical and c not in ordinal]
     elif categorical_columns is None:
-        categorical = [c for c in candidate_cols if c not in numeric and c not in ordinal]
+        categorical = [c for c in candidate_role_cols if c not in numeric and c not in ordinal]
 
-    composition_mode = (
-        str(composition_transform).strip().lower()
-        if composition_transform is not None
-        else None
-    )
-    composition_cols = [str(x) for x in (composition_columns or [])]
-    if composition_mode is not None:
-        if composition_mode != "alr":
-            raise ValueError("covariate composition transform must be 'alr'")
-        if not composition_cols or not composition_reference:
-            raise ValueError(
-                "ALR requires composition_columns and composition_reference."
-            )
-        if composition_pseudocount is None or float(composition_pseudocount) <= 0.0:
-            raise ValueError("ALR requires a positive composition_pseudocount.")
+    composition_no_standardize: List[str] = []
+    composition_output_names: List[str] = []
+    for spec in composition_specs:
         alr_frame, alr_names = _alr_transform(
             aligned,
-            composition_cols,
-            str(composition_reference),
-            float(composition_pseudocount),
+            list(spec.columns),
+            spec.reference,
+            spec.pseudocount,
         )
-        aligned = aligned.drop(columns=composition_cols).join(alr_frame)
-        numeric = [column for column in numeric if column not in composition_cols]
+        aligned = aligned.drop(columns=list(spec.columns)).join(alr_frame)
+        numeric = [column for column in numeric if column not in set(spec.columns)]
         numeric.extend(alr_names)
+        composition_output_names.extend(alr_names)
+        if not spec.standardize:
+            composition_no_standardize.extend(alr_names)
+
+    no_standardize_set = set(composition_no_standardize)
 
     overlap = (set(numeric) & set(ordinal)) | (set(numeric) & set(categorical)) | (set(ordinal) & set(categorical))
     if overlap:
@@ -448,6 +626,7 @@ def fit_covariates(
     means: Dict[str, float] = {}
     stds: Dict[str, float] = {}
     cat_levels: Dict[str, List[str]] = {}
+    cat_drop_levels: Dict[str, str] = {}
     unknown_token = "__UNKNOWN__"
     missing_token = "__MISSING__"
 
@@ -464,7 +643,7 @@ def fit_covariates(
         sd = float(np.std(x, dtype=np.float64))
         if not np.isfinite(sd) or sd <= 0.0:
             sd = 1.0
-        if standardize_numeric:
+        if standardize_numeric and col not in no_standardize_set:
             x = ((x - mu) / sd).astype(np.float32)
         out_parts.append(x.reshape(-1, 1))
         output_columns.append(col)
@@ -514,7 +693,11 @@ def fit_covariates(
         if unknown_token not in levels:
             levels.append(unknown_token)
         cat_levels[col] = levels
-        for lvl in levels:
+        drop_level = _choose_categorical_drop_level(levels, unknown_token=unknown_token)
+        if drop_level is not None:
+            cat_drop_levels[col] = drop_level
+        emit_levels = [lvl for lvl in levels if lvl != drop_level]
+        for lvl in emit_levels:
             out_parts.append((s == lvl).to_numpy(dtype=np.float32).reshape(-1, 1))
             output_columns.append(f"{col}__{lvl}")
 
@@ -530,15 +713,23 @@ def fit_covariates(
         numeric_means=means,
         numeric_stds=stds,
         categorical_levels=cat_levels,
+        categorical_drop_levels=cat_drop_levels,
         output_columns=output_columns,
         standardize_numeric=bool(standardize_numeric),
         missing_numeric_strategy=missing_numeric_strategy,
         unknown_category_token=unknown_token,
         missing_category_token=missing_token,
-        composition_transform=composition_mode,
-        composition_columns=composition_cols,
-        composition_reference=composition_reference,
-        composition_pseudocount=composition_pseudocount,
+        composition_groups=[
+            {
+                "name": spec.name,
+                "columns": list(spec.columns),
+                "reference": spec.reference,
+                "pseudocount": spec.pseudocount,
+                "standardize": spec.standardize,
+            }
+            for spec in composition_specs
+        ],
+        composition_no_standardize_columns=list(composition_no_standardize),
     )
     report = {
         "used": True,
@@ -552,15 +743,23 @@ def fit_covariates(
         "numeric_columns": list(numeric),
         "ordinal_columns": list(ordinal),
         "categorical_columns": list(categorical),
+        "categorical_drop_levels": dict(cat_drop_levels),
         "auto_excluded_columns": list(auto_excluded),
         "unknown_ordinal_values_mapped": int(unknown_ordinal_count),
         "missing_numeric_strategy": missing_numeric_strategy,
         "standardize_numeric": bool(standardize_numeric),
-        "composition_transform": composition_mode,
-        "composition_reference": composition_reference,
-        "composition_output_columns": (
-            alr_names if composition_mode == "alr" else []
-        ),
+        "composition_transform": "alr" if composition_specs else None,
+        "composition_groups": [
+            {
+                "name": spec.name,
+                "columns": list(spec.columns),
+                "reference": spec.reference,
+                "pseudocount": spec.pseudocount,
+                "standardize": spec.standardize,
+            }
+            for spec in composition_specs
+        ],
+        "composition_output_columns": list(composition_output_names),
     }
     return matrix, prep, report
 
@@ -584,21 +783,21 @@ def transform_covariates(
         preprocessor.id_column,
         strict_join=strict_join,
     )
-    if preprocessor.composition_transform == "alr":
-        if (
-            not preprocessor.composition_reference
-            or preprocessor.composition_pseudocount is None
-        ):
-            raise ValueError("Frozen ALR preprocessor metadata is incomplete.")
+    for group in preprocessor.composition_groups:
+        columns = [str(c) for c in group.get("columns", [])]
+        reference = group.get("reference")
+        pseudocount = group.get("pseudocount")
+        if not columns or not reference or pseudocount is None:
+            raise ValueError("Frozen ALR composition group metadata is incomplete.")
         alr_frame, _ = _alr_transform(
             aligned,
-            preprocessor.composition_columns,
-            preprocessor.composition_reference,
-            preprocessor.composition_pseudocount,
+            columns,
+            str(reference),
+            float(pseudocount),
         )
-        aligned = aligned.drop(columns=preprocessor.composition_columns).join(
-            alr_frame
-        )
+        aligned = aligned.drop(columns=columns).join(alr_frame)
+
+    no_standardize_set = set(preprocessor.composition_no_standardize_columns)
     out_parts: List[np.ndarray] = []
 
     for col in preprocessor.numeric_columns:
@@ -606,7 +805,7 @@ def transform_covariates(
             vals = np.full((len(sample_ids),), preprocessor.numeric_fill_values.get(col, 0.0), dtype=np.float32)
         else:
             vals = pd.to_numeric(aligned[col], errors="coerce").astype(float).fillna(preprocessor.numeric_fill_values.get(col, 0.0)).to_numpy(dtype=np.float32)
-        if preprocessor.standardize_numeric:
+        if preprocessor.standardize_numeric and col not in no_standardize_set:
             mu = float(preprocessor.numeric_means.get(col, 0.0))
             sd = float(preprocessor.numeric_stds.get(col, 1.0))
             if not np.isfinite(sd) or sd <= 0.0:
@@ -645,6 +844,9 @@ def transform_covariates(
         else:
             s = pd.Series([preprocessor.missing_category_token] * len(sample_ids), index=aligned.index, dtype=str)
         levels = preprocessor.categorical_levels.get(col, [preprocessor.unknown_category_token])
+        drop_level = (preprocessor.categorical_drop_levels or {}).get(col)
+        # Legacy preprocessors without drop metadata emit every stored level.
+        emit_levels = [lvl for lvl in levels if lvl != drop_level] if drop_level else list(levels)
         allowed = set(levels)
         mapped = []
         for v in s.tolist():
@@ -654,7 +856,7 @@ def transform_covariates(
                 mapped.append(preprocessor.unknown_category_token)
                 unknown_count += 1
         ms = pd.Series(mapped, dtype=str)
-        for lvl in levels:
+        for lvl in emit_levels:
             out_parts.append((ms == lvl).to_numpy(dtype=np.float32).reshape(-1, 1))
 
     matrix = np.concatenate(out_parts, axis=1).astype(np.float32) if out_parts else np.zeros((len(sample_ids), 0), dtype=np.float32)

@@ -23,7 +23,14 @@ from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
 
 from .classification_metrics import compute_validation_metrics
-from .covariate_preprocessor import fit_covariates, transform_covariates
+from .covariate_preprocessor import (
+    DEFAULT_COMPOSITION_PSEUDOCOUNT,
+    CompositionGroupSpec,
+    _alr_transform,
+    fit_covariates,
+    normalize_composition_groups,
+    transform_covariates,
+)
 from .model_bundle import build_model_feature_bundle, load_bundle_dmp_index
 from .observed_feature_builder import (
     apply_feature_fill_values,
@@ -33,6 +40,21 @@ from .observed_feature_builder import (
     select_training_feature_matrix,
     verify_feature_schema,
 )
+
+
+def _composition_groups_as_dicts(groups: Any) -> Optional[List[Dict[str, Any]]]:
+    """Normalize configured composition groups (pydantic models or dicts) to dicts."""
+    if not groups:
+        return None
+    out: List[Dict[str, Any]] = []
+    for group in groups:
+        if hasattr(group, "model_dump"):
+            out.append(group.model_dump())
+        elif isinstance(group, dict):
+            out.append(dict(group))
+        else:
+            raise TypeError(f"Unsupported composition group entry: {type(group)!r}")
+    return out or None
 
 
 class EcdfSecondStageParams(BaseModel):
@@ -81,6 +103,17 @@ class EcdfSecondStageParams(BaseModel):
     composition_columns: Optional[List[str]] = Field(default=None)
     composition_reference: Optional[str] = Field(default=None)
     composition_pseudocount: Optional[float] = Field(default=None, gt=0.0)
+    composition_groups: Optional[List[Dict[str, Any]]] = Field(default=None)
+
+    def resolved_composition_groups(self) -> List[CompositionGroupSpec]:
+        """Typed composition groups plus the legacy single-group keys."""
+        return normalize_composition_groups(
+            self.composition_groups,
+            legacy_transform=self.composition_transform,
+            legacy_columns=self.composition_columns,
+            legacy_reference=self.composition_reference,
+            legacy_pseudocount=self.composition_pseudocount,
+        )
 
     def has_covariates(self) -> bool:
         if self.covariates_path is None:
@@ -175,6 +208,9 @@ class EcdfSecondStageParams(BaseModel):
             ),
             composition_pseudocount=getattr(
                 config, "covariate_composition_pseudocount", None
+            ),
+            composition_groups=_composition_groups_as_dicts(
+                getattr(config, "covariate_composition_groups", None)
             ),
         )
 
@@ -347,32 +383,34 @@ def _probability_design(
     transform: Optional[str],
     epsilon: Optional[float],
 ) -> Tuple[np.ndarray, List[str]]:
-    probability_columns = _prob_columns(predictions)
-    if transform is None:
-        return (
-            predictions[probability_columns].astype(np.float32).to_numpy(),
-            probability_columns,
-        )
-    if transform != "logit_class1":
+    """Encode the first-stage class-probability simplex as ALR coordinates.
+
+    ECDF class probabilities sum to 1, so one part is redundant. We always drop
+    the reference (``prob_class0``) via additive log-ratios, yielding ``K - 1``
+    coordinates. For binary this is the clipped class-1 logit within ``epsilon``.
+    The legacy ``logit_class1`` value is accepted as an alias; ``None`` now means
+    the same ALR default (raw dual-probability stacking is no longer produced).
+    """
+    if transform is not None and str(transform).strip().lower() != "logit_class1":
         raise ValueError(f"Unsupported ECDF probability transform: {transform!r}")
-    if epsilon is None:
-        raise ValueError("logit_class1 requires probability_epsilon.")
-    if "prob_class0" not in predictions or "prob_class1" not in predictions:
-        raise ValueError("logit_class1 requires prob_class0 and prob_class1.")
-    p0 = pd.to_numeric(predictions["prob_class0"], errors="coerce").to_numpy(
-        dtype=np.float64
-    )
-    p1 = pd.to_numeric(predictions["prob_class1"], errors="coerce").to_numpy(
-        dtype=np.float64
-    )
-    if not np.isfinite(p0).all() or not np.isfinite(p1).all():
+    probability_columns = _prob_columns(predictions)
+    values = predictions[probability_columns].apply(pd.to_numeric, errors="coerce")
+    if not np.isfinite(values.to_numpy(dtype=np.float64)).all():
         raise ValueError("ECDF probabilities contain non-finite values.")
-    if not np.allclose(p0 + p1, 1.0, atol=1e-6):
-        raise ValueError("Binary ECDF probabilities do not sum to one.")
-    clipped = np.clip(p1, float(epsilon), 1.0 - float(epsilon))
-    logit = np.log(clipped / (1.0 - clipped)).astype(np.float32)
-    predictions["ecdf_logit_class1"] = logit.astype(float)
-    return logit.reshape(-1, 1), ["ecdf_logit_class1"]
+    row_sums = values.to_numpy(dtype=np.float64).sum(axis=1)
+    if not np.allclose(row_sums, 1.0, atol=1e-6):
+        raise ValueError("ECDF class probabilities do not sum to one.")
+    pseudocount = float(epsilon) if epsilon is not None else DEFAULT_COMPOSITION_PSEUDOCOUNT
+    reference = probability_columns[0]
+    alr_frame, alr_names = _alr_transform(
+        values,
+        probability_columns,
+        reference,
+        pseudocount,
+    )
+    for name in alr_names:
+        predictions[name] = alr_frame[name].to_numpy(dtype=np.float64)
+    return alr_frame.to_numpy(dtype=np.float32), alr_names
 
 
 def _second_stage_dataset_frame(
@@ -412,9 +450,13 @@ def _second_stage_dataset_frame(
             )
         numeric = set(getattr(preprocessor, "numeric_columns", []) or [])
         ordinal = set(getattr(preprocessor, "ordinal_columns", []) or [])
+        no_standardize = set(
+            getattr(preprocessor, "composition_no_standardize_columns", []) or []
+        )
         standardized = bool(getattr(preprocessor, "standardize_numeric", False))
         for index, name in enumerate(output_columns):
-            prefix = "standardized_" if standardized and name in (numeric | ordinal) else "transformed_"
+            is_std = standardized and name in (numeric | ordinal) and name not in no_standardize
+            prefix = "standardized_" if is_std else "transformed_"
             data[f"{prefix}{name}"] = covariates[:, index].astype(float)
 
     return pd.DataFrame(data).loc[np.asarray(valid_rows, dtype=bool)].reset_index(drop=True)
@@ -693,10 +735,7 @@ def train_and_apply_ecdf_second_stage(
             categorical_columns=params.covariate_categorical_columns,
             missing_numeric_strategy=params.covariate_missing_numeric_strategy,
             standardize_numeric=params.covariate_standardize_numeric,
-            composition_transform=params.composition_transform,
-            composition_columns=params.composition_columns,
-            composition_reference=params.composition_reference,
-            composition_pseudocount=params.composition_pseudocount,
+            composition_groups=params.resolved_composition_groups(),
         )
         if cov is None:
             raise ValueError("covariates_path was set but fit_covariates returned no matrix")
@@ -936,12 +975,18 @@ def train_and_apply_ecdf_second_stage(
     )
     dataset_manifest.update(
         {
-            "probability_transform": params.probability_transform,
+            "probability_transform": "alr",
             "probability_epsilon": params.probability_epsilon,
-            "composition_transform": params.composition_transform,
-            "composition_columns": params.composition_columns,
-            "composition_reference": params.composition_reference,
-            "composition_pseudocount": params.composition_pseudocount,
+            "composition_groups": [
+                {
+                    "name": spec.name,
+                    "columns": list(spec.columns),
+                    "reference": spec.reference,
+                    "pseudocount": spec.pseudocount,
+                    "standardize": spec.standardize,
+                }
+                for spec in params.resolved_composition_groups()
+            ],
             "covariate_preprocessor": meta_extra.get(
                 "covariate_preprocessor_path"
             ),
