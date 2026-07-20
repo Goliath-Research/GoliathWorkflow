@@ -204,8 +204,12 @@ def main() -> None:
         help="Write configs and summary paths only, do not run pipeline.",
     )
     p.epilog = (
-        "Extra methyl-validation flags may follow the search options, e.g. "
-        "--stability --resume 1 --skip-detection (optional leading -- is ignored)."
+        "Extra methyl-validation flags may follow the search options (optional leading "
+        "-- is ignored), e.g. `--stability` for a full search, or `--stability "
+        "--resume 1 --skip-centroid` to reuse existing centroids and continue "
+        "detector->mapper->gene-select. NOTE: --skip-detection only recomputes "
+        "stability frequency from existing detections; it does NOT re-run mapper/"
+        "gene-select, so it cannot recover trials that failed at those steps."
     )
     # Unknown options (e.g. --stability) are forwarded to methyl-validation.
     # parse_args()+REMAINDER rejects those unless a bare "--" precedes them.

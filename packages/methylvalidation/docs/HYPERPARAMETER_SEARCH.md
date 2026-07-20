@@ -92,8 +92,24 @@ methyl-hyperparam-search \
 - `--weights-json` can point to a JSON file for `ObjectiveWeights`.
 - `--baseline-summary path/to/metrics_summary.json` enables rollout constraints.
 - `--dry-run` only writes configs and paths (no `methyl-validation` subprocess).
+- Extra `methyl-validation` flags are parsed with `parse_known_args` and forwarded verbatim; the leading `--` separator is **optional** (`... --stability` == `... -- --stability`).
 
 **Example 2×2** (as in the design): `stability_dmp_freq` ∈ {0.6, 0.7} × `stability_min_balanced_accuracy` ∈ {null, 0.5} — use JSON `null` to omit the field (keeps the base config value) or pass explicit numbers.
+
+### Resuming failed trials
+
+- `--stability --resume N --skip-centroid` reuses centroids and continues detector → mapper → gene-select from `run_000N` — use this to recover trials that failed mid-pipeline.
+- `--skip-detection` only recomputes stability **frequency** from existing detections; it does **not** re-run mapper/gene-select and cannot recover a trial that failed at those steps.
+
+## 4a. Environments (development / experimentation / production)
+
+| Environment | Where | Role |
+|-------------|-------|------|
+| **Development** | Repo checkout + `.venv` | Author/unit-test the driver, objective, and mapper/gene-select fixes; `--dry-run` and smoke grids only. |
+| **Experimentation** | Promoted release venv (`/work/epimethyl/current`) + JSON under `/work` | Run the outer loop; knobs are `base_mc_config.json` / `grid_*.json` / `weights_*.json`; scores gene-FeatureCuts BA from stability-only runs; no `wf`/`cfg` schema changes. |
+| **Production** | DB-backed gateway workflows | Consumes the winning locked config via `resolvedConfig`; the search driver is not on the production task path — only its result is promoted. |
+
+The experimentation environment depends on package capabilities (gene-FeatureCuts BA objective fallback, nullable gene-select caps, mapper discovery-CSV default) being in the promoted release; until then run from a repo checkout that has them.
 
 ## 5. Large shared-storage projects (e.g. `/work/.../project.json`)
 

@@ -19,6 +19,18 @@ After a baseline workflow-run (or legacy `methyl-validation` path) is understood
 
 **Formula and weights:** `packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md` (full \(J\), `ObjectiveWeights`, constraint semantics).
 
+## Environments
+
+The search is deliberately separated across three environments. Keeping them distinct is what lets you experiment against a promoted release without editing platform code.
+
+| Environment | Where | Role for hyperparameter search |
+|-------------|-------|--------------------------------|
+| **Development** | Repo checkout + `.venv` | Author and unit-test the driver (`methyl-hyperparam-search`), objective, and mapper/gene-select fixes. Run `--dry-run` and small smoke grids only. This is the source of package fixes, not the place for long experiments. |
+| **Experimentation** | Promoted release worker venv (`/work/epimethyl/current`) + JSON under `/work` | Run the outer loop. All tunable knobs live as JSON (`base_mc_config.json`, `grid_*.json`, `weights_*.json`); the driver scores gene-FeatureCuts BA from stability-only runs. No `wf`/`cfg` schema changes. |
+| **Production** | DB-backed gateway workflows | Consumes the **winning** locked configuration via `resolvedConfig`; profiles/programs come from the runtime-bundle. The search driver itself is not part of the production task path — only its result is promoted. |
+
+Package fixes that the experimentation environment depends on (gene-FeatureCuts BA objective fallback, nullable gene-select caps, mapper discovery-CSV default) must be in the **promoted release** before you rely on them there; until then, run from a repo checkout that has them.
+
 ## Command example
 
 Use a dedicated MC config and a work directory on shared storage if many trials. Prefer the **release** worker venv (`/work/epimethyl/current/env/worker.env`), not a git checkout:
@@ -35,11 +47,17 @@ methyl-hyperparam-search \
   --stability
 ```
 
+- Extra `methyl-validation` flags follow the search options and are forwarded verbatim. The leading `--` separator is **optional** (`... --stability` and `... -- --stability` are equivalent).
 - JSON `null` in `--grid` omits that field so the base config value is kept (it does **not** mean “uncap”). To raise a site cap, put an explicit integer in the grid or base config.
 - Results: `work-dir/search_summary.json` (per-trial rows and best feasible trial, if any).
 - `--weights-json` can point to a file for `ObjectiveWeights` (e.g. BA-dominant: `w_balanced_accuracy=1`, `stat=mean`).
 - `--baseline-summary /path/to/metrics_summary.json` enforces **rollout-style** feasibility vs a baseline (same idea as `methyl-validation --rollout-compare`); see `packages/methylvalidation/docs/ROLLOUT.md` and `packages/methylvalidation/docs/HYPERPARAMETER_SEARCH.md`.
 - `--dry-run` only writes trial configs and paths; no pipeline subprocesses.
+
+### Resuming after a failure
+
+- `--stability --resume N --skip-centroid` reuses existing centroids and continues detector → mapper → gene-select from `run_000N`. Use this to resume trials that failed mid-pipeline (e.g. a mapper error) without recomputing centroids.
+- `--skip-detection` only recomputes stability **frequency** from existing detector outputs; it does **not** re-run mapper or gene-select. It cannot recover a trial whose mapper/gene-select step failed — a full `--stability` (optionally with `--skip-centroid`) is required there.
 
 ## Pitfalls
 
