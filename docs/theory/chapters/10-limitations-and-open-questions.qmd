@@ -61,6 +61,13 @@ Some results depend on systems whose internal logic is not fully versioned insid
 
 Any publication using those layers should record service versions, access dates, and cache policies. Otherwise the results are reproducible only in a weak operational sense.
 
+## Deconvolution Reference Bases
+
+Cell-type deconvolution (@sec-methyldeconv) is a principled constrained projection, but its accuracy is bounded by the reference basis. Two provisioning caveats apply:
+
+- Only the measured blood immune subtree (derived from the FlowSorted/IDOL basis) ships in the wheel. The cfDNA plasma top split and the full tissue tumor/immune/stromal tree are **composed offline from operator-supplied atlases** and are not fabricated at worker runtime; a study using the cfDNA `tumor_fraction` or tissue tumor/stromal leaves depends on those provisioned atlases.
+- Deconvolution is deterministic and MC-free, so it carries no stability/recurrence estimate of its own. HiTIMED leaf proportions inherit whatever bias and noise the node bases and marker coverage impose; low marker coverage degrades gracefully to `partial` or `insufficient_markers` rather than a calibrated uncertainty.
+
 ## Legacy Or Experimental Remnants
 
 The repository still contains legacy components, but their status is now clearer:
@@ -85,6 +92,7 @@ The current docs/code governance already reduces this risk:
 | `methylutils` ECDF core (`core/distribution_views.py`, `ecdf_classifier.py`, centroid pair ECDF comparison path) | active | Safe to cite as current detector/classifier mathematical backbone. |
 | `methylvalidation` model backends (`ecdf`, `tabular_sklearn`, `generative_hybrid`) | active | Safe to cite when backend and key hyperparameters are reported. |
 | `methylmapper`, `methylenricher`, `methyldiseaseprogression` workflow synthesis | active | Safe to cite as downstream interpretation/synthesis layers (with heuristic/external-service caveats). |
+| `methyldeconv` Houseman flat and HiTIMED hierarchical deconvolution | active | Safe to cite as constrained-projection composition; report the reference basis provenance (blood in-wheel vs operator-provisioned cfDNA/tissue atlases). |
 | `methyl_utils/comparison.py` beta-comparator module | removed | Historical; do not describe as active production detector path. |
 | Incomplete/retired experimental branches (historical clustering and partial DP-like ideas) | experimental | Do not cite as validated production methodology. |
 

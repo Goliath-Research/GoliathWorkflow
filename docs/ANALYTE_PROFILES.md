@@ -6,14 +6,17 @@ Opt out: `"auto_apply_analyte_profile": false` under `regulatory`.
 
 ## What each analyte enables
 
-| Step | `cfdna` | `buffy_coat` |
-|------|---------|--------------|
-| `alignment_qc` | cfDNA fragmentomics + **alignment guardrails** + bisulfite QC | **alignment guardrails** + bisulfite QC (no cfDNA fragmentomics profile) |
-| `fragmentomics` | `methyl-fragmentomics` enabled (WPS + end motifs) | disabled |
-| `enricher` | `library_preset: cancer-core`; CIS-BP **gene_sets + motif_scan + annotate** | CIS-BP **gene_sets** only |
-| `validation` | `enforce_training_analyte_match: true` | `false` |
+| Step | `cfdna` | `buffy_coat` | `tissue` |
+|------|---------|--------------|----------|
+| `alignment_qc` | cfDNA fragmentomics + **alignment guardrails** + bisulfite QC | **alignment guardrails** + bisulfite QC (no cfDNA fragmentomics profile) | bisulfite QC defaults (no analyte pack) |
+| `fragmentomics` | `methyl-fragmentomics` enabled (WPS + end motifs) | disabled | disabled |
+| `cell_deconvolution` | Houseman 6 Ω, or HiTIMED plasma tree (`tumor_fraction` + immune) | Houseman 6 Ω, or HiTIMED immune subtree (no tumor) | HiTIMED full tumor/immune/stromal tree (flat Houseman stays blood-oriented) |
+| `enricher` | `library_preset: cancer-core`; CIS-BP **gene_sets + motif_scan + annotate** | CIS-BP **gene_sets** only | defaults unless profile overrides |
+| `validation` | `enforce_training_analyte_match: true` | `false` | not set by analyte pack |
 
 `combined` / unknown analytes: bisulfite QC defaults only.
+
+**`cell_deconvolution` note.** The method switch and analyte-driven HiTIMED tree roots are **not** applied by the analyte profile merge today; set `method` (`houseman` | `hitimed`) under profile `actionConfig.cell_deconvolution`. HiTIMED reads its tree from the `analyte` field, which defaults to `regulatory.primary_analyte`. There is no dedicated `tissue` entry in `analyte_profiles.py`, so tissue prep/enricher steps use `combined`/unknown defaults unless a profile overrides them. See [Theory ch.07a MethylDeconv](theory/chapters/07a-methyldeconv.qmd).
 
 Background research on analyte tradeoffs: [docs/research/](../research/README.md).
 

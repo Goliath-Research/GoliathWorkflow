@@ -8,7 +8,7 @@ The source of truth is the code. This book is written from the implemented behav
 
 - shared notation and data structures,
 - the ECDF-centered centroid, detector, classifier, predictor, and validation stack,
-- downstream packages such as mapping, enrichment, and alignment QC,
+- downstream packages such as mapping, cell-type deconvolution (Houseman and HiTIMED), enrichment, and alignment QC,
 - explicit caveats for approximations, heuristics, legacy remnants, and external-service-backed steps.
 
 ## Build Requirements

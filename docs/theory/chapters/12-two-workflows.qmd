@@ -102,6 +102,48 @@ For all backends, the optional biological gate (`require_biological_review_for_m
 
 The resulting files under `production/classifiers/` and `production/predictors/` are the deployable model artifacts. Any rerun with changed panel or freeze inputs should be treated as a new model version.
 
+### Post-Freeze Covariate Stage {#sec-post-freeze-covariates}
+
+Between the freeze mapper work (Stage B) and final model selection (Stage C), the study lifecycle runs a covariate stage that enriches each sample with biology the ECDF path does not see on its own. These actions are cohort-level and deterministic; they do not change the stable panel.
+
+```mermaid
+flowchart TB
+  subgraph prep [SamplePrep per sample]
+    AQC[alignment_qc]
+    FRAG[sample.fragmentomics]
+    EXT[methyl_extract plus patterns.h5]
+  end
+  subgraph cov [Post_freeze covariates cohort]
+    DM[derived_measures]
+    CD["cell_deconvolution houseman or hitimed"]
+    IM[info_measures]
+  end
+  subgraph bio [Biology and modeling]
+    EN[enricher CIS-BP modes]
+    SEL[select_best_model]
+  end
+  prep --> cov --> bio
+```
+
+`pipeline.cell_deconvolution` in this stage carries the method switch and analyte-driven trees documented in @sec-methyldeconv. The remaining covariates (`derived_measures`, `info_measures`) and the biology step (`enricher`) are described in the [end-to-end workflow](../../architecture/end-to-end-workflow.md) and @sec-methylenricher.
+
+### Per-Analyte Action Inventory {#sec-analyte-actions}
+
+The set of actions that run — and how they are parameterized — is gated by the study `regulatory.primary_analyte`. Analyte defaults are merged into profile/site `actionConfig` by `merge_step_config` in `packages/methylutils/methyl_utils/analyte_profiles.py` (explicit profile/site keys always win). The three covered analytes:
+
+| Action | `cfdna` | `buffy_coat` | `tissue` |
+|--------|---------|--------------|----------|
+| `alignment_qc` | cfDNA fragmentomics + alignment guardrails + bisulfite QC | alignment guardrails + bisulfite QC | bisulfite QC defaults (no analyte pack) |
+| `sample.fragmentomics` | enabled (WPS + end motifs) | disabled | disabled |
+| `methyl_extract` | `*.h5` + `*.patterns.h5` | `*.h5` + `*.patterns.h5` | `*.h5` + `*.patterns.h5` |
+| `derived_measures` | chromosome / genome surrogates | same | same |
+| `cell_deconvolution` | Houseman 6 Ω, or HiTIMED plasma tree (`tumor_fraction` + immune) | Houseman 6 Ω, or HiTIMED immune subtree (no tumor) | HiTIMED full tumor/immune/stromal tree; flat Houseman remains blood-oriented (mismatch — see note) |
+| `info_measures` | when `*.patterns.h5` exist; skipped cleanly otherwise | same | same |
+| `enricher` | `cancer-core` + CIS-BP multi-mode (gene_sets + motif_scan + annotate) | CIS-BP gene_sets only | defaults unless profile overrides |
+| `validation` | `enforce_training_analyte_match: true` | `false` | not set by analyte pack |
+
+Two caveats today: (1) there is no dedicated `tissue` entry in `analyte_profiles.py`, so tissue prep/enricher behave like the `combined`/unknown default unless a profile overrides them; the tissue-specific behavior above is the HiTIMED tree, which is selected by the `cell_deconvolution` `analyte` field rather than the analyte profile merge. (2) Flat Houseman always projects against the blood IDOL basis, so for `tissue` the meaningful compositional estimate comes from `method = hitimed` with the full tree. See @sec-methyldeconv for the deconvolution math and [`docs/ANALYTE_PROFILES.md`](../../ANALYTE_PROFILES.md) for the operator view.
+
 ### Steps
 
 **Step 1: Prepare the profile and study manifest**

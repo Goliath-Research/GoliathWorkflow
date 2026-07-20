@@ -265,7 +265,7 @@ These nodes run **after** freeze mapper work and **before** final model selectio
 ```mermaid
 flowchart TD
   MAP["pipeline.mapper"] --> DM["pipeline.derived_measures<br/>chromosome / genome surrogates"]
-  DM --> CD["pipeline.cell_deconvolution<br/>Houseman / FlowSorted IDOL"]
+  DM --> CD["pipeline.cell_deconvolution<br/>method: houseman | hitimed"]
   CD --> IM["pipeline.info_measures<br/>MethylInfoTheory / Ising"]
   IM --> EN["pipeline.enricher"]
   EN --> PR["pipeline.progression optional"]
@@ -274,16 +274,32 @@ flowchart TD
 
 ### 5.1 Cell deconvolution (Ω)
 
+`pipeline.cell_deconvolution` exposes a `method` switch: **`houseman`** (default; one flat constrained projection against the FlowSorted/IDOL 6-cell blood basis) or **`hitimed`** (an analyte-driven hierarchical tree that reuses the same `houseman_qp` at every node). Both share one output contract, so downstream profiles do not change.
+
 ```mermaid
 flowchart LR
-  H5["Sample *.h5 β at IDOL markers"] --> QP["Houseman QP"]
-  REF["FlowSorted.Blood.EPIC IDOL<br/>6 cell types"] --> QP
-  QP --> CSV["cell_fractions.csv<br/>CD8T CD4T NK Bcell Mono Neu"]
+  H5["Sample *.h5 β"] --> SW{"method"}
+  SW -->|houseman| QP["Houseman QP<br/>flat 6-cell IDOL basis"]
+  REF["FlowSorted.Blood.EPIC IDOL<br/>CD8T CD4T NK Bcell Mono Neu"] --> QP
+  SW -->|hitimed| TREE["Hierarchical QP<br/>tree root by analyte"]
+  HB["Hierarchy basis v2<br/>analyte_trees map"] --> TREE
+  QP --> CSV["cell_fractions.csv"]
+  TREE --> CSV
 ```
 
-- Written under `{output_base}/cell_fractions/cell_fractions.csv`.
+Houseman writes the 6 immune fractions (`CD8T CD4T NK Bcell Mono Neu`). HiTIMED picks the tree **root from the sample analyte** (`analyte` config field, defaulting to the study `regulatory.primary_analyte`) via the basis `analyte_trees` map, then multiplies node QP weights down each path so the collected leaf columns sum to 1:
+
+| Analyte | Tree root | Leaf columns |
+|---------|-----------|--------------|
+| `buffy_coat` | immune subtree | immune leaves only (no tumor compartment) |
+| `cfdna` | plasma top split | `tumor_fraction` + immune leaves (ctDNA burden as a covariate) |
+| `tissue` | full tumor/immune/stromal tree | tumor + immune + stromal leaves |
+
+- Written under `{output_base}/cell_fractions/cell_fractions.csv`; `cell_fractions.manifest.json` records `method` and, for HiTIMED, `analyte` and `tree_root`.
+- Same column contract as Houseman for the ECDF/tabular `covariates_path`; HiTIMED only grows the column set (e.g. cfDNA `tumor_fraction`).
 - Listed on profile `covariates_path` for tabular / ECDF second-stage.
 - Auto-infer **excludes** `group` / `qp_status` (label leakage guard).
+- Theory: [ch.07a MethylDeconv](../theory/chapters/07a-methyldeconv.qmd). Plan: [`docs/plans/hitimed-hierarchical-deconvolution.plan.md`](../plans/hitimed-hierarchical-deconvolution.plan.md).
 
 ### 5.2 Information measures (read-level)
 
@@ -302,7 +318,7 @@ flowchart LR
 ```mermaid
 flowchart TB
   ECDF1["First-stage ECDF<br/>methylation only<br/>raw_gene / raw_dmp"] --> PROBS["Class probabilities"]
-  OMEGA["cell_fractions.csv<br/>6 Ω"] --> STACK["ECDF second-stage<br/>logistic stacker"]
+  OMEGA["cell_fractions.csv<br/>Houseman 6 Ω or HiTIMED leaves"] --> STACK["ECDF second-stage<br/>logistic stacker"]
   RL["readlevel_measures.csv<br/>NME / MML / …"] --> STACK
   DM2["derived_measures.csv"] --> STACK
   PROBS --> STACK
