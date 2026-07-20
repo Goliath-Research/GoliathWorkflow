@@ -221,6 +221,10 @@ AS $$
   ORDER BY e.action_name, e.run_key;
 $$;
 
+-- OUT column renamed hyperparam_set_key → execution_scope_key; CREATE OR REPLACE
+-- cannot change RETURNS TABLE shape (42P13). Drop the prior signature first.
+DROP FUNCTION IF EXISTS wf.wf_repo_get_action_submit_context(bigint);
+
 CREATE OR REPLACE FUNCTION wf.wf_repo_get_action_submit_context(
   p_node_execution_id bigint
 )
