@@ -14,6 +14,7 @@ discussions.
 
 | Document | Purpose |
 |----------|---------|
+| [Regulatory-Ready Platform for Multiomics Diagnostics](Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.md) | Product positioning, open-core packaging, GTM, and analyte/process roadmap (strategy) |
 | [Product and operational controls](methylpipeline-product-and-operational-controls.md) | Product scope, feature inventory, configuration-as-workflow model, and control summary |
 | [Deployment and supervision](deployment-and-supervision.md) | Production topology, worker supervision, portal monitoring, release bundles, rollback, and security controls |
 | [Validation evidence index](validation-evidence-index.md) | Template and registry structure for real study/model results tied to exact software and configuration versions |
