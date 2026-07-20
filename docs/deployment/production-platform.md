@@ -16,12 +16,21 @@ This page is the single ordered story. Deep dives stay in the linked runbooks; i
 
 ## Topology
 
-Two distinct access paths. **Preregistration ≠ enroll.**
+**Day-2 production has exactly two ways to reach Azure SQL.** Everything else is greenfield/bootstrap on a privileged host (Phase 2), not a third runtime client.
+
+| Path | Who | How |
+|------|-----|-----|
+| **A — Portal UI (web)** | Operators (MFA / company identity) | Browser → EpiPortal → Azure SQL (`portal.sp_*` / `cfg`). Studies, worker IP prereg, monitoring. |
+| **B — Gateway REST** | GPU workers only | `methyl-worker` → HTTPS OpenAPI (`/v1/workers/*`) → `methyl-gateway` (MI) → `wf` procs. |
+
+There is **no** worker SQL, **no** portal→gateway admin HTTP, and **no** day-2 “operator SQL / Admin CLI against production” path. CI/`methyl-study-start` and schema seed scripts are **bootstrap/parity** only (Phase 2 / Dev-only below).
+
+**Preregistration ≠ enroll.**
 
 ```mermaid
 flowchart TB
   subgraph pathA [Path A humans MFA]
-    Portal[EpiPortal_MFA]
+    PortalUI[EpiPortal_UI]
   end
   subgraph pathB [Path B workers OpenAPI only]
     W1[methyl-worker]
@@ -29,7 +38,7 @@ flowchart TB
     GW[methyl-gateway OpenAPI]
   end
   subgraph dataPlane [Azure SQL]
-    SQL[(cfg + wf)]
+    SQL[(cfg + wf + portal)]
   end
   subgraph shared ["/work storage only"]
     Rel["/work/epimethyl/current"]
@@ -38,7 +47,7 @@ flowchart TB
     ArcAgent[Arc agent + policy]
   end
 
-  Portal -->|"portal.sp_* allowlist + studies"| SQL
+  PortalUI -->|"web middle-tier: portal.sp_*"| SQL
   W1 -->|"POST /v1/workers/enroll claim submit"| Nginx
   Nginx --> GW
   GW -->|"MI: wf.sp_worker_enroll / claim / submit"| SQL
@@ -50,10 +59,11 @@ flowchart TB
 
 | Actor | How they reach Azure SQL | Evidence |
 |-------|--------------------------|----------|
-| **EpiPortal** (MFA / company identity) | Direct `portal.sp_*` — preregisters `(cluster_key, public_ip, external_worker_key)` into `wf.worker_enrollment`; starts studies | `portal.sp_upsert_worker_enrollment` |
+| **EpiPortal UI** (MFA) | Web app → `portal.sp_*` — preregisters `(cluster_key, public_ip, external_worker_key)`; starts/monitors studies | Portal product + `portal.sp_upsert_worker_enrollment` |
 | **methyl-worker** | **Only** gateway OpenAPI over HTTPS — no SQL drivers or DB secrets on the VM | `contracts/openapi.yaml`; `methyl-worker enroll` → `WorkflowRestClient` |
 | **methyl-gateway** | Managed identity → worker-facing procs (`wf.sp_worker_enroll`, claim/submit/heartbeat/fail) | `POST /v1/workers/enroll` in `gateway.py` → `wf.sp_worker_enroll` (rejects unknown IP/key) |
 
+- Operators use the **portal UI**; they do not open SQL tools or call the gateway for day-2 study control.
 - Portal **never** calls the gateway for enroll or admin catalog routes.
 - Workers **never** call SQL; enroll mints `worker_id` / `worker_token` once over TLS.
 - Azure Arc is inventory/policy/attest (`GATEWAY_REQUIRE_ARC_ATTEST=1` + `X-Arc-Resource-Id`), not a substitute enroll or DB API.
@@ -63,8 +73,9 @@ flowchart TB
 
 | Rule | Detail |
 |------|--------|
+| Two day-2 paths only | Portal UI → SQL; workers → gateway REST → SQL |
 | One gateway | Workers never open SQL; portal never calls gateway admin HTTP |
-| Portal preregistration | Each worker’s **public IP** + cluster + key via `portal.sp_upsert_worker_enrollment` before enroll |
+| Portal preregistration | Each worker’s **public IP** + cluster + key in the portal UI (backed by `portal.sp_upsert_worker_enrollment`) before enroll |
 | Gateway enroll | `methyl-worker enroll` → OpenAPI → `wf.sp_worker_enroll`; writes `/etc/methyl/worker-token` — **no** `AZURE_SQL_*` / `POSTGRES_*` on workers |
 | Arc required | Every worker is an Azure Arc **Connected** machine in the company subscription; gateway sets `GATEWAY_REQUIRE_ARC_ATTEST=1` |
 | No git on workers | Runtime is `/work/epimethyl/current` only |
@@ -209,7 +220,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' https://<gateway-fqdn>/v1/health
 
 Workers set `WORKER_API_BASE=https://<gateway-fqdn>/v1`.
 
-Gateway HTTP is **worker-only** (`POST /v1/workers/*`). Catalog and workflow deploy remain **direct DB** from Phase 2. EpiPortal uses `portal.sp_*` against Azure SQL.
+Gateway HTTP is **worker-only** (`POST /v1/workers/*`). Day-2 humans use the **portal UI** only; catalog/workflow **seed** remains Phase 2 on a privileged host (not a runtime operator path).
 
 ---
 
@@ -241,7 +252,7 @@ Uses `azcmagent` plus Azure CLI (`az`) for Connected Machine resource id / AMA e
 
 ### 4.2 Portal preregistration
 
-In EpiPortal (or SQL): `portal.sp_upsert_worker_enrollment` for this VM’s **public IP**, `cluster_key`, and worker `key` (usually `hostname -s`). Enroll fails if the client IP is not preregistered.
+In the **EpiPortal UI**, preregister this VM’s **public IP**, `cluster_key`, and worker `key` (usually `hostname -s`). The UI persists via `portal.sp_upsert_worker_enrollment`. Enroll fails if the client IP is not preregistered.
 
 ### 4.3 Orchestrated node join (recommended)
 
@@ -309,10 +320,11 @@ With `GATEWAY_REQUIRE_ARC_ATTEST=1`, the worker client sends `X-Arc-Resource-Id`
 
 ## Phase 5 — Study execution (after platform is up)
 
-| Stage | Entry |
-|-------|--------|
-| SamplePrep | Portal SQL / `methyl-study-start sample-prep-start` |
-| Validation | Portal SQL / `methyl-study-start validation-start` or local `methyl-workflow-run` with runtime-bundle programs |
+| Stage | Production entry | Notes |
+|-------|------------------|--------|
+| SamplePrep | **EpiPortal UI** | Starts instances via portal middle-tier → `portal.sp_*` |
+| Validation | **EpiPortal UI** | Same; workers claim tasks through the gateway |
+| Local / lab only | `methyl-workflow-run` (no DB) or `methyl-study-start` (CI/parity DB) | Not the production day-2 path |
 
 See [production_runbook.md](production_runbook.md) and [Usage ch.04](../usage/04-orchestration-workflow-run.qmd).
 
@@ -339,14 +351,18 @@ Azure CLI (`az`) is used for Arc Connected Machine metadata/AMA and for Azure Ar
 
 ---
 
-## Dev-only paths (do not use on production workers)
+## Dev-only / bootstrap paths (not day-2 production)
+
+These may touch SQL with credentials on a **trusted** host or CI. They are **not** additional production access paths for operators or workers.
 
 | Path | When |
 |------|------|
-| `register_worker.sh` with `AZURE_SQL_*` / `POSTGRES_*` | Trusted bootstrap host only |
+| Phase 2 `bootstrap_distributed_workers.sh` / catalog seed / `deploy_workflow_definitions.sh` | Greenfield or schema upgrade on privileged host |
+| `register_worker.sh` with `AZURE_SQL_*` / `POSTGRES_*` | Trusted bootstrap host only — never on GPU workers |
+| `methyl-study-start` against a DB | CI / parity / developer mode |
 | `GATEWAY_REQUIRE_ARC_ATTEST=0` / `--skip-arc-check` | Lab / CI |
 | Git checkout as worker `WorkingDirectory` | Never in production |
-| Gateway HTTP “admin catalog seed” | Removed — use direct DB scripts |
+| Gateway HTTP “admin catalog seed” | Removed — seed via Phase 2 scripts only |
 
 ---
 
