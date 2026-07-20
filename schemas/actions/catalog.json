@@ -615,6 +615,136 @@
       "tool": "ParabricksGiraffe"
     },
     {
+      "action_config_key": "rna_align",
+      "action_name": "sample.parabricks_rna_fq2bam",
+      "argv_map": {},
+      "capability": "parabricks.rna_fq2bam",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Align RNA-Seq FASTQs and quantify gene counts using NVIDIA Clara Parabricks rna_fq2bam (STAR, Docker).",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_parabricks_rna_fq2bam",
+      "input_schema_ref": "schemas/tasks/sample_parabricks_rna_fq2bam.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_parabricks_rna_fq2bam.output.schema.json",
+      "schema_id": "sample.parabricks_rna_fq2bam",
+      "tool": "ParabricksRnaFq2Bam"
+    },
+    {
+      "action_config_key": "rna_align",
+      "action_name": "sample.kallisto",
+      "argv_map": {},
+      "capability": "parabricks.kallisto",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Quantify RNA-Seq FASTQs with NVIDIA Clara Parabricks kallisto pseudo-alignment (Docker).",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_kallisto",
+      "input_schema_ref": "schemas/tasks/sample_kallisto.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_kallisto.output.schema.json",
+      "schema_id": "sample.kallisto",
+      "tool": "ParabricksKallisto"
+    },
+    {
+      "action_config_key": "rna_qc",
+      "action_name": "sample.rna_qc",
+      "argv_map": {},
+      "capability": "rna-qc",
+      "category": "sample_prep",
+      "cli_tool": "rna-alignment-qc",
+      "context_vars": [
+        "projectPath",
+        "sampleId",
+        "sampleDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "RNA-Seq alignment/quantification QC guardrails (mapping/pseudoalignment rate, genes detected).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [],
+        "scope_bindings": [
+          {
+            "output_json_path": "$.guardrails.overall_pass",
+            "var_name": "qcPass"
+          },
+          {
+            "output_json_path": "$.rnaQcPass",
+            "var_name": "rnaQcPass"
+          }
+        ],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": []
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_rna_qc",
+      "input_schema_ref": "schemas/tasks/sample_rna_qc.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_rna_qc.output.schema.json",
+      "schema_id": "sample.rna_qc",
+      "tool": "RnaAlignmentQc"
+    },
+    {
+      "action_config_key": "rna_align",
+      "action_name": "sample.register_expression",
+      "argv_map": {},
+      "capability": "sample.register-expression",
+      "category": "sample_prep",
+      "cli_tool": "methyl-rna-register-expression",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Normalize STAR gene counts or kallisto transcript abundances into a canonical expression.h5.",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_register_expression",
+      "input_schema_ref": "schemas/tasks/sample_register_expression.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_register_expression.output.schema.json",
+      "schema_id": "sample.register_expression",
+      "tool": "RnaRegisterExpression"
+    },
+    {
+      "action_config_key": "rna_de_select",
+      "action_name": "pipeline.rna_de_select",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-rna-de-select",
+      "category": "modeling",
+      "cli_tool": "methyl-rna-de-select",
+      "context_vars": [
+        "comparison",
+        "outputDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "RNA-Seq differential-expression gene panel selection + tabular classification (replaces methylation centroid/detector).",
+      "execution_mode": "cli",
+      "input_schema_ref": "schemas/tasks/pipeline_rna_de_select.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_rna_de_select.output.schema.json",
+      "schema_id": "pipeline.rna_de_select",
+      "tool": "RnaDeSelect"
+    },
+    {
       "action_name": "sample.delete_fastqs",
       "argv_map": {},
       "capability": "sample.delete-fastqs",

@@ -35,6 +35,7 @@ _STRING_SCOPE_KEYS = frozenset(
 
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
     "usePangenome": False,
+    "useKallisto": False,
     "deleteFastqs": True,
     "runDmpSelection": False,
     "runGeneFeaturecuts": False,
@@ -512,6 +513,22 @@ def seed_pipeline_scope_flags(
         out.setdefault(
             "usePangenome",
             str(alignment_mode).strip().lower() == "pangenome",
+        )
+
+    # RNA-Seq quantifier selection, parallel to alignment_mode/usePangenome.
+    rna_align_cfg = dict(ac.get("rna_align") or {})
+    quant_mode = out.get("quantMode")
+    if quant_mode in (None, ""):
+        quant_mode = rna_align_cfg.get("quant_mode")
+    if quant_mode in (None, ""):
+        quant_mode = "star"
+    out["quantMode"] = str(quant_mode)
+    if "useKallisto" in out:
+        out["useKallisto"] = bool(out["useKallisto"])
+    else:
+        out.setdefault(
+            "useKallisto",
+            str(quant_mode).strip().lower() == "kallisto",
         )
 
     sample_prep_cfg = dict(ac.get("sample_prep") or {})

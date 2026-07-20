@@ -37,6 +37,12 @@ from .sample_prep import (
     _handle_parabricks_giraffe,
     _handle_trim_fastq,
 )
+from .rna_prep import (
+    _handle_kallisto,
+    _handle_parabricks_rna_fq2bam,
+    _handle_register_expression,
+    _handle_rna_qc,
+)
 from .stub import _handle_stub_external
 from .workflow_compute import (
     _handle_workflow_const_bool,
@@ -82,6 +88,10 @@ __all__ = [
     "_handle_methyl_qc",
     "_handle_parabricks_fq2bam",
     "_handle_parabricks_giraffe",
+    "_handle_parabricks_rna_fq2bam",
+    "_handle_kallisto",
+    "_handle_rna_qc",
+    "_handle_register_expression",
     "_handle_stub_external",
     "_handle_trim_fastq",
     "_handle_validation_biomarker_filter",

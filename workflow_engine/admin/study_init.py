@@ -34,6 +34,7 @@ def build_manifest(
     analyte: str,
     stages: Optional[int],
     intended_use: str,
+    modality: str = "methylation",
 ) -> Dict[str, Any]:
     data_dir = output_root / study_id / "data"
     healthy_csv = str(data_dir / "healthy.csv")
@@ -84,6 +85,7 @@ def build_manifest(
         "regulatory": {
             "stage": "expanded_development",
             "intended_use_summary": intended_use,
+            "primary_modality": modality,
             "primary_analyte": analyte,
             "allow_clinical_performance_claims": False,
             "claim_boundary": "Development evidence only until pivotal_validation stage.",
@@ -109,6 +111,7 @@ def write_study(
     output_root: Path,
     intended_use: str,
     force: bool,
+    modality: str = "methylation",
 ) -> Path:
     project_name = _slug_study_name(name)
     study_root = output_root / study_id
@@ -135,6 +138,7 @@ def write_study(
         analyte=analyte,
         stages=stages,
         intended_use=intended_use,
+        modality=modality,
     )
     manifest_path = configs / f"project_{project_name}.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
@@ -209,6 +213,12 @@ def main(argv: Optional[List[str]] = None) -> int:
         help="regulatory.primary_analyte (default: buffy_coat)",
     )
     parser.add_argument(
+        "--modality",
+        default="methylation",
+        choices=["methylation", "rnaseq"],
+        help="regulatory.primary_modality: omics process pack (default: methylation)",
+    )
+    parser.add_argument(
         "--output-root",
         type=Path,
         default=Path("/work/projects"),
@@ -258,6 +268,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             output_root=args.output_root.resolve(),
             intended_use=args.intended_use,
             force=args.force,
+            modality=args.modality,
         )
     except FileExistsError as exc:
         print(f"error: {exc}", file=sys.stderr)

@@ -94,6 +94,9 @@ Parameters resolve into **`resolvedConfig`** on each workflow task (Phase 4). Se
 | `alignment_qc` | `packages/methylalignmentqc/methyl_alignment_qc/models/config.py` | `methyl_alignment_qc/project_resolver.py` |
 | `fragmentomics` | `packages/methylfragmentomics/methyl_fragmentomics/config.py` | `methyl_fragmentomics/project_resolver.py` |
 | `methyl_extract` | sample-prep / extraction | workers + site manifest |
+| `rna_align` (RNA-Seq) | `quant_mode` (`star` \| `kallisto`) + site `rna_reference` | `rna_fq2bam_runner.py` / `kallisto_runner.py` |
+| `rna_qc` (RNA-Seq) | `packages/rnaalignmentqc/rna_alignment_qc/models/config.py` | `rna_alignment_qc/core/writer.py` |
+| `rna_de_select` (RNA-Seq) | `packages/rnaexpress/rna_express/models/config.py` | `rna_express/core/de_select.py` |
 
 ## High-impact validation keys (profile actionConfig.validation)
 

@@ -16,6 +16,8 @@ GPU_REQUIRED_CAPABILITIES: FrozenSet[str] = frozenset(
     {
         "parabricks.fq2bam",
         "parabricks.giraffe",
+        "parabricks.rna_fq2bam",
+        "parabricks.kallisto",
         "methyl-centroid",
     }
 )
@@ -29,7 +31,12 @@ _PROBE_EXTRACTOR = "extractor"
 
 def _capability_probe_kind(capability: str, *, execution_mode: str, cli_tool: Optional[str]) -> str:
     """Classify how auto-detect decides whether a catalog capability is available."""
-    if capability in ("parabricks.fq2bam", "parabricks.giraffe"):
+    if capability in (
+        "parabricks.fq2bam",
+        "parabricks.giraffe",
+        "parabricks.rna_fq2bam",
+        "parabricks.kallisto",
+    ):
         return _PROBE_PARABRICKS
     if capability == "methyl-extract":
         return _PROBE_EXTRACTOR
@@ -164,7 +171,11 @@ def assert_node_can_serve_capability(capability: str) -> None:
             f"Worker configured for capability {capability!r} but no functional GPU was detected. "
             "Install NVIDIA drivers/CuPy, verify nvidia-smi, or run a CPU-only capability unit."
         )
-    if capability in ("parabricks.fq2bam", "parabricks.giraffe") and not _parabricks_available():
+    if (
+        capability
+        in ("parabricks.fq2bam", "parabricks.giraffe", "parabricks.rna_fq2bam", "parabricks.kallisto")
+        and not _parabricks_available()
+    ):
         raise RuntimeError(
             f"Worker configured for capability {capability!r} but Parabricks is not available. "
             "Set METHYL_PARABRICKS_IMAGE or install the nvcr.io Parabricks image."

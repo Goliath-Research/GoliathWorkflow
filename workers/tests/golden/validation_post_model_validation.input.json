@@ -5,6 +5,8 @@
   "project": null,
   "projectPath": "/work/p/project.json",
   "runDir": null,
+  "testControlCsv": null,
+  "testDiseaseCsv": null,
   "testGroupsJson": null,
   "tool": null,
   "valControlCsv": null,

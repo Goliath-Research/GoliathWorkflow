@@ -13,6 +13,24 @@ import copy
 from typing import Any, Dict, List, Optional
 
 
+def normalize_primary_modality(value: Optional[str]) -> Optional[str]:
+    """Normalize regulatory primary_modality tokens to a canonical omics modality.
+
+    Modality is the assay/omics axis (``methylation`` vs ``rnaseq``), distinct from
+    ``primary_analyte`` which encodes the DNA methylation sample matrix
+    (cfDNA vs buffy coat). Unknown values pass through cleaned so operators can
+    introduce future modalities via config without a code change.
+    """
+    if value is None:
+        return None
+    cleaned = "_".join(str(value).strip().lower().replace("-", " ").split())
+    if cleaned in {"methylation", "wgbs", "methyl", "dna_methylation", "bisulfite"}:
+        return "methylation"
+    if cleaned in {"rnaseq", "rna_seq", "rna", "transcriptomics", "transcriptome"}:
+        return "rnaseq"
+    return cleaned or None
+
+
 def normalize_primary_analyte(value: Optional[str]) -> Optional[str]:
     """Normalize regulatory primary_analyte tokens to canonical profile keys."""
     if value is None:

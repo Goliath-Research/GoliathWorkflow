@@ -224,6 +224,20 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         filename="storage_transfer.schema.json",
         title="StorageTransferStepConfig",
     ),
+    ConfigSchemaSpec(
+        schema_id="rna_qc",
+        module="rna_alignment_qc.models.config",
+        class_name="RnaQcGuardrailConfig",
+        filename="rna_qc.schema.json",
+        title="RnaQcGuardrailConfig",
+    ),
+    ConfigSchemaSpec(
+        schema_id="rna_de_select",
+        module="rna_express.models.config",
+        class_name="RnaDeSelectConfig",
+        filename="rna_de_select.schema.json",
+        title="RnaDeSelectConfig",
+    ),
 )
 
 

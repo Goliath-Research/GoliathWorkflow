@@ -30,6 +30,9 @@ ActionConfigKey = Literal[
     "validation",
     "progression",
     "parabricks",
+    "rna_align",
+    "rna_qc",
+    "rna_de_select",
 ]
 
 DEFAULT_SITE_PATH = Path("/work/site/methyl_site.json")
@@ -105,7 +108,30 @@ def site_slice_for_action(site: Mapping[str, Any], action_key: str) -> Dict[str,
         out.update(dict(site["parabricks"]))
     if action_key == "methyl_extract" and site.get("methyl_extract"):
         out.update(dict(site["methyl_extract"]))
+    rna_ref = site.get("rna_reference") or {}
+    if isinstance(rna_ref, dict) and rna_ref:
+        if action_key in ("rna_align", "rna_qc"):
+            for key in ("star_index_dir", "gtf", "reference_fasta", "kallisto_index", "transcriptome_fasta", "tx2gene"):
+                if rna_ref.get(key):
+                    out.setdefault(key, rna_ref[key])
+        if action_key == "rna_align" and site.get("parabricks"):
+            for key, val in dict(site["parabricks"]).items():
+                out.setdefault(key, val)
     return out
+
+
+def resolve_rna_reference(site: Mapping[str, Any] | None = None) -> Dict[str, str]:
+    """Resolve RNA-Seq reference assets from site manifest ``rna_reference``.
+
+    Returns whatever keys the operator pinned. Callers validate the subset they
+    need for the selected quantifier (STAR vs kallisto) so a site can ship only
+    one path.
+    """
+    data = dict(site or load_site_manifest())
+    bundle = data.get("rna_reference") or {}
+    if not isinstance(bundle, dict):
+        return {}
+    return {str(k): str(v) for k, v in bundle.items() if v not in (None, "")}
 
 
 def resolve_pangenome_genome(site: Mapping[str, Any] | None = None) -> Dict[str, str]:

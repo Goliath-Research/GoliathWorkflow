@@ -35,6 +35,9 @@ ActionConfigKey = Literal[
     "info_measures",
     "progression",
     "parabricks",
+    "rna_align",
+    "rna_qc",
+    "rna_de_select",
 ]
 ArgvMap = Tuple[Tuple[str, str], ...]
 ContextVars = Tuple[str, ...]
@@ -85,6 +88,9 @@ PROJECT_ACTION_CONFIG_KEYS: FrozenSet[ActionConfigKey] = frozenset(
         "info_measures",
         "progression",
         "parabricks",
+        "rna_align",
+        "rna_qc",
+        "rna_de_select",
     }
 )
 
@@ -260,6 +266,7 @@ class ActionCatalogEntry:
 
 _PIPELINE_MODULE = "methyl_worker.task_models.pipeline_models"
 _SAMPLE_MODULE = "methyl_worker.task_models.sample_prep_models"
+_RNA_SAMPLE_MODULE = "methyl_worker.task_models.rna_prep_models"
 _VALIDATION_MODULE = "methyl_worker.task_models.validation_models"
 # Domain effect presets (see workflow_engine/contract/domain_types.md)
 _DE_METHYL_SAMPLE = DomainEffects(reads_types=("MethylSampleRef",), writes_types=("MethylSampleRef",))
@@ -387,6 +394,17 @@ _DE_RESOLVE_PROJECT = DomainEffects(
     reads_types=("MethylGroup", "ComparisonSpec"),
     writes_types=("ResolvedProject",),
     scope_bindings=(("resolvedProject", "$.resolvedProject"),),
+)
+_DE_RNA_QC = DomainEffects(
+    scope_bindings=(
+        ("qcPass", "$.guardrails.overall_pass"),
+        ("rnaQcPass", "$.rnaQcPass"),
+    ),
+)
+_DE_RNA_REGISTER = DomainEffects(
+    scope_bindings=(
+        ("expressionRegistered", "$.expressionH5"),
+    ),
 )
 _WORKFLOW_MODULE = "methyl_worker.task_models.workflow_compute_models"
 _DE_WORKFLOW_VALUE = DomainEffects(
@@ -828,6 +846,85 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         context_vars=("sampleId", "sampleDir", "projectPath"),
         domain_effects=_DE_PARABRICKS,
         action_config_key="parabricks",
+    ),
+    _in_process(
+        "sample.parabricks_rna_fq2bam",
+        "parabricks.rna_fq2bam",
+        "sample.parabricks_rna_fq2bam",
+        "Align RNA-Seq FASTQs and quantify gene counts using NVIDIA Clara Parabricks rna_fq2bam (STAR, Docker).",
+        "sample_prep",
+        _RNA_SAMPLE_MODULE,
+        "ParabricksRnaFq2bamTaskInput",
+        _RNA_SAMPLE_MODULE,
+        "RnaQuantTaskOutput",
+        in_process_handler="_handle_parabricks_rna_fq2bam",
+        tool="ParabricksRnaFq2Bam",
+        context_vars=("sampleId", "sampleDir", "projectPath"),
+        action_config_key="rna_align",
+    ),
+    _in_process(
+        "sample.kallisto",
+        "parabricks.kallisto",
+        "sample.kallisto",
+        "Quantify RNA-Seq FASTQs with NVIDIA Clara Parabricks kallisto pseudo-alignment (Docker).",
+        "sample_prep",
+        _RNA_SAMPLE_MODULE,
+        "KallistoTaskInput",
+        _RNA_SAMPLE_MODULE,
+        "RnaQuantTaskOutput",
+        in_process_handler="_handle_kallisto",
+        tool="ParabricksKallisto",
+        context_vars=("sampleId", "sampleDir", "projectPath"),
+        action_config_key="rna_align",
+    ),
+    _in_process(
+        "sample.rna_qc",
+        "rna-qc",
+        "sample.rna_qc",
+        "RNA-Seq alignment/quantification QC guardrails (mapping/pseudoalignment rate, genes detected).",
+        "sample_prep",
+        _RNA_SAMPLE_MODULE,
+        "RnaQcTaskInput",
+        _RNA_SAMPLE_MODULE,
+        "RnaQcTaskOutput",
+        in_process_handler="_handle_rna_qc",
+        tool="RnaAlignmentQc",
+        cli_tool="rna-alignment-qc",
+        action_config_key="rna_qc",
+        context_vars=("projectPath", "sampleId", "sampleDir"),
+        domain_effects=_DE_RNA_QC,
+    ),
+    _in_process(
+        "sample.register_expression",
+        "sample.register-expression",
+        "sample.register_expression",
+        "Normalize STAR gene counts or kallisto transcript abundances into a canonical expression.h5.",
+        "sample_prep",
+        _RNA_SAMPLE_MODULE,
+        "RegisterExpressionTaskInput",
+        _RNA_SAMPLE_MODULE,
+        "RegisterExpressionTaskOutput",
+        in_process_handler="_handle_register_expression",
+        tool="RnaRegisterExpression",
+        cli_tool="methyl-rna-register-expression",
+        action_config_key="rna_align",
+        context_vars=("sampleId", "sampleDir", "projectPath"),
+    ),
+    _cli(
+        "pipeline.rna_de_select",
+        "methyl-rna-de-select",
+        "pipeline.rna_de_select",
+        "RNA-Seq differential-expression gene panel selection + tabular classification (replaces methylation centroid/detector).",
+        "modeling",
+        _RNA_SAMPLE_MODULE,
+        "RnaDeSelectTaskInput",
+        _RNA_SAMPLE_MODULE,
+        "RnaDeSelectTaskOutput",
+        cli_tool="methyl-rna-de-select",
+        tool="RnaDeSelect",
+        action_config_key="rna_de_select",
+        context_vars=("comparison", "outputDir"),
+        argv_map=DEFAULT_PIPELINE_ARGV_MAP,
     ),
     _in_process(
         "sample.delete_fastqs",

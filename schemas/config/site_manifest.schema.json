@@ -66,6 +66,19 @@
       },
       "additionalProperties": true
     },
+    "rna_reference": {
+      "type": "object",
+      "description": "RNA-Seq reference assets for the transcriptomics process pack. STAR index + GTF feed pbrun rna_fq2bam; the kallisto index feeds pbrun kallisto. Operators pin these at site/cfg, not in Python.",
+      "properties": {
+        "star_index_dir": { "type": "string", "description": "Directory containing a STAR genome index (used by pbrun rna_fq2bam)" },
+        "gtf": { "type": "string", "description": "Gene annotation GTF for STAR gene counts / feature assignment" },
+        "reference_fasta": { "type": "string", "description": "Genome FASTA matching the STAR index" },
+        "kallisto_index": { "type": "string", "description": "Path to a prebuilt kallisto transcriptome index (.idx)" },
+        "transcriptome_fasta": { "type": "string", "description": "Transcriptome FASTA used to build the kallisto index" },
+        "tx2gene": { "type": "string", "description": "Optional transcript-to-gene map (TSV) for aggregating kallisto transcript abundances to genes" }
+      },
+      "additionalProperties": true
+    },
     "actionConfig": {
       "type": "object",
       "description": "Optional per-action defaults keyed by catalog action_config_key",

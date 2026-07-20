@@ -13,6 +13,8 @@ dependencies = [
   "methyl_enricher",
   "methyl-disease-progression",
   "methyl_classifier",
+  "rna_alignment_qc",
+  "rna_express",
   "boto3>=1.34.0",
   "azure-identity>=1.15.0",
   "azure-storage-blob>=12.19.0",
@@ -28,12 +30,16 @@ methyl-detector = { path = "../packages/methyldetector", editable = true }
 methyl_enricher = { path = "../packages/methylenricher", editable = true }
 methyl-disease-progression = { path = "../packages/methyldiseaseprogression", editable = true }
 methyl_classifier = { path = "../packages/methylclassifier", editable = true }
+rna_alignment_qc = { path = "../packages/rnaalignmentqc", editable = true }
+rna_express = { path = "../packages/rnaexpress", editable = true }
 
 [project.scripts]
 methyl-worker = "methyl_worker.__main__:main"
 methyl-export-task-schemas = "methyl_worker.task_schema_export:main"
 methyl-export-action-catalog = "methyl_worker.action_catalog_export:main"
 methyl-parabricks-align = "methyl_worker.parabricks_runner:main"
+methyl-rna-fq2bam = "methyl_worker.rna_fq2bam_runner:main"
+methyl-kallisto = "methyl_worker.kallisto_runner:main"
 methyl-extract = "methyl_worker.extract_runner:main"
 
 [build-system]

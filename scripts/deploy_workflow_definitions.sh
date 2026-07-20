@@ -50,9 +50,13 @@ fi
 SAMPLE_PREP="$FIXTURES/sample_prep.program.json"
 REMEDIATE="$FIXTURES/sample_prep_remediate.program.json"
 LIFECYCLE="$FIXTURES/study_validation_lifecycle.program.json"
+RNA_PREP="$FIXTURES/sample_prep_rnaseq.program.json"
+RNA_LIFECYCLE="$FIXTURES/rnaseq_study_lifecycle.program.json"
 [[ -f "$LIFECYCLE" ]] || LIFECYCLE="$REPO_FIXTURES/study_validation_lifecycle.program.json"
 [[ -f "$SAMPLE_PREP" ]] || SAMPLE_PREP="$REPO_FIXTURES/sample_prep.program.json"
 [[ -f "$REMEDIATE" ]] || REMEDIATE="$REPO_FIXTURES/sample_prep_remediate.program.json"
+[[ -f "$RNA_PREP" ]] || RNA_PREP="$REPO_FIXTURES/sample_prep_rnaseq.program.json"
+[[ -f "$RNA_LIFECYCLE" ]] || RNA_LIFECYCLE="$REPO_FIXTURES/rnaseq_study_lifecycle.program.json"
 for f in "$SAMPLE_PREP" "$REMEDIATE" "$LIFECYCLE"; do
   [[ -f "$f" ]] || { echo "Missing $f" >&2; exit 1; }
 done
@@ -63,6 +67,13 @@ COMPILE="$REPO_ROOT/scripts/compile_workflow_program.py"
 "$PYTHON_BIN" "$COMPILE" "$SAMPLE_PREP" -o "$OUTPUT_DIR/sample_prep_compiled.json"
 "$PYTHON_BIN" "$COMPILE" "$REMEDIATE" -o "$OUTPUT_DIR/sample_prep_remediate_compiled.json"
 "$PYTHON_BIN" "$COMPILE" "$LIFECYCLE" -o "$OUTPUT_DIR/study_validation_lifecycle_compiled.json"
+# RNA-Seq process pack (optional; compiled when fixtures are present).
+if [[ -f "$RNA_PREP" ]]; then
+  "$PYTHON_BIN" "$COMPILE" "$RNA_PREP" -o "$OUTPUT_DIR/sample_prep_rnaseq_compiled.json"
+fi
+if [[ -f "$RNA_LIFECYCLE" ]]; then
+  "$PYTHON_BIN" "$COMPILE" "$RNA_LIFECYCLE" -o "$OUTPUT_DIR/rnaseq_study_lifecycle_compiled.json"
+fi
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   echo "Dry-run: compiled specs in $OUTPUT_DIR"

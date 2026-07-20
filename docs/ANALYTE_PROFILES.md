@@ -1,5 +1,7 @@
 # Analyte-driven pipeline profiles
 
+> **Modality vs analyte.** `regulatory.primary_modality` (`methylation` | `rnaseq`) selects the **omics process pack** and is distinct from `regulatory.primary_analyte` (the DNA-methylation sample matrix: `cfdna`, `buffy_coat`, `combined`). Modality defaults to `methylation` when unset. The RNA-Seq pack uses its own programs (`sample_prep_rnaseq`, `rnaseq_study_lifecycle`), profile (`rnaseq_research`), and actions (`sample.parabricks_rna_fq2bam` / `sample.kallisto` / `sample.rna_qc` / `sample.register_expression` / `pipeline.rna_de_select`); the analyte packs below apply to the methylation modality only. See [RNA-Seq process pack](usage/20-rnaseq-process-pack.qmd).
+
 Set **`regulatory.primary_analyte`** once in the study manifest (`cfdna`, `buffy_coat`, or `combined`). The resolver merges analyte-specific defaults into profile/site `actionConfig` via `merge_step_config` in `packages/methylutils/methyl_utils/analyte_profiles.py` (explicit profile or site keys always win).
 
 Opt out: `"auto_apply_analyte_profile": false` under `regulatory`.

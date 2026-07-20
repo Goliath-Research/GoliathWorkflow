@@ -1132,6 +1132,21 @@ class ProjectConfig(BaseModel):
 
         return normalize_primary_analyte(self.get_regulatory_config().get("primary_analyte"))
 
+    def get_primary_modality(self) -> str:
+        """Canonical omics modality (``methylation`` default, or ``rnaseq``).
+
+        Modality is the assay axis and selects the process pack (methylation vs
+        RNA-Seq). It is independent of ``primary_analyte`` (the methylation sample
+        matrix). Defaults to ``methylation`` for backward compatibility when no
+        ``regulatory.primary_modality`` is set.
+        """
+        from .analyte_profiles import normalize_primary_modality
+
+        modality = normalize_primary_modality(
+            self.get_regulatory_config().get("primary_modality")
+        )
+        return modality or "methylation"
+
     def get_project_root(self) -> str:
         """Project root directory: {output_base}/{project_name}."""
         return f"{self.output_base.rstrip('/')}/{self.project_name}"
