@@ -161,6 +161,13 @@ def expand_and_start_grid(
 
     overlays = request.grid.expand()
 
+    # Compile/resolve the DomainProgram once — inputs are loop-invariant across trials.
+    version_id = resolve_workflow_version_id(
+        db,
+        {**base_body, "projectPath": request.project_path},
+        create_workflow_definition=create_workflow_definition,
+    )
+
     search_id: Optional[int] = None
     if ledger is not None:
         search_id = ledger.start_search(request)
@@ -184,11 +191,6 @@ def expand_and_start_grid(
 
         context = finalize_instance_context(trial_context)
 
-        version_id = resolve_workflow_version_id(
-            db,
-            {**base_body, "projectPath": request.project_path},
-            create_workflow_definition=create_workflow_definition,
-        )
         instance_id = create_workflow_instance(db, version_id, context)
 
         scope = extract_execution_scope_payload(context)

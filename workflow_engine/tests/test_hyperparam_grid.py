@@ -99,8 +99,14 @@ def test_expand_and_start_grid_starts_one_instance_per_point(monkeypatch) -> Non
     def start_inst(_db, instance_id):
         started.append(instance_id)
 
-    # patch version resolution to avoid compiling a real program
-    monkeypatch.setattr(hg, "resolve_workflow_version_id", lambda db, body, **kw: 42)
+    # patch version resolution to avoid compiling a real program; must run once for N trials
+    resolve_calls: list = []
+
+    def fake_resolve(db, body, **kw):
+        resolve_calls.append(body)
+        return 42
+
+    monkeypatch.setattr(hg, "resolve_workflow_version_id", fake_resolve)
 
     request = {
         "project_path": "/work/projects/x/configs/project.json",
@@ -119,6 +125,7 @@ def test_expand_and_start_grid_starts_one_instance_per_point(monkeypatch) -> Non
     )
 
     assert len(result.trials) == 4
+    assert len(resolve_calls) == 1
     # distinct scope ids per trial
     assert sorted(t.execution_scope_key for t in result.trials) == ["scope-0", "scope-1", "scope-2", "scope-3"]
     # all instances started + registered scope + ledger rows
