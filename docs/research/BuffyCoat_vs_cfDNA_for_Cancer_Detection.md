@@ -345,6 +345,18 @@ Given that you already have an optimized Python pipeline handling parallelized `
 2. **Extract the reference matrix.** Download the validated CpG lookup indexes (the $M$ matrix) directly from the published HiTIMED or FlowSorted/EPIC data sets.
 3. **Run deconvolution natively.** Stream your `.h5` arrays straight into an optimized vector processing loop in Python using **`cvxpy`** or **`scipy`** to calculate the local tissue proportions.
 
+### Implementation status (MethylPipeline)
+
+Both deconvolution modes ship in `packages/methyldeconv` behind the `pipeline.cell_deconvolution` action, selected by `actionConfig.cell_deconvolution.method`:
+
+- **`houseman`** (default) — one flat SLSQP constrained projection against the committed FlowSorted.Blood.EPIC IDOL 6-cell basis (`houseman.py`).
+- **`hitimed`** — an analyte-driven **hierarchical tree** of the *same* per-node QP (`hitimed.py`). Each internal node splits a parent compartment into children with a node-specific basis, and leaf proportions are the product of the path weights (renormalized to 1). The tree root is chosen from the project's `regulatory.primary_analyte`:
+  - `buffy_coat` → immune/leukocyte subtree only (no tumor compartment; blood carries no tumor DNA). This subtree ships in the wheel, derived from the real IDOL basis.
+  - `cfdna` → a `tumor_fraction` vs `non_tumor` (immune) top split from a dedicated plasma atlas, descending into the shared immune subtree. Plasma is mostly hematopoietic with a low ctDNA fraction, so tumor is a single lumped leaf exposing ctDNA burden as a covariate.
+  - `tissue` → the full tumor / immune / stromal tree over the immune subtree.
+
+Consistent with the pivot above, workers never run R: the cfDNA/tissue tumor bases are composed offline (`build_cfdna_atlas_basis.py`) from operator-supplied published atlases, and only the measured blood immune subtree is committed. Output is the same `cell_fractions.csv`, so ECDF/tabular covariate wiring is unchanged — the hierarchical leaves are consumed as an ALR composition (see `cell_deconv_hitimed.profile.json`). See [`docs/plans/hitimed-hierarchical-deconvolution.plan.md`](../plans/hitimed-hierarchical-deconvolution.plan.md).
+
 ### References
 
 * Liao, Y. (2026). STED: flexible cross-modal topic modeling infers cell-type-specific regulatory landscapes from bulk epigenomics. *Briefings in Bioinformatics*, *27*(3), bbag347.

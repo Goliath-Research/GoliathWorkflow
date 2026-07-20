@@ -16,11 +16,35 @@ class CellDeconvStepConfig(BaseModel):
         default=None,
         description="Output directory; default {project_root}/cell_fractions.",
     )
+    method: Optional[Literal["houseman", "hitimed"]] = Field(
+        default=None,
+        description=(
+            "Deconvolution method. 'houseman' (default) runs one flat FlowSorted/IDOL "
+            "projection; 'hitimed' runs the analyte-driven hierarchical tree. "
+            "Operator-set per profile/site."
+        ),
+    )
     seed_basis_path: Optional[str] = Field(
         default=None,
         description=(
-            "Path to FlowSorted/IDOL seed basis JSON (markers × cell-type betas). "
-            "Operator-set per site/profile; defaults to packaged flowsorted_blood_epic_idol_v1.json."
+            "Path to FlowSorted/IDOL seed basis JSON (markers × cell-type betas) for the "
+            "'houseman' method. Operator-set per site/profile; defaults to packaged "
+            "flowsorted_blood_epic_idol_v1.json."
+        ),
+    )
+    hierarchy_basis_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "Path to hierarchical (v2) basis JSON for the 'hitimed' method. Operator-set "
+            "per site/profile; defaults to the packaged hierarchy basis. The tree used is "
+            "selected by analyte via the basis' analyte_trees map."
+        ),
+    )
+    analyte: Optional[str] = Field(
+        default=None,
+        description=(
+            "Analyte selecting the hierarchical tree (buffy_coat | cfdna | tissue) for the "
+            "'hitimed' method. Defaults to the project regulatory primary_analyte."
         ),
     )
     contexts: Optional[List[Literal["CG", "CHG", "CHH"]]] = Field(
@@ -70,6 +94,10 @@ class CellDeconvRuntimeParams(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    method: Literal["houseman", "hitimed"] = Field(
+        default="houseman",
+        description="Resolved deconvolution method (default houseman).",
+    )
     contexts: List[Literal["CG", "CHG", "CHH"]] = Field(
         min_length=1,
         description="Methylation contexts to read from sample H5.",
@@ -86,6 +114,10 @@ class CellDeconvRuntimeParams(BaseModel):
     use_gpu: Optional[bool] = Field(
         default=None,
         description="Prefer MethylUtils CuPy/GPU when available.",
+    )
+    analyte: Optional[str] = Field(
+        default=None,
+        description="Analyte selecting the hierarchical tree for the hitimed method.",
     )
     sample_id_column: str = Field(
         default="sample_id",
@@ -109,9 +141,11 @@ class CellDeconvRuntimeParams(BaseModel):
                 f"missing {', '.join(missing)}"
             )
         return cls(
+            method=str(cfg.method or "houseman"),  # type: ignore[arg-type]
             contexts=list(cfg.contexts),
             marker_min_coverage=int(cfg.marker_min_coverage),
             min_marker_fraction=float(cfg.min_marker_fraction),
             use_gpu=cfg.use_gpu,
+            analyte=cfg.analyte,
             sample_id_column=str(cfg.sample_id_column or "sample_id"),
         )

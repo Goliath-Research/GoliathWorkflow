@@ -2,6 +2,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Schema-facing actionConfig (tunable knobs default to None until site/profile set them).",
   "properties": {
+    "analyte": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Analyte selecting the hierarchical tree (buffy_coat | cfdna | tissue) for the 'hitimed' method. Defaults to the project regulatory primary_analyte.",
+      "title": "Analyte"
+    },
     "contexts": {
       "anyOf": [
         {
@@ -23,6 +36,19 @@
       "description": "Methylation contexts to read from sample H5. Required in site/profile actionConfig.cell_deconvolution (no code default).",
       "title": "Contexts"
     },
+    "hierarchy_basis_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Path to hierarchical (v2) basis JSON for the 'hitimed' method. Operator-set per site/profile; defaults to the packaged hierarchy basis. The tree used is selected by analyte via the basis' analyte_trees map.",
+      "title": "Hierarchy Basis Path"
+    },
     "marker_min_coverage": {
       "anyOf": [
         {
@@ -36,6 +62,23 @@
       "default": null,
       "description": "Minimum coverage at a marker CpG for inclusion in Y. Required in site/profile actionConfig.cell_deconvolution (no code default).",
       "title": "Marker Min Coverage"
+    },
+    "method": {
+      "anyOf": [
+        {
+          "enum": [
+            "houseman",
+            "hitimed"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Deconvolution method. 'houseman' (default) runs one flat FlowSorted/IDOL projection; 'hitimed' runs the analyte-driven hierarchical tree. Operator-set per profile/site.",
+      "title": "Method"
     },
     "min_marker_fraction": {
       "anyOf": [
@@ -81,7 +124,7 @@
         }
       ],
       "default": null,
-      "description": "Path to FlowSorted/IDOL seed basis JSON (markers \u00d7 cell-type betas). Operator-set per site/profile; defaults to packaged flowsorted_blood_epic_idol_v1.json.",
+      "description": "Path to FlowSorted/IDOL seed basis JSON (markers \u00d7 cell-type betas) for the 'houseman' method. Operator-set per site/profile; defaults to packaged flowsorted_blood_epic_idol_v1.json.",
       "title": "Seed Basis Path"
     },
     "use_gpu": {

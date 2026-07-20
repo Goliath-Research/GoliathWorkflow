@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "methyl_deconv"
 version = "0.1.0"
-description = "Reference-based leukocyte cell-type deconvolution (Houseman / FlowSorted.Blood.EPIC IDOL) for MethylPipeline"
+description = "Reference-based cell-type deconvolution (flat Houseman / FlowSorted.Blood.EPIC IDOL and hierarchical HiTIMED-style trees) for MethylPipeline"
 authors = ["MethylPipeline Team"]
 readme = "README.md"
 packages = [{include = "methyl_deconv"}]

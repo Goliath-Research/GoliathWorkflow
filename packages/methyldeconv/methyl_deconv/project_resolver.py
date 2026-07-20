@@ -52,5 +52,12 @@ def resolve_cell_deconv_step_config(
                 step_cfg.update(overrides)
 
     cfg = CellDeconvStepConfig.model_validate(step_cfg)
+    # Hierarchical (HiTIMED) tree is analyte-driven: default the analyte from the
+    # project regulatory primary_analyte when the operator did not set one.
+    if cfg.method == "hitimed" and not cfg.analyte:
+        get_analyte = getattr(project, "get_primary_analyte", None)
+        analyte = get_analyte() if callable(get_analyte) else None
+        if analyte:
+            cfg = cfg.model_copy(update={"analyte": str(analyte)})
     out = cfg.output_dir or f"{paths.output_base}/cell_fractions"
     return cfg, _all_sample_dirs(project), str(out)
