@@ -49,14 +49,16 @@ oncology cohorts. Near-term process packs use the same control plane:
 | Process / analyte | Status | Notes |
 |-------------------|--------|--------|
 | Methylation — buffy coat / cfDNA (e.g. oncology) | **In production use** | SamplePrep → MC stability → freeze → model; SaMD ladder |
+| RNA-Seq (transcriptomics) | **Shipped process pack (research)** | Second omics modality (`regulatory.primary_modality: rnaseq`). Quantify with NVIDIA Clara Parabricks `pbrun rna_fq2bam` (STAR) or `pbrun kallisto`, selectable via `actionConfig.rna_align.quant_mode` — parallel to the methylation `fq2bam_meth` / giraffe SamplePrep path. Ships typed actions, RNA QC, a per-sample expression contract, and DE gene-panel + tabular classification; remaining gate is representative cohort data and validation evidence, not aligner R&D. |
 | Methylation — cfDNA Alzheimer detection | **Planned process pack** | Same platform; disease-specific profiles, partitions, and evidence once cohorts are wired |
-| RNA-Seq (transcriptomics) | **Near-term process pack** | Low integration cost: NVIDIA Clara Parabricks already exposes `pbrun rna_fq2bam` and `pbrun kallisto`, parallel to the existing methylation `fq2bam` / giraffe SamplePrep path. Main gate is representative test data and registry fixtures, not new aligner R&D. |
 | Proteomics | **Planned process pack** | Higher effort than RNA-Seq: new typed actions and GPU-oriented workflows on the same NVIDIA clusters (not a Parabricks drop-in). Still reuses DomainProgram, scheduler, QC gates, cfg/wf, and CAAS. |
 
 Buyers purchase a **platform** with a growing set of analyte/disease packs—not a
-single hard-coded assay. RNA-Seq is the next natural pack because Parabricks
-already covers the heavy lifting; proteomics follows as a first-class GPU
-process on the same worker fleet.
+single hard-coded assay. RNA-Seq is the first multiomics pack to ship on this
+control plane (its own DomainPrograms, typed actions, profile, and QC gates
+reusing the scheduler, cfg/wf, and CAAS); proteomics follows as a first-class GPU
+process on the same worker fleet. See
+[RNA-Seq process pack](../usage/20-rnaseq-process-pack.qmd).
 
 ---
 
@@ -163,10 +165,14 @@ architecture that already exists:
   `DomainProgram`s and typed actions on the same scheduler, QC gates, and
   database structures
   ([domain-program-language.md](../reference/domain-program-language.md))—not a
-  separate product stack. RNA-Seq plugs into the existing Parabricks GPU
-  SamplePrep pattern (`rna_fq2bam`, `kallisto`); proteomics adds GPU-native
-  steps on the same clusters; Alzheimer cfDNA reuses the methylation control
-  plane with a disease-specific pack.
+  separate product stack. The shipped **RNA-Seq** pack demonstrates this: a
+  second `primary_modality` reuses the Parabricks GPU SamplePrep pattern
+  (`sample.parabricks_rna_fq2bam` / `sample.kallisto`, selected by
+  `quant_mode`), adds RNA QC and an expression contract, and swaps the
+  methylation centroid/DMP science for differential-expression gene selection
+  (`pipeline.rna_de_select`) feeding the same tabular classifier and covariate
+  stacking. Proteomics adds GPU-native steps on the same clusters; Alzheimer
+  cfDNA reuses the methylation control plane with a disease-specific pack.
 
 ---
 
