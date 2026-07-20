@@ -11,9 +11,10 @@ comparison directory:
 
     mapper/<control_group>/<disease_group>/
 
-By default the mapper consumes the detector's biological-only CSV exports
-(`dmps-*-biological-sorted.csv`). Callers may override the filename pattern via
-step config or a step-override JSON.
+By default the mapper consumes the detector's discovery CSV exports
+(`dmps-*-discovery.csv`), which match ``detection_mode=discovery_only`` and the
+legacy dual-export discovery stage. Callers may override the filename pattern via
+step config or a step-override JSON (e.g. selected / classifier / stable panels).
 """
 
 from pathlib import Path
@@ -24,9 +25,11 @@ from pydantic import BaseModel, Field
 from methyl_utils import load_project
 from methyl_utils.action_config_resolver import resolve_for_project
 
-# MethylDetector exports: dmps-{chr}-biological-sorted.csv (biological filter only) and dmps-{chr}.csv (optimized subset).
-# Default to biological-only so mapper maps all biologically significant DMPs, not every CSV in the detection dir.
-DMP_CSV_PATTERN_BIOLOGICAL = "dmps-*-biological-sorted.csv"
+# Canonical detector exports: discovery / selected / classifier(+extended).
+# Historical ``dmps-*-biological-sorted.csv`` is no longer written by methyl-detector.
+DMP_CSV_PATTERN_DISCOVERY = "dmps-*-discovery.csv"
+# Backward-compatible alias (tests / older callers); same as discovery default.
+DMP_CSV_PATTERN_BIOLOGICAL = DMP_CSV_PATTERN_DISCOVERY
 
 
 def _resolve_detection_dir_with_case_fallback(project, control_group: str, disease_group: str) -> Path:
@@ -52,7 +55,7 @@ def resolve_mapper_paths_per_cancer_group(
     step_override_path: Optional[Path] = None,
     control_index: int = 0,
     disease_subdir: str = "disease",  # deprecated compatibility argument; comparison layout is canonical
-    csv_filename_pattern: str = DMP_CSV_PATTERN_BIOLOGICAL,
+    csv_filename_pattern: str = DMP_CSV_PATTERN_DISCOVERY,
 ) -> List[Tuple[MapperStepPaths, str]]:
     """
     Build one MapperStepPaths per comparison (control vs disease).
@@ -115,7 +118,7 @@ def resolve_mapper_paths_per_cancer_group(
 def resolve_mapper_paths(
     project_path: Path,
     step_override_path: Optional[Path] = None,
-    csv_filename_pattern: str = DMP_CSV_PATTERN_BIOLOGICAL,
+    csv_filename_pattern: str = DMP_CSV_PATTERN_DISCOVERY,
 ) -> MapperStepPaths:
     """
     Build mapper step paths from a project config.

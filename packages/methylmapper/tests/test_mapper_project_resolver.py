@@ -6,6 +6,7 @@ from pathlib import Path
 
 from methyl_mapper.project_resolver import (
     DMP_CSV_PATTERN_BIOLOGICAL,
+    DMP_CSV_PATTERN_DISCOVERY,
     resolve_mapper_paths,
     resolve_mapper_paths_per_cancer_group,
 )

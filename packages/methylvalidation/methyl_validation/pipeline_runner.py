@@ -152,7 +152,7 @@ def _append_gene_stability_steps(
     steps.append(
         (
             "methyl-mapper",
-            lambda: run_mapper(project_json, per_cancer_group=per_cancer_group),
+            lambda: run_mapper(project_json, per_cancer_group=per_cancer_group, config=config),
             None,
             None,
         )
@@ -407,21 +407,28 @@ def run_classifier(project_json: str | Path, per_cancer_group: bool = False) -> 
     return run_cmd(cmd)
 
 
-def run_mapper(project_json: str | Path, per_cancer_group: bool = False) -> tuple[int, str, str]:
+def run_mapper(
+    project_json: str | Path,
+    per_cancer_group: bool = False,
+    *,
+    config: Optional["MonteCarloConfig"] = None,
+) -> tuple[int, str, str]:
     """Run methyl-mapper --project <project_json>.
 
     Per-comparison layout is resolved automatically from the project; methyl-mapper
     does not accept --per-cancer-group (unlike methyl-detector/classifier).
 
-    Mapper overrides come from ``resolvedConfig.mapper`` (profile/site/mc_config),
-    not from sidecar JSON beside iteration ``project.json``.
+    Mapper overrides come from ``resolvedConfig.mapper`` (profile/site) plus the
+    MonteCarloConfig-derived CSV pattern for detector exports (discovery /
+    selected / stable), not from sidecar JSON beside iteration ``project.json``.
+    Pass ``config`` on local ``methyl-validation`` runs so the pattern matches
+    detector outputs even when ``queue/mc_config.json`` was never written.
     """
-    import json
     import tempfile
 
     del per_cancer_group  # kept for call-site compatibility
     cmd = ["methyl-mapper", "--project", str(project_json)]
-    override = _mapper_override_dict(project_json)
+    override = _mapper_override_dict(project_json, config=config)
     if override:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8") as handle:
             json.dump(override, handle)
@@ -429,8 +436,14 @@ def run_mapper(project_json: str | Path, per_cancer_group: bool = False) -> tupl
     return run_cmd(cmd)
 
 
-def _mapper_override_dict(project_json: str | Path) -> Dict[str, Any]:
+def _mapper_override_dict(
+    project_json: str | Path,
+    *,
+    config: Optional["MonteCarloConfig"] = None,
+) -> Dict[str, Any]:
+    """Merge site/profile mapper config with MC-aware detector CSV pattern."""
     from methyl_utils.action_config_resolver import resolve_for_project
+    from methyl_validation.mc_manifest import build_mapper_classifier_override
 
     merged: Dict[str, Any] = {}
     try:
@@ -441,19 +454,28 @@ def _mapper_override_dict(project_json: str | Path) -> Dict[str, Any]:
     except Exception:
         pass
 
-    run_dir = Path(project_json).resolve().parent
-    mc_root = run_dir.parent if run_dir.name.startswith("run_") else None
-    mc_config_path = (mc_root / "queue" / "mc_config.json") if mc_root else None
-    if mc_config_path is not None and mc_config_path.is_file():
-        try:
-            from methyl_validation.config import MonteCarloConfig
-            from methyl_validation.mc_manifest import build_mapper_classifier_override
+    mc = config
+    if mc is None:
+        run_dir = Path(project_json).resolve().parent
+        mc_root = run_dir.parent if run_dir.name.startswith("run_") else None
+        mc_config_path = (mc_root / "queue" / "mc_config.json") if mc_root else None
+        if mc_config_path is not None and mc_config_path.is_file():
+            try:
+                from methyl_validation.config import MonteCarloConfig
 
-            mc = MonteCarloConfig.model_validate(json.loads(mc_config_path.read_text(encoding="utf-8")))
-            if mc.stability_gene_featurecuts_enabled:
-                merged.update(build_mapper_classifier_override(mc))
-        except Exception:
-            pass
+                mc = MonteCarloConfig.model_validate(
+                    json.loads(mc_config_path.read_text(encoding="utf-8"))
+                )
+            except Exception:
+                mc = None
+
+    if mc is not None:
+        # Prefer MC modeling / gene-FC loci source over stale site defaults so
+        # mapper consumes the same detector export family the run requested.
+        if bool(getattr(mc, "stability_gene_featurecuts_enabled", False)) or not (
+            merged.get("csv_pattern") or merged.get("csv_filename_pattern")
+        ):
+            merged.update(build_mapper_classifier_override(mc))
     return merged
 
 
@@ -1264,7 +1286,12 @@ def run_pipeline_for_iteration_multiclass(
             )
         )
     if config is not None and bool(getattr(config, "stability_gene_featurecuts_enabled", False)):
-        steps.append(("methyl-mapper", lambda: run_mapper(project_json, per_cancer_group=per_cancer_group)))
+        steps.append(
+            (
+                "methyl-mapper",
+                lambda: run_mapper(project_json, per_cancer_group=per_cancer_group, config=config),
+            )
+        )
         if split_detector:
             steps.append(
                 (
