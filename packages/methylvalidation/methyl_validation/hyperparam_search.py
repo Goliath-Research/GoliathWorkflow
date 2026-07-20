@@ -206,7 +206,11 @@ def main() -> None:
     p.add_argument(
         "mv_args",
         nargs=argparse.REMAINDER,
-        help="Extra args to methyl-validation after --config (e.g. --stability).",
+        help=(
+            "Extra args forwarded to methyl-validation after --config. "
+            "Use either: ... --stability --resume 1 --skip-detection "
+            "or: ... -- --stability --resume 1 --skip-detection"
+        ),
     )
     args = p.parse_args()
     if (args.project is None) == (args.config is None):
@@ -223,6 +227,10 @@ def main() -> None:
     if args.baseline_summary is not None:
         cset = ConstraintSet(baseline_metrics_summary_path=args.baseline_summary)
     extra = list(args.mv_args or [])
+    # argparse.REMAINDER keeps a leading "--" when callers use the usual
+    # "driver -- --stability ..." form; methyl-validation must not see it.
+    if extra and extra[0] == "--":
+        extra = extra[1:]
     if not extra and not args.dry_run:
         extra = ["--stability"]
     run_search(
