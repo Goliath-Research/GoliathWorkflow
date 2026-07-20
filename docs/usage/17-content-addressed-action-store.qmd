@@ -48,19 +48,19 @@ Canonical output paths (e.g. under `run_0001/detections/...`) become **symlinks*
 
 ## Hyperparameter set identity
 
-`finalize_instance_context` bakes `hyperparamSetId` from all merged `resolvedConfig__*` slices (optional label via `hyperparamSetName`). Every ACTION template receives `hyperparamSetId`; workers stamp it on manifests and append ledger entries.
+`finalize_instance_context` bakes `executionScopeId` from all merged `resolvedConfig__*` slices (optional label via `executionScopeName`; legacy `hyperparamSetId` still accepted as an alias). Every ACTION template receives `executionScopeId`; workers stamp it on manifests and append ledger entries.
 
-Use the ledger to compare which content keys each hyperparameter set resolved to (for example Balanced Accuracy per set).
+Use the ledger to compare which content keys each execution scope resolved to (for example Balanced Accuracy per scope).
 
 ## Database mirror (distributed gateway)
 
 When the gateway and workers run against PostgreSQL or Azure SQL:
 
-- `wf.hyperparameter_set` — set identity and merged config snapshot
-- `wf.workflow_instance.hyperparameter_set_id` — links instance to set
-- `wf.hyperparameter_set_action_entry` — action/run_key → content_key
+- `wf.execution_scope` — scope identity and merged config snapshot (formerly `hyperparameter_set`)
+- `wf.workflow_instance.execution_scope_id` — links instance to scope
+- `wf.execution_scope_action_entry` — action/run_key → content_key
 
-Deploy: `workflow_engine/sql_pg/wf_hyperparameter_set.sql` (parity in `sql_mssql/`). Instance creation calls `wf_apply_hyperparameter_set`; successful task submits upsert action entries when CAAS is enabled.
+Deploy: `workflow_engine/sql_pg/wf_execution_scope.sql` (parity in `sql_mssql/`). Instance creation calls `wf_apply_execution_scope`; successful task submits upsert action entries when CAAS is enabled. The wf engine stays process-agnostic (an "execution scope"); the domain "hyperparameter search / trial" concept lives in `cfg` — see [portal remote control](../architecture/portal-remote-control.md).
 
 ## Enabled actions
 

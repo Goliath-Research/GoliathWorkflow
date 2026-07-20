@@ -1,0 +1,200 @@
+/*
+  cfg hyperparameter search ledger + portal API (Azure SQL).
+
+  The portal UI owns the notion of a "hyperparameter search": a grid of trials,
+  each of which becomes one wf.workflow_instance bound to a process-agnostic
+  wf.execution_scope. These cfg tables give the UI a typed, queryable record of
+  the search, its grid, and the trial -> instance mapping. wf stays agnostic.
+
+  EpiPortal calls the portal.sp_* procedures directly (never the REST gateway).
+  Grid/overlay JSON conforms to the exported Pydantic schemas
+  (schemas/config/hyperparam_*.schema.json).
+
+  Prerequisites:
+  - cfg_schema.sql, cfg_registry_tables.sql (cfg.study)
+  - wf_execution_scope.sql (wf.execution_scope), wf workflow_instance
+*/
+
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+IF SCHEMA_ID(N'portal') IS NULL
+    EXEC(N'CREATE SCHEMA portal');
+GO
+
+IF OBJECT_ID(N'cfg.hyperparameter_search_run', N'U') IS NULL
+BEGIN
+    CREATE TABLE cfg.hyperparameter_search_run (
+        id                  BIGINT IDENTITY(1,1) NOT NULL,
+        study_row_id        BIGINT NULL,
+        display_name        NVARCHAR(256) NULL,
+        base_context_hash   NVARCHAR(128) NULL,
+        grid_json           json NOT NULL CONSTRAINT DF_hsr_grid DEFAULT (N'{}'),
+        objective_json      json NOT NULL CONSTRAINT DF_hsr_obj DEFAULT (N'{}'),
+        status              NVARCHAR(32) NOT NULL CONSTRAINT DF_hsr_status DEFAULT (N'created'),
+        created_by          NVARCHAR(256) NULL,
+        created_at_utc      DATETIME2(7) NOT NULL CONSTRAINT DF_hsr_created DEFAULT (SYSUTCDATETIME()),
+        updated_at_utc      DATETIME2(7) NOT NULL CONSTRAINT DF_hsr_updated DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT PK_hyperparameter_search_run PRIMARY KEY (id),
+        CONSTRAINT FK_hsr_study FOREIGN KEY (study_row_id) REFERENCES cfg.study(id),
+        CONSTRAINT CK_hsr_status CHECK (status IN (
+            N'created', N'running', N'completed', N'failed', N'cancelled'
+        ))
+    );
+    CREATE INDEX IX_hsr_study ON cfg.hyperparameter_search_run(study_row_id);
+END
+GO
+
+IF OBJECT_ID(N'cfg.hyperparameter_trial', N'U') IS NULL
+BEGIN
+    CREATE TABLE cfg.hyperparameter_trial (
+        id                      BIGINT IDENTITY(1,1) NOT NULL,
+        search_id               BIGINT NOT NULL,
+        trial_index             INT NOT NULL,
+        overrides_json          json NOT NULL CONSTRAINT DF_ht_overrides DEFAULT (N'{}'),
+        workflow_instance_id    BIGINT NULL,
+        execution_scope_key     NVARCHAR(64) NULL,
+        status                  NVARCHAR(32) NOT NULL CONSTRAINT DF_ht_status DEFAULT (N'pending'),
+        objective               FLOAT NULL,
+        feasible                BIT NULL,
+        result_json             json NULL,
+        created_at_utc          DATETIME2(7) NOT NULL CONSTRAINT DF_ht_created DEFAULT (SYSUTCDATETIME()),
+        updated_at_utc          DATETIME2(7) NOT NULL CONSTRAINT DF_ht_updated DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT PK_hyperparameter_trial PRIMARY KEY (id),
+        CONSTRAINT FK_ht_search FOREIGN KEY (search_id)
+            REFERENCES cfg.hyperparameter_search_run(id) ON DELETE CASCADE,
+        CONSTRAINT FK_ht_instance FOREIGN KEY (workflow_instance_id)
+            REFERENCES wf.workflow_instance(id),
+        CONSTRAINT UQ_ht_search_index UNIQUE (search_id, trial_index)
+    );
+    CREATE INDEX IX_ht_search ON cfg.hyperparameter_trial(search_id);
+    CREATE INDEX IX_ht_instance ON cfg.hyperparameter_trial(workflow_instance_id);
+END
+GO
+
+/*
+  Create a search run and return its id. Instance creation happens in the portal
+  middle-tier (Python) because finalization is an in-process step; trials are then
+  recorded via portal.sp_add_hyperparam_trial.
+*/
+CREATE OR ALTER PROCEDURE portal.sp_start_hyperparam_grid
+    @study_row_id BIGINT = NULL,
+    @display_name NVARCHAR(256) = NULL,
+    @grid_json json = NULL,
+    @objective_json json = NULL,
+    @base_context_hash NVARCHAR(128) = NULL,
+    @created_by NVARCHAR(256) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    INSERT INTO cfg.hyperparameter_search_run (
+        study_row_id, display_name, base_context_hash, grid_json, objective_json, status, created_by
+    ) VALUES (
+        @study_row_id,
+        NULLIF(LTRIM(RTRIM(@display_name)), N''),
+        @base_context_hash,
+        COALESCE(@grid_json, N'{}'),
+        COALESCE(@objective_json, N'{}'),
+        N'running',
+        @created_by
+    );
+
+    SELECT CAST(SCOPE_IDENTITY() AS BIGINT) AS search_id;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_add_hyperparam_trial
+    @search_id BIGINT,
+    @trial_index INT,
+    @overrides_json json = NULL,
+    @workflow_instance_id BIGINT = NULL,
+    @execution_scope_key NVARCHAR(64) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    IF EXISTS (
+        SELECT 1 FROM cfg.hyperparameter_trial
+        WHERE search_id = @search_id AND trial_index = @trial_index
+    )
+        UPDATE cfg.hyperparameter_trial
+        SET overrides_json = COALESCE(@overrides_json, N'{}'),
+            workflow_instance_id = @workflow_instance_id,
+            execution_scope_key = @execution_scope_key,
+            status = N'started',
+            updated_at_utc = SYSUTCDATETIME()
+        WHERE search_id = @search_id AND trial_index = @trial_index;
+    ELSE
+        INSERT INTO cfg.hyperparameter_trial (
+            search_id, trial_index, overrides_json, workflow_instance_id, execution_scope_key, status
+        ) VALUES (
+            @search_id,
+            @trial_index,
+            COALESCE(@overrides_json, N'{}'),
+            @workflow_instance_id,
+            @execution_scope_key,
+            N'started'
+        );
+END;
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_score_hyperparam_trial
+    @search_id BIGINT,
+    @trial_index INT,
+    @objective FLOAT = NULL,
+    @feasible BIT = NULL,
+    @result_json json = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE cfg.hyperparameter_trial
+    SET objective = @objective,
+        feasible = @feasible,
+        result_json = @result_json,
+        status = N'scored',
+        updated_at_utc = SYSUTCDATETIME()
+    WHERE search_id = @search_id AND trial_index = @trial_index;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_set_hyperparam_search_status
+    @search_id BIGINT,
+    @status NVARCHAR(32)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE cfg.hyperparameter_search_run
+    SET status = @status,
+        updated_at_utc = SYSUTCDATETIME()
+    WHERE id = @search_id;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE portal.sp_get_hyperparam_search
+    @search_id BIGINT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT
+        r.id AS search_id,
+        r.status AS search_status,
+        t.trial_index,
+        t.overrides_json,
+        t.workflow_instance_id,
+        t.execution_scope_key,
+        i.status AS instance_status,
+        t.status AS trial_status,
+        t.objective,
+        t.feasible
+    FROM cfg.hyperparameter_search_run AS r
+    LEFT JOIN cfg.hyperparameter_trial AS t ON t.search_id = r.id
+    LEFT JOIN wf.workflow_instance AS i ON i.id = t.workflow_instance_id
+    WHERE r.id = @search_id
+    ORDER BY t.trial_index;
+END;
+GO

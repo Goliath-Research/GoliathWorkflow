@@ -52,7 +52,7 @@
       "input_template": {
         "tool": "validation.model_mc",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "monteCarloRunsRoot": "${var.monteCarloRunsRoot}",

@@ -297,7 +297,7 @@ class PostgresGatewayDb(GatewayDbBase):
             (workflow_instance_id, json.dumps(context_json), persist_extension),
         )
 
-    def apply_hyperparameter_set(
+    def apply_execution_scope(
         self,
         workflow_instance_id: int,
         *,
@@ -307,7 +307,7 @@ class PostgresGatewayDb(GatewayDbBase):
         persist_extension: bool = True,
     ) -> None:
         self._exec_proc(
-            f"CALL {self._qual('wf_apply_hyperparameter_set')}(%s, %s, %s, %s, %s)",
+            f"CALL {self._qual('wf_apply_execution_scope')}(%s, %s, %s, %s, %s)",
             (
                 workflow_instance_id,
                 set_key,
@@ -326,12 +326,12 @@ class PostgresGatewayDb(GatewayDbBase):
             return None
         return {
             "workflow_instance_id": row["workflow_instance_id"],
-            "hyperparam_set_key": row.get("hyperparam_set_key"),
+            "execution_scope_key": row.get("execution_scope_key"),
             "action_name": row.get("action_name"),
             "input_json": parse_json_value(row.get("input_json")) or {},
         }
 
-    def upsert_hyperparameter_action_entry(
+    def upsert_execution_scope_action_entry(
         self,
         *,
         set_key: str,
@@ -341,9 +341,97 @@ class PostgresGatewayDb(GatewayDbBase):
         content_key: str,
     ) -> None:
         self._exec_proc(
-            f"CALL {self._qual('wf_repo_upsert_hyperparameter_action_entry')}(%s, %s, %s, %s, %s)",
+            f"CALL {self._qual('wf_repo_upsert_execution_scope_action_entry')}(%s, %s, %s, %s, %s)",
             (set_key, workflow_instance_id, action_name, run_key, content_key),
         )
+
+    def start_hyperparam_search(
+        self,
+        *,
+        study_row_id: Optional[int] = None,
+        display_name: Optional[str] = None,
+        grid_json: Optional[dict[str, Any]] = None,
+        objective_json: Optional[dict[str, Any]] = None,
+        base_context_hash: Optional[str] = None,
+        created_by: Optional[str] = None,
+    ) -> int:
+        row = self._fetch_one(
+            "SELECT portal.sp_start_hyperparam_grid(%s, %s, %s::jsonb, %s::jsonb, %s, %s) AS search_id",
+            (
+                study_row_id,
+                display_name,
+                json.dumps(grid_json or {}),
+                json.dumps(objective_json or {}),
+                base_context_hash,
+                created_by,
+            ),
+        )
+        if not row or row.get("search_id") is None:
+            raise RuntimeError("portal.sp_start_hyperparam_grid returned no search_id")
+        return int(row["search_id"])
+
+    def add_hyperparam_trial(
+        self,
+        *,
+        search_id: int,
+        trial_index: int,
+        overrides_json: Optional[dict[str, Any]] = None,
+        workflow_instance_id: Optional[int] = None,
+        execution_scope_key: Optional[str] = None,
+    ) -> None:
+        self._exec_proc(
+            "CALL portal.sp_add_hyperparam_trial(%s, %s, %s::jsonb, %s, %s)",
+            (
+                search_id,
+                trial_index,
+                json.dumps(overrides_json or {}),
+                workflow_instance_id,
+                execution_scope_key,
+            ),
+        )
+
+    def score_hyperparam_trial(
+        self,
+        *,
+        search_id: int,
+        trial_index: int,
+        objective: Optional[float] = None,
+        feasible: Optional[bool] = None,
+        result_json: Optional[dict[str, Any]] = None,
+    ) -> None:
+        self._exec_proc(
+            "CALL portal.sp_score_hyperparam_trial(%s, %s, %s, %s, %s::jsonb)",
+            (
+                search_id,
+                trial_index,
+                objective,
+                feasible,
+                json.dumps(result_json) if result_json is not None else None,
+            ),
+        )
+
+    def get_hyperparam_search(self, search_id: int) -> list[dict[str, Any]]:
+        rows = self._fetch_all(
+            f"SELECT * FROM portal.sp_get_hyperparam_search(%s)",
+            (search_id,),
+        )
+        out: list[dict[str, Any]] = []
+        for r in rows:
+            out.append(
+                {
+                    "search_id": r.get("search_id"),
+                    "search_status": r.get("search_status"),
+                    "trial_index": r.get("trial_index"),
+                    "overrides_json": parse_json_value(r.get("overrides_json")),
+                    "workflow_instance_id": r.get("workflow_instance_id"),
+                    "execution_scope_key": r.get("execution_scope_key"),
+                    "instance_status": r.get("instance_status"),
+                    "trial_status": r.get("trial_status"),
+                    "objective": r.get("objective"),
+                    "feasible": r.get("feasible"),
+                }
+            )
+        return out
 
     def list_workflow_actions(self) -> list[dict[str, Any]]:
         rows = self._fetch_all(f"SELECT * FROM {self._qual('wf_repo_list_actions')}()")

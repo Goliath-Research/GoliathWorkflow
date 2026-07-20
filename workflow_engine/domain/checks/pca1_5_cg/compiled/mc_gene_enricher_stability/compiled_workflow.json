@@ -1,6 +1,6 @@
 {
   "name": "MC_Gene_Enricher_Stability",
-  "description": "Monte Carlo stability: discovery detector, mapper, enricher per comparison; gene stability from enricher outputs (no DMP/gene FeatureCuts).",
+  "description": "Monte Carlo stability focused on enricher gene recurrence (no dmp_select / gene FeatureCuts).",
   "version_major": 1,
   "version_minor": 0,
   "is_active": true,
@@ -52,7 +52,9 @@
       "input_template": {
         "tool": "validation.plan_iterations",
         "projectPath": "${var.projectPath}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
+        "resolvedConfig": "${var.resolvedConfig__validation}",
         "featureIterations": "${var.featureIterations}",
         "qualityIterations": "${var.qualityIterations}"
       }
@@ -163,7 +165,9 @@
       "input_template": {
         "tool": "MethylCentroid",
         "projectPath": "${var.projectPath}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
+        "resolvedConfig": "${var.resolvedConfig__centroid}",
         "group": "${var.label}",
         "chromosome": "${var.chromosome}",
         "context": "${var.context}",
@@ -280,7 +284,9 @@
       "input_template": {
         "tool": "MethylCentroid",
         "projectPath": "${var.projectPath}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
+        "resolvedConfig": "${var.resolvedConfig__centroid}",
         "group": "${var.label}",
         "chromosome": "${var.chromosome}",
         "context": "${var.context}",
@@ -367,7 +373,9 @@
       "input_template": {
         "tool": "MethylDetector",
         "projectPath": "${var.projectPath}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
+        "resolvedConfig": "${var.resolvedConfig__detection}",
         "chromosome": "${var.chromosome}",
         "context": "${var.context}",
         "comparison": "${var.label}",
@@ -397,7 +405,9 @@
       "input_template": {
         "tool": "MethylMapper",
         "projectPath": "${var.projectPath}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
+        "resolvedConfig": "${var.resolvedConfig__mapper}",
         "comparison": "${var.label}",
         "group": "${var.label}"
       }
@@ -418,7 +428,9 @@
       "input_template": {
         "tool": "MethylEnricher",
         "projectPath": "${var.projectPath}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
+        "resolvedConfig": "${var.resolvedConfig__enricher}",
         "comparison": "${var.label}",
         "group": "${var.label}"
       }
@@ -439,7 +451,9 @@
       "input_template": {
         "tool": "validation.stability",
         "projectPath": "${var.projectPath}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
+        "resolvedConfig": "${var.resolvedConfig__validation}",
         "monteCarloRunsRoot": "${var.monteCarloRunsRoot}",
         "outputDir": "${var.outputDir}"
       }
@@ -460,7 +474,9 @@
       "input_template": {
         "tool": "validation.stability_freeze_readiness",
         "projectPath": "${var.projectPath}",
-        "project": "${var.projectPath}"
+        "executionScopeId": "${var.executionScopeId}",
+        "project": "${var.projectPath}",
+        "resolvedConfig": "${var.resolvedConfig__validation}"
       }
     }
   ],
@@ -751,5 +767,6 @@
       "json_path": "$.chromosomes",
       "bind_order": 3
     }
-  ]
+  ],
+  "variable_schemas": {}
 }

@@ -113,6 +113,66 @@ def cmd_sample_prep_start(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_hyperparam_grid_start(args: argparse.Namespace) -> int:
+    from rest.db_client import (
+        create_workflow_definition,
+        create_workflow_instance,
+        start_workflow_instance,
+    )
+    from ops.hyperparam_grid import DbTrialLedger, expand_and_start_grid
+
+    body = _load_body(args.body_file)
+    if args.project_path:
+        body["project_path"] = args.project_path
+
+    db = _open_db()
+    try:
+        ledger = None if args.no_ledger else DbTrialLedger(
+            db, study_row_id=args.study_row_id, created_by=args.created_by
+        )
+        result = expand_and_start_grid(
+            db,
+            body,
+            create_workflow_definition=create_workflow_definition,
+            create_workflow_instance=create_workflow_instance,
+            start_workflow_instance=start_workflow_instance,
+            ledger=ledger,
+        )
+    finally:
+        db.close()
+
+    json.dump(result.to_json(), sys.stdout, indent=2)
+    sys.stdout.write("\n")
+    return 0
+
+
+def cmd_hyperparam_grid_score(args: argparse.Namespace) -> int:
+    from ops.hyperparam_grid import score_grid, winner_overlay
+
+    trial_mc_runs: Dict[str, str] = {}
+    if args.trial_mc_json:
+        trial_mc_runs = json.loads(Path(args.trial_mc_json).read_text(encoding="utf-8"))
+    weights: Dict[str, Any] = {}
+    if args.weights_json:
+        weights = json.loads(Path(args.weights_json).read_text(encoding="utf-8"))
+
+    db = _open_db()
+    try:
+        summary = score_grid(db, int(args.search_id), weights, trial_mc_runs)
+        summary["winner"] = winner_overlay(db, int(args.search_id))
+    finally:
+        db.close()
+
+    if args.winner_out and summary.get("winner"):
+        Path(args.winner_out).write_text(
+            json.dumps(summary["winner"], indent=2) + "\n", encoding="utf-8"
+        )
+
+    json.dump(summary, sys.stdout, indent=2)
+    sys.stdout.write("\n")
+    return 0
+
+
 def cmd_plan_iterations(args: argparse.Namespace) -> int:
     ensure_import_paths()
     from methyl_validation.workflow_planner import plan_validation_context
@@ -183,6 +243,44 @@ def main(argv: Optional[list[str]] = None) -> int:
     p_prep.add_argument("--project-path", dest="project_path", default=None)
     p_prep.add_argument("--workflow-version-id", type=int, default=None)
     p_prep.set_defaults(func=cmd_sample_prep_start)
+
+    p_grid = sub.add_parser(
+        "hyperparam-grid-start",
+        help="Expand a hyperparameter grid into N validation instances (multi-instance HPO)",
+    )
+    p_grid.add_argument(
+        "body_file",
+        nargs="?",
+        default="-",
+        help="HyperparamSearchRequest JSON (default: stdin)",
+    )
+    p_grid.add_argument("--project-path", dest="project_path", default=None)
+    p_grid.add_argument("--study-row-id", type=int, default=None, help="cfg.study id for the ledger")
+    p_grid.add_argument("--created-by", default=None)
+    p_grid.add_argument(
+        "--no-ledger",
+        action="store_true",
+        help="Start instances without writing the cfg.hyperparameter_search_* ledger",
+    )
+    p_grid.set_defaults(func=cmd_hyperparam_grid_start)
+
+    p_score = sub.add_parser(
+        "hyperparam-grid-score",
+        help="Score completed grid trials via objective J and persist to the cfg ledger",
+    )
+    p_score.add_argument("--search-id", required=True, help="cfg.hyperparameter_search_run id")
+    p_score.add_argument(
+        "--trial-mc-json",
+        default=None,
+        help="JSON map of trial index -> monte_carlo_runs directory",
+    )
+    p_score.add_argument("--weights-json", default=None, help="ObjectiveWeights JSON")
+    p_score.add_argument(
+        "--winner-out",
+        default=None,
+        help="Write the winning trial's actionConfig overlay to this path (operator-gated).",
+    )
+    p_score.set_defaults(func=cmd_hyperparam_grid_score)
 
     p_plan = sub.add_parser("plan-iterations", help="Plan validation iterations context JSON")
     p_plan.add_argument(

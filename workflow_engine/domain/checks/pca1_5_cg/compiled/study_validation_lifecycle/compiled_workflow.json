@@ -52,7 +52,7 @@
       "input_template": {
         "tool": "validation.plan_iterations",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "featureIterations": "${var.featureIterations}",
@@ -165,7 +165,7 @@
       "input_template": {
         "tool": "MethylCentroid",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__centroid}",
         "group": "${var.label}",
@@ -284,7 +284,7 @@
       "input_template": {
         "tool": "MethylCentroid",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__centroid}",
         "group": "${var.label}",
@@ -373,7 +373,7 @@
       "input_template": {
         "tool": "MethylDetector",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__detection}",
         "chromosome": "${var.chromosome}",
@@ -402,7 +402,7 @@
       "input_template": {
         "tool": "validation.stability",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "monteCarloRunsRoot": "${var.monteCarloRunsRoot}",
@@ -425,7 +425,7 @@
       "input_template": {
         "tool": "validation.stability_freeze_readiness",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}"
       }
@@ -446,7 +446,7 @@
       "input_template": {
         "tool": "validation.prepare_freeze_project",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "stableDmpCsv": "${var.stableDmpCsv}",
@@ -529,7 +529,7 @@
       "input_template": {
         "tool": "MethylCentroid",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__centroid}",
         "group": "${var.label}",
@@ -618,7 +618,7 @@
       "input_template": {
         "tool": "MethylDetector",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__detection}",
         "chromosome": "${var.chromosome}",
@@ -647,7 +647,7 @@
       "input_template": {
         "tool": "MethylMapper",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__mapper}"
       }
@@ -668,7 +668,7 @@
       "input_template": {
         "tool": "MethylDerivedMeasures",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__derived_measures}"
       }
@@ -689,7 +689,7 @@
       "input_template": {
         "tool": "MethylCellDeconv",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__cell_deconvolution}"
       }
@@ -710,7 +710,7 @@
       "input_template": {
         "tool": "MethylInfoTheory",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__info_measures}"
       }
@@ -731,7 +731,7 @@
       "input_template": {
         "tool": "MethylEnricher",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__enricher}"
       }
@@ -752,7 +752,7 @@
       "input_template": {
         "tool": "MethylDiseaseProgression",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__progression}"
       }
@@ -773,7 +773,7 @@
       "input_template": {
         "tool": "validation.model_mc",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "monteCarloRunsRoot": "${var.monteCarloRunsRoot}",
@@ -797,7 +797,7 @@
       "input_template": {
         "tool": "validation.select_best_model",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "modelMcRoot": "${var.modelMcRoot}",
@@ -822,7 +822,7 @@
       "input_template": {
         "tool": "validation.post_model_validation",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "outputDir": "${var.outputDir}",

@@ -89,7 +89,7 @@ content_key = sha256(action_revision + "|" + input_signature)
 
 ### Database (wf schema)
 
-Deploy [`workflow_engine/sql_pg/wf_hyperparameter_set.sql`](../../workflow_engine/sql_pg/wf_hyperparameter_set.sql) (PostgreSQL parity in `sql_mssql/`).
+Deploy [`workflow_engine/sql_pg/wf_execution_scope.sql`](../../workflow_engine/sql_pg/wf_execution_scope.sql) (PostgreSQL parity in `sql_mssql/`). The wf tables were renamed from `hyperparameter_set` to the process-agnostic `execution_scope`; the "hyperparameter" concept now lives in `cfg`.
 
 | Table | Purpose |
 |-------|---------|

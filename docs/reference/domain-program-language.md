@@ -206,11 +206,11 @@ CAAS is **on by default**. Successful idempotent actions commit product artifact
 | `content_key` | `.caas/.../manifest.json` | `sha256(action_revision + "|" + input_signature)` — version identity |
 | `hyperparam_set_id` | manifest + `.caas/instances/{id}.json` | Links instance hyperparameter set to content keys |
 
-`hyperparamSetId` is baked at instance configuration (`finalize_instance_context`) from all `resolvedConfig__*` slices (optional label via `hyperparamSetName`). Every ACTION template receives `"hyperparamSetId": "${var.hyperparamSetId}"`.
+`executionScopeId` is baked at instance configuration (`finalize_instance_context`) from all `resolvedConfig__*` slices (optional label via `executionScopeName`). Every ACTION template receives `"executionScopeId": "${var.executionScopeId}"`. The legacy field name `hyperparamSetId` is still accepted as an alias for one release.
 
-**Instance ledger:** `{project_root}/.caas/instances/{hyperparamSetId}.json` maps `{action}:{run_key}` → `content_key` for later comparison (e.g. Balanced Accuracy per hyperparameter set).
+**Instance ledger:** `{project_root}/.caas/instances/{executionScopeId}.json` maps `{action}:{run_key}` → `content_key` for later comparison (e.g. Balanced Accuracy per execution scope).
 
-**Database mirror:** `wf.hyperparameter_set`, `wf.workflow_instance.hyperparameter_set_id`, and `wf.hyperparameter_set_action_entry` (see `workflow_engine/sql_pg/wf_hyperparameter_set.sql`). Instance creation calls `wf_apply_hyperparameter_set`; successful task submits upsert action entries when CAAS is enabled.
+**Database mirror:** `wf.execution_scope`, `wf.workflow_instance.execution_scope_id`, and `wf.execution_scope_action_entry` (see `workflow_engine/sql_pg/wf_execution_scope.sql`). Instance creation calls `wf_apply_execution_scope`; successful task submits upsert action entries when CAAS is enabled. The domain notion of a "hyperparameter" trial lives in `cfg.hyperparameter_search_run` / `cfg.hyperparameter_trial`, which map each trial to a wf execution scope.
 
 **Audit:** every executed action appends a line to `{logRoot}/action_run_log.jsonl` (including `skipped: true` when signature skip applies).
 

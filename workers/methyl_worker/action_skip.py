@@ -481,7 +481,8 @@ def compute_content_key(action_revision: str, input_signature: str) -> str:
 
 
 def _hyperparam_set_id(input_json: Mapping[str, Any]) -> Optional[str]:
-    value = input_json.get("hyperparamSetId")
+    # Canonical wf field is executionScopeId; hyperparamSetId is the legacy alias.
+    value = input_json.get("executionScopeId") or input_json.get("hyperparamSetId")
     return str(value) if value else None
 
 

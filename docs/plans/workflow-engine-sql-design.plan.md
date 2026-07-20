@@ -93,7 +93,7 @@ isProject: false
 
 ### Hyperparameter sets (result versioning)
 
-An **additive, process-agnostic** extension (implemented in [`workflow_engine/sql_pg/wf_hyperparameter_set.sql`](../../workflow_engine/sql_pg/wf_hyperparameter_set.sql)) links workflow instances to hyperparameter-set identity and a CAAS action ledger:
+An **additive, process-agnostic** extension (implemented in [`workflow_engine/sql_pg/wf_execution_scope.sql`](../../workflow_engine/sql_pg/wf_execution_scope.sql)) links workflow instances to execution-scope identity (formerly "hyperparameter set") and a CAAS action ledger:
 
 | Object | Purpose |
 |--------|---------|

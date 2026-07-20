@@ -1,6 +1,6 @@
 {
   "name": "ValidationModel",
-  "description": "Lock production model from frozen stability artifacts.",
+  "description": "Lock production model from frozen stability artifacts. With a single enabled backend (e.g. ecdf), builds production directly; with multiple backends, requires prior validation.model_mc metrics.",
   "version_major": 1,
   "version_minor": 0,
   "is_active": true,
@@ -52,7 +52,7 @@
       "input_template": {
         "tool": "validation.select_best_model",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "modelMcRoot": "${var.modelMcRoot}",
@@ -77,11 +77,11 @@
       "input_template": {
         "tool": "validation.post_model_validation",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
-        "productionOutputDir": "${var.productionOutputDir}",
-        "outputDir": "${var.outputDir}"
+        "outputDir": "${var.outputDir}",
+        "productionOutputDir": "${var.productionOutputDir}"
       }
     }
   ],

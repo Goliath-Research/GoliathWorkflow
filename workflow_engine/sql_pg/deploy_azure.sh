@@ -63,7 +63,7 @@ SCRIPTS=(
   portal_worker_enrollment_api.sql
   02_repository_api.sql
   wf_apply_validation_plan.sql
-  wf_hyperparameter_set.sql
+  wf_execution_scope.sql
   04_admin.sql
   wf_action_schema.sql
   wf_repo_upsert_workflow_action.sql
@@ -79,6 +79,7 @@ SCRIPTS=(
   portal_resource_profile.sql
   cfg_reference_assets_seed.sql
   cfg_portal_api.sql
+  cfg_hyperparameter_search.sql
 )
 
 echo "Target: host=$PGHOST db=$PGDATABASE user=$PGUSER sslmode=$PGSSLMODE"

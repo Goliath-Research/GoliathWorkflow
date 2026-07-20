@@ -13,7 +13,7 @@ The database owns:
 | **Portal UI render** | `portal.sp_*` procs, resource profiles, workflow builder |
 | **Instance creation & configuration** | `workflow_instance.context_json` → scope at start; SQL resolves `${var.*}` into task `input_json` |
 | **Monitoring & dashboards** | Instance/node execution status, portal views |
-| **Hyperparameter set identity + CAAS ledger** | `wf.hyperparameter_set` (`set_key`, opaque `config_json`), nullable `workflow_instance.hyperparameter_set_id`, `wf.hyperparameter_set_action_entry` (`action_name`, `run_key`, `content_key`); no pipeline semantics in columns |
+| **Execution scope identity + CAAS ledger** | `wf.execution_scope` (`set_key`, opaque `config_json`), nullable `workflow_instance.execution_scope_id`, `wf.execution_scope_action_entry` (`action_name`, `run_key`, `content_key`); no pipeline semantics in columns. The "hyperparameter" meaning lives in `cfg` (`cfg.hyperparameter_search_run` / `cfg.hyperparameter_trial`) |
 
 The database does **not** encode methylation semantics. Action names, capabilities, and JSON schemas are **data rows** seeded from git; the engine never branches on pipeline meaning in SQL.
 

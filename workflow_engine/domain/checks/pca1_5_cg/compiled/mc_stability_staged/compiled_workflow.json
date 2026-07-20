@@ -52,7 +52,7 @@
       "input_template": {
         "tool": "validation.plan_iterations",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "featureIterations": "${var.featureIterations}",
@@ -165,7 +165,7 @@
       "input_template": {
         "tool": "MethylCentroid",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__centroid}",
         "group": "${var.label}",
@@ -314,7 +314,7 @@
       "input_template": {
         "tool": "MethylCentroid",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__centroid}",
         "group": "${var.label}",
@@ -433,7 +433,7 @@
       "input_template": {
         "tool": "MethylDetector",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__detection}",
         "chromosome": "${var.chromosome}",
@@ -495,7 +495,7 @@
       "input_template": {
         "tool": "MethylDmpSelect",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__dmp_selection}",
         "chromosome": "${var.chromosome}",
@@ -523,7 +523,7 @@
       "input_template": {
         "tool": "MethylMapper",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__mapper}",
         "comparison": "${var.label}",
@@ -576,7 +576,7 @@
       "input_template": {
         "tool": "validation.biomarker_filter",
         "projectPath": "${var.iteration.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "runDir": "${var.iteration.runDir}"
@@ -628,7 +628,7 @@
       "input_template": {
         "tool": "MethylGeneSelect",
         "projectPath": "${var.iteration.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__gene_selection}",
         "comparison": "${var.comparison}",
@@ -682,7 +682,7 @@
       "input_template": {
         "tool": "MethylGeneFeatureSelect",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__gene_selection}",
         "mapperDir": "${var.iteration.runDir}",
@@ -705,7 +705,7 @@
       "input_template": {
         "tool": "validation.stability",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "monteCarloRunsRoot": "${var.monteCarloRunsRoot}",
@@ -728,7 +728,7 @@
       "input_template": {
         "tool": "validation.stability_freeze_readiness",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}"
       }

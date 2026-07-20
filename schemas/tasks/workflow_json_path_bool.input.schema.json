@@ -7,6 +7,19 @@
       "title": "Documentpath",
       "type": "string"
     },
+    "executionScopeId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Execution scope id (compiler-injected; unused by compute).",
+      "title": "Executionscopeid"
+    },
     "hyperparamSetId": {
       "anyOf": [
         {
@@ -17,7 +30,7 @@
         }
       ],
       "default": null,
-      "description": "Optional HP set id (compiler-injected; unused by compute).",
+      "description": "Deprecated alias for executionScopeId (compiler-injected; unused by compute).",
       "title": "Hyperparamsetid"
     },
     "jsonPath": {

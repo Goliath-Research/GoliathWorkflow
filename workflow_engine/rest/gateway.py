@@ -119,9 +119,9 @@ class RestGateway:
                 body.get("output_json"),
             )
             try:
-                from rest.hyperparameter_set import sync_hyperparameter_action_entry_after_submit
+                from rest.execution_scope import sync_execution_scope_action_entry_after_submit
 
-                sync_hyperparameter_action_entry_after_submit(
+                sync_execution_scope_action_entry_after_submit(
                     self.db,
                     int(m.group(1)),
                     int(body["result_code"]),

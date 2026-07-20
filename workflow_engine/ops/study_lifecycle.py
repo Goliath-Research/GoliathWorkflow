@@ -106,15 +106,15 @@ def start_study_validation(
         create_workflow_definition=create_workflow_definition,
     )
     instance_id = create_workflow_instance(db, version_id, context)
-    from rest.hyperparameter_set import extract_hyperparameter_set_payload
+    from rest.execution_scope import extract_execution_scope_payload
 
-    hpset = extract_hyperparameter_set_payload(context)
-    if hpset is not None:
+    scope = extract_execution_scope_payload(context)
+    if scope is not None:
         try:
-            db.apply_hyperparameter_set(instance_id, **hpset)
+            db.apply_execution_scope(instance_id, **scope)
         except Exception:
             logger.warning(
-                "Failed to register hyperparameter set for instance %s",
+                "Failed to register execution scope for instance %s",
                 instance_id,
                 exc_info=True,
             )

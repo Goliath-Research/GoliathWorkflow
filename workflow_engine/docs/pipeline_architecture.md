@@ -611,31 +611,31 @@ erDiagram
   worker ||--o{ worker_token : auth
 ```
 
-### Hyperparameter sets and CAAS
+### Execution scopes and CAAS
 
 When operators experiment with the **same** workflow (site/study/profile/DomainProgram) under varied config, the Content-Addressed Action Store (CAAS) versions idempotent action results by cumulative input signature and reuses identical intermediate outputs across workflow instances. The database mirrors on-disk CAAS identity and ledger for portal queries and cross-instance comparison.
 
-**Process-agnostic design:** these objects are **additive** — they do not alter the core workflow-engine tables or procedures. Identity is a generic `set_key` hash of merged `resolvedConfig__*` slices; `config_json` is opaque JSON; the ledger keys on `action_name`, `run_key`, and `content_key`. There are no disease, study, or process-specific columns. The FK `workflow_instance.hyperparameter_set_id` is **nullable**; instances that do not opt into CAAS behave as before.
+**Process-agnostic design:** the wf engine names this concept an **execution scope** (not "hyperparameter" — that domain meaning lives in `cfg`). These objects are **additive** — they do not alter the core workflow-engine tables or procedures. Identity is a generic `set_key` hash of merged `resolvedConfig__*` slices; `config_json` is opaque JSON; the ledger keys on `action_name`, `run_key`, and `content_key`. There are no disease, study, or process-specific columns. The FK `workflow_instance.execution_scope_id` is **nullable**; instances that do not opt into CAAS behave as before.
 
 | Object | Role |
 |--------|------|
-| `wf.hyperparameter_set` | Registry of unique config combinations (`set_key`, optional `display_name`, `config_json`) |
-| `wf.workflow_instance.hyperparameter_set_id` | Links each run to its hyperparameter set |
-| `wf.hyperparameter_set_action_entry` | Queryable ledger: `(set, action_name, run_key) → content_key` |
+| `wf.execution_scope` | Registry of unique config combinations (`set_key`, optional `display_name`, `config_json`) |
+| `wf.workflow_instance.execution_scope_id` | Links each run to its execution scope |
+| `wf.execution_scope_action_entry` | Queryable ledger: `(scope, action_name, run_key) → content_key` |
 
-**Procedures** (deployed from [`workflow_engine/sql_pg/wf_hyperparameter_set.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_pg/wf_hyperparameter_set.sql); parity in `sql_mssql/`):
+**Procedures** (deployed from [`workflow_engine/sql_pg/wf_execution_scope.sql`](/home/ubuntu/MethylPipeline/workflow_engine/sql_pg/wf_execution_scope.sql); parity in `sql_mssql/`):
 
-- `wf_apply_hyperparameter_set` — called at instance creation when `hyperparamSetId` is present in `context_json`
-- `wf_repo_upsert_hyperparameter_action_entry` — called after successful task submit when CAAS is enabled
+- `wf_apply_execution_scope` — called at instance creation when `executionScopeId` (legacy alias `hyperparamSetId`) is present in `context_json`
+- `wf_repo_upsert_execution_scope_action_entry` — called after successful task submit when CAAS is enabled
 
 On-disk CAAS (`.caas/` under `{project_root}`) remains the execution store; the database mirrors identity and ledger only.
 
 ```mermaid
 erDiagram
-  hyperparameter_set ||--o{ workflow_instance : "labels runs"
-  hyperparameter_set ||--o{ hyperparameter_set_action_entry : "ledger"
-  workflow_instance ||--o{ hyperparameter_set_action_entry : "records"
-  hyperparameter_set {
+  execution_scope ||--o{ workflow_instance : "labels runs"
+  execution_scope ||--o{ execution_scope_action_entry : "ledger"
+  workflow_instance ||--o{ execution_scope_action_entry : "records"
+  execution_scope {
     bigint id PK
     text set_key "hash of resolvedConfig slices"
     text display_name "optional"
@@ -643,11 +643,11 @@ erDiagram
   }
   workflow_instance {
     bigint id PK
-    bigint hyperparameter_set_id FK "nullable"
+    bigint execution_scope_id FK "nullable"
     jsonb context_json
   }
-  hyperparameter_set_action_entry {
-    bigint hyperparameter_set_id FK
+  execution_scope_action_entry {
+    bigint execution_scope_id FK
     bigint workflow_instance_id FK
     text action_name
     text run_key

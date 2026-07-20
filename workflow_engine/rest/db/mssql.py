@@ -367,7 +367,7 @@ SELECT @deleted_instance_count AS deleted_instance_count,
             (_json_text(context_json), workflow_instance_id, 1 if persist_extension else 0),
         )
 
-    def apply_hyperparameter_set(
+    def apply_execution_scope(
         self,
         workflow_instance_id: int,
         *,
@@ -378,7 +378,7 @@ SELECT @deleted_instance_count AS deleted_instance_count,
     ) -> None:
         self._exec_proc(
             f"{_declare_json('config')}"
-            f"EXEC {self._qual('wf_apply_hyperparameter_set')} "
+            f"EXEC {self._qual('wf_apply_execution_scope')} "
             f"@workflow_instance_id=?, @set_key=?, @display_name=?, "
             f"@config_json={_json_var('config')}, @persist_extension=?",
             (
@@ -400,12 +400,12 @@ SELECT @deleted_instance_count AS deleted_instance_count,
         row = rows[0]
         return {
             "workflow_instance_id": row["workflow_instance_id"],
-            "hyperparam_set_key": row.get("hyperparam_set_key"),
+            "execution_scope_key": row.get("execution_scope_key"),
             "action_name": row.get("action_name"),
             "input_json": parse_json_value(row.get("input_json")) or {},
         }
 
-    def upsert_hyperparameter_action_entry(
+    def upsert_execution_scope_action_entry(
         self,
         *,
         set_key: str,
@@ -415,10 +415,104 @@ SELECT @deleted_instance_count AS deleted_instance_count,
         content_key: str,
     ) -> None:
         self._exec_proc(
-            f"EXEC {self._qual('wf_repo_upsert_hyperparameter_action_entry')} "
+            f"EXEC {self._qual('wf_repo_upsert_execution_scope_action_entry')} "
             f"@set_key=?, @workflow_instance_id=?, @action_name=?, @run_key=?, @content_key=?",
             (set_key, workflow_instance_id, action_name, run_key, content_key),
         )
+
+    def start_hyperparam_search(
+        self,
+        *,
+        study_row_id: Optional[int] = None,
+        display_name: Optional[str] = None,
+        grid_json: Optional[dict[str, Any]] = None,
+        objective_json: Optional[dict[str, Any]] = None,
+        base_context_hash: Optional[str] = None,
+        created_by: Optional[str] = None,
+    ) -> int:
+        row = self._fetch_one(
+            f"{_declare_json('grid')}{_declare_json('obj')}"
+            "EXEC portal.sp_start_hyperparam_grid "
+            f"@study_row_id=?, @display_name=?, @grid_json={_json_var('grid')}, "
+            f"@objective_json={_json_var('obj')}, @base_context_hash=?, @created_by=?",
+            (
+                _json_text(grid_json or {}),
+                _json_text(objective_json or {}),
+                study_row_id,
+                display_name,
+                base_context_hash,
+                created_by,
+            ),
+        )
+        if not row or row.get("search_id") is None:
+            raise RuntimeError("portal.sp_start_hyperparam_grid returned no search_id")
+        return int(row["search_id"])
+
+    def add_hyperparam_trial(
+        self,
+        *,
+        search_id: int,
+        trial_index: int,
+        overrides_json: Optional[dict[str, Any]] = None,
+        workflow_instance_id: Optional[int] = None,
+        execution_scope_key: Optional[str] = None,
+    ) -> None:
+        self._exec_proc(
+            f"{_declare_json('ovr')}"
+            "EXEC portal.sp_add_hyperparam_trial "
+            f"@search_id=?, @trial_index=?, @overrides_json={_json_var('ovr')}, "
+            "@workflow_instance_id=?, @execution_scope_key=?",
+            (
+                _json_text(overrides_json or {}),
+                search_id,
+                trial_index,
+                workflow_instance_id,
+                execution_scope_key,
+            ),
+        )
+
+    def score_hyperparam_trial(
+        self,
+        *,
+        search_id: int,
+        trial_index: int,
+        objective: Optional[float] = None,
+        feasible: Optional[bool] = None,
+        result_json: Optional[dict[str, Any]] = None,
+    ) -> None:
+        self._exec_proc(
+            f"{_declare_json('res')}"
+            "EXEC portal.sp_score_hyperparam_trial "
+            f"@search_id=?, @trial_index=?, @objective=?, @feasible=?, @result_json={_json_var('res')}",
+            (
+                _json_text(result_json) if result_json is not None else None,
+                search_id,
+                trial_index,
+                objective,
+                None if feasible is None else (1 if feasible else 0),
+            ),
+        )
+
+    def get_hyperparam_search(self, search_id: int) -> list[dict[str, Any]]:
+        rows = self._fetch_all(
+            "EXEC portal.sp_get_hyperparam_search @search_id=?",
+            (search_id,),
+        )
+        return [
+            {
+                "search_id": r.get("search_id"),
+                "search_status": r.get("search_status"),
+                "trial_index": r.get("trial_index"),
+                "overrides_json": parse_json_value(r.get("overrides_json")),
+                "workflow_instance_id": r.get("workflow_instance_id"),
+                "execution_scope_key": r.get("execution_scope_key"),
+                "instance_status": r.get("instance_status"),
+                "trial_status": r.get("trial_status"),
+                "objective": r.get("objective"),
+                "feasible": r.get("feasible"),
+            }
+            for r in rows
+        ]
 
     def list_workflow_actions(self) -> list[dict[str, Any]]:
         rows = self._fetch_all(f"SELECT * FROM {self._qual('wf_repo_list_actions')}()")

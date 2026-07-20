@@ -18,8 +18,13 @@ class WorkflowComputeEnvelope(BaseModel):
     projectPath: Optional[str] = Field(
         default=None, description="Study manifest path (compiler-injected; provenance only)."
     )
+    executionScopeId: Optional[str] = Field(
+        default=None,
+        description="Execution scope id (compiler-injected; unused by compute).",
+    )
     hyperparamSetId: Optional[str] = Field(
-        default=None, description="Optional HP set id (compiler-injected; unused by compute)."
+        default=None,
+        description="Deprecated alias for executionScopeId (compiler-injected; unused by compute).",
     )
 
 

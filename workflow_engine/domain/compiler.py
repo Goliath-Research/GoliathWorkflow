@@ -264,7 +264,7 @@ def _action_template(entry, step: ActionStep) -> Dict[str, Any]:
     tool = entry.tool or entry.action_name
     template: Dict[str, Any] = {"tool": tool}
     template["projectPath"] = "${var.projectPath}"
-    template["hyperparamSetId"] = "${var.hyperparamSetId}"
+    template["executionScopeId"] = "${var.executionScopeId}"
     if entry.action_config_key:
         template["project"] = "${var.projectPath}"
         template["resolvedConfig"] = f"${{var.resolvedConfig__{entry.action_config_key}}}"

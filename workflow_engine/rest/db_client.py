@@ -173,7 +173,7 @@ def apply_validation_plan(
         )
 
 
-def apply_hyperparameter_set(
+def apply_execution_scope(
     db_or_dsn: Union[GatewayDb, str],
     workflow_instance_id: int,
     *,
@@ -183,7 +183,7 @@ def apply_hyperparameter_set(
     persist_extension: bool = True,
 ) -> None:
     with _use_db(db_or_dsn) as db:
-        db.apply_hyperparameter_set(
+        db.apply_execution_scope(
             workflow_instance_id,
             set_key=set_key,
             display_name=display_name,
@@ -245,7 +245,7 @@ __all__ = [
     "GatewayDb",
     "WorkerAuthError",
     "apply_validation_plan",
-    "apply_hyperparameter_set",
+    "apply_execution_scope",
     "create_workflow_definition",
     "create_workflow_instance",
     "delete_workflow_definition",

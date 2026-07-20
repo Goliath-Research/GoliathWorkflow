@@ -91,7 +91,7 @@ SCRIPTS=(
   wf_action_dispatch_metadata.sql
   wf_repo_create_workflow_graph.sql
   wf_apply_validation_plan.sql
-  wf_hyperparameter_set.sql
+  wf_execution_scope.sql
   wf_sql_collection_bindings.sql
   portal_workflow_api.sql
   wf_drop_platform_sample_storage.sql
@@ -103,6 +103,7 @@ SCRIPTS=(
   portal_resource_profile.sql
   cfg_reference_assets_seed.sql
   cfg_portal_api.sql
+  cfg_hyperparameter_search.sql
 )
 
 echo "Target: server=$SERVER database=$DATABASE user=$USER"

@@ -52,7 +52,7 @@
       "input_template": {
         "tool": "validation.prepare_freeze_project",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__validation}",
         "stableDmpCsv": "${var.stableDmpCsv}",
@@ -135,7 +135,7 @@
       "input_template": {
         "tool": "MethylCentroid",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__centroid}",
         "group": "${var.label}",
@@ -224,7 +224,7 @@
       "input_template": {
         "tool": "MethylDetector",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__detection}",
         "chromosome": "${var.chromosome}",
@@ -253,7 +253,7 @@
       "input_template": {
         "tool": "MethylMapper",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__mapper}"
       }
@@ -274,7 +274,7 @@
       "input_template": {
         "tool": "MethylEnricher",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__enricher}"
       }
@@ -295,7 +295,7 @@
       "input_template": {
         "tool": "MethylDiseaseProgression",
         "projectPath": "${var.projectPath}",
-        "hyperparamSetId": "${var.hyperparamSetId}",
+        "executionScopeId": "${var.executionScopeId}",
         "project": "${var.projectPath}",
         "resolvedConfig": "${var.resolvedConfig__progression}"
       }
@@ -445,6 +445,12 @@
       "var_name": "fixedDmpPanel",
       "source_kind": "output_path",
       "source_json_path": "$.fixedDmpPanel"
+    },
+    {
+      "node_key": "prepare_freeze",
+      "var_name": "projectPath",
+      "source_kind": "output_path",
+      "source_json_path": "$.projectPath"
     }
   ],
   "scope_defaults": [

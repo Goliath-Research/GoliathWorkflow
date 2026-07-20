@@ -1,6 +1,13 @@
 """
 Outer loop: small grid (or list) of MonteCarloConfig overrides, run ``methyl-validation`` per
 candidate, score with :func:`optimization.objective_from_monte_carlo_artifacts`.
+
+DEPRECATED for production. This host subprocess driver is retained for development
+and experimentation only. The production path expands a grid into N workflow
+instances via the portal / ``methyl-study-start hyperparam-grid-start`` (see
+``workflow_engine/ops/hyperparam_grid.py`` and
+``docs/architecture/portal-remote-control.md``). Both paths share ``grid_to_dicts``
+and the same objective J.
 """
 
 from __future__ import annotations

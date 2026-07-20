@@ -71,7 +71,7 @@ def test_two_group_compiles_nested_foreach_and_parallel():
     assert detect.input_template["centroid1Dir"] == "${var.centroid1Dir}"
     assert detect.input_template["outputDir"] == "${var.detectOutDir}"
     assert detect.input_template["resolvedConfig"] == "${var.resolvedConfig__detection}"
-    assert detect.input_template["hyperparamSetId"] == "${var.hyperparamSetId}"
+    assert detect.input_template["executionScopeId"] == "${var.executionScopeId}"
 
 
 def test_compiler_emits_root_scope_defaults():

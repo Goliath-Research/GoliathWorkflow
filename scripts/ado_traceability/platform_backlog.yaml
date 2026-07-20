@@ -1107,7 +1107,7 @@ features:
     symlinks into the store, and identical intermediate results are shared across workflow instances to
     preserve idempotency.
   code_anchors:
-  - workflow_engine/sql_pg/wf_hyperparameter_set.sql
+  - workflow_engine/sql_pg/wf_execution_scope.sql
   - packages/methyldomain/methyl_domain/action_result.py
   - packages/methyldomain/methyl_domain/content_store.py
   - workers/methyl_worker/action_skip.py
@@ -1159,7 +1159,7 @@ features:
     control-flow nodes (sequence, parallel, if/else, switch, repeat, while), plus worker-facing stored
     procedures to pull executable tasks and submit JSON output with integer control-flow results.
   code_anchors:
-  - workflow_engine/sql_pg/wf_hyperparameter_set.sql
+  - workflow_engine/sql_pg/wf_execution_scope.sql
   stories:
   - id: define-definition-schema
     title: Design workflow definition tables (workflow/version/node/edge/action) with node-type discriminator

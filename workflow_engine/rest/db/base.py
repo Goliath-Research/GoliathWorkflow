@@ -130,7 +130,7 @@ class GatewayDb(Protocol):
         persist_extension: bool = True,
     ) -> None: ...
 
-    def apply_hyperparameter_set(
+    def apply_execution_scope(
         self,
         workflow_instance_id: int,
         *,
@@ -145,7 +145,7 @@ class GatewayDb(Protocol):
         node_execution_id: int,
     ) -> Optional[dict[str, Any]]: ...
 
-    def upsert_hyperparameter_action_entry(
+    def upsert_execution_scope_action_entry(
         self,
         *,
         set_key: str,
@@ -154,6 +154,39 @@ class GatewayDb(Protocol):
         run_key: str,
         content_key: str,
     ) -> None: ...
+
+    def start_hyperparam_search(
+        self,
+        *,
+        study_row_id: Optional[int] = None,
+        display_name: Optional[str] = None,
+        grid_json: Optional[dict[str, Any]] = None,
+        objective_json: Optional[dict[str, Any]] = None,
+        base_context_hash: Optional[str] = None,
+        created_by: Optional[str] = None,
+    ) -> int: ...
+
+    def add_hyperparam_trial(
+        self,
+        *,
+        search_id: int,
+        trial_index: int,
+        overrides_json: Optional[dict[str, Any]] = None,
+        workflow_instance_id: Optional[int] = None,
+        execution_scope_key: Optional[str] = None,
+    ) -> None: ...
+
+    def score_hyperparam_trial(
+        self,
+        *,
+        search_id: int,
+        trial_index: int,
+        objective: Optional[float] = None,
+        feasible: Optional[bool] = None,
+        result_json: Optional[dict[str, Any]] = None,
+    ) -> None: ...
+
+    def get_hyperparam_search(self, search_id: int) -> list[dict[str, Any]]: ...
 
     def list_workflow_actions(self) -> list[dict[str, Any]]: ...
 

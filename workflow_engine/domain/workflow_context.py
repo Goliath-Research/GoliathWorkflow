@@ -317,19 +317,25 @@ def build_resolved_config_scope_vars(context: Mapping[str, Any]) -> Dict[str, An
     return out
 
 
-def compute_hyperparam_set_id(context: Mapping[str, Any]) -> str:
+def compute_execution_scope_id(context: Mapping[str, Any]) -> str:
     """
-    Stable identifier for the merged hyperparameter set baked at instance start.
+    Stable identifier for the merged execution scope baked at instance start.
 
     Hashes all ``resolvedConfig__*`` scope slices plus an optional operator label
-    (``hyperparamSetName`` / ``hyperparamSetLabel``).
+    (``executionScopeName`` / ``executionScopeLabel``; the legacy
+    ``hyperparamSetName`` / ``hyperparamSetLabel`` are accepted as aliases).
     """
     slices: Dict[str, Any] = {}
     for key, value in sorted(context.items()):
         if key.startswith("resolvedConfig__"):
             slices[key] = value
     payload: Dict[str, Any] = {"slices": slices}
-    label = context.get("hyperparamSetName") or context.get("hyperparamSetLabel")
+    label = (
+        context.get("executionScopeName")
+        or context.get("executionScopeLabel")
+        or context.get("hyperparamSetName")
+        or context.get("hyperparamSetLabel")
+    )
     if label:
         payload["name"] = label
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)
@@ -357,7 +363,11 @@ def finalize_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
     out = ensure_study_work_synced(context)
     out = enrich_instance_context(out)
     out.update(build_resolved_config_scope_vars(out))
-    out["hyperparamSetId"] = compute_hyperparam_set_id(out)
+    scope_id = compute_execution_scope_id(out)
+    out["executionScopeId"] = scope_id
+    # One-release alias so pre-rename compiled graphs (which bind
+    # ${var.hyperparamSetId}) still resolve against this scope.
+    out["hyperparamSetId"] = scope_id
     return out
 
 
