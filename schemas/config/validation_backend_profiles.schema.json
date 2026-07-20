@@ -30,7 +30,7 @@
             }
           ],
           "default": null,
-          "description": "Numerical guard added before the log-ratio. Operator-set per group.",
+          "description": "Numerical guard added before the log-ratio. Required per group when composition ALR runs; set in profile/site actionConfig (no code default).",
           "title": "Pseudocount"
         },
         "reference": {
@@ -204,6 +204,7 @@
             }
           ],
           "default": null,
+          "description": "Legacy single-group ALR pseudocount. Required when using covariate_composition_transform; prefer covariate_composition_groups[].pseudocount.",
           "title": "Covariate Composition Pseudocount"
         },
         "covariate_composition_reference": {
@@ -361,6 +362,7 @@
             }
           ],
           "default": null,
+          "description": "ALR pseudocount for first-stage class probabilities in the ECDF second stage. Required when the stacker runs; set in profile/site actionConfig (no code default).",
           "title": "Ecdf Second Stage Probability Epsilon"
         },
         "ecdf_second_stage_probability_transform": {
@@ -819,6 +821,7 @@
             }
           ],
           "default": null,
+          "description": "Legacy single-group ALR pseudocount. Required when using covariate_composition_transform; prefer covariate_composition_groups[].pseudocount.",
           "title": "Covariate Composition Pseudocount"
         },
         "covariate_composition_reference": {
@@ -949,6 +952,7 @@
             }
           ],
           "default": null,
+          "description": "ALR pseudocount for first-stage class probabilities in the ECDF second stage. Required when the stacker runs; set in profile/site actionConfig (no code default).",
           "title": "Ecdf Second Stage Probability Epsilon"
         },
         "ecdf_second_stage_probability_transform": {
@@ -1609,6 +1613,7 @@
             }
           ],
           "default": null,
+          "description": "Legacy single-group ALR pseudocount. Required when using covariate_composition_transform; prefer covariate_composition_groups[].pseudocount.",
           "title": "Covariate Composition Pseudocount"
         },
         "covariate_composition_reference": {
@@ -1739,6 +1744,7 @@
             }
           ],
           "default": null,
+          "description": "ALR pseudocount for first-stage class probabilities in the ECDF second stage. Required when the stacker runs; set in profile/site actionConfig (no code default).",
           "title": "Ecdf Second Stage Probability Epsilon"
         },
         "ecdf_second_stage_probability_transform": {

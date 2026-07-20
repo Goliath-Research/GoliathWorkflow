@@ -128,7 +128,10 @@ class CompositionGroup(BaseModel):
     pseudocount: Optional[float] = Field(
         default=None,
         gt=0.0,
-        description="Numerical guard added before the log-ratio. Operator-set per group.",
+        description=(
+            "Numerical guard added before the log-ratio. Required per group when "
+            "composition ALR runs; set in profile/site actionConfig (no code default)."
+        ),
     )
     standardize: Optional[bool] = Field(
         default=None,
@@ -365,13 +368,25 @@ class BackendSharedParams(BaseModel):
         Literal["logit_class1"]
     ] = Field(default=None)
     ecdf_second_stage_probability_epsilon: Optional[float] = Field(
-        default=None, gt=0.0, lt=0.5
+        default=None,
+        gt=0.0,
+        lt=0.5,
+        description=(
+            "ALR pseudocount for first-stage class probabilities in the ECDF second "
+            "stage. Required when the stacker runs; set in profile/site actionConfig "
+            "(no code default)."
+        ),
     )
     covariate_composition_transform: Optional[Literal["alr"]] = Field(default=None)
     covariate_composition_columns: Optional[List[str]] = Field(default=None)
     covariate_composition_reference: Optional[str] = Field(default=None)
     covariate_composition_pseudocount: Optional[float] = Field(
-        default=None, gt=0.0
+        default=None,
+        gt=0.0,
+        description=(
+            "Legacy single-group ALR pseudocount. Required when using "
+            "covariate_composition_transform; prefer covariate_composition_groups[].pseudocount."
+        ),
     )
     covariate_composition_groups: Optional[List[CompositionGroup]] = Field(
         default=None,

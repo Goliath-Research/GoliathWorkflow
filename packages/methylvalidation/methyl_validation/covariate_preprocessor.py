@@ -313,11 +313,6 @@ def _alr_transform(
     return pd.DataFrame(transformed, index=frame.index, columns=output_names), output_names
 
 
-# Numerical guard added to closed proportions before the log-ratio (like ``hist_eps``).
-# Operators override per group via ``pseudocount``; this only prevents log(0).
-DEFAULT_COMPOSITION_PSEUDOCOUNT = 1e-6
-
-
 @dataclass(frozen=True)
 class CompositionGroupSpec:
     """One simplex (sum-to-1) feature set encoded by additive log-ratio (ALR).
@@ -373,7 +368,12 @@ def normalize_composition_groups(
             raise ValueError(
                 f"composition group '{name}' reference '{ref}' is not one of its columns."
             )
-        pc = float(pseudocount) if pseudocount is not None else DEFAULT_COMPOSITION_PSEUDOCOUNT
+        if pseudocount is None:
+            raise ValueError(
+                f"composition group '{name}' requires pseudocount > 0 "
+                "(set per group in profile/site actionConfig; no code default)."
+            )
+        pc = float(pseudocount)
         if pc <= 0.0:
             raise ValueError(f"composition group '{name}' pseudocount must be > 0.")
         std = True if standardize is None else bool(standardize)

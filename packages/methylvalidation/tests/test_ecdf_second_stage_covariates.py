@@ -104,6 +104,7 @@ def test_ecdf_second_stage_covariates_only(tmp_path: Path):
         covariate_id_column="sample_id",
         covariate_numeric_columns=["age", "bmi"],
         covariates_strict_join=True,
+        probability_epsilon=1e-6,
     )
     out = train_and_apply_ecdf_second_stage(
         project_json=project,
@@ -152,6 +153,7 @@ def test_ecdf_second_stage_fits_train_and_scores_disjoint_test(tmp_path: Path):
             covariate_id_column="sample_id",
             covariate_numeric_columns=["age", "bmi"],
             covariates_strict_join=True,
+            probability_epsilon=1e-6,
         ),
     )
 
@@ -229,6 +231,7 @@ def test_ecdf_second_stage_rejects_overlapping_export_datasets(tmp_path: Path):
                 covariate_id_column="sample_id",
                 covariate_numeric_columns=["age", "bmi"],
                 covariates_strict_join=True,
+                probability_epsilon=1e-6,
             ),
         )
 
@@ -329,6 +332,7 @@ def test_ecdf_second_stage_strict_join_missing_ids(tmp_path: Path):
         covariates_path=str(cov_csv),
         covariates_strict_join=True,
         covariate_numeric_columns=["age", "bmi"],
+        probability_epsilon=1e-6,
     )
     with pytest.raises(ValueError, match="Missing covariate rows"):
         train_and_apply_ecdf_second_stage(
@@ -343,6 +347,27 @@ def test_ecdf_second_stage_requires_stack_components():
     params = EcdfSecondStageParams(include_observed_hybrid=False, covariates_path=None)
     with pytest.raises(ValueError, match="include_observed_hybrid and/or covariates_path"):
         params.validate_stack_components()
+
+
+def test_ecdf_second_stage_requires_probability_epsilon(tmp_path: Path):
+    project = _minimal_project(tmp_path)
+    pred_dir = tmp_path / "predictors"
+    clf_dir = tmp_path / "classifiers"
+    _write_predictions(pred_dir / "predictions.csv", n=8)
+    cov_csv = tmp_path / "covariates.csv"
+    _write_covariates(cov_csv, [f"S{i}" for i in range(8)])
+    with pytest.raises(ValueError, match="ecdf_second_stage_probability_epsilon is required"):
+        train_and_apply_ecdf_second_stage(
+            project_json=project,
+            predictor_output_dir=pred_dir,
+            classifier_output_dir=clf_dir,
+            params=EcdfSecondStageParams(
+                include_observed_hybrid=False,
+                covariates_path=str(cov_csv),
+                covariate_numeric_columns=["age", "bmi"],
+                covariates_strict_join=True,
+            ),
+        )
 
 
 def test_ecdf_second_stage_should_run_gate():

@@ -24,7 +24,6 @@ from methyl_utils import load_project
 
 from .classification_metrics import compute_validation_metrics
 from .covariate_preprocessor import (
-    DEFAULT_COMPOSITION_PSEUDOCOUNT,
     CompositionGroupSpec,
     _alr_transform,
     fit_covariates,
@@ -98,7 +97,16 @@ class EcdfSecondStageParams(BaseModel):
     covariate_standardize_numeric: bool = Field(default=True)
     covariates_strict_join: bool = Field(default=False)
     probability_transform: Optional[str] = Field(default=None)
-    probability_epsilon: Optional[float] = Field(default=None, gt=0.0, lt=0.5)
+    probability_epsilon: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        lt=0.5,
+        description=(
+            "ALR pseudocount for first-stage class probabilities. Required when the "
+            "second-stage stacker runs; set via ecdf_second_stage_probability_epsilon "
+            "in profile/site actionConfig (no code default)."
+        ),
+    )
     composition_transform: Optional[str] = Field(default=None)
     composition_columns: Optional[List[str]] = Field(default=None)
     composition_reference: Optional[str] = Field(default=None)
@@ -400,7 +408,14 @@ def _probability_design(
     row_sums = values.to_numpy(dtype=np.float64).sum(axis=1)
     if not np.allclose(row_sums, 1.0, atol=1e-6):
         raise ValueError("ECDF class probabilities do not sum to one.")
-    pseudocount = float(epsilon) if epsilon is not None else DEFAULT_COMPOSITION_PSEUDOCOUNT
+    if epsilon is None:
+        raise ValueError(
+            "ecdf_second_stage_probability_epsilon is required for ALR-encoding "
+            "class probabilities (set in profile/site actionConfig; no code default)."
+        )
+    pseudocount = float(epsilon)
+    if pseudocount <= 0.0:
+        raise ValueError("ecdf_second_stage_probability_epsilon must be > 0.")
     reference = probability_columns[0]
     alr_frame, alr_names = _alr_transform(
         values,

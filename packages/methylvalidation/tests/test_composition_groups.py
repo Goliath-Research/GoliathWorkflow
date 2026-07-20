@@ -41,26 +41,35 @@ def _two_simplex_csv(path: Path, sample_ids: list[str]) -> Path:
     return path
 
 
-def test_normalize_defaults_reference_to_last_and_pseudocount():
+def test_normalize_defaults_reference_to_last_requires_pseudocount():
     specs = normalize_composition_groups(
-        [{"name": "cf", "columns": ["CD8T", "CD4T", "Neu"]}]
+        [{"name": "cf", "columns": ["CD8T", "CD4T", "Neu"], "pseudocount": 1e-6}]
     )
     assert len(specs) == 1
     spec = specs[0]
     assert spec.reference == "Neu"
-    assert spec.pseudocount > 0.0
+    assert spec.pseudocount == pytest.approx(1e-6)
     assert spec.standardize is True
     assert spec.alr_names() == ["alr_CD8T_vs_Neu", "alr_CD4T_vs_Neu"]
 
 
+def test_normalize_rejects_missing_pseudocount():
+    with pytest.raises(ValueError, match="requires pseudocount"):
+        normalize_composition_groups(
+            [{"name": "cf", "columns": ["CD8T", "CD4T", "Neu"]}]
+        )
+
+
 def test_normalize_rejects_shared_columns_and_small_groups():
     with pytest.raises(ValueError, match="at least 2 columns"):
-        normalize_composition_groups([{"name": "x", "columns": ["only"]}])
+        normalize_composition_groups(
+            [{"name": "x", "columns": ["only"], "pseudocount": 1e-6}]
+        )
     with pytest.raises(ValueError, match="must not share columns"):
         normalize_composition_groups(
             [
-                {"name": "a", "columns": ["p", "q"]},
-                {"name": "b", "columns": ["q", "r"]},
+                {"name": "a", "columns": ["p", "q"], "pseudocount": 1e-6},
+                {"name": "b", "columns": ["q", "r"], "pseudocount": 1e-6},
             ]
         )
 
@@ -82,8 +91,18 @@ def test_two_disjoint_groups_produce_alr_and_drop_reference(tmp_path: Path):
     cov = _two_simplex_csv(tmp_path / "cov.csv", ids)
     groups = normalize_composition_groups(
         [
-            {"name": "cf", "columns": ["CD8T", "CD4T", "Neu"], "reference": "Neu"},
-            {"name": "cmp", "columns": ["compartA", "compartB"], "reference": "compartB"},
+            {
+                "name": "cf",
+                "columns": ["CD8T", "CD4T", "Neu"],
+                "reference": "Neu",
+                "pseudocount": 1e-6,
+            },
+            {
+                "name": "cmp",
+                "columns": ["compartA", "compartB"],
+                "reference": "compartB",
+                "pseudocount": 1e-6,
+            },
         ]
     )
     X, prep, report = fit_covariates(
@@ -112,7 +131,7 @@ def test_composition_columns_may_not_be_declared_numeric(tmp_path: Path):
     ids = [f"S{i}" for i in range(6)]
     cov = _two_simplex_csv(tmp_path / "cov.csv", ids)
     groups = normalize_composition_groups(
-        [{"name": "cf", "columns": ["CD8T", "CD4T", "Neu"]}]
+        [{"name": "cf", "columns": ["CD8T", "CD4T", "Neu"], "pseudocount": 1e-6}]
     )
     with pytest.raises(ValueError, match="overlap composition group columns"):
         fit_covariates(
@@ -134,6 +153,7 @@ def test_standardize_off_keeps_raw_alr_and_frozen_transform_matches(tmp_path: Pa
                 "name": "cf",
                 "columns": ["CD8T", "CD4T", "Neu"],
                 "reference": "Neu",
+                "pseudocount": 1e-6,
                 "standardize": False,
             }
         ]
@@ -165,7 +185,11 @@ def test_config_rejects_composition_overlap_with_numeric_role():
         EcdfBackendParams(
             covariate_numeric_columns=["CD8T", "age"],
             covariate_composition_groups=[
-                {"name": "cf", "columns": ["CD8T", "CD4T", "Neu"]}
+                {
+                    "name": "cf",
+                    "columns": ["CD8T", "CD4T", "Neu"],
+                    "pseudocount": 1e-6,
+                }
             ],
         )
 

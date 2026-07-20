@@ -27,7 +27,8 @@
                 "pseudocount": 1e-6
               }
             ],
-            "covariate_id_column": "sample_id"
+            "covariate_id_column": "sample_id",
+            "ecdf_second_stage_probability_epsilon": 1e-6
           }
         },
         "tabular_sklearn": {
