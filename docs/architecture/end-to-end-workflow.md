@@ -1,4 +1,6 @@
-# MethylPipeline end-to-end workflow
+# DNA methylation — end-to-end workflow
+
+> **Per-process docs.** MethylPipeline is a multiomics platform; each process pack has its own end-to-end workflow document sharing the same control plane (DomainProgram, typed actions, scheduler, cfg/wf, CAAS). This document covers the **DNA methylation (WGBS)** process. For the transcriptomics pack see [RNA-Seq — end-to-end workflow](end-to-end-workflow-rnaseq.md).
 
 **Audience:** operators, statisticians, and engineers who need one clear picture from external sample ingest through Monte Carlo stability, cell deconvolution, information-theoretic covariates, model training, and holdout validation.
 

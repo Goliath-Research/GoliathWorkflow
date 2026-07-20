@@ -11,7 +11,8 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [Distributed runtime](distributed-runtime.md) | portal, DB, gateway, workers, shared storage |
 | [Orchestration paths](orchestration-paths.md) | local, gateway, legacy CLI matrix |
 | [Pipeline stages](pipeline-stages.md) | sample prep through validation stage DAG |
-| [End-to-end workflow](end-to-end-workflow.md) | Ingest → SamplePrep (QC/trim/extract) → MC → DeConv/info measures → model → holdouts (Mermaid) |
+| [End-to-end workflow — DNA methylation](end-to-end-workflow.md) | Ingest → SamplePrep (QC/trim/extract) → MC → DeConv/info measures → model → holdouts (Mermaid) |
+| [End-to-end workflow — RNA-Seq](end-to-end-workflow-rnaseq.md) | Ingest → quantify (rna_fq2bam/kallisto) → RNA QC → expression.h5 → DE gene panel + tabular classification (Mermaid) |
 | [Portal remote control](portal-remote-control.md) | UI→DB vs workers→gateway; multi-instance hyperparameter grids; `cfg` trials → wf `execution_scope` |
 | [Execution scopes & CAAS](../usage/17-content-addressed-action-store.qmd) | Experiment with the same workflow under varied config; idempotent cross-instance reuse ([deep dive](../../workflow_engine/docs/pipeline_architecture.md#execution-scopes-and-caas)) |
 | [Documentation audit (2026-07)](documentation-audit-2026-07.md) | Staleness findings + Quarto validation + remediation checklist |
