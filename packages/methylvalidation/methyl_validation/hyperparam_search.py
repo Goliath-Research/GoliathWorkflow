@@ -203,16 +203,13 @@ def main() -> None:
         action="store_true",
         help="Write configs and summary paths only, do not run pipeline.",
     )
-    p.add_argument(
-        "mv_args",
-        nargs=argparse.REMAINDER,
-        help=(
-            "Extra args forwarded to methyl-validation after --config. "
-            "Use either: ... --stability --resume 1 --skip-detection "
-            "or: ... -- --stability --resume 1 --skip-detection"
-        ),
+    p.epilog = (
+        "Extra methyl-validation flags may follow the search options, e.g. "
+        "--stability --resume 1 --skip-detection (optional leading -- is ignored)."
     )
-    args = p.parse_args()
+    # Unknown options (e.g. --stability) are forwarded to methyl-validation.
+    # parse_args()+REMAINDER rejects those unless a bare "--" precedes them.
+    args, unknown = p.parse_known_args()
     if (args.project is None) == (args.config is None):
         p.error("Provide exactly one of --config or --project")
     if args.project and args.config:
@@ -226,9 +223,7 @@ def main() -> None:
     cset: Optional[ConstraintSet] = None
     if args.baseline_summary is not None:
         cset = ConstraintSet(baseline_metrics_summary_path=args.baseline_summary)
-    extra = list(args.mv_args or [])
-    # argparse.REMAINDER keeps a leading "--" when callers use the usual
-    # "driver -- --stability ..." form; methyl-validation must not see it.
+    extra = list(unknown or [])
     if extra and extra[0] == "--":
         extra = extra[1:]
     if not extra and not args.dry_run:
