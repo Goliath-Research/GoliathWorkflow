@@ -61,3 +61,30 @@ def test_bedtools_mapper_uses_plant_trait_enricher(tmp_path: Path) -> None:
     )
     assert isinstance(mapper.disease_enricher, PlantTraitEnricher)
     assert not isinstance(mapper.disease_enricher, type(None))
+
+
+def test_shared_enrichment_payload_path_works_for_plant_traits(tmp_path: Path) -> None:
+    """Standard chromosome-combined path calls _build/_apply_enrichment_payload."""
+    gtf = tmp_path / "tiny.gtf"
+    gtf.write_text(
+        '1\ttest\tgene\t1\t10\t.\t+\t.\tgene_id "g1"; gene_name "AT5G52310";\n',
+        encoding="utf-8",
+    )
+    mapper = BedtoolsMapper(
+        gene_gtf=gtf,
+        enrich_disease=True,
+        enrich_source="plant_traits",
+        plant_traits_path=DEMO_TSV,
+        disease_term="drought",
+        optimize_dmps=False,
+    )
+    frames = [pd.DataFrame({"gene_name": ["AT5G52310", "AT0G00000"]})]
+    payload = mapper._build_shared_enrichment_payload(frames, "gene_name")
+    assert payload is not None
+    assert payload["merged"]["AT5G52310"]["associated"] is True
+    assert payload["merged"]["AT5G52310"]["source"] == "plant_traits"
+
+    applied = mapper._apply_shared_enrichment_payload(frames[0], "gene_name", payload)
+    assert bool(applied.loc[0, "disease_associated"])
+    assert applied.loc[0, "disease_source"] == "plant_traits"
+    assert not bool(applied.loc[1, "disease_associated"])
