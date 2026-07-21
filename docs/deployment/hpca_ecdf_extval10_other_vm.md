@@ -63,6 +63,7 @@ the freeze/production detection contract (`fixed_dmp_panel`). Model-MC must reus
 `model_mc/shared` from the archived freeze-panel shared runs, then rebuild ECDF only.
 
 The driver script now links `model_mc/shared` → `model_mc.pre_alr_stacker.bak/shared`
+automatically (**symlink**, not `cp -a` — NFS rejects permission preservation and can leave mode-`700` partial trees).
 automatically. Relaunch:
 
 ```bash
