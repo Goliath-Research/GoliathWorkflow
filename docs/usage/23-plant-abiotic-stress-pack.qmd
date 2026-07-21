@@ -1,16 +1,16 @@
 ---
-title: "Plant abiotic stress pack"
+title: "Plant abiotic stress application pack"
 ---
 
-Plant abiotic stress detection ships as a **trait pack** on the existing DNA-methylation
-process, demonstrating that the platform is species-agnostic. It reuses the SamplePrep
-per-sample topology, the centroid -> detector -> mapper -> Monte Carlo stability science,
-and the `samd_research` profile. Unlike a human disease pack (e.g.
-[Alzheimer cfDNA](21-alzheimer-cfdna-pack.qmd)), plants require a few **platform
-unblockers** because human blood/cfDNA defaults are biologically wrong for plant WGBS:
-a `plant_tissue` analyte, a non-human site reference, a lifecycle program without blood
-cell deconvolution, and a plant enrichment preset. There is no new aligner or workflow
-action.
+Plant abiotic stress detection ships as an **application pack** (trait) on the existing
+DNA-methylation **process pack**, demonstrating that the platform is species-agnostic.
+The generic pattern is documented in
+[Methylation application packs](24-methylation-application-packs.qmd). This instance
+extends that pattern with plant **platform unblockers** because human blood/cfDNA
+defaults are biologically wrong for plant WGBS: a `plant_tissue` analyte, a non-human
+site reference, a lifecycle program without blood cell deconvolution, and a plant
+enrichment preset. It reuses SamplePrep, the centroid → detector → mapper → Monte Carlo
+stability science, and `samd_research`. There is no new aligner or workflow action.
 
 For the shared per-sample and Monte Carlo topology, see the DNA methylation
 [end-to-end workflow](../architecture/end-to-end-workflow.md). Plant epigenomics

@@ -1,12 +1,15 @@
 ---
-title: "Alzheimer cfDNA disease pack"
+title: "Alzheimer cfDNA application pack"
 ---
 
-Alzheimer detection ships as a **disease pack** on the existing DNA-methylation process,
-not a new omics modality. It reuses the SamplePrep and study-lifecycle DomainPrograms,
-the `samd_*` profile ladder, and the cfDNA analyte profile; the disease-specific parts
-are cohorts, patient-disjoint partitions, and a small config overlay. There is no new
-aligner, action, or program.
+Alzheimer detection ships as an **application pack** (disease) on the existing
+DNA-methylation **process pack**, not a new omics modality. The generic pattern—
+manifest, overlay, partitions, optional enrichment preset—is documented in
+[Methylation application packs](24-methylation-application-packs.qmd). This instance
+reuses SamplePrep and the study-lifecycle DomainPrograms, the `samd_*` profile ladder,
+and the cfDNA analyte profile; the Alzheimer-specific parts are cohorts,
+patient-disjoint partitions, and a small config overlay. There is no new aligner,
+action, or program.
 
 For the shared per-sample and Monte Carlo topology, see the DNA methylation
 [end-to-end workflow](../architecture/end-to-end-workflow.md). This chapter covers only

@@ -70,20 +70,24 @@ Deep method detail lives in the [Theory book](../theory/index.qmd); runbooks liv
 | “SaMD-ready architecture” | **Controls and scaffolds exist.** Pivotal clinical performance evidence is **not** yet registered as claim-ready. |
 | “Canonical entry point” | Prefer `methyl-workflow-run`. Monolithic `methyl-validation --stability/--freeze/--model` is transitional only. |
 
-### Platform vs process pack
+### Platform vs process pack vs application pack
 
-Think of MethylPipeline as two nested products:
+Think of MethylPipeline as nested products:
 
 1. **Control plane (platform)** — DomainProgram language, action catalog, config registry,
    local/distributed engines, typed observability, release bundles, evidence templates.
-2. **Methylation process pack** — sample prep through blind prediction packages and
-   SaMD study profiles that exercise the control plane for epigenetic studies.
+2. **Process pack** — an omics modality (actions, programs, QC). The shipping methylation
+   process pack covers sample prep through blind prediction and SaMD study profiles.
+3. **Application pack** — a study configuration on an existing process (cohorts,
+   partitions, overlay). Alzheimer cfDNA and plant abiotic stress are methylation
+   application packs; see [Usage ch.24](../usage/24-methylation-application-packs.qmd).
 
 A team can:
 
-- run the methylation pack end-to-end on a new disease cohort without editing Python,
+- run the methylation pack end-to-end on a new disease or trait cohort without editing Python
+  (application pack),
 - compose alternate statistical modes via profiles (`researchMode`),
-- add adjacent assays by registering typed actions and programs,
+- add adjacent assays by registering typed actions and programs (process pack),
 - assemble regulatory narratives from the same provenance chain used in operations.
 
 What a team cannot honestly claim without more work:
@@ -835,6 +839,15 @@ sequenceDiagram
 | Distributed proof | Worker claims task; artifacts on `/work` |
 | Observability | Manifest + JSONL entries present |
 | Docs | Usage/architecture notes + this overview link if platform-visible |
+
+### Application packs (config on an existing process)
+
+For a new indication or trait on methylation (or another shipped process), follow the
+**application pack** checklist in
+[Usage ch.24 Methylation application packs](../usage/24-methylation-application-packs.qmd)
+instead of the process-pack table above: study manifest, context overlay, partitions,
+optional enrichment preset / analyte / site pins, CI smoke, and a short instance guide.
+Do not invent a new modality when a config overlay is enough.
 
 ### What not to do
 

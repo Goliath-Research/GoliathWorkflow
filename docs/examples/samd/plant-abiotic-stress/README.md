@@ -1,15 +1,16 @@
 # Plant abiotic stress methylation pack (example)
 
-A **binary Control vs Drought** *Arabidopsis thaliana* leaf WGBS methylation study on the
-existing methylation control plane. It reuses the standard SamplePrep and the plant
-study-lifecycle DomainProgram, the `samd_research` profile, and the new `plant_tissue`
-analyte profile. The pack is config + cohorts + partitions + a trait overlay plus a
-non-human site reference — no new actions or aligners.
+Instance of the [methylation application-pack pattern](../../../usage/24-methylation-application-packs.qmd)
+(trait application). A **binary Control vs Drought** *Arabidopsis thaliana* leaf WGBS
+methylation study on the existing methylation control plane. It reuses the standard
+SamplePrep and the plant study-lifecycle DomainProgram, the `samd_research` profile, and
+the `plant_tissue` analyte profile. The pack is config + cohorts + partitions + a trait
+overlay plus a non-human site reference — no new actions or aligners.
 
-Unlike a human disease pack, plants need a few platform unblockers that ship with this
-pack: the `plant_tissue` analyte (plant-safe QC that treats CG/CHG/CHH as real biology,
-no cfDNA fragmentomics), a linear TAIR10 site reference, a lifecycle program **without**
-blood cell deconvolution, and the `plant-stress-core` enrichment preset.
+This instance extends the application-pack pattern with plant platform unblockers: the
+`plant_tissue` analyte (plant-safe QC that treats CG/CHG/CHH as real biology, no cfDNA
+fragmentomics), a linear TAIR10 site reference, a lifecycle program **without** blood
+cell deconvolution, and the `plant-stress-core` enrichment preset.
 
 See the operator guide: [Usage ch.23 Plant abiotic stress pack](../../../usage/23-plant-abiotic-stress-pack.qmd),
 the analyte defaults in [ANALYTE_PROFILES](../../../ANALYTE_PROFILES.md), and the plant

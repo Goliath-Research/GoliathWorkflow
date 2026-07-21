@@ -1,9 +1,11 @@
-# Alzheimer cfDNA disease pack (example)
+# Alzheimer cfDNA application pack (example)
 
-A **staged (Control -> MCI -> AD)** cfDNA DNA-methylation disease pack on the existing
-methylation SaMD control plane. It reuses the standard SamplePrep and study-lifecycle
-DomainPrograms, the `samd_*` profile ladder, and the cfDNA analyte profile. The pack is
-config + cohorts + partitions + a disease overlay — no new actions or aligners.
+Instance of the [methylation application-pack pattern](../../../usage/24-methylation-application-packs.qmd)
+(disease application). A **staged (Control -> MCI -> AD)** cfDNA DNA-methylation study
+on the existing methylation SaMD control plane. It reuses the standard SamplePrep and
+study-lifecycle DomainPrograms, the `samd_*` profile ladder, and the cfDNA analyte
+profile. The pack is config + cohorts + partitions + a disease overlay — no new actions
+or aligners.
 
 See the operator guide: [Usage ch.21 Alzheimer cfDNA pack](../../../usage/21-alzheimer-cfdna-pack.qmd)
 and the shared methylation workflow: [end-to-end workflow](../../../architecture/end-to-end-workflow.md).

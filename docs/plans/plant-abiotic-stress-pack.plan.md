@@ -43,7 +43,9 @@ todos:
 
 ## Framing: trait pack on the methylation modality
 
-Like the [Alzheimer cfDNA pack](../usage/21-alzheimer-cfdna-pack.qmd), this is config on the existing DNA-methylation process rather than a new omics modality. Unlike a human disease pack, plants need a few platform unblockers because human blood/cfDNA defaults are biologically wrong for plant WGBS (CG/CHG/CHH are all real biology; no blood cell types).
+> **Terminology (2026-07):** The umbrella term is now **application pack** (config overlay on an existing process). Plant abiotic stress is a *trait application* instance; see [Usage ch.24](../usage/24-methylation-application-packs.qmd). Historical “trait pack” / “modeled on Alzheimer” wording below is superseded by that pattern doc.
+
+Like the [Alzheimer cfDNA pack](../usage/21-alzheimer-cfdna-pack.qmd), this is config on the existing DNA-methylation process rather than a new omics modality. Plants need a few platform unblockers because human blood/cfDNA defaults are biologically wrong for plant WGBS (CG/CHG/CHH are all real biology; no blood cell types).
 
 ```mermaid
 flowchart TD

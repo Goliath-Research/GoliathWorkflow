@@ -33,6 +33,7 @@ For statistical background, use [`docs/theory/`](../theory/index.qmd). For compi
 - **Fast path (stage execution):** [Orchestration ch.04](04-orchestration-workflow-run.qmd) → `methyl-workflow-run`; stage detail in ch.05–09.
 - **Guided tutorial (healthy vs. cancer stages):** Chapter `16` — end-to-end walkthrough; [profile catalog in ch.16](16-tutorial-healthy-vs-cancer-stages.qmd#step-4--pick-a-profile).
 - **SaMD study ladder (research → holdouts → pivotal):** Chapter `18` — [`18-samd-study-lifecycle.qmd`](18-samd-study-lifecycle.qmd); scaffold with `methyl-study-init`.
+- **Application packs (config on a process):** Chapter `24` — pattern + checklist; instances in ch.21 (Alzheimer) and ch.23 (plant abiotic stress).
 - **Hyperparameter versioning (CAAS):** `17-content-addressed-action-store.qmd` (Part V; follows the tutorial).
 - **Daily operations:** `10-artifacts-and-qa-checks.qmd` through `12-command-cookbook.qmd`.
 - **Scaling MC across machines:** Chapter `13` — shared `/work` storage and queue subcommands.

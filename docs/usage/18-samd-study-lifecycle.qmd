@@ -62,7 +62,7 @@ Creates:
   configs/README.md
 ```
 
-Add `--modality rnaseq` for an RNA-Seq study (see [ch.20](20-rnaseq-process-pack.qmd)); the default is `methylation`. For a worked disease pack on the methylation modality, see the [Alzheimer cfDNA pack](21-alzheimer-cfdna-pack.qmd) (staged Control -> MCI -> AD, cfDNA, `neuro-core` enrichment). For a non-human trait pack on the same modality, see the [Plant abiotic stress pack](23-plant-abiotic-stress-pack.qmd) (Arabidopsis Control vs Drought, `plant_tissue` analyte, CG/CHG/CHH).
+Add `--modality rnaseq` for an RNA-Seq study (see [ch.20](20-rnaseq-process-pack.qmd)); the default is `methylation`. Config overlays on an existing process are **application packs** — see the generic pattern in [ch.24](24-methylation-application-packs.qmd). Worked methylation instances: [Alzheimer cfDNA](21-alzheimer-cfdna-pack.qmd) (disease — staged Control -> MCI -> AD, cfDNA, `neuro-core`) and [Plant abiotic stress](23-plant-abiotic-stress-pack.qmd) (trait — Arabidopsis Control vs Drought, `plant_tissue`, CG/CHG/CHH).
 
 Fill CSVs with sample IDs (patient-disjoint). Assign holdouts **early**:
 
