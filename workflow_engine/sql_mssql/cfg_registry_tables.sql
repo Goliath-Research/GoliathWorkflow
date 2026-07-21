@@ -169,6 +169,24 @@ BEGIN
 END
 GO
 
+/* Enrichment library presets (named Enrichr library sets, e.g. cancer-core, neuro-core). */
+IF OBJECT_ID(N'cfg.enrichment_library_preset', N'U') IS NULL
+BEGIN
+    CREATE TABLE cfg.enrichment_library_preset (
+        id bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
+        name nvarchar(256) NOT NULL,
+        version nvarchar(64) NOT NULL CONSTRAINT DF_cfg_elp_version DEFAULT (N'1'),
+        status varchar(32) NOT NULL CONSTRAINT DF_cfg_elp_status DEFAULT ('draft'),
+        content_hash nvarchar(128) NOT NULL,
+        document_json json NOT NULL,
+        created_at_utc datetime2(3) NOT NULL CONSTRAINT DF_cfg_elp_created DEFAULT (SYSUTCDATETIME()),
+        updated_at_utc datetime2(3) NULL,
+        CONSTRAINT uq_cfg_enrichment_library_preset_name_version UNIQUE (name, version),
+        CONSTRAINT ck_cfg_enrichment_library_preset_status CHECK (status IN ('draft', 'published', 'retired'))
+    );
+END
+GO
+
 /* Study analysis arms: enroll portal.Samples into control/disease groups; CSVs are materialized. */
 IF OBJECT_ID(N'cfg.study_group', N'U') IS NULL
 BEGIN

@@ -74,6 +74,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`worker-gateway-enroll.plan.md`](worker-gateway-enroll.plan.md) | _(ops)_ | Worker gateway enroll (IP preregistration) | `schema-enrollment`, `gateway-enroll-api`, `worker-enroll-client`, `provision-docs`, `tests-promote` |
 | [`methylpipeline-platform-overview.plan.md`](methylpipeline-platform-overview.plan.md) | _(docs)_ | MethylPipeline platform overview | `outline-source-map`, `platform-capabilities`, `samd-evidence`, `extension-example`, `docs-canvas`, `verify-promote` |
 | [`rna-seq-process-pack.plan.md`](rna-seq-process-pack.plan.md) | _(pending ADO)_ | RNA-Seq transcriptomics process pack | `modality-refs`, `quant-actions`, `rna-qc-express`, `downstream-model`, `programs-profiles`, `register-deploy-docs` |
+| [`alzheimer-cfdna-disease-pack.plan.md`](alzheimer-cfdna-disease-pack.plan.md) | _(pending ADO)_ | Alzheimer cfDNA methylation disease pack | `study-scaffold`, `preset-registry`, `neuro-preset`, `disease-overlay`, `ci-fixture`, `docs-guide`, `regulatory-update`, `promote-plan` |
 
 Create each **User Story** under its Feature in Azure DevOps Boards. Copy the story title from the plan `todos[].content` field (seed prefixes `[todo-id]`). Mark stories **Closed** when the corresponding code is merged; close the Feature when all child stories are done.
 

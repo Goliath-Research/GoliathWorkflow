@@ -127,6 +127,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="EnricherStepConfig",
     ),
     ConfigSchemaSpec(
+        schema_id="library_presets",
+        module="methyl_enricher.preset_registry",
+        class_name="LibraryPresetCatalog",
+        filename="library_presets.schema.json",
+        title="LibraryPresetCatalog",
+    ),
+    ConfigSchemaSpec(
         schema_id="classifier",
         module="methyl_classifier.models.config_schema",
         class_name="ClassificationConfig",

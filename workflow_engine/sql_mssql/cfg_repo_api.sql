@@ -140,6 +140,17 @@ BEGIN
         SELECT id FROM cfg.action_definition WHERE name = @name AND version = @ver;
         RETURN;
     END;
+    IF @kind = N'enrichment_library_preset'
+    BEGIN
+        MERGE cfg.enrichment_library_preset AS t
+        USING (SELECT @name AS name, @ver AS version) AS s
+        ON t.name = s.name AND t.version = s.version
+        WHEN MATCHED THEN UPDATE SET status = @st, content_hash = @hash, document_json = @doc, updated_at_utc = SYSUTCDATETIME()
+        WHEN NOT MATCHED THEN INSERT (name, version, status, content_hash, document_json)
+            VALUES (@name, @ver, @st, @hash, @doc);
+        SELECT id FROM cfg.enrichment_library_preset WHERE name = @name AND version = @ver;
+        RETURN;
+    END;
 
     RAISERROR(N'unknown cfg kind', 16, 1);
     RETURN;
@@ -162,6 +173,7 @@ BEGIN
     IF @kind = N'storage_profile' BEGIN UPDATE cfg.storage_profile SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.storage_profile WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'reference_asset' BEGIN UPDATE cfg.reference_asset SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.reference_asset WHERE name = @name AND version = @version; RETURN; END
     IF @kind = N'action_definition' BEGIN UPDATE cfg.action_definition SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.action_definition WHERE name = @name AND version = @version; RETURN; END
+    IF @kind = N'enrichment_library_preset' BEGIN UPDATE cfg.enrichment_library_preset SET status = 'published', updated_at_utc = SYSUTCDATETIME() WHERE name = @name AND version = @version; SELECT id FROM cfg.enrichment_library_preset WHERE name = @name AND version = @version; RETURN; END
 
     RAISERROR(N'unknown cfg kind', 16, 1);
     RETURN;

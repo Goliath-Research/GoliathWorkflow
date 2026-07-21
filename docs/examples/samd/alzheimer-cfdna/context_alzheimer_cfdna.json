@@ -1,0 +1,35 @@
+{
+  "projectPath": "/work/projects/alzheimer-cfdna/configs/project_Healthy_vs_AD_Stages.json",
+  "pipelineProfile": "samd_research",
+  "runProgressionAnalysis": true,
+  "actionConfig": {
+    "mapper": {
+      "disease_term": "Alzheimer's disease",
+      "enrich_disease": true
+    },
+    "enricher": {
+      "library_preset": "neuro-core",
+      "disease_only": false
+    },
+    "progression": {
+      "enabled": true
+    },
+    "validation": {
+      "holdout_partition": "locked_test",
+      "holdout_exclude_from_training": true,
+      "backend_profiles": {
+        "ecdf": {
+          "enabled": true,
+          "params": {
+            "covariates_path": "/work/projects/alzheimer-cfdna/Healthy_vs_AD_Stages/cell_fractions/cell_fractions.csv",
+            "covariate_id_column": "sample_id",
+            "covariate_numeric_columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+            "covariate_composition_transform": "alr",
+            "covariate_composition_columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+            "covariate_composition_reference": "Neu"
+          }
+        }
+      }
+    }
+  }
+}

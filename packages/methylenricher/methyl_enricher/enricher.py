@@ -11,48 +11,18 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import pandas as pd
 
 
+from .preset_registry import get_default_libraries, get_library_presets
+
 # Evidence level order (higher index = stricter when used as min)
 EVIDENCE_LEVEL_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3}
 # Legacy mapper/enricher config column names -> canonical mapper export columns.
 SORT_BY_ALIASES = {"total_weight": "gene_importance"}
-# Default Enrichr libraries optimized for methylation studies
-DEFAULT_LIBRARIES = [
-    "KEGG_2021_Human",
-    "Reactome_2022",
-    "GO_Biological_Process_2023",
-    "GO_Molecular_Function_2023",
-    "GO_Cellular_Component_2023",
-    "MSigDB_Hallmark_2020",
-    "WikiPathway_2023_Human"
-]
 
-# Cancer-focused presets.
-# Explicit `libraries` always takes precedence over presets.
-LIBRARY_PRESETS = {
-    "cancer-core": [
-        *DEFAULT_LIBRARIES,
-        "ChEA_2022",
-        "ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X",
-        "TRRUST_Transcription_Factors_2019",
-        "DisGeNET",
-        "Jensen_DISEASES",
-        "GWAS_Catalog_2019",
-    ],
-    "cancer-extended": [
-        *DEFAULT_LIBRARIES,
-        "ChEA_2022",
-        "ENCODE_and_ChEA_Consensus_TFs_from_ChIP-X",
-        "TRRUST_Transcription_Factors_2019",
-        "DisGeNET",
-        "Jensen_DISEASES",
-        "GWAS_Catalog_2019",
-        "DSigDB",
-        "DGIdb_Drug_Targets_2024",
-        "LINCS_L1000_Chem_Pert_up",
-        "LINCS_L1000_Chem_Pert_down",
-        "miRTarBase_2017",
-    ],
-}
+# Default libraries and named presets are authored in the committed registry
+# (data/library_presets.json) and synced into cfg (kind enrichment_library_preset),
+# not hardcoded here. Explicit `libraries` always takes precedence over presets.
+DEFAULT_LIBRARIES = get_default_libraries()
+LIBRARY_PRESETS = get_library_presets()
 
 # Friendly aliases for CLI/config readability. Keys are normalized to lowercase.
 _LIBRARY_ALIASES = {

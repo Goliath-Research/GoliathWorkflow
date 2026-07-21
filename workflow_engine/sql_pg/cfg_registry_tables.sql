@@ -130,6 +130,22 @@ CREATE TABLE IF NOT EXISTS cfg.action_definition (
   CONSTRAINT ck_cfg_action_implementation CHECK (implementation_status IN ('scaffolded', 'present', 'retired'))
 );
 
+-- Enrichment library presets (named Enrichr library sets, e.g. cancer-core, neuro-core).
+-- Authored in packages/methylenricher/.../data/library_presets.json; synced via
+-- methyl-cfg sync-library-presets. Config, not a workflow node.
+CREATE TABLE IF NOT EXISTS cfg.enrichment_library_preset (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name text NOT NULL,
+  version text NOT NULL DEFAULT '1',
+  status varchar(32) NOT NULL DEFAULT 'draft',
+  content_hash text NOT NULL,
+  document_json jsonb NOT NULL,
+  created_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  updated_at_utc timestamptz NULL,
+  CONSTRAINT uq_cfg_enrichment_library_preset_name_version UNIQUE (name, version),
+  CONSTRAINT ck_cfg_enrichment_library_preset_status CHECK (status IN ('draft', 'published', 'retired'))
+);
+
 -- Study analysis arms (portal.Samples FKs are soft refs on PG; MSSQL enforces portal FKs).
 CREATE TABLE IF NOT EXISTS cfg.study_group (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

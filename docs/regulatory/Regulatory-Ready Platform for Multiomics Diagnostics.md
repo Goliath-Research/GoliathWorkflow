@@ -50,7 +50,7 @@ oncology cohorts. Near-term process packs use the same control plane:
 |-------------------|--------|--------|
 | Methylation — buffy coat / cfDNA (e.g. oncology) | **In production use** | SamplePrep → MC stability → freeze → model; SaMD ladder |
 | RNA-Seq (transcriptomics) | **Shipped process pack (research)** | Second omics modality (`regulatory.primary_modality: rnaseq`). Quantify with NVIDIA Clara Parabricks `pbrun rna_fq2bam` (STAR) or `pbrun kallisto`, selectable via `actionConfig.rna_align.quant_mode` — parallel to the methylation `fq2bam_meth` / giraffe SamplePrep path. Ships typed actions, RNA QC, a per-sample expression contract, and DE gene-panel + tabular classification; remaining gate is representative cohort data and validation evidence, not aligner R&D. |
-| Methylation — cfDNA Alzheimer detection | **Planned process pack** | Same platform; disease-specific profiles, partitions, and evidence once cohorts are wired |
+| Methylation — cfDNA Alzheimer detection | **Shipped disease pack (research)** | Staged Control → MCI → AD study on the methylation control plane (`primary_analyte: cfdna`). Ships as config — study manifest, cohorts, patient-disjoint partitions, and a disease overlay (`mapper.disease_term` = Alzheimer's disease, `neuro-core` enrichment preset, progression) — with **no** new actions or aligners. Remaining gate is representative cohort data and validation evidence. See [Alzheimer cfDNA pack](../usage/21-alzheimer-cfdna-pack.qmd). |
 | Proteomics | **Planned process pack** | Higher effort than RNA-Seq: new typed actions and GPU-oriented workflows on the same NVIDIA clusters (not a Parabricks drop-in). Still reuses DomainProgram, scheduler, QC gates, cfg/wf, and CAAS. |
 
 Buyers purchase a **platform** with a growing set of analyte/disease packs—not a
@@ -171,8 +171,11 @@ architecture that already exists:
   `quant_mode`), adds RNA QC and an expression contract, and swaps the
   methylation centroid/DMP science for differential-expression gene selection
   (`pipeline.rna_de_select`) feeding the same tabular classifier and covariate
-  stacking. Proteomics adds GPU-native steps on the same clusters; Alzheimer
-  cfDNA reuses the methylation control plane with a disease-specific pack.
+  stacking. Proteomics adds GPU-native steps on the same clusters. The shipped
+  **Alzheimer cfDNA** pack shows the lighter path: a *disease* pack that reuses the
+  methylation control plane with no new code — a staged Control → MCI → AD study,
+  patient-disjoint partitions, and a config overlay (`mapper.disease_term`,
+  the registry-backed `neuro-core` enrichment preset, progression).
 
 ---
 

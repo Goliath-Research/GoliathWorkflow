@@ -150,6 +150,16 @@ def _cmd_sync_actions(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_sync_library_presets(args: argparse.Namespace) -> int:
+    from cfg.sync_library_presets import sync_library_presets_from_registry
+
+    store = _open_store(args.store_dir)
+    repo = args.repo_root or _repo_root()
+    result = sync_library_presets_from_registry(store, repo_root=repo, publish=not args.draft)
+    print(json.dumps(result, indent=2))
+    return 0
+
+
 def _cmd_scaffold_action(args: argparse.Namespace) -> int:
     from cfg.scaffold import scaffold_action, upsert_server_action
 
@@ -378,6 +388,14 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--seed-wf", action="store_true")
     s.add_argument("--draft", action="store_true")
     s.set_defaults(func=_cmd_sync_actions)
+
+    s = sub.add_parser(
+        "sync-library-presets",
+        help="Sync enrichment library presets from the committed registry into cfg",
+    )
+    s.add_argument("--repo-root", default=None)
+    s.add_argument("--draft", action="store_true")
+    s.set_defaults(func=_cmd_sync_library_presets)
 
     s = sub.add_parser("scaffold-action", help="Scaffold client stubs from cfg action")
     s.add_argument("name")

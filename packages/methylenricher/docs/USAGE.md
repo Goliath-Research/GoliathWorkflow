@@ -35,7 +35,28 @@ Library resolution is explicit and stable:
 - else `--library-preset`,
 - else package defaults.
 
-Presets currently include `cancer-core` and `cancer-extended`.
+### Library presets (registry-backed)
+
+Presets are no longer hardcoded in Python. They are authored in the committed registry
+`methyl_enricher/data/library_presets.json` (validated by
+`methyl_enricher.preset_registry.LibraryPresetCatalog`, JSON Schema
+`schemas/config/library_presets.schema.json`) and can be synced into the `cfg` registry
+like the action catalog:
+
+```bash
+methyl-cfg sync-library-presets   # registry -> cfg kind enrichment_library_preset
+methyl-cfg materialize            # -> /work/site/enrichment/
+```
+
+Shipped presets:
+
+- `cancer-core` / `cancer-extended` — oncology (pathways + TF regulators + disease priors, plus drug/perturbation/miRNA sets in extended).
+- `neuro-core` — neurodegeneration / CNS (adds brain/CNS tissue and cell-type gene sets and aging perturbations; drops oncology-only drug libraries). Used by the Alzheimer cfDNA pack.
+
+Add a preset by editing `library_presets.json` and re-running the schema export
+(`scripts/export_config_schemas.sh`) — no code change. Unknown preset names still raise
+a clear `ValueError` at resolve time, and `methyl-enricher --library-preset` choices are
+derived from the registry.
 
 ## CIS-BP transcription-factor motifs (optional)
 

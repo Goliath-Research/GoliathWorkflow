@@ -117,6 +117,15 @@ BEGIN
       implementation_status = EXCLUDED.implementation_status,
       updated_at_utc = (now() AT TIME ZONE 'utc')
     RETURNING cfg.action_definition.id INTO v_id;
+  ELSIF p_kind = 'enrichment_library_preset' THEN
+    INSERT INTO cfg.enrichment_library_preset(name, version, status, content_hash, document_json)
+    VALUES (p_name, v_version, v_status, v_hash, p_document)
+    ON CONFLICT (name, version) DO UPDATE SET
+      status = EXCLUDED.status,
+      content_hash = EXCLUDED.content_hash,
+      document_json = EXCLUDED.document_json,
+      updated_at_utc = (now() AT TIME ZONE 'utc')
+    RETURNING cfg.enrichment_library_preset.id INTO v_id;
   ELSE
     RAISE EXCEPTION 'unknown cfg kind: %', p_kind;
   END IF;
@@ -198,6 +207,10 @@ BEGIN
       jsonb_build_object('implementationStatus', s.implementation_status)
     FROM cfg.action_definition s WHERE s.name = p_name AND (p_version IS NULL OR s.version = p_version)
       AND (NOT p_published_only OR s.status = 'published') ORDER BY s.id DESC LIMIT 1;
+  ELSIF p_kind = 'enrichment_library_preset' THEN
+    RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash, s.document_json, NULL::jsonb, NULL::jsonb
+    FROM cfg.enrichment_library_preset s WHERE s.name = p_name AND (p_version IS NULL OR s.version = p_version)
+      AND (NOT p_published_only OR s.status = 'published') ORDER BY s.id DESC LIMIT 1;
   ELSE
     RAISE EXCEPTION 'unknown cfg kind: %', p_kind;
   END IF;
@@ -245,6 +258,9 @@ BEGIN
   ELSIF p_kind = 'action_definition' THEN
     RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash FROM cfg.action_definition s
       WHERE NOT p_published_only OR s.status = 'published' ORDER BY s.name, s.version;
+  ELSIF p_kind = 'enrichment_library_preset' THEN
+    RETURN QUERY SELECT s.id, s.name, s.version, s.status::text, s.content_hash FROM cfg.enrichment_library_preset s
+      WHERE NOT p_published_only OR s.status = 'published' ORDER BY s.name, s.version;
   ELSE
     RAISE EXCEPTION 'unknown cfg kind: %', p_kind;
   END IF;
@@ -288,6 +304,9 @@ BEGIN
   ELSIF p_kind = 'action_definition' THEN
     UPDATE cfg.action_definition SET status = 'published', updated_at_utc = (now() AT TIME ZONE 'utc')
     WHERE name = p_name AND version = p_version RETURNING cfg.action_definition.id INTO v_id;
+  ELSIF p_kind = 'enrichment_library_preset' THEN
+    UPDATE cfg.enrichment_library_preset SET status = 'published', updated_at_utc = (now() AT TIME ZONE 'utc')
+    WHERE name = p_name AND version = p_version RETURNING cfg.enrichment_library_preset.id INTO v_id;
   ELSE
     RAISE EXCEPTION 'unknown cfg kind: %', p_kind;
   END IF;

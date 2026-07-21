@@ -33,6 +33,7 @@ def materialize_paths(
         "projects": work_root / "projects",
         "action_definitions": work_root / "site" / "action_definitions",
         "reference_assets": work_root / "site" / "reference_assets",
+        "enrichment_library_presets": work_root / "site" / "enrichment",
     }
 
 
@@ -138,5 +139,18 @@ def materialize_store(
             out = paths["action_definitions"] / f"{rec.name}.json"
             _write_json(out, rec.document)
             written.append(f"action_definition:{rec.name}@{rec.version}->{out}")
+
+    if "enrichment_library_preset" in selected:
+        presets = store.list("enrichment_library_preset", published_only=True)
+        combined: Dict[str, Any] = {}
+        for rec in presets:
+            out = paths["enrichment_library_presets"] / f"{rec.name}.json"
+            _write_json(out, rec.document)
+            combined[rec.name] = rec.document.get("libraries")
+            written.append(f"enrichment_library_preset:{rec.name}@{rec.version}->{out}")
+        if combined:
+            index = paths["enrichment_library_presets"] / "library_presets.json"
+            _write_json(index, {"presets": combined})
+            written.append(f"enrichment_library_preset:index->{index}")
 
     return {"workRoot": str(work_root), "written": written, "paths": {k: str(v) for k, v in paths.items()}}

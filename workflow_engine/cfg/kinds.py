@@ -14,6 +14,7 @@ Kind = Literal[
     "storage_profile",
     "reference_asset",
     "action_definition",
+    "enrichment_library_preset",
 ]
 
 CFG_KINDS: tuple[Kind, ...] = (
@@ -26,6 +27,7 @@ CFG_KINDS: tuple[Kind, ...] = (
     "storage_profile",
     "reference_asset",
     "action_definition",
+    "enrichment_library_preset",
 )
 
 # Kinds whose document may be written under /work (never credential).
@@ -38,4 +40,5 @@ MATERIALIZABLE_KINDS: tuple[Kind, ...] = (
     "storage_profile",
     "reference_asset",
     "action_definition",
+    "enrichment_library_preset",
 )

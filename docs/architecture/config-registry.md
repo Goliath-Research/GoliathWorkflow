@@ -62,6 +62,7 @@ methyl-cfg expand-endpoint lab-aws --prefix plasma/S1/
 
 methyl-cfg publish-program SamplePrepPipeline --work-root /work
 methyl-cfg scaffold-action demo.echo --define --capability demo
+methyl-cfg sync-library-presets   # enrichment library presets → cfg (kind enrichment_library_preset)
 # Genomes inventory (epimethyl/genomes → /work/genomes); pins from site reference_selection
 methyl-cfg provision-assets --selected-only --site default --work-root /work --dry-run
 methyl-cfg provision-assets --name linear-grch38-ensembl-114 --version 1 --work-root /work --dry-run
@@ -70,6 +71,18 @@ methyl-cfg provision-assets --name linear-grch38-ensembl-114 --version 1 --work-
 **Canonical genomes tree** (QNAP + `/work`): `linear/GRCh38/ensembl-114/`, `annotation/gencode/v49/`, `pangenome/GRCh38/d9/1.70/`. Site `reference_selection` pins active versions; `cfg.storage_endpoint` `epimethyl-genomes` (`prefixBase: genomes/`) + `cfg.reference_asset` recipes drive `s3_sync` provision. Phase 0 helper: `scripts/provision_selected_genomes.sh`.
 
 `METHYL_CFG_STORE` defaults to `/work/epimethyl/cfg-store` (file-backed stand-in that mirrors `cfg.*` tables). Production DDL: `workflow_engine/sql_{pg,mssql}/cfg_*.sql` (wired into `deploy_azure.sh`).
+
+## Enrichment library presets
+
+`cfg` kind **`enrichment_library_preset`** holds named Enrichr library sets (e.g.
+`cancer-core`, `neuro-core`) as config rather than a Python dict, mirroring the action
+catalog:
+
+- **Source of truth:** `packages/methylenricher/methyl_enricher/data/library_presets.json` (validated by `LibraryPresetCatalog`; schema `schemas/config/library_presets.schema.json`).
+- **Sync:** `methyl-cfg sync-library-presets` upserts one object per preset (resolved library list); `materialize` writes them to `/work/site/enrichment/`.
+- **Consumers:** `methyl_enricher.resolve_enrichr_libraries` loads the registry (not code); the Alzheimer cfDNA pack selects `neuro-core` via `actionConfig.enricher.library_preset`.
+
+Presets are config, not workflow nodes, so they are **not** seeded into `wf.workflow_action`.
 
 ## Storage endpoints and credentials
 
