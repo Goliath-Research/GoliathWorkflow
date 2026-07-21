@@ -21,7 +21,15 @@ class ProteinDeSelectConfig(BaseModel):
     transform: str = Field(default="log2")
     normalize: str = Field(default="median", description="median | quantile | none")
     impute: str = Field(default="min", description="min | mean | zero | none (left-censored default)")
-    missing_fill: float = float("nan")
+    missing_fill: Optional[float] = Field(
+        default=None,
+        description=(
+            "Value for features absent from a sample before impute. "
+            "null/None means NaN (left-censored; pair with impute=min|mean). "
+            "Operator-set in profile/site actionConfig.protein_de_select. "
+            "Must be JSON-serializable (do not use Python NaN in schemas)."
+        ),
+    )
     classifier_method: str = Field(default="logistic_regression")
     cv_folds: int = Field(default=5, ge=2)
     random_state: int = Field(default=13)

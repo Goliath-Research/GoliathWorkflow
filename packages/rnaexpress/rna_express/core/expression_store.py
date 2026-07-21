@@ -1,12 +1,15 @@
 """Per-sample RNA-Seq expression contract: normalize quantifier outputs to expression.h5.
 
-Canonical layout (one file per sample, under the sample directory):
+Canonical layout (via ``omics_features.feature_store``):
 
     {sample_id}.expression.h5
-        /gene_id  (variable-length UTF-8 strings, sorted)
-        /count    (float64, raw counts or summed est_counts)
-        /tpm      (float64, TPM where available else NaN)
-        attrs: quant_mode, n_genes
+        /feature_id  (variable-length UTF-8 strings, sorted)
+        /value       (float64, raw counts or summed est_counts)
+        /tpm         (float64 aux, TPM where available else NaN)
+        attrs: source (quant_mode), kind, n_features, sample_id
+
+Legacy files (pre-shared store) used ``gene_id`` / ``count``; readers accept both
+via ``omics_features.feature_store.read_feature_datasets``.
 
 STAR (``pbrun rna_fq2bam``) gives per-gene counts directly; kallisto gives
 transcript-level abundances that we aggregate to genes via a tx2gene map.

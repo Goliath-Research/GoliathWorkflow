@@ -34,6 +34,39 @@ def parse_diann_report(report_path: str | Path) -> Dict[str, float]:
     return {str(k): float(v) for k, v in grouped.items() if v == v}  # drop NaN
 
 
+def parse_sage_quant(lfq_path: str | Path) -> Dict[str, float]:
+    """Aggregate a Sage ``lfq.tsv`` to protein intensities (sum over peptides/columns).
+
+    Sage LFQ output is a wide table keyed by protein (and peptide) with one intensity
+    column per run. For a single-sample run we take the protein rows and sum the numeric
+    intensity column(s), summing peptide rows to the protein where a protein column exists.
+    """
+    import pandas as pd
+
+    df = _read_table(Path(lfq_path))
+    cols_lower = {c.lower(): c for c in df.columns}
+    prot_col = next(
+        (cols_lower[c] for c in ("proteins", "protein", "protein_id", "protein_group") if c in cols_lower),
+        None,
+    )
+    if prot_col is None:
+        raise RuntimeError(f"Sage lfq.tsv missing a protein column (have {list(df.columns)[:8]}...)")
+    # Intensity columns: numeric columns that are not identifier/metadata columns.
+    id_like = {prot_col.lower(), "peptide", "stripped_peptide", "charge", "q_value", "score", "spectral_angle"}
+    intensity_cols = [
+        c for c in df.columns
+        if c.lower() not in id_like and pd.api.types.is_numeric_dtype(pd.to_numeric(df[c], errors="coerce"))
+    ]
+    if not intensity_cols:
+        raise RuntimeError("Sage lfq.tsv has no numeric intensity columns")
+    work = df[[prot_col] + intensity_cols].copy()
+    for c in intensity_cols:
+        work[c] = pd.to_numeric(work[c], errors="coerce").fillna(0.0)
+    work["_intensity"] = work[intensity_cols].sum(axis=1)
+    grouped = work.groupby(prot_col)["_intensity"].sum()
+    return {str(k): float(v) for k, v in grouped.items() if v > 0}
+
+
 def parse_panel_matrix(
     panel_path: str | Path,
     sample_id: str,
@@ -107,6 +140,12 @@ def register_sample_abundance(
             raise RuntimeError(f"DIA-NN report not found for {sample_id}: {report}")
         values = parse_diann_report(report)
         source_label = "diann"
+    elif src in ("sage", "dda"):
+        lfq = sample_path / f"{sample_id}.sage" / "lfq.tsv"
+        if not lfq.is_file():
+            raise RuntimeError(f"Sage lfq.tsv not found for {sample_id}: {lfq}")
+        values = parse_sage_quant(lfq)
+        source_label = "sage"
     elif src == "panel":
         if not panel_path:
             raise RuntimeError("panel ingest requires panel_path")

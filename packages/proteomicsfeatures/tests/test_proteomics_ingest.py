@@ -50,6 +50,29 @@ def test_panel_npx_long_ingest(tmp_path: Path) -> None:
     assert result["source"] == "panel:npx"
 
 
+def test_sage_lfq_ingest(tmp_path: Path) -> None:
+    from proteomics_features.ingest import parse_sage_quant
+
+    d = tmp_path / "s1"
+    (d / "s1.sage").mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "proteins": ["P1", "P1", "P2", "P3"],
+            "peptide": ["AAA", "BBB", "CCC", "DDD"],
+            "charge": [2, 2, 3, 2],
+            "file_0.mzML": [100.0, 50.0, 200.0, 0.0],
+        }
+    ).to_csv(d / "s1.sage" / "lfq.tsv", sep="\t", index=False)
+    values = parse_sage_quant(d / "s1.sage" / "lfq.tsv")
+    assert values["P1"] == 150.0  # summed peptides
+    assert values["P2"] == 200.0
+    assert "P3" not in values  # zero intensity dropped
+
+    result = register_sample_abundance(sample_dir=str(d), sample_id="s1", source="sage")
+    assert result["n_proteins"] == 2
+    assert result["source"] == "sage"
+
+
 def test_panel_wide_ingest(tmp_path: Path) -> None:
     panel = tmp_path / "wide.csv"
     pd.DataFrame(

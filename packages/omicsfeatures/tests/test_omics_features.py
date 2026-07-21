@@ -26,6 +26,28 @@ def test_write_read_roundtrip(tmp_path: Path) -> None:
     assert vals.sum() == 15.0
 
 
+def test_legacy_gene_id_count_h5_readable(tmp_path: Path) -> None:
+    """Pre-omics_features RNA expression.h5 used gene_id/count datasets."""
+    import h5py
+
+    d = tmp_path / "s_legacy"
+    d.mkdir()
+    path = d / "s_legacy.expression.h5"
+    with h5py.File(path, "w") as h5:
+        dt = h5py.string_dtype(encoding="utf-8")
+        h5.create_dataset("gene_id", data=np.asarray(["G1", "G2"], dtype=object), dtype=dt)
+        h5.create_dataset("count", data=np.asarray([10.0, 20.0], dtype=np.float64))
+        h5.attrs["quant_mode"] = "star_counts"
+    feats, vals, source = read_sample_features(d, "s_legacy", kind="expression")
+    assert list(feats) == ["G1", "G2"]
+    assert list(vals) == [10.0, 20.0]
+    assert source == "star_counts"
+    X, gene_ids, sids = load_feature_matrix([str(d)], kind="expression", transform="none")
+    assert X.shape == (1, 2)
+    assert gene_ids == ["G1", "G2"]
+    assert sids == ["s_legacy"]
+
+
 def test_matrix_transforms_and_impute(tmp_path: Path) -> None:
     _write(tmp_path, "a", {"P1": 100.0, "P2": 50.0})
     _write(tmp_path, "b", {"P1": 100.0})  # P2 missing -> NaN then imputed

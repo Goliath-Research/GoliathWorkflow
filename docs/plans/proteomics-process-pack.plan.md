@@ -79,7 +79,7 @@ flowchart TD
 - **Register/deploy/tests/docs:** actions in `action_catalog.py`; regenerated task/config/domain schemas + `catalog.json`; deploy script compiles the proteomics programs; tests in `packages/omicsfeatures/tests`, `packages/proteomicsfeatures/tests`, `workflow_engine/tests/test_proteomics_pack.py` + golden fixtures; E2E doc `end-to-end-workflow-proteomics.md`, usage ch.22, regulatory roadmap row.
 
 ## Explicitly NOT in scope
-- DDA / MSFragger / FragPipe (commercial license) - later addition (CPU capability; can also build experimental spectral libraries for DIA-NN).
+- MSFragger / FragPipe (commercial license). DDA now ships via **Sage** (Apache-2.0) instead - see [proteomics-sage-dda.plan.md](proteomics-sage-dda.plan.md).
 - Methylation/RNA science changes beyond the shared-seam refactor.
 
 ## Validation

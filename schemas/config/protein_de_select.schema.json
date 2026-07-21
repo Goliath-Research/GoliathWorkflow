@@ -42,9 +42,17 @@
       "type": "number"
     },
     "missing_fill": {
-      "default": NaN,
-      "title": "Missing Fill",
-      "type": "number"
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Value for features absent from a sample before impute. null/None means NaN (left-censored; pair with impute=min|mean). Operator-set in profile/site actionConfig.protein_de_select. Must be JSON-serializable (do not use Python NaN in schemas).",
+      "title": "Missing Fill"
     },
     "normalize": {
       "default": "median",

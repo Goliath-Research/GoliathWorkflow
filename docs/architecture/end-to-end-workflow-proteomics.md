@@ -14,14 +14,16 @@
 
 ```mermaid
 flowchart TD
-  src{"ingest_mode? (usePanel)"}
+  src{"ingest_mode?"}
   src -->|"panel (CPU)"| panel["sample.ingest_panel<br/>Olink NPX / SomaScan RFU / open matrix"]
+  src -->|"dda (CPU)"| dl2["sample.download_msdata"] --> sage["sample.sage (CPU)<br/>Sage search + LFQ (Apache-2.0)"] --> regs["register_abundance(source=sage)"]
   src -->|"dia (GPU)"| dl["sample.download_msdata<br/>.raw/.mzML/.d"]
   dl --> diann["sample.diann (GPU)<br/>docker run METHYL_DIANN_IMAGE --gpus all"]
   diann --> rescore["sample.dl_rescore (GPU, Prosit)<br/>optional (useRescore): lift IDs at fixed FDR"]
-  rescore --> reg["sample.register_abundance<br/>{sample}.abundance.h5"]
+  rescore --> reg["register_abundance(source=diann)"]
   diann --> reg
   panel --> qc
+  regs --> qc
   reg --> qc["sample.proteomics_qc"]
   qc --> mat["cohort samples x proteins matrix<br/>log2 + median-normalize + min-impute (shared seam)"]
   mat --> de["pipeline.protein_de_select"]
@@ -48,7 +50,10 @@ Methylation-only steps (centroid/DMP/ECDF, Houseman/HiTIMED, bisulfite QC) do **
 | Mode | Action(s) | GPU? | Output |
 |------|-----------|------|--------|
 | `dia` (default) | `sample.diann` (+ optional `sample.dl_rescore`) -> `sample.register_abundance` | Yes | DIA-NN `report.tsv` -> `abundance.h5` |
+| `dda` | `sample.sage` -> `sample.register_abundance` | No (CPU) | Sage `results.sage.tsv` + `lfq.tsv` -> `abundance.h5` |
 | `panel` | `sample.ingest_panel` | No (CPU) | Olink NPX / SomaScan RFU / open matrix -> `abundance.h5` |
+
+`dda` runs **Sage** (Apache-2.0, Rust) - a fast open database-search engine replacing the license-encumbered MSFragger. CPU-only and multi-arch, so it runs on non-GPU workers; variable-mod config (e.g. phospho S/T/Y) enables PTM discovery. Provided via `METHYL_SAGE_IMAGE` (Docker) or the native `sage` binary.
 
 `sample.diann` runs a DIA-NN container (`METHYL_DIANN_IMAGE`, `--gpus all`) against the site `proteomics_reference` (protein FASTA + optional spectral library; library-free with `--predictor` when no library). `sample.ingest_panel` reads a cohort panel matrix and writes the same per-sample contract - no MS search, no GPU.
 
@@ -84,4 +89,4 @@ methyl-workflow-run \
 ## 8. What this document is not
 
 - Not an FDA submission or SaMD evidence package - see [`docs/regulatory/`](../regulatory/README.md).
-- DDA/MSFragger is not included (commercial license; later addition).
+- Sage-built spectral libraries feeding DIA-NN, TMT labeled quant, and MSFragger/FragPipe (commercial) are out of scope.

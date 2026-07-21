@@ -24,6 +24,7 @@ def test_sample_prep_proteomics_compiles_with_ingest_branches() -> None:
     action_names = [n.action_name for n in result.workflow.nodes if n.node_type == "ACTION"]
     assert "sample.ingest_panel" in action_names
     assert "sample.diann" in action_names
+    assert "sample.sage" in action_names  # DDA (Sage) branch
     assert "sample.dl_rescore" in action_names
     assert "sample.register_abundance" in action_names
     assert "sample.proteomics_qc" in action_names
@@ -52,6 +53,13 @@ def test_profile_resolves_ingest_mode_flags() -> None:
     )
     assert panel["usePanel"] is True
     assert panel["useRescore"] is True
+
+    dda = seed_pipeline_scope_flags(
+        {"pipelineProfile": "proteomics_research"},
+        action_config={"proteomics_quant": {"ingest_mode": "dda"}},
+    )
+    assert dda["useDda"] is True
+    assert dda["usePanel"] is False
 
 
 def test_proteomics_modality_normalizes() -> None:

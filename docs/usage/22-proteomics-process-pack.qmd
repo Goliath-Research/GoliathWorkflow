@@ -21,10 +21,20 @@ Modality is the assay axis and is independent of `primary_analyte`.
 | `ingest_mode` | Action | GPU | Output |
 |---------------|--------|-----|--------|
 | `dia` (default) | `sample.diann` (+ optional `sample.dl_rescore`) → `sample.register_abundance` | Yes (GH200) | DIA-NN report → `abundance.h5` |
+| `dda` | `sample.sage` → `sample.register_abundance` | No (CPU) | Sage search + LFQ → `abundance.h5` |
 | `panel` | `sample.ingest_panel` | No (CPU) | Olink NPX / SomaScan RFU / open matrix → `abundance.h5` |
 
 Set `rescore: true` under `proteomics_quant` to add Prosit deep-learning rescoring on the
 DIA path. Casanovo de novo (`sample.casanovo`) is available as a complementary GPU action.
+
+**DDA via Sage.** `ingest_mode: dda` runs [Sage](https://github.com/lazear/sage) (Apache-2.0,
+Rust) — a fast, open database-search engine that replaces the license-encumbered
+MSFragger/FragPipe. It is CPU-only and multi-arch, so it lands on cheap CPU workers (not the
+GH200s). Sage knobs live under `actionConfig.proteomics_quant` (`missed_cleavages`,
+`precursor_tol_ppm`, `fragment_tol_ppm`, `variable_mods` — e.g. phospho on `S`/`T`/`Y` for
+tau phosphopeptide discovery, `lfq`). Set `METHYL_SAGE_IMAGE` (or install the `sage`
+binary). Sage produces protein LFQ intensities normalized into the same `abundance.h5`
+contract as DIA-NN and panels.
 
 ## Reference assets (site)
 
@@ -69,5 +79,6 @@ methyl-workflow-run \
 
 ## Not included
 
-DDA / MSFragger / FragPipe (commercial license) is a later addition; it would be a CPU
-capability that can also build experimental spectral libraries for the DIA-NN path.
+- Sage results → spectral library → DIA-NN (DDA-assisted DIA) — a later optional extension.
+- TMT/iTRAQ labeled quant (LFQ only this iteration).
+- MSFragger/FragPipe is intentionally not used (commercial license); Sage is the open DDA engine.

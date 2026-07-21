@@ -785,6 +785,26 @@
     },
     {
       "action_config_key": "proteomics_quant",
+      "action_name": "sample.sage",
+      "argv_map": {},
+      "capability": "proteomics.sage",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "DDA database search + LFQ quantification with Sage (Apache-2.0 Rust; CPU, open MSFragger alternative).",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_sage",
+      "input_schema_ref": "schemas/tasks/sample_sage.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_sage.output.schema.json",
+      "schema_id": "sample.sage",
+      "tool": "ProteomicsSage"
+    },
+    {
+      "action_config_key": "proteomics_quant",
       "action_name": "sample.ingest_panel",
       "argv_map": {},
       "capability": "proteomics.panel_ingest",

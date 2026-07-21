@@ -134,6 +134,12 @@ GOLDEN_INPUTS: Dict[str, Dict[str, Any]] = {
         "sampleDir": "/work/samples/S1",
         "projectPath": "/work/p/project.json",
     },
+    "sample.sage": {
+        "tool": "ProteomicsSage",
+        "sampleId": "S1",
+        "sampleDir": "/work/samples/S1",
+        "projectPath": "/work/p/project.json",
+    },
     "sample.ingest_panel": {
         "tool": "ProteomicsIngestPanel",
         "sampleId": "S1",
@@ -339,6 +345,12 @@ GOLDEN_OUTPUTS: Dict[str, Dict[str, Any]] = {
         "status": "ok",
         "sampleId": "S1",
         "reportTsv": "/work/samples/S1/S1.diann/report.tsv",
+    },
+    "sample.sage": {
+        "status": "ok",
+        "sampleId": "S1",
+        "reportTsv": "/work/samples/S1/S1.sage/results.sage.tsv",
+        "lfqTsv": "/work/samples/S1/S1.sage/lfq.tsv",
     },
     "sample.ingest_panel": {
         "status": "ok",

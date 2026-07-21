@@ -43,6 +43,42 @@ def _handle_diann(_capability: str, _action_name: str, input: BaseModel):
     return DiannTaskOutput(status="ok", sampleId=result.get("sampleId"), reportTsv=result.get("reportTsv"))
 
 
+def _handle_sage(_capability: str, _action_name: str, input: BaseModel):
+    from ..sage_runner import run_sage
+    from ..sample_prep_log import append_sample_prep_log
+    from ..task_models.proteomics_prep_models import SageTaskOutput
+
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    sample_dir = input_json.get("sampleDir")
+    sample_id = input_json.get("sampleId")
+    if not sample_dir or not sample_id:
+        raise RuntimeError("sample.sage requires sampleDir and sampleId")
+    site_path = input_json.get("siteConfigPath")
+    result = run_sage(
+        sample_id=str(sample_id),
+        sample_dir=str(sample_dir),
+        input_json=input_json,
+        site_path=str(site_path) if site_path else None,
+    )
+    append_sample_prep_log(
+        Path(str(sample_dir)),
+        sample_id=str(sample_id),
+        action="sample.sage",
+        capability=_capability,
+        attempt=int(input_json.get("qcAttempt") or 1),
+        reason="Sage DDA search + LFQ quant (CPU)",
+        inputs={"ingestMode": "dda"},
+        outputs=result,
+        workflow_node_key=input_json.get("workflowNodeKey") or "sage",
+    )
+    return SageTaskOutput(
+        status="ok",
+        sampleId=result.get("sampleId"),
+        reportTsv=result.get("reportTsv"),
+        lfqTsv=result.get("lfqTsv"),
+    )
+
+
 def _handle_ingest_panel(_capability: str, _action_name: str, input: BaseModel):
     from proteomics_features.ingest import register_sample_abundance
     from ..sample_prep_log import append_sample_prep_log

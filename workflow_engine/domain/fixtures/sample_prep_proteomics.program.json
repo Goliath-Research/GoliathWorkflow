@@ -6,7 +6,11 @@
   "variables": {
     "usePanel": {
       "schemaRef": "schemas/vars/bool.schema.json",
-      "description": "When true, ingest a panel matrix (Olink NPX / SomaScan RFU / open); else run GPU DIA-NN. Derived from actionConfig.proteomics_quant.ingest_mode."
+      "description": "When true, ingest a panel matrix (Olink NPX / SomaScan RFU / open). Derived from actionConfig.proteomics_quant.ingest_mode=panel."
+    },
+    "useDda": {
+      "schemaRef": "schemas/vars/bool.schema.json",
+      "description": "When true (and not panel), run DDA search with Sage (CPU) instead of DIA-NN. actionConfig.proteomics_quant.ingest_mode=dda."
     },
     "useRescore": {
       "schemaRef": "schemas/vars/bool.schema.json",
@@ -45,21 +49,42 @@
               "node_key": "download_msdata"
             },
             {
-              "action": "sample.diann",
-              "node_key": "diann"
-            },
-            {
-              "if": "${useRescore}",
+              "if": "${useDda}",
               "then": [
                 {
-                  "action": "sample.dl_rescore",
-                  "node_key": "dl_rescore"
+                  "action": "sample.sage",
+                  "node_key": "sage"
+                },
+                {
+                  "action": "sample.register_abundance",
+                  "node_key": "register_abundance_dda",
+                  "with": {
+                    "source": "sage"
+                  }
+                }
+              ],
+              "else": [
+                {
+                  "action": "sample.diann",
+                  "node_key": "diann"
+                },
+                {
+                  "if": "${useRescore}",
+                  "then": [
+                    {
+                      "action": "sample.dl_rescore",
+                      "node_key": "dl_rescore"
+                    }
+                  ]
+                },
+                {
+                  "action": "sample.register_abundance",
+                  "node_key": "register_abundance",
+                  "with": {
+                    "source": "diann"
+                  }
                 }
               ]
-            },
-            {
-              "action": "sample.register_abundance",
-              "node_key": "register_abundance"
             }
           ]
         },

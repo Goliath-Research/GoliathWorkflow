@@ -40,6 +40,7 @@ _PROBE_ALWAYS = "always"
 _PROBE_CLI = "cli"
 _PROBE_PARABRICKS = "parabricks"
 _PROBE_DOCKER_GPU = "docker_gpu"
+_PROBE_SAGE = "sage"
 _PROBE_EXTRACTOR = "extractor"
 
 
@@ -54,11 +55,26 @@ def _capability_probe_kind(capability: str, *, execution_mode: str, cli_tool: Op
         return _PROBE_PARABRICKS
     if capability in DOCKER_GPU_TOOL_IMAGE_ENV:
         return _PROBE_DOCKER_GPU
+    if capability == "proteomics.sage":
+        return _PROBE_SAGE
     if capability == "methyl-extract":
         return _PROBE_EXTRACTOR
     if execution_mode == "cli" and cli_tool:
         return _PROBE_CLI
     return _PROBE_ALWAYS
+
+
+def _sage_available() -> bool:
+    """True when Sage (CPU DDA) can run: a Docker image env or the native binary."""
+    try:
+        from methyl_worker.sage_runner import sage_available
+
+        return bool(sage_available())
+    except Exception:
+        if os.environ.get("METHYL_SAGE_IMAGE", "").strip() and shutil.which("docker"):
+            return True
+        binary = os.environ.get("METHYL_SAGE_BIN", "").strip() or "sage"
+        return shutil.which(binary) is not None
 
 
 def _docker_gpu_tool_available(capability: str) -> bool:
@@ -182,6 +198,11 @@ def resolve_worker_capabilities(
                     capability,
                 )
             continue
+        if kind == _PROBE_SAGE:
+            # CPU tool (Sage DDA): no GPU required.
+            if _sage_available():
+                caps.add(capability)
+            continue
         if kind == _PROBE_EXTRACTOR:
             if extractor_ok:
                 caps.add(capability)
@@ -221,6 +242,11 @@ def assert_node_can_serve_capability(capability: str) -> None:
         raise RuntimeError(
             f"Worker configured for capability {capability!r} but its Docker image is not available. "
             f"Set {env} to an arm64/multi-arch image pulled into the shared Docker store."
+        )
+    if capability == "proteomics.sage" and not _sage_available():
+        raise RuntimeError(
+            "Worker configured for capability 'proteomics.sage' but Sage is not available. "
+            "Set METHYL_SAGE_IMAGE or install the `sage` binary (METHYL_SAGE_BIN / PATH)."
         )
     if capability == "methyl-extract" and not _extractor_available():
         raise RuntimeError(

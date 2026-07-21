@@ -19,6 +19,15 @@ class DiannTaskInput(BaseModel):
     projectPath: Optional[str] = None
 
 
+class SageTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "ProteomicsSage"
+    sampleId: str
+    sampleDir: str
+    projectPath: Optional[str] = None
+
+
 class IngestPanelTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -82,6 +91,12 @@ class ProteinDeSelectTaskInput(BaseModel):
 class DiannTaskOutput(ActionOutputBase):
     sampleId: Optional[str] = None
     reportTsv: Optional[str] = None
+
+
+class SageTaskOutput(ActionOutputBase):
+    sampleId: Optional[str] = None
+    reportTsv: Optional[str] = None
+    lfqTsv: Optional[str] = None
 
 
 class AbundanceTaskOutput(ActionOutputBase):

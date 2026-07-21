@@ -14,6 +14,8 @@ RESULTS_FILENAME = "protein_de_results.json"
 
 
 def _to_generic(cfg: ProteinDeSelectConfig) -> DeSelectConfig:
+    # null/None in operator config means NaN fill (JSON-safe; RFC 8259 has no NaN).
+    fill = float("nan") if cfg.missing_fill is None else float(cfg.missing_fill)
     return DeSelectConfig(
         kind="abundance",
         feature_mode="proteomics_abundance",
@@ -23,7 +25,7 @@ def _to_generic(cfg: ProteinDeSelectConfig) -> DeSelectConfig:
         transform=cfg.transform,
         normalize=cfg.normalize,
         impute=cfg.impute,
-        missing_fill=cfg.missing_fill,
+        missing_fill=fill,
         classifier_method=cfg.classifier_method,
         cv_folds=cfg.cv_folds,
         random_state=cfg.random_state,

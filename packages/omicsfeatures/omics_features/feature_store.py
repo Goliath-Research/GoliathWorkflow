@@ -68,17 +68,36 @@ def write_sample_features(
     }
 
 
+def _decode_str_dataset(raw: Any) -> np.ndarray:
+    return np.asarray([f.decode() if isinstance(f, bytes) else str(f) for f in raw])
+
+
+def read_feature_datasets(h5: h5py.File) -> Tuple[np.ndarray, np.ndarray]:
+    """Read ``(feature_ids, values)`` from a sample feature HDF5.
+
+    Canonical contract: ``feature_id`` + ``value``.
+    Legacy RNA ``expression.h5`` (pre-omics_features): ``gene_id`` + ``count``.
+    """
+    if "feature_id" in h5 and "value" in h5:
+        return _decode_str_dataset(h5["feature_id"][:]), np.asarray(h5["value"][:], dtype=np.float64)
+    if "gene_id" in h5 and "count" in h5:
+        # Backward-compat shim for files written before the shared feature_store contract.
+        return _decode_str_dataset(h5["gene_id"][:]), np.asarray(h5["count"][:], dtype=np.float64)
+    keys = sorted(h5.keys())
+    raise KeyError(
+        "feature HDF5 missing canonical datasets feature_id/value "
+        f"(and no legacy gene_id/count); keys={keys}"
+    )
+
+
 def read_sample_features(sample_dir: str | Path, sample_id: str, *, kind: str) -> Tuple[np.ndarray, np.ndarray, str]:
     """Return (feature_ids, values, source) for a registered sample."""
     path = feature_h5_path(sample_dir, sample_id, kind=kind)
     if not path.is_file():
         raise RuntimeError(f"{kind}.h5 not found: {path}")
     with h5py.File(path, "r") as h5:
-        feature_ids = np.asarray(
-            [f.decode() if isinstance(f, bytes) else str(f) for f in h5["feature_id"][:]]
-        )
-        values = np.asarray(h5["value"][:], dtype=np.float64)
-        source = str(h5.attrs.get("source", "unknown"))
+        feature_ids, values = read_feature_datasets(h5)
+        source = str(h5.attrs.get("source", h5.attrs.get("quant_mode", "unknown")))
     return feature_ids, values, source
 
 

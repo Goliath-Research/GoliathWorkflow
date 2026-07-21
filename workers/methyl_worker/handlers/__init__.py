@@ -50,6 +50,7 @@ from .proteomics_prep import (
     _handle_ingest_panel,
     _handle_proteomics_qc,
     _handle_register_abundance,
+    _handle_sage,
 )
 from .stub import _handle_stub_external
 from .workflow_compute import (
@@ -101,6 +102,7 @@ __all__ = [
     "_handle_rna_qc",
     "_handle_register_expression",
     "_handle_diann",
+    "_handle_sage",
     "_handle_ingest_panel",
     "_handle_register_abundance",
     "_handle_proteomics_qc",

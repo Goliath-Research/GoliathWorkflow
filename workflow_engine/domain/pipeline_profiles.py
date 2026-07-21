@@ -37,6 +37,7 @@ PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
     "usePangenome": False,
     "useKallisto": False,
     "usePanel": False,
+    "useDda": False,
     "useRescore": False,
     "deleteFastqs": True,
     "runDmpSelection": False,
@@ -541,6 +542,10 @@ def seed_pipeline_scope_flags(
         out["usePanel"] = bool(out["usePanel"])
     else:
         out.setdefault("usePanel", str(ingest_mode).strip().lower() == "panel")
+    if "useDda" in out:
+        out["useDda"] = bool(out["useDda"])
+    else:
+        out.setdefault("useDda", str(ingest_mode).strip().lower() == "dda")
     if "useRescore" in out:
         out["useRescore"] = bool(out["useRescore"])
     else:

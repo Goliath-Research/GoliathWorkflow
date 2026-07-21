@@ -13,14 +13,13 @@ from typing import List, Optional, Sequence, Tuple
 import h5py
 import numpy as np
 
-from .feature_store import find_feature_h5
+from .feature_store import find_feature_h5, read_feature_datasets
 
 
 def _read_h5(path: Path) -> Tuple[List[str], np.ndarray]:
     with h5py.File(path, "r") as h5:
-        feature_ids = [f.decode() if isinstance(f, bytes) else str(f) for f in h5["feature_id"][:]]
-        values = np.asarray(h5["value"][:], dtype=np.float64)
-    return feature_ids, values
+        feature_ids, values = read_feature_datasets(h5)
+    return [str(f) for f in feature_ids], values
 
 
 def _apply_transform(X: np.ndarray, transform: str, *, min_total: float) -> np.ndarray:

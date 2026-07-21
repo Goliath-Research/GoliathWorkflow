@@ -38,6 +38,7 @@ the image is set on the node:
 | `proteomics.diann` | `METHYL_DIANN_IMAGE` | DIA search + quant (GPU) |
 | `proteomics.prosit` | `METHYL_PROSIT_IMAGE` | rescoring / in-silico library (GPU) |
 | `proteomics.casanovo` | `METHYL_CASANOVO_IMAGE` | de novo (GPU) |
+| `proteomics.sage` | `METHYL_SAGE_IMAGE` (or `sage` binary / `METHYL_SAGE_BIN`) | DDA search + LFQ — **CPU** (Apache-2.0, open MSFragger alternative); multi-arch, no page-size caveat; lands on non-GPU workers |
 | `proteomics.panel_ingest` | (none) | panel matrix ingest — **CPU**, lands on non-GPU workers |
 
 **GH200 / ARM64 caveat.** Workers run `docker run` host-native (no `--platform` pin), so on
