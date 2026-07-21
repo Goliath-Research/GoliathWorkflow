@@ -217,6 +217,14 @@ For theory and package documentation, see:
         default='Human',
         help='Organism for Enrichr analysis (default: Human)'
     )
+    enrich_group.add_argument(
+        '--string-species',
+        type=int,
+        default=9606,
+        dest='string_species',
+        help='NCBI taxon id for STRING PPI network refinement (default: 9606 human; '
+             '3702 Arabidopsis, 3847 soybean).'
+    )
     
     # Module pipeline (pathway-to-module)
     parser.add_argument(
@@ -873,6 +881,7 @@ def main():
                 output_dir=Path(out_dir),
                 cisbp=cisbp_config,
                 cisbp_context=cisbp_context,
+                organism=args.organism,
                 gene_column=args.gene_column,
                 top_n=args.top,
                 disease_only=args.disease_only,
@@ -892,6 +901,7 @@ def main():
             return run_ppi_hubs_only(
                 input_path=in_file,
                 output_dir=Path(out_dir),
+                organism=args.organism,
                 gene_column=args.gene_column,
                 top_n=args.top,
                 disease_only=args.disease_only,
@@ -917,6 +927,7 @@ def main():
                 network_refinement_hub_w_degree=getattr(args, "network_refinement_hub_w_degree", None),
                 network_refinement_hub_w_betweenness=getattr(args, "network_refinement_hub_w_betweenness", None),
                 network_refinement_hub_w_closeness=getattr(args, "network_refinement_hub_w_closeness", None),
+                network_refinement_species=getattr(args, "string_species", 9606),
             )
         if getattr(args, "modules", False):
             _np = getattr(args, "network_plot", None)
@@ -969,6 +980,7 @@ def main():
                     args, "network_refinement_hub_w_betweenness", None
                 ),
                 network_refinement_hub_w_closeness=getattr(args, "network_refinement_hub_w_closeness", None),
+                network_refinement_species=getattr(args, "string_species", 9606),
                 dash_host=getattr(args, "dash_host", "127.0.0.1"),
                 dash_port=getattr(args, "dash_port", 8050),
                 dash_open_browser=getattr(args, "dash_open_browser", False),

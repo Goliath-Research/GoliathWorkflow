@@ -44,6 +44,17 @@ def normalize_primary_analyte(value: Optional[str]) -> Optional[str]:
         return "buffy_coat"
     if cleaned in {"combined", "mixed"}:
         return "combined"
+    if cleaned in {
+        "plant_tissue",
+        "plant",
+        "leaf",
+        "plant_leaf",
+        "root_tissue",
+        "root",
+        "meristem",
+        "seed",
+    }:
+        return "plant_tissue"
     return cleaned or None
 
 
@@ -129,6 +140,48 @@ def profile_for_analyte(analyte: str) -> Dict[str, Dict[str, Any]]:
                     "cisbp_modes": ["gene_sets"],
                     "species": "Homo_sapiens",
                 },
+            },
+            "validation": {
+                "enforce_training_analyte_match": False,
+            },
+        }
+
+    if key == "plant_tissue":
+        # Plant WGBS: CG/CHG/CHH are all real biology. Non-CpG methylation is a
+        # signal, not a bisulfite-conversion failure, so the conversion-rate gate
+        # is kept (spike-in / sidecar) while the non-CpG cap is opened up and the
+        # mammalian CHG/CHH extraction caps are lifted. No blood fragmentomics.
+        plant_bisulfite = {
+            "enabled": True,
+            "source": "auto",
+            "min_conversion_rate_pct": 99.0,
+            "max_non_cpg_methylation_pct": 100.0,
+        }
+        return {
+            "alignment_qc": {
+                "auto_profile_from_analyte": False,
+                "bisulfite_conversion": plant_bisulfite,
+                "alignment_guardrails": {
+                    "enabled": True,
+                    "min_mapping_rate": 0.90,
+                    "max_secondary_supplementary_rate": 0.05,
+                    "flagstat_enabled": True,
+                    "min_properly_paired_rate": 0.90,
+                    "max_supplementary_rate_flagstat": 0.02,
+                },
+            },
+            "fragmentomics": {
+                "enabled": False,
+            },
+            "extraction_qc": {
+                "guardrails": {
+                    "max_chh_methylation_level": 1.0,
+                    "max_chg_methylation_level": 1.0,
+                },
+            },
+            "enricher": {
+                "library_preset": "plant-stress-core",
+                "organism": "Arabidopsis_thaliana",
             },
             "validation": {
                 "enforce_training_analyte_match": False,

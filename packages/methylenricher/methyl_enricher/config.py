@@ -141,6 +141,14 @@ class EnricherStepConfig(BaseModel):
     top: Optional[int] = None
     cutoff: Optional[float] = None
     organism: Optional[str] = None
+    string_species: Optional[int] = Field(
+        default=None,
+        description=(
+            "NCBI taxon id for STRING PPI network refinement (e.g. 9606 human, "
+            "3702 Arabidopsis thaliana, 3847 soybean). Defaults to 9606 when unset. "
+            "Operator-set per profile/site actionConfig.enricher for non-human packs."
+        ),
+    )
     ensure_complete: Optional[bool] = None
     distributed: Optional[bool] = None
     enricher_max_retries: Optional[int] = None

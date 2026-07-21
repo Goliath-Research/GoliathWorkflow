@@ -607,6 +607,8 @@ def run_ppi_hubs_only(
     network_refinement_hub_w_degree: Optional[float] = None,
     network_refinement_hub_w_betweenness: Optional[float] = None,
     network_refinement_hub_w_closeness: Optional[float] = None,
+    network_refinement_species: int = 9606,
+    organism: str = "Human",
     disease_genes: Optional[Set[str]] = None,
 ) -> pd.DataFrame:
     """PPI-only hub extraction: no Enrichr libraries, no pathway modules.
@@ -624,7 +626,7 @@ def run_ppi_hubs_only(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    analyzer = EnrichmentAnalyzer(libraries=[], organism="Human")
+    analyzer = EnrichmentAnalyzer(libraries=[], organism=organism)
     genes, gene_weights = analyzer.load_gene_list_with_weights(
         input_path,
         top_n=top_n,
@@ -661,6 +663,7 @@ def run_ppi_hubs_only(
     else:
         edges_df = fetch_string_edges(
             genes=genes,
+            species=int(network_refinement_species),
             required_score=float(network_refinement_score_threshold),
             cache_path=network_refinement_cache_path,
         )
@@ -737,6 +740,7 @@ def run_cisbp_only(
     feature_types: Optional[List[str]] = None,
     sort_by: Optional[str] = None,
     sort_ascending: bool = False,
+    organism: str = "Human",
 ) -> pd.DataFrame:
     """CIS-BP-only TF-motif enrichment: no Enrichr libraries, no PPI, no modules.
 
@@ -757,7 +761,7 @@ def run_cisbp_only(
         logger.warning("CIS-BP-only requested but CIS-BP config is disabled/None; nothing to do.")
         return pd.DataFrame(columns=["cisbp_label"])
 
-    analyzer = EnrichmentAnalyzer(libraries=[], organism="Human")
+    analyzer = EnrichmentAnalyzer(libraries=[], organism=organism)
     genes, _weights = analyzer.load_gene_list_with_weights(
         input_path,
         top_n=top_n,
@@ -841,6 +845,7 @@ def run_module_pipeline(
     network_refinement_hub_w_degree: Optional[float] = None,
     network_refinement_hub_w_betweenness: Optional[float] = None,
     network_refinement_hub_w_closeness: Optional[float] = None,
+    network_refinement_species: int = 9606,
     dash_host: str = "127.0.0.1",
     dash_port: int = 8050,
     dash_open_browser: bool = False,
@@ -969,6 +974,7 @@ def run_module_pipeline(
             else:
                 edges_df = fetch_string_edges(
                     genes=genes,
+                    species=int(network_refinement_species),
                     required_score=float(network_refinement_score_threshold),
                     cache_path=network_refinement_cache_path,
                 )

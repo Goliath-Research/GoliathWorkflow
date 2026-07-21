@@ -51,6 +51,7 @@ oncology cohorts. Near-term process packs use the same control plane:
 | Methylation — buffy coat / cfDNA (e.g. oncology) | **In production use** | SamplePrep → MC stability → freeze → model; SaMD ladder |
 | RNA-Seq (transcriptomics) | **Shipped process pack (research)** | Second omics modality (`regulatory.primary_modality: rnaseq`). Quantify with NVIDIA Clara Parabricks `pbrun rna_fq2bam` (STAR) or `pbrun kallisto`, selectable via `actionConfig.rna_align.quant_mode` — parallel to the methylation `fq2bam_meth` / giraffe SamplePrep path. Ships typed actions, RNA QC, a per-sample expression contract, and DE gene-panel + tabular classification; remaining gate is representative cohort data and validation evidence, not aligner R&D. |
 | Methylation — cfDNA Alzheimer detection | **Shipped disease pack (research)** | Staged Control → MCI → AD study on the methylation control plane (`primary_analyte: cfdna`). Ships as config — study manifest, cohorts, patient-disjoint partitions, and a disease overlay (`mapper.disease_term` = Alzheimer's disease, `neuro-core` enrichment preset, progression) — with **no** new actions or aligners. Remaining gate is representative cohort data and validation evidence. See [Alzheimer cfDNA pack](../usage/21-alzheimer-cfdna-pack.qmd). |
+| Methylation — plant abiotic stress (Arabidopsis drought) | **Shipped trait pack (research)** | Non-human demonstration of platform versatility: binary Control vs Drought *Arabidopsis* WGBS study (`primary_analyte: plant_tissue`) across CG/CHG/CHH contexts. Reuses the methylation science and `samd_research`; the plant-specific parts are config plus a few unblockers — a `plant_tissue` analyte (plant-safe QC that treats non-CG methylation as biology, no cfDNA fragmentomics), a linear TAIR10 site reference, a lifecycle program with blood cell deconvolution removed, and a `plant-stress-core` enrichment preset — with **no** new aligner or workflow action. Other crops (soybean, maize, wheat) reuse it by swapping site pins. Grafting / trait-introgression is a planned separate pack. See [Plant abiotic stress pack](../usage/23-plant-abiotic-stress-pack.qmd). |
 | Proteomics | **Shipped process pack (research)** | Third omics modality (`regulatory.primary_modality: proteomics`). Three ingest modes: GPU DIA-NN on the Lambda/Nebius GH200 VMs (own image + capability, not Parabricks); CPU **DDA via Sage** (Apache-2.0 Rust, the open replacement for MSFragger); and CPU panel-matrix ingest (Olink/SomaScan/open). Plus Prosit rescoring / in-silico libraries and Casanovo de novo (GPU). Shares a generalized `samples x features` seam with RNA-Seq feeding the tabular classifier, covariate stacking, and MC stability. See [Proteomics process pack](../usage/22-proteomics-process-pack.qmd). |
 
 Buyers purchase a **platform** with a growing set of analyte/disease packs—not a
@@ -179,7 +180,14 @@ architecture that already exists:
   **Alzheimer cfDNA** pack shows the lighter path: a *disease* pack that reuses the
   methylation control plane with no new code — a staged Control → MCI → AD study,
   patient-disjoint partitions, and a config overlay (`mapper.disease_term`,
-  the registry-backed `neuro-core` enrichment preset, progression).
+  the registry-backed `neuro-core` enrichment preset, progression). The shipped
+  **plant abiotic stress** pack proves the platform is *species*-agnostic, not just
+  disease-agnostic: an *Arabidopsis* Control vs Drought WGBS study across CG/CHG/CHH
+  contexts that reuses the same scheduler, MC stability, and `samd_research` ladder,
+  adding only config plus targeted unblockers (a `plant_tissue` analyte with plant-safe
+  QC, a linear TAIR10 site reference, a deconvolution-free copy of the lifecycle program,
+  and a `plant-stress-core` enrichment preset) — no new aligner or action. Other crops
+  reuse it by swapping site genome pins.
 
 ---
 

@@ -1,0 +1,143 @@
+---
+title: "Plant abiotic stress pack"
+---
+
+Plant abiotic stress detection ships as a **trait pack** on the existing DNA-methylation
+process, demonstrating that the platform is species-agnostic. It reuses the SamplePrep
+per-sample topology, the centroid -> detector -> mapper -> Monte Carlo stability science,
+and the `samd_research` profile. Unlike a human disease pack (e.g.
+[Alzheimer cfDNA](21-alzheimer-cfdna-pack.qmd)), plants require a few **platform
+unblockers** because human blood/cfDNA defaults are biologically wrong for plant WGBS:
+a `plant_tissue` analyte, a non-human site reference, a lifecycle program without blood
+cell deconvolution, and a plant enrichment preset. There is no new aligner or workflow
+action.
+
+For the shared per-sample and Monte Carlo topology, see the DNA methylation
+[end-to-end workflow](../architecture/end-to-end-workflow.md). Plant epigenomics
+background (CG/CHG/CHH contexts, stress biology, MSH1) is in
+[Plant Research](../research/Plant%20Research.md). This chapter covers only what is
+plant-specific.
+
+Committed example: [`docs/examples/samd/plant-abiotic-stress/`](../examples/samd/plant-abiotic-stress/README.md).
+
+## Why plants are different
+
+Plant genomes methylate cytosines in three sequence contexts, each with distinct biology,
+so the pack runs all three and treats non-CG methylation as signal rather than a
+bisulfite-conversion artifact:
+
+| Context | Maintained by | Meaning |
+|---------|---------------|---------|
+| CG | MET1 | Often stable, heritable epialleles |
+| CHG | CMT3 | Chromatin / TE silencing |
+| CHH | RdDM (24-nt siRNA) | Dynamic environmental (e.g. drought) response |
+
+This is why the human WGBS defaults (which treat CHG/CHH methylation above ~2% as a
+conversion failure) must be lifted for plants.
+
+## Cohort design (binary Control vs Drought)
+
+The study manifest expresses one control group and one stress group, giving a single
+comparison. Grafting / trait-introgression is a separate later pack, not this one.
+
+```mermaid
+flowchart TD
+  C["control.csv (well-watered)"] --> CMP{"comparisons<br/>control_vs_each_disease"}
+  D["drought.csv (stressed)"] --> CMP
+  CMP --> MC["MC stability per comparison<br/>CG / CHG / CHH"]
+  MC --> MODEL["freeze + model + holdout (samd_research)"]
+```
+
+Manifest essentials (`project_Control_vs_Drought.json`):
+
+```json
+{
+  "diseases": {
+    "label": "stress",
+    "groups": [{ "label": "drought", "sample_paths": ["data/drought.csv"] }]
+  },
+  "comparisons": "control_vs_each_disease",
+  "chromosomes": ["1", "2", "3", "4", "5"],
+  "contexts": ["CG", "CHG", "CHH"],
+  "regulatory": { "primary_modality": "methylation", "primary_analyte": "plant_tissue" }
+}
+```
+
+`primary_modality: methylation` keeps this on the methylation process; `primary_analyte:
+plant_tissue` selects the plant analyte profile (plant-safe QC, no cfDNA fragmentomics).
+Arabidopsis chromosomes are `1..5`; swap the list for other species.
+
+## Site reference (plant genome gate)
+
+Plants align **linear only** (no HPRC pangenome). Pin a non-human genome + GTF in a site
+manifest and provision the assets once per cluster:
+
+```bash
+scripts/download_arabidopsis_tair10.sh
+export METHYL_SITE_CONFIG=workflow_engine/domain/profiles/site_tair10.example.json
+```
+
+The committed example [`site_tair10.example.json`](../../workflow_engine/domain/profiles/site_tair10.example.json)
+pins `Arabidopsis_thaliana.TAIR10.dna.toplevel.fa` and
+`Arabidopsis_thaliana.TAIR10.58.gtf` under `/work/genomes` and omits the pangenome, RNA
+and proteomics reference blocks. The genome site reference is the real deployment gate for
+this pack, not new Python science.
+
+## Plant analyte overlay
+
+Plant biology is expressed through the `plant_tissue` analyte defaults plus a small
+instance/context overlay (`context_plant_abiotic_stress.json`):
+
+| Key | Value | Why |
+|-----|-------|-----|
+| `regulatory.primary_analyte` | `plant_tissue` | Plant-safe QC: lifts CHG/CHH extraction caps, opens the bisulfite non-CpG cap, disables cfDNA fragmentomics (see [ANALYTE_PROFILES](../ANALYTE_PROFILES.md)) |
+| `actionConfig.mapper.enrich_disease` | `false` | Stress traits are not EFO human diseases; OpenTargets is the wrong prior |
+| `actionConfig.enricher.library_preset` | `"plant-stress-core"` | Organism-general GO terms; drops human oncology/CNS libraries |
+| `actionConfig.enricher.organism` | `"Arabidopsis_thaliana"` | Enrichr organism |
+| `actionConfig.enricher.string_species` | `3702` | STRING PPI taxon (Arabidopsis; 3847 soybean) |
+| `runProgressionAnalysis` | `false` | Binary study, no ordered stages |
+
+Human-symbol Enrichr libraries do not map to Arabidopsis AGI locus IDs, so for true
+Arabidopsis/crop term enrichment supply a custom plant GMT via
+`actionConfig.enricher.libraries`; `plant-stress-core` is the discovery default. The
+preset is a committed enrichment library preset synced like the action catalog:
+
+```bash
+methyl-cfg sync-library-presets      # registry -> cfg (kind enrichment_library_preset)
+methyl-cfg materialize               # -> /work/site/enrichment/*.json
+```
+
+## Lifecycle program without cell deconvolution
+
+The pack runs
+[`plant_stress_study_lifecycle.program.json`](../../workflow_engine/domain/fixtures/plant_stress_study_lifecycle.program.json),
+identical to the human `study_validation_lifecycle` except the `pipeline.cell_deconvolution`
+node is removed (shipped deconvolution bases are human-blood only). Progression is
+config-gated off for the binary study.
+
+```bash
+methyl-study-validate-manifest \
+  --project /work/projects/plant-abiotic-stress/configs/project_Control_vs_Drought.json \
+  --profile samd_research
+
+methyl-workflow-run \
+  --program workflow_engine/domain/fixtures/plant_stress_study_lifecycle.program.json \
+  --context-file /work/projects/plant-abiotic-stress/configs/context_plant_abiotic_stress.json
+```
+
+## Extending to other crops
+
+Soybean, maize and wheat reuse this pack by swapping the site reference pins (FASTA + GTF,
+chromosome list, `string_species` taxon) and cohort CSVs. No code, program, or profile
+changes are required.
+
+## What this pack does not add
+
+- No new DomainProgram science, workflow action, or aligner (only a deconvolution-free
+  copy of the existing lifecycle program).
+- No plant cell-type deconvolution basis (shipped bases are human blood; the node is
+  omitted, not retuned).
+- No human disease priors (OpenTargets/DisGeNET) — disabled for stress traits.
+- No grafting / trait-introgression design — that is a planned separate pack.
+- No SaMD pivotal / clinical-performance claim ladder — an agricultural research pack
+  stays on `samd_research`.

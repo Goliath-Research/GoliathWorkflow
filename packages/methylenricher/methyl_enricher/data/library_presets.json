@@ -56,6 +56,15 @@
         "Aging_Perturbations_from_GEO_up",
         "Aging_Perturbations_from_GEO_down"
       ]
+    },
+    "plant-stress-core": {
+      "description": "Plant abiotic stress (e.g. Arabidopsis drought/heat/salt). Drops the human oncology/CNS pathway and disease-prior libraries (include_default is false) and keeps organism-general GO term collections that cover stress-response and hormone-signalling terms. Human-symbol Enrichr libraries do not map to plant AGI locus IDs, so for true Arabidopsis/crop enrichment supply a custom plant GMT via actionConfig.enricher.libraries or run offline ORA; this preset is the discovery default. Use with enricher.organism set to the target species and enrich_disease disabled.",
+      "include_default": false,
+      "libraries": [
+        "GO_Biological_Process_2023",
+        "GO_Molecular_Function_2023",
+        "GO_Cellular_Component_2023"
+      ]
     }
   }
 }

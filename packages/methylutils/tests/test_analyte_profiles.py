@@ -14,6 +14,23 @@ from methyl_utils.pipeline_config import ProjectConfig, load_project
 def test_normalize_primary_analyte():
     assert normalize_primary_analyte("Plasma cfDNA") == "cfdna"
     assert normalize_primary_analyte("buffy") == "buffy_coat"
+    assert normalize_primary_analyte("plant") == "plant_tissue"
+    assert normalize_primary_analyte("leaf") == "plant_tissue"
+    assert normalize_primary_analyte("plant-tissue") == "plant_tissue"
+
+
+def test_plant_tissue_profile_opens_non_cpg_qc():
+    align = merge_step_config("alignment_qc", {}, "plant_tissue")
+    assert align["bisulfite_conversion"]["enabled"] is True
+    assert align["bisulfite_conversion"]["max_non_cpg_methylation_pct"] == 100.0
+    frag = merge_step_config("fragmentomics", {}, "plant_tissue")
+    assert frag["enabled"] is False
+    extraction = merge_step_config("extraction_qc", {}, "plant_tissue")
+    assert extraction["guardrails"]["max_chh_methylation_level"] == 1.0
+    assert extraction["guardrails"]["max_chg_methylation_level"] == 1.0
+    enr = merge_step_config("enricher", {}, "plant_tissue")
+    assert enr["library_preset"] == "plant-stress-core"
+    assert enr["organism"] == "Arabidopsis_thaliana"
 
 
 def test_cfdna_profile_fills_missing_keys():

@@ -10,15 +10,18 @@ Opt out: `"auto_apply_analyte_profile": false` under `regulatory`.
 
 ## What each analyte enables
 
-| Step | `cfdna` | `buffy_coat` | `tissue` |
-|------|---------|--------------|----------|
-| `alignment_qc` | cfDNA fragmentomics + **alignment guardrails** + bisulfite QC | **alignment guardrails** + bisulfite QC (no cfDNA fragmentomics profile) | bisulfite QC defaults (no analyte pack) |
-| `fragmentomics` | `methyl-fragmentomics` enabled (WPS + end motifs) | disabled | disabled |
-| `cell_deconvolution` | Houseman 6 Ω, or HiTIMED plasma tree (`tumor_fraction` + immune) | Houseman 6 Ω, or HiTIMED immune subtree (no tumor) | HiTIMED full tumor/immune/stromal tree (flat Houseman stays blood-oriented) |
-| `enricher` | `library_preset: cancer-core`; CIS-BP **gene_sets + motif_scan + annotate** | CIS-BP **gene_sets** only | defaults unless profile overrides |
-| `validation` | `enforce_training_analyte_match: true` | `false` | not set by analyte pack |
+| Step | `cfdna` | `buffy_coat` | `tissue` | `plant_tissue` |
+|------|---------|--------------|----------|----------------|
+| `alignment_qc` | cfDNA fragmentomics + **alignment guardrails** + bisulfite QC | **alignment guardrails** + bisulfite QC (no cfDNA fragmentomics profile) | bisulfite QC defaults (no analyte pack) | **alignment guardrails** (min mapping 0.90) + bisulfite conversion-rate gate with **non-CpG cap opened** (`max_non_cpg_methylation_pct: 100`) |
+| `fragmentomics` | `methyl-fragmentomics` enabled (WPS + end motifs) | disabled | disabled | disabled |
+| `extraction_qc` | mammalian caps (`max_chh`/`max_chg` = 0.02) | mammalian caps | mammalian caps | **CHG/CHH caps lifted** (`max_chh`/`max_chg` = 1.0) — plant non-CG is real biology |
+| `cell_deconvolution` | Houseman 6 Ω, or HiTIMED plasma tree (`tumor_fraction` + immune) | Houseman 6 Ω, or HiTIMED immune subtree (no tumor) | HiTIMED full tumor/immune/stromal tree (flat Houseman stays blood-oriented) | **not applicable** (blood-only bases); plant lifecycle program omits the node |
+| `enricher` | `library_preset: cancer-core`; CIS-BP **gene_sets + motif_scan + annotate** | CIS-BP **gene_sets** only | defaults unless profile overrides | `library_preset: plant-stress-core`; `organism: Arabidopsis_thaliana` |
+| `validation` | `enforce_training_analyte_match: true` | `false` | not set by analyte pack | `false` |
 
 `combined` / unknown analytes: bisulfite QC defaults only.
+
+**`plant_tissue` (Arabidopsis / crop WGBS).** Aliases: `plant`, `leaf`, `root`, `meristem`, `seed`. Selected by the [plant abiotic stress pack](usage/23-plant-abiotic-stress-pack.qmd). Because plant genomes methylate in CG, CHG and CHH contexts, non-CpG methylation is a biological signal rather than a bisulfite-conversion failure: the conversion-rate gate stays on (spike-in / sidecar) but the non-CpG cap and mammalian CHG/CHH extraction caps are opened. Blood cell deconvolution and cfDNA fragmentomics do not apply.
 
 **`cell_deconvolution` note.** The method switch and analyte-driven HiTIMED tree roots are **not** applied by the analyte profile merge today; set `method` (`houseman` | `hitimed`) under profile `actionConfig.cell_deconvolution`. HiTIMED reads its tree from the `analyte` field, which defaults to `regulatory.primary_analyte`. There is no dedicated `tissue` entry in `analyte_profiles.py`, so tissue prep/enricher steps use `combined`/unknown defaults unless a profile overrides them. See [Theory ch.07a MethylDeconv](theory/chapters/07a-methyldeconv.qmd).
 
