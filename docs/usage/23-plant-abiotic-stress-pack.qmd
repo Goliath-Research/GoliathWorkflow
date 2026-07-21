@@ -91,7 +91,9 @@ instance/context overlay (`context_plant_abiotic_stress.json`):
 | Key | Value | Why |
 |-----|-------|-----|
 | `regulatory.primary_analyte` | `plant_tissue` | Plant-safe QC: lifts CHG/CHH extraction caps, opens the bisulfite non-CpG cap, disables cfDNA fragmentomics (see [ANALYTE_PROFILES](../ANALYTE_PROFILES.md)) |
-| `actionConfig.mapper.enrich_disease` | `false` | Stress traits are not EFO human diseases; OpenTargets is the wrong prior |
+| `actionConfig.mapper.enrich_disease` | `true` | Offline plant gene↔trait prior (`enrich_source: plant_traits`); not Open Targets |
+| `actionConfig.mapper.enrich_source` | `plant_traits` | Human Open Targets / DisGeNET stay off; join an operator TSV |
+| `actionConfig.mapper.plant_traits_path` | demo drought TSV | Seed table under the example pack; replace with SoyBase / MaizeGDB / Gramene extracts for crops |
 | `actionConfig.enricher.library_preset` | `"plant-stress-core"` | Organism-general GO terms; drops human oncology/CNS libraries |
 | `actionConfig.enricher.organism` | `"Arabidopsis_thaliana"` | Enrichr organism |
 | `actionConfig.enricher.string_species` | `3702` | STRING PPI taxon (Arabidopsis; 3847 soybean) |
@@ -125,11 +127,27 @@ methyl-workflow-run \
   --context-file /work/projects/plant-abiotic-stress/configs/context_plant_abiotic_stress.json
 ```
 
-## Extending to other crops
+## Other crops (soybean, maize, wheat)
 
-Soybean, maize and wheat reuse this pack by swapping the site reference pins (FASTA + GTF,
-chromosome list, `string_species` taxon) and cohort CSVs. No code, program, or profile
-changes are required.
+Committed site recipes and study stubs ship alongside Arabidopsis (same application pack,
+same lifecycle program):
+
+| Crop | Site example | Download script | Manifest / overlay | STRING |
+|------|--------------|-----------------|--------------------|--------|
+| Soybean Wm82 | `site_glycine_max_wm82.example.json` | `scripts/download_glycine_max_wm82.sh` | `project_Control_vs_Drought_soybean.json` + `context_soybean_drought.json` | 3847 |
+| Maize B73 | `site_zea_mays_b73.example.json` | `scripts/download_zea_mays_b73.sh` | `project_Control_vs_Drought_maize.json` + `context_maize_drought.json` | 4577 |
+| Wheat IWGSC | `site_triticum_aestivum_iwgsc.example.json` | `scripts/download_triticum_aestivum_iwgsc.sh` | `project_Control_vs_Drought_wheat.json` + `context_wheat_drought.json` | 4565 |
+
+```bash
+scripts/download_glycine_max_wm82.sh
+export METHYL_SITE_CONFIG=workflow_engine/domain/profiles/site_glycine_max_wm82.example.json
+methyl-workflow-run \
+  --program workflow_engine/domain/fixtures/plant_stress_study_lifecycle.program.json \
+  --context-file docs/examples/samd/plant-abiotic-stress/context_soybean_drought.json
+```
+
+Wheat assembly is large; operators may set a chromosome subset (e.g. `["1A"]`) for research
+runs. Pattern checklist: [ch.24](24-methylation-application-packs.qmd).
 
 ## What this pack does not add
 
@@ -137,7 +155,11 @@ changes are required.
   copy of the existing lifecycle program).
 - No plant cell-type deconvolution basis (shipped bases are human blood; the node is
   omitted, not retuned).
-- No human disease priors (OpenTargets/DisGeNET) — disabled for stress traits.
+- No Open Targets / DisGeNET priors (human therapeutic databases). Arabidopsis overlay
+  uses `enrich_source: plant_traits` with
+  `data/arabidopsis_drought_gene_traits.tsv`; crop overlays leave disease enrichment
+  off until operators supply a crop gene↔trait table (SoyBase / MaizeGDB / WheatIS /
+  Gramene / literature).
 - No grafting / trait-introgression design — that is a planned separate pack.
 - No SaMD pivotal / clinical-performance claim ladder — an agricultural research pack
   stays on `samd_research`.

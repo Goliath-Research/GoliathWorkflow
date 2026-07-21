@@ -23,6 +23,7 @@ except ImportError:
 from methyl_utils.dmp_export_paths import glob_discovery_dmps_with_unified_fallback
 
 from .gene_disease_enricher import GeneDiseaseEnricher
+from .plant_trait_enricher import PlantTraitEnricher
 from .gtf_regions import build_gene_bodies_bed, build_sp_regions_bed, parse_region_name
 from .config import BiologyWeightConfig
 
@@ -93,6 +94,7 @@ class BedtoolsMapper:
         enrich_source: str = "grok+opentargets",
         separate_enrichment_sources: bool = False,
         disease_term: str = "early-stage prostate cancer",
+        plant_traits_path: Optional[Path] = None,
         grok_api_key: Optional[str] = None,
         disgenet_api_key: Optional[str] = None,
         enrichment_profile: Optional[str] = None,
@@ -158,9 +160,10 @@ class BedtoolsMapper:
             p_value_log_transform: If True, uses -log10(p_value) for weighting
             enrich_disease: Whether to enrich results with disease associations
             enrich_source: Source(s) for disease enrichment ("grok", "opentargets", "grok+opentargets",
-                          "disgenet", "both", or "all") (default: "grok+opentargets")
+                          "disgenet", "both", "all", or "plant_traits") (default: "grok+opentargets")
             separate_enrichment_sources: If True, export separate files for each enrichment source
             disease_term: Disease term for enrichment (e.g., "early-stage prostate cancer")
+            plant_traits_path: Offline gene↔trait TSV/CSV when enrich_source=plant_traits
             grok_api_key: Grok API key for disease enrichment (optional, uses secure storage if not provided)
             disgenet_api_key: DisGeNET API key for disease enrichment (optional, uses secure storage if not provided)
             enrichment_profile: Preset threshold profile (strict, balanced, permissive)
@@ -226,45 +229,57 @@ class BedtoolsMapper:
         self.enrich_disease = enrich_disease
         self.enrich_source = enrich_source
         self.separate_enrichment_sources = separate_enrichment_sources
+        self.plant_traits_path = Path(plant_traits_path).expanduser() if plant_traits_path else None
         self.disease_enricher = None
         if enrich_disease:
-            use_grok, use_open_targets, use_disgenet = self._parse_enrich_source(enrich_source)
-            _grok_bs = min(20, max(1, int(grok_batch_size)))
             try:
-                self.disease_enricher = GeneDiseaseEnricher(
-                grok_api_key=grok_api_key if use_grok else None,
-                disgenet_api_key=disgenet_api_key if use_disgenet else None,
-                disease_term=disease_term,
-                use_grok=use_grok,
-                use_disgenet=use_disgenet,
-                use_open_targets=use_open_targets,
-                enrichment_profile=enrichment_profile,
-                min_evidence_level=min_evidence_level,
-                min_publications=min_publications,
-                min_disgenet_score=min_disgenet_score,
-                allow_predicted=allow_predicted,
-                cache_enabled=cache_enabled,
-                cache_dir=cache_dir,
-                cache_backend=cache_backend,
-                cache_db_path=cache_db_path,
-                cache_ttl_days=cache_ttl_days,
-                grok_cache_ttl_days=grok_cache_ttl_days,
-                source_max_workers=source_max_workers,
-                grok_batch_size=_grok_bs,
-                grok_max_workers=max(1, int(grok_max_workers)),
-                grok_use_xai_batch_api=grok_use_xai_batch_api,
-                grok_batch_poll_interval=grok_batch_poll_interval,
-                grok_batch_submit_chunk_size=grok_batch_submit_chunk_size,
-                rate_limit_delay=grok_rate_limit_delay,
-                max_retries=max(1, int(grok_max_retries)),
-                grok_429_inter_batch_sleep=float(grok_429_inter_batch_sleep),
-                open_targets_max_workers=open_targets_max_workers,
-                disgenet_max_workers=disgenet_max_workers,
-                azure_key_vault_url=azure_key_vault_url,
-                azure_secret_name=azure_secret_name,
-                encrypted_file_path=encrypted_file_path,
-                methyl_mapper_home=methyl_mapper_home,
-            )
+                if self._is_plant_traits_source(enrich_source):
+                    if not self.plant_traits_path:
+                        raise ValueError(
+                            "enrich_source=plant_traits requires plant_traits_path "
+                            "(offline gene↔trait TSV/CSV)."
+                        )
+                    self.disease_enricher = PlantTraitEnricher(
+                        plant_traits_path=self.plant_traits_path,
+                        disease_term=disease_term,
+                    )
+                else:
+                    use_grok, use_open_targets, use_disgenet = self._parse_enrich_source(enrich_source)
+                    _grok_bs = min(20, max(1, int(grok_batch_size)))
+                    self.disease_enricher = GeneDiseaseEnricher(
+                        grok_api_key=grok_api_key if use_grok else None,
+                        disgenet_api_key=disgenet_api_key if use_disgenet else None,
+                        disease_term=disease_term,
+                        use_grok=use_grok,
+                        use_disgenet=use_disgenet,
+                        use_open_targets=use_open_targets,
+                        enrichment_profile=enrichment_profile,
+                        min_evidence_level=min_evidence_level,
+                        min_publications=min_publications,
+                        min_disgenet_score=min_disgenet_score,
+                        allow_predicted=allow_predicted,
+                        cache_enabled=cache_enabled,
+                        cache_dir=cache_dir,
+                        cache_backend=cache_backend,
+                        cache_db_path=cache_db_path,
+                        cache_ttl_days=cache_ttl_days,
+                        grok_cache_ttl_days=grok_cache_ttl_days,
+                        source_max_workers=source_max_workers,
+                        grok_batch_size=_grok_bs,
+                        grok_max_workers=max(1, int(grok_max_workers)),
+                        grok_use_xai_batch_api=grok_use_xai_batch_api,
+                        grok_batch_poll_interval=grok_batch_poll_interval,
+                        grok_batch_submit_chunk_size=grok_batch_submit_chunk_size,
+                        rate_limit_delay=grok_rate_limit_delay,
+                        max_retries=max(1, int(grok_max_retries)),
+                        grok_429_inter_batch_sleep=float(grok_429_inter_batch_sleep),
+                        open_targets_max_workers=open_targets_max_workers,
+                        disgenet_max_workers=disgenet_max_workers,
+                        azure_key_vault_url=azure_key_vault_url,
+                        azure_secret_name=azure_secret_name,
+                        encrypted_file_path=encrypted_file_path,
+                        methyl_mapper_home=methyl_mapper_home,
+                    )
             except Exception as e:
                 logger.warning(f"Disease enricher initialization failed: {e}. Enrichment columns will not be added.")
                 self.disease_enricher = None
@@ -947,9 +962,25 @@ class BedtoolsMapper:
         return merged
 
     @staticmethod
-    def _parse_enrich_source(enrich_source: str) -> Tuple[bool, bool, bool]:
-        """Parse enrich_source into flags for grok/open_targets/disgenet."""
+    def _is_plant_traits_source(enrich_source: str) -> bool:
+        """True when enrichment uses the offline plant gene↔trait table (not human APIs)."""
         normalized = (enrich_source or "").lower().strip()
+        if normalized in {"plant_traits", "plant-traits"}:
+            return True
+        tokens = [t for t in re.split(r"[+/,\s]+", normalized) if t]
+        return any(t in {"plant_traits", "plant-traits"} for t in tokens)
+
+    @staticmethod
+    def _parse_enrich_source(enrich_source: str) -> Tuple[bool, bool, bool]:
+        """Parse enrich_source into flags for grok/open_targets/disgenet.
+
+        ``plant_traits`` is handled separately via :meth:`_is_plant_traits_source`
+        (returns all-False here so Open Targets / DisGeNET are never enabled).
+        """
+        normalized = (enrich_source or "").lower().strip()
+
+        if BedtoolsMapper._is_plant_traits_source(normalized):
+            return False, False, False
 
         if normalized == "all":
             # Grok + Open Targets only (DisGeNET must be requested explicitly)

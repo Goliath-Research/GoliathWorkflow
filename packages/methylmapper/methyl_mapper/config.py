@@ -185,6 +185,15 @@ class MapperStepConfig(BaseModel):
     disease_term: Optional[str] = None
     enrich_disease: Optional[bool] = None
     enrich_source: Optional[str] = None
+    plant_traits_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "Path to offline gene↔trait TSV/CSV for enrich_source=plant_traits "
+            "(columns: gene, disease_term/trait_term, optional score/evidence). "
+            "Operator-set per profile/site/instance; required when plant_traits is selected. "
+            "Do not use Open Targets for plant packs."
+        ),
+    )
     enrich_profile: Optional[str] = None
     grok_api_key: Optional[str] = None
     disgenet_api_key: Optional[str] = None

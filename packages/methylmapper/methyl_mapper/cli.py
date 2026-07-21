@@ -27,18 +27,19 @@ def normalize_enrich_source(value: str) -> str:
       - "opentargets+grok" -> "grok+opentargets"
       - "disgenet+grok" -> "grok+disgenet"
       - "open_targets" -> "opentargets"
+      - "plant_traits" -> "plant_traits" (offline TSV; not combinable with human APIs)
     """
     raw = str(value or "").strip().lower()
     if not raw:
         raise argparse.ArgumentTypeError("Invalid --enrich-source: value cannot be empty.")
 
-    if raw in {"both", "all", "grok", "disgenet", "opentargets"}:
+    if raw in {"both", "all", "grok", "disgenet", "opentargets", "plant_traits"}:
         return raw
 
     tokens = [t for t in re.split(r"[+/,\s]+", raw) if t]
     if not tokens:
         raise argparse.ArgumentTypeError(
-            "Invalid --enrich-source. Use grok, opentargets, disgenet, "
+            "Invalid --enrich-source. Use grok, opentargets, disgenet, plant_traits, "
             "grok+opentargets, grok+disgenet, both, or all."
         )
 
@@ -46,12 +47,21 @@ def normalize_enrich_source(value: str) -> str:
         "opentarget": "opentargets",
         "open_targets": "opentargets",
         "open-targets": "opentargets",
+        "plant-traits": "plant_traits",
+        "planttrait": "plant_traits",
     }
     canonical = {aliases.get(token, token) for token in tokens}
+    if canonical == {"plant_traits"}:
+        return "plant_traits"
+    if "plant_traits" in canonical:
+        raise argparse.ArgumentTypeError(
+            "Invalid --enrich-source: plant_traits cannot be combined with "
+            "grok, opentargets, or disgenet (human-only APIs)."
+        )
     allowed = {"grok", "opentargets", "disgenet"}
     if not canonical.issubset(allowed):
         raise argparse.ArgumentTypeError(
-            "Invalid --enrich-source. Use grok, opentargets, disgenet, "
+            "Invalid --enrich-source. Use grok, opentargets, disgenet, plant_traits, "
             "grok+opentargets, grok+disgenet, both, or all."
         )
 
@@ -478,7 +488,15 @@ Examples:
         type=normalize_enrich_source,
         default='grok+opentargets',
         help='Enrichment sources: grok+opentargets = Grok annotation + Open Targets evidence/scores; '
-             'disgenet/grok+disgenet require a DisGeNET key; all = Grok + Open Targets (no DisGeNET).'
+             'disgenet/grok+disgenet require a DisGeNET key; all = Grok + Open Targets (no DisGeNET); '
+             'plant_traits = offline gene↔trait TSV (plants; requires --plant-traits-path).'
+    )
+    disease_group.add_argument(
+        '--plant-traits-path',
+        type=str,
+        default=None,
+        help='Offline gene↔trait TSV/CSV when --enrich-source plant_traits '
+             '(columns: gene, disease_term or trait_term, optional score/evidence).'
     )
     disease_group.add_argument(
         '--separate-enrichment-sources',
@@ -837,6 +855,8 @@ def _apply_mapper_config_to_args(args, config: MapperStepConfig) -> None:
         args.enrich_disease = True
     if config.enrich_source is not None:
         args.enrich_source = normalize_enrich_source(config.enrich_source)
+    if config.plant_traits_path is not None and getattr(args, "plant_traits_path", None) is None:
+        args.plant_traits_path = config.plant_traits_path
     if config.enrich_profile is not None:
         args.enrich_profile = config.enrich_profile
     if config.grok_max_workers is not None:
@@ -1118,6 +1138,9 @@ def main_bedtools():
             enrich_source=args.enrich_source,
             separate_enrichment_sources=args.separate_enrichment_sources,
             disease_term=args.disease_term,
+            plant_traits_path=Path(args.plant_traits_path).expanduser()
+            if getattr(args, "plant_traits_path", None)
+            else None,
             grok_api_key=args.grok_api_key,
             disgenet_api_key=args.disgenet_api_key,
             enrichment_profile=args.enrich_profile,

@@ -20,23 +20,30 @@ epigenomics background in [Plant Research](../../../research/Plant%20Research.md
 
 | File | Role |
 |------|------|
-| `project_Control_vs_Drought.json` | Study manifest: Control vs Drought, `plant_tissue` analyte, `methylation` modality, CG/CHG/CHH contexts, Arabidopsis chromosomes 1-5, partitions (placeholder IDs) |
-| `context_plant_abiotic_stress.json` | Trait overlay: `enricher.library_preset=plant-stress-core`, `organism=Arabidopsis_thaliana`, `string_species=3702`, `mapper.enrich_disease=false` (no human disease priors), progression off |
-| `data/*.csv` | Cohort CSV stubs (replace placeholder IDs with real, plant-disjoint sample IDs) |
+| `project_Control_vs_Drought.json` | Default (Arabidopsis): Control vs Drought, chroms 1–5 |
+| `context_plant_abiotic_stress.json` | Arabidopsis overlay: `plant_traits` prior + `plant-stress-core`, `string_species=3702` |
+| `project_Control_vs_Drought_{soybean,maize,wheat}.json` | Crop manifests (same binary design; crop chromosome lists) |
+| `context_{soybean,maize,wheat}_drought.json` | Crop overlays (`string_species` 3847 / 4577 / 4565) |
+| `data/*.csv` | Shared cohort CSV stubs (replace with real, plant-disjoint sample IDs) |
+| `data/arabidopsis_drought_gene_traits.tsv` | Demo offline gene↔trait prior (`enrich_source=plant_traits`) |
 
-## Provision the TAIR10 reference (once per cluster)
+## Provision a plant genome (once per cluster)
 
-Plants align linear only (no HPRC pangenome). Pin the genome + GTF in a site manifest and
-provision the assets:
+Plants align linear only (no HPRC pangenome). Pick one site recipe:
+
+| Species | Download script | Site example | STRING taxon |
+|---------|-----------------|--------------|--------------|
+| Arabidopsis (TAIR10) | `scripts/download_arabidopsis_tair10.sh` | `site_tair10.example.json` | 3702 |
+| Soybean (Wm82 / v2.1) | `scripts/download_glycine_max_wm82.sh` | `site_glycine_max_wm82.example.json` | 3847 |
+| Maize (B73 NAM 5.0) | `scripts/download_zea_mays_b73.sh` | `site_zea_mays_b73.example.json` | 4577 |
+| Wheat (IWGSC) | `scripts/download_triticum_aestivum_iwgsc.sh` | `site_triticum_aestivum_iwgsc.example.json` | 4565 |
 
 ```bash
-scripts/download_arabidopsis_tair10.sh
+scripts/download_arabidopsis_tair10.sh   # or soybean / maize / wheat script
 export METHYL_SITE_CONFIG=workflow_engine/domain/profiles/site_tair10.example.json
 ```
 
-The site example (`site_tair10.example.json`) pins
-`Arabidopsis_thaliana.TAIR10.dna.toplevel.fa` and `Arabidopsis_thaliana.TAIR10.58.gtf`
-under `/work/genomes`.
+Wheat toplevel FASTA is large (~4 GB compressed); restrict study `chromosomes` (e.g. `["1A"]`) for research runs if needed.
 
 ## Instantiate on /work
 
@@ -71,8 +78,21 @@ Arabidopsis/crop term enrichment supply a custom plant GMT via
 discovery default. Cell deconvolution is not run (blood-only bases); the plant lifecycle
 program omits that node.
 
-## Extending to other crops
+**Plant trait prior (not Open Targets).** Open Targets / DisGeNET are human-only. The
+Arabidopsis overlay sets `mapper.enrich_source: plant_traits` and
+`mapper.plant_traits_path` to the demo TSV above (columns: `gene`, `disease_term`,
+optional `score` / `evidence_level`). For crops, point `plant_traits_path` at a
+SoyBase / MaizeGDB / WheatIS / Gramene extract with the same column names.
 
-Soybean, maize, or wheat reuse this pack by swapping the site reference pins (FASTA + GTF,
-chromosome list, `string_species` taxon — e.g. 3847 soybean) and cohort CSVs. No code or
-program changes are required.
+## Other crops
+
+Use the matching project + context pair with the crop site:
+
+```bash
+export METHYL_SITE_CONFIG=workflow_engine/domain/profiles/site_glycine_max_wm82.example.json
+methyl-workflow-run \
+  --program workflow_engine/domain/fixtures/plant_stress_study_lifecycle.program.json \
+  --context-file docs/examples/samd/plant-abiotic-stress/context_soybean_drought.json
+```
+
+Same program and analyte; only site pins, chromosome list, organism, and STRING taxon change.

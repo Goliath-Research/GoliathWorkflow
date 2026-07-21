@@ -12,7 +12,7 @@ This chapter is the generic pattern. Worked instances:
 | Instance | Kind | Guide |
 |----------|------|-------|
 | Alzheimer cfDNA (Control → MCI → AD) | Disease application | [ch.21](21-alzheimer-cfdna-pack.qmd) |
-| Plant abiotic stress (Arabidopsis drought) | Trait application | [ch.23](23-plant-abiotic-stress-pack.qmd) |
+| Plant abiotic stress (Arabidopsis + crop sites) | Trait application | [ch.23](23-plant-abiotic-stress-pack.qmd) |
 
 ```mermaid
 flowchart TB
@@ -98,8 +98,10 @@ Merge precedence remains: program/instance overlay → profile → analyte → s
 2. Scaffold on `/work` with `methyl-study-init` (or copy an example under `docs/examples/samd/`).
 3. Author the context overlay (preset, disease/trait knobs, progression on/off).
 4. Add or reuse an enrichment preset via `methyl-cfg sync-library-presets` when needed.
-5. Confirm analyte + site: human GRCh38 vs plant/other linear genome pins; omit blood
-   deconvolution when bases do not apply.
+5. Confirm analyte + site: human GRCh38 vs plant/other linear genome pins (Arabidopsis
+   TAIR10, soybean Wm82, maize B73, wheat IWGSC recipes); omit blood deconvolution when
+   bases do not apply. For plant trait priors use `enrich_source: plant_traits` + an
+   offline TSV — not Open Targets.
 6. Point `methyl-workflow-run` at the appropriate lifecycle program + overlay.
 7. Add CI smoke fixture + pack regression test (mirror Alzheimer / plant tests).
 8. Write a short usage chapter (instance-only deltas) and add a regulatory roadmap row.

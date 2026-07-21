@@ -1,0 +1,63 @@
+"""Offline plant_traits enrich_source (no Open Targets)."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from methyl_mapper.bedtools_mapper import BedtoolsMapper
+from methyl_mapper.cli import normalize_enrich_source
+from methyl_mapper.plant_trait_enricher import PlantTraitEnricher
+
+DEMO_TSV = (
+    Path(__file__).resolve().parents[3]
+    / "docs/examples/samd/plant-abiotic-stress/data/arabidopsis_drought_gene_traits.tsv"
+)
+
+
+def test_normalize_enrich_source_plant_traits() -> None:
+    assert normalize_enrich_source("plant_traits") == "plant_traits"
+    assert normalize_enrich_source("plant-traits") == "plant_traits"
+    with pytest.raises(Exception):
+        normalize_enrich_source("plant_traits+opentargets")
+
+
+def test_parse_enrich_source_plant_traits_disables_human_apis() -> None:
+    assert BedtoolsMapper._is_plant_traits_source("plant_traits") is True
+    use_grok, use_ot, use_dg = BedtoolsMapper._parse_enrich_source("plant_traits")
+    assert (use_grok, use_ot, use_dg) == (False, False, False)
+
+
+def test_plant_trait_enricher_joins_demo_tsv() -> None:
+    assert DEMO_TSV.is_file()
+    enricher = PlantTraitEnricher(DEMO_TSV, disease_term="drought")
+    df = pd.DataFrame({"gene_name": ["AT5G52310", "AT9G99999", "dreb2a"]})
+    # AGI IDs are case-insensitive; symbol-only rows are not in the demo table.
+    out = enricher.enrich_gene_dataframe(df, gene_column="gene_name")
+    hit = out.loc[out["gene_name"] == "AT5G52310"].iloc[0]
+    assert bool(hit["disease_associated"])
+    assert hit["disease_source"] == "plant_traits"
+    assert "drought" in str(hit["disease_functional_role"]).lower()
+    assert not bool(out.loc[out["gene_name"] == "AT9G99999", "disease_associated"].iloc[0])
+    assert "disease_score" in out.columns
+
+
+def test_bedtools_mapper_uses_plant_trait_enricher(tmp_path: Path) -> None:
+    """Smoke: enrich_disease + plant_traits never constructs GeneDiseaseEnricher."""
+    gtf = tmp_path / "tiny.gtf"
+    gtf.write_text(
+        '1\ttest\tgene\t1\t10\t.\t+\t.\tgene_id "g1"; gene_name "AT5G52310";\n',
+        encoding="utf-8",
+    )
+    mapper = BedtoolsMapper(
+        gene_gtf=gtf,
+        enrich_disease=True,
+        enrich_source="plant_traits",
+        plant_traits_path=DEMO_TSV,
+        disease_term="drought",
+        optimize_dmps=False,
+    )
+    assert isinstance(mapper.disease_enricher, PlantTraitEnricher)
+    assert not isinstance(mapper.disease_enricher, type(None))

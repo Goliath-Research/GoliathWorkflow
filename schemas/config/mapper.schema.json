@@ -494,6 +494,19 @@
       "default": null,
       "title": "Persist Secrets"
     },
+    "plant_traits_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Path to offline gene\u2194trait TSV/CSV for enrich_source=plant_traits (columns: gene, disease_term/trait_term, optional score/evidence). Operator-set per profile/site/instance; required when plant_traits is selected. Do not use Open Targets for plant packs.",
+      "title": "Plant Traits Path"
+    },
     "run_bedtools_closest": {
       "anyOf": [
         {

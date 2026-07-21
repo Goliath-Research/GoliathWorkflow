@@ -41,6 +41,8 @@ todos:
 
 > **Status: Implemented** (2026-07). Arabidopsis drought (Control vs Drought) ships as the first non-human methylation trait pack: config plus targeted unblockers (`plant_tissue` analyte, TAIR10 site, deconvolution-free lifecycle program, `plant-stress-core` preset) on the existing methylation control plane. No new aligner or workflow action. Grafting / trait-introgression is explicitly deferred to a later pack.
 
+> **Follow-on (2026-07):** Multi-crop Ensembl Plants site recipes (soybean / maize / wheat) and an offline mapper `plant_traits` prior were pulled forward in [`multi-crop-plant-expansion.plan.md`](multi-crop-plant-expansion.plan.md). Open Targets remains human-only.
+
 ## Framing: trait pack on the methylation modality
 
 > **Terminology (2026-07):** The umbrella term is now **application pack** (config overlay on an existing process). Plant abiotic stress is a *trait application* instance; see [Usage ch.24](../usage/24-methylation-application-packs.qmd). Historical “trait pack” / “modeled on Alzheimer” wording below is superseded by that pattern doc.
