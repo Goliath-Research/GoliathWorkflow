@@ -548,7 +548,8 @@ def _handle_demultiplex(_capability: str, _action_name: str, input: BaseModel) -
         outputs=result,
         workflow_node_key=input_json.get("workflowNodeKey") or "demultiplex",
     )
-    return DemultiplexTaskOutput(status="ok", **result)
+    status = "skipped" if result.get("skipped") else "ok"
+    return DemultiplexTaskOutput(status=status, **result)
 
 
 def _handle_docker_align(_capability: str, _action_name: str, input: BaseModel) -> ParabricksTaskOutput:
