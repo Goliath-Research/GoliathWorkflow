@@ -1,4 +1,5 @@
 {
+  "_docs": "Richer GRCh38 site example (RNA + proteomics paths). Canonical methylation pin SoT for Phase 0: tools/methyl-config-editor/configs/site_grch38.example.json. Keep reference_selection prefixes in sync. Upload/provision: docs/deployment/reference-inventory-qnap.md.",
   "actionConfig": {
     "gene_selection": {
       "max_dmps": 1000,

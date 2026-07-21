@@ -69,8 +69,11 @@ Pin values are inventory prefixes under `/work/genomes/` (and under `s3://epimet
 # File store (dev/CI):
 methyl-cfg import-fs --repo-root . --work-root /work
 # Credential is not in import-fs fixtures — upsert before provision:
-methyl-cfg upsert credential --file workflow_engine/domain/fixtures/credentials/epimethyl-archive-keys.example.json
-# Replace REPLACE_WITH_* placeholders with real keys (or use portal.sp_* in production).
+# Copy example, replace REPLACE_WITH_*, then:
+methyl-cfg upsert credential \
+  --file /path/to/epimethyl-archive-keys.json \
+  --publish --provider s3
+# Production: replace secrets via portal.sp_* instead.
 ```
 
 3. Provision selected trees:

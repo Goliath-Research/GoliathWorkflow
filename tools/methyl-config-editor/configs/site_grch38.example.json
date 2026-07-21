@@ -1,4 +1,5 @@
 {
+  "_docs": "Canonical methylation GRCh38 site pins (Phase 0 SoT). Richer RNA/proteomics variant: workflow_engine/domain/profiles/site_grch38.example.json. Upload/provision: docs/deployment/reference-inventory-qnap.md.",
   "actionConfig": {
     "validation": {
       "stability_gene_featurecuts_max_dmps": 1000,
