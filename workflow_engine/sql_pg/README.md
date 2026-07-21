@@ -21,9 +21,15 @@ Deploy **in order**:
 | 12 | [`wf_repo_create_workflow_graph.sql`](wf_repo_create_workflow_graph.sql) | Programmatic workflow definition builder |
 | 13 | [`wf_sql_collection_bindings.sql`](wf_sql_collection_bindings.sql) | Collection binding resolution at instance start |
 | 14 | [`portal_resource_profile.sql`](portal_resource_profile.sql) | Portal archive storage profiles + `epimethyl-genomes` endpoint |
-| 14b | [`cfg_reference_assets_seed.sql`](cfg_reference_assets_seed.sql) | Linear / GENCODE / pangenome `cfg.reference_asset` recipes |
-| 14a | [`portal_workflow_api.sql`](portal_workflow_api.sql) | Portal workflow builder + instance lifecycle (`portal.sp_*`) |
-| 15 | [`wf_drop_platform_sample_storage.sql`](wf_drop_platform_sample_storage.sql) | Drop legacy wf.platform_sample_storage if present |
+| 15 | [`cfg_reference_assets_seed.sql`](cfg_reference_assets_seed.sql) | Linear / GENCODE / pangenome `cfg.reference_asset` recipes |
+| 16 | [`portal_workflow_api.sql`](portal_workflow_api.sql) | Portal workflow builder + instance lifecycle (`portal.sp_*`) |
+| 17 | [`wf_drop_platform_sample_storage.sql`](wf_drop_platform_sample_storage.sql) | Drop legacy wf.platform_sample_storage if present |
+
+`deploy_azure.sh` also applies the full `cfg_*` stack (schema, registry tables, relationships, repo/portal APIs) before the portal/genome seeds above. Fresh installs get wide `site_reference_asset.asset_role` values (including `houseman_seed_basis` / `hitimed_hierarchy_basis`) from [`cfg_wf_relationships.sql`](cfg_wf_relationships.sql).
+
+**Existing DB upgrade only** (not in `deploy_azure.sh`): [`migrations/20260721_site_reference_asset_deconv_roles.sql`](migrations/20260721_site_reference_asset_deconv_roles.sql) widens the CHECK. MSSQL twin: [`../sql_mssql/migrations/`](../sql_mssql/migrations/).
+
+Genome inventory ops: [`docs/deployment/reference-inventory-qnap.md`](../../docs/deployment/reference-inventory-qnap.md). Note: [`scripts/populate_postgres_reference_data.py`](../../scripts/populate_postgres_reference_data.py) seeds the **action catalog** (and optional workflow defs), **not** `cfg.reference_asset` / genomes.
 
 After SQL deploy, seed the action catalog and deploy workflows:
 

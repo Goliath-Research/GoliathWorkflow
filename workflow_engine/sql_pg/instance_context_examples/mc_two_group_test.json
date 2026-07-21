@@ -1,9 +1,9 @@
 {
-  "projectPath": "/work/test/prostate-cancer/Plasma_healthy_vs_PCa",
+  "projectPath": "/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
   "context": "CG",
-  "centroid1Dir": "/work/test/Plasma/centroids/controls/all",
-  "centroid2Dir": "/work/test/Plasma/centroids/diseases/PCa",
-  "detectOutDir": "/work/test/Plasma/detections/healthy_vs_PCa",
+  "centroid1Dir": "/work/projects/prostate-cancer/Plasma/centroids/controls/all",
+  "centroid2Dir": "/work/projects/prostate-cancer/Plasma/centroids/diseases/PCa",
+  "detectOutDir": "/work/projects/prostate-cancer/Plasma/detections/healthy_vs_PCa",
   "group1Label": "healthy",
   "group2Label": "PCa",
   "workerToolMapper": "MethylMapper",

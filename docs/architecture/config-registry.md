@@ -88,6 +88,8 @@ Presets are config, not workflow nodes, so they are **not** seeded into `wf.work
 
 **Production source of truth:** Azure SQL `cfg.storage_endpoint` + `cfg.credential`, authored only by **lab admins** / **infrastructure admins** via EpiPortal (`portal.sp_*` upsert/publish). Secrets are **not** authored with `methyl-cfg` in production (CLI remains for **dev / CI / bootstrap** only).
 
+File-store bootstrap: `import-fs` loads endpoint + reference_asset fixtures but **not** credentials. Use the placeholder shape in [`workflow_engine/domain/fixtures/credentials/epimethyl-archive-keys.example.json`](../../workflow_engine/domain/fixtures/credentials/epimethyl-archive-keys.example.json) (`methyl-cfg upsert credential …` after replacing `REPLACE_WITH_*`), or env keys with `scripts/sync_genomes_to_s3.sh`.
+
 See [`schemas/domain/storage_location.schema.json`](../schemas/domain/storage_location.schema.json):
 
 | Provider | Location fields | Credential `authMode` |

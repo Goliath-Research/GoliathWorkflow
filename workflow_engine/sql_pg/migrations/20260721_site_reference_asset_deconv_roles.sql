@@ -1,5 +1,8 @@
 -- Widen cfg.site_reference_asset.asset_role for plant / deconvolution atlases.
 -- Safe to re-run: drops and recreates the CHECK constraint.
+-- Fresh installs already get these roles from cfg_wf_relationships.sql.
+-- Not applied by deploy_azure.sh — run once on upgrade of older DBs.
+-- MSSQL twin: ../../sql_mssql/migrations/20260721_site_reference_asset_deconv_roles.sql
 
 ALTER TABLE cfg.site_reference_asset
   DROP CONSTRAINT IF EXISTS ck_cfg_sra_role;

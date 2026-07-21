@@ -1,5 +1,5 @@
 {
-  "projectPath": "/home/ubuntu/Work/prostate-cancer/configs/project_PCa3.json",
+  "projectPath": "/work/projects/prostate-cancer/configs/project_PCa3.json",
   "context": "CG",
   "centroid1Dir": "/work/projects/prostate-cancer/PCa3/centroids/controls/healthy/all",
   "group1Label": "group1",

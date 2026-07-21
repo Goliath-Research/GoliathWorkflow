@@ -26,7 +26,53 @@ echo "==> Work layout verification"
 
 # Site manifest
 SITE="${METHYL_SITE_CONFIG:-/work/site/methyl_site.json}"
+WORK_ROOT="${WORK_ROOT:-/work}"
 check_path "Site manifest" "$SITE" 0
+
+# When site exists with reference_selection pins, require pinned genome files
+if [[ -f "$SITE" ]]; then
+  # shellcheck disable=SC1091
+  if [[ -f "$ROOT/.venv/bin/activate" ]]; then
+    # Prefer venv python for cfg.reference_selection
+    # shellcheck disable=SC1091
+    source "$ROOT/.venv/bin/activate" 2>/dev/null || true
+  fi
+  export WORK_ROOT
+  export METHYL_SITE_CONFIG="$SITE"
+  export PYTHONPATH="${ROOT}/workflow_engine${PYTHONPATH:+:$PYTHONPATH}"
+  if python - <<'PY'
+import json, os, sys
+from pathlib import Path
+
+site_path = Path(os.environ["METHYL_SITE_CONFIG"])
+doc = json.loads(site_path.read_text(encoding="utf-8"))
+sel = doc.get("reference_selection") or {}
+if not any(sel.get(k) for k in ("linear", "gene_annotation", "pangenome")):
+    print("SKIP: no genome reference_selection pins")
+    sys.exit(0)
+sys.path.insert(0, os.environ.get("PYTHONPATH", "").split(os.pathsep)[0])
+from cfg.reference_selection import verify_selected_paths
+
+res = verify_selected_paths(doc, work_root=os.environ.get("WORK_ROOT", "/work"))
+if res["ok"]:
+    print(f"OK: selected genome files ({len(res['present'])} paths)")
+    sys.exit(0)
+print("FAIL: missing pinned genome files:", file=sys.stderr)
+for m in res["missing"]:
+    print(f"  {m}", file=sys.stderr)
+print(
+    "Provision with scripts/provision_selected_genomes.sh "
+    "(see docs/deployment/reference-inventory-qnap.md)",
+    file=sys.stderr,
+)
+sys.exit(1)
+PY
+  then
+    :
+  else
+    fail=1
+  fi
+fi
 
 # Runtime bundle (production)
 EPIMETHYL_CURRENT="${EPIMETHYL_CURRENT:-/work/epimethyl/current}"

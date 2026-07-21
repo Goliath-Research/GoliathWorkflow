@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """
-Populate PostgreSQL wf reference metadata for distributed-worker testing.
+Populate PostgreSQL wf **action catalog** (and optional workflow definitions).
+
+Despite the historic script name, this does **not** seed genome / cfg.reference_asset
+rows. For genomes use ``cfg_reference_assets_seed.sql`` (via ``sql_pg/deploy_azure.sh``)
+plus provision from myQNAPcloud — see ``docs/deployment/reference-inventory-qnap.md``.
 
 Azure SQL is the production database (populated, in use). PostgreSQL typically has
-the same schema/procedures but empty reference tables. This script:
+the same schema/procedures but empty wf action tables. This script:
 
-  1. Seeds action catalog + JSON schemas from the **git repo** (37 actions, current).
+  1. Seeds action catalog + JSON schemas from the **git repo** (current catalog).
   2. Optionally copies workflow **definitions** (def/version/node/edge/bindings) from
      Azure SQL when both connection env sets are available.
 
-Does NOT copy runtime data (instances, executions, workers, leases).
+Does NOT copy runtime data (instances, executions, workers, leases) and does NOT
+seed ``cfg.reference_asset`` / storage endpoints.
 
 Usage:
   source .venv/bin/activate
