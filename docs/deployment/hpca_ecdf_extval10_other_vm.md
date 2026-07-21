@@ -56,13 +56,23 @@ Logs:
 - `/work/projects/prostate-cancer/H_PCa_good_ecdf_covariates_extval10.model_mc.log`
 - `/work/projects/prostate-cancer/H_PCa_good_ecdf_covariates_extval10.model.log`
 
-## If strict reuse fails (missing classifier PKLs)
+## If the first launch failed with strict reuse
 
-Discovery-only MC may lack `classifier-*.pkl`. If model-MC aborts on
-`requireArtifactReuse`, temporarily run with a local program copy that sets
-`requireArtifactReuse: false`, and/or set `actionConfig.detection.export_classifier: true`
-in the context for a one-shot relaunch. Prefer fixing reuse inputs over leaving
-reuse disabled permanently.
+Primary `monte_carlo_runs/run_*` is discovery-only and is **not** compatible with
+the freeze/production detection contract (`fixed_dmp_panel`). Model-MC must reuse
+`model_mc/shared` from the archived freeze-panel shared runs, then rebuild ECDF only.
+
+The driver script now links `model_mc/shared` → `model_mc.pre_alr_stacker.bak/shared`
+automatically. Relaunch:
+
+```bash
+tmux kill-session -t hpca-extval10-model 2>/dev/null || true
+tmux new-session -d -s hpca-extval10-model \
+  'bash /work/projects/prostate-cancer/configs/run_H_PCa_good_ecdf_covariates_extval10_model.sh'
+tmux attach -t hpca-extval10-model
+```
+
+Expect log lines like `Kept existing compatible shared artifacts` / `Reusing existing model-mc shared runs`, then `Running model-mc backend=ecdf`.
 
 ## Success checks
 
