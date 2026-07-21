@@ -15,14 +15,22 @@ transcript-level abundances that we aggregate to genes via a tx2gene map.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
-import h5py
 import numpy as np
+
+from omics_features.feature_store import (
+    feature_h5_path,
+    find_feature_h5,
+    read_sample_features,
+    write_sample_features,
+)
+
+_KIND = "expression"
 
 
 def expression_h5_path(sample_dir: str | Path, sample_id: str) -> Path:
-    return Path(sample_dir) / f"{sample_id}.expression.h5"
+    return feature_h5_path(sample_dir, sample_id, kind=_KIND)
 
 
 def _read_gene_counts_tsv(path: Path) -> Dict[str, float]:
@@ -124,47 +132,29 @@ def register_sample_expression(
             f"{gene_counts_tsv} or {abundance}"
         )
 
-    genes: List[str] = sorted(counts.keys())
-    count_arr = np.asarray([counts[g] for g in genes], dtype=np.float64)
-    tpm_arr = np.asarray([tpms.get(g, np.nan) for g in genes], dtype=np.float64)
-
-    out_path = expression_h5_path(sample_path, sample_id)
-    with h5py.File(out_path, "w") as h5:
-        dt = h5py.string_dtype(encoding="utf-8")
-        h5.create_dataset("gene_id", data=np.asarray(genes, dtype=object), dtype=dt)
-        h5.create_dataset("count", data=count_arr)
-        h5.create_dataset("tpm", data=tpm_arr)
-        h5.attrs["quant_mode"] = quant_mode
-        h5.attrs["n_genes"] = len(genes)
-        h5.attrs["sample_id"] = str(sample_id)
-
+    # Delegate storage to the shared omics_features contract (feature_id/value + tpm aux).
+    result = write_sample_features(
+        sample_dir=sample_path,
+        sample_id=sample_id,
+        kind=_KIND,
+        values=counts,
+        source=quant_mode,
+        aux={"tpm": tpms} if tpms else None,
+    )
     return {
         "sampleId": str(sample_id),
-        "expressionH5": str(out_path),
-        "n_genes": len(genes),
+        "expressionH5": result["featureH5"],
+        "n_genes": result["n_features"],
         "quantMode": quant_mode,
     }
 
 
 def read_sample_expression(sample_dir: str | Path, sample_id: str) -> Tuple[np.ndarray, np.ndarray, str]:
     """Return (gene_ids, counts, quant_mode) for a registered sample."""
-    path = expression_h5_path(sample_dir, sample_id)
-    if not path.is_file():
-        raise RuntimeError(f"expression.h5 not found: {path}")
-    with h5py.File(path, "r") as h5:
-        gene_ids = np.asarray([g.decode() if isinstance(g, bytes) else str(g) for g in h5["gene_id"][:]])
-        counts = np.asarray(h5["count"][:], dtype=np.float64)
-        quant_mode = str(h5.attrs.get("quant_mode", "unknown"))
-    return gene_ids, counts, quant_mode
+    feature_ids, values, source = read_sample_features(sample_dir, sample_id, kind=_KIND)
+    return feature_ids, values, source
 
 
 def find_expression_h5(sample_path: str | Path) -> Optional[Path]:
     """Locate an expression.h5 under a sample directory (any sample id)."""
-    p = Path(sample_path)
-    if p.is_file() and p.name.endswith(".expression.h5"):
-        return p
-    if p.is_dir():
-        matches = sorted(p.glob("*.expression.h5"))
-        if matches:
-            return matches[0]
-    return None
+    return find_feature_h5(sample_path, kind=_KIND)

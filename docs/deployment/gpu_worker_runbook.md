@@ -27,6 +27,28 @@ Record tested combinations in release `manifest.json`:
 
 **Alignment** uses CUDA **inside** the Parabricks container. Host CUDA toolkit is not required for fq2bam.
 
+## Proteomics GPU tools (DIA-NN / Prosit / Casanovo)
+
+The proteomics pack adds non-Parabricks GPU Docker tools that run on the same GPU VMs
+(Lambda/Nebius GH200). Each has its own image env and advertises a capability only when
+the image is set on the node:
+
+| Capability | Image env | Notes |
+|------------|-----------|-------|
+| `proteomics.diann` | `METHYL_DIANN_IMAGE` | DIA search + quant (GPU) |
+| `proteomics.prosit` | `METHYL_PROSIT_IMAGE` | rescoring / in-silico library (GPU) |
+| `proteomics.casanovo` | `METHYL_CASANOVO_IMAGE` | de novo (GPU) |
+| `proteomics.panel_ingest` | (none) | panel matrix ingest — **CPU**, lands on non-GPU workers |
+
+**GH200 / ARM64 caveat.** Workers run `docker run` host-native (no `--platform` pin), so on
+Grace/Hopper (`aarch64`) these images **must be linux/arm64 or multi-arch**. Set defaults in
+`scripts/platform_matrix.env` (`PROTEOMICS_*_IMAGE_aarch64`) and **verify an arm64 GPU build
+exists** before enabling — otherwise the GPU benefit does not materialize on these VMs. A
+known GH200 gotcha: some CPU images crash under the 64 KB memory page size (see
+`scripts/download_pangenome_hprc_grch38.sh`); test each proteomics image for page-size/arch
+before production. `setup_gpu_node.sh` writes `proteomics.env` (loaded by the worker
+systemd unit) from these matrix defaults.
+
 **Centroid GPU paths** may need host NVRTC (`setup_host.sh --system-deps --gpu`).
 
 ## Shared Docker data-root

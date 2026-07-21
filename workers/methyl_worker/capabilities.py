@@ -12,6 +12,16 @@ logger = logging.getLogger(__name__)
 OMNIBUS_WILDCARD = "*"
 
 # Capabilities that require a functional NVIDIA GPU at execute time (defense-in-depth).
+# Non-Parabricks GPU Docker tools: capability -> image env var. Each requires a
+# functional GPU plus its own configured Docker image (own arm64/multi-arch image for
+# GH200). Do NOT overload METHYL_PARABRICKS_IMAGE (the Parabricks probe treats that as
+# "Parabricks present").
+DOCKER_GPU_TOOL_IMAGE_ENV: dict = {
+    "proteomics.diann": "METHYL_DIANN_IMAGE",
+    "proteomics.prosit": "METHYL_PROSIT_IMAGE",
+    "proteomics.casanovo": "METHYL_CASANOVO_IMAGE",
+}
+
 GPU_REQUIRED_CAPABILITIES: FrozenSet[str] = frozenset(
     {
         "parabricks.fq2bam",
@@ -19,6 +29,9 @@ GPU_REQUIRED_CAPABILITIES: FrozenSet[str] = frozenset(
         "parabricks.rna_fq2bam",
         "parabricks.kallisto",
         "methyl-centroid",
+        "proteomics.diann",
+        "proteomics.prosit",
+        "proteomics.casanovo",
     }
 )
 
@@ -26,6 +39,7 @@ GPU_REQUIRED_CAPABILITIES: FrozenSet[str] = frozenset(
 _PROBE_ALWAYS = "always"
 _PROBE_CLI = "cli"
 _PROBE_PARABRICKS = "parabricks"
+_PROBE_DOCKER_GPU = "docker_gpu"
 _PROBE_EXTRACTOR = "extractor"
 
 
@@ -38,11 +52,23 @@ def _capability_probe_kind(capability: str, *, execution_mode: str, cli_tool: Op
         "parabricks.kallisto",
     ):
         return _PROBE_PARABRICKS
+    if capability in DOCKER_GPU_TOOL_IMAGE_ENV:
+        return _PROBE_DOCKER_GPU
     if capability == "methyl-extract":
         return _PROBE_EXTRACTOR
     if execution_mode == "cli" and cli_tool:
         return _PROBE_CLI
     return _PROBE_ALWAYS
+
+
+def _docker_gpu_tool_available(capability: str) -> bool:
+    """True when the tool's image env is configured (image pulled into shared store)."""
+    env = DOCKER_GPU_TOOL_IMAGE_ENV.get(capability)
+    if not env:
+        return False
+    if not os.environ.get(env, "").strip():
+        return False
+    return shutil.which("docker") is not None
 
 
 def _catalog_capability_rows() -> list[tuple[str, str, Optional[str]]]:
@@ -146,6 +172,16 @@ def resolve_worker_capabilities(
                     "Parabricks image configured but no GPU; omitting %s", capability
                 )
             continue
+        if kind == _PROBE_DOCKER_GPU:
+            if _docker_gpu_tool_available(capability) and gpu:
+                caps.add(capability)
+            elif _docker_gpu_tool_available(capability) and not gpu:
+                logger.warning(
+                    "%s image configured but no GPU; omitting %s",
+                    DOCKER_GPU_TOOL_IMAGE_ENV.get(capability),
+                    capability,
+                )
+            continue
         if kind == _PROBE_EXTRACTOR:
             if extractor_ok:
                 caps.add(capability)
@@ -179,6 +215,12 @@ def assert_node_can_serve_capability(capability: str) -> None:
         raise RuntimeError(
             f"Worker configured for capability {capability!r} but Parabricks is not available. "
             "Set METHYL_PARABRICKS_IMAGE or install the nvcr.io Parabricks image."
+        )
+    if capability in DOCKER_GPU_TOOL_IMAGE_ENV and not _docker_gpu_tool_available(capability):
+        env = DOCKER_GPU_TOOL_IMAGE_ENV[capability]
+        raise RuntimeError(
+            f"Worker configured for capability {capability!r} but its Docker image is not available. "
+            f"Set {env} to an arm64/multi-arch image pulled into the shared Docker store."
         )
     if capability == "methyl-extract" and not _extractor_available():
         raise RuntimeError(

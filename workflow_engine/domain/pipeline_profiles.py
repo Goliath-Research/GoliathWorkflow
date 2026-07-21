@@ -36,6 +36,8 @@ _STRING_SCOPE_KEYS = frozenset(
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
     "usePangenome": False,
     "useKallisto": False,
+    "usePanel": False,
+    "useRescore": False,
     "deleteFastqs": True,
     "runDmpSelection": False,
     "runGeneFeaturecuts": False,
@@ -530,6 +532,19 @@ def seed_pipeline_scope_flags(
             "useKallisto",
             str(quant_mode).strip().lower() == "kallisto",
         )
+
+    # Proteomics ingest selection: ingest_mode (dia | panel) -> usePanel; rescore -> useRescore.
+    prot_cfg = dict(ac.get("proteomics_quant") or {})
+    ingest_mode = out.get("ingestMode") or prot_cfg.get("ingest_mode") or "dia"
+    out["ingestMode"] = str(ingest_mode)
+    if "usePanel" in out:
+        out["usePanel"] = bool(out["usePanel"])
+    else:
+        out.setdefault("usePanel", str(ingest_mode).strip().lower() == "panel")
+    if "useRescore" in out:
+        out["useRescore"] = bool(out["useRescore"])
+    else:
+        out.setdefault("useRescore", bool(prot_cfg.get("rescore", False)))
 
     sample_prep_cfg = dict(ac.get("sample_prep") or {})
     if "deleteFastqs" in out:

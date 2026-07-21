@@ -42,6 +42,12 @@
     "transcriptome_fasta": "/work/genomes/rna/GRCh38/kallisto/gencode.v49.transcripts.fa",
     "tx2gene": "/work/genomes/rna/GRCh38/kallisto/gencode.v49.tx2gene.tsv"
   },
+  "proteomics_reference": {
+    "protein_fasta": "/work/genomes/proteomics/GRCh38/uniprot/UP000005640_9606.fasta",
+    "spectral_library": "/work/genomes/proteomics/GRCh38/diann/human_plasma.speclib",
+    "prosit_model": "/work/genomes/proteomics/models/prosit/intensity_transformer",
+    "casanovo_model": "/work/genomes/proteomics/models/casanovo/casanovo_massivekb.ckpt"
+  },
   "testing": {
     "samples": {
       "cfdna": {

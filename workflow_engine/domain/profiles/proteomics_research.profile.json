@@ -1,0 +1,27 @@
+{
+  "pipelineProfile": "proteomics_research",
+  "description": "Research profile for the proteomics process pack. Selects an ingest mode (dia | panel), optional Prosit rescoring, QC thresholds, and differential-abundance / classification knobs. Does not use methylation centroid/DMP/deconvolution config.",
+  "deleteFastqs": true,
+  "actionConfig": {
+    "proteomics_quant": {
+      "ingest_mode": "dia",
+      "rescore": false,
+      "threads": 8
+    },
+    "proteomics_qc": {
+      "guardrails": {
+        "min_proteins_identified": 300,
+        "max_missing_fraction": 0.9
+      }
+    },
+    "protein_de_select": {
+      "max_proteins": 200,
+      "ranking": "abs_t",
+      "transform": "log2",
+      "normalize": "median",
+      "impute": "min",
+      "classifier_method": "logistic_regression",
+      "cv_folds": 5
+    }
+  }
+}

@@ -51,14 +51,16 @@ oncology cohorts. Near-term process packs use the same control plane:
 | Methylation — buffy coat / cfDNA (e.g. oncology) | **In production use** | SamplePrep → MC stability → freeze → model; SaMD ladder |
 | RNA-Seq (transcriptomics) | **Shipped process pack (research)** | Second omics modality (`regulatory.primary_modality: rnaseq`). Quantify with NVIDIA Clara Parabricks `pbrun rna_fq2bam` (STAR) or `pbrun kallisto`, selectable via `actionConfig.rna_align.quant_mode` — parallel to the methylation `fq2bam_meth` / giraffe SamplePrep path. Ships typed actions, RNA QC, a per-sample expression contract, and DE gene-panel + tabular classification; remaining gate is representative cohort data and validation evidence, not aligner R&D. |
 | Methylation — cfDNA Alzheimer detection | **Shipped disease pack (research)** | Staged Control → MCI → AD study on the methylation control plane (`primary_analyte: cfdna`). Ships as config — study manifest, cohorts, patient-disjoint partitions, and a disease overlay (`mapper.disease_term` = Alzheimer's disease, `neuro-core` enrichment preset, progression) — with **no** new actions or aligners. Remaining gate is representative cohort data and validation evidence. See [Alzheimer cfDNA pack](../usage/21-alzheimer-cfdna-pack.qmd). |
-| Proteomics | **Planned process pack** | Higher effort than RNA-Seq: new typed actions and GPU-oriented workflows on the same NVIDIA clusters (not a Parabricks drop-in). Still reuses DomainProgram, scheduler, QC gates, cfg/wf, and CAAS. |
+| Proteomics | **Shipped process pack (research)** | Third omics modality (`regulatory.primary_modality: proteomics`). GPU DIA-NN mass-spec search on the same Lambda/Nebius GH200 NVIDIA VMs (own Docker image + capability, not Parabricks), plus non-commercial extensions: panel-matrix ingest (Olink/SomaScan/open, CPU), Prosit rescoring + in-silico libraries, and Casanovo de novo (both GPU). Shares a generalized `samples x features` seam with RNA-Seq feeding the tabular classifier, covariate stacking, and MC stability. DDA/MSFragger deferred (commercial license). See [Proteomics process pack](../usage/22-proteomics-process-pack.qmd). |
 
 Buyers purchase a **platform** with a growing set of analyte/disease packs—not a
 single hard-coded assay. RNA-Seq is the first multiomics pack to ship on this
 control plane (its own DomainPrograms, typed actions, profile, and QC gates
-reusing the scheduler, cfg/wf, and CAAS); proteomics follows as a first-class GPU
-process on the same worker fleet. See
-[RNA-Seq process pack](../usage/20-rnaseq-process-pack.qmd).
+reusing the scheduler, cfg/wf, and CAAS); **proteomics** is the second, adding
+GPU mass-spec search (DIA-NN, plus Prosit/Casanovo) on the same NVIDIA GH200 VMs
+and sharing a common feature seam with RNA-Seq. See
+[RNA-Seq process pack](../usage/20-rnaseq-process-pack.qmd) and
+[Proteomics process pack](../usage/22-proteomics-process-pack.qmd).
 
 ---
 
@@ -171,7 +173,9 @@ architecture that already exists:
   `quant_mode`), adds RNA QC and an expression contract, and swaps the
   methylation centroid/DMP science for differential-expression gene selection
   (`pipeline.rna_de_select`) feeding the same tabular classifier and covariate
-  stacking. Proteomics adds GPU-native steps on the same clusters. The shipped
+  stacking. The shipped **proteomics** pack adds GPU mass-spec ingest (DIA-NN,
+  Prosit, Casanovo) plus CPU panel ingest on the same clusters, reusing a
+  generalized `samples x features` seam shared with RNA-Seq. The shipped
   **Alzheimer cfDNA** pack shows the lighter path: a *disease* pack that reuses the
   methylation control plane with no new code — a staged Control → MCI → AD study,
   patient-disjoint partitions, and a config overlay (`mapper.disease_term`,

@@ -32,6 +32,21 @@ resolve_parabricks_image() {
   echo "${!var:-}"
 }
 
+# Resolve a proteomics GPU tool image (diann|prosit|casanovo) for current host arch.
+resolve_proteomics_image() {
+  local tool="${1:?tool required (diann|prosit|casanovo)}"
+  local arch_key
+  arch_key="$(platform_arch_key)"
+  if [[ -f "$MATRIX_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$MATRIX_FILE"
+  fi
+  local upper
+  upper="$(echo "$tool" | tr '[:lower:]' '[:upper:]')"
+  local var="PROTEOMICS_${upper}_IMAGE_${arch_key}"
+  echo "${!var:-}"
+}
+
 resolve_methyl_extractor_subdir() {
   local uname_arch="${1:-$(detect_uname_arch)}"
   if [[ -f "$MATRIX_FILE" ]]; then

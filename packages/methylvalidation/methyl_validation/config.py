@@ -400,9 +400,9 @@ class BackendSharedParams(BaseModel):
     @field_validator("feature_mode")
     @classmethod
     def _validate_feature_mode(cls, value: str) -> str:
-        # ``rna_expression`` selects the RNA-Seq transcriptomics feature builder
-        # (samples x genes count/TPM matrix) instead of the methylation beta builders.
-        allowed = {"raw_dmp", "raw_gene", "observed_hybrid", "rna_expression"}
+        # ``rna_expression`` / ``proteomics_abundance`` select the non-methylation feature
+        # builders (samples x features matrix) instead of the methylation beta builders.
+        allowed = {"raw_dmp", "raw_gene", "observed_hybrid", "rna_expression", "proteomics_abundance"}
         normalized = str(value).strip().lower()
         if normalized not in allowed:
             raise ValueError(f"feature_mode must be one of {sorted(allowed)}")

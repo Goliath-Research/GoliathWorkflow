@@ -1,0 +1,8 @@
+{
+  "panelFormat": "npx",
+  "panelPath": "/work/p/data/olink_npx.csv",
+  "projectPath": "/work/p/project.json",
+  "sampleDir": "/work/samples/S1",
+  "sampleId": "S1",
+  "tool": "ProteomicsIngestPanel"
+}

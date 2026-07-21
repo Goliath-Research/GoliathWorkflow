@@ -245,6 +245,20 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         filename="rna_de_select.schema.json",
         title="RnaDeSelectConfig",
     ),
+    ConfigSchemaSpec(
+        schema_id="proteomics_qc",
+        module="proteomics_qc.models.config",
+        class_name="ProteomicsQcGuardrailConfig",
+        filename="proteomics_qc.schema.json",
+        title="ProteomicsQcGuardrailConfig",
+    ),
+    ConfigSchemaSpec(
+        schema_id="protein_de_select",
+        module="proteomics_features.models.config",
+        class_name="ProteinDeSelectConfig",
+        filename="protein_de_select.schema.json",
+        title="ProteinDeSelectConfig",
+    ),
 )
 
 

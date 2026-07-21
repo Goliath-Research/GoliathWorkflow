@@ -43,6 +43,14 @@ from .rna_prep import (
     _handle_register_expression,
     _handle_rna_qc,
 )
+from .proteomics_prep import (
+    _handle_casanovo,
+    _handle_diann,
+    _handle_dl_rescore,
+    _handle_ingest_panel,
+    _handle_proteomics_qc,
+    _handle_register_abundance,
+)
 from .stub import _handle_stub_external
 from .workflow_compute import (
     _handle_workflow_const_bool,
@@ -92,6 +100,12 @@ __all__ = [
     "_handle_kallisto",
     "_handle_rna_qc",
     "_handle_register_expression",
+    "_handle_diann",
+    "_handle_ingest_panel",
+    "_handle_register_abundance",
+    "_handle_proteomics_qc",
+    "_handle_dl_rescore",
+    "_handle_casanovo",
     "_handle_stub_external",
     "_handle_trim_fastq",
     "_handle_validation_biomarker_filter",

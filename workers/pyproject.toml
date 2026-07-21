@@ -15,6 +15,9 @@ dependencies = [
   "methyl_classifier",
   "rna_alignment_qc",
   "rna_express",
+  "omics_features",
+  "proteomics_features",
+  "proteomics_qc",
   "boto3>=1.34.0",
   "azure-identity>=1.15.0",
   "azure-storage-blob>=12.19.0",
@@ -32,6 +35,9 @@ methyl-disease-progression = { path = "../packages/methyldiseaseprogression", ed
 methyl_classifier = { path = "../packages/methylclassifier", editable = true }
 rna_alignment_qc = { path = "../packages/rnaalignmentqc", editable = true }
 rna_express = { path = "../packages/rnaexpress", editable = true }
+omics_features = { path = "../packages/omicsfeatures", editable = true }
+proteomics_features = { path = "../packages/proteomicsfeatures", editable = true }
+proteomics_qc = { path = "../packages/proteomicsqc", editable = true }
 
 [project.scripts]
 methyl-worker = "methyl_worker.__main__:main"
@@ -40,6 +46,9 @@ methyl-export-action-catalog = "methyl_worker.action_catalog_export:main"
 methyl-parabricks-align = "methyl_worker.parabricks_runner:main"
 methyl-rna-fq2bam = "methyl_worker.rna_fq2bam_runner:main"
 methyl-kallisto = "methyl_worker.kallisto_runner:main"
+methyl-diann = "methyl_worker.diann_runner:main"
+methyl-prosit-rescore = "methyl_worker.prosit_runner:main"
+methyl-casanovo = "methyl_worker.casanovo_runner:main"
 methyl-extract = "methyl_worker.extract_runner:main"
 
 [build-system]

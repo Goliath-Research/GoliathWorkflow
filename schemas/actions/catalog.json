@@ -745,6 +745,195 @@
       "tool": "RnaDeSelect"
     },
     {
+      "action_name": "sample.download_msdata",
+      "argv_map": {},
+      "capability": "sample.download-msdata",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "fastqSource"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Download proteomics MS data files (.raw/.mzML/.d) from external object storage.",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_download_fastq",
+      "input_schema_ref": "schemas/tasks/sample_download_msdata.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_download_msdata.output.schema.json",
+      "schema_id": "sample.download_msdata",
+      "tool": "SampleDownloadMsdata"
+    },
+    {
+      "action_config_key": "proteomics_quant",
+      "action_name": "sample.diann",
+      "argv_map": {},
+      "capability": "proteomics.diann",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Quantify DIA mass-spec data with GPU DIA-NN (Docker; own image env, not Parabricks).",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_diann",
+      "input_schema_ref": "schemas/tasks/sample_diann.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_diann.output.schema.json",
+      "schema_id": "sample.diann",
+      "tool": "ProteomicsDiann"
+    },
+    {
+      "action_config_key": "proteomics_quant",
+      "action_name": "sample.ingest_panel",
+      "argv_map": {},
+      "capability": "proteomics.panel_ingest",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Ingest an affinity/aptamer panel matrix (Olink NPX / SomaScan RFU / open) to the abundance contract (CPU).",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_ingest_panel",
+      "input_schema_ref": "schemas/tasks/sample_ingest_panel.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_ingest_panel.output.schema.json",
+      "schema_id": "sample.ingest_panel",
+      "tool": "ProteomicsIngestPanel"
+    },
+    {
+      "action_config_key": "proteomics_quant",
+      "action_name": "sample.dl_rescore",
+      "argv_map": {},
+      "capability": "proteomics.prosit",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Prosit deep-learning rescoring of a DIA-NN report (GPU Docker) to lift IDs at fixed FDR.",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_dl_rescore",
+      "input_schema_ref": "schemas/tasks/sample_dl_rescore.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_dl_rescore.output.schema.json",
+      "schema_id": "sample.dl_rescore",
+      "tool": "ProteomicsProsit"
+    },
+    {
+      "action_config_key": "proteomics_quant",
+      "action_name": "sample.casanovo",
+      "argv_map": {},
+      "capability": "proteomics.casanovo",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Casanovo de novo peptide sequencing (GPU Docker) for novel/variant peptides.",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_casanovo",
+      "input_schema_ref": "schemas/tasks/sample_casanovo.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_casanovo.output.schema.json",
+      "schema_id": "sample.casanovo",
+      "tool": "ProteomicsCasanovo"
+    },
+    {
+      "action_config_key": "proteomics_quant",
+      "action_name": "sample.register_abundance",
+      "argv_map": {},
+      "capability": "sample.register-abundance",
+      "category": "sample_prep",
+      "cli_tool": "methyl-register-abundance",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Normalize DIA-NN / panel proteomics output into a canonical abundance.h5.",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_register_abundance",
+      "input_schema_ref": "schemas/tasks/sample_register_abundance.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_register_abundance.output.schema.json",
+      "schema_id": "sample.register_abundance",
+      "tool": "ProteomicsRegisterAbundance"
+    },
+    {
+      "action_config_key": "proteomics_qc",
+      "action_name": "sample.proteomics_qc",
+      "argv_map": {},
+      "capability": "proteomics-qc",
+      "category": "sample_prep",
+      "cli_tool": "proteomics-qc",
+      "context_vars": [
+        "projectPath",
+        "sampleId",
+        "sampleDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Proteomics QC guardrails (proteins identified, missingness).",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [],
+        "scope_bindings": [
+          {
+            "output_json_path": "$.guardrails.overall_pass",
+            "var_name": "qcPass"
+          },
+          {
+            "output_json_path": "$.proteomicsQcPass",
+            "var_name": "proteomicsQcPass"
+          }
+        ],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": []
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_proteomics_qc",
+      "input_schema_ref": "schemas/tasks/sample_proteomics_qc.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_proteomics_qc.output.schema.json",
+      "schema_id": "sample.proteomics_qc",
+      "tool": "ProteomicsQc"
+    },
+    {
+      "action_config_key": "protein_de_select",
+      "action_name": "pipeline.protein_de_select",
+      "argv_map": {
+        "centroid1Dir": "--centroid1-dir",
+        "centroid2Dir": "--centroid2-dir",
+        "chromosome": "--chromosome",
+        "comparison": "--comparison",
+        "context": "--context",
+        "group": "--group",
+        "outputDir": "--output-dir",
+        "project": "--project",
+        "projectPath": "--project",
+        "resolvedConfigPath": "--resolved-config",
+        "stepOverride": "--step-override"
+      },
+      "capability": "methyl-protein-de-select",
+      "category": "modeling",
+      "cli_tool": "methyl-protein-de-select",
+      "context_vars": [
+        "comparison",
+        "outputDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Proteomics differential-abundance protein panel selection + tabular classification.",
+      "execution_mode": "cli",
+      "input_schema_ref": "schemas/tasks/pipeline_protein_de_select.input.schema.json",
+      "output_schema_ref": "schemas/tasks/pipeline_protein_de_select.output.schema.json",
+      "schema_id": "pipeline.protein_de_select",
+      "tool": "ProteinDeSelect"
+    },
+    {
       "action_name": "sample.delete_fastqs",
       "argv_map": {},
       "capability": "sample.delete-fastqs",

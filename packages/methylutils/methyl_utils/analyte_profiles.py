@@ -28,6 +28,8 @@ def normalize_primary_modality(value: Optional[str]) -> Optional[str]:
         return "methylation"
     if cleaned in {"rnaseq", "rna_seq", "rna", "transcriptomics", "transcriptome"}:
         return "rnaseq"
+    if cleaned in {"proteomics", "proteome", "protein", "ms_proteomics", "mass_spec"}:
+        return "proteomics"
     return cleaned or None
 
 

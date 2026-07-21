@@ -33,6 +33,9 @@ ActionConfigKey = Literal[
     "rna_align",
     "rna_qc",
     "rna_de_select",
+    "proteomics_quant",
+    "proteomics_qc",
+    "protein_de_select",
 ]
 
 DEFAULT_SITE_PATH = Path("/work/site/methyl_site.json")
@@ -117,7 +120,26 @@ def site_slice_for_action(site: Mapping[str, Any], action_key: str) -> Dict[str,
         if action_key == "rna_align" and site.get("parabricks"):
             for key, val in dict(site["parabricks"]).items():
                 out.setdefault(key, val)
+    prot_ref = site.get("proteomics_reference") or {}
+    if isinstance(prot_ref, dict) and prot_ref:
+        if action_key in ("proteomics_quant", "proteomics_qc"):
+            for key in ("protein_fasta", "spectral_library", "prosit_model", "casanovo_model"):
+                if prot_ref.get(key):
+                    out.setdefault(key, prot_ref[key])
     return out
+
+
+def resolve_proteomics_reference(site: Mapping[str, Any] | None = None) -> Dict[str, str]:
+    """Resolve proteomics reference assets from site manifest ``proteomics_reference``.
+
+    Returns whatever keys the operator pinned (protein FASTA, spectral/DIA library,
+    Prosit/Casanovo model weights). Callers validate the subset they need per tool.
+    """
+    data = dict(site or load_site_manifest())
+    bundle = data.get("proteomics_reference") or {}
+    if not isinstance(bundle, dict):
+        return {}
+    return {str(k): str(v) for k, v in bundle.items() if v not in (None, "")}
 
 
 def resolve_rna_reference(site: Mapping[str, Any] | None = None) -> Dict[str, str]:

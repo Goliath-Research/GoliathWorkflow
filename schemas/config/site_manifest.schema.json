@@ -79,6 +79,17 @@
       },
       "additionalProperties": true
     },
+    "proteomics_reference": {
+      "type": "object",
+      "description": "Proteomics reference assets for the mass-spec process pack. protein_fasta + spectral_library feed DIA-NN; prosit_model / casanovo_model pin DL weights (as cfg reference_assets). Operators pin these at site/cfg, not in Python.",
+      "properties": {
+        "protein_fasta": { "type": "string", "description": "Protein sequence FASTA for DIA-NN search / library-free prediction" },
+        "spectral_library": { "type": "string", "description": "DIA spectral library (.tsv/.speclib) for DIA-NN; omit for library-free" },
+        "prosit_model": { "type": "string", "description": "Pinned Prosit model weights path (rescoring / in-silico library)" },
+        "casanovo_model": { "type": "string", "description": "Pinned Casanovo model weights path (de novo)" }
+      },
+      "additionalProperties": true
+    },
     "actionConfig": {
       "type": "object",
       "description": "Optional per-action defaults keyed by catalog action_config_key",
