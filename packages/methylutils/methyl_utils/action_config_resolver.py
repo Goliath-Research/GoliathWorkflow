@@ -30,6 +30,8 @@ ActionConfigKey = Literal[
     "validation",
     "progression",
     "parabricks",
+    "docker_align",
+    "demultiplex",
     "rna_align",
     "rna_qc",
     "rna_de_select",

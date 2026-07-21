@@ -24,6 +24,7 @@ class SeedBasis:
     cell_types: Tuple[str, ...]
     probe_ids: Tuple[str, ...]
     chroms: Tuple[str, ...]
+    contexts: Tuple[str, ...]  # per-marker methylation context (CG/CHG/CHH)
     positions: np.ndarray  # int64, shape (n_markers,)
     M: np.ndarray  # float64, shape (n_markers, n_cell_types)
     provenance: Dict[str, Any]
@@ -44,12 +45,15 @@ def load_seed_basis(path: Optional[str | Path] = None) -> SeedBasis:
         raise ValueError(f"Seed basis missing cell_types: {p}")
     probe_ids: List[str] = []
     chroms: List[str] = []
+    contexts: List[str] = []
     positions: List[int] = []
     rows: List[List[float]] = []
     for m in markers:
         betas = m.get("betas") or {}
         probe_ids.append(str(m["probe_id"]))
         chroms.append(str(m["chrom"]))
+        ctx = str(m.get("context") or "CG").strip().upper() or "CG"
+        contexts.append(ctx)
         positions.append(int(m["pos"]))
         rows.append([float(betas[ct]) for ct in cell_types])
     provenance = {
@@ -66,6 +70,7 @@ def load_seed_basis(path: Optional[str | Path] = None) -> SeedBasis:
         cell_types=cell_types,
         probe_ids=tuple(probe_ids),
         chroms=tuple(chroms),
+        contexts=tuple(contexts),
         positions=np.asarray(positions, dtype=np.int64),
         M=np.asarray(rows, dtype=np.float64),
         provenance=provenance,
@@ -142,6 +147,14 @@ def markers_by_chrom(basis: SeedBasis) -> Dict[str, np.ndarray]:
     return {k: np.asarray(v, dtype=np.int64) for k, v in out.items()}
 
 
+def _resolve_h5_path(sample_dir: Path, chrom: str, ctx: str) -> Optional[Path]:
+    path = sample_dir / f"{chrom}-{ctx}.h5"
+    if path.is_file():
+        return path
+    alt = sample_dir / f"chr{chrom}-{ctx}.h5"
+    return alt if alt.is_file() else None
+
+
 def extract_marker_vector(
     sample_dir: str | Path,
     basis: SeedBasis,
@@ -150,47 +163,62 @@ def extract_marker_vector(
     """
     Build Y and coverage mask aligned to ``basis`` marker order from sample H5 files.
 
-    Returns ``(y, observed)`` where ``observed`` is bool mask of markers with coverage.
-    Thresholds come from typed ``CellDeconvRuntimeParams`` (no code defaults).
+    Each marker is read from ``{chrom}-{marker.context}.h5`` when that file exists;
+    otherwise configured ``cfg.contexts`` are scanned and only still-unobserved
+    markers are filled (no first-context ``break``).
     """
     from methyl_utils import MethylSample
 
     sample_dir = Path(sample_dir)
     y = np.full(basis.M.shape[0], np.nan, dtype=np.float64)
     observed = np.zeros(basis.M.shape[0], dtype=bool)
-    by_chrom = markers_by_chrom(basis)
     min_coverage = int(cfg.marker_min_coverage)
+    allowed_ctx = {str(c).strip().upper() for c in (cfg.contexts or []) if str(c).strip()}
 
-    for chrom, row_idx in by_chrom.items():
-        want_pos = basis.positions[row_idx].astype(np.uint32)
-        loaded = False
-        for ctx in cfg.contexts:
-            path = sample_dir / f"{chrom}-{ctx}.h5"
-            if not path.is_file():
-                # also try chr-prefixed names
-                alt = sample_dir / f"chr{chrom}-{ctx}.h5"
-                path = alt if alt.is_file() else path
-            if not path.is_file():
+    # Group marker indices by (chrom, preferred context).
+    by_key: Dict[Tuple[str, str], List[int]] = {}
+    for i, chrom in enumerate(basis.chroms):
+        ctx = str(basis.contexts[i] if i < len(basis.contexts) else "CG").strip().upper() or "CG"
+        by_key.setdefault((str(chrom), ctx), []).append(i)
+
+    def _fill_from_h5(path: Path, row_idx: List[int]) -> None:
+        want_pos = basis.positions[np.asarray(row_idx, dtype=np.int64)].astype(np.uint32)
+        sample = MethylSample.load_from_h5(path, positions=want_pos, align_positions=True)
+        beta = np.asarray(sample.get_methylation_levels(), dtype=np.float64)
+        cov = np.asarray(sample.get_coverage(), dtype=np.float64)
+        pos = np.asarray(sample.pos, dtype=np.uint32)
+        pos_to_i = {int(p): i for i, p in enumerate(pos)}
+        for j, basis_i in enumerate(row_idx):
+            if observed[int(basis_i)]:
                 continue
-            sample = MethylSample.load_from_h5(path, positions=want_pos, align_positions=True)
-            beta = np.asarray(sample.get_methylation_levels(), dtype=np.float64)
-            cov = np.asarray(sample.get_coverage(), dtype=np.float64)
-            pos = np.asarray(sample.pos, dtype=np.uint32)
-            # align_to_positions should match want_pos length; still map safely
-            pos_to_i = {int(p): i for i, p in enumerate(pos)}
-            for j, basis_i in enumerate(row_idx):
-                p = int(want_pos[j])
-                if p not in pos_to_i:
-                    continue
-                ii = pos_to_i[p]
-                if not np.isfinite(beta[ii]) or cov[ii] < min_coverage:
-                    continue
-                y[int(basis_i)] = float(beta[ii])
-                observed[int(basis_i)] = True
-            loaded = True
-            break
-        if not loaded:
-            continue
+            p = int(want_pos[j])
+            if p not in pos_to_i:
+                continue
+            ii = pos_to_i[p]
+            if not np.isfinite(beta[ii]) or cov[ii] < min_coverage:
+                continue
+            y[int(basis_i)] = float(beta[ii])
+            observed[int(basis_i)] = True
+
+    for (chrom, marker_ctx), row_idx in by_key.items():
+        # Prefer the marker's own context H5.
+        path = _resolve_h5_path(sample_dir, chrom, marker_ctx)
+        if path is not None:
+            _fill_from_h5(path, row_idx)
+        # Fallback: scan remaining configured contexts for still-missing markers.
+        for ctx in cfg.contexts:
+            ctx_u = str(ctx).strip().upper()
+            if ctx_u == marker_ctx:
+                continue
+            if allowed_ctx and ctx_u not in allowed_ctx:
+                continue
+            path = _resolve_h5_path(sample_dir, chrom, ctx_u)
+            if path is None:
+                continue
+            pending = [i for i in row_idx if not observed[i]]
+            if not pending:
+                break
+            _fill_from_h5(path, pending)
     return y, observed
 
 

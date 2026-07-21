@@ -94,7 +94,9 @@ CREATE TABLE IF NOT EXISTS cfg.site_reference_asset (
   CONSTRAINT uq_cfg_sra_site_asset UNIQUE (site_id, reference_asset_id),
   CONSTRAINT ck_cfg_sra_role CHECK (asset_role IN (
     'reference_genome', 'annotation_gtf', 'pangenome_bundle',
-    'mapper_cache', 'other'
+    'mapper_cache',
+    'houseman_seed_basis', 'hitimed_hierarchy_basis',
+    'other'
   ))
 );
 

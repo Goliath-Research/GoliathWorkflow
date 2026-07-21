@@ -4,6 +4,8 @@ overview: Expand the plant abiotic-stress application pack with Ensembl Plants s
 
 > **Status: Implemented** (2026-07). Crop site recipes + offline `plant_traits` mapper prior shipped; Open Targets stays human-only. Grafting remains deferred.
 
+> **Follow-on:** Plant cell-type deconvolution atlases and epi-GBS / new aligners were pulled forward as platform seams in [`plant-deconv-epigbs-seams.plan.md`](plant-deconv-epigbs-seams.plan.md) (not crop-specific biology).
+
 azure_devops:
   type: Feature
   title: "Multi-crop plant sites + plant trait priors"

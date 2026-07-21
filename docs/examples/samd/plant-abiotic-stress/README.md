@@ -96,3 +96,14 @@ methyl-workflow-run \
 ```
 
 Same program and analyte; only site pins, chromosome list, organism, and STRING taxon change.
+
+## Optional: plant cell deconvolution / epi-GBS
+
+- **Atlas:** provision a Houseman/HiTIMED JSON, set site `actionConfig.cell_deconvolution`,
+  run `plant_stress_study_lifecycle_with_deconv.program.json` (default lifecycle still omits
+  the node). CI fixture:
+  `workflow_engine/domain/checks/plant_abiotic_stress/data/plant_houseman_seed_fixture.json`.
+- **epi-GBS:** `libraryProtocol: epi_gbs` + `sample_prep_epigbs.program.json` +
+  `actionConfig.docker_align` image/argv (Parabricks WGBS SamplePrep stays separate).
+  See [ch.23](../../../usage/23-plant-abiotic-stress-pack.qmd) and
+  [plant-deconv-epigbs-seams](../../../plans/plant-deconv-epigbs-seams.plan.md).

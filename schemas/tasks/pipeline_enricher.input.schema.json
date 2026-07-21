@@ -1193,6 +1193,19 @@
           "default": null,
           "title": "Sort By"
         },
+        "string_species": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "NCBI taxon id for STRING PPI network refinement (e.g. 9606 human, 3702 Arabidopsis thaliana, 3847 soybean). Defaults to 9606 when unset. Operator-set per profile/site actionConfig.enricher for non-human packs.",
+          "title": "String Species"
+        },
         "top": {
           "anyOf": [
             {

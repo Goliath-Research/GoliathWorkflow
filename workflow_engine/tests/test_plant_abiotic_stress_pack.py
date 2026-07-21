@@ -37,6 +37,22 @@ _EXAMPLE_DIR = _REPO / "docs" / "examples" / "samd" / "plant-abiotic-stress"
 _PROGRAM = (
     _REPO / "workflow_engine" / "domain" / "fixtures" / "plant_stress_study_lifecycle.program.json"
 )
+_PROGRAM_WITH_DECONV = (
+    _REPO
+    / "workflow_engine"
+    / "domain"
+    / "fixtures"
+    / "plant_stress_study_lifecycle_with_deconv.program.json"
+)
+_HOUSEMAN_FIXTURE = (
+    _REPO
+    / "workflow_engine"
+    / "domain"
+    / "checks"
+    / "plant_abiotic_stress"
+    / "data"
+    / "plant_houseman_seed_fixture.json"
+)
 _PROFILES = _REPO / "workflow_engine" / "domain" / "profiles"
 _DEMO_TRAITS = _EXAMPLE_DIR / "data" / "arabidopsis_drought_gene_traits.tsv"
 
@@ -136,8 +152,7 @@ def test_example_manifest_is_plant_tissue_methylation() -> None:
     assert manifest["chromosomes"] == ["1", "2", "3", "4", "5"]
 
 
-def test_plant_lifecycle_program_has_no_cell_deconvolution() -> None:
-    program = json.loads(_PROGRAM.read_text())
+def _program_do_keys(program: dict) -> list[str]:
     do_keys: list[str] = []
 
     def _walk(node: object) -> None:
@@ -152,10 +167,26 @@ def test_plant_lifecycle_program_has_no_cell_deconvolution() -> None:
                 _walk(item)
 
     _walk(program["body"])
+    return do_keys
+
+
+def test_plant_lifecycle_program_has_no_cell_deconvolution() -> None:
+    program = json.loads(_PROGRAM.read_text())
+    do_keys = _program_do_keys(program)
     assert "pipeline.cell_deconvolution" not in do_keys
-    # Core science is still present.
     assert "pipeline.mapper" in do_keys
     assert "validation.model_mc" in do_keys
+
+
+def test_plant_lifecycle_with_deconv_includes_node_and_fixture() -> None:
+    program = json.loads(_PROGRAM_WITH_DECONV.read_text())
+    do_keys = _program_do_keys(program)
+    assert "pipeline.cell_deconvolution" in do_keys
+    assert _HOUSEMAN_FIXTURE.is_file()
+    fixture = json.loads(_HOUSEMAN_FIXTURE.read_text())
+    assert "mesophyll" in fixture["cell_types"]
+    contexts = {m["context"] for m in fixture["markers"]}
+    assert contexts == {"CG", "CHG", "CHH"}
 
 
 @pytest.mark.parametrize("crop,path,chroms", _CROP_SMOKES)

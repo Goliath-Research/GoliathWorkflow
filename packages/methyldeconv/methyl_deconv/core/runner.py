@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import pandas as pd
 
@@ -119,6 +119,38 @@ def _run_hitimed(
     }
 
 
+def _is_plant_analyte(analyte: Optional[str]) -> bool:
+    key = str(analyte or "").strip().lower()
+    if not key:
+        return False
+    try:
+        from methyl_utils.analyte_profiles import normalize_primary_analyte
+
+        return normalize_primary_analyte(key) == "plant_tissue"
+    except Exception:
+        return key in {"plant_tissue", "plant", "leaf", "root", "meristem", "seed"}
+
+
+def _require_plant_atlas_paths(cfg: CellDeconvStepConfig, runtime: CellDeconvRuntimeParams) -> None:
+    """Plant tissue must never fall back to packaged human-blood atlases."""
+    if not _is_plant_analyte(runtime.analyte):
+        return
+    if runtime.method == "hitimed":
+        if not (cfg.hierarchy_basis_path and str(cfg.hierarchy_basis_path).strip()):
+            raise ValueError(
+                "plant_tissue HiTIMED deconvolution requires hierarchy_basis_path "
+                "(operator-supplied plant atlas JSON). Packaged blood hierarchy "
+                "fallback is not allowed."
+            )
+        return
+    if not (cfg.seed_basis_path and str(cfg.seed_basis_path).strip()):
+        raise ValueError(
+            "plant_tissue Houseman deconvolution requires seed_basis_path "
+            "(operator-supplied plant atlas JSON). Packaged FlowSorted blood "
+            "fallback is not allowed."
+        )
+
+
 def run_cell_deconv_for_samples(
     samples: Sequence[Tuple[str, str, str]],
     output_dir: Path,
@@ -127,6 +159,7 @@ def run_cell_deconv_for_samples(
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     runtime = cfg.require_runtime()
+    _require_plant_atlas_paths(cfg, runtime)
 
     if runtime.method == "hitimed":
         manifest = _run_hitimed(samples, output_dir, cfg, runtime)

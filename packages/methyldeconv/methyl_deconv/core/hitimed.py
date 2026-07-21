@@ -39,14 +39,15 @@ class HierarchyNode:
 
     ``children`` are child compartment ids (either other node ids or terminal
     leaf ids). ``M`` is (n_markers, n_children) with columns aligned to
-    ``children``; ``probe_ids`` / ``chroms`` / ``positions`` describe the node's
-    marker rows.
+    ``children``; ``probe_ids`` / ``chroms`` / ``contexts`` / ``positions``
+    describe the node's marker rows.
     """
 
     name: str
     children: Tuple[str, ...]
     probe_ids: Tuple[str, ...]
     chroms: Tuple[str, ...]
+    contexts: Tuple[str, ...]
     positions: np.ndarray  # int64 (n_markers,)
     M: np.ndarray  # float64 (n_markers, n_children)
 
@@ -59,6 +60,14 @@ class HierarchyBasis:
 
     def root_for_analyte(self, analyte: Optional[str]) -> str:
         key = str(analyte or "").strip().lower()
+        try:
+            from methyl_utils.analyte_profiles import normalize_primary_analyte
+
+            canonical = normalize_primary_analyte(key)
+            if canonical:
+                key = canonical
+        except Exception:
+            pass
         if key in self.analyte_trees:
             return self.analyte_trees[key]
         if "default" in self.analyte_trees:
@@ -109,6 +118,7 @@ def load_hierarchy_basis(path: Optional[str | Path] = None) -> HierarchyBasis:
             raise ValueError(f"Hierarchy node '{name}' has no markers: {p}")
         probe_ids: List[str] = []
         chroms: List[str] = []
+        contexts: List[str] = []
         positions: List[int] = []
         rows: List[List[float]] = []
         for m in markers:
@@ -121,6 +131,7 @@ def load_hierarchy_basis(path: Optional[str | Path] = None) -> HierarchyBasis:
                 )
             probe_ids.append(str(m["probe_id"]))
             chroms.append(str(m["chrom"]))
+            contexts.append(str(m.get("context") or "CG").strip().upper() or "CG")
             positions.append(int(m["pos"]))
             rows.append([float(betas[c]) for c in children])
         nodes[name] = HierarchyNode(
@@ -128,6 +139,7 @@ def load_hierarchy_basis(path: Optional[str | Path] = None) -> HierarchyBasis:
             children=children,
             probe_ids=tuple(probe_ids),
             chroms=tuple(chroms),
+            contexts=tuple(contexts),
             positions=np.asarray(positions, dtype=np.int64),
             M=np.asarray(rows, dtype=np.float64),
         )
@@ -170,61 +182,78 @@ def _nodes_in_tree(basis: HierarchyBasis, root: str) -> List[str]:
     return order
 
 
-def _tree_probes(basis: HierarchyBasis, root: str) -> List[Tuple[str, str, int]]:
-    """Union of ``(probe_id, chrom, pos)`` across all node markers under ``root``."""
+def _tree_probes(basis: HierarchyBasis, root: str) -> List[Tuple[str, str, str, int]]:
+    """Union of ``(probe_id, chrom, context, pos)`` across all node markers under ``root``."""
     seen: set[str] = set()
-    probes: List[Tuple[str, str, int]] = []
+    probes: List[Tuple[str, str, str, int]] = []
     for node_id in _nodes_in_tree(basis, root):
         node = basis.nodes[node_id]
-        for pid, chrom, pos in zip(node.probe_ids, node.chroms, node.positions):
+        for i, pid in enumerate(node.probe_ids):
             if pid in seen:
                 continue
             seen.add(pid)
-            probes.append((str(pid), str(chrom), int(pos)))
+            ctx = str(node.contexts[i] if i < len(node.contexts) else "CG").strip().upper() or "CG"
+            probes.append((str(pid), str(node.chroms[i]), ctx, int(node.positions[i])))
     return probes
+
+
+def _resolve_h5_path(sample_dir: Path, chrom: str, ctx: str) -> Optional[Path]:
+    path = sample_dir / f"{chrom}-{ctx}.h5"
+    if path.is_file():
+        return path
+    alt = sample_dir / f"chr{chrom}-{ctx}.h5"
+    return alt if alt.is_file() else None
 
 
 def extract_beta_map(
     sample_dir: str | Path,
-    probes: List[Tuple[str, str, int]],
+    probes: List[Tuple[str, str, str, int]],
     cfg: CellDeconvRuntimeParams,
 ) -> Dict[str, float]:
-    """Read sample H5 once per chromosome; return ``{probe_id: beta}`` for
+    """Read sample H5 per (chrom, context); return ``{probe_id: beta}`` for
     markers observed with coverage >= ``marker_min_coverage``."""
     from methyl_utils import MethylSample
 
     sample_dir = Path(sample_dir)
     min_coverage = int(cfg.marker_min_coverage)
-    by_chrom: Dict[str, List[Tuple[str, int]]] = {}
-    for pid, chrom, pos in probes:
-        by_chrom.setdefault(str(chrom), []).append((pid, int(pos)))
+    by_key: Dict[Tuple[str, str], List[Tuple[str, int]]] = {}
+    for pid, chrom, ctx, pos in probes:
+        by_key.setdefault((str(chrom), str(ctx).upper()), []).append((pid, int(pos)))
 
     beta_map: Dict[str, float] = {}
-    for chrom, entries in by_chrom.items():
+
+    def _fill(path: Path, entries: List[Tuple[str, int]]) -> None:
         want_pos = np.asarray([p for _, p in entries], dtype=np.uint32)
-        loaded_path: Optional[Path] = None
-        for ctx in cfg.contexts:
-            path = sample_dir / f"{chrom}-{ctx}.h5"
-            if not path.is_file():
-                alt = sample_dir / f"chr{chrom}-{ctx}.h5"
-                path = alt if alt.is_file() else path
-            if path.is_file():
-                loaded_path = path
-                break
-        if loaded_path is None:
-            continue
-        sample = MethylSample.load_from_h5(loaded_path, positions=want_pos, align_positions=True)
+        sample = MethylSample.load_from_h5(path, positions=want_pos, align_positions=True)
         beta = np.asarray(sample.get_methylation_levels(), dtype=np.float64)
         cov = np.asarray(sample.get_coverage(), dtype=np.float64)
         pos_arr = np.asarray(sample.pos, dtype=np.uint32)
         pos_to_i = {int(p): i for i, p in enumerate(pos_arr)}
         for pid, pos in entries:
+            if pid in beta_map:
+                continue
             ii = pos_to_i.get(int(pos))
             if ii is None:
                 continue
             if not np.isfinite(beta[ii]) or cov[ii] < min_coverage:
                 continue
             beta_map[pid] = float(beta[ii])
+
+    for (chrom, marker_ctx), entries in by_key.items():
+        path = _resolve_h5_path(sample_dir, chrom, marker_ctx)
+        if path is not None:
+            _fill(path, entries)
+        for ctx in cfg.contexts:
+            ctx_u = str(ctx).strip().upper()
+            if ctx_u == marker_ctx:
+                continue
+            path = _resolve_h5_path(sample_dir, chrom, ctx_u)
+            if path is None:
+                continue
+            pending = [(pid, pos) for pid, pos in entries if pid not in beta_map]
+            if not pending:
+                break
+            _fill(path, pending)
     return beta_map
 
 

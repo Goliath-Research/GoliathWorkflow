@@ -250,7 +250,7 @@
       "cli_tool": "methyl-cell-deconv",
       "context_vars": [],
       "default_node_type": "ACTION",
-      "description": "Houseman leukocyte cell-type deconvolution (FlowSorted.Blood.EPIC IDOL).",
+      "description": "Cell-type deconvolution (Houseman or HiTIMED) from a path-configured atlas JSON; plant_tissue requires an operator-supplied seed/hierarchy basis (no blood fallback).",
       "execution_mode": "cli",
       "input_schema_ref": "schemas/tasks/pipeline_cell_deconvolution.input.schema.json",
       "output_schema_ref": "schemas/tasks/pipeline_cell_deconvolution.output.schema.json",
@@ -517,6 +517,74 @@
       "output_schema_ref": "schemas/tasks/sample_download_fastq.output.schema.json",
       "schema_id": "sample.download_fastq",
       "tool": "SampleDownloadFastq"
+    },
+    {
+      "action_config_key": "demultiplex",
+      "action_name": "sample.demultiplex",
+      "argv_map": {},
+      "capability": "sample.demultiplex",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Demultiplex barcode-tagged PE FASTQs (epi-GBS / reduced-rep); barcode table via resolvedConfig.",
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_demultiplex",
+      "input_schema_ref": "schemas/tasks/sample_demultiplex.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_demultiplex.output.schema.json",
+      "schema_id": "sample.demultiplex",
+      "tool": "SampleDemultiplex"
+    },
+    {
+      "action_config_key": "docker_align",
+      "action_name": "sample.docker_align",
+      "argv_map": {},
+      "capability": "align.docker",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Align bisulfite FASTQs with a config-described Docker image (epi-GBS / alternate aligners).",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.bamPath",
+            "scope_field": "bamPath"
+          },
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.metricsJson",
+            "scope_field": "metricsJson"
+          },
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.qcMetricsTar",
+            "scope_field": "qcMetricsTar"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "in_process_handler": "_handle_docker_align",
+      "input_schema_ref": "schemas/tasks/sample_docker_align.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_docker_align.output.schema.json",
+      "schema_id": "sample.docker_align",
+      "tool": "SampleDockerAlign"
     },
     {
       "action_config_key": "parabricks",

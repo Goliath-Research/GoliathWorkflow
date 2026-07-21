@@ -100,8 +100,10 @@ Merge precedence remains: program/instance overlay → profile → analyte → s
 4. Add or reuse an enrichment preset via `methyl-cfg sync-library-presets` when needed.
 5. Confirm analyte + site: human GRCh38 vs plant/other linear genome pins (Arabidopsis
    TAIR10, soybean Wm82, maize B73, wheat IWGSC recipes); omit blood deconvolution when
-   bases do not apply. For plant trait priors use `enrich_source: plant_traits` + an
-   offline TSV — not Open Targets.
+   bases do not apply (or enable plant atlases via `*_basis_path` + the with-deconv
+   lifecycle). For plant trait priors use `enrich_source: plant_traits` + an offline TSV —
+   not Open Targets. For epi-GBS use `libraryProtocol: epi_gbs` +
+   `sample_prep_epigbs.program.json` (not Parabricks WGBS SamplePrep).
 6. Point `methyl-workflow-run` at the appropriate lifecycle program + overlay.
 7. Add CI smoke fixture + pack regression test (mirror Alzheimer / plant tests).
 8. Write a short usage chapter (instance-only deltas) and add a regulatory roadmap row.

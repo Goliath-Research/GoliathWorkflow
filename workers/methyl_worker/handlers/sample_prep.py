@@ -518,4 +518,71 @@ def _handle_archive_sample(_capability: str, _action_name: str, input: BaseModel
     return ArchiveSampleTaskOutput(status=status, **result)
 
 
+def _handle_demultiplex(_capability: str, _action_name: str, input: BaseModel) -> "DemultiplexTaskOutput":
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    from ..demultiplex_runner import run_demultiplex
+    from ..sample_prep_log import append_sample_prep_log
+    from ..task_models.sample_prep_models import DemultiplexTaskOutput
+
+    sample_dir = input_json.get("sampleDir")
+    sample_id = input_json.get("sampleId")
+    if not sample_dir or not sample_id:
+        raise RuntimeError("sample.demultiplex requires sampleDir and sampleId")
+    resolved = dict(input_json.get("resolvedConfig") or {})
+    if input_json.get("barcodeTsv") and not resolved.get("barcode_tsv"):
+        resolved["barcode_tsv"] = input_json["barcodeTsv"]
+    payload = {**input_json, "resolvedConfig": resolved}
+    result = run_demultiplex(
+        sample_id=str(sample_id),
+        sample_dir=str(sample_dir),
+        input_json=payload,
+    )
+    append_sample_prep_log(
+        Path(str(sample_dir)),
+        sample_id=str(sample_id),
+        action="sample.demultiplex",
+        capability=_capability,
+        attempt=1,
+        reason="Barcode demultiplex (epi-GBS / reduced-rep)",
+        inputs={"barcodeTsv": resolved.get("barcode_tsv"), "skipped": result.get("skipped")},
+        outputs=result,
+        workflow_node_key=input_json.get("workflowNodeKey") or "demultiplex",
+    )
+    return DemultiplexTaskOutput(status="ok", **result)
+
+
+def _handle_docker_align(_capability: str, _action_name: str, input: BaseModel) -> ParabricksTaskOutput:
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    from ..docker_align_runner import run_docker_align
+    from ..sample_prep_log import append_sample_prep_log
+    from ..task_models.sample_prep_models import ParabricksTaskOutput
+
+    sample_dir = input_json.get("sampleDir")
+    sample_id = input_json.get("sampleId")
+    if not sample_dir or not sample_id:
+        raise RuntimeError("sample.docker_align requires sampleDir and sampleId")
+    reference_fasta = resolve_reference_fasta(input_json)
+    result = run_docker_align(
+        sample_id=str(sample_id),
+        sample_dir=str(sample_dir),
+        reference_fasta=reference_fasta,
+        input_json=input_json,
+    )
+    append_sample_prep_log(
+        Path(str(sample_dir)),
+        sample_id=str(sample_id),
+        action="sample.docker_align",
+        capability=_capability,
+        attempt=int(input_json.get("qcAttempt") or 1),
+        reason=str(input_json.get("remediationReason") or "Generic Docker methylation align"),
+        inputs={
+            "forceRealign": bool(input_json.get("forceRealign")),
+            "alignmentPass": input_json.get("alignmentPass") or "initial",
+        },
+        outputs=result,
+        workflow_node_key=input_json.get("workflowNodeKey") or "docker_align",
+    )
+    return ParabricksTaskOutput(status="ok", **result)
+
+
 

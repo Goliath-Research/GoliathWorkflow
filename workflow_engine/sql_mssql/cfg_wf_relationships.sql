@@ -129,7 +129,9 @@ BEGIN
         CONSTRAINT FK_cfg_sra_asset FOREIGN KEY (reference_asset_id) REFERENCES cfg.reference_asset (id),
         CONSTRAINT ck_cfg_sra_role CHECK (asset_role IN (
             N'reference_genome', N'annotation_gtf', N'pangenome_bundle',
-            N'mapper_cache', N'other'
+            N'mapper_cache',
+            N'houseman_seed_basis', N'hitimed_hierarchy_basis',
+            N'other'
         ))
     );
     CREATE INDEX IX_cfg_sra_asset ON cfg.site_reference_asset (reference_asset_id);

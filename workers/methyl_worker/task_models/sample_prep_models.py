@@ -42,6 +42,38 @@ class ParabricksGiraffeTaskInput(BaseModel):
     projectPath: Optional[str] = None
 
 
+class DemultiplexTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "SampleDemultiplex"
+    sampleId: str
+    sampleDir: str
+    projectPath: Optional[str] = None
+    barcodeTsv: Optional[str] = None
+    skipDemultiplex: Optional[bool] = None
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged demultiplex actionConfig (barcode_tsv, barcode_len, skip).",
+    )
+
+
+class DockerAlignTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "SampleDockerAlign"
+    sampleId: str
+    sampleDir: str
+    projectPath: Optional[str] = None
+    forceRealign: Optional[bool] = None
+    alignmentPass: Optional[str] = None
+    remediationReason: Optional[str] = None
+    workflowNodeKey: Optional[str] = None
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged docker_align actionConfig (image, argv, gpu_flags).",
+    )
+
+
 class TrimFastqTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -174,6 +206,15 @@ class ParabricksTaskOutput(ActionOutputBase):
     bamPath: Optional[str] = None
     metricsJson: Optional[str] = None
     qcMetricsTar: Optional[str] = None
+
+
+class DemultiplexTaskOutput(ActionOutputBase):
+    sampleId: Optional[str] = None
+    fastqR1: Optional[str] = None
+    fastqR2: Optional[str] = None
+    n_reads_kept: Optional[int] = None
+    barcode: Optional[str] = None
+    skipped: bool = False
 
 
 class TrimFastqTaskOutput(ActionOutputBase):

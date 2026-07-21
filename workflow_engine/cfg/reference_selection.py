@@ -23,6 +23,8 @@ SELECTION_TO_ASSET_ROLE = {
     "linear": "reference_genome",
     "gene_annotation": "annotation_gtf",
     "pangenome": "pangenome_bundle",
+    "houseman_seed": "houseman_seed_basis",
+    "hitimed_hierarchy": "hitimed_hierarchy_basis",
 }
 
 # Map selection key → published reference_asset name (seed fixtures)

@@ -35,6 +35,8 @@ _STRING_SCOPE_KEYS = frozenset(
 
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
     "usePangenome": False,
+    "useEpiGbs": False,
+    "skipDemultiplex": False,
     "useKallisto": False,
     "usePanel": False,
     "useDda": False,
@@ -503,19 +505,52 @@ def seed_pipeline_scope_flags(
             out[key] = bool(val)
 
 
+    # Methylation library protocol (WGBS vs epi-GBS). Keeps Parabricks SamplePrep
+    # isolated from the epi-GBS DomainProgram (sample_prep_epigbs.program.json).
+    sample_prep_cfg = dict(ac.get("sample_prep") or {})
+    demux_cfg = dict(ac.get("demultiplex") or {})
+    library_protocol = out.get("libraryProtocol")
+    if library_protocol in (None, ""):
+        library_protocol = sample_prep_cfg.get("library_protocol")
+    if library_protocol in (None, ""):
+        library_protocol = "wgbs_linear"
+    proto = str(library_protocol).strip().lower().replace("-", "_")
+    if proto in {"wgbs", "linear", "wgbslinear"}:
+        proto = "wgbs_linear"
+    elif proto in {"pangenome", "wgbs_pangenome", "wgbspangenome"}:
+        proto = "wgbs_pangenome"
+    elif proto in {"epi_gbs", "epigbs", "epi_gbs_methylation"}:
+        proto = "epi_gbs"
+    out["libraryProtocol"] = proto
+    if "useEpiGbs" in out:
+        out["useEpiGbs"] = bool(out["useEpiGbs"])
+    else:
+        out.setdefault("useEpiGbs", proto == "epi_gbs")
+    if "skipDemultiplex" in out:
+        out["skipDemultiplex"] = bool(out["skipDemultiplex"])
+    else:
+        skip_demux = demux_cfg.get("skip")
+        if skip_demux is None:
+            skip_demux = sample_prep_cfg.get("skip_demultiplex")
+        out.setdefault("skipDemultiplex", bool(skip_demux))
+
     parabricks_cfg = dict(ac.get("parabricks") or {})
     alignment_mode = out.get("alignmentMode")
     if alignment_mode in (None, ""):
         alignment_mode = parabricks_cfg.get("alignment_mode")
     if alignment_mode in (None, ""):
-        alignment_mode = "linear"
+        # Derive WGBS alignment mode from libraryProtocol when unset.
+        if proto == "wgbs_pangenome":
+            alignment_mode = "pangenome"
+        else:
+            alignment_mode = "linear"
     out["alignmentMode"] = str(alignment_mode)
     if "usePangenome" in out:
         out["usePangenome"] = bool(out["usePangenome"])
     else:
         out.setdefault(
             "usePangenome",
-            str(alignment_mode).strip().lower() == "pangenome",
+            str(alignment_mode).strip().lower() == "pangenome" or proto == "wgbs_pangenome",
         )
 
     # RNA-Seq quantifier selection, parallel to alignment_mode/usePangenome.

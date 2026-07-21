@@ -149,12 +149,27 @@ methyl-workflow-run \
 Wheat assembly is large; operators may set a chromosome subset (e.g. `["1A"]`) for research
 runs. Pattern checklist: [ch.24](24-methylation-application-packs.qmd).
 
+## Plant cell-type deconvolution (optional)
+
+Default lifecycle omits blood deconvolution. When a plant atlas is available:
+
+1. Provision Houseman or HiTIMED JSON under `/work` (cfg roles `houseman_seed_basis` /
+   `hitimed_hierarchy_basis`; compose HiTIMED with `scripts/build_plant_hitimed_basis.py`).
+2. Set site `actionConfig.cell_deconvolution` (`seed_basis_path` or `hierarchy_basis_path`,
+   multi-context list). `plant_tissue` never falls back to packaged blood atlases.
+3. Run [`plant_stress_study_lifecycle_with_deconv.program.json`](../../workflow_engine/domain/fixtures/plant_stress_study_lifecycle_with_deconv.program.json).
+
+## epi-GBS SamplePrep (optional)
+
+WGBS stays on Parabricks [`sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json).
+For epi-GBS set `libraryProtocol: epi_gbs` (see [`epi_gbs.profile.json`](../../workflow_engine/domain/profiles/epi_gbs.profile.json)) and run
+[`sample_prep_epigbs.program.json`](../../workflow_engine/domain/fixtures/sample_prep_epigbs.program.json):
+optional `sample.demultiplex` → `sample.docker_align` → methyl QC/extract. Pin the Docker
+image + argv in `actionConfig.docker_align`. Demux offline and set `demultiplex.skip: true`
+when barcodes were already split. Details: [plant-deconv-epigbs-seams plan](../plans/plant-deconv-epigbs-seams.plan.md).
+
 ## What this pack does not add
 
-- No new DomainProgram science, workflow action, or aligner (only a deconvolution-free
-  copy of the existing lifecycle program).
-- No plant cell-type deconvolution basis (shipped bases are human blood; the node is
-  omitted, not retuned).
 - No Open Targets / DisGeNET priors (human therapeutic databases). Arabidopsis overlay
   uses `enrich_source: plant_traits` with
   `data/arabidopsis_drought_gene_traits.tsv`; crop overlays leave disease enrichment
@@ -163,3 +178,4 @@ runs. Pattern checklist: [ch.24](24-methylation-application-packs.qmd).
 - No grafting / trait-introgression design — that is a planned separate pack.
 - No SaMD pivotal / clinical-performance claim ladder — an agricultural research pack
   stays on `samd_research`.
+- No biologically validated plant atlas in the wheel — operators supply atlas JSON.
