@@ -8,6 +8,7 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [Action provider registry](action-provider-registry.md) | Process-pack registry vs engine; why not DI |
 | [Layer model](layer-model.md) | manifest → profile → program → instance → worker |
 | [Config registry](config-registry.md) | `cfg` SoT → materialize `/work`; storage endpoints/credentials |
+| [Reference inventory (QNAP)](../deployment/reference-inventory-qnap.md) | Upload/provision map: `s3://epimethyl/genomes/` ↔ `/work/genomes/` |
 | [Distributed runtime](distributed-runtime.md) | portal, DB, gateway, workers, shared storage |
 | [Orchestration paths](orchestration-paths.md) | local, gateway, legacy CLI matrix |
 | [Pipeline stages](pipeline-stages.md) | sample prep through validation stage DAG |

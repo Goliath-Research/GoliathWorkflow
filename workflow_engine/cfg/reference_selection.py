@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence, Union
 
 # Filenames for the current selected pins (operators change pins, not code defaults
 # for science knobs — these are inventory layout conventions for materialize).
@@ -27,16 +27,41 @@ SELECTION_TO_ASSET_ROLE = {
     "hitimed_hierarchy": "hitimed_hierarchy_basis",
 }
 
-# Map selection key → published reference_asset name (seed fixtures)
-SELECTION_TO_ASSET_NAME = {
-    "linear": "linear-grch38-ensembl-114",
-    "gene_annotation": "gencode-v49",
-    "pangenome": "pangenome-grch38-d9-1.70",
-}
+# Selection keys that resolve to cfg.reference_asset inventory (genomes on QNAP).
+GENOME_SELECTION_KEYS = ("linear", "gene_annotation", "pangenome")
 
 
 def genomes_root(work_root: Path | str) -> Path:
     return Path(work_root) / "genomes"
+
+
+def normalize_inventory_prefix(value: str) -> str:
+    """Normalize pin / inventoryPrefix / recipe key for comparison."""
+    return str(value or "").strip().strip("/")
+
+
+def asset_inventory_prefix(document: Mapping[str, Any]) -> Optional[str]:
+    """Return inventory prefix from a reference_asset document (or recipe key)."""
+    raw = document.get("inventoryPrefix") or document.get("inventory_prefix")
+    if raw:
+        return normalize_inventory_prefix(str(raw))
+    recipe = document.get("recipe") or {}
+    for step in recipe.get("steps") or []:
+        if not isinstance(step, Mapping):
+            continue
+        op = str(step.get("op") or "").strip().lower()
+        if op not in ("s3_sync", "download"):
+            continue
+        key = step.get("key") or step.get("prefix")
+        if key:
+            # download keys may include a filename; use parent dir as prefix when needed
+            key_s = normalize_inventory_prefix(str(key))
+            if op == "download" and "." in Path(key_s).name:
+                parent = str(Path(key_s).parent).replace("\\", "/")
+                if parent and parent != ".":
+                    return normalize_inventory_prefix(parent)
+            return key_s
+    return None
 
 
 def apply_reference_selection(
@@ -89,13 +114,83 @@ def apply_reference_selection(
     return out
 
 
-def selected_asset_names(site_doc: Dict[str, Any]) -> Dict[str, str]:
-    """Return selection_key → reference_asset name for pinned roles present on site."""
+def _iter_published_assets(
+    published_assets: Union[
+        Sequence[Any],
+        Mapping[str, Mapping[str, Any]],
+        Iterable[Any],
+    ],
+) -> Iterable[tuple[str, Mapping[str, Any]]]:
+    if isinstance(published_assets, Mapping):
+        for name, doc in published_assets.items():
+            yield str(name), doc
+        return
+    for rec in published_assets:
+        if hasattr(rec, "name") and hasattr(rec, "document"):
+            yield str(rec.name), rec.document or {}
+        elif isinstance(rec, Mapping) and "name" in rec:
+            body = {k: v for k, v in rec.items() if k != "name"}
+            yield str(rec["name"]), body
+        else:
+            raise TypeError(
+                f"Unsupported published asset entry: {type(rec)!r}; "
+                "expected store record or name→document mapping"
+            )
+
+
+def resolve_asset_name_for_prefix(
+    pin: str,
+    published_assets: Union[
+        Sequence[Any],
+        Mapping[str, Mapping[str, Any]],
+        Iterable[Any],
+    ],
+) -> Optional[str]:
+    """Find published reference_asset name whose inventory prefix matches ``pin``."""
+    want = normalize_inventory_prefix(pin)
+    if not want:
+        return None
+    matches: list[str] = []
+    for name, doc in _iter_published_assets(published_assets):
+        prefix = asset_inventory_prefix(doc)
+        if prefix and prefix == want:
+            matches.append(name)
+    if not matches:
+        return None
+    if len(matches) > 1:
+        raise ValueError(
+            f"multiple reference_asset rows match inventory prefix {want!r}: {matches}"
+        )
+    return matches[0]
+
+
+def selected_asset_names(
+    site_doc: Dict[str, Any],
+    published_assets: Union[
+        Sequence[Any],
+        Mapping[str, Mapping[str, Any]],
+        Iterable[Any],
+    ],
+) -> Dict[str, str]:
+    """Return selection_key → reference_asset name by matching pin path to inventoryPrefix.
+
+    Pins under ``reference_selection`` (e.g. ``linear/GRCh38/ensembl-114``) must match
+    a published asset's ``inventoryPrefix`` (or recipe ``s3_sync``/``download`` key).
+    Raises ``ValueError`` when a genome pin is set but no published asset matches.
+    """
     sel = site_doc.get("reference_selection") or {}
     out: Dict[str, str] = {}
-    for key, asset_name in SELECTION_TO_ASSET_NAME.items():
-        if sel.get(key):
-            out[key] = asset_name
+    for key in GENOME_SELECTION_KEYS:
+        pin = sel.get(key)
+        if not pin:
+            continue
+        name = resolve_asset_name_for_prefix(str(pin), published_assets)
+        if name is None:
+            raise ValueError(
+                f"reference_selection.{key}={pin!r} does not match any published "
+                "reference_asset inventoryPrefix (publish the asset or fix the pin)."
+            )
+        out[key] = name
     return out
 
 

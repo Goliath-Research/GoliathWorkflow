@@ -59,8 +59,27 @@ Applies parity scripts in dependency order, including:
 
 PostgreSQL equivalent: [`../sql_pg/wf_split_detector_actions_seed.sql`](../sql_pg/wf_split_detector_actions_seed.sql).
 
+## Config registry genomes (fresh install)
+
+`deploy_azure.sh` applies `cfg_*` then:
+
+1. [`portal_resource_profile.sql`](portal_resource_profile.sql) — `epimethyl-archive` + `epimethyl-genomes` endpoints
+2. [`cfg_reference_assets_seed.sql`](cfg_reference_assets_seed.sql) — linear / GENCODE / pangenome recipes → `/work/genomes/`
+
+Operator upload/provision: [`docs/deployment/reference-inventory-qnap.md`](../../docs/deployment/reference-inventory-qnap.md).
+
+### Existing DB: widen `site_reference_asset.asset_role`
+
+Fresh installs get houseman/hitimed roles from [`cfg_wf_relationships.sql`](cfg_wf_relationships.sql). Older databases need:
+
+[`migrations/20260721_site_reference_asset_deconv_roles.sql`](migrations/20260721_site_reference_asset_deconv_roles.sql)
+
+(Not applied by `deploy_azure.sh`; run once on upgrade. PG twin under `../sql_pg/migrations/`.)
+
+**Do not deploy** scripts under [`deprecated/`](deprecated/) (static PCa / SamplePrep seeds).
+
 ## Related
 
-- PostgreSQL scripts: [`../sql_pg/README.md`](../sql_pg/README.md)
+- PostgreSQL scripts: [`../sql_pg/README.md`](../sql_pg/README.md) (directory name is **`sql_pg`**, not `sql_pgsql`)
 - Distributed workers bootstrap: [`../../docs/deployment/distributed-workers-bootstrap.md`](../../docs/deployment/distributed-workers-bootstrap.md)
 - Engine README: [`../README.md`](../README.md)

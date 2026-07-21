@@ -9,7 +9,12 @@ import pytest
 
 from cfg.import_fs import import_filesystem
 from cfg.provision import provision_asset, provision_selected_from_site
-from cfg.reference_selection import apply_reference_selection, verify_selected_paths
+from cfg.reference_selection import (
+    apply_reference_selection,
+    asset_inventory_prefix,
+    selected_asset_names,
+    verify_selected_paths,
+)
 from cfg.store import FileConfigStore
 
 REPO = Path(__file__).resolve().parents[2]
@@ -211,6 +216,74 @@ def test_s3_sync_step_prefix_no_prefixbase_not_doubled(
     assert captured["uri"] == "s3://epimethyl/linear/GRCh38/ensembl-114/"
 
 
+def test_selected_asset_names_matches_inventory_prefix() -> None:
+    assets = {
+        "linear-grch38-ensembl-114": {
+            "inventoryPrefix": "linear/GRCh38/ensembl-114",
+        },
+        "gencode-v49": {
+            "inventoryPrefix": "annotation/gencode/v49",
+        },
+        "other-linear": {
+            "inventoryPrefix": "linear/GRCh38/ensembl-99",
+        },
+    }
+    names = selected_asset_names(
+        {
+            "reference_selection": {
+                "linear": "linear/GRCh38/ensembl-114",
+                "gene_annotation": "annotation/gencode/v49",
+            }
+        },
+        assets,
+    )
+    assert names == {
+        "linear": "linear-grch38-ensembl-114",
+        "gene_annotation": "gencode-v49",
+    }
+
+
+def test_selected_asset_names_miss_raises() -> None:
+    with pytest.raises(ValueError, match="does not match any published"):
+        selected_asset_names(
+            {"reference_selection": {"linear": "linear/GRCh38/missing"}},
+            {"linear-grch38-ensembl-114": {"inventoryPrefix": "linear/GRCh38/ensembl-114"}},
+        )
+
+
+def test_asset_inventory_prefix_from_recipe_key() -> None:
+    assert (
+        asset_inventory_prefix(
+            {
+                "recipe": {
+                    "steps": [
+                        {
+                            "op": "s3_sync",
+                            "key": "pangenome/GRCh38/d9/1.70/",
+                        }
+                    ]
+                }
+            }
+        )
+        == "pangenome/GRCh38/d9/1.70"
+    )
+    assert (
+        asset_inventory_prefix(
+            {
+                "recipe": {
+                    "steps": [
+                        {
+                            "op": "download",
+                            "key": "linear/GRCh38/ensembl-114/marker.txt",
+                        }
+                    ]
+                }
+            }
+        )
+        == "linear/GRCh38/ensembl-114"
+    )
+
+
 def test_provision_selected_from_site(store: FileConfigStore, tmp_path: Path) -> None:
     import_filesystem(
         store,
@@ -251,6 +324,7 @@ def test_provision_selected_from_site(store: FileConfigStore, tmp_path: Path) ->
             "reference_asset",
             name,
             {
+                "inventoryPrefix": "linear/GRCh38/ensembl-114",
                 "destRoot": str(tmp_path / "work" / "genomes" / "linear" / "GRCh38" / "ensembl-114"),
                 "recipe": {
                     "steps": [

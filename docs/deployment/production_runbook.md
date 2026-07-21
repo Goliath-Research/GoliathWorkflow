@@ -26,7 +26,7 @@ scripts/sync_genomes_to_s3.sh
 # optional: scripts/sync_genomes_to_s3.sh --only linear  # or annotation | pangenome
 ```
 
-Destination: `s3://epimethyl/genomes/` at `https://s3.us-east-1.myqnapcloud.io`. See script header for verify `aws s3 ls` commands.
+Destination: `s3://epimethyl/genomes/` at `https://s3.us-east-1.myqnapcloud.io`. Full upload map, pin→asset resolution, and Phase 0 provision: [reference-inventory-qnap.md](reference-inventory-qnap.md).
 
 ## Stage 1 — SamplePrepPipeline
 

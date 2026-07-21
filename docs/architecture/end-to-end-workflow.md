@@ -77,6 +77,8 @@ flowchart LR
 
 Study science lives under `/work/projects/<study>/`; sample archives under `/work/samples/{sample_id}/`. Credentials stay in the `cfg` registry — never under project trees.
 
+**Phase 0 — reference genomes:** Company inventory lives at `s3://epimethyl/genomes/` on myQNAPcloud; site `reference_selection` pins versions; `scripts/provision_selected_genomes.sh` / `methyl-cfg provision-assets --selected-only` sync selected trees to `/work/genomes/`. Upload map and out-of-band assets (plants, RNA, caches): [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md).
+
 ---
 
 ## 2. Where data lives
@@ -105,12 +107,15 @@ flowchart TB
   subgraph work["Shared /work also holds"]
     PROJ["/work/projects/{study}/<br/>configs/, data/, MC outputs/"]
     SITE["/work/site/methyl_site.json"]
+    GEN["/work/genomes/<br/>linear · annotation · pangenome"]
     EPI["/work/epimethyl/current/"]
   end
   W2["/work/samples/..."] -->|"group paths in project"| PROJ
   SITE -.-> EPI
   PROJ -->|"projectPath"| EPI
 ```
+
+Reference trees under `/work/genomes/` are provisioned from myQNAPcloud (`epimethyl-genomes`); see [reference-inventory-qnap.md](../deployment/reference-inventory-qnap.md).
 
 | Location | Config key | Role |
 |----------|------------|------|

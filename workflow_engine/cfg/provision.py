@@ -263,11 +263,12 @@ def provision_selected_from_site(
     site_name: str = "default",
     dry_run: bool = False,
 ) -> Dict[str, Any]:
-    """Provision only reference_assets named by the site's ``reference_selection``."""
+    """Provision only reference_assets whose inventoryPrefix matches site pins."""
     site = store.get("site", site_name, published_only=False)
     if site is None:
         raise KeyError(f"site not found: {site_name}")
-    names = selected_asset_names(site.document)
+    published = store.list("reference_asset", published_only=True)
+    names = selected_asset_names(site.document, published)
     if not names:
         raise ValueError(
             f"site {site_name} has no reference_selection pins mapping to assets"

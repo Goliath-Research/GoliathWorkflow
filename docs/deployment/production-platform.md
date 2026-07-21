@@ -109,7 +109,7 @@ scripts/provision_selected_genomes.sh --dry-run
 scripts/sync_genomes_to_s3.sh --download       # full inventory mirror
 ```
 
-Site pins (not “latest in bucket”) decide which versions workers use. Portal wires `samples/` via `epimethyl-archive`; genomes use sibling endpoint `epimethyl-genomes` (`prefixBase: genomes/`) plus `cfg.reference_asset` recipes (`methyl-cfg provision-assets --selected-only`). Details: [production_runbook.md](production_runbook.md), [config-registry.md](../architecture/config-registry.md).
+Site pins (not “latest in bucket”) decide which versions workers use. Portal wires `samples/` via `epimethyl-archive`; genomes use sibling endpoint `epimethyl-genomes` (`prefixBase: genomes/`) plus `cfg.reference_asset` recipes (`methyl-cfg provision-assets --selected-only`). **Upload map and Phase 0 checklist:** [reference-inventory-qnap.md](reference-inventory-qnap.md). Also: [production_runbook.md](production_runbook.md), [config-registry.md](../architecture/config-registry.md).
 
 ---
 
