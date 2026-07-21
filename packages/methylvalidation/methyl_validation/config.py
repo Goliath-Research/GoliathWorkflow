@@ -1467,6 +1467,8 @@ class MonteCarloConfig(BaseModel):
             "chromosome_distance_metrics",
             "chromosome_list",
             "ecdf_second_stage_enabled",
+            "ecdf_second_stage_probability_transform",
+            "ecdf_second_stage_probability_epsilon",
             "ecdf_aggregated_enabled",
             "ecdf_aggregated_n_bins",
             "covariates_path",
@@ -1479,6 +1481,11 @@ class MonteCarloConfig(BaseModel):
             "covariate_missing_numeric_strategy",
             "covariate_standardize_numeric",
             "covariates_strict_join",
+            "covariate_composition_transform",
+            "covariate_composition_columns",
+            "covariate_composition_reference",
+            "covariate_composition_pseudocount",
+            "covariate_composition_groups",
             "generative_latent_dim",
             "generative_kl_weight",
             "generative_density_type",
@@ -1630,7 +1637,18 @@ class MonteCarloConfig(BaseModel):
             "generative_covariates_strict",
         }:
             return getattr(self.backend_profiles.generative_hybrid.params, name)
-        if name in {"ecdf_second_stage_enabled", "ecdf_aggregated_enabled", "ecdf_aggregated_n_bins"}:
+        if name in {
+            "ecdf_second_stage_enabled",
+            "ecdf_second_stage_probability_transform",
+            "ecdf_second_stage_probability_epsilon",
+            "ecdf_aggregated_enabled",
+            "ecdf_aggregated_n_bins",
+            "covariate_composition_transform",
+            "covariate_composition_columns",
+            "covariate_composition_reference",
+            "covariate_composition_pseudocount",
+            "covariate_composition_groups",
+        }:
             return getattr(self.backend_profiles.ecdf.params, name)
         return getattr(self.get_backend_params(self.model_backend), name)
 
