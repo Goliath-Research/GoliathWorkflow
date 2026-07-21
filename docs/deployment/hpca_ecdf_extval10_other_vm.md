@@ -82,3 +82,28 @@ Expect log lines like `Kept existing compatible shared artifacts` / `Reusing exi
    ALR coordinates** (not 8 standardized raw fractions).
 3. `validation_model` completes; locked_test scoring only in that stage.
 4. Do not start Tier-A search against the same trial dirs on both VMs.
+
+## Relaunch after ALR / epsilon fix (2026-07-21)
+
+Earlier gene-train runs still skipped second-stage because shared/`mc_config` had
+overlapping numeric + composition columns, and `MonteCarloConfig` did not expose
+`ecdf_second_stage_probability_epsilon` via runtime getattr.
+
+**On the H_PCa VM (`192-222-51-118`):**
+
+```bash
+# 1) stop the old session
+tmux kill-session -t hpca-extval10-model 2>/dev/null || true
+pkill -f 'run_H_PCa_good_ecdf_covariates_extval10_model.sh' 2>/dev/null || true
+pkill -f 'methyl-workflow-run.*context_H_PCa_good_ecdf_covariates' 2>/dev/null || true
+
+# 2) apply platform getattr fix into this host's checkout
+bash /work/projects/prostate-cancer/configs/patches/apply_ecdf_epsilon_getattr_fix.sh
+
+# 3) relaunch
+tmux new-session -d -s hpca-extval10-model \
+  'bash /work/projects/prostate-cancer/configs/run_H_PCa_good_ecdf_covariates_extval10_model.sh'
+tmux attach -t hpca-extval10-model
+```
+
+`ecdf-second-stage.log` must not report a missing-epsilon skip.
