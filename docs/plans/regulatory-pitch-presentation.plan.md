@@ -2,7 +2,7 @@
 name: Regulatory pitch presentation
 overview: Convert the regulatory product-positioning markdown into a self-contained Marp slide deck (HTML + PDF) under `docs/presentations/`, prioritizing diagrams, tables, and concise talking points so it can be shared without the rest of the repository.
 
-> **Status: IMPLEMENTED.** Deck at [`docs/presentations/regulatory-ready-platform-multiomics.md`](../presentations/regulatory-ready-platform-multiomics.md); render via [`scripts/render_presentations.sh`](../../scripts/render_presentations.sh) + [`scripts/embed_marp_mermaid.mjs`](../../scripts/embed_marp_mermaid.mjs).
+> **Status: IMPLEMENTED.** Sales-themed interactive deck at [`docs/presentations/regulatory-ready-platform-multiomics.md`](../presentations/regulatory-ready-platform-multiomics.md) (`themes/epimethyl-sales.css`, DomainProgram + worker diagrams); render via [`scripts/render_presentations.sh`](../../scripts/render_presentations.sh) + [`scripts/embed_marp_mermaid.mjs`](../../scripts/embed_marp_mermaid.mjs).
 
 azure_devops:
   type: Feature

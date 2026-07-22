@@ -67,7 +67,34 @@ function buildInjection() {
   // data: URL avoids </script> breakout from the minified bundle body.
   return `${MARKER_START}
 <script>
-window.__MP_MERMAID_CONFIG__ = { startOnLoad: false, securityLevel: "loose" };
+window.__MP_MERMAID_CONFIG__ = {
+  startOnLoad: false,
+  securityLevel: "loose",
+  theme: "base",
+  themeVariables: {
+    darkMode: false,
+    background: "#ffffff",
+    fontFamily: "Segoe UI, Helvetica Neue, Arial, sans-serif",
+    primaryColor: "#99f6e4",
+    primaryTextColor: "#0f172a",
+    primaryBorderColor: "#0f766e",
+    secondaryColor: "#fde68a",
+    tertiaryColor: "#e0f2fe",
+    lineColor: "#334155",
+    textColor: "#0f172a",
+    mainBkg: "#ccfbf1",
+    nodeBorder: "#0f766e",
+    clusterBkg: "#f0fdfa",
+    clusterBorder: "#0d9488",
+    titleColor: "#0f766e",
+    edgeLabelBackground: "#ffffff",
+    actorBkg: "#ccfbf1",
+    actorBorder: "#0f766e",
+    labelBoxBkgColor: "#ecfeff",
+    labelBoxBorderColor: "#0d9488",
+    labelTextColor: "#0f172a"
+  }
+};
 </script>
 <script src="data:text/javascript;base64,${b64}"></script>
 <script>
