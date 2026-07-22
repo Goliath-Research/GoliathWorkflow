@@ -6,6 +6,7 @@ set -euo pipefail
 
 ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )"
 PRESENTATIONS_DIR="$ROOT_DIR/docs/presentations"
+THEME_DIR="$PRESENTATIONS_DIR/themes"
 EMBED_JS="$ROOT_DIR/scripts/embed_marp_mermaid.mjs"
 
 if ! command -v marp >/dev/null 2>&1; then
@@ -23,8 +24,22 @@ echo "Rendering presentation decks with Marp (HTML + Mermaid + PDF)..."
 for f in "$PRESENTATIONS_DIR"/*.md; do
     [ "$(basename "$f")" = "README.md" ] && continue
     base="${f%.md}"
-    # Use the bare template to avoid iframe/presenter features that break under file:// origins.
-    marp --no-stdin --template bare "$f" --html --output "${base}.html"
+    theme_args=()
+    if [[ -f "$THEME_DIR/epimethyl-sales.css" ]]; then
+        theme_args+=(--theme-set "$THEME_DIR/epimethyl-sales.css")
+    fi
+
+    # Sales decks (marp: true + custom theme) use bespoke for keyboard/progress/OSC.
+    # Other decks keep bare for maximal file:// compatibility.
+    template="bare"
+    extra_args=()
+    if grep -qE '^marp:\s*true' "$f"; then
+        template="bespoke"
+        extra_args+=(--bespoke.progress true --html)
+    fi
+
+    marp --no-stdin --template "$template" "${theme_args[@]}" "${extra_args[@]}" \
+        "$f" --html --output "${base}.html"
     node "$EMBED_JS" "${base}.html" --pdf "${base}.pdf"
 done
 

@@ -13,9 +13,9 @@ This folder contains two Markdown slide decks for a mixed scientific and technic
 - `methylpipeline-workflows-model-prediction-executive.md`
   - Focus: executive summary of workflows + governance checkpoints (8-10 slides).
 - `regulatory-ready-platform-multiomics.md`
-  - Focus: commercial / regulatory product positioning (pillars, open-core packaging, GTM, roadmap).
+  - Focus: **sales** briefing — colorful interactive Marp theme (`themes/epimethyl-sales.css`), DomainProgram / distributed-worker diagrams, packs roadmap, open-core GTM.
   - Source narrative: `docs/regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md`.
-  - Shareable outputs: self-contained `.html` (live talk) and `.pdf` (email attach).
+  - Shareable outputs: self-contained `.html` (bespoke: keyboard, OSC, progress, `P` presenter) and `.pdf` (email attach).
 
 ## Source Basis
 
@@ -45,15 +45,17 @@ Recommended rendering command:
 ./scripts/render_presentations.sh
 ```
 
-This script uses Marp's `bare` template, then
-[`scripts/embed_marp_mermaid.mjs`](../../scripts/embed_marp_mermaid.mjs) embeds a
-Mermaid runtime so fenced Mermaid diagrams render in the HTML and in the printed PDF.
-Outputs are offline/`file://` friendly.
+Decks with `marp: true` (sales) render with the **bespoke** template + optional
+theme CSS under `themes/`. Other decks keep **bare** for maximal `file://`
+compatibility. [`scripts/embed_marp_mermaid.mjs`](../../scripts/embed_marp_mermaid.mjs)
+embeds a Mermaid runtime (teal sales palette) so diagrams render in HTML and PDF.
 
 ```bash
 ./scripts/render_presentations.sh
-# or one deck:
-marp --template bare "docs/presentations/regulatory-ready-platform-multiomics.md" --html \
+# or one sales deck:
+marp --template bespoke --theme-set docs/presentations/themes/epimethyl-sales.css \
+  --bespoke.progress true --html \
+  "docs/presentations/regulatory-ready-platform-multiomics.md" \
   -o "docs/presentations/regulatory-ready-platform-multiomics.html"
 node scripts/embed_marp_mermaid.mjs \
   "docs/presentations/regulatory-ready-platform-multiomics.html" \
