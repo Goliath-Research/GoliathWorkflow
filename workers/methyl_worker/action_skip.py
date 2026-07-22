@@ -577,28 +577,16 @@ def _enrich_prepare_freeze_replay_paths(task_output: Dict[str, Any]) -> Dict[str
     try:
         from methyl_utils import load_project
 
+        from .handler_helpers import production_centroid_detect_dirs
+
         prod_cfg = load_project(str(project_path))
-        comparisons = list(getattr(prod_cfg, "comparisons", None) or [])
-        if not comparisons:
-            return out
-        cmp0 = comparisons[0]
-        # Match live prepare_freeze handler: support control_group/disease_group and
-        # legacy group1/group2 naming on comparison objects.
-        control = getattr(cmp0, "control_group", None) or getattr(cmp0, "group1", None)
-        disease = getattr(cmp0, "disease_group", None) or getattr(cmp0, "group2", None)
-        if control and not out.get("centroid1Dir"):
-            out["centroid1Dir"] = prod_cfg.get_centroid_dir("control", str(control))
-        if disease and not out.get("centroid2Dir"):
-            out["centroid2Dir"] = prod_cfg.get_centroid_dir("disease", str(disease))
-        label = (
-            getattr(cmp0, "comparison_label", None)
-            or getattr(cmp0, "label", None)
-            or disease
-        )
-        if label and not out.get("detectOutDir"):
-            out["detectOutDir"] = str(
-                Path(prod_cfg.output_base) / prod_cfg.project_name / "detections" / str(label)
-            )
+        c1, c2, det = production_centroid_detect_dirs(prod_cfg)
+        if c1 and not out.get("centroid1Dir"):
+            out["centroid1Dir"] = c1
+        if c2 and not out.get("centroid2Dir"):
+            out["centroid2Dir"] = c2
+        if det and not out.get("detectOutDir"):
+            out["detectOutDir"] = det
     except Exception:
         logger.debug("prepare_freeze replay path enrichment failed", exc_info=True)
     return out

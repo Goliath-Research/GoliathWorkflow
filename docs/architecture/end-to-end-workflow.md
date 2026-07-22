@@ -250,6 +250,8 @@ flowchart TD
   FC --> MAP["pipeline.mapper"]
 ```
 
+`prepare_freeze_project` rebinds `projectPath` to `production/project.json` and sets `centroid1Dir` / `centroid2Dir` / `detectOutDir` from the production manifest via `get_comparisons()` and canonical `detections/{control}/{disease}` (see [config propagation — methylation](config-propagation-methylation.md)).
+
 ```mermaid
 flowchart LR
   subgraph mc["Each MC iteration"]

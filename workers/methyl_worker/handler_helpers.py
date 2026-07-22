@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from pydantic import BaseModel
 
@@ -11,6 +11,36 @@ from .task_models.sample_prep_models import (
     QcHistoryEntry,
     ScreeningOutput,
 )
+
+
+def production_centroid_detect_dirs(prod_cfg: Any) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    """
+    Derive production centroid1/centroid2/detect dirs from a loaded ProjectConfig.
+
+    Uses ``get_comparisons()`` so shorthand strings like ``control_vs_each_disease``
+    expand correctly (never iterate the raw ``comparisons`` field). Detection dirs
+    use the canonical ``detections/{control}/{disease}`` layout.
+    """
+    try:
+        comparisons = list(prod_cfg.get_comparisons() or [])
+    except Exception:
+        comparisons = []
+    if not comparisons:
+        return None, None, None
+
+    cmp0 = comparisons[0]
+    control = getattr(cmp0, "control_group", None) or getattr(cmp0, "group1", None)
+    disease = getattr(cmp0, "disease_group", None) or getattr(cmp0, "group2", None)
+    centroid1_dir = (
+        prod_cfg.get_centroid_dir("control", str(control)) if control else None
+    )
+    centroid2_dir = (
+        prod_cfg.get_centroid_dir("disease", str(disease)) if disease else None
+    )
+    detect_out_dir = None
+    if control and disease:
+        detect_out_dir = prod_cfg.get_detection_output_dir(str(control), str(disease))
+    return centroid1_dir, centroid2_dir, detect_out_dir
 
 
 def screening_from_payload(screening: Mapping[str, Any]) -> ScreeningOutput:

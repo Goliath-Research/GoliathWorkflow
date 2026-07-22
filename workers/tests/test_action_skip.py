@@ -389,30 +389,105 @@ def test_execute_task_skips_validation_stability_when_manifest_exists(tmp_path: 
     assert result.output.status == "skipped"
 
 
-def test_enrich_prepare_freeze_replay_paths_accepts_group1_group2(monkeypatch, tmp_path: Path) -> None:
-    """CAAS replay must bind centroid dirs when comparisons use legacy group1/group2."""
-    from types import SimpleNamespace
-
-    production_project = tmp_path / "production" / "project.json"
-    production_project.parent.mkdir(parents=True)
-    production_project.write_text("{}", encoding="utf-8")
-
-    prod_cfg = SimpleNamespace(
-        comparisons=[
-            SimpleNamespace(
-                group1="healthy",
-                group2="disease",
-                comparison_label="disease",
-            )
-        ],
-        output_base=str(tmp_path),
-        project_name="Study",
-        get_centroid_dir=lambda side, label: f"{tmp_path}/centroids/{side}/{label}",
+def _write_shorthand_production_project(path: Path, tmp_path: Path) -> None:
+    """Minimal control/disease project with comparisons shorthand (not an explicit list)."""
+    (tmp_path / "healthy.csv").write_text("S1\n", encoding="utf-8")
+    (tmp_path / "mci.csv").write_text("S2\n", encoding="utf-8")
+    (tmp_path / "ad.csv").write_text("S3\n", encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "project_name": "Healthy_vs_AD_Stages",
+                "output_base": str(tmp_path / "out"),
+                "samples_base_path": str(tmp_path),
+                "controls": {
+                    "label": "healthy",
+                    "groups": [{"label": "all", "sample_paths": ["healthy.csv"]}],
+                },
+                "diseases": {
+                    "label": "AD",
+                    "groups": [
+                        {
+                            "label": "AD",
+                            "stages": [
+                                {"label": "MCI", "sample_paths": ["mci.csv"]},
+                                {"label": "AD", "sample_paths": ["ad.csv"]},
+                            ],
+                        }
+                    ],
+                },
+                "comparisons": "control_vs_each_disease",
+                "chromosomes": ["1"],
+                "contexts": ["CG"],
+            }
+        ),
+        encoding="utf-8",
     )
 
-    monkeypatch.setattr("methyl_utils.load_project", lambda _path: prod_cfg)
+
+def test_enrich_prepare_freeze_replay_paths_shorthand_comparisons(tmp_path: Path) -> None:
+    """CAAS replay expands control_vs_each_disease and uses detections/{control}/{disease}."""
+    from methyl_utils import load_project
+
+    from methyl_worker.handler_helpers import production_centroid_detect_dirs
+
+    production_project = tmp_path / "production" / "project.json"
+    _write_shorthand_production_project(production_project, tmp_path)
+
+    prod_cfg = load_project(str(production_project))
+    c1, c2, det = production_centroid_detect_dirs(prod_cfg)
+    assert c1 is not None and c2 is not None and det is not None
+
+    comparisons = prod_cfg.get_comparisons()
+    assert comparisons, "shorthand must expand via get_comparisons()"
+    control = comparisons[0].control_group
+    disease = comparisons[0].disease_group
+    assert c1 == prod_cfg.get_centroid_dir("control", control)
+    assert c2 == prod_cfg.get_centroid_dir("disease", disease)
+    assert det == prod_cfg.get_detection_output_dir(control, disease)
+    assert det.endswith(f"/detections/{control}/{disease}")
+    # Regression: never the old detections/{label} layout
+    assert not det.endswith(f"/detections/{disease}")
 
     out = _enrich_prepare_freeze_replay_paths({"projectPath": str(production_project)})
-    assert out["centroid1Dir"] == f"{tmp_path}/centroids/control/healthy"
-    assert out["centroid2Dir"] == f"{tmp_path}/centroids/disease/disease"
-    assert out["detectOutDir"] == str(tmp_path / "Study" / "detections" / "disease")
+    assert out["centroid1Dir"] == c1
+    assert out["centroid2Dir"] == c2
+    assert out["detectOutDir"] == det
+
+
+def test_production_centroid_detect_dirs_accepts_group1_group2_fallback() -> None:
+    """Soft fallback when comparison objects expose legacy group1/group2 attrs."""
+    from types import SimpleNamespace
+
+    from methyl_worker.handler_helpers import production_centroid_detect_dirs
+
+    cmp0 = SimpleNamespace(group1="healthy", group2="disease", control_group=None, disease_group=None)
+    prod_cfg = SimpleNamespace(
+        get_comparisons=lambda: [cmp0],
+        get_centroid_dir=lambda side, label: f"/centroids/{side}/{label}",
+        get_detection_output_dir=lambda c, d: f"/out/detections/{c}/{d}",
+    )
+    c1, c2, det = production_centroid_detect_dirs(prod_cfg)
+    assert c1 == "/centroids/control/healthy"
+    assert c2 == "/centroids/disease/disease"
+    assert det == "/out/detections/healthy/disease"
+
+
+def test_production_centroid_detect_dirs_rejects_raw_string_iteration() -> None:
+    """Raw comparisons string must not be iterated as comparison objects."""
+    from types import SimpleNamespace
+
+    from methyl_worker.handler_helpers import production_centroid_detect_dirs
+
+    # Simulate the old bug surface: comparisons is a str; get_comparisons expands.
+    prod_cfg = SimpleNamespace(
+        comparisons="control_vs_each_disease",
+        get_comparisons=lambda: [
+            SimpleNamespace(control_group="all", disease_group="MCI"),
+        ],
+        get_centroid_dir=lambda side, label: f"/c/{side}/{label}",
+        get_detection_output_dir=lambda c, d: f"/d/{c}/{d}",
+    )
+    c1, c2, det = production_centroid_detect_dirs(prod_cfg)
+    assert (c1, c2, det) == ("/c/control/all", "/c/disease/MCI", "/d/all/MCI")

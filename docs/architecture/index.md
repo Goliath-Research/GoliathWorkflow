@@ -13,6 +13,7 @@ Consolidated system design for MethylPipeline: configuration layers, distributed
 | [Orchestration paths](orchestration-paths.md) | local, gateway, legacy CLI matrix |
 | [Pipeline stages](pipeline-stages.md) | sample prep through validation stage DAG |
 | [End-to-end workflow — DNA methylation](end-to-end-workflow.md) | Ingest → SamplePrep (QC/trim/extract) → MC → DeConv/info measures → model → holdouts (Mermaid) |
+| [Config propagation — methylation](config-propagation-methylation.md) | Bake → SamplePrep → MC snapshot → prepare_freeze path rebind → holdout; buffy vs cfDNA checklist |
 | [End-to-end workflow — RNA-Seq](end-to-end-workflow-rnaseq.md) | Ingest → quantify (rna_fq2bam/kallisto) → RNA QC → expression.h5 → DE gene panel + tabular classification (Mermaid) |
 | [End-to-end workflow — Proteomics](end-to-end-workflow-proteomics.md) | Ingest (GPU DIA-NN / panel) → proteomics QC → abundance.h5 → differential-abundance panel + tabular classification (Mermaid) |
 | [Portal remote control](portal-remote-control.md) | UI→DB vs workers→gateway; multi-instance hyperparameter grids; `cfg` trials → wf `execution_scope` |
