@@ -1,0 +1,15 @@
+{
+  "programVersion": 2,
+  "name": "ValidationModelMcRebuild",
+  "description": "Model-MC after discovery-only stability + fixed-panel freeze: rebuild shared centroid/detector under the frozen panel (strict primary-MC reuse is incompatible).",
+  "body": [
+    {
+      "do": "validation.model_mc",
+      "with": {
+        "requireArtifactReuse": false
+      },
+      "node_key": "model_mc"
+    }
+  ],
+  "projectPath": "/work/projects/prostate-cancer/configs/project_Buffy_ecdf_gene_covariates.json"
+}

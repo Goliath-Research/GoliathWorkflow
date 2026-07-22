@@ -659,6 +659,10 @@ def _build_model_mc_shared_runs(
                 missing.append("compatible primary split")
             if not (metadata_run_dir / "project.json").is_file():
                 missing.append("project.json")
+            elif not _detection_config_compatible(metadata_run_dir / "project.json"):
+                missing.append(
+                    "detection contract (fixed_dmp_panel/detection_mode vs production)"
+                )
             if not (source_run_dir / "centroids").is_dir():
                 missing.append("centroids/")
             if not (source_run_dir / "detections").is_dir():
@@ -669,8 +673,10 @@ def _build_model_mc_shared_runs(
                 missing.append("classifier model files")
             raise RuntimeError(
                 f"Strict model-MC artifact reuse required for {run_id}; cannot reuse "
-                f"{source_run_dir} (missing/incompatible: {', '.join(missing)}). "
-                "Centroid/detector recomputation is disabled."
+                f"{source_run_dir} (missing/incompatible: {', '.join(missing) or 'unknown'}). "
+                "Centroid/detector recomputation is disabled. For discovery-only stability "
+                "followed by fixed-panel freeze, use requireArtifactReuse=false so model-MC "
+                "can rebuild shared under the frozen panel."
             )
         if can_reuse_artifacts:
             _clean_path(run_dir)
