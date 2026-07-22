@@ -11,5 +11,5 @@
       "node_key": "model_mc"
     }
   ],
-  "projectPath": "/work/projects/prostate-cancer/configs/project_Buffy_ecdf_gene_covariates.json"
+  "projectPath": "workflow_engine/domain/checks/pca1_5_cg/configs/project_Healthy_vs_PCa1-5-CG_smoke.json"
 }
