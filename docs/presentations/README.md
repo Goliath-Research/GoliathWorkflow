@@ -12,6 +12,10 @@ This folder contains two Markdown slide decks for a mixed scientific and technic
   - Focus: executive summary of theory + implementation (8-10 slides).
 - `methylpipeline-workflows-model-prediction-executive.md`
   - Focus: executive summary of workflows + governance checkpoints (8-10 slides).
+- `regulatory-ready-platform-multiomics.md`
+  - Focus: commercial / regulatory product positioning (pillars, open-core packaging, GTM, roadmap).
+  - Source narrative: `docs/regulatory/Regulatory-Ready Platform for Multiomics Diagnostics.md`.
+  - Shareable outputs: self-contained `.html` (live talk) and `.pdf` (email attach).
 
 ## Source Basis
 
@@ -41,14 +45,19 @@ Recommended rendering command:
 ./scripts/render_presentations.sh
 ```
 
-This script uses Marp's `bare` template to keep output minimal.
-It does not embed Mermaid runtime in the generated HTML.
+This script uses Marp's `bare` template, then
+[`scripts/embed_marp_mermaid.mjs`](../../scripts/embed_marp_mermaid.mjs) embeds a
+Mermaid runtime so fenced Mermaid diagrams render in the HTML and in the printed PDF.
+Outputs are offline/`file://` friendly.
 
 ```bash
-marp "docs/presentations/methylpipeline-theory-implementation.md" --html
-marp "docs/presentations/methylpipeline-workflows-model-prediction.md" --html
-marp "docs/presentations/methylpipeline-theory-implementation-executive.md" --html
-marp "docs/presentations/methylpipeline-workflows-model-prediction-executive.md" --html
+./scripts/render_presentations.sh
+# or one deck:
+marp --template bare "docs/presentations/regulatory-ready-platform-multiomics.md" --html \
+  -o "docs/presentations/regulatory-ready-platform-multiomics.html"
+node scripts/embed_marp_mermaid.mjs \
+  "docs/presentations/regulatory-ready-platform-multiomics.html" \
+  --pdf "docs/presentations/regulatory-ready-platform-multiomics.pdf"
 ```
 
 ### Option B: Quarto revealjs (quick wrapper)
