@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from methyl_worker.action_catalog import find_catalog_entry
 from methyl_worker.action_execution import execution_result_from_output, validate_input
 from methyl_worker.action_skip import (
+    _enrich_prepare_freeze_replay_paths,
     compute_action_revision,
     compute_input_signature,
     maybe_skip_action,
@@ -386,3 +387,32 @@ def test_execute_task_skips_validation_stability_when_manifest_exists(tmp_path: 
         },
     )
     assert result.output.status == "skipped"
+
+
+def test_enrich_prepare_freeze_replay_paths_accepts_group1_group2(monkeypatch, tmp_path: Path) -> None:
+    """CAAS replay must bind centroid dirs when comparisons use legacy group1/group2."""
+    from types import SimpleNamespace
+
+    production_project = tmp_path / "production" / "project.json"
+    production_project.parent.mkdir(parents=True)
+    production_project.write_text("{}", encoding="utf-8")
+
+    prod_cfg = SimpleNamespace(
+        comparisons=[
+            SimpleNamespace(
+                group1="healthy",
+                group2="disease",
+                comparison_label="disease",
+            )
+        ],
+        output_base=str(tmp_path),
+        project_name="Study",
+        get_centroid_dir=lambda side, label: f"{tmp_path}/centroids/{side}/{label}",
+    )
+
+    monkeypatch.setattr("methyl_utils.load_project", lambda _path: prod_cfg)
+
+    out = _enrich_prepare_freeze_replay_paths({"projectPath": str(production_project)})
+    assert out["centroid1Dir"] == f"{tmp_path}/centroids/control/healthy"
+    assert out["centroid2Dir"] == f"{tmp_path}/centroids/disease/disease"
+    assert out["detectOutDir"] == str(tmp_path / "Study" / "detections" / "disease")

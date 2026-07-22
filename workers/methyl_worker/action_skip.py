@@ -582,8 +582,10 @@ def _enrich_prepare_freeze_replay_paths(task_output: Dict[str, Any]) -> Dict[str
         if not comparisons:
             return out
         cmp0 = comparisons[0]
-        control = getattr(cmp0, "control_group", None)
-        disease = getattr(cmp0, "disease_group", None)
+        # Match live prepare_freeze handler: support control_group/disease_group and
+        # legacy group1/group2 naming on comparison objects.
+        control = getattr(cmp0, "control_group", None) or getattr(cmp0, "group1", None)
+        disease = getattr(cmp0, "disease_group", None) or getattr(cmp0, "group2", None)
         if control and not out.get("centroid1Dir"):
             out["centroid1Dir"] = prod_cfg.get_centroid_dir("control", str(control))
         if disease and not out.get("centroid2Dir"):
