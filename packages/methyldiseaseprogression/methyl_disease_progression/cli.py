@@ -79,6 +79,9 @@ def main() -> None:
         metavar="KEY",
         help="Bundled profile name (e.g. prostate_cancer); overrides progression.disease_profile / disease_context.",
     )
+    from methyl_utils.cli_resolved_config import add_resolved_config_argument
+
+    add_resolved_config_argument(parser, help_suffix="(progression actionConfig slice)")
     args = parser.parse_args()
 
     if args.no_gene_set_metrics:
@@ -87,6 +90,16 @@ def main() -> None:
         gsm_enabled = True
     else:
         gsm_enabled = None
+
+    resolved_progression_config = None
+    if getattr(args, "resolved_config", None):
+        from methyl_utils.cli_resolved_config import resolve_cli_step_config
+
+        resolved_progression_config = resolve_cli_step_config(
+            "progression",
+            None,
+            resolved_config_path=args.resolved_config,
+        )
 
     try:
         summary = run_progression_report(
@@ -99,6 +112,7 @@ def main() -> None:
             gene_sets_path=args.gene_sets_path,
             gene_set_profile=args.gene_set_profile,
             disease_profile=args.disease_profile,
+            resolved_progression_config=resolved_progression_config,
         )
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
