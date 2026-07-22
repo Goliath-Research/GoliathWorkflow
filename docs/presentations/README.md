@@ -50,6 +50,11 @@ theme CSS under `themes/`. Other decks keep **bare** for maximal `file://`
 compatibility. [`scripts/embed_marp_mermaid.mjs`](../../scripts/embed_marp_mermaid.mjs)
 embeds a Mermaid runtime (teal sales palette) so diagrams render in HTML and PDF.
 
+**Interactive diagrams:** put `%% mp:interactive` on the first line of a Mermaid
+fence (or any diagram that overflows the slide) to get pan / zoom / Fit / Expand
+controls in the HTML deck. Wheel-zoom and drag do not advance slides. PDF keeps a
+fitted static snapshot.
+
 ```bash
 ./scripts/render_presentations.sh
 # or one sales deck:

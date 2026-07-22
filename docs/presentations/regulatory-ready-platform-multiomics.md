@@ -102,6 +102,7 @@ Buyers purchase:
 ## DomainProgram topology (methylation process)
 
 ```mermaid
+%% mp:interactive
 flowchart TB
   subgraph prep["SamplePrepPipeline · per sample · parallel workers"]
     DL["download_fastq"] --> ALN["GPU align<br/>fq2bam_meth / giraffe"]
@@ -145,6 +146,7 @@ flowchart LR
 ## Distributed execution: portal → gateway → workers
 
 ```mermaid
+%% mp:interactive
 flowchart TB
   subgraph control["Control plane"]
     UI["EpiPortal UI"] --> CFG["cfg registry"]
@@ -234,6 +236,7 @@ Study manifest, cohorts, partitions, disease/trait overlay — **no new aligner*
 ## Multiomics on one plane (why this is flexible)
 
 ```mermaid
+%% mp:interactive
 flowchart TB
   subgraph shared["Shared control plane"]
     DP["DomainProgram + typed actions"]
@@ -316,6 +319,7 @@ flowchart LR
 ## Open-core packaging
 
 ```mermaid
+%% mp:interactive
 graph TD
     A[MethylPipeline Core] -->|AGPL-3.0| B[Community Edition]
     A -->|Commercial license + support| C[Enterprise SaMD Edition]
