@@ -566,6 +566,42 @@ def _maybe_replay_from_caas(
     return _replay_result(entry, linked, manifest_path=manifest_path)
 
 
+def _enrich_prepare_freeze_replay_paths(task_output: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure CAAS-skipped prepare_freeze still binds production centroid/detect dirs."""
+    out = dict(task_output or {})
+    project_path = out.get("projectPath") or out.get("productionProject")
+    if not project_path:
+        return out
+    if out.get("centroid1Dir") and out.get("centroid2Dir") and out.get("detectOutDir"):
+        return out
+    try:
+        from methyl_utils import load_project
+
+        prod_cfg = load_project(str(project_path))
+        comparisons = list(getattr(prod_cfg, "comparisons", None) or [])
+        if not comparisons:
+            return out
+        cmp0 = comparisons[0]
+        control = getattr(cmp0, "control_group", None)
+        disease = getattr(cmp0, "disease_group", None)
+        if control and not out.get("centroid1Dir"):
+            out["centroid1Dir"] = prod_cfg.get_centroid_dir("control", str(control))
+        if disease and not out.get("centroid2Dir"):
+            out["centroid2Dir"] = prod_cfg.get_centroid_dir("disease", str(disease))
+        label = (
+            getattr(cmp0, "comparison_label", None)
+            or getattr(cmp0, "label", None)
+            or disease
+        )
+        if label and not out.get("detectOutDir"):
+            out["detectOutDir"] = str(
+                Path(prod_cfg.output_base) / prod_cfg.project_name / "detections" / str(label)
+            )
+    except Exception:
+        logger.debug("prepare_freeze replay path enrichment failed", exc_info=True)
+    return out
+
+
 def _replay_result(
     entry: ActionCatalogEntry,
     record: ActionExecutionRecord,
@@ -574,6 +610,8 @@ def _replay_result(
 ) -> ActionExecutionResult:
     output_model = load_output_model(entry)
     merged = dict(record.task_output)
+    if entry.action_name == "validation.prepare_freeze_project":
+        merged = _enrich_prepare_freeze_replay_paths(merged)
     merged.setdefault("action_name", entry.action_name)
     merged.setdefault("capability", entry.capability)
     merged["status"] = "skipped"

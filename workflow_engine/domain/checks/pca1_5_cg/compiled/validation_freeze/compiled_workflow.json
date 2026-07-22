@@ -451,6 +451,24 @@
       "var_name": "projectPath",
       "source_kind": "output_path",
       "source_json_path": "$.projectPath"
+    },
+    {
+      "node_key": "prepare_freeze",
+      "var_name": "centroid1Dir",
+      "source_kind": "output_path",
+      "source_json_path": "$.centroid1Dir"
+    },
+    {
+      "node_key": "prepare_freeze",
+      "var_name": "centroid2Dir",
+      "source_kind": "output_path",
+      "source_json_path": "$.centroid2Dir"
+    },
+    {
+      "node_key": "prepare_freeze",
+      "var_name": "detectOutDir",
+      "source_kind": "output_path",
+      "source_json_path": "$.detectOutDir"
     }
   ],
   "scope_defaults": [

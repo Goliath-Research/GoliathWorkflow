@@ -300,6 +300,35 @@ def _handle_validation_prepare_freeze(
                 project_json=prod_project_path,
                 monte_carlo_runs_root=mc_root,
             )
+    # Recompute centroid/detect paths from production project (not study-root enrichment).
+    centroid1_dir = None
+    centroid2_dir = None
+    detect_out_dir = None
+    try:
+        from methyl_utils import load_project as _load_prod_project
+
+        prod_cfg = _load_prod_project(str(production_project))
+        comparisons = list(getattr(prod_cfg, "comparisons", None) or [])
+        if comparisons:
+            cmp0 = comparisons[0]
+            control = getattr(cmp0, "control_group", None) or getattr(cmp0, "group1", None)
+            disease = getattr(cmp0, "disease_group", None) or getattr(cmp0, "group2", None)
+            if control:
+                centroid1_dir = prod_cfg.get_centroid_dir("control", str(control))
+            if disease:
+                centroid2_dir = prod_cfg.get_centroid_dir("disease", str(disease))
+            label = (
+                getattr(cmp0, "comparison_label", None)
+                or getattr(cmp0, "label", None)
+                or disease
+            )
+            if label is not None:
+                detect_out_dir = str(
+                    Path(prod_cfg.output_base) / prod_cfg.project_name / "detections" / str(label)
+                )
+    except Exception as exc:
+        logger.warning("prepare_freeze: could not derive production centroid dirs: %s", exc)
+
     return ValidationPrepareFreezeOutput(
         status="ok",
         productionOutputDir=result.get("outputDir")
@@ -310,6 +339,9 @@ def _handle_validation_prepare_freeze(
         # Downstream freeze nodes must use production/project.json, not the study manifest.
         projectPath=str(production_project),
         fixedDmpPanel=result.get("fixedDmpPanel"),
+        centroid1Dir=centroid1_dir,
+        centroid2Dir=centroid2_dir,
+        detectOutDir=detect_out_dir,
     )
 
 

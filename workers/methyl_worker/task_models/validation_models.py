@@ -172,6 +172,11 @@ class ValidationPrepareFreezeOutput(ActionOutputBase):
     targetRunDir: Optional[str] = None
     projectPath: Optional[str] = None
     fixedDmpPanel: Optional[str] = None
+    # Bound into workflow scope so freeze detector/mapper use production centroids,
+    # not study-root paths left from initial context enrichment.
+    centroid1Dir: Optional[str] = None
+    centroid2Dir: Optional[str] = None
+    detectOutDir: Optional[str] = None
 
 
 class ValidationFreezeReadinessOutput(ActionOutputBase):

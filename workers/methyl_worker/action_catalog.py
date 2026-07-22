@@ -390,6 +390,9 @@ _DE_PREPARE_FREEZE = DomainEffects(
     scope_bindings=(
         ("fixedDmpPanel", "$.fixedDmpPanel"),
         ("projectPath", "$.projectPath"),
+        ("centroid1Dir", "$.centroid1Dir"),
+        ("centroid2Dir", "$.centroid2Dir"),
+        ("detectOutDir", "$.detectOutDir"),
     ),
 )
 _DE_SELECT_BEST_MODEL = DomainEffects(
