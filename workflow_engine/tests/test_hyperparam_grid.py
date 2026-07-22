@@ -30,6 +30,54 @@ def test_apply_overlay_does_not_mutate_base() -> None:
     assert base == {"validation": {"stability_dmp_freq": 0.5}}
 
 
+def test_apply_overlay_null_deletes_key() -> None:
+    base = {"validation": {"stability_gene_featurecuts_max_dmps": 1000, "n_iterations": 50}}
+    merged = hg.apply_overlay(base, {"validation.stability_gene_featurecuts_max_dmps": None})
+    assert "stability_gene_featurecuts_max_dmps" not in merged["validation"]
+    assert merged["validation"]["n_iterations"] == 50
+
+
+def test_start_scenario_trial_starts_one_instance(monkeypatch) -> None:
+    _install_fakes(monkeypatch, scope_ids=["scope-scenario"])
+
+    db = _FakeDb()
+    started: list = []
+
+    def create_def(_db, _spec):
+        return {"workflow_version_id": 7}
+
+    def create_inst(_db, version_id, context):
+        assert context["trialIndex"] == 0
+        assert context["executionScopeName"] == "ba-target-0.85"
+        assert context["actionConfig"]["validation"]["stability_target_balanced_accuracy"] == 0.85
+        return 42
+
+    def start_inst(_db, instance_id):
+        started.append(instance_id)
+
+    monkeypatch.setattr(hg, "resolve_workflow_version_id", lambda *a, **k: 7)
+
+    result = hg.start_scenario_trial(
+        db,
+        {
+            "project_path": "/work/projects/x/configs/project.json",
+            "display_name": "ba-target-0.85",
+            "overrides": {"validation.stability_target_balanced_accuracy": 0.85},
+        },
+        create_workflow_definition=create_def,
+        create_workflow_instance=create_inst,
+        start_workflow_instance=start_inst,
+        ledger=hg.DbTrialLedger(db),
+    )
+
+    assert len(result.trials) == 1
+    assert result.trials[0].workflow_instance_id == 42
+    assert result.trials[0].execution_scope_key == "scope-scenario"
+    assert started == [42]
+    assert result.search_id == 1
+    assert len(db.trials) == 1
+
+
 class _FakeDb:
     def __init__(self) -> None:
         self.applied: list = []

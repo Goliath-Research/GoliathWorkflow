@@ -1,9 +1,13 @@
 """
 Resolve per-action configuration from site manifest, pipeline profile, and overrides.
 
-Study manifests (project JSON) no longer carry tool parameters. Precedence (highest wins):
+Study manifests (project JSON) no longer carry tool parameters.
 
-  instance/program override → profile actionConfig → analyte defaults → site actionConfig → {}
+Merge order (later overlays win via deep_merge; analyte is fill-missing-only):
+
+  site actionConfig → profile actionConfig → program/instance overlay → analyte fill-missing
+
+JSON ``null`` in an overlay deletes that key from the merged result (clear / uncap).
 """
 
 from __future__ import annotations
@@ -47,8 +51,18 @@ PROFILE_ENV = "METHYL_PROFILE"
 
 
 def deep_merge(base: Dict[str, Any], overlay: Mapping[str, Any]) -> Dict[str, Any]:
+    """
+    Recursively merge ``overlay`` onto ``base``.
+
+    Overlay ``None`` (JSON ``null``) removes the key from the result so operators
+    can clear / uncap site or profile knobs. Nested dicts merge recursively;
+    lists and other scalars replace wholesale.
+    """
     out = copy.deepcopy(base)
     for key, val in overlay.items():
+        if val is None:
+            out.pop(key, None)
+            continue
         if isinstance(val, dict) and isinstance(out.get(key), dict):
             out[key] = deep_merge(dict(out[key]), val)
         else:

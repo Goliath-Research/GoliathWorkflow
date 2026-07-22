@@ -224,9 +224,16 @@
             "covariate_composition_groups": [
               {
                 "name": "cell_fractions",
-                "columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+                "columns": [
+                  "CD8T",
+                  "CD4T",
+                  "NK",
+                  "Bcell",
+                  "Mono",
+                  "Neu"
+                ],
                 "reference": "Neu",
-                "pseudocount": 1e-6
+                "pseudocount": 1e-06
               }
             ],
             "covariate_id_column": "sample_id"
@@ -245,9 +252,16 @@
             "covariate_composition_groups": [
               {
                 "name": "cell_fractions",
-                "columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+                "columns": [
+                  "CD8T",
+                  "CD4T",
+                  "NK",
+                  "Bcell",
+                  "Mono",
+                  "Neu"
+                ],
                 "reference": "Neu",
-                "pseudocount": 1e-6
+                "pseudocount": 1e-06
               }
             ],
             "covariate_id_column": "sample_id"
@@ -266,13 +280,20 @@
             "covariate_composition_groups": [
               {
                 "name": "cell_fractions",
-                "columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+                "columns": [
+                  "CD8T",
+                  "CD4T",
+                  "NK",
+                  "Bcell",
+                  "Mono",
+                  "Neu"
+                ],
                 "reference": "Neu",
-                "pseudocount": 1e-6
+                "pseudocount": 1e-06
               }
             ],
             "covariate_id_column": "sample_id",
-            "ecdf_second_stage_probability_epsilon": 1e-6
+            "ecdf_second_stage_probability_epsilon": 1e-06
           }
         }
       },
@@ -291,7 +312,6 @@
         "intended_use_summary": "Feasibility / expanded-development methylation classifier research (healthy vs disease). Not for clinical performance claims.",
         "target_population": "Operator-defined study population.",
         "sample_type": "Operator-defined analyte (see study regulatory.primary_analyte).",
-        "primary_analyte": "buffy_coat",
         "reference_standard": "Operator-defined clinical/pathology reference.",
         "claim_boundary": "Research and internal development evidence only; no pivotal clinical claims.",
         "allow_clinical_performance_claims": false

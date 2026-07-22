@@ -146,6 +146,39 @@ def cmd_hyperparam_grid_start(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_scenario_start(args: argparse.Namespace) -> int:
+    from rest.db_client import (
+        create_workflow_definition,
+        create_workflow_instance,
+        start_workflow_instance,
+    )
+    from ops.hyperparam_grid import DbTrialLedger, start_scenario_trial
+
+    body = _load_body(args.body_file)
+    if args.project_path:
+        body["project_path"] = args.project_path
+
+    db = _open_db()
+    try:
+        ledger = None if args.no_ledger else DbTrialLedger(
+            db, study_row_id=args.study_row_id, created_by=args.created_by
+        )
+        result = start_scenario_trial(
+            db,
+            body,
+            create_workflow_definition=create_workflow_definition,
+            create_workflow_instance=create_workflow_instance,
+            start_workflow_instance=start_workflow_instance,
+            ledger=ledger,
+        )
+    finally:
+        db.close()
+
+    json.dump(result.to_json(), sys.stdout, indent=2)
+    sys.stdout.write("\n")
+    return 0
+
+
 def cmd_hyperparam_grid_score(args: argparse.Namespace) -> int:
     from ops.hyperparam_grid import score_grid, winner_overlay
 
@@ -263,6 +296,29 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Start instances without writing the cfg.hyperparameter_search_* ledger",
     )
     p_grid.set_defaults(func=cmd_hyperparam_grid_start)
+
+    p_scenario = sub.add_parser(
+        "scenario-start",
+        help=(
+            "Start one validation instance from an actionConfig overlay "
+            "(assumption check / stability scenario; no Cartesian grid)"
+        ),
+    )
+    p_scenario.add_argument(
+        "body_file",
+        nargs="?",
+        default="-",
+        help="HyperparamScenarioRequest JSON (default: stdin)",
+    )
+    p_scenario.add_argument("--project-path", dest="project_path", default=None)
+    p_scenario.add_argument("--study-row-id", type=int, default=None)
+    p_scenario.add_argument("--created-by", default=None)
+    p_scenario.add_argument(
+        "--no-ledger",
+        action="store_true",
+        help="Start the instance without writing a cfg single-trial search row",
+    )
+    p_scenario.set_defaults(func=cmd_scenario_start)
 
     p_score = sub.add_parser(
         "hyperparam-grid-score",

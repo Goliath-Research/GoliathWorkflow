@@ -110,6 +110,51 @@ class HyperparamSearchRequest(BaseModel):
     )
 
 
+class HyperparamScenarioRequest(BaseModel):
+    """Start one validation instance from a trial overlay (no Cartesian grid).
+
+    Use for assumption checks and stability-target scenarios without opening a
+    full hyperparameter search. Optionally ledgered as a single cfg trial.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    project_path: str = Field(
+        description="Study manifest path (/work/projects/<study>/configs/project_*.json).",
+    )
+    pipeline_profile: Optional[str] = Field(
+        default=None,
+        description="Pipeline profile name resolved under METHYL_PROFILE_DIR / cfg.",
+    )
+    profile_path: Optional[str] = Field(
+        default=None,
+        description="Explicit profile path override (dev/CI); prefer pipeline_profile in production.",
+    )
+    program: Optional[str] = Field(
+        default=None,
+        description="DomainProgram name/path to instantiate.",
+    )
+    display_name: Optional[str] = Field(
+        default=None,
+        description="Operator-facing scenario name (also used as executionScopeName).",
+    )
+    overrides: Dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "Dotted actionConfig paths → value (e.g. validation.stability_target_balanced_accuracy). "
+            "JSON null clears a site/profile knob."
+        ),
+    )
+    execution_scope_name: Optional[str] = Field(
+        default=None,
+        description="Optional executionScopeName; defaults to display_name or 'scenario-0'.",
+    )
+    objective: ObjectiveWeights = Field(
+        default_factory=ObjectiveWeights,
+        description="Optional objective weights when ledgering/scoring this scenario later.",
+    )
+
+
 class HyperparamTrialStatus(BaseModel):
     """UI-facing status for one trial (portal.sp_get_hyperparam_search row)."""
 

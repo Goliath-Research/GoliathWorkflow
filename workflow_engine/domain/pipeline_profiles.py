@@ -357,7 +357,7 @@ def load_samd_research_with_mode(
             "claim_boundary": (
                 "Research axis via samd_research mode overlay; not pivotal claims."
             ),
-            "primary_analyte": "buffy_coat",
+            # primary_analyte is study-owned; do not pin buffy_coat here.
         }
         val["validation_partitions"] = {
             "development_train": [],
@@ -418,8 +418,12 @@ def profile_action_config(profile: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def _deep_merge(base: Dict[str, Any], overlay: Mapping[str, Any]) -> Dict[str, Any]:
+    """Merge overlay onto base; overlay ``None`` deletes the key (JSON null = clear)."""
     out = dict(base)
     for key, val in overlay.items():
+        if val is None:
+            out.pop(key, None)
+            continue
         if isinstance(val, dict) and isinstance(out.get(key), dict):
             out[key] = _deep_merge(dict(out[key]), val)
         else:

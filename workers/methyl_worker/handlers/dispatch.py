@@ -86,6 +86,15 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
     if entry is None:
         raise RuntimeError(f"Unknown action {action_name!r} / capability {capability!r}")
 
+    from methyl_utils.modality_gate import refuse_methyl_action_for_modality
+
+    _reg = input_json.get("regulatory") if isinstance(input_json.get("regulatory"), dict) else {}
+    if not _reg and isinstance(input_json.get("resolvedConfig"), dict):
+        _nested = input_json["resolvedConfig"].get("regulatory")
+        if isinstance(_nested, dict):
+            _reg = _nested
+    refuse_methyl_action_for_modality(action_name, _reg.get("primary_modality"))
+
     from ..action_execution import validate_input
     from ..action_skip import maybe_skip_action, record_action_execution
     from ..task_validation import extract_runtime_input, merge_runtime_input, strip_runtime_input

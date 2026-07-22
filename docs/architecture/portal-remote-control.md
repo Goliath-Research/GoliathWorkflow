@@ -31,17 +31,28 @@ The renamed wf concept is **`execution_scope`** (`wf.execution_scope`,
 `wf_apply_execution_scope`). Context/task field is `executionScopeId` (legacy
 `hyperparamSetId` accepted as an alias for one release).
 
+## Scenario vs grid
+
+| Path | When | CLI |
+|------|------|-----|
+| **Scenario** | Confirm an assumption or hit a stability target (BA gates, FeatureCuts caps, freq) without a Cartesian product | `methyl-study-start scenario-start` |
+| **Grid** | Sweep discrete axes across N instances | `methyl-study-start hyperparam-grid-start` |
+
+Both reuse `apply_overlay` → `finalize_instance_context` → `executionScopeId` / CAAS. JSON `null` in an override clears a site/profile knob. Scenarios may ledger as a single cfg trial for later score/compare.
+
+Typical stability overlay keys: `validation.stability_min_balanced_accuracy`, `validation.stability_target_balanced_accuracy`, `validation.stability_dmp_freq`, `validation.stability_gene_freq`, `validation.stability_gene_featurecuts_max_dmps` / `_max_genes`, `validation.n_iterations`.
+
 ## Multi-instance grid flow
 
 ```mermaid
 flowchart TB
   UI["EpiPortal UI"] --> PortalSQL["portal.sp_* Azure SQL"]
-  PortalSQL --> CfgSearch["cfg.hyperparameter_search_run + trials (typed)"]
-  CfgSearch --> Expand["Expand overlays + finalize (in-process)"]
-  Expand --> WfInst["wf.workflow_instance (per trial)"]
-  Expand --> Scope["wf.execution_scope (opaque CAAS)"]
+  PortalSQL --> CfgSearch["cfg.hyperparameter_search_run + trials typed"]
+  CfgSearch --> Expand["Expand overlays + finalize in-process"]
+  Expand --> WfInst["wf.workflow_instance per trial"]
+  Expand --> Scope["wf.execution_scope opaque CAAS"]
   Scope --> WfInst
-  WfInst --> Gw["methyl-gateway (workers only)"]
+  WfInst --> Gw["methyl-gateway workers only"]
   Gw --> Workers["Workers claim/submit"]
   CfgSearch --> Score["Score trials via objective J"]
   Score --> Winner["Operator-gated winner overlay"]
@@ -53,7 +64,8 @@ flowchart TB
    `finalize_instance_context` (baking `resolvedConfig__*` + `executionScopeId`),
    creates and starts one instance per point, and records each with
    `portal.sp_add_hyperparam_trial` (trial → `workflow_instance_id` +
-   `execution_scope_key`).
+   `execution_scope_key`). For a single assumption check use
+   `methyl-study-start scenario-start` instead (no axes required).
 2. **Monitor** — `portal.sp_get_hyperparam_search` returns trials joined to live
    instance status for the UI.
 3. **Score** — after trials reach a terminal state, objective \(J\)
@@ -65,10 +77,11 @@ flowchart TB
 
 ## Typed contracts
 
-Grid, trial overlay, search request, and status are Pydantic models exported to
+Grid, trial overlay, search request, scenario request, and status are Pydantic models exported to
 JSON Schema like every other config surface:
 
 - `schemas/config/hyperparam_search_request.schema.json`
+- `schemas/config/hyperparam_scenario_request.schema.json`
 - `schemas/config/hyperparam_grid_spec.schema.json`
 - `schemas/config/hyperparam_trial_overlay.schema.json`
 - `schemas/config/hyperparam_search_status.schema.json`

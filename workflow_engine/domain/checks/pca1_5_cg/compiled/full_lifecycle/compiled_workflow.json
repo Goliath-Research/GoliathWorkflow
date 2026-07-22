@@ -758,6 +758,30 @@
       }
     },
     {
+      "node_key": "model_mc",
+      "node_type": "ACTION",
+      "action_name": "validation.model_mc",
+      "repeat_count": null,
+      "condition_ref_node_key": null,
+      "switch_ref_node_key": null,
+      "condition_var": null,
+      "switch_var": null,
+      "foreach_collection_var": null,
+      "foreach_item_var": null,
+      "foreach_index_var": null,
+      "foreach_parallel": null,
+      "input_template": {
+        "tool": "validation.model_mc",
+        "projectPath": "${var.projectPath}",
+        "executionScopeId": "${var.executionScopeId}",
+        "project": "${var.projectPath}",
+        "resolvedConfig": "${var.resolvedConfig__validation}",
+        "monteCarloRunsRoot": "${var.monteCarloRunsRoot}",
+        "backends": "${var.backends}",
+        "productionOutputDir": "${var.productionOutputDir}"
+      }
+    },
+    {
       "node_key": "select_best_model",
       "node_type": "ACTION",
       "action_name": "validation.select_best_model",
@@ -1160,7 +1184,7 @@
     },
     {
       "parent_node_key": "seq_1",
-      "child_node_key": "select_best_model",
+      "child_node_key": "model_mc",
       "child_order": 14,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
@@ -1169,8 +1193,17 @@
     },
     {
       "parent_node_key": "seq_1",
-      "child_node_key": "post_model_validation",
+      "child_node_key": "select_best_model",
       "child_order": 15,
+      "branch_kind": "SEQUENCE",
+      "condition_expr": null,
+      "switch_case_value": null,
+      "is_default": false
+    },
+    {
+      "parent_node_key": "seq_1",
+      "child_node_key": "post_model_validation",
+      "child_order": 16,
       "branch_kind": "SEQUENCE",
       "condition_expr": null,
       "switch_case_value": null,
@@ -1211,6 +1244,24 @@
       "var_name": "projectPath",
       "source_kind": "output_path",
       "source_json_path": "$.projectPath"
+    },
+    {
+      "node_key": "prepare_freeze",
+      "var_name": "centroid1Dir",
+      "source_kind": "output_path",
+      "source_json_path": "$.centroid1Dir"
+    },
+    {
+      "node_key": "prepare_freeze",
+      "var_name": "centroid2Dir",
+      "source_kind": "output_path",
+      "source_json_path": "$.centroid2Dir"
+    },
+    {
+      "node_key": "prepare_freeze",
+      "var_name": "detectOutDir",
+      "source_kind": "output_path",
+      "source_json_path": "$.detectOutDir"
     },
     {
       "node_key": "select_best_model",

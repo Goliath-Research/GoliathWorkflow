@@ -99,6 +99,13 @@ CONFIG_SCHEMA_SPECS: Sequence[ConfigSchemaSpec] = (
         title="HyperparamTrialOverlay",
     ),
     ConfigSchemaSpec(
+        schema_id="hyperparam_scenario_request",
+        module="methyl_validation.hyperparam_models",
+        class_name="HyperparamScenarioRequest",
+        filename="hyperparam_scenario_request.schema.json",
+        title="HyperparamScenarioRequest",
+    ),
+    ConfigSchemaSpec(
         schema_id="hyperparam_search_status",
         module="methyl_validation.hyperparam_models",
         class_name="HyperparamSearchStatus",

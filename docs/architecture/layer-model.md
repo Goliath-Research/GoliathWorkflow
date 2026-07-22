@@ -17,7 +17,7 @@ Study configuration is split across layers so pipeline structure stays in versio
 
 **Storage rule:** The **`cfg` registry** (database) is the source of truth for DomainPrograms, pipeline profiles, sites, studies, storage endpoints/credentials, and reference assets. Shared storage **`/work`** is a **materialization** of published non-secret objects for workers. Git keeps code, JSON Schema contracts, and CI fixtures. See [config-registry.md](config-registry.md). Study sample CSVs and run artifacts still live on `/work/projects/<study>/`.
 
-Parameter precedence (highest wins): instance override → program `with` / `stepOverride` → profile `actionConfig` → analyte defaults → site manifest → *(no Python fallback for tunable science knobs)*. Code **resolves and validates** merged config; it must not inject operational defaults when config is missing (see [`config-not-code`](../../.cursor/rules/config-not-code.mdc)). Non-tunable structural constants (paths, storage keys) may still live in code.
+Merge order: site manifest → profile `actionConfig` → instance / program `with` / `stepOverride` (`deep_merge`; JSON `null` deletes/clears a key) → analyte fill-missing-only → *(no Python fallback for tunable science knobs)*. Code **resolves and validates** merged config; it must not inject operational defaults when config is missing (see [`config-not-code`](../../.cursor/rules/config-not-code.mdc)). Non-tunable structural constants (paths, storage keys) may still live in code.
 
 ```mermaid
 flowchart TB

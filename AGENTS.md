@@ -30,7 +30,7 @@ When assisting with DB tasks:
 | Site manifest | `/work/site/methyl_site.json` (`METHYL_SITE_CONFIG`) | [Layer model](docs/architecture/layer-model.md) |
 | DomainProgram | `workflow_engine/domain/**/*.program.json` | [Layer model](docs/architecture/layer-model.md) |
 
-**Precedence (highest wins):** program/instance override → profile `actionConfig` → analyte defaults → site `actionConfig` → *(no Python fallback for tunable science knobs)*.
+**Merge order:** site `actionConfig` → profile `actionConfig` → program/instance overlay (`deep_merge`; JSON `null` deletes/clears a key) → analyte fill-missing-only → *(no Python fallback for tunable science knobs)*.
 
 Study manifests must **not** contain `step_config` or tool parameters. See [config parameter matrix](docs/reference/config-parameter-matrix.md).
 

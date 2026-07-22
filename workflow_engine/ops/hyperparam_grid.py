@@ -36,11 +36,32 @@ def set_by_path(target: Dict[str, Any], dotted_key: str, value: Any) -> None:
     cur[parts[-1]] = value
 
 
+def _delete_by_path(target: Dict[str, Any], dotted_key: str) -> None:
+    """Remove ``a.b.c`` from a nested dict (no-op if missing)."""
+    parts = [p for p in str(dotted_key).split(".") if p]
+    if not parts:
+        return
+    cur: Any = target
+    for part in parts[:-1]:
+        if not isinstance(cur, dict) or part not in cur:
+            return
+        cur = cur[part]
+    if isinstance(cur, dict):
+        cur.pop(parts[-1], None)
+
+
 def apply_overlay(action_config: Mapping[str, Any], overrides: Mapping[str, Any]) -> Dict[str, Any]:
-    """Return a deep copy of ``action_config`` with dotted-path overrides applied."""
+    """Return a deep copy of ``action_config`` with dotted-path overrides applied.
+
+    Overlay value ``None`` (JSON null) deletes the target key so operators can
+    clear / uncap site or profile knobs in a scenario or grid trial.
+    """
     merged = copy.deepcopy(dict(action_config)) if action_config else {}
     for dotted_key, value in overrides.items():
-        set_by_path(merged, dotted_key, value)
+        if value is None:
+            _delete_by_path(merged, dotted_key)
+        else:
+            set_by_path(merged, dotted_key, value)
     return merged
 
 
@@ -232,6 +253,124 @@ def expand_and_start_grid(
         )
 
     return result
+
+
+def start_scenario_trial(
+    db: Any,
+    request: Any,
+    *,
+    create_workflow_definition,
+    create_workflow_instance,
+    start_workflow_instance,
+    ledger: Optional[TrialLedger] = None,
+) -> GridStartResult:
+    """Start one workflow instance from a scenario overlay (no Cartesian grid).
+
+    Reuses the same bake path as grid trials: plan → apply_overlay →
+    finalize_instance_context → execution_scope. When a ledger is supplied the
+    scenario is recorded as a single-trial search for later scoring/compare.
+    """
+    ensure_import_paths()
+    from methyl_validation.hyperparam_models import (
+        HyperparamGridSpec,
+        HyperparamScenarioRequest,
+        HyperparamSearchRequest,
+        HyperparamTrialOverlay,
+    )
+    from methyl_validation.workflow_planner import plan_validation_context
+    from rest.execution_scope import extract_execution_scope_payload
+    from workflow_context import finalize_instance_context
+
+    if not isinstance(request, HyperparamScenarioRequest):
+        request = HyperparamScenarioRequest.model_validate(request)
+
+    base_body: Dict[str, Any] = {"projectPath": request.project_path}
+    if request.pipeline_profile:
+        base_body["pipelineProfile"] = request.pipeline_profile
+    if request.profile_path:
+        base_body["profilePath"] = request.profile_path
+    if request.program:
+        base_body["program_path"] = request.program
+
+    planned = plan_validation_context(dict(base_body))
+    base_context = planned.model_dump(mode="json")
+
+    version_id = resolve_workflow_version_id(
+        db,
+        {**base_body, "projectPath": request.project_path},
+        create_workflow_definition=create_workflow_definition,
+    )
+
+    # Optional ledger: open a 1-trial search so scenarios can score/compare later.
+    search_id: Optional[int] = None
+    if ledger is not None:
+        grid_request = HyperparamSearchRequest(
+            project_path=request.project_path,
+            pipeline_profile=request.pipeline_profile,
+            profile_path=request.profile_path,
+            program=request.program,
+            display_name=request.display_name or "scenario",
+            grid=HyperparamGridSpec(axes={}),
+            objective=request.objective,
+        )
+        # Ledger APIs expect a grid_json; record empty axes + single trial manually.
+        search_id = ledger.start_search(grid_request)
+
+    overlay = HyperparamTrialOverlay(
+        index=0,
+        overrides=dict(request.overrides or {}),
+        label=request.execution_scope_name
+        or request.display_name
+        or "scenario-0",
+    )
+
+    trial_context = copy.deepcopy(base_context)
+    trial_context["actionConfig"] = apply_overlay(
+        trial_context.get("actionConfig") or {}, overlay.overrides
+    )
+    trial_context["executionScopeName"] = overlay.label
+    trial_context["trialIndex"] = 0
+
+    context = finalize_instance_context(trial_context)
+    instance_id = create_workflow_instance(db, version_id, context)
+
+    scope = extract_execution_scope_payload(context)
+    scope_key = scope["set_key"] if scope else None
+    if scope is not None:
+        try:
+            db.apply_execution_scope(instance_id, **scope)
+        except Exception:
+            logger.warning(
+                "Failed to register execution scope for scenario instance %s",
+                instance_id,
+                exc_info=True,
+            )
+    start_workflow_instance(db, instance_id)
+
+    if ledger is not None and search_id is not None:
+        try:
+            ledger.add_trial(
+                search_id=search_id,
+                trial_index=0,
+                overrides=overlay.overrides,
+                workflow_instance_id=instance_id,
+                execution_scope_key=scope_key,
+            )
+        except Exception:
+            logger.warning("Failed to record scenario trial in cfg ledger", exc_info=True)
+
+    return GridStartResult(
+        search_id=search_id,
+        trials=[
+            TrialStart(
+                index=0,
+                overrides=overlay.overrides,
+                workflow_instance_id=instance_id,
+                workflow_version_id=version_id,
+                execution_scope_key=scope_key,
+            )
+        ],
+    )
 
 
 def score_grid(

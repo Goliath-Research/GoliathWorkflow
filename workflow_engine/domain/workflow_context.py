@@ -308,13 +308,24 @@ def build_resolved_config_scope_vars(context: Mapping[str, Any]) -> Dict[str, An
 
     out: Dict[str, Any] = {}
     for key in sorted(keys):
-        out[resolved_config_scope_var_name(key)] = resolve_action_config(
+        resolved = resolve_action_config(
             key,
             site=site,
             profile_action_config=profile_ac,
             program_override=None,
             regulatory=reg,
         )
+        # Study regulatory owns analyte / claim shell in the validation slice so
+        # profile nests cannot disagree with context.regulatory in the UI bake.
+        if key == "validation" and reg:
+            nested = dict(resolved.get("regulatory") or {})
+            for rk, rv in reg.items():
+                if rv is None:
+                    nested.pop(rk, None)
+                else:
+                    nested[rk] = rv
+            resolved["regulatory"] = nested
+        out[resolved_config_scope_var_name(key)] = resolved
     return out
 
 
@@ -363,6 +374,10 @@ def finalize_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
 
     out = ensure_study_work_synced(context)
     out = enrich_instance_context(out)
+    from methyl_utils.modality_gate import enforce_pack_pairing, enforce_study_primary_analyte
+
+    enforce_pack_pairing(out)
+    enforce_study_primary_analyte(out)
     out.update(build_resolved_config_scope_vars(out))
     scope_id = compute_execution_scope_id(out)
     out["executionScopeId"] = scope_id

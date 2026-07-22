@@ -273,6 +273,10 @@
       "node_key": "progression"
     },
     {
+      "do": "validation.model_mc",
+      "node_key": "model_mc"
+    },
+    {
       "do": "validation.select_best_model",
       "node_key": "select_best_model"
     },

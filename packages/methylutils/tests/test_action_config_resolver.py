@@ -52,6 +52,30 @@ def test_deep_merge_scalar_overrides_dict_and_vice_versa():
     assert deep_merge({"k": 5}, {"k": {"a": 1}})["k"] == {"a": 1}
 
 
+def test_deep_merge_null_deletes_leaf_key():
+    """JSON null clears a site/profile cap (uncap / unset)."""
+    base = {"max_dmps": 1000, "max_genes": 200}
+    assert deep_merge(base, {"max_dmps": None}) == {"max_genes": 200}
+
+
+def test_deep_merge_null_deletes_nested_key():
+    base = {"validation": {"stability_gene_featurecuts_max_dmps": 1000, "n_iterations": 50}}
+    merged = deep_merge(base, {"validation": {"stability_gene_featurecuts_max_dmps": None}})
+    assert "stability_gene_featurecuts_max_dmps" not in merged["validation"]
+    assert merged["validation"]["n_iterations"] == 50
+
+
+def test_resolve_action_config_instance_null_clears_site_cap():
+    site = {"actionConfig": {"gene_selection": {"max_dmps": 1000, "max_genes": 200}}}
+    merged = resolve_action_config(
+        "gene_selection",
+        site=site,
+        instance_override={"max_dmps": None},
+    )
+    assert "max_dmps" not in merged
+    assert merged["max_genes"] == 200
+
+
 # --------------------------------------------------------------------------- #
 # resolve_action_config layer precedence
 # --------------------------------------------------------------------------- #

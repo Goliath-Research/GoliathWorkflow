@@ -206,7 +206,6 @@
         "intended_use_summary": "Research-use methylation classifier for prostate cancer stage discrimination from buffy coat-derived DNA methylation profiles.",
         "target_population": "Adults undergoing prostate cancer diagnostic or monitoring evaluation.",
         "sample_type": "Buffy coat-derived DNA methylation sequencing (CG context).",
-        "primary_analyte": "buffy_coat",
         "reference_standard": "Clinical/pathology adjudication including Gleason-based stage grouping.",
         "claim_boundary": "Development/internal-validation evidence only; not intended as pivotal clinical performance evidence.",
         "allow_clinical_performance_claims": false

@@ -31,7 +31,7 @@ def build_manifest(
     project_name: str,
     study_id: str,
     output_root: Path,
-    analyte: str,
+    analyte: Optional[str],
     stages: Optional[int],
     intended_use: str,
     modality: str = "methylation",
@@ -86,12 +86,14 @@ def build_manifest(
             "stage": "expanded_development",
             "intended_use_summary": intended_use,
             "primary_modality": modality,
-            "primary_analyte": analyte,
             "allow_clinical_performance_claims": False,
             "claim_boundary": "Development evidence only until pivotal_validation stage.",
         },
         "validation_partitions": _empty_partitions(),
     }
+    # primary_analyte is study-owned and methylation-pack-only.
+    if analyte:
+        manifest["regulatory"]["primary_analyte"] = analyte
     manifest.update(progression)
     return manifest
 
@@ -106,7 +108,7 @@ def write_study(
     *,
     study_id: str,
     name: str,
-    analyte: str,
+    analyte: Optional[str],
     stages: Optional[int],
     output_root: Path,
     intended_use: str,
@@ -209,13 +211,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("--name", required=True, help="Study / project_name (e.g. Healthy_vs_Disease)")
     parser.add_argument(
         "--analyte",
-        default="buffy_coat",
-        help="regulatory.primary_analyte (default: buffy_coat)",
+        default=None,
+        help=(
+            "regulatory.primary_analyte (study-owned). "
+            "Required for --modality methylation (cfdna|buffy_coat|tissue|plant_tissue). "
+            "Omit for rnaseq/proteomics."
+        ),
     )
     parser.add_argument(
         "--modality",
         default="methylation",
-        choices=["methylation", "rnaseq"],
+        choices=["methylation", "rnaseq", "proteomics"],
         help="regulatory.primary_modality: omics process pack (default: methylation)",
     )
     parser.add_argument(
@@ -254,6 +260,19 @@ def main(argv: Optional[List[str]] = None) -> int:
     if stages is not None and stages < 1:
         parser.error("--stages must be >= 1")
 
+    analyte = args.analyte
+    if args.modality == "methylation":
+        if not analyte:
+            analyte = "buffy_coat"
+            print(
+                "warning: --analyte omitted for methylation; defaulting to buffy_coat. "
+                "Set --analyte cfdna|buffy_coat|tissue|plant_tissue explicitly for production.",
+                file=sys.stderr,
+            )
+    else:
+        # Non-methyl packs must not inherit a methylation analyte default.
+        analyte = analyte  # may be None; omitted from regulatory
+
     if args.cfg_store is not None:
         import os
 
@@ -263,7 +282,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         path = write_study(
             study_id=args.study_id,
             name=args.name,
-            analyte=args.analyte,
+            analyte=analyte,
             stages=stages,
             output_root=args.output_root.resolve(),
             intended_use=args.intended_use,

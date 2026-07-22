@@ -44,6 +44,17 @@ def test_pca1_5_programs_compile(program_name: str) -> None:
     assert proc.returncode == 0, proc.stderr or proc.stdout
 
 
+def test_full_lifecycle_includes_model_mc_before_select_best() -> None:
+    """Production full_lifecycle must run model_mc before select_best_model."""
+    program_path = (
+        REPO_ROOT / "workflow_engine" / "domain" / "fixtures" / "full_lifecycle.program.json"
+    )
+    program = json.loads(program_path.read_text(encoding="utf-8"))
+    actions = [n.get("do") for n in program.get("body", []) if isinstance(n, dict) and "do" in n]
+    assert "validation.model_mc" in actions
+    assert actions.index("validation.model_mc") < actions.index("validation.select_best_model")
+
+
 def test_smoke_project_has_resolved_stage_groups() -> None:
     from methyl_utils import load_project
 

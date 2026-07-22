@@ -13,7 +13,7 @@ DomainProgram fixtures and harness for `Healthy_vs_PCa1-5-CG` (hierarchical mult
 | `configs/pca1_5_mc_stability*.program.json` | MC + stability workflows |
 | `configs/pca1_5_freeze.program.json` | Production freeze (granular centroids/detectors) |
 | `configs/pca1_5_model.program.json` | Model selection + post-model validation |
-| `configs/pca1_5_full_lifecycle.program.json` | End-to-end composed pipeline |
+| `../../fixtures/full_lifecycle.program.json` | End-to-end composed pipeline (includes `validation.model_mc`) |
 | `instance/context*.json` | Workflow instance payloads |
 | `check_pipeline.py` | Validate project, compile program, check templates |
 

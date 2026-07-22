@@ -83,14 +83,14 @@ def _apply_nullable_overlay(payload: Dict[str, Any], overlay: Mapping[str, Any],
             payload[key] = val
 
 
-def _apply_gene_selection_aliases(payload: Dict[str, Any], gene_sel: Mapping[str, Any], *, allow_null: bool) -> None:
+def _apply_gene_selection_aliases(payload: Dict[str, Any], gene_sel: Mapping[str, Any]) -> None:
+    """Map gene_selection aliases; ``null`` clears the destination (same as deep_merge)."""
     for src, dst in _GENE_SELECTION_ALIASES.items():
         if src not in gene_sel:
             continue
         val = gene_sel[src]
         if val is None:
-            if allow_null:
-                payload.pop(dst, None)
+            payload.pop(dst, None)
             continue
         payload[dst] = val
 
@@ -104,25 +104,26 @@ def build_gene_select_config(
     """
     Merge site/profile gene_selection + validation, then study/MC overlays.
 
-    Study ``actionConfig`` and ``monte_carlo_runs/queue/mc_config.json`` win over site
-    defaults. Explicit ``null`` for max_dmps / max_genes means uncapped (clears site 1000).
+    Prefer baked ``resolvedConfig`` (null already deleted by ``deep_merge``). Legacy study
+    ``actionConfig`` / MC snapshot ``null`` still clears caps via nullable overlay.
     """
     project = load_project(project_path)
     payload: Dict[str, Any] = {"stability_gene_featurecuts_enabled": True}
 
     gene_sel = dict(resolve_for_project("gene_selection", project))
-    _apply_gene_selection_aliases(payload, gene_sel, allow_null=False)
+    _apply_gene_selection_aliases(payload, gene_sel)
 
     validation = dict(resolve_for_project("validation", project))
     for key in _VALIDATION_GENE_KEYS:
-        if key in validation and validation[key] is not None:
-            payload[key] = validation[key]
+        if key in validation:
+            if validation[key] is None:
+                payload.pop(key, None)
+            else:
+                payload[key] = validation[key]
 
-    # Study-local project.json actionConfig (explicit null clears site caps).
+    # Legacy study-local project.json actionConfig (explicit null clears site caps).
     study_ac = _load_raw_action_config(project_path)
-    _apply_gene_selection_aliases(
-        payload, dict(study_ac.get("gene_selection") or {}), allow_null=True
-    )
+    _apply_gene_selection_aliases(payload, dict(study_ac.get("gene_selection") or {}))
     _apply_nullable_overlay(payload, dict(study_ac.get("validation") or {}), _VALIDATION_GENE_KEYS)
 
     # MC snapshot for DomainProgram / methyl-validation iterations.

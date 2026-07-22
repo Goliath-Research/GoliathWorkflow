@@ -16,7 +16,7 @@ MethylPipeline is **disease-agnostic** and **deployment-configurable**. Do not e
 | **Study** | Instance `context_json` overlays, `profilePath` | Per study / API | `wf.workflow_instance.context_json` |
 | **Program** | `stepOverride` / `with` on DomainProgram nodes | Versioned topology | Node task payloads |
 
-**Precedence (highest wins):** program/instance override → profile `actionConfig` → analyte defaults → site `actionConfig` → *(no code fallback)*.
+**Merge order:** site `actionConfig` → profile `actionConfig` → program/instance overlay (`deep_merge`; JSON `null` deletes/clears a key) → analyte fill-missing-only → *(no code fallback)*.
 
 ## Code may only
 
