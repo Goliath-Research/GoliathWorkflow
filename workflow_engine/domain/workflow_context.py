@@ -83,6 +83,7 @@ def enrich_comparisons_from_project(project_path: Path) -> List[Dict[str, Any]]:
                 "control_group": control,
                 "disease_group": disease,
                 "comparisonLabel": label,
+                "centroid1Dir": project.get_centroid_dir("control", control),
                 "centroid2Dir": project.get_centroid_dir("disease", disease),
                 "detectOutDir": project.get_detection_output_dir(control, disease),
             }

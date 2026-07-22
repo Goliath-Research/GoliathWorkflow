@@ -250,6 +250,28 @@ class WorkflowScheduler:
         apply_output_bindings(self.spec, node.node_key, output, scope)
         if action_name:
             apply_catalog_scope_bindings(action_name, output, scope)
+        # prepare_freeze rebinds projectPath to production/; refresh comparison
+        # artifact dirs so FOREACH flatten does not keep study-root centroid2Dir.
+        if action_name == "validation.prepare_freeze_project":
+            prod_path = scope.get("projectPath")
+            if prod_path:
+                try:
+                    from workflow_context import enrich_comparisons_from_project
+
+                    scope["comparisons"] = enrich_comparisons_from_project(Path(str(prod_path)))
+                    first = (scope.get("comparisons") or [None])[0]
+                    if isinstance(first, dict):
+                        if first.get("centroid1Dir"):
+                            scope["centroid1Dir"] = first["centroid1Dir"]
+                        if first.get("centroid2Dir"):
+                            scope["centroid2Dir"] = first["centroid2Dir"]
+                        if first.get("detectOutDir"):
+                            scope["detectOutDir"] = first["detectOutDir"]
+                except Exception:
+                    logger.debug(
+                        "could not refresh comparisons after prepare_freeze",
+                        exc_info=True,
+                    )
         status = getattr(output, "status", None)
         if status == "skipped":
             self.trace.skipped_actions.append(node.node_key)
