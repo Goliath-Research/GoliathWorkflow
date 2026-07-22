@@ -63,7 +63,11 @@ class EcdfSecondStageParams(BaseModel):
 
     include_observed_hybrid: bool = Field(
         default=False,
-        description="When true, include observed-hybrid methylation features (ecdf_second_stage_enabled).",
+        description=(
+            "When true, include observed-hybrid methylation features restricted to "
+            "the freeze-time stable/frozen gene panel. Driven by "
+            "ecdf_second_stage_include_observed_hybrid (not ecdf_second_stage_enabled)."
+        ),
     )
     max_dmps: Optional[int] = Field(default=None, ge=0)
     quantiles: Optional[List[float]] = Field(default=None)
@@ -148,7 +152,9 @@ class EcdfSecondStageParams(BaseModel):
         if config is None:
             raise ValueError("MonteCarloConfig is required to build EcdfSecondStageParams")
         return cls(
-            include_observed_hybrid=bool(getattr(config, "ecdf_second_stage_enabled", False)),
+            include_observed_hybrid=bool(
+                getattr(config, "ecdf_second_stage_include_observed_hybrid", False)
+            ),
             max_dmps=getattr(config, "tabular_max_dmps", None),
             quantiles=getattr(config, "observed_feature_quantiles", None),
             min_coverage=int(getattr(config, "observed_feature_min_coverage", 1) or 1),
@@ -224,10 +230,17 @@ class EcdfSecondStageParams(BaseModel):
 
 
 def ecdf_second_stage_should_run(config: Any) -> bool:
-    """True when observed-hybrid second stage and/or covariates_path is configured."""
+    """True when second-stage stacker and/or covariates_path is configured.
+
+    ``ecdf_second_stage_enabled`` enables the stacker itself.
+    ``ecdf_second_stage_include_observed_hybrid`` only adds hybrid features when the
+    stacker already runs (or is enabled); covariates_path alone also runs the stacker.
+    """
     if config is None:
         return False
     if bool(getattr(config, "ecdf_second_stage_enabled", False)):
+        return True
+    if bool(getattr(config, "ecdf_second_stage_include_observed_hybrid", False)):
         return True
     path = getattr(config, "covariates_path", None)
     if path is None:
@@ -569,6 +582,74 @@ def _write_second_stage_datasets(
     }
 
 
+def _resolve_second_stage_frozen_gene_panel(
+    *,
+    project_json: Path,
+    bundle_dir: Path,
+    bundle_h5: Path,
+) -> pd.DataFrame:
+    """Load freeze-time stable gene panel; required when second-stage hybrid is on."""
+    from .model_bundle import load_bundle_frozen_gene_panel
+
+    panel = load_bundle_frozen_gene_panel(bundle_h5, project_json=project_json)
+    if panel is not None and not panel.empty:
+        return panel
+    for candidate in (
+        bundle_dir / "frozen_genes_production.csv",
+        bundle_dir / "stable_genes_from_stability.csv",
+        project_json.parent / "model_bundle" / "frozen_genes_production.csv",
+        project_json.parent / "model_bundle" / "stable_genes_from_stability.csv",
+        project_json.parent.parent.parent / "production" / "model_bundle" / "frozen_genes_production.csv",
+        project_json.parent.parent.parent / "production" / "model_bundle" / "stable_genes_from_stability.csv",
+    ):
+        if not candidate.is_file():
+            continue
+        try:
+            df = pd.read_csv(candidate)
+        except (OSError, pd.errors.EmptyDataError, pd.errors.ParserError):
+            continue
+        if df.empty or "gene_name" not in df.columns:
+            continue
+        out = df.copy()
+        if "comparison_label" not in out.columns:
+            out["comparison_label"] = "default"
+        if "gene_support_n" not in out.columns:
+            out["gene_support_n"] = 0
+        if "gene_importance" not in out.columns:
+            out["gene_importance"] = 0.0
+        out["gene_name"] = out["gene_name"].astype(str)
+        return out[["comparison_label", "gene_name", "gene_support_n", "gene_importance"]]
+    raise ValueError(
+        "ECDF second-stage observed-hybrid requires a freeze-time stable/frozen gene "
+        "panel (frozen_genes_production.csv or stable_genes_from_stability.csv) under "
+        f"model_bundle. Searched beside {bundle_dir}."
+    )
+
+
+def _filter_dmp_df_to_frozen_genes(dmp_df: pd.DataFrame, frozen_panel: pd.DataFrame) -> pd.DataFrame:
+    """Keep only loci whose gene_name is in the frozen/stable panel."""
+    allowed = {
+        str(g).strip()
+        for g in frozen_panel.get("gene_name", pd.Series(dtype=object)).tolist()
+        if str(g).strip() and str(g).strip().lower() not in {"", "unknown", "nan", "none"}
+    }
+    if not allowed:
+        raise ValueError("Frozen/stable gene panel has no usable gene_name values.")
+    if "gene_name" not in dmp_df.columns:
+        raise ValueError(
+            "Bundle DMP index lacks gene_name; cannot restrict second-stage hybrid "
+            "features to the frozen/stable gene panel."
+        )
+    gene_series = dmp_df["gene_name"].astype(str).str.strip()
+    filtered = dmp_df[gene_series.isin(allowed)].copy()
+    if filtered.empty:
+        raise ValueError(
+            "No bundle loci remain after restricting to the frozen/stable gene panel "
+            f"({len(allowed)} genes)."
+        )
+    return filtered
+
+
 def train_and_apply_ecdf_second_stage(
     *,
     project_json: str | Path,
@@ -618,15 +699,27 @@ def train_and_apply_ecdf_second_stage(
     feat = None
     anchors = None
     fill_values = None
+    frozen_gene_panel_df: Optional[pd.DataFrame] = None
+    hybrid_dmp_df: Optional[pd.DataFrame] = None
     if params.include_observed_hybrid:
         bundle_dir = project_json.parent / "model_bundle"
         bundle_h5 = _ensure_bundle_h5(project_json, bundle_dir)
-        dmp_df = load_bundle_dmp_index(bundle_h5)
+        frozen_gene_panel_df = _resolve_second_stage_frozen_gene_panel(
+            project_json=project_json,
+            bundle_dir=bundle_dir,
+            bundle_h5=bundle_h5,
+        )
+        dmp_df = _filter_dmp_df_to_frozen_genes(
+            load_bundle_dmp_index(bundle_h5),
+            frozen_gene_panel_df,
+        )
+        hybrid_dmp_df = dmp_df
         max_dmps_norm = (
             int(params.max_dmps) if (params.max_dmps is not None and int(params.max_dmps) > 0) else 0
         )
         if max_dmps_norm and len(dmp_df) > max_dmps_norm:
             dmp_df = dmp_df.sort_values(["effect_size"], ascending=[False]).head(max_dmps_norm).copy()
+            hybrid_dmp_df = dmp_df
 
         y_for_anchor = pd.to_numeric(df["expected_class"], errors="coerce").fillna(0).astype(int).to_numpy()
         y_for_anchor = np.where(y_for_anchor > 0, 1, 0).astype(np.int32)
@@ -673,6 +766,7 @@ def train_and_apply_ecdf_second_stage(
             hist_evidence_clip_cap=float(params.hist_evidence_clip_cap),
             hist_tail_agreement_threshold=float(params.hist_tail_agreement_threshold),
             feature_family_set=str(params.feature_family_set),
+            frozen_gene_panel_df=frozen_gene_panel_df,
             chromosome_hypo_beta_threshold=params.chromosome_hypo_beta_threshold,
             chromosome_intermediate_beta_lo=params.chromosome_intermediate_beta_lo,
             chromosome_intermediate_beta_hi=params.chromosome_intermediate_beta_hi,
@@ -853,11 +947,18 @@ def train_and_apply_ecdf_second_stage(
             )
 
         if params.include_observed_hybrid:
-            if bundle_h5 is None or feat is None or anchors is None or fill_values is None:
+            if (
+                bundle_h5 is None
+                or feat is None
+                or anchors is None
+                or fill_values is None
+                or hybrid_dmp_df is None
+                or frozen_gene_panel_df is None
+            ):
                 raise RuntimeError("Observed second-stage training state was not retained.")
             test_feat = build_observed_hybrid_feature_table(
                 test_sample_paths,
-                load_bundle_dmp_index(bundle_h5),
+                hybrid_dmp_df,
                 min_coverage=int(max(1, params.min_coverage)),
                 include_dmp_features=bool(params.include_dmp_features),
                 include_chromosome_features=bool(params.include_chromosome_features),
@@ -880,6 +981,7 @@ def train_and_apply_ecdf_second_stage(
                 hist_evidence_clip_cap=float(params.hist_evidence_clip_cap),
                 hist_tail_agreement_threshold=float(params.hist_tail_agreement_threshold),
                 feature_family_set=str(params.feature_family_set),
+                frozen_gene_panel_df=frozen_gene_panel_df,
                 chromosome_hypo_beta_threshold=params.chromosome_hypo_beta_threshold,
                 chromosome_intermediate_beta_lo=params.chromosome_intermediate_beta_lo,
                 chromosome_intermediate_beta_hi=params.chromosome_intermediate_beta_hi,

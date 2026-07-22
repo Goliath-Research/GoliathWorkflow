@@ -582,8 +582,20 @@ class EcdfBackendParams(BackendSharedParams):
     ecdf_second_stage_enabled: bool = Field(
         default=False,
         description=(
-            "Include observed-hybrid features in the ECDF second-stage stacker. "
-            "Second stage also runs when covariates_path is set."
+            "Enable the ECDF second-stage logistic stacker that fuses first-stage "
+            "class probabilities with covariates and/or optional observed-hybrid "
+            "features. Second stage also runs when covariates_path is set. "
+            "Does not by itself include observed-hybrid methylation features; "
+            "set ecdf_second_stage_include_observed_hybrid for that."
+        ),
+    )
+    ecdf_second_stage_include_observed_hybrid: bool = Field(
+        default=False,
+        description=(
+            "When true, the ECDF second-stage stacker also includes observed-hybrid "
+            "methylation features restricted to the freeze-time stable/frozen gene "
+            "panel. Default false: covariate fusion only (recommended for raw_gene "
+            "+ deconvolution covariates)."
         ),
     )
     ecdf_aggregated_enabled: Optional[bool] = Field(
@@ -1467,6 +1479,7 @@ class MonteCarloConfig(BaseModel):
             "chromosome_distance_metrics",
             "chromosome_list",
             "ecdf_second_stage_enabled",
+            "ecdf_second_stage_include_observed_hybrid",
             "ecdf_second_stage_probability_transform",
             "ecdf_second_stage_probability_epsilon",
             "ecdf_aggregated_enabled",
@@ -1639,6 +1652,7 @@ class MonteCarloConfig(BaseModel):
             return getattr(self.backend_profiles.generative_hybrid.params, name)
         if name in {
             "ecdf_second_stage_enabled",
+            "ecdf_second_stage_include_observed_hybrid",
             "ecdf_second_stage_probability_transform",
             "ecdf_second_stage_probability_epsilon",
             "ecdf_aggregated_enabled",

@@ -143,21 +143,31 @@ def _project_ecdf_backend(config: MonteCarloConfig) -> Dict[str, Any]:
     params = profile.params
     feature_mode = str(params.feature_mode or "raw_dmp").strip().lower()
     covariates = _covariate_block(params)
-    second_stage_active = bool(params.ecdf_second_stage_enabled) or bool(covariates)
+    second_stage_active = (
+        bool(params.ecdf_second_stage_enabled)
+        or bool(getattr(params, "ecdf_second_stage_include_observed_hybrid", False))
+        or bool(covariates)
+    )
     out: Dict[str, Any] = {
         "enabled": True,
         "feature_mode": feature_mode,
         "feature_family_set": params.feature_family_set,
         "second_stage_active": second_stage_active,
         "include_covariates": bool(covariates),
-        "include_observed_hybrid": bool(params.ecdf_second_stage_enabled)
-        or feature_mode == "observed_hybrid",
+        "include_observed_hybrid": bool(
+            getattr(params, "ecdf_second_stage_include_observed_hybrid", False)
+        ),
         "ecdf_second_stage_enabled": params.ecdf_second_stage_enabled,
+        "ecdf_second_stage_include_observed_hybrid": bool(
+            getattr(params, "ecdf_second_stage_include_observed_hybrid", False)
+        ),
     }
     if feature_mode == "raw_gene":
         out["gene_feature_loading"] = params.gene_feature_loading
         out["mapper_gene_columns"] = list(params.mapper_gene_columns or [])
-    if feature_mode == "observed_hybrid" or params.ecdf_second_stage_enabled:
+    if feature_mode == "observed_hybrid" or bool(
+        getattr(params, "ecdf_second_stage_include_observed_hybrid", False)
+    ):
         out["observed_feature_quantiles"] = list(params.observed_feature_quantiles or [])
         out["observed_feature_min_coverage"] = params.observed_feature_min_coverage
         out["observed_feature_min_obs_fraction"] = params.observed_feature_min_obs_fraction

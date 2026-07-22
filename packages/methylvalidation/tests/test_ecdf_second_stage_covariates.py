@@ -388,6 +388,24 @@ def test_ecdf_second_stage_should_run_gate():
         }
     )
     assert ecdf_second_stage_should_run(cfg_off) is False
+    cfg_enabled = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": "/tmp/p.json",
+            "output_base": "/tmp",
+            "backend_profiles": {
+                "ecdf": {"enabled": True, "params": {"ecdf_second_stage_enabled": True}},
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
+        }
+    )
+    assert ecdf_second_stage_should_run(cfg_enabled) is True
+    params_enabled = EcdfSecondStageParams.from_monte_carlo_config(cfg_enabled)
+    assert params_enabled.include_observed_hybrid is False
     cfg_cov = MonteCarloConfig.model_validate(
         {
             "samples_base_path": "/tmp",
@@ -410,6 +428,52 @@ def test_ecdf_second_stage_should_run_gate():
         }
     )
     assert ecdf_second_stage_should_run(cfg_cov) is True
+
+
+def test_filter_dmp_df_to_frozen_genes_keeps_panel_only():
+    from methyl_validation.ecdf_second_stage import _filter_dmp_df_to_frozen_genes
+
+    dmp_df = pd.DataFrame(
+        {
+            "chromosome": ["1", "1", "2"],
+            "position": [10, 20, 30],
+            "gene_name": ["TP53", "BRCA1", "UNSTABLE1"],
+            "effect_size": [0.2, 0.1, 0.9],
+        }
+    )
+    panel = pd.DataFrame(
+        {"gene_name": ["TP53", "BRCA1"], "gene_support_n": [1, 1], "gene_importance": [1.0, 0.5]}
+    )
+    filtered = _filter_dmp_df_to_frozen_genes(dmp_df, panel)
+    assert set(filtered["gene_name"]) == {"TP53", "BRCA1"}
+
+
+def test_from_monte_carlo_config_hybrid_flag_is_decoupled():
+    cfg = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": "/tmp/p.json",
+            "output_base": "/tmp",
+            "backend_profiles": {
+                "ecdf": {
+                    "enabled": True,
+                    "params": {
+                        "ecdf_second_stage_enabled": True,
+                        "ecdf_second_stage_include_observed_hybrid": True,
+                        "covariates_path": "/tmp/cov.csv",
+                    },
+                },
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
+        }
+    )
+    params = EcdfSecondStageParams.from_monte_carlo_config(cfg)
+    assert params.include_observed_hybrid is True
+    assert params.has_covariates() is True
 
 
 def test_raw_gene_second_stage_runs_when_covariates_path_set(tmp_path: Path, monkeypatch):

@@ -147,6 +147,7 @@ def _apply_legacy_keys_to_backend_profiles(
             backend_profiles["generative_hybrid"]["params"][key] = before[key]
     for key in (
         "ecdf_second_stage_enabled",
+        "ecdf_second_stage_include_observed_hybrid",
         "ecdf_aggregated_enabled",
         "ecdf_aggregated_n_bins",
     ):

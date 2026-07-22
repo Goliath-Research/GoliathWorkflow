@@ -261,6 +261,7 @@ def _build_dynamic_mapped_feature_names(
     *,
     include_gene: bool,
     include_structural: bool,
+    allowed_gene_names: Optional[set[str]] = None,
 ) -> Tuple[List[str], List[str], Dict[str, Dict[str, Any]]]:
     gene_names: List[str] = []
     struct_names: List[str] = []
@@ -288,6 +289,13 @@ def _build_dynamic_mapped_feature_names(
 
     if include_gene:
         valid_gene = work["gene_name"].apply(_is_known_mapped_token)
+        if allowed_gene_names is not None:
+            allowed_norm = {
+                _normalize_feature_key(g)
+                for g in allowed_gene_names
+                if _is_known_mapped_token(g)
+            }
+            valid_gene = valid_gene & work["gene_name"].isin(allowed_norm)
         if bool(valid_gene.any()):
             genes = sorted(set(work.loc[valid_gene, "gene_name"].astype(str).tolist()))
             gene_names = [f"gene::{g}" for g in genes]
@@ -306,6 +314,13 @@ def _build_dynamic_mapped_feature_names(
             & work["feature_type"].apply(_is_known_mapped_token)
             & (work["feature_type"] != "unknown")
         )
+        if allowed_gene_names is not None:
+            allowed_norm = {
+                _normalize_feature_key(g)
+                for g in allowed_gene_names
+                if _is_known_mapped_token(g)
+            }
+            valid_struct = valid_struct & work["gene_name"].isin(allowed_norm)
         if bool(valid_struct.any()):
             pairs = sorted(
                 set(
@@ -1489,10 +1504,18 @@ def build_observed_hybrid_feature_table(
         feature_names,
         quality_columns=observed_feature_quality_columns,
     )
+    allowed_gene_names: Optional[set[str]] = None
+    if frozen_gene_panel_df is not None and not frozen_gene_panel_df.empty and "gene_name" in frozen_gene_panel_df.columns:
+        allowed_gene_names = {
+            str(g).strip()
+            for g in frozen_gene_panel_df["gene_name"].tolist()
+            if _is_known_mapped_token(g)
+        } or None
     gene_feature_names, struct_feature_names, mapped_feature_meta = _build_dynamic_mapped_feature_names(
         locus_df,
         include_gene=include_gene_family,
         include_structural=include_structural_family,
+        allowed_gene_names=allowed_gene_names,
     )
     X_feat = np.full((n_samples, len(feature_names)), np.nan, dtype=np.float32)
 

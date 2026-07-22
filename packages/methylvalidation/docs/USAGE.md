@@ -427,7 +427,7 @@ This keeps runtime mostly bounded while enforcing high per-run detector quality 
 Covariates are backend-specific:
 
 - **`tabular_sklearn` / `generative_hybrid`**: concatenated onto methylation / observed-hybrid features during first-stage train/predict.
-- **`ecdf`**: first-stage Bayesian/ECDF remains methylation-only. When `covariates_path` is set (and/or `ecdf_second_stage_enabled`), an optional **second-stage** logistic stacker fuses ECDF class probabilities with covariates and optionally observed-hybrid features.
+- **`ecdf`**: first-stage Bayesian/ECDF remains methylation-only. When `covariates_path` is set and/or `ecdf_second_stage_enabled` is true, an optional **second-stage** logistic stacker fuses ECDF class probabilities with covariates. Observed-hybrid methylation features are included in that stacker only when `ecdf_second_stage_include_observed_hybrid` is true, and then only for genes in the freeze-time stable/frozen gene panel.
 
 - **Join key:** `covariate_id_column` must match sample folder basename (for example `S123` from `/path/to/S123`).
 - **Input formats:** `.csv` / `.tsv` or `.h5`/`.hdf5` sidecar (`sample_id`, `values`, optional `columns`).
