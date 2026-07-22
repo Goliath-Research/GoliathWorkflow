@@ -72,9 +72,10 @@
   section.compact{min-height:auto; padding:5.5rem 8vw;}
 
   h1,h2,h3{font-family:var(--sans); font-weight:600; color:var(--black); letter-spacing:-0.01em;}
-  h2{font-size:clamp(1.8rem,3.2vw,2.7rem); margin-bottom:0.6rem; font-weight:500;}
-  .section-sub{color:var(--gray); font-size:1.05rem; max-width:640px; margin-bottom:3rem; font-weight:400;}
+  h2{font-size:clamp(2.2rem,4vw,3.4rem); margin-bottom:1.3rem; font-weight:700; line-height:1.04; letter-spacing:-0.025em; max-width:820px;}
+  .section-sub{color:var(--gray); font-size:1.05rem; max-width:600px; margin-bottom:3.2rem; font-weight:400; line-height:1.6;}
   section.dark .section-sub{color:#B7BAC0;}
+  .eyebrow{margin-bottom:1rem;}
 
   /* ---------- NAV ---------- */
   #navdots{
@@ -129,11 +130,11 @@
   }
   #hero .eyebrow{text-align:center;}
   #hero h1{
-    font-size:clamp(2.6rem, 5vw, 4.6rem);
-    line-height:1.05;
-    letter-spacing:-0.02em;
-    margin-bottom:1.5rem;
-    font-weight:600;
+    font-size:clamp(3rem, 5.5vw, 5.2rem);
+    line-height:1.02;
+    letter-spacing:-0.03em;
+    margin-bottom:1.6rem;
+    font-weight:700;
     max-width:900px;
   }
   #hero h1 span{color:var(--red);}
@@ -208,7 +209,8 @@
     padding:2.4rem 2rem; position:relative;
   }
   .pillar .idx{
-    font-size:0.72rem; color:var(--gray-2); font-weight:600; margin-bottom:2rem; display:block;
+    font-size:3.2rem; color:var(--line-strong); font-weight:600; margin-bottom:1.2rem; display:block;
+    line-height:1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums;
   }
   .pillar h3{font-size:1.2rem; margin-bottom:1rem; font-weight:600;}
   .pillar p{color:var(--gray); font-size:0.95rem; font-weight:400;}
@@ -324,7 +326,7 @@
     transition:background .2s ease;
   }
   .step:not(:last-child){border-right:1px solid var(--line);}
-  .step .s-idx{font-size:0.7rem; color:var(--gray); font-weight:600;}
+  .step .s-idx{font-size:3.2rem; color:var(--line-strong); font-weight:600; line-height:1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; display:block; margin-bottom:0.8rem;}
   .step .s-title{font-size:1.08rem; margin-top:0.6rem; font-weight:500;}
   .step.chasm .s-title{color:var(--red);}
   .step.active{background:var(--black);}
@@ -341,7 +343,8 @@
   .points{display:grid; grid-template-columns:repeat(3,1fr); gap:0;}
   .point{padding:2rem 2rem 0 0; border-top:2px solid var(--black);}
   .point:not(:first-child){padding-left:2rem;}
-  .point .p-code{font-size:0.74rem; color:var(--red); margin-bottom:1rem; display:block; font-weight:600; letter-spacing:0.04em;}
+  .point .p-code{font-size:0.74rem; color:var(--red); margin-bottom:0.4rem; display:block; font-weight:600; letter-spacing:0.04em;}
+  .point .p-num{font-size:3.2rem; color:var(--line-strong); font-weight:600; line-height:1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; display:block; margin-bottom:1rem;}
   .point h3{font-size:1.08rem; margin-bottom:0.8rem; font-weight:600;}
   .point p{font-size:0.92rem; color:var(--gray); font-weight:400;}
 
@@ -711,17 +714,20 @@
   <h2>Verifiable selling points</h2>
   <div class="points">
     <div class="point">
-      <span class="p-code">01 · Audit</span>
+      <span class="p-num">01</span>
+      <span class="p-code">Audit</span>
       <h3>Low-overhead audit trails</h3>
       <p>Every action result records hashes, CLI versions, and environment signatures.</p>
     </div>
     <div class="point">
-      <span class="p-code">02 · CAAS</span>
+      <span class="p-num">02</span>
+      <span class="p-code">CAAS</span>
       <h3>Real cost savings</h3>
       <p>Changing only a downstream step skips redundant alignment or extraction across large cohorts.</p>
     </div>
     <div class="point">
-      <span class="p-code">03 · Extensibility</span>
+      <span class="p-num">03</span>
+      <span class="p-code">Extensibility</span>
       <h3>Multiomics without rewrites</h3>
       <p>New process packs reuse the scheduler, QC gates, and DB structures; application packs are config-only overlays.</p>
     </div>
