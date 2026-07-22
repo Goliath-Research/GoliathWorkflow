@@ -113,3 +113,31 @@ def test_write_effective_snapshot_path(tmp_path: Path):
     cfg = MonteCarloConfig.model_validate(_base())
     out = write_effective_mc_config_snapshot(cfg, tmp_path / "mc_config.effective.json")
     assert out.is_file()
+
+
+def test_effective_hybrid_flag_inert_without_stacker():
+    """Hybrid include is not effective unless the second-stage stacker will run."""
+    payload = _base()
+    ecdf_params = payload["backend_profiles"]["ecdf"]["params"]
+    ecdf_params.pop("covariates_path", None)
+    ecdf_params.pop("covariate_numeric_columns", None)
+    ecdf_params["ecdf_second_stage_enabled"] = False
+    ecdf_params["ecdf_second_stage_include_observed_hybrid"] = True
+    cfg = MonteCarloConfig.model_validate(payload)
+    ecdf = build_effective_mc_config(cfg)["model_training"]["backends"]["ecdf"]
+    assert ecdf["second_stage_active"] is False
+    assert ecdf["include_observed_hybrid"] is False
+    assert ecdf["ecdf_second_stage_include_observed_hybrid"] is True
+    assert "observed_feature_quantiles" not in ecdf
+
+
+def test_effective_hybrid_flag_active_with_stacker():
+    payload = _base()
+    ecdf_params = payload["backend_profiles"]["ecdf"]["params"]
+    ecdf_params["ecdf_second_stage_enabled"] = True
+    ecdf_params["ecdf_second_stage_include_observed_hybrid"] = True
+    cfg = MonteCarloConfig.model_validate(payload)
+    ecdf = build_effective_mc_config(cfg)["model_training"]["backends"]["ecdf"]
+    assert ecdf["second_stage_active"] is True
+    assert ecdf["include_observed_hybrid"] is True
+    assert "observed_feature_quantiles" in ecdf
