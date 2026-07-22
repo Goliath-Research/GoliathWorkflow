@@ -348,6 +348,164 @@ def write_holdout_manifest(
     return path
 
 
+def _write_paths_csv(path: Path, paths: Sequence[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["path"])
+        for p in paths:
+            w.writerow([str(Path(p).resolve() if Path(p).exists() else Path(p))])
+
+
+def write_holdout_eval_artifacts(
+    *,
+    production_dir: Path,
+    holdout_paths: Sequence[str],
+    class_map: Dict[str, Dict[str, str]],
+    samples_base_path: str = "",
+    project_json: Optional[Path] = None,
+    monte_carlo_runs_root: Optional[Path] = None,
+) -> Dict[str, Path]:
+    """
+    Materialize locked-test eval sidecars for production model / post_model_validation.
+
+    Writes ``test_groups.json``, ``test_control.csv``, ``test_disease.csv``, and
+    ``val_*`` copies into:
+
+    - ``production_dir``
+    - the resolved parent of ``project_json`` when it differs (CAAS product dir)
+    - ``monte_carlo_runs_root`` (post_model_validation binary cohort lookup)
+    """
+    prod_dir = Path(production_dir)
+    prod_dir.mkdir(parents=True, exist_ok=True)
+    base = str(samples_base_path or "")
+    resolved = resolve_holdout_from_class_map(dict(class_map or {}), holdout_paths, base)
+    if resolved.get("unresolved"):
+        raise RuntimeError(
+            "Cannot write holdout eval artifacts; unresolved holdout samples: "
+            + ", ".join(resolved["unresolved"][:10])
+        )
+
+    groups_by_label: Dict[str, List[str]] = dict(resolved.get("groups_by_label") or {})
+    control_paths = list(resolved.get("control_paths") or [])
+    disease_paths = list(resolved.get("disease_paths") or [])
+
+    # Prefer stable binary label order: control then disease.
+    order: List[str] = []
+    for paths, fallback_side in ((control_paths, "control"), (disease_paths, "disease")):
+        if not paths:
+            continue
+        label = None
+        for p in paths:
+            info = (class_map or {}).get(_basename(p)) or {}
+            label = str(info.get("label") or "")
+            if label:
+                break
+        if not label:
+            label = "all" if fallback_side == "control" else "disease"
+        if label not in order:
+            order.append(label)
+    for lab in groups_by_label:
+        if lab not in order:
+            order.append(lab)
+
+    test_groups = [
+        {
+            "label": lab,
+            "paths": [str(Path(p).resolve() if Path(p).exists() else Path(p)) for p in groups_by_label.get(lab, [])],
+        }
+        for lab in order
+        if groups_by_label.get(lab)
+    ]
+
+    dest_dirs: List[Path] = [prod_dir]
+    if project_json is not None:
+        pj = Path(project_json)
+        logical_parent = pj.parent
+        if logical_parent not in dest_dirs:
+            dest_dirs.append(logical_parent)
+        try:
+            resolved_parent = pj.resolve().parent
+        except OSError:
+            resolved_parent = logical_parent
+        if resolved_parent not in dest_dirs:
+            dest_dirs.append(resolved_parent)
+    if monte_carlo_runs_root is not None:
+        mc_root = Path(monte_carlo_runs_root)
+        if mc_root not in dest_dirs:
+            dest_dirs.append(mc_root)
+
+    written: Dict[str, Path] = {}
+    for dest in dest_dirs:
+        dest.mkdir(parents=True, exist_ok=True)
+        tg = dest / "test_groups.json"
+        tg.write_text(json.dumps(test_groups, indent=2) + "\n", encoding="utf-8")
+        # Alias used by some multiclass / post_model lookups.
+        (dest / "val_test_groups.json").write_text(tg.read_text(encoding="utf-8"), encoding="utf-8")
+        ctrl = dest / "test_control.csv"
+        dis = dest / "test_disease.csv"
+        _write_paths_csv(ctrl, control_paths)
+        _write_paths_csv(dis, disease_paths)
+        # post_model_validation binary handler falls back to val_*.csv under mc_root.
+        (dest / "val_control.csv").write_text(ctrl.read_text(encoding="utf-8"), encoding="utf-8")
+        (dest / "val_disease.csv").write_text(dis.read_text(encoding="utf-8"), encoding="utf-8")
+        written[str(dest)] = tg
+    return written
+
+
+def apply_config_holdout_to_project(
+    project_dict: Dict[str, Any],
+    config: Any,
+    prod_dir: Path,
+    *,
+    monte_carlo_runs_root: Optional[Path] = None,
+    project_json: Optional[Path] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Exclude ``holdout_partition`` samples from production cohorts and emit eval sidecars.
+
+    Returns holdout metadata when exclusion ran; ``None`` when holdout is disabled/empty.
+    """
+    if config is None:
+        return None
+    if not bool(getattr(config, "holdout_exclude_from_training", True)):
+        return None
+    holdout_partition = str(getattr(config, "holdout_partition", "locked_test") or "locked_test")
+    partitions = getattr(config, "validation_partitions", None)
+    holdout_paths = (
+        list(getattr(partitions, holdout_partition, []) or []) if partitions is not None else []
+    )
+    if not holdout_paths:
+        return None
+
+    holdout_basenames = {_basename(p) for p in holdout_paths}
+    excluded, holdout_class_map = apply_holdout_exclusion_to_project_dict(
+        project_dict, holdout_basenames, prod_dir
+    )
+    write_holdout_manifest(
+        prod_dir,
+        partition=holdout_partition,
+        holdout_paths=holdout_paths,
+        excluded=excluded,
+        class_map=holdout_class_map,
+    )
+    samples_base = str(project_dict.get("samples_base_path") or getattr(config, "samples_base_path", "") or "")
+    write_holdout_eval_artifacts(
+        production_dir=prod_dir,
+        holdout_paths=holdout_paths,
+        class_map=holdout_class_map,
+        samples_base_path=samples_base,
+        project_json=project_json or (prod_dir / "project.json"),
+        monte_carlo_runs_root=monte_carlo_runs_root,
+    )
+    return {
+        "partition": holdout_partition,
+        "holdout_paths": list(holdout_paths),
+        "excluded": list(excluded),
+        "class_map": dict(holdout_class_map),
+    }
+
+
 def resolve_holdout_from_class_map(
     class_map: Dict[str, Dict[str, str]],
     holdout_paths: Sequence[str],

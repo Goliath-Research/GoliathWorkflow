@@ -17,6 +17,7 @@ from methyl_validation.holdout_eval import (
     stratified_holdout_by_fraction,
     _is_control_label,
     _preflight_exclusion,
+    write_holdout_eval_artifacts,
     write_holdout_manifest,
     HOLDOUT_MANIFEST_NAME,
 )
@@ -110,6 +111,49 @@ def test_holdout_eval_end_to_end_label_resolution_after_exclusion(tmp_path):
     assert sorted(Path(p).name for p in resolved["control_paths"]) == ["H3", "H4"]
     assert sorted(Path(p).name for p in resolved["disease_paths"]) == ["C4"]
     assert resolved["binary"] is True
+
+
+def test_write_holdout_eval_artifacts_caas_symlink_and_mc_root(tmp_path):
+    """Eval sidecars land in production/, CAAS product dir, and monte_carlo_runs/."""
+    samples = tmp_path / "samples"
+    samples.mkdir()
+    for name in ("H3", "H4", "C4"):
+        (samples / name).mkdir()
+    prod = tmp_path / "monte_carlo_runs" / "production"
+    prod.mkdir(parents=True)
+    caas = tmp_path / ".caas" / "validation_prepare_freeze_project" / "hash123"
+    caas.mkdir(parents=True)
+    # CAAS owns the real project.json; production path is a symlink (production layout).
+    real_project = caas / "project.json"
+    real_project.write_text("{}", encoding="utf-8")
+    (prod / "project.json").symlink_to(real_project)
+
+    holdout_paths = [str(samples / n) for n in ("H3", "H4", "C4")]
+    class_map = {
+        "H3": {"side": "control", "label": "all"},
+        "H4": {"side": "control", "label": "all"},
+        "C4": {"side": "disease", "label": "PCa"},
+    }
+    mc_root = tmp_path / "monte_carlo_runs"
+    written = write_holdout_eval_artifacts(
+        production_dir=prod,
+        holdout_paths=holdout_paths,
+        class_map=class_map,
+        samples_base_path=str(samples),
+        project_json=prod / "project.json",
+        monte_carlo_runs_root=mc_root,
+    )
+    assert written
+    for dest in (prod, caas, mc_root):
+        tg = json.loads((dest / "test_groups.json").read_text(encoding="utf-8"))
+        assert [e["label"] for e in tg] == ["all", "PCa"]
+        assert (dest / "test_control.csv").is_file()
+        assert (dest / "test_disease.csv").is_file()
+        assert (dest / "val_control.csv").is_file()
+        assert (dest / "val_disease.csv").is_file()
+        ctrl = (dest / "test_control.csv").read_text(encoding="utf-8")
+        assert "H3" in ctrl and "H4" in ctrl
+        assert "C4" in (dest / "test_disease.csv").read_text(encoding="utf-8")
 
 
 def test_preflight_exclusion_pass_and_fail(tmp_path):

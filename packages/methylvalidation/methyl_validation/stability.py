@@ -2073,6 +2073,26 @@ def prepare_freeze_project(
         config=config,
         stable_gene_csv=stability_gene_panel_path or stable_gene_csv,
     )
+
+    # Held-out batch: exclude locked_test from production cohorts + emit eval sidecars.
+    # DomainProgram freeze uses this path (not freeze_production_model).
+    if config is not None:
+        from .holdout_eval import apply_config_holdout_to_project
+
+        holdout_info = apply_config_holdout_to_project(
+            project_dict,
+            config,
+            prod_dir,
+            monte_carlo_runs_root=monte_carlo_runs_root,
+            project_json=prod_project_path,
+        )
+        if holdout_info is not None:
+            logger.info(
+                "Held-out batch (%s): excluded %d sample(s) from production training cohorts.",
+                holdout_info["partition"],
+                len(holdout_info["excluded"]),
+            )
+
     with open(prod_project_path, "w", encoding="utf-8") as f:
         json.dump(project_dict, f, indent=2)
     # Sidecar for operators / tooling that read freeze knobs without loading ProjectConfig.
@@ -2080,6 +2100,26 @@ def prepare_freeze_project(
         json.dumps(action_cfg, indent=2) + "\n",
         encoding="utf-8",
     )
+
+    # Re-emit eval artifacts after project.json exists (covers CAAS symlink parent later).
+    if config is not None and (prod_dir / "holdout_manifest.json").is_file():
+        from .holdout_eval import write_holdout_eval_artifacts
+
+        hm = json.loads((prod_dir / "holdout_manifest.json").read_text(encoding="utf-8"))
+        partitions = getattr(config, "validation_partitions", None)
+        partition = str(hm.get("partition") or getattr(config, "holdout_partition", "locked_test"))
+        holdout_paths = (
+            list(getattr(partitions, partition, []) or []) if partitions is not None else []
+        )
+        if holdout_paths and hm.get("holdout_class_map"):
+            write_holdout_eval_artifacts(
+                production_dir=prod_dir,
+                holdout_paths=holdout_paths,
+                class_map=dict(hm.get("holdout_class_map") or {}),
+                samples_base_path=str(project_dict.get("samples_base_path") or ""),
+                project_json=prod_project_path,
+                monte_carlo_runs_root=monte_carlo_runs_root,
+            )
 
     return {
         "status": "ok",
@@ -2186,32 +2226,20 @@ def freeze_production_model(
     # True held-out batch support: keep hold-out samples out of the production training
     # cohorts so the frozen model is genuinely disjoint from the evaluation batch.
     if config is not None:
-        holdout_partition = str(getattr(config, "holdout_partition", "locked_test"))
-        partitions = getattr(config, "validation_partitions", None)
-        holdout_paths = (
-            list(getattr(partitions, holdout_partition, []) or []) if partitions is not None else []
-        )
-        if holdout_paths and bool(getattr(config, "holdout_exclude_from_training", True)):
-            from .holdout_eval import (
-                apply_holdout_exclusion_to_project_dict,
-                write_holdout_manifest,
-            )
+        from .holdout_eval import apply_config_holdout_to_project
 
-            holdout_basenames = {Path(str(p)).name for p in holdout_paths}
-            excluded, holdout_class_map = apply_holdout_exclusion_to_project_dict(
-                project_dict, holdout_basenames, prod_dir
-            )
-            write_holdout_manifest(
-                prod_dir,
-                partition=holdout_partition,
-                holdout_paths=holdout_paths,
-                excluded=excluded,
-                class_map=holdout_class_map,
-            )
+        holdout_info = apply_config_holdout_to_project(
+            project_dict,
+            config,
+            prod_dir,
+            monte_carlo_runs_root=monte_carlo_runs_root,
+            project_json=prod_project_path,
+        )
+        if holdout_info is not None:
             logger.info(
                 "Held-out batch (%s): excluded %d sample(s) from production training cohorts.",
-                holdout_partition,
-                len(excluded),
+                holdout_info["partition"],
+                len(holdout_info["excluded"]),
             )
 
     with open(prod_project_path, "w", encoding="utf-8") as f:

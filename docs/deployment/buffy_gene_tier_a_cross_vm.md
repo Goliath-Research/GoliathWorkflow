@@ -56,6 +56,14 @@ methyl-workflow-run \
   --parallel-workers 1 --dry-run -v
 ```
 
+## Clean baseline before Tier-A
+
+Do **not** start Tier-A until `Buffy_ecdf_gene_covariates` completes a **config-driven** baseline through `post_model_validation` (no mid-run NFS patches for `test_groups.json` / `val_*.csv`). See [`docs/plans/buffy-clean-pipeline.plan.md`](../plans/buffy-clean-pipeline.plan.md). Preferred driver on this host (repo `.venv` until release includes the holdout-eval fixes):
+
+```bash
+START_FROM=freeze bash /work/projects/prostate-cancer/configs/run_Buffy_ecdf_gene_covariates_baseline.sh
+```
+
 ## Baseline sequence
 
 Start stability in a detached terminal. The log is outside the not-yet-created study directory so shell redirection cannot fail.

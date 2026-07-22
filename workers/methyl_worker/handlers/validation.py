@@ -277,6 +277,29 @@ def _handle_validation_prepare_freeze(
     if not production_project:
         out_dir = result.get("outputDir") or result.get("productionOutputDir") or result.get("production_output_dir")
         production_project = str(Path(out_dir) / "project.json") if out_dir else str(base_project)
+    # If CAAS already symlinked project.json, refresh eval sidecars into the product dir.
+    prod_project_path = Path(str(production_project))
+    prod_dir = prod_project_path.parent
+    hm_path = prod_dir / "holdout_manifest.json"
+    if hm_path.is_file():
+        from methyl_validation.holdout_eval import write_holdout_eval_artifacts
+
+        hm = json.loads(hm_path.read_text(encoding="utf-8"))
+        class_map = dict(hm.get("holdout_class_map") or {})
+        partition = str(hm.get("partition") or getattr(config, "holdout_partition", "locked_test"))
+        partitions = getattr(config, "validation_partitions", None)
+        holdout_paths = (
+            list(getattr(partitions, partition, []) or []) if partitions is not None else []
+        )
+        if holdout_paths and class_map:
+            write_holdout_eval_artifacts(
+                production_dir=prod_dir,
+                holdout_paths=holdout_paths,
+                class_map=class_map,
+                samples_base_path=str(getattr(config, "samples_base_path", "") or ""),
+                project_json=prod_project_path,
+                monte_carlo_runs_root=mc_root,
+            )
     return ValidationPrepareFreezeOutput(
         status="ok",
         productionOutputDir=result.get("outputDir")
@@ -310,7 +333,21 @@ def _handle_validation_stability_freeze_readiness(
     missing = verdict.get("missing_artifacts") or verdict.get("missing") or []
     if not isinstance(missing, list):
         missing = []
-    ready = str(verdict.get("ready", verdict.get("status", ""))).lower() in {"ready", "pass", "true", "ok"}
+    # Analyzer emits overall ∈ {go, go_with_risks, no_go}; keep legacy ready/status keys.
+    overall = str(verdict.get("overall") or "").strip().lower()
+    legacy = str(verdict.get("ready", verdict.get("status", ""))).strip().lower()
+    ready = overall in {"go", "go_with_risks"} or legacy in {
+        "ready",
+        "pass",
+        "true",
+        "ok",
+        "go",
+        "go_with_risks",
+    }
+    if not missing:
+        reasons = verdict.get("reasons") or []
+        if isinstance(reasons, list):
+            missing = reasons
     return ValidationFreezeReadinessOutput(
         status="ok",
         ready=ready,
@@ -593,26 +630,78 @@ def _handle_validation_post_model_validation(
     if layout == "binary":
         raw_test_control = input_json.get("testControlCsv") or input_json.get("valControlCsv")
         raw_test_disease = input_json.get("testDiseaseCsv") or input_json.get("valDiseaseCsv")
-        val_control_csv = Path(
-            raw_test_control
-            or (
-                mc_root / "test_control.csv"
-                if (mc_root / "test_control.csv").is_file()
-                else mc_root / "val_control.csv"
-            )
+
+        def _first_existing(*candidates: Path) -> Optional[Path]:
+            for c in candidates:
+                if c is not None and Path(c).is_file():
+                    return Path(c)
+            return None
+
+        val_control_csv = _first_existing(
+            Path(raw_test_control) if raw_test_control else None,
+            mc_root / "test_control.csv",
+            mc_root / "val_control.csv",
+            production_dir / "test_control.csv",
+            production_dir / "val_control.csv",
         )
-        val_disease_csv = Path(
-            raw_test_disease
-            or (
-                mc_root / "test_disease.csv"
-                if (mc_root / "test_disease.csv").is_file()
-                else mc_root / "val_disease.csv"
-            )
+        val_disease_csv = _first_existing(
+            Path(raw_test_disease) if raw_test_disease else None,
+            mc_root / "test_disease.csv",
+            mc_root / "val_disease.csv",
+            production_dir / "test_disease.csv",
+            production_dir / "val_disease.csv",
         )
-        if not val_control_csv.is_file() or not val_disease_csv.is_file():
+        if (
+            val_control_csv is None
+            or val_disease_csv is None
+            or not val_control_csv.is_file()
+            or not val_disease_csv.is_file()
+        ):
+            # Derive from freeze holdout_manifest + locked_test when freeze sidecars missing.
+            from methyl_validation.holdout_eval import write_holdout_eval_artifacts
+
+            hm_path = production_dir / "holdout_manifest.json"
+            if hm_path.is_file():
+                hm = json.loads(hm_path.read_text(encoding="utf-8"))
+                class_map = dict(hm.get("holdout_class_map") or {})
+                partition = str(
+                    hm.get("partition") or getattr(config, "holdout_partition", "locked_test")
+                )
+                partitions = getattr(config, "validation_partitions", None)
+                holdout_paths = (
+                    list(getattr(partitions, partition, []) or [])
+                    if partitions is not None
+                    else []
+                )
+                if holdout_paths and class_map:
+                    write_holdout_eval_artifacts(
+                        production_dir=production_dir,
+                        holdout_paths=holdout_paths,
+                        class_map=class_map,
+                        samples_base_path=str(getattr(config, "samples_base_path", "") or ""),
+                        project_json=production_project,
+                        monte_carlo_runs_root=mc_root,
+                    )
+                    val_control_csv = _first_existing(
+                        mc_root / "test_control.csv",
+                        mc_root / "val_control.csv",
+                        production_dir / "test_control.csv",
+                    )
+                    val_disease_csv = _first_existing(
+                        mc_root / "test_disease.csv",
+                        mc_root / "val_disease.csv",
+                        production_dir / "test_disease.csv",
+                    )
+        if (
+            val_control_csv is None
+            or val_disease_csv is None
+            or not val_control_csv.is_file()
+            or not val_disease_csv.is_file()
+        ):
             raise RuntimeError(
-                f"post_model_validation binary requires val cohort CSVs "
-                f"(missing {val_control_csv} and/or {val_disease_csv})."
+                "post_model_validation binary requires val cohort CSVs "
+                f"(missing under {mc_root} / {production_dir}; "
+                "re-run freeze so holdout eval artifacts are emitted)."
             )
         success, errors, timings = run_post_model_validation_binary(
             project_json=production_project,

@@ -44,14 +44,22 @@ def resolve_eval_paths_and_labels(
     """
     partition = str(evaluation_partition or "").strip().lower()
     if partition == "test":
-        project_path = Path(project_json).resolve()
-        manifest = project_path.parent / "test_groups.json"
-        if not manifest.is_file():
-            manifest = project_path.parent / "val_test_groups.json"
-        if not manifest.is_file():
+        # Prefer the logical project parent (production/) before following CAAS symlinks.
+        logical = Path(project_json)
+        resolved = logical.resolve()
+        candidates = [
+            logical.parent / "test_groups.json",
+            logical.parent / "val_test_groups.json",
+            resolved.parent / "test_groups.json",
+            resolved.parent / "val_test_groups.json",
+        ]
+        manifest = next((p for p in candidates if p.is_file()), None)
+        if manifest is None:
             raise FileNotFoundError(
-                f"Model-MC test evaluation requires test_groups.json under {project_path.parent}"
+                "Model-MC test evaluation requires test_groups.json under "
+                f"{logical.parent} (or resolved {resolved.parent})"
             )
+        project_path = resolved
         payload = json.loads(manifest.read_text(encoding="utf-8"))
         if not isinstance(payload, list) or not payload:
             raise ValueError(f"Model-MC test manifest is empty or invalid: {manifest}")
