@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Regulatory-Ready Platform for Multiomics Diagnostics</title>
+<title>MethylPipeline — Regulatory-Ready Platform for Multiomics Diagnostics</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -51,8 +51,8 @@
     letter-spacing:0.14em;
     text-transform:uppercase;
     color:var(--gray);
-    margin-bottom:1.3rem;
   }
+  .eyebrow{margin-bottom:1rem;}
   section.dark .eyebrow{color:var(--gray-2);}
 
   section{
@@ -70,12 +70,24 @@
   section.dark{background:var(--dark); color:#fff; border-bottom:1px solid var(--dark-line);}
   section.dark h1, section.dark h2, section.dark h3{color:#fff;}
   section.compact{min-height:auto; padding:5.5rem 8vw;}
+  section.divider{min-height:60vh; align-items:center; text-align:center;}
 
   h1,h2,h3{font-family:var(--sans); font-weight:600; color:var(--black); letter-spacing:-0.01em;}
   h2{font-size:clamp(2.2rem,4vw,3.4rem); margin-bottom:1.3rem; font-weight:700; line-height:1.04; letter-spacing:-0.025em; max-width:820px;}
   .section-sub{color:var(--gray); font-size:1.05rem; max-width:600px; margin-bottom:3.2rem; font-weight:400; line-height:1.6;}
   section.dark .section-sub{color:#B7BAC0;}
-  .eyebrow{margin-bottom:1rem;}
+
+  /* ---------- BRAND / TAGS ---------- */
+  #brandmark{
+    position:fixed; top:1.7rem; left:2.1rem; z-index:150;
+    font-size:0.7rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
+    color:#fff; mix-blend-mode:difference;
+  }
+  #confidential-tag{
+    position:fixed; top:1.85rem; right:2.1rem; z-index:150;
+    font-size:0.62rem; letter-spacing:0.05em; text-transform:uppercase; font-weight:500;
+    color:#fff; mix-blend-mode:difference;
+  }
 
   /* ---------- NAV ---------- */
   #navdots{
@@ -86,20 +98,20 @@
     z-index:100;
     display:flex;
     flex-direction:column;
-    gap:1rem;
+    gap:0.85rem;
     align-items:flex-end;
     mix-blend-mode:difference;
   }
   .navdot{
     display:flex; align-items:center; gap:0.7rem;
     cursor:pointer;
-    opacity:0.45;
+    opacity:0.4;
     transition:opacity .25s ease;
   }
   .navdot:hover{opacity:1;}
   .navdot.active{opacity:1;}
   .navdot .lbl{
-    font-family:var(--sans); font-size:0.66rem; font-weight:500; letter-spacing:0.05em;
+    font-family:var(--sans); font-size:0.62rem; font-weight:500; letter-spacing:0.05em;
     color:#fff; text-transform:uppercase;
     white-space:nowrap;
     max-width:0; overflow:hidden;
@@ -108,14 +120,12 @@
   }
   .navdot:hover .lbl, .navdot.active .lbl{max-width:220px; opacity:1;}
   .navdot .dot{
-    width:6px; height:6px; border-radius:50%;
+    width:5px; height:5px; border-radius:50%;
     background:#fff;
     flex-shrink:0;
     transition:all .25s ease;
   }
-  .navdot.active .dot{
-    transform:scale(1.5);
-  }
+  .navdot.active .dot{transform:scale(1.6);}
 
   #topline{
     position:fixed; top:0; left:0; height:2px; background:var(--red);
@@ -123,11 +133,7 @@
   }
 
   /* ---------- HERO ---------- */
-  #hero{
-    justify-content:center;
-    align-items:center;
-    text-align:center;
-  }
+  #hero{justify-content:center; align-items:center; text-align:center;}
   #hero .eyebrow{text-align:center;}
   #hero h1{
     font-size:clamp(3rem, 5.5vw, 5.2rem);
@@ -135,37 +141,29 @@
     letter-spacing:-0.03em;
     margin-bottom:1.6rem;
     font-weight:700;
-    max-width:900px;
+    max-width:920px;
   }
   #hero h1 span{color:var(--red);}
   .hero-lede{
-    font-size:1.15rem; color:var(--gray); max-width:600px; font-weight:400;
-    margin:0 auto 3.2rem; line-height:1.6;
+    font-size:1.15rem; color:var(--gray); max-width:620px; font-weight:400;
+    margin:0 auto 1rem; line-height:1.6;
   }
-  .hero-facts{
-    display:flex; gap:0; flex-wrap:wrap; justify-content:center;
-    border-top:1px solid var(--line);
-    padding-top:0;
+  .hero-tagline{
+    font-size:1.02rem; color:var(--black); max-width:640px; font-weight:500;
+    margin:0.6rem auto 2.8rem; line-height:1.5; font-style:italic;
   }
-  .hero-fact{
-    padding:1.6rem 2.6rem; border-right:1px solid var(--line);
-    text-align:center;
-  }
+  .hero-facts{display:flex; gap:0; flex-wrap:wrap; justify-content:center; border-top:1px solid var(--line);}
+  .hero-fact{padding:1.6rem 2.6rem; border-right:1px solid var(--line); text-align:center;}
   .hero-fact:last-child{border-right:none;}
   .hero-fact .n{font-size:0.68rem; font-weight:600; color:var(--gray); text-transform:uppercase; letter-spacing:0.08em;}
   .hero-fact .v{font-size:1.02rem; color:var(--black); margin-top:0.5rem; font-weight:500;}
 
-  /* ---------- LADDER (signature element) ---------- */
+  /* ---------- LADDER ---------- */
   .ladder-wrap{display:flex; flex-direction:column; align-items:center; margin-top:3.5rem;}
-  .ladder{
-    display:flex; flex-direction:column-reverse; gap:0.5rem; width:100%; max-width:420px;
-  }
+  .ladder{display:flex; flex-direction:column-reverse; gap:0.5rem; width:100%; max-width:420px;}
   .rung{
-    position:relative;
-    border:1px solid var(--line-strong);
-    background:var(--white);
-    padding:0.9rem 1.3rem;
-    display:flex; align-items:center; justify-content:space-between;
+    position:relative; border:1px solid var(--line-strong); background:var(--white);
+    padding:0.9rem 1.3rem; display:flex; align-items:center; justify-content:space-between;
     transition:background .2s ease;
   }
   .rung:hover{background:var(--off);}
@@ -175,52 +173,42 @@
   .rung.r2{width:86%; align-self:center;}
   .rung.r3{width:100%; align-self:center; border-color:var(--red); border-width:1.5px;}
   .rung.r3 .name{color:var(--red);}
-  .ladder-cap{
-    font-size:0.72rem; color:var(--gray);
-    text-align:center; margin-top:1.2rem; letter-spacing:0.02em;
-  }
+  .ladder-cap{font-size:0.72rem; color:var(--gray); text-align:center; margin-top:1.2rem; letter-spacing:0.02em;}
 
-  /* ---------- CLAIM BOUNDARY ---------- */
+  /* ---------- CALLOUT / SEAL / QUOTE ---------- */
   .seal-box{
-    border:1px solid var(--black);
-    border-left:3px solid var(--red);
-    padding:2.4rem 2.6rem;
-    max-width:840px;
+    border:1px solid var(--black); border-left:3px solid var(--red);
+    padding:2.4rem 2.6rem; max-width:840px;
   }
-  .seal-box .seal-title{
-    font-size:0.72rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
-    color:var(--red); margin-bottom:1.3rem;
-  }
-  .seal-box ul{list-style:none;}
-  .seal-box li{
-    position:relative; padding-left:1.1rem; margin-bottom:1rem; color:var(--gray); font-size:1rem; font-weight:400;
-  }
-  .seal-box li::before{content:''; position:absolute; left:0; top:0.55em; width:5px; height:5px; background:var(--black);}
-  .seal-box li strong{color:var(--black); font-weight:600;}
+  .seal-box .seal-title{font-size:0.72rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--red); margin-bottom:1.3rem;}
+  .seal-box ul, .problem-list{list-style:none;}
+  .seal-box li, .problem-list li{position:relative; padding-left:1.1rem; margin-bottom:1rem; color:var(--gray); font-size:1rem; font-weight:400;}
+  .seal-box li::before, .problem-list li::before{content:''; position:absolute; left:0; top:0.55em; width:5px; height:5px; background:var(--black);}
+  .seal-box li strong, .problem-list li strong{color:var(--black); font-weight:600;}
   .pathway-tags{display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:1.6rem;}
-  .pathway-tag{
-    font-family:var(--mono); font-size:0.7rem; padding:0.4rem 0.85rem; border:1px solid var(--line-strong); color:var(--black); font-weight:500;
+  .pathway-tag{font-family:var(--mono); font-size:0.7rem; padding:0.4rem 0.85rem; border:1px solid var(--line-strong); color:var(--black); font-weight:500;}
+
+  .problem-list{max-width:680px; margin-bottom:2.4rem;}
+  .callout-quote{
+    max-width:780px; border-top:2px solid var(--black); padding-top:1.6rem;
+    font-size:1.15rem; font-weight:500; color:var(--black); line-height:1.5; font-style:italic;
   }
 
-  /* ---------- PILLARS ---------- */
-  .pillars{display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); border-left:1px solid var(--line);}
-  .pillar{
-    border-right:1px solid var(--line); border-bottom:1px solid var(--line);
-    padding:2.4rem 2rem; position:relative;
-  }
-  .pillar .idx{
+  /* ---------- PILLARS / GRIDS WITH BIG NUMBERS ---------- */
+  .pillars, .buy-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); border-left:1px solid var(--line);}
+  .pillar, .buy-card{border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:2.4rem 2rem; position:relative;}
+  .pillar .idx, .buy-card .idx{
     font-size:3.2rem; color:var(--line-strong); font-weight:600; margin-bottom:1.2rem; display:block;
     line-height:1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums;
   }
-  .pillar h3{font-size:1.2rem; margin-bottom:1rem; font-weight:600;}
-  .pillar p{color:var(--gray); font-size:0.95rem; font-weight:400;}
-  .pillar .mark{color:var(--red); font-size:0.68rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:0.9rem; display:block;}
+  .pillar h3, .buy-card h3{font-size:1.2rem; margin-bottom:1rem; font-weight:600;}
+  .pillar p, .buy-card p{color:var(--gray); font-size:0.95rem; font-weight:400;}
+  .pillar .mark, .buy-card .mark{color:var(--red); font-size:0.68rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; margin-bottom:0.9rem; display:block;}
+  .tag-row{display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:2rem;}
+  .tag-pill{font-size:0.72rem; font-weight:500; padding:0.4rem 0.9rem; border:1px solid var(--line-strong); color:var(--black);}
 
   /* ---------- DIAGRAM / ZOOM ---------- */
-  .diagram-card, .tree-card{
-    background:var(--white); border:1px solid var(--line); padding:0;
-    position:relative;
-  }
+  .diagram-card{background:var(--white); border:1px solid var(--line); padding:0; position:relative;}
   .zoom-frame{
     position:relative; overflow:hidden; width:100%; height:420px;
     cursor:grab; touch-action:none;
@@ -229,51 +217,36 @@
       linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px) 0 0/32px 32px;
   }
   .zoom-frame.grabbing{cursor:grabbing;}
-  .zoom-stage{
-    position:absolute; top:0; left:0;
-    transform-origin:0 0;
-    width:900px;
-  }
-  .zoom-controls{
-    position:absolute; bottom:1rem; right:1rem; z-index:5;
-    display:flex; border:1px solid var(--line-strong); background:var(--white);
-  }
-  .zoom-btn{
-    width:34px; height:34px; display:flex; align-items:center; justify-content:center;
-    font-size:1rem; color:var(--black); cursor:pointer; border-right:1px solid var(--line-strong);
-    user-select:none; font-weight:500;
-  }
+  .zoom-stage{position:absolute; top:0; left:0; transform-origin:0 0;}
+  .zoom-controls{position:absolute; bottom:1rem; right:1rem; z-index:5; display:flex; border:1px solid var(--line-strong); background:var(--white);}
+  .zoom-btn{width:34px; height:34px; display:flex; align-items:center; justify-content:center; font-size:1rem; color:var(--black); cursor:pointer; border-right:1px solid var(--line-strong); user-select:none; font-weight:500;}
   .zoom-btn:last-child{border-right:none;}
   .zoom-btn:hover{background:var(--off);}
-  .zoom-hint{
-    position:absolute; top:1rem; left:1rem; font-size:0.66rem; color:var(--gray);
-    text-transform:uppercase; letter-spacing:0.06em; font-weight:500; z-index:5;
-    background:rgba(255,255,255,0.85); padding:0.3rem 0.6rem;
-  }
+  .zoom-hint{position:absolute; top:1rem; left:1rem; font-size:0.66rem; color:var(--gray); text-transform:uppercase; letter-spacing:0.06em; font-weight:500; z-index:5; background:rgba(255,255,255,0.85); padding:0.3rem 0.6rem;}
 
   svg text{font-family:var(--mono);}
   .node-rect{fill:var(--white); stroke:var(--line-strong); stroke-width:1;}
   .node-rect.platform{stroke:var(--black); stroke-width:1.5;}
   .node-rect.prod{stroke:var(--red); stroke-width:1.5;}
   .conn{stroke:var(--line-strong); stroke-width:1.2; fill:none;}
+  .conn.dashed{stroke-dasharray:4 4;}
   .node-label{fill:var(--black); font-size:12px;}
+  .node-label.sm{font-size:10.5px;}
   .node-sub{fill:var(--gray); font-size:9.5px; letter-spacing:0.5px;}
+  .conn-label{fill:var(--gray); font-size:9px; font-style:italic;}
 
-  /* ---------- ROADMAP TABLE ---------- */
-  .roadmap-table{width:100%; border-collapse:collapse;}
-  .roadmap-table th{
-    text-align:left; font-size:0.68rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase;
-    color:var(--gray); padding:0.9rem 1rem; border-bottom:1px solid var(--black);
-  }
-  .roadmap-table td{
-    padding:1.3rem 1rem; border-bottom:1px solid var(--line); font-size:0.96rem; vertical-align:top;
-  }
-  .roadmap-table td.name{font-family:var(--sans); font-size:1.02rem; color:var(--black); font-weight:500;}
-  .roadmap-table td.notes{color:var(--gray); font-weight:400; font-size:0.9rem;}
-  .status-pill{
-    font-size:0.7rem; font-weight:600; letter-spacing:0.03em; padding:0.32rem 0.7rem;
-    display:inline-flex; align-items:center; gap:0.5rem; white-space:nowrap; border:1px solid var(--line-strong);
-  }
+  .diagram-notes{margin-top:1.8rem; max-width:760px;}
+  .diagram-notes li{position:relative; padding-left:1.1rem; margin-bottom:0.8rem; color:var(--gray); font-size:0.95rem; font-weight:400; list-style:none;}
+  .diagram-notes li::before{content:'—'; position:absolute; left:0; color:var(--gray-2);}
+  .diagram-notes li strong{color:var(--black); font-weight:600;}
+
+  /* ---------- TABLE ---------- */
+  .data-table{width:100%; border-collapse:collapse; margin-top:1rem;}
+  .data-table th{text-align:left; font-size:0.68rem; font-weight:600; letter-spacing:0.08em; text-transform:uppercase; color:var(--gray); padding:0.9rem 1rem; border-bottom:1px solid var(--black);}
+  .data-table td{padding:1.3rem 1rem; border-bottom:1px solid var(--line); font-size:0.96rem; vertical-align:top;}
+  .data-table td.name{font-family:var(--sans); font-size:1.02rem; color:var(--black); font-weight:500;}
+  .data-table td.notes{color:var(--gray); font-weight:400; font-size:0.9rem;}
+  .status-pill{font-size:0.7rem; font-weight:600; letter-spacing:0.03em; padding:0.32rem 0.7rem; display:inline-flex; align-items:center; gap:0.5rem; white-space:nowrap; border:1px solid var(--line-strong);}
   .status-pill::before{content:''; width:6px; height:6px; border-radius:50%; background:var(--gray-2);}
   .status-pill.production{border-color:var(--black); color:var(--black);}
   .status-pill.production::before{background:var(--black);}
@@ -282,22 +255,19 @@
   .status-pill.research-app{color:var(--gray); border-style:dashed;}
   .status-pill.research-app::before{background:var(--line-strong);}
 
-  /* ---------- EDITION COMPARISON ---------- */
-  .editions{display:grid; grid-template-columns:1fr 1fr; gap:0;}
-  .edition-card{
-    padding:2.6rem; border:1px solid var(--line);
-  }
+  /* ---------- EDITION / PATTERN CARDS ---------- */
+  .editions, .pattern-grid{display:grid; grid-template-columns:1fr 1fr; gap:0;}
+  .edition-card, .pattern-card{padding:2.6rem; border:1px solid var(--line);}
   .edition-card.enterprise{border-color:var(--black); border-width:1.5px; margin-left:-1px;}
-  .edition-card .ed-label{font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--gray); margin-bottom:0.5rem;}
+  .pattern-card:last-child{margin-left:-1px;}
+  .edition-card .ed-label, .pattern-card .ed-label{font-size:0.7rem; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; color:var(--gray); margin-bottom:0.5rem;}
   .edition-card.enterprise .ed-label{color:var(--red);}
-  .edition-card h3{font-size:1.4rem; margin-bottom:0.4rem; font-weight:600;}
-  .edition-card .ed-model{font-size:0.9rem; color:var(--gray); font-weight:400; margin-bottom:1.7rem;}
-  .edition-card ul{list-style:none;}
-  .edition-card li{
-    padding:0.75rem 0; border-top:1px solid var(--line); font-size:0.93rem; color:var(--gray); font-weight:400;
-  }
-  .edition-card li:first-of-type{border-top:none;}
-  .edition-card li strong{color:var(--black); font-weight:600;}
+  .edition-card h3, .pattern-card h3{font-size:1.4rem; margin-bottom:0.4rem; font-weight:600;}
+  .edition-card .ed-model, .pattern-card .ed-model{font-size:0.9rem; color:var(--gray); font-weight:400; margin-bottom:1.7rem;}
+  .edition-card ul, .pattern-card ul{list-style:none;}
+  .edition-card li, .pattern-card li{padding:0.75rem 0; border-top:1px solid var(--line); font-size:0.93rem; color:var(--gray); font-weight:400;}
+  .edition-card li:first-of-type, .pattern-card li:first-of-type{border-top:none;}
+  .edition-card li strong, .pattern-card li strong{color:var(--black); font-weight:600;}
 
   /* ---------- BYOC ---------- */
   .byoc-split{display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid var(--line);}
@@ -309,6 +279,7 @@
   .byoc-half li::before{content:'—'; position:absolute; left:0; color:var(--gray-2);}
   .compliance-tags{display:flex; gap:0.6rem; margin-bottom:1.8rem;}
   .compliance-tag{font-family:var(--mono); font-size:0.72rem; border:1px solid var(--red); color:var(--red); padding:0.32rem 0.75rem; font-weight:500;}
+  .byoc-foot{margin-top:1.8rem; font-size:0.98rem; color:var(--black); font-weight:500; font-style:italic; max-width:700px;}
 
   /* ---------- BUYERS ---------- */
   .buyers{display:grid; grid-template-columns:repeat(3,1fr); gap:0; border-top:1px solid var(--line); border-left:1px solid var(--line);}
@@ -318,78 +289,76 @@
   .buyer p{font-size:0.92rem; color:var(--gray); font-weight:400;}
   .buyer.primary .b-eyebrow{color:var(--red);}
 
-  /* ---------- JOURNEY STEPPER ---------- */
+  /* ---------- STEPPER (reused for journey + ladder) ---------- */
   .stepper{display:flex; align-items:stretch; gap:0; margin-bottom:0; border:1px solid var(--line);}
-  .step{
-    flex:1; position:relative; cursor:pointer; padding:1.8rem 1.6rem;
-    background:var(--white);
-    transition:background .2s ease;
-  }
+  .step{flex:1; position:relative; cursor:pointer; padding:1.8rem 1.6rem; background:var(--white); transition:background .2s ease;}
   .step:not(:last-child){border-right:1px solid var(--line);}
   .step .s-idx{font-size:3.2rem; color:var(--line-strong); font-weight:600; line-height:1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; display:block; margin-bottom:0.8rem;}
-  .step .s-title{font-size:1.08rem; margin-top:0.6rem; font-weight:500;}
+  .step .s-title{font-size:1.08rem; margin-top:0.2rem; font-weight:500;}
   .step.chasm .s-title{color:var(--red);}
   .step.active{background:var(--black);}
-  .step.active .s-idx{color:#B7BAC0;}
+  .step.active .s-idx{color:#4A4E57;}
   .step.active .s-title{color:#fff;}
-  .step-detail{
-    border:1px solid var(--line); border-top:none;
-    background:var(--off); padding:2rem 2.2rem; font-size:0.96rem; color:var(--gray); font-weight:400; max-width:900px;
-    min-height:64px;
-  }
+  .step-detail{border:1px solid var(--line); border-top:none; background:var(--off); padding:2rem 2.2rem; font-size:0.96rem; color:var(--gray); font-weight:400; max-width:900px; min-height:64px;}
   .step-detail strong{color:var(--black); font-weight:600;}
 
   /* ---------- SELLING POINTS ---------- */
-  .points{display:grid; grid-template-columns:repeat(3,1fr); gap:0;}
-  .point{padding:2rem 2rem 0 0; border-top:2px solid var(--black);}
-  .point:not(:first-child){padding-left:2rem;}
+  .points{display:grid; grid-template-columns:repeat(2,1fr); gap:0; border-top:1px solid var(--line); border-left:1px solid var(--line);}
+  .point{border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:2.4rem 2.2rem;}
   .point .p-code{font-size:0.74rem; color:var(--red); margin-bottom:0.4rem; display:block; font-weight:600; letter-spacing:0.04em;}
   .point .p-num{font-size:3.2rem; color:var(--line-strong); font-weight:600; line-height:1; letter-spacing:-0.02em; font-variant-numeric:tabular-nums; display:block; margin-bottom:1rem;}
   .point h3{font-size:1.08rem; margin-bottom:0.8rem; font-weight:600;}
   .point p{font-size:0.92rem; color:var(--gray); font-weight:400;}
+
+  /* ---------- DIVIDER SECTION ---------- */
+  .divider .eyebrow{text-align:center;}
+  .divider h1{font-size:clamp(2.6rem,4.6vw,4rem); font-weight:700; letter-spacing:-0.02em; margin-bottom:1.2rem;}
+  .divider .section-sub{margin:0 auto; text-align:center; max-width:700px;}
 
   /* ---------- CLOSING ---------- */
   #closing{justify-content:center; align-items:center; text-align:center; border-bottom:none;}
   #closing h2{font-size:clamp(2.1rem,4.2vw,3.2rem); max-width:820px; color:#fff; font-weight:600;}
   #closing .section-sub{margin:1.5rem auto 3rem;}
   .cta-row{display:flex; gap:1rem; justify-content:center; flex-wrap:wrap;}
-  .cta{
-    font-size:0.82rem; letter-spacing:0.02em; padding:0.9rem 1.8rem; font-weight:500;
-    border-radius:999px; border:1px solid #4A4E57; color:#fff; cursor:default;
-  }
+  .cta{font-size:0.82rem; letter-spacing:0.02em; padding:0.9rem 1.8rem; font-weight:500; border-radius:999px; border:1px solid #4A4E57; color:#fff; cursor:default;}
   .cta.primary{background:var(--red); border-color:var(--red); color:#fff;}
 
   footer{text-align:center; padding:2.5rem 0 3rem; color:var(--gray-2); font-size:0.7rem; letter-spacing:0.06em; background:var(--dark); font-weight:500;}
 
   @media (max-width:980px){
-    .pillars, .editions, .buyers, .points{grid-template-columns:1fr;}
-    .pillar, .buyer{border-right:none;}
+    .pillars, .editions, .buyers, .points, .buy-grid, .pattern-grid{grid-template-columns:1fr;}
+    .pillar, .buyer, .buy-card{border-right:none;}
     .byoc-split{grid-template-columns:1fr;}
     .byoc-half.customer{border-left:none; border-top:1px dashed var(--line-strong);}
     .stepper{flex-direction:column;}
     .step:not(:last-child){border-right:none; border-bottom:1px solid var(--line);}
     #navdots{display:none;}
+    #brandmark, #confidential-tag{font-size:0.6rem;}
     .hero-facts{flex-direction:column; border-top:none;}
     .hero-fact{border-right:none; border-top:1px solid var(--line); padding:1.2rem 0;}
     section{padding:5rem 6vw 3.5rem;}
-    .zoom-frame{height:320px;}
-    .point{padding-left:0 !important;}
+    .zoom-frame{height:300px;}
+    .point{padding-left:1.4rem !important;}
   }
 </style>
 </head>
 <body>
 
 <div id="topline"></div>
+<div id="brandmark">MethylPipeline</div>
+<div id="confidential-tag">Confidential · Sales briefing</div>
 <nav id="navdots"></nav>
 
 <!-- ============ HERO ============ -->
 <section id="hero">
-  <div class="eyebrow">Bioinformatics · Regulatory Readiness</div>
+  <div class="eyebrow">MethylPipeline · Commercial Briefing</div>
   <h1>Regulatory-Ready <span>Platform</span><br>for Multiomics Diagnostics</h1>
   <p class="hero-lede">
     Bridges bioinformatics R&D engineering with regulatory and quality readiness,
-    reducing the failure modes that slow diagnostic development: train/holdout
-    leakage, and documentation and audit bottlenecks.
+    reducing the failure modes that slow diagnostic development.
+  </p>
+  <p class="hero-tagline">
+    "From discovery scripts to auditor-ready evidence — without rebuilding your stack for every assay."
   </p>
   <div class="hero-facts">
     <div class="hero-fact"><div class="n">Approach</div><div class="v">Config-first science</div></div>
@@ -406,102 +375,183 @@
   </div>
 </section>
 
+<!-- ============ THE PROBLEM ============ -->
+<section id="problem" class="off">
+  <div class="eyebrow">The problem</div>
+  <h2>The problem buyers already feel</h2>
+  <ul class="problem-list">
+    <li>Biomarker → authorization (<strong>510(k)</strong> / <strong>De Novo</strong> / <strong>PMA</strong>, plus <strong>CLIA</strong>/LDT) is historically slow.</li>
+    <li>Validation fails quietly: train/holdout <strong>leakage</strong>, ad hoc notebooks, unreproducible "final" runs.</li>
+    <li>Audits bottleneck on <strong>documentation</strong>, not just science.</li>
+    <li>Every new omics modality or indication tends to become a <strong>new product stack</strong>.</li>
+  </ul>
+  <p class="callout-quote">MethylPipeline is built to shrink these failure modes — with config-first science, partition discipline, and submission scaffolds.</p>
+</section>
+
 <!-- ============ CLAIM BOUNDARY ============ -->
-<section id="boundary" class="compact off">
-  <div class="eyebrow">Claim boundary</div>
+<section id="boundary" class="compact">
+  <div class="eyebrow">Claim boundary — say this early</div>
   <h2>What the platform is — and isn't</h2>
   <p class="section-sub">Scope honesty, stated upfront: this is how you sell process control to a buyer who audits every clinical claim.</p>
   <div class="seal-box">
     <div class="seal-title">Boundary statement</div>
     <ul>
-      <li>Platform <strong>enforces process and configuration controls</strong> — it does not choose clinical design.</li>
-      <li>Platform <strong>assembles evidence packages</strong> — it does not certify them with any authority.</li>
+      <li>The platform <strong>enforces process and configuration controls</strong> and <strong>assembles evidence packages</strong>.</li>
       <li>Architecture, SaMD profiles, and filled feasibility packages are <strong>not</strong> FDA clearance or approval.</li>
-      <li>Novel diagnostics may need <strong>De Novo</strong> or <strong>PMA</strong> — not only <strong>510(k)</strong>; labs may also implicate <strong>CLIA</strong>.</li>
+      <li>Novel diagnostics may need <strong>De Novo</strong> or <strong>PMA</strong>, not only a predicate <strong>510(k)</strong>.</li>
+      <li>Laboratory deployment may also implicate <strong>CLIA</strong>.</li>
+      <li>We shorten the <strong>software + validation process</strong> path — we do <strong>not</strong> choose or guarantee the regulatory pathway.</li>
     </ul>
     <div class="pathway-tags">
       <span class="pathway-tag">510(k)</span>
       <span class="pathway-tag">De Novo</span>
       <span class="pathway-tag">PMA</span>
-      <span class="pathway-tag">CLIA</span>
+      <span class="pathway-tag">CLIA / LDT</span>
     </div>
   </div>
 </section>
 
-<!-- ============ PILLARS ============ -->
-<section id="pillars">
-  <div class="eyebrow">Three pillars</div>
+<!-- ============ THREE PILLARS ============ -->
+<section id="pillars" class="off">
+  <div class="eyebrow">Three pillars of value</div>
   <h2>What holds the platform up</h2>
   <p class="section-sub">R&D agility, production-scale compute efficiency, and SaMD-oriented process controls — in that order of dependency.</p>
   <div class="pillars">
     <div class="pillar">
       <span class="idx">01</span>
       <span class="mark">R&D agility</span>
-      <h3>Without coding chaos</h3>
-      <p>Cohorts, modeling backends, and cell-type estimation are controlled through configuration, not ad hoc scripts.</p>
+      <h3>Configuration, not scripts</h3>
+      <p>New cohorts, modeling backends (ECDF, tabular sklearn, covariates), and cell-type estimation (Houseman / HiTIMED) via configuration — not ad hoc scripts.</p>
     </div>
     <div class="pillar">
       <span class="idx">02</span>
       <span class="mark">Cloud efficiency</span>
-      <h3>Real production-scale</h3>
-      <p>Cluster-parallel execution plus a Content-Addressed Action Store (CAAS) that skips redundant recomputation.</p>
+      <h3>Lower cost at scale</h3>
+      <p>Cluster-parallel workers + CAAS skip redundant alignment/extraction when only downstream science changes — lower VM cost on large cohorts.</p>
     </div>
     <div class="pillar">
       <span class="idx">03</span>
-      <span class="mark">SaMD-oriented controls</span>
-      <h3>Against statistical contamination</h3>
-      <p>Stages clinical-performance claims and auto-assembles regulatory submission scaffolds.</p>
+      <span class="mark">SaMD controls</span>
+      <h3>Evidence, not slideware</h3>
+      <p>Guard against statistical contamination, stage clinical-performance claims, and auto-assemble regulatory evidence scaffolds.</p>
     </div>
   </div>
 </section>
 
-<!-- ============ ARCHITECTURE ============ -->
-<section id="architecture" class="off">
-  <div class="eyebrow">Platform + packs</div>
-  <h2>Not a single assay — a system of packs</h2>
-  <p class="section-sub">A <strong>process pack</strong> covers a full omics modality; an <strong>application pack</strong> is a config overlay on an existing process, for a specific indication or trait.</p>
+<!-- ============ CONTROL PLANE, NOT ONE ASSAY ============ -->
+<section id="controlplane">
+  <div class="eyebrow">What buyers purchase</div>
+  <h2>A control plane — not one assay</h2>
+  <p class="section-sub">Three things ship together, and none of them are a single hard-coded test.</p>
+  <div class="buy-grid">
+    <div class="buy-card">
+      <span class="idx">01</span>
+      <h3>Execution platform</h3>
+      <p>DomainProgram language, typed actions, cfg/wf registry, portal, gateway workers, CAAS.</p>
+    </div>
+    <div class="buy-card">
+      <span class="idx">02</span>
+      <h3>Process packs</h3>
+      <p>Omics modalities — methylation, RNA-Seq, proteomics — added to the same control plane.</p>
+    </div>
+    <div class="buy-card">
+      <span class="idx">03</span>
+      <h3>Application packs</h3>
+      <p>Indication / trait overlays as config on an existing process. No new aligner required.</p>
+    </div>
+  </div>
+  <div class="tag-row">
+    <span class="tag-pill">Disease-agnostic</span>
+    <span class="tag-pill">Analyte-extensible</span>
+    <span class="tag-pill">Operator-configurable</span>
+  </div>
+</section>
+
+<!-- ============ DOMAINPROGRAM ============ -->
+<section id="domainprogram" class="off">
+  <div class="eyebrow">Language power</div>
+  <h2>DomainProgram: declare the science once</h2>
+  <p class="section-sub">A DomainProgram is a versioned, typed workflow IR — not a shell script farm.</p>
+  <ul class="diagram-notes" style="margin-top:0;">
+    <li>Compiles into schedulable graphs for <strong>local</strong> or <strong>distributed</strong> workers.</li>
+    <li>The same language expresses SamplePrep, Monte Carlo stability, freeze, model selection, and holdout gates.</li>
+    <li>Operators change <strong>topology and parameters through config layers</strong> — workers execute a baked <code>resolvedConfig</code>.</li>
+    <li>Flexibility without coding chaos: new modalities add programs + typed actions on the <strong>same</strong> scheduler, QC gates, and database structures.</li>
+  </ul>
+</section>
+
+<!-- ============ DOMAINPROGRAM TOPOLOGY ============ -->
+<section id="topology">
+  <div class="eyebrow">Reference topology</div>
+  <h2>DomainProgram topology (methylation process)</h2>
+  <p class="section-sub">SamplePrep runs per sample in parallel; the study lifecycle governs cohort-level validation.</p>
   <div class="diagram-card">
     <div class="zoom-frame" data-zoom>
       <div class="zoom-hint">Scroll or pinch to zoom · drag to pan</div>
-      <div class="zoom-stage">
-        <svg viewBox="0 0 900 300" width="900" height="300">
-          <path class="conn" d="M 150 150 C 210 150, 210 80, 270 80"/>
-          <path class="conn" d="M 150 150 C 210 150, 210 220, 270 220"/>
-          <path class="conn" d="M 400 80 C 440 80, 440 40, 470 40"/>
-          <path class="conn" d="M 400 80 C 440 80, 440 80, 470 80"/>
-          <path class="conn" d="M 400 80 C 440 80, 440 120, 470 120"/>
-          <path class="conn" d="M 400 220 C 440 220, 440 190, 470 190"/>
-          <path class="conn" d="M 400 220 C 440 220, 440 250, 470 250"/>
+      <div class="zoom-stage" style="width:1180px;">
+        <svg viewBox="0 0 1180 340" width="1180" height="340">
+          <text class="node-sub" x="20" y="26">SAMPLEPREPPIPELINE · PER SAMPLE · PARALLEL WORKERS</text>
+          <path class="conn" d="M 150 60 H 210"/>
+          <path class="conn" d="M 350 60 H 410"/>
+          <path class="conn" d="M 550 60 C 590 60, 590 40, 610 40"/>
+          <path class="conn" d="M 550 60 C 590 60, 590 100, 610 100"/>
+          <path class="conn" d="M 750 40 H 810"/>
+          <path class="conn dashed" d="M 750 100 C 780 100, 790 130, 750 140 C 700 150, 690 90, 750 100"/>
+          <path class="conn" d="M 950 40 H 1010"/>
 
-          <rect class="node-rect platform" x="30" y="120" width="120" height="60"/>
-          <text class="node-label" x="90" y="147" text-anchor="middle">Execution</text>
-          <text class="node-label" x="90" y="163" text-anchor="middle">platform</text>
+          <rect class="node-rect" x="20" y="34" width="130" height="44"/>
+          <text class="node-label sm" x="85" y="61" text-anchor="middle">download_fastq</text>
 
-          <rect class="node-rect" x="270" y="58" width="130" height="44"/>
-          <text class="node-label" x="335" y="84" text-anchor="middle">Process packs</text>
+          <rect class="node-rect" x="210" y="34" width="140" height="44"/>
+          <text class="node-label sm" x="280" y="55" text-anchor="middle">GPU align</text>
+          <text class="node-sub" x="280" y="69" text-anchor="middle">fq2bam_meth / giraffe</text>
 
-          <rect class="node-rect" x="270" y="198" width="130" height="44"/>
-          <text class="node-label" x="335" y="224" text-anchor="middle">Application packs</text>
+          <rect class="node-rect" x="410" y="34" width="140" height="52"/>
+          <text class="node-label sm" x="480" y="58" text-anchor="middle">alignment QC</text>
+          <text class="conn-label" x="595" y="34" text-anchor="middle">pass</text>
+          <text class="conn-label" x="595" y="112" text-anchor="middle">remediate</text>
 
-          <rect class="node-rect prod" x="470" y="18" width="180" height="44"/>
-          <text class="node-label" x="560" y="38" text-anchor="middle">Methylation (WGBS)</text>
-          <text class="node-sub" x="560" y="52" text-anchor="middle">PRODUCTION</text>
+          <rect class="node-rect" x="610" y="18" width="140" height="44"/>
+          <text class="node-label sm" x="680" y="45" text-anchor="middle">extract H5</text>
 
-          <rect class="node-rect" x="470" y="58" width="180" height="44"/>
-          <text class="node-label" x="560" y="78" text-anchor="middle">RNA-Seq</text>
-          <text class="node-sub" x="560" y="92" text-anchor="middle">RESEARCH PACK</text>
+          <rect class="node-rect" x="610" y="78" width="150" height="44"/>
+          <text class="node-label sm" x="685" y="96" text-anchor="middle">trim → realign</text>
+          <text class="node-sub" x="685" y="110" text-anchor="middle">→ QC</text>
 
-          <rect class="node-rect" x="470" y="98" width="180" height="44"/>
-          <text class="node-label" x="560" y="118" text-anchor="middle">Proteomics</text>
-          <text class="node-sub" x="560" y="132" text-anchor="middle">RESEARCH PACK</text>
+          <rect class="node-rect" x="810" y="18" width="140" height="44"/>
+          <text class="node-label sm" x="880" y="45" text-anchor="middle">archive bundle</text>
 
-          <rect class="node-rect" x="470" y="168" width="180" height="44"/>
-          <text class="node-label" x="560" y="188" text-anchor="middle">Alzheimer cfDNA</text>
-          <text class="node-sub" x="560" y="202" text-anchor="middle">RESEARCH APP</text>
+          <rect class="node-rect platform" x="1010" y="18" width="150" height="44"/>
+          <text class="node-label sm" x="1085" y="45" text-anchor="middle">→ study lifecycle</text>
 
-          <rect class="node-rect" x="470" y="228" width="180" height="44"/>
-          <text class="node-label" x="560" y="248" text-anchor="middle">Plant abiotic stress</text>
-          <text class="node-sub" x="560" y="262" text-anchor="middle">RESEARCH APP</text>
+          <line x1="60" y1="150" x2="1140" y2="150" stroke="var(--line)" stroke-width="1"/>
+          <text class="node-sub" x="20" y="190">STUDY VALIDATION LIFECYCLE · COHORT</text>
+
+          <path class="conn" d="M 150 224 H 210"/>
+          <path class="conn" d="M 350 224 H 410"/>
+          <path class="conn" d="M 550 224 H 610"/>
+          <path class="conn" d="M 750 224 H 810"/>
+          <path class="conn" d="M 950 224 H 1010"/>
+
+          <rect class="node-rect" x="20" y="202" width="130" height="44"/>
+          <text class="node-label sm" x="85" y="224" text-anchor="middle">MC centroid</text>
+          <text class="node-sub" x="85" y="238" text-anchor="middle">+ detector</text>
+
+          <rect class="node-rect" x="210" y="202" width="140" height="44"/>
+          <text class="node-label sm" x="280" y="228" text-anchor="middle">stability / readiness</text>
+
+          <rect class="node-rect" x="410" y="202" width="140" height="44"/>
+          <text class="node-label sm" x="480" y="228" text-anchor="middle">freeze panel + mapper</text>
+
+          <rect class="node-rect" x="610" y="202" width="140" height="44"/>
+          <text class="node-label sm" x="680" y="228" text-anchor="middle">deconv + info</text>
+
+          <rect class="node-rect" x="810" y="202" width="140" height="44"/>
+          <text class="node-label sm" x="880" y="228" text-anchor="middle">select_best_model</text>
+
+          <rect class="node-rect prod" x="1010" y="202" width="150" height="44"/>
+          <text class="node-label sm" x="1085" y="224" text-anchor="middle">locked / pivotal</text>
+          <text class="node-sub" x="1085" y="238" text-anchor="middle">holdouts</text>
         </svg>
       </div>
       <div class="zoom-controls">
@@ -513,54 +563,461 @@
   </div>
 </section>
 
+<!-- ============ RNA-SEQ PACK ============ -->
+<section id="rnaseq" class="off">
+  <div class="eyebrow">Same language, different modality</div>
+  <h2>RNA-Seq process pack</h2>
+  <div class="diagram-card">
+    <div class="zoom-frame" data-zoom>
+      <div class="zoom-hint">Scroll or pinch to zoom · drag to pan</div>
+      <div class="zoom-stage" style="width:1180px;">
+        <svg viewBox="0 0 1180 160" width="1180" height="160">
+          <path class="conn" d="M 100 60 H 160"/>
+          <path class="conn" d="M 340 60 H 400"/>
+          <path class="conn" d="M 580 60 H 640"/>
+          <path class="conn" d="M 820 60 H 880"/>
+          <path class="conn" d="M 1020 60 H 1080"/>
+
+          <rect class="node-rect" x="20" y="38" width="80" height="44"/>
+          <text class="node-label sm" x="60" y="65" text-anchor="middle">FASTQ</text>
+
+          <rect class="node-rect" x="160" y="30" width="180" height="60"/>
+          <text class="node-label sm" x="250" y="56" text-anchor="middle">Parabricks RNA quant</text>
+          <text class="node-sub" x="250" y="70" text-anchor="middle">STAR rna_fq2bam / kallisto</text>
+
+          <rect class="node-rect" x="400" y="38" width="180" height="44"/>
+          <text class="node-label sm" x="490" y="65" text-anchor="middle">RNA QC</text>
+
+          <rect class="node-rect" x="640" y="30" width="180" height="60"/>
+          <text class="node-label sm" x="730" y="56" text-anchor="middle">expression contract</text>
+          <text class="node-sub" x="730" y="70" text-anchor="middle">samples × features</text>
+
+          <rect class="node-rect" x="880" y="30" width="140" height="60"/>
+          <text class="node-label sm" x="950" y="56" text-anchor="middle">rna_de_select</text>
+          <text class="node-sub" x="950" y="70" text-anchor="middle">gene panel</text>
+
+          <rect class="node-rect prod" x="1080" y="24" width="80" height="72"/>
+          <text class="node-label sm" x="1085" y="52" text-anchor="start">tabular</text>
+          <text class="node-label sm" x="1085" y="66" text-anchor="start">classifier</text>
+          <text class="node-sub" x="1085" y="80" text-anchor="start">+ MC</text>
+        </svg>
+      </div>
+      <div class="zoom-controls">
+        <div class="zoom-btn" data-zoom-out>–</div>
+        <div class="zoom-btn" data-zoom-reset>⟲</div>
+        <div class="zoom-btn" data-zoom-in>+</div>
+      </div>
+    </div>
+  </div>
+  <ul class="diagram-notes">
+    <li>Selects quant mode via <code>actionConfig.rna_align.quant_mode</code>.</li>
+    <li>Reuses scheduler, cfg/wf, CAAS, and the shared feature seam — <strong>not</strong> a separate product stack.</li>
+    <li>Remaining gate: representative cohort data + validation evidence, not aligner R&D.</li>
+  </ul>
+</section>
+
+<!-- ============ DISTRIBUTED EXECUTION ============ -->
+<section id="execution">
+  <div class="eyebrow">Distributed execution</div>
+  <h2>Portal → gateway → workers</h2>
+  <div class="diagram-card">
+    <div class="zoom-frame" data-zoom>
+      <div class="zoom-hint">Scroll or pinch to zoom · drag to pan</div>
+      <div class="zoom-stage" style="width:1180px;">
+        <svg viewBox="0 0 1180 400" width="1180" height="400">
+          <text class="node-sub" x="20" y="24">CONTROL PLANE</text>
+          <path class="conn" d="M 150 60 H 200"/>
+          <path class="conn" d="M 350 60 H 400"/>
+          <path class="conn" d="M 550 60 H 600"/>
+          <path class="conn" d="M 800 60 H 850"/>
+
+          <rect class="node-rect platform" x="20" y="38" width="130" height="44"/>
+          <text class="node-label sm" x="85" y="65" text-anchor="middle">EpiPortal UI</text>
+
+          <rect class="node-rect" x="200" y="38" width="150" height="44"/>
+          <text class="node-label sm" x="275" y="65" text-anchor="middle">cfg registry</text>
+
+          <rect class="node-rect" x="400" y="30" width="150" height="60"/>
+          <text class="node-label sm" x="475" y="56" text-anchor="middle">DomainProgram</text>
+          <text class="node-sub" x="475" y="70" text-anchor="middle">→ workflow_def</text>
+
+          <rect class="node-rect" x="600" y="30" width="200" height="60"/>
+          <text class="node-label sm" x="700" y="56" text-anchor="middle">workflow_instance</text>
+          <text class="node-sub" x="700" y="70" text-anchor="middle">+ actionConfig</text>
+
+          <rect class="node-rect prod" x="850" y="38" width="180" height="44"/>
+          <text class="node-label sm" x="940" y="65" text-anchor="middle">methyl-gateway REST</text>
+
+          <path class="conn" d="M 940 82 V 130 H 130 V 168"/>
+          <path class="conn" d="M 940 82 V 168"/>
+          <path class="conn" d="M 940 82 V 130 H 1040 V 168"/>
+          <text class="node-sub" x="20" y="200">CUSTOMER / SITE COMPUTE</text>
+
+          <rect class="node-rect" x="60" y="170" width="180" height="52"/>
+          <text class="node-label sm" x="150" y="192" text-anchor="middle">GPU SamplePrep</text>
+          <text class="node-sub" x="150" y="206" text-anchor="middle">workers</text>
+
+          <rect class="node-rect" x="850" y="170" width="180" height="52"/>
+          <text class="node-label sm" x="940" y="192" text-anchor="middle">CPU science</text>
+          <text class="node-sub" x="940" y="206" text-anchor="middle">workers</text>
+
+          <rect class="node-rect" x="455" y="170" width="200" height="52"/>
+          <text class="node-label sm" x="555" y="192" text-anchor="middle">Enricher / model</text>
+          <text class="node-sub" x="555" y="206" text-anchor="middle">workers</text>
+
+          <path class="conn" d="M 150 222 V 300 H 555 V 340"/>
+          <path class="conn" d="M 555 222 V 340"/>
+          <path class="conn" d="M 940 222 V 300 H 555 V 340"/>
+          <path class="conn dashed" d="M 275 82 V 340 H 480"/>
+          <text class="conn-label" x="290" y="300">materialize non-secrets</text>
+
+          <rect class="node-rect platform" x="455" y="340" width="220" height="48"/>
+          <text class="node-label sm" x="565" y="362" text-anchor="middle">Shared /work</text>
+          <text class="node-sub" x="565" y="376" text-anchor="middle">samples · projects · caches</text>
+        </svg>
+      </div>
+      <div class="zoom-controls">
+        <div class="zoom-btn" data-zoom-out>–</div>
+        <div class="zoom-btn" data-zoom-reset>⟲</div>
+        <div class="zoom-btn" data-zoom-in>+</div>
+      </div>
+    </div>
+  </div>
+  <ul class="diagram-notes">
+    <li>Workers are <strong>stateless claimants</strong> — capability-matched, TLS task payloads.</li>
+    <li>Secrets stay in <code>cfg.credential</code>; never plain files under <code>/work</code>.</li>
+  </ul>
+</section>
+
+<!-- ============ CONFIG LAYERS ============ -->
+<section id="configlayers" class="off">
+  <div class="eyebrow">Tune without redeploying</div>
+  <h2>Config layers — highest wins</h2>
+  <div class="diagram-card">
+    <div class="zoom-frame" data-zoom style="height:200px;">
+      <div class="zoom-hint">Scroll or pinch to zoom · drag to pan</div>
+      <div class="zoom-stage" style="width:1180px;">
+        <svg viewBox="0 0 1180 140" width="1180" height="140">
+          <path class="conn" d="M 190 60 H 250"/>
+          <path class="conn" d="M 420 60 H 480"/>
+          <path class="conn" d="M 650 60 H 710"/>
+          <path class="conn" d="M 880 60 H 940"/>
+
+          <rect class="node-rect" x="20" y="30" width="170" height="60"/>
+          <text class="node-label sm" x="105" y="55" text-anchor="middle">Site</text>
+          <text class="node-sub" x="105" y="70" text-anchor="middle">deployment defaults</text>
+
+          <rect class="node-rect" x="250" y="30" width="170" height="60"/>
+          <text class="node-label sm" x="335" y="55" text-anchor="middle">Profile</text>
+          <text class="node-sub" x="335" y="70" text-anchor="middle">samd_* procedure</text>
+
+          <rect class="node-rect" x="480" y="30" width="170" height="60"/>
+          <text class="node-label sm" x="565" y="55" text-anchor="middle">DomainProgram</text>
+          <text class="node-sub" x="565" y="70" text-anchor="middle">topology</text>
+
+          <rect class="node-rect" x="710" y="30" width="170" height="60"/>
+          <text class="node-label sm" x="795" y="55" text-anchor="middle">Instance / study</text>
+          <text class="node-sub" x="795" y="70" text-anchor="middle">overlays</text>
+
+          <rect class="node-rect prod" x="940" y="24" width="200" height="72"/>
+          <text class="node-label sm" x="1040" y="52" text-anchor="middle">resolvedConfig</text>
+          <text class="node-sub" x="1040" y="68" text-anchor="middle">on each task</text>
+        </svg>
+      </div>
+      <div class="zoom-controls">
+        <div class="zoom-btn" data-zoom-out>–</div>
+        <div class="zoom-btn" data-zoom-reset>⟲</div>
+        <div class="zoom-btn" data-zoom-in>+</div>
+      </div>
+    </div>
+  </div>
+  <table class="data-table">
+    <thead><tr><th>Layer</th><th>Who edits</th><th>Examples</th></tr></thead>
+    <tbody>
+      <tr><td class="name">Site</td><td class="notes">Operators / cluster</td><td class="notes">Genomes, caches, site action caps</td></tr>
+      <tr><td class="name">Profile</td><td class="notes">Release / procedure pack</td><td class="notes"><code>samd_research</code>, MC knobs</td></tr>
+      <tr><td class="name">DomainProgram</td><td class="notes">Platform / pack authors</td><td class="notes">Node graph, typed actions</td></tr>
+      <tr><td class="name">Study / instance</td><td class="notes">Study team</td><td class="notes">Cohorts, partitions, claim gates</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ PROCESS VS APPLICATION PACKS ============ -->
+<section id="architecture">
+  <div class="eyebrow">Platform + packs</div>
+  <h2>Process packs vs application packs</h2>
+  <div class="diagram-card">
+    <div class="zoom-frame" data-zoom>
+      <div class="zoom-hint">Scroll or pinch to zoom · drag to pan</div>
+      <div class="zoom-stage" style="width:1000px;">
+        <svg viewBox="0 0 1000 320" width="1000" height="320">
+          <path class="conn" d="M 150 160 C 210 160, 210 90, 270 90"/>
+          <path class="conn" d="M 150 160 C 210 160, 210 230, 270 230"/>
+          <path class="conn" d="M 400 90 C 440 90, 440 50, 470 50"/>
+          <path class="conn" d="M 400 90 C 440 90, 440 90, 470 90"/>
+          <path class="conn" d="M 400 90 C 440 90, 440 130, 470 130"/>
+          <path class="conn" d="M 400 230 C 440 230, 440 200, 470 200"/>
+          <path class="conn" d="M 400 230 C 440 230, 440 260, 470 260"/>
+          <path class="conn dashed" d="M 650 72 C 800 100, 800 170, 650 200"/>
+          <path class="conn dashed" d="M 650 72 C 850 120, 850 230, 650 260"/>
+
+          <rect class="node-rect platform" x="30" y="130" width="120" height="60"/>
+          <text class="node-label" x="90" y="157" text-anchor="middle">Execution</text>
+          <text class="node-label" x="90" y="173" text-anchor="middle">platform</text>
+
+          <rect class="node-rect" x="270" y="68" width="130" height="44"/>
+          <text class="node-label" x="335" y="94" text-anchor="middle">Process packs</text>
+
+          <rect class="node-rect" x="270" y="208" width="130" height="44"/>
+          <text class="node-label" x="335" y="234" text-anchor="middle">Application packs</text>
+
+          <rect class="node-rect prod" x="470" y="28" width="180" height="44"/>
+          <text class="node-label" x="560" y="48" text-anchor="middle">Methylation (WGBS)</text>
+          <text class="node-sub" x="560" y="62" text-anchor="middle">PRODUCTION</text>
+
+          <rect class="node-rect" x="470" y="68" width="180" height="44"/>
+          <text class="node-label" x="560" y="94" text-anchor="middle">RNA-Seq</text>
+
+          <rect class="node-rect" x="470" y="108" width="180" height="44"/>
+          <text class="node-label" x="560" y="134" text-anchor="middle">Proteomics</text>
+
+          <rect class="node-rect" x="470" y="178" width="180" height="44"/>
+          <text class="node-label" x="560" y="204" text-anchor="middle">Alzheimer cfDNA</text>
+
+          <rect class="node-rect" x="470" y="238" width="180" height="44"/>
+          <text class="node-label" x="560" y="264" text-anchor="middle">Plant abiotic stress</text>
+
+          <text class="conn-label" x="760" y="120" text-anchor="middle">config overlay</text>
+        </svg>
+      </div>
+      <div class="zoom-controls">
+        <div class="zoom-btn" data-zoom-out>–</div>
+        <div class="zoom-btn" data-zoom-reset>⟲</div>
+        <div class="zoom-btn" data-zoom-in>+</div>
+      </div>
+    </div>
+  </div>
+  <div class="editions" style="margin-top:2.5rem;">
+    <div class="edition-card">
+      <div class="ed-label">Process pack</div>
+      <h3>= new modality</h3>
+      <div class="ed-model">DomainPrograms, typed actions, QC, profiles on the shared control plane.</div>
+    </div>
+    <div class="edition-card enterprise">
+      <div class="ed-label">Application pack</div>
+      <h3>= config overlay</h3>
+      <div class="ed-model">Study manifest, cohorts, partitions, disease/trait overlay — no new aligner.</div>
+    </div>
+  </div>
+</section>
+
 <!-- ============ ROADMAP ============ -->
-<section id="roadmap">
+<section id="roadmap" class="off">
   <div class="eyebrow">Roadmap</div>
-  <h2>Analyte and disease-process roadmap</h2>
-  <p class="section-sub">The single process already in production sets the maturity bar the following packs are measured against.</p>
-  <table class="roadmap-table">
-    <thead>
-      <tr><th>Process / Analyte</th><th>Status</th><th>Notes</th></tr>
-    </thead>
+  <h2>Analyte & disease-process roadmap</h2>
+  <table class="data-table">
+    <thead><tr><th>Process / analyte</th><th>Status</th><th>What ships</th></tr></thead>
     <tbody>
       <tr>
-        <td class="name">Methylation — buffy / cfDNA</td>
-        <td><span class="status-pill production">Production</span></td>
-        <td class="notes">SamplePrep → MC → freeze → model; full SaMD ladder.</td>
+        <td class="name">Methylation — buffy / cfDNA (oncology)</td>
+        <td><span class="status-pill production">In production</span></td>
+        <td class="notes">SamplePrep → MC stability → freeze → model; SaMD ladder.</td>
       </tr>
       <tr>
         <td class="name">RNA-Seq</td>
-        <td><span class="status-pill research-pack">Research pack</span></td>
-        <td class="notes">Process pack; STAR / kallisto; DE → tabular classifier.</td>
+        <td><span class="status-pill research-pack">Research process pack</span></td>
+        <td class="notes">STAR/kallisto, RNA QC, DE panel → tabular classifier.</td>
       </tr>
       <tr>
         <td class="name">Proteomics</td>
-        <td><span class="status-pill research-pack">Research pack</span></td>
-        <td class="notes">DIA-NN / Sage / panel ingest; shared feature seam.</td>
+        <td><span class="status-pill research-pack">Research process pack</span></td>
+        <td class="notes">GPU DIA-NN, Sage DDA, panel ingest; Prosit / Casanovo.</td>
       </tr>
       <tr>
         <td class="name">Alzheimer cfDNA</td>
-        <td><span class="status-pill research-app">Research app</span></td>
-        <td class="notes">Application pack on methylation (config overlay).</td>
+        <td><span class="status-pill research-app">Research application pack</span></td>
+        <td class="notes">Methylation + disease overlay (<code>neuro-core</code>); config only.</td>
       </tr>
       <tr>
         <td class="name">Plant abiotic stress</td>
-        <td><span class="status-pill research-app">Research app</span></td>
-        <td class="notes">Drought WGBS application pack; multi-crop sites.</td>
+        <td><span class="status-pill research-app">Research application pack</span></td>
+        <td class="notes">Control vs Drought WGBS; multi-crop sites; <code>plant-stress-core</code>.</td>
       </tr>
     </tbody>
   </table>
 </section>
 
+<!-- ============ MULTIOMICS ON ONE PLANE ============ -->
+<section id="multiomics">
+  <div class="eyebrow">Why this is flexible</div>
+  <h2>Multiomics on one plane</h2>
+  <div class="diagram-card">
+    <div class="zoom-frame" data-zoom>
+      <div class="zoom-hint">Scroll or pinch to zoom · drag to pan</div>
+      <div class="zoom-stage" style="width:1000px;">
+        <svg viewBox="0 0 1000 360" width="1000" height="360">
+          <rect x="30" y="20" width="300" height="70" fill="none" stroke="var(--line)" stroke-dasharray="3 3"/>
+          <text class="node-sub" x="45" y="40">SHARED CONTROL PLANE</text>
+          <rect class="node-rect platform" x="45" y="50" width="120" height="32"/>
+          <text class="node-label sm" x="105" y="70" text-anchor="middle">DomainProgram</text>
+          <rect class="node-rect platform" x="185" y="50" width="130" height="32"/>
+          <text class="node-label sm" x="250" y="70" text-anchor="middle">Scheduler / CAAS</text>
+
+          <path class="conn" d="M 130 130 C 200 160, 250 190, 320 210"/>
+          <path class="conn" d="M 130 220 H 320"/>
+          <path class="conn" d="M 130 310 C 200 280, 250 250, 320 220"/>
+          <path class="conn" d="M 500 210 H 560"/>
+          <path class="conn" d="M 700 210 H 760"/>
+          <path class="conn dashed" d="M 250 82 V 210"/>
+
+          <rect class="node-rect" x="20" y="110" width="220" height="44"/>
+          <text class="node-label sm" x="130" y="132" text-anchor="middle">Methylation</text>
+          <text class="node-sub" x="130" y="146" text-anchor="middle">centroid / DMP science</text>
+
+          <rect class="node-rect" x="20" y="200" width="220" height="44"/>
+          <text class="node-label sm" x="130" y="227" text-anchor="middle">RNA-Seq — DE selection</text>
+
+          <rect class="node-rect" x="20" y="290" width="220" height="44"/>
+          <text class="node-label sm" x="130" y="308" text-anchor="middle">Proteomics</text>
+          <text class="node-sub" x="130" y="322" text-anchor="middle">DIA-NN / Sage / panels</text>
+
+          <rect class="node-rect prod" x="320" y="190" width="180" height="44"/>
+          <text class="node-label sm" x="410" y="217" text-anchor="middle">samples × features seam</text>
+
+          <rect class="node-rect platform" x="560" y="182" width="220" height="60"/>
+          <text class="node-label sm" x="670" y="206" text-anchor="middle">Tabular classifier</text>
+          <text class="node-sub" x="670" y="220" text-anchor="middle">+ covariates + MC stability</text>
+        </svg>
+      </div>
+      <div class="zoom-controls">
+        <div class="zoom-btn" data-zoom-out>–</div>
+        <div class="zoom-btn" data-zoom-reset>⟲</div>
+        <div class="zoom-btn" data-zoom-in>+</div>
+      </div>
+    </div>
+  </div>
+  <ul class="diagram-notes">
+    <li><strong>Proteomics</strong> adds GPU mass-spec on the same GH200-class workers.</li>
+    <li><strong>Alzheimer</strong> / <strong>plant</strong> prove application packs: indication or trait without forking the platform.</li>
+  </ul>
+</section>
+
+<!-- ============ APPLICATION PACK PATTERN ============ -->
+<section id="apppattern" class="off">
+  <div class="eyebrow">Config, not code</div>
+  <h2>Application pack pattern</h2>
+  <div class="pattern-grid">
+    <div class="pattern-card">
+      <div class="ed-label">Application pack</div>
+      <h3>Alzheimer cfDNA</h3>
+      <div class="ed-model"><code>primary_analyte: cfdna</code></div>
+      <ul>
+        <li>Patient-disjoint partitions</li>
+        <li><code>mapper.disease_term</code> = Alzheimer's; <code>neuro-core</code> enrichment</li>
+        <li>Control → MCI → AD progression</li>
+        <li><strong>No new actions or aligners.</strong></li>
+      </ul>
+    </div>
+    <div class="pattern-card">
+      <div class="ed-label">Application pack</div>
+      <h3>Plant abiotic stress</h3>
+      <div class="ed-model"><code>primary_analyte: plant_tissue</code></div>
+      <ul>
+        <li>Binary Control vs Drought across CG/CHG/CHH</li>
+        <li>Ensembl Plants sites; optional deconv lifecycle</li>
+        <li>Offline <code>plant_traits</code> prior</li>
+        <li><strong>epi-GBS</strong> isolated via a separate SamplePrep program.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SAMD LADDER (interactive) ============ -->
+<section id="samdladder">
+  <div class="eyebrow">SaMD profile ladder</div>
+  <h2>Research → pivotal</h2>
+  <p class="section-sub">The order encodes real evidentiary weight. Tap a stage to see what it requires.</p>
+  <div class="stepper" data-stepper>
+    <div class="step active" data-step="0" data-detail="<strong>Research</strong> — discover stable panels under partition discipline. Includes hyperparameter search with early-stop, still exploratory.">
+      <div class="s-idx">01</div>
+      <div class="s-title">samd_research</div>
+    </div>
+    <div class="step" data-step="1" data-detail="<strong>Holdout enrichment</strong> — locked hyperparameters + locked test patients. This is where the pipeline stops changing underneath the evidence.">
+      <div class="s-idx">02</div>
+      <div class="s-title">samd_holdout_enrichment</div>
+    </div>
+    <div class="step chasm" data-step="2" data-detail="<strong>Pivotal</strong> — claim-gated clinical-performance evidence packaging, ready for audit and submission scaffolding.">
+      <div class="s-idx">03</div>
+      <div class="s-title">samd_pivotal</div>
+    </div>
+  </div>
+  <div class="step-detail">
+    <strong>Research</strong> — discover stable panels under partition discipline. Includes hyperparameter search with early-stop, still exploratory.
+  </div>
+</section>
+
+<!-- ============ CAAS ============ -->
+<section id="caas" class="off">
+  <div class="eyebrow">Cost economics</div>
+  <h2>CAAS: change the classifier, keep the alignment</h2>
+  <div class="diagram-card">
+    <div class="zoom-frame" data-zoom style="height:320px;">
+      <div class="zoom-hint">Scroll or pinch to zoom · drag to pan</div>
+      <div class="zoom-stage" style="width:1000px;">
+        <svg viewBox="0 0 1000 280" width="1000" height="280">
+          <path class="conn" d="M 210 110 H 270"/>
+          <path class="conn" d="M 470 110 H 530"/>
+          <path class="conn" d="M 730 110 H 790"/>
+          <path class="conn dashed" d="M 130 150 C 130 220, 850 220, 850 150"/>
+          <path class="conn dashed" d="M 400 150 C 400 200, 850 200, 850 150"/>
+          <text class="conn-label" x="490" y="240">CAAS hit · skip recompute</text>
+          <text class="conn-label" x="490" y="200">reuse artifacts</text>
+          <text class="conn-label" x="860" y="90">edit downstream only</text>
+
+          <rect class="node-rect" x="20" y="80" width="190" height="60"/>
+          <text class="node-label sm" x="115" y="104" text-anchor="middle">Align + extract</text>
+          <text class="node-sub" x="115" y="118" text-anchor="middle">content-addressed</text>
+
+          <rect class="node-rect" x="270" y="88" width="200" height="44"/>
+          <text class="node-label sm" x="370" y="115" text-anchor="middle">Centroid / detector</text>
+
+          <rect class="node-rect" x="530" y="88" width="200" height="44"/>
+          <text class="node-label sm" x="630" y="115" text-anchor="middle">Classifier / model MC</text>
+
+          <rect class="node-rect prod" x="790" y="80" width="190" height="60"/>
+          <text class="node-label sm" x="885" y="104" text-anchor="middle">New model</text>
+          <text class="node-sub" x="885" y="118" text-anchor="middle">config</text>
+        </svg>
+      </div>
+      <div class="zoom-controls">
+        <div class="zoom-btn" data-zoom-out>–</div>
+        <div class="zoom-btn" data-zoom-reset>⟲</div>
+        <div class="zoom-btn" data-zoom-in>+</div>
+      </div>
+    </div>
+  </div>
+  <ul class="diagram-notes">
+    <li><code>.action_results</code> bind input/output hashes, CLI versions, environment signatures.</li>
+    <li>Large-cohort VM cost drops when science iteration stays <strong>downstream</strong>.</li>
+    <li>Provenance chain is ready for quality review — not a slideware promise.</li>
+  </ul>
+</section>
+
+<!-- ============ DIVIDER: PACKAGING & GTM ============ -->
+<section id="gtm-divider" class="divider dark">
+  <div class="eyebrow">Packaging & GTM</div>
+  <h1>Open core that captures R&D — Enterprise that closes the FDA chasm</h1>
+</section>
+
 <!-- ============ OPEN CORE ============ -->
-<section id="opencore" class="off">
+<section id="opencore">
   <div class="eyebrow">Open-core packaging</div>
   <h2>One core, two adoption paths</h2>
   <p class="section-sub">Open source captures academic mindshare; the Enterprise layer closes the validation and evidence gap.</p>
-  <div class="tree-card">
+  <div class="diagram-card">
     <div class="zoom-frame" data-zoom>
       <div class="zoom-hint">Scroll or pinch to zoom · drag to pan</div>
-      <div class="zoom-stage">
+      <div class="zoom-stage" style="width:900px;">
         <svg viewBox="0 0 900 340" width="900" height="340">
           <path class="conn" d="M 450 60 C 350 90, 300 100, 220 130"/>
           <path class="conn" d="M 450 60 C 550 90, 600 100, 680 130"/>
@@ -573,14 +1030,14 @@
 
           <rect class="node-rect" x="120" y="130" width="200" height="44"/>
           <text class="node-label" x="220" y="150" text-anchor="middle">Community Edition</text>
-          <text class="node-sub" x="220" y="164" text-anchor="middle">Open source · AGPL-3.0</text>
+          <text class="node-sub" x="220" y="164" text-anchor="middle">AGPL-3.0</text>
 
           <rect class="node-rect prod" x="580" y="130" width="200" height="44"/>
           <text class="node-label" x="680" y="150" text-anchor="middle">Enterprise SaMD Edition</text>
           <text class="node-sub" x="680" y="164" text-anchor="middle">Commercial license + support</text>
 
           <rect class="node-rect" x="120" y="210" width="200" height="44"/>
-          <text class="node-label" x="220" y="230" text-anchor="middle">Academic · Consortia</text>
+          <text class="node-label" x="220" y="230" text-anchor="middle">Academia · Consortia</text>
           <text class="node-sub" x="220" y="244" text-anchor="middle">DEVELOPERS</text>
 
           <rect class="node-rect" x="580" y="210" width="200" height="44"/>
@@ -602,157 +1059,162 @@
 </section>
 
 <!-- ============ EDITIONS ============ -->
-<section id="editions">
+<section id="editions" class="off">
   <div class="eyebrow">Two editions</div>
   <h2>Community vs. Enterprise / SaMD</h2>
   <div class="editions">
     <div class="edition-card">
       <div class="ed-label">Community Edition</div>
-      <h3>For academic traction</h3>
-      <div class="ed-model">Open source under AGPL-3.0 (copyleft for network / SaaS use)</div>
+      <h3>AGPL-3.0</h3>
+      <div class="ed-model">Goal: citations, adoption, contributions</div>
       <ul>
-        <li><strong>Engine</strong> — local workflow engine</li>
-        <li><strong>Process pack</strong> — standard DNA methylation pack</li>
-        <li><strong>Tools</strong> — basic CLI tools</li>
-        <li><strong>Profiles</strong> — research profiles (e.g. <code>samd_research</code>)</li>
+        <li><strong>Engine</strong> — LocalWorkflowEngine</li>
+        <li><strong>Process pack</strong> — DNA methylation</li>
+        <li><strong>Tools</strong> — CLI tools + <code>samd_research</code></li>
       </ul>
     </div>
     <div class="edition-card enterprise">
       <div class="ed-label">Enterprise / SaMD Edition</div>
-      <h3>For closing the regulatory gap</h3>
-      <div class="ed-model">Annual subscription (per worker node or deployment site) + support</div>
+      <h3>Annual subscription</h3>
+      <div class="ed-model">Closes the validation and evidence gap</div>
       <ul>
-        <li><strong>Regulatory suite</strong> — validation evidence index + traceability</li>
-        <li><strong>Pivotal SaMD ladder</strong> — <code>samd_holdout_enrichment</code>, <code>samd_pivotal</code></li>
-        <li><strong>Control plane</strong> — multi-tenant (EpiPortal UI)</li>
-        <li><strong>Enterprise security</strong> — DB credentials to TLS task payloads; never plain files under <code>/work</code></li>
-        <li><strong>GPU support</strong> — supported NVIDIA Parabricks SamplePrep paths</li>
+        <li><strong>Evidence index</strong> + traceability packaging</li>
+        <li><strong>Pivotal ladder</strong> unlocks</li>
+        <li><strong>EpiPortal</strong> multi-tenant ops</li>
+        <li><strong>Zero-trust credentials</strong> + GPU SamplePrep support</li>
       </ul>
     </div>
   </div>
 </section>
 
 <!-- ============ BYOC ============ -->
-<section id="byoc" class="off">
+<section id="byoc">
   <div class="eyebrow">Hybrid cloud</div>
   <h2>Bring Your Own Cloud</h2>
-  <p class="section-sub">Genomic data is sensitive — the control plane and patient data never share a jurisdiction.</p>
+  <p class="section-sub">For sensitive genomics — regulated data never has to leave the customer's estate.</p>
   <div class="compliance-tags">
     <span class="compliance-tag">HIPAA</span>
     <span class="compliance-tag">GDPR</span>
   </div>
   <div class="byoc-split">
     <div class="byoc-half">
-      <div class="bh-label">Platform side</div>
+      <div class="bh-label">We host / operate</div>
       <ul>
-        <li>Hosts the control plane</li>
-        <li>EpiPortal + DB metadata</li>
-        <li>Central scheduler</li>
+        <li>EpiPortal control plane</li>
+        <li>DB metadata + scheduler</li>
+        <li>Non-secret materialization</li>
       </ul>
     </div>
     <div class="byoc-half customer">
-      <div class="bh-label">Customer side</div>
+      <div class="bh-label">Customer keeps</div>
       <ul>
-        <li>Customer runs the workers</li>
-        <li>Against their own AWS/Azure (or other) cluster</li>
-        <li><code>/work</code> and samples never leave the customer environment</li>
+        <li>Stateless workers on AWS / Azure / on-prem</li>
+        <li><code>/work</code> + samples in their boundary</li>
+        <li>HIPAA / GDPR data residency</li>
       </ul>
     </div>
   </div>
+  <p class="byoc-foot">Bring Your Own Cloud: regulated data never has to leave the customer's estate.</p>
 </section>
 
-<!-- ============ BUYERS ============ -->
-<section id="buyers">
-  <div class="eyebrow">Who is the buyer?</div>
+<!-- ============ WHO BUYS ============ -->
+<section id="buyers" class="off">
+  <div class="eyebrow">Who buys — and why</div>
   <h2>Three buyer profiles</h2>
   <div class="buyers">
     <div class="buyer primary">
       <div class="b-eyebrow">Primary</div>
-      <h3>Biotech and diagnostic startups</h3>
-      <p>Liquid biopsy / multiomics programs needing a QA and regulatory framework without building a platform themselves.</p>
+      <h3>Biotech / diagnostic startups</h3>
+      <p>Liquid biopsy & multiomics programs that need a QA + regulatory framework without building a platform.</p>
     </div>
     <div class="buyer">
       <div class="b-eyebrow">Secondary</div>
-      <h3>Pharma / clinical trial sponsors</h3>
-      <p>Multi-cohort longitudinal endpoints; locked, reproducible workflows over years.</p>
+      <h3>Pharma / trial sponsors</h3>
+      <p>Multi-year locked, reproducible workflows for methylation (and other packs) as endpoints.</p>
     </div>
     <div class="buyer">
       <div class="b-eyebrow">Secondary</div>
-      <h3>Clinical reference labs / CROs</h3>
-      <p>Upsell path: from raw FASTQs to curated classification and evidence packages.</p>
+      <h3>Reference labs / CROs</h3>
+      <p>Upsell FASTQs into curated classification + evidence packages — oncology, Alzheimer cfDNA, and more.</p>
     </div>
   </div>
 </section>
 
-<!-- ============ JOURNEY ============ -->
-<section id="journey" class="off">
+<!-- ============ CUSTOMER JOURNEY ============ -->
+<section id="journey">
   <div class="eyebrow">Customer journey</div>
   <h2>The FDA chasm</h2>
   <p class="section-sub">Sequence matters here: it's the one part of this content that represents a real order of commercial decision. Tap each stage to see the detail.</p>
-  <div class="stepper" id="stepper">
-    <div class="step active" data-step="0">
+  <div class="stepper" data-stepper>
+    <div class="step active" data-step="0" data-detail="<strong>Hook</strong> — free / low-cost research feasibility. Community / samd_research discovers stable panels, no commercial commitment yet.">
       <div class="s-idx">01</div>
       <div class="s-title">Community / samd_research</div>
     </div>
-    <div class="step chasm" data-step="1">
+    <div class="step chasm" data-step="1" data-detail="<strong>Trigger</strong> — a promising marker must survive internal + pivotal validation under audit: locked pipeline, holdouts, evidence package. This is where Community stops being enough.">
       <div class="s-idx">02</div>
-      <div class="s-title">FDA chasm trigger</div>
+      <div class="s-title">FDA chasm</div>
     </div>
-    <div class="step" data-step="2">
+    <div class="step" data-step="2" data-detail="<strong>Upgrade</strong> — pivotal ladder support, portal operations, and full regulatory packaging on Enterprise SaMD.">
       <div class="s-idx">03</div>
-      <div class="s-title">Enterprise SaMD Edition</div>
+      <div class="s-title">Enterprise SaMD</div>
     </div>
   </div>
-  <div class="step-detail" id="stepDetail">
-    <strong>Research / feasibility</strong> (free or low cost) — discover stable panels under the <code>samd_research</code> profile, no commercial commitment yet.
+  <div class="step-detail">
+    <strong>Hook</strong> — free / low-cost research feasibility. Community / samd_research discovers stable panels, no commercial commitment yet.
   </div>
 </section>
 
-<!-- ============ SELLING POINTS ============ -->
-<section id="selling">
+<!-- ============ WHY TECHNICAL BUYERS SAY YES ============ -->
+<section id="selling" class="off">
   <div class="eyebrow">Codebase-backed</div>
-  <h2>Verifiable selling points</h2>
+  <h2>Why technical buyers say yes</h2>
   <div class="points">
     <div class="point">
       <span class="p-num">01</span>
       <span class="p-code">Audit</span>
-      <h3>Low-overhead audit trails</h3>
-      <p>Every action result records hashes, CLI versions, and environment signatures.</p>
+      <h3>Audit trails, low overhead</h3>
+      <p>Hashes, versions, and environment signatures land automatically in every action result.</p>
     </div>
     <div class="point">
       <span class="p-num">02</span>
       <span class="p-code">CAAS</span>
-      <h3>Real cost savings</h3>
-      <p>Changing only a downstream step skips redundant alignment or extraction across large cohorts.</p>
+      <h3>Real economics</h3>
+      <p>Skip alignment / extraction across large cohorts when only the model is iterating.</p>
     </div>
     <div class="point">
       <span class="p-num">03</span>
       <span class="p-code">Extensibility</span>
       <h3>Multiomics without rewrites</h3>
-      <p>New process packs reuse the scheduler, QC gates, and DB structures; application packs are config-only overlays.</p>
+      <p>Process packs add DomainPrograms; application packs are config-only overlays.</p>
+    </div>
+    <div class="point">
+      <span class="p-num">04</span>
+      <span class="p-code">Discipline</span>
+      <h3>Partition discipline</h3>
+      <p>Development vs. locked holdout patients enforced by profiles, not heroics.</p>
     </div>
   </div>
 </section>
 
 <!-- ============ CLOSING ============ -->
 <section id="closing" class="dark">
-  <div class="eyebrow" style="text-align:center;">Takeaways</div>
-  <h2>Sell the control plane and the packs — not a single hard-coded assay.</h2>
-  <p class="section-sub">Open core captures R&D mindshare; Enterprise closes the validation and evidence gap.</p>
+  <div class="eyebrow" style="text-align:center;">Close</div>
+  <h2>Control plane + packs — not a single hard-coded assay.</h2>
+  <p class="section-sub">Regulatory-Ready Platform for Multiomics Diagnostics.</p>
   <div class="cta-row">
-    <span class="cta primary">Live demo</span>
+    <span class="cta primary">Live DomainProgram demo</span>
     <span class="cta">SaMD ladder walkthrough</span>
     <span class="cta">Evidence-scaffold review</span>
   </div>
 </section>
 
-<footer>REGULATORY-READY PLATFORM FOR MULTIOMICS DIAGNOSTICS</footer>
+<footer>METHYLPIPELINE · REGULATORY-READY PLATFORM FOR MULTIOMICS DIAGNOSTICS · CONFIDENTIAL · SALES BRIEFING</footer>
 
 <script>
   // ---- nav dots ----
   const sections = Array.from(document.querySelectorAll('section'));
   const navEl = document.getElementById('navdots');
-  sections.forEach((sec, i) => {
+  sections.forEach((sec) => {
     const label = sec.querySelector('h2, h1')?.textContent.split('\n')[0] || sec.id;
     const dot = document.createElement('div');
     dot.className = 'navdot';
@@ -780,33 +1242,29 @@
     topline.style.width = scrolled + '%';
   });
 
-  // ---- journey stepper ----
-  const stepDetails = [
-    `<strong>Research / feasibility</strong> (free or low cost) — discover stable panels under the <code>samd_research</code> profile, no commercial commitment yet.`,
-    `<strong>Commercial trigger</strong> — the team needs to move the pipeline to a locked mode, with holdout discipline and an auditor-facing evidence package. This is where Community stops being enough.`,
-    `<strong>Enterprise SaMD Edition</strong> — support for the pivotal ladder, multi-tenant portal operations, and full regulatory packaging.`
-  ];
-  const steps = document.querySelectorAll('.step');
-  const detailBox = document.getElementById('stepDetail');
-  steps.forEach(step => {
-    step.addEventListener('click', () => {
-      steps.forEach(s => s.classList.remove('active'));
-      step.classList.add('active');
-      detailBox.innerHTML = stepDetails[step.dataset.step];
+  // ---- generic steppers (journey + samd ladder) ----
+  document.querySelectorAll('[data-stepper]').forEach(stepperEl => {
+    const steps = stepperEl.querySelectorAll('.step');
+    const detailBox = stepperEl.nextElementSibling;
+    steps.forEach(step => {
+      step.addEventListener('click', () => {
+        steps.forEach(s => s.classList.remove('active'));
+        step.classList.add('active');
+        detailBox.innerHTML = step.dataset.detail;
+      });
     });
   });
 
   // ---- diagram zoom / pan ----
   document.querySelectorAll('[data-zoom]').forEach(frame => {
     const stage = frame.querySelector('.zoom-stage');
-    let scale = 1, minScale = 0.5, maxScale = 3;
+    let scale = 1, minScale = 0.4, maxScale = 3;
     let originX = 0, originY = 0;
     let isDragging = false, startX = 0, startY = 0, startOriginX = 0, startOriginY = 0;
 
-    // center the diagram initially
     function center(){
       const frameRect = frame.getBoundingClientRect();
-      const stageWidth = 900 * scale;
+      const stageWidth = stage.offsetWidth * scale;
       originX = (frameRect.width - stageWidth) / 2;
       originY = 20;
       apply();
@@ -851,7 +1309,6 @@
       frame.classList.remove('grabbing');
     });
 
-    // touch support (drag + pinch)
     let lastTouchDist = null;
     frame.addEventListener('touchstart', (e) => {
       if(e.touches.length === 1){
