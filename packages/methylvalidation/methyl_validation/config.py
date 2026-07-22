@@ -592,9 +592,11 @@ class EcdfBackendParams(BackendSharedParams):
     ecdf_second_stage_include_observed_hybrid: bool = Field(
         default=False,
         description=(
-            "When true, the ECDF second-stage stacker also includes observed-hybrid "
-            "methylation features restricted to the freeze-time stable/frozen gene "
-            "panel. Default false: covariate fusion only (recommended for raw_gene "
+            "When the ECDF second-stage stacker already runs "
+            "(ecdf_second_stage_enabled and/or covariates_path), include "
+            "observed-hybrid methylation features restricted to the freeze-time "
+            "stable/frozen gene panel. Does not start the stacker by itself. "
+            "Default false: covariate fusion only (recommended for raw_gene "
             "+ deconvolution covariates)."
         ),
     )

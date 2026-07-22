@@ -738,8 +738,7 @@ def build_model_backend_steps(
                     return 0, f"ECDF second-stage scorer disabled. {tm_msg}", ""
                 return (
                     0,
-                    "ECDF second-stage scorer skipped (set ecdf_second_stage_enabled, "
-                    "ecdf_second_stage_include_observed_hybrid, or covariates_path).",
+                    "ECDF second-stage scorer skipped (set ecdf_second_stage_enabled or covariates_path).",
                     "",
                 )
             params = EcdfSecondStageParams.from_monte_carlo_config(

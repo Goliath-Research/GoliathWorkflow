@@ -428,6 +428,28 @@ def test_ecdf_second_stage_should_run_gate():
         }
     )
     assert ecdf_second_stage_should_run(cfg_cov) is True
+    cfg_hybrid_only = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [{"label": "healthy", "csv": "h.csv"}, {"label": "disease", "csv": "d.csv"}],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": "/tmp/p.json",
+            "output_base": "/tmp",
+            "backend_profiles": {
+                "ecdf": {
+                    "enabled": True,
+                    "params": {
+                        "ecdf_second_stage_enabled": False,
+                        "ecdf_second_stage_include_observed_hybrid": True,
+                    },
+                },
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
+        }
+    )
+    assert ecdf_second_stage_should_run(cfg_hybrid_only) is False
 
 
 def test_filter_dmp_df_to_frozen_genes_keeps_panel_only():

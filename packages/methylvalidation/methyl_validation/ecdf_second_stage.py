@@ -66,7 +66,8 @@ class EcdfSecondStageParams(BaseModel):
         description=(
             "When true, include observed-hybrid methylation features restricted to "
             "the freeze-time stable/frozen gene panel. Driven by "
-            "ecdf_second_stage_include_observed_hybrid (not ecdf_second_stage_enabled)."
+            "ecdf_second_stage_include_observed_hybrid once the stacker already runs "
+            "(not by ecdf_second_stage_enabled alone)."
         ),
     )
     max_dmps: Optional[int] = Field(default=None, ge=0)
@@ -230,17 +231,16 @@ class EcdfSecondStageParams(BaseModel):
 
 
 def ecdf_second_stage_should_run(config: Any) -> bool:
-    """True when second-stage stacker and/or covariates_path is configured.
+    """True when the second-stage stacker is configured to run.
 
-    ``ecdf_second_stage_enabled`` enables the stacker itself.
-    ``ecdf_second_stage_include_observed_hybrid`` only adds hybrid features when the
-    stacker already runs (or is enabled); covariates_path alone also runs the stacker.
+    The stacker runs when ``ecdf_second_stage_enabled`` is true and/or
+    ``covariates_path`` is set. ``ecdf_second_stage_include_observed_hybrid`` only
+    controls whether hybrid features are included once the stacker already runs;
+    it does not start the stacker by itself.
     """
     if config is None:
         return False
     if bool(getattr(config, "ecdf_second_stage_enabled", False)):
-        return True
-    if bool(getattr(config, "ecdf_second_stage_include_observed_hybrid", False)):
         return True
     path = getattr(config, "covariates_path", None)
     if path is None:
