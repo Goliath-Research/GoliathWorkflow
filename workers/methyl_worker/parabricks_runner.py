@@ -381,6 +381,10 @@ def run_fq2bam_meth(
         _package_qc_metrics(paths)
         return _result_payload(paths)
 
+    from methyl_worker.capabilities import assert_execute_gpu_prereqs
+
+    assert_execute_gpu_prereqs("parabricks.fq2bam", "sample.parabricks_fq2bam")
+
     fastqs = resolve_paired_fastqs(sample_path, sample_id)
     docker_cmd = _build_docker_command(cfg, paths, fastqs)
     paths.sample_dir.mkdir(parents=True, exist_ok=True)
