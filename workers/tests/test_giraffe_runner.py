@@ -149,12 +149,13 @@ def test_run_giraffe_align_invokes_giraffe_then_metrics(tmp_path: Path) -> None:
         "os.environ",
         {"METHYL_PARABRICKS_IMAGE": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1"},
     ):
-        with patch("methyl_worker.giraffe_runner.subprocess.run", side_effect=fake_run):
-            out = runner.run_giraffe_align(
-                sample_id="S3",
-                sample_dir=sample_dir,
-                site_path=site_path,
-            )
+        with patch("methyl_worker.capabilities._gpu_available", return_value=True):
+            with patch("methyl_worker.giraffe_runner.subprocess.run", side_effect=fake_run):
+                out = runner.run_giraffe_align(
+                    sample_id="S3",
+                    sample_dir=sample_dir,
+                    site_path=site_path,
+                )
 
     assert calls == ["giraffe", "metrics"]
     assert out["bamPath"] == str(sample_dir / "S3.bam")
