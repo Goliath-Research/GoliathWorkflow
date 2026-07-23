@@ -50,12 +50,15 @@ def test_start_sample_prep_plans_context_and_starts_instance(tmp_path: Path) -> 
     def fake_start(_dsn: str, instance_id: int) -> None:
         started.append(instance_id)
 
+    ref = tmp_path / "genome.fa"
+    ref.write_text(">chr1\nACGT\n", encoding="utf-8")
     payload = start_sample_prep(
         db,
         {
             "projectPath": str(project_path),
             "workflow_version_id": 7,
             "samples": [{"sampleId": "S1"}],
+            "referenceFasta": str(ref),
             "fastqStorage": {
                 "type": "s3",
                 "bucket": "b",

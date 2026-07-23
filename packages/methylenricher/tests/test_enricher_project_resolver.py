@@ -15,11 +15,12 @@ from methyl_enricher.project_resolver import (
 
 def _write_project(tmp_path: Path) -> Path:
     project_path = tmp_path / "project.json"
+    out_base = tmp_path / "output"
     project_path.write_text(
         json.dumps(
             {
                 "project_name": "EnricherProject",
-                "output_base": "/work/output",
+                "output_base": str(out_base),
                 "controls": {
                     "label": "controls",
                     "groups": [{"label": "healthy", "sample_paths": ["c1"]}],
@@ -38,15 +39,17 @@ def _write_project(tmp_path: Path) -> Path:
 
 def test_resolve_enricher_paths_defaults_to_project_roots(tmp_path):
     project_path = _write_project(tmp_path)
+    out_base = tmp_path / "output"
 
     paths = resolve_enricher_paths(project_path)
 
-    assert paths.input_file == "/work/output/EnricherProject/mapper/all-gene_name-combined.csv"
-    assert paths.output_dir == "/work/output/EnricherProject/enricher"
+    assert paths.input_file == str(out_base / "EnricherProject/mapper/all-gene_name-combined.csv")
+    assert paths.output_dir == str(out_base / "EnricherProject/enricher")
 
 
 def test_resolve_enricher_paths_per_comparison_uses_canonical_layout(tmp_path):
     project_path = _write_project(tmp_path)
+    out_base = tmp_path / "output"
 
     resolved = resolve_enricher_paths_per_cancer_group(project_path)
 
@@ -55,9 +58,9 @@ def test_resolve_enricher_paths_per_comparison_uses_canonical_layout(tmp_path):
     assert label == "pca"
     assert (
         paths.input_file
-        == "/work/output/EnricherProject/mapper/healthy/pca/all-gene_name-combined.csv"
+        == str(out_base / "EnricherProject/mapper/healthy/pca/all-gene_name-combined.csv")
     )
-    assert paths.output_dir == "/work/output/EnricherProject/enricher/healthy/pca"
+    assert paths.output_dir == str(out_base / "EnricherProject/enricher/healthy/pca")
 
 
 def test_resolve_enricher_paths_warns_on_legacy_alias_keys(tmp_path):
@@ -87,7 +90,7 @@ def test_resolve_methyl_enricher_home_from_site_config(tmp_path, monkeypatch):
         json.dumps(
             {
                 "project_name": "EnricherProject",
-                "output_base": "/work/output",
+                "output_base": str(tmp_path / "output"),
                 "groups": [{"label": "g1", "sample_paths": []}, {"label": "g2", "sample_paths": []}],
             }
         ),

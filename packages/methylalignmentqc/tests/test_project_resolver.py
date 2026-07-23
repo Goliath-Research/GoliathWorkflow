@@ -1,35 +1,31 @@
 """Test project_resolver returns expected output_dir and sample_paths from project config."""
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
 
 
-def test_resolve_alignment_qc_config_output_dir_and_sample_paths():
+def test_resolve_alignment_qc_config_output_dir_and_sample_paths(tmp_path: Path):
     """resolve_alignment_qc_config returns output_dir and non-empty sample_paths from minimal project."""
     from methyl_alignment_qc.project_resolver import resolve_alignment_qc_config
 
+    out_base = tmp_path / "output"
     project = {
         "project_name": "TestProject",
-        "output_base": "/work/output",
+        "output_base": str(out_base),
         "group1": {"label": "healthy", "sample_paths": ["/samples/h1", "/samples/h2"]},
         "group2": {"label": "disease", "sample_paths": ["/samples/d1"]},
     }
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        json.dump(project, f)
-        project_path = f.name
-    try:
-        config = resolve_alignment_qc_config(project_path)
-        assert config.output_dir == "/work/output/TestProject/alignment_qc"
-        assert len(config.sample_paths) == 3
-        assert "/samples/h1" in config.sample_paths
-        assert "/samples/h2" in config.sample_paths
-        assert "/samples/d1" in config.sample_paths
-        assert config.validate_schema is True
-    finally:
-        Path(project_path).unlink(missing_ok=True)
+    project_path = tmp_path / "project.json"
+    project_path.write_text(json.dumps(project), encoding="utf-8")
+    config = resolve_alignment_qc_config(str(project_path))
+    assert config.output_dir == str(out_base / "TestProject" / "alignment_qc")
+    assert len(config.sample_paths) == 3
+    assert "/samples/h1" in config.sample_paths
+    assert "/samples/h2" in config.sample_paths
+    assert "/samples/d1" in config.sample_paths
+    assert config.validate_schema is True
 
 
 def _write_site(tmp_path: Path, action_key: str, cfg: dict) -> str:

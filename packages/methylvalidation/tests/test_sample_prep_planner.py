@@ -54,14 +54,28 @@ def _write_csv(path: Path, rows: list[str]) -> None:
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
+def _ref_fasta(tmp_path: Path) -> str:
+    path = tmp_path / "genome.fa"
+    if not path.is_file():
+        path.write_text(">chr1\nACGT\n", encoding="utf-8")
+    return str(path)
+
+
+def _plan(tmp_path: Path, body: dict) -> dict:
+    payload = dict(body)
+    payload.setdefault("referenceFasta", _ref_fasta(tmp_path))
+    return plan_sample_prep_context(payload)
+
+
 def test_explicit_samples_with_s3_storage(tmp_path: Path) -> None:
     project_path = _write_project(tmp_path)
-    ctx = plan_sample_prep_context(
+    ctx = _plan(
+        tmp_path,
         {
             "projectPath": str(project_path),
             "samples": [{"sampleId": "S1"}, {"sampleId": "S2"}],
             "fastqStorage": S3_STORAGE,
-        }
+        },
     )
     assert ctx["primaryAnalyte"] == "buffy_coat"
     assert ctx["isCfdna"] is False
@@ -88,7 +102,8 @@ def test_planner_leaves_delete_fastqs_unset_for_profile_resolution(tmp_path: Pat
     from pipeline_profiles import seed_pipeline_scope_flags
 
     project_path = _write_project(tmp_path)
-    ctx = plan_sample_prep_context(
+    ctx = _plan(
+        tmp_path,
         {
             "projectPath": str(project_path),
             "samples": [{"sampleId": "S1"}],
@@ -102,7 +117,8 @@ def test_planner_leaves_delete_fastqs_unset_for_profile_resolution(tmp_path: Pat
     )
     assert seeded["deleteFastqs"] is False
 
-    forced = plan_sample_prep_context(
+    forced = _plan(
+        tmp_path,
         {
             "projectPath": str(project_path),
             "samples": [{"sampleId": "S1"}],
@@ -125,7 +141,8 @@ def test_csv_plus_azure_storage(tmp_path: Path) -> None:
     _write_csv(csv, ["alpha", "beta"])
     project_path = _write_project(tmp_path, samples_base=str(samples_base))
 
-    ctx = plan_sample_prep_context(
+    ctx = _plan(
+        tmp_path,
         {
             "projectPath": str(project_path),
             "sampleCsv": str(csv),
@@ -181,7 +198,8 @@ def test_use_project_samples(tmp_path: Path) -> None:
     project_path = tmp_path / "project.json"
     project_path.write_text(json.dumps(project), encoding="utf-8")
 
-    ctx = plan_sample_prep_context(
+    ctx = _plan(
+        tmp_path,
         {
             "projectPath": str(project_path),
             "useProjectSamples": True,
@@ -193,7 +211,8 @@ def test_use_project_samples(tmp_path: Path) -> None:
 
 def test_dedupe_by_sample_id(tmp_path: Path) -> None:
     project_path = _write_project(tmp_path)
-    ctx = plan_sample_prep_context(
+    ctx = _plan(
+        tmp_path,
         {
             "projectPath": str(project_path),
             "fastqStorage": S3_STORAGE,
@@ -213,7 +232,8 @@ def test_explicit_fastq_source_override(tmp_path: Path) -> None:
         "basePath": "/mnt/custom",
         "prefix": "lane1/S1/",
     }
-    ctx = plan_sample_prep_context(
+    ctx = _plan(
+        tmp_path,
         {
             "projectPath": str(project_path),
             "fastqStorage": FILE_STORAGE,
@@ -242,7 +262,8 @@ def test_cfdna_primary_analyte(tmp_path: Path) -> None:
     project_path = tmp_path / "project.json"
     project_path.write_text(json.dumps(project), encoding="utf-8")
 
-    ctx = plan_sample_prep_context(
+    ctx = _plan(
+        tmp_path,
         {
             "projectPath": str(project_path),
             "samples": [{"sampleId": "S1"}],
@@ -264,7 +285,8 @@ H5_STORAGE = {
 
 def test_h5_storage_materializes_per_sample_destination(tmp_path: Path) -> None:
     project_path = _write_project(tmp_path)
-    ctx = plan_sample_prep_context(
+    ctx = _plan(
+        tmp_path,
         {
             "projectPath": str(project_path),
             "samples": [{"sampleId": "S1", "fastqPrefix": "cohort/S1/"}],
@@ -290,7 +312,8 @@ def test_prefix_base_on_fastq_storage(tmp_path: Path) -> None:
         "prefixBase": "samples/",
         "credentials": {"authMode": "instance_profile"},
     }
-    ctx = plan_sample_prep_context(
+    ctx = _plan(
+        tmp_path,
         {
             "projectPath": str(project_path),
             "samples": [{"sampleId": "S1"}],

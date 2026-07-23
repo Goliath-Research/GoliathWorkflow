@@ -92,12 +92,23 @@ def test_if_then_else_branching() -> None:
 
 
 @pytest.fixture
-def sample_prep_context() -> dict:
+def sample_prep_context(tmp_path: Path) -> dict:
     fixture = REPO / "workflow_engine/sql_mssql/instance_context_examples/sample_prep_plasma.json"
     ctx = json.loads(fixture.read_text(encoding="utf-8"))
+    # Hosted CI cannot mkdir under /work; keep sample dirs local.
     for sample in ctx.get("samples", []):
         if "sampleDestination" not in sample and "h5Destination" in sample:
             sample["sampleDestination"] = sample["h5Destination"]
+        sid = sample["sampleId"]
+        sample_dir = tmp_path / "samples" / sid
+        sample_dir.mkdir(parents=True, exist_ok=True)
+        sample["sampleDir"] = str(sample_dir)
+    project = tmp_path / "project.json"
+    project.write_text("{}", encoding="utf-8")
+    ctx["projectPath"] = str(project)
+    ref = tmp_path / "genome.fa"
+    ref.write_text(">chr1\nACGT\n", encoding="utf-8")
+    ctx["referenceFasta"] = str(ref)
     return ctx
 
 
