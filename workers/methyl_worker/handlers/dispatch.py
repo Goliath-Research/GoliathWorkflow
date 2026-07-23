@@ -110,10 +110,7 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
             skipped_result = _attach_domain_sample_ref(entry, action_name, task_input, skipped_result)
         return skipped_result
 
-    from ..capabilities import assert_execute_gpu_prereqs
-
-    assert_execute_gpu_prereqs(capability, action_name)
-
+    # Stubbed external tools (CI / dry-run) must not require a host GPU either.
     if _stub_external_enabled() and capability in _STUB_EXTERNAL_CAPABILITIES:
         from ..action_execution import ExecutionTimer, execution_result_from_output
 
@@ -129,6 +126,13 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
         )
         result = execution_result_from_output(output)
     else:
+        from ..capabilities import assert_execute_gpu_prereqs
+
+        # Parabricks runners assert GPU after their product-level output short-circuit
+        # so idempotent re-entry works on CPU agents. Other GPU actions guard here.
+        if not str(capability).startswith("parabricks."):
+            assert_execute_gpu_prereqs(capability, action_name)
+
         # Resolve via package attribute so tests can monkeypatch
         # ``methyl_worker.handlers.build_action_from_catalog``.
         import methyl_worker.handlers as handlers_pkg

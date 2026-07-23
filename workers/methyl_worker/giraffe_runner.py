@@ -212,6 +212,10 @@ def run_giraffe_align(
         _package_qc_metrics(paths)
         return _result_payload(paths)
 
+    from methyl_worker.capabilities import assert_execute_gpu_prereqs
+
+    assert_execute_gpu_prereqs("parabricks.giraffe", "sample.parabricks_giraffe")
+
     fastqs = resolve_paired_fastqs(sample_path, sample_id)
     paths.sample_dir.mkdir(parents=True, exist_ok=True)
     paths.tmp_dir.mkdir(parents=True, exist_ok=True)
