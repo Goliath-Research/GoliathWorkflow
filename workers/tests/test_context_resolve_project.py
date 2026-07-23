@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from methyl_domain.testing import project_with_local_samples
+from local_project_support import project_with_local_samples
 
 _WORKERS = Path(__file__).resolve().parents[1]
 if str(_WORKERS) not in sys.path:

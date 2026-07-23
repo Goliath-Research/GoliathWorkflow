@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from methyl_domain.helpers import build_resolved_project
-from methyl_domain.testing import project_with_local_samples
+from local_project_support import project_with_local_samples
 
 
 def test_build_resolved_project_from_smoke_project(tmp_path: Path) -> None:
