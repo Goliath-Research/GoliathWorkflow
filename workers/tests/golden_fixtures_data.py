@@ -43,6 +43,17 @@ GOLDEN_INPUTS: Dict[str, Dict[str, Any]] = {
         "sampleDir": "/work/samples/S1",
         "projectPath": "/work/p/project.json",
     },
+    "sample.demultiplex": {
+        "tool": "SampleDemultiplex",
+        "sampleId": "S1",
+        "sampleDir": "/work/samples/S1",
+    },
+    "sample.docker_align": {
+        "tool": "SampleDockerAlign",
+        "sampleId": "S1",
+        "sampleDir": "/work/samples/S1",
+        "projectPath": "/work/p/project.json",
+    },
     "sample.download_fastq": {
         "tool": "SampleDownloadFastq",
         "sampleId": "S1",
@@ -186,6 +197,11 @@ GOLDEN_INPUTS: Dict[str, Dict[str, Any]] = {
         "projectPath": "/work/p/project.json",
         "monteCarloRunsRoot": "/work/p/monte_carlo_runs",
     },
+    "validation.finalize_freeze_model_bundle": {
+        "projectPath": "/work/p/project.json",
+        "monteCarloRunsRoot": "/work/p/monte_carlo_runs",
+        "productionOutputDir": "/work/p/monte_carlo_runs/production",
+    },
     "validation.stability_freeze_readiness": {"projectPath": "/work/p/project.json"},
     "validation.link_artifacts": {
         "sourceRunDir": "/work/p/monte_carlo_runs/run_0001",
@@ -281,6 +297,19 @@ GOLDEN_OUTPUTS: Dict[str, Dict[str, Any]] = {
         },
     },
     "sample.parabricks_giraffe": {
+        "status": "ok",
+        "sampleId": "S1",
+        "bamPath": "/work/samples/S1/S1.bam",
+    },
+    "sample.demultiplex": {
+        "status": "ok",
+        "sampleId": "S1",
+        "fastqR1": "/work/samples/S1/S1_1.fastq.gz",
+        "fastqR2": "/work/samples/S1/S1_2.fastq.gz",
+        "n_reads_kept": 1000000,
+        "barcode": "BC01",
+    },
+    "sample.docker_align": {
         "status": "ok",
         "sampleId": "S1",
         "bamPath": "/work/samples/S1/S1.bam",
@@ -448,6 +477,13 @@ GOLDEN_OUTPUTS: Dict[str, Dict[str, Any]] = {
         "status": "ok",
         "productionOutputDir": "/work/p/monte_carlo_runs/production",
         "projectPath": "/work/p/project.json",
+    },
+    "validation.finalize_freeze_model_bundle": {
+        "status": "ok",
+        "projectPath": "/work/p/project.json",
+        "modelBundleDir": "/work/p/monte_carlo_runs/production/model_bundle",
+        "n_mapper_rows": 120,
+        "n_genes": 50,
     },
     "validation.stability_freeze_readiness": {"status": "ok", "ready": True, "outputDir": "/work/p"},
     "validation.link_artifacts": {"status": "ok", "linked_files": ["centroids", "detections"]},

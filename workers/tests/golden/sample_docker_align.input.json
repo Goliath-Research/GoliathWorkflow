@@ -1,0 +1,11 @@
+{
+  "alignmentPass": null,
+  "forceRealign": null,
+  "projectPath": "/work/p/project.json",
+  "remediationReason": null,
+  "resolvedConfig": null,
+  "sampleDir": "/work/samples/S1",
+  "sampleId": "S1",
+  "tool": "SampleDockerAlign",
+  "workflowNodeKey": null
+}

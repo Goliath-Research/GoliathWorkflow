@@ -109,7 +109,7 @@ def test_build_raw_gene_feature_table_weighted_aggregate(monkeypatch):
 
 def test_normalize_production_ecdf_backend_defaults_to_raw_dmp():
     project = {
-        "step_config": {
+        "actionConfig": {
             "validation": {
                 "backend_profiles": {
                     "ecdf": {
@@ -123,7 +123,7 @@ def test_normalize_production_ecdf_backend_defaults_to_raw_dmp():
         }
     }
     _normalize_production_ecdf_backend(project)
-    params = project["step_config"]["validation"]["backend_profiles"]["ecdf"]["params"]
+    params = project["actionConfig"]["validation"]["backend_profiles"]["ecdf"]["params"]
     assert params["feature_mode"] == "raw_dmp"
     assert params["feature_family_set"] == "dmp_scored"
     assert params["model_weight_column"] == "effect_size"
@@ -132,7 +132,7 @@ def test_normalize_production_ecdf_backend_defaults_to_raw_dmp():
 
 def test_normalize_production_ecdf_backend_preserves_raw_gene():
     project = {
-        "step_config": {
+        "actionConfig": {
             "validation": {
                 "backend_profiles": {
                     "ecdf": {
@@ -146,6 +146,6 @@ def test_normalize_production_ecdf_backend_preserves_raw_gene():
         }
     }
     _normalize_production_ecdf_backend(project)
-    params = project["step_config"]["validation"]["backend_profiles"]["ecdf"]["params"]
+    params = project["actionConfig"]["validation"]["backend_profiles"]["ecdf"]["params"]
     assert params["feature_mode"] == "raw_gene"
     assert params["feature_family_set"] == "gene"

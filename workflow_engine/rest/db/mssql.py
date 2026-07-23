@@ -193,7 +193,7 @@ class MssqlGatewayDb(GatewayDbBase):
         capabilities: Optional[list[Any]] = None,
         arc_resource_id: Optional[str] = None,
     ) -> int:
-        caps_text = json.dumps(capabilities if capabilities is not None else [])
+        caps_text = _json_text(capabilities if capabilities is not None else [])
         sql = f"""{_MSSQL_OUTPUT_BATCH_PREFIX}
 DECLARE @worker_id bigint;
 BEGIN TRY

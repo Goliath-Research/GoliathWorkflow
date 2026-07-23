@@ -440,7 +440,7 @@ def test_pipeline_runner_generative_backend_dispatch(tmp_path: Path, monkeypatch
 
 
 def test_generative_config_validation_strict_fields():
-    with pytest.raises(ValueError, match="Legacy backend config keys"):
+    with pytest.raises(ValueError, match="model_backend must be one of"):
         MonteCarloConfig.model_validate(
             {
                 "samples_base_path": "/tmp",
