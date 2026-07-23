@@ -69,6 +69,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`methylit-standalone-doc.plan.md`](methylit-standalone-doc.plan.md) | **AB#668** | MethylIT Standalone Doc | (see plan frontmatter) |
 | [`worker-transport-security.plan.md`](worker-transport-security.plan.md) | **AB#672** | Worker Transport Security | (see plan frontmatter) |
 | [`ado-boards-traceability.plan.md`](ado-boards-traceability.plan.md) | _(meta)_ | ADO Boards Traceability (seed tooling) | `manifest`, `seed-script`, `ado-create`, `backfill-docs`, `promote-plan` |
+| [`ci-dev-deploy-sync.plan.md`](ci-dev-deploy-sync.plan.md) | _(pending ADO)_ | CI / Dev / Deploy synchronization contracts | `immediate-ci-fixes`, `sync-matrix`, `install-contract`, `catalog-fixture-contract`, `local-mirrors-ci`, `precommit-expand`, `editable-hygiene`, `promote-plan-docs` |
 | [`sync-genomes-to-qnap.plan.md`](sync-genomes-to-qnap.plan.md) | _(ops)_ | Sync /work/genomes to myQNAPcloud | `sync-script`, `doc-note` |
 | [`genomes-multi-version-inventory.plan.md`](genomes-multi-version-inventory.plan.md) | _(pending ADO)_ | Genomes multi-version inventory + pinned selection | `layout-and-selection`, `qnap-reorganize-cli`, `confirm-gap-docs`, `seed-genomes-endpoint`, `reference-asset-recipes`, `provision-s3-sync`, `phase0-hook` |
 | [`reference-inventory-audit.plan.md`](reference-inventory-audit.plan.md) | _(pending ADO)_ | Reference inventory propagation audit | `inventory-doc`, `pin-to-prefix`, `sql-parity`, `cred-example`, `verify-genomes`, `legacy-hygiene` |
