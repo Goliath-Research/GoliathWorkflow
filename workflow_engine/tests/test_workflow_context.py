@@ -48,12 +48,13 @@ def test_validate_resolved_input_json_rejects_placeholders():
     assert any("unresolved" in e for e in errors)
 
 
-def test_enrich_instance_context_from_buffy_project():
+def test_enrich_instance_context_from_buffy_project(local_project):
     check = Path(__file__).resolve().parents[1] / "domain" / "checks" / "buffy_healthy_vs_pca"
-    project = check / "configs" / "project_Buffy_healthy_vs_PCa.json"
-    if not project.is_file():
+    project_src = check / "configs" / "project_Buffy_healthy_vs_PCa.json"
+    if not project_src.is_file():
         pytest.skip("buffy fixture project missing")
 
+    project = local_project(project_src)
     enriched = enrich_instance_context({"projectPath": str(project)})
     assert enriched.get("comparisons")
     assert enriched.get("chromosomes")

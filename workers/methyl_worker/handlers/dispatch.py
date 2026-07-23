@@ -78,10 +78,6 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
     ``maybe_skip_action`` / ``record_action_execution``. Opt out with
     ``caasEnabled: false`` or ``METHYL_CAAS_ENABLED=0``.
     """
-    from ..capabilities import assert_execute_gpu_prereqs
-
-    assert_execute_gpu_prereqs(capability, action_name)
-
     entry = find_catalog_entry(action_name) or find_catalog_entry_by_capability(capability)
     if entry is None:
         raise RuntimeError(f"Unknown action {action_name!r} / capability {capability!r}")
@@ -104,6 +100,7 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
     input_model = validate_input(entry, task_input)
     skip_input = merge_runtime_input(task_input, runtime)
 
+    # Idempotent / CAAS skips must not require a GPU — outputs already exist.
     skipped_result = maybe_skip_action(entry, skip_input)
     if skipped_result is not None:
         _log_action_execution(
@@ -112,6 +109,10 @@ def execute_task(capability: str, action_name: str, input_json: Dict[str, Any]) 
         if action_name in _SAMPLE_PREP_DOMAIN_ACTIONS:
             skipped_result = _attach_domain_sample_ref(entry, action_name, task_input, skipped_result)
         return skipped_result
+
+    from ..capabilities import assert_execute_gpu_prereqs
+
+    assert_execute_gpu_prereqs(capability, action_name)
 
     if _stub_external_enabled() and capability in _STUB_EXTERNAL_CAPABILITIES:
         from ..action_execution import ExecutionTimer, execution_result_from_output

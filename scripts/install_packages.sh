@@ -1,8 +1,55 @@
 #!/bin/bash
 # Install MethylPipeline packages from scripts/packages.list (editable mode).
 # Also installs workers/ when present. Sourced by setup_host.sh and install_all.sh.
+#
+# With --with-deps, pip may materialize path dependencies as non-editable
+# site-packages copies. After the list (and workers), foundational packages are
+# re-installed editable --no-deps so repo schemas/source stay reachable.
 
 set -euo pipefail
+
+# Path deps often get overwritten as plain wheels during --with-deps; keep these editable.
+FOUNDATIONAL_PACKAGES=(methylutils methyldomain)
+
+_assert_editable_foundation() {
+  local python_bin="$1"
+  local dist_name="$2"
+  local show
+  show="$("$python_bin" -m pip show "$dist_name" 2>/dev/null || true)"
+  if [[ -z "$show" ]]; then
+    echo "[ERROR] Expected distribution not installed: $dist_name" >&2
+    return 1
+  fi
+  if ! grep -q '^Editable project location:' <<<"$show"; then
+    echo "[ERROR] $dist_name is not an editable install (pip --with-deps overwrote it)." >&2
+    echo "$show" >&2
+    return 1
+  fi
+}
+
+_reassert_foundational_editable() {
+  local project_root="$1"
+  local python_bin="$2"
+  local packages_dir="$3"
+  local pkg pkg_path dist_name
+
+  for pkg in "${FOUNDATIONAL_PACKAGES[@]}"; do
+    pkg_path="$packages_dir/$pkg"
+    if [[ ! -d "$pkg_path" ]]; then
+      echo "[WARN] Foundational package missing: $pkg_path" >&2
+      continue
+    fi
+    echo "[INFO] Re-asserting editable install: $pkg"
+    "$python_bin" -m pip install -e "$pkg_path" --no-deps
+  done
+
+  if [[ "${METHYL_REQUIRE_EDITABLE_FOUNDATIONS:-1}" == "1" ]]; then
+    # pip show uses distribution names from pyproject (methyldomain -> methyl_domain).
+    for dist_name in methylutils methyl_domain; do
+      _assert_editable_foundation "$python_bin" "$dist_name"
+    done
+  fi
+}
 
 install_packages_from_list() {
   local project_root="${1:?project root required}"
@@ -52,6 +99,10 @@ install_packages_from_list() {
   else
     echo "[WARN] workers/ not found or missing pyproject.toml"
   fi
+
+  # Always re-editable foundations after the list/workers pass so --with-deps
+  # path resolution cannot leave stale site-packages copies.
+  _reassert_foundational_editable "$project_root" "$python_bin" "$packages_dir"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

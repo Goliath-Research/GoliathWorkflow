@@ -1,7 +1,8 @@
 ---
 name: CI Dev Deploy Sync
 overview: Stop whack-a-mole CI failures by making every sync surface (packages, schemas, docs, diagrams, fixtures, install order) an explicit contract with pre-commit + PR gates that mirror the deployment build.
-> **Status: IN PROGRESS** — Immediate CI fixes applied; permanent sync gates still to implement.
+
+> **Status: IMPLEMENTED** — Sync contracts, preflight, pre-commit, PR wiring, and editable hygiene landed (Jul 2026).
 
 azure_devops:
   type: Feature
@@ -14,25 +15,25 @@ todos:
     status: completed
   - id: sync-matrix
     content: "Publish a committed sync-matrix doc listing every paired artifact (source → generated/committed companion) and which gate enforces it"
-    status: pending
+    status: completed
   - id: install-contract
     content: "Add scripts/check_package_install_contract.py — dist names match path-dep keys, packages.list topological order, every pyproject readme exists, every path dep is listed before dependents"
-    status: pending
+    status: completed
   - id: catalog-fixture-contract
     content: "Extend golden/schema/catalog drift so new catalog actions fail PR until schemas/tasks + golden I/O exist; wire into pre-commit + azure-pipelines-pr"
-    status: pending
+    status: completed
   - id: local-mirrors-ci
     content: "Make scripts/run_tests_ci.sh (or a scripts/ci_preflight.sh) the single local command that mirrors the deployment/PR install+guard+pytest path; document in ci/README.md"
-    status: pending
+    status: completed
   - id: precommit-expand
     content: "Expand .pre-commit-config.yaml to run install-contract, diagram --check (hash), doc freshness, catalog/schema/golden drift — same scripts CI runs"
-    status: pending
+    status: completed
   - id: editable-hygiene
     content: "Harden install_packages.sh so path deps stay editable (or re-editable) after --with-deps; fail if methylutils lands as a plain site-packages copy during CI/dev bootstrap"
-    status: pending
+    status: completed
   - id: promote-plan-docs
     content: "Update docs/plans/README.md, ci/README.md, and link from documentation-and-deployment-reliability; seed ADO Feature under AB#413 when ready"
-    status: pending
+    status: completed
 ---
 
 # CI / Dev / Deploy synchronization

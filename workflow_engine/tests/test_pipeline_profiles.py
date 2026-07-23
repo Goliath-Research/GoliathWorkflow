@@ -144,12 +144,13 @@ def test_full_biomarker_profile_enables_optional_branches() -> None:
     assert ctx["runBiomarkerFilter"] is True
 
 
-def test_enrich_instance_context_seeds_flags_from_validation() -> None:
+def test_enrich_instance_context_seeds_flags_from_validation(local_project) -> None:
+    project = local_project(
+        DOMAIN / "checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json"
+    )
     ctx = enrich_instance_context(
         {
-            "projectPath": str(
-                DOMAIN / "checks/buffy_healthy_vs_pca/configs/project_Buffy_healthy_vs_PCa.json"
-            ),
+            "projectPath": str(project),
             "pipelineProfile": "gene_enricher_stability",
         }
     )

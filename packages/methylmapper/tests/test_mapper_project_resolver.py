@@ -24,7 +24,7 @@ def _write_project(tmp_path: Path, *, csv_pattern: str = "dmps-*.csv") -> Path:
         json.dumps(
             {
                 "project_name": "MapperProject",
-                "output_base": "/work/output",
+                "output_base": str(tmp_path / "output"),
                 "controls": {
                     "label": "controls",
                     "groups": [{"label": "healthy", "sample_paths": ["c1"]}],
@@ -43,15 +43,17 @@ def _write_project(tmp_path: Path, *, csv_pattern: str = "dmps-*.csv") -> Path:
 
 def test_resolve_mapper_paths_uses_comparison_wildcards(tmp_path):
     project_path = _write_project(tmp_path)
+    out_base = tmp_path / "output"
 
     paths = resolve_mapper_paths(project_path)
 
-    assert paths.csv_pattern == "/work/output/MapperProject/detections/*/*/dmps-*.csv"
-    assert paths.output_dir == "/work/output/MapperProject/mapper"
+    assert paths.csv_pattern == str(out_base / "MapperProject/detections/*/*/dmps-*.csv")
+    assert paths.output_dir == str(out_base / "MapperProject/mapper")
 
 
 def test_resolve_mapper_paths_per_comparison_uses_canonical_layout(tmp_path):
     project_path = _write_project(tmp_path)
+    out_base = tmp_path / "output"
 
     resolved = resolve_mapper_paths_per_cancer_group(
         project_path,
@@ -63,19 +65,21 @@ def test_resolve_mapper_paths_per_comparison_uses_canonical_layout(tmp_path):
     assert label == "pca"
     assert (
         paths.csv_pattern
-        == "/work/output/MapperProject/detections/healthy/pca/dmps-*.csv"
+        == str(out_base / "MapperProject/detections/healthy/pca/dmps-*.csv")
     )
-    assert paths.output_dir == "/work/output/MapperProject/mapper/healthy/pca"
+    assert paths.output_dir == str(out_base / "MapperProject/mapper/healthy/pca")
 
 
 def test_resolve_mapper_paths_per_comparison_honors_step_override_output_dir(tmp_path):
     project_path = _write_project(tmp_path)
+    out_base = tmp_path / "output"
     override = tmp_path / "mapper_classifier_override.json"
+    override_dir = str(out_base / "MapperProject/mapper_classifier/healthy/pca")
     override.write_text(
         json.dumps(
             {
                 "csv_pattern": "dmps-*-classifier.csv",
-                "output_dir": "/work/output/MapperProject/mapper_classifier/healthy/pca",
+                "output_dir": override_dir,
             }
         ),
         encoding="utf-8",
@@ -87,16 +91,17 @@ def test_resolve_mapper_paths_per_comparison_honors_step_override_output_dir(tmp
     paths, label = resolved[0]
     assert label == "pca"
     assert paths.csv_pattern.endswith("/detections/healthy/pca/dmps-*-classifier.csv")
-    assert paths.output_dir == "/work/output/MapperProject/mapper_classifier/healthy/pca"
+    assert paths.output_dir == override_dir
 
 
 def test_resolve_mapper_paths_per_comparison_output_dir_base_appends_each_comparison(tmp_path):
+    out_base = tmp_path / "output"
     project_path = _write_project(tmp_path)
     project_path.write_text(
         json.dumps(
             {
                 "project_name": "MapperProject",
-                "output_base": "/work/output",
+                "output_base": str(out_base),
                 "controls": {
                     "label": "controls",
                     "groups": [{"label": "healthy", "sample_paths": ["c1"]}],
@@ -121,7 +126,7 @@ def test_resolve_mapper_paths_per_comparison_output_dir_base_appends_each_compar
         json.dumps(
             {
                 "csv_pattern": "dmps-*-classifier.csv",
-                "output_dir": "/work/output/MapperProject/mapper_classifier",
+                "output_dir": str(out_base / "MapperProject/mapper_classifier"),
             }
         ),
         encoding="utf-8",
@@ -131,8 +136,12 @@ def test_resolve_mapper_paths_per_comparison_output_dir_base_appends_each_compar
 
     assert len(resolved) == 2
     by_label = {label: paths for paths, label in resolved}
-    assert by_label["pca_low"].output_dir == "/work/output/MapperProject/mapper_classifier/healthy/pca_low"
-    assert by_label["pca_high"].output_dir == "/work/output/MapperProject/mapper_classifier/healthy/pca_high"
+    assert by_label["pca_low"].output_dir == str(
+        out_base / "MapperProject/mapper_classifier/healthy/pca_low"
+    )
+    assert by_label["pca_high"].output_dir == str(
+        out_base / "MapperProject/mapper_classifier/healthy/pca_high"
+    )
     assert by_label["pca_low"].output_dir != by_label["pca_high"].output_dir
 
 

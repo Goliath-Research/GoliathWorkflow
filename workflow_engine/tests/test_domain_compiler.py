@@ -184,24 +184,38 @@ def test_sample_prep_remediate_typed_gates_compile():
     assert result.workflow.variable_schemas.get("qcPass") == "schemas/vars/bool.schema.json"
 
 
-def test_data_driven_action_templates_are_self_contained_when_resolved():
+def test_data_driven_action_templates_are_self_contained_when_resolved(local_project, tmp_path):
     """Resolved scope should satisfy catalog required keys (parity check helper)."""
     program_path = (
         Path(__file__).resolve().parents[1] / "domain" / "fixtures" / "data_driven.program.json"
     )
-    result = compile_domain_program_file(program_path, enrich_context=True)
+    # Compile without host /work enrichment; seed scope from a local project copy.
+    result = compile_domain_program_file(program_path, enrich_context=False)
     wf = result.workflow
 
     _DOMAIN = Path(__file__).resolve().parents[1] / "domain"
     if str(_DOMAIN) not in sys.path:
         sys.path.insert(0, str(_DOMAIN))
-    from workflow_context import resolve_input_json_from_template, validate_resolved_input_json
+    from workflow_context import (
+        enrich_instance_context,
+        resolve_input_json_from_template,
+        validate_resolved_input_json,
+    )
 
+    src = (
+        _DOMAIN
+        / "checks"
+        / "buffy_healthy_vs_pca"
+        / "configs"
+        / "project_Buffy_healthy_vs_PCa.json"
+    )
+    project = local_project(src)
+    enriched = enrich_instance_context({"projectPath": str(project)})
     scope = {
-        "projectPath": result.context_json["projectPath"],
-        "centroid1Dir": result.context_json["centroid1Dir"],
-        "centroid2Dir": "/work/out/centroid2",
-        "detectOutDir": "/work/out/detect",
+        "projectPath": str(project),
+        "centroid1Dir": enriched["centroid1Dir"],
+        "centroid2Dir": str(tmp_path / "centroid2"),
+        "detectOutDir": str(tmp_path / "detect"),
         "chromosome": "21",
         "context": "CG",
         "control_group": "all",

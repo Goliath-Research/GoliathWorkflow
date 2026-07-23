@@ -21,3 +21,5 @@ methyl-export-action-catalog
 ```
 
 Parameter semantics vs key locations: [config-parameter-matrix.md](config-parameter-matrix.md).
+
+CI sync contracts (catalog ↔ schemas ↔ goldens, package install order, diagrams): [ci-sync-matrix.md](ci-sync-matrix.md).

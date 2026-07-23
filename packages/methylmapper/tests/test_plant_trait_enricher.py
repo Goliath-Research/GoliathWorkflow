@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -15,6 +16,13 @@ DEMO_TSV = (
     Path(__file__).resolve().parents[3]
     / "docs/examples/samd/plant-abiotic-stress/data/arabidopsis_drought_gene_traits.tsv"
 )
+
+
+def _mapper_without_bedtools(**kwargs) -> BedtoolsMapper:
+    """Construct BedtoolsMapper without requiring a host bedtools binary (CI agents)."""
+    with patch("methyl_mapper.bedtools_mapper.subprocess.run") as mock_run:
+        mock_run.return_value = None
+        return BedtoolsMapper(**kwargs)
 
 
 def test_normalize_enrich_source_plant_traits() -> None:
@@ -51,7 +59,7 @@ def test_bedtools_mapper_uses_plant_trait_enricher(tmp_path: Path) -> None:
         '1\ttest\tgene\t1\t10\t.\t+\t.\tgene_id "g1"; gene_name "AT5G52310";\n',
         encoding="utf-8",
     )
-    mapper = BedtoolsMapper(
+    mapper = _mapper_without_bedtools(
         gene_gtf=gtf,
         enrich_disease=True,
         enrich_source="plant_traits",
@@ -70,7 +78,7 @@ def test_shared_enrichment_payload_path_works_for_plant_traits(tmp_path: Path) -
         '1\ttest\tgene\t1\t10\t.\t+\t.\tgene_id "g1"; gene_name "AT5G52310";\n',
         encoding="utf-8",
     )
-    mapper = BedtoolsMapper(
+    mapper = _mapper_without_bedtools(
         gene_gtf=gtf,
         enrich_disease=True,
         enrich_source="plant_traits",

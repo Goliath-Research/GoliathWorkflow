@@ -19,13 +19,7 @@ For a first binary or multi-stage walkthrough without the SaMD ladder, use [Tuto
 
 **Never** put tool knobs in the study manifest (`step_config` is rejected). **Never** move `locked_test` / `pivotal_validation` patients back into training.
 
-```mermaid
-flowchart LR
-  init["methyl-study-init"] --> research["samd_research"]
-  research -->|"lock HPs + require locked_test"| enrich["samd_holdout_enrichment"]
-  enrich -->|"freeze + open pivotal cohort"| pivotal["samd_pivotal"]
-  research -.-> search["hyperparam search + early-stop"]
-```
+![SaMD study lifecycle](../diagrams/out/samd-study-lifecycle.png)
 
 ## Three profiles
 

@@ -1,0 +1,5 @@
+flowchart LR
+  init["methyl-study-init"] --> research["samd_research"]
+  research -->|"lock HPs + require locked_test"| enrich["samd_holdout_enrichment"]
+  enrich -->|"freeze + open pivotal cohort"| pivotal["samd_pivotal"]
+  research -.-> search["hyperparam search + early-stop"]
