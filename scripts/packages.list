@@ -24,8 +24,8 @@ methylderivedmeasures
 methyldeconv
 methylinfotheory
 rnaalignmentqc
-rnaexpress
 omicsfeatures
+rnaexpress
 proteomicsfeatures
 proteomicsqc
 workflow_engine
