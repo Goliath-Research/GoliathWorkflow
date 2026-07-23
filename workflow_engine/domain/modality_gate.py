@@ -27,6 +27,7 @@ METHYL_ONLY_ACTIONS = frozenset(
         "validation.stability",
         "validation.stability_freeze_readiness",
         "validation.prepare_freeze_project",
+        "validation.finalize_freeze_model_bundle",
         "validation.model_mc",
         "sample.parabricks_fq2bam",
         "sample.methyl_qc",

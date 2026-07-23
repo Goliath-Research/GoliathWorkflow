@@ -43,6 +43,16 @@ class PrepareFreezeTaskInput(BaseModel):
     targetRunDir: Optional[str] = None
 
 
+class FinalizeFreezeModelBundleTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: Optional[str] = None
+    projectPath: Optional[str] = None
+    project: Optional[str] = None
+    productionOutputDir: Optional[str] = None
+    monteCarloRunsRoot: Optional[str] = None
+
+
 class FreezeReadinessTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -177,6 +187,13 @@ class ValidationPrepareFreezeOutput(ActionOutputBase):
     centroid1Dir: Optional[str] = None
     centroid2Dir: Optional[str] = None
     detectOutDir: Optional[str] = None
+
+
+class ValidationFinalizeFreezeModelBundleOutput(ActionOutputBase):
+    projectPath: Optional[str] = None
+    modelBundleDir: Optional[str] = None
+    n_mapper_rows: int = 0
+    n_genes: int = 0
 
 
 class ValidationFreezeReadinessOutput(ActionOutputBase):

@@ -332,6 +332,45 @@ def _handle_validation_prepare_freeze(
     )
 
 
+def _handle_validation_finalize_freeze_model_bundle(
+    _capability: str,
+    _action_name: str,
+    input: BaseModel,
+    runtime: TaskRuntimeContext = Depends(get_runtime),
+    mc_root: Path = Depends(get_monte_carlo_runs_root),
+):
+    """Build mapper annotations + frozen gene panel after DomainProgram freeze mapper."""
+    input_json = _mc_input_with_runtime(input, runtime)
+    from methyl_validation.stability import finalize_production_model_bundle
+
+    from ..task_models.validation_models import ValidationFinalizeFreezeModelBundleOutput
+
+    config, _base_project = _load_mc_config(
+        input_json,
+        profile_overrides=runtime.validationProfile,
+    )
+    production_project = (
+        input_json.get("projectPath")
+        or input_json.get("project")
+        or str(Path(input_json.get("productionOutputDir") or (mc_root / "production")) / "project.json")
+    )
+    feature_mode = str(getattr(config, "feature_mode", "") or "").strip().lower()
+    family = str(getattr(config, "feature_family_set", "") or "").strip().lower()
+    require_mapper = feature_mode == "raw_gene" or family not in ("", "dmp_scored")
+    result = finalize_production_model_bundle(
+        production_project=Path(str(production_project)),
+        config=config,
+        require_mapper=require_mapper,
+    )
+    return ValidationFinalizeFreezeModelBundleOutput(
+        status="ok",
+        projectPath=result.get("productionProject"),
+        modelBundleDir=result.get("modelBundleDir"),
+        n_mapper_rows=int(result.get("n_mapper_rows") or 0),
+        n_genes=int(result.get("n_genes") or 0),
+    )
+
+
 def _handle_validation_stability_freeze_readiness(
     _capability: str, _action_name: str, input: BaseModel
 ):

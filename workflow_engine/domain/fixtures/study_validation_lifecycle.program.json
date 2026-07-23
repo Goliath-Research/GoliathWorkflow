@@ -269,6 +269,10 @@
       "node_key": "enricher"
     },
     {
+      "do": "validation.finalize_freeze_model_bundle",
+      "node_key": "finalize_freeze_model_bundle"
+    },
+    {
       "do": "pipeline.progression",
       "node_key": "progression"
     },

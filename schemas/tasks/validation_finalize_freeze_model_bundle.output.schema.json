@@ -79,42 +79,6 @@
       "default": null,
       "title": "Capability"
     },
-    "centroid1Dir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Centroid1Dir"
-    },
-    "centroid2Dir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Centroid2Dir"
-    },
-    "detectOutDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Detectoutdir"
-    },
     "domainSample": {
       "anyOf": [
         {},
@@ -155,18 +119,6 @@
       "default": null,
       "title": "Finished At Utc"
     },
-    "fixedDmpPanel": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Fixeddmppanel"
-    },
     "manifest_path": {
       "anyOf": [
         {
@@ -179,7 +131,7 @@
       "default": null,
       "title": "Manifest Path"
     },
-    "productionOutputDir": {
+    "modelBundleDir": {
       "anyOf": [
         {
           "type": "string"
@@ -189,7 +141,17 @@
         }
       ],
       "default": null,
-      "title": "Productionoutputdir"
+      "title": "Modelbundledir"
+    },
+    "n_genes": {
+      "default": 0,
+      "title": "N Genes",
+      "type": "integer"
+    },
+    "n_mapper_rows": {
+      "default": 0,
+      "title": "N Mapper Rows",
+      "type": "integer"
     },
     "projectPath": {
       "anyOf": [
@@ -213,18 +175,6 @@
       "default": "1.0",
       "title": "Schema Version",
       "type": "string"
-    },
-    "sourceRunDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Sourcerundir"
     },
     "started_at_utc": {
       "anyOf": [
@@ -261,18 +211,6 @@
       "default": null,
       "title": "Stdout Tail"
     },
-    "targetRunDir": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Targetrundir"
-    },
     "tool": {
       "anyOf": [
         {
@@ -286,6 +224,6 @@
       "title": "Tool"
     }
   },
-  "title": "ValidationPrepareFreezeOutput",
+  "title": "ValidationFinalizeFreezeModelBundleOutput",
   "type": "object"
 }

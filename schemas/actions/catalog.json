@@ -1578,6 +1578,37 @@
     },
     {
       "action_config_key": "validation",
+      "action_name": "validation.finalize_freeze_model_bundle",
+      "argv_map": {},
+      "capability": "validation.finalize-freeze-model-bundle",
+      "category": "validation",
+      "context_vars": [
+        "projectPath",
+        "productionOutputDir"
+      ],
+      "default_node_type": "ACTION",
+      "description": "After freeze mapper: write mapper_dmp_annotations + frozen gene panel and wire production project.json.",
+      "domain_effects": {
+        "output_bindings": [],
+        "reads_types": [
+          "StratifiedCohortDraw"
+        ],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": [
+          "ValidationArtifactRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "idempotency_enabled": true,
+      "in_process_handler": "_handle_validation_finalize_freeze_model_bundle",
+      "input_schema_ref": "schemas/tasks/validation_finalize_freeze_model_bundle.input.schema.json",
+      "output_schema_ref": "schemas/tasks/validation_finalize_freeze_model_bundle.output.schema.json",
+      "schema_id": "validation.finalize_freeze_model_bundle"
+    },
+    {
+      "action_config_key": "validation",
       "action_name": "validation.stability_freeze_readiness",
       "argv_map": {},
       "capability": "validation.stability-freeze-readiness",

@@ -2129,6 +2129,163 @@ def prepare_freeze_project(
     }
 
 
+def finalize_production_model_bundle(
+    *,
+    production_project: Path,
+    config: Optional["MonteCarloConfig"] = None,
+    stability_gene_panel_path: Optional[Path] = None,
+    require_mapper: bool = True,
+) -> Dict[str, Any]:
+    """
+    After DomainProgram freeze mapper (or legacy --freeze pipeline), build gene-mode
+    artifacts under ``production/model_bundle`` and wire pointers into project.json.
+
+    DomainProgram ``validation_freeze`` runs prepare → centroid → detect → mapper →
+    enricher but historically skipped this step (legacy ``freeze_production_model``
+    did it). Without it, gene ECDF model-MC fails looking for mapper_dmp_annotations.
+    """
+    from .model_bundle import (
+        FROZEN_GENE_FEATURES_NAME,
+        FROZEN_GENE_PANEL_NAME,
+        MAPPER_ANNOTATION_NAME,
+        build_frozen_gene_panel,
+        build_mapper_annotation_cache,
+    )
+
+    prod_project_path = Path(production_project)
+    if not prod_project_path.is_file():
+        raise FileNotFoundError(f"production project not found: {prod_project_path}")
+    prod_dir = prod_project_path.parent
+    bundle_dir = prod_dir / "model_bundle"
+    bundle_dir.mkdir(parents=True, exist_ok=True)
+
+    if stability_gene_panel_path is None:
+        candidate = bundle_dir / "stable_genes_from_stability.csv"
+        if candidate.is_file():
+            stability_gene_panel_path = candidate
+        else:
+            default_gene_csv = prod_dir.parent / "stability" / "stable_genes_production.csv"
+            if default_gene_csv.is_file():
+                stability_gene_panel_path = default_gene_csv
+
+    mapper_annotation_cache = build_mapper_annotation_cache(
+        project_json=prod_project_path,
+        output_csv=bundle_dir / MAPPER_ANNOTATION_NAME,
+    )
+    n_mapper_rows = int(mapper_annotation_cache.get("rows") or 0)
+    if require_mapper and n_mapper_rows <= 0:
+        raise RuntimeError(
+            "finalize_production_model_bundle: mapper annotation cache is empty. "
+            "Freeze mapper must run before gene ECDF (expected production/mapper/...)."
+        )
+
+    frozen_gene_panel = build_frozen_gene_panel(
+        project_json=prod_project_path,
+        output_dir=bundle_dir,
+        min_dmps_per_feature=max(
+            1,
+            int(
+                getattr(config, "freeze_min_dmps_per_feature", 1)
+                if config is not None
+                else 1
+            ),
+        ),
+        gene_importance_min=(
+            float(getattr(config, "freeze_gene_importance_min"))
+            if (config is not None and getattr(config, "freeze_gene_importance_min", None) is not None)
+            else None
+        ),
+        top_genes=(
+            int(getattr(config, "freeze_top_genes"))
+            if (config is not None and getattr(config, "freeze_top_genes", None) is not None)
+            else None
+        ),
+        stability_gene_panel_path=(
+            str(stability_gene_panel_path)
+            if stability_gene_panel_path is not None and Path(stability_gene_panel_path).is_file()
+            else None
+        ),
+    )
+
+    feature_mode = (
+        str(getattr(config, "feature_mode", "") or "").strip().lower() if config is not None else ""
+    )
+    family = (
+        str(getattr(config, "feature_family_set", "") or "").strip().lower()
+        if config is not None
+        else ""
+    )
+    needs_genes = feature_mode == "raw_gene" or family in ("gene", "gene_scored", "observed_hybrid")
+    gene_panel_path = Path(
+        str(frozen_gene_panel.get("gene_panel_path") or (bundle_dir / FROZEN_GENE_PANEL_NAME))
+    )
+    if not gene_panel_path.is_absolute():
+        gene_panel_path = bundle_dir / gene_panel_path.name
+    gene_feat_path = Path(
+        str(frozen_gene_panel.get("gene_features_path") or (bundle_dir / FROZEN_GENE_FEATURES_NAME))
+    )
+    if not gene_feat_path.is_absolute():
+        gene_feat_path = bundle_dir / gene_feat_path.name
+
+    n_genes = int(frozen_gene_panel.get("n_genes") or frozen_gene_panel.get("genes_rows") or 0)
+    if n_genes <= 0 and gene_panel_path.is_file():
+        try:
+            gene_df = pd.read_csv(gene_panel_path)
+            if not gene_df.empty and "gene_name" in gene_df.columns:
+                n_genes = int(gene_df["gene_name"].dropna().astype(str).str.strip().ne("").sum())
+        except Exception:
+            n_genes = 0
+    if needs_genes and n_genes <= 0:
+        # Fall back to stability panel row count when freeze builder omitted n_genes.
+        if stability_gene_panel_path is not None and Path(stability_gene_panel_path).is_file():
+            try:
+                stab_df = pd.read_csv(stability_gene_panel_path)
+                if not stab_df.empty and "gene_name" in stab_df.columns:
+                    n_genes = int(stab_df["gene_name"].dropna().astype(str).str.strip().ne("").sum())
+            except Exception:
+                pass
+    if needs_genes and n_genes <= 0:
+        raise RuntimeError(
+            "finalize_production_model_bundle: no frozen genes for gene ECDF. "
+            "mc_stability must produce stable_genes_production.csv via runGeneFeaturecuts "
+            f"(checked {stability_gene_panel_path})."
+        )
+
+    with open(prod_project_path, encoding="utf-8") as f:
+        prod_project_payload = json.load(f)
+    prod_project_payload.pop("step_config", None)
+    action_cfg = prod_project_payload.setdefault("actionConfig", {})
+    model_bundle_cfg = action_cfg.setdefault("model_bundle", {})
+    # Prefer configured mount paths (/work/...) over OS realpath (/lambda/nfs/...).
+    mapper_path = Path(str(mapper_annotation_cache.get("path") or (bundle_dir / MAPPER_ANNOTATION_NAME)))
+    if not mapper_path.is_absolute():
+        mapper_path = bundle_dir / mapper_path.name
+
+    model_bundle_cfg["mapper_annotation_csv"] = str(mapper_path)
+    model_bundle_cfg["fixed_gene_panel"] = str(gene_panel_path)
+    model_bundle_cfg["fixed_gene_features"] = str(gene_feat_path)
+    if stability_gene_panel_path is not None and Path(stability_gene_panel_path).is_file():
+        model_bundle_cfg["stability_gene_panel"] = str(Path(stability_gene_panel_path))
+    with open(prod_project_path, "w", encoding="utf-8") as f:
+        json.dump(prod_project_payload, f, indent=2)
+
+    logger.info(
+        "Finalized production model_bundle: mapper_rows=%s n_genes=%s path=%s",
+        n_mapper_rows,
+        n_genes,
+        bundle_dir,
+    )
+    return {
+        "status": "ok",
+        "productionProject": str(prod_project_path),
+        "modelBundleDir": str(bundle_dir),
+        "mapper_annotation_cache": mapper_annotation_cache,
+        "frozen_gene_panel": frozen_gene_panel,
+        "n_mapper_rows": n_mapper_rows,
+        "n_genes": n_genes,
+    }
+
+
 def freeze_production_model(
     base_project: Path,
     stable_dmp_csv: str,
@@ -2255,74 +2412,33 @@ def freeze_production_model(
         config=config,
     )
     mapper_annotation_cache: Dict[str, Any] = {}
+    frozen_gene_panel: Dict[str, Any] = {}
     if success:
         try:
-            from .model_bundle import (
-                FROZEN_GENE_FEATURES_NAME,
-                FROZEN_GENE_PANEL_NAME,
-                MAPPER_ANNOTATION_NAME,
-                build_frozen_gene_panel,
-                build_mapper_annotation_cache,
+            ecdf_params = (
+                ((project_dict.get("actionConfig") or {}).get("validation") or {})
+                .get("backend_profiles", {})
+                .get("ecdf", {})
+                .get("params", {})
             )
-
-            bundle_dir = prod_dir / "model_bundle"
-            bundle_dir.mkdir(parents=True, exist_ok=True)
-            mapper_annotation_cache = build_mapper_annotation_cache(
-                project_json=prod_project_path,
-                output_csv=bundle_dir / MAPPER_ANNOTATION_NAME,
+            feature_mode = str(ecdf_params.get("feature_mode") or getattr(config, "feature_mode", "") or "").strip().lower()
+            family = str(
+                ecdf_params.get("feature_family_set") or getattr(config, "feature_family_set", "") or ""
+            ).strip().lower()
+            require_mapper = feature_mode == "raw_gene" or family not in ("", "dmp_scored")
+            finalized = finalize_production_model_bundle(
+                production_project=prod_project_path,
+                config=config,
+                stability_gene_panel_path=stability_gene_panel_path,
+                require_mapper=require_mapper,
             )
-            frozen_gene_panel = build_frozen_gene_panel(
-                project_json=prod_project_path,
-                output_dir=bundle_dir,
-                min_dmps_per_feature=max(
-                    1,
-                    int(
-                        getattr(config, "freeze_min_dmps_per_feature", 1)
-                        if config is not None
-                        else 1
-                    ),
-                ),
-                gene_importance_min=(
-                    float(getattr(config, "freeze_gene_importance_min"))
-                    if (config is not None and getattr(config, "freeze_gene_importance_min", None) is not None)
-                    else None
-                ),
-                top_genes=(
-                    int(getattr(config, "freeze_top_genes"))
-                    if (config is not None and getattr(config, "freeze_top_genes", None) is not None)
-                    else None
-                ),
-                stability_gene_panel_path=(
-                    str(stability_gene_panel_path)
-                    if stability_gene_panel_path is not None and stability_gene_panel_path.is_file()
-                    else None
-                ),
-            )
-            with open(prod_project_path, encoding="utf-8") as f:
-                prod_project_payload = json.load(f)
-            prod_project_payload.pop("step_config", None)
-            action_cfg = prod_project_payload.setdefault("actionConfig", {})
-            model_bundle_cfg = action_cfg.setdefault("model_bundle", {})
-            model_bundle_cfg["mapper_annotation_csv"] = str(
-                mapper_annotation_cache.get("path")
-            )
-            model_bundle_cfg["fixed_gene_panel"] = str(
-                frozen_gene_panel.get("gene_panel_path")
-                or (bundle_dir / FROZEN_GENE_PANEL_NAME).absolute()
-            )
-            model_bundle_cfg["fixed_gene_features"] = str(
-                frozen_gene_panel.get("gene_features_path")
-                or (bundle_dir / FROZEN_GENE_FEATURES_NAME).absolute()
-            )
-            with open(prod_project_path, "w", encoding="utf-8") as f:
-                json.dump(prod_project_payload, f, indent=2)
+            mapper_annotation_cache = dict(finalized.get("mapper_annotation_cache") or {})
+            frozen_gene_panel = dict(finalized.get("frozen_gene_panel") or {})
         except Exception as e:
             success = False
             errors = list(errors) + [f"Mapper annotation cache build failed: {e}"]
             mapper_annotation_cache = {}
             frozen_gene_panel = {}
-    else:
-        frozen_gene_panel = {}
 
     summary = {
         "output_dir": str(prod_dir),

@@ -101,7 +101,7 @@ def test_freeze_production_model_writes_mapper_annotation_pointer(tmp_path: Path
     assert summary["mapper_annotation_cache"]["rows"] == 1
 
     prod_project = json.loads((production_dir / "project.json").read_text(encoding="utf-8"))
-    mb_cfg = prod_project["step_config"]["model_bundle"]
+    mb_cfg = prod_project["actionConfig"]["model_bundle"]
     assert mb_cfg["mapper_annotation_csv"] == summary["mapper_annotation_cache"]["path"]
     assert mb_cfg["fixed_gene_panel"] == summary["frozen_gene_panel"]["gene_panel_path"]
     assert mb_cfg["fixed_gene_features"] == summary["frozen_gene_panel"]["gene_features_path"]
@@ -236,7 +236,11 @@ def test_freeze_production_model_wires_stable_genes_and_raw_gene(tmp_path: Path,
     monkeypatch.setattr(
         model_bundle,
         "build_mapper_annotation_cache",
-        lambda **kwargs: {"path": str(production_dir / "model_bundle" / "mapper.csv"), "rows": 0},
+        lambda **kwargs: {
+            "path": str(production_dir / "model_bundle" / "mapper.csv"),
+            "rows": 1,
+            "unique_loci": 1,
+        },
     )
 
     frozen_calls: dict = {}
@@ -292,9 +296,9 @@ def test_freeze_production_model_wires_stable_genes_and_raw_gene(tmp_path: Path,
     assert summary["success"] is True
     assert summary["stable_gene_panel"] is not None
     prod_project = json.loads((production_dir / "project.json").read_text(encoding="utf-8"))
-    params = prod_project["step_config"]["validation"]["backend_profiles"]["ecdf"]["params"]
+    params = prod_project["actionConfig"]["validation"]["backend_profiles"]["ecdf"]["params"]
     assert params["feature_mode"] == "raw_gene"
     assert params["feature_family_set"] == "gene"
-    mb_cfg = prod_project["step_config"]["model_bundle"]
+    mb_cfg = prod_project["actionConfig"]["model_bundle"]
     assert "stability_gene_panel" in mb_cfg
     assert frozen_calls.get("stability_gene_panel_path") == summary["stable_gene_panel"]
