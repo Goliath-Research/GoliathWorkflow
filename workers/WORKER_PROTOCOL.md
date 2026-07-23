@@ -56,7 +56,7 @@ Workflow runs append a unified `{logRoot}/action_run_log.jsonl` with one line pe
 
 Log root resolution: explicit `monteCarloRunsRoot`, any path under `monte_carlo_runs/`, validation project output, project output base, or `sampleDir`.
 
-**FOREACH:** each action inside an MC iteration skips independently via its own manifest under `{runDir}/.action_results/`; the scheduler does not short-circuit whole iterations.
+**FOREACH:** each action inside an MC iteration still skips independently via CAAS / `{runDir}/.action_results/`. In addition, the scheduler may **short-circuit a whole BODY iteration** when an iteration-bundle content key hits under `{project_root}/.caas/foreach_bundle/` (local engine) or `wf.foreach_bundle_entry` (DB engine). On hit, BODY children are not claimed; on miss, normal fan-out runs and a successful BODY commits the bundle.
 
 **Force re-execute:** pass `forceRerun: true` in task input, set context `forceRerun` on local runs, use `methyl-workflow-run --force-rerun`, or export `METHYL_FORCE_RERUN=1`.
 

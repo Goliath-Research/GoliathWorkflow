@@ -163,6 +163,8 @@ class ActionCatalogExport(TypedDict, total=False):
     cli_tool: str
     tool: str
     domain_effects: Dict[str, Any]
+    idempotency_enabled: bool
+    idempotency_opt_out_reason: str
 
 
 @dataclass(frozen=True)
@@ -186,6 +188,7 @@ class ActionCatalogEntry:
     in_process_handler: Optional[str] = None
     handler: Optional[str] = None  # deprecated alias for in_process_handler
     idempotency_enabled: bool = False
+    idempotency_opt_out_reason: Optional[str] = None
     internal: bool = False
     domain_effects: Optional[DomainEffects] = None
 
@@ -271,6 +274,11 @@ class ActionCatalogEntry:
                     for t in de.template_group_side_defaults
                 ],
             }
+        # Effective eligibility (default-on with explicit opt-outs).
+        payload["idempotency_enabled"] = idempotency_enabled_for(self)
+        reason = idempotency_opt_out_reason_for(self)
+        if reason:
+            payload["idempotency_opt_out_reason"] = reason
         return payload
 
 
@@ -475,6 +483,7 @@ def _entry(
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     in_process_handler: Optional[str] = None,
     idempotency_enabled: bool = False,
+    idempotency_opt_out_reason: Optional[str] = None,
     domain_effects: Optional[DomainEffects] = None,
     internal: bool = False,
 ) -> ActionCatalogEntry:
@@ -496,6 +505,7 @@ def _entry(
         argv_map=argv_map,
         in_process_handler=in_process_handler,
         idempotency_enabled=idempotency_enabled,
+        idempotency_opt_out_reason=idempotency_opt_out_reason,
         domain_effects=domain_effects,
         internal=internal,
     )
@@ -519,6 +529,7 @@ def _cli(
     argv_map: ArgvMap = DEFAULT_PIPELINE_ARGV_MAP,
     domain_effects: Optional[DomainEffects] = None,
     idempotency_enabled: bool = False,
+    idempotency_opt_out_reason: Optional[str] = None,
     internal: bool = False,
 ) -> ActionCatalogEntry:
     return _entry(
@@ -539,6 +550,7 @@ def _cli(
         argv_map=argv_map,
         domain_effects=domain_effects,
         idempotency_enabled=idempotency_enabled,
+        idempotency_opt_out_reason=idempotency_opt_out_reason,
         internal=internal,
     )
 
@@ -561,6 +573,7 @@ def _in_process(
     context_vars: ContextVars = (),
     domain_effects: Optional[DomainEffects] = None,
     idempotency_enabled: bool = False,
+    idempotency_opt_out_reason: Optional[str] = None,
     internal: bool = False,
 ) -> ActionCatalogEntry:
     return _entry(
@@ -582,6 +595,7 @@ def _in_process(
         argv_map=(),
         domain_effects=domain_effects,
         idempotency_enabled=idempotency_enabled,
+        idempotency_opt_out_reason=idempotency_opt_out_reason,
         internal=internal,
     )
 
@@ -1583,30 +1597,67 @@ ACTION_CATALOG: Sequence[ActionCatalogEntry] = (
         tool="WorkflowFsStat",
         context_vars=("projectPath",),
         domain_effects=_DE_WORKFLOW_VALUE,
-        idempotency_enabled=False,
+        idempotency_opt_out_reason="mtime_sensitive",
     ),
 )
 
 
+# Legacy allow-list retained for docs/tests; eligibility is now default-on with opt-outs.
 IDEMPOTENT_VALIDATION_ACTIONS: FrozenSet[str] = frozenset(
     {
         "validation.plan_iterations",
         "validation.stability",
         "validation.stability_freeze_readiness",
         "validation.prepare_freeze_project",
+        "validation.model_mc",
+        "validation.select_best_model",
+        "validation.post_model_validation",
+        "validation.model_bundle",
+        "validation.model_train",
+        "validation.model_predict",
+        "validation.biomarker_filter",
+        "validation.link_artifacts",
     }
 )
 
+# Hard opt-outs (destructive, control-flow, time-varying). Sample-scoped prep is
+# deferred unless METHYL_SAMPLE_CAAS_ENABLED (see sample_content_store).
+_HARD_IDEMPOTENCY_OPT_OUT: Dict[str, str] = {
+    "workflow.fs_stat": "mtime_sensitive",
+    "sample.delete_fastqs": "destructive",
+    "sample.delete_bam": "destructive",
+    "sample.archive_sample": "remote_upload_etag_only",
+    "sample.qc_failed": "control_flow",
+}
+
+_SAMPLE_SCOPED_PREFIXES = ("sample.", "parabricks.", "proteomics.", "align.")
+
+
+def idempotency_opt_out_reason_for(entry: ActionCatalogEntry) -> Optional[str]:
+    """Return opt-out reason when CAAS skip/replay must not apply; else None."""
+    if entry.idempotency_opt_out_reason:
+        return entry.idempotency_opt_out_reason
+    if entry.action_name in _HARD_IDEMPOTENCY_OPT_OUT:
+        return _HARD_IDEMPOTENCY_OPT_OUT[entry.action_name]
+    if entry.action_name.startswith(_SAMPLE_SCOPED_PREFIXES):
+        try:
+            from methyl_domain.sample_content_store import sample_caas_enabled_for_action
+
+            if sample_caas_enabled_for_action(entry.action_name):
+                return None
+        except Exception:
+            pass
+        return "sample_scoped_caas_deferred"
+    return None
+
 
 def idempotency_enabled_for(entry: ActionCatalogEntry) -> bool:
-    """Return True when signature-based skip/replay is active for this catalog entry."""
-    if entry.idempotency_enabled:
-        return True
-    if entry.action_name in IDEMPOTENT_VALIDATION_ACTIONS:
-        return True
-    if entry.action_name.startswith("pipeline."):
-        return True
-    return False
+    """Return True when signature-based skip/replay is active for this catalog entry.
+
+    Default: every catalog ACTION is eligible unless an explicit opt-out applies
+    (destructive sample ops, mtime probes, deferred sample-scoped store).
+    """
+    return idempotency_opt_out_reason_for(entry) is None
 
 
 def list_action_catalog() -> List[ActionCatalogEntry]:

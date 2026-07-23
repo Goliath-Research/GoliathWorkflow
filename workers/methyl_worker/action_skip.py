@@ -26,7 +26,7 @@ from methyl_domain.content_store import (
     commit_artifacts_to_store,
     link_entry_into_place,
     read_caas_entry,
-    resolve_project_root,
+    resolve_caas_root,
     verify_entry_artifacts,
 )
 from pydantic import BaseModel
@@ -51,6 +51,13 @@ _TASK_SCHEMAS = _REPO_ROOT / "schemas" / "tasks"
 
 _PATH_SUFFIXES = (".json", ".csv", ".tsv", ".h5", ".hdf5", ".bam", ".txt", ".md")
 
+# Dual NFS mounts that must hash to the same content keys across workers.
+_DUAL_MOUNT_PREFIXES = (
+    "/lambda/nfs/Work",
+    "/lambda/nfs/work",
+    "/Work",
+)
+
 
 def _canonical_json(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str)
@@ -60,18 +67,100 @@ def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _normalize_path_strings(value: Any) -> Any:
+def _file_content_fingerprint(path: Path, *, max_bytes: int = 1_048_576) -> str:
+    """Stable content digest: full sha256 for small files, size+prefix/suffix for large."""
+    try:
+        st = path.stat()
+    except OSError:
+        return "missing"
+    size = int(st.st_size)
+    if size <= max_bytes:
+        h = hashlib.sha256()
+        try:
+            with path.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                    h.update(chunk)
+            return f"{size}:{h.hexdigest()[:16]}"
+        except OSError:
+            return f"{size}:unreadable"
+    # Large files: size + first/last 64 KiB (avoids mtime-only NFS remount forks).
+    h = hashlib.sha256()
+    try:
+        with path.open("rb") as fh:
+            head = fh.read(65536)
+            h.update(head)
+            if size > 65536:
+                fh.seek(max(0, size - 65536))
+                h.update(fh.read(65536))
+        return f"{size}:{h.hexdigest()[:16]}"
+    except OSError:
+        return f"{size}:unreadable"
+
+
+def _load_path_remap(input_json: Mapping[str, Any]) -> Dict[str, str]:
+    """Study ``path_remap`` from resolvedConfig / regulatory / project JSON."""
+    for container in (
+        input_json.get("resolvedConfig"),
+        input_json.get("actionConfig"),
+    ):
+        if isinstance(container, Mapping):
+            remap = container.get("path_remap") or container.get("pathRemap")
+            if isinstance(remap, Mapping) and remap:
+                return {str(k): str(v) for k, v in remap.items()}
+    project = input_json.get("projectPath") or input_json.get("project")
+    if not project:
+        return {}
+    path = Path(str(project))
+    if not path.is_file():
+        return {}
+    try:
+        from methyl_utils import load_project
+
+        cfg = load_project(str(path))
+        raw = getattr(cfg, "path_remap", None) or {}
+        if isinstance(raw, Mapping):
+            return {str(k): str(v) for k, v in raw.items()}
+    except Exception:
+        pass
+    return {}
+
+
+def _canonicalize_abs_path(path_str: str, path_remap: Mapping[str, str]) -> str:
+    """Remap dual mounts / study path_remap, then resolve to a stable absolute form."""
+    text = path_str
+    if path_remap:
+        try:
+            from methyl_validation.path_remap import remap_path_string
+
+            text = remap_path_string(text, dict(path_remap))
+        except Exception:
+            pass
+    try:
+        resolved = str(Path(text).expanduser().resolve())
+    except OSError:
+        resolved = text
+    # Collapse known dual mounts onto /work/... so workers share content keys.
+    for prefix in _DUAL_MOUNT_PREFIXES:
+        if resolved == prefix or resolved.startswith(prefix + "/"):
+            rel = resolved[len(prefix) :].lstrip("/")
+            resolved = f"/work/{rel}" if rel else "/work"
+            break
+    return resolved
+
+
+def _normalize_path_strings(
+    value: Any,
+    path_remap: Optional[Mapping[str, str]] = None,
+) -> Any:
+    remap = dict(path_remap or {})
     if isinstance(value, str):
         if value.startswith("/") or value.startswith("~"):
-            try:
-                return str(Path(value).expanduser().resolve())
-            except OSError:
-                return value
+            return _canonicalize_abs_path(value, remap)
         return value
     if isinstance(value, dict):
-        return {k: _normalize_path_strings(v) for k, v in sorted(value.items())}
+        return {k: _normalize_path_strings(v, remap) for k, v in sorted(value.items())}
     if isinstance(value, list):
-        return [_normalize_path_strings(v) for v in value]
+        return [_normalize_path_strings(v, remap) for v in value]
     return value
 
 
@@ -131,6 +220,7 @@ def _previous_mc_run_dir(run_dir: Path) -> Optional[Path]:
 
 
 def _directory_fingerprint(root: Path, *, max_files: int = 500) -> Optional[str]:
+    """Content-oriented tree fingerprint (size + content digest; not mtime-only)."""
     if not root.is_dir():
         return None
     entries: List[str] = []
@@ -142,12 +232,8 @@ def _directory_fingerprint(root: Path, *, max_files: int = 500) -> Optional[str]
         if count > max_files:
             entries.append("…truncated")
             break
-        try:
-            st = path.stat()
-        except OSError:
-            continue
         rel = path.relative_to(root).as_posix()
-        entries.append(f"{rel}:{st.st_size}:{int(st.st_mtime)}")
+        entries.append(f"{rel}:{_file_content_fingerprint(path)}")
     if not entries:
         return None
     return _sha256_text("\n".join(entries))[:16]
@@ -216,26 +302,114 @@ def _stability_mc_extra(input_json: Mapping[str, Any]) -> Optional[dict]:
     return extra
 
 
+def _split_reuse_fingerprint(input_json: Mapping[str, Any]) -> Optional[dict]:
+    """Fingerprint upstream MC split CSVs so model-MC CAAS aligns with split-reuse identity."""
+    mc_root = _resolve_monte_carlo_runs_root(input_json)
+    if mc_root is None or not mc_root.is_dir():
+        return None
+    extra: dict[str, Any] = {}
+    try:
+        from methyl_validation.reuse_splits import fingerprint_mc_splits_root
+
+        fp = fingerprint_mc_splits_root(mc_root)
+        if fp:
+            extra["splitReuseFingerprint"] = fp
+    except Exception:
+        logger.debug("split reuse fingerprint failed", exc_info=True)
+    summary = mc_root / "split_reuse_summary.json"
+    if not summary.is_file():
+        for candidate in mc_root.glob("**/split_reuse_summary.json"):
+            summary = candidate
+            break
+    if summary.is_file():
+        extra["splitReuseSummary"] = _file_content_fingerprint(summary)
+    return extra or None
+
+
+def _model_mc_extra(input_json: Mapping[str, Any]) -> Optional[dict]:
+    """Upstream freeze / MC config fingerprints for validation.model_mc signatures."""
+    extra: dict[str, Any] = {}
+    mc_root = _resolve_monte_carlo_runs_root(input_json)
+    if mc_root is not None and mc_root.is_dir():
+        extra["monteCarloRunsRoot"] = str(mc_root)
+        snapshot = mc_root / "queue" / "mc_config.json"
+        if snapshot.is_file() or snapshot.is_symlink():
+            try:
+                target = snapshot.resolve() if snapshot.is_symlink() else snapshot
+                extra["mcConfig"] = _file_content_fingerprint(target)
+            except OSError:
+                extra["mcConfig"] = "missing"
+        prod = mc_root / "production"
+        if prod.is_dir():
+            fp = _directory_fingerprint(prod)
+            if fp:
+                extra["productionFingerprint"] = fp
+    split_fp = _split_reuse_fingerprint(input_json)
+    if split_fp:
+        extra.update(split_fp)
+    if input_json.get("requireArtifactReuse") is not None:
+        extra["requireArtifactReuse"] = bool(input_json.get("requireArtifactReuse"))
+    backends = input_json.get("backends")
+    if backends is not None:
+        extra["backends"] = backends
+    return extra or None
+
+
+def _select_best_model_extra(input_json: Mapping[str, Any]) -> Optional[dict]:
+    model_mc = input_json.get("modelMcRoot")
+    if not model_mc:
+        return None
+    root = Path(str(model_mc)).expanduser()
+    if not root.is_dir():
+        return {"modelMcRoot": str(root)}
+    fp = _directory_fingerprint(root)
+    return {
+        "modelMcRoot": str(root.resolve()),
+        "modelMcFingerprint": fp,
+        "selectionMetric": input_json.get("selectionMetric"),
+        "selectionStat": input_json.get("selectionStat"),
+    }
+
+
 def compute_input_signature(
     entry: ActionCatalogEntry,
     input_json: Mapping[str, Any],
     input_model: BaseModel,
 ) -> str:
+    path_remap = _load_path_remap(input_json)
     payload: dict[str, Any] = {
         "action": entry.action_name,
-        "input": _normalize_path_strings(input_model.model_dump(mode="json")),
+        "input": _normalize_path_strings(
+            input_model.model_dump(mode="json"), path_remap
+        ),
     }
     action_slice = _load_action_config_slice(entry, input_json)
     if action_slice is not None:
-        payload["action_config"] = action_slice
+        payload["action_config"] = _normalize_path_strings(action_slice, path_remap)
     if entry.action_name == "pipeline.centroid":
         extra = _incremental_centroid_extra(input_json)
         if extra:
-            payload["incremental"] = extra
+            payload["incremental"] = _normalize_path_strings(extra, path_remap)
     if entry.action_name == "validation.stability":
         extra = _stability_mc_extra(input_json)
         if extra:
-            payload["monteCarlo"] = extra
+            payload["monteCarlo"] = _normalize_path_strings(extra, path_remap)
+    if entry.action_name == "validation.model_mc":
+        extra = _model_mc_extra(input_json)
+        if extra:
+            payload["modelMc"] = _normalize_path_strings(extra, path_remap)
+    if entry.action_name == "validation.select_best_model":
+        extra = _select_best_model_extra(input_json)
+        if extra:
+            payload["selectBest"] = _normalize_path_strings(extra, path_remap)
+    if entry.action_name == "validation.post_model_validation":
+        split_fp = _split_reuse_fingerprint(input_json)
+        if split_fp:
+            payload["splitReuse"] = split_fp
+    if entry.action_name == "validation.plan_iterations":
+        split_fp = _split_reuse_fingerprint(input_json)
+        if split_fp:
+            payload["splitReuse"] = split_fp
     return _sha256_text(_canonical_json(payload))
 
 
@@ -268,7 +442,36 @@ def resolve_action_output_dir(entry: ActionCatalogEntry, input_json: Mapping[str
     if action == "validation.plan_iterations":
         return _resolve_monte_carlo_runs_root(input_json)
 
-    if action in {"validation.stability_freeze_readiness", "validation.prepare_freeze_project"}:
+    if action == "validation.model_mc":
+        prod = input_json.get("productionOutputDir")
+        if prod:
+            return Path(str(prod)).expanduser().resolve()
+        mc_root = _resolve_monte_carlo_runs_root(input_json)
+        return mc_root / "model_mc" if mc_root else None
+
+    if action == "validation.select_best_model":
+        model_mc = input_json.get("modelMcRoot")
+        if model_mc:
+            return Path(str(model_mc)).expanduser().resolve()
+        mc_root = _resolve_monte_carlo_runs_root(input_json)
+        return mc_root / "model_mc" if mc_root else None
+
+    if action == "validation.post_model_validation":
+        prod = input_json.get("productionOutputDir")
+        if prod:
+            return Path(str(prod)).expanduser().resolve()
+        mc_root = _resolve_monte_carlo_runs_root(input_json)
+        return mc_root / "post_model_validation" if mc_root else None
+
+    if action == "validation.model_bundle":
+        bundle = input_json.get("bundleDir")
+        if bundle:
+            return Path(str(bundle)).expanduser().resolve()
+
+    if action in {
+        "validation.stability_freeze_readiness",
+        "validation.prepare_freeze_project",
+    }:
         project = input_json.get("projectPath") or input_json.get("project")
         if not project:
             return None
@@ -289,6 +492,10 @@ def resolve_action_output_dir(entry: ActionCatalogEntry, input_json: Mapping[str
     run_dir = input_json.get("runDir")
     if run_dir:
         return Path(str(run_dir)).expanduser().resolve()
+
+    target = input_json.get("targetRunDir")
+    if target:
+        return Path(str(target)).expanduser().resolve()
 
     project = input_json.get("projectPath") or input_json.get("project")
     if project:
@@ -328,13 +535,43 @@ def _is_action_result_envelope(path: Path) -> bool:
     return path.parent.name == ".action_results" and path.suffix == ".json"
 
 
-def artifacts_from_output(output_dict: Mapping[str, Any]) -> List[ArtifactRef]:
+def _harvest_centroid_artifacts(output_dict: Mapping[str, Any]) -> List[Path]:
+    """Ensure pipeline.centroid commits the HDF5 even when path checks race or miss."""
+    paths: List[Path] = []
+    h5 = output_dict.get("centroid_h5_path")
+    if isinstance(h5, str) and h5:
+        p = Path(h5)
+        if p.is_file():
+            paths.append(p)
+    out_dir_raw = output_dict.get("output_dir") or output_dict.get("outputDir")
+    if isinstance(out_dir_raw, str) and out_dir_raw:
+        out_dir = Path(out_dir_raw)
+        if out_dir.is_dir():
+            for candidate in sorted(out_dir.glob("*.h5")) + sorted(out_dir.glob("*.hdf5")):
+                if candidate.is_file():
+                    paths.append(candidate)
+    return paths
+
+
+def artifacts_from_output(
+    output_dict: Mapping[str, Any],
+    *,
+    action_name: Optional[str] = None,
+) -> List[ArtifactRef]:
     refs: List[ArtifactRef] = []
     seen: set[str] = set()
-    for path in _path_like_output_values(output_dict):
+    candidates = list(_path_like_output_values(output_dict))
+    if action_name == "pipeline.centroid":
+        candidates.extend(_harvest_centroid_artifacts(output_dict))
+    for path in candidates:
         if _is_action_result_envelope(path):
             continue
-        key = str(path.resolve())
+        if not path.is_file():
+            continue
+        try:
+            key = str(path.resolve())
+        except OSError:
+            key = str(path)
         if key in seen:
             continue
         seen.add(key)
@@ -495,7 +732,7 @@ def _maybe_replay_from_caas(
     manifest_path: Path,
     input_model: BaseModel,
 ) -> Optional[ActionExecutionResult]:
-    project_root = resolve_project_root(input_json)
+    project_root = resolve_caas_root(input_json, action_name=entry.action_name)
     if project_root is None:
         return None
 
@@ -700,7 +937,7 @@ def maybe_skip_action(
 
     hyperparam_set_id = _hyperparam_set_id(input_json)
     if hyperparam_set_id and caas_enabled(input_json):
-        project_root = resolve_project_root(input_json)
+        project_root = resolve_caas_root(input_json, action_name=entry.action_name)
         if project_root is not None:
             append_instance_ledger(
                 project_root,
@@ -761,7 +998,7 @@ def record_action_execution(
     if isinstance(finished, str):
         finished = datetime.fromisoformat(finished.replace("Z", "+00:00"))
 
-    artifacts = artifacts_from_output(output_dict)
+    artifacts = artifacts_from_output(output_dict, action_name=entry.action_name)
     if not artifacts and output_dict.get("artifacts"):
         artifacts = [ArtifactRef.model_validate(a) for a in output_dict["artifacts"]]
 
@@ -795,7 +1032,7 @@ def record_action_execution(
         and result.result_code == 0
         and not skipped
     ):
-        project_root = resolve_project_root(input_json)
+        project_root = resolve_caas_root(input_json, action_name=entry.action_name)
         if project_root is not None:
             try:
                 record = commit_artifacts_to_store(

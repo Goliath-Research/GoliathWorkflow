@@ -1,5 +1,11 @@
 """Tagged domain types for workflow scope variables."""
 
+from .foreach_bundle import (
+    commit_iteration_bundle,
+    compute_iteration_bundle_key,
+    read_iteration_bundle,
+    try_short_circuit_foreach_iteration,
+)
 from .helpers import (
     MethylDetectionRef_from_detector_output,
     MethylGroup_from_project,
@@ -54,10 +60,14 @@ __all__ = [
     "StratifiedCohortDraw",
     "build_resolved_project",
     "build_stratified_cohort_draw",
+    "commit_iteration_bundle",
     "comparisons_from_project_json",
+    "compute_iteration_bundle_key",
     "domain_type_names",
     "groups_from_mc_run_dir",
     "groups_from_project",
     "parse_domain_value",
+    "read_iteration_bundle",
     "to_tagged_json",
+    "try_short_circuit_foreach_iteration",
 ]

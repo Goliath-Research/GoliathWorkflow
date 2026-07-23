@@ -3,10 +3,17 @@ Load train/validation partitions from existing Monte Carlo ``run_XXXX`` director
 
 Used to reuse the same stratified splits as a prior stability / default MC run when evaluating
 models or post-model metrics, avoiding redundant split RNG and ensuring aligned partitions.
+
+CAAS bridge (universal idempotency Phase 3): split CSV content fingerprints are part of
+``validation.plan_iterations`` / ``validation.model_mc`` input signatures (see
+``methyl_worker.action_skip``). When those actions hit CAAS, the older ``[split-reuse]`` /
+``Kept existing`` paths are redundant — the worker relinks products instead of re-planning.
+``requireArtifactReuse`` remains a strict gate inside model-MC execution when set.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -211,3 +218,64 @@ def write_split_reuse_summary(path: Path, payload: Dict[str, object]) -> Path:
     with open(out, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2)
     return out
+
+
+def fingerprint_run_split_csvs(run_dir: Path) -> Optional[str]:
+    """Content fingerprint of train/val(/test) split CSVs under a run metadata dir.
+
+    Used by worker CAAS signatures so model-MC / plan_iterations keys change when
+    reused partitions change — aligning split-reuse identity with content keys.
+    """
+    meta = resolve_run_metadata_dir(run_dir)
+    names = (
+        "train_control.csv",
+        "train_disease.csv",
+        "val_control.csv",
+        "val_disease.csv",
+        "test_control.csv",
+        "test_disease.csv",
+    )
+    parts: List[str] = []
+    for name in names:
+        path = meta / name
+        if not path.is_file():
+            continue
+        h = hashlib.sha256()
+        try:
+            with path.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                    h.update(chunk)
+            st = path.stat()
+            parts.append(f"{name}:{st.st_size}:{h.hexdigest()[:16]}")
+        except OSError:
+            continue
+    # Multiclass training_*/test_* files
+    for path in sorted(meta.glob("training_*.csv")) + sorted(meta.glob("test_*.csv")):
+        if not path.is_file():
+            continue
+        h = hashlib.sha256()
+        try:
+            with path.open("rb") as fh:
+                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                    h.update(chunk)
+            st = path.stat()
+            parts.append(f"{path.name}:{st.st_size}:{h.hexdigest()[:16]}")
+        except OSError:
+            continue
+    if not parts:
+        return None
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:16]
+
+
+def fingerprint_mc_splits_root(mc_root: Path, *, max_runs: int = 64) -> Optional[str]:
+    """Roll up :func:`fingerprint_run_split_csvs` across ``run_*`` under ``mc_root``."""
+    if not mc_root.is_dir():
+        return None
+    bits: List[str] = []
+    for run_dir in sorted(p for p in mc_root.glob("run_*") if p.is_dir())[:max_runs]:
+        fp = fingerprint_run_split_csvs(run_dir)
+        if fp:
+            bits.append(f"{run_dir.name}:{fp}")
+    if not bits:
+        return None
+    return hashlib.sha256("\n".join(bits).encode("utf-8")).hexdigest()[:16]

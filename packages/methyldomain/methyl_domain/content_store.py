@@ -67,6 +67,25 @@ def caas_enabled(input_json: Mapping[str, Any]) -> bool:
     return True
 
 
+def resolve_caas_root(
+    input_json: Mapping[str, Any],
+    *,
+    action_name: Optional[str] = None,
+) -> Optional[Path]:
+    """Resolve CAAS store root: sample-scoped when enabled, else study project root."""
+    if action_name:
+        from .sample_content_store import (
+            resolve_sample_caas_root,
+            sample_caas_enabled_for_action,
+        )
+
+        if sample_caas_enabled_for_action(action_name, input_json):
+            sample_root = resolve_sample_caas_root(input_json)
+            if sample_root is not None:
+                return sample_root
+    return resolve_project_root(input_json)
+
+
 def resolve_project_root(input_json: Mapping[str, Any]) -> Optional[Path]:
     """Resolve ``{output_base}/{project_name}`` from task inputs."""
     explicit = input_json.get("projectRoot")

@@ -214,7 +214,7 @@ CAAS is **on by default**. Successful idempotent actions commit product artifact
 
 **Audit:** every executed action appends a line to `{logRoot}/action_run_log.jsonl` (including `skipped: true` when signature skip applies).
 
-**FOREACH iterations:** the scheduler always enters each iteration body; **each action** inside (centroid, detector, mapper, gene_select, …) skips independently when its manifest under `{runDir}/.action_results/` matches. No iteration-level marker is required.
+**FOREACH iterations:** **each action** inside (centroid, detector, mapper, gene_select, …) still skips independently via CAAS / `{runDir}/.action_results/`. The scheduler also probes an **iteration-bundle** content key (FOREACH node + item payload + child action revisions) under `{project_root}/.caas/foreach_bundle/`; on hit it short-circuits the BODY without claiming leaf ACTIONs. DB engines mirror hits in `wf.foreach_bundle_entry`.
 
 **Force re-execute:**
 

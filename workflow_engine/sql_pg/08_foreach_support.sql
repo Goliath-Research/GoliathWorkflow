@@ -2,7 +2,90 @@
   PostgreSQL FOREACH control-flow parity (port of sql/wf_sql_foreach_support.sql).
 
   Deploy after 06_scope_writepath_parity.sql and 07_scope_encoding_parity.sql.
+
+  FOREACH CAAS (iteration-bundle short-circuit):
+  Local engine probes ``{project_root}/.caas/foreach_bundle/{content_key}/``.
+  Distributed gateway/workers may mirror hits into ``wf.foreach_bundle_entry``;
+  ``wf_foreach_caas_try_skip_body`` then marks BODY SKIPPED without claiming leaf ACTIONs.
 */
+
+CREATE TABLE IF NOT EXISTS wf.foreach_bundle_entry (
+  workflow_instance_id bigint NOT NULL,
+  foreach_node_key text NOT NULL,
+  iteration_index int NOT NULL,
+  content_key text NOT NULL,
+  status text NOT NULL DEFAULT 'completed',
+  committed_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
+  PRIMARY KEY (workflow_instance_id, foreach_node_key, iteration_index)
+);
+
+CREATE INDEX IF NOT EXISTS ix_foreach_bundle_entry_content
+  ON wf.foreach_bundle_entry (content_key);
+
+CREATE OR REPLACE FUNCTION wf.wf_foreach_bundle_is_hit(
+  p_workflow_instance_id bigint,
+  p_foreach_node_key text,
+  p_iteration_index int
+)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM wf.foreach_bundle_entry b
+    WHERE b.workflow_instance_id = p_workflow_instance_id
+      AND b.foreach_node_key = p_foreach_node_key
+      AND b.iteration_index = p_iteration_index
+      AND b.status = 'completed'
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION wf.wf_foreach_caas_try_skip_body(
+  p_workflow_instance_id bigint,
+  p_body_node_execution_id bigint,
+  p_foreach_node_execution_id bigint,
+  p_iteration_no int
+)
+RETURNS boolean
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  v_parent_type text;
+  v_foreach_key text;
+  v_zbi int;
+BEGIN
+  IF p_foreach_node_execution_id IS NULL OR p_body_node_execution_id IS NULL THEN
+    RETURN false;
+  END IF;
+
+  SELECT wn.node_type, wn.node_key
+  INTO v_parent_type, v_foreach_key
+  FROM wf.node_execution ne
+  INNER JOIN wf.workflow_node wn ON wn.id = ne.workflow_node_id
+  WHERE ne.id = p_foreach_node_execution_id;
+
+  IF v_parent_type IS DISTINCT FROM 'FOREACH' THEN
+    RETURN false;
+  END IF;
+
+  v_zbi := CASE WHEN p_iteration_no < 1 THEN 0 ELSE p_iteration_no - 1 END;
+
+  IF NOT wf.wf_foreach_bundle_is_hit(p_workflow_instance_id, v_foreach_key, v_zbi) THEN
+    RETURN false;
+  END IF;
+
+  UPDATE wf.node_execution
+  SET status = 'SKIPPED',
+      ended_at_utc = (now() AT TIME ZONE 'utc'),
+      engine_error_message = 'foreach_caas_bundle_hit'
+  WHERE id = p_body_node_execution_id
+    AND status IN ('PENDING', 'READY', 'RUNNING');
+
+  CALL wf.wf_engine_on_composite_complete(p_body_node_execution_id);
+  RETURN true;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION wf.wf_json_array_length(p_json text)
 RETURNS int
@@ -444,6 +527,13 @@ BEGIN
     p_workflow_instance_id, p_workflow_node_id,
     p_parent_node_execution_id, v_pex, p_iteration_no
   );
+
+  -- Iteration-bundle CAAS: skip BODY fan-out when a prior successful iteration is mirrored.
+  IF wf.wf_foreach_caas_try_skip_body(
+    p_workflow_instance_id, v_pex, p_parent_node_execution_id, p_iteration_no
+  ) THEN
+    RETURN;
+  END IF;
 
   IF v_node_type = 'SEQUENCE' THEN
     SELECT e.child_node_id, e.child_order INTO v_child, v_ord
