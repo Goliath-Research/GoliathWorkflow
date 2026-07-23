@@ -220,6 +220,21 @@ def write_split_reuse_summary(path: Path, payload: Dict[str, object]) -> Path:
     return out
 
 
+def _hash_split_csv_part(path: Path) -> Optional[str]:
+    """Return ``name:size:digest16`` for one split CSV, or None if unreadable."""
+    if not path.is_file():
+        return None
+    h = hashlib.sha256()
+    try:
+        with path.open("rb") as fh:
+            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                h.update(chunk)
+        st = path.stat()
+    except OSError:
+        return None
+    return f"{path.name}:{st.st_size}:{h.hexdigest()[:16]}"
+
+
 def fingerprint_run_split_csvs(run_dir: Path) -> Optional[str]:
     """Content fingerprint of train/val(/test) split CSVs under a run metadata dir.
 
@@ -227,7 +242,7 @@ def fingerprint_run_split_csvs(run_dir: Path) -> Optional[str]:
     reused partitions change — aligning split-reuse identity with content keys.
     """
     meta = resolve_run_metadata_dir(run_dir)
-    names = (
+    binary_names = (
         "train_control.csv",
         "train_disease.csv",
         "val_control.csv",
@@ -236,32 +251,23 @@ def fingerprint_run_split_csvs(run_dir: Path) -> Optional[str]:
         "test_disease.csv",
     )
     parts: List[str] = []
-    for name in names:
-        path = meta / name
-        if not path.is_file():
+    seen: set[str] = set()
+    for name in binary_names:
+        part = _hash_split_csv_part(meta / name)
+        if part is None:
             continue
-        h = hashlib.sha256()
-        try:
-            with path.open("rb") as fh:
-                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-                    h.update(chunk)
-            st = path.stat()
-            parts.append(f"{name}:{st.st_size}:{h.hexdigest()[:16]}")
-        except OSError:
-            continue
-    # Multiclass training_*/test_* files
+        parts.append(part)
+        seen.add(name)
+    # Multiclass training_*/test_* — skip binary names already covered above
+    # (test_*.csv would otherwise re-hash test_control.csv / test_disease.csv).
     for path in sorted(meta.glob("training_*.csv")) + sorted(meta.glob("test_*.csv")):
-        if not path.is_file():
+        if path.name in seen:
             continue
-        h = hashlib.sha256()
-        try:
-            with path.open("rb") as fh:
-                for chunk in iter(lambda: fh.read(1024 * 1024), b""):
-                    h.update(chunk)
-            st = path.stat()
-            parts.append(f"{path.name}:{st.st_size}:{h.hexdigest()[:16]}")
-        except OSError:
+        part = _hash_split_csv_part(path)
+        if part is None:
             continue
+        parts.append(part)
+        seen.add(path.name)
     if not parts:
         return None
     return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:16]

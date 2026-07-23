@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 from methyl_validation.project_gen import generate_run_project, generate_run_project_multiclass
 from methyl_validation.reuse_splits import (
+    _hash_split_csv_part,
+    fingerprint_run_split_csvs,
     resolve_iteration_split,
     try_load_binary_split_from_run_dir,
     try_load_multiclass_split_from_run_dir,
@@ -27,6 +30,38 @@ def _write_minimal_binary_base_project(path: Path, samples_base: Path) -> None:
 """.strip(),
         encoding="utf-8",
     )
+
+
+def test_fingerprint_run_split_csvs_skips_binary_test_glob_overlap(tmp_path: Path) -> None:
+    """test_*.csv must not re-hash test_control/test_disease already in the binary list."""
+    run_dir = tmp_path / "run_0001"
+    run_dir.mkdir()
+    (run_dir / "test_control.csv").write_text("control\n", encoding="utf-8")
+    (run_dir / "test_disease.csv").write_text("disease\n", encoding="utf-8")
+    (run_dir / "test_cohortA.csv").write_text("multi\n", encoding="utf-8")
+
+    fp = fingerprint_run_split_csvs(run_dir)
+    assert fp is not None
+
+    unique_parts = [
+        _hash_split_csv_part(run_dir / "test_control.csv"),
+        _hash_split_csv_part(run_dir / "test_disease.csv"),
+        _hash_split_csv_part(run_dir / "test_cohortA.csv"),
+    ]
+    expected = hashlib.sha256(
+        "\n".join(p for p in unique_parts if p is not None).encode("utf-8")
+    ).hexdigest()[:16]
+    assert fp == expected
+
+    # Duplicating binary test_* entries would change the digest — prove we are not doing that.
+    dup_parts = unique_parts + [
+        _hash_split_csv_part(run_dir / "test_control.csv"),
+        _hash_split_csv_part(run_dir / "test_disease.csv"),
+    ]
+    dup_fp = hashlib.sha256(
+        "\n".join(p for p in dup_parts if p is not None).encode("utf-8")
+    ).hexdigest()[:16]
+    assert fp != dup_fp
 
 
 def test_try_load_binary_matches_generated_run(tmp_path: Path) -> None:
