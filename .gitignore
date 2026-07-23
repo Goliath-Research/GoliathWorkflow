@@ -26,10 +26,10 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Virtual environments
+# Virtual environments (anchor to repo root — bare `env/` also matched deploy/env/)
 venv/
-ENV/
-env/
+/ENV/
+/env/
 .venv
 
 # Node (diagram pre-render tooling under docs/diagrams/)
