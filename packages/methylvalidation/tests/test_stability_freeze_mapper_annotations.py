@@ -302,3 +302,107 @@ def test_freeze_production_model_wires_stable_genes_and_raw_gene(tmp_path: Path,
     mb_cfg = prod_project["actionConfig"]["model_bundle"]
     assert "stability_gene_panel" in mb_cfg
     assert frozen_calls.get("stability_gene_panel_path") == summary["stable_gene_panel"]
+
+
+def test_resolve_production_ecdf_feature_settings_prefers_project_action_config(tmp_path: Path):
+    prod = tmp_path / "production"
+    prod.mkdir()
+    project = prod / "project.json"
+    project.write_text(
+        json.dumps(
+            {
+                "project_name": "production",
+                "actionConfig": {
+                    "validation": {
+                        "backend_profiles": {
+                            "ecdf": {
+                                "enabled": True,
+                                "params": {
+                                    "feature_mode": "raw_gene",
+                                    "feature_family_set": "gene",
+                                },
+                            }
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    mode, family = stability.resolve_production_ecdf_feature_settings(project, config=None)
+    assert mode == "raw_gene"
+    assert family == "gene"
+    assert stability.production_requires_mapper_annotations(mode, family) is True
+    assert stability.production_requires_frozen_genes(mode, family) is True
+
+
+def test_finalize_requires_genes_from_production_project_not_config(tmp_path: Path, monkeypatch):
+    """Bug: config may lack feature_mode while prepare_freeze wrote raw_gene on production."""
+    prod = tmp_path / "production"
+    bundle = prod / "model_bundle"
+    bundle.mkdir(parents=True)
+    project = prod / "project.json"
+    project.write_text(
+        json.dumps(
+            {
+                "project_name": "production",
+                "output_base": str(tmp_path),
+                "actionConfig": {
+                    "validation": {
+                        "backend_profiles": {
+                            "ecdf": {
+                                "enabled": True,
+                                "params": {
+                                    "feature_mode": "raw_gene",
+                                    "feature_family_set": "gene",
+                                },
+                            }
+                        }
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    (bundle / "stable_genes_from_stability.csv").write_text(
+        "gene_name,frequency\n", encoding="utf-8"
+    )
+
+    monkeypatch.setattr(
+        model_bundle,
+        "build_mapper_annotation_cache",
+        lambda **kwargs: {
+            "path": str(bundle / "mapper_dmp_annotations.csv"),
+            "rows": 1,
+            "unique_loci": 1,
+        },
+    )
+
+    def _empty_genes(**kwargs):
+        genes = bundle / "frozen_genes_production.csv"
+        feats = bundle / "frozen_gene_features.csv"
+        genes.write_text("comparison_label,gene_name,gene_importance\n", encoding="utf-8")
+        feats.write_text(
+            "comparison_label,gene_name,chromosome,feature_type,feature_start,feature_end,n_dmps_in_feature\n",
+            encoding="utf-8",
+        )
+        return {
+            "gene_panel_path": str(genes),
+            "gene_features_path": str(feats),
+            "n_genes": 0,
+        }
+
+    monkeypatch.setattr(model_bundle, "build_frozen_gene_panel", _empty_genes)
+
+    # config=None → old bug would set needs_genes=False and skip the error.
+    try:
+        stability.finalize_production_model_bundle(
+            production_project=project,
+            config=None,
+            require_mapper=False,  # old handler bug also passed False from empty config attrs
+        )
+        raised = False
+    except RuntimeError as exc:
+        raised = True
+        assert "no frozen genes" in str(exc).lower()
+    assert raised is True

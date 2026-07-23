@@ -2129,6 +2129,56 @@ def prepare_freeze_project(
     }
 
 
+def resolve_production_ecdf_feature_settings(
+    production_project: Path,
+    config: Optional["MonteCarloConfig"] = None,
+) -> tuple[str, str]:
+    """
+    Resolve ``(feature_mode, feature_family_set)`` for freeze finalize.
+
+    Prefer production ``actionConfig.validation.backend_profiles.ecdf.params``
+    (written by ``prepare_freeze_project`` via ``_normalize_production_ecdf_backend``),
+    then fall back to MonteCarloConfig attributes.
+    """
+    feature_mode = ""
+    family = ""
+    prod_path = Path(production_project)
+    if prod_path.is_file():
+        try:
+            payload = json.loads(prod_path.read_text(encoding="utf-8"))
+            ecdf_params = (
+                ((payload.get("actionConfig") or {}).get("validation") or {})
+                .get("backend_profiles", {})
+                .get("ecdf", {})
+                .get("params", {})
+                or {}
+            )
+            feature_mode = str(ecdf_params.get("feature_mode") or "").strip().lower()
+            family = str(ecdf_params.get("feature_family_set") or "").strip().lower()
+        except (OSError, json.JSONDecodeError, TypeError, AttributeError):
+            feature_mode = ""
+            family = ""
+    if not feature_mode and config is not None:
+        feature_mode = str(getattr(config, "feature_mode", "") or "").strip().lower()
+    if not family and config is not None:
+        family = str(getattr(config, "feature_family_set", "") or "").strip().lower()
+    return feature_mode, family
+
+
+def production_requires_mapper_annotations(feature_mode: str, family: str) -> bool:
+    """True when gene/non-DMP ECDF mode needs mapper_dmp_annotations.csv."""
+    mode = str(feature_mode or "").strip().lower()
+    fam = str(family or "").strip().lower()
+    return mode == "raw_gene" or fam not in ("", "dmp_scored")
+
+
+def production_requires_frozen_genes(feature_mode: str, family: str) -> bool:
+    """True when ECDF mode requires a non-empty frozen gene panel."""
+    mode = str(feature_mode or "").strip().lower()
+    fam = str(family or "").strip().lower()
+    return mode == "raw_gene" or fam in ("gene", "gene_scored", "observed_hybrid")
+
+
 def finalize_production_model_bundle(
     *,
     production_project: Path,
@@ -2159,6 +2209,15 @@ def finalize_production_model_bundle(
     bundle_dir = prod_dir / "model_bundle"
     bundle_dir.mkdir(parents=True, exist_ok=True)
 
+    feature_mode, family = resolve_production_ecdf_feature_settings(
+        prod_project_path, config=config
+    )
+    # Honor production project gene-mode even if the caller passed require_mapper=False.
+    effective_require_mapper = bool(require_mapper) or production_requires_mapper_annotations(
+        feature_mode, family
+    )
+    needs_genes = production_requires_frozen_genes(feature_mode, family)
+
     if stability_gene_panel_path is None:
         candidate = bundle_dir / "stable_genes_from_stability.csv"
         if candidate.is_file():
@@ -2173,7 +2232,7 @@ def finalize_production_model_bundle(
         output_csv=bundle_dir / MAPPER_ANNOTATION_NAME,
     )
     n_mapper_rows = int(mapper_annotation_cache.get("rows") or 0)
-    if require_mapper and n_mapper_rows <= 0:
+    if effective_require_mapper and n_mapper_rows <= 0:
         raise RuntimeError(
             "finalize_production_model_bundle: mapper annotation cache is empty. "
             "Freeze mapper must run before gene ECDF (expected production/mapper/...)."
@@ -2207,15 +2266,6 @@ def finalize_production_model_bundle(
         ),
     )
 
-    feature_mode = (
-        str(getattr(config, "feature_mode", "") or "").strip().lower() if config is not None else ""
-    )
-    family = (
-        str(getattr(config, "feature_family_set", "") or "").strip().lower()
-        if config is not None
-        else ""
-    )
-    needs_genes = feature_mode == "raw_gene" or family in ("gene", "gene_scored", "observed_hybrid")
     gene_panel_path = Path(
         str(frozen_gene_panel.get("gene_panel_path") or (bundle_dir / FROZEN_GENE_PANEL_NAME))
     )
@@ -2270,10 +2320,14 @@ def finalize_production_model_bundle(
         json.dump(prod_project_payload, f, indent=2)
 
     logger.info(
-        "Finalized production model_bundle: mapper_rows=%s n_genes=%s path=%s",
+        "Finalized production model_bundle: mapper_rows=%s n_genes=%s path=%s "
+        "(feature_mode=%s family=%s require_mapper=%s)",
         n_mapper_rows,
         n_genes,
         bundle_dir,
+        feature_mode,
+        family,
+        effective_require_mapper,
     )
     return {
         "status": "ok",
@@ -2283,6 +2337,8 @@ def finalize_production_model_bundle(
         "frozen_gene_panel": frozen_gene_panel,
         "n_mapper_rows": n_mapper_rows,
         "n_genes": n_genes,
+        "feature_mode": feature_mode,
+        "feature_family_set": family,
     }
 
 
@@ -2415,17 +2471,10 @@ def freeze_production_model(
     frozen_gene_panel: Dict[str, Any] = {}
     if success:
         try:
-            ecdf_params = (
-                ((project_dict.get("actionConfig") or {}).get("validation") or {})
-                .get("backend_profiles", {})
-                .get("ecdf", {})
-                .get("params", {})
+            feature_mode, family = resolve_production_ecdf_feature_settings(
+                prod_project_path, config=config
             )
-            feature_mode = str(ecdf_params.get("feature_mode") or getattr(config, "feature_mode", "") or "").strip().lower()
-            family = str(
-                ecdf_params.get("feature_family_set") or getattr(config, "feature_family_set", "") or ""
-            ).strip().lower()
-            require_mapper = feature_mode == "raw_gene" or family not in ("", "dmp_scored")
+            require_mapper = production_requires_mapper_annotations(feature_mode, family)
             finalized = finalize_production_model_bundle(
                 production_project=prod_project_path,
                 config=config,

@@ -341,7 +341,11 @@ def _handle_validation_finalize_freeze_model_bundle(
 ):
     """Build mapper annotations + frozen gene panel after DomainProgram freeze mapper."""
     input_json = _mc_input_with_runtime(input, runtime)
-    from methyl_validation.stability import finalize_production_model_bundle
+    from methyl_validation.stability import (
+        finalize_production_model_bundle,
+        production_requires_mapper_annotations,
+        resolve_production_ecdf_feature_settings,
+    )
 
     from ..task_models.validation_models import ValidationFinalizeFreezeModelBundleOutput
 
@@ -354,11 +358,11 @@ def _handle_validation_finalize_freeze_model_bundle(
         or input_json.get("project")
         or str(Path(input_json.get("productionOutputDir") or (mc_root / "production")) / "project.json")
     )
-    feature_mode = str(getattr(config, "feature_mode", "") or "").strip().lower()
-    family = str(getattr(config, "feature_family_set", "") or "").strip().lower()
-    require_mapper = feature_mode == "raw_gene" or family not in ("", "dmp_scored")
+    prod_path = Path(str(production_project))
+    feature_mode, family = resolve_production_ecdf_feature_settings(prod_path, config=config)
+    require_mapper = production_requires_mapper_annotations(feature_mode, family)
     result = finalize_production_model_bundle(
-        production_project=Path(str(production_project)),
+        production_project=prod_path,
         config=config,
         require_mapper=require_mapper,
     )
