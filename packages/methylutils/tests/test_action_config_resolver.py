@@ -14,10 +14,14 @@ import pytest
 
 from methyl_utils.action_config_resolver import (
     deep_merge,
+    load_profile_action_config,
     load_resolved_config,
+    load_site_manifest,
     resolve_action_config,
     resolve_for_project,
     resolve_from_task_input,
+    resolve_proteomics_reference,
+    resolve_rna_reference,
     site_slice_for_action,
 )
 
@@ -299,3 +303,64 @@ def test_resolve_for_project_falls_back_to_env(monkeypatch, tmp_path: Path):
 
     out = resolve_for_project("enricher", _Project(), site_path=site)
     assert out["top"] == 99
+
+
+def test_load_site_manifest_missing_file_returns_empty(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("METHYL_SITE_CONFIG", raising=False)
+    assert load_site_manifest(tmp_path / "missing.json") == {}
+
+
+def test_load_profile_action_config_missing_name_or_file(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("METHYL_PROFILE", raising=False)
+    assert load_profile_action_config(None) == {}
+    assert load_profile_action_config(tmp_path / "no-such.profile.json") == {}
+
+
+def test_load_profile_action_config_reads_action_config(tmp_path: Path):
+    profile = tmp_path / "demo.profile.json"
+    profile.write_text(
+        json.dumps({"pipelineProfile": "demo", "actionConfig": {"detection": {"alpha": 0.03}}}),
+        encoding="utf-8",
+    )
+    assert load_profile_action_config(profile) == {"detection": {"alpha": 0.03}}
+
+
+def test_site_slice_parabricks_methyl_extract_and_omics_refs():
+    site = {
+        "parabricks": {"bwa_threads": 8},
+        "methyl_extract": {"min_coverage": 5},
+        "rna_reference": {"star_index_dir": "/rna/star", "gtf": "/rna/genes.gtf"},
+        "proteomics_reference": {"protein_fasta": "/prot/proteins.fa"},
+        "annotation": {},
+        "caches": {},
+    }
+    assert site_slice_for_action(site, "parabricks")["bwa_threads"] == 8
+    assert site_slice_for_action(site, "methyl_extract")["min_coverage"] == 5
+    rna = site_slice_for_action(site, "rna_align")
+    assert rna["star_index_dir"] == "/rna/star"
+    assert rna["gtf"] == "/rna/genes.gtf"
+    assert rna["bwa_threads"] == 8  # parabricks defaults merged for rna_align
+    prot = site_slice_for_action(site, "proteomics_quant")
+    assert prot["protein_fasta"] == "/prot/proteins.fa"
+
+
+def test_resolve_rna_and_proteomics_reference_helpers():
+    site = {
+        "rna_reference": {"kallisto_index": "/rna/kallisto.idx", "unused": ""},
+        "proteomics_reference": {"spectral_library": "/prot/lib.tsv"},
+    }
+    assert resolve_rna_reference(site) == {"kallisto_index": "/rna/kallisto.idx"}
+    assert resolve_proteomics_reference(site) == {"spectral_library": "/prot/lib.tsv"}
+    assert resolve_rna_reference({"rna_reference": "bad"}) == {}
+    assert resolve_proteomics_reference({"proteomics_reference": []}) == {}
+
+
+def test_resolve_from_task_input_loads_profile_when_action_config_absent(tmp_path: Path, monkeypatch):
+    profile = tmp_path / "mc.profile.json"
+    profile.write_text(
+        json.dumps({"actionConfig": {"detection": {"alpha": 0.07}}}),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("METHYL_PROFILE", str(profile))
+    out = resolve_from_task_input("detection", {"siteConfig": {}})
+    assert out["alpha"] == 0.07

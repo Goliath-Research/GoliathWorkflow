@@ -80,6 +80,19 @@ def test_atomic_write_json_overwrites_existing(tmp_path: Path):
     assert json.loads(target.read_text(encoding="utf-8")) == {"v": 2}
 
 
+def test_atomic_write_json_cleans_temp_on_failure(tmp_path: Path, monkeypatch):
+    target = tmp_path / "out.json"
+
+    def boom(*_args, **_kwargs):
+        raise OSError("simulated write failure")
+
+    monkeypatch.setattr("methyl_domain.action_result.json.dump", boom)
+    with pytest.raises(OSError, match="simulated write failure"):
+        atomic_write_json(target, {"v": 1})
+    assert not target.exists()
+    assert list(tmp_path.glob(".*tmp*")) == []
+
+
 def test_atomic_write_and_read_action_record_roundtrip(tmp_path: Path):
     now = utc_now()
     record = ActionExecutionRecord(
