@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Pre-render Mermaid sources in docs/diagrams/src/ to SVG + PNG in docs/diagrams/out/.
 # PNG uses native SVG text (htmlLabels: false) so labels survive LaTeX/PDF embeds.
+#
+# Freshness uses content hashes (out/<name>.mmd.sha256), not filesystem mtimes —
+# Azure/CI checkouts often make src/ appear newer than out/ and false-fail -nt checks.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,7 +17,18 @@ CHECK_ONLY=false
 usage() {
   echo "Usage: $0 [--check]" >&2
   echo "  Renders *.mmd to matching *.svg and *.png under docs/diagrams/out/." >&2
-  echo "  --check  Exit 1 if any output is missing, older than its source, or a placeholder." >&2
+  echo "  --check  Exit 1 if any output is missing, hash-mismatched, or a placeholder." >&2
+}
+
+mmd_sha256() {
+  # Portable content hash of the Mermaid source (no filename in digest).
+  sha256sum "$1" | awk '{print $1}'
+}
+
+write_source_hash() {
+  local mmd="$1"
+  local base="$2"
+  mmd_sha256 "$mmd" >"$OUT/${base}.mmd.sha256"
 }
 
 while [[ $# -gt 0 ]]; do
@@ -82,13 +96,21 @@ for mmd in "$SRC"/*.mmd; do
   base="$(basename "$mmd" .mmd)"
   svg="$OUT/${base}.svg"
   png="$OUT/${base}.png"
+  hash_file="$OUT/${base}.mmd.sha256"
   if $CHECK_ONLY; then
+    actual="$(mmd_sha256 "$mmd")"
+    expected=""
+    [[ -f "$hash_file" ]] && expected="$(tr -d '[:space:]' <"$hash_file")"
     for artifact in "$svg" "$png"; do
-      if [[ ! -f "$artifact" ]] || [[ "$mmd" -nt "$artifact" ]]; then
+      if [[ ! -f "$artifact" ]]; then
         echo "STALE: $artifact (regenerate with scripts/render_diagrams.sh)" >&2
         stale=1
       fi
     done
+    if [[ -z "$expected" || "$expected" != "$actual" ]]; then
+      echo "STALE: $hash_file (source hash mismatch; regenerate with scripts/render_diagrams.sh)" >&2
+      stale=1
+    fi
     if [[ -f "$svg" ]] && is_placeholder_svg "$svg"; then
       echo "PLACEHOLDER: $svg (regenerate with scripts/render_diagrams.sh)" >&2
       stale=1
@@ -108,6 +130,7 @@ for mmd in "$SRC"/*.mmd; do
     echo "ERROR: render produced placeholder-like output for $svg" >&2
     exit 1
   fi
+  write_source_hash "$mmd" "$base"
 done
 
 if $CHECK_ONLY && [[ $stale -ne 0 ]]; then

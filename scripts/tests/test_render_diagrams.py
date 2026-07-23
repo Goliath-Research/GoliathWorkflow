@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from pathlib import Path
 
@@ -29,3 +30,8 @@ def test_all_mmd_sources_have_non_placeholder_svgs() -> None:
         text = svg.read_text(encoding="utf-8")
         assert "placeholder SVG" not in text, f"{svg.name} is still a placeholder"
         assert len(text) > 2000, f"{svg.name} looks too small to be a real diagram"
+        hash_file = OUT / f"{mmd.stem}.mmd.sha256"
+        assert hash_file.is_file(), f"missing source hash for {mmd.name}"
+        expected = hash_file.read_text(encoding="utf-8").strip()
+        actual = hashlib.sha256(mmd.read_bytes()).hexdigest()
+        assert actual == expected, f"hash mismatch for {mmd.name}; run scripts/render_diagrams.sh"
