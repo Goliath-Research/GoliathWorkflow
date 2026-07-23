@@ -214,7 +214,7 @@ CAAS is **on by default**. Successful idempotent actions commit product artifact
 
 **Audit:** every executed action appends a line to `{logRoot}/action_run_log.jsonl` (including `skipped: true` when signature skip applies).
 
-**FOREACH iterations:** **each action** inside (centroid, detector, mapper, gene_select, …) still skips independently via CAAS / `{runDir}/.action_results/`. The scheduler also probes an **iteration-bundle** content key (FOREACH node + item payload + child action revisions) under `{project_root}/.caas/foreach_bundle/`; on hit it short-circuits the BODY without claiming leaf ACTIONs. DB engines mirror hits in `wf.foreach_bundle_entry`.
+**FOREACH iterations:** **each action** inside (centroid, detector, mapper, gene_select, …) still skips independently via CAAS / `{runDir}/.action_results/`. The scheduler also probes an **iteration-bundle** content key under `{project_root}/.caas/foreach_bundle/`; on hit it short-circuits the BODY without claiming leaf ACTIONs. The key hashes FOREACH node + item payload + child action revisions **and**, for nested FOREACH, a fingerprint of ancestor FOREACH bindings (`__foreach_ancestry__`). Without ancestry, identical leaf items under different parents collide (e.g. `contexts=["CG"]` under control vs disease `centroidSeedGroups`), and later parents are falsely skipped — disease centroids never run. DB engines mirror hits in `wf.foreach_bundle_entry` keyed by `content_key`.
 
 **Force re-execute:**
 

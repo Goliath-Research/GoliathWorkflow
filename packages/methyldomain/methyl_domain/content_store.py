@@ -6,6 +6,7 @@ import hashlib
 import logging
 import os
 import shutil
+import uuid
 from pathlib import Path
 from typing import Any, List, Mapping, Optional, Sequence, Set, Type, TypeVar
 
@@ -201,22 +202,47 @@ def _symlink_target_for(link_path: Path, target: Path) -> Path | str:
 
 
 def _ensure_symlink(link_path: Path, target: Path) -> None:
+    """Create or replace ``link_path`` as a symlink to ``target``.
+
+    Uses a temp link + ``os.replace`` so concurrent workers sharing an output
+    directory (portal / local ``--parallel-workers``) do not race on
+    ``FileExistsError`` between unlink and symlink.
+    """
     link_path = link_path.expanduser()
     target_resolved = target.expanduser().resolve()
     link_path.parent.mkdir(parents=True, exist_ok=True)
+    desired = _symlink_target_for(link_path, target_resolved)
     if link_path.is_symlink():
         try:
             if link_path.resolve() == target_resolved:
                 return
         except OSError:
             pass
-        link_path.unlink()
-    elif link_path.exists():
-        if link_path.is_dir():
-            shutil.rmtree(link_path)
-        else:
-            link_path.unlink()
-    link_path.symlink_to(_symlink_target_for(link_path, target_resolved))
+    elif link_path.exists() and link_path.is_dir() and not link_path.is_symlink():
+        shutil.rmtree(link_path)
+
+    tmp = link_path.with_name(
+        f".{link_path.name}.caas-link-{os.getpid()}-{uuid.uuid4().hex[:8]}"
+    )
+    try:
+        if tmp.exists() or tmp.is_symlink():
+            tmp.unlink()
+        tmp.symlink_to(desired)
+        os.replace(tmp, link_path)
+    except OSError:
+        if tmp.exists() or tmp.is_symlink():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+        # Another worker may have won the race with the same target.
+        if link_path.is_symlink():
+            try:
+                if link_path.resolve() == target_resolved:
+                    return
+            except OSError:
+                pass
+        raise
 
 
 def _move_tree_into_entry(

@@ -1,9 +1,13 @@
 """FOREACH iteration-bundle CAAS: short-circuit whole BODY fan-out on content hit.
 
-Bundle keys hash the FOREACH node identity, the bound iteration item, and child
-action revisions — inputs the BODY consumes, not its outputs. On hit, the local
-(or future DB) scheduler marks the BODY as skipped without claiming leaf ACTIONs.
-On miss, normal fan-out runs; callers commit a bundle pointing at child content keys.
+Bundle keys hash the FOREACH node identity, the bound iteration item, child
+action revisions, and — for nested FOREACH — a fingerprint of ancestor FOREACH
+bindings (``extra_input_fingerprint`` / ``__foreach_ancestry__``). Without the
+parent chain, identical leaf items under different parents collide (e.g. context
+``CG`` under control vs disease ``centroidSeedGroups``), and later parents are
+falsely skipped. On hit, the local (or DB) scheduler marks the BODY as skipped
+without claiming leaf ACTIONs. On miss, normal fan-out runs; callers commit a
+bundle pointing at child content keys.
 """
 
 from __future__ import annotations
@@ -20,6 +24,10 @@ logger = logging.getLogger(__name__)
 
 BUNDLE_ACTION_SAFE = "foreach_bundle"
 
+# Scope key: stack of ancestor FOREACH bindings so nested identical leaf items
+# (e.g. context="CG" under control vs disease seed groups) do not collide.
+FOREACH_ANCESTRY_SCOPE_KEY = "__foreach_ancestry__"
+
 
 def _canonical_json(obj: Any) -> str:
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str)
@@ -27,6 +35,42 @@ def _canonical_json(obj: Any) -> str:
 
 def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def fingerprint_foreach_ancestry(ancestry: Sequence[Any] | None) -> Optional[str]:
+    """Hash parent FOREACH chain for nested iteration-bundle keys."""
+    if not ancestry:
+        return None
+    return _sha256_text(_canonical_json(list(ancestry)))
+
+
+def foreach_ancestry_from_scope(scope_values: Mapping[str, Any] | None) -> List[Any]:
+    """Return a copy of the parent FOREACH ancestry stack from scope."""
+    if not scope_values:
+        return []
+    raw = scope_values.get(FOREACH_ANCESTRY_SCOPE_KEY)
+    if not isinstance(raw, list):
+        return []
+    return list(raw)
+
+
+def extend_foreach_ancestry(
+    parent_ancestry: Sequence[Any],
+    *,
+    foreach_node_key: str,
+    collection_var: str,
+    iteration_index: int,
+    item_payload: Any,
+) -> List[Any]:
+    """Append the current FOREACH frame for nested children to close over."""
+    return list(parent_ancestry) + [
+        {
+            "foreach_node_key": foreach_node_key,
+            "collection_var": collection_var,
+            "iteration_index": int(iteration_index),
+            "item": item_payload,
+        }
+    ]
 
 
 def compute_iteration_bundle_key(
@@ -38,7 +82,12 @@ def compute_iteration_bundle_key(
     child_action_revisions: Sequence[str] = (),
     extra_input_fingerprint: Optional[str] = None,
 ) -> str:
-    """Content key for one FOREACH BODY iteration."""
+    """Content key for one FOREACH BODY iteration.
+
+    ``extra_input_fingerprint`` must carry parent FOREACH identity for nested
+    loops whose leaf item alone is not unique (identical ``contexts`` / chromosomes
+    under different ``centroidSeedGroups`` / ``centroidGroups``).
+    """
     payload = {
         "foreach_node_key": foreach_node_key,
         "collection_var": collection_var,

@@ -7,7 +7,10 @@ from pathlib import Path
 from methyl_domain.foreach_bundle import (
     commit_iteration_bundle,
     compute_iteration_bundle_key,
+    extend_foreach_ancestry,
+    fingerprint_foreach_ancestry,
     read_iteration_bundle,
+    try_short_circuit_foreach_iteration,
 )
 from methyl_domain.sample_content_store import (
     resolve_sample_caas_root,
@@ -25,6 +28,89 @@ def test_bundle_key_stable() -> None:
         child_action_revisions=["pipeline.centroid:x"],
     )
     assert compute_iteration_bundle_key(**kwargs) == compute_iteration_bundle_key(**kwargs)
+
+
+def test_nested_identical_leaf_items_do_not_collide() -> None:
+    """Control vs disease seed groups both bind context=CG; keys must differ."""
+    shared = dict(
+        foreach_node_key="foreach_context",
+        collection_var="contexts",
+        iteration_index=0,
+        item_payload="CG",
+        child_action_revisions=["pipeline.centroid:rev"],
+    )
+    control_fp = fingerprint_foreach_ancestry(
+        extend_foreach_ancestry(
+            [],
+            foreach_node_key="foreach_seed",
+            collection_var="centroidSeedGroups",
+            iteration_index=0,
+            item_payload={"label": "all", "centroidDir": "/seed/controls"},
+        )
+    )
+    disease_fp = fingerprint_foreach_ancestry(
+        extend_foreach_ancestry(
+            [],
+            foreach_node_key="foreach_seed",
+            collection_var="centroidSeedGroups",
+            iteration_index=1,
+            item_payload={"label": "pca_low", "centroidDir": "/seed/diseases"},
+        )
+    )
+    assert control_fp != disease_fp
+    control_key = compute_iteration_bundle_key(
+        **shared, extra_input_fingerprint=control_fp
+    )
+    disease_key = compute_iteration_bundle_key(
+        **shared, extra_input_fingerprint=disease_fp
+    )
+    assert control_key != disease_key
+    # Regression: without ancestry, both would share one key.
+    bare = compute_iteration_bundle_key(**shared)
+    assert bare != control_key
+    assert bare != disease_key
+
+
+def test_nested_short_circuit_requires_matching_ancestry(tmp_path: Path) -> None:
+    shared = dict(
+        foreach_node_key="foreach_context",
+        collection_var="contexts",
+        iteration_index=0,
+        item_payload="CG",
+    )
+    control_fp = fingerprint_foreach_ancestry(
+        [{"foreach_node_key": "foreach_seed", "item": {"label": "all"}}]
+    )
+    disease_fp = fingerprint_foreach_ancestry(
+        [{"foreach_node_key": "foreach_seed", "item": {"label": "pca_low"}}]
+    )
+    control_key = compute_iteration_bundle_key(
+        **shared, extra_input_fingerprint=control_fp
+    )
+    commit_iteration_bundle(
+        tmp_path,
+        control_key,
+        foreach_node_key=shared["foreach_node_key"],
+        collection_var=shared["collection_var"],
+        iteration_index=0,
+        item_payload="CG",
+    )
+    assert (
+        try_short_circuit_foreach_iteration(
+            tmp_path,
+            **shared,
+            extra_input_fingerprint=control_fp,
+        )
+        is not None
+    )
+    assert (
+        try_short_circuit_foreach_iteration(
+            tmp_path,
+            **shared,
+            extra_input_fingerprint=disease_fp,
+        )
+        is None
+    )
 
 
 def test_commit_read(tmp_path: Path) -> None:

@@ -171,12 +171,23 @@ class WorkflowScheduler:
             foreach_caas_enabled,
             probe_iteration_bundle,
         )
-        from methyl_domain.foreach_bundle import resolve_study_root_from_scope
+        from methyl_domain.foreach_bundle import (
+            FOREACH_ANCESTRY_SCOPE_KEY,
+            extend_foreach_ancestry,
+            fingerprint_foreach_ancestry,
+            foreach_ancestry_from_scope,
+            resolve_study_root_from_scope,
+        )
 
         flat = scope.as_flat_dict()
         caas_on = foreach_caas_enabled(flat) and not self.config.force_rerun
         project_root = resolve_study_root_from_scope(flat) if caas_on else None
         revisions = child_action_revisions(collect_body_action_names(self.graph, body))
+        # Nested FOREACH bodies close over parent items (seedGroup → context → chrom).
+        # Without parent identity in the bundle key, identical leaf items collide and
+        # later parents are falsely short-circuited (e.g. disease centroids never run).
+        parent_ancestry = foreach_ancestry_from_scope(flat)
+        parent_fingerprint = fingerprint_foreach_ancestry(parent_ancestry)
 
         def run_one(idx: int, element: Any) -> None:
             item_payload = canonical_item_payload(element)
@@ -189,17 +200,24 @@ class WorkflowScheduler:
                     item_payload=item_payload,
                     child_revisions=revisions,
                     enabled=True,
+                    extra_input_fingerprint=parent_fingerprint,
                 )
                 if hit is not None:
                     self.trace.skipped_branches.append(
                         f"{node.node_key}:BODY[{idx}]:foreach_caas"
                     )
                     return
-            child_scope = scope.child(
-                flatten_foreach_element(
-                    element, item_var=item_var, index_var=index_var, index=idx
-                )
+            child_overrides = flatten_foreach_element(
+                element, item_var=item_var, index_var=index_var, index=idx
             )
+            child_overrides[FOREACH_ANCESTRY_SCOPE_KEY] = extend_foreach_ancestry(
+                parent_ancestry,
+                foreach_node_key=node.node_key,
+                collection_var=coll_var,
+                iteration_index=idx,
+                item_payload=item_payload,
+            )
+            child_scope = scope.child(child_overrides)
             self._execute_node(body, child_scope)
             if caas_on:
                 # Re-resolve root after BODY (prepare_freeze may rebind projectPath).
@@ -213,6 +231,7 @@ class WorkflowScheduler:
                     item_payload=item_payload,
                     child_revisions=revisions,
                     enabled=True,
+                    extra_input_fingerprint=parent_fingerprint,
                 )
 
         if parallel and self.config.parallel_workers > 1 and len(collection) > 1:

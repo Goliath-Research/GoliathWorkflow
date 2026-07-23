@@ -3,7 +3,7 @@
 **Status:** Implemented in [`wf_sql_foreach_support.sql`](wf_sql_foreach_support.sql).  
 **Goal:** Express data-driven fan-out over JSON collections without static node explosion.
 
-**CAAS iteration-bundle short-circuit (PG parity):** see `workflow_engine/sql_pg/08_foreach_support.sql` — table `wf.foreach_bundle_entry` and `wf_foreach_caas_try_skip_body`. Local engine uses `{project_root}/.caas/foreach_bundle/`; gateway may mirror hits into the DB table so BODY fan-out is skipped without claiming leaf ACTIONs. MSSQL port should mirror that table + skip hook when deploying distributed FOREACH CAAS.
+**CAAS iteration-bundle short-circuit (PG parity):** see `workflow_engine/sql_pg/08_foreach_support.sql` — table `wf.foreach_bundle_entry` (PK by `content_key`) and `wf_foreach_caas_try_skip_body`. Local engine uses `{project_root}/.caas/foreach_bundle/` with nested parent ancestry in the key. Gateway must mirror the same `content_key` (node + item + ancestry fingerprint); skip-by-(node, iteration_index) alone is unsafe for nested FOREACH. When `content_key` is not supplied, DB skip is a no-op.
 
 ---
 

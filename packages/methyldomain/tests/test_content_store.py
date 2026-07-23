@@ -122,6 +122,29 @@ def test_commit_and_relink_uses_relative_symlink(tmp_path: Path, monkeypatch) ->
     assert summary.resolve().is_file()
 
 
+def test_ensure_symlink_concurrent_replace(tmp_path: Path) -> None:
+    """Parallel workers must not FileExistsError when relinking the same product path."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from methyl_domain.content_store import _ensure_symlink
+
+    blob_a = tmp_path / "store" / "a.h5"
+    blob_b = tmp_path / "store" / "b.h5"
+    blob_a.parent.mkdir(parents=True)
+    blob_a.write_bytes(b"a")
+    blob_b.write_bytes(b"b")
+    link = tmp_path / "out" / "1-CG.h5"
+    link.parent.mkdir(parents=True)
+
+    def once(blob: Path) -> None:
+        _ensure_symlink(link, blob)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(once, [blob_a, blob_b] * 20))
+    assert link.is_symlink()
+    assert link.resolve().is_file()
+
+
 def test_commit_and_relink_directory_entry(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("METHYL_CAAS_ENABLED", "true")
     project_root = tmp_path / "Study"

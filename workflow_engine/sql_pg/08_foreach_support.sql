@@ -7,6 +7,11 @@
   Local engine probes ``{project_root}/.caas/foreach_bundle/{content_key}/``.
   Distributed gateway/workers may mirror hits into ``wf.foreach_bundle_entry``;
   ``wf_foreach_caas_try_skip_body`` then marks BODY SKIPPED without claiming leaf ACTIONs.
+
+  ``content_key`` must match local ``compute_iteration_bundle_key`` (FOREACH node +
+  item + child revisions + nested parent ancestry fingerprint). Hits keyed only by
+  (foreach_node_key, iteration_index) falsely skip later parents that share leaf
+  items (e.g. context CG under control vs disease centroidSeedGroups).
 */
 
 CREATE TABLE IF NOT EXISTS wf.foreach_bundle_entry (
@@ -16,16 +21,15 @@ CREATE TABLE IF NOT EXISTS wf.foreach_bundle_entry (
   content_key text NOT NULL,
   status text NOT NULL DEFAULT 'completed',
   committed_at_utc timestamptz NOT NULL DEFAULT (now() AT TIME ZONE 'utc'),
-  PRIMARY KEY (workflow_instance_id, foreach_node_key, iteration_index)
+  PRIMARY KEY (workflow_instance_id, content_key)
 );
 
-CREATE INDEX IF NOT EXISTS ix_foreach_bundle_entry_content
-  ON wf.foreach_bundle_entry (content_key);
+CREATE INDEX IF NOT EXISTS ix_foreach_bundle_entry_node_iter
+  ON wf.foreach_bundle_entry (workflow_instance_id, foreach_node_key, iteration_index);
 
 CREATE OR REPLACE FUNCTION wf.wf_foreach_bundle_is_hit(
   p_workflow_instance_id bigint,
-  p_foreach_node_key text,
-  p_iteration_index int
+  p_content_key text
 )
 RETURNS boolean
 LANGUAGE sql
@@ -35,8 +39,7 @@ AS $$
     SELECT 1
     FROM wf.foreach_bundle_entry b
     WHERE b.workflow_instance_id = p_workflow_instance_id
-      AND b.foreach_node_key = p_foreach_node_key
-      AND b.iteration_index = p_iteration_index
+      AND b.content_key = p_content_key
       AND b.status = 'completed'
   );
 $$;
@@ -45,22 +48,27 @@ CREATE OR REPLACE FUNCTION wf.wf_foreach_caas_try_skip_body(
   p_workflow_instance_id bigint,
   p_body_node_execution_id bigint,
   p_foreach_node_execution_id bigint,
-  p_iteration_no int
+  p_iteration_no int,
+  p_content_key text DEFAULT NULL
 )
 RETURNS boolean
 LANGUAGE plpgsql
 AS $$
 DECLARE
   v_parent_type text;
-  v_foreach_key text;
-  v_zbi int;
 BEGIN
+  -- Without a content_key (node+item+ancestry), never short-circuit: nested
+  -- FOREACH parents share iteration indexes and would falsely skip.
+  IF p_content_key IS NULL OR btrim(p_content_key) = '' THEN
+    RETURN false;
+  END IF;
+
   IF p_foreach_node_execution_id IS NULL OR p_body_node_execution_id IS NULL THEN
     RETURN false;
   END IF;
 
-  SELECT wn.node_type, wn.node_key
-  INTO v_parent_type, v_foreach_key
+  SELECT wn.node_type
+  INTO v_parent_type
   FROM wf.node_execution ne
   INNER JOIN wf.workflow_node wn ON wn.id = ne.workflow_node_id
   WHERE ne.id = p_foreach_node_execution_id;
@@ -69,9 +77,7 @@ BEGIN
     RETURN false;
   END IF;
 
-  v_zbi := CASE WHEN p_iteration_no < 1 THEN 0 ELSE p_iteration_no - 1 END;
-
-  IF NOT wf.wf_foreach_bundle_is_hit(p_workflow_instance_id, v_foreach_key, v_zbi) THEN
+  IF NOT wf.wf_foreach_bundle_is_hit(p_workflow_instance_id, p_content_key) THEN
     RETURN false;
   END IF;
 
@@ -153,6 +159,7 @@ BEGIN
       IF v_key IS NOT NULL
          AND v_key <> coalesce(nullif(btrim(p_item_var), ''), 'item')
          AND v_key <> coalesce(nullif(btrim(p_index_var), ''), 'index')
+         AND v_key <> '__foreach_ancestry__'
       THEN
         CALL wf.wf_set_scope_variable(
           p_workflow_instance_id, p_scope_node_execution_id, v_key, v_val::text
@@ -528,9 +535,10 @@ BEGIN
     p_parent_node_execution_id, v_pex, p_iteration_no
   );
 
-  -- Iteration-bundle CAAS: skip BODY fan-out when a prior successful iteration is mirrored.
+  -- Iteration-bundle CAAS: skip BODY fan-out only when caller supplies a
+  -- content_key (node+item+nested ancestry). NULL disables skip (safe default).
   IF wf.wf_foreach_caas_try_skip_body(
-    p_workflow_instance_id, v_pex, p_parent_node_execution_id, p_iteration_no
+    p_workflow_instance_id, v_pex, p_parent_node_execution_id, p_iteration_no, NULL
   ) THEN
     RETURN;
   END IF;

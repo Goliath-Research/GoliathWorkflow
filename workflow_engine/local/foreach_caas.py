@@ -88,6 +88,7 @@ def probe_iteration_bundle(
     item_payload: Any,
     child_revisions: Sequence[str],
     enabled: bool = True,
+    extra_input_fingerprint: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     if not enabled or project_root is None:
         return None
@@ -100,6 +101,7 @@ def probe_iteration_bundle(
         iteration_index=iteration_index,
         item_payload=item_payload,
         child_action_revisions=list(child_revisions),
+        extra_input_fingerprint=extra_input_fingerprint,
         enabled=True,
     )
 
@@ -113,6 +115,7 @@ def commit_iteration_bundle_local(
     item_payload: Any,
     child_revisions: Sequence[str],
     enabled: bool = True,
+    extra_input_fingerprint: Optional[str] = None,
 ) -> Optional[Path]:
     if not enabled or project_root is None:
         return None
@@ -127,6 +130,7 @@ def commit_iteration_bundle_local(
         iteration_index=iteration_index,
         item_payload=item_payload,
         child_action_revisions=list(child_revisions),
+        extra_input_fingerprint=extra_input_fingerprint,
     )
     path = commit_iteration_bundle(
         project_root,

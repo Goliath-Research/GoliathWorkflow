@@ -1,8 +1,12 @@
 """Tagged domain types for workflow scope variables."""
 
 from .foreach_bundle import (
+    FOREACH_ANCESTRY_SCOPE_KEY,
     commit_iteration_bundle,
     compute_iteration_bundle_key,
+    extend_foreach_ancestry,
+    fingerprint_foreach_ancestry,
+    foreach_ancestry_from_scope,
     read_iteration_bundle,
     try_short_circuit_foreach_iteration,
 )
@@ -45,6 +49,7 @@ __all__ = [
     "ComparisonSpecRef",
     "DomainProgram",
     "DomainTypeName",
+    "FOREACH_ANCESTRY_SCOPE_KEY",
     "FragmentomicsRef",
     "McIterationTaskConfig",
     "MethylCentroidRef",
@@ -64,6 +69,9 @@ __all__ = [
     "comparisons_from_project_json",
     "compute_iteration_bundle_key",
     "domain_type_names",
+    "extend_foreach_ancestry",
+    "fingerprint_foreach_ancestry",
+    "foreach_ancestry_from_scope",
     "groups_from_mc_run_dir",
     "groups_from_project",
     "parse_domain_value",
