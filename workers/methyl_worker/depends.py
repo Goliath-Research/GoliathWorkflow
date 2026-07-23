@@ -165,10 +165,11 @@ def call_in_process_handler(
             continue
 
         if param.name == "runtime":
-            if default is inspect.Parameter.empty:
-                args.append(runtime_ctx)
-            else:
+            # Keyword-only params must be passed by name; positional would TypeError.
+            if param.kind is inspect.Parameter.KEYWORD_ONLY or default is not inspect.Parameter.empty:
                 kwargs[param.name] = runtime_ctx
+            else:
+                args.append(runtime_ctx)
             continue
 
         # Leave other defaults / required kwargs to the caller (should not happen

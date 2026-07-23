@@ -6,7 +6,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict
 
 from methyl_worker.action_catalog import find_catalog_entry
-from methyl_worker.actions.base import InProcessAction, _call_in_process_handler, _handler_accepts_runtime
+from methyl_worker.actions.base import InProcessAction, _call_in_process_handler
 from methyl_worker.task_models.runtime_models import TaskRuntimeContext
 
 
@@ -42,13 +42,19 @@ def _keyword_only_runtime_handler(
     *,
     runtime: TaskRuntimeContext,
 ) -> _SampleOutput:
-    return _SampleOutput()
+    return _SampleOutput(status=runtime.workflowNodeKey or "ok")
 
 
-def test_handler_accepts_runtime_detects_signatures() -> None:
-    assert _handler_accepts_runtime(_three_arg_handler) is False
-    assert _handler_accepts_runtime(_four_arg_handler) is True
-    assert _handler_accepts_runtime(_keyword_only_runtime_handler) is True
+def test_call_in_process_handler_passes_required_keyword_only_runtime() -> None:
+    runtime = TaskRuntimeContext.from_wire({"workflowNodeKey": "kw-required"})
+    out = _call_in_process_handler(
+        _keyword_only_runtime_handler,
+        "cap",
+        "action",
+        _SampleInput(projectPath="/p"),
+        runtime,
+    )
+    assert out.status == "kw-required"
 
 
 def test_call_in_process_handler_passes_keyword_only_runtime() -> None:
