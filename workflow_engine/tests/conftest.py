@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from methyl_domain.testing import project_with_local_samples
+from local_project_support import project_with_local_samples
 
 DOMAIN = Path(__file__).resolve().parents[1] / "domain"
 REPO_PROFILES = DOMAIN / "profiles"

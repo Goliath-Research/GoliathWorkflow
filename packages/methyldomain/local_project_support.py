@@ -1,7 +1,7 @@
-"""Test helpers for decoupling committed study projects from host ``/work`` data.
+"""Stdlib-only helpers to decouple committed study projects from host ``/work`` data.
 
-Used by workflow_engine and package tests so hosted CI agents (no writable
-``/work``, no cohort CSVs) can still exercise resolve/enrich/compile paths.
+Lives next to the ``methyl_domain`` package (not inside it) so early CI guards can
+import this module without pulling package deps such as pydantic.
 """
 
 from __future__ import annotations
