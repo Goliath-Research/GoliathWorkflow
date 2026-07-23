@@ -1,6 +1,7 @@
 ---
 name: CI Dev Deploy Sync
 overview: Stop whack-a-mole CI failures by making every sync surface (packages, schemas, docs, diagrams, fixtures, install order) an explicit contract with pre-commit + PR gates that mirror the deployment build.
+
 > **Status: IMPLEMENTED** — Sync contracts, preflight, pre-commit, PR wiring, and editable hygiene landed (Jul 2026).
 
 azure_devops:
