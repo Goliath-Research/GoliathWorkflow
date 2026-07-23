@@ -144,12 +144,13 @@ def test_run_fq2bam_meth_invokes_docker(tmp_path: Path) -> None:
         "os.environ",
         {"METHYL_PARABRICKS_IMAGE": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1"},
     ):
-        with patch("methyl_worker.parabricks_runner.subprocess.run", side_effect=fake_run):
-            out = runner.run_fq2bam_meth(
-                sample_id="S7",
-                sample_dir=sample_dir,
-                reference_fasta=ref,
-            )
+        with patch("methyl_worker.capabilities._gpu_available", return_value=True):
+            with patch("methyl_worker.parabricks_runner.subprocess.run", side_effect=fake_run):
+                out = runner.run_fq2bam_meth(
+                    sample_id="S7",
+                    sample_dir=sample_dir,
+                    reference_fasta=ref,
+                )
 
     assert out["bamPath"] == str(sample_dir / "S7.bam")
     assert out["qcMetricsTar"] == str(sample_dir / "S7.qc-metrics.tar")
