@@ -14,8 +14,8 @@ pandas = ">=2.1.0,<3.0.0"
 scikit-learn = ">=1.4.0,<2.0.0"
 click = ">=8.1.0,<9.0.0"
 methylutils = {path = "../methylutils", develop = true}
-methylpredictor = {path = "../methylpredictor", develop = true}
-methylenricher = {path = "../methylenricher", develop = true}
+methyl-predictor = {path = "../methylpredictor", develop = true}
+methyl-enricher = {path = "../methylenricher", develop = true}
 
 [tool.poetry.scripts]
 methyl-gene-select = "methyl_gene_select.cli.main:main"
