@@ -15,10 +15,30 @@ Each YAML lives in **this repository** so Azure DevOps can point pipelines at lo
 
 ## Regression and coverage gate (PR pipeline)
 
-`azure-pipelines-pr.yml` runs the **full pytest suite** as a regression gate on
-every pull request, in addition to the doc/diagram/packaging guards. It builds a
-`.venv`, installs the editable packages with dependencies
-(`scripts/install_packages.sh --with-deps`), then runs
+`azure-pipelines-pr.yml` runs **sync contracts** then the **full pytest suite** as a
+regression gate on every pull request. Sync contracts catch the deployment
+whack-a-mole class of failures (package install metadata, catalog/golden drift,
+docs/diagrams) before the long suite.
+
+### Local commands (mirror CI)
+
+```bash
+# Cheap sync guards — same scripts as PR (run before push)
+./scripts/ci_preflight.sh
+
+# Full regression + coverage artifacts (hosted PR suite)
+./scripts/run_tests_ci.sh
+
+# Narrow spine coverage ratchet
+./scripts/run_spine_coverage_ratchet.sh
+```
+
+Contract map: [`../docs/reference/ci-sync-matrix.md`](../docs/reference/ci-sync-matrix.md).
+Plan: [`../docs/plans/ci-dev-deploy-sync.plan.md`](../docs/plans/ci-dev-deploy-sync.plan.md).
+
+`azure-pipelines-pr.yml` builds a `.venv`, installs editable packages with
+dependencies (`scripts/install_packages.sh --with-deps`, including a foundational
+re-editable pass for `methylutils` / `methyldomain`), then runs
 [`../scripts/run_tests_ci.sh`](../scripts/run_tests_ci.sh), which emits:
 
 - `test-results/junit.xml` — published via `PublishTestResults@2` (a failing test fails the PR),
@@ -30,9 +50,6 @@ self-skip on the hosted agent. Coverage is **measure-and-report only**: there is
 no `--cov-fail-under` gate yet. The baseline is recorded so the threshold can be
 ratcheted up over time. Policy and rationale live in
 [`../docs/regulatory/continuous-integration-and-regression-testing.md`](../docs/regulatory/continuous-integration-and-regression-testing.md).
-
-Run the same suite locally with `./scripts/run_tests_ci.sh` (or `./scripts/run_tests.sh`
-for a plain run without coverage artifacts).
 
 ### Spine coverage ratchet (branch, `fail_under`)
 

@@ -22,15 +22,7 @@ Committed example: [`docs/examples/samd/alzheimer-cfdna/`](../examples/samd/alzh
 The study manifest expresses two ordered disease stages under one group, giving two
 comparisons plus progression:
 
-```mermaid
-flowchart TD
-  H["healthy.csv (Control)"] --> CMP{"comparisons<br/>control_vs_each_disease"}
-  MCI["mci.csv (AD_MCI)"] --> CMP
-  AD["ad.csv (AD_AD)"] --> CMP
-  CMP --> MC["MC stability per comparison"]
-  MC --> PROG["pipeline.progression<br/>progression_labels: AD_MCI, AD_AD"]
-  PROG --> MODEL["freeze + model + holdout (SaMD ladder)"]
-```
+![Alzheimer cfDNA pack cohort flow](../diagrams/out/alzheimer-cfdna-pack.png)
 
 Manifest essentials (`project_Healthy_vs_AD_Stages.json`):
 

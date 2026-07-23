@@ -1,0 +1,7 @@
+flowchart TD
+  H["healthy.csv (Control)"] --> CMP{"comparisons control_vs_each_disease"}
+  MCI["mci.csv (AD_MCI)"] --> CMP
+  AD["ad.csv (AD_AD)"] --> CMP
+  CMP --> MC["MC stability per comparison"]
+  MC --> PROG["pipeline.progression progression_labels: AD_MCI, AD_AD"]
+  PROG --> MODEL["freeze + model + holdout (SaMD ladder)"]

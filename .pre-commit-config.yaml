@@ -17,8 +17,24 @@ repos:
         entry: python scripts/check_no_step_config.py
         language: system
         pass_filenames: false
+      - id: package-install-contract
+        name: Package install contract
+        entry: python scripts/check_package_install_contract.py
+        language: system
+        pass_filenames: false
+      - id: catalog-fixture-contract
+        name: Catalog schema and golden fixture contract
+        entry: python scripts/check_catalog_fixture_contract.py
+        language: system
+        pass_filenames: false
       - id: diagram-freshness
         name: Mermaid diagram freshness
         entry: bash scripts/render_diagrams.sh --check
         language: system
         pass_filenames: false
+      - id: ci-preflight
+        name: CI preflight (sync contracts)
+        entry: bash scripts/ci_preflight.sh
+        language: system
+        pass_filenames: false
+        stages: [manual]

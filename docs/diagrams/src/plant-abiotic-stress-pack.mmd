@@ -1,0 +1,5 @@
+flowchart TD
+  C["control.csv (well-watered)"] --> CMP{"comparisons control_vs_each_disease"}
+  D["drought.csv (stressed)"] --> CMP
+  CMP --> MC["MC stability per comparison CG / CHG / CHH"]
+  MC --> MODEL["freeze + model + holdout (samd_research)"]

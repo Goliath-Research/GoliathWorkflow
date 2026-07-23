@@ -40,6 +40,12 @@ steps:
     displayName: Documentation freshness guard
 
   - script: |
+      python scripts/check_package_install_contract.py
+      python scripts/check_catalog_fixture_contract.py
+      pytest scripts/tests/test_check_package_install_contract.py scripts/tests/test_check_catalog_fixture_contract.py -q
+    displayName: Package install and catalog fixture contracts
+
+  - script: |
       sudo apt-get update
       sudo apt-get install -y chromium-browser
       (cd docs/diagrams && npm ci --no-audit --no-fund)

@@ -14,22 +14,7 @@ This chapter is the generic pattern. Worked instances:
 | Alzheimer cfDNA (Control → MCI → AD) | Disease application | [ch.21](21-alzheimer-cfdna-pack.qmd) |
 | Plant abiotic stress (Arabidopsis + crop sites) | Trait application | [ch.23](23-plant-abiotic-stress-pack.qmd) |
 
-```mermaid
-flowchart TB
-  subgraph process [Process packs]
-    METH[methylation WGBS]
-    RNA[rnaseq]
-    PROT[proteomics]
-  end
-  subgraph apps [Application packs on methylation]
-    AD[Alzheimer cfDNA]
-    PLANT[Plant abiotic stress]
-    FUTURE[Future indication or trait]
-  end
-  METH --> AD
-  METH --> PLANT
-  METH --> FUTURE
-```
+![Process packs vs methylation application packs](../diagrams/out/methylation-application-packs.png)
 
 ## Process pack vs application pack
 
