@@ -38,6 +38,27 @@ def test_build_release_resolves_workflow_engine_wheel() -> None:
     assert "workflow_engine" in (REPO_ROOT / "scripts" / "packages.list").read_text()
 
 
+def test_packages_list_includes_worker_path_deps_before_workers() -> None:
+    """pip ignores [tool.uv.sources]; path deps must be installed before workers."""
+    lines = [
+        ln.strip()
+        for ln in (REPO_ROOT / "scripts" / "packages.list").read_text(encoding="utf-8").splitlines()
+        if ln.strip() and not ln.strip().startswith("#")
+    ]
+    required = (
+        "rnaalignmentqc",
+        "rnaexpress",
+        "omicsfeatures",
+        "proteomicsfeatures",
+        "proteomicsqc",
+    )
+    assert "workers" in lines
+    workers_idx = lines.index("workers")
+    for name in required:
+        assert name in lines, f"{name} missing from packages.list"
+        assert lines.index(name) < workers_idx, f"{name} must precede workers"
+
+
 def test_verify_setup_fails_on_missing_canonical_doc(tmp_path: Path) -> None:
     proc = subprocess.run(
         ["bash", str(REPO_ROOT / "scripts" / "verify_setup.sh")],
