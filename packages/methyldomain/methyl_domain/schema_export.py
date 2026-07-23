@@ -16,13 +16,15 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 from pydantic import BaseModel, TypeAdapter
 
+from methyl_utils.repo_paths import repo_schemas_dir
+
 from .program import DomainProgram
 from .fastq_storage import FastqSourceLocation, FastqStorageDefaults
 from .types import DOMAIN_MODEL_BY_TYPE, DOMAIN_TYPE_NAMES
 
 
 def repo_schemas_domain_dir() -> Path:
-    return Path(__file__).resolve().parents[3] / "schemas" / "domain"
+    return repo_schemas_dir("domain", start=Path(__file__))
 
 
 def generate_schema_dict(model: type[BaseModel], *, title: str | None = None) -> Dict[str, Any]:

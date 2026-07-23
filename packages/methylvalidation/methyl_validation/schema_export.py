@@ -16,12 +16,14 @@ from typing import Any, Dict, Iterable, List, Tuple
 
 from pydantic import BaseModel
 
+from methyl_utils.repo_paths import repo_schemas_dir
+
 from .config_schema_registry import ConfigSchemaSpec, list_config_schema_specs
 
 
 def repo_schemas_config_dir() -> Path:
-    """``<repo>/schemas/config`` (methyl_validation is packages/methylvalidation/methyl_validation)."""
-    return Path(__file__).resolve().parents[3] / "schemas" / "config"
+    """``<repo>/schemas/config``."""
+    return repo_schemas_dir("config", start=Path(__file__))
 
 
 def generate_schema_dict(model: type[BaseModel], *, title: str | None = None) -> Dict[str, Any]:

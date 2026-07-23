@@ -134,7 +134,18 @@ class WorkflowDefinitionSpec(BaseModel):
 
 
 def repo_schemas_workflow_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "schemas" / "workflow"
+    """``<repo>/schemas/workflow`` — walk-up so site-packages installs still find committed schemas."""
+    try:
+        from methyl_utils.repo_paths import repo_schemas_dir
+
+        return repo_schemas_dir("workflow", start=Path(__file__))
+    except Exception:
+        start = Path(__file__).resolve()
+        for candidate in (start, *start.parents, Path.cwd().resolve(), *Path.cwd().resolve().parents):
+            marker = candidate / "schemas" / "workflow"
+            if marker.is_dir() and (candidate / "scripts" / "packages.list").is_file():
+                return marker
+        return Path(__file__).resolve().parents[2] / "schemas" / "workflow"
 
 
 def export_workflow_definition_schema(*, output_root: Path | None = None, write: bool = True) -> Path:

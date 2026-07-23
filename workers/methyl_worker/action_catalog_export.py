@@ -14,11 +14,13 @@ import sys
 from pathlib import Path
 from typing import List
 
+from methyl_utils.repo_paths import repo_schemas_dir
+
 from .action_catalog import ACTION_CATALOG, validate_catalog_linkage
 
 
 def repo_schemas_actions_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "schemas" / "actions"
+    return repo_schemas_dir("actions", start=Path(__file__))
 
 
 def generate_catalog_dict() -> dict:
