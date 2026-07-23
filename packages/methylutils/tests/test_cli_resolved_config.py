@@ -12,7 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from methyl_utils.cli_resolved_config import read_json_object, resolve_cli_step_config
+from methyl_utils.cli_resolved_config import (
+    add_resolved_config_argument,
+    read_json_object,
+    resolve_cli_step_config,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -98,3 +102,12 @@ def test_resolve_cli_step_config_standalone_project_path(monkeypatch):
     assert out == {"resolved": "from_project"}
     assert captured["action_key"] == "mapper"
     assert captured["project"] is proj
+
+
+def test_add_resolved_config_argument_registers_flag():
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    add_resolved_config_argument(parser, help_suffix="Used by methyl-mapper.")
+    ns = parser.parse_args(["--resolved-config", "/tmp/baked.json"])
+    assert ns.resolved_config == "/tmp/baked.json"
