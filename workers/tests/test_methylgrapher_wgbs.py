@@ -127,7 +127,7 @@ def test_run_binary_stdout_redirect(tmp_path: Path) -> None:
 
 
 def test_restore_sequences_streaming_not_dict_load(tmp_path: Path) -> None:
-    """Restore must merge-join sorted FASTQ TSVs — not load both FASTQs into dicts."""
+    """Restore must merge-join with matching lex collation (incl. numeric names)."""
     import pysam
 
     bam_in = tmp_path / "conv.bam"
@@ -135,12 +135,16 @@ def test_restore_sequences_streaming_not_dict_load(tmp_path: Path) -> None:
         "HD": {"VN": "1.0", "SO": "unsorted"},
         "SQ": [{"LN": 1000, "SN": "chr1"}],
     }
+    # Numeric suffixes diverge under natural (-n) vs lex (-N / unix sort):
+    # natural: read9 < read10 ; lex: read10 < read9.
     with pysam.AlignmentFile(str(bam_in), "wb", header=header) as out:
         for qname, seq, flag, start in (
-            ("readB", "AAAA", 99, 5),
-            ("readA", "CCCC", 99, 10),
-            ("readA", "GGGG", 147, 20),
-            ("readB", "TTTT", 147, 30),
+            ("read9", "AAAA", 99, 5),
+            ("read10", "CCCC", 99, 10),
+            ("read10", "GGGG", 147, 20),
+            ("read9", "TTTT", 147, 30),
+            ("read2", "ATAT", 99, 40),
+            ("read2", "GCGC", 147, 50),
         ):
             aln = pysam.AlignedSegment()
             aln.query_name = qname
@@ -156,13 +160,15 @@ def test_restore_sequences_streaming_not_dict_load(tmp_path: Path) -> None:
     fq1 = tmp_path / "r1.fastq"
     fq2 = tmp_path / "r2.fastq"
     fq1.write_text(
-        "@readA\nACGT\n+\nIIII\n"
-        "@readB\nTGCA\n+\nIIII\n",
+        "@read9\nACGT\n+\nIIII\n"
+        "@read2\nTGCA\n+\nIIII\n"
+        "@read10\nAATT\n+\nIIII\n",
         encoding="utf-8",
     )
     fq2.write_text(
-        "@readA\nTTAA\n+\nIIII\n"
-        "@readB\nGGCC\n+\nIIII\n",
+        "@read10\nTTAA\n+\nIIII\n"
+        "@read9\nGGCC\n+\nIIII\n"
+        "@read2\nCCGG\n+\nIIII\n",
         encoding="utf-8",
     )
     out_bam = tmp_path / "restored.bam"
@@ -173,10 +179,12 @@ def test_restore_sequences_streaming_not_dict_load(tmp_path: Path) -> None:
     with pysam.AlignmentFile(str(out_bam), "rb") as inn:
         for aln in inn:
             by_name[(aln.query_name, aln.is_read2)] = aln.query_sequence
-    assert by_name[("readA", False)] == "ACGT"
-    assert by_name[("readA", True)] == "TTAA"
-    assert by_name[("readB", False)] == "TGCA"
-    assert by_name[("readB", True)] == "GGCC"
+    assert by_name[("read2", False)] == "TGCA"
+    assert by_name[("read2", True)] == "CCGG"
+    assert by_name[("read9", False)] == "ACGT"
+    assert by_name[("read9", True)] == "GGCC"
+    assert by_name[("read10", False)] == "AATT"
+    assert by_name[("read10", True)] == "TTAA"
     assert "streaming merge-join" in log.read_text(encoding="utf-8")
 
 

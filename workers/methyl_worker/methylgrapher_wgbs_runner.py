@@ -422,13 +422,17 @@ def _iter_fastq_records(path: Path):
 def _write_sorted_fastq_tsv(fastq: Path, out_tsv: Path, *, sort_dir: Path) -> None:
     """Stream FASTQ → ``name\\tseq\\tqual`` lines, externally sorted by name.
 
-    Uses ``sort -S`` with a bounded memory budget so production WGBS FASTQs
-    never materialize as Python dicts.
+    Collation is ``LC_ALL=C`` lexicographic byte order — the same order as
+    ``samtools sort -N`` (not natural ``-n``) and Python ``str`` comparisons used
+    by the merge-join. Uses ``sort -S`` with a bounded memory budget so production
+    WGBS FASTQs never materialize as Python dicts.
     """
     out_tsv.parent.mkdir(parents=True, exist_ok=True)
     sort_dir.mkdir(parents=True, exist_ok=True)
     # Bound RAM for external sort; disk spill under sort_dir.
     sort_mem = os.environ.get("METHYL_FASTQ_SORT_MEM", "2G").strip() or "2G"
+    env = os.environ.copy()
+    env["LC_ALL"] = "C"
     sort_cmd = [
         "sort",
         "-t",
@@ -446,6 +450,7 @@ def _write_sorted_fastq_tsv(fastq: Path, out_tsv: Path, *, sort_dir: Path) -> No
         stdin=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
+        env=env,
     )
     assert proc.stdin is not None
     try:
@@ -488,8 +493,13 @@ def _restore_original_sequences(
     """Restore original read bases/qualities into surjected BAM (streaming).
 
     Surjection after C2T/G2A alignment can leave converted sequences; QC expects
-    original bases. Never loads full FASTQs into RAM: name-sort the BAM, externally
-    sort FASTQ records, then merge-join by read name.
+    original bases. Never loads full FASTQs into RAM: lexicographically name-sort
+    the BAM (``samtools sort -N``), externally sort FASTQ records with matching
+    ``LC_ALL=C`` collation, then merge-join by read name.
+
+    Important: do **not** use ``samtools sort -n`` (natural/alpha-numeric order);
+    that disagrees with Unix ``sort`` / Python ``str`` lexicographic order and
+    silently drops restores for Illumina-style numeric read names.
     """
     try:
         import pysam  # type: ignore
@@ -508,10 +518,11 @@ def _restore_original_sequences(
     tmp_out = work / "restored.tmp.bam"
 
     try:
+        # -N = lexicographic (raw) name order; matches LC_ALL=C sort + str comparisons.
         _run(
-            ["samtools", "sort", "-n", "-o", str(name_sorted_bam), str(bam_path)],
+            ["samtools", "sort", "-N", "-o", str(name_sorted_bam), str(bam_path)],
             log_path,
-            step="samtools.sort_name",
+            step="samtools.sort_name_lex",
         )
         _write_sorted_fastq_tsv(fq1, r1_tsv, sort_dir=sort_tmp / "r1")
         _write_sorted_fastq_tsv(fq2, r2_tsv, sort_dir=sort_tmp / "r2")
@@ -522,7 +533,10 @@ def _restore_original_sequences(
         r2_cur = next(r2_iter, None)
 
         def _advance(cur, it, key: str):
-            """Advance sorted iterator until name >= key; consume match if equal."""
+            """Advance sorted iterator until name >= key; consume match if equal.
+
+            Both streams must use the same lexicographic collation.
+            """
             while cur is not None and cur[0] < key:
                 cur = next(it, None)
             if cur is not None and cur[0] == key:
