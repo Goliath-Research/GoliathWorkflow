@@ -9,6 +9,8 @@ import pytest
 
 from methyl_utils.action_config_resolver import resolve_methylgrapher_wgbs_genome
 from methyl_worker.methylgrapher_wgbs_runner import (
+    _restore_original_sequences,
+    _run,
     build_align_command,
     build_surject_command,
     resolve_wgbs_bundle_from_resolved,
@@ -104,10 +106,78 @@ def test_build_align_and_surject_commands(tmp_path: Path) -> None:
         gaf=tmp_path / "a.gaf",
         gbz=bundle.original_gbz or bundle.c2t_gbz,
         ref_paths=bundle.ref_paths,
-        out_bam=tmp_path / "out.bam",
     )
     assert sur[0] in {"vg", "vg"} or sur[0].endswith("vg")
     assert "surject" in sur
+    assert "-G" in sur  # GAF input (not -i GAF)
+    assert "-b" in sur  # BAM on stdout
+    assert "-i" not in sur
+    assert "-o" not in sur
+    assert str(tmp_path / "a.gaf") in sur
+
+
+def test_run_binary_stdout_redirect(tmp_path: Path) -> None:
+    out = tmp_path / "blob.bin"
+    log = tmp_path / "run.log"
+    payload = b"\x1f\x8bBAM\x00\x01\x02"
+    src = tmp_path / "src.bin"
+    src.write_bytes(payload)
+    _run(["cat", str(src)], log, step="bin", stdout_path=out)
+    assert out.read_bytes() == payload
+
+
+def test_restore_sequences_streaming_not_dict_load(tmp_path: Path) -> None:
+    """Restore must merge-join sorted FASTQ TSVs — not load both FASTQs into dicts."""
+    import pysam
+
+    bam_in = tmp_path / "conv.bam"
+    header = {
+        "HD": {"VN": "1.0", "SO": "unsorted"},
+        "SQ": [{"LN": 1000, "SN": "chr1"}],
+    }
+    with pysam.AlignmentFile(str(bam_in), "wb", header=header) as out:
+        for qname, seq, flag, start in (
+            ("readB", "AAAA", 99, 5),
+            ("readA", "CCCC", 99, 10),
+            ("readA", "GGGG", 147, 20),
+            ("readB", "TTTT", 147, 30),
+        ):
+            aln = pysam.AlignedSegment()
+            aln.query_name = qname
+            aln.query_sequence = seq
+            aln.flag = flag
+            aln.reference_id = 0
+            aln.reference_start = start
+            aln.mapping_quality = 60
+            aln.cigarstring = f"{len(seq)}M"
+            aln.query_qualities = pysam.qualitystring_to_array("I" * len(seq))
+            out.write(aln)
+
+    fq1 = tmp_path / "r1.fastq"
+    fq2 = tmp_path / "r2.fastq"
+    fq1.write_text(
+        "@readA\nACGT\n+\nIIII\n"
+        "@readB\nTGCA\n+\nIIII\n",
+        encoding="utf-8",
+    )
+    fq2.write_text(
+        "@readA\nTTAA\n+\nIIII\n"
+        "@readB\nGGCC\n+\nIIII\n",
+        encoding="utf-8",
+    )
+    out_bam = tmp_path / "restored.bam"
+    log = tmp_path / "restore.log"
+    _restore_original_sequences(bam_in, fq1, fq2, out_bam, log)
+    assert out_bam.is_file()
+    by_name = {}
+    with pysam.AlignmentFile(str(out_bam), "rb") as inn:
+        for aln in inn:
+            by_name[(aln.query_name, aln.is_read2)] = aln.query_sequence
+    assert by_name[("readA", False)] == "ACGT"
+    assert by_name[("readA", True)] == "TTAA"
+    assert by_name[("readB", False)] == "TGCA"
+    assert by_name[("readB", True)] == "GGCC"
+    assert "streaming merge-join" in log.read_text(encoding="utf-8")
 
 
 def test_dry_run_align_and_extract(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

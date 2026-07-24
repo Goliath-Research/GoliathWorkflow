@@ -206,9 +206,41 @@ def _append_log(log_path: Path, text: str) -> None:
         fh.write(text.rstrip() + "\n")
 
 
-def _run(cmd: Sequence[str], log_path: Path, *, step: str) -> None:
+def _run(
+    cmd: Sequence[str],
+    log_path: Path,
+    *,
+    step: str,
+    stdout_path: Path | None = None,
+) -> None:
+    """Run a command, optionally redirecting binary stdout to ``stdout_path``.
+
+    When ``stdout_path`` is set (e.g. ``vg surject -b`` BAM), stdout is written
+    as raw bytes and must not use ``text=True`` / ``capture_output``.
+    """
     logger.info("%s: %s", step, " ".join(shlex.quote(c) for c in cmd))
     _append_log(log_path, "COMMAND: " + " ".join(shlex.quote(c) for c in cmd))
+    if stdout_path is not None:
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+        with stdout_path.open("wb") as out_fh:
+            proc = subprocess.run(
+                list(cmd),
+                stdout=out_fh,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+        stderr_text = (proc.stderr or b"").decode("utf-8", errors="replace")
+        if stderr_text:
+            _append_log(log_path, f"[{step}] stderr:\n{stderr_text}")
+        if proc.returncode != 0:
+            raise RuntimeError(
+                stderr_text.strip()
+                or f"methylGrapher step {step} failed (rc={proc.returncode})"
+            )
+        if not stdout_path.is_file() or stdout_path.stat().st_size == 0:
+            raise RuntimeError(f"{step} produced empty stdout file: {stdout_path}")
+        return
+
     proc = subprocess.run(list(cmd), capture_output=True, text=True, check=False)
     if proc.stdout:
         _append_log(log_path, f"[{step}] stdout:\n{proc.stdout}")
@@ -276,24 +308,30 @@ def build_surject_command(
     gaf: Path,
     gbz: Path,
     ref_paths: Path,
-    out_bam: Path,
+    threads: int | None = None,
 ) -> List[str]:
+    """Build ``vg surject`` argv for GAF → BAM (stdout).
+
+    Correct flags (vg ≥1.x):
+    - ``-G`` / ``--gaf-input``: input is GAF (not GAM)
+    - ``-b`` / ``--bam-output``: write BAM to **stdout**
+    - ``-i`` is interleaved paired-end (boolean) — do **not** pass format there
+    - there is no ``-o``; callers must redirect stdout to the BAM path
+    """
     vg = os.environ.get(VG_BIN_ENV, "").strip() or "vg"
+    n_threads = threads if threads is not None else max(1, (os.cpu_count() or 4) // 2)
     return [
         vg,
         "surject",
         "-x",
         str(gbz),
+        "-G",
         "-b",
         "-t",
-        str(max(1, (os.cpu_count() or 4) // 2)),
+        str(n_threads),
         "-F",
         str(ref_paths),
-        "-i",
-        "GAF",
         str(gaf),
-        "-o",
-        str(out_bam),
     ]
 
 
@@ -348,6 +386,98 @@ def _write_dedup_metrics(path: Path, sample_id: str, *, n_reads: int = 0) -> Non
     )
 
 
+def _fastq_base_name(header_name: str) -> str:
+    name = header_name.split()[0]
+    if name.startswith("@"):
+        name = name[1:]
+    if name.endswith("/1") or name.endswith("/2"):
+        name = name[:-2]
+    return name
+
+
+def _iter_fastq_records(path: Path):
+    """Yield ``(base_name, seq, qual)`` without loading the full file."""
+    try:
+        from pysam import FastxFile  # type: ignore
+
+        with FastxFile(str(path)) as fh:
+            for rec in fh:
+                yield _fastq_base_name(rec.name), rec.sequence, rec.quality or ""
+            return
+    except Exception:
+        pass
+
+    opener = gzip.open if path.name.endswith(".gz") else open
+    with opener(path, "rt") as fh:  # type: ignore[arg-type]
+        while True:
+            header = fh.readline()
+            if not header:
+                break
+            seq = fh.readline().rstrip("\n")
+            fh.readline()
+            qual = fh.readline().rstrip("\n")
+            yield _fastq_base_name(header[1:]), seq, qual
+
+
+def _write_sorted_fastq_tsv(fastq: Path, out_tsv: Path, *, sort_dir: Path) -> None:
+    """Stream FASTQ → ``name\\tseq\\tqual`` lines, externally sorted by name.
+
+    Uses ``sort -S`` with a bounded memory budget so production WGBS FASTQs
+    never materialize as Python dicts.
+    """
+    out_tsv.parent.mkdir(parents=True, exist_ok=True)
+    sort_dir.mkdir(parents=True, exist_ok=True)
+    # Bound RAM for external sort; disk spill under sort_dir.
+    sort_mem = os.environ.get("METHYL_FASTQ_SORT_MEM", "2G").strip() or "2G"
+    sort_cmd = [
+        "sort",
+        "-t",
+        "\t",
+        "-k1,1",
+        "-S",
+        sort_mem,
+        "-T",
+        str(sort_dir),
+        "-o",
+        str(out_tsv),
+    ]
+    proc = subprocess.Popen(
+        sort_cmd,
+        stdin=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    assert proc.stdin is not None
+    try:
+        for name, seq, qual in _iter_fastq_records(fastq):
+            proc.stdin.write(f"{name}\t{seq}\t{qual}\n")
+        proc.stdin.close()
+    except Exception:
+        proc.kill()
+        raise
+    stderr = proc.stderr.read() if proc.stderr else ""
+    rc = proc.wait()
+    if rc != 0:
+        raise RuntimeError(f"external FASTQ sort failed (rc={rc}): {stderr.strip()}")
+
+
+def _iter_sorted_fastq_tsv(path: Path):
+    with path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 3:
+                continue
+            yield parts[0], parts[1], parts[2]
+
+
+def _bam_query_key(qname: str | None) -> str | None:
+    if not qname:
+        return None
+    if qname.endswith("/1") or qname.endswith("/2"):
+        return qname[:-2]
+    return qname
+
+
 def _restore_original_sequences(
     bam_path: Path,
     fq1: Path,
@@ -355,11 +485,11 @@ def _restore_original_sequences(
     out_bam: Path,
     log_path: Path,
 ) -> None:
-    """Best-effort restore of original read bases/qualities into surjected BAM.
+    """Restore original read bases/qualities into surjected BAM (streaming).
 
-    Surjection after C2T/G2A alignment can leave converted sequences; QC and
-    downstream contracts expect original bases. Uses samtools + a small Python
-    rewrite when pysam is available; otherwise copies the surjected BAM.
+    Surjection after C2T/G2A alignment can leave converted sequences; QC expects
+    original bases. Never loads full FASTQs into RAM: name-sort the BAM, externally
+    sort FASTQ records, then merge-join by read name.
     """
     try:
         import pysam  # type: ignore
@@ -369,48 +499,70 @@ def _restore_original_sequences(
             shutil.copy2(bam_path, out_bam)
         return
 
-    def _load_fastq(path: Path) -> Dict[str, Tuple[str, str]]:
-        opener = gzip.open if path.name.endswith(".gz") else open
-        out: Dict[str, Tuple[str, str]] = {}
-        with opener(path, "rt") as fh:  # type: ignore[arg-type]
-            while True:
-                header = fh.readline()
-                if not header:
-                    break
-                seq = fh.readline().rstrip("\n")
-                fh.readline()
-                qual = fh.readline().rstrip("\n")
-                name = header[1:].split()[0]
-                if name.endswith("/1") or name.endswith("/2"):
-                    name = name[:-2]
-                out[name] = (seq, qual)
-        return out
+    work = out_bam.parent / f"{out_bam.stem}.restore_work"
+    work.mkdir(parents=True, exist_ok=True)
+    name_sorted_bam = work / "name_sorted.bam"
+    r1_tsv = work / "r1.sorted.tsv"
+    r2_tsv = work / "r2.sorted.tsv"
+    sort_tmp = work / "sort_tmp"
+    tmp_out = work / "restored.tmp.bam"
 
-    r1 = _load_fastq(fq1)
-    r2 = _load_fastq(fq2)
-    tmp = out_bam.with_suffix(".tmp.bam")
-    with pysam.AlignmentFile(str(bam_path), "rb") as inn, pysam.AlignmentFile(
-        str(tmp), "wb", template=inn
-    ) as out:
-        for aln in inn:
-            qname = aln.query_name
-            if qname is None:
+    try:
+        _run(
+            ["samtools", "sort", "-n", "-o", str(name_sorted_bam), str(bam_path)],
+            log_path,
+            step="samtools.sort_name",
+        )
+        _write_sorted_fastq_tsv(fq1, r1_tsv, sort_dir=sort_tmp / "r1")
+        _write_sorted_fastq_tsv(fq2, r2_tsv, sort_dir=sort_tmp / "r2")
+
+        r1_iter = _iter_sorted_fastq_tsv(r1_tsv)
+        r2_iter = _iter_sorted_fastq_tsv(r2_tsv)
+        r1_cur = next(r1_iter, None)
+        r2_cur = next(r2_iter, None)
+
+        def _advance(cur, it, key: str):
+            """Advance sorted iterator until name >= key; consume match if equal."""
+            while cur is not None and cur[0] < key:
+                cur = next(it, None)
+            if cur is not None and cur[0] == key:
+                hit = cur
+                cur = next(it, None)
+                return cur, hit
+            return cur, None
+
+        n_restored = 0
+        with pysam.AlignmentFile(str(name_sorted_bam), "rb") as inn, pysam.AlignmentFile(
+            str(tmp_out), "wb", template=inn
+        ) as out:
+            for aln in inn:
+                key = _bam_query_key(aln.query_name)
+                if key is None or not aln.query_sequence:
+                    out.write(aln)
+                    continue
+                if aln.is_read2:
+                    r2_cur, hit = _advance(r2_cur, r2_iter, key)
+                else:
+                    r1_cur, hit = _advance(r1_cur, r1_iter, key)
+                if hit is not None and len(hit[1]) == len(aln.query_sequence):
+                    aln.query_sequence = hit[1]
+                    aln.query_qualities = pysam.qualitystring_to_array(hit[2])
+                    n_restored += 1
                 out.write(aln)
-                continue
-            key = qname[:-2] if qname.endswith(("/1", "/2")) else qname
-            seq_qual = None
-            if aln.is_read2:
-                seq_qual = r2.get(key) or r2.get(qname)
-            else:
-                seq_qual = r1.get(key) or r1.get(qname)
-            if seq_qual is not None and aln.query_sequence and len(seq_qual[0]) == len(
-                aln.query_sequence
-            ):
-                aln.query_sequence = seq_qual[0]
-                aln.query_qualities = pysam.qualitystring_to_array(seq_qual[1])
-            out.write(aln)
-    tmp.replace(out_bam)
-    _append_log(log_path, f"Restored original sequences into {out_bam}")
+
+        shutil.copy2(tmp_out, out_bam)
+        _append_log(
+            log_path,
+            f"Restored original sequences into {out_bam} (n_restored={n_restored}, streaming merge-join)",
+        )
+    finally:
+        # Keep work dir only when METHYL_KEEP_RESTORE_WORK=1 for debugging.
+        if os.environ.get("METHYL_KEEP_RESTORE_WORK", "").strip() not in {
+            "1",
+            "true",
+            "yes",
+        }:
+            shutil.rmtree(work, ignore_errors=True)
 
 
 def run_methylgrapher_wgbs_align(
@@ -514,7 +666,7 @@ def run_methylgrapher_wgbs_align(
             gaf=gaf_path,
             gbz=surject_gbz,
             ref_paths=bundle.ref_paths,
-            out_bam=surject_bam,
+            threads=bundle.threads,
         )
         docker_surject = [
             _docker_bin(),
@@ -526,7 +678,8 @@ def run_methylgrapher_wgbs_align(
         for root in sorted(mount_roots | {surject_gbz.parent.resolve()}, key=str):
             docker_surject.extend(["-v", f"{root}:{root}"])
         docker_surject.extend([image, *surject_cmd])
-        _run(docker_surject, log_path, step="vg.surject")
+        # vg surject -b writes BAM to stdout; redirect as binary (never text capture).
+        _run(docker_surject, log_path, step="vg.surject", stdout_path=surject_bam)
 
         restored = work_dir / f"{sample_id}.restored.bam"
         _restore_original_sequences(surject_bam, fq1, fq2, restored, log_path)
