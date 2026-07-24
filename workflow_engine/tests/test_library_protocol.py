@@ -45,6 +45,21 @@ def test_library_protocol_wgbs_pangenome() -> None:
     assert out["useEpiGbs"] is False
 
 
+def test_library_protocol_emseq_targeted() -> None:
+    out = apply_pipeline_profile(
+        {},
+        {
+            "pipelineProfile": "custom",
+            "actionConfig": {"sample_prep": {"library_protocol": "emseq_targeted"}},
+        },
+    )
+    assert out["libraryProtocol"] == "emseq_targeted"
+    assert out["useEmseqTargeted"] is True
+    assert out["useEpiGbs"] is False
+    assert out["usePangenome"] is False
+    assert out["alignmentMode"] == "linear"
+
+
 def test_skip_demultiplex_from_demux_config() -> None:
     out = apply_pipeline_profile(
         {},

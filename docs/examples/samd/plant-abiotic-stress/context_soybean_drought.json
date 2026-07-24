@@ -1,5 +1,6 @@
 {
   "projectPath": "/work/projects/plant-abiotic-stress-soybean/configs/project_Control_vs_Drought_soybean.json",
+  "pipelineProcedure": "plant_wgbs_gene_fc",
   "pipelineProfile": "samd_research",
   "runProgressionAnalysis": false,
   "actionConfig": {

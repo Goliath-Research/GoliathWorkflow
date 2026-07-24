@@ -4,7 +4,15 @@
 
 > **Application packs.** An [application pack](usage/24-methylation-application-packs.qmd) is a study configuration on an existing process modality (cohorts + partitions + a config overlay), not a new process pack. Worked methylation instances: the [Alzheimer cfDNA pack](usage/21-alzheimer-cfdna-pack.qmd) (disease application — staged Control -> MCI -> AD on `primary_analyte: cfdna`, `neuro-core` enrichment) and the [plant abiotic stress pack](usage/23-plant-abiotic-stress-pack.qmd) (trait application — Control vs Drought on `primary_analyte: plant_tissue`, `plant-stress-core` enrichment).
 
-Set **`regulatory.primary_analyte`** once in the study manifest (`cfdna`, `buffy_coat`, or `combined`). The resolver merges analyte-specific defaults into profile/site `actionConfig` via `merge_step_config` in `packages/methylutils/methyl_utils/analyte_profiles.py` (explicit profile or site keys always win).
+> **Assay procedure packs.** Between process and application, pick a named
+> `pipelineProcedure` (e.g. `buffy_wgbs_pangenome_gene_fc`, `cfdna_wgbs_plasma`,
+> `cfdna_emseq_targeted`, `plant_wgbs_gene_fc`) under
+> [`workflow_engine/domain/profiles/procedures/`](../workflow_engine/domain/profiles/procedures/).
+> Procedures pin library protocol, SamplePrep/lifecycle program hints, FeatureCuts
+> axis, and covariate defaults. The study `primary_analyte` must match the
+> procedure’s `analyteExpectation`. See [Usage ch.24](usage/24-methylation-application-packs.qmd).
+
+Set **`regulatory.primary_analyte`** once in the study manifest (`cfdna`, `buffy_coat`, or `combined`). The resolver merges analyte-specific defaults into profile/site `actionConfig` via `merge_step_config` in `packages/methylutils/methyl_utils/analyte_profiles.py` (explicit profile or site keys always win). Procedure and instance overlays still win over analyte fill-missing defaults.
 
 Opt out: `"auto_apply_analyte_profile": false` under `regulatory`.
 
@@ -66,6 +74,10 @@ Study manifest (cohorts + regulatory only):
 }
 ```
 
-Tool parameters (fragmentomics, enricher CIS-BP modes, validation guards) live in profile `actionConfig` — see [`mc_gene_fc.profile.json`](../workflow_engine/domain/profiles/mc_gene_fc.profile.json) or a study-specific overlay, and site defaults in `/work/site/methyl_site.json`.
+Tool parameters (fragmentomics, enricher CIS-BP modes, validation guards) live in
+profile / **procedure** `actionConfig` — prefer
+[`cfdna_wgbs_plasma.procedure.json`](../workflow_engine/domain/profiles/procedures/cfdna_wgbs_plasma.procedure.json)
+for plasma WGBS, or a study-specific overlay on top. Site defaults remain in
+`/work/site/methyl_site.json`.
 
 Example: [`tools/methyl-config-editor/configs/project_Plasma_cfDNA_CG.example.json`](../tools/methyl-config-editor/configs/project_Plasma_cfDNA_CG.example.json).

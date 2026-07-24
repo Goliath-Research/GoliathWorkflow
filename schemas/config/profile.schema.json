@@ -5,6 +5,14 @@
   "type": "object",
   "properties": {
     "pipelineProfile": { "type": "string" },
+    "pipelineProcedure": {
+      "type": "string",
+      "description": "Optional assay procedure pack id (profiles/procedures/<id>.procedure.json)."
+    },
+    "researchMode": {
+      "type": "string",
+      "description": "samd_research statistical axis overlay (gene_fc, dual_fc, …)."
+    },
     "runDmpSelection": { "type": "boolean" },
     "runGeneFeaturecuts": { "type": "boolean" },
     "runBiomarkerFilter": { "type": "boolean" },

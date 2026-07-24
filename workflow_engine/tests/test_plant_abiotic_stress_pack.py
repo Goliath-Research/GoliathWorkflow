@@ -127,6 +127,7 @@ def test_plant_stress_core_preset_resolves_without_human_disease_libs() -> None:
 
 def test_trait_overlay_uses_plant_traits_not_open_targets() -> None:
     overlay = json.loads((_EXAMPLE_DIR / "context_plant_abiotic_stress.json").read_text())
+    assert overlay["pipelineProcedure"] == "plant_wgbs_gene_fc"
     ac = overlay["actionConfig"]
     mapper = ac["mapper"]
     assert mapper["enrich_disease"] is True

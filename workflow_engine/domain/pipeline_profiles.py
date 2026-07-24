@@ -30,12 +30,38 @@ _SAMD_RESEARCH_MODES: Dict[str, str] = {
 _RESEARCH_MODE_IDS = frozenset(_SAMD_RESEARCH_MODES.values())
 
 _STRING_SCOPE_KEYS = frozenset(
-    {"researchMode", "dmp_modeling_mode", "gene_modeling_mode"}
+    {
+        "researchMode",
+        "dmp_modeling_mode",
+        "gene_modeling_mode",
+        "pipelineProcedure",
+        "samplePrepProgram",
+        "lifecycleProgram",
+        "libraryProtocol",
+        "alignmentMode",
+    }
+)
+
+_PROCEDURE_SCOPE_BOOLS = frozenset(
+    {
+        "usePangenome",
+        "useEpiGbs",
+        "useEmseqTargeted",
+        "runDmpSelection",
+        "runGeneFeaturecuts",
+        "runBiomarkerFilter",
+        "runGeneFeatureSelect",
+        "runProgressionAnalysis",
+        "stabilityFeaturecutsEnabled",
+        "stabilityGeneFeaturecutsEnabled",
+        "stabilityGeneBiomarkerFilterEnabled",
+    }
 )
 
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
     "usePangenome": False,
     "useEpiGbs": False,
+    "useEmseqTargeted": False,
     "skipDemultiplex": False,
     "useKallisto": False,
     "usePanel": False,
@@ -321,6 +347,105 @@ def load_mode_overlay(mode_id: str) -> Dict[str, Any]:
     )
 
 
+def load_procedure(name_or_path: str | Path) -> Dict[str, Any]:
+    """Load an assay procedure pack (``profiles/procedures/<id>.procedure.json``)."""
+    from methyl_utils.profile_paths import resolve_procedure_path
+
+    path = resolve_procedure_path(name_or_path)
+    data = load_profile_file(path)
+    proc_id = str(data.get("pipelineProcedure") or path.name.replace(".procedure.json", ""))
+    data["pipelineProcedure"] = proc_id
+    return data
+
+
+def apply_pipeline_procedure(
+    context: Dict[str, Any],
+    procedure: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Merge a procedure pack under instance context (instance wins on conflicts).
+
+    Procedure sits between profile and instance:
+    ``instance → procedure → profile/mode → analyte → site``.
+    """
+    out = dict(context)
+    proc_id = procedure.get("pipelineProcedure")
+    if proc_id:
+        out["pipelineProcedure"] = str(proc_id)
+
+    for key in (
+        "pipelineProfile",
+        "researchMode",
+        "samplePrepProgram",
+        "lifecycleProgram",
+        "libraryProtocol",
+        "alignmentMode",
+        "analyteExpectation",
+    ):
+        if key in procedure and procedure[key] is not None and key not in out:
+            out[key] = procedure[key]
+
+    for key in _PROCEDURE_SCOPE_BOOLS:
+        if key in procedure and key not in out:
+            out[key] = bool(procedure[key])
+
+    proc_ac = procedure.get("actionConfig") or procedure.get("step_config_overrides") or {}
+    if isinstance(proc_ac, dict) and proc_ac:
+        existing = dict(out.get("actionConfig") or {})
+        out["actionConfig"] = _deep_merge(dict(proc_ac), existing)
+
+    # Mirror libraryProtocol into actionConfig when procedure pins it and instance
+    # did not already set sample_prep.library_protocol.
+    lib = out.get("libraryProtocol") or procedure.get("libraryProtocol")
+    if lib:
+        ac = dict(out.get("actionConfig") or {})
+        sample_prep = dict(ac.get("sample_prep") or {})
+        sample_prep.setdefault("library_protocol", str(lib))
+        ac["sample_prep"] = sample_prep
+        if procedure.get("alignmentMode") or out.get("alignmentMode"):
+            parabricks = dict(ac.get("parabricks") or {})
+            parabricks.setdefault(
+                "alignment_mode",
+                str(out.get("alignmentMode") or procedure.get("alignmentMode")),
+            )
+            ac["parabricks"] = parabricks
+        out["actionConfig"] = ac
+
+    return out
+
+
+def validate_procedure_analyte(context: Mapping[str, Any]) -> None:
+    """Ensure study ``regulatory.primary_analyte`` matches procedure expectation."""
+    expected = context.get("analyteExpectation")
+    if expected is None:
+        proc_id = context.get("pipelineProcedure")
+        if not proc_id:
+            return
+        try:
+            expected = load_procedure(str(proc_id)).get("analyteExpectation")
+        except FileNotFoundError:
+            return
+    if expected is None:
+        return
+    if isinstance(expected, str):
+        allowed = {expected.strip().lower()}
+    else:
+        allowed = {str(x).strip().lower() for x in expected if str(x).strip()}
+    if not allowed:
+        return
+    regulatory = context.get("regulatory") or {}
+    if not isinstance(regulatory, Mapping):
+        raise ValueError(
+            f"pipelineProcedure {context.get('pipelineProcedure')!r} requires "
+            f"regulatory.primary_analyte in {sorted(allowed)}"
+        )
+    actual = str(regulatory.get("primary_analyte") or "").strip().lower()
+    if actual not in allowed:
+        raise ValueError(
+            f"pipelineProcedure {context.get('pipelineProcedure')!r} expects "
+            f"regulatory.primary_analyte in {sorted(allowed)}, got {actual!r}"
+        )
+
+
 def load_samd_research_with_mode(
     mode_id: str,
     *,
@@ -525,11 +650,24 @@ def seed_pipeline_scope_flags(
         proto = "wgbs_pangenome"
     elif proto in {"epi_gbs", "epigbs", "epi_gbs_methylation"}:
         proto = "epi_gbs"
+    elif proto in {
+        "emseq",
+        "emseq_targeted",
+        "em_seq",
+        "em_seq_targeted",
+        "hybrid_capture",
+        "hybridcapture",
+    }:
+        proto = "emseq_targeted"
     out["libraryProtocol"] = proto
     if "useEpiGbs" in out:
         out["useEpiGbs"] = bool(out["useEpiGbs"])
     else:
         out.setdefault("useEpiGbs", proto == "epi_gbs")
+    if "useEmseqTargeted" in out:
+        out["useEmseqTargeted"] = bool(out["useEmseqTargeted"])
+    else:
+        out.setdefault("useEmseqTargeted", proto == "emseq_targeted")
     if "skipDemultiplex" in out:
         out["skipDemultiplex"] = bool(out["skipDemultiplex"])
     else:
@@ -547,6 +685,7 @@ def seed_pipeline_scope_flags(
         if proto == "wgbs_pangenome":
             alignment_mode = "pangenome"
         else:
+            # linear WGBS, epi-GBS, and EM-Seq targeted all use linear references.
             alignment_mode = "linear"
     out["alignmentMode"] = str(alignment_mode)
     if "usePangenome" in out:

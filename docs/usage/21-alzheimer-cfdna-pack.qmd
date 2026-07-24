@@ -6,10 +6,10 @@ Alzheimer detection ships as an **application pack** (disease) on the existing
 DNA-methylation **process pack**, not a new omics modality. The generic pattern—
 manifest, overlay, partitions, optional enrichment preset—is documented in
 [Methylation application packs](24-methylation-application-packs.qmd). This instance
-reuses SamplePrep and the study-lifecycle DomainPrograms, the `samd_*` profile ladder,
-and the cfDNA analyte profile; the Alzheimer-specific parts are cohorts,
-patient-disjoint partitions, and a small config overlay. There is no new aligner,
-action, or program.
+declares assay procedure `cfdna_wgbs_plasma` (linear WGBS, fragmentomics, gene
+FeatureCuts, no cell deconvolution), the `samd_*` profile ladder, and the cfDNA
+analyte profile; the Alzheimer-specific parts are cohorts, patient-disjoint
+partitions, and a small disease overlay. There is no new aligner, action, or program.
 
 For the shared per-sample and Monte Carlo topology, see the DNA methylation
 [end-to-end workflow](../architecture/end-to-end-workflow.md). This chapter covers only
@@ -52,16 +52,16 @@ progression block.
 
 ## Disease overlay
 
-Alzheimer biology is expressed as an instance/context overlay merged onto the `samd_*`
-profile (`context_alzheimer_cfdna.json`):
+Alzheimer biology is expressed as an instance/context overlay merged onto procedure
+`cfdna_wgbs_plasma` + the `samd_*` profile (`context_alzheimer_cfdna.json`):
 
 | Key | Value | Why |
 |-----|-------|-----|
+| `pipelineProcedure` | `"cfdna_wgbs_plasma"` | Assay recipe: plasma WGBS, no cell deconv lifecycle, gene FeatureCuts. |
 | `actionConfig.mapper.disease_term` | `"Alzheimer's disease"` | OpenTargets disease prior; writes `disease_associated` columns. Overrides the mapper's prostate CLI default. |
 | `actionConfig.mapper.enrich_disease` | `true` | Enable the disease-gene annotation. |
 | `actionConfig.enricher.library_preset` | `"neuro-core"` | Brain/CNS gene sets; overrides the cfDNA analyte default `cancer-core`. |
 | `runProgressionAnalysis` | `true` | Ordered MCI -> AD progression scoring. |
-| `actionConfig.validation.backend_profiles.ecdf.params.covariates_path` | optional | Blood-immune fractions as covariates (Houseman/HiTIMED are blood-only; no CNS cell types). |
 
 ### neuro-core enrichment preset
 
@@ -96,7 +96,7 @@ methyl-study-validate-manifest \
   --profile samd_holdout_enrichment
 
 methyl-workflow-run \
-  --program workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
+  --program workflow_engine/domain/fixtures/study_validation_lifecycle_no_deconv.program.json \
   --context-file /work/projects/alzheimer-cfdna/configs/context_alzheimer_cfdna.json
 ```
 
@@ -105,7 +105,8 @@ with a non-empty pivotal cohort.
 
 ## What this pack does not add
 
-- No brain/CNS cell-type deconvolution basis (shipped bases are blood-only). Cell
-  deconvolution, if run, yields blood-immune fractions as covariates.
+- No brain/CNS cell-type deconvolution basis (shipped bases are blood-only). The
+  `cfdna_wgbs_plasma` procedure omits `pipeline.cell_deconvolution` by default;
+  optional HiTIMED plasma overlays remain instance-level advanced knobs.
 - No new DomainProgram, action, or aligner. Only cohorts, partitions, the overlay, and
   the `neuro-core` preset.

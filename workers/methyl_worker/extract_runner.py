@@ -40,6 +40,7 @@ class MethylExtractConfig:
     split: bool
     read_level: bool
     tile_size: Optional[int]
+    target_panel_bed: Optional[Path] = None
 
 
 @dataclass(frozen=True)
@@ -265,6 +266,20 @@ def resolve_methyl_extract_config(
     extractor_bin = str(step_cfg.get("extractor_bin") or "MethylExtractor").strip()
     read_level, tile_size = _resolve_read_level(step_cfg)
 
+    panel_raw = (
+        step_cfg.get("target_panel_bed")
+        or step_cfg.get("regions_bed")
+        or input_json.get("targetPanelBed")
+    )
+    target_panel_bed: Optional[Path] = None
+    if panel_raw not in (None, "", False):
+        target_panel_bed = Path(str(panel_raw)).expanduser().resolve()
+        if not target_panel_bed.is_file():
+            raise RuntimeError(
+                f"methyl_extract.target_panel_bed not found: {target_panel_bed} "
+                "(required for EM-Seq / hybrid-capture restricted extract)"
+            )
+
     return MethylExtractConfig(
         sample_id=sample_id,
         sample_dir=Path(str(sample_dir_raw)).expanduser().resolve(),
@@ -285,6 +300,7 @@ def resolve_methyl_extract_config(
         split=bool(step_cfg.get("split", True)),
         read_level=read_level,
         tile_size=tile_size,
+        target_panel_bed=target_panel_bed,
     )
 
 
@@ -363,6 +379,55 @@ def _resolve_paths(sample_dir: Path, sample_id: str, bam_path: Path) -> MethylEx
         bam_path=bam_path,
         log_path=sample_dir / f"{sample_id}.methyl_extract.log",
     )
+
+
+def _filter_bam_to_panel(
+    bam_path: Path,
+    panel_bed: Path,
+    *,
+    sample_dir: Path,
+    sample_id: str,
+    log_path: Path,
+) -> Path:
+    """Restrict BAM to target panel intervals (EM-Seq / hybrid-capture seam)."""
+    samtools = shutil.which("samtools")
+    if not samtools:
+        raise RuntimeError(
+            "samtools is required to apply methyl_extract.target_panel_bed "
+            "(EM-Seq / hybrid-capture restricted extract)"
+        )
+    out_bam = sample_dir / f"{sample_id}.panel.bam"
+    cmd = [
+        samtools,
+        "view",
+        "-b",
+        "-L",
+        str(panel_bed),
+        "-o",
+        str(out_bam),
+        str(bam_path),
+    ]
+    _append_log(log_path, "PANEL_FILTER: " + " ".join(shlex.quote(p) for p in cmd))
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.stdout:
+        _append_log(log_path, proc.stdout)
+    if proc.stderr:
+        _append_log(log_path, proc.stderr)
+    if proc.returncode != 0 or not out_bam.is_file():
+        raise RuntimeError(
+            proc.stderr.strip()
+            or proc.stdout.strip()
+            or f"samtools view -L failed for panel {panel_bed}"
+        )
+    idx = subprocess.run(
+        [samtools, "index", str(out_bam)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if idx.returncode != 0:
+        raise RuntimeError(idx.stderr.strip() or "samtools index failed for panel BAM")
+    return out_bam
 
 
 def _extractor_bin(cfg: MethylExtractConfig) -> str:
@@ -475,6 +540,20 @@ def run_methyl_extract(
 
     bam_path = resolve_bam_path(cfg.sample_dir, cfg.sample_id)
     paths = _resolve_paths(cfg.sample_dir, cfg.sample_id, bam_path)
+    if cfg.target_panel_bed is not None:
+        logger.info(
+            "Restricting BAM to target panel %s for %s",
+            cfg.target_panel_bed,
+            cfg.sample_id,
+        )
+        panel_bam = _filter_bam_to_panel(
+            bam_path,
+            cfg.target_panel_bed,
+            sample_dir=cfg.sample_dir,
+            sample_id=cfg.sample_id,
+            log_path=paths.log_path,
+        )
+        paths = _resolve_paths(cfg.sample_dir, cfg.sample_id, panel_bam)
     cmd = build_methyl_extractor_command(cfg, paths)
 
     logger.info("Running MethylExtractor for %s", cfg.sample_id)

@@ -61,6 +61,7 @@ def test_neuro_core_preset_resolves_from_registry() -> None:
 
 def test_disease_overlay_selects_neuro_core_and_alzheimer_term() -> None:
     overlay = json.loads((_EXAMPLE_DIR / "context_alzheimer_cfdna.json").read_text())
+    assert overlay["pipelineProcedure"] == "cfdna_wgbs_plasma"
     ac = overlay["actionConfig"]
     assert ac["mapper"]["disease_term"] == "Alzheimer's disease"
     assert ac["mapper"]["enrich_disease"] is True

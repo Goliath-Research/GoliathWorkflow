@@ -80,3 +80,28 @@ def resolve_profile_path(name_or_path: Union[str, Path]) -> Path:
     raise FileNotFoundError(
         f"Unknown pipeline profile: {name_or_path!r} (searched: {searched})"
     )
+
+
+def resolve_procedure_path(name_or_path: Union[str, Path]) -> Path:
+    """Resolve an assay procedure pack (``*.procedure.json`` under ``profiles/procedures/``)."""
+    p = Path(name_or_path).expanduser()
+    if p.is_file():
+        return p.resolve()
+
+    key = str(name_or_path).strip()
+    if not key:
+        raise FileNotFoundError("Empty pipeline procedure name")
+    if key.endswith(".procedure.json"):
+        key = key[: -len(".procedure.json")]
+
+    candidates: List[Path] = []
+    for directory in profile_search_dirs():
+        candidate = directory / "procedures" / f"{key}.procedure.json"
+        candidates.append(candidate)
+        if candidate.is_file():
+            return candidate.resolve()
+
+    searched = ", ".join(str(c) for c in candidates)
+    raise FileNotFoundError(
+        f"Unknown pipeline procedure: {name_or_path!r} (searched: {searched})"
+    )

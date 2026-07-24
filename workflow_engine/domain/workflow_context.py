@@ -105,10 +105,13 @@ def enrich_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
     from methyl_utils.action_config_resolver import load_site_manifest
     from pipeline_profiles import (
         PIPELINE_FLAG_DEFAULTS,
+        apply_pipeline_procedure,
         apply_pipeline_profile,
+        load_procedure,
         load_profile,
         profile_action_config,
         seed_pipeline_scope_flags,
+        validate_procedure_analyte,
     )
 
     project = load_project(str(project_path))
@@ -139,9 +142,25 @@ def enrich_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
     if not out.get("regulatory"):
         out["regulatory"] = project.get_regulatory_config()
 
+    # Assay procedure pack (optional). Precedence (highest wins first):
+    # instance → procedure → profile/mode → analyte → site.
+    # Rebuild actionConfig in that order so procedure JSON nulls can clear
+    # profile keys (e.g. cell_deconvolution on cfDNA plasma).
+    from pipeline_profiles import _deep_merge
+
+    instance_action_config = dict(out.get("actionConfig") or {})
+    out["actionConfig"] = {}
+
+    procedure_name = out.get("pipelineProcedure")
+    procedure_file = out.get("procedurePath")
+    if procedure_file or procedure_name:
+        procedure = load_procedure(procedure_file or procedure_name)
+        out = apply_pipeline_procedure(out, procedure)
+
     profile_name = out.get("pipelineProfile")
     profile_file = out.get("profilePath")
     if profile_file or profile_name:
+        # Prefer procedure/instance researchMode when loading samd_research modes.
         profile = load_profile(profile_file or profile_name)
         out = apply_pipeline_profile(out, profile)
     elif out.get("actionConfig"):
@@ -149,6 +168,14 @@ def enrich_instance_context(context: Dict[str, Any]) -> Dict[str, Any]:
     elif any(k in out for k in PIPELINE_FLAG_DEFAULTS):
         out = seed_pipeline_scope_flags(out, action_config=profile_action_config(out))
 
+    if instance_action_config:
+        out["actionConfig"] = _deep_merge(
+            dict(out.get("actionConfig") or {}),
+            instance_action_config,
+        )
+        out = seed_pipeline_scope_flags(out, action_config=out.get("actionConfig"))
+
+    validate_procedure_analyte(out)
     return out
 
 

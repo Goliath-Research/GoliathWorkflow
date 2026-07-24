@@ -2,10 +2,11 @@
 
 Instance of the [methylation application-pack pattern](../../../usage/24-methylation-application-packs.qmd)
 (trait application). A **binary Control vs Drought** *Arabidopsis thaliana* leaf WGBS
-methylation study on the existing methylation control plane. It reuses the standard
-SamplePrep and the plant study-lifecycle DomainProgram, the `samd_research` profile, and
-the `plant_tissue` analyte profile. The pack is config + cohorts + partitions + a trait
-overlay plus a non-human site reference — no new actions or aligners.
+methylation study on the existing methylation control plane. It selects assay procedure
+`plant_wgbs_gene_fc` (linear WGBS, gene FeatureCuts, plant lifecycle without blood
+deconvolution), the `samd_research` profile, and the `plant_tissue` analyte profile. The
+pack is config + cohorts + partitions + a trait overlay plus a non-human site reference
+— no new actions or aligners.
 
 This instance extends the application-pack pattern with plant platform unblockers: the
 `plant_tissue` analyte (plant-safe QC that treats CG/CHG/CHH as real biology, no cfDNA
@@ -21,7 +22,7 @@ epigenomics background in [Plant Research](../../../research/Plant%20Research.md
 | File | Role |
 |------|------|
 | `project_Control_vs_Drought.json` | Default (Arabidopsis): Control vs Drought, chroms 1–5 |
-| `context_plant_abiotic_stress.json` | Arabidopsis overlay: `plant_traits` prior + `plant-stress-core`, `string_species=3702` |
+| `context_plant_abiotic_stress.json` | Arabidopsis overlay: `pipelineProcedure=plant_wgbs_gene_fc`, `plant_traits` prior + `plant-stress-core`, `string_species=3702` |
 | `project_Control_vs_Drought_{soybean,maize,wheat}.json` | Crop manifests (same binary design; crop chromosome lists) |
 | `context_{soybean,maize,wheat}_drought.json` | Crop overlays (`string_species` 3847 / 4577 / 4565) |
 | `data/*.csv` | Shared cohort CSV stubs (replace with real, plant-disjoint sample IDs) |

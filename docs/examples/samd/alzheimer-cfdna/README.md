@@ -2,10 +2,10 @@
 
 Instance of the [methylation application-pack pattern](../../../usage/24-methylation-application-packs.qmd)
 (disease application). A **staged (Control -> MCI -> AD)** cfDNA DNA-methylation study
-on the existing methylation SaMD control plane. It reuses the standard SamplePrep and
-study-lifecycle DomainPrograms, the `samd_*` profile ladder, and the cfDNA analyte
-profile. The pack is config + cohorts + partitions + a disease overlay — no new actions
-or aligners.
+on the existing methylation SaMD control plane. It selects assay procedure
+`cfdna_wgbs_plasma` (linear WGBS, fragmentomics, gene FeatureCuts, no cell
+deconvolution), the `samd_*` profile ladder, and the cfDNA analyte profile. The pack
+is config + cohorts + partitions + a disease overlay — no new actions or aligners.
 
 See the operator guide: [Usage ch.21 Alzheimer cfDNA pack](../../../usage/21-alzheimer-cfdna-pack.qmd)
 and the shared methylation workflow: [end-to-end workflow](../../../architecture/end-to-end-workflow.md).
@@ -15,7 +15,7 @@ and the shared methylation workflow: [end-to-end workflow](../../../architecture
 | File | Role |
 |------|------|
 | `project_Healthy_vs_AD_Stages.json` | Study manifest: Control vs MCI vs AD stages, cfDNA analyte, `methylation` modality, progression labels, partitions (placeholder IDs) |
-| `context_alzheimer_cfdna.json` | Disease overlay: `mapper.disease_term=Alzheimer's disease`, `enricher.library_preset=neuro-core`, progression, optional blood-immune covariates |
+| `context_alzheimer_cfdna.json` | Disease overlay: `pipelineProcedure=cfdna_wgbs_plasma`, `mapper.disease_term=Alzheimer's disease`, `enricher.library_preset=neuro-core`, progression |
 | `data/*.csv` | Cohort CSV stubs (replace placeholder IDs with real, patient-disjoint sample IDs) |
 
 ## Instantiate on /work
@@ -39,9 +39,9 @@ methyl-study-init \
 ## Run the SaMD ladder
 
 ```bash
-# Research
+# Research (procedure points at no-deconv lifecycle)
 methyl-workflow-run \
-  --program workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
+  --program workflow_engine/domain/fixtures/study_validation_lifecycle_no_deconv.program.json \
   --context-file docs/examples/samd/alzheimer-cfdna/context_alzheimer_cfdna.json
 
 # Enrichment (requires non-empty locked_test) -> switch pipelineProfile to samd_holdout_enrichment

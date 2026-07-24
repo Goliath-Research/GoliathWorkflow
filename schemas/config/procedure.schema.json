@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AssayProcedurePack",
+  "description": "Named assay procedure overlay: library protocol + SamplePrep/lifecycle pointers + science defaults for a methylation matrix recipe. Merges under instance context and over profile/mode (instance → procedure → profile → analyte → site).",
+  "type": "object",
+  "required": ["pipelineProcedure"],
+  "properties": {
+    "pipelineProcedure": {
+      "type": "string",
+      "description": "Stable procedure id (filename stem), e.g. buffy_wgbs_pangenome_gene_fc."
+    },
+    "description": { "type": "string" },
+    "pipelineProfile": {
+      "type": "string",
+      "description": "Default SaMD/research profile when instance omits pipelineProfile (usually samd_research)."
+    },
+    "researchMode": {
+      "type": "string",
+      "description": "samd_research statistical axis (gene_fc, dual_fc, …)."
+    },
+    "analyteExpectation": {
+      "description": "Required study regulatory.primary_analyte (string or list of allowed tokens).",
+      "oneOf": [
+        { "type": "string" },
+        { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+      ]
+    },
+    "libraryProtocol": {
+      "type": "string",
+      "enum": ["wgbs_linear", "wgbs_pangenome", "epi_gbs", "emseq_targeted"]
+    },
+    "samplePrepProgram": {
+      "type": "string",
+      "description": "DomainProgram path or fixture name for SamplePrep (operator / portal hint)."
+    },
+    "lifecycleProgram": {
+      "type": "string",
+      "description": "DomainProgram path or fixture name for post-MC lifecycle (operator / portal hint)."
+    },
+    "alignmentMode": { "type": "string" },
+    "usePangenome": { "type": "boolean" },
+    "useEpiGbs": { "type": "boolean" },
+    "useEmseqTargeted": { "type": "boolean" },
+    "runDmpSelection": { "type": "boolean" },
+    "runGeneFeaturecuts": { "type": "boolean" },
+    "stabilityFeaturecutsEnabled": { "type": "boolean" },
+    "stabilityGeneFeaturecutsEnabled": { "type": "boolean" },
+    "actionConfig": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

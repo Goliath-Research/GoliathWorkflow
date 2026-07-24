@@ -3,9 +3,9 @@ title: "Methylation application packs"
 ---
 
 An **application pack** is a study configuration on an existing omics **process pack**
-(cohorts, partitions, and a small config overlay)—not a new modality. Process packs
-add aligners, actions, and QC; application packs reuse that control plane for a
-specific indication or trait.
+(cohorts, partitions, and a small config overlay)—not a new modality. Between process
+and application sits an **assay procedure pack**: a named recipe for *how* the matrix
+is sequenced and scored (library protocol, SamplePrep, covariates, FeatureCuts axis).
 
 This chapter is the generic pattern. Worked instances:
 
@@ -16,29 +16,60 @@ This chapter is the generic pattern. Worked instances:
 
 ![Process packs vs methylation application packs](../diagrams/out/methylation-application-packs.png)
 
-## Process pack vs application pack
+## Process vs procedure vs application
 
-| | **Process pack** | **Application pack** |
-|--|------------------|----------------------|
-| What it adds | Modality: DomainPrograms, typed actions, QC gates, analyte/matrix defaults | Study: cohorts, partitions, context overlay, optional enrichment preset |
-| Typical change | New aligner / feature contract / classifier seam | New `project_*.json` + overlay; rarely a thin program fork |
-| Examples | Methylation WGBS, [RNA-Seq](20-rnaseq-process-pack.qmd), [proteomics](22-proteomics-process-pack.qmd) | Alzheimer cfDNA, plant drought stress |
-| Operator surface | `regulatory.primary_modality` | Same modality + overlay / analyte / partitions |
+| | **Process pack** | **Assay procedure pack** | **Application pack** |
+|--|------------------|--------------------------|----------------------|
+| What it adds | Omics modality: DomainPrograms, typed actions, QC | Library protocol + SamplePrep/lifecycle pointers + science defaults (aligner, informME, deconv, FeatureCuts) | Indication/trait: cohorts, partitions, disease/trait overlay, enrichment preset |
+| Typical change | New aligner / feature contract | New `*.procedure.json` (rarely a thin program fork) | New `project_*.json` + `context_*.json` |
+| Examples | Methylation WGBS, [RNA-Seq](20-rnaseq-process-pack.qmd), [proteomics](22-proteomics-process-pack.qmd) | `buffy_wgbs_pangenome_gene_fc`, `cfdna_wgbs_plasma`, `cfdna_emseq_targeted` | Alzheimer cfDNA, plant drought stress |
+| Operator surface | `regulatory.primary_modality` | `pipelineProcedure` | Same modality + procedure + overlay / analyte |
 
 Informal subtypes (**disease application**, **trait application**) are fine in prose;
 checklists and hub docs use **application pack**.
 
-## Required artifacts
+## Shipped methylation assay procedures
+
+Committed under
+[`workflow_engine/domain/profiles/procedures/`](../../workflow_engine/domain/profiles/procedures/):
+
+| Procedure | Analyte | Defaults |
+|-----------|---------|----------|
+| `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | Pangenome (Giraffe), read-level informME, Houseman deconv, gene FeatureCuts, full lifecycle |
+| `buffy_wgbs_linear_gene_fc` | `buffy_coat` | Linear WGBS baseline (same science, cheaper aligner) |
+| `cfdna_wgbs_plasma` | `cfdna` | Linear WGBS + fragmentomics (analyte merge), gene FeatureCuts, **no** cell deconv lifecycle |
+| `cfdna_emseq_targeted` | `cfdna` | `libraryProtocol: emseq_targeted`, `sample_prep_emseq`, panel BED + elevated `min_cov`, no deconv |
+| `plant_wgbs_gene_fc` | `plant_tissue` | Linear WGBS, gene FeatureCuts, plant lifecycle (no blood deconv) |
+
+```bash
+methyl-workflow-run \
+  --program workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
+  --context '{
+    "projectPath":"/work/projects/my-buffy/configs/project_….json",
+    "pipelineProcedure":"buffy_wgbs_pangenome_gene_fc",
+    "pipelineProfile":"samd_research"
+  }'
+```
+
+Prefer the procedure’s `lifecycleProgram` / `samplePrepProgram` hints (especially
+`study_validation_lifecycle_no_deconv` for cfDNA plasma and EM-Seq). Schema:
+[`schemas/config/procedure.schema.json`](../../schemas/config/procedure.schema.json).
+
+**EM-Seq note.** Set `actionConfig.methyl_extract.target_panel_bed` to an operator-
+supplied panel BED (cancer-specific panels belong in the application pack or study,
+not in Python). Extract restricts the BAM with `samtools view -L` before MethylExtractor.
+
+## Required artifacts (application pack)
 
 | Artifact | Role |
 |----------|------|
 | Study manifest (`project_*.json`) | Groups/comparisons (or stages), chromosomes, contexts, `regulatory`, `validation_partitions` |
-| Context overlay (`context_*.json`) | Instance `actionConfig` (mapper / enricher / progression / holdout) + `pipelineProfile` |
+| Context overlay (`context_*.json`) | `pipelineProcedure` + disease/trait `actionConfig` + `pipelineProfile` |
 | Cohort CSVs | Sample ID lists under `data/` (plant- or patient-disjoint as appropriate) |
 | Enrichment preset (optional) | Named entry in `library_presets.json` when human `cancer-core` is wrong |
 | Analyte / site (as needed) | e.g. `cfdna` vs `plant_tissue`; non-human genomes via site pins |
-| Lifecycle program | Reuse `study_validation_lifecycle.program.json`, or a thin sibling when a node must be omitted (e.g. no blood cell deconvolution) |
-| CI smoke + test | `workflow_engine/domain/checks/<pack>/` + `workflow_engine/tests/test_<pack>_pack.py` |
+| Lifecycle program | Taken from the procedure when possible; thin forks only when biology differs |
+| CI smoke + test | `workflow_engine/domain/checks/<pack>/` + procedure tests |
 | Usage guide | `docs/usage/*-pack.qmd` describing only what is instance-specific |
 | Regulatory roadmap row | Status under [Regulatory-Ready Platform](../regulatory/Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.md) |
 
@@ -46,18 +77,18 @@ Committed stubs and examples live under [`docs/examples/samd/`](../examples/samd
 
 ## Reused programs and profiles
 
-Default methylation path (human blood / cfDNA applications):
+Default methylation path with a procedure:
 
 ```
-sample_prep.program.json
-  → study_validation_lifecycle.program.json
-  → samd_research → samd_holdout_enrichment → samd_pivotal
+sample_prep*.program.json          ← procedure.samplePrepProgram
+  → study_validation_lifecycle*.program.json  ← procedure.lifecycleProgram
+  → samd_research (+ researchMode from procedure) → holdout → pivotal
 ```
 
 When a lifecycle node is biologically wrong (for example Houseman/HiTIMED on plant
-tissue), ship a **thin program fork** that drops that node—still an application pack,
-not a new process pack. See [plant abiotic stress](23-plant-abiotic-stress-pack.qmd)
-(`plant_stress_study_lifecycle.program.json`).
+tissue or default cfDNA plasma), the procedure points at a **thin program fork** that
+drops that node—still not a new process pack. See [plant abiotic stress](23-plant-abiotic-stress-pack.qmd)
+and `study_validation_lifecycle_no_deconv.program.json`.
 
 SaMD ladder SOP: [ch.18](18-samd-study-lifecycle.qmd). Agricultural or other
 non-clinical packs may stay on `samd_research` without climbing pivotal claim tiers.
@@ -66,37 +97,38 @@ non-clinical packs may stay on `samd_research` without climbing pivotal claim ti
 
 | Key | Typical use |
 |-----|-------------|
+| `pipelineProcedure` | Assay recipe (`buffy_wgbs_pangenome_gene_fc`, `cfdna_wgbs_plasma`, …) |
 | `regulatory.primary_modality` | Keep `methylation` for these packs |
-| `regulatory.primary_analyte` | Matrix defaults (`cfdna`, `buffy_coat`, `plant_tissue`, …) — see [ANALYTE_PROFILES](../ANALYTE_PROFILES.md) |
+| `regulatory.primary_analyte` | Must match procedure `analyteExpectation` — see [ANALYTE_PROFILES](../ANALYTE_PROFILES.md) |
 | `actionConfig.mapper.disease_term` / `enrich_disease` | Human disease priors (OpenTargets); set `enrich_disease: false` for non-disease traits |
 | `actionConfig.enricher.library_preset` | e.g. `neuro-core`, `plant-stress-core` (overrides analyte default such as `cancer-core`) |
 | `actionConfig.enricher.organism` / `string_species` | Non-human Enrichr / STRING taxon |
 | `runProgressionAnalysis` / `actionConfig.progression` | Staged indications only |
 | `actionConfig.validation.holdout_*` | Locked holdout partition for SaMD enrichment / pivotal |
+| `actionConfig.methyl_extract.target_panel_bed` | EM-Seq / hybrid-capture panel BED (study or site asset) |
 
-Merge precedence remains: program/instance overlay → profile → analyte → site
+Merge precedence (highest wins first): **instance → procedure → profile/mode → analyte → site**
 ([config-not-code](../../.cursor/rules/config-not-code.mdc)).
 
 ## Checklist for a new application pack
 
-1. Choose binary vs staged comparisons; set chromosomes / contexts for the species.
-2. Scaffold on `/work` with `methyl-study-init` (or copy an example under `docs/examples/samd/`).
-3. Author the context overlay (preset, disease/trait knobs, progression on/off).
-4. Add or reuse an enrichment preset via `methyl-cfg sync-library-presets` when needed.
-5. Confirm analyte + site: human GRCh38 vs plant/other linear genome pins (Arabidopsis
-   TAIR10, soybean Wm82, maize B73, wheat IWGSC recipes); omit blood deconvolution when
-   bases do not apply (or enable plant atlases via `*_basis_path` + the with-deconv
-   lifecycle). For plant trait priors use `enrich_source: plant_traits` + an offline TSV —
-   not Open Targets. For epi-GBS use `libraryProtocol: epi_gbs` +
-   `sample_prep_epigbs.program.json` (not Parabricks WGBS SamplePrep).
-6. Point `methyl-workflow-run` at the appropriate lifecycle program + overlay.
-7. Add CI smoke fixture + pack regression test (mirror Alzheimer / plant tests).
-8. Write a short usage chapter (instance-only deltas) and add a regulatory roadmap row.
-9. Validate: `methyl-study-validate-manifest --profile samd_research` (or higher ladder tier).
+1. Choose a **procedure** (`pipelineProcedure`) that matches analyte and assay recipe.
+2. Choose binary vs staged comparisons; set chromosomes / contexts for the species.
+3. Scaffold on `/work` with `methyl-study-init` (or copy an example under `docs/examples/samd/`).
+4. Author the context overlay (procedure id + preset + disease/trait knobs + progression).
+5. Add or reuse an enrichment preset via `methyl-cfg sync-library-presets` when needed.
+6. Confirm analyte + site: human GRCh38 vs plant/other linear genome pins; for EM-Seq
+   set `target_panel_bed`. For epi-GBS use `libraryProtocol: epi_gbs` +
+   `sample_prep_epigbs.program.json` (or a future epi-GBS procedure).
+7. Point `methyl-workflow-run` at the procedure’s lifecycle program + overlay.
+8. Add CI smoke fixture + pack regression test (mirror Alzheimer / plant tests).
+9. Write a short usage chapter (instance-only deltas) and add a regulatory roadmap row.
+10. Validate: `methyl-study-validate-manifest --profile samd_research` (or higher ladder tier).
 
 ## What an application pack does not add
 
 - A new omics modality or aligner (that is a **process pack**).
+- A full SamplePrep/covariate recipe (that is an **assay procedure pack**).
 - Hard-coded disease or crop names in Python — stay in manifests, overlays, and site pins.
 - Clinical-performance claims without the SaMD partition ladder
   ([ch.18](18-samd-study-lifecycle.qmd)).
