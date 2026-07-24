@@ -8,7 +8,8 @@
 # Canonical tree under genomes/:
 #   linear/GRCh38/ensembl-114/
 #   annotation/gencode/v49/
-#   pangenome/GRCh38/d9/1.70/
+#   pangenome/GRCh38/d9/1.70/       # stock HPRC Giraffe indexes
+#   pangenome/GRCh38/d9-bs/1.70/    # methylGrapher C2T+G2A BS bundle
 #
 # Operator usage (upload local → QNAP):
 #   export AWS_ACCESS_KEY_ID=...
@@ -16,10 +17,12 @@
 #   scripts/sync_genomes_to_s3.sh --dry-run
 #   scripts/sync_genomes_to_s3.sh
 #   scripts/sync_genomes_to_s3.sh --only pangenome
+#   scripts/sync_genomes_to_s3.sh --only pangenome/GRCh38/d9-bs/1.70
 #
 # Operator usage (download QNAP → local, fill missing files):
 #   scripts/sync_genomes_to_s3.sh --download --dry-run
 #   scripts/sync_genomes_to_s3.sh --download
+#   scripts/sync_genomes_to_s3.sh --download --only pangenome/GRCh38/d9-bs/1.70
 #
 # Optional env overrides:
 #   GENOMES_SRC=/work/genomes
@@ -36,6 +39,8 @@
 #   aws s3 ls s3://epimethyl/genomes/annotation/gencode/v49/ \
 #     --endpoint-url https://s3.us-east-1.myqnapcloud.io
 #   aws s3 ls s3://epimethyl/genomes/pangenome/GRCh38/d9/1.70/ \
+#     --endpoint-url https://s3.us-east-1.myqnapcloud.io
+#   aws s3 ls s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/ \
 #     --endpoint-url https://s3.us-east-1.myqnapcloud.io
 
 set -euo pipefail
@@ -58,11 +63,18 @@ Usage: scripts/sync_genomes_to_s3.sh [options]
 
 Sync genomes between local /work/genomes and myQNAPcloud (S3-compatible).
 
+aws s3 sync is recursive. Without --only, the entire genomes/ tree is mirrored.
+Use --only to limit to a role root or a relative inventory path under genomes/.
+
 Options:
   --download             Sync S3 → local (fill missing/outdated under /work/genomes)
   --dry-run              Pass --dryrun to aws s3 sync (no transfers)
   --delete               Pass --delete (remove destination extras absent on source; off by default)
-  --only NAME            Sync only a subtree: linear | annotation | pangenome
+  --only PATH            Sync only a subtree under genomes/:
+                           role roots: linear | annotation | pangenome
+                           or a relative path, e.g.:
+                             pangenome/GRCh38/d9/1.70
+                             pangenome/GRCh38/d9-bs/1.70
   -h, --help             Show this help
 
 Required env:
@@ -73,6 +85,33 @@ Optional env: GENOMES_SRC, S3_ENDPOINT_URL, S3_BUCKET, S3_PREFIX, AWS_DEFAULT_RE
 EOF
 }
 
+# Normalize --only to a relative path under genomes/ (no leading slash, no ..).
+normalize_only_path() {
+  local raw="$1"
+  local path="${raw#/}"
+  path="${path#./}"
+  # Strip accidental genomes/ prefix if the operator pasted a full relative inventory path.
+  if [[ "$path" == genomes/* ]]; then
+    path="${path#genomes/}"
+  fi
+  if [[ -z "$path" ]]; then
+    echo "ERROR: --only path is empty" >&2
+    return 2
+  fi
+  if [[ "$path" == *".."* ]]; then
+    echo "ERROR: --only path must not contain '..' (got: $raw)" >&2
+    return 2
+  fi
+  case "$path" in
+    linear|annotation|pangenome|linear/*|annotation/*|pangenome/*) ;;
+    *)
+      echo "ERROR: --only must be under linear/, annotation/, or pangenome/ (got: $raw)" >&2
+      return 2
+      ;;
+  esac
+  printf '%s\n' "$path"
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --download) DIRECTION="download"; shift ;;
@@ -81,7 +120,7 @@ while [[ $# -gt 0 ]]; do
     --only)
       ONLY="${2:-}"
       if [[ -z "$ONLY" ]]; then
-        echo "ERROR: --only requires linear, annotation, or pangenome" >&2
+        echo "ERROR: --only requires a role or relative path under genomes/" >&2
         exit 2
       fi
       shift 2
@@ -108,13 +147,7 @@ fi
 LOCAL="$GENOMES_SRC"
 REMOTE_KEY="$S3_PREFIX"
 if [[ -n "$ONLY" ]]; then
-  case "$ONLY" in
-    linear|annotation|pangenome) ;;
-    *)
-      echo "ERROR: --only must be linear, annotation, or pangenome (got: $ONLY)" >&2
-      exit 2
-      ;;
-  esac
+  ONLY="$(normalize_only_path "$ONLY")"
   LOCAL="${GENOMES_SRC}/${ONLY}"
   REMOTE_KEY="${S3_PREFIX}/${ONLY}"
 fi
@@ -145,6 +178,9 @@ echo "Source:      $SRC_SYNC"
 echo "Destination: $DEST_SYNC"
 echo "Endpoint:    $S3_ENDPOINT_URL"
 echo "Region:      $AWS_DEFAULT_REGION"
+if [[ -n "$ONLY" ]]; then
+  echo "Only:        $ONLY"
+fi
 if [[ -d "$LOCAL" ]]; then
   du -sh "$LOCAL" 2>/dev/null || true
 fi

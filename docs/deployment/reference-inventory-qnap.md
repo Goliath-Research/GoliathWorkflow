@@ -27,6 +27,7 @@ Upload so object keys match `cfg.reference_asset` recipe `key` / `inventoryPrefi
 | `linear-grch38-ensembl-114@1` | `/work/genomes/linear/GRCh38/ensembl-114/` | `s3://epimethyl/genomes/linear/GRCh38/ensembl-114/` | `Homo_sapiens.GRCh38.dna.primary_assembly.fa` (+ `.fai` if used) |
 | `gencode-v49@1` | `/work/genomes/annotation/gencode/v49/` | `s3://epimethyl/genomes/annotation/gencode/v49/` | `gencode.v49.annotation.gtf` |
 | `pangenome-grch38-d9-1.70@1` | `/work/genomes/pangenome/GRCh38/d9/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9/1.70/` | `hprc-v1.1-mc-grch38.d9.gbz`, `.autoindex.1.70.dist`, `.shortread.withzip.min`, `.shortread.zipcodes`, `.paths.sub` |
+| `pangenome-grch38-d9-bs-1.70@1` | `/work/genomes/pangenome/GRCh38/d9-bs/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/` | methylGrapher C2T+G2A bundle (`hprc-d9-bs.wl.C2T.*`, `hprc-d9-bs.wl.G2A.*`, `.cpg.tsv`, report) |
 
 ### Upload (local → QNAP)
 
@@ -36,7 +37,11 @@ export AWS_SECRET_ACCESS_KEY=...
 # Files already under /work/genomes/{linear,annotation,pangenome}/...
 scripts/sync_genomes_to_s3.sh --dry-run
 scripts/sync_genomes_to_s3.sh
-# optional subtree: --only linear | annotation | pangenome
+# optional subtree (aws s3 sync is recursive; narrow with --only):
+#   --only linear | annotation | pangenome
+#   --only pangenome/GRCh38/d9/1.70
+#   --only pangenome/GRCh38/d9-bs/1.70
+scripts/sync_genomes_to_s3.sh --only pangenome/GRCh38/d9-bs/1.70
 ```
 
 ### Verify on QNAP
@@ -45,6 +50,8 @@ scripts/sync_genomes_to_s3.sh
 aws s3 ls s3://epimethyl/genomes/ \
   --endpoint-url https://s3.us-east-1.myqnapcloud.io
 aws s3 ls s3://epimethyl/genomes/linear/GRCh38/ensembl-114/ \
+  --endpoint-url https://s3.us-east-1.myqnapcloud.io
+aws s3 ls s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/ \
   --endpoint-url https://s3.us-east-1.myqnapcloud.io
 ```
 

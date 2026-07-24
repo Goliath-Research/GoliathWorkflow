@@ -23,7 +23,8 @@ export AWS_ACCESS_KEY_ID=...
 export AWS_SECRET_ACCESS_KEY=...
 scripts/sync_genomes_to_s3.sh --dry-run
 scripts/sync_genomes_to_s3.sh
-# optional: scripts/sync_genomes_to_s3.sh --only linear  # or annotation | pangenome
+# optional: scripts/sync_genomes_to_s3.sh --only linear|annotation|pangenome
+# or a leaf path: --only pangenome/GRCh38/d9-bs/1.70
 ```
 
 Destination: `s3://epimethyl/genomes/` at `https://s3.us-east-1.myqnapcloud.io`. Full upload map, pin→asset resolution, and Phase 0 provision: [reference-inventory-qnap.md](reference-inventory-qnap.md).
