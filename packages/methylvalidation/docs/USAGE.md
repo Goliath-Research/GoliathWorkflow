@@ -501,10 +501,13 @@ Operational notes:
 - Freeze now also writes and wires:
   - `actionConfig.model_bundle.fixed_gene_panel` -> `production/model_bundle/frozen_genes_production.csv`
   - `actionConfig.model_bundle.fixed_gene_features` -> `production/model_bundle/frozen_gene_features.csv`
+    - **Contract:** one row per `(comparison_label, gene_name, chromosome, feature_type)`.
+    - Coordinates are the **union hull** (`min(feature_start)`, `max(feature_end)`) over isoform/GTF intervals from mapper intersections; `n_dmps_in_feature` is the **unique** DMP count across that union (not one row per overlapping isoform span).
+    - Mapper `*-intersections.csv` remains isoform-detailed for audit; only the freeze panel collapses.
 - After changing `mapper_annotation_collapse_mode`, `mapper_annotation_unknown_fallback`, or `region_directional_region_types`, refreeze mapper annotations, rebuild the model bundle, remove cached tabular train datasets if any, and retrain.
 - `gene_feature_loading` controls gene-family locus selection in observed-hybrid mode:
   - `frozen` (default): only frozen DMP loci are used.
-  - `range`: expand to all observed loci inside frozen gene-feature ranges from `fixed_gene_features`.
+  - `range`: expand to all observed loci inside frozen gene-feature ranges from `fixed_gene_features`. Because each gene×region is a **hull**, discontinuous annotations (e.g. distant exons) can admit loci in the gaps between segments.
 - Train/predict schema parity is enforced via stored feature names/fingerprints and fill metadata.
 - Legacy `observed_feature_include_*` toggles are no longer the canonical feature-family contract.
 

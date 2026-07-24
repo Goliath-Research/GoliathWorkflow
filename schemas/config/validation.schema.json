@@ -2604,7 +2604,7 @@
         }
       ],
       "default": 1,
-      "description": "Minimum number of unique frozen DMPs required for a gene-feature segment to be included in freeze-time fixed_gene_features output.",
+      "description": "Minimum number of unique frozen DMPs required for a gene\u00d7region panel row (union over isoform/GTF intervals) to be included in freeze-time fixed_gene_features output.",
       "title": "Freeze Min Dmps Per Feature"
     },
     "freeze_stable_dmp_csv": {

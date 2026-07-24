@@ -465,6 +465,113 @@ def test_build_frozen_gene_panel_writes_gene_and_feature_outputs(tmp_path: Path,
     assert float(feats_df.iloc[0]["feature_effect_compound"]) == pytest.approx(0.7)
 
 
+def test_build_frozen_gene_panel_collapses_overlapping_isoform_intervals(
+    tmp_path: Path, monkeypatch
+):
+    """Overlapping isoform gene_body spans become one row with union hull + unique DMPs."""
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    mapper = tmp_path / "mapper" / "healthy" / "pca1"
+    mapper.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "gene_name": ["DLGAP2"],
+            "gene_id": ["ENSG_DLGAP2"],
+            "gene_importance": [2.5],
+            "unique_dmps": [3],
+            "gene_support_n": [3],
+            "gene_effect_abs_wsum": [4.0],
+            "feature_effect_compound_gene_body": [0.9],
+        }
+    ).to_csv(mapper / "all-gene_name-combined.csv", index=False)
+    # Nested/overlapping isoform intervals sharing some DMPs (unique count = 3, not 2+3).
+    pd.DataFrame(
+        {
+            "dmp_name": [
+                "8:100:CG:eff=0.20",
+                "8:200:CG:eff=0.22",
+                "8:100:CG:eff=0.20",
+                "8:200:CG:eff=0.22",
+                "8:300:CG:eff=0.18",
+            ],
+            "feature_chrom": ["chr8"] * 5,
+            "gene_name": ["DLGAP2"] * 5,
+            "feature_type": ["gene_body"] * 5,
+            "feature_start": [50, 50, 80, 80, 80],
+            "feature_end": [250, 250, 400, 400, 400],
+        }
+    ).to_csv(mapper / "chr8-intersections.csv", index=False)
+
+    monkeypatch.setattr(
+        model_bundle,
+        "load_project",
+        lambda _p: _StubProjectWithMapper(det, mapper),
+    )
+    out = model_bundle.build_frozen_gene_panel(
+        project_json=tmp_path / "project.json",
+        output_dir=tmp_path / "bundle",
+        min_dmps_per_feature=1,
+    )
+    feats_df = pd.read_csv(out["gene_features_path"])
+    gene_body = feats_df[feats_df["feature_type"] == "gene_body"]
+    assert len(gene_body) == 1
+    row = gene_body.iloc[0]
+    assert row["gene_name"] == "DLGAP2"
+    assert int(row["feature_start"]) == 50
+    assert int(row["feature_end"]) == 400
+    assert int(row["n_dmps_in_feature"]) == 3
+    assert float(row["feature_effect_compound"]) == pytest.approx(0.9)
+
+
+def test_build_frozen_gene_panel_one_row_for_disjoint_exons_under_option_a(
+    tmp_path: Path, monkeypatch
+):
+    """Option A: disjoint exons for the same gene still collapse to one hull row."""
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    mapper = tmp_path / "mapper" / "healthy" / "pca1"
+    mapper.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "gene_name": ["PTPRN2"],
+            "gene_id": ["ENSG_PTPRN2"],
+            "gene_importance": [2.0],
+            "unique_dmps": [2],
+            "gene_support_n": [2],
+            "feature_effect_compound_exon": [0.5],
+        }
+    ).to_csv(mapper / "all-gene_name-combined.csv", index=False)
+    pd.DataFrame(
+        {
+            "dmp_name": ["7:100:CG:eff=0.20", "7:5000:CG:eff=0.22"],
+            "feature_chrom": ["chr7", "chr7"],
+            "gene_name": ["PTPRN2", "PTPRN2"],
+            "feature_type": ["exon", "exon"],
+            "feature_start": [90, 4900],
+            "feature_end": [150, 5100],
+        }
+    ).to_csv(mapper / "chr7-intersections.csv", index=False)
+
+    monkeypatch.setattr(
+        model_bundle,
+        "load_project",
+        lambda _p: _StubProjectWithMapper(det, mapper),
+    )
+    out = model_bundle.build_frozen_gene_panel(
+        project_json=tmp_path / "project.json",
+        output_dir=tmp_path / "bundle",
+        min_dmps_per_feature=1,
+    )
+    feats_df = pd.read_csv(out["gene_features_path"])
+    exon = feats_df[feats_df["feature_type"] == "exon"]
+    assert len(exon) == 1
+    row = exon.iloc[0]
+    assert row["gene_name"] == "PTPRN2"
+    assert int(row["feature_start"]) == 90
+    assert int(row["feature_end"]) == 5100
+    assert int(row["n_dmps_in_feature"]) == 2
+
+
 def test_resolve_fixed_gene_features_panel_rebuilds_missing_compounds(tmp_path: Path, monkeypatch):
     mapper = tmp_path / "mapper" / "healthy" / "pca1"
     mapper.mkdir(parents=True)

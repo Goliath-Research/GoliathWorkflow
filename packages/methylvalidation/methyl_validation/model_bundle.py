@@ -1055,14 +1055,20 @@ def build_frozen_gene_panel(
 
     if feature_rows:
         fr = pd.concat(feature_rows, ignore_index=True)
+        # One row per comparison×gene×chromosome×region: union hull over isoform/GTF
+        # intervals, with unique DMP support across that union (not per exact start/end).
+        group_keys = ["comparison_label", "gene_name", "chromosome", "feature_type"]
         grouped = (
-            fr.groupby(
-                ["comparison_label", "gene_name", "chromosome", "feature_type", "feature_start", "feature_end"],
-                dropna=False,
-            )["dmp_name"]
-            .nunique()
-            .reset_index(name="n_dmps_in_feature")
+            fr.groupby(group_keys, dropna=False)
+            .agg(
+                feature_start=("feature_start", "min"),
+                feature_end=("feature_end", "max"),
+                n_dmps_in_feature=("dmp_name", "nunique"),
+            )
+            .reset_index()
         )
+        grouped["feature_start"] = pd.to_numeric(grouped["feature_start"], errors="coerce").astype("Int64")
+        grouped["feature_end"] = pd.to_numeric(grouped["feature_end"], errors="coerce").astype("Int64")
         grouped["n_dmps_in_feature"] = pd.to_numeric(grouped["n_dmps_in_feature"], errors="coerce").fillna(0).astype(int)
         grouped = grouped[grouped["n_dmps_in_feature"] >= int(max(1, min_dmps_per_feature))].copy()
         if not genes_df.empty:

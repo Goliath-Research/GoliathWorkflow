@@ -1281,8 +1281,9 @@ class MonteCarloConfig(BaseModel):
         default=1,
         ge=1,
         description=(
-            "Minimum number of unique frozen DMPs required for a gene-feature segment "
-            "to be included in freeze-time fixed_gene_features output."
+            "Minimum number of unique frozen DMPs required for a gene×region panel row "
+            "(union over isoform/GTF intervals) to be included in freeze-time "
+            "fixed_gene_features output."
         ),
     )
     freeze_gene_importance_min: Optional[float] = Field(

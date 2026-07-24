@@ -90,6 +90,7 @@ Hierarchy (EpiMethyl Agile): **Epic (AB#413) → Feature (one per plan) → User
 | [`proteomics-sage-dda.plan.md`](proteomics-sage-dda.plan.md) | _(pending ADO)_ | Proteomics DDA via Sage (open MSFragger alternative) | `sage-runner`, `sage-ingest-source`, `program-config`, `provisioning`, `register-tests-docs` |
 | [`config-propagation-analysis.plan.md`](config-propagation-analysis.plan.md) | _(pending ADO)_ | Config propagation analysis (methylation) | `analysis-doc`, `fix-prepare-freeze-bind`, `regression-tests`, `docs-wire-plan` |
 | [`production-config-enforcement.plan.md`](production-config-enforcement.plan.md) | _(pending ADO)_ | Production config enforcement | `deep-merge-null-delete`, `full-lifecycle-model-mc`, `study-owned-analyte`, `pack-boundaries`, `scenario-experiments`, `docs-promote` |
+| [`collapse-frozen-gene-features.plan.md`](collapse-frozen-gene-features.plan.md) | _(pending ADO)_ | Collapse frozen gene-feature panel | `collapse-groupby`, `tests-isoform`, `docs-contract`, `promote-plan` |
 
 Create each **User Story** under its Feature in Azure DevOps Boards. Copy the story title from the plan `todos[].content` field (seed prefixes `[todo-id]`). Mark stories **Closed** when the corresponding code is merged; close the Feature when all child stories are done.
 

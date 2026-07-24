@@ -120,7 +120,7 @@ Region-directional scores (`region_directional_score__*`) are no longer emitted 
 
 Structural-directional score (per sample, per `comparison_label` and `feature_type` such as `promoter`):
 
-- Gene-feature panel: rows in `frozen_gene_features.csv` with `n_dmps_in_feature >= structural_scored_min_support_n` (default `2`) and positive `feature_effect_compound`, restricted to configured `region_directional_region_types`.
+- Gene-feature panel: one row per `(comparison, gene, chromosome, feature_type)` in `frozen_gene_features.csv` (union hull over isoform intervals; `n_dmps_in_feature` = unique DMPs), kept when `n_dmps_in_feature >= structural_scored_min_support_n` (default `2`) and `feature_effect_compound > 0`, restricted to configured `region_directional_region_types`.
 - Per `(gene, region)`: same locus formula as `gene_scored` over observed panel loci for that gene and region.
 - Pooled: weighted mean of per-gene `dir_g` using `feature_effect_compound` (and optionally `sqrt(n_dmps_in_feature)`).
 - Column emission: a `(comparison, region)` emits four base columns only when at least `region_directional_min_loci` panel loci intersect the classifier DMP index; otherwise the region is omitted (not exported as all-NaN placeholders).
@@ -170,10 +170,10 @@ During freeze, model-bundle preparation materializes:
 
 - mapper annotation cache under `production/model_bundle/mapper_dmp_annotations.csv` and wires `actionConfig.model_bundle.mapper_annotation_csv`,
 - frozen gene ranking panel under `production/model_bundle/frozen_genes_production.csv` and wires `actionConfig.model_bundle.fixed_gene_panel`,
-- frozen gene-feature ranges under `production/model_bundle/frozen_gene_features.csv` and wires `actionConfig.model_bundle.fixed_gene_features`.
+- frozen gene-feature ranges under `production/model_bundle/frozen_gene_features.csv` (one row per comparison×gene×region with union hull and unique DMP support) and wires `actionConfig.model_bundle.fixed_gene_features`.
 
 Cache generation also supports configurable per-gene mapper attributes via `actionConfig.model_bundle.mapper_gene_columns` (or `actionConfig.mapper.mapper_gene_columns` fallback), defaulting to `["gene_importance", "gene_effect_abs_wsum", "gene_support_n", "gene_score", "mean_effect_size", "gene_effect_compound", "gene_feature_effect_compound"]`; set `[]` to disable carrying extra per-gene columns.
-For observed-hybrid gene families, `gene_feature_loading` determines whether training/prediction uses only frozen DMP loci (`frozen`) or expands to all loci observed inside the frozen gene-feature ranges (`range`).
+For observed-hybrid gene families, `gene_feature_loading` determines whether training/prediction uses only frozen DMP loci (`frozen`) or expands to all loci observed inside the frozen gene-feature ranges (`range`). With `range`, each gene×region range is a genomic hull, so discontinuous exon/intron annotations can admit gap loci.
 
 ```mermaid
 flowchart LR
