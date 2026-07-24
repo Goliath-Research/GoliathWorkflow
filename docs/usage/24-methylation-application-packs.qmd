@@ -121,9 +121,12 @@ Merge precedence (highest wins first): **instance → procedure → profile/mode
    set `target_panel_bed`. For epi-GBS use `libraryProtocol: epi_gbs` +
    `sample_prep_epigbs.program.json` (or a future epi-GBS procedure).
 7. Point `methyl-workflow-run` at the procedure’s lifecycle program + overlay.
-8. Add CI smoke fixture + pack regression test (mirror Alzheimer / plant tests).
-9. Write a short usage chapter (instance-only deltas) and add a regulatory roadmap row.
-10. Validate: `methyl-study-validate-manifest --profile samd_research` (or higher ladder tier).
+8. After a baseline succeeds, tune Tier-A validation knobs with hyperparameter search
+   **on that same procedure** — do not put `pipelineProcedure` in the grid
+   ([ch.15](15-optional-hyperparameter-search.qmd)).
+9. Add CI smoke fixture + pack regression test (mirror Alzheimer / plant tests).
+10. Write a short usage chapter (instance-only deltas) and add a regulatory roadmap row.
+11. Validate: `methyl-study-validate-manifest --profile samd_research` (or higher ladder tier).
 
 ## What an application pack does not add
 
