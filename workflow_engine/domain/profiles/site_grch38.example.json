@@ -15,7 +15,8 @@
   "reference_selection": {
     "linear": "linear/GRCh38/ensembl-114",
     "gene_annotation": "annotation/gencode/v49",
-    "pangenome": "pangenome/GRCh38/d9/1.70"
+    "pangenome": "pangenome/GRCh38/d9/1.70",
+    "pangenome_wgbs": "pangenome/GRCh38/d9-bs/1.70"
   },
   "reference_genome": {
     "fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
@@ -55,16 +56,24 @@
         "sample_id": "REF_CFDNA_01",
         "sample_dir": "/work/samples/__testref_cfdna__",
         "analyte": "cfdna",
-        "chromosomes": ["21"],
-        "contexts": ["CG"],
+        "chromosomes": [
+          "21"
+        ],
+        "contexts": [
+          "CG"
+        ],
         "provenance": "Non-PHI public/consented WGBS; MethylExtractor <release>."
       },
       "buffy_coat": {
         "sample_id": "REF_BUFFY_01",
         "sample_dir": "/work/samples/__testref_buffy__",
         "analyte": "buffy_coat",
-        "chromosomes": ["21"],
-        "contexts": ["CG"],
+        "chromosomes": [
+          "21"
+        ],
+        "contexts": [
+          "CG"
+        ],
         "provenance": "Non-PHI public/consented WGBS; MethylExtractor <release>."
       }
     },
@@ -72,12 +81,18 @@
       "healthy": {
         "label": "healthy",
         "analyte": "cfdna",
-        "sample_dirs": ["/work/samples/__testref_healthy_1__", "/work/samples/__testref_healthy_2__"]
+        "sample_dirs": [
+          "/work/samples/__testref_healthy_1__",
+          "/work/samples/__testref_healthy_2__"
+        ]
       },
       "PCa": {
         "label": "PCa",
         "analyte": "cfdna",
-        "sample_dirs": ["/work/samples/__testref_pca_1__", "/work/samples/__testref_pca_2__"]
+        "sample_dirs": [
+          "/work/samples/__testref_pca_1__",
+          "/work/samples/__testref_pca_2__"
+        ]
       }
     }
   }

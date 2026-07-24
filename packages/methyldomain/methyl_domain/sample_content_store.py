@@ -23,7 +23,13 @@ SAMPLE_CAAS_OPT_OUT: dict[str, str] = {
 }
 
 # Prefixes deferred to sample-scoped store (not study .caas).
-SAMPLE_SCOPED_PREFIXES = ("sample.", "parabricks.", "proteomics.", "align.")
+SAMPLE_SCOPED_PREFIXES = (
+    "sample.",
+    "parabricks.",
+    "proteomics.",
+    "align.",
+    "methylgrapher.",
+)
 
 
 def sample_caas_env_enabled() -> bool:

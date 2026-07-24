@@ -249,6 +249,20 @@ def _artifact_entries(
         for h5 in sorted(sample_dir.glob(f"*{H5_SUFFIX}")):
             entries.append((h5, f"h5/{h5.name}"))
 
+    # methylGrapher WGBS provenance (align + extract) — archive when present.
+    for name, rel in (
+        (f"{sample_id}.alignment.gaf", f"pangenome/{sample_id}.alignment.gaf"),
+        (f"{sample_id}.conversion_report.txt", f"pangenome/{sample_id}.conversion_report.txt"),
+        (f"{sample_id}.methylgrapher_align.log", f"pangenome/{sample_id}.methylgrapher_align.log"),
+        (f"{sample_id}.methylgrapher_extract.log", f"pangenome/{sample_id}.methylgrapher_extract.log"),
+        (f"{sample_id}.alignment_metrics.json", f"pangenome/{sample_id}.alignment_metrics.json"),
+        (f"{sample_id}.deduplicate_metrics.txt", f"qc/{sample_id}.deduplicate_metrics.txt"),
+        (f"{sample_id}.qc-metrics.tar", f"qc/{sample_id}.qc-metrics.tar"),
+    ):
+        path = sample_dir / name
+        if path.is_file():
+            entries.append((path, rel))
+
     return entries
 
 

@@ -37,6 +37,8 @@ from .sample_prep import (
     _handle_methyl_qc,
     _handle_parabricks_fq2bam,
     _handle_parabricks_giraffe,
+    _handle_methylgrapher_wgbs_align,
+    _handle_methylgrapher_wgbs_extract,
     _handle_trim_fastq,
 )
 from .rna_prep import (
@@ -102,6 +104,8 @@ __all__ = [
     "_handle_methyl_qc",
     "_handle_parabricks_fq2bam",
     "_handle_parabricks_giraffe",
+    "_handle_methylgrapher_wgbs_align",
+    "_handle_methylgrapher_wgbs_extract",
     "_handle_parabricks_rna_fq2bam",
     "_handle_kallisto",
     "_handle_rna_qc",

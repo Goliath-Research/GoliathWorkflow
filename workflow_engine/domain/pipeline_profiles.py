@@ -45,6 +45,7 @@ _STRING_SCOPE_KEYS = frozenset(
 _PROCEDURE_SCOPE_BOOLS = frozenset(
     {
         "usePangenome",
+        "useWgbsPangenome",
         "useEpiGbs",
         "useEmseqTargeted",
         "runDmpSelection",
@@ -60,6 +61,7 @@ _PROCEDURE_SCOPE_BOOLS = frozenset(
 
 PIPELINE_FLAG_DEFAULTS: Dict[str, bool] = {
     "usePangenome": False,
+    "useWgbsPangenome": False,
     "useEpiGbs": False,
     "useEmseqTargeted": False,
     "skipDemultiplex": False,
@@ -677,24 +679,40 @@ def seed_pipeline_scope_flags(
         out.setdefault("skipDemultiplex", bool(skip_demux))
 
     parabricks_cfg = dict(ac.get("parabricks") or {})
+    mg_cfg = dict(ac.get("methylgrapher_wgbs") or {})
     alignment_mode = out.get("alignmentMode")
     if alignment_mode in (None, ""):
-        alignment_mode = parabricks_cfg.get("alignment_mode")
+        alignment_mode = (
+            parabricks_cfg.get("alignment_mode")
+            or mg_cfg.get("alignment_mode")
+            or sample_prep_cfg.get("alignment_mode")
+        )
     if alignment_mode in (None, ""):
         # Derive WGBS alignment mode from libraryProtocol when unset.
+        # wgbs_pangenome defaults to methylGrapher dual-graph (pangenome_wgbs);
+        # operators who want stock Giraffe must set alignmentMode=pangenome.
         if proto == "wgbs_pangenome":
-            alignment_mode = "pangenome"
+            alignment_mode = "pangenome_wgbs"
         else:
             # linear WGBS, epi-GBS, and EM-Seq targeted all use linear references.
             alignment_mode = "linear"
-    out["alignmentMode"] = str(alignment_mode)
+    mode_norm = str(alignment_mode).strip().lower().replace("-", "_")
+    if mode_norm in {"wgbs_pangenome", "pangenomewgbs", "methylgrapher", "methylgrapher_wgbs"}:
+        mode_norm = "pangenome_wgbs"
+    elif mode_norm in {"giraffe", "stock_pangenome", "stock_giraffe"}:
+        mode_norm = "pangenome"
+    out["alignmentMode"] = mode_norm
+    is_wgbs_pangenome = mode_norm == "pangenome_wgbs"
+    is_any_pangenome = mode_norm in {"pangenome", "pangenome_wgbs"} or proto == "wgbs_pangenome"
+    if "useWgbsPangenome" in out:
+        out["useWgbsPangenome"] = bool(out["useWgbsPangenome"])
+    else:
+        out.setdefault("useWgbsPangenome", is_wgbs_pangenome)
     if "usePangenome" in out:
         out["usePangenome"] = bool(out["usePangenome"])
     else:
-        out.setdefault(
-            "usePangenome",
-            str(alignment_mode).strip().lower() == "pangenome" or proto == "wgbs_pangenome",
-        )
+        # Shared lifecycle semantics for both stock Giraffe and WGBS pangenome.
+        out.setdefault("usePangenome", is_any_pangenome or bool(out.get("useWgbsPangenome")))
 
     # RNA-Seq quantifier selection, parallel to alignment_mode/usePangenome.
     rna_align_cfg = dict(ac.get("rna_align") or {})

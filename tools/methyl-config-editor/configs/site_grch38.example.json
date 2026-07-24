@@ -14,12 +14,34 @@
       "multipart_chunksize_mb": 16,
       "multipart_threshold_mb": 32,
       "max_attempts": 10
+    },
+    "methylgrapher_wgbs": {
+      "directional": true,
+      "index_prefix": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs",
+      "c2t": {
+        "gbz": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.C2T.gbz",
+        "dist": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.C2T.dist",
+        "min": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.C2T.shortread.withzip.min",
+        "zipcodes": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.C2T.shortread.zipcodes"
+      },
+      "g2a": {
+        "gbz": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.G2A.gbz",
+        "dist": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.G2A.dist",
+        "min": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.G2A.shortread.withzip.min",
+        "zipcodes": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.G2A.shortread.zipcodes"
+      },
+      "original_gbz": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.gbz",
+      "ref_paths": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.paths.sub",
+      "cpg_tsv": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.cpg.tsv",
+      "node_replacement_json": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.node_replacement.json",
+      "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
     }
   },
   "reference_selection": {
     "linear": "linear/GRCh38/ensembl-114",
     "gene_annotation": "annotation/gencode/v49",
-    "pangenome": "pangenome/GRCh38/d9/1.70"
+    "pangenome": "pangenome/GRCh38/d9/1.70",
+    "pangenome_wgbs": "pangenome/GRCh38/d9-bs/1.70"
   },
   "reference_genome": {
     "fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
@@ -37,6 +59,26 @@
     "min": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.withzip.min",
     "zipcodes": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.autoindex.1.70.shortread.zipcodes",
     "ref_paths": "/work/genomes/pangenome/GRCh38/d9/1.70/hprc-v1.1-mc-grch38.d9.paths.sub",
+    "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+  },
+  "pangenome_wgbs_genome": {
+    "index_prefix": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs",
+    "c2t": {
+      "gbz": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.C2T.gbz",
+      "dist": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.C2T.dist",
+      "min": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.C2T.shortread.withzip.min",
+      "zipcodes": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.C2T.shortread.zipcodes"
+    },
+    "g2a": {
+      "gbz": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.G2A.gbz",
+      "dist": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.G2A.dist",
+      "min": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.G2A.shortread.withzip.min",
+      "zipcodes": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.G2A.shortread.zipcodes"
+    },
+    "original_gbz": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.gbz",
+    "ref_paths": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.paths.sub",
+    "cpg_tsv": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.cpg.tsv",
+    "node_replacement_json": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.node_replacement.json",
     "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
   }
 }

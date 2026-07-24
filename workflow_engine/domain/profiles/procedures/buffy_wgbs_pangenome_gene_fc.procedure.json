@@ -5,8 +5,9 @@
   "researchMode": "gene_fc",
   "analyteExpectation": "buffy_coat",
   "libraryProtocol": "wgbs_pangenome",
-  "alignmentMode": "pangenome",
+  "alignmentMode": "pangenome_wgbs",
   "usePangenome": true,
+  "useWgbsPangenome": true,
   "samplePrepProgram": "workflow_engine/domain/fixtures/sample_prep.program.json",
   "lifecycleProgram": "workflow_engine/domain/fixtures/study_validation_lifecycle.program.json",
   "runDmpSelection": false,
@@ -15,10 +16,15 @@
   "stabilityGeneFeaturecutsEnabled": true,
   "actionConfig": {
     "sample_prep": {
-      "library_protocol": "wgbs_pangenome"
+      "library_protocol": "wgbs_pangenome",
+      "alignment_mode": "pangenome_wgbs"
     },
     "parabricks": {
-      "alignment_mode": "pangenome"
+      "alignment_mode": "pangenome_wgbs"
+    },
+    "methylgrapher_wgbs": {
+      "alignment_mode": "pangenome_wgbs",
+      "directional": true
     },
     "methyl_extract": {
       "read_level": {

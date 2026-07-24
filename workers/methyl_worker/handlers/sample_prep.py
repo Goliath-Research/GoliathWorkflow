@@ -415,6 +415,83 @@ def _handle_parabricks_giraffe(_capability: str, _action_name: str, input: BaseM
     return ParabricksTaskOutput(status="ok", **result)
 
 
+def _handle_methylgrapher_wgbs_align(
+    _capability: str, _action_name: str, input: BaseModel
+) -> "MethylGrapherWgbsAlignTaskOutput":
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    from ..methylgrapher_wgbs_runner import run_methylgrapher_wgbs_align
+    from ..sample_prep_log import append_sample_prep_log
+    from ..task_models.sample_prep_models import MethylGrapherWgbsAlignTaskOutput
+
+    sample_dir = input_json.get("sampleDir")
+    sample_id = input_json.get("sampleId")
+    if not sample_dir or not sample_id:
+        raise RuntimeError("sample.methylgrapher_wgbs_align requires sampleDir and sampleId")
+    result = run_methylgrapher_wgbs_align(
+        sample_id=str(sample_id),
+        sample_dir=str(sample_dir),
+        input_json=input_json,
+    )
+    reason = str(input_json.get("remediationReason") or "")
+    if input_json.get("forceRealign"):
+        reason = reason or f"forceRealign after trim_front2={input_json.get('trimFront2', '?')}"
+    append_sample_prep_log(
+        Path(str(sample_dir)),
+        sample_id=str(sample_id),
+        action="sample.methylgrapher_wgbs_align",
+        capability=_capability,
+        attempt=int(input_json.get("qcAttempt") or 1),
+        reason=reason or "methylGrapher C2T/G2A WGBS pangenome alignment",
+        inputs={
+            "forceRealign": bool(input_json.get("forceRealign")),
+            "alignmentPass": input_json.get("alignmentPass") or "initial",
+            "alignmentMode": "pangenome_wgbs",
+        },
+        outputs=result,
+        workflow_node_key=input_json.get("workflowNodeKey") or "methylgrapher_wgbs_align",
+    )
+    return MethylGrapherWgbsAlignTaskOutput(status="ok", **result)
+
+
+def _handle_methylgrapher_wgbs_extract(_capability: str, _action_name: str, input: BaseModel):
+    input_json: Dict[str, Any] = input.model_dump(mode="json")
+    from ..methylgrapher_wgbs_runner import run_methylgrapher_wgbs_extract
+    from ..sample_prep_log import append_sample_prep_log
+    from ..task_models.sample_prep_models import MethylExtractTaskOutput
+
+    sample_dir = input_json.get("sampleDir")
+    sample_id = input_json.get("sampleId")
+    project = input_json.get("project") or input_json.get("projectPath")
+    if not sample_dir or not sample_id:
+        raise RuntimeError("sample.methylgrapher_wgbs_extract requires sampleDir and sampleId")
+    if not project:
+        raise RuntimeError("sample.methylgrapher_wgbs_extract requires projectPath")
+    raw = run_methylgrapher_wgbs_extract(
+        sample_id=str(sample_id),
+        sample_dir=str(sample_dir),
+        project=str(project),
+        input_json=input_json,
+    )
+    append_sample_prep_log(
+        Path(str(sample_dir)),
+        sample_id=str(sample_id),
+        action="sample.methylgrapher_wgbs_extract",
+        capability=_capability,
+        attempt=int(input_json.get("qcAttempt") or 1),
+        reason="methylGrapher graph-aware methylation extraction",
+        inputs={"forceRealign": bool(input_json.get("forceRealign"))},
+        outputs=raw,
+        workflow_node_key=input_json.get("workflowNodeKey") or "methylgrapher_wgbs_extract",
+    )
+    h5_files = list(raw.get("h5Files") or [])
+    return MethylExtractTaskOutput(
+        status="ok",
+        sampleId=str(raw.get("sampleId") or sample_id),
+        h5Files=h5_files,
+        n_h5_files=len(h5_files),
+    )
+
+
 def _handle_delete_fastqs(_capability: str, _action_name: str, input: BaseModel) -> DeleteTaskOutput:
     input_json: Dict[str, Any] = input.model_dump(mode="json")
     from ..task_models.sample_prep_models import DeleteTaskOutput

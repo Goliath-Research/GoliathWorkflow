@@ -42,17 +42,28 @@
           }
         },
         {
-          "if": "${usePangenome}",
+          "if": "${useWgbsPangenome}",
           "then": [
             {
-              "action": "sample.parabricks_giraffe",
-              "node_key": "parabricks_giraffe"
+              "action": "sample.methylgrapher_wgbs_align",
+              "node_key": "methylgrapher_wgbs_align"
             }
           ],
           "else": [
             {
-              "action": "sample.parabricks_fq2bam",
-              "node_key": "parabricks_fq2bam"
+              "if": "${usePangenome}",
+              "then": [
+                {
+                  "action": "sample.parabricks_giraffe",
+                  "node_key": "parabricks_giraffe"
+                }
+              ],
+              "else": [
+                {
+                  "action": "sample.parabricks_fq2bam",
+                  "node_key": "parabricks_fq2bam"
+                }
+              ]
             }
           ]
         },
@@ -88,8 +99,19 @@
               ]
             },
             {
-              "action": "sample.methyl_extract",
-              "node_key": "methyl_extract"
+              "if": "${useWgbsPangenome}",
+              "then": [
+                {
+                  "action": "sample.methylgrapher_wgbs_extract",
+                  "node_key": "methylgrapher_wgbs_extract"
+                }
+              ],
+              "else": [
+                {
+                  "action": "sample.methyl_extract",
+                  "node_key": "methyl_extract"
+                }
+              ]
             },
             {
               "action": "sample.extraction_qc",

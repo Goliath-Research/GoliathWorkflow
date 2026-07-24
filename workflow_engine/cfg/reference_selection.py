@@ -23,12 +23,29 @@ SELECTION_TO_ASSET_ROLE = {
     "linear": "reference_genome",
     "gene_annotation": "annotation_gtf",
     "pangenome": "pangenome_bundle",
+    "pangenome_wgbs": "pangenome_wgbs_bundle",
     "houseman_seed": "houseman_seed_basis",
     "hitimed_hierarchy": "hitimed_hierarchy_basis",
 }
 
 # Selection keys that resolve to cfg.reference_asset inventory (genomes on QNAP).
-GENOME_SELECTION_KEYS = ("linear", "gene_annotation", "pangenome")
+GENOME_SELECTION_KEYS = ("linear", "gene_annotation", "pangenome", "pangenome_wgbs")
+
+# Default filenames for the methylGrapher BS bundle under d9-bs/1.70 (inventory convention).
+PANGENOME_WGBS_FILES = {
+    "c2t_gbz": "hprc-d9-bs.wl.C2T.gbz",
+    "c2t_dist": "hprc-d9-bs.wl.C2T.dist",
+    "c2t_min": "hprc-d9-bs.wl.C2T.shortread.withzip.min",
+    "c2t_zipcodes": "hprc-d9-bs.wl.C2T.shortread.zipcodes",
+    "g2a_gbz": "hprc-d9-bs.wl.G2A.gbz",
+    "g2a_dist": "hprc-d9-bs.wl.G2A.dist",
+    "g2a_min": "hprc-d9-bs.wl.G2A.shortread.withzip.min",
+    "g2a_zipcodes": "hprc-d9-bs.wl.G2A.shortread.zipcodes",
+    "cpg_tsv": "hprc-d9-bs.cpg.tsv",
+    "ref_paths": "hprc-d9-bs.paths.sub",
+    "original_gbz": "hprc-d9-bs.gbz",
+    "node_replacement_json": "hprc-d9-bs.node_replacement.json",
+}
 
 
 def genomes_root(work_root: Path | str) -> Path:
@@ -110,6 +127,49 @@ def apply_reference_selection(
             if linear_fasta:
                 pan["linear_ref_fasta"] = linear_fasta
         out["pangenome_genome"] = pan
+
+    wgbs_rel = sel.get("pangenome_wgbs")
+    if wgbs_rel:
+        wgbs_dir = root / wgbs_rel
+        wgbs = dict(out.get("pangenome_wgbs_genome") or {})
+        # Nested c2t/g2a + scalars used by resolve_methylgrapher_wgbs_genome.
+        c2t = dict(wgbs.get("c2t") or {})
+        g2a = dict(wgbs.get("g2a") or {})
+        for key, fname in PANGENOME_WGBS_FILES.items():
+            path = str(wgbs_dir / fname)
+            if key.startswith("c2t_"):
+                nested_key = key[len("c2t_") :]
+                if overwrite or not c2t.get(nested_key):
+                    c2t[nested_key] = path
+            elif key.startswith("g2a_"):
+                nested_key = key[len("g2a_") :]
+                if overwrite or not g2a.get(nested_key):
+                    g2a[nested_key] = path
+            else:
+                if overwrite or not wgbs.get(key):
+                    wgbs[key] = path
+        wgbs["c2t"] = c2t
+        wgbs["g2a"] = g2a
+        if overwrite or not wgbs.get("index_prefix"):
+            wgbs["index_prefix"] = str(wgbs_dir / "hprc-d9-bs")
+        linear_fasta = (out.get("reference_genome") or {}).get("fasta")
+        if overwrite or not wgbs.get("linear_ref_fasta"):
+            if linear_fasta:
+                wgbs["linear_ref_fasta"] = linear_fasta
+        out["pangenome_wgbs_genome"] = wgbs
+        # Also bake into actionConfig.methylgrapher_wgbs for worker resolvedConfig.
+        ac = dict(out.get("actionConfig") or {})
+        mg = dict(ac.get("methylgrapher_wgbs") or {})
+        for key, val in wgbs.items():
+            if key in ("c2t", "g2a") or (overwrite or not mg.get(key)):
+                if key in ("c2t", "g2a"):
+                    nested = dict(mg.get(key) or {})
+                    nested.update(val)
+                    mg[key] = nested
+                elif overwrite or not mg.get(key):
+                    mg[key] = val
+        ac["methylgrapher_wgbs"] = mg
+        out["actionConfig"] = ac
 
     return out
 
@@ -210,6 +270,15 @@ def verify_selected_paths(
     pan = resolved.get("pangenome_genome") or {}
     for key in ("gbz", "dist", "min", "zipcodes", "ref_paths", "linear_ref_fasta"):
         checks.append(pan.get(key))
+    wgbs = resolved.get("pangenome_wgbs_genome") or {}
+    if wgbs:
+        for key in ("ref_paths", "cpg_tsv", "linear_ref_fasta", "original_gbz"):
+            checks.append(wgbs.get(key))
+        for side in ("c2t", "g2a"):
+            nested = wgbs.get(side) or {}
+            if isinstance(nested, Mapping):
+                for key in ("gbz", "dist", "min", "zipcodes"):
+                    checks.append(nested.get(key))
     for path_s in checks:
         if not path_s:
             continue

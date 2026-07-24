@@ -42,6 +42,128 @@ class ParabricksGiraffeTaskInput(BaseModel):
     projectPath: Optional[str] = None
 
 
+class MethylGrapherGraphIndexFiles(BaseModel):
+    """One converted-graph Giraffe index set (C2T or G2A)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    gbz: Optional[str] = Field(default=None, description="Path to .gbz graph index")
+    dist: Optional[str] = Field(default=None, description="Path to Giraffe .dist index")
+    min: Optional[str] = Field(
+        default=None, description="Path to Giraffe minimizer (.min / .withzip.min)"
+    )
+    zipcodes: Optional[str] = Field(default=None, description="Path to Giraffe zipcodes index")
+
+
+class MethylGrapherWgbsStepConfig(BaseModel):
+    """Operator-tunable methylGrapher WGBS pangenome knobs (actionConfig.methylgrapher_wgbs).
+
+    Asset paths are site-pinned under ``/work/genomes/pangenome/.../d9-bs/...`` and
+    baked into task ``resolvedConfig`` at instance configuration. Workers must not
+    re-read site/profile manifests for these values when ``resolvedConfig`` is present.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    alignment_mode: Optional[str] = Field(
+        default=None,
+        description="Must be pangenome_wgbs when this section is used. Set at site/profile/procedure.",
+    )
+    directional: Optional[bool] = Field(
+        default=None,
+        description="Directional WGBS library (methylGrapher -directional). Operator-set per site/profile.",
+    )
+    threads: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Worker threads for methylGrapher/vg. Operator-set per site/profile.",
+    )
+    image: Optional[str] = Field(
+        default=None,
+        description="Pinned methylGrapher(+vg) Docker image ref/digest. Or METHYL_METHYLGRAPHER_IMAGE.",
+    )
+    image_digest: Optional[str] = Field(
+        default=None,
+        description="Optional immutable digest recorded in CAAS fingerprints / provenance.",
+    )
+    methylgrapher_version: Optional[str] = Field(
+        default=None,
+        description="Pinned methylGrapher version string for provenance / CAAS.",
+    )
+    vg_version: Optional[str] = Field(
+        default=None,
+        description="Pinned vg version string for provenance / CAAS (must match index builder).",
+    )
+    index_prefix: Optional[str] = Field(
+        default=None,
+        description="PrepareGenome-style index prefix under the BS bundle (e.g. .../hprc-d9-bs).",
+    )
+    c2t: Optional[MethylGrapherGraphIndexFiles] = Field(
+        default=None, description="C-to-T converted graph Giraffe indexes."
+    )
+    g2a: Optional[MethylGrapherGraphIndexFiles] = Field(
+        default=None, description="G-to-A converted graph Giraffe indexes."
+    )
+    original_gbz: Optional[str] = Field(
+        default=None,
+        description="Unconverted graph GBZ used for MethylCall / coordinate provenance.",
+    )
+    ref_paths: Optional[str] = Field(
+        default=None, description="GRCh38 ref-paths file for surjection / linear coordinates."
+    )
+    cpg_tsv: Optional[str] = Field(
+        default=None, description="methylGrapher {prefix}cpg.tsv (graph CpG registry)."
+    )
+    node_replacement_json: Optional[str] = Field(
+        default=None, description="Optional node-replacement JSON from PrepareGenome."
+    )
+    linear_ref_fasta: Optional[str] = Field(
+        default=None,
+        description="Linear GRCh38 FASTA matching ref_paths (QC BAM / extraction contracts).",
+    )
+    cg_only: Optional[bool] = Field(
+        default=None, description="MethylCall -cg_only. Operator-set per site/profile."
+    )
+    read_level: Optional[dict] = Field(
+        default=None,
+        description="Read-level pattern extraction knobs (enabled, tile_size). Operator-set.",
+    )
+    contexts: Optional[List[str]] = Field(
+        default=None, description="Methylation contexts to emit as {chrom}-{ctx}.h5 (e.g. CG)."
+    )
+
+
+class MethylGrapherWgbsAlignTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "MethylGrapherWgbsAlign"
+    sampleId: str
+    sampleDir: str
+    projectPath: Optional[str] = None
+    forceRealign: Optional[bool] = None
+    alignmentPass: Optional[str] = None
+    remediationReason: Optional[str] = None
+    workflowNodeKey: Optional[str] = None
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig.methylgrapher_wgbs (assets + tool pins).",
+    )
+
+
+class MethylGrapherWgbsExtractTaskInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tool: str = "MethylGrapherWgbsExtract"
+    sampleId: str
+    sampleDir: str
+    projectPath: str
+    forceRealign: Optional[bool] = None
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig.methylgrapher_wgbs (+ extract overlays).",
+    )
+
+
 class DemultiplexTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -206,6 +328,16 @@ class ParabricksTaskOutput(ActionOutputBase):
     bamPath: Optional[str] = None
     metricsJson: Optional[str] = None
     qcMetricsTar: Optional[str] = None
+
+
+class MethylGrapherWgbsAlignTaskOutput(ActionOutputBase):
+    sampleId: Optional[str] = None
+    bamPath: Optional[str] = None
+    gafPath: Optional[str] = None
+    metricsJson: Optional[str] = None
+    qcMetricsTar: Optional[str] = None
+    dedupMetricsPath: Optional[str] = None
+    conversionReportPath: Optional[str] = None
 
 
 class DemultiplexTaskOutput(ActionOutputBase):

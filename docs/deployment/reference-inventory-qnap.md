@@ -63,11 +63,14 @@ aws s3 ls s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/ \
 "reference_selection": {
   "linear": "linear/GRCh38/ensembl-114",
   "gene_annotation": "annotation/gencode/v49",
-  "pangenome": "pangenome/GRCh38/d9/1.70"
+  "pangenome": "pangenome/GRCh38/d9/1.70",
+  "pangenome_wgbs": "pangenome/GRCh38/d9-bs/1.70"
 }
 ```
 
 Pin values are inventory prefixes under `/work/genomes/` (and under `s3://epimethyl/genomes/`). `methyl-cfg provision-assets --selected-only` resolves each pin to a published `cfg.reference_asset` whose `inventoryPrefix` matches the pin path.
+
+For WGBS pangenome SamplePrep (`alignmentMode=pangenome_wgbs`), also pin `pangenome_wgbs` and bake C2T/G2A paths into site `actionConfig.methylgrapher_wgbs` (see [`site_grch38.example.json`](../../tools/methyl-config-editor/configs/site_grch38.example.json)). Stock `pangenome` Giraffe indexes are **not** a fallback when the BS bundle is missing.
 
 2. Seed/publish cfg (DB deploy or file store):
 

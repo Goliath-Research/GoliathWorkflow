@@ -62,4 +62,20 @@ BEGIN
     SELECT 1 FROM cfg.reference_asset
     WHERE name = 'pangenome-grch38-d9-1.70' AND version = '1'
   );
+
+  INSERT INTO cfg.reference_asset (
+    name, version, status, content_hash, document_json, storage_endpoint_id, asset_type
+  )
+  SELECT
+    'pangenome-grch38-d9-bs-1.70',
+    '1',
+    'published',
+    md5('pangenome-grch38-d9-bs-1.70@1'),
+    '{"assetType":"pangenome_wgbs_bundle","destRoot":"/work/genomes/pangenome/GRCh38/d9-bs/1.70","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"pangenome/GRCh38/d9-bs/1.70","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"pangenome/GRCh38/d9-bs/1.70/","dest":"/work/genomes/pangenome/GRCh38/d9-bs/1.70"}]}}'::jsonb,
+    ep_id,
+    'pangenome_wgbs_bundle'
+  WHERE NOT EXISTS (
+    SELECT 1 FROM cfg.reference_asset
+    WHERE name = 'pangenome-grch38-d9-bs-1.70' AND version = '1'
+  );
 END $$;

@@ -47,10 +47,13 @@ def test_procedure_files_load(proc_id: str) -> None:
 def test_buffy_pangenome_procedure_flags() -> None:
     ctx = apply_pipeline_procedure({}, load_procedure("buffy_wgbs_pangenome_gene_fc"))
     ctx = apply_pipeline_profile(ctx, load_profile(ctx["pipelineProfile"]))
+    ctx = seed_pipeline_scope_flags(ctx, action_config=ctx.get("actionConfig"))
     assert ctx["pipelineProcedure"] == "buffy_wgbs_pangenome_gene_fc"
     assert ctx["researchMode"] == "gene_fc"
     assert ctx["libraryProtocol"] == "wgbs_pangenome"
+    assert ctx["alignmentMode"] == "pangenome_wgbs"
     assert ctx["usePangenome"] is True
+    assert ctx["useWgbsPangenome"] is True
     assert ctx["runGeneFeaturecuts"] is True
     assert ctx["runDmpSelection"] is False
     assert (ctx.get("actionConfig") or {}).get("cell_deconvolution", {}).get("method") == "houseman"

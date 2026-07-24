@@ -52,7 +52,7 @@
     },
     "pangenome_genome": {
       "type": "object",
-      "description": "HPRC / vg Giraffe pangenome graph bundle (surjected to linear_ref_fasta coordinates). Operator must supply a bisulfite-compatible graph for WGBS.",
+      "description": "Stock HPRC / vg Giraffe pangenome graph bundle (surjected to linear_ref_fasta). Not bisulfite-aware; use pangenome_wgbs_genome / actionConfig.methylgrapher_wgbs for WGBS.",
       "properties": {
         "gbz": { "type": "string", "description": "Path to .gbz graph index" },
         "dist": { "type": "string", "description": "Path to Giraffe distance index (.dist)" },
@@ -63,6 +63,39 @@
           "type": "string",
           "description": "Linear GRCh38 FASTA matching ref_paths (used by collectmultiplemetrics and MethylExtractor)"
         }
+      },
+      "additionalProperties": true
+    },
+    "pangenome_wgbs_genome": {
+      "type": "object",
+      "description": "methylGrapher C2T/G2A bisulfite pangenome bundle (QNAP asset pangenome-grch38-d9-bs-1.70). Prefer baking paths into actionConfig.methylgrapher_wgbs for workers.",
+      "properties": {
+        "index_prefix": { "type": "string", "description": "PrepareGenome-style index prefix (e.g. /work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs)" },
+        "c2t": {
+          "type": "object",
+          "properties": {
+            "gbz": { "type": "string" },
+            "dist": { "type": "string" },
+            "min": { "type": "string" },
+            "zipcodes": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "g2a": {
+          "type": "object",
+          "properties": {
+            "gbz": { "type": "string" },
+            "dist": { "type": "string" },
+            "min": { "type": "string" },
+            "zipcodes": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "original_gbz": { "type": "string" },
+        "ref_paths": { "type": "string" },
+        "cpg_tsv": { "type": "string" },
+        "node_replacement_json": { "type": "string" },
+        "linear_ref_fasta": { "type": "string" }
       },
       "additionalProperties": true
     },

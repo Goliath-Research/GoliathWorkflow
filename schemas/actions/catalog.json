@@ -707,6 +707,56 @@
       "tool": "ParabricksGiraffe"
     },
     {
+      "action_config_key": "methylgrapher_wgbs",
+      "action_name": "sample.methylgrapher_wgbs_align",
+      "argv_map": {},
+      "capability": "methylgrapher.wgbs_align",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Align WGBS FASTQs with methylGrapher dual C2T/G2A graphs and emit QC-compatible GRCh38 BAM.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.bamPath",
+            "scope_field": "bamPath"
+          },
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.metricsJson",
+            "scope_field": "metricsJson"
+          },
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.qcMetricsTar",
+            "scope_field": "qcMetricsTar"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "idempotency_enabled": false,
+      "idempotency_opt_out_reason": "sample_scoped_caas_deferred",
+      "in_process_handler": "_handle_methylgrapher_wgbs_align",
+      "input_schema_ref": "schemas/tasks/sample_methylgrapher_wgbs_align.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_methylgrapher_wgbs_align.output.schema.json",
+      "schema_id": "sample.methylgrapher_wgbs_align",
+      "tool": "MethylGrapherWgbsAlign"
+    },
+    {
       "action_config_key": "rna_align",
       "action_name": "sample.parabricks_rna_fq2bam",
       "argv_map": {},
@@ -1275,6 +1325,46 @@
       "output_schema_ref": "schemas/tasks/sample_methyl_extract.output.schema.json",
       "schema_id": "sample.methyl_extract",
       "tool": "MethylExtract"
+    },
+    {
+      "action_config_key": "methylgrapher_wgbs",
+      "action_name": "sample.methylgrapher_wgbs_extract",
+      "argv_map": {},
+      "capability": "methylgrapher.wgbs_extract",
+      "category": "sample_prep",
+      "context_vars": [
+        "sampleId",
+        "sampleDir",
+        "projectPath"
+      ],
+      "default_node_type": "ACTION",
+      "description": "Graph-aware methylGrapher extraction into {chrom}-{context}.h5 and patterns.h5 contracts.",
+      "domain_effects": {
+        "output_bindings": [
+          {
+            "domain_type": "MethylSampleRef",
+            "output_json_path": "$.methylation",
+            "scope_field": "methylation"
+          }
+        ],
+        "reads_types": [
+          "MethylSampleRef"
+        ],
+        "scope_bindings": [],
+        "template_defaults": [],
+        "template_group_side_defaults": [],
+        "writes_types": [
+          "MethylSampleRef"
+        ]
+      },
+      "execution_mode": "in_process",
+      "idempotency_enabled": false,
+      "idempotency_opt_out_reason": "sample_scoped_caas_deferred",
+      "in_process_handler": "_handle_methylgrapher_wgbs_extract",
+      "input_schema_ref": "schemas/tasks/sample_methylgrapher_wgbs_extract.input.schema.json",
+      "output_schema_ref": "schemas/tasks/sample_methylgrapher_wgbs_extract.output.schema.json",
+      "schema_id": "sample.methylgrapher_wgbs_extract",
+      "tool": "MethylGrapherWgbsExtract"
     },
     {
       "action_config_key": "extraction_qc",

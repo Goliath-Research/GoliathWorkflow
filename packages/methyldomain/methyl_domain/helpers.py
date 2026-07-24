@@ -338,7 +338,11 @@ def enrich_sample_prep_output(
     if action_name == "sample.download_fastq":
         files = output_json.get("fastqFiles")
         return sample.model_copy(update={"fastqFiles": files})
-    if action_name == "sample.parabricks_fq2bam":
+    if action_name in (
+        "sample.parabricks_fq2bam",
+        "sample.parabricks_giraffe",
+        "sample.methylgrapher_wgbs_align",
+    ):
         return sample.model_copy(
             update={
                 "bamPath": output_json.get("bamPath"),
@@ -375,7 +379,7 @@ def enrich_sample_prep_output(
             if candidate.is_file():
                 summary_path = str(candidate)
         return apply_fragmentomics_to_sample(sample, output_dir=out_dir, summary_path=summary_path)
-    if action_name == "sample.methyl_extract":
+    if action_name in ("sample.methyl_extract", "sample.methylgrapher_wgbs_extract"):
         return apply_methylation_to_sample(
             sample,
             chromosomes=chromosomes or [],

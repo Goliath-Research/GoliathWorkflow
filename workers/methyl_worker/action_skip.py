@@ -371,6 +371,47 @@ def _select_best_model_extra(input_json: Mapping[str, Any]) -> Optional[dict]:
     }
 
 
+def _methylgrapher_wgbs_extra(input_json: Mapping[str, Any]) -> Optional[dict]:
+    """Fingerprint FASTQs + C2T/G2A assets + tool pins for WGBS pangenome CAAS."""
+    resolved = dict(input_json.get("resolvedConfig") or {})
+    extra: dict[str, Any] = {
+        "forceRealign": bool(input_json.get("forceRealign")),
+        "directional": resolved.get("directional"),
+        "image": resolved.get("image") or resolved.get("image_digest"),
+        "methylgrapher_version": resolved.get("methylgrapher_version"),
+        "vg_version": resolved.get("vg_version"),
+        "contexts": resolved.get("contexts"),
+        "read_level": resolved.get("read_level"),
+    }
+    sample_dir = input_json.get("sampleDir")
+    sample_id = input_json.get("sampleId")
+    if sample_dir and sample_id:
+        root = Path(str(sample_dir))
+        for pattern in (
+            f"{sample_id}*_R1*.fastq*",
+            f"{sample_id}*_1.fastq*",
+            f"{sample_id}*.fastq.gz",
+        ):
+            hits = sorted(root.glob(pattern))
+            if hits:
+                extra["fastqFingerprints"] = [
+                    _file_content_fingerprint(p) for p in hits[:4]
+                ]
+                break
+    try:
+        from methyl_worker.methylgrapher_wgbs_runner import (
+            fingerprint_wgbs_assets,
+            resolve_wgbs_bundle_from_resolved,
+        )
+
+        if resolved:
+            bundle = resolve_wgbs_bundle_from_resolved(resolved)
+            extra["assetFingerprints"] = fingerprint_wgbs_assets(bundle)
+    except Exception:
+        logger.debug("methylGrapher asset fingerprint skipped", exc_info=True)
+    return {k: v for k, v in extra.items() if v is not None} or None
+
+
 def compute_input_signature(
     entry: ActionCatalogEntry,
     input_json: Mapping[str, Any],
@@ -410,6 +451,13 @@ def compute_input_signature(
         split_fp = _split_reuse_fingerprint(input_json)
         if split_fp:
             payload["splitReuse"] = split_fp
+    if entry.action_name in (
+        "sample.methylgrapher_wgbs_align",
+        "sample.methylgrapher_wgbs_extract",
+    ):
+        extra = _methylgrapher_wgbs_extra(input_json)
+        if extra:
+            payload["methylgrapherWgbs"] = _normalize_path_strings(extra, path_remap)
     return _sha256_text(_canonical_json(payload))
 
 

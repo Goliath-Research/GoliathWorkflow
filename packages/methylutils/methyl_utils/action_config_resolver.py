@@ -127,6 +127,24 @@ def site_slice_for_action(site: Mapping[str, Any], action_key: str) -> Dict[str,
         out.update(dict(site["parabricks"]))
     if action_key == "methyl_extract" and site.get("methyl_extract"):
         out.update(dict(site["methyl_extract"]))
+    if action_key == "methylgrapher_wgbs":
+        wgbs = site.get("pangenome_wgbs_genome") or {}
+        if isinstance(wgbs, dict) and wgbs:
+            out.update(dict(wgbs))
+        # Prefer linear fasta from BS bundle, else stock pangenome linear, else reference_genome.
+        if not out.get("linear_ref_fasta"):
+            lin = (
+                (isinstance(wgbs, dict) and wgbs.get("linear_ref_fasta"))
+                or pangenome.get("linear_ref_fasta")
+                or linear_fasta
+            )
+            if lin:
+                out["linear_ref_fasta"] = lin
+        site_mg = (site.get("actionConfig") or {}).get("methylgrapher_wgbs")
+        if isinstance(site_mg, dict):
+            # actionConfig already returned above when present; this branch is the
+            # fallback path when actionConfig.methylgrapher_wgbs was absent.
+            pass
     rna_ref = site.get("rna_reference") or {}
     if isinstance(rna_ref, dict) and rna_ref:
         if action_key in ("rna_align", "rna_qc"):
@@ -192,6 +210,105 @@ def resolve_pangenome_genome(site: Mapping[str, Any] | None = None) -> Dict[str,
                 f"(METHYL_SITE_CONFIG / reference_genome.fasta alone is insufficient)"
             )
         resolved[key] = str(raw)
+    return resolved
+
+
+_WGBS_INDEX_KEYS = ("gbz", "dist", "min", "zipcodes")
+
+
+def resolve_methylgrapher_wgbs_genome(
+    site: Mapping[str, Any] | None = None,
+    *,
+    resolved_config: Mapping[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Resolve methylGrapher C2T/G2A BS pangenome assets.
+
+    Preference order:
+    1. Explicit ``resolved_config`` (worker path — already baked)
+    2. site ``actionConfig.methylgrapher_wgbs``
+    3. site top-level ``pangenome_wgbs_genome``
+
+    Never falls back to stock ``pangenome_genome`` (Giraffe) indexes.
+    """
+    data = dict(site or {})
+    if not data and resolved_config is None:
+        data = dict(load_site_manifest())
+
+    cfg: Dict[str, Any] = {}
+    if isinstance(resolved_config, Mapping) and resolved_config:
+        cfg = dict(resolved_config)
+    else:
+        ac = data.get("actionConfig") or {}
+        if isinstance(ac, Mapping) and isinstance(ac.get("methylgrapher_wgbs"), Mapping):
+            cfg = dict(ac["methylgrapher_wgbs"])
+        bundle = data.get("pangenome_wgbs_genome") or {}
+        if isinstance(bundle, Mapping) and bundle:
+            # Top-level site bundle fills missing keys only.
+            for key, val in bundle.items():
+                cfg.setdefault(key, val)
+
+    def _index(side: str) -> Dict[str, str]:
+        raw = cfg.get(side)
+        if not isinstance(raw, Mapping):
+            raw = {}
+        out: Dict[str, str] = {}
+        missing = []
+        for key in _WGBS_INDEX_KEYS:
+            # Allow flat keys: c2t_gbz / g2a_dist
+            flat = cfg.get(f"{side}_{key}")
+            val = raw.get(key) if raw.get(key) not in (None, "") else flat
+            if val in (None, ""):
+                missing.append(f"{side}.{key}")
+            else:
+                out[key] = str(val)
+        if missing:
+            raise RuntimeError(
+                "methylGrapher WGBS pangenome assets missing: "
+                + ", ".join(missing)
+                + " (pin actionConfig.methylgrapher_wgbs or pangenome_wgbs_genome; "
+                "do not fall back to stock pangenome_genome)"
+            )
+        return out
+
+    required_scalars = ("ref_paths", "cpg_tsv", "linear_ref_fasta")
+    resolved: Dict[str, Any] = {
+        "c2t": _index("c2t"),
+        "g2a": _index("g2a"),
+    }
+    missing_scalars = []
+    for key in required_scalars:
+        raw = cfg.get(key)
+        if raw in (None, ""):
+            missing_scalars.append(key)
+        else:
+            resolved[key] = str(raw)
+    if missing_scalars:
+        raise RuntimeError(
+            "methylGrapher WGBS pangenome assets missing: "
+            + ", ".join(missing_scalars)
+            + " (pin actionConfig.methylgrapher_wgbs / pangenome_wgbs_genome)"
+        )
+    for optional in (
+        "original_gbz",
+        "node_replacement_json",
+        "index_prefix",
+        "image",
+        "image_digest",
+        "methylgrapher_version",
+        "vg_version",
+    ):
+        if cfg.get(optional) not in (None, ""):
+            resolved[optional] = str(cfg[optional])
+    if "directional" in cfg and cfg["directional"] is not None:
+        resolved["directional"] = bool(cfg["directional"])
+    if cfg.get("threads") is not None:
+        resolved["threads"] = int(cfg["threads"])
+    if "cg_only" in cfg and cfg["cg_only"] is not None:
+        resolved["cg_only"] = bool(cfg["cg_only"])
+    if isinstance(cfg.get("read_level"), Mapping):
+        resolved["read_level"] = dict(cfg["read_level"])
+    if isinstance(cfg.get("contexts"), list):
+        resolved["contexts"] = [str(c) for c in cfg["contexts"]]
     return resolved
 
 

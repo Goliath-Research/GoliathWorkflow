@@ -81,3 +81,20 @@ BEGIN
     );
 END
 GO
+
+IF NOT EXISTS (SELECT 1 FROM cfg.reference_asset WHERE name = N'pangenome-grch38-d9-bs-1.70' AND version = N'1')
+BEGIN
+    INSERT INTO cfg.reference_asset (
+        name, version, status, content_hash, document_json, storage_endpoint_id, asset_type
+    )
+    VALUES (
+        N'pangenome-grch38-d9-bs-1.70',
+        N'1',
+        N'published',
+        CONVERT(nvarchar(128), HASHBYTES('SHA2_256', N'pangenome-grch38-d9-bs-1.70@1'), 2),
+        CAST(N'{"assetType":"pangenome_wgbs_bundle","destRoot":"/work/genomes/pangenome/GRCh38/d9-bs/1.70","storageEndpoint":"epimethyl-genomes","inventoryPrefix":"pangenome/GRCh38/d9-bs/1.70","recipe":{"steps":[{"op":"mkdir"},{"op":"s3_sync","storageEndpoint":"epimethyl-genomes","key":"pangenome/GRCh38/d9-bs/1.70/","dest":"/work/genomes/pangenome/GRCh38/d9-bs/1.70"}]}}' AS json),
+        @ep_id,
+        N'pangenome_wgbs_bundle'
+    );
+END
+GO

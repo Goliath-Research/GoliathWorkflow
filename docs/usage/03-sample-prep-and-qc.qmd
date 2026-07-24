@@ -9,7 +9,7 @@
 
 Without these gates, bad alignments would waste GPU extraction time, and under-covered or poorly converted extractions would pollute centroids, DMP discovery, and classifiers.
 
-Each sample is aligned on GPU using either **linear** (`fq2bam_meth`) or **pangenome** (`vg giraffe` via Clara Parabricks), then passes through the same QC and extraction gates below.
+Each sample is aligned using **linear** (`fq2bam_meth`), **stock pangenome** (`vg giraffe` via Clara Parabricks), or **WGBS pangenome** (methylGrapher dual C2T/G2A), then passes through the same QC gates below. Extraction is MethylExtractor for linear/stock pangenome, or graph-aware methylGrapher extract for WGBS pangenome.
 
 **Workflow source of truth:** [`workflow_engine/domain/fixtures/sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json)
 
@@ -19,22 +19,29 @@ Each sample is aligned on GPU using either **linear** (`fq2bam_meth`) or **pange
 
 **Implementation detail (alignment modes, storage, guardrails):** [`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md)
 
-## Alignment modes (linear vs pangenome)
+**WGBS pangenome plan:** [`docs/plans/wgbs-pangenome-sample-prep.plan.md`](../plans/wgbs-pangenome-sample-prep.plan.md)
 
-After FASTQ download, SamplePrep chooses **one GPU alignment path** per sample (and the same path on fastp remediation realign):
+## Alignment modes (linear / stock pangenome / WGBS pangenome)
 
-| Mode | Scope flag | Worker action | Parabricks entry | Reference |
-|------|------------|---------------|------------------|-----------|
-| **Linear (default)** | `usePangenome: false` | `sample.parabricks_fq2bam` | `pbrun fq2bam_meth` — traditional bisulfite-aware WGBS align to a linear reference | `referenceFasta` on instance / site `genomes` |
-| **Pangenome** | `usePangenome: true` | `sample.parabricks_giraffe` | `pbrun giraffe` — vg Giraffe on an HPRC graph bundle, surjected to **GRCh38** coordinates; then `collectmultiplemetrics` for the same QC tar/JSON shape as linear | Site manifest `pangenome_genome` (`gbz`, `dist`, `min`, `zipcodes`, `ref_paths`, `linear_ref_fasta`) |
+After FASTQ download, SamplePrep chooses **one alignment path** per sample (and the same path on fastp remediation realign):
 
-: Alignment modes {tbl-colwidths="[12,14,18,22,34]"}
+| Mode | Scope flags | Worker action | Tool | Reference |
+|------|-------------|---------------|------|-----------|
+| **Linear (default)** | `usePangenome: false`, `useWgbsPangenome: false` | `sample.parabricks_fq2bam` | `pbrun fq2bam_meth` | Site `reference_genome.fasta` |
+| **Stock pangenome** | `usePangenome: true`, `useWgbsPangenome: false` | `sample.parabricks_giraffe` | `pbrun giraffe` + `collectmultiplemetrics` | Site `pangenome_genome` |
+| **WGBS pangenome** | `usePangenome: true`, `useWgbsPangenome: true` | `sample.methylgrapher_wgbs_align` | methylGrapher Align (C2T+G2A) + vg surject → QC BAM | Site `actionConfig.methylgrapher_wgbs` / `pangenome_wgbs_genome` (QNAP `d9-bs/1.70`) |
 
-**How to enable pangenome:** set instance `alignmentMode: "pangenome"` (binds `usePangenome`) or profile `actionConfig.parabricks.alignment_mode: "pangenome"`. Default is **`linear`**.
+: Alignment modes {tbl-colwidths="[14,22,22,20,22]"}
 
-**WGBS note:** stock HPRC graphs are not bisulfite-aware. For pangenome WGBS, operators must stage a **C→T-converted / WGBS-compatible graph** (or document an explicit read-conversion workflow at the site). See implementation guide § Parabricks pangenome alignment and `scripts/download_pangenome_hprc_grch38.sh`.
+**How to enable:**
 
-Downstream steps (`methyl_qc`, fragmentomics, `methyl_extract`, extraction QC) are identical for both modes — alignment QC consumes the same normalized metrics JSON regardless of aligner.
+- Stock Giraffe: `alignmentMode: "pangenome"` (binds `usePangenome`).
+- WGBS methylGrapher: `alignmentMode: "pangenome_wgbs"` (binds `useWgbsPangenome` + `usePangenome`). Procedure `buffy_wgbs_pangenome_gene_fc` selects this mode.
+- Default for unset modes is **`linear`** (except `libraryProtocol: wgbs_pangenome`, which defaults to `pangenome_wgbs`).
+
+**WGBS note:** stock HPRC graphs are **not** bisulfite-aware. Do **not** silently fall back to stock Giraffe when the BS bundle is missing — pin and provision `pangenome-grch38-d9-bs-1.70`, set `METHYL_METHYLGRAPHER_IMAGE`, and gate promotion with the canary checklist under `workers/tests/test_methylgrapher_wgbs_canary.md`.
+
+**Extraction branch:** when `useWgbsPangenome` is true, SamplePrep runs `sample.methylgrapher_wgbs_extract` (graph-aware H5 + patterns) instead of `sample.methyl_extract`. Alignment QC still consumes the QC-compatible GRCh38 BAM / metrics tar from the align step.
 
 ## End-to-end flow
 
@@ -54,14 +61,17 @@ Per sample under `/work/samples/{sample_id}/`:
 
 | Artifact | Role |
 |----------|------|
-| `*deduplicate_metrics.txt` | Picard-style duplication metrics from Parabricks |
+| `*deduplicate_metrics.txt` | Picard-style duplication metrics from Parabricks / methylGrapher QC BAM |
 | `{sample_id}.json` | Parabricks WGBS metrics JSON (sequencing + alignment) |
 | `{sample_id}.qc-metrics.tar` | Optional tar of tabular metrics (used when JSON is absent) |
+| `{sample_id}.alignment.gaf` | methylGrapher merged GAF (WGBS pangenome mode) |
+| `{sample_id}.alignment_metrics.json` | methylGrapher align provenance + asset fingerprints |
 | `{output_base}/{project}/alignment_qc/{sample_id}.json` | Normalized **V2** alignment QC export (when run project-scoped) |
-| `{sample_id}.extraction_manifest.json` | MethylExtractor summary (written at extract time) |
+| `{sample_id}.extraction_manifest.json` | Extractor / methylGrapher extract summary |
 | `{sample_id}.extraction_qc.json` | Extraction guardrail report |
 | `{sample_id}.sample_prep_log.jsonl` | Append-only audit of every prep action |
 | `{chr}-CG.h5` | Methylation matrices consumed by `methyl-centroid` |
+| `{chr}-CG.patterns.h5` | Read-level pattern sidecars for informME |
 
 ## Alignment QC: inputs and normalized JSON
 
