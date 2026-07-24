@@ -28,7 +28,9 @@ Diagnostics."** Messaging rests on three pillars:
   backends (ECDF, tabular scikit-learn, covariates), and cell-type estimation
   (Houseman / HiTIMED) through a configuration-first surface
   ([config-parameter-matrix.md](../reference/config-parameter-matrix.md)), not
-  ad hoc scripts.
+  ad hoc scripts. Named **assay procedure packs** (`pipelineProcedure`) give
+  one-shot recipes for buffy coat, cfDNA WGBS, and EM-Seq without hand-merging
+  aligner, informME, deconvolution, and FeatureCuts knobs.
 * **Production-scale cloud efficiency.** Cluster-parallel execution and the
   Content-Addressed Action Store
   ([CAAS](../usage/17-content-addressed-action-store.qmd)) skip redundant work
@@ -39,33 +41,64 @@ Diagnostics."** Messaging rests on three pillars:
   submission **scaffolds**
   ([samd-submission-scaffold.md](samd-submission-scaffold.md)).
 
+### Product packaging layers
+
+Buyers purchase a **platform** plus a growing catalog of config packs—not a
+single hard-coded assay:
+
+| Layer | Owns | Operator picks |
+|-------|------|----------------|
+| **Process pack** | Omics modality (actions, DomainPrograms, QC) | `regulatory.primary_modality` (`methylation`, `rnaseq`, `proteomics`) |
+| **Assay procedure pack** | How the matrix is sequenced and scored (library protocol, SamplePrep/lifecycle, gene FeatureCuts, covariates) | `pipelineProcedure` (e.g. `buffy_wgbs_pangenome_gene_fc`) |
+| **Application pack** | Indication or trait (cohorts, partitions, disease/trait overlay, enrichment preset) | Study manifest + `context_*.json` |
+
+Merge precedence stays config-not-code: **instance → procedure → profile/mode →
+analyte → site**. Guide:
+[Methylation application packs](../usage/24-methylation-application-packs.qmd)
+(procedure JSON under
+`workflow_engine/domain/profiles/procedures/`).
+
+```mermaid
+flowchart TD
+  process[ProcessPack_methylation]
+  procBuffy[Procedure_buffy_pangenome_gene_fc]
+  procCfWGBS[Procedure_cfdna_wgbs_plasma]
+  procEmseq[Procedure_cfdna_emseq_targeted]
+  appPCa[App_oncology]
+  appAD[App_Alzheimer]
+  study[Study_manifest]
+
+  process --> procBuffy
+  process --> procCfWGBS
+  process --> procEmseq
+  procBuffy --> appPCa
+  procCfWGBS --> appPCa
+  procCfWGBS --> appAD
+  procEmseq --> appPCa
+  appPCa --> study
+  appAD --> study
+```
+
 ### Analyte and disease-process roadmap
 
 The **execution platform** (DomainProgram, typed actions, cfg/wf, portal,
 gateway workers, CAAS) is disease- and analyte-agnostic. Shipped science packs
-today are strongest on **DNA methylation WGBS** (buffy coat and cfDNA), including
-oncology cohorts. Near-term process packs use the same control plane:
+today are strongest on **DNA methylation** (buffy coat and cfDNA), including
+oncology cohorts. Near-term packs use the same control plane:
 
-| Process / analyte | Status | Notes |
-|-------------------|--------|--------|
-| Methylation — buffy coat / cfDNA (e.g. oncology) | **In production use** | SamplePrep → MC stability → freeze → model; SaMD ladder. Prefer named **assay procedure packs** (`pipelineProcedure`): `buffy_wgbs_pangenome_gene_fc` (default buffy research), `buffy_wgbs_linear_gene_fc`, `cfdna_wgbs_plasma`, `cfdna_emseq_targeted`. See [application packs / procedures](../usage/24-methylation-application-packs.qmd). |
-| Methylation — assay procedure packs | **Shipped (research)** | Middle layer between process and application: library protocol + SamplePrep/lifecycle pointers + gene FeatureCuts / covariate defaults under `workflow_engine/domain/profiles/procedures/`. EM-Seq uses `libraryProtocol: emseq_targeted` + panel BED (`methyl_extract.target_panel_bed`). |
-| RNA-Seq (transcriptomics) | **Shipped process pack (research)** | Second omics modality (`regulatory.primary_modality: rnaseq`). Quantify with NVIDIA Clara Parabricks `pbrun rna_fq2bam` (STAR) or `pbrun kallisto`, selectable via `actionConfig.rna_align.quant_mode` — parallel to the methylation `fq2bam_meth` / giraffe SamplePrep path. Ships typed actions, RNA QC, a per-sample expression contract, and DE gene-panel + tabular classification; remaining gate is representative cohort data and validation evidence, not aligner R&D. |
-| Methylation — cfDNA Alzheimer detection | **Shipped application pack (research)** | Disease application on the methylation process (`primary_analyte: cfdna`) using procedure `cfdna_wgbs_plasma`. Ships as config — study manifest, cohorts, patient-disjoint partitions, and a disease overlay (`mapper.disease_term` = Alzheimer's disease, `neuro-core` enrichment preset, progression) — with **no** new actions or aligners. Remaining gate is representative cohort data and validation evidence. Pattern: [application packs](../usage/24-methylation-application-packs.qmd). See [Alzheimer cfDNA pack](../usage/21-alzheimer-cfdna-pack.qmd). |
-| Methylation — plant abiotic stress (Arabidopsis + crops) | **Shipped application pack (research)** | Trait application on the methylation process: binary Control vs Drought WGBS (`primary_analyte: plant_tissue`) across CG/CHG/CHH, procedure `plant_wgbs_gene_fc`. Reuses methylation science and `samd_research`; plant-specific unblockers are config plus thin program forks — `plant_tissue` analyte, Ensembl Plants site recipes, optional plant cell-deconv atlas paths (`…_with_deconv` lifecycle), `plant-stress-core` preset, offline `plant_traits` prior (not Open Targets). epi-GBS uses a separate SamplePrep program (`libraryProtocol: epi_gbs`, `sample.docker_align`) so Parabricks WGBS stays isolated. Grafting remains deferred. Pattern: [application packs](../usage/24-methylation-application-packs.qmd). See [Plant abiotic stress pack](../usage/23-plant-abiotic-stress-pack.qmd) and [plant-deconv-epigbs-seams](../plans/plant-deconv-epigbs-seams.plan.md). |
-| Proteomics | **Shipped process pack (research)** | Third omics modality (`regulatory.primary_modality: proteomics`). Three ingest modes: GPU DIA-NN on the Lambda/Nebius GH200 VMs (own image + capability, not Parabricks); CPU **DDA via Sage** (Apache-2.0 Rust, the open replacement for MSFragger); and CPU panel-matrix ingest (Olink/SomaScan/open). Plus Prosit rescoring / in-silico libraries and Casanovo de novo (GPU). Shares a generalized `samples x features` seam with RNA-Seq feeding the tabular classifier, covariate stacking, and MC stability. See [Proteomics process pack](../usage/22-proteomics-process-pack.qmd). |
+| Pack | Status | Notes |
+|------|--------|--------|
+| Methylation **process** (WGBS / EM-Seq) | **In production use** | SamplePrep → MC stability → freeze → model; SaMD ladder. |
+| Assay procedures — `buffy_wgbs_pangenome_gene_fc` | **In production use** | Default human buffy research: pangenome (Giraffe), read-level informME, Houseman deconv, gene FeatureCuts. Linear alternate: `buffy_wgbs_linear_gene_fc`. |
+| Assay procedures — `cfdna_wgbs_plasma` | **In production use** | Plasma WGBS + fragmentomics, gene FeatureCuts, no cell-deconv lifecycle (`study_validation_lifecycle_no_deconv`). |
+| Assay procedures — `cfdna_emseq_targeted` | **Shipped (research)** | Inch-wide / mile-deep: `libraryProtocol: emseq_targeted`, `sample_prep_emseq`, operator panel BED (`methyl_extract.target_panel_bed`), elevated `min_cov`, no deconv. |
+| Assay procedures — `plant_wgbs_gene_fc` | **Shipped (research)** | Plant WGBS trait recipe; pairs with `plant_tissue` analyte and plant lifecycle. |
+| RNA-Seq **process** | **Shipped (research)** | `primary_modality: rnaseq`. Parabricks `rna_fq2bam` (STAR) or `kallisto` via `actionConfig.rna_align.quant_mode`. Typed actions, RNA QC, expression contract, DE gene-panel + tabular classification. Gate: representative cohorts + validation evidence. |
+| Proteomics **process** | **Shipped (research)** | `primary_modality: proteomics`. GPU DIA-NN; CPU DDA via Sage; panel-matrix ingest; Prosit / Casanovo. Shares `samples x features` seam with RNA-Seq. See [ch.22](../usage/22-proteomics-process-pack.qmd). |
+| Alzheimer cfDNA **application** | **Shipped (research)** | Disease overlay on `cfdna_wgbs_plasma`: staged Control → MCI → AD, `neuro-core`, progression. No new actions. See [ch.21](../usage/21-alzheimer-cfdna-pack.qmd). |
+| Plant abiotic stress **application** | **Shipped (research)** | Trait overlay on `plant_wgbs_gene_fc`: Control vs Drought, multi-crop sites, `plant-stress-core`, offline `plant_traits` prior. See [ch.23](../usage/23-plant-abiotic-stress-pack.qmd). |
 
-Buyers purchase a **platform** with a growing set of **process packs** (omics
-modalities), **assay procedure packs** (named recipes for library protocol and
-science defaults), and **application packs** (config overlays for an indication or
-trait)—not a single hard-coded assay. RNA-Seq is the first multiomics *process*
-pack to ship on this control plane (its own DomainPrograms, typed actions,
-profile, and QC gates reusing the scheduler, cfg/wf, and CAAS); **proteomics** is
-the second, adding GPU mass-spec search (DIA-NN, plus Prosit/Casanovo) on the same
-NVIDIA GH200 VMs and sharing a common feature seam with RNA-Seq. Alzheimer cfDNA
-and plant abiotic stress are *application* packs on the methylation process,
-each declaring a `pipelineProcedure`. See
-[RNA-Seq process pack](../usage/20-rnaseq-process-pack.qmd),
+See [RNA-Seq process pack](../usage/20-rnaseq-process-pack.qmd),
 [Proteomics process pack](../usage/22-proteomics-process-pack.qmd), and
 [Methylation application packs](../usage/24-methylation-application-packs.qmd).
 
@@ -89,9 +122,9 @@ graph TD
 
 * **Model:** Open source under **AGPL-3.0** (copyleft for network/SaaS use;
   drives upgrade when vendors productize without contributing).
-* **Included:** Local workflow engine (`LocalWorkflowEngine`), standard DNA
-  methylation process pack (alignment, extraction, QC, centroid, ECDF
-  classifiers), basic CLI tools, and research-oriented profiles such as
+* **Included:** Local workflow engine (`LocalWorkflowEngine`), DNA methylation
+  process pack, shipped **assay procedure packs** (buffy / cfDNA WGBS / EM-Seq
+  targeted / plant), basic CLI tools, and research-oriented profiles such as
   `samd_research`.
 * **Goal:** Citations, academic adoption, and developer contributions.
 
@@ -116,7 +149,8 @@ graph TD
     in the DB; secrets expanded into task payloads over TLS—never as plain files
     under `/work`).
   * **Hardware acceleration:** Supported NVIDIA Parabricks GPU paths for
-    alignment-heavy SamplePrep.
+    alignment-heavy SamplePrep (including pangenome Giraffe for buffy
+    procedures).
 
 #### C. Hybrid cloud (SaaS control plane + BYOC)
 
@@ -133,18 +167,21 @@ and samples reside.
 
 1. **Biotech and diagnostic startups (primary).** Early-detection liquid biopsy
    and related methylation (or upcoming multiomics) programs that need a ready
-   QA / regulatory framework without building a platform from scratch.
+   QA / regulatory framework without building a platform from scratch—pick a
+   procedure (`cfdna_wgbs_plasma` or `cfdna_emseq_targeted`) then an indication
+   overlay.
 2. **Pharma / clinical trial sponsors.** Multi-cohort longitudinal studies using
    methylation (or additional omics packs) as endpoints; need locked,
    reproducible workflows over multi-year periods.
 3. **Clinical reference labs / CROs.** Sequencing-as-a-service providers who want
    to upsell FASTQs into curated classification and evidence packages—including
-   oncology and **Alzheimer cfDNA** process packs as they ship.
+   oncology procedures and the **Alzheimer cfDNA** application pack as they ship.
 
 ### Customer journey / “hook”
 
 * **Research and feasibility (free / low cost).** R&D uses Community Edition to
-  process samples and discover stable panels under `samd_research`.
+  process samples under a named procedure + `samd_research` and discover stable
+  gene (or panel) features.
 * **The “FDA chasm” (commercial trigger).** When a promising marker must move to
   internal and pivotal validation—locked pipeline, holdout discipline, and an
   auditor-facing evidence package—the organization upgrades to Enterprise / SaMD
@@ -170,26 +207,27 @@ architecture that already exists:
 * **Cost savings via CAAS.** Changing only a downstream classification step can
   skip alignment and extraction across large cohorts
   ([CAAS](../usage/17-content-addressed-action-store.qmd)).
-* **Multiomics extensibility.** New **process packs** add `DomainProgram`s and typed
-  actions on the same scheduler, QC gates, and database structures
-  ([domain-program-language.md](../reference/domain-program-language.md))—not a
-  separate product stack. New **application packs** reuse an existing process with
-  config only (manifest, overlay, partitions, optional preset); see
+* **Three-layer extensibility.** New **process packs** add `DomainProgram`s and
+  typed actions on the same scheduler
+  ([domain-program-language.md](../reference/domain-program-language.md)). New
+  **assay procedure packs** are versioned JSON recipes (`pipelineProcedure`)—
+  library protocol, SamplePrep/lifecycle pointers, FeatureCuts axis, covariate
+  stack—without disease names in Python. New **application packs** reuse a
+  process + procedure with config only (manifest, overlay, partitions, optional
+  preset); see
   [Methylation application packs](../usage/24-methylation-application-packs.qmd).
-  The shipped **RNA-Seq** process pack demonstrates the modality path: a second
-  `primary_modality` reuses the Parabricks GPU SamplePrep pattern
-  (`sample.parabricks_rna_fq2bam` / `sample.kallisto`, selected by
-  `quant_mode`), adds RNA QC and an expression contract, and swaps the
-  methylation centroid/DMP science for differential-expression gene selection
-  (`pipeline.rna_de_select`) feeding the same tabular classifier and covariate
-  stacking. The shipped **proteomics** process pack adds GPU mass-spec ingest
-  (DIA-NN, Prosit, Casanovo) plus CPU panel ingest on the same clusters, reusing a
-  generalized `samples x features` seam shared with RNA-Seq. The shipped
-  **Alzheimer cfDNA** and **plant abiotic stress** packs are application-pack
-  instances on methylation: Alzheimer is a staged Control → MCI → AD disease
-  overlay (`neuro-core`); plant drought is a species-agnostic trait overlay
-  (`plant_tissue`, multi-crop Ensembl Plants sites, deconvolution-free lifecycle,
-  `plant-stress-core`, offline `plant_traits` prior — Open Targets remains human-only).
+* **Shipped multiomics process packs.** **RNA-Seq** reuses the Parabricks GPU
+  SamplePrep pattern (`sample.parabricks_rna_fq2bam` / `sample.kallisto`), adds
+  RNA QC and an expression contract, and feeds DE gene selection into the same
+  tabular classifier and covariate stacking. **Proteomics** adds GPU mass-spec
+  ingest (DIA-NN, Prosit, Casanovo) plus CPU panel ingest, sharing a generalized
+  `samples x features` seam with RNA-Seq.
+* **Shipped methylation applications.** **Alzheimer cfDNA** declares
+  `pipelineProcedure: cfdna_wgbs_plasma` plus a staged Control → MCI → AD
+  overlay (`neuro-core`). **Plant abiotic stress** declares
+  `plant_wgbs_gene_fc` plus a species-agnostic trait overlay (`plant_tissue`,
+  multi-crop Ensembl Plants sites, `plant-stress-core`, offline `plant_traits`
+  prior — Open Targets remains human-only).
 
 ---
 
@@ -202,3 +240,5 @@ architecture that already exists:
 | [SaMD submission scaffold](samd-submission-scaffold.md) | 510(k) / De Novo-style content map |
 | [Production platform](../deployment/production-platform.md) | Day-2 access: portal UI + worker gateway |
 | [SaMD study lifecycle (usage ch.18)](../usage/18-samd-study-lifecycle.qmd) | Operator SOP for the profile ladder |
+| [Methylation application packs (usage ch.24)](../usage/24-methylation-application-packs.qmd) | Process vs procedure vs application |
+| [Assay procedure packs plan](../plans/assay-procedure-packs.plan.md) | Implementation record for `pipelineProcedure` |
