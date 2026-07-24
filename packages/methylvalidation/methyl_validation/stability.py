@@ -81,11 +81,36 @@ def run_balanced_accuracy(run_dir: Path) -> Optional[float]:
         return None
 
 
-def stability_dmp_panel_source_label(*, prefer_classifier_panel_dmps: bool) -> str:
-    """Human-readable label for which detector exports stability aggregation reads."""
+def stability_dmp_panel_source_label(
+    *,
+    prefer_classifier_panel_dmps: bool,
+    min_frequency: Optional[float] = None,
+) -> str:
+    """Human-readable label for which detector exports stability aggregation reads.
+
+    When ``min_frequency`` is 0 (or below), DMP FeatureCuts is typically off and the
+    CSV is a **discovery locus pool** for gene mapping — not a recurrence-filtered
+    stable DMP biomarker panel. Callers should pass ``min_frequency`` whenever known.
+    """
     if prefer_classifier_panel_dmps:
-        return "classifier DMP panels (dmps-*-classifier.csv)"
-    return "discovery DMP exports (dmps-*-discovery.csv)"
+        base = "classifier DMP panels (dmps-*-classifier.csv)"
+    else:
+        base = "discovery DMP exports (dmps-*-discovery.csv)"
+    if min_frequency is not None and float(min_frequency) <= 0.0:
+        return (
+            f"{base}; frequency filter disabled "
+            "(union discovery locus pool for gene mapping, not a recurrence-stable DMP panel)"
+        )
+    return base
+
+
+def _dmp_panel_role(*, min_frequency: float, prefer_classifier_panel_dmps: bool) -> str:
+    """Semantic role of the DMP CSV emitted by stability (for operators/provenance)."""
+    if float(min_frequency) <= 0.0:
+        return "discovery_locus_pool"
+    if prefer_classifier_panel_dmps:
+        return "frequency_filtered_classifier_stable"
+    return "frequency_filtered_discovery_stable"
 
 
 def load_discovery_dmps(run_dir: Path, prefer_classifier_panel: bool = False) -> Optional[pd.DataFrame]:
@@ -1014,9 +1039,16 @@ def _compute_dmp_stability_from_run_dirs(
             "skipped_no_discovery": skipped_no_discovery,
             "skipped_low_balanced_accuracy": skipped_low_ba,
             "min_balanced_accuracy": min_balanced_accuracy,
+            "min_frequency": float(min_frequency),
+            "dmp_recurrence_filtering": float(min_frequency) > 0.0,
+            "dmp_panel_role": _dmp_panel_role(
+                min_frequency=float(min_frequency),
+                prefer_classifier_panel_dmps=bool(prefer_classifier_panel_dmps),
+            ),
             "prefer_classifier_panel_dmps": bool(prefer_classifier_panel_dmps),
             "dmp_panel_source": stability_dmp_panel_source_label(
-                prefer_classifier_panel_dmps=prefer_classifier_panel_dmps
+                prefer_classifier_panel_dmps=prefer_classifier_panel_dmps,
+                min_frequency=float(min_frequency),
             ),
         }
 
@@ -1072,10 +1104,16 @@ def _compute_dmp_stability_from_run_dirs(
         "total_unique_dmps": len(dmp_run_hits),
         "stable_dmps_at_threshold": len(stable),
         "min_frequency": min_frequency,
+        "dmp_recurrence_filtering": float(min_frequency) > 0.0,
+        "dmp_panel_role": _dmp_panel_role(
+            min_frequency=float(min_frequency),
+            prefer_classifier_panel_dmps=bool(prefer_classifier_panel_dmps),
+        ),
         "stable_dmp_fraction": len(stable) / len(dmp_run_hits) if len(dmp_run_hits) > 0 else 0.0,
         "prefer_classifier_panel_dmps": bool(prefer_classifier_panel_dmps),
         "dmp_panel_source": stability_dmp_panel_source_label(
-            prefer_classifier_panel_dmps=prefer_classifier_panel_dmps
+            prefer_classifier_panel_dmps=prefer_classifier_panel_dmps,
+            min_frequency=float(min_frequency),
         ),
     }
     return df, summary
@@ -1668,6 +1706,12 @@ def run_stability_analysis(
     if output_dir is None:
         output_dir = monte_carlo_runs_root / "stability"
 
+    # Prefer boolean panel flags over a stale default gene_recurrence_source="enricher".
+    if prefer_mapper_gene_panels and str(gene_recurrence_source).strip().lower() == "enricher":
+        gene_recurrence_source = "mapper"
+    elif prefer_classifier_gene_panels and str(gene_recurrence_source).strip().lower() == "enricher":
+        gene_recurrence_source = "classifier"
+
     dmp_df, dmp_summary = compute_dmp_stability(
         monte_carlo_runs_root,
         dmp_min_freq,
@@ -1811,6 +1855,9 @@ def run_stability_analysis(
     from .biomarker_gene_pool import compute_biomarker_stability_diagnostics
 
     dmp_axis = "classifier" if prefer_classifier_panel_dmps else "discovery"
+    if float(dmp_min_freq) <= 0.0:
+        # Frequency filter off: panel is a locus pool for gene mapping, not DMP stability.
+        dmp_axis = "discovery_locus_pool" if not prefer_classifier_panel_dmps else "classifier_locus_pool"
     if dmp_min_freq <= 0.0 and dmp_df.empty:
         dmp_axis = "none"
     if prefer_mapper_gene_panels or gene_recurrence_source == "mapper":

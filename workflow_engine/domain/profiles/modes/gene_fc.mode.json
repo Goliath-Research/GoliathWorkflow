@@ -36,7 +36,7 @@
       "gene_featurecuts_target_ba": 0.95,
       "gene_featurecuts_loci_source": "raw_pool",
       "stability_gene_featurecuts_dmp_source": "discovery",
-      "stability_gene_recurrence_source": "enricher",
+      "stability_gene_recurrence_source": "classifier",
       "stability_dmp_freq": 0.0,
       "stability_gene_freq": 0.7
     }

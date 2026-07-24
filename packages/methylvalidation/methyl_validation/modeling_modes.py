@@ -70,9 +70,13 @@ def infer_gene_modeling_mode(config: Mapping[str, Any]) -> GeneModelingMode:
 
 
 def infer_gene_recurrence_source(config: Mapping[str, Any]) -> GeneRecurrenceSource:
-    explicit = config.get("stability_gene_recurrence_source")
-    if explicit in ("enricher", "mapper", "classifier"):
-        return explicit  # type: ignore[return-value]
+    """Resolve gene-panel provenance for stability aggregation.
+
+    Modeling mode wins over a stale explicit ``enricher`` value: gene FeatureCuts
+    panels come from methyl-mapper + FeatureCuts (``classifier``), and mapper-ranked
+    mode uses mapper tables. Enricher hubs are optional and typically applied at
+    freeze, not as the MC gene-recurrence source for gene FeatureCuts packs.
+    """
     gene_mode = infer_gene_modeling_mode(config)
     if gene_mode == "mapper_ranked":
         return "mapper"
@@ -80,6 +84,11 @@ def infer_gene_recurrence_source(config: Mapping[str, Any]) -> GeneRecurrenceSou
         return "classifier"
     if bool(config.get("prefer_classifier_gene_panels")) or bool(config.get("stability_gene_featurecuts_enabled")):
         return "classifier"
+    if bool(config.get("prefer_mapper_gene_panels")):
+        return "mapper"
+    explicit = config.get("stability_gene_recurrence_source")
+    if explicit in ("enricher", "mapper", "classifier"):
+        return explicit  # type: ignore[return-value]
     return "enricher"
 
 
@@ -101,6 +110,7 @@ def apply_modeling_modes_to_validation_dict(validation: Dict[str, Any]) -> Dict[
     if gene_mode == "from_stable_dmp_panel":
         out["gene_featurecuts_loci_source"] = "stable_panel"
         out["stability_gene_featurecuts_dmp_source"] = "stable"
+        out["stability_gene_recurrence_source"] = "classifier"
     elif gene_mode == "featurecuts":
         loci = normalize_gene_featurecuts_loci_source(
             str(out.get("gene_featurecuts_loci_source") or out.get("stability_gene_featurecuts_dmp_source") or "")
@@ -114,6 +124,9 @@ def apply_modeling_modes_to_validation_dict(validation: Dict[str, Any]) -> Dict[
             if loci == "featurecuts_selected"
             else "stable"
         )
+        # Gene FC panels are exported under gene_stability/genes-classifier.csv;
+        # do not leave profile defaults pointing at enricher hubs.
+        out["stability_gene_recurrence_source"] = "classifier"
     elif gene_mode == "mapper_ranked":
         out["stability_gene_recurrence_source"] = "mapper"
 

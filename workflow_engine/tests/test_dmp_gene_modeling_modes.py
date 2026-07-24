@@ -81,6 +81,15 @@ def test_mc_gene_profile_defaults_ppi_only() -> None:
     assert profile.get("researchMode") == "gene_enricher"
 
 
+def test_mc_gene_fc_profile_uses_classifier_gene_recurrence() -> None:
+    profile = load_profile("mc_gene_fc")
+    validation = (profile.get("actionConfig") or {}).get("validation") or {}
+    assert validation.get("stability_gene_recurrence_source") == "classifier"
+    assert validation.get("gene_modeling_mode") == "featurecuts"
+    assert validation.get("stability_dmp_freq") == 0.0
+    assert profile.get("researchMode") == "gene_fc"
+
+
 @pytest.mark.parametrize(
     ("legacy_name", "mode_id"),
     [

@@ -122,6 +122,42 @@ def test_write_stable_gene_panel_and_stability_analysis(tmp_path: Path):
     stable = pd.read_csv(stable_gene_csv)
     assert set(stable["gene_name"].astype(str)) == {"BRCA1", "TP53"}
     assert (mc_root / "stability" / "gene_frequency.csv").is_file()
+    assert summary["pipeline_axes"]["gene_recurrence_source"] == "classifier"
+    assert summary["pipeline_axes"]["gene_axis"] == "classifier"
+
+
+def test_run_stability_analysis_discovery_locus_pool_when_dmp_freq_zero(tmp_path: Path):
+    mc_root = tmp_path / "monte_carlo_runs"
+    for idx in range(1, 3):
+        run_dir = mc_root / f"run_{idx:04d}"
+        _write_classifier_genes(run_dir, ["BRCA1", "TP53"])
+        det = run_dir / "detections" / "chr1" / "cmp"
+        det.mkdir(parents=True)
+        pd.DataFrame(
+            {
+                "chromosome": ["1"],
+                "position": [100 + idx],
+                "context": ["CG"],
+                "effect_size": [0.5],
+            }
+        ).to_csv(det / "dmps-cmp-discovery.csv", index=False)
+
+    summary = run_stability_analysis(
+        mc_root,
+        dmp_min_freq=0.0,
+        gene_min_freq=0.5,
+        prefer_classifier_panel_dmps=False,
+        prefer_classifier_gene_panels=True,
+        # Stale enricher default must not win over classifier gene panels.
+        gene_recurrence_source="enricher",
+    )
+    dmp = summary["dmp_stability"]
+    assert dmp["dmp_recurrence_filtering"] is False
+    assert dmp["dmp_panel_role"] == "discovery_locus_pool"
+    assert "frequency filter disabled" in dmp["dmp_panel_source"]
+    assert summary["pipeline_axes"]["dmp_axis"] == "discovery_locus_pool"
+    assert summary["pipeline_axes"]["gene_recurrence_source"] == "classifier"
+    assert summary["pipeline_axes"]["gene_axis"] == "classifier"
 
 
 def test_run_stability_analysis_persists_biomarker_filter_in_summary_json(tmp_path: Path):

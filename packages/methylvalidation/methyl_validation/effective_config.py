@@ -143,7 +143,8 @@ def _project_ecdf_backend(config: MonteCarloConfig) -> Dict[str, Any]:
     params = profile.params
     feature_mode = str(params.feature_mode or "raw_dmp").strip().lower()
     covariates = _covariate_block(params)
-    second_stage_active = bool(params.ecdf_second_stage_enabled) or bool(covariates)
+    # Sole gate is ecdf_second_stage_enabled (covariates_path coerces it true at validate).
+    second_stage_active = bool(params.ecdf_second_stage_enabled)
     hybrid_requested = bool(
         getattr(params, "ecdf_second_stage_include_observed_hybrid", False)
     )

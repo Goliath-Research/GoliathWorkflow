@@ -134,6 +134,9 @@ def _handle_validation_stability(
     config, _base = _load_mc_config(input_json, profile_overrides=profile_overrides)
     output_dir = Path(input_json.get("outputDir") or mc_root / "stability")
     log.info("validation.stability mc_root=%s output_dir=%s", mc_root, output_dir)
+    from methyl_validation.modeling_modes import resolve_gene_stability_preferences
+
+    gene_prefs = resolve_gene_stability_preferences(config.model_dump(mode="python"))
     summary_raw = run_stability_analysis(
         mc_root,
         output_dir=output_dir,
@@ -141,7 +144,9 @@ def _handle_validation_stability(
         gene_min_freq=config.stability_gene_freq,
         min_balanced_accuracy=config.stability_min_balanced_accuracy,
         prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
-        prefer_classifier_gene_panels=bool(config.stability_gene_featurecuts_enabled),
+        prefer_classifier_gene_panels=bool(gene_prefs["prefer_classifier_gene_panels"]),
+        prefer_mapper_gene_panels=bool(gene_prefs["prefer_mapper_gene_panels"]),
+        gene_recurrence_source=str(gene_prefs["gene_recurrence_source"]),
         dual_cutoff_enabled=bool(config.stability_dual_cutoff_enabled),
         relaxed_cutoff_mode=config.stability_relaxed_cutoff_mode,
         relaxed_multiplier=config.stability_relaxed_multiplier,

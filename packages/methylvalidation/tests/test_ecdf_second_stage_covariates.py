@@ -418,6 +418,7 @@ def test_ecdf_second_stage_should_run_gate():
                 "ecdf": {
                     "enabled": True,
                     "params": {
+                        # Contradictory false+covariates is coerced to enabled=true.
                         "ecdf_second_stage_enabled": False,
                         "covariates_path": "/tmp/cov.csv",
                     },
@@ -427,6 +428,7 @@ def test_ecdf_second_stage_should_run_gate():
             },
         }
     )
+    assert cfg_cov.ecdf_second_stage_enabled is True
     assert ecdf_second_stage_should_run(cfg_cov) is True
     cfg_hybrid_only = MonteCarloConfig.model_validate(
         {

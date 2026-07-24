@@ -158,9 +158,12 @@ def _print_stability_summary(stability_summary: Dict[str, Any], config: MonteCar
     print(f"Stability analysis complete. See: {stability_summary['output_dir']}")
     dmp_source = dmp_summary.get("dmp_panel_source") or stability_dmp_panel_source_label(
         prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+        min_frequency=float(config.stability_dmp_freq),
     )
+    dmp_role = dmp_summary.get("dmp_panel_role")
+    dmp_label = "Discovery locus-pool DMPs" if dmp_role == "discovery_locus_pool" else "Stable DMPs"
     print(
-        f"  Stable DMPs: {dmp_summary.get('stable_dmps_at_threshold', 0)} "
+        f"  {dmp_label}: {dmp_summary.get('stable_dmps_at_threshold', 0)} "
         f"(from {dmp_source}; {dmp_summary.get('n_runs_analyzed', 0)} runs analyzed)"
     )
     if stability_summary.get("tiered_stability_enabled"):
@@ -2918,6 +2921,7 @@ def main() -> None:
     if args.skip_detection:
         dmp_source = stability_dmp_panel_source_label(
             prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+            min_frequency=float(config.stability_dmp_freq),
         )
         print(
             f"\nRunning stability analysis on existing detector outputs (skip-detection mode; "
@@ -3560,6 +3564,7 @@ def main() -> None:
     if args.stability or config.run_stability:
         dmp_source = stability_dmp_panel_source_label(
             prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+            min_frequency=float(config.stability_dmp_freq),
         )
         print(f"\nRunning stability analysis on existing detector outputs (DMP source: {dmp_source})...")
         stability_summary = run_stability_analysis(

@@ -47,6 +47,7 @@
         "ecdf": {
           "enabled": true,
           "params": {
+            "ecdf_second_stage_enabled": true,
             "covariates_path": [
               "{output_base}/cell_fractions/cell_fractions.csv",
               "{output_base}/derived_measures/derived_measures.csv",

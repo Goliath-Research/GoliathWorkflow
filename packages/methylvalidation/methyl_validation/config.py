@@ -584,20 +584,21 @@ class EcdfBackendParams(BackendSharedParams):
         description=(
             "Enable the ECDF second-stage logistic stacker that fuses first-stage "
             "class probabilities with covariates and/or optional observed-hybrid "
-            "features. Second stage also runs when covariates_path is set. "
-            "Does not by itself include observed-hybrid methylation features; "
-            "set ecdf_second_stage_include_observed_hybrid for that."
+            "features. This is the sole run gate for the stacker. When covariates_path "
+            "is set, config validation coerces this flag to true so operators cannot "
+            "leave a contradictory false+covariates state. Does not by itself include "
+            "observed-hybrid methylation features; set "
+            "ecdf_second_stage_include_observed_hybrid for that."
         ),
     )
     ecdf_second_stage_include_observed_hybrid: bool = Field(
         default=False,
         description=(
             "When the ECDF second-stage stacker already runs "
-            "(ecdf_second_stage_enabled and/or covariates_path), include "
-            "observed-hybrid methylation features restricted to the freeze-time "
-            "stable/frozen gene panel. Does not start the stacker by itself. "
-            "Default false: covariate fusion only (recommended for raw_gene "
-            "+ deconvolution covariates)."
+            "(ecdf_second_stage_enabled), include observed-hybrid methylation features "
+            "restricted to the freeze-time stable/frozen gene panel. Does not start "
+            "the stacker by itself. Default false: covariate fusion only (recommended "
+            "for raw_gene + deconvolution covariates)."
         ),
     )
     ecdf_aggregated_enabled: Optional[bool] = Field(
@@ -613,6 +614,26 @@ class EcdfBackendParams(BackendSharedParams):
         le=512,
         description="Histogram bin count per feature for aggregated ECDF heads.",
     )
+
+    @model_validator(mode="after")
+    def _coerce_second_stage_enabled_when_covariates(self) -> "EcdfBackendParams":
+        """Keep ecdf_second_stage_enabled aligned with covariates_path.
+
+        The stacker gate is ``ecdf_second_stage_enabled`` alone. Setting
+        ``covariates_path`` without enabling the flag used to still run the
+        stacker, which left configs looking disabled while covariates ran.
+        Coerce enabled=true whenever covariates are configured.
+        """
+        path = self.covariates_path
+        if path is None:
+            return self
+        if isinstance(path, (list, tuple)):
+            has_cov = any(str(p).strip() for p in path)
+        else:
+            has_cov = bool(str(path).strip())
+        if has_cov and not self.ecdf_second_stage_enabled:
+            self.ecdf_second_stage_enabled = True
+        return self
 
 
 class TabularBackendParams(BackendSharedParams):
@@ -941,7 +962,12 @@ class MonteCarloConfig(BaseModel):
         default=0.7,
         ge=0.0,
         le=1.0,
-        description="Minimum frequency (across runs) for a DMP to be considered stable.",
+        description=(
+            "Minimum frequency (across runs) for a DMP to be considered stable. "
+            "Set to 0.0 when DMP FeatureCuts is off (dmp_modeling_mode=raw_pool) so "
+            "stability emits the union discovery locus pool for gene mapping — not a "
+            "recurrence-filtered DMP biomarker panel (see dmp_panel_role in stability_summary)."
+        ),
     )
     stability_min_balanced_accuracy: Optional[float] = Field(
         default=None,
@@ -1106,7 +1132,11 @@ class MonteCarloConfig(BaseModel):
     stability_gene_recurrence_source: Optional[Literal["enricher", "mapper", "classifier"]] = Field(
         default=None,
         description=(
-            "Gene stability aggregation source: enricher genes, mapper-ranked genes, or gene FC panels."
+            "Gene stability aggregation source. For gene FeatureCuts packs use "
+            "'classifier' (genes-classifier.csv from methyl-mapper + FeatureCuts). "
+            "'mapper' uses mapper-ranked gene tables. 'enricher' is for enricher-hub "
+            "recurrence only — disease enrichment is usually applied at freeze, not as "
+            "the MC gene-recurrence source for gene FeatureCuts."
         ),
     )
     stability_gene_featurecuts_dmp_source: Literal["discovery", "classifier", "stable"] = Field(

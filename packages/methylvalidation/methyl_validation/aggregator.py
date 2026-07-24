@@ -90,6 +90,7 @@ def aggregate_discovery_monte_carlo(
 
         dmp_source = stability_dmp_panel_source_label(
             prefer_classifier_panel_dmps=bool(config.stability_featurecuts_enabled),
+            min_frequency=float(config.stability_dmp_freq),
         )
         print(f"\nRunning stability analysis on existing detector outputs (DMP source: {dmp_source})...")
         run_stability_analysis(

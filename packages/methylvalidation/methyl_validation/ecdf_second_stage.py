@@ -233,21 +233,16 @@ class EcdfSecondStageParams(BaseModel):
 def ecdf_second_stage_should_run(config: Any) -> bool:
     """True when the second-stage stacker is configured to run.
 
-    The stacker runs when ``ecdf_second_stage_enabled`` is true and/or
-    ``covariates_path`` is set. ``ecdf_second_stage_include_observed_hybrid`` only
-    controls whether hybrid features are included once the stacker already runs;
-    it does not start the stacker by itself.
+    The sole gate is ``ecdf_second_stage_enabled``. Setting ``covariates_path``
+    without the flag is coerced to enabled=true during EcdfBackendParams
+    validation, so resolved MonteCarloConfig cannot claim the stacker is off
+    while covariates are configured. ``ecdf_second_stage_include_observed_hybrid``
+    only controls whether hybrid features are included once the stacker already
+    runs; it does not start the stacker by itself.
     """
     if config is None:
         return False
-    if bool(getattr(config, "ecdf_second_stage_enabled", False)):
-        return True
-    path = getattr(config, "covariates_path", None)
-    if path is None:
-        return False
-    if isinstance(path, (list, tuple)):
-        return any(str(p).strip() for p in path)
-    return bool(str(path).strip())
+    return bool(getattr(config, "ecdf_second_stage_enabled", False))
 
 
 def _resolve_eval_paths_and_labels(project_json: str | Path) -> Tuple[List[str], Optional[np.ndarray]]:

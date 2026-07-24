@@ -76,6 +76,22 @@ def test_mode4_gene_featurecuts_split_ba() -> None:
     assert cfg.stability_featurecuts_enabled is False
     assert cfg.gene_featurecuts_target_ba == 0.90
     assert cfg.stability_gene_featurecuts_dmp_source == "discovery"
+    assert cfg.stability_gene_recurrence_source == "classifier"
+    prefs = resolve_gene_stability_preferences(cfg.model_dump(mode="python"))
+    assert prefs["prefer_classifier_gene_panels"] is True
+    assert prefs["gene_recurrence_source"] == "classifier"
+
+
+def test_gene_featurecuts_overrides_stale_enricher_recurrence_source() -> None:
+    derived = apply_modeling_modes_to_validation_dict(
+        {
+            "dmp_modeling_mode": "raw_pool",
+            "gene_modeling_mode": "featurecuts",
+            "stability_gene_recurrence_source": "enricher",
+        }
+    )
+    assert derived["stability_gene_recurrence_source"] == "classifier"
+    assert infer_gene_recurrence_source(derived) == "classifier"
 
 
 def test_mode5_from_stable_dmp_panel_loci_source() -> None:
