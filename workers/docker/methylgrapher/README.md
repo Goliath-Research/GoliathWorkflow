@@ -36,4 +36,6 @@ export METHYL_METHYLGRAPHER_IMAGE=epimethyl/methylgrapher:1.70
 ./scripts/ensure_methylgrapher_image.sh
 ```
 
+Image tag is `:1.70` (platform matrix). CI compiles vg `v1.70.0` but publishes `:1.70` — do not retag to the full vg semver unless you also change `METHYLGRAPHER_IMAGE_*`.
+
 `scripts/write_worker_env.sh` writes `METHYL_METHYLGRAPHER_IMAGE` from `platform_matrix.env` when set.

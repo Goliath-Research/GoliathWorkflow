@@ -273,8 +273,12 @@ def verify_selected_paths(
         checks.append(pan.get(key))
     wgbs = resolved.get("pangenome_wgbs_genome") or {}
     if wgbs:
-        for key in ("ref_paths", "cpg_tsv", "linear_ref_fasta", "original_gbz"):
+        # original_gbz is optional (surject falls back to C2T) and is not part of
+        # PANGENOME_WGBS_FILES inventory — never require it for path verification.
+        for key in ("ref_paths", "cpg_tsv", "linear_ref_fasta"):
             checks.append(wgbs.get(key))
+        if wgbs.get("node_replacement_json"):
+            checks.append(wgbs.get("node_replacement_json"))
         for side in ("c2t", "g2a"):
             nested = wgbs.get(side) or {}
             if isinstance(nested, Mapping):

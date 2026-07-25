@@ -13,8 +13,11 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DOCKER_DIR="${REPO_ROOT}/workers/docker/methylgrapher"
 
 VG_VERSION="${VG_VERSION:-1.70.0}"
+# Image tag is independent of vg semver (1.70.0 compile pin → publish :1.70).
+# Must match scripts/platform_matrix.env METHYLGRAPHER_IMAGE_*.
+IMAGE_TAG="${METHYLGRAPHER_IMAGE_TAG:-1.70}"
 METHYLGRAPHER_VERSION="${METHYLGRAPHER_VERSION:-0.2.0}"
-IMAGE="${METHYL_METHYLGRAPHER_IMAGE:-epimethyl/methylgrapher:${VG_VERSION}}"
+IMAGE="${METHYL_METHYLGRAPHER_IMAGE:-epimethyl/methylgrapher:${IMAGE_TAG}}"
 VG_SRC_DIR="${VG_SRC_DIR:-${REPO_ROOT}/.cache/vg-src/vg}"
 SAVE_TAR="${METHYLGRAPHER_IMAGE_TAR:-}"
 SKIP_SMOKE="${SKIP_SMOKE:-0}"

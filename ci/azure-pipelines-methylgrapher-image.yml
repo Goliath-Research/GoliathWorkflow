@@ -24,9 +24,13 @@ pr: none
 
 parameters:
   - name: vgVersion
-    displayName: vg version pin
+    displayName: vg source/release version pin (compile)
     type: string
     default: '1.70.0'
+  - name: imageTag
+    displayName: Published image tag (must match platform_matrix METHYLGRAPHER_IMAGE_*)
+    type: string
+    default: '1.70'
   - name: methylgrapherVersion
     displayName: methylGrapher PyPI version pin
     type: string
@@ -45,8 +49,8 @@ parameters:
     default: ''
 
 variables:
-  imageTag: ${{ parameters.vgVersion }}
-  imageRef: ${{ parameters.imageRepository }}:${{ parameters.vgVersion }}
+  imageTag: ${{ parameters.imageTag }}
+  imageRef: ${{ parameters.imageRepository }}:${{ parameters.imageTag }}
 
 pool:
   name: build-arm64
@@ -66,6 +70,7 @@ steps:
   - bash: |
       set -euo pipefail
       export VG_VERSION='${{ parameters.vgVersion }}'
+      export METHYLGRAPHER_IMAGE_TAG='${{ parameters.imageTag }}'
       export METHYLGRAPHER_VERSION='${{ parameters.methylgrapherVersion }}'
       export METHYL_METHYLGRAPHER_IMAGE='$(imageRef)'
       export METHYLGRAPHER_IMAGE_TAR="$(Build.ArtifactStagingDirectory)/methylgrapher-$(imageTag)-arm64.tar.gz"
@@ -92,4 +97,4 @@ steps:
         repository: ${{ parameters.imageRepository }}
         command: push
         tags: |
-          ${{ parameters.vgVersion }}
+          ${{ parameters.imageTag }}
