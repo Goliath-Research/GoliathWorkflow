@@ -31,20 +31,21 @@ SELECTION_TO_ASSET_ROLE = {
 # Selection keys that resolve to cfg.reference_asset inventory (genomes on QNAP).
 GENOME_SELECTION_KEYS = ("linear", "gene_annotation", "pangenome", "pangenome_wgbs")
 
-# Default filenames for the methylGrapher BS bundle under d9-bs/1.70 (inventory convention).
+# Default filenames for the methylGrapher BS bundle under d9-bs/1.70
+# (native methylGrapher / vg autoindex output names on QNAP).
 PANGENOME_WGBS_FILES = {
-    "c2t_gbz": "hprc-d9-bs.wl.C2T.gbz",
+    "c2t_gbz": "hprc-d9-bs.wl.C2T.giraffe.gbz",
     "c2t_dist": "hprc-d9-bs.wl.C2T.dist",
     "c2t_min": "hprc-d9-bs.wl.C2T.shortread.withzip.min",
     "c2t_zipcodes": "hprc-d9-bs.wl.C2T.shortread.zipcodes",
-    "g2a_gbz": "hprc-d9-bs.wl.G2A.gbz",
+    "g2a_gbz": "hprc-d9-bs.wl.G2A.giraffe.gbz",
     "g2a_dist": "hprc-d9-bs.wl.G2A.dist",
     "g2a_min": "hprc-d9-bs.wl.G2A.shortread.withzip.min",
     "g2a_zipcodes": "hprc-d9-bs.wl.G2A.shortread.zipcodes",
     "cpg_tsv": "hprc-d9-bs.cpg.tsv",
-    "ref_paths": "hprc-d9-bs.paths.sub",
-    "original_gbz": "hprc-d9-bs.gbz",
-    "node_replacement_json": "hprc-d9-bs.node_replacement.json",
+    # Copied from stock d9/1.70 into the BS prefix for self-contained sync.
+    "ref_paths": "hprc-v1.1-mc-grch38.d9.paths.sub",
+    "node_replacement_json": "hprc-d9-bs.wl.node.replacement.json",
 }
 
 

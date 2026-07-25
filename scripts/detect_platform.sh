@@ -47,6 +47,18 @@ resolve_proteomics_image() {
   echo "${!var:-}"
 }
 
+# Resolve methylGrapher(+vg) worker image for current host arch.
+resolve_methylgrapher_image() {
+  local arch_key
+  arch_key="$(platform_arch_key)"
+  if [[ -f "$MATRIX_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$MATRIX_FILE"
+  fi
+  local var="METHYLGRAPHER_IMAGE_${arch_key}"
+  echo "${METHYL_METHYLGRAPHER_IMAGE:-${!var:-}}"
+}
+
 resolve_methyl_extractor_subdir() {
   local uname_arch="${1:-$(detect_uname_arch)}"
   if [[ -f "$MATRIX_FILE" ]]; then

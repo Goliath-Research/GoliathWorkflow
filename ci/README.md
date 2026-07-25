@@ -12,6 +12,7 @@ Each YAML lives in **this repository** so Azure DevOps can point pipelines at lo
 | [`azure-pipelines-release-deploy.yml`](azure-pipelines-release-deploy.yml) | Epimethyl-Release-Deploy | Manual (+ approval) |
 | [`azure-pipelines-real-data.yml`](azure-pipelines-real-data.yml) | MethylPipeline-RealData | Manual / scheduled (self-hosted) |
 | [`azure-pipelines-smoke.yml`](azure-pipelines-smoke.yml) | MethylPipeline-Distributed-Smoke | Nightly + manual (`production-work-agents`) |
+| [`azure-pipelines-methylgrapher-image.yml`](azure-pipelines-methylgrapher-image.yml) | MethylPipeline-MethylGrapher-Image | Manual / path filter on `workers/docker/methylgrapher/**` (`build-arm64`) — **image build only**, not deploy |
 
 ## Regression and coverage gate (PR pipeline)
 
