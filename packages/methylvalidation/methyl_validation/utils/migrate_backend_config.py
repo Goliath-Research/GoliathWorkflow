@@ -92,28 +92,14 @@ GENERATIVE_PARAM_KEYS = {
 }
 
 
-_OFFLINE_FEATURE_FAMILY_ALIASES = {
-    "dmp": "dmp_scored",
-    "dmp+gene": "dmp_scored+gene_scored",
-    "dmp+structural": "dmp_scored+structural_scored",
-    "dmp+gene_scored": "dmp_scored+gene_scored",
-    "dmp+structural_scored": "dmp_scored+structural_scored",
-    "gene": "gene_scored",
-    "structural": "structural_scored",
-    "dmp_scored+gene": "dmp_scored+gene_scored",
-    "dmp_scored+structural": "dmp_scored+structural_scored",
-}
-
-
 def _canonicalize_feature_family_set_value(value: Any) -> Any:
     """Offline-only alias rewrite; runtime MonteCarloConfig rejects legacy tokens."""
     if not isinstance(value, str):
         return value
-    from methyl_validation.observed_feature_builder import normalize_feature_family_set
+    from methyl_validation.observed_feature_builder import coerce_saved_feature_family_set
 
-    token = _OFFLINE_FEATURE_FAMILY_ALIASES.get(value.strip().lower(), value)
     try:
-        return normalize_feature_family_set(token)
+        return coerce_saved_feature_family_set(value)
     except ValueError:
         return value
 

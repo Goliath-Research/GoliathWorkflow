@@ -82,6 +82,20 @@ _BANNED_FEATURE_FAMILY_SETS: Dict[str, Optional[str]] = {
     "dmp+structural": "dmp_scored+structural_scored",
 }
 
+# Load/offline migration only: rewrite legacy tokens before normalize.
+# New configs must still use normalize_feature_family_set (strict / rejects these).
+FEATURE_FAMILY_SET_LOAD_ALIASES: Dict[str, str] = {
+    "dmp": "dmp_scored",
+    "dmp+gene": "dmp_scored+gene_scored",
+    "dmp+structural": "dmp_scored+structural_scored",
+    "dmp+gene_scored": "dmp_scored+gene_scored",
+    "dmp+structural_scored": "dmp_scored+structural_scored",
+    "gene": "gene_scored",
+    "structural": "structural_scored",
+    "dmp_scored+gene": "dmp_scored+gene_scored",
+    "dmp_scored+structural": "dmp_scored+structural_scored",
+}
+
 
 def normalize_feature_family_set(value: Optional[str]) -> str:
     """Return canonical feature_family_set token (legacy/unfiltered families rejected)."""
@@ -106,6 +120,18 @@ def normalize_feature_family_set(value: Optional[str]) -> str:
             f"Unsupported feature_family_set={value!r}; canonical values: {canonical}."
         )
     return token
+
+
+def coerce_saved_feature_family_set(value: Optional[str]) -> str:
+    """
+    Migrate legacy feature_family_set tokens from pickled models / saved metadata.
+
+    Applies FEATURE_FAMILY_SET_LOAD_ALIASES then normalize_feature_family_set.
+    Use on deserialize/predict paths only — not for accepting new operator config.
+    """
+    token = str(value or "dmp_scored").strip().lower()
+    token = FEATURE_FAMILY_SET_LOAD_ALIASES.get(token, token)
+    return normalize_feature_family_set(token)
 
 
 def family_includes_dmp_scored(feature_family_set: Optional[str]) -> bool:

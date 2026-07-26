@@ -59,6 +59,7 @@ from .observed_feature_builder import (
     OBSERVED_HYBRID_SCHEMA_VERSION,
     apply_feature_fill_values,
     build_observed_hybrid_feature_table,
+    coerce_saved_feature_family_set,
     derive_observed_hybrid_anchors,
     describe_active_feature_families,
     fit_feature_fill_values,
@@ -1479,7 +1480,7 @@ def predict_tabular_model_from_project(
             hist_tail_agreement_threshold=float(
                 meta.get("observed_hist_tail_agreement_threshold", 0.10)
             ),
-            feature_family_set=normalize_feature_family_set(str(meta.get("feature_family_set", "dmp_scored"))),
+            feature_family_set=coerce_saved_feature_family_set(str(meta.get("feature_family_set", "dmp_scored"))),
             gene_feature_loading=str(meta.get("gene_feature_loading", "frozen")),
             fixed_gene_features_df=load_bundle_gene_feature_ranges(bundle_h5),
             frozen_gene_panel_df=load_bundle_frozen_gene_panel(
@@ -1611,7 +1612,7 @@ def predict_tabular_model_from_project(
         metrics["train_test_overlap_count"] = 0 if partition == "test" else None
         metrics["metrics_source"] = f"tabular_{partition}"
     if feature_mode == "observed_hybrid" and partition in {"", "test", "unspecified"}:
-        active_family_set = normalize_feature_family_set(str(meta.get("feature_family_set", "dmp_scored")))
+        active_family_set = coerce_saved_feature_family_set(str(meta.get("feature_family_set", "dmp_scored")))
         active_gene_loading = str(meta.get("gene_feature_loading", "frozen"))
         cm = metrics.get("confusion_matrix") or []
         worst_group_ba = None

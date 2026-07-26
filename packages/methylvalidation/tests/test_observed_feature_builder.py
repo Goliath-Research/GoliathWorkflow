@@ -638,6 +638,23 @@ def test_normalize_feature_family_set_rejects_legacy_aliases():
             observed_feature_builder.normalize_feature_family_set(banned)
 
 
+def test_coerce_saved_feature_family_set_migrates_legacy_tokens():
+    assert observed_feature_builder.coerce_saved_feature_family_set("gene") == "gene_scored"
+    assert observed_feature_builder.coerce_saved_feature_family_set("structural") == "structural_scored"
+    assert observed_feature_builder.coerce_saved_feature_family_set("dmp") == "dmp_scored"
+    assert (
+        observed_feature_builder.coerce_saved_feature_family_set("dmp+gene_scored")
+        == "dmp_scored+gene_scored"
+    )
+    assert (
+        observed_feature_builder.coerce_saved_feature_family_set("dmp_scored+gene")
+        == "dmp_scored+gene_scored"
+    )
+    assert observed_feature_builder.coerce_saved_feature_family_set("gene_scored") == "gene_scored"
+    with pytest.raises(ValueError, match="banned"):
+        observed_feature_builder.coerce_saved_feature_family_set("hybrid-all")
+
+
 def test_gene_scored_feature_names_and_fingerprint():
     from methyl_validation.gene_scored_features import (
         compute_gene_scored_matrices,
