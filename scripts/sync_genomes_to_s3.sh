@@ -10,6 +10,7 @@
 #   annotation/gencode/v49/
 #   pangenome/GRCh38/d9/1.70/       # stock HPRC Giraffe indexes
 #   pangenome/GRCh38/d9-bs/1.70/    # methylGrapher C2T+G2A BS bundle
+#   pangenome/canary/gse261315/...  # public HPRC/methylGrapher WGBS canary FASTQs
 #
 # Operator usage (upload local → QNAP):
 #   export AWS_ACCESS_KEY_ID=...
@@ -41,6 +42,8 @@
 #   aws s3 ls s3://epimethyl/genomes/pangenome/GRCh38/d9/1.70/ \
 #     --endpoint-url https://s3.us-east-1.myqnapcloud.io
 #   aws s3 ls s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/ \
+#     --endpoint-url https://s3.us-east-1.myqnapcloud.io
+#   aws s3 ls s3://epimethyl/genomes/pangenome/canary/gse261315/SRR28293403/ \
 #     --endpoint-url https://s3.us-east-1.myqnapcloud.io
 
 set -euo pipefail
@@ -75,6 +78,7 @@ Options:
                            or a relative path, e.g.:
                              pangenome/GRCh38/d9/1.70
                              pangenome/GRCh38/d9-bs/1.70
+                             pangenome/canary
   -h, --help             Show this help
 
 Required env:

@@ -149,7 +149,10 @@ and `pangenome_wgbs`.
   (`GSE261315` / `SRR28293403` / HG00621).
 - Example config: [`../tests/real_data/sample_prep_canary/registry.example.json`](../../tests/real_data/sample_prep_canary/registry.example.json)
   (also embedded in [`registry.example.json`](../../tests/real_data/registry.example.json)).
-- Provision: `scripts/provision_sample_prep_canary.sh` (checksummed full + subset into `fastqStorage`).
+- Provision: `scripts/provision_sample_prep_canary.sh` stages under
+  `/work/genomes/pangenome/canary/...` (HPRC/methylGrapher provenance); mirror with
+  `scripts/sync_genomes_to_s3.sh --only pangenome/canary` →
+  `s3://epimethyl/genomes/pangenome/canary/...`.
 - Execute: `scripts/smoke_sample_prep_real.sh` / [`ci/azure-pipelines-sample-prep-canary.yml`](../../ci/azure-pipelines-sample-prep-canary.yml).
 - Validation helpers: `methyl_utils.testing.sample_prep_canary`.
 

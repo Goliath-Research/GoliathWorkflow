@@ -11,10 +11,11 @@ Provenance: [`tests/real_data/sample_prep_canary/provenance.json`](../../tests/r
 
 ```bash
 source .venv/bin/activate
-# 0) One-time: provision full + deterministic subset into fastqStorage
+# 0) One-time: provision under /work/genomes/pangenome/canary/... (pangenome inventory)
 bash scripts/provision_sample_prep_canary.sh --subset-pairs 2000000
-# Merge emitted checksums into site testing.sample_prep_canary (or
-# METHYL_SAMPLE_PREP_CANARY_CONFIG). See tests/real_data/sample_prep_canary/registry.example.json
+scripts/sync_genomes_to_s3.sh --only pangenome/canary
+# Merge emitted checksums into site testing.sample_prep_canary
+# (fastq_storage.basePath=/work/genomes/pangenome). See registry.example.json
 
 # 1) 64K image smoke
 bash workers/docker/methylgrapher/smoke_64k.sh "$METHYL_METHYLGRAPHER_IMAGE"

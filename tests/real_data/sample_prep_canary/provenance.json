@@ -46,11 +46,14 @@
     "https://www.ncbi.nlm.nih.gov/bioproject/1086543"
   ],
   "storage_layout": {
+    "local_root": "/work/genomes/pangenome",
+    "qnap_prefix": "s3://epimethyl/genomes/pangenome/",
     "full_prefix": "canary/gse261315/SRR28293403/full/",
     "subset_prefix": "canary/gse261315/SRR28293403/subset/",
     "r1_name": "SRR28293403_1.fastq.gz",
     "r2_name": "SRR28293403_2.fastq.gz",
-    "checksum_manifest": "canary/gse261315/SRR28293403/checksums.json"
+    "checksum_manifest": "canary/gse261315/SRR28293403/checksums.json",
+    "notes": "Lives under the pangenome inventory tree (not lab fastqStorage) so provenance from the HPRC/methylGrapher project is obvious. Mirror with scripts/sync_genomes_to_s3.sh --only pangenome/canary."
   },
   "subset_recipe": {
     "method": "first_n_paired_records",

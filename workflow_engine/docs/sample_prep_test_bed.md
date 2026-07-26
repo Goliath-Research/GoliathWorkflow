@@ -128,8 +128,11 @@ stub smoke and **not** catalog/golden PR tests.
 source .venv/bin/activate
 unset WORKER_STUB_EXTERNAL
 # One-time: download SRA, write subset, checksum, stage under fastqStorage root
-bash scripts/provision_sample_prep_canary.sh --stage-root /work/fastq-storage
-# Merge checksums into site testing.sample_prep_canary (or METHYL_SAMPLE_PREP_CANARY_CONFIG)
+# Stages under /work/genomes/pangenome/canary/... (HPRC/methylGrapher provenance)
+bash scripts/provision_sample_prep_canary.sh --subset-pairs 2000000
+scripts/sync_genomes_to_s3.sh --only pangenome/canary
+# Merge checksums into site testing.sample_prep_canary
+# (fastq_storage.basePath=/work/genomes/pangenome)
 export METHYL_SITE_CONFIG=/work/site/methyl_site.json
 bash scripts/smoke_sample_prep_real.sh --tier subset
 # After subset passes (expensive):
