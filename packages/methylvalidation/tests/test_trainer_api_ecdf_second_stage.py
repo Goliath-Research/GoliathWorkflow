@@ -519,3 +519,103 @@ def test_build_model_backend_steps_ecdf_aggregated_uses_configured_n_bins(tmp_pa
     rc, _out, _err = steps[1][1]()
     assert rc == 0
     assert captured.get("n_bins") == 211
+
+
+def test_tabular_predictor_emits_train_then_test_partitions(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [
+                {"label": "healthy", "csv": "h.csv"},
+                {"label": "disease", "csv": "d.csv"},
+            ],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": str(tmp_path / "project.json"),
+            "output_base": str(tmp_path),
+            "backend_profiles": {
+                "ecdf": {"enabled": False, "params": {}},
+                "tabular_sklearn": {
+                    "enabled": True,
+                    "params": {"feature_mode": "observed_hybrid", "feature_family_set": "gene_scored"},
+                },
+                "generative_hybrid": {"enabled": False, "params": {}},
+            },
+        }
+    )
+    partitions: list[str] = []
+
+    def _fake_predict(**kwargs):
+        partitions.append(kwargs["evaluation_partition"])
+        return {"evaluation_partition": kwargs["evaluation_partition"]}
+
+    monkeypatch.setattr(
+        "methyl_validation.tabular_backend.predict_tabular_model_from_project",
+        _fake_predict,
+    )
+    steps = build_model_backend_steps(
+        project_json=tmp_path / "project.json",
+        predictor_output_dir=tmp_path / "predictors",
+        config=cfg,
+        per_cancer_group=False,
+        run_classifier_fn=lambda _p, _g: (0, "", ""),
+        run_predictor_fn=lambda _p, _o: (0, "", ""),
+    )
+    names = [name for name, _ in steps]
+    assert "tabular-predictor" in names
+    rc, _out, err = steps[names.index("tabular-predictor")][1]()
+    assert rc == 0
+    assert err == ""
+    assert partitions == ["train", "test"]
+
+
+def test_generative_predictor_emits_train_then_test_partitions(
+    tmp_path: Path, monkeypatch
+) -> None:
+    cfg = MonteCarloConfig.model_validate(
+        {
+            "samples_base_path": "/tmp",
+            "cohorts": [
+                {"label": "healthy", "csv": "h.csv"},
+                {"label": "disease", "csv": "d.csv"},
+            ],
+            "train_fraction": 0.8,
+            "n_iterations": 1,
+            "base_project": str(tmp_path / "project.json"),
+            "output_base": str(tmp_path),
+            "backend_profiles": {
+                "ecdf": {"enabled": False, "params": {}},
+                "tabular_sklearn": {"enabled": False, "params": {}},
+                "generative_hybrid": {
+                    "enabled": True,
+                    "params": {"feature_mode": "observed_hybrid", "feature_family_set": "dmp_scored"},
+                },
+            },
+        }
+    )
+    partitions: list[str] = []
+
+    def _fake_predict(**kwargs):
+        partitions.append(kwargs["evaluation_partition"])
+        return {"evaluation_partition": kwargs["evaluation_partition"]}
+
+    monkeypatch.setattr(
+        "methyl_validation.generative_backend.predict_generative_model_from_project",
+        _fake_predict,
+    )
+    steps = build_model_backend_steps(
+        project_json=tmp_path / "project.json",
+        predictor_output_dir=tmp_path / "predictors",
+        config=cfg,
+        per_cancer_group=False,
+        run_classifier_fn=lambda _p, _g: (0, "", ""),
+        run_predictor_fn=lambda _p, _o: (0, "", ""),
+    )
+    names = [name for name, _ in steps]
+    assert "generative-predictor" in names
+    rc, _out, err = steps[names.index("generative-predictor")][1]()
+    assert rc == 0
+    assert err == ""
+    assert partitions == ["train", "test"]

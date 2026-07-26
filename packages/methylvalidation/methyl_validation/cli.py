@@ -1044,7 +1044,7 @@ def _run_model_mc_backend_from_shared_runs(
             if config.abort_on_step_failure:
                 raise RuntimeError(f"[model-mc:{backend}] abort_on_step_failure=true and model stage failed")
             continue
-        if backend == "ecdf" and not any(
+        if not any(
             (backend_run_dir / "predictors").rglob("test_metrics.json")
         ):
             raise RuntimeError(
@@ -1052,7 +1052,7 @@ def _run_model_mc_backend_from_shared_runs(
                 "refusing to aggregate training or detector metrics as model-MC performance."
             )
         scalar = iteration_scalar_metrics_from_run_dir(backend_run_dir)
-        if backend == "ecdf" and scalar.get("metrics_source") != "model_test":
+        if scalar.get("metrics_source") != "model_test":
             raise RuntimeError(
                 f"[model-mc:{backend}] {run_id} metrics did not resolve from the test partition."
             )
@@ -1483,7 +1483,16 @@ def _run_model_mc_backend(
             if config.abort_on_step_failure:
                 raise RuntimeError(f"[model-mc:{backend}] abort_on_step_failure=true and model stage failed")
             continue
+        if not any((run_dir / "predictors").rglob("test_metrics.json")):
+            raise RuntimeError(
+                f"[model-mc:{backend}] {run_id} produced no test_metrics.json; "
+                "refusing to aggregate training or detector metrics as model-MC performance."
+            )
         scalar = iteration_scalar_metrics_from_run_dir(run_dir)
+        if scalar.get("metrics_source") != "model_test":
+            raise RuntimeError(
+                f"[model-mc:{backend}] {run_id} metrics did not resolve from the test partition."
+            )
         rows.append({"iteration": i + 1, "run_id": run_id, "run_dir": str(run_dir), "model_backend": backend, **scalar})
         elapsed = time.perf_counter() - iteration_t0
         completed_iteration_seconds.append(elapsed)

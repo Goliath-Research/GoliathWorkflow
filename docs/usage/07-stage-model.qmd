@@ -68,7 +68,9 @@ Each backend run writes `train_metrics.json` for diagnostics and
 `test_metrics.json` for the disjoint held-out partition. Only test metrics feed
 `all_metrics.csv`, summaries, and backend ranking. Canonical split files are
 `test_control.csv`, `test_disease.csv`, and `test_groups.json`; `val_*` names are
-compatibility aliases.
+compatibility aliases. Tabular and generative backends use the same
+`evaluation_partition` contract as ECDF (not legacy predictor `test_*` cohort
+lists), so shared-run train/test membership stays comparable across backends.
 
 Every sum-to-1 feature set (a simplex) is encoded by additive log-ratio (ALR),
 which drops the redundant reference part. The first-stage ECDF class

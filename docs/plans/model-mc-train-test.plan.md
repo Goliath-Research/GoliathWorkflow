@@ -2,7 +2,7 @@
 name: Model MC Train Test
 overview: Correct model-MC so each iteration fits on its training partition and evaluates only on its disjoint test partition, while introducing unambiguous train/test artifact names with compatibility aliases.
 
-> **Status: IMPLEMENTED.** Model-MC now fits ECDF and covariate models on training samples, evaluates disjoint test samples, and aggregates test metrics only.
+> **Status: IMPLEMENTED for ECDF.** Tabular/generative holdout parity is completed in [`unified-model-mc-partitions.plan.md`](unified-model-mc-partitions.plan.md).
 
 azure_devops:
   type: Feature

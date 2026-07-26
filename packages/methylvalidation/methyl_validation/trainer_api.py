@@ -253,6 +253,43 @@ def _score_classic_ecdf_partition(
         }
 
 
+def _binary_partition_paths_from_resolver(
+    project_json: Path,
+    partition: str,
+) -> tuple[List[str], List[str]]:
+    """
+    Resolve control/disease paths for classic ECDF via the shared partition API.
+
+    Uses ``evaluation_partition`` so train comes from project groups and test from
+    ``test_groups.json`` (same contract as gene/tabular/generative backends).
+    """
+    from methyl_utils import load_project
+
+    from .classification_metrics import resolve_class_roles
+    from .eval_split_resolver import resolve_eval_paths_and_labels
+
+    project = load_project(project_json)
+    class_names = list(resolve_class_roles(project)["class_names"])
+    if len(class_names) < 2:
+        class_names = ["control", "disease"]
+    samples, y_true = resolve_eval_paths_and_labels(
+        project_json,
+        class_names,
+        project_loader=load_project,
+        evaluation_partition=partition,
+    )
+    if y_true is None or not samples:
+        raise ValueError(f"No samples resolved for classic ECDF {partition} partition")
+    control = [str(s) for s, y in zip(samples, y_true) if int(y) == 0]
+    disease = [str(s) for s, y in zip(samples, y_true) if int(y) != 0]
+    if not control or not disease:
+        raise ValueError(
+            f"Classic ECDF {partition} partition requires non-empty control and disease "
+            f"paths (control={len(control)}, disease={len(disease)})"
+        )
+    return control, disease
+
+
 def _run_classic_ecdf_partitioned_predictor(
     project_json: Path,
     predictor_output_dir: Optional[Path],
@@ -264,9 +301,12 @@ def _run_classic_ecdf_partitioned_predictor(
     covariate second stage require disjoint train_/test_ prediction files.
     """
     try:
+        from .eval_split_resolver import assert_model_mc_train_partition
+
+        assert_model_mc_train_partition(project_json)
         output_dir = Path(predictor_output_dir or (Path(project_json).parent / "predictors"))
-        train_control, train_disease = _load_binary_partition_paths(project_json, "train")
-        test_control, test_disease = _load_binary_partition_paths(project_json, "test")
+        train_control, train_disease = _binary_partition_paths_from_resolver(project_json, "train")
+        test_control, test_disease = _binary_partition_paths_from_resolver(project_json, "test")
         train_out = _score_classic_ecdf_partition(
             project_json=project_json,
             output_dir=output_dir,
@@ -497,10 +537,11 @@ def build_model_backend_steps(
             try:
                 from .tabular_backend import predict_tabular_model_from_project
 
-                metrics = predict_tabular_model_from_project(
+                output_dir = predictor_output_dir or (project_json.parent / "predictors")
+                common = dict(
                     project_json=project_json,
                     model_dir=model_dir,
-                    output_dir=predictor_output_dir or (project_json.parent / "predictors"),
+                    output_dir=output_dir,
                     covariates_path=(config.covariates_path if config is not None else None),
                     covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                     covariates_strict_join=(config.covariates_strict_join if config is not None else False),
@@ -508,7 +549,15 @@ def build_model_backend_steps(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
                 )
-                return 0, json.dumps(metrics), ""
+                train_metrics = predict_tabular_model_from_project(
+                    **common,
+                    evaluation_partition="train",
+                )
+                test_metrics = predict_tabular_model_from_project(
+                    **common,
+                    evaluation_partition="test",
+                )
+                return 0, json.dumps({"train": train_metrics, "test": test_metrics}), ""
             except Exception as e:
                 return 1, "", str(e)
 
@@ -690,10 +739,11 @@ def build_model_backend_steps(
             try:
                 from .generative_backend import predict_generative_model_from_project
 
-                metrics = predict_generative_model_from_project(
+                output_dir = predictor_output_dir or (project_json.parent / "predictors")
+                common = dict(
                     project_json=project_json,
                     model_dir=model_dir,
-                    output_dir=predictor_output_dir or (project_json.parent / "predictors"),
+                    output_dir=output_dir,
                     covariates_path=(config.covariates_path if config is not None else None),
                     covariate_id_column=(config.covariate_id_column if config is not None else "sample_id"),
                     covariates_strict_join=(config.generative_covariates_strict if config is not None else True),
@@ -701,7 +751,15 @@ def build_model_backend_steps(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
                 )
-                return 0, json.dumps(metrics), ""
+                train_metrics = predict_generative_model_from_project(
+                    **common,
+                    evaluation_partition="train",
+                )
+                test_metrics = predict_generative_model_from_project(
+                    **common,
+                    evaluation_partition="test",
+                )
+                return 0, json.dumps({"train": train_metrics, "test": test_metrics}), ""
             except Exception as e:
                 return 1, "", str(e)
 

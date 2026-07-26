@@ -40,6 +40,8 @@ from .tabular_backend import _resolve_class_centroid_dirs
 
 
 def _load_training_samples(project_json: str | Path) -> Tuple[List[str], np.ndarray, List[str]]:
+    from .eval_split_resolver import assert_model_mc_train_partition
+
     project = load_project(project_json)
     resolved = project.get_resolved_groups()
     if len(resolved) < 2:
@@ -54,6 +56,7 @@ def _load_training_samples(project_json: str | Path) -> Tuple[List[str], np.ndar
             y.append(int(cls))
     if not all_paths:
         raise ValueError("No training samples resolved from project")
+    assert_model_mc_train_partition(project_json, train_sample_paths=all_paths)
     return all_paths, np.asarray(y, dtype=np.int32), class_names
 
 

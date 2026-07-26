@@ -928,6 +928,7 @@ def run_post_model_validation_binary(
                     observed_feature_min_obs_fraction=(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
+                    evaluation_partition="test",
                 )
                 return 0, json.dumps(metrics), ""
             except Exception as e:
@@ -948,6 +949,7 @@ def run_post_model_validation_binary(
                     observed_feature_min_obs_fraction=(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
+                    evaluation_partition="test",
                 )
                 return 0, json.dumps(metrics), ""
             except Exception as e:
@@ -1047,6 +1049,7 @@ def run_post_model_validation_multiclass(
                     observed_feature_min_obs_fraction=(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
+                    evaluation_partition="test",
                 )
                 return 0, json.dumps(metrics), ""
             except Exception as e:
@@ -1067,6 +1070,7 @@ def run_post_model_validation_multiclass(
                     observed_feature_min_obs_fraction=(
                         config.observed_feature_min_obs_fraction if config is not None else 0.0
                     ),
+                    evaluation_partition="test",
                 )
                 return 0, json.dumps(metrics), ""
             except Exception as e:

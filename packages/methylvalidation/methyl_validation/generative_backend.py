@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -34,7 +35,7 @@ from .covariate_preprocessor import (
     normalize_composition_groups,
     transform_covariates,
 )
-from .eval_split_resolver import resolve_eval_paths_and_labels
+from .eval_split_resolver import assert_model_mc_train_partition, resolve_eval_paths_and_labels
 from .gene_scored_features import DEFAULT_REGION_DIRECTIONAL_TYPES, family_includes_gene_scored
 from .structural_scored_features import (
     family_includes_structural_scored,
@@ -150,13 +151,22 @@ def _posterior_from_latent(
     return (probs / denom).astype(np.float32)
 
 
-def _resolve_eval_paths_and_labels(project_json: str | Path, class_names: List[str]) -> Tuple[List[str], Optional[np.ndarray]]:
-    predictor_cfg = resolve_predictor_config(project_json)
+def _resolve_eval_paths_and_labels(
+    project_json: str | Path,
+    class_names: List[str],
+    *,
+    evaluation_partition: Optional[str] = None,
+) -> Tuple[List[str], Optional[np.ndarray]]:
+    predictor_cfg = None
+    partition = str(evaluation_partition or "").strip().lower()
+    if partition not in {"train", "test"}:
+        predictor_cfg = resolve_predictor_config(project_json)
     return resolve_eval_paths_and_labels(
         project_json,
         class_names,
         predictor_cfg=predictor_cfg,
         project_loader=load_project,
+        evaluation_partition=partition or None,
     )
 
 
@@ -301,6 +311,7 @@ def train_generative_model(
             all_paths.append(str(p))
             y.append(cls_idx)
             sample_ids.append(Path(str(p)).name)
+    assert_model_mc_train_partition(project_json, train_sample_paths=all_paths)
     if len(all_paths) < 2:
         raise ValueError("Need at least 2 training samples to fit generative backend.")
 
@@ -658,10 +669,12 @@ def predict_generative_model_from_project(
     covariate_id_column: str = "sample_id",
     covariates_strict_join: bool = True,
     observed_feature_min_obs_fraction: Optional[float] = None,
+    evaluation_partition: Optional[str] = None,
 ) -> Dict[str, Any]:
     model_dir = Path(model_dir).resolve()
     out_dir = Path(output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
+    partition = str(evaluation_partition or "").strip().lower()
 
     model_path = model_dir / "generative-model.npz"
     meta_path = model_dir / "generative-model-metadata.json"
@@ -677,9 +690,16 @@ def predict_generative_model_from_project(
     with _project_cwd(project_json):
         project = load_project(project_json)
     class_centroid_dirs = _resolve_class_centroid_dirs(project, class_names)
-    samples, y_true = _resolve_eval_paths_and_labels(project_json, class_names)
+    samples, y_true = _resolve_eval_paths_and_labels(
+        project_json,
+        class_names,
+        evaluation_partition=partition or None,
+    )
     if not samples:
-        raise ValueError("No evaluation samples resolved for generative prediction.")
+        raise ValueError(
+            "No evaluation samples resolved for generative prediction"
+            f"{f' (partition={partition})' if partition else ''}."
+        )
     sample_ids = sample_ids_from_paths(samples)
 
     obs_fraction_vec: Optional[np.ndarray] = None
@@ -859,9 +879,17 @@ def predict_generative_model_from_project(
         }
     metrics["covariate_preprocessing"] = cov_report
     metrics["n_covariate_features_used"] = int(cov.shape[1]) if cov is not None else 0
-    with open(out_dir / "validation_metrics.json", "w", encoding="utf-8") as f:
-        json.dump(metrics, f, indent=2)
-    if feature_mode == "observed_hybrid":
+    metrics["n_samples"] = int(len(samples))
+    metrics["evaluation_partition"] = partition or "unspecified"
+    if partition in {"train", "test"}:
+        train_count = sum(
+            len(paths or []) for _label, paths in project.get_resolved_groups()
+        )
+        metrics["n_train_samples"] = int(train_count)
+        metrics["n_test_samples"] = int(len(samples)) if partition == "test" else None
+        metrics["train_test_overlap_count"] = 0 if partition == "test" else None
+        metrics["metrics_source"] = f"generative_{partition}"
+    if feature_mode == "observed_hybrid" and partition in {"", "test"}:
         active_family_set = normalize_feature_family_set(str(meta.get("feature_family_set", "dmp_scored")))
         active_gene_loading = str(meta.get("gene_feature_loading", "frozen"))
         cm = metrics.get("confusion_matrix") or []
@@ -928,6 +956,15 @@ def predict_generative_model_from_project(
             rec["low_evidence"] = bool(np.isfinite(obs_f) and obs_f < min_obs)
             rec["prediction_evidence_filtered"] = -1 if rec["low_evidence"] else int(y_pred[i])
         recs.append(rec)
-    pd.DataFrame(recs).to_csv(out_dir / "predictions.csv", index=False)
+    pred_name = f"{partition}_predictions.csv" if partition in {"train", "test"} else "predictions.csv"
+    pred_csv = out_dir / pred_name
+    pd.DataFrame(recs).to_csv(pred_csv, index=False)
+    metrics_name = f"{partition}_metrics.json" if partition in {"train", "test"} else "validation_metrics.json"
+    metrics_path = out_dir / metrics_name
+    with open(metrics_path, "w", encoding="utf-8") as f:
+        json.dump(metrics, f, indent=2)
+    if partition == "test":
+        shutil.copy2(pred_csv, out_dir / "predictions.csv")
+        shutil.copy2(metrics_path, out_dir / "validation_metrics.json")
     return metrics
 

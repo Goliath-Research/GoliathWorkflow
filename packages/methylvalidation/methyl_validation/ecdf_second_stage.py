@@ -19,7 +19,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import balanced_accuracy_score
 
-from methyl_predictor.project_resolver import resolve_predictor_config
 from methyl_utils import load_project
 
 from .classification_metrics import compute_validation_metrics
@@ -30,6 +29,7 @@ from .covariate_preprocessor import (
     normalize_composition_groups,
     transform_covariates,
 )
+from .eval_split_resolver import resolve_eval_paths_and_labels
 from .model_bundle import build_model_feature_bundle, load_bundle_dmp_index
 from .observed_feature_builder import (
     apply_feature_fill_values,
@@ -245,50 +245,22 @@ def ecdf_second_stage_should_run(config: Any) -> bool:
     return bool(getattr(config, "ecdf_second_stage_enabled", False))
 
 
-def _resolve_eval_paths_and_labels(project_json: str | Path) -> Tuple[List[str], Optional[np.ndarray]]:
-    cfg = resolve_predictor_config(project_json)
-    samples: List[str] = []
-    y_true: List[int] = []
-
-    test_group_paths = getattr(cfg, "test_group_paths", None)
-    holdout_group_paths = getattr(cfg, "holdout_group_paths", None)
-    train_group_paths = getattr(cfg, "train_group_paths", None)
-    if test_group_paths:
-        for idx, entry in enumerate(test_group_paths):
-            cls_idx = int(entry.get("class_index", idx))
-            for p in (entry.get("paths") or []):
-                samples.append(str(p))
-                y_true.append(cls_idx)
-        return samples, np.asarray(y_true, dtype=np.int32)
-    if holdout_group_paths:
-        for idx, entry in enumerate(holdout_group_paths):
-            cls_idx = int(entry.get("class_index", idx))
-            for p in (entry.get("paths") or []):
-                samples.append(str(p))
-                y_true.append(cls_idx)
-        if samples:
-            return samples, np.asarray(y_true, dtype=np.int32)
-    if train_group_paths:
-        for idx, entry in enumerate(train_group_paths):
-            cls_idx = int(entry.get("class_index", idx))
-            for p in (entry.get("paths") or []):
-                samples.append(str(p))
-                y_true.append(cls_idx)
-        if samples:
-            return samples, np.asarray(y_true, dtype=np.int32)
-
-    control = list(getattr(cfg, "test_control_paths", []) or []) + list(
-        getattr(cfg, "holdout_control_paths", []) or []
+def _resolve_eval_paths_and_labels(
+    project_json: str | Path,
+    *,
+    evaluation_partition: Optional[str] = None,
+) -> Tuple[List[str], Optional[np.ndarray]]:
+    """Delegate path resolution to the shared model-MC partition resolver."""
+    project = load_project(project_json)
+    class_names = [str(label) for label, _paths in project.get_resolved_groups()]
+    if len(class_names) < 2:
+        class_names = ["control", "disease"]
+    return resolve_eval_paths_and_labels(
+        project_json,
+        class_names,
+        project_loader=load_project,
+        evaluation_partition=evaluation_partition,
     )
-    disease = list(getattr(cfg, "test_disease_paths", []) or []) + list(
-        getattr(cfg, "holdout_disease_paths", []) or []
-    )
-    if control or disease:
-        samples = [str(p) for p in control + disease]
-        y_true = [0] * len(control) + [1] * len(disease)
-        return samples, np.asarray(y_true, dtype=np.int32)
-
-    return [], None
 
 
 def _ensure_bundle_h5(project_json: Path, bundle_dir: Path) -> Path:
@@ -338,10 +310,20 @@ def _sample_paths_from_predictions(
     samples_base_path = Path(samples_base) if samples_base else None
 
     resolved_eval_paths: List[str] = []
-    try:
-        resolved_eval_paths, _ = _resolve_eval_paths_and_labels(project_json)
-    except Exception:
-        resolved_eval_paths = []
+    for part in ("train", "test"):
+        try:
+            paths, _ = _resolve_eval_paths_and_labels(
+                project_json, evaluation_partition=part
+            )
+            resolved_eval_paths.extend(list(paths or []))
+        except Exception:
+            continue
+    if not resolved_eval_paths:
+        try:
+            paths, _ = _resolve_eval_paths_and_labels(project_json)
+            resolved_eval_paths = list(paths or [])
+        except Exception:
+            resolved_eval_paths = []
     eval_by_name: Dict[str, str] = {Path(str(p)).name: str(p) for p in resolved_eval_paths}
     eval_by_stem: Dict[str, str] = {Path(str(p)).stem: str(p) for p in resolved_eval_paths}
 
