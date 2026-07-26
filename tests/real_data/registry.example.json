@@ -39,5 +39,51 @@
       ],
       "description": "Prostate-cancer cohort for cohort-level real-data tests."
     }
+  },
+  "sample_prep_canary": {
+    "sample_id": "canary-SRR28293403",
+    "analyte": "buffy_coat",
+    "provenance_path": "tests/real_data/sample_prep_canary/provenance.json",
+    "source": {
+      "geo_series": "GSE261315",
+      "geo_sample": "GSM8140413",
+      "sra_run": "SRR28293403",
+      "bioproject": "PRJNA1086543",
+      "individual_id": "HG00621",
+      "title": "WGBS-HG00621-Rep1",
+      "library_strategy": "Bisulfite-Seq",
+      "library_layout": "PAIRED",
+      "license_note": "Public SRA/GEO (PRJNA1086543). Non-PHI. Cite GSE261315 / PubMed 39868538."
+    },
+    "fastq_storage": {
+      "type": "file",
+      "basePath": "/work/fastq-storage",
+      "endpointRef": "fastqStorage"
+    },
+    "full": {
+      "prefix": "canary/gse261315/SRR28293403/full/",
+      "r1_name": "SRR28293403_1.fastq.gz",
+      "r2_name": "SRR28293403_2.fastq.gz",
+      "expected_read_pairs": 158106440
+    },
+    "subset": {
+      "prefix": "canary/gse261315/SRR28293403/subset/",
+      "r1_name": "SRR28293403_1.fastq.gz",
+      "r2_name": "SRR28293403_2.fastq.gz",
+      "expected_read_pairs": 2000000
+    },
+    "subset_read_pairs": 2000000,
+    "modes": ["linear", "pangenome", "pangenome_wgbs"],
+    "directional": false,
+    "thresholds": {
+      "mapping_rate_delta": 0.15,
+      "duplication_rate_delta": 0.20,
+      "cpg_sites_min_fraction_of_linear": 0.50,
+      "mean_coverage_delta": 20.0,
+      "require_extraction_qc_pass": true
+    },
+    "asset_pins": {
+      "methylgrapher_image_env": "METHYL_METHYLGRAPHER_IMAGE"
+    }
   }
 }

@@ -22,11 +22,12 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
 TEST_DATA_CONFIG_ENV = "METHYL_TEST_DATA_CONFIG"
+SAMPLE_PREP_CANARY_CONFIG_ENV = "METHYL_SAMPLE_PREP_CANARY_CONFIG"
 SITE_CONFIG_ENV = "METHYL_SITE_CONFIG"
 DEFAULT_SITE_PATH = Path("/work/site/methyl_site.json")
 
@@ -88,6 +89,181 @@ class TestSampleGroup(BaseModel):
     )
 
 
+class SamplePrepCanarySource(BaseModel):
+    """Provenance for the pinned public SamplePrep canary FASTQ pair."""
+
+    __test__ = False
+    model_config = ConfigDict(extra="forbid")
+
+    geo_series: Optional[str] = Field(default=None, description="GEO series accession (e.g. GSE261315).")
+    geo_sample: Optional[str] = Field(default=None, description="GEO sample accession (e.g. GSM8140413).")
+    sra_run: Optional[str] = Field(default=None, description="SRA run accession (e.g. SRR28293403).")
+    bioproject: Optional[str] = Field(default=None, description="BioProject accession.")
+    individual_id: Optional[str] = Field(
+        default=None, description="Donor / HPRC individual id when known (e.g. HG00621)."
+    )
+    title: Optional[str] = Field(default=None, description="GEO/SRA sample title.")
+    library_strategy: Optional[str] = Field(default=None, description="SRA library strategy (Bisulfite-Seq).")
+    library_layout: Optional[str] = Field(default=None, description="PAIRED or SINGLE.")
+    platform: Optional[str] = Field(default=None, description="Sequencing platform string.")
+    license_note: Optional[str] = Field(
+        default=None, description="Public/consent basis and citation requirements (non-PHI only)."
+    )
+    pubmed_id: Optional[str] = Field(default=None, description="Primary publication PubMed id when available.")
+    source_urls: Optional[List[str]] = Field(default=None, description="Canonical GEO/SRA/BioProject URLs.")
+    notes: Optional[str] = Field(default=None, description="Operator notes / why this run was pinned.")
+
+
+class SamplePrepCanaryFastqPair(BaseModel):
+    """Checksummed FASTQ pair layout under fastqStorage (full or subset tier)."""
+
+    __test__ = False
+    model_config = ConfigDict(extra="forbid")
+
+    prefix: Optional[str] = Field(
+        default=None,
+        description="Object prefix under fastqStorage for this tier (e.g. canary/.../subset/).",
+    )
+    r1_name: Optional[str] = Field(default=None, description="R1 filename under prefix.")
+    r2_name: Optional[str] = Field(default=None, description="R2 filename under prefix.")
+    r1_sha256: Optional[str] = Field(
+        default=None, description="SHA-256 of R1 after provisioning (operator-filled)."
+    )
+    r2_sha256: Optional[str] = Field(
+        default=None, description="SHA-256 of R2 after provisioning (operator-filled)."
+    )
+    expected_read_pairs: Optional[int] = Field(
+        default=None, ge=1, description="Expected paired-read count for preflight checks."
+    )
+    size_bytes_r1: Optional[int] = Field(default=None, ge=0, description="R1 size in bytes after provisioning.")
+    size_bytes_r2: Optional[int] = Field(default=None, ge=0, description="R2 size in bytes after provisioning.")
+
+
+class SamplePrepCanaryThresholds(BaseModel):
+    """Operator-set acceptance bounds for linear vs methylGrapher comparison.
+
+    Stock Giraffe (``pangenome``) is an engineering comparator and does not use
+    these biological parity thresholds.
+    """
+
+    __test__ = False
+    model_config = ConfigDict(extra="forbid")
+
+    mapping_rate_delta: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Max absolute mapping-rate delta between linear and pangenome_wgbs.",
+    )
+    duplication_rate_delta: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Max absolute duplication-rate delta between linear and pangenome_wgbs.",
+    )
+    cpg_sites_min_fraction_of_linear: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Minimum CpG sites called by pangenome_wgbs as a fraction of linear.",
+    )
+    mean_coverage_delta: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description="Max absolute mean-coverage delta between linear and pangenome_wgbs.",
+    )
+    require_extraction_qc_pass: Optional[bool] = Field(
+        default=None,
+        description="When true, every mode must pass extraction QC guardrails.",
+    )
+    require_read_level_patterns: Optional[bool] = Field(
+        default=None,
+        description="When true, methylGrapher must emit non-empty patterns.h5 sidecars.",
+    )
+
+
+class SamplePrepCanaryAssetPins(BaseModel):
+    """Non-secret reference / image pins required for the three-mode canary."""
+
+    __test__ = False
+    model_config = ConfigDict(extra="forbid")
+
+    linear_genome_key: Optional[str] = Field(
+        default=None, description="Site genomes.linear selection key / release pin."
+    )
+    pangenome_key: Optional[str] = Field(
+        default=None, description="Site genomes.pangenome (stock Giraffe) pin."
+    )
+    pangenome_wgbs_key: Optional[str] = Field(
+        default=None, description="Site genomes.pangenome_wgbs (methylGrapher BS) pin."
+    )
+    methylgrapher_image_env: Optional[str] = Field(
+        default=None,
+        description="Env var name holding the methylGrapher image pin (e.g. METHYL_METHYLGRAPHER_IMAGE).",
+    )
+
+
+class SamplePrepCanaryConfig(BaseModel):
+    """Typed SamplePrep real-data canary definition (site/testing or standalone JSON)."""
+
+    __test__ = False
+    model_config = ConfigDict(extra="forbid")
+
+    sample_id: Optional[str] = Field(
+        default=None, description="Stable canary sample id base (modes append a suffix)."
+    )
+    analyte: Optional[str] = Field(
+        default=None, description="Canonical analyte label for the canary (e.g. buffy_coat)."
+    )
+    source: Optional[SamplePrepCanarySource] = Field(
+        default=None, description="Pinned public provenance for the FASTQ pair."
+    )
+    fastq_storage: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Non-secret FastqStorageRef-shaped metadata (type/bucket/basePath/endpointRef). "
+        "Credentials stay in cfg.credential and are injected at schedule time.",
+    )
+    full: Optional[SamplePrepCanaryFastqPair] = Field(
+        default=None, description="Full-run FASTQ pair under fastqStorage."
+    )
+    subset: Optional[SamplePrepCanaryFastqPair] = Field(
+        default=None, description="Deterministic paired-read subset under fastqStorage."
+    )
+    subset_read_pairs: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Target paired-read count used when provisioning the subset tier "
+        "(operator-set; not a Python science default).",
+    )
+    subset_seed: Optional[int] = Field(
+        default=None,
+        description="Reserved for alternate subset strategies; first-N recipe ignores seed.",
+    )
+    modes: Optional[List[str]] = Field(
+        default=None,
+        description="Alignment modes to run: linear, pangenome, pangenome_wgbs.",
+    )
+    thresholds: Optional[SamplePrepCanaryThresholds] = Field(
+        default=None,
+        description="Operator-set acceptance bounds for linear vs pangenome_wgbs.",
+    )
+    asset_pins: Optional[SamplePrepCanaryAssetPins] = Field(
+        default=None, description="Reference genome / image pins for preflight."
+    )
+    directional: Optional[bool] = Field(
+        default=None,
+        description="Preferred methylGrapher directional flag for this library chemistry.",
+    )
+    library_protocol: Optional[str] = Field(
+        default=None,
+        description="Procedure libraryProtocol hint (e.g. wgbs_linear / wgbs_pangenome).",
+    )
+    provenance_path: Optional[str] = Field(
+        default=None,
+        description="Repo-relative or absolute path to the committed provenance JSON.",
+    )
+
+
 class TestDataRegistry(BaseModel):
     """Registry of real reference samples and groups used by ``real_data`` tests."""
 
@@ -108,6 +284,11 @@ class TestDataRegistry(BaseModel):
     groups: Optional[Dict[str, TestSampleGroup]] = Field(
         default=None,
         description="Named cohorts keyed by group name (e.g. {'healthy': {...}, 'PCa': {...}}).",
+    )
+    sample_prep_canary: Optional[SamplePrepCanaryConfig] = Field(
+        default=None,
+        description="Optional SamplePrep real-WGBS canary definition (full + subset tiers, "
+        "three alignment modes). Set under site testing or METHYL_TEST_DATA_CONFIG.",
     )
 
 
@@ -167,3 +348,35 @@ def sample_has_h5(sample_dir: Optional[Path]) -> bool:
     if sample_dir is None or not sample_dir.is_dir():
         return False
     return any(sample_dir.glob("*-*.h5"))
+
+
+def load_sample_prep_canary(path: Optional[str | Path] = None) -> Optional[SamplePrepCanaryConfig]:
+    """Resolve SamplePrep canary config from env, registry, or committed example.
+
+    Precedence (highest wins):
+    1. explicit ``path``
+    2. ``METHYL_SAMPLE_PREP_CANARY_CONFIG`` standalone JSON
+    3. ``sample_prep_canary`` on the resolved :class:`TestDataRegistry`
+    4. committed ``tests/real_data/sample_prep_canary/registry.example.json``
+    """
+    explicit = path or os.environ.get(SAMPLE_PREP_CANARY_CONFIG_ENV)
+    if explicit:
+        p = Path(str(explicit)).expanduser()
+        if p.is_file():
+            raw = _load_json(p)
+            if "sample_prep_canary" in raw and isinstance(raw["sample_prep_canary"], dict):
+                return SamplePrepCanaryConfig.model_validate(raw["sample_prep_canary"])
+            return SamplePrepCanaryConfig.model_validate(raw)
+
+    registry = load_test_data_registry()
+    if registry.sample_prep_canary is not None:
+        return registry.sample_prep_canary
+
+    example = repo_root() / "tests" / "real_data" / "sample_prep_canary" / "registry.example.json"
+    if example.is_file():
+        raw = _load_json(example)
+        if "sample_prep_canary" in raw and isinstance(raw["sample_prep_canary"], dict):
+            return SamplePrepCanaryConfig.model_validate(raw["sample_prep_canary"])
+        if raw:
+            return SamplePrepCanaryConfig.model_validate(raw)
+    return None

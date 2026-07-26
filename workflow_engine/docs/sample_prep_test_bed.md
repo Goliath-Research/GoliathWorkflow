@@ -98,7 +98,7 @@ context = plan_sample_prep_context({
 
 Then create/start via portal SQL (`portal.sp_create_and_start_instance`) with `workflow_version_id` and `context_json`.
 
-## Local smoke
+## Local smoke (stubbed externals)
 
 ```bash
 source .venv/bin/activate
@@ -107,8 +107,43 @@ bash scripts/bootstrap_sample_prep_smoke_fixtures.sh
 bash scripts/smoke_sample_prep.sh
 ```
 
+Bootstrap writes fixtures under `.smoke/sample_prep/` (Parabricks metrics JSON + placeholder FASTQs). With `WORKER_STUB_EXTERNAL=1`, download/align/extract/QC handlers that are stubbed return synthetic pass artifacts — this validates the **workflow graph + DB claim path**, not real Parabricks/methylGrapher science.
 
-Bootstrap writes fixtures under `.smoke/sample_prep/` (Parabricks metrics JSON + placeholder FASTQs) so real `methyl_qc` runs while download/align/extract are stubbed.
+## Real-data canary (GPU, on-demand)
+
+For periodical confirmation of the full SamplePrep science path on one public WGBS
+sample (linear + stock Giraffe + methylGrapher), use the real canary — **not** the
+stub smoke and **not** catalog/golden PR tests.
+
+| Piece | Path |
+|-------|------|
+| Pinned provenance | [`tests/real_data/sample_prep_canary/provenance.json`](../../tests/real_data/sample_prep_canary/provenance.json) (`SRR28293403` / HG00621) |
+| Config example | [`tests/real_data/sample_prep_canary/registry.example.json`](../../tests/real_data/sample_prep_canary/registry.example.json) |
+| Provision FASTQs | `bash scripts/provision_sample_prep_canary.sh` |
+| Run canary | `bash scripts/smoke_sample_prep_real.sh --tier subset` |
+| ADO pipeline | [`ci/azure-pipelines-sample-prep-canary.yml`](../../ci/azure-pipelines-sample-prep-canary.yml) |
+| Checklist | [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md) |
+
+```bash
+source .venv/bin/activate
+unset WORKER_STUB_EXTERNAL
+# One-time: download SRA, write subset, checksum, stage under fastqStorage root
+bash scripts/provision_sample_prep_canary.sh --stage-root /work/fastq-storage
+# Merge checksums into site testing.sample_prep_canary (or METHYL_SAMPLE_PREP_CANARY_CONFIG)
+export METHYL_SITE_CONFIG=/work/site/methyl_site.json
+bash scripts/smoke_sample_prep_real.sh --tier subset
+# After subset passes (expensive):
+bash scripts/smoke_sample_prep_real.sh --tier full
+```
+
+**Interpretation**
+
+- `linear` — biological reference (Parabricks `fq2bam_meth` + MethylExtract).
+- `pangenome` — stock Giraffe **engineering comparator only** (workflow/artifacts; no methylation parity).
+- `pangenome_wgbs` — methylGrapher BS path; compared to linear via operator-set thresholds.
+
+Retain qualification JSON/JUnit/Markdown under the canary report directory for longitudinal
+comparison. NVIDIA does not publish a WGBS FASTQ fixture; GSE261315 is the citable public source.
 
 ## QC outcomes
 

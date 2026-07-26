@@ -49,6 +49,22 @@ def start_sample_prep(
     )
 
     context = plan_sample_prep_context(planner_payload)
+    # Profile / alignment overlays from the start request must survive planning so
+    # finalize/seed_pipeline_scope_flags can derive usePangenome / useWgbsPangenome.
+    for key in (
+        "alignmentMode",
+        "pipelineProfile",
+        "pipelineProcedure",
+        "libraryProtocol",
+        "usePangenome",
+        "useWgbsPangenome",
+        "actionConfig",
+        "profilePath",
+        "procedurePath",
+        "siteConfigPath",
+    ):
+        if key in body and body[key] is not None:
+            context[key] = body[key]
     from cfg.sync_on_start import ensure_study_work_synced
 
     context = ensure_study_work_synced(context)

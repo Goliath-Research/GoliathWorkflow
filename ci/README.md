@@ -12,6 +12,7 @@ Each YAML lives in **this repository** so Azure DevOps can point pipelines at lo
 | [`azure-pipelines-release-deploy.yml`](azure-pipelines-release-deploy.yml) | Epimethyl-Release-Deploy | Manual (+ approval) |
 | [`azure-pipelines-real-data.yml`](azure-pipelines-real-data.yml) | MethylPipeline-RealData | Manual / scheduled (self-hosted) |
 | [`azure-pipelines-smoke.yml`](azure-pipelines-smoke.yml) | MethylPipeline-Distributed-Smoke | Nightly + manual (`production-work-agents`) |
+| [`azure-pipelines-sample-prep-canary.yml`](azure-pipelines-sample-prep-canary.yml) | MethylPipeline-SamplePrep-Canary | Manual + monthly subset (`production-work-agents`, real GPU) |
 | [`azure-pipelines-methylgrapher-image.yml`](azure-pipelines-methylgrapher-image.yml) | MethylPipeline-MethylGrapher-Image | Manual / path filter on `workers/docker/methylgrapher/**` (`build-arm64`) — **image build only**, not deploy |
 
 ## Regression and coverage gate (PR pipeline)
@@ -75,6 +76,25 @@ as `healthy`/`PCa`) on the self-hosted `production-work-agents` pool, which moun
 they only execute where a real sample is declared via the site manifest `testing`
 block or `METHYL_TEST_DATA_CONFIG`. See
 [`../docs/reference/test-data-registry.md`](../docs/reference/test-data-registry.md).
+
+## SamplePrep real-data canary (self-hosted GPU)
+
+`azure-pipelines-sample-prep-canary.yml` runs one pinned public WGBS sample
+(`GSE261315` / `SRR28293403`) through SamplePrep for `linear`, stock `pangenome`
+(engineering comparator), and `pangenome_wgbs` (methylGrapher). Default tier is
+the deterministic **subset**; pass `tier=full` for periodic qualification.
+Requires provisioned FASTQs in `fastqStorage`, `WORKER_STUB_EXTERNAL` unset, and
+site `testing.sample_prep_canary` (or `METHYL_SAMPLE_PREP_CANARY_CONFIG`).
+
+```bash
+# Local / operator
+bash scripts/provision_sample_prep_canary.sh --stage-root /work/fastq-storage
+unset WORKER_STUB_EXTERNAL
+bash scripts/smoke_sample_prep_real.sh --tier subset
+```
+
+Docs: [`../workflow_engine/docs/sample_prep_test_bed.md`](../workflow_engine/docs/sample_prep_test_bed.md),
+[`../workers/tests/test_methylgrapher_wgbs_canary.md`](../workers/tests/test_methylgrapher_wgbs_canary.md).
 
 ## MethylExtractor repo (separate)
 

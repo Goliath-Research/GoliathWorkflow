@@ -94,6 +94,72 @@
           "/work/samples/__testref_pca_2__"
         ]
       }
+    },
+    "sample_prep_canary": {
+      "sample_id": "canary-SRR28293403",
+      "analyte": "buffy_coat",
+      "provenance_path": "tests/real_data/sample_prep_canary/provenance.json",
+      "source": {
+        "geo_series": "GSE261315",
+        "geo_sample": "GSM8140413",
+        "sra_run": "SRR28293403",
+        "bioproject": "PRJNA1086543",
+        "individual_id": "HG00621",
+        "title": "WGBS-HG00621-Rep1",
+        "library_strategy": "Bisulfite-Seq",
+        "library_layout": "PAIRED",
+        "platform": "ILLUMINA Illumina NovaSeq 6000",
+        "pubmed_id": "39868538",
+        "license_note": "Public SRA/GEO (PRJNA1086543). Non-PHI. Cite GSE261315 / PubMed 39868538.",
+        "source_urls": [
+          "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE261315",
+          "https://www.ncbi.nlm.nih.gov/sra/?term=SRR28293403"
+        ],
+        "notes": "Pinned methylGrapher/HPRC WGBS canary; stock Giraffe is engineering-only."
+      },
+      "fastq_storage": {
+        "type": "file",
+        "basePath": "/work/fastq-storage",
+        "endpointRef": "fastqStorage"
+      },
+      "full": {
+        "prefix": "canary/gse261315/SRR28293403/full/",
+        "r1_name": "SRR28293403_1.fastq.gz",
+        "r2_name": "SRR28293403_2.fastq.gz",
+        "r1_sha256": null,
+        "r2_sha256": null,
+        "expected_read_pairs": 158106440
+      },
+      "subset": {
+        "prefix": "canary/gse261315/SRR28293403/subset/",
+        "r1_name": "SRR28293403_1.fastq.gz",
+        "r2_name": "SRR28293403_2.fastq.gz",
+        "r1_sha256": null,
+        "r2_sha256": null,
+        "expected_read_pairs": 2000000
+      },
+      "subset_read_pairs": 2000000,
+      "modes": [
+        "linear",
+        "pangenome",
+        "pangenome_wgbs"
+      ],
+      "directional": false,
+      "library_protocol": "wgbs_pangenome",
+      "asset_pins": {
+        "linear_genome_key": "grch38",
+        "pangenome_key": "pangenome-grch38-d9-1.70",
+        "pangenome_wgbs_key": "pangenome-grch38-d9-bs-1.70",
+        "methylgrapher_image_env": "METHYL_METHYLGRAPHER_IMAGE"
+      },
+      "thresholds": {
+        "mapping_rate_delta": 0.15,
+        "duplication_rate_delta": 0.2,
+        "cpg_sites_min_fraction_of_linear": 0.5,
+        "mean_coverage_delta": 20.0,
+        "require_extraction_qc_pass": true,
+        "require_read_level_patterns": false
+      }
     }
   }
 }

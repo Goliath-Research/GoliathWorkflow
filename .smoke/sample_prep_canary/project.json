@@ -1,0 +1,30 @@
+{
+  "project_name": "SamplePrep_real_canary",
+  "output_base": "/home/ubuntu/MethylPipeline/.smoke/sample_prep_canary/output",
+  "samples_base_path": "/home/ubuntu/MethylPipeline/.smoke/sample_prep_canary/samples",
+  "chromosomes": [
+    "1",
+    "21"
+  ],
+  "contexts": [
+    "CG"
+  ],
+  "controls": {
+    "label": "healthy",
+    "groups": [
+      {
+        "label": "all",
+        "sample_paths": []
+      }
+    ]
+  },
+  "diseases": {
+    "label": "cancer",
+    "groups": [
+      {
+        "label": "PCa",
+        "sample_paths": []
+      }
+    ]
+  }
+}

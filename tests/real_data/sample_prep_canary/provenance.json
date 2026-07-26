@@ -1,0 +1,67 @@
+{
+  "schema_version": "1.0",
+  "role": "sample_prep_real_data_canary",
+  "selected": {
+    "geo_series": "GSE261315",
+    "geo_sample": "GSM8140413",
+    "title": "WGBS-HG00621-Rep1",
+    "individual_id": "HG00621",
+    "sra_run": "SRR28293403",
+    "sra_experiment": "SRX23902469",
+    "biosample": "SAMN40381571",
+    "bioproject": "PRJNA1086543",
+    "sra_study": "SRP494617",
+    "pubmed_id": "39868538"
+  },
+  "assay": {
+    "organism": "Homo sapiens",
+    "library_strategy": "Bisulfite-Seq",
+    "library_source": "GENOMIC",
+    "library_selection": "RANDOM",
+    "library_layout": "PAIRED",
+    "platform": "ILLUMINA",
+    "instrument_model": "Illumina NovaSeq 6000",
+    "library_construction": "Accel-NGS Methyl-Seq DNA Library Kit (Swift) with EZ-96 DNA Methylation-Gold Mag Prep; lambda spike-in reported in GEO protocol",
+    "directional_guidance": "Accel-NGS Adaptase libraries are typically treated as non-directional for bisulfite dual-index alignment; set actionConfig.methylgrapher_wgbs.directional=false unless site validation says otherwise.",
+    "spots": 158106440,
+    "bases": 47748144880,
+    "avg_read_length": 302,
+    "sra_size_mb": 15910
+  },
+  "why_this_run": [
+    "Public GEO/SRA WGBS produced for the methylGrapher paper on HPRC individuals.",
+    "HG00621 is represented in the first Human Pangenome draft graphs used by stock Giraffe and methylGrapher BS bundles.",
+    "Paired-end human WGBS suitable for linear fq2bam_meth, stock Giraffe (engineering comparator), and methylGrapher WGBS.",
+    "NVIDIA Parabricks does not publish a WGBS FASTQ fixture; this replaces that assumption with a citable public source."
+  ],
+  "license_use": {
+    "consent": "public",
+    "note": "Public SRA/GEO release under BioProject PRJNA1086543. Non-PHI. Retain accession and PubMed citation in canary reports.",
+    "citation": "Wang et al., Nucleic Acids Research (methylGrapher); GEO GSE261315; SRA SRR28293403."
+  },
+  "source_urls": [
+    "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE261315",
+    "https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSM8140413",
+    "https://www.ncbi.nlm.nih.gov/sra/?term=SRR28293403",
+    "https://www.ncbi.nlm.nih.gov/bioproject/1086543"
+  ],
+  "storage_layout": {
+    "full_prefix": "canary/gse261315/SRR28293403/full/",
+    "subset_prefix": "canary/gse261315/SRR28293403/subset/",
+    "r1_name": "SRR28293403_1.fastq.gz",
+    "r2_name": "SRR28293403_2.fastq.gz",
+    "checksum_manifest": "canary/gse261315/SRR28293403/checksums.json"
+  },
+  "subset_recipe": {
+    "method": "first_n_paired_records",
+    "description": "Deterministic paired-end subset: take the first N read pairs from the full FASTQ pair (same order, both mates). No random sampling at canary runtime.",
+    "default_operator_pairs": null,
+    "recommended_routine_pairs": 2000000,
+    "notes": "Operators set subset_read_pairs in the site testing.sample_prep_canary block. Provisioning writes SHA-256 after materialization."
+  },
+  "comparator_policy": {
+    "linear": "biological reference path (Parabricks fq2bam_meth + MethylExtract)",
+    "pangenome": "stock Giraffe engineering/robustness comparator only; do not require methylation parity with linear or methylGrapher",
+    "pangenome_wgbs": "bisulfite-aware methylGrapher path; compare QC/H5 metrics to linear using operator-set thresholds"
+  }
+}

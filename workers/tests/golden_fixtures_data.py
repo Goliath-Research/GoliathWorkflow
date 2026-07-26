@@ -84,6 +84,18 @@ GOLDEN_INPUTS: Dict[str, Dict[str, Any]] = {
         "sampleDir": "/work/samples/S1",
         "projectPath": "/work/p/project.json",
     },
+    "sample.methylgrapher_wgbs_align": {
+        "tool": "MethylGrapherWgbsAlign",
+        "sampleId": "S1",
+        "sampleDir": "/work/samples/S1",
+        "projectPath": "/work/p/project.json",
+    },
+    "sample.methylgrapher_wgbs_extract": {
+        "tool": "MethylGrapherWgbsExtract",
+        "sampleId": "S1",
+        "sampleDir": "/work/samples/S1",
+        "projectPath": "/work/p/project.json",
+    },
     "sample.extraction_qc": {
         "tool": "MethylExtractionQc",
         "sampleId": "S1",
@@ -336,6 +348,22 @@ GOLDEN_OUTPUTS: Dict[str, Dict[str, Any]] = {
     },
     "sample.fragmentomics": {"status": "ok", "sampleId": "S1", "outputDir": "/work/frag/S1"},
     "sample.methyl_extract": {"status": "ok", "sampleId": "S1", "h5Files": ["21-CG.h5"], "n_h5_files": 1},
+    "sample.methylgrapher_wgbs_align": {
+        "status": "ok",
+        "sampleId": "S1",
+        "bamPath": "/work/samples/S1/S1.bam",
+        "gafPath": "/work/samples/S1/S1.alignment.gaf",
+        "metricsJson": "/work/samples/S1/S1.alignment_metrics.json",
+        "qcMetricsTar": "/work/samples/S1/S1.qc-metrics.tar",
+        "dedupMetricsPath": "/work/samples/S1/S1.deduplicate_metrics.txt",
+        "conversionReportPath": "/work/samples/S1/S1.conversion_report.txt",
+    },
+    "sample.methylgrapher_wgbs_extract": {
+        "status": "ok",
+        "sampleId": "S1",
+        "h5Files": ["21-CG.h5"],
+        "n_h5_files": 1,
+    },
     "sample.extraction_qc": {
         "status": "ok",
         "sampleId": "S1",

@@ -86,9 +86,12 @@ def test_sample_prep_actions_have_domain_effects() -> None:
     sample_prep = [
         "sample.download_fastq",
         "sample.parabricks_fq2bam",
+        "sample.parabricks_giraffe",
+        "sample.methylgrapher_wgbs_align",
         "sample.methyl_qc",
         "sample.fragmentomics",
         "sample.methyl_extract",
+        "sample.methylgrapher_wgbs_extract",
         "sample.extraction_qc",
         "sample.qc_failed",
     ]
@@ -99,3 +102,20 @@ def test_sample_prep_actions_have_domain_effects() -> None:
 
     qc = next(e for e in ACTION_CATALOG if e.action_name == "sample.methyl_qc")
     assert "qcPass" in [v for v, _ in qc.domain_effects.scope_bindings]
+
+
+def test_all_sample_prep_catalog_actions_have_golden_fixtures() -> None:
+    from pathlib import Path
+
+    from golden_fixtures_data import GOLDEN_INPUTS, GOLDEN_OUTPUTS
+
+    sample_prep = [e.action_name for e in ACTION_CATALOG if e.category == "sample_prep"]
+    missing_in = sorted(a for a in sample_prep if a not in GOLDEN_INPUTS)
+    missing_out = sorted(a for a in sample_prep if a not in GOLDEN_OUTPUTS)
+    assert not missing_in, missing_in
+    assert not missing_out, missing_out
+    golden_dir = Path(__file__).resolve().parent / "golden"
+    for action_name in sample_prep:
+        stem = action_name.replace(".", "_")
+        assert (golden_dir / f"{stem}.input.json").is_file(), action_name
+        assert (golden_dir / f"{stem}.output.json").is_file(), action_name

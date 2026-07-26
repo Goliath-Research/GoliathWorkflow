@@ -136,3 +136,23 @@ Reference samples must be **non-PHI**: use public/consented sources. The
 `provenance` field and the regulatory evidence index record the source, consent
 basis, and producing MethylExtractor release so a real-data test result is
 traceable validation evidence, not just convenience.
+
+## SamplePrep real-data canary (optional `sample_prep_canary`)
+
+In addition to extracted-H5 reference samples, the registry may declare a
+**SamplePrep canary** under `sample_prep_canary` (same site `testing` block or a
+standalone `METHYL_SAMPLE_PREP_CANARY_CONFIG` JSON). This drives the on-demand
+FASTQ→align→QC→extract matrix across `linear`, `pangenome` (engineering-only),
+and `pangenome_wgbs`.
+
+- Provenance pin: [`../tests/real_data/sample_prep_canary/provenance.json`](../../tests/real_data/sample_prep_canary/provenance.json)
+  (`GSE261315` / `SRR28293403` / HG00621).
+- Example config: [`../tests/real_data/sample_prep_canary/registry.example.json`](../../tests/real_data/sample_prep_canary/registry.example.json)
+  (also embedded in [`registry.example.json`](../../tests/real_data/registry.example.json)).
+- Provision: `scripts/provision_sample_prep_canary.sh` (checksummed full + subset into `fastqStorage`).
+- Execute: `scripts/smoke_sample_prep_real.sh` / [`ci/azure-pipelines-sample-prep-canary.yml`](../../ci/azure-pipelines-sample-prep-canary.yml).
+- Validation helpers: `methyl_utils.testing.sample_prep_canary`.
+
+Do **not** put production FASTQ paths into golden fixtures or catalog unit tests.
+Operator thresholds (`mapping_rate_delta`, etc.) are site/config values — never
+Python `DEFAULT_*` constants.

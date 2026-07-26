@@ -39,7 +39,7 @@ See [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/doc
 
 - [ ] Site `pangenome_wgbs_genome` / `actionConfig.methylgrapher_wgbs` provisioned (`pangenome-grch38-d9-bs-1.70` on QNAP → `/work/genomes/…/d9-bs/1.70`)
 - [ ] `METHYL_METHYLGRAPHER_IMAGE` pinned on GPU workers (see [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md))
-- [ ] Canary passed before promoting `buffy_wgbs_pangenome_gene_fc` in production ([`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md))
+- [ ] Canary passed before promoting `buffy_wgbs_pangenome_gene_fc` in production (`bash scripts/smoke_sample_prep_real.sh --tier subset`; checklist [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md); ADO [`ci/azure-pipelines-sample-prep-canary.yml`](../../ci/azure-pipelines-sample-prep-canary.yml))
 
 **Recommended start:** portal SQL after planning (`portal.sp_create_and_start_instance`). For CI / Admin CLI:
 
