@@ -130,13 +130,20 @@ fi
 
 SUBSET_R1="$WORK_DIR/subset/$R1_NAME"
 SUBSET_R2="$WORK_DIR/subset/$R2_NAME"
+# Prefer uncompressed FASTQs for subsetting (much faster than gunzip-streaming).
+SUBSET_SRC_R1="$FULL_R1"
+SUBSET_SRC_R2="$FULL_R2"
+if [[ -f "$WORK_DIR/full/${RUN_ACC}_1.fastq" && -f "$WORK_DIR/full/${RUN_ACC}_2.fastq" ]]; then
+  SUBSET_SRC_R1="$WORK_DIR/full/${RUN_ACC}_1.fastq"
+  SUBSET_SRC_R2="$WORK_DIR/full/${RUN_ACC}_2.fastq"
+fi
 if [[ ! -f "$SUBSET_R1" || ! -f "$SUBSET_R2" ]]; then
-  echo "Writing deterministic first-${SUBSET_PAIRS}-pair subset..."
+  echo "Writing deterministic first-${SUBSET_PAIRS}-pair subset from $(basename "$SUBSET_SRC_R1")..."
   PYTHON_BIN="${PYTHON_BIN:-python3}"
   if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
     PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
   fi
-  "$PYTHON_BIN" - "$FULL_R1" "$FULL_R2" "$SUBSET_R1" "$SUBSET_R2" "$SUBSET_PAIRS" <<'PY'
+  "$PYTHON_BIN" - "$SUBSET_SRC_R1" "$SUBSET_SRC_R2" "$SUBSET_R1" "$SUBSET_R2" "$SUBSET_PAIRS" <<'PY'
 from pathlib import Path
 import gzip
 import sys
