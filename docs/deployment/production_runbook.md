@@ -31,7 +31,15 @@ Destination: `s3://epimethyl/genomes/` at `https://s3.us-east-1.myqnapcloud.io`.
 
 ## Stage 1 — SamplePrepPipeline
 
-See [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md) and the SamplePrep test bed [`workflow_engine/docs/sample_prep_test_bed.md`](../../workflow_engine/docs/sample_prep_test_bed.md).
+See [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md), and the SamplePrep test bed [`workflow_engine/docs/sample_prep_test_bed.md`](../../workflow_engine/docs/sample_prep_test_bed.md).
+
+**Alignment modes:** each sample uses one path from instance/profile `alignmentMode` — `linear` (`parabricks.fq2bam`), `pangenome` (stock Giraffe), or `pangenome_wgbs` (methylGrapher dual C2T/G2A via `sample.methylgrapher_wgbs_align` / `sample.methylgrapher_wgbs_extract`). Procedure `buffy_wgbs_pangenome_gene_fc` selects `pangenome_wgbs`. Program checks `useWgbsPangenome` **before** `usePangenome` — do not fall back to stock Giraffe when the BS bundle is missing.
+
+**WGBS pangenome operator checklist:**
+
+- [ ] Site `pangenome_wgbs_genome` / `actionConfig.methylgrapher_wgbs` provisioned (`pangenome-grch38-d9-bs-1.70` on QNAP → `/work/genomes/…/d9-bs/1.70`)
+- [ ] `METHYL_METHYLGRAPHER_IMAGE` pinned on GPU workers (see [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md))
+- [ ] Canary passed before promoting `buffy_wgbs_pangenome_gene_fc` in production ([`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md))
 
 **Recommended start:** portal SQL after planning (`portal.sp_create_and_start_instance`). For CI / Admin CLI:
 
@@ -40,7 +48,7 @@ methyl-study-start sample-prep-start request.json
 # request.json: projectPath, workflow_version_id, fastqStorage, sampleCsvs, ...
 ```
 
-**Ingress vs retention:** `fastqStorage` must point at **laboratory-owned** storage (never inferred from myQNAPcloud). HDF5/sample archive (`sampleStorage` / `h5Storage`) defaults from `portal.resource_profile` → published `cfg.storage_endpoint` (e.g. `epimethyl-archive`) when omitted. See [portal_resource_profile.md](portal_resource_profile.md).
+**Ingress vs retention:** `fastqStorage` must point at **laboratory-owned** storage (never inferred from myQNAPcloud). Sample archive (`sampleStorage` / `sampleDestination`; legacy alias `h5Storage`) defaults from `portal.resource_profile` → published `cfg.storage_endpoint` (e.g. `epimethyl-archive`) when omitted. See [portal_resource_profile.md](portal_resource_profile.md).
 
 **Local smoke (stub worker):**
 
@@ -49,11 +57,11 @@ export WORKER_STUB_EXTERNAL=1
 bash scripts/smoke_sample_prep.sh
 ```
 
-Poll until **COMPLETED**. Do not start validation until all samples have per-chromosome HDF5s archived (when `h5Storage` is configured) and present locally under `/work/samples/{id}/`.
+Poll until **COMPLETED**. Do not start validation until all samples have per-chromosome HDF5s under `/work/samples/{id}/` (and remote archive when `sampleDestination` is configured).
 
-**HDF5 archive:** After `sample.methyl_extract`, `sample.archive_sample` copies HDF5 and related artifacts to S3/Azure/NFS per instance `h5Storage` + per-sample prefix. Local files are retained for validation and BAM deletion.
+**Sample archive:** After extraction QC disposition, `sample.archive_sample` uploads a curated bundle (QC JSON, optional FASTQs, H5 including patterns) to S3/Azure/NFS per `sampleDestination`. Modes: `full` (extraction pass) or `qc_only` (terminal fail). Local HDF5 files are retained for validation; BAM is never uploaded. Retired action: `sample.upload_h5` — use `sample.archive_sample`.
 
-**FASTQ retention:** SamplePrep keeps FASTQs until final QC (pass or final fail after any trim/realign retry). Samples with `REALIGN_READ2_TRIM` run `sample.trim_fastq` → Parabricks `forceRealign` → `methyl_qc` retry before `delete_fastqs`.
+**FASTQ retention:** SamplePrep keeps FASTQs until final QC (pass or final fail after any trim/realign retry). Remediation runs `sample.trim_fastq` → the **same** alignment mode with `forceRealign` → `methyl_qc` retry before optional `delete_fastqs`.
 
 **Cohort screening (existing QC JSONs):**
 
@@ -82,7 +90,8 @@ methyl-study-start validation-start request.json
 | Symptom | Check |
 |---------|--------|
 | Parabricks tasks fail | `verify_parabricks.sh`, NGC login, `nvidia-ctk` |
-| Extract fails | `verify_methyl_extractor.sh`, `HDF5_PLUGIN_PATH` |
+| methylGrapher WGBS tasks fail | `METHYL_METHYLGRAPHER_IMAGE`, BS bundle under `d9-bs/1.70`, canary checklist |
+| Extract fails | `verify_methyl_extractor.sh`, `HDF5_PLUGIN_PATH`; WGBS pangenome path uses `methylgrapher.wgbs_extract` |
 | Worker idle | `WORKER_CAPABILITY` filter vs task capability |
 | FOREACH errors | `08_foreach_support.sql` applied on PostgreSQL |
 

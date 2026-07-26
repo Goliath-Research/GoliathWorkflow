@@ -1,23 +1,34 @@
 flowchart TD
-  dl[download_fastq] --> mode{usePangenome?}
+  dl[download_fastq] --> mode{alignmentMode}
   mode -->|linear| fq[parabricks_fq2bam]
   mode -->|pangenome| gf[parabricks_giraffe]
+  mode -->|pangenome_wgbs| mg[methylgrapher_wgbs_align]
   fq --> aqc[methyl_qc]
   gf --> aqc
+  mg --> aqc
   aqc --> gate{qcPass?}
   gate -->|yes| frag{isCfdna?}
   frag -->|yes| fm[fragmentomics_BAM]
-  frag -->|no| ext[methyl_extract]
-  fm --> ext
-  ext --> eqc[extraction_qc]
+  frag -->|no| extMode{useWgbsPangenome?}
+  fm --> extMode
+  extMode -->|yes| mgExt[methylgrapher_wgbs_extract]
+  extMode -->|no| mex[methyl_extract]
+  mgExt --> patterns["patterns.h5 sidecars"]
+  mex --> patterns
+  patterns --> eqc[extraction_qc]
   eqc --> pass{extractionQcPass?}
   pass -->|yes| archive[archive_full]
+  archive --> cleanup[delete_fastqs_optional_then_delete_bam]
   gate -->|no + remediate| trim[trim_fastq_fastp]
-  trim --> rmode{usePangenome?}
+  trim --> rmode{alignmentMode}
   rmode -->|linear| fq2[fq2bam_forceRealign]
   rmode -->|pangenome| gf2[giraffe_forceRealign]
+  rmode -->|pangenome_wgbs| mg2[methylgrapher_forceRealign]
   fq2 --> aqc2[methyl_qc_retry]
   gf2 --> aqc2
+  mg2 --> aqc2
   aqc2 --> gate
   gate -->|no terminal| reject[archive_qc_only]
   pass -->|no| reject
+  reject --> cleanup
+  patterns -.->|downstream study lifecycle| info[pipeline.info_measures]

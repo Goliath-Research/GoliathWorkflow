@@ -89,7 +89,7 @@ oncology cohorts. Near-term packs use the same control plane:
 | Pack | Status | Notes |
 |------|--------|--------|
 | Methylation **process** (WGBS / EM-Seq) | **In production use** | SamplePrep → MC stability → freeze → model; SaMD ladder. |
-| Assay procedures — `buffy_wgbs_pangenome_gene_fc` | **In production use** | Default human buffy research: pangenome (Giraffe), read-level informME, Houseman deconv, gene FeatureCuts. Linear alternate: `buffy_wgbs_linear_gene_fc`. |
+| Assay procedures — `buffy_wgbs_pangenome_gene_fc` | **In production use** | Default human buffy research: WGBS pangenome (methylGrapher dual C2T/G2A, `alignmentMode: pangenome_wgbs`), read-level informME, Houseman deconv, gene FeatureCuts. Linear alternate: `buffy_wgbs_linear_gene_fc`. Stock Giraffe (`pangenome`) is a separate non-WGBS path. |
 | Assay procedures — `cfdna_wgbs_plasma` | **In production use** | Plasma WGBS + fragmentomics, gene FeatureCuts, no cell-deconv lifecycle (`study_validation_lifecycle_no_deconv`). |
 | Assay procedures — `cfdna_emseq_targeted` | **Shipped (research)** | Inch-wide / mile-deep: `libraryProtocol: emseq_targeted`, `sample_prep_emseq`, operator panel BED (`methyl_extract.target_panel_bed`), elevated `min_cov`, no deconv. |
 | Assay procedures — `plant_wgbs_gene_fc` | **Shipped (research)** | Plant WGBS trait recipe; pairs with `plant_tissue` analyte and plant lifecycle. |
@@ -149,8 +149,8 @@ graph TD
     in the DB; secrets expanded into task payloads over TLS—never as plain files
     under `/work`).
   * **Hardware acceleration:** Supported NVIDIA Parabricks GPU paths for
-    alignment-heavy SamplePrep (including pangenome Giraffe for buffy
-    procedures).
+    alignment-heavy SamplePrep (linear fq2bam, stock pangenome Giraffe, and
+    methylGrapher WGBS pangenome for buffy procedures).
 
 #### C. Hybrid cloud (SaaS control plane + BYOC)
 

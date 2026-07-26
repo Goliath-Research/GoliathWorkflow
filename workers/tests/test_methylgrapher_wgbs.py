@@ -231,6 +231,34 @@ def test_dry_run_align_and_extract(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     patterns = list(sample_dir.glob("*.patterns.h5"))
     assert patterns
 
+    manifest_path = Path(extract["manifestPath"])
+    assert manifest_path.is_file()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["metadata"]["schema_name"] == "methylextractor.extraction_manifest"
+    assert manifest["metadata"]["contexts_extracted"] == ["CG"]
+    assert manifest["metadata"]["extractor"] == "methylGrapher"
+    assert "cpg_weighted_mean_coverage" in manifest["summary"]
+    assert manifest["summary"]["cpg_weighted_mean_coverage"] >= 10.0
+    assert "1" in manifest["per_chromosome"]
+    assert isinstance(manifest["per_chromosome"]["1"].get("CG"), dict)
+    assert manifest["per_chromosome"]["1"]["CG"]["num_positions"] >= 1
+    assert "read_filtering" not in manifest  # unavailable for graph extract; skip check
+    assert manifest["tool"] == "methylGrapher"
+    assert "graph_assets" in manifest
+
+    from methyl_extraction_qc.guardrails import evaluate_guardrails
+    from methyl_extraction_qc.models.config import ExtractionQCGuardrailConfig
+
+    report = evaluate_guardrails(
+        manifest,
+        config=ExtractionQCGuardrailConfig(),
+        expected_chromosomes=["1"],
+    )
+    assert report["overall_pass"] is True
+    assert report["metrics"]["cpg_weighted_mean_coverage"]["pass"] is True
+    assert report["metrics"]["chromosome_completeness"]["pass"] is True
+    assert report["metrics"]["read_discard_fraction"]["pass"] is True
+
 
 def test_force_realign_clears_outputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("METHYL_METHYLGRAPHER_DRY_RUN", "1")

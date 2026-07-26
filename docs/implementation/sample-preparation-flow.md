@@ -10,38 +10,22 @@ Developer and operator reference for the per-sample upstream workflow: laborator
 
 SamplePrepPipeline is the universal entry point for every sample (cfDNA, buffy coat, or other analytes). Each sample passes through **two automated guardrails** before entering stability, freeze, or discovery workflows:
 
-1. **Alignment QC** (`sample.methyl_qc` / `methyl-qc`) — validates Parabricks alignment and sequencing metrics; may trigger focused FASTP trim and realign.
-2. **Extraction QC** (`sample.extraction_qc` / `methyl-extraction-qc`) — validates MethylExtractor coverage and conversion-quality signal.
+1. **Alignment QC** (`sample.methyl_qc` / `methyl-qc`) — validates linear / stock Giraffe / methylGrapher QC BAM metrics; may trigger focused FASTP trim and realign on the **same** alignment mode.
+2. **Extraction QC** (`sample.extraction_qc` / `methyl-extraction-qc`) — validates the extraction manifest (MethylExtractor or methylGrapher canonical shape) for coverage and conversion-quality signal.
 
 Without these gates, bad alignments waste GPU extraction time, and under-covered extractions pollute centroids, DMP discovery, and classifiers.
 
-```mermaid
-flowchart TD
-  dl[download_fastq] --> mode{usePangenome?}
-  mode -->|linear| fq[parabricks_fq2bam]
-  mode -->|pangenome| gf[parabricks_giraffe]
-  fq --> aqc[methyl_qc]
-  gf --> aqc
-  aqc --> gate{qcPass?}
-  gate -->|yes| frag{isCfdna?}
-  frag -->|yes| fm[fragmentomics_BAM]
-  frag -->|no| ext[methyl_extract]
-  fm --> ext
-  ext --> eqc[extraction_qc]
-  eqc --> pass{extractionQcPass?}
-  pass -->|yes| archive[archive_full]
-  gate -->|no + remediate| trim[trim_fastq_fastp]
-  trim --> rmode{usePangenome?}
-  rmode -->|linear| fq2[fq2bam_forceRealign]
-  rmode -->|pangenome| gf2[giraffe_forceRealign]
-  fq2 --> aqc2[methyl_qc_retry]
-  gf2 --> aqc2
-  aqc2 --> gate
-  gate -->|no terminal| reject[archive_qc_only]
-  pass -->|no| reject
-```
+Canonical flowchart source: [`docs/diagrams/src/sample-prep-flow.mmd`](../diagrams/src/sample-prep-flow.mmd) (pre-rendered SVG/PNG under `docs/diagrams/out/`). Do **not** maintain a second inline copy of the graph here — the three-mode align/extract routing lives only in that `.mmd` and in [`sample_prep.program.json`](../../workflow_engine/domain/fixtures/sample_prep.program.json).
 
-Canonical source: [`docs/diagrams/src/sample-prep-flow.mmd`](../diagrams/src/sample-prep-flow.mmd) (pre-rendered SVG/PNG under `docs/diagrams/out/`).
+### Alignment modes (three-way)
+
+| Mode | `alignmentMode` | Scope flags | Align action | Extract action |
+|------|-----------------|-------------|--------------|----------------|
+| Linear (default) | `linear` | `useWgbsPangenome=false`, `usePangenome=false` | `sample.parabricks_fq2bam` | `sample.methyl_extract` |
+| Stock pangenome | `pangenome` | `useWgbsPangenome=false`, `usePangenome=true` | `sample.parabricks_giraffe` | `sample.methyl_extract` |
+| WGBS pangenome | `pangenome_wgbs` | `useWgbsPangenome=true`, `usePangenome=true` | `sample.methylgrapher_wgbs_align` | `sample.methylgrapher_wgbs_extract` |
+
+Program `IF` order checks `useWgbsPangenome` **before** `usePangenome`, so the WGBS path never falls through to stock Giraffe. Seeded by [`pipeline_profiles.seed_pipeline_scope_flags`](../../workflow_engine/domain/pipeline_profiles.py).
 
 ### Workflow scope variables
 
@@ -52,8 +36,10 @@ Canonical source: [`docs/diagrams/src/sample-prep-flow.mmd`](../diagrams/src/sam
 | `remediateAlignment` | `sample.methyl_qc` | True when focused trim + realign is recommended |
 | `trimFront1`, `trimTail1`, `trimFront2`, `trimTail2` | `sample.methyl_qc` | Recommended fastp trim bases per read end |
 | `extractionQcPass` | `sample.extraction_qc` | `guardrails.overall_pass` — extraction gate |
+| `useWgbsPangenome` / `usePangenome` | instance/profile seed | Alignment/extract branch selectors |
+| `deleteFastqs` | instance/profile (default true) | Whether to delete local FASTQs after final disposition |
 
-**Ordering rationale:** alignment QC runs before cfDNA BAM fragmentomics so failed samples skip BAM scanning. FASTQs are retained until final QC disposition so fastp remediation can run.
+**Ordering rationale:** alignment QC runs before cfDNA BAM fragmentomics so failed samples skip BAM scanning. FASTQs are retained until final QC disposition so fastp remediation can run. Read-level `{chr}-CG.patterns.h5` sidecars are emitted at extract time; `pipeline.info_measures` runs later in the **study lifecycle**, not inside SamplePrep.
 
 ## Storage topology: sample sources and result archival
 
@@ -213,12 +199,15 @@ Full example: [`workflow_engine/sql_mssql/instance_context_examples/sample_prep_
 |-------|---------------|---------|-------------------|
 | Download | `sample.download_fastq` | `_handle_download_fastq` | [`workers/methyl_worker/fastq_source.py`](../../workers/methyl_worker/fastq_source.py) |
 | Align (linear) | `sample.parabricks_fq2bam` | `_handle_parabricks_fq2bam` | [`workers/methyl_worker/parabricks_runner.py`](../../workers/methyl_worker/parabricks_runner.py) |
-| Align (pangenome) | `sample.parabricks_giraffe` | `_handle_parabricks_giraffe` | [`workers/methyl_worker/giraffe_runner.py`](../../workers/methyl_worker/giraffe_runner.py) |
+| Align (stock pangenome) | `sample.parabricks_giraffe` | `_handle_parabricks_giraffe` | [`workers/methyl_worker/giraffe_runner.py`](../../workers/methyl_worker/giraffe_runner.py) |
+| Align (WGBS pangenome) | `sample.methylgrapher_wgbs_align` | `_handle_methylgrapher_wgbs_align` | [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py) |
 | Alignment QC | `sample.methyl_qc` | `_handle_methyl_qc` | [`packages/methylalignmentqc/methyl_alignment_qc/core/writer.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/writer.py) |
 | Trim (remediation) | `sample.trim_fastq` | `_handle_trim_fastq` | [`workers/methyl_worker/fastq_trim_runner.py`](../../workers/methyl_worker/fastq_trim_runner.py) |
 | cfDNA fragmentomics | `sample.fragmentomics` | — | [`packages/methylfragmentomics/`](../../packages/methylfragmentomics/) |
-| Extract | `sample.methyl_extract` | `_handle_methyl_extract` | [`workers/methyl_worker/extract_runner.py`](../../workers/methyl_worker/extract_runner.py) |
+| Extract (linear / stock) | `sample.methyl_extract` | `_handle_methyl_extract` | [`workers/methyl_worker/extract_runner.py`](../../workers/methyl_worker/extract_runner.py) |
+| Extract (WGBS pangenome) | `sample.methylgrapher_wgbs_extract` | `_handle_methylgrapher_wgbs_extract` | [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py) |
 | Extraction QC | `sample.extraction_qc` | `_handle_extraction_qc` | [`packages/methylextractionqc/methyl_extraction_qc/guardrails.py`](../../packages/methylextractionqc/methyl_extraction_qc/guardrails.py) |
+| Archive / cleanup | `sample.archive_sample`, `delete_fastqs`, `delete_bam` | — | [`workers/methyl_worker/sample_archive.py`](../../workers/methyl_worker/sample_archive.py) |
 
 ### Download FASTQs
 
@@ -248,7 +237,7 @@ When instance/profile sets `alignmentMode: "pangenome"` (scope flag `usePangenom
 1. **`pbrun giraffe`** — GPU vg Giraffe against an HPRC graph bundle from site manifest `pangenome_genome` (`gbz`, `dist`, `min`, `zipcodes`, `ref_paths`). Output is surjected to **GRCh38** coordinates via `--ref-paths` (same BAM artifact names as the linear path).
 2. **`pbrun collectmultiplemetrics --gen-all-metrics`** — regenerates the same Picard/GATK metric tables (`quality_yield`, `gcbias`, `insert_size`, `sequencingArtifact`, …) from the surjected BAM against `pangenome_genome.linear_ref_fasta`, packaged as `{sample_id}.qc-metrics.tar`.
 
-**Scientific requirement:** stock HPRC graphs are not bisulfite-aware. Operators must supply a **C→T-converted / WGBS-compatible graph** (or an explicit read-conversion workflow documented at the site). Default remains `alignmentMode: "linear"` (`fq2bam_meth`).
+**Scientific requirement:** stock HPRC graphs are **not** bisulfite-aware. Do **not** use stock Giraffe as a silent substitute for WGBS. For bisulfite-aware pangenome alignment, use `alignmentMode: "pangenome_wgbs"` (methylGrapher) below. Default remains `alignmentMode: "linear"` (`fq2bam_meth`).
 
 **Site manifest example** (`/work/site/methyl_site.json`):
 
@@ -265,11 +254,34 @@ When instance/profile sets `alignmentMode: "pangenome"` (scope flag `usePangenom
 
 Profile override: `actionConfig.parabricks.alignment_mode: "pangenome"`.
 
-**Staging the graph bundle:** run [`scripts/download_pangenome_hprc_grch38.sh`](../../scripts/download_pangenome_hprc_grch38.sh) on the worker/GPU node to download `hprc-v1.1-mc-grch38.d9.gbz` from the [HPRC public S3 bucket](https://github.com/human-pangenomics/hpp_pangenome_resources) and build `vg autoindex` + `ref_paths` files under `/work/genomes/pangenome/GRCh38/d9/1.70/`. For WGBS, point `PANGENOME_GBZ` at your bisulfite C→T graph and re-run indexing (`SKIP_DOWNLOAD=1` or `FORCE=1`).
+**Staging the graph bundle:** run [`scripts/download_pangenome_hprc_grch38.sh`](../../scripts/download_pangenome_hprc_grch38.sh) on the worker/GPU node to download `hprc-v1.1-mc-grch38.d9.gbz` from the [HPRC public S3 bucket](https://github.com/human-pangenomics/hpp_pangenome_resources) and build `vg autoindex` + `ref_paths` files under `/work/genomes/pangenome/GRCh38/d9/1.70/`.
 
 Implementation: [`workers/methyl_worker/giraffe_runner.py`](../../workers/methyl_worker/giraffe_runner.py).
 
 **Important:** consolidated alignment QC JSON is **assembled by methyl-qc**, not always emitted directly by Parabricks. When `{sample_id}.json` is absent, `writer._build_parabricks_payload_from_qc_tar` reconstructs the payload from the qc-metrics tar.
+
+### WGBS pangenome alignment (methylGrapher dual C2T/G2A)
+
+When instance/profile/procedure sets `alignmentMode: "pangenome_wgbs"` (scope `useWgbsPangenome: true`), SamplePrep runs **`sample.methylgrapher_wgbs_align`** then later **`sample.methylgrapher_wgbs_extract`**. Procedure pack [`buffy_wgbs_pangenome_gene_fc`](../../workflow_engine/domain/profiles/procedures/buffy_wgbs_pangenome_gene_fc.procedure.json) selects this mode. Plan: [`docs/plans/wgbs-pangenome-sample-prep.plan.md`](../plans/wgbs-pangenome-sample-prep.plan.md).
+
+**Bisulfite-aware correction chain** (worker-side; assets from task `resolvedConfig` only — no stock Giraffe fallback):
+
+1. Resolve dual **C→T** and **G→A** Giraffe indexes + `cpg_tsv` / `ref_paths` / `original_gbz` from site `pangenome_wgbs_genome` / `actionConfig.methylgrapher_wgbs` (QNAP asset `pangenome-grch38-d9-bs-1.70`).
+2. **`methylGrapher Align`** (directional Y/N) against both converted indexes → merged **GAF** `{sample_id}.alignment.gaf`.
+3. **`vg surject -G -b`** onto linear GRCh38 (`original_gbz` or C2T `gbz` + `ref_paths`).
+4. **Restore original read sequences/qualities** on the surjected BAM (converted bases are not suitable for downstream QC as-is).
+5. `samtools sort` → `markdup` → `index`; emit Picard-like `{sample_id}.deduplicate_metrics.txt` + `{sample_id}.qc-metrics.tar` so **`sample.methyl_qc` is unchanged**.
+6. Write `{sample_id}.alignment_metrics.json` with tool/image pins and **asset fingerprints** (partial SHA256) for CAAS provenance.
+
+**Extract (graph-aware):** `methylGrapher MethylCall` + `MergeCpG` → linear-coordinate CpG TSV → `{chr}-CG.h5` + optional `{chr}-CG.patterns.h5`. The extraction manifest uses the **canonical** `metadata` / `summary` / `per_chromosome` shape expected by `methyl_extraction_qc` (plus methylGrapher provenance). Read-filtering stats are omitted when unavailable so the discard-fraction guardrail reports a skipped check.
+
+**Operator requirements:**
+
+- Provision BS bundle under `/work/genomes/pangenome/.../d9-bs/1.70` (see [`docs/deployment/reference-inventory-qnap.md`](../deployment/reference-inventory-qnap.md)).
+- Set `METHYL_METHYLGRAPHER_IMAGE` (or pin `image` in resolvedConfig).
+- Gate production promotion with [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md).
+
+Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py).
 
 ## Metrics import and structured JSON
 
@@ -428,9 +440,9 @@ Historically, alignment QC computed `min(mq[20:])` over the **combined** R1+R2 c
 
 ## Extraction-time read filtering and post-discard QC
 
-Alignment QC validates the **BAM**. Extraction applies additional **read- and base-level filters** during methylation calling; extraction QC validates the **consequences** of those filters.
+Alignment QC validates the **QC BAM**. Extraction applies additional **read- and base-level filters** during methylation calling (MethylExtractor) or produces graph-aware calls (methylGrapher); extraction QC validates the **consequences** via the canonical extraction manifest.
 
-### Filters at extraction (MethylExtractor)
+### Filters at extraction (MethylExtractor — linear / stock pangenome)
 
 Configured in profile/site `actionConfig.methyl_extract` (production profiles default both to **20**):
 
@@ -441,7 +453,7 @@ Configured in profile/site `actionConfig.methyl_extract` (production profiles de
 
 Wired in [`extract_runner.py`](../../workers/methyl_worker/extract_runner.py) via `resolvedConfig.methyl_extract` only (no wire tunables). Raising these values protects against low-quality reads but reduces effective coverage; lowering them without cause risks noisy methylation calls.
 
-Alignment QC has no standalone read-discard guardrail; extraction QC now includes one (`read_discard_fraction`, see below) driven by the MethylExtractor `read_filtering` manifest block.
+Alignment QC has no standalone read-discard guardrail; extraction QC includes `read_discard_fraction` when the MethylExtractor `read_filtering` manifest block is present. On the methylGrapher path that block is typically omitted (skipped as a pass).
 
 ### Post-discard QC (second gate)
 
@@ -456,14 +468,26 @@ Alignment QC has no standalone read-discard guardrail; extraction QC now include
 | `chromosome_uniformity` | autosomal min/median ≥ 0.5 | Localized dropout from MAPQ/Phred losses |
 | `read_discard_fraction` | ≤ 0.9 (`max_discard_fraction`) | Catastrophic read loss: `1 − read_retention_rate` from `read_filtering` (unmapped, secondary/supplementary, duplicate, low-MAPQ, multimap, no-strand) |
 
-`read_discard_fraction` reads the manifest `read_filtering` block (`reads_seen`, `reads_used`, `read_retention_rate`); it is skipped as a pass when the block is absent (older manifests). It complements the coverage checks — a sample can retain acceptable coverage yet still have discarded the bulk of its reads, which flags a systematic problem (wrong reference, contamination, or mis-set `min_mapq`/`min_phred`). Tune `max_discard_fraction` via profile/site `actionConfig.extraction_qc.guardrails`.
+`read_discard_fraction` reads the manifest `read_filtering` block (`reads_seen`, `reads_used`, `read_retention_rate`); it is skipped as a pass when the block is absent (older manifests or methylGrapher graph extract). It complements the coverage checks — a sample can retain acceptable coverage yet still have discarded the bulk of its reads, which flags a systematic problem (wrong reference, contamination, or mis-set `min_mapq`/`min_phred`). Tune `max_discard_fraction` via profile/site `actionConfig.extraction_qc.guardrails`.
 
 `guardrails.overall_pass` maps to workflow **`extractionQcPass`**. Failures are **terminal** today (no automatic retry loop).
+
+### Canonical extraction-manifest contract
+
+Both extractors must emit:
+
+| Block | Required fields |
+|-------|-----------------|
+| `metadata` | `schema_name`, `schema_version`, `contexts_extracted`, `sample_id` |
+| `summary` | `cpg_weighted_mean_coverage` (optional CHH/CHG levels when those contexts are extracted) |
+| `per_chromosome` | Expected chromosomes with a `CG` block including `mean_coverage` |
+
+methylGrapher builds this shape from emitted linear CpG calls (`build_canonical_extraction_manifest` in [`methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py)) while retaining graph provenance.
 
 ### Recommended operational QC pattern
 
 1. Compare alignment QC `summary_stats.total_reads` and `duplication_rate` with extraction manifest `summary.cpg_weighted_mean_coverage`.
-2. If extraction coverage fails while alignment passed, suspect aggressive `min_mapq`/`min_phred` or localized BAM quality issues — do not blindly lower thresholds.
+2. If extraction coverage fails while alignment passed, suspect aggressive `min_mapq`/`min_phred` or localized BAM quality issues — do not blindly lower thresholds. On the WGBS pangenome path, also verify linear-coordinate projection / `linear_cpg_tsv` and asset fingerprints in `alignment_metrics.json`.
 3. Use [`scripts/alignment_qc_cohort_screening.py`](../../scripts/alignment_qc_cohort_screening.py) for cohort-level alignment review; extraction failures are per-sample via `{sample_id}.extraction_qc.json`.
 
 **Implemented:** MethylExtractor emits `reads_seen` / `reads_used` / `read_retention_rate` in the extraction manifest `read_filtering` block (see MethylExtractor `docs/extraction_qc_contract.md`), and `methylextractionqc` evaluates the `read_discard_fraction` guardrail (`max_discard_fraction`, default ≤ 0.9) against it.
@@ -513,14 +537,17 @@ Per sample under `/work/samples/{sample_id}/`:
 |----------|------|
 | `*_1.fastq.gz`, `*_2.fastq.gz` | Original paired FASTQs (retained until final QC) |
 | `*_1.trimmed.fastq.gz`, `*_2.trimmed.fastq.gz` | Post-fastp FASTQs (remediation path) |
-| `*deduplicate_metrics.txt` | Picard-style duplication metrics |
-| `{sample_id}.qc-metrics.tar` | Parabricks tabular metrics |
+| `*deduplicate_metrics.txt` | Picard-style duplication metrics (linear / Giraffe / methylGrapher QC BAM) |
+| `{sample_id}.qc-metrics.tar` | Parabricks / methylGrapher tabular metrics |
 | `{sample_id}.json` | Optional Parabricks consolidated metrics |
-| `{sample_id}.bam` | Aligned BAM |
-| `{sample_id}.extraction_manifest.json` | MethylExtractor summary |
+| `{sample_id}.bam` | Aligned / QC-compatible BAM |
+| `{sample_id}.alignment.gaf` | methylGrapher merged GAF (WGBS pangenome) |
+| `{sample_id}.alignment_metrics.json` | methylGrapher align provenance + asset fingerprints |
+| `{sample_id}.extraction_manifest.json` | Canonical extractor / methylGrapher summary |
 | `{sample_id}.extraction_qc.json` | Extraction guardrail report |
 | `{sample_id}.sample_prep_log.jsonl` | Append-only audit of every prep action |
 | `{chr}-CG.h5` (and CHG/CHH) | Methylation matrices |
+| `{chr}-CG.patterns.h5` | Read-level pattern sidecars for downstream `pipeline.info_measures` |
 
 Project-scoped alignment QC export: `{output_base}/{project}/alignment_qc/{sample_id}.json`
 
@@ -531,10 +558,11 @@ Before starting SamplePrep, confirm:
 - [ ] `project.json` lists samples and paths resolve to `/work/samples/...`
 - [ ] Profile `actionConfig.alignment_qc` thresholds match analyte (cfDNA vs buffy coat)
 - [ ] Profile `actionConfig.extraction_qc` min coverage appropriate for WGBS depth expectations
-- [ ] Profile `actionConfig.methyl_extract.min_mapq` / `min_phred` reviewed for analyte
+- [ ] Profile `actionConfig.methyl_extract.min_mapq` / `min_phred` reviewed for analyte (linear / stock path)
 - [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
 - [ ] Instance `context_json` includes `fastqStorage`, `samples[]`; reference genome on site manifest
-- [ ] When using pangenome alignment: run [`scripts/download_pangenome_hprc_grch38.sh`](../../scripts/download_pangenome_hprc_grch38.sh), set `pangenome_genome` on the site manifest, and `alignmentMode: "pangenome"` (or profile `parabricks.alignment_mode`)
+- [ ] Stock pangenome: run [`scripts/download_pangenome_hprc_grch38.sh`](../../scripts/download_pangenome_hprc_grch38.sh), set `pangenome_genome`, `alignmentMode: "pangenome"`
+- [ ] WGBS pangenome: provision `pangenome_wgbs_genome` / `d9-bs/1.70`, set `alignmentMode: "pangenome_wgbs"`, `METHYL_METHYLGRAPHER_IMAGE`, and pass the canary checklist
 
 Example profile `actionConfig.alignment_qc` snippet:
 

@@ -35,7 +35,7 @@ Committed under
 
 | Procedure | Analyte | Defaults |
 |-----------|---------|----------|
-| `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | Pangenome (Giraffe), read-level informME, Houseman deconv, gene FeatureCuts, full lifecycle |
+| `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | WGBS pangenome (methylGrapher, `alignmentMode: pangenome_wgbs`), read-level informME, Houseman deconv, gene FeatureCuts, full lifecycle |
 | `buffy_wgbs_linear_gene_fc` | `buffy_coat` | Linear WGBS baseline (same science, cheaper aligner) |
 | `cfdna_wgbs_plasma` | `cfdna` | Linear WGBS + fragmentomics (analyte merge), gene FeatureCuts, **no** cell deconv lifecycle |
 | `cfdna_emseq_targeted` | `cfdna` | `libraryProtocol: emseq_targeted`, `sample_prep_emseq`, panel BED + elevated `min_cov`, no deconv |

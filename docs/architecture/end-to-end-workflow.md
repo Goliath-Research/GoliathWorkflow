@@ -31,10 +31,10 @@ flowchart TB
 
   subgraph prep["1 · SamplePrepPipeline (per sample on /work scratch)"]
     DL["download_fastq"]
-    ALN["Parabricks align<br/>fq2bam_meth or giraffe"]
+    ALN["align<br/>fq2bam · giraffe · methylGrapher WGBS"]
     AQC["methyl_qc"]
     REM["trim_fastq → realign → methyl_qc retry"]
-    EXT2["methyl_extract<br/>*.h5 + *.patterns.h5"]
+    EXT2["methyl_extract or methylgrapher_wgbs_extract<br/>*.h5 + *.patterns.h5"]
     EQC["extraction_qc"]
     ARC["archive_sample<br/>success → full · fail → qc_only"]
     DEL["delete_fastqs + delete_bam<br/>local scratch cleanup"]
@@ -151,17 +151,23 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-  A["sample.download_fastq<br/>fastqSource → /work/samples/id"] --> B{"usePangenome?"}
-  B -->|no| C["sample.parabricks_fq2bam<br/>pbrun fq2bam_meth"]
-  B -->|yes| D["sample.parabricks_giraffe<br/>vg giraffe → GRCh38"]
+  A["sample.download_fastq<br/>fastqSource → /work/samples/id"] --> B{"useWgbsPangenome?"}
+  B -->|yes| MG["sample.methylgrapher_wgbs_align<br/>methylGrapher C2T+G2A → QC BAM"]
+  B -->|no| B2{"usePangenome?"}
+  B2 -->|no| C["sample.parabricks_fq2bam<br/>pbrun fq2bam_meth"]
+  B2 -->|yes| D["sample.parabricks_giraffe<br/>stock vg giraffe → GRCh38"]
   C --> E["sample.methyl_qc"]
   D --> E
+  MG --> E
   E --> F{"qcPass?"}
   F -->|yes| G{"isCfdna?"}
   G -->|yes| H["sample.fragmentomics"]
-  G -->|no| I["sample.methyl_extract"]
+  G -->|no| I{"useWgbsPangenome?"}
   H --> I
-  I --> J["sample.extraction_qc"]
+  I -->|yes| IX["sample.methylgrapher_wgbs_extract"]
+  I -->|no| IY["sample.methyl_extract"]
+  IX --> J["sample.extraction_qc"]
+  IY --> J
   J --> K{"extractionQcPass?"}
   K -->|yes| L["archive_sample mode=full<br/>→ sampleDestination<br/>qc + fastq + h5 · no BAM"]
   L --> M{"deleteFastqs?<br/>default true"}
@@ -184,7 +190,7 @@ flowchart TD
 | `{chrom}-{ctx}.h5` | Marginal per-CpG counts (`mC`, `uC`, coverage) |
 | `{chrom}-{ctx}.patterns.h5` | Read-level co-methylation tile histograms (MethylInfoTheory input) |
 
-If patterns are missing, extract warns and continues; later `pipeline.info_measures` skips without failing the study.
+If patterns are missing, extract warns and continues; later `pipeline.info_measures` (study lifecycle §5.2) skips without failing the study.
 
 ### 3.2 Alignment QC fail → trim → realign → retry
 
@@ -197,10 +203,10 @@ flowchart TD
   P -->|no| R{"remediateAlignment?"}
   R -->|no| FAIL["archive qc_only → qc_failed"]
   R -->|yes| T["sample.trim_fastq<br/>fastp front/tail from QC disposition"]
-  T --> RA["parabricks_* forceRealign<br/>alignmentPass=post_trim_realign"]
+  T --> RA["same align branch forceRealign<br/>fq2bam · giraffe · methylGrapher WGBS"]
   RA --> QC2["methyl_qc attempt 2"]
   QC2 --> P2{"qcPass?"}
-  P2 -->|yes| OK2["fragmentomics? → methyl_extract → extraction_qc → archive"]
+  P2 -->|yes| OK2["fragmentomics? → extract branch → extraction_qc → archive"]
   P2 -->|no| FAIL2["archive qc_only → qc_failed"]
 ```
 
@@ -217,9 +223,9 @@ sequenceDiagram
 
   Src->>W: download_fastq
   W->>S: stage *.fastq.gz
-  W->>S: align → *.bam + metrics
+  W->>S: align (fq2bam / giraffe / methylGrapher) → *.bam + metrics
   W->>S: methyl_qc (± trim/realign)
-  W->>S: methyl_extract → *.h5 + *.patterns.h5
+  W->>S: methyl_extract or methylgrapher_wgbs_extract → *.h5 + *.patterns.h5
   W->>S: extraction_qc
   alt pass → mode=full
     W->>Dst: upload qc/ + fastq/ + h5/ + manifest

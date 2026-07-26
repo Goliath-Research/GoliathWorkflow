@@ -14,7 +14,7 @@ QC gate variable `qcPass` comes from **`output_json.guardrails.overall_pass`** (
 
 After `methyl-qc`, scope also receives **`qcDisposition`**, **`trimFront2`**, **`qcAttemptReason`**, and **`remediateR2Trim`** (boolean) for the remediation branch.
 
-After `sample.extraction_qc`, scope receives **`extractionQcPass`** from **`output_json.guardrails.overall_pass`**. Extraction QC runs after `sample.methyl_extract` and before optional `sample.upload_h5` and `sample.delete_bam`.
+After `sample.extraction_qc`, scope receives **`extractionQcPass`** from **`output_json.guardrails.overall_pass`**. Extraction QC runs after `sample.methyl_extract` or `sample.methylgrapher_wgbs_extract` and before `sample.archive_sample` and `sample.delete_bam`.
 
 ## FASTQ retention
 
@@ -41,10 +41,11 @@ BAM deletion (`sample.delete_bam`) is **not** gated by this flag. Durable copies
 | `sample.delete-fastqs` | FASTQs already absent (no-op success) |
 | `sample.delete-bam` | BAM already absent (no-op success) |
 | `parabricks.fq2bam` / `parabricks.giraffe` | Only when BAM missing or QC artifact missing (`{sampleId}.json` or `{sampleId}.qc-metrics.tar`); pass **`forceRealign: true`** after trim to clear stale outputs |
+| `methylgrapher.wgbs_align` | Same idempotency as Parabricks; also requires `{sampleId}.alignment.gaf` + QC tar when present |
 | `sample.trim-fastq` | When trimmed FASTQs missing or `trimFront2` changed |
-| `methyl-extract` | When HDF5 outputs missing for `project.chromosomes × extract_contexts` |
+| `methyl-extract` / `methylgrapher.wgbs_extract` | When HDF5 outputs missing for `project.chromosomes × extract_contexts` |
 | `methyl-extraction-qc` | When `{sampleId}.extraction_qc.json` missing or manifest changed |
-| `sample.upload-h5` | Remote object missing or size/ETag differs from local `{chr}-{ctx}.h5` |
+| `sample.archive-sample` | Remote object missing or size/ETag differs from local bundle member |
 
 ## Lease / retry
 
@@ -219,7 +220,49 @@ Task `input_json` keys: `parabricksImage`, `bwaThreads`, `gpuFlags`, `extraDocke
 
 **Outputs:** Same artifacts as `parabricks.fq2bam` (`{sampleId}.bam`, `{sampleId}.deduplicate_metrics.txt`, `{sampleId}.qc-metrics.tar`, alignment log). `methyl-qc` consumes the regenerated qc-metrics tar unchanged.
 
-**Bisulfite caveat:** operator must provide a WGBS-compatible pangenome graph; stock HPRC graphs alone are not bisulfite-aware.
+**Bisulfite caveat:** stock HPRC graphs are **not** bisulfite-aware. For WGBS pangenome use `alignmentMode: "pangenome_wgbs"` (methylGrapher) — not stock Giraffe.
+
+
+## `methylgrapher.wgbs_align`
+
+**action_name:** `sample.methylgrapher_wgbs_align`  
+**Runtime:** Docker GPU container running methylGrapher Align (dual C→T / G→A Giraffe indexes) + vg surject → QC-compatible GRCh38 BAM.
+
+**When:** SamplePrep **IF** `useWgbsPangenome` is true (`alignmentMode: "pangenome_wgbs"`). Checked **before** `usePangenome` in the program graph. Idempotency and `forceRealign` semantics match `parabricks.fq2bam`.
+
+**Site manifest (`pangenome_wgbs_genome`) / `actionConfig.methylgrapher_wgbs`:** dual converted indexes (`gbz`, `dist`, `min`, `zipcodes`), `cpg_tsv`, `ref_paths`, `original_gbz`, `linear_ref_fasta` (QNAP asset `pangenome-grch38-d9-bs-1.70`). **Do not** fall back to stock `pangenome_genome` when the BS bundle is missing.
+
+**Worker environment (fallback):**
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `METHYL_METHYLGRAPHER_IMAGE` | fallback | methylGrapher Docker image (pin in profile/site `actionConfig.methylgrapher_wgbs.image`) |
+
+Gate production promotion with [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md).
+
+**Outputs (QC path unchanged for methyl-qc):**
+
+| Artifact | Path |
+|----------|------|
+| QC BAM | `{sampleId}.bam` (surjected, original read sequences restored) |
+| Merged GAF | `{sampleId}.alignment.gaf` |
+| Duplicate metrics | `{sampleId}.deduplicate_metrics.txt` |
+| QC metrics archive | `{sampleId}.qc-metrics.tar` |
+| Align provenance | `{sampleId}.alignment_metrics.json` (tool/image pins, asset fingerprints) |
+
+Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py).
+
+
+## `methylgrapher.wgbs_extract`
+
+**action_name:** `sample.methylgrapher_wgbs_extract`  
+**Runtime:** methylGrapher MethylCall + MergeCpG → linear-coordinate CpG TSV → `{chrom}-{ctx}.h5` + optional `{chrom}-{ctx}.patterns.h5`.
+
+**When:** SamplePrep pass path when `useWgbsPangenome` is true (replaces `sample.methyl_extract`). Requires prior `sample.methylgrapher_wgbs_align` GAF + QC BAM on disk.
+
+**Extraction manifest:** canonical `metadata` / `summary` / `per_chromosome` shape for `methyl-extraction-qc` (read-filtering block omitted when unavailable — discard-fraction guardrail reports skipped). Graph provenance retained in manifest sidecars.
+
+**Storage contract:** same HDF5 naming as MethylExtractor (`{chrom}-{ctx}.h5`, `{chrom}-{ctx}.patterns.h5`, `{sampleId}.extraction_manifest.json`).
 
 
 ## `methyl-qc`
@@ -365,9 +408,9 @@ Production defaults (not env vars):
 
 **action_name:** `sample.extraction_qc`  
 **Owner:** In-repo — [`packages/methylextractionqc`](../../packages/methylextractionqc/)  
-**When:** After every successful `sample.methyl_extract` (both direct pass and post-remediation pass paths).
+**When:** After every successful `sample.methyl_extract` or `sample.methylgrapher_wgbs_extract` (both direct pass and post-remediation pass paths).
 
-Reads MethylExtractor `{sampleId}.extraction_manifest.json` (schema `methylextractor.extraction_manifest` v1.0.0). Writes `{sampleId}.extraction_qc.json` in `sampleDir` with `guardrails.overall_pass`.
+Reads `{sampleId}.extraction_manifest.json` (MethylExtractor or methylGrapher canonical schema). Writes `{sampleId}.extraction_qc.json` in `sampleDir` with `guardrails.overall_pass`.
 
 Upstream contract: MethylExtractor [`docs/extraction_qc_contract.md`](file:///home/ubuntu/MethylExtractor/docs/extraction_qc_contract.md).
 
@@ -422,49 +465,55 @@ Path binding: `$.guardrails.overall_pass` → scope variable **`extractionQcPass
 
 ---
 
-## `sample.upload-h5`
+## `sample.archive-sample`
 
-**action_name:** `sample.upload_h5`  
-**When:** Only when per-sample `h5Destination` is present in instance context (workflow **IF** node; omitted when `h5Storage` is not configured).
+**action_name:** `sample.archive_sample`  
+**When:** After terminal QC disposition (extraction pass → `mode=full`; alignment or extraction fail → `mode=qc_only`). Skipped with `skipReason: sample_destination_not_configured` when no `sampleDestination` is set.
 
-Archive-copies per-chromosome HDF5 files to durable object storage. **Local files on `/work/samples/{id}/` are retained** for downstream validation and BAM deletion.
+Uploads a curated bundle to durable object storage (`file` / `s3` / `azure_blob`). **Local `/work/samples/{id}/` HDF5 files are retained** for downstream validation; BAM is never uploaded.
+
+> **Note:** `sample.upload_h5` is **retired**. Use `sample.archive_sample` with `sampleDestination` (alias `sampleStorage` / deprecated `h5Storage`).
 
 ### input_json
 
-Instance-level `h5Storage` (planner) merges with per-sample `fastqPrefix` / `h5Destination.prefix`:
+Instance-level `sampleStorage` (planner) merges with per-sample `sampleDestination`:
 
 ```json
 {
-  "tool": "SampleUploadH5",
+  "tool": "SampleArchive",
   "sampleId": "DPLST-051425-111148",
   "sampleDir": "/work/samples/DPLST-051425-111148",
-  "h5Destination": {
+  "mode": "full",
+  "sampleDestination": {
     "type": "s3",
     "bucket": "methyl-archive",
     "prefix": "plasma/DPLST-051425-111148/",
     "region": "us-east-1",
     "credentials": { "authMode": "instance_profile" }
-  },
-  "h5Files": ["1-CG.h5", "1-CHG.h5", "1-CHH.h5"]
+  }
 }
 ```
 
-Optional `h5Files` defaults to all `*.h5` in `sampleDir`. Credential modes mirror [`sample.download-fastq`](#sampledownload-fastq) (`s3`, `azure_blob`, `file`).
+| Mode | Remote layout |
+|------|---------------|
+| `full` | `qc/*.json`, `fastq/*.fastq.gz`, `h5/{chr}-{ctx}.h5` (including patterns), `archive_manifest.json` |
+| `qc_only` | QC JSONs + `sample_prep_log.jsonl` + `reject_reason`; no FASTQs or H5 |
 
-**Idempotency:** skip upload when remote size (and ETag/md5 when available) matches local.
+Credential modes mirror [`sample.download-fastq`](#sampledownload-fastq). **Idempotency:** skip upload when remote size and ETag/md5 match local.
 
 ### output_json
 
 ```json
 {
   "sampleId": "DPLST-051425-111148",
-  "uploadedFiles": ["1-CG.h5"],
-  "skippedFiles": ["1-CHG.h5", "1-CHH.h5"],
+  "mode": "full",
+  "uploadedCount": 12,
   "remotePrefix": "plasma/DPLST-051425-111148/",
-  "uploadedCount": 1,
-  "skippedCount": 2
+  "sampleArchived": true
 }
 ```
+
+Path binding: `sampleArchived` → scope variable **`sampleArchived`**.
 
 ---
 
@@ -529,13 +578,15 @@ Use `result_code = 0` even when marking failed — the sample is intentionally s
 | `sample.download_fastq` | `sample.download-fastq` |
 | `sample.parabricks_fq2bam` | `parabricks.fq2bam` |
 | `sample.parabricks_giraffe` | `parabricks.giraffe` |
+| `sample.methylgrapher_wgbs_align` | `methylgrapher.wgbs_align` |
+| `sample.methylgrapher_wgbs_extract` | `methylgrapher.wgbs_extract` |
 | `sample.delete_fastqs` | `sample.delete-fastqs` |
 | `sample.trim_fastq` | `sample.trim-fastq` |
 | `sample.methyl_qc` | `methyl-qc` |
 | `sample.fragmentomics` | `methyl-fragmentomics` |
 | `sample.methyl_extract` | `methyl-extract` |
 | `sample.extraction_qc` | `methyl-extraction-qc` |
-| `sample.upload_h5` | `sample.upload-h5` |
+| `sample.archive_sample` | `sample.archive-sample` |
 | `sample.delete_bam` | `sample.delete-bam` |
 | `sample.qc_failed` | `sample.mark-failed` |
 

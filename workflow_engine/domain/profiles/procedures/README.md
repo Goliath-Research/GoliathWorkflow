@@ -6,7 +6,7 @@ informME, deconvolution, and FeatureCuts knobs.
 
 | Procedure | Analyte | SamplePrep | Lifecycle | Notes |
 |-----------|---------|------------|-----------|-------|
-| `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | `sample_prep` (giraffe) | `study_validation_lifecycle` | Default human buffy research |
+| `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | `sample_prep` (methylGrapher / `pangenome_wgbs`) | `study_validation_lifecycle` | Default human buffy research |
 | `buffy_wgbs_linear_gene_fc` | `buffy_coat` | `sample_prep` (linear) | `study_validation_lifecycle` | Cheaper / baseline linear |
 | `cfdna_wgbs_plasma` | `cfdna` | `sample_prep` | `study_validation_lifecycle_no_deconv` | Fragmentomics; no cell deconv |
 | `cfdna_emseq_targeted` | `cfdna` | `sample_prep_emseq` | `study_validation_lifecycle_no_deconv` | BED panel + high min_cov |

@@ -142,31 +142,46 @@ Legacy SQL seed [`workflow_engine/sql_mssql/deprecated/wf_sample_prep_pipeline_s
 
 ### Step order
 
+Three alignment modes (linear / stock Giraffe / methylGrapher WGBS) share the same QC gates; extract branches on `useWgbsPangenome`. Source: [`sample_prep.program.json`](/home/ubuntu/MethylPipeline/workflow_engine/domain/fixtures/sample_prep.program.json).
+
 ::: {.content-visible when-format="html"}
 ```mermaid
 flowchart TD
   subgraph perSample [FOREACH sample parallel]
     dl[download_FASTQs]
-    align[Parabricks_fq2bam GPU]
+    mode{align_mode}
+    fq[parabricks_fq2bam]
+    gf[parabricks_giraffe]
+    mg[methylgrapher_wgbs_align]
     qc[methyl_qc alignment guardrail]
     gateQc{qcPass}
-    delFq[delete_FASTQs after final align QC]
     frag[methyl_fragmentomics if isCfdna]
-    ext[MethylExtractor GPU]
+    extMode{useWgbsPangenome?}
+    mex[methyl_extract]
+    mgExt[methylgrapher_wgbs_extract]
     extQc[extraction_qc post-extract guardrail]
     gateExt{extractionQcPass}
-    upload[archive_sample optional]
+    archive[archive_sample optional]
+    delFq[delete_fastqs if deleteFastqs]
     delBam[delete_BAM]
     trim[trim_fastq fastp]
-    align2[Parabricks forceRealign]
+    align2[same align mode forceRealign]
     qc2[methyl_qc retry]
     fail[sample_qc_failed]
   end
-  dl --> align --> qc --> gateQc
-  gateQc -->|pass| delFq --> frag --> ext --> extQc --> gateExt
-  gateExt -->|pass| upload --> delBam
+  dl --> mode
+  mode -->|linear| fq --> qc
+  mode -->|pangenome| gf --> qc
+  mode -->|pangenome_wgbs| mg --> qc
+  qc --> gateQc
+  gateQc -->|pass| frag --> extMode
+  extMode -->|no| mex --> extQc
+  extMode -->|yes| mgExt --> extQc
+  extQc --> gateExt
+  gateExt -->|pass| archive --> delFq --> delBam
   gateExt -->|fail| fail
-  gateQc -->|fail| trim --> align2 --> qc2 --> delFq
+  gateQc -->|fail + remediate| trim --> align2 --> qc2 --> gateQc
+  gateQc -->|fail terminal| fail
   delBam --> h5["chrom-CG.h5 in sample dir"]
   h5 --> ddp[DataDrivenPipeline]
 ```
@@ -181,24 +196,28 @@ flowchart TD
 |------|------------|-------|-----------------|
 | Download FASTQs | `sample.download-fastq` | In-process | `*.fastq.gz` in `/work/samples/{id}/` |
 | Parabricks fq2bam | `parabricks.fq2bam` | External GPU | `{id}.bam`, `{id}.json`, `*.qc-metrics.tar` |
+| Parabricks Giraffe | `parabricks.giraffe` | External GPU | Stock pangenome surjected BAM + QC tar |
+| methylGrapher WGBS align | `methylgrapher.wgbs_align` | External GPU | QC BAM + `{id}.alignment.gaf` + metrics |
 | methyl-qc | `methyl-qc` | In-repo | V2 QC JSON; `qcPass`, remediation scope vars |
 | Trim FASTQ | `sample.trim-fastq` | In-process fastp | Trimmed FASTQs (remediation branch) |
-| Delete FASTQs | `sample.delete-fastqs` | In-process | FASTQs removed after final alignment QC |
+| Delete FASTQs | `sample.delete-fastqs` | In-process | FASTQs removed after final QC (when `deleteFastqs`) |
 | methyl-fragmentomics | `methyl-fragmentomics` | In-repo (cfDNA only) | `{project}/fragmentomics/{id}/` |
 | MethylExtractor | `methyl-extract` | External GPU | `{chrom}-{ctx}.h5`, extraction manifest |
+| methylGrapher WGBS extract | `methylgrapher.wgbs_extract` | External GPU | Graph-aware H5 + patterns + canonical manifest |
 | Extraction QC | `methyl-extraction-qc` | In-repo | `{id}.extraction_qc.json`; `extractionQcPass` |
-| Archive HDF5 | `sample.upload-h5` | In-process | Optional remote copy |
-| Delete BAM | `sample.delete-bam` | In-process | BAM removed after extraction QC pass |
+| Archive sample | `sample.archive-sample` | In-process | Optional remote qc/fastq/h5 bundle (`mode=full` or `qc_only`) |
+| Delete BAM | `sample.delete-bam` | In-process | BAM removed after extraction QC disposition |
 
-**Ordering:** Run **methyl-qc before methyl-fragmentomics** so failed samples do not scan BAMs. **extraction_qc** runs after extract and before upload/delete. When `primary_analyte` is `cfdna`, fragmentomics runs; `buffy_coat` skips it.
+**Ordering:** Run **methyl-qc before methyl-fragmentomics** so failed samples do not scan BAMs. **extraction_qc** runs after extract and before archive/delete. FASTQs are retained until final QC so trim/realign can run on the **same** alignment mode. Read-level `{chr}-CG.patterns.h5` sidecars are emitted at extract time; **`pipeline.info_measures` runs later in the study lifecycle**, not inside SamplePrep. When `primary_analyte` is `cfdna`, fragmentomics runs; `buffy_coat` skips it.
 
 ### Storage contract (`/work/samples`)
 
 ```
 /work/samples/{sample_id}/
-  *.fastq.gz              (transient; deleted after align)
-  {sample_id}.bam         (transient; deleted after extract)
-  {sample_id}.json        (Parabricks metrics; retained)
+  *.fastq.gz              (transient; deleted after archive when deleteFastqs)
+  {sample_id}.bam         (transient; deleted after extract disposition)
+  {sample_id}.alignment.gaf   (methylGrapher WGBS mode; retained)
+  {sample_id}.json        (Parabricks / align metrics; retained)
   *.qc-metrics.tar        (optional; retained)
   bisulfite_conversion.json  (optional sidecar)
   1-CG.h5 … Y-CG.h5       (retained; consumed by methyl-centroid)
@@ -665,7 +684,7 @@ Deploy scripts:
 | Layer | Tables |
 |-------|--------|
 | **Definition** | `workflow_def`, `workflow_version`, `workflow_node`, `workflow_edge`, `workflow_action`, `workflow_input_template`, `workflow_input_binding`, `variable_output_binding`, `node_scope_default`, **`workflow_collection_binding`** |
-| **Runtime** | `workflow_instance`, `node_execution`, `task_lease`, `loop_state`, `execution_context`, `scope_variable`, `instance_cursor`, **`execution_scope`**, **`execution_scope_action_entry`** (`workflow_instance.execution_scope_id` FK, nullable) |
+| **Runtime** | `workflow_instance`, `node_execution`, `task_lease`, `loop_state`, `execution_context`, `scope_variable`, `instance_cursor`, **`hyperparameter_set`**, **`hyperparameter_set_action_entry`** (`workflow_instance.hyperparameter_set_id` FK, nullable) |
 | **Workers / cluster** | `worker`, `worker_token`, `cluster` |
 
 ### Control-flow node types
@@ -714,7 +733,7 @@ erDiagram
 
 When operators experiment with the **same** workflow (site/study/profile/DomainProgram) under varied config, the Content-Addressed Action Store (CAAS) versions idempotent action results by cumulative input signature and reuses identical intermediate outputs across workflow instances. The database mirrors on-disk CAAS identity and ledger for portal queries and cross-instance comparison.
 
-**Process-agnostic design:** the wf engine names this an **execution scope** (the domain "hyperparameter" meaning lives in `cfg`). These objects are **additive** — they do not alter the core workflow-engine tables or procedures. Identity is a generic `set_key` hash of merged `resolvedConfig__*` slices; `config_json` is opaque JSON; the ledger keys on `action_name`, `run_key`, and `content_key`. There are no disease, study, or process-specific columns. The FK `workflow_instance.execution_scope_id` is **nullable**; instances that do not opt into CAAS behave as before.
+**Process-agnostic design:** the wf engine names this concept an **execution scope** (not "hyperparameter" — that domain meaning lives in `cfg`). These objects are **additive** — they do not alter the core workflow-engine tables or procedures. Identity is a generic `set_key` hash of merged `resolvedConfig__*` slices; `config_json` is opaque JSON; the ledger keys on `action_name`, `run_key`, and `content_key`. There are no disease, study, or process-specific columns. The FK `workflow_instance.execution_scope_id` is **nullable**; instances that do not opt into CAAS behave as before.
 
 | Object | Role |
 |--------|------|

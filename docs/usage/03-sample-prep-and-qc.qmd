@@ -45,15 +45,15 @@ After FASTQ download, SamplePrep chooses **one alignment path** per sample (and 
 
 ## End-to-end flow
 
-![Sample prep and QC flow (linear or pangenome align, then shared QC gates)](../diagrams/out/sample-prep-flow.png)
+![Sample prep and QC flow (three-mode align, shared QC gates, extract branch, downstream info measures)](../diagrams/out/sample-prep-flow.png)
 
 
 | Gate | Scope variable | When | Blocks |
 |------|----------------|------|--------|
-| Alignment | `qcPass` | After Parabricks, **before** extract | Extraction (unless remediation succeeds) |
-| Extraction | `extractionQcPass` | After MethylExtractor | Full archive and BAM deletion |
+| Alignment | `qcPass` | After linear / Giraffe / methylGrapher QC BAM, **before** extract | Extraction (unless remediation succeeds) |
+| Extraction | `extractionQcPass` | After MethylExtractor or methylGrapher extract | Full archive and BAM deletion |
 
-**Ordering rationale:** alignment QC runs before cfDNA fragmentomics so failed samples skip BAM scanning. Fragmentomics and extraction both need the aligned BAM. FASTQs are retained until QC is fully resolved so **fastp** can trim and Parabricks can realign on the remediation path.
+**Ordering rationale:** alignment QC runs before cfDNA fragmentomics so failed samples skip BAM scanning. Fragmentomics and extraction both need the aligned BAM (or GAF+H5 on the WGBS path). FASTQs are retained until QC is fully resolved so **fastp** can trim and the **same** alignment mode can realign on the remediation path. SamplePrep emits `{chr}-CG.patterns.h5` when read-level extraction is enabled; `pipeline.info_measures` runs later in the study lifecycle (see [end-to-end workflow §5.2](../architecture/end-to-end-workflow.md)).
 
 ## Where artifacts live
 
@@ -202,14 +202,17 @@ python scripts/alignment_qc_cohort_screening.py \
 
 ## Extraction QC: confirming enough good reads
 
-Alignment QC validates the **BAM**. Extraction QC validates the **methylation call layer** MethylExtractor produced.
+Alignment QC validates the **QC BAM** (linear, stock Giraffe, or methylGrapher-restored BAM). Extraction QC validates the **methylation call layer** produced by MethylExtractor (`sample.methyl_extract`) or methylGrapher (`sample.methylgrapher_wgbs_extract`).
 
 ### Input: extraction manifest
 
-MethylExtractor writes `{sample_id}.extraction_manifest.json` with:
+Both extractors write `{sample_id}.extraction_manifest.json` with the **canonical** blocks consumed by `methyl_extraction_qc`:
 
-- `summary` — genome-wide CpG weighted mean coverage, CHH/CHG methylation levels
+- `metadata.contexts_extracted` — contexts present in the call set
+- `summary` — genome-wide CpG weighted mean coverage, optional CHH/CHG methylation levels
 - `per_chromosome` — per-chromosome blocks with `CG.mean_coverage` and related stats
+
+methylGrapher also retains provenance (`tool`, `graph_assets`, `coordinate_system`, H5/pattern paths). Read-filtering stats may be absent on the graph path; the discard-fraction guardrail then reports a skipped check rather than inventing values.
 
 ### Output: extraction QC JSON
 
@@ -259,7 +262,8 @@ Before starting SamplePrep, confirm:
 - [ ] Profile `actionConfig.extraction_qc` min coverage appropriate for WGBS depth expectations
 - [ ] `validation.regulatory.primary_analyte` set (drives fragmentomics profile)
 - [ ] Instance `context_json` includes `fastqStorage`, `referenceFasta`, `samples[]`
-- [ ] When using pangenome: site `pangenome_genome` bundle staged, `alignmentMode: "pangenome"` (or profile `parabricks.alignment_mode`)
+- [ ] Stock pangenome: site `pangenome_genome` bundle staged, `alignmentMode: "pangenome"`
+- [ ] WGBS pangenome: site `pangenome_wgbs_genome` / `actionConfig.methylgrapher_wgbs` staged (`d9-bs/1.70`), `alignmentMode: "pangenome_wgbs"`, `METHYL_METHYLGRAPHER_IMAGE` set; gate promotion with [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md)
 
 ## Commands (standalone debugging)
 

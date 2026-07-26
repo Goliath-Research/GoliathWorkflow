@@ -16,7 +16,7 @@ This document is the canonical register of documentation coverage, canonical sou
 | **Architecture** | [`docs/architecture/`](architecture/index.md) | Consolidated | Absorbs architecture_review + pipeline overview |
 | **Reference** | [`docs/reference/`](reference/documentation-toolchain.md) | New pillar | Config matrix, DomainProgram language, toolchain decision |
 | **Workflow JSON** | [`reference/domain-program-language.md`](reference/domain-program-language.md) | Moved | Schemas in `schemas/domain/` |
-| **SamplePrep + QC** | Usage ch.03, [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md) | Documented | |
+| **SamplePrep + QC** | Usage [ch.03](usage/03-sample-prep-and-qc.qmd), [`sample_prep.program.json`](../workflow_engine/domain/fixtures/sample_prep.program.json), [`docs/implementation/sample-preparation-flow.md`](implementation/sample-preparation-flow.md), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md), plans [`wgbs-pangenome-sample-prep.plan.md`](plans/wgbs-pangenome-sample-prep.plan.md) + [`sampleprep-pangenome-documentation.plan.md`](plans/sampleprep-pangenome-documentation.plan.md) | Documented | Three-mode align (linear / stock Giraffe / methylGrapher WGBS); `sample.archive_sample` |
 | **Deployment** | Usage ch.14, [`deployment/production_runbook.md`](deployment/production_runbook.md) | Dual-backend | Worker-only gateway; env templates in `deploy/env/` |
 | **Admin CLI** | [`reference/admin-cli-methyl-study-start.md`](reference/admin-cli-methyl-study-start.md) | Documented | Direct DB; not on gateway |
 | **Workflow engine** | [`implementation/workflow-engine.md`](implementation/workflow-engine.md) | Expanded | Dual-dialect state machine |
@@ -35,7 +35,7 @@ This document is the canonical register of documentation coverage, canonical sou
 | What is the end-to-end platform + SaMD fitness story? | [`overview/methylpipeline-platform-overview.md`](overview/methylpipeline-platform-overview.md) |
 | How do I set up the dev environment? | [`DEPLOYMENT.md`](DEPLOYMENT.md), Usage ch.01 |
 | Where do project configs vs programs live? | Usage ch.02, [work-config-paths](../.cursor/rules/work-config-paths.mdc), [layer model](architecture/layer-model.md) |
-| How does SamplePrep QC work? | Usage ch.03, theory ch.09 |
+| How does SamplePrep QC work? | Usage [ch.03](usage/03-sample-prep-and-qc.qmd), [`sample_prep.program.json`](../workflow_engine/domain/fixtures/sample_prep.program.json), [`sample-preparation-flow.md`](implementation/sample-preparation-flow.md), [`SamplePrepFlow.md`](../workflow_engine/sql_mssql/SamplePrepFlow.md) |
 | How do I run a study end-to-end? | `methyl-workflow-run` + Usage Part II |
 | How do I author a workflow in JSON? | [domain-program-language.md](reference/domain-program-language.md) |
 | How do I deploy DB + gateway + workers? | Usage ch.14, [production_runbook.md](deployment/production_runbook.md), [deploy/env/](../deploy/env/README.md) |

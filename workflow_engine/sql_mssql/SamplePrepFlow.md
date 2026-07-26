@@ -21,53 +21,59 @@ worker_action + capabilities        ACTION nodes + two QC gates
 
 Instance (project-specific)         Performance stack
 ─────────────────────────           ─────────────────
-context_json: samples[],            Clara Parabricks (GPU align)
-  fastqStorage, projectPath           fastp (R2 trim remediation)
-                                    MethylExtractor (GPU extract)
+context_json: samples[],            Clara Parabricks (GPU align: fq2bam / Giraffe)
+  fastqStorage, projectPath           methylGrapher Docker (WGBS pangenome C2T+G2A)
+                                    fastp (R2 trim remediation)
+                                    MethylExtractor or methylGrapher extract (GPU)
 ```
 
 ## Workflow tree
+
+Program `IF` order checks **`useWgbsPangenome` before `usePangenome`** (WGBS methylGrapher never falls through to stock Giraffe). See [`sample_prep.program.json`](../domain/fixtures/sample_prep.program.json).
 
 ```text
 SEQUENCE root
 └─ FOREACH samples (parallel)
    └─ SEQUENCE one_sample
       ├─ ACTION download_fastq       ← laboratory fastqSource → local sampleDir
-      ├─ IF usePangenome
-      │    ├─ THEN parabricks_giraffe   ← GPU vg Giraffe (HPRC pangenome → GRCh38 surjection)
-      │    └─ ELSE parabricks_fq2bam    ← GPU linear WGBS align (fq2bam_meth)
+      ├─ IF useWgbsPangenome
+      │    └─ THEN methylgrapher_wgbs_align   ← methylGrapher C2T+G2A → QC BAM
+      │    ELSE IF usePangenome
+      │         └─ THEN parabricks_giraffe    ← GPU vg Giraffe (stock HPRC → GRCh38 surjection)
+      │         ELSE parabricks_fq2bam        ← GPU linear WGBS align (fq2bam_meth)
       ├─ ACTION methyl_qc            ← alignment guardrail #1
       │     binds: qcPass, qcDisposition, trimFront1/2, trimTail1/2, remediateAlignment
       └─ IF qcPass
          ├─ THEN (pass path)
          │    ├─ [IF isCfdna → fragmentomics]
-         │    ├─ methyl_extract
+         │    ├─ IF useWgbsPangenome → methylgrapher_wgbs_extract
+         │    │  ELSE methyl_extract
          │    ├─ extraction_qc       ← extraction guardrail #2
          │    └─ IF extractionQcPass
-         │         ├─ [IF sampleDestination → archive_sample mode=full]
-         │         ├─ delete_fastqs
+         │         ├─ archive_sample mode=full (when sampleDestination configured)
+         │         ├─ [IF deleteFastqs → delete_fastqs]
          │         └─ delete_bam
-         │       ELSE → archive_sample mode=qc_only → delete_fastqs → delete_bam → qc_failed
+         │       ELSE → archive_sample mode=qc_only → [delete_fastqs] → delete_bam → qc_failed
          └─ ELSE (alignment fail)
             └─ IF remediateAlignment
                ├─ trim_fastq (fastp, read-end trim from screening)
-               ├─ IF usePangenome → parabricks_giraffe else parabricks_fq2bam (forceRealign)
+               ├─ same align branch as above (methylgrapher / giraffe / fq2bam, forceRealign)
                ├─ methyl_qc retry (attempt 2)
                └─ IF qcPass → same pass path as above
-                  ELSE → archive_sample mode=qc_only → delete_fastqs → delete_bam → qc_failed
-            ELSE → archive_sample mode=qc_only → delete_fastqs → delete_bam → qc_failed
+                  ELSE → archive_sample mode=qc_only → [delete_fastqs] → delete_bam → qc_failed
+            ELSE → archive_sample mode=qc_only → [delete_fastqs] → delete_bam → qc_failed
 ```
 
 ### Two guardrails
 
 | Gate | Action | Scope variable | When | Blocks |
 |------|--------|----------------|------|--------|
-| **Alignment** | `sample.methyl_qc` | `qcPass` | After Parabricks, before extract | Extract path (unless fastp remediation) |
-| **Extraction** | `sample.extraction_qc` | `extractionQcPass` | After `sample.methyl_extract` | Full archive + BAM delete |
+| **Alignment** | `sample.methyl_qc` | `qcPass` | After linear / stock Giraffe / methylGrapher QC BAM, before extract | Extract path (unless fastp remediation) |
+| **Extraction** | `sample.extraction_qc` | `extractionQcPass` | After `sample.methyl_extract` or `sample.methylgrapher_wgbs_extract` | Full archive + BAM delete |
 
 Alignment QC may recommend **REALIGN_TRIM** (cycle screening in methylalignmentqc). When `remediateAlignment` is true, fastp trims Read 1/2 start or end bases per `trimFront1`/`trimTail1`/`trimFront2`/`trimTail2`, Parabricks realigns, and methyl_qc runs again — **FASTQs must remain on disk** until archive (pass or reject).
 
-Extraction QC reads MethylExtractor `{sampleId}.extraction_manifest.json` and writes `{sampleId}.extraction_qc.json`. Failures are **terminal** (no retry loop today).
+Extraction QC reads `{sampleId}.extraction_manifest.json` (MethylExtractor or methylGrapher canonical shape) and writes `{sampleId}.extraction_qc.json`. Failures are **terminal** (no retry loop today). Read-level `{chr}-CG.patterns.h5` sidecars are emitted at extract time; **`pipeline.info_measures` runs later in the study lifecycle**, not inside SamplePrep.
 
 **Ordering:** methyl-qc runs **before** fragmentomics so failed samples skip BAM scanning. Fragmentomics runs before extraction (needs aligned BAM).
 
@@ -92,7 +98,7 @@ Top-level keys become scope-0 variables. FOREACH object elements flatten into pe
 | `isCfdna` | boolean | yes | Drives fragmentomics **IF** |
 | `referenceFasta` | string | yes | Reference FASTA for linear Parabricks fq2bam and MethylExtractor |
 | `referenceGtf` | string | no | GTF for Parabricks |
-| `alignmentMode` | string | no | `linear` (default) or `pangenome` — binds `usePangenome` for Giraffe vs fq2bam |
+| `alignmentMode` | string | no | `linear` (default), `pangenome` (stock Giraffe), or `pangenome_wgbs` (methylGrapher WGBS; binds `useWgbsPangenome` + `usePangenome`) |
 | `deleteFastqs` | boolean | no | **Default `true`.** When true, run `sample.delete_fastqs` after archive/terminal QC. Set `false` (or profile `actionConfig.sample_prep.delete_fastqs: false`) to retain FASTQs under `/work/samples/{id}/`. |
 | `fastqStorage` | object | yes | Laboratory-owned ingress (never inferred from archive profile) |
 | `sampleStorage` | object | no | Internal archive defaults from `portal.resource_profile` → `cfg.storage_endpoint` when omitted (`h5Storage` alias) |
@@ -118,10 +124,12 @@ Per sample under `/work/samples/{sample_id}/`:
 ```text
 *.fastq.gz                          retained until archive_sample, then deleted
 {sample_id}.bam                     deleted after archive (pass or reject)
-{sample_id}.json                    Parabricks metrics (retained)
+{sample_id}.alignment.gaf           methylGrapher WGBS mode (retained)
+{sample_id}.alignment_metrics.json  methylGrapher align provenance (retained)
+{sample_id}.json                    Parabricks / align metrics (retained)
 *.qc-metrics.tar                    optional Parabricks tar (retained)
 {sample_id}.sample_prep_log.jsonl   append-only audit (retained)
-{sample_id}.extraction_manifest.json   MethylExtractor export (retained)
+{sample_id}.extraction_manifest.json   MethylExtractor or methylGrapher export (retained)
 {sample_id}.extraction_qc.json      post-extract guardrails (retained)
 {chr}-{ctx}.json                    optional per-context QC sidecars (retained)
 {chr}-{ctx}.h5                      methylation matrices (retained; optional remote copy)
@@ -165,14 +173,16 @@ See [pipeline architecture §0](../docs/pipeline_architecture.md).
 |-------------|------------|-------|
 | `sample.download_fastq` | `sample.download-fastq` | In-process worker |
 | `sample.parabricks_fq2bam` | `parabricks.fq2bam` | External GPU (Docker Parabricks) |
+| `sample.parabricks_giraffe` | `parabricks.giraffe` | External GPU (stock HPRC pangenome) |
+| `sample.methylgrapher_wgbs_align` | `methylgrapher.wgbs_align` | External GPU (methylGrapher Docker; C2T+G2A) |
+| `sample.methylgrapher_wgbs_extract` | `methylgrapher.wgbs_extract` | External GPU (graph-aware H5 + patterns) |
 | `sample.trim_fastq` | `sample.trim-fastq` | In-process (fastp) |
 | `sample.delete_fastqs` | `sample.delete-fastqs` | In-process |
 | `sample.methyl_qc` | `methyl-qc` | In-repo methylalignmentqc |
 | `sample.fragmentomics` | `methyl-fragmentomics` | In-repo (cfDNA only) |
 | `sample.methyl_extract` | `methyl-extract` | External MethylExtractor |
 | `sample.extraction_qc` | `methyl-extraction-qc` | In-repo methylextractionqc |
-| `sample.archive_sample` | `sample.archive-sample` | In-process |
-| `sample.upload_h5` | `sample.upload-h5` | In-process (deprecated alias) |
+| `sample.archive_sample` | `sample.archive-sample` | In-process (curated qc/fastq/h5 bundle; replaces retired `sample.upload_h5`) |
 | `sample.delete_bam` | `sample.delete-bam` | In-process |
 | `sample.qc_failed` | `sample.mark-failed` | In-process |
 
