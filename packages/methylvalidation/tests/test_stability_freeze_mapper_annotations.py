@@ -298,7 +298,7 @@ def test_freeze_production_model_wires_stable_genes_and_raw_gene(tmp_path: Path,
     prod_project = json.loads((production_dir / "project.json").read_text(encoding="utf-8"))
     params = prod_project["actionConfig"]["validation"]["backend_profiles"]["ecdf"]["params"]
     assert params["feature_mode"] == "raw_gene"
-    assert params["feature_family_set"] == "gene"
+    assert params["feature_family_set"] == "gene_scored"
     mb_cfg = prod_project["actionConfig"]["model_bundle"]
     assert "stability_gene_panel" in mb_cfg
     assert frozen_calls.get("stability_gene_panel_path") == summary["stable_gene_panel"]
@@ -319,7 +319,7 @@ def test_resolve_production_ecdf_feature_settings_prefers_project_action_config(
                                 "enabled": True,
                                 "params": {
                                     "feature_mode": "raw_gene",
-                                    "feature_family_set": "gene",
+                                    "feature_family_set": "gene_scored",
                                 },
                             }
                         }
@@ -331,7 +331,7 @@ def test_resolve_production_ecdf_feature_settings_prefers_project_action_config(
     )
     mode, family = stability.resolve_production_ecdf_feature_settings(project, config=None)
     assert mode == "raw_gene"
-    assert family == "gene"
+    assert family == "gene_scored"
     assert stability.production_requires_mapper_annotations(mode, family) is True
     assert stability.production_requires_frozen_genes(mode, family) is True
 
@@ -354,7 +354,7 @@ def test_finalize_requires_genes_from_production_project_not_config(tmp_path: Pa
                                 "enabled": True,
                                 "params": {
                                     "feature_mode": "raw_gene",
-                                    "feature_family_set": "gene",
+                                    "feature_family_set": "gene_scored",
                                 },
                             }
                         }

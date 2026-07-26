@@ -62,21 +62,44 @@ OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v29_structural_scored"
 HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v5_centroid_distance_per_class"
 HYBRID_FEATURE_FAMILY_SETS = (
     "dmp_scored",
-    "gene",
-    "structural",
     "gene_scored",
     "structural_scored",
     "chromosome",
-    "dmp_scored+gene",
-    "dmp_scored+structural",
     "dmp_scored+gene_scored",
     "dmp_scored+structural_scored",
     "dmp_scored+chromosome",
-    "hybrid-all",
 )
+
+# Unfiltered one-column-per-mapped-gene / gene×region families (and hybrid-all).
+# These explode dimensionality and ignore the stable panel; use *_scored instead.
+_BANNED_FEATURE_FAMILY_SETS: Dict[str, Optional[str]] = {
+    "gene": "gene_scored",
+    "structural": "structural_scored",
+    "dmp_scored+gene": "dmp_scored+gene_scored",
+    "dmp_scored+structural": "dmp_scored+structural_scored",
+    "hybrid-all": None,
+    "dmp+gene": "dmp_scored+gene_scored",
+    "dmp+structural": "dmp_scored+structural_scored",
+}
+
+
 def normalize_feature_family_set(value: Optional[str]) -> str:
-    """Return canonical feature_family_set token (legacy aliases rejected)."""
+    """Return canonical feature_family_set token (legacy/unfiltered families rejected)."""
     token = str(value or "dmp_scored").strip().lower()
+    if token in _BANNED_FEATURE_FAMILY_SETS:
+        suggestion = _BANNED_FEATURE_FAMILY_SETS[token]
+        if suggestion:
+            raise ValueError(
+                f"feature_family_set={value!r} is banned (unfiltered mapped columns produce "
+                f"useless high-dimensional models). Use {suggestion!r} for stable-panel "
+                "scores; for promoter/intron/… selection use structural_scored (or "
+                "dmp_scored+structural_scored) with region_directional_region_types."
+            )
+        raise ValueError(
+            f"feature_family_set={value!r} is banned. Choose an explicit scored family "
+            f"from: {', '.join(HYBRID_FEATURE_FAMILY_SETS)}. For region focus set "
+            "region_directional_region_types (e.g. promoter, intron)."
+        )
     if token not in HYBRID_FEATURE_FAMILY_SETS:
         canonical = ", ".join(HYBRID_FEATURE_FAMILY_SETS)
         raise ValueError(
@@ -347,32 +370,26 @@ def _build_dynamic_mapped_feature_names(
 
 
 def _family_flags(feature_family_set: Optional[str]) -> Tuple[bool, bool, bool, bool, bool, bool]:
-    """Return (dmp_scored, legacy_gene, structural, gene_scored, structural_scored, chromosome)."""
+    """Return (dmp_scored, legacy_gene, structural, gene_scored, structural_scored, chromosome).
+
+    Legacy unfiltered gene/structural flags are always False; those tokens are rejected by
+    ``normalize_feature_family_set``.
+    """
     token = normalize_feature_family_set(feature_family_set)
     if token == "dmp_scored":
         return True, False, False, False, False, False
-    if token == "gene":
-        return False, True, False, False, False, False
-    if token == "structural":
-        return False, False, True, False, False, False
     if token == "gene_scored":
         return False, False, False, True, False, False
     if token == "structural_scored":
         return False, False, False, False, True, False
     if token == "chromosome":
         return False, False, False, False, False, True
-    if token == "dmp_scored+gene":
-        return True, True, False, False, False, False
-    if token == "dmp_scored+structural":
-        return True, False, True, False, False, False
     if token == "dmp_scored+gene_scored":
         return True, False, False, True, False, False
     if token == "dmp_scored+structural_scored":
         return True, False, False, False, True, False
     if token == "dmp_scored+chromosome":
         return True, False, False, False, False, True
-    if token == "hybrid-all":
-        return True, True, True, False, False, True
     raise ValueError(
         f"Unsupported feature_family_set={feature_family_set!r}; "
         f"allowed={list(HYBRID_FEATURE_FAMILY_SETS)}"

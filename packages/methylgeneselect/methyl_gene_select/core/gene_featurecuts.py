@@ -408,7 +408,7 @@ def _evaluate_gene_prefix(
         class_names=class_names,
         feature_names=names,
         feature_weights=weights,
-        feature_family_set="gene",
+        feature_family_set="gene_scored",
         feature_mode="raw_gene",
         n_bins=int(max(8, n_bins)),
         temperature=1.0,

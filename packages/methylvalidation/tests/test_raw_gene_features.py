@@ -115,7 +115,7 @@ def test_normalize_production_ecdf_backend_defaults_to_raw_dmp():
                     "ecdf": {
                         "params": {
                             "feature_mode": "observed_hybrid",
-                            "feature_family_set": "gene",
+                            "feature_family_set": "gene_scored",
                         }
                     }
                 }
@@ -138,7 +138,7 @@ def test_normalize_production_ecdf_backend_preserves_raw_gene():
                     "ecdf": {
                         "params": {
                             "feature_mode": "raw_gene",
-                            "feature_family_set": "gene",
+                            "feature_family_set": "gene_scored",
                         }
                     }
                 }
@@ -148,4 +148,4 @@ def test_normalize_production_ecdf_backend_preserves_raw_gene():
     _normalize_production_ecdf_backend(project)
     params = project["actionConfig"]["validation"]["backend_profiles"]["ecdf"]["params"]
     assert params["feature_mode"] == "raw_gene"
-    assert params["feature_family_set"] == "gene"
+    assert params["feature_family_set"] == "gene_scored"

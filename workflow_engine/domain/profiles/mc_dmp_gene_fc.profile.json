@@ -230,7 +230,7 @@
           "enabled": true,
           "params": {
             "feature_mode": "raw_gene",
-            "feature_family_set": "gene",
+            "feature_family_set": "gene_scored",
             "covariates_path": [
               "{output_base}/derived_measures/derived_measures.csv",
               "{output_base}/info_measures/readlevel_measures.csv"

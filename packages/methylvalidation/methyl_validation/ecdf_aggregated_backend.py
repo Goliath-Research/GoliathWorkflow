@@ -65,7 +65,7 @@ def train_ecdf_aggregated_ovr_model(
     project_json: str | Path,
     bundle_h5: str | Path,
     output_dir: str | Path,
-    feature_family_set: str = "gene",
+    feature_family_set: str = "gene_scored",
     observed_feature_min_coverage: int = 1,
     observed_feature_quality_columns: Optional[Sequence[str]] = None,
     observed_hist_eps: float = 1e-6,
@@ -273,7 +273,7 @@ def predict_ecdf_aggregated_ovr_from_project(
         hist_alpha=float(obs.get("hist_alpha", 0.5)),
         hist_evidence_clip_cap=float(obs.get("hist_evidence_clip_cap", 5.0)),
         hist_tail_agreement_threshold=float(obs.get("hist_tail_agreement_threshold", 0.10)),
-        feature_family_set=normalize_feature_family_set(str(obs.get("feature_family_set") or "gene")),
+        feature_family_set=normalize_feature_family_set(str(obs.get("feature_family_set") or "gene_scored")),
         observed_feature_quality_columns=obs.get("observed_feature_quality_columns"),
     )
     export_names = [str(x) for x in (obs.get("export_feature_names") or feat.feature_names)]

@@ -699,7 +699,7 @@ def test_build_model_feature_bundle_merges_mapper_annotations(tmp_path: Path, mo
     model_bundle.build_model_feature_bundle(
         project_json=tmp_path / "project.json",
         output_dir=tmp_path / "bundle",
-        feature_family_set="gene",
+        feature_family_set="gene_scored",
         require_mapper_annotations=True,
         mapper_annotation_csv=ann_csv,
     )
@@ -742,7 +742,7 @@ def test_build_model_feature_bundle_preserves_mapper_gene_columns(tmp_path: Path
     model_bundle.build_model_feature_bundle(
         project_json=tmp_path / "project.json",
         output_dir=tmp_path / "bundle",
-        feature_family_set="gene",
+        feature_family_set="gene_scored",
         require_mapper_annotations=True,
         mapper_annotation_csv=ann_csv,
     )
@@ -833,7 +833,7 @@ def test_build_model_feature_bundle_uses_project_mapper_annotation_pointer(tmp_p
     model_bundle.build_model_feature_bundle(
         project_json=tmp_path / "project.json",
         output_dir=tmp_path / "bundle",
-        feature_family_set="gene",
+        feature_family_set="gene_scored",
         require_mapper_annotations=True,
     )
     out_df = model_bundle.load_bundle_dmp_index(tmp_path / "bundle" / "model_feature_bundle.h5")
@@ -857,7 +857,7 @@ def test_build_model_feature_bundle_requires_mapper_annotations_for_non_dmp(tmp_
         model_bundle.build_model_feature_bundle(
             project_json=tmp_path / "project.json",
             output_dir=tmp_path / "bundle",
-            feature_family_set="gene",
+            feature_family_set="gene_scored",
             require_mapper_annotations=True,
         )
 

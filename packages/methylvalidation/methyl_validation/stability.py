@@ -2037,7 +2037,7 @@ def _normalize_production_ecdf_backend(
 
     if use_raw_gene:
         params["feature_mode"] = "raw_gene"
-        params["feature_family_set"] = "gene"
+        params["feature_family_set"] = "gene_scored"
     else:
         params["feature_mode"] = "raw_dmp"
         params["feature_family_set"] = "dmp_scored"

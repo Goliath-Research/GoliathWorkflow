@@ -84,13 +84,12 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 ECDF/Bayesian remains methylation-only by design at the first stage. The optional ECDF second stage (observed-hybrid and/or covariates) and the `observed_hybrid` path used by ECDF-aggregated/tabular/generative backends share a unified mapped-feature builder with explicit family toggles:
 
 - `feature_family_set=dmp_scored`: aggregated DMP-family observed metrics (`max_weighted_directional_score`, etc.). Legacy alias: `dmp`.
-- `feature_family_set=gene`: dynamic one-feature-per-mapped-gene keys (`gene::<GENE>`).
-- `feature_family_set=structural`: dynamic one-feature-per-mapped `(gene, feature_type)` keys (`struct::<GENE>::<FEATURE>`).
 - `feature_family_set=gene_scored`: comparison-level `gene_directional_score__{comparison}` features from frozen gene panels (`frozen_genes_production.csv`) and per-comparison DMP effects (no `gene::` columns).
 - `feature_family_set=structural_scored`: comparison×region pooled features from `frozen_gene_features.csv` and per-locus mapper annotations; emits `structural_directional_score__{comparison}__{region}` plus companion columns only for supported `(comparison, region)` pairs (dynamic schema).
 - `feature_family_set=dmp_scored+gene_scored`: DMP-family metrics plus gene-directional scores (recommended when using mapper gene panels without legacy per-gene columns). Legacy alias: `dmp+gene_scored`.
 - `feature_family_set=dmp_scored+structural_scored`: DMP-family metrics plus structural-directional scores. Legacy alias: `dmp+structural_scored`.
-- combined families (`dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`) concatenate families in deterministic order (`hybrid-all` does not include `gene_scored` or `structural_scored`; combine explicitly).
+- Unfiltered `gene`, `structural`, `dmp_scored+gene`, `dmp_scored+structural`, and `hybrid-all` are **rejected** (they emit one column per mapped gene / gene×region and ignore the stable panel). For promoter/intron/… focus use `structural_scored` with `region_directional_region_types`.
+- combined scored families (`dmp_scored+gene_scored`, `dmp_scored+structural_scored`, `dmp_scored+chromosome`) concatenate in deterministic order.
 
 Gene-directional score (per sample, per `comparison_label`):
 

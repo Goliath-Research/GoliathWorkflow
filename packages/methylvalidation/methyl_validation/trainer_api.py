@@ -843,13 +843,13 @@ def build_model_backend_steps(
                     project_json=project_json,
                     output_dir=bundle_dir,
                     weight_column=(config.model_weight_column if config is not None else "effect_size"),
-                    feature_family_set="gene",
+                    feature_family_set="gene_scored",
                     require_mapper_annotations=True,
                     extra_metadata={
                         "model_backend": "ecdf",
                         "classifier_type": "ecdf_gene_one_vs_rest",
                         "feature_mode": "raw_gene",
-                        "feature_family_set": "gene",
+                        "feature_family_set": "gene_scored",
                     },
                 )
                 return 0, f"Bundle written to {bundle_dir}", ""

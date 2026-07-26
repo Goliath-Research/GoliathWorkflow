@@ -525,7 +525,7 @@ def test_raw_gene_second_stage_runs_when_covariates_path_set(tmp_path: Path, mon
                     "enabled": True,
                     "params": {
                         "feature_mode": "raw_gene",
-                        "feature_family_set": "gene",
+                        "feature_family_set": "gene_scored",
                         "covariates_path": str(tmp_path / "cov.csv"),
                     },
                 },
@@ -578,7 +578,7 @@ def test_raw_gene_second_stage_skips_when_neither_gate(tmp_path: Path, monkeypat
                     "enabled": True,
                     "params": {
                         "feature_mode": "raw_gene",
-                        "feature_family_set": "gene",
+                        "feature_family_set": "gene_scored",
                     },
                 },
                 "tabular_sklearn": {"enabled": False, "params": {}},

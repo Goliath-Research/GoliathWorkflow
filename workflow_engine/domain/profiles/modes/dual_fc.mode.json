@@ -229,7 +229,7 @@
           "enabled": true,
           "params": {
             "feature_mode": "raw_gene",
-            "feature_family_set": "gene"
+            "feature_family_set": "gene_scored"
           }
         }
       }

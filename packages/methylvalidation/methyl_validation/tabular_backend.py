@@ -1644,15 +1644,10 @@ def predict_tabular_model_from_project(
                 {"name": "dmp_scored", "feature_family_set": "dmp_scored"},
                 {"name": "dmp_scored+chromosome", "feature_family_set": "dmp_scored+chromosome"},
                 {"name": "chromosome", "feature_family_set": "chromosome"},
-                {"name": "gene", "feature_family_set": "gene"},
-                {"name": "structural", "feature_family_set": "structural"},
-                {"name": "dmp_scored+gene", "feature_family_set": "dmp_scored+gene"},
                 {"name": "gene_scored", "feature_family_set": "gene_scored"},
                 {"name": "dmp_scored+gene_scored", "feature_family_set": "dmp_scored+gene_scored"},
                 {"name": "structural_scored", "feature_family_set": "structural_scored"},
                 {"name": "dmp_scored+structural_scored", "feature_family_set": "dmp_scored+structural_scored"},
-                {"name": "dmp_scored+structural", "feature_family_set": "dmp_scored+structural"},
-                {"name": "hybrid-all", "feature_family_set": "hybrid-all"},
             ],
         }
         with open(out_dir / "feature_family_ablation.json", "w", encoding="utf-8") as f:

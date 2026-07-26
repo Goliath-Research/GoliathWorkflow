@@ -1629,7 +1629,7 @@ def build_model_feature_bundle(
             "dmps-*-discovery.csv, or dmps-*.csv under detection dirs."
         )
 
-    from .observed_feature_builder import normalize_feature_family_set
+    from .observed_feature_builder import describe_active_feature_families, normalize_feature_family_set
 
     family_token = normalize_feature_family_set(feature_family_set)
     strict_mapper = (
@@ -1682,8 +1682,9 @@ def build_model_feature_bundle(
         ascending=[False, True, True, True],
     ).reset_index(drop=True)
 
-    includes_gene = family_token in {"gene", "dmp_scored+gene", "hybrid-all"}
-    includes_structural = family_token in {"structural", "dmp_scored+structural", "hybrid-all"}
+    family_flags = describe_active_feature_families(family_token)
+    includes_gene = bool(family_flags.get("gene_scored"))
+    includes_structural = bool(family_flags.get("structural_scored"))
     gene_non_unknown = int((dmp_df["gene_name"].astype(str).str.strip().str.lower() != "unknown").sum())
     feat_non_unknown = int((dmp_df["feature_type"].astype(str).str.strip().str.lower() != "unknown").sum())
     if strict_mapper:

@@ -350,7 +350,7 @@ Optional gene stability runs in the same MC loop when `stability_gene_featurecut
       "ecdf": {
         "params": {
           "feature_mode": "raw_gene",
-          "feature_family_set": "gene"
+          "feature_family_set": "gene_scored"
         }
       }
     }
@@ -472,27 +472,21 @@ When profile `actionConfig.validation.backend_profiles.<backend>.params.feature_
 
 - `feature_family_set` (applies only when `feature_mode=observed_hybrid`; ignored for `raw_dmp` / `raw_gene`):
   - `dmp_scored`: aggregated DMP-family observed metrics (`max_weighted_directional_score`, etc.), including per-class `weighted_cosine_distance_to_centroid__{class}` columns from methyl-centroid H5 profiles at selected-panel DMP loci (`dmps-*-selected.csv`). Legacy alias: `dmp`.
-  - `gene`: one feature per mapped gene (`gene::<GENE>`)
-  - `structural`: one feature per mapped gene-annotation key (`struct::<GENE>::<FEATURE>`)
   - `gene_scored`: comparison-level features from frozen gene panels: `gene_directional_score__{comparison}`, `gene_panel_obs_fraction__{comparison}`, `gene_directional_iqr__{comparison}`, `gene_weighted_sign_agreement__{comparison}`; when **K ≥ 2** ordered comparisons, also progression contrasts (`gene_directional_contrast__*`, `gene_directional_adjacent_delta__*`, `gene_directional_progression_slope`, `gene_directional_range`) from directional scores only
-  - `structural_scored`: comparison×region pooled features from `frozen_gene_features.csv`: `structural_directional_score__{comparison}__{region}`, `structural_panel_obs_fraction__*`, `structural_directional_iqr__*`, `structural_weighted_sign_agreement__*`; default regions include `gene_body`; progression contrasts per region when **K ≥ 2**; columns omitted when a region has insufficient panel loci in the classifier index; mapper cache uses priority-based locus assignment by default
+  - `structural_scored`: comparison×region pooled features from `frozen_gene_features.csv`: `structural_directional_score__{comparison}__{region}`, `structural_panel_obs_fraction__*`, `structural_directional_iqr__*`, `structural_weighted_sign_agreement__*`; default regions include `gene_body`; progression contrasts per region when **K ≥ 2**; columns omitted when a region has insufficient panel loci in the classifier index; mapper cache uses priority-based locus assignment by default. Select regions with `region_directional_region_types` (e.g. `promoter`, `intron`).
   - `dmp_scored+gene_scored`: DMP-family metrics plus gene-directional scores (legacy alias: `dmp+gene_scored`)
   - `dmp_scored+structural_scored`: DMP-family metrics plus structural-directional scores (legacy alias: `dmp+structural_scored`)
-  - `dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all`: deterministic concatenation of families (canonical tokens only; legacy aliases rejected)
+  - **Banned:** `gene`, `structural`, `dmp_scored+gene`, `dmp_scored+structural`, `hybrid-all` (and legacy `dmp+gene` / `dmp+structural`) — unfiltered one-column-per-mapped-gene / gene×region schemas. Migrator rewrites them to the scored equivalents where possible.
 
 | Legacy alias | Canonical token |
 |--------------|-----------------|
 | `dmp` | `dmp_scored` |
-| `dmp+gene` | `dmp_scored+gene` |
-| `dmp+structural` | `dmp_scored+structural` |
+| `dmp+gene` / `gene` / `dmp_scored+gene` | `dmp_scored+gene_scored` or `gene_scored` |
+| `dmp+structural` / `structural` / `dmp_scored+structural` | `dmp_scored+structural_scored` or `structural_scored` |
 | `dmp+gene_scored` | `dmp_scored+gene_scored` |
 | `dmp+structural_scored` | `dmp_scored+structural_scored` |
 
-Project JSON may still use legacy tokens; validators and `methyl-validation-migrate-backend-config` rewrite them to canonical names on load.
-
-For `gene`/`structural` families, per-sample mapped features are computed as signed weighted centered methylation over observed loci:
-
-- `sum(sign(effect_size) * abs(effect_size) * (beta - 0.5)) / sum(abs(effect_size))`
+`methyl-validation-migrate-backend-config` rewrites offline aliases to scored families. Runtime validation rejects banned tokens.
 
 Operational notes:
 

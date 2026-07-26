@@ -94,10 +94,14 @@ GENERATIVE_PARAM_KEYS = {
 
 _OFFLINE_FEATURE_FAMILY_ALIASES = {
     "dmp": "dmp_scored",
-    "dmp+gene": "dmp_scored+gene",
-    "dmp+structural": "dmp_scored+structural",
+    "dmp+gene": "dmp_scored+gene_scored",
+    "dmp+structural": "dmp_scored+structural_scored",
     "dmp+gene_scored": "dmp_scored+gene_scored",
     "dmp+structural_scored": "dmp_scored+structural_scored",
+    "gene": "gene_scored",
+    "structural": "structural_scored",
+    "dmp_scored+gene": "dmp_scored+gene_scored",
+    "dmp_scored+structural": "dmp_scored+structural_scored",
 }
 
 

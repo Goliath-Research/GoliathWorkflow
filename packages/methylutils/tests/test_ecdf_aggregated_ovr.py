@@ -42,7 +42,7 @@ def test_train_and_predict_aggregated_package_roundtrip() -> None:
         class_names=["healthy", "disease"],
         feature_names=feature_names,
         feature_weights=weights,
-        feature_family_set="gene",
+        feature_family_set="gene_scored",
         feature_mode="observed_hybrid",
         n_bins=32,
         temperature=1.0,
@@ -84,7 +84,7 @@ def test_train_and_predict_gene_ecdf_package_roundtrip() -> None:
         class_names=["healthy", "disease"],
         feature_names=feature_names,
         feature_weights=weights,
-        feature_family_set="gene",
+        feature_family_set="gene_scored",
         feature_mode="raw_gene",
         classifier_type=GENE_ECDF_OVR_TYPE,
     )

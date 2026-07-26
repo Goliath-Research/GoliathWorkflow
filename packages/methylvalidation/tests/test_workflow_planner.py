@@ -158,7 +158,7 @@ def test_plan_validation_context_profile_overrides_exclude_legacy_defaults(tmp_p
                 "enabled": True,
                 "params": {
                     "feature_mode": "raw_gene",
-                    "feature_family_set": "gene",
+                    "feature_family_set": "gene_scored",
                 },
             }
         },

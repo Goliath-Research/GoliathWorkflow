@@ -285,7 +285,7 @@ def test_build_model_backend_steps_ecdf_observed_hybrid_defaults_to_classic_path
                     "enabled": True,
                     "params": {
                         "feature_mode": "observed_hybrid",
-                        "feature_family_set": "gene",
+                        "feature_family_set": "gene_scored",
                     },
                 },
                 "tabular_sklearn": {"enabled": False, "params": {}},
@@ -318,7 +318,7 @@ def test_build_model_backend_steps_ecdf_raw_gene_uses_gene_ecdf_path(tmp_path: P
                     "enabled": True,
                     "params": {
                         "feature_mode": "raw_gene",
-                        "feature_family_set": "gene",
+                        "feature_family_set": "gene_scored",
                     },
                 },
                 "tabular_sklearn": {"enabled": False, "params": {}},
@@ -361,7 +361,7 @@ def test_raw_gene_predictor_emits_train_then_test_partitions(
                     "enabled": True,
                     "params": {
                         "feature_mode": "raw_gene",
-                        "feature_family_set": "gene",
+                        "feature_family_set": "gene_scored",
                     },
                 },
                 "tabular_sklearn": {"enabled": False, "params": {}},
@@ -409,7 +409,7 @@ def test_build_model_backend_steps_ecdf_observed_hybrid_uses_aggregated_path_whe
                     "enabled": True,
                     "params": {
                         "feature_mode": "observed_hybrid",
-                        "feature_family_set": "gene",
+                        "feature_family_set": "gene_scored",
                         "ecdf_aggregated_enabled": True,
                     },
                 },
@@ -448,7 +448,7 @@ def test_build_model_backend_steps_ecdf_aggregated_can_be_explicitly_disabled(tm
                     "enabled": True,
                     "params": {
                         "feature_mode": "observed_hybrid",
-                        "feature_family_set": "gene",
+                        "feature_family_set": "gene_scored",
                         "ecdf_aggregated_enabled": False,
                     },
                 },
@@ -497,7 +497,7 @@ def test_build_model_backend_steps_ecdf_aggregated_uses_configured_n_bins(tmp_pa
                     "enabled": True,
                     "params": {
                         "feature_mode": "observed_hybrid",
-                        "feature_family_set": "gene",
+                        "feature_family_set": "gene_scored",
                         "ecdf_aggregated_enabled": True,
                         "ecdf_aggregated_n_bins": 211,
                     },
