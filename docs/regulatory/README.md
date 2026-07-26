@@ -14,7 +14,7 @@ discussions.
 
 | Document | Purpose |
 |----------|---------|
-| [Regulatory-Ready Platform for Multiomics Diagnostics](Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.md) | Product positioning, open-core packaging, GTM, and analyte/process roadmap (strategy). Shareable pitch: [`../presentations/regulatory-ready-platform-multiomics.md`](../presentations/regulatory-ready-platform-multiomics.md) (HTML/PDF via `scripts/render_presentations.sh`) |
+| [Regulatory-Ready Platform for Multiomics Diagnostics](Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.md) | Product positioning, open-core packaging, GTM, and analyte/process roadmap (strategy). **Standalone HTML** (offline Mermaid): [`Regulatory-Ready Platform for Multiomics Diagnostics.html`](Regulatory-Ready%20Platform%20for%20Multiomics%20Diagnostics.html) — regenerate with `scripts/render_regulatory_standalone.sh`. Sales pitch deck (Marp): [`../presentations/regulatory-ready-platform-multiomics.md`](../presentations/regulatory-ready-platform-multiomics.md) (HTML/PDF via `scripts/render_presentations.sh`; re-render after pitch edits — the deck can lag the strategy article). |
 | [Product and operational controls](methylpipeline-product-and-operational-controls.md) | Product scope, feature inventory, configuration-as-workflow model, and control summary |
 | [Deployment and supervision](deployment-and-supervision.md) | Production topology, worker supervision, portal monitoring, release bundles, rollback, and security controls |
 | [Validation evidence index](validation-evidence-index.md) | Template and registry structure for real study/model results tied to exact software and configuration versions |
