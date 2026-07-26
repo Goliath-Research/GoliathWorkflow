@@ -88,7 +88,9 @@ if [[ "$SKIP_DOWNLOAD" -eq 0 ]]; then
   if [[ ! -f "$FULL_R1" || ! -f "$FULL_R2" ]]; then
     if ! command -v fasterq-dump >/dev/null 2>&1 && ! command -v prefetch >/dev/null 2>&1; then
       echo "ERROR: SRA Toolkit (prefetch/fasterq-dump) not found and FASTQs missing." >&2
-      echo "Install SRA Toolkit or place ${R1_NAME}/${R2_NAME} under ${WORK_DIR}/full/ and re-run with --skip-download." >&2
+      echo "Install on Ubuntu/Debian:" >&2
+      echo "  sudo apt-get update && sudo apt-get install -y sra-toolkit" >&2
+      echo "Or place ${R1_NAME}/${R2_NAME} under ${WORK_DIR}/full/ and re-run with --skip-download." >&2
       exit 2
     fi
     echo "Downloading ${RUN_ACC} (large; may take hours)..."
