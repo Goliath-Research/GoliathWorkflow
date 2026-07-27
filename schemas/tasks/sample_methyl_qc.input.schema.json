@@ -2,6 +2,55 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "alignmentPass": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Alignmentpass"
+    },
+    "executionScopeId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Executionscopeid"
+    },
+    "primaryAnalyte": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Primaryanalyte"
+    },
+    "project": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Legacy alias of projectPath from older input templates (provenance only).",
+      "title": "Project"
+    },
     "projectPath": {
       "anyOf": [
         {
@@ -13,6 +62,56 @@
       ],
       "default": null,
       "title": "Projectpath"
+    },
+    "qcAttempt": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Qcattempt"
+    },
+    "qcAttemptReason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Qcattemptreason"
+    },
+    "remediationTrigger": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Remediationtrigger"
+    },
+    "resolvedConfig": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Merged actionConfig.alignment_qc baked at instance configuration.",
+      "title": "Resolvedconfig"
     },
     "sampleDir": {
       "title": "Sampledir",
@@ -26,6 +125,18 @@
       "default": "MethylAlignmentQc",
       "title": "Tool",
       "type": "string"
+    },
+    "workflowNodeKey": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Workflownodekey"
     }
   },
   "required": [

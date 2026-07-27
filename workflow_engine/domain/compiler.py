@@ -418,8 +418,17 @@ def _compile_if(
     )
     _link(parent_key, if_key, order, branch, ctx)
     _compile_steps(ctx, step.then, if_key, branch="THEN", in_parallel=in_parallel)
-    if step.else_:
-        _compile_steps(ctx, step.else_, if_key, branch="ELSE", in_parallel=in_parallel)
+    # IF picks THEN/ELSE from the integer Result (condition_var / result_code), same
+    # shape as SWITCH CASE/DEFAULT. Typed action outputs explain that Result; they do
+    # not select the branch. Always emit ELSE so Result=0 has a branch (empty SEQUENCE
+    # when the program omits else — activate completes empty SEQUENCE immediately).
+    else_steps = list(step.else_ or [])
+    if else_steps:
+        _compile_steps(ctx, else_steps, if_key, branch="ELSE", in_parallel=in_parallel)
+    else:
+        else_key = ctx.fresh_key("seq")
+        ctx.nodes.append(WorkflowNodeSpec(node_key=else_key, node_type="SEQUENCE"))
+        _link(if_key, else_key, 0, "ELSE", ctx)
     return if_key
 
 

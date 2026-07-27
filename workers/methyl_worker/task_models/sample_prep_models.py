@@ -97,6 +97,22 @@ class MethylGrapherGraphIndexFiles(BaseModel):
     zipcodes: Optional[str] = Field(default=None, description="Path to Giraffe zipcodes index")
 
 
+class MethylGrapherReadLevelConfig(BaseModel):
+    """Read-level pattern extraction knobs under actionConfig.methylgrapher_wgbs.read_level."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: Optional[bool] = Field(
+        default=None,
+        description="Enable read-level / pattern extraction. Operator-set per site/profile.",
+    )
+    tile_size: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Pattern tile size (bp). Operator-set per site/profile.",
+    )
+
+
 class MethylGrapherWgbsStepConfig(BaseModel):
     """Operator-tunable methylGrapher WGBS pangenome knobs (actionConfig.methylgrapher_wgbs).
 
@@ -166,9 +182,9 @@ class MethylGrapherWgbsStepConfig(BaseModel):
     cg_only: Optional[bool] = Field(
         default=None, description="MethylCall -cg_only. Operator-set per site/profile."
     )
-    read_level: Optional[dict] = Field(
+    read_level: Optional[MethylGrapherReadLevelConfig] = Field(
         default=None,
-        description="Read-level pattern extraction knobs (enabled, tile_size). Operator-set.",
+        description="Read-level pattern extraction knobs. Operator-set per site/profile.",
     )
     contexts: Optional[List[str]] = Field(
         default=None, description="Methylation contexts to emit as {chrom}-{ctx}.h5 (e.g. CG)."
@@ -191,7 +207,7 @@ class MethylGrapherWgbsAlignTaskInput(BaseModel):
     alignmentPass: Optional[str] = None
     remediationReason: Optional[str] = None
     workflowNodeKey: Optional[str] = None
-    resolvedConfig: Optional[dict] = Field(
+    resolvedConfig: Optional[MethylGrapherWgbsStepConfig] = Field(
         default=None,
         description="Merged actionConfig.methylgrapher_wgbs (assets + tool pins).",
     )
@@ -210,7 +226,7 @@ class MethylGrapherWgbsExtractTaskInput(BaseModel):
     )
     executionScopeId: Optional[str] = None
     forceRealign: Optional[bool] = None
-    resolvedConfig: Optional[dict] = Field(
+    resolvedConfig: Optional[MethylGrapherWgbsStepConfig] = Field(
         default=None,
         description="Merged actionConfig.methylgrapher_wgbs (+ extract overlays).",
     )

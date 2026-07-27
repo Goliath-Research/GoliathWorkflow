@@ -67,6 +67,14 @@ def start_sample_prep(
             context[key] = body[key]
     # Bake site/profile actionConfig, alignment flags, and resolvedConfig__* scope vars.
     context = finalize_instance_context(context)
+    if body.get("disableArchive") is True:
+        context.pop("sampleStorage", None)
+        context.pop("h5Storage", None)
+        # Seed JSON null so archive templates resolve var.sampleDestination without
+        # Missing scope variable; archive handler skips when destination is null.
+        context["sampleDestination"] = None
+        context["h5Destination"] = None
+        context["disableArchive"] = True
 
     program_path = body.get("program_path")
     if program_path is None and body.get("workflow_version_id") is None:

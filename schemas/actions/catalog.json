@@ -1228,6 +1228,10 @@
           {
             "output_json_path": "$.remediateR2Trim",
             "var_name": "remediateR2Trim"
+          },
+          {
+            "output_json_path": "$.qcPath",
+            "var_name": "qcPath"
           }
         ],
         "template_defaults": [],

@@ -330,12 +330,28 @@ BEGIN
 
     ELSE IF @ptype = N'WHILE'
         EXEC wf.wf_while_continue @while_execution_id = @parent;
+
+    ELSE IF @ptype = N'FOREACH'
+    BEGIN
+        DECLARE @fparallel BIT;
+        SELECT @fparallel = ISNULL(wn.foreach_parallel, 0)
+        FROM wf.node_execution AS ne
+        INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
+        WHERE ne.id = @parent;
+
+        IF @fparallel = 1
+            EXEC wf.wf_foreach_parallel_continue @foreach_execution_id = @parent;
+        ELSE
+            EXEC wf.wf_foreach_continue @foreach_execution_id = @parent;
+    END
 END;
 GO
 
 /*
   Full wf_engine_activate with OpenScope on composite nodes and PARALLEL child scope copy.
   Replaces wf_sql_branch_parity version when this script is deployed.
+  NOTE: Prefer deploying wf_engine_activate from wf_sql_foreach_support.sql on Azure
+  (FOREACH + condition_var). This copy is the OpenScope/PARALLEL write-path baseline.
 */
 CREATE OR ALTER PROCEDURE wf.wf_engine_activate
     @workflow_instance_id BIGINT,

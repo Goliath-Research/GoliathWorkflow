@@ -259,7 +259,12 @@ def _clear_alignment_outputs(paths: ParabricksPaths) -> None:
 
 
 def alignment_outputs_complete(paths: ParabricksPaths) -> bool:
-    return paths.bam_path.is_file() and _has_qc_artifact(paths)
+    # Require a non-empty BAM so a crashed/partial write cannot skip realignment.
+    return (
+        paths.bam_path.is_file()
+        and paths.bam_path.stat().st_size > 0
+        and _has_qc_artifact(paths)
+    )
 
 
 def _docker_bin() -> str:

@@ -529,3 +529,47 @@ def test_assign_foreach_as_collision_rejected():
     )
     with pytest.raises(ValueError, match="collides with FOREACH"):
         compile_domain_program(program)
+
+
+def test_if_without_else_emits_empty_else_sequence():
+    """IF picks THEN/ELSE from Result like SWITCH CASE/DEFAULT; omit-else still needs ELSE."""
+    program = DomainProgram.model_validate(
+        {
+            "name": "if_else_smoke",
+            "projectPath": "/work/projects/demo/configs/project.json",
+            "phases": [
+                {
+                    "name": "p",
+                    "steps": [
+                        {
+                            "if": "${deleteFastqs}",
+                            "then": [
+                                {
+                                    "action": "sample.delete_fastqs",
+                                    "node_key": "delete_fastqs",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    )
+    result = compile_domain_program(program)
+    if_nodes = [n for n in result.workflow.nodes if n.node_type == "IF"]
+    assert len(if_nodes) == 1
+    if_key = if_nodes[0].node_key
+    else_edges = [
+        e
+        for e in result.workflow.edges
+        if e.parent_node_key == if_key and e.branch_kind == "ELSE"
+    ]
+    then_edges = [
+        e
+        for e in result.workflow.edges
+        if e.parent_node_key == if_key and e.branch_kind == "THEN"
+    ]
+    assert len(then_edges) == 1
+    assert len(else_edges) == 1
+    else_node = next(n for n in result.workflow.nodes if n.node_key == else_edges[0].child_node_key)
+    assert else_node.node_type == "SEQUENCE"

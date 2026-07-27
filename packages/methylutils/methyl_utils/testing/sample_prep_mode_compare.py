@@ -525,6 +525,8 @@ def build_start_payload(
         "primaryAnalyte": primary_analyte,
         "referenceFasta": reference_fasta,
         "deleteFastqs": False,
+        # Keep mode trees local: do not fill portal sampleStorage / QNAP archive.
+        "disableArchive": True,
         "fastqStorage": dict(fastq_storage),
         "samples": [
             {

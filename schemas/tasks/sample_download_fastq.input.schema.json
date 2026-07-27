@@ -809,6 +809,19 @@
       ],
       "title": "Fastqsource"
     },
+    "projectPath": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Study project path for provenance/logging only; not a config source.",
+      "title": "Projectpath"
+    },
     "resolvedConfig": {
       "anyOf": [
         {

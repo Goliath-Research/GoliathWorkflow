@@ -125,6 +125,8 @@ Conditions reference scope variables set by prior ACTION output bindings or inst
 
 Example: `sample.methyl_qc` binds `qcPass` from `$.guardrails.overall_pass` (see `schemas/actions/catalog.json`).
 
+IF selects **THEN** or **ELSE** from an integer **Result** (scope `condition_var`, or fallback prior-task `result_code`) — the same shape as SWITCH selecting **CASE** / **DEFAULT**. Typed `output_json` fields explain that Result (disposition, messages, trim counts); they do not choose the branch. Omitting `else` still compiles an empty ELSE SEQUENCE so Result=`0` has a branch.
+
 ## Result codes and branching
 
 When a worker completes an ACTION, it submits **`result_code`** (integer) with typed **`output_json`**. The engine stores the code on `node_execution.result_code` and resolves it for control flow via `wf_try_task_result_code(workflow_instance_id, node_key)`.

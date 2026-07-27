@@ -320,6 +320,8 @@ _DE_METHYL_QC = DomainEffects(
         ("qcAttemptReason", "$.screening.message"),
         ("remediateAlignment", "$.remediateAlignment"),
         ("remediateR2Trim", "$.remediateR2Trim"),
+        # archive_sample context_vars / templates resolve var.qcPath (not only alignmentQc.qcPath).
+        ("qcPath", "$.qcPath"),
     ),
     output_bindings=(
         DomainOutputBinding("MethylSampleRef", "alignmentQc", "$.alignmentQc"),

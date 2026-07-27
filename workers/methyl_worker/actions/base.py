@@ -17,6 +17,7 @@ from ..action_execution import (
     ExecutionTimer,
     execution_result_from_output,
     finalize_output,
+    load_input_model,
     validate_input,
 )
 from ..collectors import ArtifactCollector, GenericPipelineCollector
@@ -190,8 +191,9 @@ class CliAction:
         from ..task_validation import extract_runtime_input, strip_runtime_input
 
         payload = dict(input_json)
-        runtime = extract_runtime_input(payload)
-        task_payload = strip_runtime_input(payload)
+        input_model_cls = load_input_model(self.entry)
+        runtime = extract_runtime_input(payload, input_model_cls)
+        task_payload = strip_runtime_input(payload, input_model_cls)
         input_model = validate_input(self.entry, task_payload)
         argv_payload = {**input_model.model_dump(mode="json"), **runtime}
         timer = ExecutionTimer()

@@ -33,6 +33,11 @@ def apply_archive_profile_storage(
             "fastqStorage is required: initial FASTQs must come from laboratory-owned "
             "storage, not from platform archive storage"
         )
+    # Compare / dry-run arms: keep outputs under sampleDir and skip QNAP fill.
+    if out.get("disableArchive") is True:
+        out.pop("sampleStorage", None)
+        out.pop("h5Storage", None)
+        return out
     if out.get("sampleStorage") is None and out.get("h5Storage") is None:
         loaded = loader(profile_key)
         if loaded is not None:

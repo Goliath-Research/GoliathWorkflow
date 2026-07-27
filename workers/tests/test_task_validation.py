@@ -93,6 +93,46 @@ def test_parse_task_envelope_strips_runtime_keys() -> None:
     assert runtime.validationProfile.n_iterations == 10
 
 
+def test_parse_task_envelope_keeps_typed_resolved_config_on_task() -> None:
+    """SamplePrep actions declare resolvedConfig on the input model — do not strip it."""
+    from methyl_worker.task_validation import parse_task_envelope
+
+    task, runtime = parse_task_envelope(
+        "sample.methylgrapher_wgbs_align",
+        "methylgrapher.wgbs_align",
+        {
+            "tool": "MethylGrapherWgbsAlign",
+            "sampleId": "S1",
+            "sampleDir": "/work/samples/S1",
+            "projectPath": "/work/demo/project.json",
+            "executionScopeId": "scope-1",
+            "resolvedConfig": {
+                "index_prefix": "/work/genomes/pangenome/x",
+                "directional": True,
+                "c2t": {
+                    "gbz": "/c2t.gbz",
+                    "dist": "/c2t.dist",
+                    "min": "/c2t.min",
+                    "zipcodes": "/c2t.zip",
+                },
+                "g2a": {
+                    "gbz": "/g2a.gbz",
+                    "dist": "/g2a.dist",
+                    "min": "/g2a.min",
+                    "zipcodes": "/g2a.zip",
+                },
+                "ref_paths": "/ref.paths",
+                "cpg_tsv": "/cpg.tsv",
+                "linear_ref_fasta": "/ref.fa",
+            },
+        },
+    )
+    dumped = task.model_dump(mode="json")
+    assert dumped["resolvedConfig"]["index_prefix"] == "/work/genomes/pangenome/x"
+    assert dumped["executionScopeId"] == "scope-1"
+    assert runtime.validationProfile is None
+
+
 def test_cli_action_accepts_runtime_keys_on_wire() -> None:
     from unittest.mock import MagicMock, patch
 
