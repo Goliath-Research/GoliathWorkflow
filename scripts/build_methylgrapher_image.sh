@@ -33,7 +33,8 @@ case "$arch" in
   *) die "unsupported arch: $arch" ;;
 esac
 
-install_build_deps() {
+# Only enough to clone vg and invoke its own get-deps target.
+install_bootstrap_deps() {
   [[ "${INSTALL_DEPS}" == "1" ]] || return 0
   if ! command -v sudo >/dev/null 2>&1; then
     log "sudo unavailable; assuming build deps already installed"
@@ -41,10 +42,18 @@ install_build_deps() {
   fi
   sudo apt-get update -qq
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    build-essential cmake pkg-config git autoconf automake libtool \
-    protobuf-compiler libprotobuf-dev \
-    libjansson-dev libbz2-dev liblzma-dev zlib1g-dev libncurses-dev \
-    ca-certificates curl
+    build-essential make git ca-certificates curl
+}
+
+# vg owns its compile dependency list (Dockerfile DEPS markers), so get-deps
+# always matches v${VG_VERSION}. Duplicating it here silently omitted bison/flex
+# and cairo, which fails late in the build at lib/libraptor2.a.
+# Runs with CWD inside ${VG_SRC_DIR}.
+install_vg_deps() {
+  [[ "${INSTALL_DEPS}" == "1" ]] || return 0
+  command -v sudo >/dev/null 2>&1 || return 0
+  log "installing vg build deps via make get-deps (pinned to v${VG_VERSION})"
+  make get-deps DEBIAN_FRONTEND=noninteractive
 }
 
 build_vg_arm64() {
@@ -68,12 +77,50 @@ build_vg_arm64() {
         die "git submodule update failed after retries (often sourceware.org/elfutils 502)"
       fi
     done
+    install_vg_deps
     make -j"$(nproc)" jemalloc=off
   )
   [[ -x "${VG_SRC_DIR}/bin/vg" ]] || die "vg binary missing after build"
   "${VG_SRC_DIR}/bin/vg" version
   cp -f "${VG_SRC_DIR}/bin/vg" "${DOCKER_DIR}/vg.arm64"
   chmod +x "${DOCKER_DIR}/vg.arm64"
+  strip_staged "${DOCKER_DIR}/vg.arm64"
+  stage_vg_libs
+}
+
+# vg compiles with -ggdb -g, so the binary is ~600 MB of mostly debug symbols.
+# Strip the build-context copy only; ${VG_SRC_DIR} keeps its symbols.
+strip_staged() {
+  command -v strip >/dev/null 2>&1 || { log "strip unavailable; shipping unstripped $1"; return 0; }
+  local before after
+  before="$(stat -c %s "$1")"
+  strip --strip-unneeded "$1"
+  after="$(stat -c %s "$1")"
+  log "stripped $(basename "$1"): ${before} -> ${after} bytes"
+}
+
+# Ship the vg-built shared objects the binary resolves at load time. Whatever ldd
+# reports missing inside the image has to land here or vg exits 127.
+stage_vg_libs() {
+  local dest="${DOCKER_DIR}/vg_libs"
+  rm -rf "${dest}"
+  mkdir -p "${dest}"
+  local lib
+  for lib in libhandlegraph.so; do
+    [[ -f "${VG_SRC_DIR}/lib/${lib}" ]] || die "missing ${VG_SRC_DIR}/lib/${lib}"
+    cp -f "${VG_SRC_DIR}/lib/${lib}" "${dest}/"
+    strip_staged "${dest}/${lib}"
+  done
+  log "staged $(ls "${dest}" | tr '\n' ' ')"
+}
+
+# The Dockerfile COPYs vg_libs/ unconditionally, so the dir must exist even when
+# the stock release binary needs nothing from it.
+stage_empty_vg_libs() {
+  local dest="${DOCKER_DIR}/vg_libs"
+  rm -rf "${dest}"
+  mkdir -p "${dest}"
+  : >"${dest}/.keep"
 }
 
 fetch_vg_amd64() {
@@ -84,11 +131,19 @@ fetch_vg_amd64() {
     "https://github.com/vgteam/vg/releases/download/v${VG_VERSION}/vg-amd64"
   chmod +x "${dest}"
   "${dest}" version
+  stage_empty_vg_libs
 }
 
 build_docker() {
   local prebuilt="vg.${arch_key}"
   [[ -f "${DOCKER_DIR}/${prebuilt}" ]] || die "missing ${DOCKER_DIR}/${prebuilt}"
+  # A stray bind mount (docker run -v .../Dockerfile:...) turns this into a
+  # directory; the daemon then fails deep inside the build with a tmp path.
+  if [[ -d "${DOCKER_DIR}/Dockerfile" ]]; then
+    die "${DOCKER_DIR}/Dockerfile is a directory; remove it and restore the file (git checkout -- ${DOCKER_DIR#"${REPO_ROOT}/"}/Dockerfile)"
+  fi
+  [[ -f "${DOCKER_DIR}/Dockerfile" ]] || die "missing ${DOCKER_DIR}/Dockerfile"
+  [[ -d "${DOCKER_DIR}/vg_libs" ]] || die "missing ${DOCKER_DIR}/vg_libs (staged by the vg build step)"
   docker build \
     --build-arg "VG_VERSION=${VG_VERSION}" \
     --build-arg "METHYLGRAPHER_VERSION=${METHYLGRAPHER_VERSION}" \
@@ -104,10 +159,12 @@ maybe_smoke() {
     log "SKIP_SMOKE=1; not running smoke_64k.sh"
     return 0
   fi
+  # smoke_64k.sh exists to prove vg survives a 64 KB-page kernel, which only a
+  # 65536-page host can show. 4K index-build hosts (amd64) defer to a 64K worker.
   local page
   page="$(getconf PAGE_SIZE 2>/dev/null || echo 0)"
-  if [[ "${arch_key}" == "arm64" && "${page}" != "65536" ]]; then
-    log "host page size ${page} (not 65536); smoke deferred to a 64K worker (SKIP_SMOKE implied)"
+  if [[ "${page}" != "65536" ]]; then
+    log "host page size ${page} (not 65536); 64K smoke deferred to a 64K ARM64 worker"
     return 0
   fi
   bash "${DOCKER_DIR}/smoke_64k.sh" "${IMAGE}"
@@ -122,10 +179,11 @@ maybe_save() {
 
 main() {
   command -v docker >/dev/null 2>&1 || die "docker required"
-  install_build_deps
   if [[ "${arch_key}" == "arm64" ]]; then
+    install_bootstrap_deps
     build_vg_arm64
   else
+    # Stock release binary; nothing is compiled, so no build deps are needed.
     fetch_vg_amd64
   fi
   build_docker
