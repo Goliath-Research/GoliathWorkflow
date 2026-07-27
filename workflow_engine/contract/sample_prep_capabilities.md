@@ -226,7 +226,7 @@ Task `input_json` keys: `parabricksImage`, `bwaThreads`, `gpuFlags`, `extraDocke
 ## `methylgrapher.wgbs_align`
 
 **action_name:** `sample.methylgrapher_wgbs_align`  
-**Runtime:** Docker GPU container running methylGrapher Align (dual C→T / G→A Giraffe indexes) + vg surject → QC-compatible GRCh38 BAM.
+**Runtime:** Docker **CPU** container (`METHYL_METHYLGRAPHER_IMAGE`) running methylGrapher Align (dual C→T / G→A Giraffe indexes) + `vg surject` → QC-compatible GRCh38 BAM. **No GPU / CUDA acceleration** — stock `vg` and methylGrapher are CPU-only by design. On 64 KB-page ARM64 (Grace/GH200) the image must ship `jemalloc=off` vg (see [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md)); exposing `--gpus` does not speed this path. Expect substantially longer wall time than Parabricks linear `fq2bam_meth` on the same host.
 
 **When:** SamplePrep **IF** `useWgbsPangenome` is true (`alignmentMode: "pangenome_wgbs"`). Checked **before** `usePangenome` in the program graph. Idempotency and `forceRealign` semantics match `parabricks.fq2bam`.
 
@@ -256,7 +256,7 @@ Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../wor
 ## `methylgrapher.wgbs_extract`
 
 **action_name:** `sample.methylgrapher_wgbs_extract`  
-**Runtime:** methylGrapher MethylCall + MergeCpG → linear-coordinate CpG TSV → `{chrom}-{ctx}.h5` + optional `{chrom}-{ctx}.patterns.h5`.
+**Runtime:** Same **CPU** methylGrapher Docker image as align (MethylCall + MergeCpG → linear-coordinate CpG TSV → `{chrom}-{ctx}.h5` + optional `{chrom}-{ctx}.patterns.h5`). Not a GPU workload.
 
 **When:** SamplePrep pass path when `useWgbsPangenome` is true (replaces `sample.methyl_extract`). Requires prior `sample.methylgrapher_wgbs_align` GAF + QC BAM on disk.
 

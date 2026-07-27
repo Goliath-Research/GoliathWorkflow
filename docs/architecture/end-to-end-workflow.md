@@ -152,10 +152,10 @@ flowchart TD
 ```mermaid
 flowchart TD
   A["sample.download_fastq<br/>fastqSource → /work/samples/id"] --> B{"useWgbsPangenome?"}
-  B -->|yes| MG["sample.methylgrapher_wgbs_align<br/>methylGrapher C2T+G2A → QC BAM"]
+  B -->|yes| MG["sample.methylgrapher_wgbs_align<br/>methylGrapher C2T+G2A → QC BAM<br/>(CPU Docker; no CUDA)"]
   B -->|no| B2{"usePangenome?"}
-  B2 -->|no| C["sample.parabricks_fq2bam<br/>pbrun fq2bam_meth"]
-  B2 -->|yes| D["sample.parabricks_giraffe<br/>stock vg giraffe → GRCh38"]
+  B2 -->|no| C["sample.parabricks_fq2bam<br/>pbrun fq2bam_meth (GPU)"]
+  B2 -->|yes| D["sample.parabricks_giraffe<br/>stock vg giraffe → GRCh38 (GPU)"]
   C --> E["sample.methyl_qc"]
   D --> E
   MG --> E

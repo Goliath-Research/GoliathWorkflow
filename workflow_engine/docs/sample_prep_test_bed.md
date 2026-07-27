@@ -153,6 +153,11 @@ comparison. NVIDIA does not publish a WGBS FASTQ fixture; GSE261315 is the citab
 Use this when evaluating whether methylGrapher WGBS improves usable CpG read support vs linear
 on real lab samples (plasma + buffy), with alignment wall time as a cost metric.
 
+**Compute asymmetry (do not confuse with canary GPU label):** linear arms use **Parabricks GPU**;
+`pangenome_wgbs` arms use the **CPU-only** methylGrapher(+vg) Docker image. A “GPU worker” is
+still required for the linear arm and for MethylExtractor on linear, but methylGrapher itself
+never uses CUDA — longer wall time on the same GH200 is expected.
+
 | Piece | Path |
 |-------|------|
 | Runner | `bash scripts/compare_sample_prep_linear_vs_wgbs.sh` |
@@ -220,7 +225,9 @@ After reviewing `/work/samples/_comparisons/latest/comparison.md`:
 
 Hypothesis framing in the report: **pangenome_wgbs improves usable read support at CpG
 positions** (coverage/site yield); alignment runtime is a cost metric — not a stock-Giraffe
-methylation-biology claim.
+methylation-biology claim. Finish a live 4-arm execute (plasma + buffy × linear +
+`pangenome_wgbs`) and review `/work/samples/_comparisons/latest/comparison.md` before deciding
+whether the CpG-quality gain justifies the CPU wall-time cost.
 
 ## QC outcomes
 

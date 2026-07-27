@@ -155,3 +155,4 @@ migrate_work_layout.manifest.json
 
 # Ephemeral review/diagnostic output (pytest logs, schema-drift, guard results) — local only
 .review-scratch/
+.cache/vg-src/vg

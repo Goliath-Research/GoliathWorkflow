@@ -278,7 +278,8 @@ When instance/profile/procedure sets `alignmentMode: "pangenome_wgbs"` (scope `u
 **Operator requirements:**
 
 - Provision BS bundle under `/work/genomes/pangenome/.../d9-bs/1.70` (see [`docs/deployment/reference-inventory-qnap.md`](../deployment/reference-inventory-qnap.md)).
-- Set `METHYL_METHYLGRAPHER_IMAGE` (or pin `image` in resolvedConfig).
+- Set `METHYL_METHYLGRAPHER_IMAGE` (or pin `image` in resolvedConfig). On 64 KB-page ARM64 the image must contain `jemalloc=off` vg ([`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md)).
+- **CPU-only by design** — no CUDA acceleration; expect longer wall time than Parabricks linear on the same GPU node. Size `actionConfig.methylgrapher_wgbs.threads` for the host; compare quality vs cost with [`scripts/compare_sample_prep_linear_vs_wgbs.sh`](../../scripts/compare_sample_prep_linear_vs_wgbs.sh).
 - Gate production promotion with [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md).
 
 Implementation: [`workers/methyl_worker/methylgrapher_wgbs_runner.py`](../../workers/methyl_worker/methylgrapher_wgbs_runner.py).

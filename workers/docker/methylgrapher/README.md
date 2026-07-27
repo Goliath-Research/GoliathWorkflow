@@ -2,6 +2,24 @@
 
 Pinned runtime for `alignmentMode: pangenome_wgbs` (`sample.methylgrapher_wgbs_*`).
 
+## Compute model (CPU only — by design)
+
+methylGrapher and stock `vg` **do not use NVIDIA GPUs**. Baking a CUDA base image or passing
+`--gpus` to `docker run` does **not** accelerate Align / MethylCall / MergeCpG / surject.
+The worker invokes the image without GPU flags (`workers/methyl_worker/methylgrapher_wgbs_runner.py`).
+
+| Mode | Tool | Accelerator |
+|------|------|-------------|
+| `linear` | Clara Parabricks `fq2bam_meth` | GPU |
+| `pangenome` | Clara Parabricks `giraffe` | GPU |
+| `pangenome_wgbs` | methylGrapher + `vg` (this image) | **CPU threads + host RAM** |
+
+On a Grace/GH200 node, this path still benefits from many cores and large memory, but wall time
+is typically **much longer** than Parabricks linear on the same host (dual C2T/G2A giraffe plus
+surject/sort/markdup). Use site/profile `actionConfig.methylgrapher_wgbs.threads` to size
+parallelism; calibrate cost vs CpG yield with
+[`scripts/compare_sample_prep_linear_vs_wgbs.sh`](../../../scripts/compare_sample_prep_linear_vs_wgbs.sh).
+
 ## Production model (do not compile on deploy)
 
 | When | What |

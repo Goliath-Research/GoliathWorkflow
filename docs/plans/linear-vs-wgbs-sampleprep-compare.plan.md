@@ -2,7 +2,7 @@
 name: Linear vs WGBS SamplePrep Compare
 overview: Run SamplePrep through extraction QC for plasma `DPLST-051425-111148` and buffy `DBCST-051425-111148` under linear vs `pangenome_wgbs`, keeping mode-isolated local trees and producing a CpG-quality plus alignment-time comparison report—without archiving to QNAP until after review.
 
-> **Status: IMPLEMENTED.** Runner `scripts/compare_sample_prep_linear_vs_wgbs.sh` + `workflow_engine/ops/sample_prep_mode_compare.py`; helpers in `packages/methylutils/methyl_utils/testing/sample_prep_mode_compare.py`; operator note in `workflow_engine/docs/sample_prep_test_bed.md`. Dry-run payloads written under `/work/samples/_comparisons/`; live 4-arm execute blocked pending refreshed QNAP/lab FASTQ credentials and a GPU worker with Parabricks + methylGrapher capabilities.
+> **Status: TOOLING IMPLEMENTED; LIVE COMPARE STILL OPEN.** Runner `scripts/compare_sample_prep_linear_vs_wgbs.sh` + `workflow_engine/ops/sample_prep_mode_compare.py`; helpers in `packages/methylutils/methyl_utils/testing/sample_prep_mode_compare.py`; operator note in `workflow_engine/docs/sample_prep_test_bed.md`. Dry-run payloads written under `/work/samples/_comparisons/`. **Live 4-arm execute** (plasma + buffy × linear + `pangenome_wgbs`) remains the gate for judging CpG-quality gain vs alignment cost. Linear arm needs Parabricks GPU; `pangenome_wgbs` is **CPU-only** methylGrapher(+vg) — no CUDA, expect much longer wall time on the same host.
 
 azure_devops:
   type: Feature
@@ -18,7 +18,7 @@ todos:
     status: completed
   - id: execute-two-samples
     content: Run DPLST-051425-111148 and DBCST-051425-111148 through both arms; write report under /work/samples/_comparisons
-    status: completed
+    status: pending
   - id: docs-no-archive
     content: Document experiment layout and post-compare single-arm archive policy in sample_prep_test_bed
     status: completed

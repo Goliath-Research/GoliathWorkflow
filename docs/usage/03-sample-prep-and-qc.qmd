@@ -25,14 +25,15 @@ Each sample is aligned using **linear** (`fq2bam_meth`), **stock pangenome** (`v
 
 After FASTQ download, SamplePrep chooses **one alignment path** per sample (and the same path on fastp remediation realign):
 
-| Mode | Scope flags | Worker action | Tool | Reference |
-|------|-------------|---------------|------|-----------|
-| **Linear (default)** | `usePangenome: false`, `useWgbsPangenome: false` | `sample.parabricks_fq2bam` | `pbrun fq2bam_meth` | Site `reference_genome.fasta` |
-| **Stock pangenome** | `usePangenome: true`, `useWgbsPangenome: false` | `sample.parabricks_giraffe` | `pbrun giraffe` + `collectmultiplemetrics` | Site `pangenome_genome` |
-| **WGBS pangenome** | `usePangenome: true`, `useWgbsPangenome: true` | `sample.methylgrapher_wgbs_align` | methylGrapher Align (C2T+G2A) + vg surject → QC BAM | Site `actionConfig.methylgrapher_wgbs` / `pangenome_wgbs_genome` (QNAP `d9-bs/1.70`) |
+| Mode | Scope flags | Worker action | Tool | Compute | Reference |
+|------|-------------|---------------|------|---------|-----------|
+| **Linear (default)** | `usePangenome: false`, `useWgbsPangenome: false` | `sample.parabricks_fq2bam` | `pbrun fq2bam_meth` | GPU (Parabricks) | Site `reference_genome.fasta` |
+| **Stock pangenome** | `usePangenome: true`, `useWgbsPangenome: false` | `sample.parabricks_giraffe` | `pbrun giraffe` + `collectmultiplemetrics` | GPU (Parabricks) | Site `pangenome_genome` |
+| **WGBS pangenome** | `usePangenome: true`, `useWgbsPangenome: true` | `sample.methylgrapher_wgbs_align` | methylGrapher Align (C2T+G2A) + vg surject → QC BAM | **CPU only** (no CUDA; jemalloc=off vg on 64K ARM64) | Site `actionConfig.methylgrapher_wgbs` / `pangenome_wgbs_genome` (QNAP `d9-bs/1.70`) |
 
-: Alignment modes {tbl-colwidths="[14,22,22,20,22]"}
+: Alignment modes {tbl-colwidths="[12,18,18,18,14,20]"}
 
+**Cost note:** `pangenome_wgbs` is dual-graph CPU giraffe plus surject/sort/markdup. On GPU workers it typically takes **much longer** wall time than linear Parabricks (~hours vs ~1 h on GH200-class hosts for full-depth WGBS). Measure CpG yield vs time with [`scripts/compare_sample_prep_linear_vs_wgbs.sh`](../../scripts/compare_sample_prep_linear_vs_wgbs.sh) before promoting procedure packs.
 **How to enable:**
 
 - Stock Giraffe: `alignmentMode: "pangenome"` (binds `usePangenome`).
