@@ -74,26 +74,45 @@ def _sample_prep_version_id(versions: Mapping[str, Any]) -> Optional[int]:
     return int(vid) if vid else None
 
 
+def _load_site() -> Dict[str, Any]:
+    site_path = Path(os.environ.get("METHYL_SITE_CONFIG") or "/work/site/methyl_site.json")
+    if site_path.is_file():
+        site = json.loads(site_path.read_text(encoding="utf-8"))
+        return site if isinstance(site, dict) else {}
+    return {}
+
+
 def _reference_fasta(explicit: Optional[str]) -> str:
     if explicit:
         return explicit
     env = os.environ.get("METHYL_COMPARE_REFERENCE_FASTA")
     if env:
         return env
-    site_path = Path(os.environ.get("METHYL_SITE_CONFIG") or "/work/site/methyl_site.json")
-    if site_path.is_file():
-        site = json.loads(site_path.read_text(encoding="utf-8"))
-        genomes = site.get("genomes") if isinstance(site.get("genomes"), dict) else {}
-        linear = genomes.get("linear") if isinstance(genomes.get("linear"), dict) else {}
-        ref = linear.get("fasta") or linear.get("path")
-        if ref:
-            return str(ref)
-        # Common site keys
-        for key in ("reference_genome", "pangenome_genome"):
-            block = site.get(key)
-            if isinstance(block, dict) and block.get("fasta"):
-                return str(block["fasta"])
+    site = _load_site()
+    genomes = site.get("genomes") if isinstance(site.get("genomes"), dict) else {}
+    linear = genomes.get("linear") if isinstance(genomes.get("linear"), dict) else {}
+    ref = linear.get("fasta") or linear.get("path")
+    if ref:
+        return str(ref)
+    for key in ("reference_genome", "pangenome_genome"):
+        block = site.get(key)
+        if isinstance(block, dict) and block.get("fasta"):
+            return str(block["fasta"])
     return "/work/genomes/homo_sapiens/grch38/fasta/genome.fa"
+
+
+def _reference_gtf(explicit: Optional[str]) -> str:
+    if explicit:
+        return explicit
+    env = os.environ.get("METHYL_COMPARE_REFERENCE_GTF")
+    if env:
+        return env
+    site = _load_site()
+    annotation = site.get("annotation") if isinstance(site.get("annotation"), dict) else {}
+    gtf = annotation.get("gtf") or annotation.get("referenceGtf") or site.get("referenceGtf")
+    if gtf:
+        return str(gtf)
+    return "/work/genomes/annotation/gencode/v49/gencode.v49.annotation.gtf"
 
 
 def _poll_instance(db: Any, instance_id: int, *, poll: int, timeout: int) -> str:
@@ -213,6 +232,12 @@ def run_compare(args: argparse.Namespace) -> int:
 
     thresholds = _thresholds_from_args(args)
     reference_fasta = _reference_fasta(args.reference_fasta)
+    reference_gtf = _reference_gtf(args.reference_gtf)
+    # Always compile the current fixture so methylGrapher branches exist even when
+    # MSSQL SamplePrep v7 is still the stale linear-only graph.
+    sample_prep_program = str(
+        REPO_ROOT / "workflow_engine" / "domain" / "fixtures" / "sample_prep.program.json"
+    )
 
     qnap_storage: Optional[Dict[str, Any]] = None
     if args.fastq_storage_json:
@@ -236,8 +261,10 @@ def run_compare(args: argparse.Namespace) -> int:
         "stamp": stamp,
         "samples_base": str(samples_base),
         "reference_fasta": reference_fasta,
+        "reference_gtf": reference_gtf,
         "versions_file": str(versions_file),
         "workflow_version_id": sample_prep_vid,
+        "program_path": sample_prep_program,
         "reuse_local_fastq": bool(args.reuse_local_fastq),
         "modes": list(COMPARE_MODES),
         "archive": "disabled",
@@ -297,14 +324,16 @@ def run_compare(args: argparse.Namespace) -> int:
                 mode=mode,
                 sample_dir=mode_dir,
                 project_path=project_path,
-                workflow_version_id=sample_prep_vid,
+                workflow_version_id=None,
                 primary_analyte=primary,
                 reference_fasta=reference_fasta,
+                reference_gtf=reference_gtf,
                 fastq_storage=mode_fastq_storage,
-                fastq_prefix="",
+                fastq_prefix=".",
                 library_protocol=sample.get("libraryProtocol"),
                 pipeline_procedure=sample.get("pipelineProcedure"),
                 action_config=sample.get("actionConfig"),
+                program_path=sample_prep_program,
             )
             planned_payloads.append({"sampleId": sample_id, "mode": mode, "body": payload})
 
@@ -319,13 +348,6 @@ def run_compare(args: argparse.Namespace) -> int:
                 )
                 arm_reports[mode] = report
                 continue
-
-            if sample_prep_vid is None and not payload.get("program_path"):
-                # Allow on-the-fly compile when versions file has no DB id.
-                payload["program_path"] = str(
-                    REPO_ROOT / "workflow_engine" / "domain" / "fixtures" / "sample_prep.program.json"
-                )
-                payload.pop("workflow_version_id", None)
 
             link_root_fastqs_into_mode(
                 sample_root, mode, sample_id=sample_id, method=args.link_method
@@ -488,6 +510,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("--versions-file", default=None)
     p.add_argument("--reference-fasta", default=None)
+    p.add_argument("--reference-gtf", default=None)
     p.add_argument("--poll-seconds", type=int, default=30)
     p.add_argument("--timeout", type=int, default=28800, help="Per-arm timeout seconds")
     p.add_argument(

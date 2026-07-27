@@ -36,7 +36,7 @@ def _minimal_project(tmp_path: Path) -> Path:
     return path
 
 
-def test_start_sample_prep_plans_context_and_starts_instance(tmp_path: Path) -> None:
+def test_start_sample_prep_plans_context_and_starts_instance(tmp_path: Path, monkeypatch) -> None:
     project_path = _minimal_project(tmp_path)
     created: dict = {}
     started: list[int] = []
@@ -49,6 +49,12 @@ def test_start_sample_prep_plans_context_and_starts_instance(tmp_path: Path) -> 
 
     def fake_start(_dsn: str, instance_id: int) -> None:
         started.append(instance_id)
+
+    # Unit test covers plan→create→start wiring; finalize enrichment is covered elsewhere.
+    monkeypatch.setattr(
+        "workflow_context.finalize_instance_context",
+        lambda ctx: {**ctx, "useWgbsPangenome": False, "executionScopeId": "test"},
+    )
 
     ref = tmp_path / "genome.fa"
     ref.write_text(">chr1\nACGT\n", encoding="utf-8")

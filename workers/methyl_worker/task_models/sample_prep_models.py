@@ -18,6 +18,10 @@ class DownloadFastqTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     fastqSource: FastqSourceLocation
+    projectPath: Optional[str] = Field(
+        default=None,
+        description="Study project path for provenance/logging only; not a config source.",
+    )
     resolvedConfig: Optional[dict] = Field(
         default=None,
         description="Merged actionConfig slice (may include storage_transfer knobs).",
@@ -30,7 +34,26 @@ class ParabricksFq2bamTaskInput(BaseModel):
     tool: str = "ParabricksFq2Bam"
     sampleId: str
     sampleDir: str
-    projectPath: Optional[str] = None
+    projectPath: Optional[str] = Field(
+        default=None,
+        description="Study project path for provenance/logging only; not a config source.",
+    )
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = Field(
+        default=None,
+        description="Baked execution scope id from instance finalize (provenance).",
+    )
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig.parabricks baked at instance configuration.",
+    )
+    forceRealign: Optional[bool] = None
+    alignmentPass: Optional[str] = None
+    remediationReason: Optional[str] = None
+    workflowNodeKey: Optional[str] = None
 
 
 class ParabricksGiraffeTaskInput(BaseModel):
@@ -39,7 +62,26 @@ class ParabricksGiraffeTaskInput(BaseModel):
     tool: str = "ParabricksGiraffe"
     sampleId: str
     sampleDir: str
-    projectPath: Optional[str] = None
+    projectPath: Optional[str] = Field(
+        default=None,
+        description="Study project path for provenance/logging only; not a config source.",
+    )
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = Field(
+        default=None,
+        description="Baked execution scope id from instance finalize (provenance).",
+    )
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig.parabricks baked at instance configuration.",
+    )
+    forceRealign: Optional[bool] = None
+    alignmentPass: Optional[str] = None
+    remediationReason: Optional[str] = None
+    workflowNodeKey: Optional[str] = None
 
 
 class MethylGrapherGraphIndexFiles(BaseModel):
@@ -140,6 +182,11 @@ class MethylGrapherWgbsAlignTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
     forceRealign: Optional[bool] = None
     alignmentPass: Optional[str] = None
     remediationReason: Optional[str] = None
@@ -157,6 +204,11 @@ class MethylGrapherWgbsExtractTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: str
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
     forceRealign: Optional[bool] = None
     resolvedConfig: Optional[dict] = Field(
         default=None,
@@ -216,6 +268,21 @@ class MethylQcTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
+    primaryAnalyte: Optional[str] = None
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig.alignment_qc baked at instance configuration.",
+    )
+    alignmentPass: Optional[str] = None
+    qcAttempt: Optional[int] = None
+    qcAttemptReason: Optional[str] = None
+    remediationTrigger: Optional[str] = None
+    workflowNodeKey: Optional[str] = None
 
 
 class FragmentomicsTaskInput(BaseModel):
@@ -225,6 +292,12 @@ class FragmentomicsTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = None
 
 
 class MethylExtractTaskInput(BaseModel):
@@ -234,6 +307,15 @@ class MethylExtractTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: str
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig.methyl_extract baked at instance configuration.",
+    )
 
 
 class ExtractionQcTaskInput(BaseModel):
@@ -243,6 +325,12 @@ class ExtractionQcTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = None
 
 
 class DeleteFastqsTaskInput(BaseModel):

@@ -30,7 +30,7 @@ def start_sample_prep(
     from archive_profile_resolver import apply_archive_profile_storage
     from methyl_validation.sample_prep_planner import plan_sample_prep_context
     from resource_profile import DEFAULT_ARCHIVE_PROFILE_KEY, ResourceProfileReader
-    from workflow_context import build_resolved_config_scope_vars
+    from workflow_context import finalize_instance_context
 
     planner_payload = dict(body)
     planner_payload.setdefault("projectPath", project_path)
@@ -65,10 +65,8 @@ def start_sample_prep(
     ):
         if key in body and body[key] is not None:
             context[key] = body[key]
-    from cfg.sync_on_start import ensure_study_work_synced
-
-    context = ensure_study_work_synced(context)
-    context.update(build_resolved_config_scope_vars(context))
+    # Bake site/profile actionConfig, alignment flags, and resolvedConfig__* scope vars.
+    context = finalize_instance_context(context)
 
     program_path = body.get("program_path")
     if program_path is None and body.get("workflow_version_id") is None:

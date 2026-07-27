@@ -67,16 +67,18 @@ class _OdbcPool:
         self._created = 0
 
     def _new_connection(self) -> pyodbc.Connection:
+        # Worker procs (claim/submit) COMMIT internally; autocommit avoids
+        # "Transaction count after EXECUTE" mismatches on the pooled connection.
         if self._use_managed_identity:
             from ..azure_auth import mssql_access_token_bytes
 
             token_bytes = mssql_access_token_bytes()
             return pyodbc.connect(
                 self._conn_str,
-                autocommit=False,
+                autocommit=True,
                 attrs_before={1256: token_bytes},
             )
-        return pyodbc.connect(self._conn_str, autocommit=False)
+        return pyodbc.connect(self._conn_str, autocommit=True)
 
     @contextmanager
     def connection(self) -> Generator[pyodbc.Connection, None, None]:
@@ -94,9 +96,14 @@ class _OdbcPool:
                 conn = self._pool.get()
         try:
             yield conn
-            conn.commit()
+            if not conn.autocommit:
+                conn.commit()
         except Exception:
-            conn.rollback()
+            if not conn.autocommit:
+                try:
+                    conn.rollback()
+                except pyodbc.Error:
+                    pass
             raise
         finally:
             try:
@@ -253,16 +260,16 @@ SELECT @worker_id AS worker_id;
         result_code: int,
         output_json: Optional[dict[str, Any]],
     ) -> dict[str, Any]:
+        # sp_worker_submit_result.@output_json is NVARCHAR(MAX); do not bind a SQL json var.
         out_text = _json_text(output_json)
         sql = f"""{_MSSQL_OUTPUT_BATCH_PREFIX}
-{_declare_json("output")}
 DECLARE @accepted bit, @instance_status varchar(32), @next_ready_count int;
 EXEC {self._qual('sp_worker_submit_result')}
     @node_execution_id=?,
     @worker_id=?,
     @worker_token=?,
     @result_code=?,
-    @output_json={_json_var("output")},
+    @output_json=?,
     @accepted=@accepted OUTPUT,
     @instance_status=@instance_status OUTPUT,
     @next_ready_count=@next_ready_count OUTPUT;
@@ -270,7 +277,7 @@ SELECT @accepted AS accepted, @instance_status AS instance_status, @next_ready_c
 """
         row = self._fetch_one(
             sql,
-            (out_text, node_execution_id, worker_id, worker_token, result_code),
+            (node_execution_id, worker_id, worker_token, result_code, out_text),
         )
         return row if row else {"accepted": False}
 
@@ -307,12 +314,12 @@ SELECT @accepted AS accepted, @instance_status AS instance_status, @next_ready_c
         workflow_version_id: int,
         context_json: Optional[dict[str, Any]],
     ) -> int:
+        # Proc expects NVARCHAR(MAX); CAST to SQL json here breaks the bind.
         ctx = _json_text(context_json or {})
         row = self._fetch_one(
-            f"{_declare_json('context')}"
             f"EXEC {self._qual('wf_repo_create_workflow_instance')} "
-            f"@version_id=?, @context_json={_json_var('context')}",
-            (ctx, workflow_version_id),
+            "@version_id=?, @context_json=?",
+            (workflow_version_id, ctx),
         )
         if not row:
             raise RuntimeError("wf_repo_create_workflow_instance returned no id")

@@ -512,9 +512,11 @@ def build_start_payload(
     reference_fasta: str,
     fastq_storage: Mapping[str, Any],
     fastq_prefix: str = "",
+    reference_gtf: Optional[str] = None,
     library_protocol: Optional[str] = None,
     pipeline_procedure: Optional[str] = None,
     action_config: Optional[Mapping[str, Any]] = None,
+    program_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Build a sample-prep-start body for one experiment arm (no sampleStorage)."""
     body: Dict[str, Any] = {
@@ -528,11 +530,18 @@ def build_start_payload(
             {
                 "sampleId": sample_id,
                 "sampleDir": str(sample_dir),
-                "fastqPrefix": fastq_prefix,
+                # Explicit "." keeps file sources rooted at sampleDir (lab FASTQs are
+                # hardlinked there). Empty string is treated as unset and becomes sampleId/.
+                "fastqPrefix": fastq_prefix if fastq_prefix else ".",
             }
         ],
     }
-    if workflow_version_id is not None:
+    if reference_gtf:
+        body["referenceGtf"] = str(reference_gtf)
+    if program_path:
+        # Prefer compiling the current DomainProgram when DB SamplePrep is stale.
+        body["program_path"] = str(program_path)
+    elif workflow_version_id is not None:
         body["workflow_version_id"] = int(workflow_version_id)
     if library_protocol:
         body["libraryProtocol"] = library_protocol
