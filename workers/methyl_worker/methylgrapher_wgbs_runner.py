@@ -622,6 +622,11 @@ def run_methylgrapher_wgbs_align(
     index_prefix = bundle.index_prefix or str(
         bundle.c2t_gbz.parent / Path(bundle.c2t_gbz.name.split(".wl.")[0])
     )
+    # Resolve symlinks (/work -> …/Work) so Docker -v mounts and -index_prefix agree.
+    index_prefix = str(Path(index_prefix).expanduser().resolve())
+    work_dir = work_dir.resolve()
+    fq1 = fq1.resolve()
+    fq2 = fq2.resolve()
 
     # Dry / unit-test hook: skip external tools when METHYL_METHYLGRAPHER_DRY_RUN=1
     dry = os.environ.get("METHYL_METHYLGRAPHER_DRY_RUN", "").strip() in {"1", "true", "yes"}
@@ -655,12 +660,15 @@ def run_methylgrapher_wgbs_align(
     else:
         image = _resolve_image(bundle)
         # Mount sample + genome roots covering C2T/G2A/linear assets.
+        # Include resolved index_prefix parent so -index_prefix matches a mounted path.
         mount_roots = {
             sample_path.resolve(),
+            work_dir,
             bundle.c2t_gbz.parent.resolve(),
             bundle.g2a_gbz.parent.resolve(),
             bundle.linear_ref_fasta.parent.resolve(),
             fq1.parent.resolve(),
+            Path(index_prefix).parent,
         }
         docker_cmd = [_docker_bin(), "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}"]
         for root in sorted(mount_roots, key=str):
@@ -1061,6 +1069,8 @@ def run_methylgrapher_wgbs_extract(
     index_prefix = bundle.index_prefix or str(
         bundle.c2t_gbz.parent / Path(bundle.c2t_gbz.name.split(".wl.")[0])
     )
+    index_prefix = str(Path(index_prefix).expanduser().resolve())
+    work_dir = work_dir.resolve()
     linear_tsv = work_dir / "linear_cpg_calls.tsv"
 
     if dry:
@@ -1073,8 +1083,9 @@ def run_methylgrapher_wgbs_extract(
         )
         mount_roots = {
             sample_path.resolve(),
-            work_dir.resolve(),
+            work_dir,
             bundle.c2t_gbz.parent.resolve(),
+            Path(index_prefix).parent,
         }
         docker_cmd = [_docker_bin(), "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}"]
         for root in sorted(mount_roots, key=str):

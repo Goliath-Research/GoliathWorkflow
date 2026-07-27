@@ -2,6 +2,18 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "executionScopeId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Executionscopeid"
+    },
     "panelFormat": {
       "default": "open",
       "title": "Panelformat",
@@ -19,6 +31,18 @@
       "default": null,
       "title": "Panelpath"
     },
+    "project": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Project"
+    },
     "projectPath": {
       "anyOf": [
         {
@@ -30,6 +54,19 @@
       ],
       "default": null,
       "title": "Projectpath"
+    },
+    "resolvedConfig": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Resolvedconfig"
     },
     "sampleDir": {
       "title": "Sampledir",

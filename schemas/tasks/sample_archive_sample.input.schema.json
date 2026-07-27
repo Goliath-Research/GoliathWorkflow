@@ -799,6 +799,19 @@
       "default": null,
       "title": "Alignmentqcpath"
     },
+    "executionScopeId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Baked execution scope id from instance finalize (provenance).",
+      "title": "Executionscopeid"
+    },
     "h5Destination": {
       "anyOf": [
         {

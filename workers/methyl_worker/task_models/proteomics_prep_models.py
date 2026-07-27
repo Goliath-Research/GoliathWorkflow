@@ -17,6 +17,9 @@ class DiannTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = None
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = None
 
 
 class SageTaskInput(BaseModel):
@@ -26,6 +29,9 @@ class SageTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = None
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = None
 
 
 class IngestPanelTaskInput(BaseModel):
@@ -35,6 +41,9 @@ class IngestPanelTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = None
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = None
     panelPath: Optional[str] = None
     panelFormat: str = "open"
 
@@ -46,6 +55,9 @@ class RegisterAbundanceTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = None
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = None
     source: str = "diann"
 
 
@@ -56,6 +68,9 @@ class ProteomicsQcTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = None
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = None
 
 
 class DlRescoreTaskInput(BaseModel):
@@ -65,6 +80,9 @@ class DlRescoreTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = None
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = None
 
 
 class CasanovoTaskInput(BaseModel):
@@ -74,6 +92,9 @@ class CasanovoTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = None
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = None
 
 
 class ProteinDeSelectTaskInput(BaseModel):

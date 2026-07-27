@@ -22,6 +22,15 @@ class ParabricksRnaFq2bamTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig.rna_align baked at instance configuration.",
+    )
 
 
 class KallistoTaskInput(BaseModel):
@@ -31,6 +40,15 @@ class KallistoTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig.rna_align baked at instance configuration.",
+    )
 
 
 class RnaQuantTaskOutput(ActionOutputBase):
@@ -48,6 +66,15 @@ class RnaQcTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig.rna_qc baked at instance configuration.",
+    )
 
 
 class RnaQcTaskOutput(ActionOutputBase):
@@ -64,6 +91,15 @@ class RegisterExpressionTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
+    resolvedConfig: Optional[dict] = Field(
+        default=None,
+        description="Merged actionConfig.rna_align baked at instance configuration.",
+    )
 
 
 class RegisterExpressionTaskOutput(ActionOutputBase):

@@ -22,6 +22,10 @@ class DownloadFastqTaskInput(BaseModel):
         default=None,
         description="Study project path for provenance/logging only; not a config source.",
     )
+    executionScopeId: Optional[str] = Field(
+        default=None,
+        description="Baked execution scope id from instance finalize (provenance).",
+    )
     resolvedConfig: Optional[dict] = Field(
         default=None,
         description="Merged actionConfig slice (may include storage_transfer knobs).",
@@ -239,6 +243,11 @@ class DemultiplexTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
     barcodeTsv: Optional[str] = None
     skipDemultiplex: Optional[bool] = None
     resolvedConfig: Optional[dict] = Field(
@@ -254,6 +263,11 @@ class DockerAlignTaskInput(BaseModel):
     sampleId: str
     sampleDir: str
     projectPath: Optional[str] = None
+    project: Optional[str] = Field(
+        default=None,
+        description="Legacy alias of projectPath from older input templates (provenance only).",
+    )
+    executionScopeId: Optional[str] = None
     forceRealign: Optional[bool] = None
     alignmentPass: Optional[str] = None
     remediationReason: Optional[str] = None
@@ -270,6 +284,14 @@ class TrimFastqTaskInput(BaseModel):
     tool: str = "SampleTrimFastq"
     sampleId: str
     sampleDir: str
+    projectPath: Optional[str] = Field(
+        default=None,
+        description="Study project path for provenance/logging only; not a config source.",
+    )
+    executionScopeId: Optional[str] = Field(
+        default=None,
+        description="Baked execution scope id from instance finalize (provenance).",
+    )
     trimFront1: Optional[int] = None
     trimTail1: Optional[int] = None
     trimFront2: Optional[int] = None
@@ -355,6 +377,14 @@ class DeleteFastqsTaskInput(BaseModel):
     tool: str = "SampleDeleteFastqs"
     sampleId: str
     sampleDir: str
+    projectPath: Optional[str] = Field(
+        default=None,
+        description="Study project path for provenance/logging only; not a config source.",
+    )
+    executionScopeId: Optional[str] = Field(
+        default=None,
+        description="Baked execution scope id from instance finalize (provenance).",
+    )
 
 
 class DeleteBamTaskInput(BaseModel):
@@ -363,6 +393,14 @@ class DeleteBamTaskInput(BaseModel):
     tool: str = "SampleDeleteBam"
     sampleId: str
     sampleDir: str
+    projectPath: Optional[str] = Field(
+        default=None,
+        description="Study project path for provenance/logging only; not a config source.",
+    )
+    executionScopeId: Optional[str] = Field(
+        default=None,
+        description="Baked execution scope id from instance finalize (provenance).",
+    )
 
 
 class QcFailedTaskInput(BaseModel):
@@ -371,6 +409,14 @@ class QcFailedTaskInput(BaseModel):
     tool: str = "SampleMarkFailed"
     sampleId: str
     sampleDir: str
+    projectPath: Optional[str] = Field(
+        default=None,
+        description="Study project path for provenance/logging only; not a config source.",
+    )
+    executionScopeId: Optional[str] = Field(
+        default=None,
+        description="Baked execution scope id from instance finalize (provenance).",
+    )
     reason: Optional[str] = None
 
 
@@ -387,6 +433,10 @@ class ArchiveSampleTaskInput(BaseModel):
     alignmentQcPath: Optional[str] = None
     qcPath: Optional[str] = None
     projectPath: Optional[str] = None
+    executionScopeId: Optional[str] = Field(
+        default=None,
+        description="Baked execution scope id from instance finalize (provenance).",
+    )
     h5Files: Optional[List[str]] = None
 
 

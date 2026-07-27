@@ -194,3 +194,60 @@ def test_try_validate_returns_message() -> None:
 
 def test_task_validation_error_code_constant() -> None:
     assert TASK_VALIDATION_ERROR_CODE == 4001
+
+
+def test_trim_fastq_accepts_compiler_project_path() -> None:
+    from methyl_worker.task_models.sample_prep_models import TrimFastqTaskInput
+
+    model = TrimFastqTaskInput.model_validate(
+        {
+            "tool": "SampleTrimFastq",
+            "sampleId": "S1",
+            "sampleDir": "/work/samples/S1",
+            "projectPath": "/work/projects/demo/configs/project.json",
+            "executionScopeId": "scope-1",
+            "trimFront1": 5,
+        }
+    )
+    assert model.projectPath.endswith("project.json")
+    assert model.executionScopeId == "scope-1"
+
+
+def test_sample_prep_compiler_keys_on_all_task_inputs() -> None:
+    """Compiler always injects projectPath + executionScopeId into action templates."""
+    import json
+    from pathlib import Path
+
+    from methyl_worker.action_catalog import ACTION_CATALOG
+
+    prog = json.loads(
+        (
+            Path(__file__).resolve().parents[2]
+            / "workflow_engine/domain/fixtures/sample_prep.program.json"
+        ).read_text(encoding="utf-8")
+    )
+    actions: set[str] = set()
+
+    def walk(node):
+        if isinstance(node, dict):
+            act = node.get("action")
+            if isinstance(act, str):
+                actions.add(act)
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+
+    walk(prog)
+    by_name = {e.action_name: e for e in ACTION_CATALOG}
+    for act in sorted(actions):
+        entry = by_name[act]
+        mod = __import__(entry.input_module, fromlist=[entry.input_class])
+        model = getattr(mod, entry.input_class)
+        fields = set(model.model_fields)
+        assert "projectPath" in fields, act
+        assert "executionScopeId" in fields, act
+        if entry.action_config_key:
+            assert "project" in fields, act
+            assert "resolvedConfig" in fields, act

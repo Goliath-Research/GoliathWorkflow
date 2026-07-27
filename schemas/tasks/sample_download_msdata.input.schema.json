@@ -787,6 +787,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
+    "executionScopeId": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Baked execution scope id from instance finalize (provenance).",
+      "title": "Executionscopeid"
+    },
     "fastqSource": {
       "discriminator": {
         "mapping": {

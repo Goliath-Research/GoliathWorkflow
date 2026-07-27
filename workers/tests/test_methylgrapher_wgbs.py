@@ -292,6 +292,51 @@ def test_force_realign_clears_outputs(tmp_path: Path, monkeypatch: pytest.Monkey
     assert stamp  # dry-run marker existed
 
 
+
+def test_align_resolves_index_prefix_for_docker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Config may store paths via a symlink (/work); Docker mounts use realpath."""
+    assets = tmp_path / "assets"
+    cfg = _touch_bundle(assets)
+    link_root = tmp_path / "work_link"
+    link_root.symlink_to(assets.resolve(), target_is_directory=True)
+    cfg = {**cfg, "index_prefix": str(link_root / "hprc-d9-bs")}
+
+    sample_dir = tmp_path / "S_idx"
+    sample_dir.mkdir()
+    (sample_dir / "S_idx_R1.fastq.gz").write_bytes(b"x")
+    (sample_dir / "S_idx_R2.fastq.gz").write_bytes(b"x")
+    from methyl_worker import parabricks_runner
+
+    monkeypatch.setattr(
+        parabricks_runner,
+        "resolve_paired_fastqs",
+        lambda sample_path, sample_id: (
+            sample_path / f"{sample_id}_R1.fastq.gz",
+            sample_path / f"{sample_id}_R2.fastq.gz",
+        ),
+    )
+    captured: dict[str, str] = {}
+    real_build = build_align_command
+
+    def wrap_build(**kwargs):
+        captured["index_prefix"] = kwargs["index_prefix"]
+        return real_build(**kwargs)
+
+    monkeypatch.setattr(
+        "methyl_worker.methylgrapher_wgbs_runner.build_align_command",
+        wrap_build,
+    )
+    monkeypatch.setenv("METHYL_METHYLGRAPHER_DRY_RUN", "1")
+
+    run_methylgrapher_wgbs_align(
+        sample_id="S_idx",
+        sample_dir=sample_dir,
+        input_json={"resolvedConfig": cfg},
+    )
+    assert captured["index_prefix"] == str((assets / "hprc-d9-bs").resolve())
+    assert "work_link" not in captured["index_prefix"]
+
+
 def test_task_models_accept_resolved_config() -> None:
     align = MethylGrapherWgbsAlignTaskInput(
         sampleId="S1",
