@@ -346,7 +346,10 @@
                     },
                     {
                       "action": "sample.qc_failed",
-                      "node_key": "qc_failed_after_retry"
+                      "node_key": "qc_failed_after_retry",
+                      "with": {
+                        "reason": "alignment_qc_failed_after_retry"
+                      }
                     }
                   ]
                 }
@@ -375,7 +378,10 @@
                 },
                 {
                   "action": "sample.qc_failed",
-                  "node_key": "qc_failed"
+                  "node_key": "qc_failed",
+                  "with": {
+                    "reason": "alignment_qc_failed"
+                  }
                 }
               ]
             }
