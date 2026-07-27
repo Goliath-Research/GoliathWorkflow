@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import joblib
 import numpy as np
@@ -30,6 +30,10 @@ from .covariate_preprocessor import (
     transform_covariates,
 )
 from .eval_split_resolver import resolve_eval_paths_and_labels
+from .model_datasets import (
+    resolve_model_bundle_dir,
+    write_model_datasets,
+)
 from .model_bundle import build_model_feature_bundle, load_bundle_dmp_index
 from .observed_feature_builder import (
     apply_feature_fill_values,
@@ -443,14 +447,21 @@ def _second_stage_dataset_frame(
     valid_rows: np.ndarray,
     transformed_covariates: Optional[np.ndarray],
     preprocessor: Any,
+    class_names: Optional[Sequence[str]] = None,
 ) -> pd.DataFrame:
     """Build the persisted matrix actually supplied to the covariate stacker."""
     if len(predictions) != len(sample_ids) or len(predictions) != len(labels):
         raise ValueError("Second-stage dataset row counts are inconsistent.")
 
+    y = labels.astype(int)
+    names = [str(x) for x in (class_names or ["class0", "class1"])]
+    class_labels = [
+        names[int(i)] if 0 <= int(i) < len(names) else str(int(i)) for i in y
+    ]
     data: Dict[str, Any] = {
         "sample_id": sample_ids,
-        "expected_class": labels.astype(int),
+        "class_index": y,
+        "class_label": class_labels,
     }
     for column in probability_columns:
         data[column] = (
@@ -510,9 +521,12 @@ def _write_second_stage_datasets(
     test_labels: Optional[np.ndarray],
     test_valid_rows: Optional[np.ndarray],
     test_covariates: Optional[np.ndarray],
+    class_names: Optional[Sequence[str]] = None,
+    bundle_dir: Optional[Path] = None,
 ) -> Dict[str, Any]:
-    output_dir = project_json.parent / "model_bundle" / "second_stage"
+    output_dir = resolve_model_bundle_dir(bundle_dir, project_json=project_json)
     output_dir.mkdir(parents=True, exist_ok=True)
+    names = [str(x) for x in (class_names or ["class0", "class1"])]
 
     train_dataset = _second_stage_dataset_frame(
         predictions=train_predictions,
@@ -522,13 +536,10 @@ def _write_second_stage_datasets(
         valid_rows=train_valid_rows,
         transformed_covariates=train_covariates,
         preprocessor=preprocessor,
+        class_names=names,
     )
-    train_path = output_dir / "train_dataset.csv"
-    train_dataset.to_csv(train_path, index=False)
 
-    test_path: Optional[Path] = None
     test_dataset: Optional[pd.DataFrame] = None
-    overlap: List[str] = []
     if (
         test_predictions is not None
         and test_probability_columns is not None
@@ -544,33 +555,20 @@ def _write_second_stage_datasets(
             valid_rows=test_valid_rows,
             transformed_covariates=test_covariates,
             preprocessor=preprocessor,
-        )
-        test_path = output_dir / "test_dataset.csv"
-        test_dataset.to_csv(test_path, index=False)
-        overlap = sorted(
-            set(train_dataset["sample_id"].astype(str))
-            & set(test_dataset["sample_id"].astype(str))
+            class_names=names,
         )
 
     covariates_exported = train_covariates is not None
-    manifest = {
-        "schema_version": 1,
-        "train_dataset": str(train_path),
-        "test_dataset": str(test_path) if test_path is not None else None,
-        "n_train_samples": int(len(train_dataset)),
-        "n_test_samples": int(len(test_dataset)) if test_dataset is not None else None,
-        "train_test_overlap_count": int(len(overlap)) if test_dataset is not None else None,
-        "overlapping_sample_ids": overlap,
-        "feature_columns": [
-            column
-            for column in train_dataset.columns
-            if column not in {"sample_id", "expected_class"}
-        ],
-        "covariates_are_training_fitted_transforms": covariates_exported,
-    }
-    manifest_path = output_dir / "dataset_manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-
+    artifacts = write_model_datasets(
+        output_dir,
+        backend="ecdf",
+        train_frame=train_dataset,
+        test_frame=test_dataset,
+        extra_manifest={
+            "covariates_are_training_fitted_transforms": covariates_exported,
+        },
+    )
+    overlap = list(artifacts.get("overlapping_sample_ids") or [])
     if overlap:
         raise ValueError(
             "Second-stage train/test datasets overlap; refusing model evaluation. "
@@ -578,11 +576,14 @@ def _write_second_stage_datasets(
         )
 
     return {
-        "train_dataset_csv": str(train_path),
-        "test_dataset_csv": str(test_path) if test_path is not None else None,
-        "dataset_manifest_json": str(manifest_path),
-        "train_test_overlap_count": int(len(overlap)) if test_dataset is not None else None,
+        "train_dataset": artifacts["train_dataset"],
+        "test_dataset": artifacts.get("test_dataset"),
+        "dataset_manifest_json": artifacts["dataset_manifest_json"],
+        "train_test_overlap_count": artifacts.get("train_test_overlap_count"),
         "covariates_exported": covariates_exported,
+        # Backward-compatible aliases for callers still reading old keys.
+        "train_dataset_csv": artifacts["train_dataset"],
+        "test_dataset_csv": artifacts.get("test_dataset"),
     }
 
 
@@ -1074,6 +1075,14 @@ def train_and_apply_ecdf_second_stage(
         shutil.copy2(test_pred_csv, predictor_output_dir / "predictions.csv")
         shutil.copy2(test_metrics_path, predictor_output_dir / "validation_metrics.json")
 
+    try:
+        _proj = load_project(project_json)
+        dataset_class_names = [str(label) for label, _paths in _proj.get_resolved_groups()]
+        if len(dataset_class_names) < 2:
+            dataset_class_names = ["class0", "class1"]
+    except Exception:
+        dataset_class_names = ["class0", "class1"]
+
     dataset_artifacts = _write_second_stage_datasets(
         project_json=project_json,
         train_predictions=df,
@@ -1089,6 +1098,8 @@ def train_and_apply_ecdf_second_stage(
         test_labels=test_y_for_dataset,
         test_valid_rows=test_valid_for_dataset,
         test_covariates=test_cov_for_dataset,
+        class_names=dataset_class_names,
+        bundle_dir=project_json.parent / "model_bundle",
     )
     dataset_manifest_path = Path(dataset_artifacts["dataset_manifest_json"])
     dataset_manifest = json.loads(

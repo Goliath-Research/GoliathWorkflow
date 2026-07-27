@@ -49,6 +49,14 @@ from .structural_scored_features import (
     family_includes_structural_scored,
     preflight_structural_scored_training,
 )
+from .model_datasets import (
+    TRAIN_DATASET_NAME,
+    TEST_DATASET_NAME,
+    dataset_sidecar_meta_path,
+    read_dataset_frame,
+    write_dataset_frame,
+    write_dataset_manifest,
+)
 from .model_bundle import (
     load_bundle_dmp_index,
     load_bundle_frozen_gene_panel,
@@ -85,27 +93,15 @@ def _project_cwd(project_json: str | Path):
 
 
 def _dataset_meta_path(dataset_path: Path) -> Path:
-    return dataset_path.with_suffix(f"{dataset_path.suffix}.meta.json")
+    return dataset_sidecar_meta_path(dataset_path)
 
 
 def _write_dataset_frame(dataset_path: Path, frame: pd.DataFrame) -> None:
-    dataset_path.parent.mkdir(parents=True, exist_ok=True)
-    ext = dataset_path.suffix.lower()
-    if ext == ".parquet":
-        frame.to_parquet(dataset_path, index=False)
-    elif ext == ".tsv":
-        frame.to_csv(dataset_path, sep="\t", index=False)
-    else:
-        frame.to_csv(dataset_path, index=False)
+    write_dataset_frame(dataset_path, frame)
 
 
 def _read_dataset_frame(dataset_path: Path) -> pd.DataFrame:
-    ext = dataset_path.suffix.lower()
-    if ext == ".parquet":
-        return pd.read_parquet(dataset_path)
-    if ext == ".tsv":
-        return pd.read_csv(dataset_path, sep="\t")
-    return pd.read_csv(dataset_path)
+    return read_dataset_frame(dataset_path)
 
 
 def _dataset_to_matrix(frame: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, List[str], List[str], List[str]]:
@@ -134,7 +130,7 @@ def _require_non_empty_training_matrix(
         f"tabular training matrix has zero feature columns "
         f"(feature_mode={feature_mode}, feature_family_set={feature_family_set}). "
         "For feature_family_set=structural_scored, rebuild frozen_gene_features.csv and ensure "
-        "structural column specs resolve; delete any cached tabular_train_dataset.parquet that "
+        "structural column specs resolve; delete any cached train_dataset.parquet that "
         "was written with zero features."
     )
 
@@ -161,11 +157,11 @@ def _derive_test_dataset_path(
     if explicit_test_dataset_path:
         return Path(explicit_test_dataset_path).expanduser().resolve()
     if train_dataset_out_path is not None:
-        ext = train_dataset_out_path.suffix or ".csv"
-        return train_dataset_out_path.with_name(f"tabular_test_dataset{ext}")
+        ext = train_dataset_out_path.suffix or ".parquet"
+        return train_dataset_out_path.with_name(f"test_dataset{ext}")
     if bundle_dir is not None:
-        return bundle_dir / "tabular_test_dataset.parquet"
-    return out_dir / "tabular_test_dataset.parquet"
+        return bundle_dir / TEST_DATASET_NAME
+    return out_dir / TEST_DATASET_NAME
 
 
 def _has_explicit_eval_split(predictor_cfg: Any) -> bool:
@@ -516,9 +512,9 @@ def train_tabular_model(
         Path(train_dataset_path).expanduser().resolve()
         if (save_train_dataset and train_dataset_path)
         else (
-            (bundle_dir_path / "tabular_train_dataset.parquet")
+            (bundle_dir_path / TRAIN_DATASET_NAME)
             if (save_train_dataset and bundle_dir_path is not None)
-            else ((out_dir / "tabular_train_dataset.parquet") if save_train_dataset else None)
+            else ((out_dir / TRAIN_DATASET_NAME) if save_train_dataset else None)
         )
     )
     train_dataset_meta_path = _dataset_meta_path(train_dataset_out_path) if train_dataset_out_path is not None else None
@@ -1162,6 +1158,49 @@ def train_tabular_model(
                     f,
                     indent=2,
                 )
+
+    if (
+        save_train_dataset
+        and train_dataset_out_path is not None
+        and train_dataset_out_path.is_file()
+    ):
+        manifest_bundle = (
+            bundle_dir_path
+            if bundle_dir_path is not None
+            else train_dataset_out_path.parent
+        )
+        overlap_ids: List[str] = []
+        if (
+            test_dataset_out_path is not None
+            and test_dataset_out_path.is_file()
+        ):
+            train_ids = set(
+                _read_dataset_frame(train_dataset_out_path)["sample_id"].astype(str)
+            )
+            test_ids = set(
+                _read_dataset_frame(test_dataset_out_path)["sample_id"].astype(str)
+            )
+            overlap_ids = sorted(train_ids & test_ids)
+        write_dataset_manifest(
+            manifest_bundle,
+            backend="tabular_sklearn",
+            train_path=train_dataset_out_path,
+            test_path=(
+                test_dataset_out_path
+                if test_dataset_out_path is not None and test_dataset_out_path.is_file()
+                else None
+            ),
+            feature_columns=list(feature_names) if feature_names else None,
+            train_test_overlap_count=(
+                int(len(overlap_ids))
+                if (
+                    test_dataset_out_path is not None
+                    and test_dataset_out_path.is_file()
+                )
+                else None
+            ),
+            overlapping_sample_ids=overlap_ids,
+        )
 
     _require_non_empty_training_matrix(
         X,

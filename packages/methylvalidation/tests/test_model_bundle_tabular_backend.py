@@ -1399,7 +1399,7 @@ def test_tabular_train_dataset_cache_hit_skips_feature_recompute(tmp_path: Path,
 
     monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
 
-    dataset_path = tmp_path / "cache" / "tabular_train_dataset.parquet"
+    dataset_path = tmp_path / "cache" / "train_dataset.parquet"
     model_dir_1 = tmp_path / "model_first"
     tabular_backend.train_tabular_model(
         project_json=tmp_path / "project.json",
@@ -1413,7 +1413,7 @@ def test_tabular_train_dataset_cache_hit_skips_feature_recompute(tmp_path: Path,
     )
     assert calls["count"] > 0
     assert dataset_path.is_file()
-    assert (tmp_path / "cache" / "tabular_train_dataset.parquet.meta.json").is_file()
+    assert (tmp_path / "cache" / "train_dataset.parquet.meta.json").is_file()
 
     calls["count"] = 0
     model_dir_2 = tmp_path / "model_second"
@@ -1464,7 +1464,7 @@ def test_tabular_observed_hybrid_cache_schema_mismatch_recomputes(tmp_path: Path
 
     monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
 
-    dataset_path = tmp_path / "cache" / "tabular_train_dataset.parquet"
+    dataset_path = tmp_path / "cache" / "train_dataset.parquet"
     tabular_backend.train_tabular_model(
         project_json=tmp_path / "project.json",
         bundle_h5=bundle_dir / "model_feature_bundle.h5",
@@ -1478,7 +1478,7 @@ def test_tabular_observed_hybrid_cache_schema_mismatch_recomputes(tmp_path: Path
     )
     assert calls["count"] > 0
 
-    meta_path = tmp_path / "cache" / "tabular_train_dataset.parquet.meta.json"
+    meta_path = tmp_path / "cache" / "train_dataset.parquet.meta.json"
     with open(meta_path, encoding="utf-8") as f:
         cache_meta = json.load(f)
     cache_meta["observed_feature_names"] = cache_meta["observed_feature_names"][:-1]
@@ -1540,7 +1540,7 @@ def test_tabular_saves_test_dataset_next_to_train_dataset(tmp_path: Path, monkey
     )
     monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
 
-    train_dataset_path = tmp_path / "export" / "tabular_train_dataset.parquet"
+    train_dataset_path = tmp_path / "export" / "train_dataset.parquet"
     model_dir = tmp_path / "model"
     tabular_backend.train_tabular_model(
         project_json=tmp_path / "project.json",
@@ -1551,14 +1551,14 @@ def test_tabular_saves_test_dataset_next_to_train_dataset(tmp_path: Path, monkey
         train_dataset_path=train_dataset_path,
         save_test_dataset=True,
     )
-    test_dataset_path = tmp_path / "export" / "tabular_test_dataset.parquet"
+    test_dataset_path = tmp_path / "export" / "test_dataset.parquet"
     assert train_dataset_path.is_file()
     assert test_dataset_path.is_file()
-    assert (tmp_path / "export" / "tabular_test_dataset.parquet.meta.json").is_file()
+    assert (tmp_path / "export" / "test_dataset.parquet.meta.json").is_file()
     with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
         meta = json.load(f)
     assert bool(meta.get("test_dataset_saved")) is True
-    assert str(meta.get("test_dataset_path")).endswith("tabular_test_dataset.parquet")
+    assert str(meta.get("test_dataset_path")).endswith("test_dataset.parquet")
 
 
 def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path, monkeypatch):
@@ -1629,7 +1629,7 @@ def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path
 
     monkeypatch.setattr(tabular_backend, "build_observed_hybrid_feature_table", _spy_build)
 
-    train_dataset_path = tmp_path / "export" / "tabular_train_dataset.parquet"
+    train_dataset_path = tmp_path / "export" / "train_dataset.parquet"
     model_dir = tmp_path / "model"
     tabular_backend.train_tabular_model(
         project_json=tmp_path / "project.json",
@@ -1642,7 +1642,7 @@ def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path
         train_dataset_path=train_dataset_path,
         save_test_dataset=True,
     )
-    test_dataset_path = tmp_path / "export" / "tabular_test_dataset.parquet"
+    test_dataset_path = tmp_path / "export" / "test_dataset.parquet"
     assert train_dataset_path.is_file()
     assert test_dataset_path.is_file()
     assert len(hybrid_calls) >= 2
@@ -1701,12 +1701,12 @@ def test_tabular_defaults_train_and_test_dataset_paths_to_bundle_dir(tmp_path: P
         save_train_dataset=True,
         save_test_dataset=True,
     )
-    assert (bundle_dir / "tabular_train_dataset.parquet").is_file()
-    assert (bundle_dir / "tabular_test_dataset.parquet").is_file()
+    assert (bundle_dir / "train_dataset.parquet").is_file()
+    assert (bundle_dir / "test_dataset.parquet").is_file()
     with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
         meta = json.load(f)
-    assert str(meta.get("train_dataset_path")).endswith("bundle/tabular_train_dataset.parquet")
-    assert str(meta.get("test_dataset_path")).endswith("bundle/tabular_test_dataset.parquet")
+    assert str(meta.get("train_dataset_path")).endswith("bundle/train_dataset.parquet")
+    assert str(meta.get("test_dataset_path")).endswith("bundle/test_dataset.parquet")
 
 
 def test_build_estimator_from_config_xgboost(monkeypatch):

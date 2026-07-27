@@ -1001,7 +1001,7 @@ def _run_model_mc_backend_from_shared_runs(
 
         backend_config = config.with_backend_selection(backend)
         if (
-            backend in {"tabular_sklearn", "generative_hybrid"}
+            backend in {"tabular_sklearn", "generative_hybrid", "ecdf"}
             and not backend_config.model_bundle_dir
         ):
             backend_config = backend_config.model_copy(

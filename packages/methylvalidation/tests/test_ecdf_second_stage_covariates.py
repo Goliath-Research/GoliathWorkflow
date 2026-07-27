@@ -170,12 +170,13 @@ def test_ecdf_second_stage_fits_train_and_scores_disjoint_test(tmp_path: Path):
     assert (pred_dir / "validation_metrics.json").read_text(encoding="utf-8") == (
         pred_dir / "test_metrics.json"
     ).read_text(encoding="utf-8")
-    dataset_dir = tmp_path / "model_bundle" / "second_stage"
-    train_dataset = pd.read_csv(dataset_dir / "train_dataset.csv")
-    test_dataset = pd.read_csv(dataset_dir / "test_dataset.csv")
+    dataset_dir = tmp_path / "model_bundle"
+    train_dataset = pd.read_parquet(dataset_dir / "train_dataset.parquet")
+    test_dataset = pd.read_parquet(dataset_dir / "test_dataset.parquet")
     expected_columns = [
         "sample_id",
-        "expected_class",
+        "class_index",
+        "class_label",
         "alr_prob_class1_vs_prob_class0",
         "standardized_age",
         "standardized_bmi",
@@ -275,9 +276,9 @@ def test_ecdf_second_stage_uses_one_logit_and_five_alr_features(
         ),
     )
 
-    dataset_dir = tmp_path / "model_bundle" / "second_stage"
-    train_dataset = pd.read_csv(dataset_dir / "train_dataset.csv")
-    test_dataset = pd.read_csv(dataset_dir / "test_dataset.csv")
+    dataset_dir = tmp_path / "model_bundle"
+    train_dataset = pd.read_parquet(dataset_dir / "train_dataset.parquet")
+    test_dataset = pd.read_parquet(dataset_dir / "test_dataset.parquet")
     feature_columns = [
         "alr_prob_class1_vs_prob_class0",
         "alr_CD8T_vs_Neu",
@@ -288,12 +289,14 @@ def test_ecdf_second_stage_uses_one_logit_and_five_alr_features(
     ]
     assert train_dataset.columns.tolist() == [
         "sample_id",
-        "expected_class",
+        "class_index",
+        "class_label",
         *feature_columns,
     ]
     assert test_dataset.columns.tolist() == [
         "sample_id",
-        "expected_class",
+        "class_index",
+        "class_label",
         *feature_columns,
     ]
     assert np.isfinite(train_dataset[feature_columns].to_numpy()).all()

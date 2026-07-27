@@ -130,7 +130,7 @@ Structural-directional score (per sample, per `comparison_label` and `feature_ty
 
 Additional `structural_scored` columns per emitted `(comparison, region)`: `structural_panel_obs_fraction__*`, `structural_directional_iqr__*`, `structural_weighted_sign_agreement__*`. When **K ≥ 2** comparisons emit base columns for a region, progression features are derived per region from `structural_directional_score__*` only (schema `structural_scored_v1_progression_contrast`).
 
-**Operational note:** changing mapper collapse mode or region defaults requires refreezing `mapper_dmp_annotations.csv`, rebuilding the model feature bundle, deleting cached `tabular_train_dataset.parquet` if present, and retraining.
+**Operational note:** changing mapper collapse mode or region defaults requires refreezing `mapper_dmp_annotations.csv`, rebuilding the model feature bundle, deleting cached `train_dataset.parquet` if present, and retraining.
 
 ### Lean DMP feature profile (`hybrid_feature_v4_lean_dmp`)
 
@@ -266,7 +266,7 @@ Config-contract audit and redundancy classification are tracked in [../../../doc
 | **model_mc/shared/run_XXXX/test_*.csv**, **test_groups.json** | Canonical held-out test partition. `val_*` and `val_test_groups.json` remain deprecated compatibility aliases. |
 | **model_mc/shared/run_XXXX/centroids**, **model_mc/shared/run_XXXX/detections** | Symlinked from primary MC runs when split source is marked reusable; avoids duplicate detector execution. |
 | **model_mc/\<backend\>/run_XXXX/predictors/** | `train_predictions.csv` / `train_metrics.json` are training diagnostics; `test_predictions.csv` / `test_metrics.json` are held-out results used for model selection. Legacy names alias the test artifacts. |
-| **model_bundle/second_stage/** | Exact ECDF covariate-stacker design matrices: one clipped class-1 logit plus five standardized Neu-referenced ALR cell-composition features. `dataset_manifest.json` records ordered features, transform parameters, sample counts, and train/test overlap QC. |
+| **model_bundle/** | Flat Parquet design matrices for research: `train_dataset.parquet`, `test_dataset.parquet` (when a test split exists), and `dataset_manifest.json`. Identity columns are `sample_id`, `class_index`, `class_label`; remaining columns are backend features (ECDF second-stage: class-probability ALR + Neu-referenced cell ALR; tabular/generative: observed-hybrid/DMP + covariates). |
 | **model_mc/<backend>/all_metrics.csv** | Per-backend model-stage MC metrics table produced from shared runs (or standalone backend runs when `--model-mc-all` is not used). |
 | **model_mc/<backend>/metrics_summary.json** | Per-backend summary statistics used for backend ranking. |
 | **model_mc/backend_ranking.csv** | Cross-backend ranking by configured metric/statistic. |

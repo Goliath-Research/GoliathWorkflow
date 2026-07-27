@@ -453,6 +453,10 @@ def test_generative_composition_alr_uses_canonical_feature_names(
     report = meta["covariate_preprocessing"]
     assert report["composition_transform"] == "alr"
     assert report["composition_output_columns"] == expected_alr
+    train_ds = pd.read_parquet(bundle_dir / "train_dataset.parquet")
+    assert list(train_ds.columns[:3]) == ["sample_id", "class_index", "class_label"]
+    assert train_ds.columns.tolist()[-5:] == expected_alr
+    assert (bundle_dir / "dataset_manifest.json").is_file()
 
 
 def test_pipeline_runner_generative_backend_dispatch(tmp_path: Path, monkeypatch):
