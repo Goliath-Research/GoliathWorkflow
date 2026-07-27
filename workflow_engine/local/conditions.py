@@ -10,7 +10,8 @@ def scope_var_truthy(scope: Mapping[str, Any], var_name: str) -> bool:
     Evaluate workflow branch condition from a scope variable.
 
     Matches SQL ``wf_get_scope_variable_int`` truthiness: non-zero integers,
-    non-empty strings, true booleans; false/0/empty/null are falsy.
+    JSON/Python booleans (true→1 / false→0), non-empty strings; false/0/empty/null
+    are falsy. SQL must coerce JSON ``true``/``false`` the same way (engine-generic).
     """
     if var_name not in scope:
         return False

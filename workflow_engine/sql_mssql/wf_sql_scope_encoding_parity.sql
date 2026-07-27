@@ -130,6 +130,8 @@ GO
   Simplified wf_get_scope_variable_int: no unquoting hack needed when the write-path
   encodes numbers correctly as bare JSON number literals.
   Keeps backward compatibility: still handles quoted numbers in old data via TRY_CONVERT.
+  Also coerces JSON booleans (true/false) so IF/WHILE conditions on boolean
+  scope variables evaluate correctly (engine-generic; not process-specific).
 */
 CREATE OR ALTER FUNCTION wf.wf_get_scope_variable_int
 (
@@ -154,9 +156,25 @@ BEGIN
     IF @v IS NOT NULL
         RETURN @v;
 
-    /* Legacy: JSON string wrapping a number, e.g. "42" stored in old data. */
+    /* JSON boolean literals written by wf_json_encode_openjson (type 3). */
+    IF LOWER(@trimmed) IN (N'true', N'1')
+        RETURN 1;
+    IF LOWER(@trimmed) IN (N'false', N'0', N'null')
+        RETURN 0;
+
+    /* Legacy: JSON string wrapping a number/bool, e.g. "42" or "true". */
     IF LEN(@trimmed) >= 2 AND LEFT(@trimmed, 1) = N'"' AND RIGHT(@trimmed, 1) = N'"'
-        RETURN TRY_CONVERT(INT, SUBSTRING(@trimmed, 2, LEN(@trimmed) - 2));
+    BEGIN
+        DECLARE @inner NVARCHAR(MAX) = SUBSTRING(@trimmed, 2, LEN(@trimmed) - 2);
+        SET @v = TRY_CONVERT(INT, @inner);
+        IF @v IS NOT NULL
+            RETURN @v;
+        IF LOWER(@inner) IN (N'true', N'1')
+            RETURN 1;
+        IF LOWER(@inner) IN (N'false', N'0', N'null')
+            RETURN 0;
+        RETURN NULL;
+    END;
 
     RETURN NULL;
 END;

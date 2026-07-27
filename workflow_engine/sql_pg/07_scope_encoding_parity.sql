@@ -69,6 +69,7 @@ AS $$
 DECLARE
   v_raw text;
   v_trimmed text;
+  v_inner text;
   v_v int;
 BEGIN
   v_raw := wf.wf_get_scope_variable_json(
@@ -83,11 +84,25 @@ BEGIN
     RETURN v_v;
   EXCEPTION WHEN others THEN NULL;
   END;
+  /* JSON boolean literals for IF/WHILE condition_var evaluation. */
+  IF lower(v_trimmed) IN ('true', '1') THEN
+    RETURN 1;
+  END IF;
+  IF lower(v_trimmed) IN ('false', '0', 'null') THEN
+    RETURN 0;
+  END IF;
   IF length(v_trimmed) >= 2 AND left(v_trimmed, 1) = '"' AND right(v_trimmed, 1) = '"' THEN
+    v_inner := substring(v_trimmed from 2 for length(v_trimmed) - 2);
     BEGIN
-      RETURN substring(v_trimmed from 2 for length(v_trimmed) - 2)::int;
+      RETURN v_inner::int;
     EXCEPTION WHEN others THEN NULL;
     END;
+    IF lower(v_inner) IN ('true', '1') THEN
+      RETURN 1;
+    END IF;
+    IF lower(v_inner) IN ('false', '0', 'null') THEN
+      RETURN 0;
+    END IF;
   END IF;
   RETURN NULL;
 END;

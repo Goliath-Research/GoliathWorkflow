@@ -98,8 +98,8 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
         out_dir = cfg.output_dir
         qc_path = Path(out_dir) / f"{sample_path.name}.json"
         if qc_path.is_file():
-            import json
-
+            # Use module-level json (do not re-import here — that makes `json` a
+            # function-local name and breaks _build_result when this branch is skipped).
             prior = json.loads(qc_path.read_text(encoding="utf-8"))
             history = prior.get("qc_history")
             if isinstance(history, list):
@@ -117,7 +117,6 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
         )
         qc_path = Path(out_dir) / f"{sample_path.name}.json"
     else:
-        import json
         import tempfile
 
         with tempfile.TemporaryDirectory(prefix="methyl-qc-") as tmp:

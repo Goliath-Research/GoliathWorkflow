@@ -66,17 +66,27 @@ RETURNS int
 LANGUAGE plpgsql
 STABLE
 AS $$
-DECLARE v_json text;
+DECLARE
+  v_json text;
+  v_trimmed text;
 BEGIN
   v_json := wf.wf_get_scope_variable_json(p_workflow_instance_id, p_start_scope_node_execution_id, p_var_name);
   IF v_json IS NULL OR btrim(v_json) = '' THEN
     RETURN NULL;
   END IF;
+  v_trimmed := btrim(v_json);
   BEGIN
-    RETURN v_json::int;
-  EXCEPTION WHEN others THEN
-    RETURN NULL;
+    RETURN v_trimmed::int;
+  EXCEPTION WHEN others THEN NULL;
   END;
+  /* JSON boolean literals for IF/WHILE condition_var evaluation. */
+  IF lower(v_trimmed) IN ('true', '1') THEN
+    RETURN 1;
+  END IF;
+  IF lower(v_trimmed) IN ('false', '0', 'null') THEN
+    RETURN 0;
+  END IF;
+  RETURN NULL;
 END;
 $$;
 

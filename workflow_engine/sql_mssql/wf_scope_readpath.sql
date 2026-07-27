@@ -80,6 +80,15 @@ BEGIN
         SET @trimmed = SUBSTRING(@trimmed, 2, LEN(@trimmed) - 2);
 
     SET @v = TRY_CONVERT(INT, @trimmed);
-    RETURN @v;
+    IF @v IS NOT NULL
+        RETURN @v;
+
+    /* JSON boolean literals for IF/WHILE condition_var evaluation. */
+    IF LOWER(@trimmed) IN (N'true', N'1')
+        RETURN 1;
+    IF LOWER(@trimmed) IN (N'false', N'0', N'null')
+        RETURN 0;
+
+    RETURN NULL;
 END;
 GO
