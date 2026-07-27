@@ -1505,6 +1505,34 @@ def test_tabular_observed_hybrid_cache_schema_mismatch_recomputes(tmp_path: Path
     assert "schema mismatch" in str(model_meta.get("train_dataset_cache_miss_reason"))
 
 
+def _write_holdout_test_groups(
+    project_json: Path,
+    *,
+    control_paths: list[str],
+    disease_paths: list[str],
+) -> Path:
+    """Write Model-MC test_groups.json beside project.json (disjoint holdout)."""
+    project_json.parent.mkdir(parents=True, exist_ok=True)
+    manifest = project_json.parent / "test_groups.json"
+    manifest.write_text(
+        json.dumps(
+            [
+                {"class_index": 0, "paths": list(control_paths)},
+                {"class_index": 1, "paths": list(disease_paths)},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return manifest
+
+
+def _patch_eval_split_load_project(monkeypatch, stub) -> None:
+    """assert_model_mc_train_partition uses eval_split_resolver.load_project directly."""
+    from methyl_validation import eval_split_resolver
+
+    monkeypatch.setattr(eval_split_resolver, "load_project", lambda _p: stub)
+
+
 def test_tabular_saves_test_dataset_next_to_train_dataset(tmp_path: Path, monkeypatch):
     det = tmp_path / "detections" / "healthy" / "pca1"
     det.mkdir(parents=True)
@@ -1519,31 +1547,42 @@ def test_tabular_saves_test_dataset_next_to_train_dataset(tmp_path: Path, monkey
     ).to_csv(det / "dmps-1-classifier.csv", index=False)
     monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
     bundle_dir = tmp_path / "bundle"
-    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
-    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: _StubProject(det))
+    project_json = tmp_path / "project.json"
+    model_bundle.build_model_feature_bundle(project_json, bundle_dir)
+    stub = _StubProject(det)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: stub)
+    _patch_eval_split_load_project(monkeypatch, stub)
+    _write_holdout_test_groups(
+        project_json,
+        control_paths=["/tmp/H1"],
+        disease_paths=["/tmp/D1"],
+    )
 
     def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
         del chromosome, min_coverage
         positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
         X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
         for i, p in enumerate(sample_paths):
-            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2"} else 0.8
+            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2", "H1"} else 0.8
         ctx = np.asarray(["CG"] * len(positions), dtype=object)
         return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
 
     monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
+    # Legacy misnamed predictor test_* must not drive export (train paths).
     predictor_cfg = SimpleNamespace(
-        test_group_paths=[
-            {"label": "healthy", "class_index": 0, "paths": ["/tmp/S1", "/tmp/S2"]},
-            {"label": "pca1", "class_index": 1, "paths": ["/tmp/S3", "/tmp/S4"]},
-        ],
+        test_control_paths=["/tmp/S1", "/tmp/S2"],
+        test_disease_paths=["/tmp/S3", "/tmp/S4"],
+        test_group_paths=[],
+        holdout_group_paths=[],
+        holdout_control_paths=[],
+        holdout_disease_paths=[],
     )
     monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
 
     train_dataset_path = tmp_path / "export" / "train_dataset.parquet"
     model_dir = tmp_path / "model"
     tabular_backend.train_tabular_model(
-        project_json=tmp_path / "project.json",
+        project_json=project_json,
         bundle_h5=bundle_dir / "model_feature_bundle.h5",
         output_dir=model_dir,
         model_type="random_forest",
@@ -1559,6 +1598,90 @@ def test_tabular_saves_test_dataset_next_to_train_dataset(tmp_path: Path, monkey
         meta = json.load(f)
     assert bool(meta.get("test_dataset_saved")) is True
     assert str(meta.get("test_dataset_path")).endswith("test_dataset.parquet")
+
+
+def test_tabular_test_dataset_uses_test_groups_not_predictor_test_paths(
+    tmp_path: Path, monkeypatch
+):
+    """Regression: misnamed predictor test_* (train cohort) must not fill test Parquet."""
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    det.mkdir(parents=True)
+    pd.DataFrame(
+        {
+            "chromosome": ["1", "1"],
+            "position": [100, 120],
+            "context": ["CG", "CG"],
+            "effect_size": [0.7, 0.4],
+            "weight": [0.8, 0.3],
+        }
+    ).to_csv(det / "dmps-1-classifier.csv", index=False)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
+    bundle_dir = tmp_path / "bundle"
+    project_json = tmp_path / "project.json"
+    model_bundle.build_model_feature_bundle(project_json, bundle_dir)
+    stub = _StubProject(det)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: stub)
+    _patch_eval_split_load_project(monkeypatch, stub)
+    holdout_control = ["/tmp/HoldC1", "/tmp/HoldC2"]
+    holdout_disease = ["/tmp/HoldD1"]
+    _write_holdout_test_groups(
+        project_json,
+        control_paths=holdout_control,
+        disease_paths=holdout_disease,
+    )
+
+    def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
+        del chromosome, min_coverage
+        positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
+        X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
+        for i, p in enumerate(sample_paths):
+            name = Path(str(p)).name
+            X[i, :] = 0.2 if name.startswith("S") or name.startswith("HoldC") else 0.8
+        ctx = np.asarray(["CG"] * len(positions), dtype=object)
+        return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
+
+    monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
+    train_paths_control = ["/tmp/S1", "/tmp/S2"]
+    train_paths_disease = ["/tmp/S3", "/tmp/S4"]
+    predictor_cfg = SimpleNamespace(
+        test_control_paths=list(train_paths_control),
+        test_disease_paths=list(train_paths_disease),
+        test_group_paths=[],
+        holdout_group_paths=[],
+        holdout_control_paths=[],
+        holdout_disease_paths=[],
+    )
+    monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
+
+    export_dir = tmp_path / "export"
+    train_dataset_path = export_dir / "train_dataset.parquet"
+    model_dir = tmp_path / "model"
+    tabular_backend.train_tabular_model(
+        project_json=project_json,
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir,
+        model_type="random_forest",
+        save_train_dataset=True,
+        train_dataset_path=train_dataset_path,
+        save_test_dataset=True,
+    )
+    test_dataset_path = export_dir / "test_dataset.parquet"
+    train_df = pd.read_parquet(train_dataset_path)
+    test_df = pd.read_parquet(test_dataset_path)
+    train_ids = set(train_df["sample_id"].astype(str))
+    test_ids = set(test_df["sample_id"].astype(str))
+    expected_holdout = {"HoldC1", "HoldC2", "HoldD1"}
+    assert test_ids == expected_holdout
+    assert len(test_df) == 3
+    assert train_ids == {"S1", "S2", "S3", "S4"}
+    assert not (train_ids & test_ids)
+    # Misnamed predictor paths would have produced train IDs — must not.
+    assert test_ids != {"S1", "S2", "S3", "S4"}
+    # Manifest lands under model_bundle (bundle_h5 parent) even when Parquet paths are explicit.
+    manifest = json.loads((bundle_dir / "dataset_manifest.json").read_text(encoding="utf-8"))
+    assert int(manifest["train_test_overlap_count"]) == 0
+    assert int(manifest["n_test_samples"]) == 3
+    assert int(manifest["n_train_samples"]) == 4
 
 
 def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path, monkeypatch):
@@ -1593,24 +1716,33 @@ def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path
         fixed_gene_panel_csv=frozen_panel_path,
     )
     monkeypatch.setattr(model_bundle, "load_project", lambda _p: stub)
-    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+    project_json = tmp_path / "project.json"
+    model_bundle.build_model_feature_bundle(project_json, bundle_dir)
     monkeypatch.setattr(tabular_backend, "load_project", lambda _p: stub)
+    _patch_eval_split_load_project(monkeypatch, stub)
+    _write_holdout_test_groups(
+        project_json,
+        control_paths=["/tmp/H1"],
+        disease_paths=["/tmp/D1"],
+    )
 
     def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
         del chromosome, min_coverage
         positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
         X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
         for i, p in enumerate(sample_paths):
-            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2"} else 0.8
+            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2", "H1"} else 0.8
         ctx = np.asarray(["CG"] * len(positions), dtype=object)
         return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
 
     monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
     predictor_cfg = SimpleNamespace(
-        test_group_paths=[
-            {"label": "healthy", "class_index": 0, "paths": ["/tmp/S1", "/tmp/S2"]},
-            {"label": "pca1", "class_index": 1, "paths": ["/tmp/S3", "/tmp/S4"]},
-        ],
+        test_control_paths=["/tmp/S1", "/tmp/S2"],
+        test_disease_paths=["/tmp/S3", "/tmp/S4"],
+        test_group_paths=[],
+        holdout_group_paths=[],
+        holdout_control_paths=[],
+        holdout_disease_paths=[],
     )
     monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
 
@@ -1632,7 +1764,7 @@ def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path
     train_dataset_path = tmp_path / "export" / "train_dataset.parquet"
     model_dir = tmp_path / "model"
     tabular_backend.train_tabular_model(
-        project_json=tmp_path / "project.json",
+        project_json=project_json,
         bundle_h5=bundle_dir / "model_feature_bundle.h5",
         output_dir=model_dir,
         model_type="random_forest",
@@ -1649,7 +1781,7 @@ def test_tabular_gene_scored_test_export_passes_frozen_gene_panel(tmp_path: Path
     assert hybrid_calls[0]["panel_empty"] is False
     assert hybrid_calls[1]["panel_empty"] is False
     assert hybrid_calls[0]["n_samples"] == 4
-    assert hybrid_calls[1]["n_samples"] == 4
+    assert hybrid_calls[1]["n_samples"] == 2
     with open(model_dir / "tabular-model-metadata.json", encoding="utf-8") as f:
         meta = json.load(f)
     observed_names = [str(x) for x in (meta.get("observed_feature_names") or [])]
@@ -1670,30 +1802,40 @@ def test_tabular_defaults_train_and_test_dataset_paths_to_bundle_dir(tmp_path: P
     ).to_csv(det / "dmps-1-classifier.csv", index=False)
     monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProject(det))
     bundle_dir = tmp_path / "bundle"
-    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
-    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: _StubProject(det))
+    project_json = tmp_path / "project.json"
+    model_bundle.build_model_feature_bundle(project_json, bundle_dir)
+    stub = _StubProject(det)
+    monkeypatch.setattr(tabular_backend, "load_project", lambda _p: stub)
+    _patch_eval_split_load_project(monkeypatch, stub)
+    _write_holdout_test_groups(
+        project_json,
+        control_paths=["/tmp/H1"],
+        disease_paths=["/tmp/D1"],
+    )
 
     def _fake_extract(sample_paths, reference_positions, chromosome, min_coverage=1):
         del chromosome, min_coverage
         positions = np.asarray(reference_positions["CG"], dtype=np.uint32)
         X = np.zeros((len(sample_paths), len(positions)), dtype=np.float32)
         for i, p in enumerate(sample_paths):
-            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2"} else 0.8
+            X[i, :] = 0.2 if Path(str(p)).name in {"S1", "S2", "H1"} else 0.8
         ctx = np.asarray(["CG"] * len(positions), dtype=object)
         return X, positions, ctx, {"CG": np.arange(len(positions), dtype=np.uint32)}
 
     monkeypatch.setattr(tabular_backend.MethylCentroidPair, "extract_methylation_fractions", _fake_extract)
     predictor_cfg = SimpleNamespace(
-        test_group_paths=[
-            {"label": "healthy", "class_index": 0, "paths": ["/tmp/S1", "/tmp/S2"]},
-            {"label": "pca1", "class_index": 1, "paths": ["/tmp/S3", "/tmp/S4"]},
-        ],
+        test_control_paths=["/tmp/S1", "/tmp/S2"],
+        test_disease_paths=["/tmp/S3", "/tmp/S4"],
+        test_group_paths=[],
+        holdout_group_paths=[],
+        holdout_control_paths=[],
+        holdout_disease_paths=[],
     )
     monkeypatch.setattr(tabular_backend, "resolve_predictor_config", lambda _p: predictor_cfg)
 
     model_dir = tmp_path / "model"
     tabular_backend.train_tabular_model(
-        project_json=tmp_path / "project.json",
+        project_json=project_json,
         bundle_h5=bundle_dir / "model_feature_bundle.h5",
         bundle_dir=bundle_dir,
         output_dir=model_dir,

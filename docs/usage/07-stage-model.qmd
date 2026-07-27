@@ -71,6 +71,10 @@ Each backend run writes `train_metrics.json` for diagnostics and
 compatibility aliases. Tabular and generative backends use the same
 `evaluation_partition` contract as ECDF (not legacy predictor `test_*` cohort
 lists), so shared-run train/test membership stays comparable across backends.
+Tabular **train-time** `test_dataset.parquet` export uses the same rule:
+`evaluation_partition="test"` → `test_groups.json` only (fail closed if missing).
+Misnamed predictor `test_control_paths` / `test_disease_paths` must never fill
+the holdout Parquet.
 
 Every sum-to-1 feature set (a simplex) is encoded by additive log-ratio (ALR),
 which drops the redundant reference part. The first-stage ECDF class

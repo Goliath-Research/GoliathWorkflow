@@ -164,23 +164,6 @@ def _derive_test_dataset_path(
     return out_dir / TEST_DATASET_NAME
 
 
-def _has_explicit_eval_split(predictor_cfg: Any) -> bool:
-    if predictor_cfg is None:
-        return False
-    for key in (
-        "test_group_paths",
-        "holdout_group_paths",
-        "test_control_paths",
-        "test_disease_paths",
-        "holdout_control_paths",
-        "holdout_disease_paths",
-    ):
-        values = getattr(predictor_cfg, key, None)
-        if isinstance(values, list) and len(values) > 0:
-            return True
-    return False
-
-
 def _resolve_class_centroid_dirs(project: Any, class_names: Sequence[str]) -> Dict[str, str]:
     label_to_dir: Dict[str, str] = {}
     try:
@@ -1013,12 +996,9 @@ def train_tabular_model(
     test_dataset_out_path: Optional[Path] = None
     test_cache_hit: Optional[bool] = None
     test_cache_miss_reason: Optional[str] = None
-    try:
-        predictor_cfg = resolve_predictor_config(project_json)
-    except Exception:
-        predictor_cfg = None
-    explicit_eval_split = _has_explicit_eval_split(predictor_cfg)
-    if save_test_dataset and explicit_eval_split:
+    if save_test_dataset:
+        # Model-MC holdout only: never use legacy predictor test_* paths (often
+        # misnamed train cohorts). Same contract as tabular predict scoring.
         test_dataset_out_path = _derive_test_dataset_path(
             train_dataset_out_path,
             test_dataset_path,
@@ -1029,8 +1009,8 @@ def train_tabular_model(
         eval_paths, eval_y = resolve_eval_paths_and_labels(
             project_json,
             class_names,
-            predictor_cfg=predictor_cfg,
             project_loader=load_project,
+            evaluation_partition="test",
         )
         if eval_y is None:
             raise ValueError("No labeled evaluation samples resolved for tabular test dataset export.")
@@ -1181,6 +1161,11 @@ def train_tabular_model(
                 _read_dataset_frame(test_dataset_out_path)["sample_id"].astype(str)
             )
             overlap_ids = sorted(train_ids & test_ids)
+            if overlap_ids:
+                raise ValueError(
+                    "Tabular train/test datasets overlap; refusing to export model_bundle. "
+                    f"First overlap(s): {overlap_ids[:5]}"
+                )
         write_dataset_manifest(
             manifest_bundle,
             backend="tabular_sklearn",
