@@ -28,6 +28,7 @@ Upload so object keys match `cfg.reference_asset` recipe `key` / `inventoryPrefi
 | `gencode-v49@1` | `/work/genomes/annotation/gencode/v49/` | `s3://epimethyl/genomes/annotation/gencode/v49/` | `gencode.v49.annotation.gtf` |
 | `pangenome-grch38-d9-1.70@1` | `/work/genomes/pangenome/GRCh38/d9/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9/1.70/` | `hprc-v1.1-mc-grch38.d9.gbz`, `.autoindex.1.70.dist`, `.shortread.withzip.min`, `.shortread.zipcodes`, `.paths.sub` |
 | `pangenome-grch38-d9-bs-1.70@1` | `/work/genomes/pangenome/GRCh38/d9-bs/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/` | methylGrapher C2T+G2A bundle (`hprc-d9-bs.wl.C2T.*`, `hprc-d9-bs.wl.G2A.*`, `.cpg.tsv`, report) |
+| SamplePrep canary WGBS (GSE261315 / SRR28293403) | `/work/genomes/pangenome/canary/gse261315/SRR28293403/` | `s3://epimethyl/genomes/pangenome/canary/gse261315/SRR28293403/` | `full/` + `subset/` FASTQ pairs, `checksums.json`, `provenance.json` (HPRC/methylGrapher public WGBS; provision via `scripts/provision_sample_prep_canary.sh`) |
 
 ### Upload (local → QNAP)
 
@@ -41,7 +42,10 @@ scripts/sync_genomes_to_s3.sh
 #   --only linear | annotation | pangenome
 #   --only pangenome/GRCh38/d9/1.70
 #   --only pangenome/GRCh38/d9-bs/1.70
+#   --only pangenome/canary
 scripts/sync_genomes_to_s3.sh --only pangenome/GRCh38/d9-bs/1.70
+# After provisioning the SamplePrep canary FASTQs under genomes/pangenome/canary/:
+scripts/sync_genomes_to_s3.sh --only pangenome/canary
 ```
 
 ### Verify on QNAP

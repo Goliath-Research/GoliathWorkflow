@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 # Provision the pinned GSE261315 / SRR28293403 SamplePrep canary FASTQs.
 #
+# These reads come from the methylGrapher / HPRC pangenome project (GSE261315).
+# Canonical local + QNAP location (same relative tree as graph assets):
+#
+#   /work/genomes/pangenome/canary/gse261315/SRR28293403/{full,subset}/
+#   s3://epimethyl/genomes/pangenome/canary/gse261315/SRR28293403/{full,subset}/
+#
 # Downloads the public SRA run once, materializes a deterministic paired-read
-# subset, checksums both tiers, and stages them under a local fastqStorage root
-# (or prints the layout for QNAP / myQNAPcloud upload).
+# subset, checksums both tiers, and stages under that pangenome tree. Mirror to
+# myQNAPcloud with:
+#   scripts/sync_genomes_to_s3.sh --only pangenome/canary
 #
 # Does NOT re-download or re-subsample at canary runtime — the canary consumes
 # the immutable objects produced here.
@@ -15,20 +22,26 @@ Usage: scripts/provision_sample_prep_canary.sh [options]
 
 Options:
   --work-dir PATH       Scratch directory (default: /tmp/sample_prep_canary_SRR28293403)
-  --stage-root PATH     Local fastqStorage root to stage into (default: WORK_DIR/stage)
+  --stage-root PATH     Stage root (default: /work/genomes/pangenome)
   --subset-pairs N      Paired reads in the subset tier (default: 2000000)
   --skip-download       Reuse existing FASTQs under --work-dir
   --dry-run             Print planned actions only
   -h, --help            Show help
+
+Canonical layout (pangenome project provenance):
+  /work/genomes/pangenome/canary/gse261315/SRR28293403/full/
+  /work/genomes/pangenome/canary/gse261315/SRR28293403/subset/
+  s3://epimethyl/genomes/pangenome/canary/gse261315/SRR28293403/...
 
 Requires (for a full provision):
   - prefetch / fasterq-dump (SRA Toolkit) OR existing *_1.fastq.gz / *_2.fastq.gz
   - gzip, sha256sum, python3
   - enough disk for ~16GB SRA + expanded FASTQ + subset
 
-After staging, copy stage-root/canary/... to the deployment fastqStorage and
-merge checksums into the site testing.sample_prep_canary block (or a
-METHYL_SAMPLE_PREP_CANARY_CONFIG JSON).
+After staging:
+  1) scripts/sync_genomes_to_s3.sh --only pangenome/canary
+  2) Merge checksums into site testing.sample_prep_canary
+     (fastq_storage.basePath=/work/genomes/pangenome)
 EOF
 }
 
@@ -37,7 +50,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 RUN_ACC="SRR28293403"
 GEO_SAMPLE="GSM8140413"
 WORK_DIR="/tmp/sample_prep_canary_${RUN_ACC}"
-STAGE_ROOT=""
+# Default under the pangenome inventory tree (mirrored to QNAP genomes/pangenome/).
+STAGE_ROOT="/work/genomes/pangenome"
 SUBSET_PAIRS=2000000
 SKIP_DOWNLOAD=0
 DRY_RUN=0
@@ -54,16 +68,17 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-STAGE_ROOT="${STAGE_ROOT:-$WORK_DIR/stage}"
 FULL_PREFIX="canary/gse261315/${RUN_ACC}/full"
 SUBSET_PREFIX="canary/gse261315/${RUN_ACC}/subset"
 R1_NAME="${RUN_ACC}_1.fastq.gz"
 R2_NAME="${RUN_ACC}_2.fastq.gz"
 
-echo "SamplePrep canary provision"
+echo "SamplePrep canary provision (pangenome inventory tree)"
 echo "  run=${RUN_ACC} geo=${GEO_SAMPLE} subset_pairs=${SUBSET_PAIRS}"
 echo "  work_dir=${WORK_DIR}"
 echo "  stage_root=${STAGE_ROOT}"
+echo "  local: ${STAGE_ROOT}/${FULL_PREFIX}/"
+echo "  qnap:  s3://epimethyl/genomes/pangenome/${FULL_PREFIX}/"
 
 if [[ "$DRY_RUN" -eq 1 ]]; then
   cat <<EOF
@@ -73,6 +88,7 @@ dry-run plan:
   3) sha256sum both tiers
   4) stage under ${STAGE_ROOT}/${FULL_PREFIX}/ and .../${SUBSET_PREFIX}/
   5) write ${STAGE_ROOT}/canary/gse261315/${RUN_ACC}/checksums.json
+  6) mirror: scripts/sync_genomes_to_s3.sh --only pangenome/canary
 EOF
   exit 0
 fi
@@ -114,13 +130,20 @@ fi
 
 SUBSET_R1="$WORK_DIR/subset/$R1_NAME"
 SUBSET_R2="$WORK_DIR/subset/$R2_NAME"
+# Prefer uncompressed FASTQs for subsetting (much faster than gunzip-streaming).
+SUBSET_SRC_R1="$FULL_R1"
+SUBSET_SRC_R2="$FULL_R2"
+if [[ -f "$WORK_DIR/full/${RUN_ACC}_1.fastq" && -f "$WORK_DIR/full/${RUN_ACC}_2.fastq" ]]; then
+  SUBSET_SRC_R1="$WORK_DIR/full/${RUN_ACC}_1.fastq"
+  SUBSET_SRC_R2="$WORK_DIR/full/${RUN_ACC}_2.fastq"
+fi
 if [[ ! -f "$SUBSET_R1" || ! -f "$SUBSET_R2" ]]; then
-  echo "Writing deterministic first-${SUBSET_PAIRS}-pair subset..."
+  echo "Writing deterministic first-${SUBSET_PAIRS}-pair subset from $(basename "$SUBSET_SRC_R1")..."
   PYTHON_BIN="${PYTHON_BIN:-python3}"
   if [[ -x "$REPO_ROOT/.venv/bin/python" ]]; then
     PYTHON_BIN="$REPO_ROOT/.venv/bin/python"
   fi
-  "$PYTHON_BIN" - "$FULL_R1" "$FULL_R2" "$SUBSET_R1" "$SUBSET_R2" "$SUBSET_PAIRS" <<'PY'
+  "$PYTHON_BIN" - "$SUBSET_SRC_R1" "$SUBSET_SRC_R2" "$SUBSET_R1" "$SUBSET_R2" "$SUBSET_PAIRS" <<'PY'
 from pathlib import Path
 import gzip
 import sys
@@ -207,4 +230,7 @@ cp -f "$REPO_ROOT/tests/real_data/sample_prep_canary/provenance.json" \
   "$STAGE_ROOT/canary/gse261315/${RUN_ACC}/provenance.json"
 
 echo "Staged under ${STAGE_ROOT}"
-echo "Next: sync ${STAGE_ROOT}/canary to deployment fastqStorage and merge checksums into site testing.sample_prep_canary."
+echo "Next:"
+echo "  1) scripts/sync_genomes_to_s3.sh --only pangenome/canary"
+echo "  2) Merge checksums into site testing.sample_prep_canary"
+echo "     (fastq_storage.basePath=${STAGE_ROOT})"

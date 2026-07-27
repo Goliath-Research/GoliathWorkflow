@@ -1,6 +1,8 @@
 # SamplePrep real-data canary fixtures
 
-Pinned public WGBS sample for periodical SamplePrep qualification:
+Pinned public WGBS sample for periodical SamplePrep qualification. These reads
+come from the **methylGrapher / HPRC pangenome project** (GSE261315) and live in
+the pangenome inventory tree — not lab `fastqStorage`.
 
 | Field | Value |
 |-------|-------|
@@ -9,21 +11,24 @@ Pinned public WGBS sample for periodical SamplePrep qualification:
 | SRA run | SRR28293403 |
 | Individual | HG00621 (HPRC) |
 | Layout | paired-end Bisulfite-Seq |
+| Local root | `/work/genomes/pangenome/canary/gse261315/SRR28293403/` |
+| QNAP / S3 | `s3://epimethyl/genomes/pangenome/canary/gse261315/SRR28293403/` |
 
-See [`provenance.json`](provenance.json) for license/citation and [`registry.example.json`](registry.example.json) for the typed config shape.
+See [`provenance.json`](provenance.json) and [`registry.example.json`](registry.example.json).
 
 ## Provision once
 
 ```bash
 source .venv/bin/activate
-bash scripts/provision_sample_prep_canary.sh \
-  --subset-pairs 2000000 \
-  --stage-root /work/fastq-storage
+# Default --stage-root is /work/genomes/pangenome
+bash scripts/provision_sample_prep_canary.sh --subset-pairs 2000000
+
+# Mirror the canary subtree to myQNAPcloud (same relative path)
+scripts/sync_genomes_to_s3.sh --only pangenome/canary
 ```
 
-Copy/sync `canary/` into deployment `fastqStorage` (myQNAPcloud today) and merge
-`checksums.json` SHA-256 values into the site `testing.sample_prep_canary` block
-(or `METHYL_SAMPLE_PREP_CANARY_CONFIG`).
+Merge `checksums.json` SHA-256 values into site `testing.sample_prep_canary`
+with `fastq_storage.basePath=/work/genomes/pangenome`.
 
 ## Run
 

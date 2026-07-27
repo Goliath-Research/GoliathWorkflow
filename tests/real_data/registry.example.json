@@ -57,8 +57,8 @@
     },
     "fastq_storage": {
       "type": "file",
-      "basePath": "/work/fastq-storage",
-      "endpointRef": "fastqStorage"
+      "basePath": "/work/genomes/pangenome",
+      "endpointRef": "epimethyl-genomes"
     },
     "full": {
       "prefix": "canary/gse261315/SRR28293403/full/",

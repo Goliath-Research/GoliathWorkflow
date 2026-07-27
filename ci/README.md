@@ -88,7 +88,8 @@ site `testing.sample_prep_canary` (or `METHYL_SAMPLE_PREP_CANARY_CONFIG`).
 
 ```bash
 # Local / operator
-bash scripts/provision_sample_prep_canary.sh --stage-root /work/fastq-storage
+bash scripts/provision_sample_prep_canary.sh --subset-pairs 2000000
+scripts/sync_genomes_to_s3.sh --only pangenome/canary
 unset WORKER_STUB_EXTERNAL
 bash scripts/smoke_sample_prep_real.sh --tier subset
 ```
