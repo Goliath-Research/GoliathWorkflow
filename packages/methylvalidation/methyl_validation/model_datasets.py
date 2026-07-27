@@ -34,8 +34,12 @@ def resolve_model_bundle_dir(
     *,
     project_json: Optional[Union[str, Path]] = None,
 ) -> Path:
-    """Resolve the run-local ``model_bundle`` directory."""
-    if bundle_dir is not None:
+    """Resolve the run-local ``model_bundle`` directory.
+
+    ``bundle_dir`` must already be the ``model_bundle`` folder (not an H5 parent
+    guess). When unset, uses ``<project_json.parent>/model_bundle``.
+    """
+    if bundle_dir is not None and str(bundle_dir).strip():
         return Path(bundle_dir).expanduser().resolve()
     if project_json is not None:
         return Path(project_json).expanduser().resolve().parent / "model_bundle"

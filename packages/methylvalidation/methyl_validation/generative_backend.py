@@ -676,10 +676,7 @@ def train_generative_model(
     with open(out_dir / "generative-model-metadata.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
 
-    bundle_dir = resolve_model_bundle_dir(
-        Path(bundle_h5).expanduser().resolve().parent,
-        project_json=project_json,
-    )
+    bundle_dir = resolve_model_bundle_dir(project_json=project_json)
     train_frame = build_identity_feature_frame(
         sample_ids=sample_ids,
         class_index=y_arr,

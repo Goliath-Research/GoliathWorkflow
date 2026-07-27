@@ -581,9 +581,6 @@ def _write_second_stage_datasets(
         "dataset_manifest_json": artifacts["dataset_manifest_json"],
         "train_test_overlap_count": artifacts.get("train_test_overlap_count"),
         "covariates_exported": covariates_exported,
-        # Backward-compatible aliases for callers still reading old keys.
-        "train_dataset_csv": artifacts["train_dataset"],
-        "test_dataset_csv": artifacts.get("test_dataset"),
     }
 
 
