@@ -47,6 +47,16 @@ from .model_bundle import (
     load_bundle_gene_feature_ranges,
     resolve_fixed_gene_features_panel,
 )
+from .model_datasets import (
+    build_identity_feature_frame,
+    read_dataset_frame,
+    resolve_model_bundle_dir,
+    test_dataset_path,
+    train_dataset_path,
+    write_dataset_frame,
+    write_dataset_manifest,
+    write_model_datasets,
+)
 from .observed_feature_builder import (
     apply_feature_fill_values,
     build_observed_hybrid_feature_table,
@@ -484,11 +494,17 @@ def train_generative_model(
         feature_weights = dmp_weights
 
     if feature_mode_norm == "observed_hybrid":
-        base_feature_names = list(observed_feature_names)
+        # Match the training matrix (quality columns are excluded from X_methyl).
+        base_feature_names = list(training_feature_names_obs)
     else:
         base_feature_names = [f"{c}:{ctx}:{int(pos)}" for c, ctx, pos in feature_order]
     cov_feature_names = list(preprocessor.output_columns) if preprocessor is not None else []
     feature_names = base_feature_names + cov_feature_names
+    if len(feature_names) != int(X.shape[1]):
+        raise ValueError(
+            "Generative feature name schema mismatch: "
+            f"names={len(feature_names)} matrix={int(X.shape[1])}"
+        )
     y_arr = np.asarray(y, dtype=np.int32)
 
     X_weighted = X * feature_weights.reshape(1, -1)
@@ -635,6 +651,7 @@ def train_generative_model(
         "observed_cancer_class_labels": observed_cancer_class_labels,
         "observed_anchor_strategy": observed_anchor_strategy,
         "observed_feature_order_fingerprint": observed_feature_order_fingerprint,
+        "selected_feature_names": list(feature_names),
         "selected_feature_count": int(len(feature_names)),
         "covariates_path": str(covariates_path) if covariates_path else None,
         "covariate_id_column": covariate_id_column,
@@ -656,6 +673,32 @@ def train_generative_model(
         "random_seed": int(random_seed),
         "calibrate": bool(calibrate),
     }
+    with open(out_dir / "generative-model-metadata.json", "w", encoding="utf-8") as f:
+        json.dump(meta, f, indent=2)
+
+    bundle_dir = resolve_model_bundle_dir(
+        Path(bundle_h5).expanduser().resolve().parent,
+        project_json=project_json,
+    )
+    train_frame = build_identity_feature_frame(
+        sample_ids=sample_ids,
+        class_index=y_arr,
+        class_names=class_names,
+        feature_matrix=X,
+        feature_names=feature_names,
+    )
+    write_model_datasets(
+        bundle_dir,
+        backend="generative_hybrid",
+        train_frame=train_frame,
+        test_frame=None,
+        extra_manifest={
+            "n_covariates": int(n_covariates),
+            "feature_mode": feature_mode_norm,
+        },
+    )
+    meta["train_dataset_path"] = str(train_dataset_path(bundle_dir))
+    meta["model_bundle_dir"] = str(bundle_dir)
     with open(out_dir / "generative-model-metadata.json", "w", encoding="utf-8") as f:
         json.dump(meta, f, indent=2)
     return model_path
@@ -962,5 +1005,47 @@ def predict_generative_model_from_project(
     if partition == "test":
         shutil.copy2(pred_csv, out_dir / "predictions.csv")
         shutil.copy2(metrics_path, out_dir / "validation_metrics.json")
+        try:
+            bundle_dir = resolve_model_bundle_dir(
+                meta.get("model_bundle_dir"),
+                project_json=project_json,
+            )
+            feat_names = [str(x) for x in (meta.get("selected_feature_names") or [])]
+            if feat_names and len(feat_names) == int(X.shape[1]) and y_true is not None:
+                test_frame = build_identity_feature_frame(
+                    sample_ids=sample_ids,
+                    class_index=y_true,
+                    class_names=class_names,
+                    feature_matrix=X,
+                    feature_names=feat_names,
+                )
+                train_path = train_dataset_path(bundle_dir)
+                test_path = test_dataset_path(bundle_dir)
+                write_dataset_frame(test_path, test_frame)
+                overlap: List[str] = []
+                if train_path.is_file():
+                    train_ids = set(
+                        read_dataset_frame(train_path)["sample_id"].astype(str)
+                    )
+                    test_ids = set(test_frame["sample_id"].astype(str))
+                    overlap = sorted(train_ids & test_ids)
+                    write_dataset_manifest(
+                        bundle_dir,
+                        backend="generative_hybrid",
+                        train_path=train_path,
+                        test_path=test_path,
+                        feature_columns=feat_names,
+                        train_test_overlap_count=int(len(overlap)),
+                        overlapping_sample_ids=overlap,
+                        extra={
+                            "n_covariates": int(
+                                cov.shape[1] if cov is not None else 0
+                            ),
+                            "feature_mode": feature_mode,
+                        },
+                    )
+                metrics["test_dataset_path"] = str(test_path)
+        except Exception as exc:
+            metrics["test_dataset_export_error"] = str(exc)
     return metrics
 

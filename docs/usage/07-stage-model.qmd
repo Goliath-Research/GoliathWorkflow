@@ -82,8 +82,9 @@ plus five standardized Neu-referenced ALR fractions (`CD8T`, `CD4T`, `NK`,
 `Bcell`, `Mono`). Declare composition groups with
 `covariate_composition_groups` (see the covariate contract in the
 [MethylValidation usage guide](../../packages/methylvalidation/docs/USAGE.md)).
-The exact matrices are saved under each run's `model_bundle/second_stage/`; its
-manifest records transform parameters and verifies zero train/test sample
+The exact matrices are saved under each run's `model_bundle/` as
+`train_dataset.parquet` / `test_dataset.parquet` (plus `dataset_manifest.json`);
+the manifest records transform parameters and verifies zero train/test sample
 overlap.
 
 ## Backend behavior
