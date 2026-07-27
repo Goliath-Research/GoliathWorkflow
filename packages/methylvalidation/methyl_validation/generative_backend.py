@@ -484,11 +484,17 @@ def train_generative_model(
         feature_weights = dmp_weights
 
     if feature_mode_norm == "observed_hybrid":
-        base_feature_names = list(observed_feature_names)
+        # Match the training matrix (quality columns are excluded from X_methyl).
+        base_feature_names = list(training_feature_names_obs)
     else:
         base_feature_names = [f"{c}:{ctx}:{int(pos)}" for c, ctx, pos in feature_order]
     cov_feature_names = list(preprocessor.output_columns) if preprocessor is not None else []
     feature_names = base_feature_names + cov_feature_names
+    if len(feature_names) != int(X.shape[1]):
+        raise ValueError(
+            "Generative feature name schema mismatch: "
+            f"names={len(feature_names)} matrix={int(X.shape[1])}"
+        )
     y_arr = np.asarray(y, dtype=np.int32)
 
     X_weighted = X * feature_weights.reshape(1, -1)
@@ -635,6 +641,7 @@ def train_generative_model(
         "observed_cancer_class_labels": observed_cancer_class_labels,
         "observed_anchor_strategy": observed_anchor_strategy,
         "observed_feature_order_fingerprint": observed_feature_order_fingerprint,
+        "selected_feature_names": list(feature_names),
         "selected_feature_count": int(len(feature_names)),
         "covariates_path": str(covariates_path) if covariates_path else None,
         "covariate_id_column": covariate_id_column,

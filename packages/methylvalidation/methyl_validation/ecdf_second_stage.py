@@ -418,6 +418,22 @@ def _probability_design(
     return alr_frame.to_numpy(dtype=np.float32), alr_names
 
 
+def _composition_alr_export_names(preprocessor: Any) -> set[str]:
+    """Canonical ALR names from frozen composition groups (same as tabular_sklearn)."""
+    names: set[str] = set()
+    for group in getattr(preprocessor, "composition_groups", []) or []:
+        columns = [str(c) for c in (group.get("columns") or [])]
+        if not columns:
+            continue
+        reference = str(group.get("reference") or columns[-1])
+        names.update(
+            f"alr_{column}_vs_{reference}"
+            for column in columns
+            if column != reference
+        )
+    return names
+
+
 def _second_stage_dataset_frame(
     *,
     predictions: pd.DataFrame,
@@ -458,11 +474,22 @@ def _second_stage_dataset_frame(
         no_standardize = set(
             getattr(preprocessor, "composition_no_standardize_columns", []) or []
         )
+        composition_alr = _composition_alr_export_names(preprocessor)
         standardized = bool(getattr(preprocessor, "standardize_numeric", False))
         for index, name in enumerate(output_columns):
-            is_std = standardized and name in (numeric | ordinal) and name not in no_standardize
-            prefix = "standardized_" if is_std else "transformed_"
-            data[f"{prefix}{name}"] = covariates[:, index].astype(float)
+            # Keep composition ALR names canonical (alr_<part>_vs_<ref>) so they
+            # match tabular_sklearn / covariate-preprocessor output_columns.
+            if name in composition_alr:
+                export_name = name
+            else:
+                is_std = (
+                    standardized
+                    and name in (numeric | ordinal)
+                    and name not in no_standardize
+                )
+                prefix = "standardized_" if is_std else "transformed_"
+                export_name = f"{prefix}{name}"
+            data[export_name] = covariates[:, index].astype(float)
 
     return pd.DataFrame(data).loc[np.asarray(valid_rows, dtype=bool)].reset_index(drop=True)
 

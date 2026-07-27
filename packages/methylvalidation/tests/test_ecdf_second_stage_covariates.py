@@ -280,11 +280,11 @@ def test_ecdf_second_stage_uses_one_logit_and_five_alr_features(
     test_dataset = pd.read_csv(dataset_dir / "test_dataset.csv")
     feature_columns = [
         "alr_prob_class1_vs_prob_class0",
-        "standardized_alr_CD8T_vs_Neu",
-        "standardized_alr_CD4T_vs_Neu",
-        "standardized_alr_NK_vs_Neu",
-        "standardized_alr_Bcell_vs_Neu",
-        "standardized_alr_Mono_vs_Neu",
+        "alr_CD8T_vs_Neu",
+        "alr_CD4T_vs_Neu",
+        "alr_NK_vs_Neu",
+        "alr_Bcell_vs_Neu",
+        "alr_Mono_vs_Neu",
     ]
     assert train_dataset.columns.tolist() == [
         "sample_id",

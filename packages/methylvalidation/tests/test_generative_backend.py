@@ -376,6 +376,85 @@ def test_generative_covariate_preprocessor_written(tmp_path: Path, monkeypatch):
     assert (model_dir / "covariate-preprocessor.json").is_file()
 
 
+def test_generative_composition_alr_uses_canonical_feature_names(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Cell-fraction ALR names must match tabular/ECDF: alr_<part>_vs_<ref>."""
+    det = tmp_path / "detections" / "healthy" / "pca1"
+    _write_detector_dmps(det)
+    monkeypatch.setattr(model_bundle, "load_project", lambda _p: _StubProjectBinary(det))
+    bundle_dir = tmp_path / "bundle"
+    model_bundle.build_model_feature_bundle(tmp_path / "project.json", bundle_dir)
+
+    monkeypatch.setattr(generative_backend, "load_project", lambda _p: _StubProjectBinary(det))
+    monkeypatch.setattr(
+        generative_backend.MethylCentroidPair,
+        "extract_methylation_fractions",
+        _fake_extract,
+    )
+    columns = ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"]
+    rows = []
+    for i, sid in enumerate(["S1", "S2", "S3", "S4"]):
+        cd8 = 0.05 + 0.01 * i
+        cd4 = 0.15 + 0.01 * i
+        nk = 0.04
+        bcell = 0.03
+        mono = 0.10
+        neu = 1.0 - (cd8 + cd4 + nk + bcell + mono)
+        rows.append(
+            {
+                "sample_id": sid,
+                "CD8T": cd8,
+                "CD4T": cd4,
+                "NK": nk,
+                "Bcell": bcell,
+                "Mono": mono,
+                "Neu": neu,
+            }
+        )
+    cov_csv = tmp_path / "cell_fractions.csv"
+    pd.DataFrame(rows).to_csv(cov_csv, index=False)
+    model_dir = tmp_path / "model"
+    generative_backend.train_generative_model(
+        project_json=tmp_path / "project.json",
+        bundle_h5=bundle_dir / "model_feature_bundle.h5",
+        output_dir=model_dir,
+        covariates_path=str(cov_csv),
+        covariates_strict_join=True,
+        covariate_composition_groups=[
+            {
+                "name": "cell_fractions",
+                "columns": columns,
+                "reference": "Neu",
+                "pseudocount": 1e-6,
+            }
+        ],
+    )
+    prep = json.loads(
+        (model_dir / "covariate-preprocessor.json").read_text(encoding="utf-8")
+    )
+    expected_alr = [
+        "alr_CD8T_vs_Neu",
+        "alr_CD4T_vs_Neu",
+        "alr_NK_vs_Neu",
+        "alr_Bcell_vs_Neu",
+        "alr_Mono_vs_Neu",
+    ]
+    assert prep["output_columns"] == expected_alr
+    assert all(not c.startswith("standardized_") for c in prep["output_columns"])
+    meta = json.loads(
+        (model_dir / "generative-model-metadata.json").read_text(encoding="utf-8")
+    )
+    assert meta["n_covariates"] == 5
+    assert meta["selected_feature_count"] == meta["n_features"]
+    selected = meta["selected_feature_names"]
+    assert selected[-5:] == expected_alr
+    assert len(selected) == meta["n_features"]
+    report = meta["covariate_preprocessing"]
+    assert report["composition_transform"] == "alr"
+    assert report["composition_output_columns"] == expected_alr
+
+
 def test_pipeline_runner_generative_backend_dispatch(tmp_path: Path, monkeypatch):
     def _fake_bundle(**kwargs):
         out_dir = Path(kwargs["output_dir"])
@@ -588,6 +667,10 @@ def test_generative_observed_hybrid_train_predict_schema_parity(tmp_path: Path, 
     assert training_names
     assert quality_names
     assert {"obs_fraction", "n_obs_dmps", "n_total_dmps"}.issubset(set(quality_names))
+    # selected_feature_names must match the training matrix (not full observed + quality).
+    assert meta["selected_feature_count"] == meta["n_features"]
+    assert meta["selected_feature_names"] == list(training_names)
+    assert set(quality_names).isdisjoint(set(meta["selected_feature_names"]))
     assert float(meta.get("observed_hist_eps", 0.0)) > 0.0
     assert float(meta.get("observed_hist_alpha", -1.0)) >= 0.0
     assert float(meta.get("observed_hist_evidence_clip_cap", -1.0)) >= 0.0
