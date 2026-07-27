@@ -134,6 +134,75 @@ def test_with_backend_selection_resyncs_runtime_fields():
     assert switched.tabular_max_dmps == 7777
 
 
+def _cell_fraction_composition_group(*, name: str = "cell_fractions") -> dict:
+    return {
+        "name": name,
+        "columns": ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"],
+        "reference": "Neu",
+        "pseudocount": 1e-6,
+        "standardize": True,
+    }
+
+
+def test_composition_groups_resolve_from_active_backend_not_ecdf_only():
+    """ALR groups live per-backend; tabular must not read empty ecdf.params."""
+    tabular_group = _cell_fraction_composition_group(name="tabular_cf")
+    generative_group = _cell_fraction_composition_group(name="generative_cf")
+    ecdf_group = _cell_fraction_composition_group(name="ecdf_cf")
+
+    payload = _base_payload()
+    payload["backend_profiles"]["ecdf"] = {
+        "enabled": True,
+        "params": {"covariate_composition_groups": [ecdf_group]},
+    }
+    payload["backend_profiles"]["tabular_sklearn"] = {
+        "enabled": True,
+        "params": {
+            "tabular_methods": [{"method": "logistic_regression", "params": {}}],
+            "covariate_composition_groups": [tabular_group],
+        },
+    }
+    payload["backend_profiles"]["generative_hybrid"] = {
+        "enabled": True,
+        "params": {"covariate_composition_groups": [generative_group]},
+    }
+    cfg = MonteCarloConfig.model_validate(payload)
+
+    tab = cfg.with_backend_selection("tabular_sklearn")
+    assert tab.covariate_composition_groups is not None
+    assert len(tab.covariate_composition_groups) == 1
+    assert tab.covariate_composition_groups[0].name == "tabular_cf"
+    assert tab.covariate_composition_groups[0].reference == "Neu"
+
+    gen = cfg.with_backend_selection("generative_hybrid")
+    assert gen.covariate_composition_groups is not None
+    assert gen.covariate_composition_groups[0].name == "generative_cf"
+
+    ecdf = cfg.with_backend_selection("ecdf")
+    assert ecdf.covariate_composition_groups is not None
+    assert ecdf.covariate_composition_groups[0].name == "ecdf_cf"
+
+
+def test_tabular_composition_groups_not_lost_when_ecdf_omits_them():
+    tabular_group = _cell_fraction_composition_group()
+    payload = _base_payload()
+    payload["backend_profiles"]["ecdf"] = {"enabled": False, "params": {}}
+    payload["backend_profiles"]["tabular_sklearn"] = {
+        "enabled": True,
+        "params": {
+            "tabular_methods": [{"method": "random_forest", "params": {}}],
+            "covariate_composition_groups": [tabular_group],
+        },
+    }
+    payload["backend_profiles"]["generative_hybrid"]["enabled"] = False
+    cfg = MonteCarloConfig.model_validate(payload)
+    tab = cfg.with_backend_selection("tabular_sklearn")
+    groups = tab.covariate_composition_groups
+    assert groups is not None and len(groups) == 1
+    assert groups[0].columns == ["CD8T", "CD4T", "NK", "Bcell", "Mono", "Neu"]
+    assert groups[0].reference == "Neu"
+
+
 def test_update_backend_params_resyncs_runtime_fields():
     payload = _base_payload()
     payload["backend_profiles"]["ecdf"]["enabled"] = False

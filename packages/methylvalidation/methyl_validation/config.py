@@ -1690,13 +1690,10 @@ class MonteCarloConfig(BaseModel):
             "ecdf_second_stage_probability_epsilon",
             "ecdf_aggregated_enabled",
             "ecdf_aggregated_n_bins",
-            "covariate_composition_transform",
-            "covariate_composition_columns",
-            "covariate_composition_reference",
-            "covariate_composition_pseudocount",
-            "covariate_composition_groups",
         }:
             return getattr(self.backend_profiles.ecdf.params, name)
+        # covariate_composition_* (ALR) resolve from the active backend — same as
+        # covariates_path — so tabular/generative composition groups are not ignored.
         return getattr(self.get_backend_params(self.model_backend), name)
 
     def __getattr__(self, item: str) -> Any:
