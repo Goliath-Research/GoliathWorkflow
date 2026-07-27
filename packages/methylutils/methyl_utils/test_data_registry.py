@@ -180,6 +180,29 @@ class SamplePrepCanaryThresholds(BaseModel):
         default=None,
         description="When true, methylGrapher must emit non-empty patterns.h5 sidecars.",
     )
+    alignment_time_ratio_max: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Max allowed (pangenome_wgbs alignment_ms / linear alignment_ms). "
+            "Operator-set cost gate for the dual-mode compare experiment."
+        ),
+    )
+    cpg_coverage_min_fraction_of_linear: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Minimum pangenome_wgbs CpG weighted-mean coverage as a fraction of linear. "
+            "Hypothesis: usable CpG read support should not collapse vs linear."
+        ),
+    )
+    cpg_depth_thresholds: Optional[List[int]] = Field(
+        default=None,
+        description=(
+            "Operator-set coverage depths for optional H5 fraction-of-CpGs stats "
+            "(e.g. [1, 5, 10]). Empty/unset skips H5 depth fractions."
+        ),
+    )
 
 
 class SamplePrepCanaryAssetPins(BaseModel):

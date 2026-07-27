@@ -1,0 +1,10 @@
+{
+  "mapping_rate_delta": 0.10,
+  "duplication_rate_delta": 0.10,
+  "cpg_sites_min_fraction_of_linear": 0.75,
+  "cpg_coverage_min_fraction_of_linear": 0.75,
+  "mean_coverage_delta": 25.0,
+  "alignment_time_ratio_max": 10.0,
+  "require_extraction_qc_pass": true,
+  "cpg_depth_thresholds": [1, 5, 10]
+}

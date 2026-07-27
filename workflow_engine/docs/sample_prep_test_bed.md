@@ -148,6 +148,80 @@ bash scripts/smoke_sample_prep_real.sh --tier full
 Retain qualification JSON/JUnit/Markdown under the canary report directory for longitudinal
 comparison. NVIDIA does not publish a WGBS FASTQ fixture; GSE261315 is the citable public source.
 
+## Linear vs pangenome_wgbs comparison (experiment-only)
+
+Use this when evaluating whether methylGrapher WGBS improves usable CpG read support vs linear
+on real lab samples (plasma + buffy), with alignment wall time as a cost metric.
+
+| Piece | Path |
+|-------|------|
+| Runner | `bash scripts/compare_sample_prep_linear_vs_wgbs.sh` |
+| Core | [`ops/sample_prep_mode_compare.py`](../ops/sample_prep_mode_compare.py) |
+| Helpers | [`packages/methylutils/.../sample_prep_mode_compare.py`](../../packages/methylutils/methyl_utils/testing/sample_prep_mode_compare.py) |
+| Example inputs | [`tests/real_data/sample_prep_mode_compare/`](../../tests/real_data/sample_prep_mode_compare/) |
+| Reports | `/work/samples/_comparisons/<stamp>/` (+ `latest` symlink) |
+
+### Layout (lab/QNAP FASTQ root + temporary mode trees)
+
+Laboratories and QNAP store FASTQs **directly under** `/work/samples/<sampleId>/` — there is
+**no** `/fastq` child folder. Keep that contract.
+
+`linear/` and `pangenome_wgbs/` exist **only for this dual-align experiment** so both BAM/QC/H5
+trees can coexist. They are **not** a new production or lab/QNAP convention. Once one mode wins
+consistently, return to a single flat `/work/samples/<sampleId>/` tree.
+
+```text
+/work/samples/<sampleId>/
+  <sampleId>_1.fastq.gz          # shared; same layout as QNAP / lab delivery
+  <sampleId>_2.fastq.gz
+  linear/                        # experiment-only: BAM, QC, H5, manifests
+  pangenome_wgbs/                # experiment-only: BAM/GAF, QC, H5, manifests
+```
+
+### Run
+
+```bash
+source .venv/bin/activate
+unset WORKER_STUB_EXTERNAL
+
+# Plan four start payloads (2 samples × 2 modes) without touching the DB:
+bash scripts/compare_sample_prep_linear_vs_wgbs.sh --dry-run
+
+# One-time root FASTQ download from lab storage, then both arms:
+bash scripts/compare_sample_prep_linear_vs_wgbs.sh \
+  --fastq-storage-json /path/to/lab_fastq_storage.json \
+  --thresholds-json tests/real_data/sample_prep_mode_compare/thresholds.example.json
+
+# Or when non-empty root FASTQs already exist:
+bash scripts/compare_sample_prep_linear_vs_wgbs.sh \
+  --reuse-local-fastq \
+  --thresholds-json tests/real_data/sample_prep_mode_compare/thresholds.example.json
+```
+
+Each arm sets `sampleDir` to the mode subdirectory, `alignmentMode` accordingly, and
+`deleteFastqs: false`. Root FASTQs are hardlinked into the mode dir before start so aligners
+see them without a second cloud pull.
+
+### No-archive until after review
+
+Starts **omit** `sampleStorage` / `sampleDestination`. `sample.archive_sample` then skips with
+`archiveSkipped=true` (does not overwrite QNAP). Do **not** archive mid-experiment.
+
+### Promote / archive the winning arm
+
+After reviewing `/work/samples/_comparisons/latest/comparison.md`:
+
+1. Copy or move the winning mode tree’s BAM/QC/H5/manifests up to the flat sample root (or
+   re-run SamplePrep once with `alignmentMode` set to the winner and `sampleDir` =
+   `/work/samples/<sampleId>/`).
+2. Start a normal SamplePrep (or archive-only path) **with** `sampleStorage` so QNAP receives a
+   single arm.
+3. Remove the unused experiment mode subdirectory when no longer needed.
+
+Hypothesis framing in the report: **pangenome_wgbs improves usable read support at CpG
+positions** (coverage/site yield); alignment runtime is a cost metric — not a stock-Giraffe
+methylation-biology claim.
+
 ## QC outcomes
 
 After `sample.methyl_qc`, scope receives:

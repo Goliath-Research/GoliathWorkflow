@@ -410,6 +410,39 @@ def compare_linear_vs_wgbs(
                 f"fraction={frac:.4f} min={thr.cpg_sites_min_fraction_of_linear}",
             )
         )
+
+    if (
+        thr.cpg_coverage_min_fraction_of_linear is not None
+        and cov_l is not None
+        and cov_w is not None
+        and cov_l > 0
+    ):
+        frac = cov_w / cov_l
+        checks.append(
+            CheckResult(
+                "cpg_coverage_min_fraction_of_linear",
+                frac >= float(thr.cpg_coverage_min_fraction_of_linear),
+                f"fraction={frac:.4f} min={thr.cpg_coverage_min_fraction_of_linear}",
+            )
+        )
+
+    time_l = _num(linear, "alignment_duration_ms")
+    time_w = _num(wgbs, "alignment_duration_ms")
+    if (
+        thr.alignment_time_ratio_max is not None
+        and time_l is not None
+        and time_w is not None
+        and time_l > 0
+    ):
+        ratio = time_w / time_l
+        checks.append(
+            CheckResult(
+                "alignment_time_ratio_max",
+                ratio <= float(thr.alignment_time_ratio_max),
+                f"ratio={ratio:.4f} max={thr.alignment_time_ratio_max} "
+                f"linear_ms={time_l:.0f} wgbs_ms={time_w:.0f}",
+            )
+        )
     return checks
 
 

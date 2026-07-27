@@ -1,0 +1,42 @@
+{
+  "samples": [
+    {
+      "sampleId": "DPLST-051425-111148",
+      "primaryAnalyte": "cfdna",
+      "projectPath": "/work/projects/prostate-cancer/configs/project_Plasma_healthy_vs_PCa.json",
+      "pipelineProcedure": "cfdna_wgbs_plasma",
+      "libraryProtocol": "wgbs_linear",
+      "fastqPrefix": "DPLST-051425-111148/"
+    },
+    {
+      "sampleId": "DBCST-051425-111148",
+      "primaryAnalyte": "buffy_coat",
+      "projectPath": "/work/projects/prostate-cancer/configs/project_Buffy_healthy_vs_PCa.json",
+      "pipelineProcedure": "buffy_wgbs_linear_gene_fc",
+      "libraryProtocol": "wgbs_linear",
+      "fastqPrefix": "DBCST-051425-111148/"
+    }
+  ],
+  "thresholds_example": {
+    "mapping_rate_delta": 0.05,
+    "duplication_rate_delta": 0.05,
+    "cpg_sites_min_fraction_of_linear": 0.8,
+    "cpg_coverage_min_fraction_of_linear": 0.8,
+    "mean_coverage_delta": 10.0,
+    "alignment_time_ratio_max": 5.0,
+    "require_extraction_qc_pass": true,
+    "cpg_depth_thresholds": [1, 5, 10]
+  },
+  "fastq_storage_example": {
+    "type": "s3",
+    "bucket": "lab-fastq-bucket",
+    "endpointUrl": "https://s3.example.example",
+    "region": "us-east-1",
+    "credentials": { "authMode": "access_key", "credentialRef": "lab-fastq" }
+  },
+  "notes": [
+    "FASTQs download once to /work/samples/<sampleId>/ (no /fastq child).",
+    "linear/ and pangenome_wgbs/ are experiment-only mode trees.",
+    "Omit sampleStorage on starts; archive the winning arm after review."
+  ]
+}
