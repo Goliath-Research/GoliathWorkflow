@@ -442,9 +442,31 @@ def _extractor_bin(cfg: MethylExtractConfig) -> str:
     return found
 
 
+def _extractor_supports_read_level(bin_path: str) -> bool:
+    """Return True when ``MethylExtractor --help`` documents ``--read-level``.
+
+    Older aarch64 builds on some workers omit the flag; asking for it aborts
+    extraction with ``unrecognized option``. Probe help text rather than
+    hard-coding version strings.
+    """
+    try:
+        proc = subprocess.run(
+            [bin_path, "--help"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    help_text = f"{proc.stdout or ''}\n{proc.stderr or ''}"
+    return "--read-level" in help_text
+
+
 def build_methyl_extractor_command(cfg: MethylExtractConfig, paths: MethylExtractPaths) -> List[str]:
+    bin_path = _extractor_bin(cfg)
     cmd: List[str] = [
-        _extractor_bin(cfg),
+        bin_path,
     ]
     if cfg.threads is not None:
         cmd.append(f"--threads={cfg.threads}")
@@ -469,9 +491,16 @@ def build_methyl_extractor_command(cfg: MethylExtractConfig, paths: MethylExtrac
     if cfg.split:
         cmd.append("--split")
     if cfg.read_level:
-        cmd.append("--read-level")
-        if cfg.tile_size is not None:
-            cmd.append(f"--tile-size={int(cfg.tile_size)}")
+        if _extractor_supports_read_level(bin_path):
+            cmd.append("--read-level")
+            if cfg.tile_size is not None:
+                cmd.append(f"--tile-size={int(cfg.tile_size)}")
+        else:
+            logger.warning(
+                "methyl_extract.read_level requested but %s has no --read-level; "
+                "emitting marginal H5 only (upgrade MethylExtractor for patterns)",
+                bin_path,
+            )
     cmd.append(f"--output-dir={paths.sample_dir}")
     cmd.append(str(paths.bam_path))
     # With --output-dir set, MethylExtractor treats the next positional as ref.fa only

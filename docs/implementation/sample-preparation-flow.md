@@ -272,7 +272,7 @@ When instance/profile/procedure sets `alignmentMode: "pangenome_wgbs"` (scope `u
    - **Do not surject the methylGrapher GAF.** methylGrapher maps with `vg giraffe --named-coordinates`, so the GAF path column holds GFA *segment* names, while `vg surject -G` reads that column as vg *node* IDs. The lengths disagree and vg aborts (`cur_offset < cur_len` assertion in `gaf_to_alignment`, signal 6). The GAF stays the input for `MethylCall`, which expects named coordinates.
    - QC needs one best alignment per read, so only the primary R1-C2T/R2-G2A pass is re-mapped; methylation calls still use every methylGrapher pass.
 4. **Restore original read sequences/qualities** on the BAM (converted bases are not suitable for downstream QC as-is).
-5. `samtools sort` → `markdup` → `index`; emit Picard-like `{sample_id}.deduplicate_metrics.txt` + `{sample_id}.qc-metrics.tar` so **`sample.methyl_qc` is unchanged**.
+5. `samtools fixmate -m` (on the name-ordered restored BAM) → `sort` → `markdup` → `index`; emit Picard-like `{sample_id}.deduplicate_metrics.txt` + `{sample_id}.qc-metrics.tar` so **`sample.methyl_qc` is unchanged**. Giraffe BAMs lack the MC tag that `markdup` requires, so fixmate is mandatory.
 6. Write `{sample_id}.alignment_metrics.json` with tool/image pins and **asset fingerprints** (partial SHA256) for CAAS provenance.
 
 **Extract (graph-aware):** `methylGrapher MethylCall` + `MergeCpG` → linear-coordinate CpG TSV → `{chr}-CG.h5` + optional `{chr}-CG.patterns.h5`. The extraction manifest uses the **canonical** `metadata` / `summary` / `per_chromosome` shape expected by `methyl_extraction_qc` (plus methylGrapher provenance). Read-filtering stats are omitted when unavailable so the discard-fraction guardrail reports a skipped check.

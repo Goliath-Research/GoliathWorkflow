@@ -18,8 +18,9 @@ Full depth for plasma `DPLST-051425-111148` is 349.3M read pairs, so the arms ru
 | Retry QC task rejected its own input | `MethylQcTaskInput.remediationTrigger` typed `str` while programs pass an object | `RemediationTrigger` model in `workers/methyl_worker/task_models/sample_prep_models.py` |
 | `vg surject` aborted on the methylGrapher GAF (signal 6, empty BAM) | methylGrapher maps with `vg giraffe --named-coordinates`, so the GAF path column holds GFA **segment** names; `vg surject -G` reads it as vg **node** IDs. Node `57658665` is 3 bp in the graph while the GAF claims a 1202 bp path, tripping the `cur_offset < cur_len` assertion in `gaf_to_alignment` | Build the QC BAM from a dedicated `vg giraffe -o BAM --ref-paths` C2T pass over freshly converted reads (`build_qc_bam_command`); the GAF stays untouched for `MethylCall`, which needs named coordinates |
 | Comparison arms overwrote each other's QC | `methyl_qc` wrote only to `alignment_qc/<sampleId>.json`, keyed by sample id alone | `methyl_qc` also mirrors `<sampleId>.alignment_qc.json` into the sample dir — which is the file the compare validator already looked for |
+| `samtools markdup` aborted after the giraffe QC BAM | giraffe BAMs have no MC tag | insert `samtools fixmate -m` on the name-ordered restored BAM before coordinate-sort / markdup |
 
-Re-running the align action now reuses an existing non-empty GAF, so a QC-BAM failure no longer costs another full dual-graph mapping.
+Re-running the align action now reuses an existing non-empty GAF (and, when present, the giraffe / restored BAM), so a QC-BAM or markdup failure no longer costs another full dual-graph mapping.
 
 Guardrail outcome on the subset (linear arm): `min_quality_post20` 27.23 failed, screening asked for a 5 bp R2 front trim, and the post-trim realignment cleared it. `properly_paired_rate` 0.88996 is a library/insert-size property that trimming cannot fix, so this study sets `alignment_guardrails.min_properly_paired_rate: 0.80` at the site layer — otherwise neither arm reaches extraction and there are no CpG metrics to compare.
 

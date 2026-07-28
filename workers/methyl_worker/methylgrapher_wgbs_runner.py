@@ -437,18 +437,99 @@ def _clear_alignment_outputs(sample_dir: Path, sample_id: str) -> None:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def _write_dedup_metrics(path: Path, sample_id: str, *, n_reads: int = 0) -> None:
-    # Picard-like header so methyl_qc can parse duplication rate when present.
+def _write_dedup_metrics(
+    path: Path,
+    sample_id: str,
+    *,
+    unpaired_examined: int = 0,
+    read_pairs_examined: int = 0,
+    unmapped_reads: int = 0,
+    unpaired_duplicates: int = 0,
+    read_pair_duplicates: int = 0,
+    optical_duplicates: int = 0,
+    percent_duplication: float = 0.0,
+) -> None:
+    """Write a Picard-shaped duplication metrics file methyl_qc can parse.
+
+    The parser requires a ``METRICS CLASS`` header; a bare TSV is ignored and
+    ``process_samples_to_qc_jsons`` then silently writes nothing.
+    """
     path.write_text(
         "## methylGrapher WGBS QC BAM mark-duplicates metrics\n"
-        f"# sample={sample_id}\n"
+        f"## sample={sample_id}\n"
+        "## METRICS CLASS\tpicard.sam.DuplicationMetrics\n"
         "LIBRARY\tUNPAIRED_READS_EXAMINED\tREAD_PAIRS_EXAMINED\t"
         "SECONDARY_OR_SUPPLEMENTARY_RDS\tUNMAPPED_READS\tUNPAIRED_READ_DUPLICATES\t"
         "READ_PAIR_DUPLICATES\tREAD_PAIR_OPTICAL_DUPLICATES\tPERCENT_DUPLICATION\t"
         "ESTIMATED_LIBRARY_SIZE\n"
-        f"Unknown\t0\t{max(n_reads, 0)}\t0\t0\t0\t0\t0\t0.0\t0\n",
+        f"Unknown\t{unpaired_examined}\t{read_pairs_examined}\t0\t{unmapped_reads}\t"
+        f"{unpaired_duplicates}\t{read_pair_duplicates}\t{optical_duplicates}\t"
+        f"{percent_duplication:.6f}\t0\n",
         encoding="utf-8",
     )
+
+
+def _dedup_metrics_from_markdup_stderr(stderr: str) -> Dict[str, float | int]:
+    """Parse ``samtools markdup -s`` summary lines into Picard-ish counts."""
+    stats: Dict[str, float | int] = {
+        "unpaired_examined": 0,
+        "read_pairs_examined": 0,
+        "unmapped_reads": 0,
+        "unpaired_duplicates": 0,
+        "read_pair_duplicates": 0,
+        "optical_duplicates": 0,
+        "percent_duplication": 0.0,
+    }
+    written = 0
+    dup_pair = 0
+    dup_single = 0
+    for line in stderr.splitlines():
+        if ":" not in line:
+            continue
+        key, _, rest = line.partition(":")
+        key = key.strip().upper()
+        try:
+            value = int(rest.strip().split()[0])
+        except (ValueError, IndexError):
+            continue
+        if key == "WRITTEN":
+            written = value
+        elif key == "DUPLICATE PAIR":
+            dup_pair = value
+        elif key == "DUPLICATE SINGLE":
+            dup_single = value
+        elif key == "DUPLICATE PAIR OPTICAL":
+            stats["optical_duplicates"] = value
+    # markdup -s reports per-read WRITTEN; approximate pair counts for Picard.
+    stats["read_pairs_examined"] = max(written // 2, 0)
+    stats["read_pair_duplicates"] = dup_pair
+    stats["unpaired_duplicates"] = dup_single
+    examined = max(int(stats["read_pairs_examined"]), 1)
+    stats["percent_duplication"] = float(dup_pair) / float(examined)
+    return stats
+
+
+def _run_capturing_stderr(
+    cmd: Sequence[str],
+    log_path: Path,
+    *,
+    step: str,
+) -> str:
+    """Like :func:`_run` but return decoded stderr (for markdup -s summaries)."""
+    logger.info("%s: %s", step, " ".join(shlex.quote(c) for c in cmd))
+    _append_log(log_path, "COMMAND: " + " ".join(shlex.quote(c) for c in cmd))
+    proc = subprocess.run(list(cmd), capture_output=True, text=True, check=False)
+    if proc.stdout:
+        _append_log(log_path, f"[{step}] stdout:\n{proc.stdout}")
+    if proc.stderr:
+        _append_log(log_path, f"[{step}] stderr:\n{proc.stderr}")
+    if proc.returncode != 0:
+        raise RuntimeError(
+            proc.stderr.strip()
+            or proc.stdout.strip()
+            or f"methylGrapher step {step} failed (rc={proc.returncode})"
+        )
+    return proc.stderr or ""
 
 
 def _fastq_base_name(header_name: str) -> str:
@@ -721,7 +802,7 @@ def run_methylgrapher_wgbs_align(
         # Minimal BAM placeholder is not valid for samtools; write empty file + metrics.
         bam_path.write_bytes(b"")
         conversion_report.write_text("dry_run=1\n", encoding="utf-8")
-        _write_dedup_metrics(dedup_path, sample_id, n_reads=0)
+        _write_dedup_metrics(dedup_path, sample_id)
     else:
         image = _resolve_image(bundle)
         # Mount sample + genome roots covering C2T/G2A/linear assets.
@@ -768,60 +849,84 @@ def run_methylgrapher_wgbs_align(
                 "methylGrapher pass",
                 sample_id,
             )
-        c2t_r1 = work_dir / f"{sample_id}.C2T.R1.fastq"
-        g2a_r2 = work_dir / f"{sample_id}.G2A.R2.fastq"
-        _write_bs_converted_fastq(
-            fq1, c2t_r1, base_from="C", base_to="T", log_path=log_path
-        )
-        _write_bs_converted_fastq(
-            fq2, g2a_r2, base_from="G", base_to="A", log_path=log_path
-        )
+
         qc_bam = work_dir / f"{sample_id}.giraffe.bam"
-        qc_bam_cmd = build_qc_bam_command(
-            bundle=bundle,
-            fq1_c2t=c2t_r1,
-            fq2_g2a=g2a_r2,
-            threads=bundle.threads,
-        )
-        docker_qc_bam = [
-            _docker_bin(),
-            "run",
-            "--rm",
-            "--user",
-            f"{os.getuid()}:{os.getgid()}",
-        ]
-        for root in sorted(mount_roots | {bundle.ref_paths.parent.resolve()}, key=str):
-            docker_qc_bam.extend(["-v", f"{root}:{root}"])
-        docker_qc_bam.extend([image, *qc_bam_cmd])
-        # giraffe -o BAM writes to stdout; redirect as binary (never text capture).
-        _run(docker_qc_bam, log_path, step="vg.giraffe_qc_bam", stdout_path=qc_bam)
-        for converted in (c2t_r1, g2a_r2):
-            converted.unlink(missing_ok=True)
-
         restored = work_dir / f"{sample_id}.restored.bam"
-        _restore_original_sequences(qc_bam, fq1, fq2, restored, log_path)
+        if restored.is_file() and restored.stat().st_size > 0:
+            # Resume after a failed fixmate/markdup: keep the name-ordered BAM.
+            logger.info("Reusing restored QC BAM for %s", sample_id)
+            _append_log(log_path, f"REUSE: existing restored BAM {restored}")
+        else:
+            if qc_bam.is_file() and qc_bam.stat().st_size > 0:
+                logger.info("Reusing giraffe QC BAM for %s", sample_id)
+                _append_log(log_path, f"REUSE: existing giraffe BAM {qc_bam}")
+            else:
+                c2t_r1 = work_dir / f"{sample_id}.C2T.R1.fastq"
+                g2a_r2 = work_dir / f"{sample_id}.G2A.R2.fastq"
+                _write_bs_converted_fastq(
+                    fq1, c2t_r1, base_from="C", base_to="T", log_path=log_path
+                )
+                _write_bs_converted_fastq(
+                    fq2, g2a_r2, base_from="G", base_to="A", log_path=log_path
+                )
+                qc_bam_cmd = build_qc_bam_command(
+                    bundle=bundle,
+                    fq1_c2t=c2t_r1,
+                    fq2_g2a=g2a_r2,
+                    threads=bundle.threads,
+                )
+                docker_qc_bam = [
+                    _docker_bin(),
+                    "run",
+                    "--rm",
+                    "--user",
+                    f"{os.getuid()}:{os.getgid()}",
+                ]
+                for root in sorted(
+                    mount_roots | {bundle.ref_paths.parent.resolve()}, key=str
+                ):
+                    docker_qc_bam.extend(["-v", f"{root}:{root}"])
+                docker_qc_bam.extend([image, *qc_bam_cmd])
+                # giraffe -o BAM writes to stdout; redirect as binary.
+                _run(
+                    docker_qc_bam, log_path, step="vg.giraffe_qc_bam", stdout_path=qc_bam
+                )
+                for converted in (c2t_r1, g2a_r2):
+                    converted.unlink(missing_ok=True)
 
-        sorted_bam = work_dir / f"{sample_id}.sorted.bam"
+            _restore_original_sequences(qc_bam, fq1, fq2, restored, log_path)
+
+        # Restored BAM is name-ordered (merge-join walks a -N sorted stream).
+        # fixmate must see that order so markdup gets the MC/ms tags it needs.
+        fixed = work_dir / f"{sample_id}.fixmate.bam"
         _run(
             [
                 "samtools",
-                "sort",
-                "-o",
-                str(sorted_bam),
+                "fixmate",
+                "-m",
                 str(restored if restored.is_file() else qc_bam),
+                str(fixed),
             ],
+            log_path,
+            step="samtools.fixmate",
+        )
+        sorted_bam = work_dir / f"{sample_id}.sorted.bam"
+        _run(
+            ["samtools", "sort", "-o", str(sorted_bam), str(fixed)],
             log_path,
             step="samtools.sort",
         )
         marked = work_dir / f"{sample_id}.markdup.bam"
-        _run(
+        markdup_stderr = _run_capturing_stderr(
             ["samtools", "markdup", "-s", str(sorted_bam), str(marked)],
             log_path,
             step="samtools.markdup",
         )
         shutil.copy2(marked, bam_path)
         _run(["samtools", "index", str(bam_path)], log_path, step="samtools.index")
-        _write_dedup_metrics(dedup_path, sample_id)
+        _write_dedup_metrics(
+            dedup_path, sample_id, **_dedup_metrics_from_markdup_stderr(markdup_stderr)
+        )
         # Capture conversion / mapping reports if present.
         for report in work_dir.glob("*report*"):
             if report.is_file():
