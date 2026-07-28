@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import statistics
 from typing import Any, Dict, Iterable, List, Optional
 
 from .manifest import contexts_extracted
@@ -164,6 +165,7 @@ def evaluate_guardrails(
         if mean_cov is not None:
             autosomal_coverages.append(mean_cov)
 
+    median_coverage: Optional[float] = None
     if len(autosomal_coverages) < 2:
         uniformity_ratio = None
         uniformity_pass = True
@@ -172,10 +174,9 @@ def evaluate_guardrails(
             "chromosomes were evaluated."
         )
     else:
-        autosomal_coverages.sort()
-        median = autosomal_coverages[len(autosomal_coverages) // 2]
-        minimum = autosomal_coverages[0]
-        uniformity_ratio = minimum / median if median > 0 else 0.0
+        median_coverage = statistics.median(autosomal_coverages)
+        minimum = min(autosomal_coverages)
+        uniformity_ratio = minimum / median_coverage if median_coverage > 0 else 0.0
         uniformity_pass = uniformity_ratio >= config.min_autosomal_coverage_uniformity_ratio
         uniformity_message = (
             "Autosomal CpG mean coverage should be uniform across chromosomes. "
@@ -187,11 +188,9 @@ def evaluate_guardrails(
             "min_autosomal_mean_coverage": round(min(autosomal_coverages), 4)
             if autosomal_coverages
             else None,
-            "median_autosomal_mean_coverage": round(
-                autosomal_coverages[len(autosomal_coverages) // 2], 4
-            )
-            if len(autosomal_coverages) >= 2
-            else None,
+            "median_autosomal_mean_coverage": (
+                round(median_coverage, 4) if median_coverage is not None else None
+            ),
             "min_over_median": round(uniformity_ratio, 4) if uniformity_ratio is not None else None,
         },
         normal_range=f">= {config.min_autosomal_coverage_uniformity_ratio}",

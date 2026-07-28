@@ -84,6 +84,30 @@ def test_evaluate_guardrails_fails_high_chh() -> None:
     assert report["metrics"]["chh_methylation_level"]["pass"] is False
 
 
+def test_chromosome_uniformity_median_averages_middle_pair() -> None:
+    manifest = _manifest_fixture()
+    # Four autosomes → median is the mean of the two middle coverages (12, 14).
+    manifest["per_chromosome"] = {
+        chrom: {
+            "CG": {
+                "num_positions": 1000,
+                "methylation_level": 0.6,
+                "mean_coverage": cov,
+            }
+        }
+        for chrom, cov in {"1": 10.0, "2": 12.0, "3": 14.0, "4": 20.0}.items()
+    }
+    report = evaluate_guardrails(
+        manifest,
+        config=ExtractionQCGuardrailConfig(),
+        expected_chromosomes=["1", "2", "3", "4"],
+    )
+    value = report["metrics"]["chromosome_uniformity"]["value"]
+    assert value["median_autosomal_mean_coverage"] == pytest.approx(13.0)
+    assert value["min_autosomal_mean_coverage"] == pytest.approx(10.0)
+    assert value["min_over_median"] == pytest.approx(round(10.0 / 13.0, 4))
+
+
 def test_evaluate_guardrails_read_discard_passes_normal_retention() -> None:
     report = evaluate_guardrails(
         _manifest_fixture(retention_rate=0.85),

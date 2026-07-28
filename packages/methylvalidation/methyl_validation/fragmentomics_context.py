@@ -5,6 +5,7 @@ Summarize alignment_qc and methyl-fragmentomics artifacts for readiness / Grok.
 from __future__ import annotations
 
 import json
+import statistics
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -96,7 +97,7 @@ def summarize_alignment_qc_fragmentomics(alignment_qc_dir: Path) -> Dict[str, An
         "alignment_qc_dir_present": True,
         "n_samples_with_metrics": len(samples),
         "samples": samples[:20],
-        "cohort_median_insert_size": sorted(medians)[len(medians) // 2] if medians else None,
+        "cohort_median_insert_size": statistics.median(medians) if medians else None,
         "cohort_mean_short_fragment_fraction": (
             round(sum(short_fracs) / len(short_fracs), 4) if short_fracs else None
         ),

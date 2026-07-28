@@ -12,6 +12,7 @@ import argparse
 import csv
 import json
 import re
+import statistics
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
@@ -178,7 +179,7 @@ def main() -> int:
             {
                 "batch_prefix": prefix,
                 "n_samples": len(trims),
-                "median_trim_front2": sorted(trims)[len(trims) // 2],
+                "median_trim_front2": statistics.median(trims),
                 "min_trim_front2": min(trims),
                 "max_trim_front2": max(trims),
             }

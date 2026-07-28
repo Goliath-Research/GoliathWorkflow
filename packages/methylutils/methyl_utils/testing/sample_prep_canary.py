@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import statistics
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -414,10 +415,7 @@ def compute_cg_overlap_stats(
             pearson = num / (den_l * den_w)
 
     recall = (len(shared_keys) / len(lin)) if lin else None
-    ratios_sorted = sorted(ratios)
-    median_ratio = (
-        ratios_sorted[len(ratios_sorted) // 2] if ratios_sorted else None
-    )
+    median_ratio = statistics.median(ratios) if ratios else None
     return {
         "linear_sites": len(lin),
         "wgbs_sites": len(wgbs),
