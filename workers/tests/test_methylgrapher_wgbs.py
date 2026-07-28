@@ -417,6 +417,25 @@ def test_build_methylcall_clamps_threads_and_batch_size(tmp_path: Path) -> None:
     assert "MethylCall" in cmd
 
 
+def test_mojo_engine_skips_thread_cap_and_defaults_image(tmp_path: Path) -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import _resolve_image
+
+    cfg = {**_touch_bundle(tmp_path), "threads": 64, "engine": "mojo"}
+    del cfg["image"]
+    bundle = resolve_wgbs_bundle_from_resolved(cfg)
+    assert bundle.engine == "mojo"
+    cmd = build_methylcall_command(
+        bundle=bundle, work_dir=tmp_path / "work", index_prefix=str(tmp_path / "hprc-d9-bs")
+    )
+    assert cmd[cmd.index("-t") + 1] == "64"
+    assert _resolve_image(bundle) == "epimethyl/methylgrapher:1.70-mojo"
+
+
+def test_step_config_accepts_engine_mojo() -> None:
+    cfg = MethylGrapherWgbsStepConfig(engine="mojo")
+    assert cfg.engine == "mojo"
+
+
 def test_project_graph_cpg_to_linear_tsv(tmp_path: Path) -> None:
     gfa = tmp_path / "toy.wl.gfa"
     # Segment 11 starts at path offset 1000 on GRCh38 chr1.

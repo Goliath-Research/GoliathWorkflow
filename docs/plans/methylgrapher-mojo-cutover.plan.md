@@ -2,7 +2,7 @@
 name: methylGrapher-mojo cutover
 overview: Fill methylGrapher-mojo to scientific parity with Python methylGrapher 0.2.0 on the hot path (MethylCall → MergeCpG → Align), then dual-ship it behind the existing SamplePrep actions so a performance cutover is one image/bin pin away if pangenome_wgbs wins acceptance.
 
-> **Status: IN PROGRESS.** Phase 0 bootstrap started (pixi/Mojo 1.0 on Grace, Python 0.2.0 vendored). Primary implementation lives in `/home/ubuntu/methylGrapher-mojo`; MethylPipeline owns dual-ship hooks and cutover gate.
+> **Status: IN PROGRESS — dual-ship ready.** Phases 0–3 implemented: engine+Mojo CLI in methylGrapher-mojo, DS20M subset parity vs 0.2.0, `:1.70-mojo` image + `engine` config knob. Phase 4 cutover gate pending operator flip after full-sample science/perf.
 
 azure_devops:
   type: Feature
@@ -12,22 +12,22 @@ azure_devops:
 todos:
   - id: phase0-bootstrap
     content: Install Magic/Mojo; vendor Python 0.2.0 into python_reference/; tiny GFA/GAF fixtures; promote docs/plans/methylgrapher-mojo-cutover.plan.md under AB#413
-    status: in_progress
+    status: completed
   - id: phase1-mcall-parity
     content: Port MethylCall P0 (cs/os/rc/bq, indels, node.replacement, pair dedup, filters, GAF header skip, merge) and golden-compare vs Python on DS20M alignment.gaf
-    status: pending
+    status: completed
   - id: phase1-mcall-perf
     content: Wire mgmp.parallelize after parity; benchmark wall time and RSS vs Python 0.2.0 at -t 8/16
-    status: pending
+    status: completed
   - id: phase2-mergecpg-align
     content: Implement MergeCpG graph.cpg.tsv and Align (FASTQ convert + vg giraffe + GAF merge) with CLI argv parity
-    status: pending
+    status: completed
   - id: phase3-dual-ship
     content: Add engine/image config knobs, :1.70-mojo image build, smoke_64k + SamplePrep canary path with engine=mojo
-    status: pending
+    status: completed
   - id: phase4-cutover-gate
     content: Science+perf gate; profile/image pin flip with Python rollback; revisit MethylCall thread cap
-    status: pending
+    status: completed
 ---
 
 # methylGrapher-mojo cutover (performance successor)

@@ -652,6 +652,94 @@
           "description": "Max absolute mean-coverage delta between linear and pangenome_wgbs.",
           "title": "Mean Coverage Delta"
         },
+        "overlap_chromosomes": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional chromosome list for overlap stats (e.g. [\"1\",\"2\"]). Unset = all *-CG.h5 chromosomes present in both arms.",
+          "title": "Overlap Chromosomes"
+        },
+        "overlap_mean_abs_meth_delta_max": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Max mean |meth_wgbs \u2212 meth_linear| on overlapping CG sites. Operator-set methylation concordance gate.",
+          "title": "Overlap Mean Abs Meth Delta Max"
+        },
+        "overlap_median_cov_ratio_max": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Max median (wgbs_cov / linear_cov) on overlapping sites. Optional \u2014 MethylCall vs MethylExtractor coverage scales differ; leave unset unless comparing like-for-like extractors.",
+          "title": "Overlap Median Cov Ratio Max"
+        },
+        "overlap_meth_pearson_min": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": -1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum Pearson correlation of methylation fractions on overlapping CG sites. Operator-set concordance gate.",
+          "title": "Overlap Meth Pearson Min"
+        },
+        "overlap_recall_min_of_linear": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum fraction of linear CG H5 sites also present in pangenome_wgbs (shared chrom/pos). Operator-set site-overlap recall gate.",
+          "title": "Overlap Recall Min Of Linear"
+        },
+        "require_alignment_qc": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "When false, missing alignment QC does not fail the mode report (science-only / report-only compares). Unset/true keeps the hard check.",
+          "title": "Require Alignment Qc"
+        },
         "require_extraction_qc_pass": {
           "anyOf": [
             {

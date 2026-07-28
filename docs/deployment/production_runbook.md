@@ -91,6 +91,7 @@ methyl-study-start validation-start request.json
 |---------|--------|
 | Parabricks tasks fail | `verify_parabricks.sh`, NGC login, `nvidia-ctk` |
 | methylGrapher WGBS tasks fail | `METHYL_METHYLGRAPHER_IMAGE`, BS bundle under `d9-bs/1.70`, canary checklist |
+| Switch methylGrapher engine | `actionConfig.methylgrapher_wgbs.engine` = `python` (default `:1.70`) or `mojo` (`:1.70-mojo`); see [`docs/plans/methylgrapher-mojo-cutover-gate.md`](../plans/methylgrapher-mojo-cutover-gate.md) |
 | Extract fails | `verify_methyl_extractor.sh`, `HDF5_PLUGIN_PATH`; WGBS pangenome path uses `methylgrapher.wgbs_extract` |
 | Worker idle | `WORKER_CAPABILITY` filter vs task capability |
 | FOREACH errors | `08_foreach_support.sql` applied on PostgreSQL |

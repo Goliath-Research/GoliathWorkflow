@@ -135,12 +135,21 @@ class MethylGrapherWgbsStepConfig(BaseModel):
         default=None,
         description="Directional WGBS library (methylGrapher -directional). Operator-set per site/profile.",
     )
+    engine: Optional[str] = Field(
+        default=None,
+        description=(
+            "methylGrapher implementation: 'python' (stock 0.2.0 image) or 'mojo' "
+            "(methylGrapher-mojo / patched engine image, tag :1.70-mojo). "
+            "Operator-set per site/profile. Default when unset: python."
+        ),
+    )
     threads: Optional[int] = Field(
         default=None,
         ge=1,
         description=(
             "Worker threads for methylGrapher/vg. Operator-set per site/profile. "
-            "For MethylCall keep <=16 so methylGrapher uses a single in-memory GFA worker."
+            "Stock python MethylCall: keep <=16 to avoid dual in-memory GFA. "
+            "engine=mojo forces a single GFA worker so higher -t is safe for RAM."
         ),
     )
     batch_size: Optional[int] = Field(

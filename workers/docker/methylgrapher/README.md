@@ -2,6 +2,15 @@
 
 Pinned runtime for `alignmentMode: pangenome_wgbs` (`sample.methylgrapher_wgbs_*`).
 
+## Engines (dual-ship)
+
+| `actionConfig.methylgrapher_wgbs.engine` | Image (default) | Notes |
+|-----------------------------------------|-----------------|-------|
+| `python` (default) | `epimethyl/methylgrapher:1.70` | Stock methylGrapher 0.2.0 + GAF-header patch |
+| `mojo` | `epimethyl/methylgrapher:1.70-mojo` | methylGrapher-mojo patched engine (single GFA worker; CLI parity) |
+
+Build mojo image: `scripts/build_methylgrapher_mojo_image.sh` (requires `METHYLGRAPHER_MOJO_ROOT` and a prior vg bake from `build_methylgrapher_image.sh`). Plan: [`docs/plans/methylgrapher-mojo-cutover.plan.md`](../../../docs/plans/methylgrapher-mojo-cutover.plan.md).
+
 ## Compute model (CPU only — by design)
 
 methylGrapher and stock `vg` **do not use NVIDIA GPUs**. Baking a CUDA base image or passing

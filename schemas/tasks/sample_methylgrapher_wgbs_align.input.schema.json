@@ -112,6 +112,20 @@
           "description": "Must be pangenome_wgbs when this section is used. Set at site/profile/procedure.",
           "title": "Alignment Mode"
         },
+        "batch_size": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "MethylCall -batch_size. Operator-set per site/profile.",
+          "title": "Batch Size"
+        },
         "c2t": {
           "anyOf": [
             {
@@ -179,6 +193,19 @@
           "description": "Directional WGBS library (methylGrapher -directional). Operator-set per site/profile.",
           "title": "Directional"
         },
+        "engine": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "methylGrapher implementation: 'python' (stock 0.2.0 image) or 'mojo' (methylGrapher-mojo / patched engine image, tag :1.70-mojo). Operator-set per site/profile. Default when unset: python.",
+          "title": "Engine"
+        },
         "g2a": {
           "anyOf": [
             {
@@ -229,6 +256,19 @@
           "default": null,
           "description": "PrepareGenome-style index prefix under the BS bundle (e.g. .../hprc-d9-bs).",
           "title": "Index Prefix"
+        },
+        "linear_cpg_tsv": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional pre-projected GRCh38 chrom/pos/mC/uC TSV. When unset, extract projects MergeCpG graph.cpg.tsv onto GRCh38#0 paths from {index_prefix}.wl.gfa.",
+          "title": "Linear Cpg Tsv"
         },
         "linear_ref_fasta": {
           "anyOf": [
@@ -318,7 +358,7 @@
             }
           ],
           "default": null,
-          "description": "Worker threads for methylGrapher/vg. Operator-set per site/profile.",
+          "description": "Worker threads for methylGrapher/vg. Operator-set per site/profile. Stock python MethylCall: keep <=16 to avoid dual in-memory GFA. engine=mojo forces a single GFA worker so higher -t is safe for RAM.",
           "title": "Threads"
         },
         "vg_version": {
@@ -333,6 +373,19 @@
           "default": null,
           "description": "Pinned vg version string for provenance / CAAS (must match index builder).",
           "title": "Vg Version"
+        },
+        "wl_gfa": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override for PrepareGenome {index_prefix}.wl.gfa (MethylCall + GRCh38 path projection). Defaults to {index_prefix}.wl.gfa beside the bundle.",
+          "title": "Wl Gfa"
         }
       },
       "title": "MethylGrapherWgbsStepConfig",

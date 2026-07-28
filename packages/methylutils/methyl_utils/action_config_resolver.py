@@ -298,6 +298,7 @@ def resolve_methylgrapher_wgbs_genome(
         "vg_version",
         "linear_cpg_tsv",
         "wl_gfa",
+        "engine",
     ):
         if cfg.get(optional) not in (None, ""):
             resolved[optional] = str(cfg[optional])

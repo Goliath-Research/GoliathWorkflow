@@ -52,6 +52,7 @@ class MethylGrapherWgbsBundle:
     image_digest: Optional[str] = None
     methylgrapher_version: Optional[str] = None
     vg_version: Optional[str] = None
+    engine: str = "python"
     cg_only: bool = True
     contexts: Tuple[str, ...] = ("CG",)
     read_level_enabled: bool = True
@@ -96,6 +97,20 @@ def _pick_bool(payload: Mapping[str, Any], key: str, default: bool) -> bool:
     if isinstance(val, bool):
         return val
     return str(val).strip().lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _normalize_engine(value: Any) -> str:
+    """Return ``python`` or ``mojo``; unset → ``python`` (safe default)."""
+    if value is None or str(value).strip() == "":
+        return "python"
+    eng = str(value).strip().lower()
+    if eng in {"mojo", "methylgrapher-mojo"}:
+        return "mojo"
+    if eng in {"python", "py", "0.2.0", "stock"}:
+        return "python"
+    raise RuntimeError(
+        f"methylgrapher_wgbs.engine must be 'python' or 'mojo' (got {value!r})"
+    )
 
 
 def resolve_wgbs_bundle_from_resolved(
@@ -144,6 +159,7 @@ def resolve_wgbs_bundle_from_resolved(
             str(raw["methylgrapher_version"]) if raw.get("methylgrapher_version") else None
         ),
         vg_version=str(raw["vg_version"]) if raw.get("vg_version") else None,
+        engine=_normalize_engine(raw.get("engine")),
         cg_only=_pick_bool(raw, "cg_only", True),
         contexts=contexts,
         read_level_enabled=_pick_bool(rl, "enabled", True),
@@ -162,9 +178,11 @@ def resolve_wgbs_bundle_from_resolved(
     return bundle
 
 
-# methylGrapher forks a second in-memory GFA worker when -t > 20; for HPRC-scale
-# graphs that doubles RAM. Cap MethylCall threads unless the operator set a lower value.
+# Stock python methylGrapher forks a second in-memory GFA worker when -t > 20;
+# for HPRC-scale graphs that doubles RAM. Cap MethylCall threads for engine=python.
+# engine=mojo forces gfa_worker_num=1, so this cap is not applied.
 _METHYLCALL_THREAD_CAP = 16
+_DEFAULT_MOJO_IMAGE = "epimethyl/methylgrapher:1.70-mojo"
 
 
 def resolve_index_prefix(bundle: MethylGrapherWgbsBundle) -> str:
@@ -222,6 +240,7 @@ def fingerprint_wgbs_assets(bundle: MethylGrapherWgbsBundle) -> Dict[str, str]:
         out["methylgrapher_version"] = bundle.methylgrapher_version
     if bundle.vg_version:
         out["vg_version"] = bundle.vg_version
+    out["engine"] = bundle.engine
     out["directional"] = "1" if bundle.directional else "0"
     return out
 
@@ -236,6 +255,8 @@ def _resolve_image(bundle: MethylGrapherWgbsBundle) -> str:
         or os.environ.get(METHYLGRAPHER_IMAGE_ENV, "").strip()
         or os.environ.get("METHYL_METHYLGRAPHER_IMAGE", "").strip()
     )
+    if not image and bundle.engine == "mojo":
+        image = _DEFAULT_MOJO_IMAGE
     if not image:
         raise RuntimeError(
             "methylGrapher image not configured "
@@ -342,7 +363,8 @@ def build_methylcall_command(
     index_prefix: str,
 ) -> List[str]:
     threads = bundle.threads or max(1, (os.cpu_count() or 4) // 2)
-    if threads > _METHYLCALL_THREAD_CAP:
+    # Stock python dual-GFA cliff; mojo engine always uses a single GFA worker.
+    if bundle.engine != "mojo" and threads > _METHYLCALL_THREAD_CAP:
         logger.warning(
             "MethylCall threads=%s exceeds safety cap %s (avoids dual in-memory GFA "
             "workers); clamping",
