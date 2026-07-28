@@ -1021,6 +1021,12 @@ def run_methylgrapher_wgbs_align(
     }
 
 
+def _is_grch38_sample(name: str) -> bool:
+    """True when a PanSN sample name denotes the GRCh38 linear reference."""
+    head = name.strip().split("#", 1)[0].upper()
+    return head == "HG38" or head.startswith("GRCH38")
+
+
 def _normalize_grch38_chrom(name: str) -> Optional[str]:
     """Map path/sequence names like ``GRCh38#0#chr1`` / ``chr1`` → ``1``."""
     raw = str(name).strip()
@@ -1028,10 +1034,9 @@ def _normalize_grch38_chrom(name: str) -> Optional[str]:
         return None
     # Prefer GRCh38 haplotype paths; ignore CHM13 / sample haplotypes.
     if "#" in raw:
-        parts = raw.split("#")
-        if parts and parts[0] not in {"GRCh38", "GRCh38.p13", "hg38"}:
+        if not _is_grch38_sample(raw):
             return None
-        raw = parts[-1]
+        raw = raw.split("#")[-1]
     if raw.lower().startswith("chr"):
         raw = raw[3:]
     if raw.upper() == "M":
@@ -1080,11 +1085,12 @@ def build_grch38_segment_offsets_from_gfa(gfa_path: Path) -> Dict[str, Tuple[str
             chrom: Optional[str] = None
             path_start = 0
             if line[0] == "W" and len(parts) >= 7:
-                # W sample hap seqname start end path
+                # W SampleId HapIndex SeqId SeqStart SeqEnd Walk
+                # SeqId is usually a bare chromosome name, so the sample field is
+                # the only place the haplotype is identified.
+                if not _is_grch38_sample(parts[1]):
+                    continue
                 chrom = _normalize_grch38_chrom(parts[3])
-                if chrom is None:
-                    # Some exports put GRCh38#0#chrN in sample/hap fields.
-                    chrom = _normalize_grch38_chrom(f"{parts[1]}#{parts[2]}#{parts[3]}")
                 if chrom is None:
                     continue
                 try:

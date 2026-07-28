@@ -454,6 +454,29 @@ def test_project_graph_cpg_to_linear_tsv(tmp_path: Path) -> None:
     assert rows[1] == "1\t1001\t3\t7\t1"
 
 
+def test_segment_offsets_ignore_non_reference_walks(tmp_path: Path) -> None:
+    gfa = tmp_path / "toy.wl.gfa"
+    # Segments 21/23 are only reachable from non-GRCh38 haplotypes, and the
+    # sample haplotypes visit shared segment 22 at a different offset.
+    gfa.write_text(
+        "\n".join(
+            [
+                "H\tVN:Z:1.1",
+                "S\t21\tACGT",
+                "S\t22\tCGCG",
+                "S\t23\tTTAA",
+                "W\tHG002\t1\tchr1\t500\t508\t>21>22",
+                "W\tCHM13\t0\tchr1\t700\t708\t>22>23",
+                "W\tGRCh38\t0\tchr1\t1000\t1004\t>22",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    offsets = build_grch38_segment_offsets_from_gfa(gfa)
+    assert offsets == {"22": ("1", 1000)}
+
+
 def test_catalog_registers_methylgrapher_actions() -> None:
     from methyl_worker.action_catalog import ACTION_CATALOG
 
