@@ -108,3 +108,12 @@ See [`ds20m-dual-graph-finish.plan.md`](ds20m-dual-graph-finish.plan.md) and go/
 `/work/samples/_comparisons/20260728T163518Z/dual_graph_gono.md`.
 
 **Go/no-go:** NO-GO for full-depth multi-worker yet — site yield is high but overlap cov/meth vs linear are not concordant (coverage ~100× inflated).
+
+
+## Interim production recommendation (2026-07-28)
+
+**Buffy WGBS SamplePrep default = linear** (`buffy_wgbs_linear_gene_fc`).
+`buffy_wgbs_pangenome_gene_fc` remains experimental until the acceptance path in
+[`wgbs-alignment-decision.plan.md`](wgbs-alignment-decision.plan.md) passes
+(DS20M concordance + buffy confirmation). Memo:
+`/work/samples/_comparisons/20260728Tinterim/interim_alignment_recommendation.md`.

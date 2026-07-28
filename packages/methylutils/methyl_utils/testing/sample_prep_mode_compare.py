@@ -28,6 +28,7 @@ from .sample_prep_canary import (
     CheckResult,
     ModeReport,
     compare_linear_vs_wgbs,
+    compute_cg_overlap_stats,
     mode_report_to_dict,
     validate_mode_artifacts,
 )

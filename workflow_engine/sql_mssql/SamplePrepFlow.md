@@ -99,7 +99,7 @@ Top-level keys become scope-0 variables. FOREACH object elements flatten into pe
 | `isCfdna` | boolean | yes | Drives fragmentomics **IF** |
 | `referenceFasta` | string | yes | Reference FASTA for linear Parabricks fq2bam and MethylExtractor |
 | `referenceGtf` | string | no | GTF for Parabricks |
-| `alignmentMode` | string | no | `linear` (default), `pangenome` (stock Giraffe), or `pangenome_wgbs` (methylGrapher WGBS; binds `useWgbsPangenome` + `usePangenome`) |
+| `alignmentMode` | string | no | `linear` (default), `pangenome` (stock Giraffe), or `pangenome_wgbs` (methylGrapher WGBS; binds `useWgbsPangenome` + `usePangenome`). **Interim buffy recommendation:** procedure `buffy_wgbs_linear_gene_fc` (`linear`). Keep `buffy_wgbs_pangenome_gene_fc` experimental until linear-vs-wgbs acceptance passes. |
 | `deleteFastqs` | boolean | no | **Default `true`.** When true, run `sample.delete_fastqs` after archive/terminal QC. Set `false` (or profile `actionConfig.sample_prep.delete_fastqs: false`) to retain FASTQs under `/work/samples/{id}/`. |
 | `fastqStorage` | object | yes | Laboratory-owned ingress (never inferred from archive profile) |
 | `sampleStorage` | object | no | Internal archive defaults from `portal.resource_profile` → `cfg.storage_endpoint` when omitted (`h5Storage` alias) |

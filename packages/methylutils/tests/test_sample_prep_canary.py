@@ -178,3 +178,32 @@ def test_reports_write(tmp_path: Path) -> None:
     write_markdown_summary(report, md)
     assert junit.is_file()
     assert "SamplePrep real-data canary" in md.read_text(encoding="utf-8")
+
+
+def test_compute_cg_overlap_stats(tmp_path: Path) -> None:
+    import h5py
+    import numpy as np
+
+    from methyl_utils.testing.sample_prep_canary import compute_cg_overlap_stats
+
+    def write_cg(path: Path, rows):
+        dt = np.dtype([("pos", "<u4"), ("mC", "<u2"), ("uC", "<u2"), ("tnc", "u1")])
+        data = np.empty(len(rows), dtype=dt)
+        for i, (pos, mc, uc) in enumerate(rows):
+            data[i] = (pos, mc, uc, 1)
+        with h5py.File(path, "w") as f:
+            f.create_dataset("methylation_data", data=data)
+
+    lin = tmp_path / "linear"
+    wgbs = tmp_path / "wgbs"
+    lin.mkdir()
+    wgbs.mkdir()
+    write_cg(lin / "1-CG.h5", [(100, 8, 2), (200, 0, 10), (300, 5, 5)])
+    write_cg(wgbs / "1-CG.h5", [(100, 7, 3), (200, 1, 9), (400, 4, 4)])
+    stats = compute_cg_overlap_stats(lin, wgbs, chromosomes=["1"])
+    assert stats["linear_sites"] == 3
+    assert stats["wgbs_sites"] == 3
+    assert stats["shared_sites"] == 2
+    assert abs(stats["overlap_recall_of_linear"] - 2 / 3) < 1e-9
+    assert stats["overlap_meth_pearson"] is not None
+    assert stats["overlap_mean_abs_meth_delta"] is not None

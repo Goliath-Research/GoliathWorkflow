@@ -1,0 +1,11 @@
+{
+  "require_alignment_qc": false,
+  "require_extraction_qc_pass": false,
+  "cpg_sites_min_fraction_of_linear": 1.0,
+  "overlap_recall_min_of_linear": 0.40,
+  "overlap_mean_abs_meth_delta_max": 0.15,
+  "overlap_meth_pearson_min": 0.70,
+  "alignment_time_ratio_max": 20.0,
+  "mapping_rate_delta": 0.30,
+  "duplication_rate_delta": 0.30
+}

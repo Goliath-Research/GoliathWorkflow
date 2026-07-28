@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from ..test_data_registry import (
     SamplePrepCanaryConfig,
@@ -221,19 +221,28 @@ def validate_mode_artifacts(
             if "guardrails" in data or "summary_stats" in data:
                 qc_path = cand
                 break
-    report.checks.append(CheckResult("alignment_qc_present", qc_path is not None, str(qc_path)))
+    require_aln_qc = thr.require_alignment_qc
+    if require_aln_qc is None:
+        require_aln_qc = True
+    if require_aln_qc:
+        report.checks.append(
+            CheckResult("alignment_qc_present", qc_path is not None, str(qc_path))
+        )
+    elif qc_path is not None:
+        report.artifacts["alignmentQcPath"] = str(qc_path)
     if qc_path is not None:
         qc = _load_json(qc_path)
         report.artifacts["alignmentQcPath"] = str(qc_path)
         report.metrics.update(_qc_metrics(qc))
         overall = report.metrics.get("overall_pass")
-        report.checks.append(
-            CheckResult(
-                "alignment_qc_pass",
-                overall is True,
-                f"overall_pass={overall}",
+        if require_aln_qc:
+            report.checks.append(
+                CheckResult(
+                    "alignment_qc_pass",
+                    overall is True,
+                    f"overall_pass={overall}",
+                )
             )
-        )
 
     if mode == "pangenome_wgbs":
         gaf = _find_first(sample_dir, [f"{sample_id}.alignment.gaf", "*.gaf"])
@@ -259,7 +268,11 @@ def validate_mode_artifacts(
         summary = man.get("summary") if isinstance(man.get("summary"), dict) else {}
         report.metrics["extraction_schema"] = meta.get("schema_name")
         report.metrics["cpg_weighted_mean_coverage"] = summary.get("cpg_weighted_mean_coverage")
-        report.metrics["cpg_sites"] = summary.get("cpg_sites") or summary.get("n_cpg_sites")
+        report.metrics["cpg_sites"] = (
+            summary.get("cpg_sites")
+            or summary.get("n_cpg_sites")
+            or summary.get("cpg_sites_passing_min_cov")
+        )
         if mode == "pangenome_wgbs":
             report.checks.append(
                 CheckResult(
@@ -280,15 +293,18 @@ def validate_mode_artifacts(
                 )
 
     eqc = _find_first(sample_dir, [f"{sample_id}.extraction_qc.json", "*extraction_qc*.json"])
-    report.checks.append(CheckResult("extraction_qc_present", eqc is not None, str(eqc)))
+    require_pass = thr.require_extraction_qc_pass
+    if require_pass is None:
+        require_pass = True
+    if require_pass:
+        report.checks.append(CheckResult("extraction_qc_present", eqc is not None, str(eqc)))
     if eqc is not None:
         eqc_data = _load_json(eqc)
         report.artifacts["extractionQcPath"] = str(eqc)
         guard = eqc_data.get("guardrails") if isinstance(eqc_data.get("guardrails"), dict) else {}
         passed = guard.get("overall_pass")
         report.metrics["extraction_qc_pass"] = passed
-        require_pass = thr.require_extraction_qc_pass
-        if require_pass is None or require_pass:
+        if require_pass:
             report.checks.append(
                 CheckResult("extraction_qc_pass", passed is True, f"overall_pass={passed}")
             )
@@ -322,6 +338,98 @@ def validate_mode_artifacts(
 
     # Recompute ok ignoring nothing — engineering_only still must be ok=True
     return report
+
+
+def _load_cg_h5_sites(sample_dir: Path, chromosomes: Optional[Sequence[str]] = None) -> Dict[Tuple[str, int], Tuple[int, int]]:
+    """Load ``*-CG.h5`` sites as (chrom, pos) → (mC, uC)."""
+    try:
+        import h5py  # type: ignore
+        import numpy as np  # type: ignore
+    except ImportError:
+        return {}
+
+    sites: Dict[Tuple[str, int], Tuple[int, int]] = {}
+    paths = sorted(sample_dir.glob("*-CG.h5"))
+    allow = {str(c).lstrip("chr") for c in chromosomes} if chromosomes else None
+    for path in paths:
+        chrom = path.name.split("-", 1)[0].lstrip("chr")
+        if allow is not None and chrom not in allow:
+            continue
+        try:
+            with h5py.File(path, "r") as handle:
+                obj = handle["methylation_data"]
+                if hasattr(obj, "dtype") and obj.dtype.names:
+                    data = obj[:]
+                    for row in data:
+                        sites[(chrom, int(row["pos"]))] = (int(row["mC"]), int(row["uC"]))
+                else:
+                    pos = np.asarray(obj["pos"][:])
+                    mc = np.asarray(obj["mC"][:])
+                    uc = np.asarray(obj["uC"][:])
+                    for p, m, u in zip(pos, mc, uc):
+                        sites[(chrom, int(p))] = (int(m), int(u))
+        except (OSError, KeyError, TypeError, ValueError):
+            continue
+    return sites
+
+
+def compute_cg_overlap_stats(
+    linear_dir: Path,
+    wgbs_dir: Path,
+    *,
+    chromosomes: Optional[Sequence[str]] = None,
+) -> Dict[str, Any]:
+    """Site-overlap / meth concordance stats between linear and wgbs CG H5 trees."""
+    import math
+
+    lin = _load_cg_h5_sites(linear_dir, chromosomes=chromosomes)
+    wgbs = _load_cg_h5_sites(wgbs_dir, chromosomes=chromosomes)
+    shared_keys = sorted(set(lin) & set(wgbs))
+    ratios: List[float] = []
+    abs_dmeth: List[float] = []
+    lmeth: List[float] = []
+    wmeth: List[float] = []
+    for key in shared_keys:
+        lm, lu = lin[key]
+        wm, wu = wgbs[key]
+        lcov = lm + lu
+        wcov = wm + wu
+        if lcov <= 0 or wcov <= 0:
+            continue
+        ratios.append(wcov / lcov)
+        lm_f = lm / lcov
+        wm_f = wm / wcov
+        abs_dmeth.append(abs(wm_f - lm_f))
+        lmeth.append(lm_f)
+        wmeth.append(wm_f)
+
+    pearson: Optional[float] = None
+    if len(lmeth) >= 2:
+        mean_l = sum(lmeth) / len(lmeth)
+        mean_w = sum(wmeth) / len(wmeth)
+        num = sum((a - mean_l) * (b - mean_w) for a, b in zip(lmeth, wmeth))
+        den_l = math.sqrt(sum((a - mean_l) ** 2 for a in lmeth))
+        den_w = math.sqrt(sum((b - mean_w) ** 2 for b in wmeth))
+        if den_l > 0 and den_w > 0:
+            pearson = num / (den_l * den_w)
+
+    recall = (len(shared_keys) / len(lin)) if lin else None
+    ratios_sorted = sorted(ratios)
+    median_ratio = (
+        ratios_sorted[len(ratios_sorted) // 2] if ratios_sorted else None
+    )
+    return {
+        "linear_sites": len(lin),
+        "wgbs_sites": len(wgbs),
+        "shared_sites": len(shared_keys),
+        "overlap_recall_of_linear": recall,
+        "overlap_mean_abs_meth_delta": (
+            sum(abs_dmeth) / len(abs_dmeth) if abs_dmeth else None
+        ),
+        "overlap_meth_pearson": pearson,
+        "overlap_median_cov_ratio": median_ratio,
+        "overlap_n_meth_pairs": len(abs_dmeth),
+    }
 
 
 def compare_linear_vs_wgbs(
@@ -391,11 +499,7 @@ def compare_linear_vs_wgbs(
 
     sites_l = _num(linear, "cpg_sites")
     sites_w = _num(wgbs, "cpg_sites")
-    # Fall back to H5 file counts when site counts unavailable
-    if sites_l is None:
-        sites_l = float(linear.metrics.get("n_h5_files") or 0) or None
-    if sites_w is None:
-        sites_w = float(wgbs.metrics.get("n_h5_files") or 0) or None
+    # Prefer real site counts; never use n_h5_files as a science proxy.
     if (
         thr.cpg_sites_min_fraction_of_linear is not None
         and sites_l is not None
@@ -443,6 +547,61 @@ def compare_linear_vs_wgbs(
                 f"linear_ms={time_l:.0f} wgbs_ms={time_w:.0f}",
             )
         )
+
+    need_overlap = any(
+        getattr(thr, name) is not None
+        for name in (
+            "overlap_recall_min_of_linear",
+            "overlap_mean_abs_meth_delta_max",
+            "overlap_meth_pearson_min",
+            "overlap_median_cov_ratio_max",
+        )
+    )
+    if need_overlap:
+        stats = compute_cg_overlap_stats(
+            linear.sample_dir,
+            wgbs.sample_dir,
+            chromosomes=thr.overlap_chromosomes,
+        )
+        linear.metrics.update({f"overlap_{k}": v for k, v in stats.items()})
+        wgbs.metrics.update({f"overlap_{k}": v for k, v in stats.items()})
+        recall = stats.get("overlap_recall_of_linear")
+        if thr.overlap_recall_min_of_linear is not None and recall is not None:
+            checks.append(
+                CheckResult(
+                    "overlap_recall_min_of_linear",
+                    float(recall) >= float(thr.overlap_recall_min_of_linear),
+                    f"recall={float(recall):.4f} min={thr.overlap_recall_min_of_linear} "
+                    f"shared={stats.get('shared_sites')} linear={stats.get('linear_sites')}",
+                )
+            )
+        dmeth = stats.get("overlap_mean_abs_meth_delta")
+        if thr.overlap_mean_abs_meth_delta_max is not None and dmeth is not None:
+            checks.append(
+                CheckResult(
+                    "overlap_mean_abs_meth_delta_max",
+                    float(dmeth) <= float(thr.overlap_mean_abs_meth_delta_max),
+                    f"mean_abs_dmeth={float(dmeth):.4f} max={thr.overlap_mean_abs_meth_delta_max}",
+                )
+            )
+        pearson = stats.get("overlap_meth_pearson")
+        if thr.overlap_meth_pearson_min is not None and pearson is not None:
+            checks.append(
+                CheckResult(
+                    "overlap_meth_pearson_min",
+                    float(pearson) >= float(thr.overlap_meth_pearson_min),
+                    f"pearson={float(pearson):.4f} min={thr.overlap_meth_pearson_min}",
+                )
+            )
+        cov_ratio = stats.get("overlap_median_cov_ratio")
+        if thr.overlap_median_cov_ratio_max is not None and cov_ratio is not None:
+            checks.append(
+                CheckResult(
+                    "overlap_median_cov_ratio_max",
+                    float(cov_ratio) <= float(thr.overlap_median_cov_ratio_max),
+                    f"median_ratio={float(cov_ratio):.4f} max={thr.overlap_median_cov_ratio_max}",
+                )
+            )
     return checks
 
 

@@ -203,6 +203,56 @@ class SamplePrepCanaryThresholds(BaseModel):
             "(e.g. [1, 5, 10]). Empty/unset skips H5 depth fractions."
         ),
     )
+    require_alignment_qc: Optional[bool] = Field(
+        default=None,
+        description=(
+            "When false, missing alignment QC does not fail the mode report "
+            "(science-only / report-only compares). Unset/true keeps the hard check."
+        ),
+    )
+    overlap_recall_min_of_linear: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Minimum fraction of linear CG H5 sites also present in pangenome_wgbs "
+            "(shared chrom/pos). Operator-set site-overlap recall gate."
+        ),
+    )
+    overlap_mean_abs_meth_delta_max: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Max mean |meth_wgbs − meth_linear| on overlapping CG sites. "
+            "Operator-set methylation concordance gate."
+        ),
+    )
+    overlap_meth_pearson_min: Optional[float] = Field(
+        default=None,
+        ge=-1.0,
+        le=1.0,
+        description=(
+            "Minimum Pearson correlation of methylation fractions on overlapping "
+            "CG sites. Operator-set concordance gate."
+        ),
+    )
+    overlap_median_cov_ratio_max: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "Max median (wgbs_cov / linear_cov) on overlapping sites. Optional — "
+            "MethylCall vs MethylExtractor coverage scales differ; leave unset "
+            "unless comparing like-for-like extractors."
+        ),
+    )
+    overlap_chromosomes: Optional[List[str]] = Field(
+        default=None,
+        description=(
+            "Optional chromosome list for overlap stats (e.g. [\"1\",\"2\"]). "
+            "Unset = all *-CG.h5 chromosomes present in both arms."
+        ),
+    )
 
 
 class SamplePrepCanaryAssetPins(BaseModel):

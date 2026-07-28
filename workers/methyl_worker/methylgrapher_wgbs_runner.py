@@ -1046,16 +1046,19 @@ def _normalize_grch38_chrom(name: str) -> Optional[str]:
     return None
 
 
-def build_grch38_segment_offsets_from_gfa(gfa_path: Path) -> Dict[str, Tuple[str, int]]:
-    """Map segment ID → (chrom, path offset of segment start) for GRCh38#0 paths.
+def build_grch38_segment_offsets_from_gfa(
+    gfa_path: Path,
+) -> Dict[str, Tuple[str, int, int, str]]:
+    """Map segment ID → (chrom, start_0based, length, orient) for GRCh38 paths.
 
     Parses GFA ``W`` / ``P`` lines. When a segment appears on multiple GRCh38
     paths, the first occurrence wins (stable for primary chromosomes).
+    ``orient`` is ``'>'`` or ``'<'`` for the walk step used.
     """
     import re
 
-    seg_re = re.compile(r"[><]([^><]+)")
-    offsets: Dict[str, Tuple[str, int]] = {}
+    seg_re = re.compile(r"([><])([^><]+)")
+    offsets: Dict[str, Tuple[str, int, int, str]] = {}
     # Cache segment lengths from S-lines so W-path walks can advance.
     seg_len: Dict[str, int] = {}
 
@@ -1064,7 +1067,7 @@ def build_grch38_segment_offsets_from_gfa(gfa_path: Path) -> Dict[str, Tuple[str
             if not line or line[0] not in "SWP":
                 continue
             if line[0] == "S":
-                parts = line.rstrip("\n").split("\t")
+                parts = line.rstrip("\r\n").split("\t")
                 if len(parts) < 3:
                     continue
                 seg_id, seq = parts[1], parts[2]
@@ -1080,7 +1083,7 @@ def build_grch38_segment_offsets_from_gfa(gfa_path: Path) -> Dict[str, Tuple[str
                     seg_len[seg_id] = len(seq)
                 continue
 
-            parts = line.rstrip("\n").split("\t")
+            parts = line.rstrip("\r\n").split("\t")
             path_seq = ""
             chrom: Optional[str] = None
             path_start = 0
@@ -1113,23 +1116,45 @@ def build_grch38_segment_offsets_from_gfa(gfa_path: Path) -> Dict[str, Tuple[str
 
             cursor = path_start
             for m in seg_re.finditer(path_seq):
-                seg_id = m.group(1)
+                orient, seg_id = m.group(1), m.group(2)
+                length = int(seg_len.get(seg_id, 0))
                 if seg_id not in offsets:
-                    offsets[seg_id] = (chrom, cursor)
-                cursor += seg_len.get(seg_id, 0)
+                    offsets[seg_id] = (chrom, cursor, length, orient)
+                cursor += length
     return offsets
+
+
+def _genomic_pos_1based(
+    *,
+    base_0: int,
+    seg_len: int,
+    orient: str,
+    pos_0: int,
+) -> int:
+    """Convert 0-based segment offset to 1-based linear genomic coordinate."""
+    if orient == "<":
+        if seg_len <= 0:
+            g0 = base_0 + int(pos_0)
+        else:
+            g0 = base_0 + (int(seg_len) - 1 - int(pos_0))
+    else:
+        g0 = base_0 + int(pos_0)
+    return g0 + 1
 
 
 def project_graph_cpg_to_linear_tsv(
     *,
     graph_cpg_tsv: Path,
     cpg_registry_tsv: Path,
-    segment_offsets: Mapping[str, Tuple[str, int]],
+    segment_offsets: Mapping[str, Tuple],
     out_tsv: Path,
 ) -> int:
     """Join MergeCpG ``graph.cpg.tsv`` to ``cpg.tsv`` and emit chrom/pos/mC/uC.
 
+    Emits **1-based** GRCh38 coordinates (MethylExtractor / linear H5 convention).
+    ``segment_offsets`` values are ``(chrom, start_0based[, length, orient])``.
     Sites whose cytosines are not on a GRCh38 reference path are skipped.
+    Duplicate linear positions are aggregated (sum mC/uC).
     Returns the number of projected rows written.
     """
     # cpg.tsv: C0\tseg1\tpos1\tseg2\tpos2\ttag...
@@ -1138,7 +1163,7 @@ def project_graph_cpg_to_linear_tsv(
         for line in fh:
             if not line.strip():
                 continue
-            parts = line.rstrip("\n").split("\t")
+            parts = line.rstrip("\r\n").split("\t")
             if len(parts) < 5:
                 continue
             # First field is like C0 / E12 (letter glued to index).
@@ -1148,15 +1173,13 @@ def project_graph_cpg_to_linear_tsv(
             except ValueError:
                 continue
 
-    written = 0
-    with graph_cpg_tsv.open("r", encoding="utf-8", errors="replace") as fin, out_tsv.open(
-        "w", encoding="utf-8"
-    ) as fout:
-        fout.write("chrom\tpos\tmC\tuC\ttnc\n")
+    # Aggregate in case multiple graph CpGs project to the same linear locus.
+    agg: Dict[Tuple[str, int], List[int]] = {}
+    with graph_cpg_tsv.open("r", encoding="utf-8", errors="replace") as fin:
         for line in fin:
             if not line.strip():
                 continue
-            parts = line.rstrip("\n").split("\t")
+            parts = line.rstrip("\r\n").split("\t")
             if len(parts) < 3:
                 continue
             cpg_id, met_s, cov_s = parts[0], parts[1], parts[2]
@@ -1173,17 +1196,39 @@ def project_graph_cpg_to_linear_tsv(
             # Prefer the first cytosine on a GRCh38 path.
             chrom_pos: Optional[Tuple[str, int]] = None
             for seg, pos in ((seg1, pos1), (seg2, pos2)):
-                if seg in segment_offsets:
-                    chrom, base = segment_offsets[seg]
-                    chrom_pos = (chrom, base + int(pos))
-                    break
+                if seg not in segment_offsets:
+                    continue
+                entry = segment_offsets[seg]
+                chrom = str(entry[0])
+                base = int(entry[1])
+                if len(entry) >= 4:
+                    slen = int(entry[2])
+                    orient = str(entry[3]) if entry[3] in (">", "<") else ">"
+                elif len(entry) == 3 and str(entry[2]) in (">", "<"):
+                    slen = 0
+                    orient = str(entry[2])
+                else:
+                    slen = int(entry[2]) if len(entry) >= 3 else 0
+                    orient = ">"
+                chrom_pos = (chrom, _genomic_pos_1based(base_0=base, seg_len=slen, orient=orient, pos_0=int(pos)))
+                break
             if chrom_pos is None:
                 continue
             chrom, pos = chrom_pos
             uc = max(0, cov - met)
+            key = (chrom, pos)
+            cur = agg.get(key)
+            if cur is None:
+                agg[key] = [met, uc]
+            else:
+                cur[0] += met
+                cur[1] += uc
+
+    with out_tsv.open("w", encoding="utf-8") as fout:
+        fout.write("chrom\tpos\tmC\tuC\ttnc\n")
+        for (chrom, pos), (met, uc) in sorted(agg.items(), key=lambda kv: (kv[0][0], kv[0][1])):
             fout.write(f"{chrom}\t{pos}\t{met}\t{uc}\t1\n")
-            written += 1
-    return written
+    return len(agg)
 
 
 def _parse_linear_methyl_tsv(path: Path) -> Dict[str, Dict[str, Any]]:
@@ -1224,20 +1269,42 @@ def _write_marginal_h5(
     by_chrom: Mapping[str, Mapping[str, Any]],
     contexts: Sequence[str],
 ) -> List[str]:
-    from methyl_utils.core.methyl_frame import MethylSample
+    """Write MethylExtractor-compatible structured ``methylation_data`` datasets.
+
+    Uses gzip (not Zstd plugin) so QC tools can read without ``HDF5_PLUGIN_PATH``.
+    Widens mC/uC to uint32 when counts exceed uint16.
+    """
+    import h5py
 
     written: List[str] = []
     for chrom, arrays in by_chrom.items():
         for ctx in contexts:
             path = sample_dir / f"{chrom}-{ctx}.h5"
-            sample = MethylSample.from_sample_data(
-                pos=np.asarray(arrays["pos"], dtype=np.uint32),
-                mC=np.asarray(arrays["mC"], dtype=np.uint32),
-                uC=np.asarray(arrays["uC"], dtype=np.uint32),
-                tnc=np.asarray(arrays["tnc"], dtype=np.uint8),
-                metadata={"context": ctx, "chromosome": str(chrom), "source": "methylGrapher"},
-            )
-            sample.save_to_h5(path)
+            pos = np.asarray(arrays["pos"], dtype=np.uint32)
+            mc = np.asarray(arrays["mC"], dtype=np.int64)
+            uc = np.asarray(arrays["uC"], dtype=np.int64)
+            tnc = np.asarray(arrays.get("tnc", np.ones(pos.size, dtype=np.uint8)), dtype=np.uint8)
+            if mc.size and (int(mc.max()) > 65535 or int(uc.max()) > 65535):
+                dt = np.dtype([("pos", "<u4"), ("mC", "<u4"), ("uC", "<u4"), ("tnc", "u1")])
+                data = np.empty(pos.size, dtype=dt)
+                data["pos"] = pos
+                data["mC"] = mc.astype(np.uint32)
+                data["uC"] = uc.astype(np.uint32)
+                data["tnc"] = tnc
+            else:
+                dt = np.dtype([("pos", "<u4"), ("mC", "<u2"), ("uC", "<u2"), ("tnc", "u1")])
+                data = np.empty(pos.size, dtype=dt)
+                data["pos"] = pos
+                data["mC"] = mc.astype(np.uint16, copy=False)
+                data["uC"] = uc.astype(np.uint16, copy=False)
+                data["tnc"] = tnc
+            with h5py.File(path, "w") as handle:
+                handle.create_dataset(
+                    "methylation_data", data=data, compression="gzip", compression_opts=4
+                )
+                handle.attrs["context"] = str(ctx)
+                handle.attrs["chromosome"] = str(chrom)
+                handle.attrs["source"] = "methylGrapher"
             written.append(str(path))
     return written
 

@@ -433,11 +433,11 @@ def test_project_graph_cpg_to_linear_tsv(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     offsets = build_grch38_segment_offsets_from_gfa(gfa)
-    assert offsets["11"] == ("1", 1000)
-    assert offsets["12"] == ("1", 1008)
+    assert offsets["11"] == ("1", 1000, 8, ">")
+    assert offsets["12"] == ("1", 1008, 6, ">")
 
     cpg_reg = tmp_path / "cpg.tsv"
-    # C0 at seg11 pos 2 (base 'G' of CG at index 2? seq ACGTCGGA → CG at pos 1 and 4)
+    # C0 at seg11 pos 1 (0-based; seq ACGTCGGA → CG at index 1) → 1-based genomic 1002
     cpg_reg.write_text("C0\t11\t1\t11\t2\tOther\n", encoding="utf-8")
     graph_cpg = tmp_path / "graph.cpg.tsv"
     graph_cpg.write_text("C0\t3\t10\n", encoding="utf-8")
@@ -451,7 +451,39 @@ def test_project_graph_cpg_to_linear_tsv(tmp_path: Path) -> None:
     assert n == 1
     rows = out.read_text(encoding="utf-8").strip().splitlines()
     assert rows[0] == "chrom\tpos\tmC\tuC\ttnc"
-    assert rows[1] == "1\t1001\t3\t7\t1"
+    assert rows[1] == "1\t1002\t3\t7\t1"
+
+
+def test_project_reverse_oriented_segment(tmp_path: Path) -> None:
+    gfa = tmp_path / "toy.wl.gfa"
+    # Reverse walk: segment length 4 at path start 1000 → pos0=1 maps to 1-based 1003
+    # (0-based genomic = 1000 + (4-1-1) = 1002 → 1-based 1003)
+    gfa.write_text(
+        "\n".join(
+            [
+                "H\tVN:Z:1.1",
+                "S\t9\tACGT",
+                "W\tGRCh38\t0\tchr2\t1000\t1004\t<9",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    offsets = build_grch38_segment_offsets_from_gfa(gfa)
+    assert offsets["9"] == ("2", 1000, 4, "<")
+    cpg_reg = tmp_path / "cpg.tsv"
+    cpg_reg.write_text("C0\t9\t1\t9\t2\tOther\n", encoding="utf-8")
+    graph_cpg = tmp_path / "graph.cpg.tsv"
+    graph_cpg.write_text("C0\t1\t4\n", encoding="utf-8")
+    out = tmp_path / "linear.tsv"
+    n = project_graph_cpg_to_linear_tsv(
+        graph_cpg_tsv=graph_cpg,
+        cpg_registry_tsv=cpg_reg,
+        segment_offsets=offsets,
+        out_tsv=out,
+    )
+    assert n == 1
+    assert out.read_text(encoding="utf-8").strip().splitlines()[1] == "2\t1003\t1\t3\t1"
 
 
 def test_segment_offsets_ignore_non_reference_walks(tmp_path: Path) -> None:
@@ -474,7 +506,7 @@ def test_segment_offsets_ignore_non_reference_walks(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     offsets = build_grch38_segment_offsets_from_gfa(gfa)
-    assert offsets == {"22": ("1", 1000)}
+    assert offsets == {"22": ("1", 1000, 4, ">")}
 
 
 def test_catalog_registers_methylgrapher_actions() -> None:
