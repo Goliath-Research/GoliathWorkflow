@@ -58,7 +58,7 @@ class ObservedHybridAnchors:
     feature_order_fingerprint: str
 
 
-OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v29_structural_scored"
+OBSERVED_HYBRID_SCHEMA_VERSION = "observed_hybrid_v30_gene_scored_centroid_analogs"
 HYBRID_FEATURE_SCHEMA_VERSION = "hybrid_feature_v5_centroid_distance_per_class"
 HYBRID_FEATURE_FAMILY_SETS = (
     "dmp_scored",
@@ -1163,6 +1163,8 @@ def observed_hybrid_feature_names(
             gene_scored_feature_names(
                 progression_order,
                 contrast_pairs=gene_scored_contrast_pairs,
+                cancer_class_labels=cancer_class_labels,
+                all_class_labels=all_class_labels,
             )
         )
     if include_structural_scored:
@@ -1602,7 +1604,11 @@ def build_observed_hybrid_feature_table(
         centroid_dir_by_class_label=centroid_dir_by_class_label,
     )
     centroid_refs_by_label: Dict[str, np.ndarray] = {}
-    if include_dmp_family and centroid_dir_by_class_label and all_class_labels_list:
+    if (
+        (include_dmp_family or include_gene_scored_family)
+        and centroid_dir_by_class_label
+        and all_class_labels_list
+    ):
         centroid_refs_by_label = _extract_centroid_reference_vectors(
             centroid_dir_by_class_label,
             all_class_labels_list,
@@ -1887,6 +1893,7 @@ def build_observed_hybrid_feature_table(
     structural_scored_report: Dict[str, Any] = {}
     if include_gene_scored_family:
         from .gene_scored_features import (
+            compute_gene_scored_centroid_features,
             compute_gene_scored_matrices,
             compute_gene_scored_progression_features,
             gene_directional_iqr_column,
@@ -1946,6 +1953,28 @@ def build_observed_hybrid_feature_table(
             if prog_name not in idx:
                 continue
             X_feat[:, int(idx[prog_name])] = prog_vec.astype(np.float32)
+
+        cancer_labels_for_gene = list(cancer_labels_raw) if cancer_labels_raw else list(progression_order)
+        centroid_feat = compute_gene_scored_centroid_features(
+            X_raw,
+            feature_order,
+            dmp_df,
+            panels,
+            progression_order,
+            healthy_reference_vector=healthy_ref,
+            cancer_reference_vector=cancer_ref,
+            per_cancer_reference_vectors=per_cancer_refs,
+            cancer_class_labels=cancer_labels_for_gene,
+            all_class_labels=all_class_labels_list,
+            centroid_refs_by_label=centroid_refs_by_label,
+            use_region_weight=bool(gene_scored_use_region_weight),
+            gene_weight_mode=str(gene_scored_gene_weight),
+        )
+        for feat_name, feat_vec in centroid_feat.items():
+            if feat_name not in idx:
+                continue
+            X_feat[:, int(idx[feat_name])] = np.asarray(feat_vec, dtype=np.float32)
+
         gene_scored_report = {
             "comparison_labels": list(progression_order),
             "progression_order": list(progression_order),
@@ -1956,6 +1985,7 @@ def build_observed_hybrid_feature_table(
             "gene_scored_gene_weight": str(gene_scored_gene_weight),
             "gene_scored_contrast_pairs": gene_scored_contrast_pairs,
             "n_genes_per_comparison": {k: int(len(v)) for k, v in panels.items()},
+            "centroid_analog_feature_names": sorted(centroid_feat.keys()),
         }
 
     if include_structural_scored_family:

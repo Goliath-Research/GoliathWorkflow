@@ -690,14 +690,43 @@ def test_gene_scored_feature_names_and_fingerprint():
         feature_family_set="gene_scored",
         dmp_df=dmp_df,
         frozen_gene_panel_df=frozen_panel,
+        cancer_class_labels=["pca_low"],
+        all_class_labels=["all", "pca_low"],
     )
-    assert names == [
+    assert names[:4] == [
         "gene_directional_score__cmp_a",
         "gene_panel_obs_fraction__cmp_a",
         "gene_directional_iqr__cmp_a",
         "gene_weighted_sign_agreement__cmp_a",
     ]
+    assert "gene_max_weighted_directional_score" in names
+    assert "gene_weighted_centroid_contrast_score" in names
+    assert "gene_weighted_directional_agreement__pca_low" in names
+    assert "gene_weighted_cosine_similarity_to_cancer_centroid__pca_low" in names
+    assert "gene_weighted_cosine_distance_to_centroid__all" in names
+    assert "gene_weighted_cosine_distance_to_centroid__pca_low" in names
     assert "gene::" not in names[0]
+
+    # Without class labels, centroid analogs still appear with comparison-label suffixes
+    names_default = observed_feature_builder.observed_hybrid_feature_names(
+        feature_family_set="gene_scored",
+        dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_panel,
+    )
+    assert "gene_max_weighted_directional_score" in names_default
+    assert "gene_weighted_directional_agreement__cmp_a" in names_default
+
+    # No name collisions when both families enabled
+    both = observed_feature_builder.observed_hybrid_feature_names(
+        feature_family_set="dmp_scored+gene_scored",
+        dmp_df=dmp_df,
+        frozen_gene_panel_df=frozen_panel,
+        cancer_class_labels=["pca_low"],
+        all_class_labels=["all", "pca_low"],
+    )
+    assert len(both) == len(set(both))
+    assert "max_weighted_directional_score" in both
+    assert "gene_max_weighted_directional_score" in both
 
     fp_a = observed_feature_builder.observed_hybrid_schema_fingerprint(
         feature_family_set="gene_scored",
@@ -742,6 +771,67 @@ def test_gene_scored_feature_names_and_fingerprint():
     assert gene_panel_obs_fraction_column("cmp_a") == "gene_panel_obs_fraction__cmp_a"
     assert gene_directional_iqr_column("cmp_a") == "gene_directional_iqr__cmp_a"
     assert gene_weighted_sign_agreement_column("cmp_a") == "gene_weighted_sign_agreement__cmp_a"
+
+
+def test_gene_scored_centroid_analog_features_finite():
+    from methyl_validation.gene_scored_features import (
+        GENE_MAX_WEIGHTED_DIRECTIONAL_SCORE,
+        GENE_WEIGHTED_CENTROID_CONTRAST_SCORE,
+        compute_gene_scored_centroid_features,
+        gene_weighted_cosine_distance_to_centroid_column,
+        gene_weighted_directional_agreement_column,
+        prepare_gene_scored_panels,
+    )
+
+    dmp_df = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a", "cmp_a"],
+            "chromosome": ["1", "1", "1"],
+            "context": ["CG", "CG", "CG"],
+            "position": [100, 120, 200],
+            "effect_size": [1.0, -1.0, 0.5],
+            "gene_name": ["G1", "G1", "G2"],
+            "feature_type": ["promoter", "exon", "intron"],
+            "region_weight": [1.0, 1.0, 1.0],
+        }
+    )
+    frozen_panel = pd.DataFrame(
+        {
+            "comparison_label": ["cmp_a", "cmp_a"],
+            "gene_name": ["G1", "G2"],
+            "gene_support_n": [2, 2],
+            "gene_importance": [1.0, 0.5],
+            "gene_effect_signed_wsum": [1.0, -1.0],
+        }
+    )
+    feature_order = [("1", "CG", 100), ("1", "CG", 120), ("1", "CG", 200)]
+    # Sample pushed toward cancer-like betas vs healthy/cancer refs
+    X_raw = np.asarray([[0.8, 0.2, 0.7], [0.2, 0.8, 0.3]], dtype=np.float64)
+    healthy = np.asarray([0.2, 0.8, 0.3], dtype=np.float64)
+    cancer = np.asarray([0.8, 0.2, 0.7], dtype=np.float64)
+    panels = prepare_gene_scored_panels(frozen_panel, min_support_n=2)
+    feat = compute_gene_scored_centroid_features(
+        X_raw,
+        feature_order,
+        dmp_df,
+        panels,
+        ["cmp_a"],
+        healthy_reference_vector=healthy,
+        cancer_reference_vector=cancer,
+        per_cancer_reference_vectors=[cancer],
+        cancer_class_labels=["pca_low"],
+        all_class_labels=["all", "pca_low"],
+        centroid_refs_by_label={"all": healthy, "pca_low": cancer},
+    )
+    assert GENE_MAX_WEIGHTED_DIRECTIONAL_SCORE in feat
+    assert np.isfinite(feat[GENE_MAX_WEIGHTED_DIRECTIONAL_SCORE][0])
+    assert np.isfinite(feat[GENE_WEIGHTED_CENTROID_CONTRAST_SCORE][0])
+    assert np.isfinite(feat[gene_weighted_directional_agreement_column("pca_low")][0])
+    # First sample matches cancer centroid -> smaller distance to pca_low than to all
+    d_all = feat[gene_weighted_cosine_distance_to_centroid_column("all")]
+    d_pca = feat[gene_weighted_cosine_distance_to_centroid_column("pca_low")]
+    assert np.isfinite(d_all[0]) and np.isfinite(d_pca[0])
+    assert float(d_pca[0]) < float(d_all[0])
 
 
 def test_prepare_gene_scored_panels_raises_when_min_support_filters_all_rows():

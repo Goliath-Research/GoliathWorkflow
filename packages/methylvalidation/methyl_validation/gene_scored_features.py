@@ -44,8 +44,13 @@ GENE_DIRECTIONAL_CONTRAST_PREFIX = "gene_directional_contrast__"
 GENE_DIRECTIONAL_ADJACENT_PREFIX = "gene_directional_adjacent_delta__"
 GENE_DIRECTIONAL_PROGRESSION_SLOPE = "gene_directional_progression_slope"
 GENE_DIRECTIONAL_RANGE = "gene_directional_range"
+GENE_MAX_WEIGHTED_DIRECTIONAL_SCORE = "gene_max_weighted_directional_score"
+GENE_WEIGHTED_CENTROID_CONTRAST_SCORE = "gene_weighted_centroid_contrast_score"
+GENE_WEIGHTED_DIRECTIONAL_AGREEMENT_PREFIX = "gene_weighted_directional_agreement__"
+GENE_WEIGHTED_COSINE_SIM_TO_CANCER_PREFIX = "gene_weighted_cosine_similarity_to_cancer_centroid__"
+GENE_WEIGHTED_COSINE_DIST_TO_CENTROID_PREFIX = "gene_weighted_cosine_distance_to_centroid__"
 REGION_DIRECTIONAL_FEATURE_PREFIX = "region_directional_score__"
-GENE_SCORED_SCHEMA_VERSION = "gene_scored_v5_progression_contrast"
+GENE_SCORED_SCHEMA_VERSION = "gene_scored_v6_centroid_analogs"
 DEFAULT_REGION_DIRECTIONAL_TYPES: Tuple[str, ...] = (
     "promoter",
     "exon",
@@ -72,6 +77,18 @@ def gene_directional_iqr_column(comparison_label: object) -> str:
 
 def gene_weighted_sign_agreement_column(comparison_label: object) -> str:
     return f"{GENE_WEIGHTED_SIGN_AGREEMENT_PREFIX}{_feature_label_token(comparison_label)}"
+
+
+def gene_weighted_directional_agreement_column(cancer_label: object) -> str:
+    return f"{GENE_WEIGHTED_DIRECTIONAL_AGREEMENT_PREFIX}{_feature_label_token(cancer_label)}"
+
+
+def gene_weighted_cosine_similarity_to_cancer_centroid_column(cancer_label: object) -> str:
+    return f"{GENE_WEIGHTED_COSINE_SIM_TO_CANCER_PREFIX}{_feature_label_token(cancer_label)}"
+
+
+def gene_weighted_cosine_distance_to_centroid_column(class_label: object) -> str:
+    return f"{GENE_WEIGHTED_COSINE_DIST_TO_CENTROID_PREFIX}{_feature_label_token(class_label)}"
 
 
 def gene_directional_contrast_column(left_label: object, right_label: object) -> str:
@@ -358,6 +375,8 @@ def gene_scored_feature_names(
     comparison_labels: Sequence[str],
     *,
     contrast_pairs: Optional[Sequence[Sequence[str]]] = None,
+    cancer_class_labels: Optional[Sequence[str]] = None,
+    all_class_labels: Optional[Sequence[str]] = None,
 ) -> List[str]:
     names: List[str] = []
     for label in comparison_labels:
@@ -371,7 +390,345 @@ def gene_scored_feature_names(
             contrast_pairs=contrast_pairs,
         )
     )
+    names.extend(
+        gene_scored_centroid_feature_names(
+            cancer_class_labels=cancer_class_labels,
+            all_class_labels=all_class_labels,
+            comparison_labels=comparison_labels,
+        )
+    )
     return names
+
+
+def gene_scored_centroid_feature_names(
+    *,
+    cancer_class_labels: Optional[Sequence[str]] = None,
+    all_class_labels: Optional[Sequence[str]] = None,
+    comparison_labels: Optional[Sequence[str]] = None,
+) -> List[str]:
+    """Gene-level analogs of dmp_scored centroid/directional aggregates."""
+    names: List[str] = [
+        GENE_MAX_WEIGHTED_DIRECTIONAL_SCORE,
+        GENE_WEIGHTED_CENTROID_CONTRAST_SCORE,
+    ]
+    cancer_labels = [str(x) for x in (cancer_class_labels or []) if str(x).strip()]
+    if not cancer_labels:
+        cancer_labels = [str(x) for x in (comparison_labels or []) if str(x).strip()]
+    if not cancer_labels:
+        cancer_labels = ["cancer"]
+    for label in cancer_labels:
+        names.append(gene_weighted_directional_agreement_column(label))
+        names.append(gene_weighted_cosine_similarity_to_cancer_centroid_column(label))
+    for label in [str(x) for x in (all_class_labels or []) if str(x).strip()]:
+        names.append(gene_weighted_cosine_distance_to_centroid_column(label))
+    return names
+
+
+def _weighted_cosine_similarity_gene(
+    values_a: np.ndarray,
+    values_b: np.ndarray,
+    weights: np.ndarray,
+) -> float:
+    if values_a.size == 0 or values_b.size == 0 or values_a.size != values_b.size:
+        return float("nan")
+    if weights.size != values_a.size:
+        return float("nan")
+    w = np.asarray(weights, dtype=np.float64)
+    w = np.abs(np.nan_to_num(w, nan=0.0, posinf=0.0, neginf=0.0))
+    if float(np.sum(w)) <= 0.0:
+        return float("nan")
+    a = np.asarray(values_a, dtype=np.float64)
+    b = np.asarray(values_b, dtype=np.float64)
+    num = float(np.sum(w * a * b))
+    na = float(np.sqrt(np.sum(w * (a**2))))
+    nb = float(np.sqrt(np.sum(w * (b**2))))
+    if na <= 1e-12 or nb <= 1e-12:
+        return float("nan")
+    return float(num / (na * nb))
+
+
+def _weighted_jensen_shannon_distance_gene(
+    values_a: np.ndarray,
+    values_b: np.ndarray,
+    weights: np.ndarray,
+    eps: float = 1e-10,
+) -> float:
+    from scipy.stats import entropy
+
+    if values_a.size == 0 or values_b.size == 0 or values_a.size != values_b.size:
+        return float("nan")
+    if weights.size != values_a.size:
+        return float("nan")
+    w = np.asarray(weights, dtype=np.float64)
+    w = np.abs(np.nan_to_num(w, nan=0.0, posinf=0.0, neginf=0.0))
+    w_sum = float(np.sum(w))
+    if w_sum <= 0.0:
+        return float("nan")
+    w = w / w_sum
+    # Directional scores are roughly in [-0.5, 0.5]; map to (0,1) for JS.
+    p = np.clip(0.5 + np.asarray(values_a, dtype=np.float64), eps, 1.0 - eps)
+    q = np.clip(0.5 + np.asarray(values_b, dtype=np.float64), eps, 1.0 - eps)
+    p_w = p * w
+    q_w = q * w
+    p_sum = float(np.sum(p_w))
+    q_sum = float(np.sum(q_w))
+    if p_sum <= 0.0 or q_sum <= 0.0:
+        return float("nan")
+    p_w = p_w / p_sum
+    q_w = q_w / q_sum
+    m = 0.5 * (p_w + q_w)
+    js_div = 0.5 * (entropy(p_w, m, base=2) + entropy(q_w, m, base=2))
+    if not np.isfinite(js_div):
+        return float("nan")
+    return float(np.sqrt(max(float(js_div), 0.0)))
+
+
+def _panel_gene_vector_from_row(
+    sample_row: np.ndarray,
+    panel: pd.DataFrame,
+    loci_by_gene: Dict[str, List[Tuple[int, float, float]]],
+    *,
+    gene_weight_mode: str,
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return (directional_values, weights) aligned to panel row order (NaN if missing)."""
+    n = int(len(panel))
+    values = np.full(n, np.nan, dtype=np.float64)
+    weights = np.zeros(n, dtype=np.float64)
+    for idx_g, (_, grow) in enumerate(panel.iterrows()):
+        gene = str(grow["gene_name"])
+        loci = loci_by_gene.get(gene)
+        if not loci:
+            continue
+        dir_g = _per_gene_directional_value(loci, sample_row)
+        if dir_g is None:
+            continue
+        w_g = _gene_weight(grow, gene_weight_mode=gene_weight_mode)
+        if w_g <= 0.0:
+            continue
+        values[idx_g] = float(dir_g)
+        weights[idx_g] = float(w_g)
+    return values, weights
+
+
+def compute_gene_scored_centroid_features(
+    X_raw: np.ndarray,
+    feature_order: Sequence[Tuple[str, str, int]],
+    dmp_df: pd.DataFrame,
+    panels: Dict[str, pd.DataFrame],
+    comparison_labels: Sequence[str],
+    *,
+    healthy_reference_vector: np.ndarray,
+    cancer_reference_vector: np.ndarray,
+    per_cancer_reference_vectors: Optional[Sequence[np.ndarray]] = None,
+    cancer_class_labels: Optional[Sequence[str]] = None,
+    all_class_labels: Optional[Sequence[str]] = None,
+    centroid_refs_by_label: Optional[Dict[str, np.ndarray]] = None,
+    use_region_weight: bool = True,
+    gene_weight_mode: str = "importance_x_sqrt_support",
+    eps: float = 1e-6,
+) -> Dict[str, np.ndarray]:
+    """
+    Gene-level analogs of dmp_scored centroid/directional aggregates.
+
+    Operates in per-gene directional space (same ``dir_g`` as gene_directional_score).
+    """
+    n_samples = int(X_raw.shape[0])
+    out: Dict[str, np.ndarray] = {
+        GENE_MAX_WEIGHTED_DIRECTIONAL_SCORE: np.full(n_samples, np.nan, dtype=np.float64),
+        GENE_WEIGHTED_CENTROID_CONTRAST_SCORE: np.full(n_samples, np.nan, dtype=np.float64),
+    }
+    cancer_labels = [str(x) for x in (cancer_class_labels or []) if str(x).strip()]
+    if not cancer_labels:
+        cancer_labels = [str(x) for x in comparison_labels if str(x).strip()]
+    if not cancer_labels:
+        cancer_labels = ["cancer"]
+    for label in cancer_labels:
+        out[gene_weighted_directional_agreement_column(label)] = np.full(
+            n_samples, np.nan, dtype=np.float64
+        )
+        out[gene_weighted_cosine_similarity_to_cancer_centroid_column(label)] = np.full(
+            n_samples, np.nan, dtype=np.float64
+        )
+    class_labels = [str(x) for x in (all_class_labels or []) if str(x).strip()]
+    for label in class_labels:
+        out[gene_weighted_cosine_distance_to_centroid_column(label)] = np.full(
+            n_samples, np.nan, dtype=np.float64
+        )
+
+    if n_samples == 0 or not comparison_labels:
+        return out
+    if dmp_df is None or dmp_df.empty:
+        return out
+
+    order_index = build_locus_order_index(feature_order)
+    work = _prepare_gene_scored_dmp_work(dmp_df, use_region_weight=use_region_weight)
+    if work.empty:
+        return out
+
+    healthy_ref = np.asarray(healthy_reference_vector, dtype=np.float64).reshape(-1)
+    cancer_ref = np.asarray(cancer_reference_vector, dtype=np.float64).reshape(-1)
+    per_cancer_refs: List[np.ndarray] = []
+    if per_cancer_reference_vectors is not None:
+        for vec in per_cancer_reference_vectors:
+            per_cancer_refs.append(np.asarray(vec, dtype=np.float64).reshape(-1))
+    if not per_cancer_refs:
+        per_cancer_refs = [cancer_ref]
+    # Pad/trim cancer refs to cancer_labels length
+    while len(per_cancer_refs) < len(cancer_labels):
+        per_cancer_refs.append(cancer_ref)
+    per_cancer_refs = per_cancer_refs[: len(cancer_labels)]
+
+    centroid_map = dict(centroid_refs_by_label or {})
+
+    # Prefer the first comparison panel that has genes (binary studies have one).
+    panel: Optional[pd.DataFrame] = None
+    cmp_label_for_loci: Optional[str] = None
+    for cmp_label in comparison_labels:
+        cand = panels.get(str(cmp_label))
+        if cand is not None and not cand.empty:
+            panel = cand
+            cmp_label_for_loci = str(cmp_label)
+            break
+    if panel is None or cmp_label_for_loci is None:
+        return out
+
+    cmp_dmp = work[work["comparison_label"] == cmp_label_for_loci]
+    if cmp_dmp.empty:
+        # Fall back: use all DMP rows for locus membership
+        cmp_dmp = work
+    loci_by_gene = _build_loci_by_gene(cmp_dmp, order_index)
+    if not loci_by_gene:
+        return out
+
+    n_loci = int(X_raw.shape[1]) if X_raw.ndim == 2 else 0
+
+    def _as_locus_row(vec: np.ndarray) -> np.ndarray:
+        row = np.asarray(vec, dtype=np.float64).reshape(-1)
+        if row.shape[0] != n_loci:
+            # Length mismatch: cannot map; return empty-like zeros marked missing via nan weights
+            return np.full(n_loci, np.nan, dtype=np.float64)
+        return row
+
+    g_h, w_h = _panel_gene_vector_from_row(
+        _as_locus_row(healthy_ref),
+        panel,
+        loci_by_gene,
+        gene_weight_mode=gene_weight_mode,
+    )
+    g_c_primary, _w_c_primary = _panel_gene_vector_from_row(
+        _as_locus_row(cancer_ref),
+        panel,
+        loci_by_gene,
+        gene_weight_mode=gene_weight_mode,
+    )
+    g_cancer_by_label: Dict[str, np.ndarray] = {}
+    for k_idx, label in enumerate(cancer_labels):
+        ref_k = per_cancer_refs[k_idx] if k_idx < len(per_cancer_refs) else cancer_ref
+        g_k, _ = _panel_gene_vector_from_row(
+            _as_locus_row(ref_k),
+            panel,
+            loci_by_gene,
+            gene_weight_mode=gene_weight_mode,
+        )
+        g_cancer_by_label[label] = g_k
+
+    g_class_by_label: Dict[str, np.ndarray] = {}
+    for label in class_labels:
+        vec = centroid_map.get(label)
+        if vec is None:
+            # Fallbacks: control-like -> healthy, else cancer primary / matching cancer label
+            token = str(label).strip().lower()
+            if any(t in token for t in ("healthy", "control", "normal", "all")):
+                vec = healthy_ref
+            elif label in g_cancer_by_label:
+                # already have gene vector
+                g_class_by_label[label] = g_cancer_by_label[label]
+                continue
+            else:
+                vec = cancer_ref
+        g_cls, _ = _panel_gene_vector_from_row(
+            _as_locus_row(vec),
+            panel,
+            loci_by_gene,
+            gene_weight_mode=gene_weight_mode,
+        )
+        g_class_by_label[label] = g_cls
+
+    for i in range(n_samples):
+        sample_row = np.asarray(X_raw[i, :], dtype=np.float64)
+        g_s, w_s = _panel_gene_vector_from_row(
+            sample_row,
+            panel,
+            loci_by_gene,
+            gene_weight_mode=gene_weight_mode,
+        )
+        if g_s.size == 0 or not np.any(np.isfinite(g_s) & (w_s > 0.0)):
+            continue
+
+        max_dir = float("nan")
+        for label in cancer_labels:
+            g_k = g_cancer_by_label.get(label)
+            if g_k is None or g_k.size != g_s.size or g_h.size != g_s.size:
+                continue
+            mask = (
+                np.isfinite(g_s)
+                & np.isfinite(g_h)
+                & np.isfinite(g_k)
+                & np.isfinite(w_s)
+                & (w_s > 0.0)
+            )
+            if not np.any(mask):
+                continue
+            gs, gh, gk, ww = g_s[mask], g_h[mask], g_k[mask], w_s[mask]
+            directional = np.clip((2.0 * (gs - gh) / (gk - gh + float(eps))) - 1.0, -1.0, 1.0)
+            ww_sum = float(np.sum(ww))
+            if ww_sum <= 0.0:
+                continue
+            fk = float(np.sum(ww * directional) / ww_sum)
+            agree = float(np.sum(ww * (directional > 0.0).astype(np.float64)) / ww_sum)
+            out[gene_weighted_directional_agreement_column(label)][i] = agree
+            # Cosine in gene-directional space
+            sim = _weighted_cosine_similarity_gene(gs, gk, ww)
+            out[gene_weighted_cosine_similarity_to_cancer_centroid_column(label)][i] = sim
+            if not np.isfinite(max_dir) or fk > max_dir:
+                max_dir = fk
+        out[GENE_MAX_WEIGHTED_DIRECTIONAL_SCORE][i] = max_dir
+
+        # Contrast vs primary healthy/cancer gene vectors
+        mask_c = (
+            np.isfinite(g_s)
+            & np.isfinite(g_h)
+            & np.isfinite(g_c_primary)
+            & np.isfinite(w_s)
+            & (w_s > 0.0)
+        )
+        if np.any(mask_c):
+            gs, gh, gc, ww = g_s[mask_c], g_h[mask_c], g_c_primary[mask_c], w_s[mask_c]
+            wcos_h = _weighted_cosine_similarity_gene(gs, gh, ww)
+            wcos_c = _weighted_cosine_similarity_gene(gs, gc, ww)
+            wjs_h = _weighted_jensen_shannon_distance_gene(gs, gh, ww)
+            wjs_c = _weighted_jensen_shannon_distance_gene(gs, gc, ww)
+            if all(np.isfinite(v) for v in (wcos_h, wcos_c, wjs_h, wjs_c)):
+                out[GENE_WEIGHTED_CENTROID_CONTRAST_SCORE][i] = float(
+                    (wcos_c - wcos_h) + (wjs_h - wjs_c)
+                )
+
+        for label, g_cls in g_class_by_label.items():
+            key = gene_weighted_cosine_distance_to_centroid_column(label)
+            if key not in out or g_cls.size != g_s.size:
+                continue
+            mask = (
+                np.isfinite(g_s)
+                & np.isfinite(g_cls)
+                & np.isfinite(w_s)
+                & (w_s > 0.0)
+            )
+            if not np.any(mask):
+                continue
+            sim = _weighted_cosine_similarity_gene(g_s[mask], g_cls[mask], w_s[mask])
+            out[key][i] = float(1.0 - sim) if np.isfinite(sim) else float("nan")
+
+    return out
 
 
 def _normalize_structural_feature(value: object) -> str:

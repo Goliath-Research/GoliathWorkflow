@@ -84,7 +84,7 @@ MethylValidation orchestrates stratified splits, project generation, and pipelin
 ECDF/Bayesian remains methylation-only by design at the first stage. The optional ECDF second stage (observed-hybrid and/or covariates) and the `observed_hybrid` path used by ECDF-aggregated/tabular/generative backends share a unified mapped-feature builder with explicit family toggles:
 
 - `feature_family_set=dmp_scored`: aggregated DMP-family observed metrics (`max_weighted_directional_score`, etc.). Legacy alias: `dmp`.
-- `feature_family_set=gene_scored`: comparison-level `gene_directional_score__{comparison}` features from frozen gene panels (`frozen_genes_production.csv`) and per-comparison DMP effects (no `gene::` columns).
+- `feature_family_set=gene_scored`: comparison-level `gene_directional_score__{comparison}` features from frozen gene panels (`frozen_genes_production.csv`) and per-comparison DMP effects (no `gene::` columns), plus gene-level analogs of dmp_scored centroid aggregates (`gene_max_weighted_directional_score`, `gene_weighted_centroid_contrast_score`, `gene_weighted_directional_agreement__{cancer}`, `gene_weighted_cosine_similarity_to_cancer_centroid__{cancer}`, `gene_weighted_cosine_distance_to_centroid__{class}`). No gene-level `weighted_healthy_tail_evidence` (histogram) yet.
 - `feature_family_set=structural_scored`: comparison×region pooled features from `frozen_gene_features.csv` and per-locus mapper annotations; emits `structural_directional_score__{comparison}__{region}` plus companion columns only for supported `(comparison, region)` pairs (dynamic schema).
 - `feature_family_set=dmp_scored+gene_scored`: DMP-family metrics plus gene-directional scores (recommended when using mapper gene panels without legacy per-gene columns). Legacy alias: `dmp+gene_scored`.
 - `feature_family_set=dmp_scored+structural_scored`: DMP-family metrics plus structural-directional scores. Legacy alias: `dmp+structural_scored`.
@@ -103,7 +103,15 @@ Additional `gene_scored` columns per comparison (same frozen panel and per-gene 
 - `gene_directional_iqr__{comparison}`: IQR of per-gene `dir_g` values; left NaN when fewer than two panel genes have observed loci.
 - `gene_weighted_sign_agreement__{comparison}`: weighted fraction of panel genes whose `sign(dir_g)` matches `sign(mean_effect_size)` from the frozen panel; uses the same `w_g` as directional score; NaN when no eligible genes have nonzero prior.
 
-When **K ≥ 2** ordered comparisons are available, derived progression features are computed from **`gene_directional_score` only** (schema `gene_scored_v5_progression_contrast`):
+Gene-level dmp_scored analogs (schema `gene_scored_v6_centroid_analogs`): operate in the same per-gene directional space, using healthy/cancer/class locus reference vectors aggregated with `_per_gene_directional_value`:
+
+- `gene_max_weighted_directional_score`
+- `gene_weighted_centroid_contrast_score`
+- `gene_weighted_directional_agreement__{cancer}`
+- `gene_weighted_cosine_similarity_to_cancer_centroid__{cancer}`
+- `gene_weighted_cosine_distance_to_centroid__{class}`
+
+When **K ≥ 2** ordered comparisons are available, derived progression features are computed from **`gene_directional_score` only** (progression contrast schema retained under `gene_scored_v6_centroid_analogs`):
 
 | K | Derived columns |
 |---|-----------------|
@@ -146,7 +154,7 @@ Backends persist three name lists in model metadata and train-dataset sidecars:
 - `training_feature_names` — columns passed to sklearn/generative/ECDF models.
 - `quality_feature_names` — diagnostics only; still used at predict time for low-evidence filtering via `obs_fraction`.
 
-For E1 `dmp_scored+gene_scored` with four comparisons, expect roughly **39 export** and **36 training** columns after this profile (22 gene_scored columns: 16 base + 6 progression derived). With two comparisons: 10 gene_scored columns (8 base + 2 derived). Re-run `--model` after upgrading (schema fingerprint bump invalidates feature caches).
+For E1 `dmp_scored+gene_scored` with four comparisons, gene_scored contributes 16 base summaries + 6 progression derived + gene-level centroid analogs (`gene_max_weighted_directional_score`, contrast, per-cancer agreement/cosine-similarity, per-class cosine-distance). With one comparison (binary): 4 summaries + typically 6 centroid analogs. Re-run `--model` after upgrading (schema fingerprint bump invalidates feature caches).
 
 For gene/structural keys, per-sample value uses signed weighted centered methylation over observed loci:
 
