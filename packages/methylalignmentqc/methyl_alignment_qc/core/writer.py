@@ -7,7 +7,7 @@ import math
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from ..models.sample_qc import ExportedSampleQCPayload, ParabricksMetricsPayload
 from ..models.sample_qc_v2 import ExportedSampleQCV2Payload
@@ -415,6 +415,7 @@ def _apply_screening_and_audit(
 def build_sample_qc_v2_dict(
     sample_dir: Path,
     *,
+    sample_id: Optional[str] = None,
     validate_schema: bool = True,
     fragmentomics: Optional[FragmentomicsConfig] = None,
     bisulfite_conversion: Optional[BisulfiteConversionConfig] = None,
@@ -433,14 +434,20 @@ def build_sample_qc_v2_dict(
     Expects Picard deduplicate metrics ({sample_id}.deduplicate_metrics.txt) and
     Parabricks metrics ({sample_id}.json or {sample_id}.qc-metrics.tar).
 
+    ``sample_id`` is the artifact basename (``{sample_id}.bam``). When omitted,
+    it is resolved from task-provided identity or unique artifacts — not blindly
+    from ``sample_dir.name`` (which may be an experiment mode leaf like ``linear``).
+
     Pass ``dedup_metrics`` / ``summary_stats`` when batching to avoid re-parsing files.
     """
     from ..utils.schema_validator import validate_sample_qc_metrics
 
     sample_dir = Path(sample_dir)
-    sample_name = sample_dir.name
+    sample_name = core_parser.resolve_sample_artifact_id(sample_dir, sample_id)
     if dedup_metrics is None:
-        parsed = core_parser.parse_metrics_from_sample_paths([sample_dir])
+        parsed = core_parser.parse_metrics_from_sample_paths(
+            [sample_dir], sample_id_by_path={str(sample_dir): sample_name}
+        )
         if sample_name not in parsed:
             raise RuntimeError(
                 f"No Picard deduplicate metrics in {sample_dir}; "
@@ -453,6 +460,7 @@ def build_sample_qc_v2_dict(
         metrics = dedup_metrics
 
     payload, metrics_source = _load_parabricks_metrics_payload(sample_dir, sample_name)
+    payload["sample_id"] = sample_name
 
     for key, value in metrics.items():
         if key not in payload:
@@ -473,6 +481,9 @@ def build_sample_qc_v2_dict(
             payload["guardrails"] = _build_wgbs_guardrail_report(payload)
     except Exception as e:
         raise RuntimeError(f"Failed to compute guardrails for {sample_name} from {metrics_source}: {e}") from e
+
+    if isinstance(payload.get("guardrails"), dict):
+        payload["guardrails"]["sample_id"] = sample_name
 
     align_cfg = alignment_guardrails or AlignmentGuardrailsConfig()
     stats = compute_alignment_stats(payload)
@@ -538,34 +549,48 @@ def process_samples_to_qc_jsons(
     optional_guardrails: Optional[OptionalGuardrailsConfig] = None,
     alignment_guardrails: Optional[AlignmentGuardrailsConfig] = None,
     write_context: Optional[QcWriteContext] = None,
+    sample_id: Optional[str] = None,
+    sample_id_by_path: Optional[Mapping[str, str]] = None,
 ) -> None:
     """
     Parse each sample directory and write one JSON per sample to output_dir.
-    Output files: {output_dir}/{sample_basename}.json (V2 row-oriented schema).
+    Output files: {output_dir}/{sample_id}.json (V2 row-oriented schema).
 
     Args:
         sample_paths: List of sample directory paths
         output_dir: Output directory for JSON files
         validate_schema: If True, validate each sample's JSON structure (via utils.schema_validator)
+        sample_id: Explicit sample id when processing a single path (worker ``sampleId``)
+        sample_id_by_path: Optional map of sample_dir path → sample id for batches
     """
     paths = [Path(p) for p in sample_paths]
-    parsed = core_parser.parse_metrics_from_sample_paths(paths)
+    id_map: Dict[str, str] = {}
+    if sample_id_by_path:
+        id_map.update({str(Path(k)): str(v) for k, v in sample_id_by_path.items() if v})
+    if sample_id and len(paths) == 1:
+        id_map[str(paths[0])] = str(sample_id)
+
+    resolved_ids = {
+        str(p): core_parser.resolve_sample_artifact_id(p, id_map.get(str(p))) for p in paths
+    }
+    parsed = core_parser.parse_metrics_from_sample_paths(paths, sample_id_by_path=resolved_ids)
     if not parsed:
         return
 
-    sample_paths_by_name = {Path(p).name: Path(p) for p in paths}
+    sample_paths_by_id = {resolved_ids[str(p)]: p for p in paths}
     summary_by_name = core_parser.calculate_summary_stats(parsed)
     out = Path(output_dir)
     out.mkdir(parents=True, exist_ok=True)
 
     for sample_name, dedup_metrics in parsed.items():
-        sample_dir = sample_paths_by_name.get(sample_name)
+        sample_dir = sample_paths_by_id.get(sample_name)
         if sample_dir is None:
             raise RuntimeError(f"Sample directory not found for parsed sample: {sample_name}")
 
         output_file = out / f"{sample_name}.json"
         v2_dict = build_sample_qc_v2_dict(
             sample_dir,
+            sample_id=sample_name,
             validate_schema=validate_schema,
             fragmentomics=fragmentomics,
             bisulfite_conversion=bisulfite_conversion,

@@ -3,7 +3,52 @@ Parser for Picard-style deduplication metrics (Parabricks/bwa-mem2 output).
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
+
+# Experiment-only mode trees used by linear vs pangenome_wgbs compare.
+# Artifacts inside remain named {sampleId}.*; the leaf dirname is not the sample id.
+_EXPERIMENT_MODE_DIRNAMES = frozenset({"linear", "pangenome", "pangenome_wgbs"})
+
+
+def _infer_sample_id_from_artifacts(sample_dir: Path) -> Optional[str]:
+    """Derive sample id from uniquely named SamplePrep artifacts under ``sample_dir``."""
+    sample_dir = Path(sample_dir)
+    if not sample_dir.is_dir():
+        return None
+    dedups = sorted(sample_dir.glob("*.deduplicate_metrics.txt"))
+    if len(dedups) == 1:
+        name = dedups[0].name
+        return name[: -len(".deduplicate_metrics.txt")]
+    tars = sorted(sample_dir.glob("*.qc-metrics.tar"))
+    if len(tars) == 1:
+        name = tars[0].name
+        return name[: -len(".qc-metrics.tar")]
+    bams = sorted(sample_dir.glob("*.bam"))
+    if len(bams) == 1:
+        return bams[0].stem
+    return None
+
+
+def resolve_sample_artifact_id(
+    sample_dir: Path,
+    sample_id: Optional[str] = None,
+) -> str:
+    """Identity for ``{id}.bam`` / metrics / QC JSON basename.
+
+    Prefer an explicit ``sample_id`` (worker task input). Otherwise infer from
+    uniquely named artifacts when ``sample_dir.name`` is an experiment mode
+    subdirectory (``linear`` / ``pangenome_wgbs`` / …). Fall back to the
+    directory basename (flat ``/work/samples/<sampleId>/`` layout).
+    """
+    explicit = (sample_id or "").strip()
+    if explicit:
+        return explicit
+    sample_dir = Path(sample_dir)
+    inferred = _infer_sample_id_from_artifacts(sample_dir)
+    dirname = sample_dir.name
+    if inferred and (dirname in _EXPERIMENT_MODE_DIRNAMES or inferred != dirname):
+        return inferred
+    return dirname
 
 
 def parse_deduplication_metrics(file_path: Path) -> Dict[str, Any]:
@@ -104,12 +149,16 @@ def _parse_histogram_section(lines: List[str]) -> Dict[str, Any]:
     return histogram_data
 
 
-def find_metrics_in_sample_dir(sample_dir: Path) -> Optional[Path]:
+def find_metrics_in_sample_dir(
+    sample_dir: Path,
+    sample_id: Optional[str] = None,
+) -> Optional[Path]:
     """
     Find deduplication metrics file in a single sample directory.
 
-    Looks for {sample_dir.name}.deduplicate_metrics.txt or *deduplicate_metrics.txt
-    or *duplication_metrics.txt under sample_dir.
+    Looks for {sample_id}.deduplicate_metrics.txt (when sample_id given),
+    then {sample_dir.name}.deduplicate_metrics.txt, then *deduplicate_metrics.txt
+    / *duplication_metrics.txt under sample_dir.
 
     Returns:
         Path to the metrics file, or None if not found.
@@ -117,10 +166,13 @@ def find_metrics_in_sample_dir(sample_dir: Path) -> Optional[Path]:
     sample_dir = Path(sample_dir)
     if not sample_dir.is_dir():
         return None
-    # Prefer exact name match
-    candidate = sample_dir / f"{sample_dir.name}.deduplicate_metrics.txt"
-    if candidate.exists():
-        return candidate
+    # Prefer explicit sample id, then directory basename, then glob.
+    for name in (sample_id, sample_dir.name):
+        if not name:
+            continue
+        candidate = sample_dir / f"{name}.deduplicate_metrics.txt"
+        if candidate.exists():
+            return candidate
     for pattern in ["*deduplicate_metrics.txt", "*duplication_metrics.txt"]:
         matches = list(sample_dir.glob(pattern))
         if matches:
@@ -159,25 +211,31 @@ def parse_all_metrics(metrics_root: Path) -> Dict[str, Dict[str, Any]]:
 
 def parse_metrics_from_sample_paths(
     sample_paths: List[Path],
+    *,
+    sample_id_by_path: Optional[Mapping[str, str]] = None,
 ) -> Dict[str, Dict[str, Any]]:
     """
     Parse metrics from explicit sample directories.
     Each sample path is a directory; metrics file is discovered inside it.
 
     Returns:
-        Dict mapping sample_basename -> parsed metrics dict (skips samples with no metrics file).
+        Dict mapping sample_id -> parsed metrics dict (skips samples with no metrics file).
+        Keys prefer ``sample_id_by_path`` / artifact-resolved ids over directory basenames
+        (experiment mode trees use leaf names like ``linear``).
     """
     result: Dict[str, Dict[str, Any]] = {}
+    id_map = {str(Path(k)): str(v) for k, v in (sample_id_by_path or {}).items() if v}
     for sample_dir in sample_paths:
         sample_dir = Path(sample_dir)
-        metrics_file = find_metrics_in_sample_dir(sample_dir)
+        sample_id = resolve_sample_artifact_id(sample_dir, id_map.get(str(sample_dir)))
+        metrics_file = find_metrics_in_sample_dir(sample_dir, sample_id=sample_id)
         if metrics_file is None:
             print(f"Warning: No metrics file found in {sample_dir}")
             continue
         try:
             metrics = parse_deduplication_metrics(metrics_file)
             if metrics:
-                result[sample_dir.name] = metrics
+                result[sample_id] = metrics
         except Exception as e:
             print(f"Warning: Failed to parse {metrics_file}: {e}")
     return result

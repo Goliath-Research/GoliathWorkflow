@@ -35,12 +35,22 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
     if not sample_path.is_dir():
         raise RuntimeError(f"sampleDir not found: {sample_path}")
 
+    from methyl_alignment_qc.core import resolve_sample_artifact_id
+
+    # sampleDir may be an experiment mode leaf (.../<sampleId>/linear); artifacts
+    # remain named {sampleId}.bam — never use sample_path.name as the sample id.
+    resolved_sample_id = resolve_sample_artifact_id(
+        sample_path, str(sample_id) if sample_id else None
+    )
+
     project = input_json.get("project") or input_json.get("projectPath")
     from methyl_alignment_qc.core import process_samples_to_qc_jsons
     from methyl_alignment_qc.core.qc_write_context import QcWriteContext
 
     write_ctx = QcWriteContext.from_input_json(input_json)
-    write_ctx.sample_prep_log_path = str(sample_path / f"{sample_path.name}.sample_prep_log.jsonl")
+    write_ctx.sample_prep_log_path = str(
+        sample_path / f"{resolved_sample_id}.sample_prep_log.jsonl"
+    )
 
     def _build_result(qc_path: Path) -> MethylQcTaskOutput:
         from ..sample_prep_log import append_sample_prep_log
@@ -61,7 +71,7 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
         rc = methyl_qc_result_code(remediate=remediate)
         append_sample_prep_log(
             sample_path,
-            sample_id=sample_id or sample_path.name,
+            sample_id=resolved_sample_id,
             action="sample.methyl_qc",
             capability=_capability,
             attempt=write_ctx.attempt,
@@ -82,7 +92,7 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
         return MethylQcTaskOutput(
             status="ok",
             result_code=rc,
-            sampleId=sample_id or sample_path.name,
+            sampleId=resolved_sample_id,
             qcPath=str(qc_path),
             guardrails=guardrails,
             screening=screening,
@@ -96,7 +106,7 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
 
         cfg = resolve_alignment_qc_config(str(project))
         out_dir = cfg.output_dir
-        qc_path = Path(out_dir) / f"{sample_path.name}.json"
+        qc_path = Path(out_dir) / f"{resolved_sample_id}.json"
         if qc_path.is_file():
             # Use module-level json (do not re-import here — that makes `json` a
             # function-local name and breaks _build_result when this branch is skipped).
@@ -114,8 +124,9 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
             optional_guardrails=cfg.optional_guardrails,
             alignment_guardrails=cfg.alignment_guardrails,
             write_context=write_ctx,
+            sample_id=resolved_sample_id,
         )
-        qc_path = Path(out_dir) / f"{sample_path.name}.json"
+        qc_path = Path(out_dir) / f"{resolved_sample_id}.json"
     else:
         import tempfile
 
@@ -125,8 +136,9 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
                 [str(sample_path)],
                 out_dir,
                 write_context=write_ctx,
+                sample_id=resolved_sample_id,
             )
-            qc_path = Path(out_dir) / f"{sample_path.name}.json"
+            qc_path = Path(out_dir) / f"{resolved_sample_id}.json"
             return _build_result(qc_path)
 
     if not qc_path.is_file():

@@ -144,9 +144,9 @@ def test_process_samples_to_qc_jsons_parses_dedup_metrics_once(tmp_path: Path, m
     calls = {"n": 0}
     real_parse = core_parser.parse_metrics_from_sample_paths
 
-    def counting_parse(paths):
+    def counting_parse(paths, **kwargs):
         calls["n"] += 1
-        return real_parse(paths)
+        return real_parse(paths, **kwargs)
 
     monkeypatch.setattr(core_parser, "parse_metrics_from_sample_paths", counting_parse)
 

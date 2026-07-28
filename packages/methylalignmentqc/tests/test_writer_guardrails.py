@@ -213,3 +213,83 @@ def test_process_samples_to_qc_jsons_uses_canonical_sample_json_name_only(tmp_pa
     output_dir = tmp_path / "out"
     with pytest.raises(RuntimeError, match="Missing Parabricks metrics"):
         process_samples_to_qc_jsons([str(sample_dir)], str(output_dir), validate_schema=True)
+
+
+def test_resolve_sample_artifact_id_mode_subdir(tmp_path: Path):
+    from methyl_alignment_qc.core.parser import resolve_sample_artifact_id
+
+    mode_dir = tmp_path / "DPLST-051425-111148" / "linear"
+    mode_dir.mkdir(parents=True)
+    (mode_dir / "DPLST-051425-111148.deduplicate_metrics.txt").write_text("x", encoding="utf-8")
+    assert resolve_sample_artifact_id(mode_dir) == "DPLST-051425-111148"
+    assert resolve_sample_artifact_id(mode_dir, "DPLST-051425-111148") == "DPLST-051425-111148"
+    # Explicit wins even if dirname looks like a sample id
+    flat = tmp_path / "sampleA"
+    flat.mkdir()
+    assert resolve_sample_artifact_id(flat, "sampleA") == "sampleA"
+    assert resolve_sample_artifact_id(flat) == "sampleA"
+
+
+def test_process_samples_to_qc_jsons_mode_subdir_uses_sample_id_not_dirname(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Regression: compare experiment uses .../<sampleId>/linear as sampleDir.
+
+    Flagstat / QC output must key off sampleId, not the mode leaf name.
+    """
+    from methyl_alignment_qc.core.writer import process_samples_to_qc_jsons
+    from methyl_alignment_qc.models.config import AlignmentGuardrailsConfig
+
+    sample_id = "DPLST-051425-111148"
+    mode_dir = tmp_path / sample_id / "linear"
+    mode_dir.mkdir(parents=True)
+    _write_text(mode_dir / f"{sample_id}.deduplicate_metrics.txt", _dedup_metrics_fixture())
+    (mode_dir / f"{sample_id}.json").write_text(
+        json.dumps(_parabricks_json_fixture(sample_id)), encoding="utf-8"
+    )
+    # Minimal BAM-shaped file so preflight does not fail on magic (gzip header).
+    (mode_dir / f"{sample_id}.bam").write_bytes(b"\x1f\x8b" + b"\x00" * 64)
+
+    flagstat_calls: list[tuple[str, str]] = []
+
+    def _fake_flagstat(sample_dir, sid, force=False):
+        flagstat_calls.append((str(sample_dir), sid))
+        from methyl_alignment_qc.models.sample_qc import AlignmentFlagstat
+
+        return AlignmentFlagstat(
+            total_reads=100,
+            mapped_reads=95,
+            properly_paired_reads=92,
+            supplementary_reads=0,
+            secondary_reads=0,
+            duplicate_reads=0,
+            mapped_rate=0.95,
+            properly_paired_rate=0.92,
+            supplementary_rate=0.0,
+        )
+
+    monkeypatch.setattr("methyl_alignment_qc.core.writer.run_flagstat", _fake_flagstat)
+
+    output_dir = tmp_path / "out"
+    process_samples_to_qc_jsons(
+        [str(mode_dir)],
+        str(output_dir),
+        validate_schema=True,
+        sample_id=sample_id,
+        alignment_guardrails=AlignmentGuardrailsConfig(
+            enabled=True,
+            flagstat_enabled=True,
+            min_properly_paired_rate=0.90,
+        ),
+    )
+
+    out = output_dir / f"{sample_id}.json"
+    assert out.is_file()
+    assert not (output_dir / "linear.json").exists()
+    payload = json.loads(out.read_text(encoding="utf-8"))
+    assert payload["sample_id"] == sample_id
+    assert flagstat_calls == [(str(mode_dir), sample_id)]
+    details = payload["guardrails"]["details"]
+    assert "properly_paired_rate" in details
+    assert "BAM not found" not in str(details.get("properly_paired_rate", {}).get("message", ""))
+    assert details["properly_paired_rate"]["pass"] is True
