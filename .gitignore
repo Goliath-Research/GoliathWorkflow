@@ -137,7 +137,6 @@ packages/methylclassifier/classification_dmps_pc-hc12-1-CG.txt
 packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.out
 packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.fdb_latexmk
 packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.toc
-.gitignore
 packages/methyldetector/docs/MethylDetector_Theoretical_Foundation.aux
 .hypothesis
 /.quarto/
@@ -155,4 +154,6 @@ migrate_work_layout.manifest.json
 
 # Ephemeral review/diagnostic output (pytest logs, schema-drift, guard results) — local only
 .review-scratch/
-.cache/vg-src/vg
+
+# Local vg source checkout + build tree (scripts/build_methylgrapher_image.sh, ~5 GB)
+.cache/vg-src/
