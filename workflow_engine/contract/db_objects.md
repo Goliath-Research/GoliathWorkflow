@@ -131,7 +131,9 @@ Used when middle-tier delegates graph expansion to SQL (`wf_engine_activate` pat
 | `wf.wf_get_scope_variable_json` | Read scope variable |
 | `wf.wf_get_scope_variable_int` | Read scope variable as int |
 
-Control-flow helpers: `wf_sequence_continue`, `wf_parallel_continue`, `wf_repeat_continue`, `wf_while_continue`, FOREACH procs.
+Control-flow helpers: `wf_sequence_continue`, `wf_parallel_continue`, `wf_repeat_continue`, `wf_while_continue`, `wf_foreach_continue`, `wf_foreach_parallel_continue`.
+
+FOREACH continuation is dispatched through `wf.wf_foreach_route_continue`, which is the only object that reads `wf.workflow_node.foreach_parallel`. Base schema scripts predate FOREACH, so they route through it rather than duplicating the sequential/parallel branch — re-running a base script must never leave a FOREACH parent `PENDING` while its BODY children are `SUCCEEDED`.
 
 ### 4. Admin
 

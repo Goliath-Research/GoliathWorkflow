@@ -83,5 +83,10 @@ BEGIN
 
     ELSE IF @ptype = N'WHILE'
         EXEC wf.wf_while_continue @while_execution_id = @parent;
+
+    /* FOREACH parents (direct ACTION body) dispatch through the router so this script
+       can be re-applied without dropping FOREACH continuation. */
+    ELSE IF @ptype = N'FOREACH'
+        EXEC wf.wf_foreach_route_continue @foreach_execution_id = @parent;
 END;
 GO

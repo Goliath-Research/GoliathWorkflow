@@ -7,6 +7,7 @@
   - wf.wf_json_array_length
   - wf.wf_foreach_bind_iteration
   - wf.wf_foreach_continue / wf.wf_foreach_parallel_continue
+  - wf.wf_foreach_route_continue (sequential/parallel dispatch; called by base engine procs)
   - wf.wf_engine_continue_parent (FOREACH routing)
   - wf.wf_engine_on_action_complete (FOREACH parent on direct BODY action)
   - wf.wf_engine_activate (FOREACH activation + BODY item bind hook)
@@ -350,6 +351,32 @@ BEGIN
 END;
 GO
 
+/* Single dispatch seam for FOREACH continuation.
+
+   The base schema scripts (MethylPipeline.sql / MethylPipelineDB_Script.sql) predate
+   FOREACH and cannot reference wf.workflow_node.foreach_parallel, so they route here
+   instead. Keeping the column read in one place means re-running a base script can no
+   longer strand a FOREACH parent in PENDING while its BODY children are SUCCEEDED. */
+CREATE OR ALTER PROCEDURE wf.wf_foreach_route_continue
+    @foreach_execution_id BIGINT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @parallel BIT;
+
+    SELECT @parallel = ISNULL(wn.foreach_parallel, 0)
+    FROM wf.node_execution AS ne
+    INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
+    WHERE ne.id = @foreach_execution_id;
+
+    IF @parallel = 1
+        EXEC wf.wf_foreach_parallel_continue @foreach_execution_id = @foreach_execution_id;
+    ELSE
+        EXEC wf.wf_foreach_continue @foreach_execution_id = @foreach_execution_id;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE wf.wf_engine_continue_parent
     @parent_node_execution_id BIGINT
 AS
@@ -358,9 +385,8 @@ BEGIN
 
     DECLARE @pnode BIGINT;
     DECLARE @ptype VARCHAR(32);
-    DECLARE @parallel BIT;
 
-    SELECT @pnode = ne.workflow_node_id, @ptype = wn.node_type, @parallel = ISNULL(wn.foreach_parallel, 0)
+    SELECT @pnode = ne.workflow_node_id, @ptype = wn.node_type
     FROM wf.node_execution AS ne
     INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
     WHERE ne.id = @parent_node_execution_id;
@@ -384,12 +410,7 @@ BEGIN
         EXEC wf.wf_while_continue @while_execution_id = @parent_node_execution_id;
 
     ELSE IF @ptype = N'FOREACH'
-    BEGIN
-        IF @parallel = 1
-            EXEC wf.wf_foreach_parallel_continue @foreach_execution_id = @parent_node_execution_id;
-        ELSE
-            EXEC wf.wf_foreach_continue @foreach_execution_id = @parent_node_execution_id;
-    END
+        EXEC wf.wf_foreach_route_continue @foreach_execution_id = @parent_node_execution_id;
 END;
 GO
 
@@ -453,9 +474,8 @@ BEGIN
     END
 
     DECLARE @ptype VARCHAR(32);
-    DECLARE @fparallel BIT;
 
-    SELECT @ptype = wn.node_type, @fparallel = ISNULL(wn.foreach_parallel, 0)
+    SELECT @ptype = wn.node_type
     FROM wf.node_execution AS ne
     INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
     WHERE ne.id = @parent;
@@ -479,12 +499,7 @@ BEGIN
         EXEC wf.wf_while_continue @while_execution_id = @parent;
 
     ELSE IF @ptype = N'FOREACH'
-    BEGIN
-        IF @fparallel = 1
-            EXEC wf.wf_foreach_parallel_continue @foreach_execution_id = @parent;
-        ELSE
-            EXEC wf.wf_foreach_continue @foreach_execution_id = @parent;
-    END
+        EXEC wf.wf_foreach_route_continue @foreach_execution_id = @parent;
 END;
 GO
 

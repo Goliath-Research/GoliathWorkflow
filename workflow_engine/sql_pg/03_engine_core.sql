@@ -382,6 +382,10 @@ BEGIN
     CALL wf.wf_repeat_continue(p_parent_node_execution_id);
   ELSIF v_ptype = 'WHILE' THEN
     CALL wf.wf_while_continue(p_parent_node_execution_id);
+  -- FOREACH arrives with 08_foreach_support.sql; dispatch through the router so
+  -- re-running this core script never drops FOREACH continuation.
+  ELSIF v_ptype = 'FOREACH' THEN
+    CALL wf.wf_foreach_route_continue(p_parent_node_execution_id);
   END IF;
 END;
 $$;
@@ -438,6 +442,10 @@ BEGIN
     CALL wf.wf_repeat_continue(v_parent);
   ELSIF v_ptype = 'WHILE' THEN
     CALL wf.wf_while_continue(v_parent);
+  -- FOREACH parents (direct ACTION body) dispatch through the router so re-running
+  -- this core script never drops FOREACH continuation.
+  ELSIF v_ptype = 'FOREACH' THEN
+    CALL wf.wf_foreach_route_continue(v_parent);
   END IF;
 END;
 $$;

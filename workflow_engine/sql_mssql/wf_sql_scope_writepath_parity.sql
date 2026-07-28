@@ -332,18 +332,7 @@ BEGIN
         EXEC wf.wf_while_continue @while_execution_id = @parent;
 
     ELSE IF @ptype = N'FOREACH'
-    BEGIN
-        DECLARE @fparallel BIT;
-        SELECT @fparallel = ISNULL(wn.foreach_parallel, 0)
-        FROM wf.node_execution AS ne
-        INNER JOIN wf.workflow_node AS wn ON wn.id = ne.workflow_node_id
-        WHERE ne.id = @parent;
-
-        IF @fparallel = 1
-            EXEC wf.wf_foreach_parallel_continue @foreach_execution_id = @parent;
-        ELSE
-            EXEC wf.wf_foreach_continue @foreach_execution_id = @parent;
-    END
+        EXEC wf.wf_foreach_route_continue @foreach_execution_id = @parent;
 END;
 GO
 

@@ -20,6 +20,9 @@ Options:
   --report-only             Validate existing mode trees; write report
   --dry-run                 Plan start payloads only
   --timeout SEC             Per-arm timeout (default 28800)
+  --modes LIST              Arms to run (default linear,pangenome_wgbs). The
+                            pangenome arm is CPU-only and far slower, so run it
+                            on its own timeout and pair results with --report-only
   -h, --help
 
 Requires for real runs:

@@ -197,6 +197,10 @@ BEGIN
     CALL wf.wf_repeat_continue(v_parent);
   ELSIF v_ptype = 'WHILE' THEN
     CALL wf.wf_while_continue(v_parent);
+  -- FOREACH parents (direct ACTION body) dispatch through the router so re-running
+  -- this parity script never drops FOREACH continuation.
+  ELSIF v_ptype = 'FOREACH' THEN
+    CALL wf.wf_foreach_route_continue(v_parent);
   END IF;
 END;
 $$;

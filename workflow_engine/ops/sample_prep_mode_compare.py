@@ -190,6 +190,17 @@ def _resolve_samples(args: argparse.Namespace) -> List[Dict[str, Any]]:
     return [dict(s) for s in DEFAULT_SAMPLES]
 
 
+def _resolve_modes(args: argparse.Namespace, all_modes: Sequence[str]) -> List[str]:
+    """Arms to run this invocation (arms are independent; one may take days)."""
+    requested = [m.strip() for m in (args.modes or "").split(",") if m.strip()]
+    if not requested:
+        return list(all_modes)
+    unknown = [m for m in requested if m not in all_modes]
+    if unknown:
+        raise SystemExit(f"--modes: unknown mode(s) {unknown}; choose from {list(all_modes)}")
+    return [m for m in all_modes if m in requested]
+
+
 def _thresholds_from_args(args: argparse.Namespace):
     ensure_import_paths()
     from methyl_utils.test_data_registry import SamplePrepCanaryThresholds
@@ -230,6 +241,7 @@ def run_compare(args: argparse.Namespace) -> int:
     out_dir = report_root / stamp
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    modes = _resolve_modes(args, COMPARE_MODES)
     thresholds = _thresholds_from_args(args)
     reference_fasta = _reference_fasta(args.reference_fasta)
     reference_gtf = _reference_gtf(args.reference_gtf)
@@ -266,7 +278,7 @@ def run_compare(args: argparse.Namespace) -> int:
         "workflow_version_id": sample_prep_vid,
         "program_path": sample_prep_program,
         "reuse_local_fastq": bool(args.reuse_local_fastq),
-        "modes": list(COMPARE_MODES),
+        "modes": list(modes),
         "archive": "disabled",
     }
 
@@ -314,7 +326,7 @@ def run_compare(args: argparse.Namespace) -> int:
 
         arm_reports = {}
         instance_ids[sample_id] = {}
-        for mode in COMPARE_MODES:
+        for mode in modes:
             mode_dir = mode_sample_dir(sample_root, mode)
             mode_dir.mkdir(parents=True, exist_ok=True)
             # Mode-local file storage so download_fastq skips onto hardlinked root FASTQs.
@@ -498,6 +510,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional JSON with samples[] overrides (else plasma+buffy defaults)",
     )
     p.add_argument("--project-path", default=None, help="Fallback projectPath for all samples")
+    p.add_argument(
+        "--modes",
+        default=None,
+        help=(
+            "Comma-separated arms to run (default both: linear,pangenome_wgbs). Run arms "
+            "separately when the CPU-only pangenome arm needs a much longer timeout; "
+            "combine with --report-only afterwards for the paired report."
+        ),
+    )
     p.add_argument(
         "--fastq-storage-json",
         default=None,

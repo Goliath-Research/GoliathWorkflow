@@ -330,13 +330,34 @@ BEGIN
 END;
 $$;
 
+-- Single dispatch seam for FOREACH continuation. 03_engine_core.sql predates FOREACH
+-- and routes here so it can stay agnostic of wf.workflow_node.foreach_parallel.
+CREATE OR REPLACE PROCEDURE wf.wf_foreach_route_continue(IN p_foreach_execution_id bigint)
+LANGUAGE plpgsql
+AS $$
+DECLARE v_parallel boolean;
+BEGIN
+  SELECT coalesce(wn.foreach_parallel, false)
+  INTO v_parallel
+  FROM wf.node_execution ne
+  INNER JOIN wf.workflow_node wn ON wn.id = ne.workflow_node_id
+  WHERE ne.id = p_foreach_execution_id;
+
+  IF v_parallel THEN
+    CALL wf.wf_foreach_parallel_continue(p_foreach_execution_id);
+  ELSE
+    CALL wf.wf_foreach_continue(p_foreach_execution_id);
+  END IF;
+END;
+$$;
+
 CREATE OR REPLACE PROCEDURE wf.wf_engine_continue_parent(IN p_parent_node_execution_id bigint)
 LANGUAGE plpgsql
 AS $$
-DECLARE v_ptype text; v_parallel boolean;
+DECLARE v_ptype text;
 BEGIN
-  SELECT wn.node_type, coalesce(wn.foreach_parallel, false)
-  INTO v_ptype, v_parallel
+  SELECT wn.node_type
+  INTO v_ptype
   FROM wf.node_execution ne
   INNER JOIN wf.workflow_node wn ON wn.id = ne.workflow_node_id
   WHERE ne.id = p_parent_node_execution_id;
@@ -353,11 +374,7 @@ BEGIN
   ELSIF v_ptype = 'WHILE' THEN
     CALL wf.wf_while_continue(p_parent_node_execution_id);
   ELSIF v_ptype = 'FOREACH' THEN
-    IF v_parallel THEN
-      CALL wf.wf_foreach_parallel_continue(p_parent_node_execution_id);
-    ELSE
-      CALL wf.wf_foreach_continue(p_parent_node_execution_id);
-    END IF;
+    CALL wf.wf_foreach_route_continue(p_parent_node_execution_id);
   END IF;
 END;
 $$;
@@ -373,7 +390,6 @@ DECLARE
   v_inst bigint;
   v_parent bigint;
   v_ptype text;
-  v_fparallel boolean;
 BEGIN
   SELECT ne.workflow_instance_id, ne.parent_node_execution_id
   INTO v_inst, v_parent
@@ -402,8 +418,8 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT wn.node_type, coalesce(wn.foreach_parallel, false)
-  INTO v_ptype, v_fparallel
+  SELECT wn.node_type
+  INTO v_ptype
   FROM wf.node_execution ne INNER JOIN wf.workflow_node wn ON wn.id = ne.workflow_node_id
   WHERE ne.id = v_parent;
 
@@ -419,11 +435,7 @@ BEGIN
   ELSIF v_ptype = 'WHILE' THEN
     CALL wf.wf_while_continue(v_parent);
   ELSIF v_ptype = 'FOREACH' THEN
-    IF v_fparallel THEN
-      CALL wf.wf_foreach_parallel_continue(v_parent);
-    ELSE
-      CALL wf.wf_foreach_continue(v_parent);
-    END IF;
+    CALL wf.wf_foreach_route_continue(v_parent);
   END IF;
 END;
 $$;

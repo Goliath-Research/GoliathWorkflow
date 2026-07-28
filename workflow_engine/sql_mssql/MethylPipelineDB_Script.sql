@@ -971,6 +971,11 @@ BEGIN
 
     ELSE IF @ptype = N''WHILE''
         EXEC wf.wf_while_continue @while_execution_id = @parent_node_execution_id;
+
+    /* FOREACH arrives with wf_sql_foreach_support.sql; dispatch through the router so
+       re-running this base script never drops FOREACH continuation. */
+    ELSE IF @ptype = N''FOREACH''
+        EXEC wf.wf_foreach_route_continue @foreach_execution_id = @parent_node_execution_id;
 END;
 '
 GO
@@ -1622,6 +1627,11 @@ BEGIN
 
     ELSE IF @ptype = N''WHILE''
         EXEC wf.wf_while_continue @while_execution_id = @parent;
+
+    /* FOREACH arrives with wf_sql_foreach_support.sql; dispatch through the router so
+       re-running this base script never drops FOREACH continuation. */
+    ELSE IF @ptype = N''FOREACH''
+        EXEC wf.wf_foreach_route_continue @foreach_execution_id = @parent;
 END;
 '
 GO

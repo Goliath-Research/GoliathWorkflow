@@ -206,6 +206,15 @@ objects:
     - name: wf.wf_while_continue
       kind: procedure
       required: true
+    - name: wf.wf_foreach_continue
+      kind: procedure
+      required: true
+    - name: wf.wf_foreach_parallel_continue
+      kind: procedure
+      required: true
+    - name: wf.wf_foreach_route_continue
+      kind: procedure
+      required: true
 
   admin:
     - name: wf.sp_delete_workflow_def
