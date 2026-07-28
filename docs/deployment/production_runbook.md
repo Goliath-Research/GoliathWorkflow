@@ -33,13 +33,13 @@ Destination: `s3://epimethyl/genomes/` at `https://s3.us-east-1.myqnapcloud.io`.
 
 See [`workflow_engine/docs/portal_study_lifecycle.md`](../../workflow_engine/docs/portal_study_lifecycle.md), [`workflow_engine/sql_mssql/SamplePrepFlow.md`](../../workflow_engine/sql_mssql/SamplePrepFlow.md), and the SamplePrep test bed [`workflow_engine/docs/sample_prep_test_bed.md`](../../workflow_engine/docs/sample_prep_test_bed.md).
 
-**Alignment modes:** each sample uses one path from instance/profile `alignmentMode` — `linear` (`parabricks.fq2bam`, **GPU**), `pangenome` (stock Giraffe via Parabricks, **GPU**), or `pangenome_wgbs` (methylGrapher dual C2T/G2A via `sample.methylgrapher_wgbs_align` / `sample.methylgrapher_wgbs_extract`, **CPU only — no CUDA**). **Interim buffy default:** procedure `buffy_wgbs_linear_gene_fc` (`linear`). Procedure `buffy_wgbs_pangenome_gene_fc` selects `pangenome_wgbs` and is **experimental** until linear-vs-wgbs acceptance passes ([`docs/plans/wgbs-alignment-decision.plan.md`](../plans/wgbs-alignment-decision.plan.md)). Program checks `useWgbsPangenome` **before** `usePangenome` — do not fall back to stock Giraffe when the BS bundle is missing.
+**Alignment modes:** each sample uses one path from instance/profile `alignmentMode` — `linear` (`parabricks.fq2bam`, **GPU**), `pangenome` (stock Giraffe via Parabricks, **GPU**), or `pangenome_wgbs` (methylGrapher dual C2T/G2A via `sample.methylgrapher_wgbs_align` / `sample.methylgrapher_wgbs_extract`, **CPU only — no CUDA**). **Buffy default:** procedure `buffy_wgbs_pangenome_gene_fc` (`pangenome_wgbs`) after acceptance ([`docs/plans/wgbs-alignment-decision.plan.md`](../plans/wgbs-alignment-decision.plan.md)); linear alternate `buffy_wgbs_linear_gene_fc`. Program checks `useWgbsPangenome` **before** `usePangenome` — do not fall back to stock Giraffe when the BS bundle is missing.
 
-**WGBS pangenome operator checklist (experimental path only):**
+**WGBS pangenome operator checklist:**
 
 - [ ] Site `pangenome_wgbs_genome` / `actionConfig.methylgrapher_wgbs` provisioned (`pangenome-grch38-d9-bs-1.70` on QNAP → `/work/genomes/…/d9-bs/1.70`), including `hprc-d9-bs.wl.gfa` for MethylCall
 - [ ] `METHYL_METHYLGRAPHER_IMAGE` pinned on workers that run SamplePrep (64K-safe jemalloc=off image on Grace/GH200; see [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md)). Image is CPU-only; GPU is unused by this path.
-- [ ] Acceptance compare green before promoting `buffy_wgbs_pangenome_gene_fc` (`bash scripts/compare_sample_prep_linear_vs_wgbs.sh` with `thresholds.acceptance.json`; checklist [`workers/tests/test_methylgrapher_wgbs_canary.md`](../../workers/tests/test_methylgrapher_wgbs_canary.md))
+- [ ] Acceptance thresholds available at `tests/real_data/sample_prep_mode_compare/thresholds.acceptance.json` for re-qualification
 
 **Recommended start:** portal SQL after planning (`portal.sp_create_and_start_instance`). For CI / Admin CLI:
 

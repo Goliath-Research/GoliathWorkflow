@@ -117,3 +117,10 @@ See [`ds20m-dual-graph-finish.plan.md`](ds20m-dual-graph-finish.plan.md) and go/
 [`wgbs-alignment-decision.plan.md`](wgbs-alignment-decision.plan.md) passes
 (DS20M concordance + buffy confirmation). Memo:
 `/work/samples/_comparisons/20260728Tinterim/interim_alignment_recommendation.md`.
+
+
+## Final recommendation (2026-07-28)
+
+Both acceptance gates passed (plasma DS20M + buffy DS20M). **Buffy production default restored to `buffy_wgbs_pangenome_gene_fc`.**
+See [`wgbs-alignment-decision.plan.md`](wgbs-alignment-decision.plan.md) and
+`/work/samples/_comparisons/20260728T185352Z/alignment_recommendation.md`.

@@ -35,8 +35,8 @@ Committed under
 
 | Procedure | Analyte | Defaults |
 |-----------|---------|----------|
-| `buffy_wgbs_linear_gene_fc` | `buffy_coat` | **Interim default** linear WGBS (Parabricks); same science knobs as the pangenome pack |
-| `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | **Experimental** WGBS pangenome (methylGrapher, `alignmentMode: pangenome_wgbs`) — opt-in until linear-vs-wgbs acceptance passes |
+| `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | **Default** WGBS pangenome (methylGrapher, `alignmentMode: pangenome_wgbs`); requires `hprc-d9-bs.wl.gfa` |
+| `buffy_wgbs_linear_gene_fc` | `buffy_coat` | Linear WGBS baseline (same science knobs, cheaper aligner) |
 | `cfdna_wgbs_plasma` | `cfdna` | Linear WGBS + fragmentomics (analyte merge), gene FeatureCuts, **no** cell deconv lifecycle |
 | `cfdna_emseq_targeted` | `cfdna` | `libraryProtocol: emseq_targeted`, `sample_prep_emseq`, panel BED + elevated `min_cov`, no deconv |
 | `plant_wgbs_gene_fc` | `plant_tissue` | Linear WGBS, gene FeatureCuts, plant lifecycle (no blood deconv) |
@@ -46,14 +46,14 @@ methyl-workflow-run \
   --program workflow_engine/domain/fixtures/study_validation_lifecycle.program.json \
   --context '{
     "projectPath":"/work/projects/my-buffy/configs/project_….json",
-    "pipelineProcedure":"buffy_wgbs_linear_gene_fc",
+    "pipelineProcedure":"buffy_wgbs_pangenome_gene_fc",
     "pipelineProfile":"samd_research"
   }'
 ```
 
-Use `buffy_wgbs_pangenome_gene_fc` only for experimental dual-align compares until
-[`docs/plans/wgbs-alignment-decision.plan.md`](../plans/wgbs-alignment-decision.plan.md)
-acceptance (DS20M + buffy) passes.
+Accepted for production buffy research after linear-vs-wgbs gates
+([`docs/plans/wgbs-alignment-decision.plan.md`](../plans/wgbs-alignment-decision.plan.md)).
+Use `buffy_wgbs_linear_gene_fc` when GPU-only / lower wall-time is preferred.
 
 Prefer the procedure’s `lifecycleProgram` / `samplePrepProgram` hints (especially
 `study_validation_lifecycle_no_deconv` for cfDNA plasma and EM-Seq). Schema:

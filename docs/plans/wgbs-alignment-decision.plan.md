@@ -2,7 +2,7 @@
 name: WGBS Alignment Decision
 overview: Ship an interim SamplePrep recommendation of linear for buffy-coat WGBS, then run a two-stage scientific acceptance gate (fix DS20M dual-graph concordance → buffy confirmation) before any re-promotion of pangenome_wgbs.
 
-> **Status: In progress.** Interim linear shipped; DS20M acceptance PASS; buffy DS20M confirmation running.
+> **Status: Complete.** Interim linear shipped → DS20M PASS → buffy DS20M PASS → promoted `buffy_wgbs_pangenome_gene_fc`. Recommendation: `/work/samples/_comparisons/20260728T185352Z/alignment_recommendation.md`.
 
 azure_devops:
   type: Feature
@@ -27,7 +27,7 @@ todos:
     status: completed
   - id: final-reco
     content: Write alignment_recommendation.md and update procedure default only if both gates pass
-    status: pending
+    status: completed
 ---
 
 # WGBS alignment decision (1C)

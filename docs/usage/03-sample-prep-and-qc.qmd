@@ -37,8 +37,8 @@ After FASTQ download, SamplePrep chooses **one alignment path** per sample (and 
 **How to enable:**
 
 - Stock Giraffe: `alignmentMode: "pangenome"` (binds `usePangenome`).
-- WGBS methylGrapher: `alignmentMode: "pangenome_wgbs"` (binds `useWgbsPangenome` + `usePangenome`). Procedure `buffy_wgbs_pangenome_gene_fc` selects this mode (**experimental** until acceptance).
-- **Interim buffy recommendation:** use procedure `buffy_wgbs_linear_gene_fc` (`alignmentMode: linear`). Do not promote `pangenome_wgbs` as the production buffy default until the linear-vs-wgbs acceptance gate passes (see [`docs/plans/wgbs-alignment-decision.plan.md`](../plans/wgbs-alignment-decision.plan.md)).
+- WGBS methylGrapher: `alignmentMode: "pangenome_wgbs"` (binds `useWgbsPangenome` + `usePangenome`). Procedure `buffy_wgbs_pangenome_gene_fc` selects this mode (**default buffy research** after acceptance; see [`docs/plans/wgbs-alignment-decision.plan.md`](../plans/wgbs-alignment-decision.plan.md)).
+- Buffy linear alternate: `buffy_wgbs_linear_gene_fc` when lower wall-time / GPU Parabricks path is preferred.
 - Default for unset modes is **`linear`** (except `libraryProtocol: wgbs_pangenome`, which defaults to `pangenome_wgbs`).
 
 **WGBS note:** stock HPRC graphs are **not** bisulfite-aware. Do **not** silently fall back to stock Giraffe when the BS bundle is missing — pin and provision `pangenome-grch38-d9-bs-1.70`, set `METHYL_METHYLGRAPHER_IMAGE`, and gate promotion with the canary checklist under `workers/tests/test_methylgrapher_wgbs_canary.md`.
