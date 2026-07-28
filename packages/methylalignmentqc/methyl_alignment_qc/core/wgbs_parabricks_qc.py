@@ -10,7 +10,10 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
+
+if TYPE_CHECKING:
+    from ..models.config import CoreGuardrailsConfig
 
 def load_parabricks_json(json_path: str) -> Dict[str, Any]:
     """Load the Parabricks metrics JSON."""
@@ -36,9 +39,20 @@ def _make_guardrail_metric(
 
 def _build_wgbs_guardrail_report(
     data: Dict[str, Any],
-    q30_threshold: float = 85.0,
+    q30_threshold: Optional[float] = None,
+    core_guardrails: Optional["CoreGuardrailsConfig"] = None,
 ) -> Dict[str, Any]:
-    """Build guardrail report from already-loaded Parabricks JSON payload."""
+    """Build guardrail report from already-loaded Parabricks JSON payload.
+
+    ``core_guardrails`` carries operator-set thresholds; ``q30_threshold``, when given,
+    overrides its Q30 value so the CLI flag keeps working.
+    """
+    from ..models.config import CoreGuardrailsConfig
+
+    cfg = core_guardrails or CoreGuardrailsConfig()
+    if q30_threshold is None:
+        q30_threshold = cfg.min_q30_percent
+
     qy = data["quality_yield"]
     mq = data["mean_quality_by_cycle"]["mean_quality"]
     gc = data["gc_bias_summary"]
@@ -68,21 +82,21 @@ def _build_wgbs_guardrail_report(
     deam_score = qscores[deam_idx] if deam_idx is not None else 100
     oxog_score = qscores[oxog_idx] if oxog_idx is not None else 100
 
-    # Compile results with clear thresholds
-    pf_pass = pf_pct >= 90.0
+    # Compile results against operator-set thresholds
+    pf_pass = pf_pct >= cfg.min_pf_percent
     q30_pass = q30_pct >= q30_threshold
-    mean_qual_pass = mean_qual >= 35.0
-    min_qual_post20_pass = min_qual_post20 >= 30.0
-    at_dropout_pass = at_dropout < 3.0
-    gc_dropout_pass = gc_dropout < 5.0
-    median_insert_pass = 150 <= median_insert <= 300
-    deam_pass = deam_score <= 30
-    oxog_pass = oxog_score >= 20
+    mean_qual_pass = mean_qual >= cfg.min_mean_quality
+    min_qual_post20_pass = min_qual_post20 >= cfg.min_quality_post20
+    at_dropout_pass = at_dropout < cfg.max_at_dropout
+    gc_dropout_pass = gc_dropout < cfg.max_gc_dropout
+    median_insert_pass = cfg.median_insert_min_bp <= median_insert <= cfg.median_insert_max_bp
+    deam_pass = deam_score <= cfg.max_deamination_qscore
+    oxog_pass = oxog_score >= cfg.min_oxog_qscore
 
     results = {
         "pf_percent": _make_guardrail_metric(
             value=round(pf_pct, 2),
-            normal_range=">= 90",
+            normal_range=f">= {cfg.min_pf_percent}",
             passed=pf_pass,
             message="Percentage of reads passing Illumina PF filtering. Low values can indicate run-level quality issues.",
         ),
@@ -94,43 +108,43 @@ def _build_wgbs_guardrail_report(
         ),
         "mean_quality": _make_guardrail_metric(
             value=round(mean_qual, 2),
-            normal_range=">= 35",
+            normal_range=f">= {cfg.min_mean_quality}",
             passed=mean_qual_pass,
             message="Average Phred quality across cycles. Lower values indicate noisier reads and weaker sequencing confidence.",
         ),
         "min_quality_post20": _make_guardrail_metric(
             value=round(min_qual_post20, 2),
-            normal_range=">= 30",
+            normal_range=f">= {cfg.min_quality_post20}",
             passed=min_qual_post20_pass,
             message="Minimum quality after cycle 20. Captures late-cycle degradation that can hurt alignment and methylation calls.",
         ),
         "at_dropout": _make_guardrail_metric(
             value=round(at_dropout, 3),
-            normal_range="< 3.0",
+            normal_range=f"< {cfg.max_at_dropout}",
             passed=at_dropout_pass,
             message="AT-rich region dropout. High values suggest uneven representation of AT-rich genomic content.",
         ),
         "gc_dropout": _make_guardrail_metric(
             value=round(gc_dropout, 3),
-            normal_range="< 5.0",
+            normal_range=f"< {cfg.max_gc_dropout}",
             passed=gc_dropout_pass,
             message="GC-rich region dropout. High values suggest uneven representation of GC-rich genomic content.",
         ),
         "median_insert_bp": _make_guardrail_metric(
             value=median_insert,
-            normal_range="150-300",
+            normal_range=f"{cfg.median_insert_min_bp}-{cfg.median_insert_max_bp}",
             passed=median_insert_pass,
             message="Median insert size (bp). Out-of-range values can indicate library preparation or fragmentation issues.",
         ),
         "deamination_qscore": _make_guardrail_metric(
             value=deam_score,
-            normal_range="<= 30 (ideally <= 20)",
+            normal_range=f"<= {cfg.max_deamination_qscore}",
             passed=deam_pass,
             message="Parabricks deamination qscore. In WGBS, lower scores are expected and reflect bisulfite conversion signal.",
         ),
         "oxog_qscore": _make_guardrail_metric(
             value=oxog_score,
-            normal_range=">= 20",
+            normal_range=f">= {cfg.min_oxog_qscore}",
             passed=oxog_pass,
             message="Parabricks OxoG qscore. Lower values indicate higher oxidative G>T damage risk.",
         ),
@@ -216,15 +230,18 @@ def _print_wgbs_guardrail_report(report: Dict[str, Any]) -> None:
 
 def check_wgbs_guardrails(
     json_path: str,
-    q30_threshold: float = 85.0,
+    q30_threshold: Optional[float] = None,
     print_report: bool = True,
+    core_guardrails: Optional["CoreGuardrailsConfig"] = None,
 ) -> Dict[str, Any]:
     """
     Run all guardrails and return a detailed report.
     q30_threshold: 85.0 (strict) or 80.0 (relaxed) for % Q30 bases.
     """
     data = load_parabricks_json(json_path)
-    report = _build_wgbs_guardrail_report(data, q30_threshold=q30_threshold)
+    report = _build_wgbs_guardrail_report(
+        data, q30_threshold=q30_threshold, core_guardrails=core_guardrails
+    )
     if print_report:
         _print_wgbs_guardrail_report(report)
     return report
@@ -253,8 +270,8 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--q30-threshold",
         type=float,
-        default=85.0,
-        help="Threshold for q30_percent guardrail (default: 85.0)",
+        default=None,
+        help="Override the q30_percent guardrail threshold (default: from alignment_qc config)",
     )
     parser.add_argument(
         "--output",

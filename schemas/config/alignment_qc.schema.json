@@ -144,6 +144,85 @@
       "title": "BisulfiteConversionConfig",
       "type": "object"
     },
+    "CoreGuardrailsConfig": {
+      "description": "Thresholds for the core WGBS Parabricks guardrails.\n\nOperators set these per deployment in site `actionConfig.alignment_qc.core_guardrails`\nor per procedure in a pipeline profile. Values here reproduce the published WGBS\nacceptance window so an unset config keeps the QC gate closed rather than silently\npassing every sample.",
+      "properties": {
+        "max_at_dropout": {
+          "default": 3.0,
+          "description": "Maximum Picard GC-bias AT dropout.",
+          "minimum": 0.0,
+          "title": "Max At Dropout",
+          "type": "number"
+        },
+        "max_deamination_qscore": {
+          "default": 30,
+          "description": "Maximum Parabricks pre-adapter deamination qscore (low is expected in WGBS).",
+          "minimum": 0,
+          "title": "Max Deamination Qscore",
+          "type": "integer"
+        },
+        "max_gc_dropout": {
+          "default": 5.0,
+          "description": "Maximum Picard GC-bias GC dropout. Raise per deployment for libraries with known GC-rich under-representation (e.g. 6.0) instead of editing code.",
+          "minimum": 0.0,
+          "title": "Max Gc Dropout",
+          "type": "number"
+        },
+        "median_insert_max_bp": {
+          "default": 300,
+          "description": "Maximum acceptable median insert size (bp).",
+          "minimum": 1,
+          "title": "Median Insert Max Bp",
+          "type": "integer"
+        },
+        "median_insert_min_bp": {
+          "default": 150,
+          "description": "Minimum acceptable median insert size (bp).",
+          "minimum": 1,
+          "title": "Median Insert Min Bp",
+          "type": "integer"
+        },
+        "min_mean_quality": {
+          "default": 35.0,
+          "description": "Minimum mean Phred quality averaged across cycles.",
+          "minimum": 0.0,
+          "title": "Min Mean Quality",
+          "type": "number"
+        },
+        "min_oxog_qscore": {
+          "default": 20,
+          "description": "Minimum Parabricks pre-adapter OxoG qscore; lower means more G>T damage risk.",
+          "minimum": 0,
+          "title": "Min Oxog Qscore",
+          "type": "integer"
+        },
+        "min_pf_percent": {
+          "default": 90.0,
+          "description": "Minimum percentage of reads passing Illumina PF filtering.",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Min Pf Percent",
+          "type": "number"
+        },
+        "min_q30_percent": {
+          "default": 85.0,
+          "description": "Minimum percentage of PF bases at Q30 or better (85 strict, 80 relaxed).",
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Min Q30 Percent",
+          "type": "number"
+        },
+        "min_quality_post20": {
+          "default": 30.0,
+          "description": "Minimum per-cycle quality after cycle 20 (late-cycle degradation).",
+          "minimum": 0.0,
+          "title": "Min Quality Post20",
+          "type": "number"
+        }
+      },
+      "title": "CoreGuardrailsConfig",
+      "type": "object"
+    },
     "CycleScreeningConfig": {
       "description": "Per-cycle read-end screening for remediation dispositions.",
       "properties": {
@@ -356,6 +435,18 @@
       ],
       "default": null,
       "description": "Optional bisulfite conversion rate QC from per-sample sidecar files."
+    },
+    "core_guardrails": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CoreGuardrailsConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Thresholds for the core WGBS guardrails (PF, Q30, GC/AT dropout, insert size, artifact qscores). Unset uses the published acceptance window."
     },
     "cycle_screening": {
       "anyOf": [

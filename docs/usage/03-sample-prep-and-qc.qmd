@@ -29,7 +29,7 @@ After FASTQ download, SamplePrep chooses **one alignment path** per sample (and 
 |------|-------------|---------------|------|---------|-----------|
 | **Linear (default)** | `usePangenome: false`, `useWgbsPangenome: false` | `sample.parabricks_fq2bam` | `pbrun fq2bam_meth` | GPU (Parabricks) | Site `reference_genome.fasta` |
 | **Stock pangenome** | `usePangenome: true`, `useWgbsPangenome: false` | `sample.parabricks_giraffe` | `pbrun giraffe` + `collectmultiplemetrics` | GPU (Parabricks) | Site `pangenome_genome` |
-| **WGBS pangenome** | `usePangenome: true`, `useWgbsPangenome: true` | `sample.methylgrapher_wgbs_align` | methylGrapher Align (C2T+G2A) + vg surject → QC BAM | **CPU only** (no CUDA; jemalloc=off vg on 64K ARM64) | Site `actionConfig.methylgrapher_wgbs` / `pangenome_wgbs_genome` (QNAP `d9-bs/1.70`) |
+| **WGBS pangenome** | `usePangenome: true`, `useWgbsPangenome: true` | `sample.methylgrapher_wgbs_align` | methylGrapher Align (C2T+G2A) + `vg giraffe -o BAM` C2T pass → QC BAM | **CPU only** (no CUDA; jemalloc=off vg on 64K ARM64) | Site `actionConfig.methylgrapher_wgbs` / `pangenome_wgbs_genome` (QNAP `d9-bs/1.70`) |
 
 : Alignment modes {tbl-colwidths="[12,18,18,18,14,20]"}
 
@@ -118,18 +118,20 @@ V1-shaped payloads are assembled internally and converted to V2 for export; stan
 
 ## Alignment guardrails: what “good alignment” means
 
-Core WGBS guardrails (defaults in `wgbs_parabricks_qc.py`) include:
+Core WGBS guardrails are **operator-configurable** under `actionConfig.alignment_qc.core_guardrails` (site or profile layer). The acceptance window applied when a key is unset is:
 
-| Metric | Default expectation | Why it matters |
-|--------|---------------------|----------------|
-| PF read percent | ≥ 90% | Run-level filtering quality |
-| Q30 percent | ≥ 85% (configurable) | Base-call confidence |
-| Mean quality | ≥ 35 | Overall sequencing noise |
-| Min quality after cycle 20 | ≥ 30 | Late-cycle degradation |
-| AT / GC dropout | < 3 / < 5 | Coverage bias across genome |
-| Median insert size | 150–300 bp | Library fragmentation sanity |
-| Deamination qscore | ≤ 30 | Expected WGBS conversion signal |
-| OxoG qscore | ≥ 20 | Oxidative damage risk |
+| Metric | Acceptance window | Config key | Why it matters |
+|--------|-------------------|------------|----------------|
+| PF read percent | ≥ 90% | `min_pf_percent` | Run-level filtering quality |
+| Q30 percent | ≥ 85% | `min_q30_percent` | Base-call confidence |
+| Mean quality | ≥ 35 | `min_mean_quality` | Overall sequencing noise |
+| Min quality after cycle 20 | ≥ 30 | `min_quality_post20` | Late-cycle degradation |
+| AT / GC dropout | < 3 / < 5 | `max_at_dropout` / `max_gc_dropout` | Coverage bias across genome |
+| Median insert size | 150–300 bp | `median_insert_min_bp` / `median_insert_max_bp` | Library fragmentation sanity |
+| Deamination qscore | ≤ 30 | `max_deamination_qscore` | Expected WGBS conversion signal |
+| OxoG qscore | ≥ 20 | `min_oxog_qscore` | Oxidative damage risk |
+
+Widen or tighten a window per deployment rather than editing Python — for example, a cohort whose GC dropout sits just above 5 can be admitted with `"core_guardrails": {"max_gc_dropout": 6.0}`. The reported `normal_range` in the QC JSON always echoes the configured value, so a report is self-describing.
 
 Each metric carries a **`message`** explaining the biological/operational concern. `guardrails.overall_pass` is the logical AND of all evaluated checks (including optional and analyte-specific add-ons).
 
@@ -140,6 +142,9 @@ Configure under profile or site `actionConfig.alignment_qc` (not in the study ma
 ```json
 {
   "alignment_qc": {
+    "core_guardrails": {
+      "max_gc_dropout": 6.0
+    },
     "optional_guardrails": {
       "duplication_rate_max": 0.25,
       "min_pf_reads": 1000000
@@ -168,6 +173,7 @@ Configure under profile or site `actionConfig.alignment_qc` (not in the study ma
 }
 ```
 
+- **Core guardrails:** the sequencing/library window in the table above. Only set the keys you need to move; unset keys keep the acceptance window.
 - **Alignment guardrails:** mapping rate, secondary/supplementary rate, GC uniformity (Picard-derived), and properly paired rate (`samtools flagstat` on the BAM). Enabled by default for `cfdna` and `buffy_coat` via analyte profile. See [implementation guide](../../implementation/sample-preparation-flow.md).
 - **Bisulfite conversion:** reads `bisulfite_conversion.json` sidecar when present; otherwise may use deamination qscore as a qualitative proxy.
 - **cfDNA fragmentomics:** when `primary_analyte` is `cfdna`, insert-size histogram guardrails can flag abnormal fragment profiles before extraction.

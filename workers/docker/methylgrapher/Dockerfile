@@ -35,6 +35,10 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     || pip3 install --no-cache-dir --break-system-packages \
       "git+https://github.com/twlab/methylGrapher.git@v${METHYLGRAPHER_VERSION}"
 
+# vg 1.70 writes GAF header lines that methylGrapher's reader cannot parse.
+COPY patch_gaf_header.py /usr/local/share/patch_gaf_header.py
+RUN python3 /usr/local/share/patch_gaf_header.py
+
 LABEL org.opencontainers.image.title="methylGrapher WGBS worker" \
       org.opencontainers.image.description="methylGrapher + vg for MethylPipeline pangenome_wgbs SamplePrep" \
       methylpipeline.vg_version="${VG_VERSION}" \

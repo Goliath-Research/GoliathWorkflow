@@ -77,6 +77,7 @@ def resolve_alignment_qc_config(
             "bisulfite_conversion",
             "optional_guardrails",
             "alignment_guardrails",
+            "core_guardrails",
             "cycle_screening",
         ):
             if key in step_cfg:

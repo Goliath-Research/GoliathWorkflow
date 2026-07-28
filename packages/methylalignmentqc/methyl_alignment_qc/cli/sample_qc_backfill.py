@@ -16,6 +16,7 @@ from methyl_alignment_qc.core.writer import build_sample_qc_v2_dict, write_sampl
 from methyl_alignment_qc.models.config import (
     AlignmentGuardrailsConfig,
     BisulfiteConversionConfig,
+    CoreGuardrailsConfig,
     CycleScreeningConfig,
     FragmentomicsConfig,
     OptionalGuardrailsConfig,
@@ -52,6 +53,8 @@ def _kwargs_from_step_config(step_cfg: Dict[str, Any], *, validate_schema: bool)
         kwargs["alignment_guardrails"] = AlignmentGuardrailsConfig.model_validate(
             step_cfg["alignment_guardrails"]
         )
+    if step_cfg.get("core_guardrails") is not None:
+        kwargs["core_guardrails"] = CoreGuardrailsConfig.model_validate(step_cfg["core_guardrails"])
     return kwargs
 
 
@@ -73,6 +76,7 @@ def resolve_backfill_kwargs(
             "cycle_screening": cfg.cycle_screening or CycleScreeningConfig(),
             "optional_guardrails": cfg.optional_guardrails,
             "alignment_guardrails": cfg.alignment_guardrails,
+            "core_guardrails": cfg.core_guardrails,
         }
 
     step_cfg: Dict[str, Any] = {}

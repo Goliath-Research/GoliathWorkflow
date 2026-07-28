@@ -226,7 +226,7 @@ Task `input_json` keys: `parabricksImage`, `bwaThreads`, `gpuFlags`, `extraDocke
 ## `methylgrapher.wgbs_align`
 
 **action_name:** `sample.methylgrapher_wgbs_align`  
-**Runtime:** Docker **CPU** container (`METHYL_METHYLGRAPHER_IMAGE`) running methylGrapher Align (dual C→T / G→A Giraffe indexes) + `vg surject` → QC-compatible GRCh38 BAM. **No GPU / CUDA acceleration** — stock `vg` and methylGrapher are CPU-only by design. On 64 KB-page ARM64 (Grace/GH200) the image must ship `jemalloc=off` vg (see [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md)); exposing `--gpus` does not speed this path. Expect substantially longer wall time than Parabricks linear `fq2bam_meth` on the same host.
+**Runtime:** Docker **CPU** container (`METHYL_METHYLGRAPHER_IMAGE`) running methylGrapher Align (dual C→T / G→A Giraffe indexes) for methylation calls, plus a `vg giraffe -o BAM --ref-paths` C2T pass for the QC-compatible GRCh38 BAM. The methylGrapher GAF is in named-segment space and cannot be fed to `vg surject`. **No GPU / CUDA acceleration** — stock `vg` and methylGrapher are CPU-only by design. On 64 KB-page ARM64 (Grace/GH200) the image must ship `jemalloc=off` vg (see [`workers/docker/methylgrapher/README.md`](../../workers/docker/methylgrapher/README.md)); exposing `--gpus` does not speed this path. Expect substantially longer wall time than Parabricks linear `fq2bam_meth` on the same host.
 
 **When:** SamplePrep **IF** `useWgbsPangenome` is true (`alignmentMode: "pangenome_wgbs"`). Checked **before** `usePangenome` in the program graph. Idempotency and `forceRealign` semantics match `parabricks.fq2bam`.
 

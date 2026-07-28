@@ -549,6 +549,50 @@
       "additionalProperties": false,
       "description": "Operator-set acceptance bounds for linear vs methylGrapher comparison.\n\nStock Giraffe (``pangenome``) is an engineering comparator and does not use\nthese biological parity thresholds.",
       "properties": {
+        "alignment_time_ratio_max": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Max allowed (pangenome_wgbs alignment_ms / linear alignment_ms). Operator-set cost gate for the dual-mode compare experiment.",
+          "title": "Alignment Time Ratio Max"
+        },
+        "cpg_coverage_min_fraction_of_linear": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum pangenome_wgbs CpG weighted-mean coverage as a fraction of linear. Hypothesis: usable CpG read support should not collapse vs linear.",
+          "title": "Cpg Coverage Min Fraction Of Linear"
+        },
+        "cpg_depth_thresholds": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Operator-set coverage depths for optional H5 fraction-of-CpGs stats (e.g. [1, 5, 10]). Empty/unset skips H5 depth fractions.",
+          "title": "Cpg Depth Thresholds"
+        },
         "cpg_sites_min_fraction_of_linear": {
           "anyOf": [
             {

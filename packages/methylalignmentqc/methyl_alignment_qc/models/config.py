@@ -24,6 +24,72 @@ class CycleScreeningConfig(BaseModel):
     localized_max_span: int = Field(default=6, ge=1)
 
 
+class CoreGuardrailsConfig(BaseModel):
+    """Thresholds for the core WGBS Parabricks guardrails.
+
+    Operators set these per deployment in site `actionConfig.alignment_qc.core_guardrails`
+    or per procedure in a pipeline profile. Values here reproduce the published WGBS
+    acceptance window so an unset config keeps the QC gate closed rather than silently
+    passing every sample.
+    """
+
+    min_pf_percent: float = Field(
+        default=90.0,
+        ge=0.0,
+        le=100.0,
+        description="Minimum percentage of reads passing Illumina PF filtering.",
+    )
+    min_q30_percent: float = Field(
+        default=85.0,
+        ge=0.0,
+        le=100.0,
+        description="Minimum percentage of PF bases at Q30 or better (85 strict, 80 relaxed).",
+    )
+    min_mean_quality: float = Field(
+        default=35.0,
+        ge=0.0,
+        description="Minimum mean Phred quality averaged across cycles.",
+    )
+    min_quality_post20: float = Field(
+        default=30.0,
+        ge=0.0,
+        description="Minimum per-cycle quality after cycle 20 (late-cycle degradation).",
+    )
+    max_at_dropout: float = Field(
+        default=3.0,
+        ge=0.0,
+        description="Maximum Picard GC-bias AT dropout.",
+    )
+    max_gc_dropout: float = Field(
+        default=5.0,
+        ge=0.0,
+        description=(
+            "Maximum Picard GC-bias GC dropout. Raise per deployment for libraries with "
+            "known GC-rich under-representation (e.g. 6.0) instead of editing code."
+        ),
+    )
+    median_insert_min_bp: int = Field(
+        default=150,
+        ge=1,
+        description="Minimum acceptable median insert size (bp).",
+    )
+    median_insert_max_bp: int = Field(
+        default=300,
+        ge=1,
+        description="Maximum acceptable median insert size (bp).",
+    )
+    max_deamination_qscore: int = Field(
+        default=30,
+        ge=0,
+        description="Maximum Parabricks pre-adapter deamination qscore (low is expected in WGBS).",
+    )
+    min_oxog_qscore: int = Field(
+        default=20,
+        ge=0,
+        description="Minimum Parabricks pre-adapter OxoG qscore; lower means more G>T damage risk.",
+    )
+
+
 class OptionalGuardrailsConfig(BaseModel):
     """Config-gated guardrails beyond core WGBS Parabricks checks."""
 
@@ -173,6 +239,13 @@ class AlignmentQCConfig(BaseModel):
         default=None,
         description="Read 2 start cycle screening for remediation dispositions.",
     )
+    core_guardrails: Optional[CoreGuardrailsConfig] = Field(
+        default=None,
+        description=(
+            "Thresholds for the core WGBS guardrails (PF, Q30, GC/AT dropout, insert size, "
+            "artifact qscores). Unset uses the published acceptance window."
+        ),
+    )
     optional_guardrails: Optional[OptionalGuardrailsConfig] = Field(
         default=None,
         description="Additional guardrails (duplication rate, min PF reads). Opt in via step_config.",
@@ -213,6 +286,17 @@ class AlignmentQCConfig(BaseModel):
             return value
         if isinstance(value, dict):
             return OptionalGuardrailsConfig.model_validate(value)
+        return value
+
+    @field_validator("core_guardrails", mode="before")
+    @classmethod
+    def _coerce_core_guardrails(cls, value):  # noqa: ANN001
+        if value is None:
+            return None
+        if isinstance(value, CoreGuardrailsConfig):
+            return value
+        if isinstance(value, dict):
+            return CoreGuardrailsConfig.model_validate(value)
         return value
 
     @field_validator("fragmentomics", mode="before")

@@ -53,7 +53,7 @@ todos:
 - Expand [`docs/usage/03-sample-prep-and-qc.qmd`](../usage/03-sample-prep-and-qc.qmd) and [`docs/implementation/sample-preparation-flow.md`](../implementation/sample-preparation-flow.md) with:
   - exact stage ordering and remediation behavior;
   - linear, stock Giraffe, and WGBS pangenome selection/configuration;
-  - the bisulfite-aware correction chain: dual C2T/G2A indexes → directional methylGrapher alignment → GAF → `vg surject` → restoration of original read sequences/qualities → sort/markdup/index → QC-compatible BAM;
+  - the bisulfite-aware correction chain: dual C2T/G2A indexes → directional methylGrapher alignment → GAF (named-segment space, kept for `MethylCall`) → separate `vg giraffe -o BAM --ref-paths` C2T pass → restoration of original read sequences/qualities → sort/markdup/index → QC-compatible BAM;
   - graph-aware methyl calling, linear-coordinate projection, H5/pattern outputs, asset fingerprints, image/version provenance, and failure/no-fallback rules;
   - alignment-QC and extraction-QC metrics/gates and the corrected manifest contract;
   - a precise boundary showing SamplePrep emits read-level patterns while `pipeline.info_measures` runs later in the study lifecycle.

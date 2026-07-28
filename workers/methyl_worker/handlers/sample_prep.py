@@ -52,6 +52,19 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
         sample_path / f"{resolved_sample_id}.sample_prep_log.jsonl"
     )
 
+    def _mirror_into_sample_dir(qc_path: Path) -> None:
+        """Keep the QC JSON beside the BAM it describes.
+
+        ``cfg.output_dir`` is keyed by sample id alone, so separate runs of one
+        sample (e.g. the linear vs pangenome_wgbs comparison arms) overwrite each
+        other's QC there. The per-run copy is also what artifact validators look
+        for when they walk a sample directory.
+        """
+        dest = sample_path / f"{resolved_sample_id}.alignment_qc.json"
+        if qc_path.resolve() == dest.resolve():
+            return
+        shutil.copy2(qc_path, dest)
+
     def _build_result(qc_path: Path) -> MethylQcTaskOutput:
         from ..sample_prep_log import append_sample_prep_log
 
@@ -123,6 +136,7 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
             cycle_screening=cfg.cycle_screening,
             optional_guardrails=cfg.optional_guardrails,
             alignment_guardrails=cfg.alignment_guardrails,
+            core_guardrails=cfg.core_guardrails,
             write_context=write_ctx,
             sample_id=resolved_sample_id,
         )
@@ -139,11 +153,13 @@ def _handle_methyl_qc(_capability: str, _action_name: str, input: BaseModel) -> 
                 sample_id=resolved_sample_id,
             )
             qc_path = Path(out_dir) / f"{resolved_sample_id}.json"
+            _mirror_into_sample_dir(qc_path)
             return _build_result(qc_path)
 
     if not qc_path.is_file():
         raise RuntimeError(f"QC JSON not written: {qc_path}")
 
+    _mirror_into_sample_dir(qc_path)
     return _build_result(qc_path)
 
 

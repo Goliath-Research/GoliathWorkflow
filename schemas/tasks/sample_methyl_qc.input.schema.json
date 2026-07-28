@@ -1,4 +1,92 @@
 {
+  "$defs": {
+    "RemediationTrigger": {
+      "additionalProperties": false,
+      "description": "Why a QC re-evaluation was scheduled, bound by the program's realign branch.",
+      "properties": {
+        "disposition": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Screening disposition that triggered remediation (e.g. REALIGN_TRIM).",
+          "title": "Disposition"
+        },
+        "priorNode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Node key of the QC attempt that produced the disposition.",
+          "title": "Priornode"
+        },
+        "trimFront1": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trimfront1"
+        },
+        "trimFront2": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trimfront2"
+        },
+        "trimTail1": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trimtail1"
+        },
+        "trimTail2": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trimtail2"
+        }
+      },
+      "title": "RemediationTrigger",
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -90,14 +178,14 @@
     "remediationTrigger": {
       "anyOf": [
         {
-          "type": "string"
+          "$ref": "#/$defs/RemediationTrigger"
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "title": "Remediationtrigger"
+      "description": "Set on retry QC nodes so the attempt record keeps the trim provenance."
     },
     "resolvedConfig": {
       "anyOf": [

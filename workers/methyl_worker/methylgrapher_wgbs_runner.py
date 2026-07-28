@@ -303,36 +303,101 @@ def build_methylcall_command(
     ]
 
 
-def build_surject_command(
+def build_qc_bam_command(
     *,
-    gaf: Path,
-    gbz: Path,
-    ref_paths: Path,
+    bundle: MethylGrapherWgbsBundle,
+    fq1_c2t: Path,
+    fq2_g2a: Path,
     threads: int | None = None,
 ) -> List[str]:
-    """Build ``vg surject`` argv for GAF → BAM (stdout).
+    """Build ``vg giraffe`` argv emitting a GRCh38-surjected BAM on **stdout**.
 
-    Correct flags (vg ≥1.x):
-    - ``-G`` / ``--gaf-input``: input is GAF (not GAM)
-    - ``-b`` / ``--bam-output``: write BAM to **stdout**
-    - ``-i`` is interleaved paired-end (boolean) — do **not** pass format there
-    - there is no ``-o``; callers must redirect stdout to the BAM path
+    The QC BAM must not be produced by surjecting methylGrapher's GAF.
+    methylGrapher aligns with ``vg giraffe --named-coordinates``, so the GAF path
+    column holds GFA *segment* names, while ``vg surject -G`` reads that column as
+    vg *node* IDs; the node lengths disagree and vg aborts on the first record
+    (``cur_offset < cur_len`` assertion in ``gaf_to_alignment``). Re-mapping the
+    converted reads with ``-o BAM --ref-paths`` keeps node space internal to vg.
+
+    Only the primary R1-C2T / R2-G2A pass against the C2T graph is mapped: QC
+    needs one best alignment per read, not methylGrapher's multi-graph output.
     """
     vg = os.environ.get(VG_BIN_ENV, "").strip() or "vg"
     n_threads = threads if threads is not None else max(1, (os.cpu_count() or 4) // 2)
     return [
         vg,
-        "surject",
-        "-x",
-        str(gbz),
-        "-G",
-        "-b",
+        "giraffe",
+        "-p",
         "-t",
         str(n_threads),
-        "-F",
-        str(ref_paths),
-        str(gaf),
+        "-o",
+        "BAM",
+        "--ref-paths",
+        str(bundle.ref_paths),
+        "-Z",
+        str(bundle.c2t_gbz),
+        "-d",
+        str(bundle.c2t_dist),
+        "-m",
+        str(bundle.c2t_min),
+        "-z",
+        str(bundle.c2t_zipcodes),
+        "-f",
+        str(fq1_c2t),
+        "-f",
+        str(fq2_g2a),
     ]
+
+
+def _write_bs_converted_fastq(
+    src: Path,
+    dst: Path,
+    *,
+    base_from: str,
+    base_to: str,
+    log_path: Path,
+) -> None:
+    """Stream ``src`` into its in-silico bisulfite-converted form at ``dst``.
+
+    Mirrors the conversion methylGrapher applies before ``vg giraffe`` (R1 C→T,
+    R2 G→A for directional libraries), which it does not keep on disk. Only
+    sequence lines are rewritten, so names and qualities stay intact and
+    :func:`_restore_original_sequences` can put the original bases back.
+    """
+    if src.name.endswith(".gz"):
+        reader = [("pigz" if shutil.which("pigz") else "gzip"), "-dc", str(src)]
+    else:
+        reader = ["cat", str(src)]
+    convert = ["awk", f'NR % 4 == 2 {{ gsub(/{base_from}/, "{base_to}") }} 1']
+    _append_log(
+        log_path,
+        "COMMAND: "
+        + " ".join(shlex.quote(c) for c in reader)
+        + " | "
+        + " ".join(shlex.quote(c) for c in convert)
+        + " > "
+        + shlex.quote(str(dst)),
+    )
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    with dst.open("wb") as out_fh:
+        rd = subprocess.Popen(reader, stdout=subprocess.PIPE)
+        try:
+            cv = subprocess.Popen(
+                convert, stdin=rd.stdout, stdout=out_fh, stderr=subprocess.PIPE
+            )
+        finally:
+            # Close our handle so the reader sees EPIPE if awk dies early.
+            if rd.stdout is not None:
+                rd.stdout.close()
+        cv_err = (cv.communicate()[1] or b"").decode("utf-8", errors="replace")
+        rc_reader = rd.wait()
+    if rc_reader != 0 or cv.returncode != 0:
+        raise RuntimeError(
+            f"bisulfite conversion of {src.name} failed "
+            f"(reader rc={rc_reader}, awk rc={cv.returncode}): {cv_err.strip()}"
+        )
+    if not dst.is_file() or dst.stat().st_size == 0:
+        raise RuntimeError(f"bisulfite conversion produced empty FASTQ: {dst}")
 
 
 def _package_qc_tar(sample_dir: Path, sample_id: str, metrics_dir: Path) -> Path:
@@ -670,45 +735,81 @@ def run_methylgrapher_wgbs_align(
             fq1.parent.resolve(),
             Path(index_prefix).parent,
         }
-        docker_cmd = [_docker_bin(), "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}"]
-        for root in sorted(mount_roots, key=str):
-            docker_cmd.extend(["-v", f"{root}:{root}"])
-        docker_cmd.extend([image, *align_cmd])
-        _run(docker_cmd, log_path, step="methylGrapher.Align")
+        if gaf_path.is_file() and gaf_path.stat().st_size > 0:
+            # Resume: alignment is the longest step and the GAF only lands here
+            # after methylGrapher succeeded, so never re-map it.
+            logger.info("Reusing existing methylGrapher GAF for %s", sample_id)
+            _append_log(log_path, f"REUSE: existing GAF {gaf_path}")
+        else:
+            docker_cmd = [
+                _docker_bin(),
+                "run",
+                "--rm",
+                "--user",
+                f"{os.getuid()}:{os.getgid()}",
+            ]
+            for root in sorted(mount_roots, key=str):
+                docker_cmd.extend(["-v", f"{root}:{root}"])
+            docker_cmd.extend([image, *align_cmd])
+            _run(docker_cmd, log_path, step="methylGrapher.Align")
 
-        # methylGrapher writes GAF under work_dir; normalize to sample root.
-        candidates = list(work_dir.glob("*.gaf")) + list(work_dir.glob("**/*.gaf"))
-        if not candidates:
-            raise RuntimeError(f"methylGrapher Align did not produce a GAF under {work_dir}")
-        shutil.copy2(candidates[0], gaf_path)
+            # methylGrapher writes GAF under work_dir; normalize to sample root.
+            candidates = list(work_dir.glob("*.gaf")) + list(work_dir.glob("**/*.gaf"))
+            if not candidates:
+                raise RuntimeError(
+                    f"methylGrapher Align did not produce a GAF under {work_dir}"
+                )
+            shutil.copy2(candidates[0], gaf_path)
 
-        surject_gbz = bundle.original_gbz or bundle.c2t_gbz
-        surject_bam = work_dir / f"{sample_id}.surject.bam"
-        surject_cmd = build_surject_command(
-            gaf=gaf_path,
-            gbz=surject_gbz,
-            ref_paths=bundle.ref_paths,
+        if not bundle.directional:
+            logger.warning(
+                "non-directional library %s: QC BAM covers the R1-C2T/R2-G2A pass "
+                "against the C2T graph only; methylation calls still use every "
+                "methylGrapher pass",
+                sample_id,
+            )
+        c2t_r1 = work_dir / f"{sample_id}.C2T.R1.fastq"
+        g2a_r2 = work_dir / f"{sample_id}.G2A.R2.fastq"
+        _write_bs_converted_fastq(
+            fq1, c2t_r1, base_from="C", base_to="T", log_path=log_path
+        )
+        _write_bs_converted_fastq(
+            fq2, g2a_r2, base_from="G", base_to="A", log_path=log_path
+        )
+        qc_bam = work_dir / f"{sample_id}.giraffe.bam"
+        qc_bam_cmd = build_qc_bam_command(
+            bundle=bundle,
+            fq1_c2t=c2t_r1,
+            fq2_g2a=g2a_r2,
             threads=bundle.threads,
         )
-        docker_surject = [
+        docker_qc_bam = [
             _docker_bin(),
             "run",
             "--rm",
             "--user",
             f"{os.getuid()}:{os.getgid()}",
         ]
-        for root in sorted(mount_roots | {surject_gbz.parent.resolve()}, key=str):
-            docker_surject.extend(["-v", f"{root}:{root}"])
-        docker_surject.extend([image, *surject_cmd])
-        # vg surject -b writes BAM to stdout; redirect as binary (never text capture).
-        _run(docker_surject, log_path, step="vg.surject", stdout_path=surject_bam)
+        for root in sorted(mount_roots | {bundle.ref_paths.parent.resolve()}, key=str):
+            docker_qc_bam.extend(["-v", f"{root}:{root}"])
+        docker_qc_bam.extend([image, *qc_bam_cmd])
+        # giraffe -o BAM writes to stdout; redirect as binary (never text capture).
+        _run(docker_qc_bam, log_path, step="vg.giraffe_qc_bam", stdout_path=qc_bam)
+        for converted in (c2t_r1, g2a_r2):
+            converted.unlink(missing_ok=True)
 
         restored = work_dir / f"{sample_id}.restored.bam"
-        _restore_original_sequences(surject_bam, fq1, fq2, restored, log_path)
+        _restore_original_sequences(qc_bam, fq1, fq2, restored, log_path)
 
         sorted_bam = work_dir / f"{sample_id}.sorted.bam"
         _run(
-            ["samtools", "sort", "-o", str(sorted_bam), str(restored if restored.is_file() else surject_bam)],
+            [
+                "samtools",
+                "sort",
+                "-o",
+                str(sorted_bam),
+                str(restored if restored.is_file() else qc_bam),
+            ],
             log_path,
             step="samtools.sort",
         )

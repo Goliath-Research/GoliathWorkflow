@@ -85,6 +85,7 @@ Examples:
                 cycle_screening=config.cycle_screening,
                 optional_guardrails=config.optional_guardrails,
                 alignment_guardrails=config.alignment_guardrails,
+                core_guardrails=config.core_guardrails,
             )
             if args.verbose:
                 print(f"Wrote {len(config.sample_paths)} JSON(s) to {config.output_dir}")

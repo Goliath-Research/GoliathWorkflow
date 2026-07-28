@@ -16,6 +16,7 @@ from . import parser as core_parser
 from ..models.config import (
     AlignmentGuardrailsConfig,
     BisulfiteConversionConfig,
+    CoreGuardrailsConfig,
     CycleScreeningConfig,
     FragmentomicsConfig,
     OptionalGuardrailsConfig,
@@ -422,6 +423,7 @@ def build_sample_qc_v2_dict(
     cycle_screening: Optional[CycleScreeningConfig] = None,
     optional_guardrails: Optional[OptionalGuardrailsConfig] = None,
     alignment_guardrails: Optional[AlignmentGuardrailsConfig] = None,
+    core_guardrails: Optional[CoreGuardrailsConfig] = None,
     write_context: Optional[QcWriteContext] = None,
     output_path_for_history: Optional[Path] = None,
     dedup_metrics: Optional[Dict[str, Any]] = None,
@@ -474,11 +476,15 @@ def build_sample_qc_v2_dict(
 
     try:
         if str(metrics_source).endswith(".json"):
-            payload["guardrails"] = check_wgbs_guardrails(str(metrics_source), print_report=False)
+            payload["guardrails"] = check_wgbs_guardrails(
+                str(metrics_source), print_report=False, core_guardrails=core_guardrails
+            )
         else:
             from .wgbs_parabricks_qc import _build_wgbs_guardrail_report
 
-            payload["guardrails"] = _build_wgbs_guardrail_report(payload)
+            payload["guardrails"] = _build_wgbs_guardrail_report(
+                payload, core_guardrails=core_guardrails
+            )
     except Exception as e:
         raise RuntimeError(f"Failed to compute guardrails for {sample_name} from {metrics_source}: {e}") from e
 
@@ -548,6 +554,7 @@ def process_samples_to_qc_jsons(
     cycle_screening: Optional[CycleScreeningConfig] = None,
     optional_guardrails: Optional[OptionalGuardrailsConfig] = None,
     alignment_guardrails: Optional[AlignmentGuardrailsConfig] = None,
+    core_guardrails: Optional[CoreGuardrailsConfig] = None,
     write_context: Optional[QcWriteContext] = None,
     sample_id: Optional[str] = None,
     sample_id_by_path: Optional[Mapping[str, str]] = None,
@@ -597,6 +604,7 @@ def process_samples_to_qc_jsons(
             cycle_screening=cycle_screening,
             optional_guardrails=optional_guardrails,
             alignment_guardrails=alignment_guardrails,
+            core_guardrails=core_guardrails,
             write_context=write_context,
             output_path_for_history=output_file,
             dedup_metrics=dedup_metrics,

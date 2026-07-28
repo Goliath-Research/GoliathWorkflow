@@ -299,6 +299,25 @@ class TrimFastqTaskInput(BaseModel):
     remediationReason: Optional[str] = None
 
 
+class RemediationTrigger(BaseModel):
+    """Why a QC re-evaluation was scheduled, bound by the program's realign branch."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    disposition: Optional[str] = Field(
+        default=None,
+        description="Screening disposition that triggered remediation (e.g. REALIGN_TRIM).",
+    )
+    trimFront1: Optional[int] = Field(default=None, ge=0)
+    trimTail1: Optional[int] = Field(default=None, ge=0)
+    trimFront2: Optional[int] = Field(default=None, ge=0)
+    trimTail2: Optional[int] = Field(default=None, ge=0)
+    priorNode: Optional[str] = Field(
+        default=None,
+        description="Node key of the QC attempt that produced the disposition.",
+    )
+
+
 class MethylQcTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -319,7 +338,10 @@ class MethylQcTaskInput(BaseModel):
     alignmentPass: Optional[str] = None
     qcAttempt: Optional[int] = None
     qcAttemptReason: Optional[str] = None
-    remediationTrigger: Optional[str] = None
+    remediationTrigger: Optional[RemediationTrigger] = Field(
+        default=None,
+        description="Set on retry QC nodes so the attempt record keeps the trim provenance.",
+    )
     workflowNodeKey: Optional[str] = None
 
 

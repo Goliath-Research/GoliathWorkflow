@@ -267,9 +267,11 @@ When instance/profile/procedure sets `alignmentMode: "pangenome_wgbs"` (scope `u
 **Bisulfite-aware correction chain** (worker-side; assets from task `resolvedConfig` only — no stock Giraffe fallback):
 
 1. Resolve dual **C→T** and **G→A** Giraffe indexes + `cpg_tsv` / `ref_paths` / `original_gbz` from site `pangenome_wgbs_genome` / `actionConfig.methylgrapher_wgbs` (QNAP asset `pangenome-grch38-d9-bs-1.70`).
-2. **`methylGrapher Align`** (directional Y/N) against both converted indexes → merged **GAF** `{sample_id}.alignment.gaf`.
-3. **`vg surject -G -b`** onto linear GRCh38 (`original_gbz` or C2T `gbz` + `ref_paths`).
-4. **Restore original read sequences/qualities** on the surjected BAM (converted bases are not suitable for downstream QC as-is).
+2. **`methylGrapher Align`** (directional Y/N) against both converted indexes → merged **GAF** `{sample_id}.alignment.gaf`. Re-running the action reuses an existing non-empty GAF instead of re-mapping.
+3. **QC BAM via `vg giraffe -o BAM --ref-paths`** against the C2T index, using freshly converted reads (R1 C→T, R2 G→A). Surjection happens **inside** giraffe.
+   - **Do not surject the methylGrapher GAF.** methylGrapher maps with `vg giraffe --named-coordinates`, so the GAF path column holds GFA *segment* names, while `vg surject -G` reads that column as vg *node* IDs. The lengths disagree and vg aborts (`cur_offset < cur_len` assertion in `gaf_to_alignment`, signal 6). The GAF stays the input for `MethylCall`, which expects named coordinates.
+   - QC needs one best alignment per read, so only the primary R1-C2T/R2-G2A pass is re-mapped; methylation calls still use every methylGrapher pass.
+4. **Restore original read sequences/qualities** on the BAM (converted bases are not suitable for downstream QC as-is).
 5. `samtools sort` → `markdup` → `index`; emit Picard-like `{sample_id}.deduplicate_metrics.txt` + `{sample_id}.qc-metrics.tar` so **`sample.methyl_qc` is unchanged**.
 6. Write `{sample_id}.alignment_metrics.json` with tool/image pins and **asset fingerprints** (partial SHA256) for CAAS provenance.
 
@@ -338,21 +340,23 @@ The workflow variable `qcPass` covers layers 1 and 2. Extraction QC (`extraction
 
 `guardrails.overall_pass` is the **logical AND** of all evaluated checks in `guardrails.details`. Optional guardrails (`duplication_rate_max`, `min_pf_reads`) are **off by default** until set in profile `actionConfig.alignment_qc.optional_guardrails`. **Alignment guardrails** are enabled by default for `cfdna` and `buffy_coat` via analyte profiles (`alignment_guardrails.enabled: true`). cfDNA fragmentomics and bisulfite conversion checks add to the AND when enabled via [`AlignmentQCConfig`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py) or [`docs/ANALYTE_PROFILES.md`](../ANALYTE_PROFILES.md).
 
-Core sequencing thresholds are defined in [`wgbs_parabricks_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py). Alignment-layer logic lives in [`alignment_derived_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/alignment_derived_qc.py) and [`bam_flagstat.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/bam_flagstat.py).
+Core sequencing guardrails are evaluated in [`wgbs_parabricks_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/wgbs_parabricks_qc.py) against operator-set thresholds ([`CoreGuardrailsConfig`](../../packages/methylalignmentqc/methyl_alignment_qc/models/config.py)); the values below are the acceptance window used when a deployment sets nothing. Alignment-layer logic lives in [`alignment_derived_qc.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/alignment_derived_qc.py) and [`bam_flagstat.py`](../../packages/methylalignmentqc/methyl_alignment_qc/core/bam_flagstat.py).
 
 ### Core sequencing / library guardrails
 
-| Metric | Normal range (default) | Source | If fail | Possible fix |
-|--------|------------------------|--------|---------|--------------|
-| `pf_percent` | ≥ 90% | Parabricks `quality_yield` | Run-level PF loss | Re-sequence; check instrument/filtering |
-| `q30_percent` | ≥ 85% | Parabricks `quality_yield` | Low base-call confidence | Focused trim if localized dip; else re-sequence |
-| `mean_quality` | ≥ 35 | `mean_quality_by_cycle` | Global sequencing noise | Same as Q30 |
-| `min_quality_post20` | ≥ 30 | cycles after index 20 | Late-cycle degradation | **Focused FASTP** if R2-start/end dip; else investigate |
-| `at_dropout` | < 3.0 | `gc_bias_summary` | AT-rich coverage bias | Library prep / bisulfite over-degradation |
-| `gc_dropout` | < 5.0 | `gc_bias_summary` | GC-rich coverage bias | Same as AT dropout |
-| `median_insert_bp` | 150–300 bp (WGBS) | `insert_size_metrics` | Wrong fragmentation | WGBS: review shearing; cfDNA: see fragmentomics below |
-| `deamination_qscore` | ≤ 30 (ideally ≤ 20) | `pre_adapter_summaries` | Conversion signal | Bisulfite protocol review |
-| `oxog_qscore` | ≥ 20 | `pre_adapter_summaries` | Oxidative G→T damage | Library prep timing |
+Override any threshold per deployment in site `actionConfig.alignment_qc.core_guardrails` or per procedure in a pipeline profile. The reported `normal_range` on each metric always reflects the resolved threshold, so QC JSON stays self-describing.
+
+| Metric | Config key | Normal range (unset) | Source | If fail | Possible fix |
+|--------|------------|----------------------|--------|---------|--------------|
+| `pf_percent` | `min_pf_percent` | ≥ 90% | Parabricks `quality_yield` | Run-level PF loss | Re-sequence; check instrument/filtering |
+| `q30_percent` | `min_q30_percent` | ≥ 85% | Parabricks `quality_yield` | Low base-call confidence | Focused trim if localized dip; else re-sequence |
+| `mean_quality` | `min_mean_quality` | ≥ 35 | `mean_quality_by_cycle` | Global sequencing noise | Same as Q30 |
+| `min_quality_post20` | `min_quality_post20` | ≥ 30 | cycles after index 20 | Late-cycle degradation | **Focused FASTP** if R2-start/end dip; else investigate |
+| `at_dropout` | `max_at_dropout` | < 3.0 | `gc_bias_summary` | AT-rich coverage bias | Library prep / bisulfite over-degradation |
+| `gc_dropout` | `max_gc_dropout` | < 5.0 | `gc_bias_summary` | GC-rich coverage bias | Same as AT dropout; raise per deployment for known GC-skewed libraries |
+| `median_insert_bp` | `median_insert_min_bp` / `median_insert_max_bp` | 150–300 bp (WGBS) | `insert_size_metrics` | Wrong fragmentation | WGBS: review shearing; cfDNA: see fragmentomics below |
+| `deamination_qscore` | `max_deamination_qscore` | ≤ 30 | `pre_adapter_summaries` | Conversion signal | Bisulfite protocol review |
+| `oxog_qscore` | `min_oxog_qscore` | ≥ 20 | `pre_adapter_summaries` | Oxidative G→T damage | Library prep timing |
 
 ### Optional config guardrails
 
@@ -570,6 +574,9 @@ Example profile `actionConfig.alignment_qc` snippet:
 ```json
 {
   "alignment_qc": {
+    "core_guardrails": {
+      "max_gc_dropout": 6.0
+    },
     "optional_guardrails": {
       "duplication_rate_max": 0.25,
       "min_pf_reads": 1000000

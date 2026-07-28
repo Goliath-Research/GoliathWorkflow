@@ -11,8 +11,9 @@ from methyl_utils.action_config_resolver import resolve_methylgrapher_wgbs_genom
 from methyl_worker.methylgrapher_wgbs_runner import (
     _restore_original_sequences,
     _run,
+    _write_bs_converted_fastq,
     build_align_command,
-    build_surject_command,
+    build_qc_bam_command,
     resolve_wgbs_bundle_from_resolved,
     run_methylgrapher_wgbs_align,
     run_methylgrapher_wgbs_extract,
@@ -89,7 +90,7 @@ def test_resolve_bundle_ok_and_no_stock_fallback(tmp_path: Path) -> None:
     assert bundle.c2t_gbz.is_file()
 
 
-def test_build_align_and_surject_commands(tmp_path: Path) -> None:
+def test_build_align_and_qc_bam_commands(tmp_path: Path) -> None:
     cfg = _touch_bundle(tmp_path)
     bundle = resolve_wgbs_bundle_from_resolved(cfg)
     cmd = build_align_command(
@@ -102,18 +103,39 @@ def test_build_align_and_surject_commands(tmp_path: Path) -> None:
     assert cmd[0].endswith("methylGrapher") or cmd[0] == "methylGrapher"
     assert "Align" in cmd
     assert "-directional" in cmd
-    sur = build_surject_command(
-        gaf=tmp_path / "a.gaf",
-        gbz=bundle.original_gbz or bundle.c2t_gbz,
-        ref_paths=bundle.ref_paths,
+    qc = build_qc_bam_command(
+        bundle=bundle,
+        fq1_c2t=tmp_path / "a.C2T.R1.fastq",
+        fq2_g2a=tmp_path / "a.G2A.R2.fastq",
+        threads=8,
     )
-    assert sur[0] in {"vg", "vg"} or sur[0].endswith("vg")
-    assert "surject" in sur
-    assert "-G" in sur  # GAF input (not -i GAF)
-    assert "-b" in sur  # BAM on stdout
-    assert "-i" not in sur
-    assert "-o" not in sur
-    assert str(tmp_path / "a.gaf") in sur
+    assert qc[0] == "vg" or qc[0].endswith("vg")
+    assert "giraffe" in qc
+    assert qc[qc.index("-o") + 1] == "BAM"  # surjection happens inside giraffe
+    assert qc[qc.index("--ref-paths") + 1] == str(bundle.ref_paths)
+    assert qc[qc.index("-Z") + 1] == str(bundle.c2t_gbz)
+    assert [qc[i + 1] for i, a in enumerate(qc) if a == "-f"] == [
+        str(tmp_path / "a.C2T.R1.fastq"),
+        str(tmp_path / "a.G2A.R2.fastq"),
+    ]
+    # Named coordinates are why the GAF cannot be surjected; never ask for them.
+    assert "--named-coordinates" not in qc
+    assert "surject" not in qc
+
+
+def test_bs_conversion_rewrites_only_sequence_lines(tmp_path: Path) -> None:
+    src = tmp_path / "r1.fastq"
+    src.write_text(
+        "@read1\nACGTCC\n+\nIIICCI\n@read2\nCCCCGG\n+\nCCIIII\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "r1.C2T.fastq"
+    _write_bs_converted_fastq(
+        src, out, base_from="C", base_to="T", log_path=tmp_path / "log.txt"
+    )
+    assert out.read_text(encoding="utf-8") == (
+        "@read1\nATGTTT\n+\nIIICCI\n@read2\nTTTTGG\n+\nCCIIII\n"
+    )
 
 
 def test_run_binary_stdout_redirect(tmp_path: Path) -> None:
