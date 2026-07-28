@@ -12,8 +12,12 @@ from methyl_worker.methylgrapher_wgbs_runner import (
     _restore_original_sequences,
     _run,
     _write_bs_converted_fastq,
+    assert_methylcall_assets,
     build_align_command,
+    build_grch38_segment_offsets_from_gfa,
+    build_methylcall_command,
     build_qc_bam_command,
+    project_graph_cpg_to_linear_tsv,
     resolve_wgbs_bundle_from_resolved,
     run_methylgrapher_wgbs_align,
     run_methylgrapher_wgbs_extract,
@@ -387,6 +391,67 @@ def test_sample_prep_program_has_three_way_branch() -> None:
     assert "sample.methylgrapher_wgbs_extract" in text
     assert "sample.parabricks_giraffe" in text
     assert "sample.parabricks_fq2bam" in text
+
+
+def test_methylcall_preflight_requires_wl_gfa(tmp_path: Path) -> None:
+    cfg = _touch_bundle(tmp_path)
+    bundle = resolve_wgbs_bundle_from_resolved(cfg)
+    index_prefix = str(tmp_path / "hprc-d9-bs")
+    with pytest.raises(RuntimeError, match="wl.gfa"):
+        assert_methylcall_assets(bundle, index_prefix)
+    wl = Path(f"{index_prefix}.wl.gfa")
+    wl.write_text("H\tVN:Z:1.1\n", encoding="utf-8")
+    nr = Path(f"{index_prefix}.wl.node.replacement.json")
+    nr.write_text('{"CT":{},"GA":{}}\n', encoding="utf-8")
+    assert assert_methylcall_assets(bundle, index_prefix) == wl
+
+
+def test_build_methylcall_clamps_threads_and_batch_size(tmp_path: Path) -> None:
+    cfg = {**_touch_bundle(tmp_path), "threads": 64, "batch_size": 8192}
+    bundle = resolve_wgbs_bundle_from_resolved(cfg)
+    cmd = build_methylcall_command(
+        bundle=bundle, work_dir=tmp_path / "work", index_prefix=str(tmp_path / "hprc-d9-bs")
+    )
+    assert cmd[cmd.index("-t") + 1] == "16"
+    assert cmd[cmd.index("-batch_size") + 1] == "8192"
+    assert "MethylCall" in cmd
+
+
+def test_project_graph_cpg_to_linear_tsv(tmp_path: Path) -> None:
+    gfa = tmp_path / "toy.wl.gfa"
+    # Segment 11 starts at path offset 1000 on GRCh38 chr1.
+    gfa.write_text(
+        "\n".join(
+            [
+                "H\tVN:Z:1.1",
+                "S\t11\tACGTCGGA",
+                "S\t12\tTTCGAA",
+                "W\tGRCh38\t0\tchr1\t1000\t1014\t>11>12",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    offsets = build_grch38_segment_offsets_from_gfa(gfa)
+    assert offsets["11"] == ("1", 1000)
+    assert offsets["12"] == ("1", 1008)
+
+    cpg_reg = tmp_path / "cpg.tsv"
+    # C0 at seg11 pos 2 (base 'G' of CG at index 2? seq ACGTCGGA → CG at pos 1 and 4)
+    cpg_reg.write_text("C0\t11\t1\t11\t2\tOther\n", encoding="utf-8")
+    graph_cpg = tmp_path / "graph.cpg.tsv"
+    graph_cpg.write_text("C0\t3\t10\n", encoding="utf-8")
+    out = tmp_path / "linear.tsv"
+    n = project_graph_cpg_to_linear_tsv(
+        graph_cpg_tsv=graph_cpg,
+        cpg_registry_tsv=cpg_reg,
+        segment_offsets=offsets,
+        out_tsv=out,
+    )
+    assert n == 1
+    rows = out.read_text(encoding="utf-8").strip().splitlines()
+    assert rows[0] == "chrom\tpos\tmC\tuC\ttnc"
+    assert rows[1] == "1\t1001\t3\t7\t1"
 
 
 def test_catalog_registers_methylgrapher_actions() -> None:

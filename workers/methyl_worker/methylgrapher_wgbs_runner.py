@@ -56,6 +56,9 @@ class MethylGrapherWgbsBundle:
     contexts: Tuple[str, ...] = ("CG",)
     read_level_enabled: bool = True
     tile_size: int = 4
+    batch_size: Optional[int] = None
+    linear_cpg_tsv: Optional[Path] = None
+    wl_gfa: Optional[Path] = None
 
     def required_files(self) -> List[Tuple[str, Path]]:
         items = [
@@ -145,9 +148,59 @@ def resolve_wgbs_bundle_from_resolved(
         contexts=contexts,
         read_level_enabled=_pick_bool(rl, "enabled", True),
         tile_size=int(rl.get("tile_size") or 4),
+        batch_size=int(raw["batch_size"]) if raw.get("batch_size") is not None else None,
+        linear_cpg_tsv=(
+            Path(str(raw["linear_cpg_tsv"])).expanduser().resolve()
+            if raw.get("linear_cpg_tsv")
+            else None
+        ),
+        wl_gfa=(
+            Path(str(raw["wl_gfa"])).expanduser().resolve() if raw.get("wl_gfa") else None
+        ),
     )
     bundle.assert_present()
     return bundle
+
+
+# methylGrapher forks a second in-memory GFA worker when -t > 20; for HPRC-scale
+# graphs that doubles RAM. Cap MethylCall threads unless the operator set a lower value.
+_METHYLCALL_THREAD_CAP = 16
+
+
+def resolve_index_prefix(bundle: MethylGrapherWgbsBundle) -> str:
+    index_prefix = bundle.index_prefix or str(
+        bundle.c2t_gbz.parent / Path(bundle.c2t_gbz.name.split(".wl.")[0])
+    )
+    return str(Path(index_prefix).expanduser().resolve())
+
+
+def resolve_wl_gfa_path(bundle: MethylGrapherWgbsBundle, index_prefix: str) -> Path:
+    if bundle.wl_gfa is not None:
+        return Path(bundle.wl_gfa)
+    return Path(f"{index_prefix}.wl.gfa")
+
+
+def assert_methylcall_assets(bundle: MethylGrapherWgbsBundle, index_prefix: str) -> Path:
+    """Fail fast when MethylCall's required PrepareGenome artifacts are absent.
+
+    Without ``{index_prefix}.wl.gfa``, methylGrapher's GFA workers crash while the
+    alignment parser keeps filling an orphan queue — looks like a hang.
+    """
+    wl_gfa = resolve_wl_gfa_path(bundle, index_prefix)
+    node_repl = Path(f"{index_prefix}.wl.node.replacement.json")
+    if bundle.node_replacement_json is not None:
+        node_repl = Path(bundle.node_replacement_json)
+    missing: List[str] = []
+    if not wl_gfa.is_file() or wl_gfa.stat().st_size == 0:
+        missing.append(str(wl_gfa))
+    if not node_repl.is_file() or node_repl.stat().st_size == 0:
+        missing.append(str(node_repl))
+    if missing:
+        raise RuntimeError(
+            "methylGrapher MethylCall requires PrepareGenome assets that are missing "
+            "or empty: " + ", ".join(missing)
+        )
+    return wl_gfa
 
 
 def fingerprint_wgbs_assets(bundle: MethylGrapherWgbsBundle) -> Dict[str, str]:
@@ -289,7 +342,15 @@ def build_methylcall_command(
     index_prefix: str,
 ) -> List[str]:
     threads = bundle.threads or max(1, (os.cpu_count() or 4) // 2)
-    return [
+    if threads > _METHYLCALL_THREAD_CAP:
+        logger.warning(
+            "MethylCall threads=%s exceeds safety cap %s (avoids dual in-memory GFA "
+            "workers); clamping",
+            threads,
+            _METHYLCALL_THREAD_CAP,
+        )
+        threads = _METHYLCALL_THREAD_CAP
+    cmd = [
         os.environ.get(METHYLGRAPHER_BIN_ENV, "").strip() or "methylGrapher",
         "MethylCall",
         "-t",
@@ -301,6 +362,9 @@ def build_methylcall_command(
         "-cg_only",
         "Y" if bundle.cg_only else "N",
     ]
+    if bundle.batch_size is not None:
+        cmd.extend(["-batch_size", str(int(bundle.batch_size))])
+    return cmd
 
 
 def build_qc_bam_command(
@@ -957,6 +1021,165 @@ def run_methylgrapher_wgbs_align(
     }
 
 
+def _normalize_grch38_chrom(name: str) -> Optional[str]:
+    """Map path/sequence names like ``GRCh38#0#chr1`` / ``chr1`` → ``1``."""
+    raw = str(name).strip()
+    if not raw:
+        return None
+    # Prefer GRCh38 haplotype paths; ignore CHM13 / sample haplotypes.
+    if "#" in raw:
+        parts = raw.split("#")
+        if parts and parts[0] not in {"GRCh38", "GRCh38.p13", "hg38"}:
+            return None
+        raw = parts[-1]
+    if raw.lower().startswith("chr"):
+        raw = raw[3:]
+    if raw.upper() == "M":
+        return "MT"
+    if raw in {"X", "Y", "MT"} or raw.isdigit():
+        return raw
+    return None
+
+
+def build_grch38_segment_offsets_from_gfa(gfa_path: Path) -> Dict[str, Tuple[str, int]]:
+    """Map segment ID → (chrom, path offset of segment start) for GRCh38#0 paths.
+
+    Parses GFA ``W`` / ``P`` lines. When a segment appears on multiple GRCh38
+    paths, the first occurrence wins (stable for primary chromosomes).
+    """
+    import re
+
+    seg_re = re.compile(r"[><]([^><]+)")
+    offsets: Dict[str, Tuple[str, int]] = {}
+    # Cache segment lengths from S-lines so W-path walks can advance.
+    seg_len: Dict[str, int] = {}
+
+    with gfa_path.open("r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if not line or line[0] not in "SWP":
+                continue
+            if line[0] == "S":
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) < 3:
+                    continue
+                seg_id, seq = parts[1], parts[2]
+                if seq == "*":
+                    # length may be in LN:i: tag
+                    length = 0
+                    for tag in parts[3:]:
+                        if tag.startswith("LN:i:"):
+                            length = int(tag[5:])
+                            break
+                    seg_len[seg_id] = length
+                else:
+                    seg_len[seg_id] = len(seq)
+                continue
+
+            parts = line.rstrip("\n").split("\t")
+            path_seq = ""
+            chrom: Optional[str] = None
+            path_start = 0
+            if line[0] == "W" and len(parts) >= 7:
+                # W sample hap seqname start end path
+                chrom = _normalize_grch38_chrom(parts[3])
+                if chrom is None:
+                    # Some exports put GRCh38#0#chrN in sample/hap fields.
+                    chrom = _normalize_grch38_chrom(f"{parts[1]}#{parts[2]}#{parts[3]}")
+                if chrom is None:
+                    continue
+                try:
+                    path_start = int(parts[4])
+                except ValueError:
+                    path_start = 0
+                path_seq = parts[6]
+            elif line[0] == "P" and len(parts) >= 3:
+                chrom = _normalize_grch38_chrom(parts[1])
+                if chrom is None:
+                    continue
+                # P pathName seg+[,seg+]…
+                path_seq = "".join(
+                    (">" if tok.endswith("+") else "<") + tok[:-1]
+                    for tok in parts[2].split(",")
+                    if tok
+                )
+            else:
+                continue
+
+            cursor = path_start
+            for m in seg_re.finditer(path_seq):
+                seg_id = m.group(1)
+                if seg_id not in offsets:
+                    offsets[seg_id] = (chrom, cursor)
+                cursor += seg_len.get(seg_id, 0)
+    return offsets
+
+
+def project_graph_cpg_to_linear_tsv(
+    *,
+    graph_cpg_tsv: Path,
+    cpg_registry_tsv: Path,
+    segment_offsets: Mapping[str, Tuple[str, int]],
+    out_tsv: Path,
+) -> int:
+    """Join MergeCpG ``graph.cpg.tsv`` to ``cpg.tsv`` and emit chrom/pos/mC/uC.
+
+    Sites whose cytosines are not on a GRCh38 reference path are skipped.
+    Returns the number of projected rows written.
+    """
+    # cpg.tsv: C0\tseg1\tpos1\tseg2\tpos2\ttag...
+    registry: Dict[str, Tuple[str, int, str, int]] = {}
+    with cpg_registry_tsv.open("r", encoding="utf-8", errors="replace") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 5:
+                continue
+            # First field is like C0 / E12 (letter glued to index).
+            cpg_id = parts[0]
+            try:
+                registry[cpg_id] = (parts[1], int(parts[2]), parts[3], int(parts[4]))
+            except ValueError:
+                continue
+
+    written = 0
+    with graph_cpg_tsv.open("r", encoding="utf-8", errors="replace") as fin, out_tsv.open(
+        "w", encoding="utf-8"
+    ) as fout:
+        fout.write("chrom\tpos\tmC\tuC\ttnc\n")
+        for line in fin:
+            if not line.strip():
+                continue
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 3:
+                continue
+            cpg_id, met_s, cov_s = parts[0], parts[1], parts[2]
+            if cpg_id not in registry:
+                continue
+            try:
+                met = int(float(met_s))
+                cov = int(float(cov_s))
+            except ValueError:
+                continue
+            if cov <= 0:
+                continue
+            seg1, pos1, seg2, pos2 = registry[cpg_id]
+            # Prefer the first cytosine on a GRCh38 path.
+            chrom_pos: Optional[Tuple[str, int]] = None
+            for seg, pos in ((seg1, pos1), (seg2, pos2)):
+                if seg in segment_offsets:
+                    chrom, base = segment_offsets[seg]
+                    chrom_pos = (chrom, base + int(pos))
+                    break
+            if chrom_pos is None:
+                continue
+            chrom, pos = chrom_pos
+            uc = max(0, cov - met)
+            fout.write(f"{chrom}\t{pos}\t{met}\t{uc}\t1\n")
+            written += 1
+    return written
+
+
 def _parse_linear_methyl_tsv(path: Path) -> Dict[str, Dict[str, Any]]:
     """Parse a TSV with chrom,pos,mC,uC[,tnc] into per-chromosome arrays."""
     by_chrom: Dict[str, Dict[str, list]] = {}
@@ -1272,10 +1495,7 @@ def run_methylgrapher_wgbs_extract(
         }
 
     dry = os.environ.get("METHYL_METHYLGRAPHER_DRY_RUN", "").strip() in {"1", "true", "yes"}
-    index_prefix = bundle.index_prefix or str(
-        bundle.c2t_gbz.parent / Path(bundle.c2t_gbz.name.split(".wl.")[0])
-    )
-    index_prefix = str(Path(index_prefix).expanduser().resolve())
+    index_prefix = resolve_index_prefix(bundle)
     work_dir = work_dir.resolve()
     linear_tsv = work_dir / "linear_cpg_calls.tsv"
 
@@ -1283,6 +1503,13 @@ def run_methylgrapher_wgbs_extract(
         # Synthetic single-site call for contract tests.
         linear_tsv.write_text("chrom\tpos\tmC\tuC\ttnc\n1\t1000\t10\t2\t1\n", encoding="utf-8")
     else:
+        wl_gfa = assert_methylcall_assets(bundle, index_prefix)
+        # Ensure work_dir has alignment.gaf (methylGrapher MethylCall hardcodes this name).
+        work_gaf = work_dir / "alignment.gaf"
+        if not work_gaf.is_file() and gaf_path.is_file():
+            if gaf_path.resolve() != work_gaf.resolve():
+                shutil.copy2(gaf_path, work_gaf)
+
         image = _resolve_image(bundle)
         methyl_cmd = build_methylcall_command(
             bundle=bundle, work_dir=work_dir, index_prefix=index_prefix
@@ -1292,7 +1519,11 @@ def run_methylgrapher_wgbs_extract(
             work_dir,
             bundle.c2t_gbz.parent.resolve(),
             Path(index_prefix).parent,
+            wl_gfa.resolve().parent,
         }
+        # Follow symlink targets so Docker can open {index_prefix}.wl.gfa on local disk.
+        if wl_gfa.is_symlink():
+            mount_roots.add(wl_gfa.resolve().parent)
         docker_cmd = [_docker_bin(), "run", "--rm", "--user", f"{os.getuid()}:{os.getgid()}"]
         for root in sorted(mount_roots, key=str):
             docker_cmd.extend(["-v", f"{root}:{root}"])
@@ -1319,32 +1550,51 @@ def run_methylgrapher_wgbs_extract(
         docker_merge.extend([image, *merge_cmd])
         _run(docker_merge, log_path, step="methylGrapher.MergeCpG")
 
-        # Prefer an operator/pre-projected linear TSV if present; else look for MergeCpG outputs.
-        projected = resolved.get("linear_cpg_tsv")
+        # Prefer an operator/pre-projected linear TSV if present; else project MergeCpG.
+        projected = resolved.get("linear_cpg_tsv") or (
+            str(bundle.linear_cpg_tsv) if bundle.linear_cpg_tsv else None
+        )
         if projected and Path(str(projected)).is_file():
             shutil.copy2(Path(str(projected)), linear_tsv)
         else:
-            candidates = (
-                list(work_dir.glob("*cpg*.tsv"))
-                + list(work_dir.glob("*.methyl"))
-                + list(work_dir.glob("**/*cpg*.tsv"))
-            )
-            if not candidates:
-                raise RuntimeError(
-                    "methylGrapher extract produced no CpG/methyl tables; "
-                    "provide resolvedConfig.linear_cpg_tsv with chrom/pos/mC/uC columns"
+            graph_cpg = work_dir / "graph.cpg.tsv"
+            if not graph_cpg.is_file():
+                candidates = list(work_dir.glob("*cpg*.tsv")) + list(
+                    work_dir.glob("**/*cpg*.tsv")
                 )
-            # If the table is already linear-coordinate shaped, use it; otherwise require projection.
-            src = candidates[0]
-            text = src.read_text(encoding="utf-8", errors="replace").splitlines()[:5]
-            header = text[0].lower() if text else ""
-            if "chrom" in header or (len(text) > 1 and text[1].split("\t")[0].lstrip("chr").isdigit()):
-                shutil.copy2(src, linear_tsv)
+                if not candidates:
+                    raise RuntimeError(
+                        "methylGrapher MergeCpG produced no graph.cpg.tsv; "
+                        "provide resolvedConfig.linear_cpg_tsv with chrom/pos/mC/uC columns"
+                    )
+                graph_cpg = candidates[0]
+            # Already linear?
+            peek = graph_cpg.read_text(encoding="utf-8", errors="replace").splitlines()[:3]
+            header = peek[0].lower() if peek else ""
+            if "chrom" in header and "pos" in header:
+                shutil.copy2(graph_cpg, linear_tsv)
             else:
-                raise RuntimeError(
-                    f"methylGrapher output {src} is graph-coordinate; pin "
-                    "resolvedConfig.linear_cpg_tsv (GRCh38 chrom/pos/mC/uC) for H5 emission"
+                logger.info(
+                    "Projecting graph CpGs onto GRCh38 paths from %s", wl_gfa
                 )
+                offsets = build_grch38_segment_offsets_from_gfa(wl_gfa)
+                if not offsets:
+                    raise RuntimeError(
+                        f"No GRCh38 path offsets parsed from {wl_gfa}; cannot project "
+                        "graph.cpg.tsv — pin resolvedConfig.linear_cpg_tsv"
+                    )
+                n = project_graph_cpg_to_linear_tsv(
+                    graph_cpg_tsv=graph_cpg,
+                    cpg_registry_tsv=bundle.cpg_tsv,
+                    segment_offsets=offsets,
+                    out_tsv=linear_tsv,
+                )
+                if n <= 0:
+                    raise RuntimeError(
+                        "graph→GRCh38 projection wrote 0 sites (no called CpGs on "
+                        f"GRCh38 paths). graph_cpg={graph_cpg} wl_gfa={wl_gfa}"
+                    )
+                logger.info("Projected %s graph CpG sites to %s", n, linear_tsv)
 
     by_chrom = _parse_linear_methyl_tsv(linear_tsv)
     if not by_chrom:

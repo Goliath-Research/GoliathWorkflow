@@ -138,7 +138,29 @@ class MethylGrapherWgbsStepConfig(BaseModel):
     threads: Optional[int] = Field(
         default=None,
         ge=1,
-        description="Worker threads for methylGrapher/vg. Operator-set per site/profile.",
+        description=(
+            "Worker threads for methylGrapher/vg. Operator-set per site/profile. "
+            "For MethylCall keep <=16 so methylGrapher uses a single in-memory GFA worker."
+        ),
+    )
+    batch_size: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="MethylCall -batch_size. Operator-set per site/profile.",
+    )
+    linear_cpg_tsv: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional pre-projected GRCh38 chrom/pos/mC/uC TSV. When unset, extract "
+            "projects MergeCpG graph.cpg.tsv onto GRCh38#0 paths from {index_prefix}.wl.gfa."
+        ),
+    )
+    wl_gfa: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional override for PrepareGenome {index_prefix}.wl.gfa (MethylCall + "
+            "GRCh38 path projection). Defaults to {index_prefix}.wl.gfa beside the bundle."
+        ),
     )
     image: Optional[str] = Field(
         default=None,

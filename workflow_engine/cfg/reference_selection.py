@@ -46,6 +46,8 @@ PANGENOME_WGBS_FILES = {
     # Copied from stock d9/1.70 into the BS prefix for self-contained sync.
     "ref_paths": "hprc-v1.1-mc-grch38.d9.paths.sub",
     "node_replacement_json": "hprc-d9-bs.wl.node.replacement.json",
+    # PrepareGenome original graph — required by methylGrapher MethylCall.
+    "wl_gfa": "hprc-d9-bs.wl.gfa",
 }
 
 
@@ -273,9 +275,9 @@ def verify_selected_paths(
         checks.append(pan.get(key))
     wgbs = resolved.get("pangenome_wgbs_genome") or {}
     if wgbs:
-        # original_gbz is optional (surject falls back to C2T) and is not part of
-        # PANGENOME_WGBS_FILES inventory — never require it for path verification.
-        for key in ("ref_paths", "cpg_tsv", "linear_ref_fasta"):
+        # original_gbz is optional (surject falls back to C2T). wl.gfa is required
+        # for MethylCall and is part of PANGENOME_WGBS_FILES.
+        for key in ("ref_paths", "cpg_tsv", "linear_ref_fasta", "wl_gfa"):
             checks.append(wgbs.get(key))
         if wgbs.get("node_replacement_json"):
             checks.append(wgbs.get("node_replacement_json"))

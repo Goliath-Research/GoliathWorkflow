@@ -27,7 +27,7 @@ Upload so object keys match `cfg.reference_asset` recipe `key` / `inventoryPrefi
 | `linear-grch38-ensembl-114@1` | `/work/genomes/linear/GRCh38/ensembl-114/` | `s3://epimethyl/genomes/linear/GRCh38/ensembl-114/` | `Homo_sapiens.GRCh38.dna.primary_assembly.fa` (+ `.fai` if used) |
 | `gencode-v49@1` | `/work/genomes/annotation/gencode/v49/` | `s3://epimethyl/genomes/annotation/gencode/v49/` | `gencode.v49.annotation.gtf` |
 | `pangenome-grch38-d9-1.70@1` | `/work/genomes/pangenome/GRCh38/d9/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9/1.70/` | `hprc-v1.1-mc-grch38.d9.gbz`, `.autoindex.1.70.dist`, `.shortread.withzip.min`, `.shortread.zipcodes`, `.paths.sub` |
-| `pangenome-grch38-d9-bs-1.70@1` | `/work/genomes/pangenome/GRCh38/d9-bs/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/` | methylGrapher C2T+G2A bundle (`hprc-d9-bs.wl.C2T.*`, `hprc-d9-bs.wl.G2A.*`, `.cpg.tsv`, report) |
+| `pangenome-grch38-d9-bs-1.70@1` | `/work/genomes/pangenome/GRCh38/d9-bs/1.70/` | `s3://epimethyl/genomes/pangenome/GRCh38/d9-bs/1.70/` | methylGrapher C2T+G2A bundle (`hprc-d9-bs.wl.gfa`, `hprc-d9-bs.wl.C2T.*`, `hprc-d9-bs.wl.G2A.*`, `.cpg.tsv`, `node.replacement.json`, report). **`wl.gfa` is required for MethylCall** (~43 GB). |
 | SamplePrep canary WGBS (GSE261315 / SRR28293403) | `/work/genomes/pangenome/canary/gse261315/SRR28293403/` | `s3://epimethyl/genomes/pangenome/canary/gse261315/SRR28293403/` | `full/` + `subset/` FASTQ pairs, `checksums.json`, `provenance.json` (HPRC/methylGrapher public WGBS; provision via `scripts/provision_sample_prep_canary.sh`) |
 
 ### Upload (local → QNAP)

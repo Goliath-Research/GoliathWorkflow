@@ -2,7 +2,7 @@
 name: Linear vs WGBS SamplePrep Compare
 overview: Run SamplePrep through extraction QC for plasma `DPLST-051425-111148` and buffy `DBCST-051425-111148` under linear vs `pangenome_wgbs`, keeping mode-isolated local trees and producing a CpG-quality plus alignment-time comparison report—without archiving to QNAP until after review.
 
-> **Status: TOOLING IMPLEMENTED; LIVE COMPARE IN PROGRESS (depth-matched subset).** Runner `scripts/compare_sample_prep_linear_vs_wgbs.sh` + `workflow_engine/ops/sample_prep_mode_compare.py`; helpers in `packages/methylutils/methyl_utils/testing/sample_prep_mode_compare.py`; operator note in `workflow_engine/docs/sample_prep_test_bed.md`. Reports under `/work/samples/_comparisons/`. Linear arm needs Parabricks GPU; `pangenome_wgbs` is **CPU-only** methylGrapher(+vg) — no CUDA, expect much longer wall time on the same host.
+> **Status: DEPTH-MATCHED COMPARE COMPLETE (with caveats).** Report: `/work/samples/_comparisons/20260728T151643Z/`. Linear arm reached QC pass + MethylExtractor H5s. Pangenome dual-graph `MethylCall` on the 18 GB named-coordinate GAF was abandoned (~30 h ETA); CpG metrics below are from MethylExtractor on the C2T-only QC BAM (73.6% mapped), so they understate a full dual-graph methylation call.
 
 ## Live-run findings (2026-07-28)
 
@@ -19,6 +19,19 @@ Full depth for plasma `DPLST-051425-111148` is 349.3M read pairs, so the arms ru
 | `vg surject` aborted on the methylGrapher GAF (signal 6, empty BAM) | methylGrapher maps with `vg giraffe --named-coordinates`, so the GAF path column holds GFA **segment** names; `vg surject -G` reads it as vg **node** IDs. Node `57658665` is 3 bp in the graph while the GAF claims a 1202 bp path, tripping the `cur_offset < cur_len` assertion in `gaf_to_alignment` | Build the QC BAM from a dedicated `vg giraffe -o BAM --ref-paths` C2T pass over freshly converted reads (`build_qc_bam_command`); the GAF stays untouched for `MethylCall`, which needs named coordinates |
 | Comparison arms overwrote each other's QC | `methyl_qc` wrote only to `alignment_qc/<sampleId>.json`, keyed by sample id alone | `methyl_qc` also mirrors `<sampleId>.alignment_qc.json` into the sample dir — which is the file the compare validator already looked for |
 | `samtools markdup` aborted after the giraffe QC BAM | giraffe BAMs have no MC tag | insert `samtools fixmate -m` on the name-ordered restored BAM before coordinate-sort / markdup |
+| Host `MethylExtractor` rejected `--read-level` | aarch64 binary on this worker predates the flag | probe `--help` and omit `--read-level` / `--tile-size` when absent (`extract_runner.py`) |
+| Dual-graph `MethylCall` stalled on the 18 GB GAF | ~392 MB parsed in 40 min (~30 h ETA); workers idle on futex | Finished the compare with MethylExtractor on the C2T QC BAM instead; full MethylCall remains future work |
+
+### Depth-matched subset results (`DPLST-051425-111148-DS20M`, 20M pairs)
+
+| Arm | Mapped | Properly paired | CpG sites (min cov) | CpG mean cov | CpG meth | CHG / CHH meth |
+|---|---|---|---|---|---|---|
+| linear (Parabricks) | 99.19% | 90.70% | 98,721 | 8.23 | 0.731 | 0.023 / 0.031 |
+| pangenome_wgbs (C2T QC BAM) | 73.62% | 66.94% | 23,096 | 15.23 | 0.539 | 0.219 / 0.201 |
+
+Report: `/work/samples/_comparisons/20260728T151643Z/comparison.md`
+
+Pangenome site yield is ~23% of linear on this C2T-only QC BAM path; coverage on the sites that remain is higher. Elevated CHG/CHH on the pangenome arm should be treated as a conversion/coordinate-mapping red flag until dual-graph `MethylCall` (or a dual-graph QC BAM merge) is re-run.
 
 Re-running the align action now reuses an existing non-empty GAF (and, when present, the giraffe / restored BAM), so a QC-BAM or markdup failure no longer costs another full dual-graph mapping.
 
@@ -86,3 +99,12 @@ Report JSON + Markdown under `/work/samples/_comparisons/<stamp>/` (and symlink 
 Hypothesis framing: **pangenome_wgbs improves usable read support at CpG positions** (coverage/site yield), with alignment runtime as a cost metric—not a methylation-biology claim from stock Giraffe.
 
 Operator-set thresholds extend `SamplePrepCanaryThresholds` (`alignment_time_ratio_max`, `cpg_coverage_min_fraction_of_linear`, `cpg_depth_thresholds`).
+
+
+## Dual-graph DS20M finish (2026-07-28)
+
+Completed true MethylCall+MergeCpG on the DS20M GAF after restoring QNAP-seeded `hprc-d9-bs.wl.gfa`.
+See [`ds20m-dual-graph-finish.plan.md`](ds20m-dual-graph-finish.plan.md) and go/no-go note:
+`/work/samples/_comparisons/20260728T163518Z/dual_graph_gono.md`.
+
+**Go/no-go:** NO-GO for full-depth multi-worker yet — site yield is high but overlap cov/meth vs linear are not concordant (coverage ~100× inflated).

@@ -296,6 +296,8 @@ def resolve_methylgrapher_wgbs_genome(
         "image_digest",
         "methylgrapher_version",
         "vg_version",
+        "linear_cpg_tsv",
+        "wl_gfa",
     ):
         if cfg.get(optional) not in (None, ""):
             resolved[optional] = str(cfg[optional])
@@ -303,6 +305,8 @@ def resolve_methylgrapher_wgbs_genome(
         resolved["directional"] = bool(cfg["directional"])
     if cfg.get("threads") is not None:
         resolved["threads"] = int(cfg["threads"])
+    if cfg.get("batch_size") is not None:
+        resolved["batch_size"] = int(cfg["batch_size"])
     if "cg_only" in cfg and cfg["cg_only"] is not None:
         resolved["cg_only"] = bool(cfg["cg_only"])
     if isinstance(cfg.get("read_level"), Mapping):
