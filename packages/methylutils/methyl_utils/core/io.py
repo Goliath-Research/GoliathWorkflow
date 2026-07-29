@@ -1,6 +1,8 @@
 # methyl_utils/core/io.py
+from __future__ import annotations
+
 from pathlib import Path
-from typing import Optional, Union
+from typing import Iterator, Optional, Union
 import hdf5plugin  # noqa: F401 - Must be imported before h5py
 import h5py
 import numpy as np
@@ -41,6 +43,73 @@ def _indices_for_positions_h5(pos_dset, positions: np.ndarray) -> np.ndarray:
     return np.array(sorted(found), dtype=np.int32)
 
 
+def _searchsorted_left(pos_dset_or_arr, value: int) -> int:
+    """Lower-bound index of *value* in sorted genomic positions (searchsorted side='left')."""
+    value = int(value)
+    if isinstance(pos_dset_or_arr, np.ndarray):
+        return int(np.searchsorted(pos_dset_or_arr, value, side="left"))
+    n = int(pos_dset_or_arr.shape[0])
+    lo, hi = 0, n
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if int(pos_dset_or_arr[mid]) < value:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def _row_range_for_bp(
+    pos_dset_or_arr,
+    start_bp: int,
+    end_bp: int,
+) -> tuple[int, int]:
+    """
+    Contiguous row range [lo, hi) for genomic half-open interval [start_bp, end_bp).
+
+    Assumes *pos_dset_or_arr* is sorted ascending (genomic order). Works on a NumPy
+    array or an h5py Dataset (element-wise binary search; no full pos load).
+    """
+    start_bp = int(start_bp)
+    end_bp = int(end_bp)
+    if end_bp < start_bp:
+        raise ValueError(f"end_bp ({end_bp}) must be >= start_bp ({start_bp})")
+    n = int(pos_dset_or_arr.shape[0])
+    if n == 0:
+        return 0, 0
+    lo = _searchsorted_left(pos_dset_or_arr, start_bp)
+    hi = _searchsorted_left(pos_dset_or_arr, end_bp)
+    return lo, hi
+
+
+def _pos_dataset_from_open_file(f: h5py.File):
+    """Return the ``pos`` dataset handle from an open methylation H5 file."""
+    if "methylation_data" in f:
+        group = f["methylation_data"]
+        if isinstance(group, h5py.Group) and "pos" in group:
+            return group["pos"]
+        if isinstance(group, h5py.Dataset) and group.dtype.names and "pos" in group.dtype.names:
+            return group["pos"]
+    if "pos" in f:
+        return f["pos"]
+    raise ValueError("No 'pos' dataset found in open HDF5 file")
+
+
+def _validate_bp_range_args(
+    positions: Optional[np.ndarray],
+    indices: Optional[np.ndarray],
+    start_bp: Optional[int],
+    end_bp: Optional[int],
+) -> bool:
+    """Return True when a bp range load is requested; raise on invalid combinations."""
+    bp_range = start_bp is not None or end_bp is not None
+    if bp_range and (positions is not None or indices is not None):
+        raise ValueError("start_bp/end_bp cannot be combined with positions= or indices=")
+    if bp_range and start_bp is not None and end_bp is not None and int(end_bp) < int(start_bp):
+        raise ValueError(f"end_bp ({end_bp}) must be >= start_bp ({start_bp})")
+    return bp_range
+
+
 def load_pos_from_h5(path: Union[str, Path]) -> np.ndarray:
     """
     Load only the position array from an HDF5 methylation file (lightweight read for indexing).
@@ -61,10 +130,50 @@ def load_pos_from_h5(path: Union[str, Path]) -> np.ndarray:
     raise ValueError(f"No 'pos' dataset found in {path}")
 
 
+def _h5_take(dset, sel):
+    """Load *dset* with selection: None (all), slice (hyperslab), or integer index array."""
+    if sel is None:
+        return np.asarray(dset[:])
+    return np.asarray(dset[sel])
+
+
+def _selection_for_pos(
+    pos_source,
+    *,
+    positions: Optional[np.ndarray],
+    indices: Optional[np.ndarray],
+    start_bp: Optional[int],
+    end_bp: Optional[int],
+    bp_range: bool,
+):
+    """
+    Resolve row selection for a sorted ``pos`` source.
+
+    Returns None (full load), a ``slice`` (contiguous bp range), or an index ndarray.
+    """
+    if indices is not None:
+        return np.asarray(indices, dtype=np.intp)
+    if positions is not None:
+        if isinstance(pos_source, np.ndarray):
+            return _indices_for_positions(pos_source, positions)
+        return _indices_for_positions_h5(pos_source, positions)
+    if bp_range:
+        lo, hi = _row_range_for_bp(
+            pos_source,
+            0 if start_bp is None else int(start_bp),
+            int(np.iinfo(np.uint32).max) if end_bp is None else int(end_bp),
+        )
+        return slice(lo, hi)
+    return None
+
+
 def load_from_h5(
     path: Union[str, Path],
     positions: Optional[np.ndarray] = None,
     indices: Optional[np.ndarray] = None,
+    *,
+    start_bp: Optional[int] = None,
+    end_bp: Optional[int] = None,
 ) -> MethylCentroid | MethylSample:
     """
     Load methylation data from HDF5 file.
@@ -72,6 +181,9 @@ def load_from_h5(
     When positions is provided, only those rows are read from disk (hyperslice).
     When indices is provided, only those row indices are read (no full pos read); use with
     load_pos_from_h5() + _indices_for_positions for chunked centroid building.
+    When start_bp/end_bp are provided, load the contiguous half-open genomic range
+    ``[start_bp, end_bp)`` via a hyperslab (sorted ``pos``). Cannot combine with
+    ``positions`` or ``indices``.
 
     Centroid detection: presence of pos, tnc, N, Sx, Sx2, Sm, Su, Sc2, Swx2. Requires binned_stats (bins attr + bin_counts).
     No backward compatibility: only the new centroid schema is supported for centroids.
@@ -84,6 +196,7 @@ def load_from_h5(
         KeyError: If required datasets are missing
     """
     path = Path(path)
+    bp_range = _validate_bp_range_args(positions, indices, start_bp, end_bp)
     load_idx = None  # when set, bin_counts will be sliced to match data rows
     loaded_bins = None
     loaded_bin_counts = None
@@ -101,19 +214,19 @@ def load_from_h5(
                 datasets = list(methyl_data.keys())
                 # Centroid: all nine fields + binned_stats required
                 if all(d in datasets for d in centroid_required):
-                    if indices is not None:
-                        idx = np.asarray(indices, dtype=np.intp)
-                        load_idx = idx
-                    elif positions is not None:
-                        idx = _indices_for_positions_h5(methyl_data["pos"], positions)
-                        load_idx = idx
-                    else:
-                        idx = None
-                        load_idx = None
+                    sel = _selection_for_pos(
+                        methyl_data["pos"],
+                        positions=positions,
+                        indices=indices,
+                        start_bp=start_bp,
+                        end_bp=end_bp,
+                        bp_range=bp_range,
+                    )
+                    load_idx = sel if isinstance(sel, np.ndarray) else None
+
                     def _load(key):
-                        if idx is not None:
-                            return np.asarray(methyl_data[key][idx])
-                        return np.asarray(methyl_data[key][:])
+                        return _h5_take(methyl_data[key], sel)
+
                     data = {
                         "pos": _load("pos").astype(np.uint32),
                         "tnc": _load("tnc").astype(np.uint8),
@@ -140,32 +253,21 @@ def load_from_h5(
                         )
                 elif all(d in datasets for d in sample_required):
                     # Sample
-                    if indices is not None:
-                        idx = np.asarray(indices, dtype=np.intp)
-                        load_idx = idx
-                        data = {
-                            "pos": np.asarray(methyl_data["pos"][idx], dtype=np.uint32),
-                            "mC": np.asarray(methyl_data["mC"][idx], dtype=np.uint32),
-                            "uC": np.asarray(methyl_data["uC"][idx], dtype=np.uint32),
-                            "tnc": np.asarray(methyl_data["tnc"][idx], dtype=np.uint8),
-                        }
-                    elif positions is not None:
-                        idx = _indices_for_positions_h5(methyl_data["pos"], positions)
-                        load_idx = idx
-                        data = {
-                            "pos": np.asarray(methyl_data["pos"][idx], dtype=np.uint32),
-                            "mC": np.asarray(methyl_data["mC"][idx], dtype=np.uint32),
-                            "uC": np.asarray(methyl_data["uC"][idx], dtype=np.uint32),
-                            "tnc": np.asarray(methyl_data["tnc"][idx], dtype=np.uint8),
-                        }
-                    else:
-                        load_idx = None
-                        data = {
-                            "pos": np.asarray(methyl_data["pos"][:], dtype=np.uint32),
-                            "mC": np.asarray(methyl_data["mC"][:], dtype=np.uint32),
-                            "uC": np.asarray(methyl_data["uC"][:], dtype=np.uint32),
-                            "tnc": np.asarray(methyl_data["tnc"][:], dtype=np.uint8),
-                        }
+                    sel = _selection_for_pos(
+                        methyl_data["pos"],
+                        positions=positions,
+                        indices=indices,
+                        start_bp=start_bp,
+                        end_bp=end_bp,
+                        bp_range=bp_range,
+                    )
+                    load_idx = sel if isinstance(sel, np.ndarray) else None
+                    data = {
+                        "pos": _h5_take(methyl_data["pos"], sel).astype(np.uint32),
+                        "mC": _h5_take(methyl_data["mC"], sel).astype(np.uint32),
+                        "uC": _h5_take(methyl_data["uC"], sel).astype(np.uint32),
+                        "tnc": _h5_take(methyl_data["tnc"], sel).astype(np.uint8),
+                    }
 
         # Fallback to old format: datasets at root level
         if not data:
@@ -176,77 +278,59 @@ def load_from_h5(
             missing = [d for d in required_core if d not in root_keys]
             if not missing:
                 datasets = root_keys
-                if indices is not None:
-                    idx = np.asarray(indices, dtype=np.intp)
-                    load_idx = idx
-                    data = {
-                        "pos": np.asarray(f["pos"][idx], dtype=np.uint32),
-                        "mC": np.asarray(f["mC"][idx], dtype=np.uint32),
-                        "uC": np.asarray(f["uC"][idx], dtype=np.uint32),
-                        "tnc": np.asarray(f["tnc"][idx], dtype=np.uint8),
-                    }
-                elif positions is not None:
-                    idx = _indices_for_positions_h5(f["pos"], positions)
-                    load_idx = idx
-                    data = {
-                        "pos": np.asarray(f["pos"][idx], dtype=np.uint32),
-                        "mC": np.asarray(f["mC"][idx], dtype=np.uint32),
-                        "uC": np.asarray(f["uC"][idx], dtype=np.uint32),
-                        "tnc": np.asarray(f["tnc"][idx], dtype=np.uint8),
-                    }
-                else:
-                    idx = None
-                    data = {
-                        "pos": np.asarray(f["pos"][:], dtype=np.uint32),
-                        "mC": np.asarray(f["mC"][:], dtype=np.uint32),
-                        "uC": np.asarray(f["uC"][:], dtype=np.uint32),
-                        "tnc": np.asarray(f["tnc"][:], dtype=np.uint8),
-                    }
+                sel = _selection_for_pos(
+                    f["pos"],
+                    positions=positions,
+                    indices=indices,
+                    start_bp=start_bp,
+                    end_bp=end_bp,
+                    bp_range=bp_range,
+                )
+                load_idx = sel if isinstance(sel, np.ndarray) else None
+                data = {
+                    "pos": _h5_take(f["pos"], sel).astype(np.uint32),
+                    "mC": _h5_take(f["mC"], sel).astype(np.uint32),
+                    "uC": _h5_take(f["uC"], sel).astype(np.uint32),
+                    "tnc": _h5_take(f["tnc"], sel).astype(np.uint8),
+                }
                 if "N" in root_keys:
-                    if indices is not None or positions is not None:
-                        data["N"] = np.asarray(f["N"][idx], dtype=np.uint32)
-                    else:
-                        data["N"] = np.asarray(f["N"][:], dtype=np.uint32)
+                    data["N"] = _h5_take(f["N"], sel).astype(np.uint32)
                 for col in ["Sx", "Sx2"]:
                     if col in root_keys:
-                        if indices is not None or positions is not None:
-                            data[col] = np.asarray(f[col][idx], dtype=np.float32)
-                        else:
-                            data[col] = np.asarray(f[col][:], dtype=np.float32)
-        
+                        data[col] = _h5_take(f[col], sel).astype(np.float32)
+
         # Fallback to old format: 'methylation_data' as structured array
         if not data and "methylation_data" in f:
             methyl_data = f["methylation_data"]
             if isinstance(methyl_data, h5py.Dataset) and methyl_data.dtype.names:
-                # Structured array format (single dataset; must load then filter if positions set)
+                # Structured array format (single dataset; must load then filter)
                 struct_data = methyl_data[:]
                 datasets = list(methyl_data.dtype.names)
                 required_core = ["pos", "mC", "uC", "tnc"]
                 missing = [d for d in required_core if d not in datasets]
                 if not missing:
                     pos_arr = np.asarray(struct_data["pos"], dtype=np.uint32)
-                    if positions is not None:
-                        idx = _indices_for_positions(pos_arr, positions)
-                        load_idx = idx
-                        data = {
-                            "pos": np.asarray(struct_data["pos"][idx], dtype=np.uint32),
-                            "mC": np.asarray(struct_data["mC"][idx], dtype=np.uint32),
-                            "uC": np.asarray(struct_data["uC"][idx], dtype=np.uint32),
-                            "tnc": np.asarray(struct_data["tnc"][idx], dtype=np.uint8),
-                        }
-                    else:
-                        data = {
-                            "pos": np.asarray(struct_data["pos"], dtype=np.uint32),
-                            "mC": np.asarray(struct_data["mC"], dtype=np.uint32),
-                            "uC": np.asarray(struct_data["uC"], dtype=np.uint32),
-                            "tnc": np.asarray(struct_data["tnc"], dtype=np.uint8),
-                        }
+                    sel = _selection_for_pos(
+                        pos_arr,
+                        positions=positions,
+                        indices=indices,
+                        start_bp=start_bp,
+                        end_bp=end_bp,
+                        bp_range=bp_range,
+                    )
+                    load_idx = sel if isinstance(sel, np.ndarray) else None
+                    data = {
+                        "pos": _h5_take(struct_data["pos"], sel).astype(np.uint32),
+                        "mC": _h5_take(struct_data["mC"], sel).astype(np.uint32),
+                        "uC": _h5_take(struct_data["uC"], sel).astype(np.uint32),
+                        "tnc": _h5_take(struct_data["tnc"], sel).astype(np.uint8),
+                    }
                     if "N" in datasets:
-                        data["N"] = np.asarray(struct_data["N"], dtype=np.uint32) if positions is None else np.asarray(struct_data["N"][idx], dtype=np.uint32)
+                        data["N"] = _h5_take(struct_data["N"], sel).astype(np.uint32)
                     for col in ["Sx", "Sx2"]:
                         if col in datasets:
-                            data[col] = np.asarray(struct_data[col], dtype=np.float32) if positions is None else np.asarray(struct_data[col][idx], dtype=np.float32)
-        
+                            data[col] = _h5_take(struct_data[col], sel).astype(np.float32)
+
         # If still no data, raise error
         if not data:
             available_keys = list(f.keys())
@@ -254,13 +338,13 @@ def load_from_h5(
                 f"HDF5 file does not contain required datasets in any recognized format. "
                 f"Required: ['pos', 'mC', 'uC', 'tnc']. Available keys: {available_keys}"
             )
-        
+
         # Centroid: full schema (Sm, Su, Sc2, Swx2) present -> MethylCentroid. Else sample.
         if "Sm" in data and "Su" in data and "Sc2" in data and "Swx2" in data:
             cls = MethylCentroid
         else:
             cls = MethylSample
-        
+
         # Load metadata from file attributes
         metadata = {}
         if f.attrs:
@@ -291,6 +375,53 @@ def load_from_h5(
                 obj._binned_stats = {"bin_edges": bin_edges, "bin_counts": loaded_bin_counts}
 
         return obj
+
+
+def iter_bp_shards(
+    path: Union[str, Path],
+    shard_bp: int,
+    *,
+    start_bp: Optional[int] = None,
+    end_bp: Optional[int] = None,
+) -> Iterator[MethylCentroid | MethylSample]:
+    """
+    Yield successive non-overlapping genomic shards from a methylation H5 file.
+
+    Each shard is loaded via ``load_from_h5(..., start_bp=..., end_bp=...)`` using
+    half-open intervals of width ``shard_bp`` (caller-provided; no package default).
+    Empty shards (no sites in the interval) are skipped.
+
+    When *start_bp* / *end_bp* are omitted, the span is taken from the file's
+    first and last ``pos`` values (``[pos_min, pos_max + 1)``).
+    """
+    path = Path(path)
+    shard_bp = int(shard_bp)
+    if shard_bp <= 0:
+        raise ValueError(f"shard_bp must be a positive integer, got {shard_bp}")
+
+    with h5py.File(path, "r") as f:
+        pos_dset = _pos_dataset_from_open_file(f)
+        n = int(pos_dset.shape[0])
+        if n == 0:
+            return
+        file_min = int(pos_dset[0])
+        file_max = int(pos_dset[n - 1])
+
+    outer_start = file_min if start_bp is None else int(start_bp)
+    outer_end = (file_max + 1) if end_bp is None else int(end_bp)
+    if outer_end < outer_start:
+        raise ValueError(f"end_bp ({outer_end}) must be >= start_bp ({outer_start})")
+
+    cur = outer_start
+    while cur < outer_end:
+        nxt = min(cur + shard_bp, outer_end)
+        obj = load_from_h5(path, start_bp=cur, end_bp=nxt)
+        if len(obj) == 0:
+            if hasattr(obj, "close"):
+                obj.close()
+        else:
+            yield obj
+        cur = nxt
 
 
 def estimate_n_cap_from_sample_path(

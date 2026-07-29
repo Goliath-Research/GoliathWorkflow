@@ -565,6 +565,8 @@ class MethylFrame:
         positions: Optional[np.ndarray] = None,
         indices: Optional[np.ndarray] = None,
         *,
+        start_bp: Optional[int] = None,
+        end_bp: Optional[int] = None,
         align_positions: bool = True,
     ) -> "MethylFrame":
         """
@@ -573,12 +575,16 @@ class MethylFrame:
         When ``positions`` is given, only matching rows are read from disk (same
         hyperslice approach used in detector/validation extraction). When
         ``indices`` is given, only those H5 row indices are loaded. ``indices``
-        takes precedence over ``positions``.
+        takes precedence over ``positions``. When ``start_bp`` / ``end_bp`` are
+        given, load the contiguous half-open genomic range ``[start_bp, end_bp)``
+        (cannot combine with ``positions`` / ``indices``).
 
         Args:
             path: Path to HDF5 file
             positions: Optional positions to load; only these rows are read (saves memory).
             indices: Optional row indices to load directly from the H5 file.
+            start_bp: Optional inclusive genomic start (bp) for ranged load.
+            end_bp: Optional exclusive genomic end (bp) for ranged load.
             align_positions: If True and ``positions`` is provided (without
                 ``indices``), align in-memory output to exactly the requested
                 positions.
@@ -587,7 +593,13 @@ class MethylFrame:
             MethylSample or MethylCentroid instance
         """
         from .io import load_from_h5
-        result = load_from_h5(path, positions=positions, indices=indices)
+        result = load_from_h5(
+            path,
+            positions=positions,
+            indices=indices,
+            start_bp=start_bp,
+            end_bp=end_bp,
+        )
         if align_positions and indices is None and positions is not None:
             result = result.align_to_positions(positions)
         return result

@@ -60,6 +60,7 @@ from .core.methyl_frame import (
 from .core.io import (
     load_from_h5,
     load_pos_from_h5,
+    iter_bp_shards,
     estimate_n_cap_from_sample_path,
     estimate_n_cap_from_sample_path_with_log,
 )
@@ -698,6 +699,7 @@ __all__ = [
     "compare_ecdf_to_theoretical_at_positions",
     "load_from_h5",
     "load_pos_from_h5",
+    "iter_bp_shards",
     "estimate_n_cap_from_sample_path",
     "estimate_n_cap_from_sample_path_with_log",
     "TNCBits",
