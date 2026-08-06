@@ -486,13 +486,52 @@ def _write_bs_converted_fastq(
         raise RuntimeError(f"bisulfite conversion produced empty FASTQ: {dst}")
 
 
+def _flatten_qc_metrics_dir(metrics_dir: Path) -> None:
+    """Copy nested metric files up to ``metrics_dir`` root for flat tar packaging.
+
+    Parabricks ``collectmultiplemetrics`` may write under a subdirectory. Downstream
+    ``_package_qc_tar`` only packs top-level files, and mode-aware QC looks up tables
+    by basename suffix — so insert/GC/cycle/artifact files left nested would be
+    omitted while ``quality_yield.txt`` alone could still mark collect as success.
+    """
+    if not metrics_dir.is_dir():
+        return
+    root = metrics_dir.resolve()
+    for src in sorted(metrics_dir.rglob("*")):
+        if not src.is_file():
+            continue
+        try:
+            if src.resolve().parent == root:
+                continue
+        except OSError:
+            continue
+        dest = metrics_dir / src.name
+        if dest.exists() and dest.resolve() == src.resolve():
+            continue
+        if dest.is_file() and dest.stat().st_size > 0 and dest.resolve() != src.resolve():
+            # Prefer an existing non-empty root copy; do not clobber.
+            continue
+        shutil.copy2(src, dest)
+
+
 def _package_qc_tar(sample_dir: Path, sample_id: str, metrics_dir: Path) -> Path:
+    """Pack Picard metric text files into ``{sample_id}.qc-metrics.tar``.
+
+    Files are added by basename (flat). Call ``_flatten_qc_metrics_dir`` first when
+    collect may have written nested outputs.
+    """
     qc_tar = sample_dir / f"{sample_id}.qc-metrics.tar"
     with tarfile.open(qc_tar, "w") as tar:
         if metrics_dir.is_dir():
-            for p in sorted(metrics_dir.iterdir()):
-                if p.is_file():
-                    tar.add(p, arcname=p.name)
+            # Prefer top-level files after flatten; also pick up any stragglers by
+            # basename so nested-only trees still enter the tar once.
+            seen: set[str] = set()
+            candidates = list(metrics_dir.iterdir()) + list(metrics_dir.rglob("*"))
+            for p in sorted(candidates, key=lambda x: (x.name, str(x))):
+                if not p.is_file() or p.name in seen:
+                    continue
+                seen.add(p.name)
+                tar.add(p, arcname=p.name)
     return qc_tar
 
 
@@ -575,16 +614,9 @@ def _maybe_collect_picard_metrics(
         )
         return False
 
-    # Parabricks may write into metrics_dir or a nested folder; flatten one level.
+    # Always flatten nested Parabricks outputs (not only when quality_yield is missing).
+    _flatten_qc_metrics_dir(metrics_dir)
     qy = metrics_dir / "quality_yield.txt"
-    if not qy.is_file():
-        nested = list(metrics_dir.rglob("quality_yield.txt"))
-        if nested:
-            for src in nested:
-                dest = metrics_dir / src.name
-                if src.resolve() != dest.resolve():
-                    shutil.copy2(src, dest)
-            qy = metrics_dir / "quality_yield.txt"
     if not qy.is_file():
         logger.warning(
             "collectmultiplemetrics produced no quality_yield.txt for %s", sample_id

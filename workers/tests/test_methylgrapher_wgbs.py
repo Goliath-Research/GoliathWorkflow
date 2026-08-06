@@ -9,6 +9,8 @@ import pytest
 
 from methyl_utils.action_config_resolver import resolve_methylgrapher_wgbs_genome
 from methyl_worker.methylgrapher_wgbs_runner import (
+    _flatten_qc_metrics_dir,
+    _package_qc_tar,
     _restore_original_sequences,
     _run,
     _write_bs_converted_fastq,
@@ -539,3 +541,60 @@ def test_catalog_registers_methylgrapher_actions() -> None:
     assert entries["sample.methylgrapher_wgbs_extract"].in_process_handler == (
         "_handle_methylgrapher_wgbs_extract"
     )
+
+
+def test_flatten_and_package_nested_picard_metrics(tmp_path: Path) -> None:
+    """Nested Parabricks outputs must all land in the flat qc-metrics tar."""
+    import tarfile
+
+    sample_id = "HBCST-NEST"
+    sample_dir = tmp_path / sample_id
+    metrics_dir = sample_dir / f"{sample_id}.qc-metrics"
+    nested = metrics_dir / "collectmultiplemetrics"
+    nested.mkdir(parents=True)
+    # quality_yield already at root (old bug skipped flatten entirely in this case)
+    (metrics_dir / "quality_yield.txt").write_text("TOTAL_READS\t1000\n", encoding="utf-8")
+    for name in (
+        "insert_size.txt",
+        "gcbias_summary.txt",
+        "mean_quality_by_cycle.txt",
+        "sequencingArtifact.pre_adapter_summary_metrics.txt",
+    ):
+        (nested / name).write_text(f"{name}\tok\n", encoding="utf-8")
+
+    _flatten_qc_metrics_dir(metrics_dir)
+    for name in (
+        "quality_yield.txt",
+        "insert_size.txt",
+        "gcbias_summary.txt",
+        "mean_quality_by_cycle.txt",
+        "sequencingArtifact.pre_adapter_summary_metrics.txt",
+    ):
+        assert (metrics_dir / name).is_file(), name
+
+    tar_path = _package_qc_tar(sample_dir, sample_id, metrics_dir)
+    with tarfile.open(tar_path, "r") as tar:
+        names = set(tar.getnames())
+    assert "quality_yield.txt" in names
+    assert "insert_size.txt" in names
+    assert "gcbias_summary.txt" in names
+    assert "mean_quality_by_cycle.txt" in names
+    assert "sequencingArtifact.pre_adapter_summary_metrics.txt" in names
+
+
+def test_package_qc_tar_includes_nested_only_metrics(tmp_path: Path) -> None:
+    """Packaging safety net: nested-only trees still enter the tar by basename."""
+    import tarfile
+
+    sample_id = "HBCST-NEST2"
+    sample_dir = tmp_path / sample_id
+    metrics_dir = sample_dir / f"{sample_id}.qc-metrics"
+    nested = metrics_dir / "out"
+    nested.mkdir(parents=True)
+    (nested / "quality_yield.txt").write_text("TOTAL_READS\t1\n", encoding="utf-8")
+    (nested / "insert_size.txt").write_text("MEDIAN_INSERT_SIZE\t180\n", encoding="utf-8")
+
+    tar_path = _package_qc_tar(sample_dir, sample_id, metrics_dir)
+    with tarfile.open(tar_path, "r") as tar:
+        names = set(tar.getnames())
+    assert names == {"quality_yield.txt", "insert_size.txt"}
