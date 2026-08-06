@@ -707,7 +707,15 @@
       "additionalProperties": false,
       "properties": {
         "at_dropout": {
-          "$ref": "#/$defs/GuardrailMetric"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "bisulfite_conversion": {
           "anyOf": [
@@ -725,7 +733,15 @@
           "title": "Bisulfite Conversion"
         },
         "deamination_qscore": {
-          "$ref": "#/$defs/GuardrailMetric"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "duplication_rate": {
           "anyOf": [
@@ -761,7 +777,15 @@
           "default": null
         },
         "gc_dropout": {
-          "$ref": "#/$defs/GuardrailMetric"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "mapping_rate": {
           "anyOf": [
@@ -775,10 +799,26 @@
           "default": null
         },
         "mean_quality": {
-          "$ref": "#/$defs/GuardrailMetric"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "median_insert_bp": {
-          "$ref": "#/$defs/GuardrailMetric"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "min_pf_reads": {
           "anyOf": [
@@ -792,13 +832,37 @@
           "default": null
         },
         "min_quality_post20": {
-          "$ref": "#/$defs/GuardrailMetric"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "oxog_qscore": {
-          "$ref": "#/$defs/GuardrailMetric"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "pf_percent": {
-          "$ref": "#/$defs/GuardrailMetric"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "properly_paired_rate": {
           "anyOf": [
@@ -812,7 +876,15 @@
           "default": null
         },
         "q30_percent": {
-          "$ref": "#/$defs/GuardrailMetric"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "secondary_supplementary_rate": {
           "anyOf": [
@@ -835,19 +907,52 @@
             }
           ],
           "default": null
+        },
+        "wgbs_bam_mapped_rate": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "wgbs_bam_present": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "wgbs_gaf_present": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "wgbs_provenance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GuardrailMetric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
-      "required": [
-        "pf_percent",
-        "q30_percent",
-        "mean_quality",
-        "min_quality_post20",
-        "at_dropout",
-        "gc_dropout",
-        "median_insert_bp",
-        "deamination_qscore",
-        "oxog_qscore"
-      ],
       "title": "GuardrailDetails",
       "type": "object"
     },
@@ -892,6 +997,18 @@
       "properties": {
         "details": {
           "$ref": "#/$defs/GuardrailDetails"
+        },
+        "metrics_family": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metrics Family"
         },
         "next_steps": {
           "title": "Next Steps",
@@ -1632,6 +1749,108 @@
       ],
       "title": "TrimSpec",
       "type": "object"
+    },
+    "WgbsAlignMetrics": {
+      "additionalProperties": true,
+      "description": "Provenance block from methylGrapher ``{sample}.alignment_metrics.json``.",
+      "properties": {
+        "action": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Action"
+        },
+        "asset_fingerprints": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Asset Fingerprints"
+        },
+        "bam": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bam"
+        },
+        "directional": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Directional"
+        },
+        "gaf": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gaf"
+        },
+        "index_prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Index Prefix"
+        },
+        "sample_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Id"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool"
+      ],
+      "title": "WgbsAlignMetrics",
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -1661,10 +1880,26 @@
       "default": null
     },
     "bait_bias_summaries": {
-      "$ref": "#/$defs/ArtifactSummariesV2"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactSummariesV2"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "base_distribution_by_cycle": {
-      "$ref": "#/$defs/BaseDistributionByCycleV2"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/BaseDistributionByCycleV2"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "bisulfite_conversion_metrics": {
       "anyOf": [
@@ -1678,7 +1913,15 @@
       "default": null
     },
     "conversion_log": {
-      "$ref": "#/$defs/ConversionLog"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ConversionLog"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "duplication_histogram": {
       "$ref": "#/$defs/DuplicationHistogramV2"
@@ -1691,7 +1934,15 @@
       "type": "array"
     },
     "error_summaries": {
-      "$ref": "#/$defs/ErrorSummariesV2"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ErrorSummariesV2"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "fragmentomics_metrics": {
       "anyOf": [
@@ -1705,28 +1956,76 @@
       "default": null
     },
     "gc_bias_details": {
-      "$ref": "#/$defs/GCBiasDetailsV2"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GCBiasDetailsV2"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "gc_bias_summary": {
-      "$ref": "#/$defs/GCBiasSummary"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GCBiasSummary"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "guardrails": {
       "$ref": "#/$defs/GuardrailReport"
     },
     "insert_size_histogram": {
-      "$ref": "#/$defs/InsertSizeHistogramV2"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InsertSizeHistogramV2"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "insert_size_metrics": {
-      "$ref": "#/$defs/InsertSizeMetrics"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InsertSizeMetrics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "mean_quality_by_cycle": {
-      "$ref": "#/$defs/MeanQualityByCycleV2"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MeanQualityByCycleV2"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "metadata": {
       "$ref": "#/$defs/QCV2Metadata"
     },
     "pre_adapter_summaries": {
-      "$ref": "#/$defs/ArtifactSummariesV2"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ArtifactSummariesV2"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "qc_history": {
       "anyOf": [
@@ -1744,10 +2043,26 @@
       "title": "Qc History"
     },
     "quality_score_distribution": {
-      "$ref": "#/$defs/QualityScoreDistributionV2"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/QualityScoreDistributionV2"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "quality_yield": {
-      "$ref": "#/$defs/QualityYield"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/QualityYield"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "sample_id": {
       "title": "Sample Id",
@@ -1767,23 +2082,22 @@
     },
     "summary_stats": {
       "$ref": "#/$defs/SummaryStats"
+    },
+    "wgbs_align_metrics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/WgbsAlignMetrics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     }
   },
   "required": [
     "metadata",
     "sample_id",
-    "quality_yield",
-    "mean_quality_by_cycle",
-    "quality_score_distribution",
-    "base_distribution_by_cycle",
-    "gc_bias_summary",
-    "gc_bias_details",
-    "insert_size_metrics",
-    "insert_size_histogram",
-    "error_summaries",
-    "pre_adapter_summaries",
-    "bait_bias_summaries",
-    "conversion_log",
     "duplication_metrics",
     "duplication_histogram",
     "summary_stats",

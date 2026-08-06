@@ -158,3 +158,5 @@ migrate_work_layout.manifest.json
 # Local vg source checkout + build tree (scripts/build_methylgrapher_image.sh, ~5 GB)
 .cache/vg-src/
 workers/docker/methylgrapher/engine/
+workers/docker/methylgrapher/src/
+workers/docker/methylgrapher/mojo-env/

@@ -30,7 +30,9 @@ from .cycle_quality_screening import (
     screen_cycle_quality,
 )
 from .fragmentomics import apply_fragmentomics_to_payload
+from .metrics_family import MetricsFamily, detect_metrics_family
 from .qc_write_context import QcWriteContext
+from .wgbs_pangenome_qc import build_wgbs_pangenome_guardrail_report
 from .wgbs_parabricks_qc import apply_optional_guardrails, check_wgbs_guardrails
 
 
@@ -55,37 +57,39 @@ def _find_parabricks_metrics_json(sample_dir: Path, sample_name: str) -> Optiona
     return direct_candidate if direct_candidate.exists() else None
 
 
-def _load_parabricks_metrics_payload(
+def _try_load_parabricks_metrics_payload(
     sample_dir: Path,
     sample_name: str,
-) -> tuple[Dict[str, Any], Path]:
+) -> Optional[tuple[Dict[str, Any], Path]]:
     """
-    Load Parabricks/Picard metrics for QC export.
+    Try to load Parabricks/Picard metrics for QC export.
 
     Prefers a full {sample_id}.json when it validates; otherwise falls back to
     {sample_id}.qc-metrics.tar (legacy folders may contain guardrails-only JSON stubs).
+    Returns None when neither source yields a valid Parabricks payload.
     """
     json_path = _find_parabricks_metrics_json(sample_dir, sample_name)
     if json_path is not None:
         try:
             with open(json_path, "r", encoding="utf-8") as f:
                 raw_payload = json.load(f)
+            # Reject guardrails-only stubs left by prior failed QC runs
+            if isinstance(raw_payload, dict) and "quality_yield" not in raw_payload:
+                raise ValueError("stub JSON without quality_yield")
             payload = ParabricksMetricsPayload.model_validate(raw_payload).model_dump(
                 mode="python",
                 by_alias=True,
                 exclude_none=True,
             )
+            if payload.get("quality_yield") is None:
+                raise ValueError("Parabricks payload missing quality_yield")
             return payload, json_path
         except Exception:
             pass
 
     parsed_from_tar = _build_parabricks_payload_from_qc_tar(sample_dir, sample_name)
     if parsed_from_tar is None:
-        raise RuntimeError(
-            f"Missing Parabricks metrics for {sample_name}: expected a full "
-            f"{sample_dir / f'{sample_name}.json'} or "
-            f"{sample_dir / f'{sample_name}.qc-metrics.tar'}"
-        )
+        return None
     payload = ParabricksMetricsPayload.model_validate(parsed_from_tar).model_dump(
         mode="python",
         by_alias=True,
@@ -93,8 +97,23 @@ def _load_parabricks_metrics_payload(
     )
     tar_path = _find_qc_metrics_tar(sample_dir, sample_name)
     if tar_path is None:
-        raise RuntimeError(f"qc-metrics tar resolved during parse but not found for {sample_name}")
+        return None
     return payload, tar_path
+
+
+def _load_parabricks_metrics_payload(
+    sample_dir: Path,
+    sample_name: str,
+) -> tuple[Dict[str, Any], Path]:
+    """Load Parabricks/Picard metrics or raise (linear/pangenome path)."""
+    loaded = _try_load_parabricks_metrics_payload(sample_dir, sample_name)
+    if loaded is None:
+        raise RuntimeError(
+            f"Missing Parabricks metrics for {sample_name}: expected a full "
+            f"{sample_dir / f'{sample_name}.json'} or "
+            f"{sample_dir / f'{sample_name}.qc-metrics.tar'}"
+        )
+    return loaded
 
 
 def _find_qc_metrics_tar(sample_dir: Path, sample_name: str) -> Optional[Path]:
@@ -395,10 +414,30 @@ def _apply_screening_and_audit(
 
     cfg = cycle_screening if cycle_screening is not None else CycleScreeningConfig()
     screening: Dict[str, Any] = {}
-    if cfg.enabled:
+    mqc = payload.get("mean_quality_by_cycle") or {}
+    has_cycles = bool(mqc.get("cycle") or mqc.get("rows"))
+    if cfg.enabled and has_cycles:
         screening = screen_cycle_quality(payload, guardrails, cfg)
         guardrails["screening"] = screening
         apply_screening_recommendations(guardrails, screening)
+    elif cfg.enabled and not has_cycles:
+        # pangenome_wgbs (and any path without cycle series): do not invent REALIGN_TRIM
+        screening = {
+            "disposition": "USE_CURRENT_ALIGNMENT",
+            "quality_pattern": "NO_CYCLE_METRICS",
+            "read_length": 0,
+            "r2_start_cycle": 0,
+            "trim_front1": 0,
+            "trim_tail1": 0,
+            "trim_front2": 0,
+            "trim_tail2": 0,
+            "trim_spec": None,
+            "r2_start_mean_quality": None,
+            "r2_recovery_mean_quality": None,
+            "dip_regions": [],
+            "message": "Cycle quality screening skipped: no mean_quality_by_cycle metrics.",
+        }
+        guardrails["screening"] = screening
 
     ctx = write_ctx or QcWriteContext()
     prior_history = ctx.prior_qc_history or _load_prior_qc_history(output_path)
@@ -429,12 +468,14 @@ def build_sample_qc_v2_dict(
     dedup_metrics: Optional[Dict[str, Any]] = None,
     summary_stats: Optional[Dict[str, Any]] = None,
     force_flagstat: bool = False,
+    alignment_mode: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Build one V2 sample QC export dict from a sample directory.
 
     Expects Picard deduplicate metrics ({sample_id}.deduplicate_metrics.txt) and
-    Parabricks metrics ({sample_id}.json or {sample_id}.qc-metrics.tar).
+    either Parabricks metrics (linear/pangenome) or methylGrapher provenance
+    (pangenome_wgbs).
 
     ``sample_id`` is the artifact basename (``{sample_id}.bam``). When omitted,
     it is resolved from task-provided identity or unique artifacts — not blindly
@@ -461,7 +502,34 @@ def build_sample_qc_v2_dict(
     else:
         metrics = dedup_metrics
 
-    payload, metrics_source = _load_parabricks_metrics_payload(sample_dir, sample_name)
+    parabricks_loaded = _try_load_parabricks_metrics_payload(sample_dir, sample_name)
+    family, _prov_path, provenance = detect_metrics_family(
+        sample_dir,
+        sample_name,
+        alignment_mode=alignment_mode,
+        parabricks_available=parabricks_loaded is not None,
+    )
+
+    if family == MetricsFamily.PARABRICKS:
+        if parabricks_loaded is None:
+            raise RuntimeError(
+                f"Missing Parabricks metrics for {sample_name}: expected a full "
+                f"{sample_dir / f'{sample_name}.json'} or "
+                f"{sample_dir / f'{sample_name}.qc-metrics.tar'}"
+            )
+        payload, metrics_source = parabricks_loaded
+    else:
+        # methylGrapher WGBS: never use stale linear Picard tables
+        if provenance is None:
+            raise RuntimeError(
+                f"Missing methylGrapher alignment_metrics.json for {sample_name} in {sample_dir}"
+            )
+        payload = {
+            "sample_id": sample_name,
+            "wgbs_align_metrics": provenance,
+        }
+        metrics_source = _prov_path or (sample_dir / f"{sample_name}.alignment_metrics.json")
+
     payload["sample_id"] = sample_name
 
     for key, value in metrics.items():
@@ -470,20 +538,59 @@ def build_sample_qc_v2_dict(
 
     if "duplication_histogram" in payload:
         payload["duplication_histogram"] = _normalize_duplication_histogram(payload["duplication_histogram"])
+    elif "duplication_histogram" not in payload:
+        payload["duplication_histogram"] = {
+            "BIN": [],
+            "VALUE": [],
+            "all_sets": [],
+            "optical_sets": [],
+            "non_optical_sets": [],
+        }
 
     if summary_stats is not None:
         payload["summary_stats"] = summary_stats
 
-    try:
-        if str(metrics_source).endswith(".json"):
-            payload["guardrails"] = check_wgbs_guardrails(
-                str(metrics_source), print_report=False, core_guardrails=core_guardrails
-            )
+    align_cfg = alignment_guardrails or AlignmentGuardrailsConfig()
+    flagstat_metrics = None
+    flagstat_error: Optional[str] = None
+    if align_cfg.enabled and align_cfg.flagstat_enabled:
+        bam_path = sample_dir / f"{sample_name}.bam"
+        if bam_path.is_file() and bam_path.stat().st_size > 0:
+            try:
+                flagstat_metrics = run_flagstat(sample_dir, sample_name, force=force_flagstat)
+                payload["alignment_flagstat"] = flagstat_metrics.model_dump()
+            except RuntimeError as exc:
+                flagstat_error = str(exc)
         else:
-            from .wgbs_parabricks_qc import _build_wgbs_guardrail_report
+            flagstat_error = f"BAM missing or empty for flagstat: {bam_path}"
 
-            payload["guardrails"] = _build_wgbs_guardrail_report(
-                payload, core_guardrails=core_guardrails
+    try:
+        if family == MetricsFamily.PARABRICKS:
+            if str(metrics_source).endswith(".json"):
+                payload["guardrails"] = check_wgbs_guardrails(
+                    str(metrics_source), print_report=False, core_guardrails=core_guardrails
+                )
+            else:
+                from .wgbs_parabricks_qc import _build_wgbs_guardrail_report
+
+                payload["guardrails"] = _build_wgbs_guardrail_report(
+                    payload, core_guardrails=core_guardrails
+                )
+            payload["guardrails"]["metrics_family"] = MetricsFamily.PARABRICKS.value
+        else:
+            fs_dict = None
+            if flagstat_metrics is not None:
+                fs_dict = (
+                    flagstat_metrics.model_dump()
+                    if hasattr(flagstat_metrics, "model_dump")
+                    else dict(flagstat_metrics)
+                )
+            payload["guardrails"] = build_wgbs_pangenome_guardrail_report(
+                sample_id=sample_name,
+                sample_dir=sample_dir,
+                provenance=provenance or {},
+                flagstat=fs_dict,
+                min_mapped_rate=align_cfg.min_mapping_rate if align_cfg.enabled else None,
             )
     except Exception as e:
         raise RuntimeError(f"Failed to compute guardrails for {sample_name} from {metrics_source}: {e}") from e
@@ -491,7 +598,6 @@ def build_sample_qc_v2_dict(
     if isinstance(payload.get("guardrails"), dict):
         payload["guardrails"]["sample_id"] = sample_name
 
-    align_cfg = alignment_guardrails or AlignmentGuardrailsConfig()
     stats = compute_alignment_stats(payload)
     if stats is not None:
         payload["alignment_stats"] = stats
@@ -499,17 +605,6 @@ def build_sample_qc_v2_dict(
     if align_cfg.enabled:
         apply_alignment_derived_guardrails(payload["guardrails"], payload, align_cfg)
         if align_cfg.flagstat_enabled:
-            bam_path = sample_dir / f"{sample_name}.bam"
-            flagstat_error: Optional[str] = None
-            flagstat_metrics = None
-            if bam_path.is_file():
-                try:
-                    flagstat_metrics = run_flagstat(sample_dir, sample_name, force=force_flagstat)
-                    payload["alignment_flagstat"] = flagstat_metrics.model_dump()
-                except RuntimeError as exc:
-                    flagstat_error = str(exc)
-            else:
-                flagstat_error = f"BAM not found for flagstat: {bam_path}"
             apply_flagstat_guardrails(
                 payload["guardrails"],
                 flagstat_metrics,
@@ -517,8 +612,13 @@ def build_sample_qc_v2_dict(
                 error=flagstat_error,
             )
 
-    apply_fragmentomics_to_payload(payload, fragmentomics)
-    apply_bisulfite_conversion_to_payload(payload, sample_dir, bisulfite_conversion)
+    # Fragmentomics / bisulfite proxies need Parabricks insert / pre-adapter tables
+    if family == MetricsFamily.PARABRICKS:
+        apply_fragmentomics_to_payload(payload, fragmentomics)
+        apply_bisulfite_conversion_to_payload(payload, sample_dir, bisulfite_conversion)
+    else:
+        # Still allow real conversion sidecars when present
+        apply_bisulfite_conversion_to_payload(payload, sample_dir, bisulfite_conversion)
 
     history_path = output_path_for_history or (sample_dir / f"{sample_name}.json")
     _apply_screening_and_audit(
@@ -558,6 +658,7 @@ def process_samples_to_qc_jsons(
     write_context: Optional[QcWriteContext] = None,
     sample_id: Optional[str] = None,
     sample_id_by_path: Optional[Mapping[str, str]] = None,
+    alignment_mode: Optional[str] = None,
 ) -> None:
     """
     Parse each sample directory and write one JSON per sample to output_dir.
@@ -609,5 +710,6 @@ def process_samples_to_qc_jsons(
             output_path_for_history=output_file,
             dedup_metrics=dedup_metrics,
             summary_stats=summary_by_name.get(sample_name),
+            alignment_mode=alignment_mode,
         )
         write_sample_qc_json(v2_dict, output_file)

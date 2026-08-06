@@ -77,11 +77,18 @@ Per sample under `/work/samples/{sample_id}/`:
 
 ## Alignment QC: inputs and normalized JSON
 
-`methyl-qc` (`packages/methylalignmentqc`) combines **two upstream metric families** into one decision:
+`methyl-qc` (`packages/methylalignmentqc`) is **mode-aware**. It prefers task `alignmentMode` (`linear` | `pangenome` | `pangenome_wgbs`), otherwise infers the metrics family from artifacts. Soft-fail still flows through `guardrails.overall_pass` → workflow `qcPass`.
+
+| Mode | Required artifacts (hard-fail if missing) | Votes on `overall_pass` |
+|------|-------------------------------------------|-------------------------|
+| `linear` / `pangenome` | Full Parabricks JSON or Picard tar with `quality_yield.txt`; post-dedup metrics | Core Parabricks + alignment-derived + optional + cycle screening |
+| `pangenome_wgbs` | Non-empty BAM; dedup; `{id}.alignment_metrics.json` (`tool=methylGrapher`); GAF present | WGBS provenance / GAF / BAM(+flagstat) / dup; **skips** Parabricks core, cycle screening, fragmentomics, pre-adapter |
+
+For `pangenome_wgbs`, QC **must not** fall back to a stale linear Picard `qc-metrics.tar` or stub `{id}.json` left from an earlier linear run.
 
 ### Picard-style duplication metrics
 
-Parabricks emits a tab-separated **deduplication metrics** file (names vary: `*deduplicate_metrics.txt` or `*duplication_metrics.txt`). The parser (`methyl_alignment_qc/core/parser.py`) reads Picard-compatible columns such as:
+Parabricks (and methylGrapher QC BAM markdup) emit a tab-separated **deduplication metrics** file (names vary: `*deduplicate_metrics.txt` or `*duplication_metrics.txt`). The parser (`methyl_alignment_qc/core/parser.py`) reads Picard-compatible columns such as:
 
 - `LIBRARY`, `UNPAIRED_READS_EXAMINED`, `READ_PAIRS_EXAMINED`
 - `SECONDARY_OR_SUPPLEMENTARY_RDS`, `UNMAPPED_READS`
@@ -90,9 +97,9 @@ Parabricks emits a tab-separated **deduplication metrics** file (names vary: `*d
 
 These feed `summary_stats` on the export JSON (total reads, duplication rate, etc.). Optional config guardrails (`actionConfig.alignment_qc.optional_guardrails.duplication_rate_max`) can fail samples with excessive PCR duplication even when cycle quality looks fine.
 
-### Parabricks WGBS metrics JSON
+### Parabricks metrics JSON (linear / stock pangenome)
 
-Each sample directory should contain **`{sample_id}.json`**: Parabricks' structured report with sections such as:
+Each linear or stock-pangenome sample directory should contain **`{sample_id}.json`**: Parabricks' structured report with sections such as:
 
 - `quality_yield` — total/PF reads and Q30 bases
 - `mean_quality_by_cycle` — per-cycle mean Phred (Read 1 then Read 2; for 151+151 cycles, Read 2 starts at cycle 152)
@@ -100,6 +107,10 @@ Each sample directory should contain **`{sample_id}.json`**: Parabricks' structu
 - `pre_adapter_summaries` — deamination and OxoG artifact qscores
 
 When this file is present, guardrails in `wgbs_parabricks_qc.py` evaluate sequencing and alignment health **before** methylation extraction.
+
+### methylGrapher WGBS provenance (`pangenome_wgbs`)
+
+WGBS pangenome align writes **`{sample_id}.alignment_metrics.json`** (tool=`methylGrapher`) plus GAF / QC BAM / dedup. Export may include optional `wgbs_align_metrics`; Parabricks-only payload blocks stay `null`. Guardrails live in `wgbs_pangenome_qc.py`.
 
 ### Our equivalent export JSON (V2)
 

@@ -254,17 +254,32 @@ class QcAttemptRecord(BaseModel):
     workflow_node_key: Optional[str] = None
 
 
+class WgbsAlignMetrics(BaseModel):
+    """Provenance block from methylGrapher ``{sample}.alignment_metrics.json``."""
+
+    model_config = ConfigDict(extra="allow")
+    tool: str
+    action: Optional[str] = None
+    sample_id: Optional[str] = None
+    index_prefix: Optional[str] = None
+    directional: Optional[bool] = None
+    asset_fingerprints: Optional[Dict[str, str]] = None
+    gaf: Optional[str] = None
+    bam: Optional[str] = None
+
+
 class GuardrailDetails(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    pf_percent: GuardrailMetric
-    q30_percent: GuardrailMetric
-    mean_quality: GuardrailMetric
-    min_quality_post20: GuardrailMetric
-    at_dropout: GuardrailMetric
-    gc_dropout: GuardrailMetric
-    median_insert_bp: GuardrailMetric
-    deamination_qscore: GuardrailMetric
-    oxog_qscore: GuardrailMetric
+    # Parabricks CollectMultipleMetrics core (required for linear/pangenome; absent on WGBS)
+    pf_percent: Optional[GuardrailMetric] = None
+    q30_percent: Optional[GuardrailMetric] = None
+    mean_quality: Optional[GuardrailMetric] = None
+    min_quality_post20: Optional[GuardrailMetric] = None
+    at_dropout: Optional[GuardrailMetric] = None
+    gc_dropout: Optional[GuardrailMetric] = None
+    median_insert_bp: Optional[GuardrailMetric] = None
+    deamination_qscore: Optional[GuardrailMetric] = None
+    oxog_qscore: Optional[GuardrailMetric] = None
     duplication_rate: Optional[GuardrailMetric] = None
     min_pf_reads: Optional[GuardrailMetric] = None
     mapping_rate: Optional[GuardrailMetric] = None
@@ -274,6 +289,11 @@ class GuardrailDetails(BaseModel):
     supplementary_rate_flagstat: Optional[GuardrailMetric] = None
     fragmentomics: Optional[FragmentomicsGuardrailDetails] = None
     bisulfite_conversion: Optional[Dict[str, GuardrailMetric]] = None
+    # pangenome_wgbs (methylGrapher) specific
+    wgbs_provenance: Optional[GuardrailMetric] = None
+    wgbs_gaf_present: Optional[GuardrailMetric] = None
+    wgbs_bam_present: Optional[GuardrailMetric] = None
+    wgbs_bam_mapped_rate: Optional[GuardrailMetric] = None
 
 
 class GuardrailReport(BaseModel):
@@ -284,28 +304,30 @@ class GuardrailReport(BaseModel):
     recommendation: str
     next_steps: str
     screening: Optional[QcScreeningReport] = None
+    metrics_family: Optional[str] = None
 
 
 class ParabricksMetricsPayload(BaseModel):
-    """Canonical Parabricks metrics payload used as base export content."""
+    """Canonical metrics payload used as base export content (mode-aware optionals)."""
 
     model_config = ConfigDict(extra="forbid")
 
     sample_id: str
-    quality_yield: QualityYield
-    mean_quality_by_cycle: MeanQualityByCycle
-    quality_score_distribution: QualityScoreDistribution
-    base_distribution_by_cycle: BaseDistributionByCycle
-    gc_bias_summary: GCBiasSummary
-    gc_bias_details: GCBiasDetails
-    insert_size_metrics: InsertSizeMetrics
-    insert_size_histogram: InsertSizeHistogram
-    error_summaries: ErrorSummaries
-    pre_adapter_summaries: ArtifactSummaries
-    bait_bias_summaries: ArtifactSummaries
-    conversion_log: ConversionLog
+    quality_yield: Optional[QualityYield] = None
+    mean_quality_by_cycle: Optional[MeanQualityByCycle] = None
+    quality_score_distribution: Optional[QualityScoreDistribution] = None
+    base_distribution_by_cycle: Optional[BaseDistributionByCycle] = None
+    gc_bias_summary: Optional[GCBiasSummary] = None
+    gc_bias_details: Optional[GCBiasDetails] = None
+    insert_size_metrics: Optional[InsertSizeMetrics] = None
+    insert_size_histogram: Optional[InsertSizeHistogram] = None
+    error_summaries: Optional[ErrorSummaries] = None
+    pre_adapter_summaries: Optional[ArtifactSummaries] = None
+    bait_bias_summaries: Optional[ArtifactSummaries] = None
+    conversion_log: Optional[ConversionLog] = None
     duplication_metrics: Optional[List[DuplicationMetric]] = None
     duplication_histogram: Optional[DuplicationHistogram] = None
+    wgbs_align_metrics: Optional[WgbsAlignMetrics] = None
 
 
 class ExportedSampleQCPayload(ParabricksMetricsPayload):

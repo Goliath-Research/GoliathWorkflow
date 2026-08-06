@@ -78,85 +78,100 @@ def v1_model_to_v2(
         producer=QCV2Producer(package="methyl_alignment_qc", version=_producer_package_version()),
     )
 
-    mqc = v1.mean_quality_by_cycle
-    mean_rows = [
-        MeanQualityByCycleRow(cycle=int(c), mean_quality=float(mq)) for c, mq in zip(mqc.cycle, mqc.mean_quality)
-    ]
+    mean_rows: List[MeanQualityByCycleRow] = []
+    if v1.mean_quality_by_cycle is not None:
+        mqc = v1.mean_quality_by_cycle
+        mean_rows = [
+            MeanQualityByCycleRow(cycle=int(c), mean_quality=float(mq))
+            for c, mq in zip(mqc.cycle, mqc.mean_quality)
+        ]
 
-    qsd = v1.quality_score_distribution
-    q_rows = [
-        QualityScoreDistributionRow(q=int(q), count_of_q=int(cq)) for q, cq in zip(qsd.Q, qsd.COUNT_OF_Q)
-    ]
+    q_rows: List[QualityScoreDistributionRow] = []
+    if v1.quality_score_distribution is not None:
+        qsd = v1.quality_score_distribution
+        q_rows = [
+            QualityScoreDistributionRow(q=int(q), count_of_q=int(cq))
+            for q, cq in zip(qsd.Q, qsd.COUNT_OF_Q)
+        ]
 
-    bd = v1.base_distribution_by_cycle
-    base_rows = [
-        BaseDistributionByCycleRow(
-            cycle=int(c),
-            pct_a=float(a),
-            pct_c=float(cc),
-            pct_g=float(g),
-            pct_t=float(t),
-            pct_n=float(n),
-        )
-        for c, a, cc, g, t, n in zip(
-            bd.cycle,
-            bd.PCT_A,
-            bd.PCT_C,
-            bd.PCT_G,
-            bd.PCT_T,
-            bd.PCT_N,
-        )
-    ]
-
-    gcd = v1.gc_bias_details
-    gc_rows = [
-        GCBiasDetailsRow(
-            gc=int(gc),
-            windows=int(w),
-            read_starts=int(rs),
-            mean_base_quality=float(mbq),
-            normalized_coverage=float(nc),
-            error_bar=float(eb),
-        )
-        for gc, w, rs, mbq, nc, eb in zip(
-            gcd.GC,
-            gcd.WINDOWS,
-            gcd.READ_STARTS,
-            gcd.MEAN_BASE_QUALITY,
-            gcd.NORMALIZED_COVERAGE,
-            gcd.ERROR_BAR,
-        )
-    ]
-
-    ish = v1.insert_size_histogram
-    insert_rows: List[InsertSizeHistogramRow] = []
-    n_ins = len(ish.insert_size)
-    for i in range(n_ins):
-        insert_rows.append(
-            InsertSizeHistogramRow(
-                insert_size=int(ish.insert_size[i]),
-                pair_orientation=str(ish.pair_orientation[i]),
-                all_reads_fr_count=int(ish.all_reads_fr_count[i]),
-                value=float(ish.VALUE[i]) if i < len(ish.VALUE) else None,
-                all_sets=int(ish.all_sets[i]) if i < len(ish.all_sets) else None,
-                optical_sets=int(ish.optical_sets[i]) if i < len(ish.optical_sets) else None,
-                non_optical_sets=int(ish.non_optical_sets[i]) if i < len(ish.non_optical_sets) else None,
+    base_rows: List[BaseDistributionByCycleRow] = []
+    if v1.base_distribution_by_cycle is not None:
+        bd = v1.base_distribution_by_cycle
+        base_rows = [
+            BaseDistributionByCycleRow(
+                cycle=int(c),
+                pct_a=float(a),
+                pct_c=float(cc),
+                pct_g=float(g),
+                pct_t=float(t),
+                pct_n=float(n),
             )
-        )
+            for c, a, cc, g, t, n in zip(
+                bd.cycle,
+                bd.PCT_A,
+                bd.PCT_C,
+                bd.PCT_G,
+                bd.PCT_T,
+                bd.PCT_N,
+            )
+        ]
 
-    es = v1.error_summaries
-    err_rows = [
-        ErrorSummariesRow(
-            ref=str(rf),
-            alt=str(alt),
-            count=int(cnt),
-            rate=float(rate),
-            qscore=int(qs),
-        )
-        for rf, alt, cnt, rate, qs in zip(es.REF, es.ALT, es.COUNT, es.RATE, es.QSCORE)
-    ]
+    gc_rows: List[GCBiasDetailsRow] = []
+    if v1.gc_bias_details is not None:
+        gcd = v1.gc_bias_details
+        gc_rows = [
+            GCBiasDetailsRow(
+                gc=int(gc),
+                windows=int(w),
+                read_starts=int(rs),
+                mean_base_quality=float(mbq),
+                normalized_coverage=float(nc),
+                error_bar=float(eb),
+            )
+            for gc, w, rs, mbq, nc, eb in zip(
+                gcd.GC,
+                gcd.WINDOWS,
+                gcd.READ_STARTS,
+                gcd.MEAN_BASE_QUALITY,
+                gcd.NORMALIZED_COVERAGE,
+                gcd.ERROR_BAR,
+            )
+        ]
+
+    insert_rows: List[InsertSizeHistogramRow] = []
+    if v1.insert_size_histogram is not None:
+        ish = v1.insert_size_histogram
+        n_ins = len(ish.insert_size)
+        for i in range(n_ins):
+            insert_rows.append(
+                InsertSizeHistogramRow(
+                    insert_size=int(ish.insert_size[i]),
+                    pair_orientation=str(ish.pair_orientation[i]),
+                    all_reads_fr_count=int(ish.all_reads_fr_count[i]),
+                    value=float(ish.VALUE[i]) if i < len(ish.VALUE) else None,
+                    all_sets=int(ish.all_sets[i]) if i < len(ish.all_sets) else None,
+                    optical_sets=int(ish.optical_sets[i]) if i < len(ish.optical_sets) else None,
+                    non_optical_sets=int(ish.non_optical_sets[i]) if i < len(ish.non_optical_sets) else None,
+                )
+            )
+
+    err_rows: List[ErrorSummariesRow] = []
+    if v1.error_summaries is not None:
+        es = v1.error_summaries
+        err_rows = [
+            ErrorSummariesRow(
+                ref=str(rf),
+                alt=str(alt),
+                count=int(cnt),
+                rate=float(rate),
+                qscore=int(qs),
+            )
+            for rf, alt, cnt, rate, qs in zip(es.REF, es.ALT, es.COUNT, es.RATE, es.QSCORE)
+        ]
 
     def _artifact_rows(art: Any) -> List[ArtifactSummariesRow]:
+        if art is None:
+            return []
         return [
             ArtifactSummariesRow(
                 artifact_name=str(nm),
@@ -169,33 +184,48 @@ def v1_model_to_v2(
 
     duph = v1.duplication_histogram
     dup_rows: List[DuplicationHistogramRow] = []
-    for i in range(len(duph.BIN)):
-        dup_rows.append(
-            DuplicationHistogramRow(
-                bin=float(duph.BIN[i]),
-                value=float(duph.VALUE[i]),
-                all_sets=int(duph.all_sets[i]) if i < len(duph.all_sets) else None,
-                optical_sets=int(duph.optical_sets[i]) if i < len(duph.optical_sets) else None,
-                non_optical_sets=int(duph.non_optical_sets[i]) if i < len(duph.non_optical_sets) else None,
+    if duph is not None:
+        for i in range(len(duph.BIN)):
+            dup_rows.append(
+                DuplicationHistogramRow(
+                    bin=float(duph.BIN[i]),
+                    value=float(duph.VALUE[i]),
+                    all_sets=int(duph.all_sets[i]) if i < len(duph.all_sets) else None,
+                    optical_sets=int(duph.optical_sets[i]) if i < len(duph.optical_sets) else None,
+                    non_optical_sets=int(duph.non_optical_sets[i]) if i < len(duph.non_optical_sets) else None,
+                )
             )
-        )
 
     return ExportedSampleQCV2Payload(
         metadata=metadata,
         sample_id=v1.sample_id,
         quality_yield=v1.quality_yield,
-        mean_quality_by_cycle=MeanQualityByCycleV2(rows=mean_rows),
-        quality_score_distribution=QualityScoreDistributionV2(rows=q_rows),
-        base_distribution_by_cycle=BaseDistributionByCycleV2(rows=base_rows),
+        mean_quality_by_cycle=MeanQualityByCycleV2(rows=mean_rows) if v1.mean_quality_by_cycle is not None else None,
+        quality_score_distribution=(
+            QualityScoreDistributionV2(rows=q_rows) if v1.quality_score_distribution is not None else None
+        ),
+        base_distribution_by_cycle=(
+            BaseDistributionByCycleV2(rows=base_rows) if v1.base_distribution_by_cycle is not None else None
+        ),
         gc_bias_summary=v1.gc_bias_summary,
-        gc_bias_details=GCBiasDetailsV2(rows=gc_rows),
+        gc_bias_details=GCBiasDetailsV2(rows=gc_rows) if v1.gc_bias_details is not None else None,
         insert_size_metrics=v1.insert_size_metrics,
-        insert_size_histogram=InsertSizeHistogramV2(rows=insert_rows),
-        error_summaries=ErrorSummariesV2(rows=err_rows),
-        pre_adapter_summaries=ArtifactSummariesV2(rows=_artifact_rows(v1.pre_adapter_summaries)),
-        bait_bias_summaries=ArtifactSummariesV2(rows=_artifact_rows(v1.bait_bias_summaries)),
+        insert_size_histogram=(
+            InsertSizeHistogramV2(rows=insert_rows) if v1.insert_size_histogram is not None else None
+        ),
+        error_summaries=ErrorSummariesV2(rows=err_rows) if v1.error_summaries is not None else None,
+        pre_adapter_summaries=(
+            ArtifactSummariesV2(rows=_artifact_rows(v1.pre_adapter_summaries))
+            if v1.pre_adapter_summaries is not None
+            else None
+        ),
+        bait_bias_summaries=(
+            ArtifactSummariesV2(rows=_artifact_rows(v1.bait_bias_summaries))
+            if v1.bait_bias_summaries is not None
+            else None
+        ),
         conversion_log=v1.conversion_log,
-        duplication_metrics=list(v1.duplication_metrics),
+        duplication_metrics=list(v1.duplication_metrics or []),
         duplication_histogram=DuplicationHistogramV2(rows=dup_rows),
         summary_stats=v1.summary_stats,
         guardrails=v1.guardrails,
@@ -205,6 +235,7 @@ def v1_model_to_v2(
         bisulfite_conversion_metrics=v1.bisulfite_conversion_metrics,
         qc_history=v1.qc_history,
         sample_prep_log_path=v1.sample_prep_log_path,
+        wgbs_align_metrics=v1.wgbs_align_metrics,
     )
 
 

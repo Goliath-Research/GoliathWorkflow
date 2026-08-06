@@ -19,6 +19,7 @@ from .sample_qc import (
     QcAttemptRecord,
     QualityYield,
     SummaryStats,
+    WgbsAlignMetrics,
 )
 
 
@@ -153,18 +154,18 @@ class ExportedSampleQCV2Payload(BaseModel):
 
     metadata: QCV2Metadata
     sample_id: str
-    quality_yield: QualityYield
-    mean_quality_by_cycle: MeanQualityByCycleV2
-    quality_score_distribution: QualityScoreDistributionV2
-    base_distribution_by_cycle: BaseDistributionByCycleV2
-    gc_bias_summary: GCBiasSummary
-    gc_bias_details: GCBiasDetailsV2
-    insert_size_metrics: InsertSizeMetrics
-    insert_size_histogram: InsertSizeHistogramV2
-    error_summaries: ErrorSummariesV2
-    pre_adapter_summaries: ArtifactSummariesV2
-    bait_bias_summaries: ArtifactSummariesV2
-    conversion_log: ConversionLog
+    quality_yield: Optional[QualityYield] = None
+    mean_quality_by_cycle: Optional[MeanQualityByCycleV2] = None
+    quality_score_distribution: Optional[QualityScoreDistributionV2] = None
+    base_distribution_by_cycle: Optional[BaseDistributionByCycleV2] = None
+    gc_bias_summary: Optional[GCBiasSummary] = None
+    gc_bias_details: Optional[GCBiasDetailsV2] = None
+    insert_size_metrics: Optional[InsertSizeMetrics] = None
+    insert_size_histogram: Optional[InsertSizeHistogramV2] = None
+    error_summaries: Optional[ErrorSummariesV2] = None
+    pre_adapter_summaries: Optional[ArtifactSummariesV2] = None
+    bait_bias_summaries: Optional[ArtifactSummariesV2] = None
+    conversion_log: Optional[ConversionLog] = None
     duplication_metrics: List[DuplicationMetric]
     duplication_histogram: DuplicationHistogramV2
     summary_stats: SummaryStats
@@ -175,3 +176,4 @@ class ExportedSampleQCV2Payload(BaseModel):
     bisulfite_conversion_metrics: Optional[BisulfiteConversionMetrics] = None
     qc_history: Optional[List[QcAttemptRecord]] = None
     sample_prep_log_path: Optional[str] = None
+    wgbs_align_metrics: Optional[WgbsAlignMetrics] = None
