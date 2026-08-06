@@ -143,6 +143,15 @@ class MethylGrapherWgbsStepConfig(BaseModel):
             "Operator-set per site/profile. Default when unset: python."
         ),
     )
+    align_engine: Optional[str] = Field(
+        default=None,
+        description=(
+            "Align map backend for dual-graph GAF: 'cpu_vg' (stock vg giraffe GAF) or "
+            "'gpu_giraffe' (GH200 intent). Parabricks 4.7 cannot emit GAF; gpu_giraffe "
+            "defaults to vg GAF fallback (METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=vg) until "
+            "a GPU→GAF tool exists. Operator-set per site/profile on GH200 fleets."
+        ),
+    )
     threads: Optional[int] = Field(
         default=None,
         ge=1,

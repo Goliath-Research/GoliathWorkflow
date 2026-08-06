@@ -32,6 +32,8 @@ GPU_REQUIRED_CAPABILITIES: FrozenSet[str] = frozenset(
         "proteomics.diann",
         "proteomics.prosit",
         "proteomics.casanovo",
+        # GH200 dual-graph Align fleet marker (config align_engine=gpu_giraffe).
+        "methylgrapher.wgbs_gpu_align",
     }
 )
 
@@ -207,6 +209,11 @@ def resolve_worker_capabilities(
             if extractor_ok:
                 caps.add(capability)
             continue
+
+    # Fleet marker for GH200 dual-graph Align (not a separate action capability).
+    # Operators filter enroll / pools by this string when using align_engine=gpu_giraffe.
+    if gpu:
+        caps.add("methylgrapher.wgbs_gpu_align")
 
     if not caps:
         logger.warning("resolve_worker_capabilities: no capabilities detected; registering omnibus")

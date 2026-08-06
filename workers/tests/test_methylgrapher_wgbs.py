@@ -79,6 +79,16 @@ def test_step_config_defaults_are_none() -> None:
     assert cfg.threads is None
     assert cfg.directional is None
     assert cfg.c2t is None
+    assert cfg.align_engine is None
+
+
+def test_normalize_align_engine() -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import _normalize_align_engine
+
+    assert _normalize_align_engine(None) == "cpu_vg"
+    assert _normalize_align_engine("gpu_giraffe") == "gpu_giraffe"
+    with pytest.raises(RuntimeError):
+        _normalize_align_engine("bam_only")
 
 
 def test_resolve_bundle_requires_c2t_g2a(tmp_path: Path) -> None:
@@ -109,6 +119,8 @@ def test_build_align_and_qc_bam_commands(tmp_path: Path) -> None:
     assert cmd[0].endswith("methylGrapher") or cmd[0] == "methylGrapher"
     assert "Align" in cmd
     assert "-directional" in cmd
+    assert "-align_engine" in cmd
+    assert cmd[cmd.index("-align_engine") + 1] == "cpu_vg"
     qc = build_qc_bam_command(
         bundle=bundle,
         fq1_c2t=tmp_path / "a.C2T.R1.fastq",

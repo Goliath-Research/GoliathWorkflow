@@ -53,6 +53,7 @@ class MethylGrapherWgbsBundle:
     methylgrapher_version: Optional[str] = None
     vg_version: Optional[str] = None
     engine: str = "python"
+    align_engine: str = "cpu_vg"
     cg_only: bool = True
     contexts: Tuple[str, ...] = ("CG",)
     read_level_enabled: bool = True
@@ -113,6 +114,20 @@ def _normalize_engine(value: Any) -> str:
     )
 
 
+def _normalize_align_engine(value: Any) -> str:
+    """Return ``cpu_vg`` or ``gpu_giraffe``; unset → ``cpu_vg`` (safe default)."""
+    if value is None or str(value).strip() == "":
+        return "cpu_vg"
+    eng = str(value).strip().lower()
+    if eng in {"cpu_vg", "cpu", "vg"}:
+        return "cpu_vg"
+    if eng in {"gpu_giraffe", "gpu", "gh200"}:
+        return "gpu_giraffe"
+    raise RuntimeError(
+        f"methylgrapher_wgbs.align_engine must be 'cpu_vg' or 'gpu_giraffe' (got {value!r})"
+    )
+
+
 def resolve_wgbs_bundle_from_resolved(
     resolved_config: Mapping[str, Any] | None,
 ) -> MethylGrapherWgbsBundle:
@@ -160,6 +175,7 @@ def resolve_wgbs_bundle_from_resolved(
         ),
         vg_version=str(raw["vg_version"]) if raw.get("vg_version") else None,
         engine=_normalize_engine(raw.get("engine")),
+        align_engine=_normalize_align_engine(raw.get("align_engine")),
         cg_only=_pick_bool(raw, "cg_only", True),
         contexts=contexts,
         read_level_enabled=_pick_bool(rl, "enabled", True),
@@ -241,6 +257,7 @@ def fingerprint_wgbs_assets(bundle: MethylGrapherWgbsBundle) -> Dict[str, str]:
     if bundle.vg_version:
         out["vg_version"] = bundle.vg_version
     out["engine"] = bundle.engine
+    out["align_engine"] = bundle.align_engine
     out["directional"] = "1" if bundle.directional else "0"
     return out
 
@@ -338,7 +355,7 @@ def build_align_command(
 ) -> List[str]:
     """Construct methylGrapher Align argv (host or container-inner)."""
     threads = bundle.threads or max(1, (os.cpu_count() or 4) // 2)
-    return [
+    cmd = [
         os.environ.get(METHYLGRAPHER_BIN_ENV, "").strip() or "methylGrapher",
         "Align",
         "-t",
@@ -353,7 +370,10 @@ def build_align_command(
         str(fq2),
         "-directional",
         "Y" if bundle.directional else "N",
+        "-align_engine",
+        bundle.align_engine,
     ]
+    return cmd
 
 
 def build_methylcall_command(
@@ -1056,6 +1076,14 @@ def run_methylgrapher_wgbs_align(
                 "--rm",
                 "--user",
                 f"{os.getuid()}:{os.getgid()}",
+                "-e",
+                f"METHYLGRAPHER_ALIGN_ENGINE={bundle.align_engine}",
+                "-e",
+                "METHYLGRAPHER_GPU_GIRAFFE_FALLBACK="
+                + (
+                    os.environ.get("METHYLGRAPHER_GPU_GIRAFFE_FALLBACK", "vg").strip()
+                    or "vg"
+                ),
             ]
             for root in sorted(mount_roots, key=str):
                 docker_cmd.extend(["-v", f"{root}:{root}"])

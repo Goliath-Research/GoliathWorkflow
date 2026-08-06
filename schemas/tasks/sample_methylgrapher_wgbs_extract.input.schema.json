@@ -99,6 +99,19 @@
       "additionalProperties": false,
       "description": "Operator-tunable methylGrapher WGBS pangenome knobs (actionConfig.methylgrapher_wgbs).\n\nAsset paths are site-pinned under ``/work/genomes/pangenome/.../d9-bs/...`` and\nbaked into task ``resolvedConfig`` at instance configuration. Workers must not\nre-read site/profile manifests for these values when ``resolvedConfig`` is present.",
       "properties": {
+        "align_engine": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Align map backend for dual-graph GAF: 'cpu_vg' (stock vg giraffe GAF) or 'gpu_giraffe' (GH200 intent). Parabricks 4.7 cannot emit GAF; gpu_giraffe defaults to vg GAF fallback (METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=vg) until a GPU\u2192GAF tool exists. Operator-set per site/profile on GH200 fleets.",
+          "title": "Align Engine"
+        },
         "alignment_mode": {
           "anyOf": [
             {

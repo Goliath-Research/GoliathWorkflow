@@ -1,6 +1,6 @@
 # methylGrapher-mojo cutover gate
 
-Companion to [`methylgrapher-mojo-cutover.plan.md`](methylgrapher-mojo-cutover.plan.md), [`pangenome-wgbs-methyl-qc.plan.md`](pangenome-wgbs-methyl-qc.plan.md), and [`extend-former-out-of-scope.plan.md`](extend-former-out-of-scope.plan.md) (MergeCpG / ConversionRate ports).
+Companion to [`methylgrapher-mojo-cutover.plan.md`](methylgrapher-mojo-cutover.plan.md), [`pangenome-wgbs-methyl-qc.plan.md`](pangenome-wgbs-methyl-qc.plan.md), [`extend-former-out-of-scope.plan.md`](extend-former-out-of-scope.plan.md), and [`gh200-wgbs-dual-graph-align.plan.md`](gh200-wgbs-dual-graph-align.plan.md).
 
 ## Current default (this lab)
 
@@ -15,6 +15,8 @@ Site `/work/site/methyl_site.json` pins:
   }
 }
 ```
+
+`align_engine` stays unset / `cpu_vg` until the GH200 full-sample Align gate (≤~2 h). Parabricks giraffe remains BAM-only (no science GAF).
 
 Procedure git packs keep `engine` unset / python-compatible until multi-site science sign-off. Workers load site `actionConfig` at instance finalize.
 
