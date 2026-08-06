@@ -519,7 +519,8 @@ def build_sample_qc_v2_dict(
             )
         payload, metrics_source = parabricks_loaded
     else:
-        # methylGrapher WGBS: never use stale linear Picard tables
+        # methylGrapher WGBS: never use stale linear Picard tables unless this
+        # Align run explicitly recorded collectmultiplemetrics success.
         if provenance is None:
             raise RuntimeError(
                 f"Missing methylGrapher alignment_metrics.json for {sample_name} in {sample_dir}"
@@ -529,6 +530,15 @@ def build_sample_qc_v2_dict(
             "wgbs_align_metrics": provenance,
         }
         metrics_source = _prov_path or (sample_dir / f"{sample_name}.alignment_metrics.json")
+        # Optional enrichment: real Picard tables from this WGBS Align only.
+        if bool(provenance.get("collectmultiplemetrics")) and parabricks_loaded is not None:
+            pb_payload, pb_source = parabricks_loaded
+            for key, value in pb_payload.items():
+                if key in {"sample_id", "guardrails", "wgbs_align_metrics"}:
+                    continue
+                if value is not None and key not in payload:
+                    payload[key] = value
+            metrics_source = pb_source
 
     payload["sample_id"] = sample_name
 
@@ -592,6 +602,37 @@ def build_sample_qc_v2_dict(
                 flagstat=fs_dict,
                 min_mapped_rate=align_cfg.min_mapping_rate if align_cfg.enabled else None,
             )
+            # Optional Parabricks core votes when this WGBS Align collected a
+            # complete Picard payload (quality_yield + cycle/GC/insert tables).
+            if bool((provenance or {}).get("collectmultiplemetrics")) and payload.get(
+                "quality_yield"
+            ):
+                from .wgbs_parabricks_qc import _build_wgbs_guardrail_report
+
+                try:
+                    pb_gr = _build_wgbs_guardrail_report(
+                        payload, core_guardrails=core_guardrails
+                    )
+                except Exception:
+                    pb_gr = None
+                if pb_gr is not None:
+                    details = payload["guardrails"].setdefault("details", {})
+                    for key, metric in (pb_gr.get("details") or {}).items():
+                        details[key] = metric
+                    payload["guardrails"]["overall_pass"] = bool(
+                        payload["guardrails"].get("overall_pass")
+                    ) and bool(pb_gr.get("overall_pass"))
+                    payload["guardrails"]["picard_enrichment"] = True
+                    payload["guardrails"]["picard_enrichment_note"] = (
+                        "Parabricks CollectMultipleMetrics on restored QC BAM; "
+                        "BS chemistry may skew artifact/GC — operational screening only."
+                    )
+                else:
+                    payload["guardrails"]["picard_enrichment"] = False
+                    payload["guardrails"]["picard_enrichment_note"] = (
+                        "collectmultiplemetrics flagged but Picard tables incomplete; "
+                        "using WGBS provenance guardrails only."
+                    )
     except Exception as e:
         raise RuntimeError(f"Failed to compute guardrails for {sample_name} from {metrics_source}: {e}") from e
 
@@ -613,7 +654,12 @@ def build_sample_qc_v2_dict(
             )
 
     # Fragmentomics / bisulfite proxies need Parabricks insert / pre-adapter tables
-    if family == MetricsFamily.PARABRICKS:
+    wgbs_picard = (
+        family == MetricsFamily.METHYLGRAPHER_WGBS
+        and bool((provenance or {}).get("collectmultiplemetrics"))
+        and payload.get("quality_yield") is not None
+    )
+    if family == MetricsFamily.PARABRICKS or wgbs_picard:
         apply_fragmentomics_to_payload(payload, fragmentomics)
         apply_bisulfite_conversion_to_payload(payload, sample_dir, bisulfite_conversion)
     else:

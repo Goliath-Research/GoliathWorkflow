@@ -496,6 +496,103 @@ def _package_qc_tar(sample_dir: Path, sample_id: str, metrics_dir: Path) -> Path
     return qc_tar
 
 
+def _maybe_collect_picard_metrics(
+    *,
+    sample_id: str,
+    sample_path: Path,
+    bam_path: Path,
+    metrics_dir: Path,
+    linear_ref_fasta: Path,
+    log_path: Path,
+    input_json: Optional[Mapping[str, Any]],
+) -> bool:
+    """Run ``pbrun collectmultiplemetrics`` on the WGBS QC BAM (soft-fail).
+
+    Returns True when ``quality_yield.txt`` (or equivalent) lands under
+    ``metrics_dir``. BS-converted BAM bases can skew artifact/GC metrics;
+    these tables are operational screening only.
+    """
+    if not bam_path.is_file() or bam_path.stat().st_size == 0:
+        logger.warning(
+            "Skipping collectmultiplemetrics for %s: BAM missing or empty", sample_id
+        )
+        return False
+    if not linear_ref_fasta.is_file():
+        logger.warning(
+            "Skipping collectmultiplemetrics for %s: linear_ref_fasta missing (%s)",
+            sample_id,
+            linear_ref_fasta,
+        )
+        return False
+
+    try:
+        from methyl_worker.giraffe_runner import _build_collect_metrics_docker_command
+        from methyl_worker.parabricks_runner import (
+            ParabricksPaths,
+            resolve_parabricks_config,
+        )
+    except Exception as exc:  # pragma: no cover - import surface
+        logger.warning("collectmultiplemetrics unavailable (import): %s", exc)
+        return False
+
+    try:
+        cfg = resolve_parabricks_config(
+            project_path=(input_json or {}).get("projectPath")
+            or (input_json or {}).get("project"),
+            input_json=input_json,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Skipping collectmultiplemetrics for %s: Parabricks config unresolved (%s)",
+            sample_id,
+            exc,
+        )
+        return False
+
+    metrics_dir.mkdir(parents=True, exist_ok=True)
+    paths = ParabricksPaths(
+        sample_dir=sample_path,
+        sample_id=sample_id,
+        reference_fasta=linear_ref_fasta,
+        bam_path=bam_path,
+        qc_metrics_dir=metrics_dir,
+        qc_metrics_tar=sample_path / f"{sample_id}.qc-metrics.tar",
+        metrics_json=sample_path / f"{sample_id}.json",
+        dedup_metrics=sample_path / f"{sample_id}.deduplicate_metrics.txt",
+        log_path=log_path,
+        tmp_dir=sample_path / "tmp",
+    )
+    metrics_cmd = _build_collect_metrics_docker_command(cfg, paths, linear_ref_fasta)
+    logger.info("Running Parabricks collectmultiplemetrics for WGBS QC BAM %s", sample_id)
+    _append_log(log_path, "COMMAND: " + " ".join(shlex.quote(c) for c in metrics_cmd))
+    try:
+        _run(metrics_cmd, log_path, step="collectmultiplemetrics")
+    except Exception as exc:
+        logger.warning(
+            "collectmultiplemetrics failed for %s (continuing with provenance-only QC): %s",
+            sample_id,
+            exc,
+        )
+        return False
+
+    # Parabricks may write into metrics_dir or a nested folder; flatten one level.
+    qy = metrics_dir / "quality_yield.txt"
+    if not qy.is_file():
+        nested = list(metrics_dir.rglob("quality_yield.txt"))
+        if nested:
+            for src in nested:
+                dest = metrics_dir / src.name
+                if src.resolve() != dest.resolve():
+                    shutil.copy2(src, dest)
+            qy = metrics_dir / "quality_yield.txt"
+    if not qy.is_file():
+        logger.warning(
+            "collectmultiplemetrics produced no quality_yield.txt for %s", sample_id
+        )
+        return False
+    return True
+
+
 def _alignment_complete(sample_dir: Path, sample_id: str) -> bool:
     bam = sample_dir / f"{sample_id}.bam"
     dedup = sample_dir / f"{sample_id}.deduplicate_metrics.txt"
@@ -1026,6 +1123,25 @@ def run_methylgrapher_wgbs_align(
 
     provenance["gaf"] = str(gaf_path)
     provenance["bam"] = str(bam_path)
+
+    picard_ok = False
+    if not dry:
+        picard_ok = _maybe_collect_picard_metrics(
+            sample_id=sample_id,
+            sample_path=sample_path,
+            bam_path=bam_path,
+            metrics_dir=metrics_dir,
+            linear_ref_fasta=bundle.linear_ref_fasta,
+            log_path=log_path,
+            input_json=payload,
+        )
+    provenance["collectmultiplemetrics"] = bool(picard_ok)
+    if picard_ok:
+        provenance["picard_qc_note"] = (
+            "Picard CollectMultipleMetrics on restored QC BAM; BS chemistry may "
+            "skew artifact/GC metrics — operational screening only."
+        )
+
     metrics_json.write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
     (metrics_dir / "alignment_metrics.json").write_text(
         metrics_json.read_text(encoding="utf-8"), encoding="utf-8"

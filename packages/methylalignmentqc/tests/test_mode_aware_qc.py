@@ -132,3 +132,99 @@ def test_build_qc_wgbs_fails_when_gaf_missing(tmp_path: Path):
     )
     assert payload["guardrails"]["overall_pass"] is False
     assert payload["guardrails"]["details"]["wgbs_gaf_present"]["pass"] is False
+
+
+def _write_full_picard_tar(sample_dir: Path, sample: str) -> None:
+    """Minimal complete Picard tables so core WGBS Parabricks guardrails can run."""
+    metrics = sample_dir / f"{sample}.qc-metrics"
+    metrics.mkdir(exist_ok=True)
+    (metrics / "quality_yield.txt").write_text(
+        "TOTAL_READS\tPF_READS\tTOTAL_BASES\tPF_BASES\tQ20_BASES\tPF_Q20_BASES\t"
+        "Q30_BASES\tPF_Q30_BASES\tQ20_EQUIVALENT_YIELD\tPF_Q20_EQUIVALENT_YIELD\n"
+        "1000\t950\t151000\t143450\t140000\t135000\t130000\t125000\t120000\t115000\n",
+        encoding="utf-8",
+    )
+    cycles = "\n".join(f"{i}\t38.0" for i in range(1, 51))
+    (metrics / "mean_quality_by_cycle.txt").write_text(
+        f"CYCLE\tMEAN_QUALITY\n{cycles}\n", encoding="utf-8"
+    )
+    (metrics / "gcbias_summary.txt").write_text(
+        "ACCUMULATION_LEVEL\tREADS_USED\tGC\tWINDOWS\tREAD_STARTS\tMEAN_BASE_QUALITY\t"
+        "NORMALIZED_COVERAGE\tERROR_BAR_WIDTH\tMIN_NORMALIZED_COVERAGE\t"
+        "MAX_NORMALIZED_COVERAGE\tAT_DROPOUT\tGC_DROPOUT\n"
+        "All Reads\tALL\t50\t100\t1000\t38\t1.0\t0.1\t0.9\t1.1\t1.0\t1.5\n",
+        encoding="utf-8",
+    )
+    (metrics / "insert_size.txt").write_text(
+        "MEDIAN_INSERT_SIZE\tMODE_INSERT_SIZE\tMEDIAN_ABSOLUTE_DEVIATION\tMIN_INSERT_SIZE\t"
+        "MAX_INSERT_SIZE\tMEAN_INSERT_SIZE\tSTANDARD_DEVIATION\tREAD_PAIRS\tPAIR_ORIENTATION\t"
+        "WIDTH_OF_10_PERCENT\tWIDTH_OF_20_PERCENT\tWIDTH_OF_30_PERCENT\tWIDTH_OF_40_PERCENT\t"
+        "WIDTH_OF_50_PERCENT\tWIDTH_OF_60_PERCENT\tWIDTH_OF_70_PERCENT\tWIDTH_OF_80_PERCENT\t"
+        "WIDTH_OF_90_PERCENT\tWIDTH_OF_95_PERCENT\tWIDTH_OF_99_PERCENT\n"
+        "180\t175\t20\t50\t400\t185.0\t30.0\t500\tFR\t10\t20\t30\t40\t50\t60\t70\t80\t90\t95\t99\n"
+        "## HISTOGRAM\tjava.lang.Integer\n"
+        "insert_size\tAll_Reads.fr_count\n"
+        "180\t100\n",
+        encoding="utf-8",
+    )
+    (metrics / "sequencingArtifact.pre_adapter_summary_metrics.txt").write_text(
+        "LIBRARY\tSAMPLE\tARTIFACT_NAME\tTOTAL_QSCORE\tWORST_CXT\tWORST_CXT_QSCORE\n"
+        "lib\ts\tDeamination\t25\tC\t25\n"
+        "lib\ts\tOxoG\t30\tG\t30\n",
+        encoding="utf-8",
+    )
+    tar_path = sample_dir / f"{sample}.qc-metrics.tar"
+    with tarfile.open(tar_path, "w") as tar:
+        for p in sorted(metrics.iterdir()):
+            if p.is_file():
+                tar.add(p, arcname=f"{sample}.qc-metrics/{p.name}")
+
+
+def test_build_qc_wgbs_picard_enrichment_when_flagged(tmp_path: Path):
+    """Provenance collectmultiplemetrics=true + full Picard tar enriches QC."""
+    sample = "HBCST-PICARD"
+    d = _setup_wgbs_sample(tmp_path, sample)
+    _write_full_picard_tar(d, sample)
+    prov_path = d / f"{sample}.alignment_metrics.json"
+    prov = json.loads(prov_path.read_text(encoding="utf-8"))
+    prov["collectmultiplemetrics"] = True
+    prov_path.write_text(json.dumps(prov), encoding="utf-8")
+
+    payload = build_sample_qc_v2_dict(
+        d,
+        sample_id=sample,
+        validate_schema=True,
+        alignment_mode="pangenome_wgbs",
+        alignment_guardrails=AlignmentGuardrailsConfig(enabled=True, flagstat_enabled=False),
+        cycle_screening=CycleScreeningConfig(enabled=True),
+    )
+    assert payload.get("quality_yield") is not None
+    assert payload["wgbs_align_metrics"]["collectmultiplemetrics"] is True
+    gr = payload["guardrails"]
+    assert gr["metrics_family"] == "methylgrapher_wgbs"
+    assert gr.get("picard_enrichment") is True
+    assert "pf_percent" in gr["details"]
+    assert "wgbs_provenance" in gr["details"]
+    screening = gr.get("screening") or {}
+    assert screening.get("disposition") in {
+        "USE_CURRENT_ALIGNMENT",
+        "REALIGN_READ2_TRIM",
+        "NOT_FIXABLE",
+    }
+
+
+def test_build_qc_wgbs_ignores_picard_tar_without_flag(tmp_path: Path):
+    """Stale linear Picard tar must not enrich without collectmultiplemetrics flag."""
+    sample = "HBCST-STALE"
+    d = _setup_wgbs_sample(tmp_path, sample, with_linear_tar=True)
+    payload = build_sample_qc_v2_dict(
+        d,
+        sample_id=sample,
+        validate_schema=True,
+        alignment_mode="pangenome_wgbs",
+        alignment_guardrails=AlignmentGuardrailsConfig(enabled=False),
+        cycle_screening=CycleScreeningConfig(enabled=False),
+    )
+    assert payload.get("quality_yield") is None
+    assert payload["guardrails"].get("picard_enrichment") is not True
+    assert "pf_percent" not in payload["guardrails"]["details"]

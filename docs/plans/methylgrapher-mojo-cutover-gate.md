@@ -1,6 +1,6 @@
 # methylGrapher-mojo cutover gate
 
-Companion to [`methylgrapher-mojo-cutover.plan.md`](methylgrapher-mojo-cutover.plan.md) and [`pangenome-wgbs-methyl-qc.plan.md`](pangenome-wgbs-methyl-qc.plan.md).
+Companion to [`methylgrapher-mojo-cutover.plan.md`](methylgrapher-mojo-cutover.plan.md), [`pangenome-wgbs-methyl-qc.plan.md`](pangenome-wgbs-methyl-qc.plan.md), and [`extend-former-out-of-scope.plan.md`](extend-former-out-of-scope.plan.md) (MergeCpG / ConversionRate ports).
 
 ## Current default (this lab)
 
@@ -22,7 +22,8 @@ Procedure git packs keep `engine` unset / python-compatible until multi-site sci
 
 1. **Parity (required)** — **PASS**
    - Toy fixtures: engine vs native Mojo `graph.methyl` / `graph.cpg.tsv` identical.
-   - DS20M subset (20k GAF lines): native Mojo `graph.methyl` identical vs python engine (16 993 rows).
+   - DS20M subset (20k GAF lines): native Mojo `graph.methyl` identical vs python engine (16 993 rows); native MergeCpG `graph.cpg.tsv` identical (16 776 rows).
+   - Native ConversionRate CLI ported (requires PrepareGenome lambda spike-in report; Buffy path may not invoke it).
    - Unit tests: `pixi run mojo -I src tests/test_mcall_core.mojo`
 
 2. **Performance (required for flip)** — **PASS (subset)**

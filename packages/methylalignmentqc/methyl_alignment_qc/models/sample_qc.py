@@ -305,6 +305,17 @@ class GuardrailReport(BaseModel):
     next_steps: str
     screening: Optional[QcScreeningReport] = None
     metrics_family: Optional[str] = None
+    picard_enrichment: Optional[bool] = Field(
+        default=None,
+        description=(
+            "True when pangenome_wgbs Align collected Picard tables and core "
+            "Parabricks guardrails were merged into details."
+        ),
+    )
+    picard_enrichment_note: Optional[str] = Field(
+        default=None,
+        description="Operator note for Picard enrichment / BS chemistry skew caveat.",
+    )
 
 
 class ParabricksMetricsPayload(BaseModel):

@@ -2,7 +2,7 @@
 name: Pangenome WGBS methyl QC
 overview: Make sample.methyl_qc mode-aware for linear / pangenome / pangenome_wgbs, re-run Buffy missing25 pangenome_wgbs alignments via gateway, then land the deferred MethylCall Mojo hot-path optimizations and cutover gate now that pangenome_wgbs science is validated.
 
-> **Status: IMPLEMENTED.** Mode-aware QC in `methylalignmentqc`; missing25 SamplePrep started on gateway (instance 59); native Mojo MethylCall hot path in methylGrapher-mojo; site `engine=mojo` + `:1.70-mojo` image rebuilt. Full Buffy GAF (~679 GiB) wall-clock re-measure remains an operator follow-up.
+> **Status: IMPLEMENTED (+ follow-on).** Mode-aware QC; missing25 SamplePrep (instance 59); native Mojo MethylCall/MergeCpG/ConversionRate; WGBS Align may run Picard `collectmultiplemetrics` on the QC BAM with optional QC enrichment. **Full Buffy 238 re-extract stays gated** until missing25 SamplePrep COMPLETED.
 
 azure_devops:
   type: Feature
@@ -65,6 +65,18 @@ Primary code: `/home/ubuntu/methylGrapher-mojo`
 - Image `epimethyl/methylgrapher:1.70-mojo` rebuilt with Mojo runtime + `src/`
 - Site `actionConfig.methylgrapher_wgbs.engine=mojo`, `image=:1.70-mojo`, `threads=64`
 - Rollback: `engine=python` + `epimethyl/methylgrapher:1.70` (see production runbook + cutover gate)
+
+### Follow-on (former out-of-scope, now landed)
+
+| Item | Status |
+|------|--------|
+| Picard `collectmultiplemetrics` after WGBS QC BAM (worker) | Done — soft-fail; provenance `collectmultiplemetrics`; optional Parabricks enrichment in mode-aware QC |
+| Native Mojo MergeCpG | Done — toy + DS20M `graph.cpg.tsv` parity |
+| Native Mojo ConversionRate | Done — CLI parity; SamplePrep unwired until spike-in lambda assets exist |
+| Full Buffy 238 / rewrite Feb linear H5 | **Wait** — open only after missing25 SamplePrep COMPLETED |
+| Long-read; re-PrepareGenome; QC BAM/H5 packaging into Mojo | Still deferred (not needed for short-read Buffy biomarkers) |
+
+**Gate for Buffy 238:** do not start cohort-scale re-align/re-extract until the 25-sample SamplePrep instance (gateway **id=59**) reaches COMPLETED with science H5. Track via portal / `wf.workflow_instance` (`status`; was RUNNING at follow-on close). See [`extend-former-out-of-scope.plan.md`](extend-former-out-of-scope.plan.md).
 
 ## Cross-links
 

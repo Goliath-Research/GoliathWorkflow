@@ -987,6 +987,32 @@
           "title": "Overall Pass",
           "type": "boolean"
         },
+        "picard_enrichment": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True when pangenome_wgbs Align collected Picard tables and core Parabricks guardrails were merged into details.",
+          "title": "Picard Enrichment"
+        },
+        "picard_enrichment_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Operator note for Picard enrichment / BS chemistry skew caveat.",
+          "title": "Picard Enrichment Note"
+        },
         "recommendation": {
           "title": "Recommendation",
           "type": "string"

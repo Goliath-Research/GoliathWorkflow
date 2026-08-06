@@ -110,7 +110,7 @@ When this file is present, guardrails in `wgbs_parabricks_qc.py` evaluate sequen
 
 ### methylGrapher WGBS provenance (`pangenome_wgbs`)
 
-WGBS pangenome align writes **`{sample_id}.alignment_metrics.json`** (tool=`methylGrapher`) plus GAF / QC BAM / dedup. Export may include optional `wgbs_align_metrics`; Parabricks-only payload blocks stay `null`. Guardrails live in `wgbs_pangenome_qc.py`.
+WGBS pangenome align writes **`{sample_id}.alignment_metrics.json`** (tool=`methylGrapher`) plus GAF / QC BAM / dedup. After the QC BAM is ready, Align may run Parabricks **`collectmultiplemetrics`** (soft-fail if GPU/image unavailable) and pack real Picard tables into `{sample_id}.qc-metrics.tar`. Provenance then sets `collectmultiplemetrics: true`. Mode-aware QC keeps WGBS provenance as the hard baseline and **optionally** merges Parabricks core + cycle screening when that flag is set and tables are complete — never from a stale linear tar without the flag. BS chemistry can skew artifact/GC metrics; treat Picard enrichment as operational screening only. Guardrails: `wgbs_pangenome_qc.py` (+ optional `wgbs_parabricks_qc`).
 
 ### Our equivalent export JSON (V2)
 
