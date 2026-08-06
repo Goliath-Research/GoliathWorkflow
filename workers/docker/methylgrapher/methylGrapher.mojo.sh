@@ -3,12 +3,22 @@
 #
 # Prefer the native Mojo CLI (MethylCall hot path) when the staged Mojo
 # runtime is present; otherwise fall back to the patched Python engine
-# (same argv surface). Set METHYLGRAPHER_MCALL_ENGINE=python to force the
-# Python MethylCall path even when Mojo is available.
+# (same argv surface).
+#
+# In-image MethylCall / CLI rollback (no image tag swap):
+#   METHYLGRAPHER_MCALL_ENGINE=python
+# skips the Mojo binary entirely and runs engine.cli. This must be honored
+# in the shell — not only inside src/main.mojo — so a broken Mojo runtime
+# can still be bypassed.
 set -euo pipefail
 
 ROOT="/opt/methylgrapher-mojo"
 export PYTHONPATH="${ROOT}${PYTHONPATH:+:$PYTHONPATH}"
+
+_mcall_engine="$(printf '%s' "${METHYLGRAPHER_MCALL_ENGINE:-native}" | tr '[:upper:]' '[:lower:]')"
+if [[ "${_mcall_engine}" == "python" ]]; then
+  exec python3 -m engine.cli "$@"
+fi
 
 MOJO_BIN="${ROOT}/mojo-env/bin/mojo"
 if [[ -x "${MOJO_BIN}" ]]; then

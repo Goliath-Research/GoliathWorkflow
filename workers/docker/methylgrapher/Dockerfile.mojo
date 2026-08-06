@@ -8,7 +8,8 @@
 #   bash workers/docker/methylgrapher/smoke_64k.sh epimethyl/methylgrapher:1.70-mojo
 #
 # Rollback: set actionConfig.methylgrapher_wgbs.engine=python and image
-# epimethyl/methylgrapher:1.70, or METHYLGRAPHER_MCALL_ENGINE=python inside this image.
+# epimethyl/methylgrapher:1.70. In-image: METHYLGRAPHER_MCALL_ENGINE=python
+# (methylGrapher.mojo.sh skips Mojo and runs engine.cli).
 
 FROM ubuntu:24.04
 

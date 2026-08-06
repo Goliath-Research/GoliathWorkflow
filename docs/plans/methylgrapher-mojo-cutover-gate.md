@@ -51,6 +51,6 @@ Procedure git packs keep `engine` unset / python-compatible until multi-site sci
 }
 ```
 
-**Rollback (one release):** set `engine: python` and `image: epimethyl/methylgrapher:1.70`. Inside the mojo image, `METHYLGRAPHER_MCALL_ENGINE=python` forces the legacy multiprocessing MethylCall path without changing the image tag.
+**Rollback (one release):** set `engine: python` and `image: epimethyl/methylgrapher:1.70`. Inside the mojo image, set `METHYLGRAPHER_MCALL_ENGINE=python` on the worker/container (honored by [`methylGrapher.mojo.sh`](../../workers/docker/methylgrapher/methylGrapher.mojo.sh) before launching Mojo) to force the patched Python `engine.cli` path without changing the image tag.
 
 Do **not** change procedure defaults in git until science + multi-site perf signs off; document the flip in the procedure README and production runbook in the same change.

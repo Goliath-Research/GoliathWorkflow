@@ -91,7 +91,7 @@ methyl-study-start validation-start request.json
 |---------|--------|
 | Parabricks tasks fail | `verify_parabricks.sh`, NGC login, `nvidia-ctk` |
 | methylGrapher WGBS tasks fail | `METHYL_METHYLGRAPHER_IMAGE`, BS bundle under `d9-bs/1.70`, canary checklist |
-| Switch methylGrapher engine | Site `actionConfig.methylgrapher_wgbs.engine` = `mojo` + `image` `:1.70-mojo` (native MethylCall hot path; MethylCall `-t` uncapped) or `python` + `:1.70` one-release rollback. Rebuild image via `scripts/build_methylgrapher_mojo_image.sh`. Do not flip procedure git defaults until science sign-off. See [`docs/plans/methylgrapher-mojo-cutover-gate.md`](../plans/methylgrapher-mojo-cutover-gate.md) / [`docs/plans/pangenome-wgbs-methyl-qc.plan.md`](../plans/pangenome-wgbs-methyl-qc.plan.md). |
+| Switch methylGrapher engine | Site `actionConfig.methylgrapher_wgbs.engine` = `mojo` + `image` `:1.70-mojo` (native MethylCall hot path; MethylCall `-t` uncapped) or `python` + `:1.70` one-release rollback. In-image emergency: set worker/container `METHYLGRAPHER_MCALL_ENGINE=python` so [`methylGrapher.mojo.sh`](../../workers/docker/methylgrapher/methylGrapher.mojo.sh) skips Mojo and runs `engine.cli`. Rebuild image via `scripts/build_methylgrapher_mojo_image.sh`. Do not flip procedure git defaults until science sign-off. See [`docs/plans/methylgrapher-mojo-cutover-gate.md`](../plans/methylgrapher-mojo-cutover-gate.md) / [`docs/plans/pangenome-wgbs-methyl-qc.plan.md`](../plans/pangenome-wgbs-methyl-qc.plan.md). |
 | Extract fails | `verify_methyl_extractor.sh`, `HDF5_PLUGIN_PATH`; WGBS pangenome path uses `methylgrapher.wgbs_extract` |
 | Worker idle | `WORKER_CAPABILITY` filter vs task capability |
 | FOREACH errors | `08_foreach_support.sql` applied on PostgreSQL |
