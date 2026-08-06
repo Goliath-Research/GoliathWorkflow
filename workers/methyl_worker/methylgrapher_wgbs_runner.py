@@ -523,13 +523,26 @@ def _package_qc_tar(sample_dir: Path, sample_id: str, metrics_dir: Path) -> Path
     qc_tar = sample_dir / f"{sample_id}.qc-metrics.tar"
     with tarfile.open(qc_tar, "w") as tar:
         if metrics_dir.is_dir():
-            # Prefer top-level files after flatten; also pick up any stragglers by
-            # basename so nested-only trees still enter the tar once.
+            # Root-level files are authoritative (matches _flatten_qc_metrics_dir
+            # no-clobber). Then add nested-only basenames as a safety net.
             seen: set[str] = set()
-            candidates = list(metrics_dir.iterdir()) + list(metrics_dir.rglob("*"))
-            for p in sorted(candidates, key=lambda x: (x.name, str(x))):
+            try:
+                root = metrics_dir.resolve()
+            except OSError:
+                root = metrics_dir
+            for p in sorted(metrics_dir.iterdir(), key=lambda x: x.name):
                 if not p.is_file() or p.name in seen:
                     continue
+                seen.add(p.name)
+                tar.add(p, arcname=p.name)
+            for p in sorted(metrics_dir.rglob("*"), key=lambda x: (x.name, str(x))):
+                if not p.is_file() or p.name in seen:
+                    continue
+                try:
+                    if p.resolve().parent == root:
+                        continue
+                except OSError:
+                    pass
                 seen.add(p.name)
                 tar.add(p, arcname=p.name)
     return qc_tar

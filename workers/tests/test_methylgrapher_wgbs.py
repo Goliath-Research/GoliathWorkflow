@@ -598,3 +598,28 @@ def test_package_qc_tar_includes_nested_only_metrics(tmp_path: Path) -> None:
     with tarfile.open(tar_path, "r") as tar:
         names = set(tar.getnames())
     assert names == {"quality_yield.txt", "insert_size.txt"}
+
+
+def test_package_qc_tar_prefers_root_over_nested_same_basename(tmp_path: Path) -> None:
+    """Root-level metric wins when a nested duplicate sorts earlier by path."""
+    import tarfile
+
+    sample_id = "HBCST-ROOTWIN"
+    sample_dir = tmp_path / sample_id
+    metrics_dir = sample_dir / f"{sample_id}.qc-metrics"
+    # Subdir name 'collectmultiplemetrics' sorts before filename under old key.
+    nested = metrics_dir / "collectmultiplemetrics"
+    nested.mkdir(parents=True)
+    root_qy = "TOTAL_READS\tROOT\n"
+    nested_qy = "TOTAL_READS\tNESTED\n"
+    (metrics_dir / "quality_yield.txt").write_text(root_qy, encoding="utf-8")
+    (nested / "quality_yield.txt").write_text(nested_qy, encoding="utf-8")
+    (nested / "insert_size.txt").write_text("MEDIAN_INSERT_SIZE\t180\n", encoding="utf-8")
+
+    tar_path = _package_qc_tar(sample_dir, sample_id, metrics_dir)
+    with tarfile.open(tar_path, "r") as tar:
+        names = set(tar.getnames())
+        qy = tar.extractfile("quality_yield.txt")
+        assert qy is not None
+        assert qy.read().decode("utf-8") == root_qy
+    assert names == {"quality_yield.txt", "insert_size.txt"}
