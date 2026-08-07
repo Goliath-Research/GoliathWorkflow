@@ -216,8 +216,13 @@ def resolve_worker_capabilities(
         caps.add("methylgrapher.wgbs_gpu_align")
 
     if not caps:
-        logger.warning("resolve_worker_capabilities: no capabilities detected; registering omnibus")
-        return [OMNIBUS_WILDCARD]
+        # Do not fall back to ["*"]: silent omnibus let half-enrolled VMs claim any
+        # task. Callers that want omnibus must pass explicit=["*"] / --omnibus /
+        # --capabilities-json '["*"]'.
+        logger.warning(
+            "resolve_worker_capabilities: no capabilities detected; returning empty set"
+        )
+        return []
 
     return sorted(caps)
 

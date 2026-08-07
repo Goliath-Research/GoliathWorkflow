@@ -18,6 +18,7 @@ from methyl_worker.__main__ import (  # noqa: E402
     _write_token_file,
     main,
 )
+from methyl_worker.capabilities import OMNIBUS_WILDCARD  # noqa: E402
 from methyl_worker.client import WorkflowRestClient  # noqa: E402
 
 
@@ -133,6 +134,62 @@ class EnrollCliTests(unittest.TestCase):
             self.assertEqual(
                 token_path.read_text(encoding="utf-8"),
                 "WORKER_ID=3\nWORKER_TOKEN=secret\n",
+            )
+
+    def test_enroll_cli_refuses_empty_probe(self) -> None:
+        args = MagicMock(
+            cluster_key="lambda",
+            external_worker_key="vm-1",
+            api_base="http://gw/v1",
+            capabilities_json="",
+            token_file="/tmp/unused-token",
+            env_file="",
+        )
+        with patch("methyl_worker.__main__.WorkflowRestClient") as cls, patch(
+            "methyl_worker.__main__.resolve_worker_capabilities",
+            return_value=[],
+        ):
+            rc = _run_enroll_cli(args)
+        self.assertEqual(rc, 2)
+        cls.return_value.enroll.assert_not_called()
+
+    def test_enroll_cli_refuses_probed_omnibus(self) -> None:
+        args = MagicMock(
+            cluster_key="lambda",
+            external_worker_key="vm-1",
+            api_base="http://gw/v1",
+            capabilities_json="",
+            token_file="/tmp/unused-token",
+            env_file="",
+        )
+        with patch("methyl_worker.__main__.WorkflowRestClient") as cls, patch(
+            "methyl_worker.__main__.resolve_worker_capabilities",
+            return_value=[OMNIBUS_WILDCARD],
+        ):
+            rc = _run_enroll_cli(args)
+        self.assertEqual(rc, 2)
+        cls.return_value.enroll.assert_not_called()
+
+    def test_enroll_cli_allows_explicit_omnibus_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            token_path = Path(tmp) / "token"
+            args = MagicMock(
+                cluster_key="lambda",
+                external_worker_key="vm-1",
+                api_base="http://gw/v1",
+                capabilities_json='["*"]',
+                token_file=str(token_path),
+                env_file="",
+            )
+            with patch("methyl_worker.__main__.WorkflowRestClient") as cls:
+                cls.return_value.enroll.return_value = {
+                    "worker_id": 4,
+                    "worker_token": "tok",
+                }
+                rc = _run_enroll_cli(args)
+            self.assertEqual(rc, 0)
+            cls.return_value.enroll.assert_called_once_with(
+                "lambda", "vm-1", capabilities=["*"]
             )
 
 

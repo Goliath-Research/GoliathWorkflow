@@ -11,7 +11,11 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
-from .capabilities import assert_node_can_serve_capability, resolve_worker_capabilities
+from .capabilities import (
+    OMNIBUS_WILDCARD,
+    assert_node_can_serve_capability,
+    resolve_worker_capabilities,
+)
 from .client import WorkflowRestClient
 from .runner import WorkerRunner
 
@@ -192,12 +196,20 @@ def _run_enroll_cli(args: argparse.Namespace) -> int:
             )
             return 2
     else:
-        # GH200 / NVIDIA cluster: probe installed CLIs + GPU; never enroll with [].
+        # GH200 / NVIDIA cluster: probe installed CLIs + GPU; never enroll with []
+        # or silent ["*"] (resolve no longer falls back to omnibus).
         capabilities = resolve_worker_capabilities()
         if not capabilities:
             print(
                 "resolve_worker_capabilities() returned empty; "
                 "refusing enroll (no AMD/ROCm fallback on this fleet)",
+                file=sys.stderr,
+            )
+            return 2
+        if capabilities == [OMNIBUS_WILDCARD]:
+            print(
+                "refusing enroll with probed omnibus ['*']; "
+                "pass --capabilities-json '[\"*\"]' only when intentional",
                 file=sys.stderr,
             )
             return 2

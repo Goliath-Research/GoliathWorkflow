@@ -55,3 +55,14 @@ def test_auto_detect_includes_validation_caps() -> None:
         with patch("methyl_worker.capabilities._cli_on_path", return_value=False):
             caps = resolve_worker_capabilities()
     assert "validation.plan-iterations" in caps
+
+
+def test_auto_detect_empty_does_not_become_omnibus() -> None:
+    """Probe failure must return [] — never silent ['*'] (enroll-safety invariant)."""
+    with patch(
+        "methyl_worker.capabilities._catalog_capability_rows",
+        return_value=[],
+    ), patch("methyl_worker.capabilities._gpu_available", return_value=False):
+        caps = resolve_worker_capabilities()
+    assert caps == []
+    assert OMNIBUS_WILDCARD not in caps
