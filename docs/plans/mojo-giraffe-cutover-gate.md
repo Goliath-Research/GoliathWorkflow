@@ -1,33 +1,36 @@
 # Mojo Giraffe cutover gate
 
-Companion to [`mojo-gpu-giraffe-gaf.plan.md`](mojo-gpu-giraffe-gaf.plan.md) and
+Companion to [`mojo-gpu-giraffe-gaf.plan.md`](mojo-gpu-giraffe-gaf.plan.md),
+[`gbz-native-mojo-giraffe.plan.md`](gbz-native-mojo-giraffe.plan.md), and
 [`gh200-align-phase3-gate.md`](gh200-align-phase3-gate.md).
 
-## Status (2026-08-06)
+## Status (2026-08-07)
 
 | Criterion | Status |
 |-----------|--------|
-| Toy PE GAF vs golden (`path` / `cs` / `ri` / `os` / `rc`) | **PASS** |
-| Portable GPU seed path on GH200 (`nvidia:sm_90` label + device helper) | **PASS** (CuPy optional) |
-| `gpu_giraffe` prefers Mojo (fallback default `mojo`, not hard-coded `vg`) | **PASS** |
-| Auto-vg for oversized / GBZ-only indexes | **PASS** (safe progressive) |
-| DS20M MethylCall `graph.methyl` vs `cpu_vg` | **PENDING** (needs subset GFA or GBZ-native) |
+| Toy PE GAF vs golden (GFA path) | **PASS** |
+| Toy GBZ→GAF vs golden (`path` / `cs` / PE tags) | **PASS** |
+| Portable GPU seed on GH200 (`nvidia:sm_90`) | **PASS** |
+| `gpu_giraffe` prefers **GBZ quartet** (no GFA size-cap) | **PASS** |
+| Production C2T/G2A segment caches built | **PENDING** (`build_mojo_gbz_cache.py`) |
+| DS20M / Buffy-subset `graph.methyl` vs `cpu_vg` | **PENDING** |
 | Full Buffy dual-map Align ≤ ~2 h on GH200 | **PENDING** operator measure |
-| Site flip `align_engine=gpu_giraffe` on GH200 fleets as “Mojo map done” | **BLOCKED** until Buffy wall + DS20M/GBZ parity |
+| Site “Mojo map done” claim | **BLOCKED** until Buffy wall + MethylCall parity |
 
-## Operator knobs
+## Operator knobs (`pangenome_wgbs` only)
 
 ```bash
 export METHYLGRAPHER_ALIGN_ENGINE=gpu_giraffe
-export METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo   # default; emergency: vg
-export METHYLGRAPHER_GIRAFFE_DEVICE=auto         # cpu|nvidia|amd
-export METHYLGRAPHER_GIRAFFE_GFA=/path/to/subset.wl.gfa   # optional
-export METHYLGRAPHER_MOJO_GIRAFFE_MAX_GFA_BYTES=67108864  # 0 = unlimited
+export METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo   # emergency: vg
+export METHYLGRAPHER_GIRAFFE_DEVICE=nvidia
+# After caches exist for both strands:
+# python …/build_mojo_gbz_cache.py --gbz …/hprc-d9-bs.wl.C2T.giraffe.gbz
+# python …/build_mojo_gbz_cache.py --gbz …/hprc-d9-bs.wl.G2A.giraffe.gbz
 ```
 
 Rollback: `align_engine=cpu_vg` or `METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=vg`.
 
-## Site flip (only after Buffy + parity gates)
+## Site flip (after Buffy + parity gates)
 
 ```json
 "actionConfig": {
@@ -40,4 +43,4 @@ Rollback: `align_engine=cpu_vg` or `METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=vg`.
 }
 ```
 
-Parabricks remains BAM-only for science GAF (Phase 0 NO-GO).
+Do **not** change cfDNA / linear / stock `pangenome` packs. Parabricks remains BAM-only for science GAF (Phase 0 NO-GO). Linear arm = comparator only.

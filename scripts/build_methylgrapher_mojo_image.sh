@@ -60,11 +60,12 @@ mkdir -p "${DOCKER_DIR}/src"
 # Skip legacy scaffold stubs in the image.
 cp -a "${MOJO_ROOT}/src/"*.mojo "${DOCKER_DIR}/src/"
 
-log "staging scripts/ (Giraffe GPU minimizer helper)"
+log "staging scripts/ (Giraffe GPU + GBZ helpers)"
 rm -rf "${DOCKER_DIR}/scripts"
 mkdir -p "${DOCKER_DIR}/scripts"
 cp -a "${MOJO_ROOT}/scripts/giraffe_gpu_minimizer.py" "${DOCKER_DIR}/scripts/" 2>/dev/null || true
 cp -a "${MOJO_ROOT}/scripts/giraffe_gaf_parity.py" "${DOCKER_DIR}/scripts/" 2>/dev/null || true
+cp -a "${MOJO_ROOT}/scripts/build_mojo_gbz_cache.py" "${DOCKER_DIR}/scripts/" 2>/dev/null || true
 
 log "staging trimmed Mojo runtime from pixi env"
 rm -rf "${DOCKER_DIR}/mojo-env"
