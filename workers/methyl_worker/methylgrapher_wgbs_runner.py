@@ -1102,19 +1102,51 @@ def run_methylgrapher_wgbs_align(
                 "-e",
                 "METHYLGRAPHER_GIRAFFE_DEVICE="
                 + (os.environ.get("METHYLGRAPHER_GIRAFFE_DEVICE", "auto").strip() or "auto"),
+                # Mojo runtime cache must be writable under --user (image /opt is root-owned).
+                "-e",
+                "MODULAR_CACHE_DIR="
+                + (os.environ.get("MODULAR_CACHE_DIR", "").strip() or "/tmp/modular_cache"),
+                "-e",
+                "METHYLGRAPHER_MOJO_SEGMENTS_CACHE="
+                + (
+                    os.environ.get("METHYLGRAPHER_MOJO_SEGMENTS_CACHE", "").strip()
+                    or "/work/cache/mojo_segments"
+                ),
             ]
+            cache_root = Path(
+                os.environ.get("METHYLGRAPHER_MOJO_SEGMENTS_CACHE", "").strip()
+                or "/work/cache/mojo_segments"
+            )
+            mount_roots.add(cache_root)
+            # Also mount /work/cache parent when present so shared segment packs resolve.
+            for extra in (Path("/work/cache"), Path("/lambda/nfs/Work/cache")):
+                if extra.is_dir():
+                    mount_roots.add(extra.resolve())
             for root in sorted(mount_roots, key=str):
                 docker_cmd.extend(["-v", f"{root}:{root}"])
             docker_cmd.extend([image, *align_cmd])
             _run(docker_cmd, log_path, step="methylGrapher.Align")
 
-            # methylGrapher writes GAF under work_dir; normalize to sample root.
-            candidates = list(work_dir.glob("*.gaf")) + list(work_dir.glob("**/*.gaf"))
-            if not candidates:
-                raise RuntimeError(
-                    f"methylGrapher Align did not produce a GAF under {work_dir}"
+            # methylGrapher merges to work_dir/alignment.gaf; ignore empty shard files
+            # left behind by a failed prior attempt (alignment.0.gaf …).
+            preferred = work_dir / "alignment.gaf"
+            if preferred.is_file() and preferred.stat().st_size > 0:
+                shutil.copy2(preferred, gaf_path)
+            else:
+                candidates = sorted(
+                    (
+                        p
+                        for p in work_dir.glob("*.gaf")
+                        if p.is_file() and p.stat().st_size > 0
+                    ),
+                    key=lambda p: p.stat().st_size,
+                    reverse=True,
                 )
-            shutil.copy2(candidates[0], gaf_path)
+                if not candidates:
+                    raise RuntimeError(
+                        f"methylGrapher Align did not produce a GAF under {work_dir}"
+                    )
+                shutil.copy2(candidates[0], gaf_path)
 
         if not bundle.directional:
             logger.warning(
