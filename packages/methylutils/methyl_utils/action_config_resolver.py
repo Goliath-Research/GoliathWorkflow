@@ -303,6 +303,7 @@ def resolve_methylgrapher_wgbs_genome(
         "alignment_mode",
         "gpu_giraffe_fallback",
         "giraffe_device",
+        "align_device",
         "mojo_segments_cache",
         "modular_cache_dir",
         "qc_bam_engine",

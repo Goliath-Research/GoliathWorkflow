@@ -55,6 +55,8 @@ def test_build_docker_command_mounts_and_flags(tmp_path: Path) -> None:
         bwa_threads=8,
         extra_docker_args=(),
         cleanup_tmp=True,
+        engine="parabricks",
+        align_device="auto",
     )
     paths = runner._resolve_paths(sample_dir, "S4", ref)
     fq1 = sample_dir / "S4_1.fastq.gz"
@@ -101,7 +103,12 @@ def test_idempotent_skip_when_bam_and_qc_tar_exist(tmp_path: Path) -> None:
                 reference_fasta=ref,
             )
 
-    mock_run.assert_not_called()
+    docker_calls = [
+        c
+        for c in mock_run.call_args_list
+        if c.args and any("docker" in str(x) or "pbrun" in str(x) for x in c.args[0])
+    ]
+    assert not docker_calls
     assert out["bamPath"] == str(sample_dir / "S5.bam")
     assert out["qcMetricsTar"] == str(sample_dir / "S5.qc-metrics.tar")
 
@@ -154,6 +161,47 @@ def test_run_fq2bam_meth_invokes_docker(tmp_path: Path) -> None:
 
     assert out["bamPath"] == str(sample_dir / "S7.bam")
     assert out["qcMetricsTar"] == str(sample_dir / "S7.qc-metrics.tar")
+
+
+def test_build_mojo_fq2bam_docker_command(tmp_path: Path) -> None:
+    sample_dir = tmp_path / "S8"
+    sample_dir.mkdir()
+    ref = tmp_path / "genomes" / "genome.fa"
+    ref.parent.mkdir(parents=True)
+    ref.write_text(">ref\n")
+    cfg = runner.ParabricksConfig(
+        image="epimethyl/methylgrapher:1.70-mojo-rocm",
+        gpu_flags=("--device=/dev/kfd",),
+        bwa_threads=8,
+        extra_docker_args=(),
+        cleanup_tmp=True,
+        engine="mojo",
+        align_device="amd",
+    )
+    paths = runner._resolve_paths(sample_dir, "S8", ref)
+    fq1 = sample_dir / "S8_1.fastq.gz"
+    fq2 = sample_dir / "S8_2.fastq.gz"
+    fq1.write_bytes(b"1")
+    fq2.write_bytes(b"2")
+
+    with patch.object(runner, "_docker_bin", return_value="/usr/bin/docker"):
+        cmd = runner._build_docker_command(cfg, paths, [fq1, fq2])
+
+    assert "MojoFq2bamMeth" in cmd
+    assert "pbrun" not in cmd
+    assert "-device" in cmd
+    assert "amd" in cmd
+    assert cfg.image in cmd
+
+
+def test_resolve_mojo_engine_defaults_image(tmp_path: Path) -> None:
+    cfg = runner.resolve_parabricks_config(
+        input_json={"resolvedConfig": {"engine": "mojo", "align_device": "auto", "bwa_threads": 4}}
+    )
+    assert cfg.engine == "mojo"
+    assert cfg.align_device == "auto"
+    assert "methylgrapher" in cfg.image
+    assert cfg.bwa_threads == 4
 
 
 def test_resolve_parabricks_from_project_action_config(tmp_path: Path) -> None:

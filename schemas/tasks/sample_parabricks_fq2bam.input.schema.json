@@ -1,4 +1,129 @@
 {
+  "$defs": {
+    "ParabricksStepConfig": {
+      "additionalProperties": false,
+      "description": "Operator-tunable linear Align knobs (actionConfig.parabricks).\n\n``engine=parabricks`` keeps NVIDIA Clara fq2bam_meth. ``engine=mojo`` uses\nMojoFq2bamMeth in the methylGrapher-mojo image (NVIDIA/AMD/CPU via align_device).",
+      "properties": {
+        "align_device": {
+          "anyOf": [
+            {
+              "enum": [
+                "auto",
+                "cpu",
+                "nvidia",
+                "amd"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mojo portable device when engine=mojo: auto|cpu|nvidia|amd. Operator-set per site/profile. Ignored for Clara.",
+          "title": "Align Device"
+        },
+        "alignment_mode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Must be linear when this section is used for SamplePrep linear arm.",
+          "title": "Alignment Mode"
+        },
+        "bwa_threads": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "BWA / MojoFq2bamMeth CPU thread pool. Operator-set per site/profile.",
+          "title": "Bwa Threads"
+        },
+        "engine": {
+          "anyOf": [
+            {
+              "enum": [
+                "parabricks",
+                "mojo"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Linear Align implementation: 'parabricks' (Clara fq2bam_meth, NVIDIA) or 'mojo' (MojoFq2bamMeth, portable). Operator-set per site/profile.",
+          "title": "Engine"
+        },
+        "gpu_flags": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Docker GPU flags for Clara (e.g. '--gpus all'). Operator-set per site.",
+          "title": "Gpu Flags"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Docker image for Align. Clara NGC tag when engine=parabricks; epimethyl/methylgrapher:1.70-mojo-cuda|rocm when engine=mojo.",
+          "title": "Image"
+        },
+        "mojo_image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional override image when engine=mojo (else image or epimethyl/methylgrapher:1.70-mojo).",
+          "title": "Mojo Image"
+        },
+        "reference_fasta": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Linear GRCh38 FASTA path. Usually from site reference_genome.fasta.",
+          "title": "Reference Fasta"
+        }
+      },
+      "title": "ParabricksStepConfig",
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "properties": {
@@ -80,16 +205,14 @@
     "resolvedConfig": {
       "anyOf": [
         {
-          "additionalProperties": true,
-          "type": "object"
+          "$ref": "#/$defs/ParabricksStepConfig"
         },
         {
           "type": "null"
         }
       ],
       "default": null,
-      "description": "Merged actionConfig.parabricks baked at instance configuration.",
-      "title": "Resolvedconfig"
+      "description": "Merged actionConfig.parabricks baked at instance configuration."
     },
     "sampleDir": {
       "title": "Sampledir",

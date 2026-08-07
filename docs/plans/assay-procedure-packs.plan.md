@@ -53,7 +53,8 @@ todos:
 | Id | Analyte | Notes |
 |----|---------|-------|
 | `buffy_wgbs_pangenome_gene_fc` | `buffy_coat` | Default buffy research |
-| `buffy_wgbs_linear_gene_fc` | `buffy_coat` | Linear baseline |
+| `buffy_wgbs_linear_gene_fc` | `buffy_coat` | Linear baseline (Clara fq2bam_meth) |
+| `buffy_wgbs_linear_mojo_gene_fc` | `buffy_coat` | Linear MojoFq2bamMeth (portable GPU) |
 | `cfdna_wgbs_plasma` | `cfdna` | No deconv lifecycle |
 | `cfdna_emseq_targeted` | `cfdna` | Panel BED + `min_cov` |
 | `plant_wgbs_gene_fc` | `plant_tissue` | Plant lifecycle |

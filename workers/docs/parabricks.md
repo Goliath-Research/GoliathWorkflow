@@ -1,26 +1,52 @@
-# Parabricks fq2bam_meth on GPU workers
+# Linear WGBS Align: Clara Parabricks or MojoFq2bamMeth
 
-Sample prep alignment (`sample.parabricks_fq2bam`) runs **NVIDIA Clara Parabricks `fq2bam_meth`** inside Docker on GPU worker nodes. Implementation: [`methyl_worker/parabricks_runner.py`](../methyl_worker/parabricks_runner.py).
+Sample prep alignment (`sample.parabricks_fq2bam`) runs **either**:
+
+1. **NVIDIA Clara Parabricks `fq2bam_meth`** (`actionConfig.parabricks.engine=parabricks`) — NGC Docker, CUDA only  
+2. **MojoFq2bamMeth** (`engine=mojo`) — `epimethyl/methylgrapher:1.70-mojo{,-cuda,-rocm}`, portable `align_device=auto|cpu|nvidia|amd`
+
+Implementation: [`methyl_worker/parabricks_runner.py`](../methyl_worker/parabricks_runner.py). Dual-Align strategy: [`docs/architecture/mojo-multi-gpu-dual-align.md`](../../docs/architecture/mojo-multi-gpu-dual-align.md).
 
 ## Prerequisites
 
-- NVIDIA GPU driver + `nvidia-smi` on the host
-- [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) so `docker run --gpus all` exposes GPUs
-- Docker CLI on PATH
-- Parabricks image pulled locally (licensed via NGC)
-- **samtools** on the worker host PATH (used by `sample.methyl_qc` for BAM flagstat alignment guardrails when `alignment_guardrails.flagstat_enabled` is true; installed by `setup_host.sh --system-deps`)
+### Clara (`engine=parabricks`)
 
-## Configuration
+- NVIDIA GPU driver + `nvidia-smi`
+- [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) (`docker run --gpus all`)
+- Parabricks image pulled locally (NGC license)
+- **samtools** on the worker host PATH (methyl_qc flagstat)
 
-Set on the worker host or job environment:
+### Mojo (`engine=mojo`)
 
-```bash
-export METHYL_PARABRICKS_IMAGE=nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1
-export METHYL_PARABRICKS_GPU_FLAGS="--gpus all"
-export METHYL_PARABRICKS_BWA_THREADS=16
+- CUDA **or** ROCm host (or CPU-only with `align_device=cpu`)
+- methylGrapher-mojo image with `bwa` + `samtools` (see Dockerfile.mojo)
+- ROCm: see [`docs/deployment/worker-rocm.md`](../../docs/deployment/worker-rocm.md)
+
+## Configuration (site / profile → resolvedConfig)
+
+Prefer DB-backed `actionConfig.parabricks` (not host env for science knobs):
+
+```json
+"parabricks": {
+  "engine": "mojo",
+  "align_device": "auto",
+  "image": "epimethyl/methylgrapher:1.70-mojo-rocm",
+  "bwa_threads": 32
+}
 ```
 
-Pick the newest image validated on your cluster’s GPU generation (Hopper/Blackwell vs Ampere). The repo does not pin a single image tag in code.
+Clara rollback:
+
+```json
+"parabricks": {
+  "engine": "parabricks",
+  "image": "nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1",
+  "gpu_flags": "--gpus all",
+  "bwa_threads": 16
+}
+```
+
+Legacy env (local/dev only): `METHYL_PARABRICKS_IMAGE`, `METHYL_PARABRICKS_ENGINE`, `METHYL_PARABRICKS_GPU_FLAGS`, `METHYL_PARABRICKS_BWA_THREADS`.
 
 ## Smoke test
 
@@ -29,27 +55,12 @@ export METHYL_PARABRICKS_IMAGE=nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1
 ./scripts/verify_parabricks.sh
 ```
 
-## Manual / HPC alignment
-
-```bash
-export METHYL_PARABRICKS_IMAGE=nvcr.io/nvidia/clara/clara-parabricks:4.7.0-1
-./scripts/parabricks_fq2bam_meth.sh DPLST-051425-111148 \
-  --sample-dir /work/samples/DPLST-051425-111148 \
-  --reference /work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa
-```
-
-Equivalent CLI (after `pip install -e workers`):
-
-```bash
-methyl-parabricks-align DPLST-051425-111148 --sample-dir /work/samples/DPLST-051425-111148
-```
-
 ## Outputs
 
 Under `{sampleDir}`:
 
 - `{sampleId}.bam` — input to `sample.methyl_extract`
-- `{sampleId}.qc-metrics.tar` — input to `sample.methyl_qc` (WGBS guardrails)
-- `{sampleId}.deduplicate_metrics.txt`, `{sampleId}.fq2bam_meth.log`
+- `{sampleId}.qc-metrics.tar` — input to `sample.methyl_qc`
+- `{sampleId}.json` — Parabricks-shaped metrics (Mojo emits MVP subset; see [`docs/reference/mojo-fq2bam-meth-parity.md`](../../docs/reference/mojo-fq2bam-meth-parity.md))
 
-See [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md) for the full contract.
+See [`workflow_engine/contract/sample_prep_capabilities.md`](../../workflow_engine/contract/sample_prep_capabilities.md).

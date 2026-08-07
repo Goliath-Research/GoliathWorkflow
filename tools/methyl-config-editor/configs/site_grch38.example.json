@@ -38,7 +38,8 @@
       "image": "epimethyl/methylgrapher:1.70-mojo",
       "align_engine": "gpu_giraffe",
       "gpu_giraffe_fallback": "mojo",
-      "giraffe_device": "nvidia",
+      "giraffe_device": "auto",
+      "align_device": "auto",
       "mojo_segments_cache": "/work/cache/mojo_segments",
       "qc_bam_engine": "mojo",
       "conversion_rate_enabled": true,
@@ -47,6 +48,11 @@
         "enabled": true,
         "tile_size": 4
       }
+    },
+    "parabricks": {
+      "engine": "parabricks",
+      "align_device": "auto",
+      "bwa_threads": 16
     },
     "alignment_qc": {
       "cycle_screening": {

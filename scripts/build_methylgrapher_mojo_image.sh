@@ -14,8 +14,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 DOCKER_DIR="${REPO_ROOT}/workers/docker/methylgrapher"
 
-IMAGE_TAG="${METHYLGRAPHER_MOJO_IMAGE_TAG:-1.70-mojo}"
-IMAGE="${METHYL_METHYLGRAPHER_MOJO_IMAGE:-epimethyl/methylgrapher:${IMAGE_TAG}}"
+# GPU variant selects Dockerfile label + default tag suffix (cuda|rocm).
+# Dual-ship: build twice with METHYLGRAPHER_MOJO_GPU_VARIANT=cuda|rocm and
+# METHYLGRAPHER_MOJO_IMAGE_TAG=1.70-mojo-cuda|1.70-mojo-rocm.
+GPU_VARIANT="${METHYLGRAPHER_MOJO_GPU_VARIANT:-cuda}"
+case "${GPU_VARIANT}" in
+  cuda|rocm) ;;
+  *)
+    echo "ERROR: METHYLGRAPHER_MOJO_GPU_VARIANT must be cuda or rocm (got ${GPU_VARIANT})" >&2
+    exit 1
+    ;;
+esac
+IMAGE_TAG="${METHYLGRAPHER_MOJO_IMAGE_TAG:-1.70-mojo-${GPU_VARIANT}}"
+# Backward-compatible default when callers still request :1.70-mojo (CUDA twin).
+if [[ -n "${METHYL_METHYLGRAPHER_MOJO_IMAGE:-}" ]]; then
+  IMAGE="${METHYL_METHYLGRAPHER_MOJO_IMAGE}"
+elif [[ "${IMAGE_TAG}" == "1.70-mojo" ]]; then
+  IMAGE="epimethyl/methylgrapher:1.70-mojo"
+else
+  IMAGE="epimethyl/methylgrapher:${IMAGE_TAG}"
+fi
 MOJO_ROOT="${METHYLGRAPHER_MOJO_ROOT:-}"
 if [[ -z "${MOJO_ROOT}" ]]; then
   if [[ -d "${REPO_ROOT}/../methylGrapher-mojo/engine" ]]; then
@@ -115,16 +133,24 @@ sed \
 
 chmod +x "${DOCKER_DIR}/methylGrapher.mojo.sh"
 
-log "building ${IMAGE}"
+log "building ${IMAGE} (gpu_variant=${GPU_VARIANT})"
 docker build \
   -f "${DOCKER_DIR}/Dockerfile.mojo" \
   --build-arg "VG_PREBUILT=${VG_PREBUILT}" \
+  --build-arg "GPU_VARIANT=${GPU_VARIANT}" \
   -t "${IMAGE}" \
   "${DOCKER_DIR}"
+
+# Keep legacy :1.70-mojo as an alias of the CUDA build for existing site pins.
+if [[ "${GPU_VARIANT}" == "cuda" && "${IMAGE}" == *":1.70-mojo-cuda" ]]; then
+  docker tag "${IMAGE}" "epimethyl/methylgrapher:1.70-mojo" || true
+  log "also tagged epimethyl/methylgrapher:1.70-mojo -> ${IMAGE}"
+fi
 
 log "smoke"
 bash "${DOCKER_DIR}/smoke_64k.sh" "${IMAGE}"
 
 log "done: ${IMAGE}"
-log "Pin via actionConfig.methylgrapher_wgbs.engine=mojo (default image ${IMAGE})"
+log "Pin via actionConfig.methylgrapher_wgbs.engine=mojo image=${IMAGE}"
+log "ROCm twin: METHYLGRAPHER_MOJO_GPU_VARIANT=rocm METHYLGRAPHER_MOJO_IMAGE_TAG=1.70-mojo-rocm $0"
 # Leave staged engine for inspect; CI may clean.

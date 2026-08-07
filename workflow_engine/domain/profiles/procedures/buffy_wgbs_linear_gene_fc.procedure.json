@@ -18,7 +18,8 @@
       "library_protocol": "wgbs_linear"
     },
     "parabricks": {
-      "alignment_mode": "linear"
+      "alignment_mode": "linear",
+      "engine": "parabricks"
     },
     "methyl_extract": {
       "read_level": {

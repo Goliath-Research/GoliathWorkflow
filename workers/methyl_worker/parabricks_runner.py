@@ -1,4 +1,4 @@
-"""NVIDIA Clara Parabricks fq2bam_meth alignment via Docker."""
+"""Linear WGBS Align: Clara Parabricks fq2bam_meth or portable MojoFq2bamMeth."""
 
 from __future__ import annotations
 
@@ -12,11 +12,12 @@ import sys
 import tarfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Mapping, Optional, Sequence
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 logger = logging.getLogger(__name__)
 
 FASTQ_SUFFIXES: Sequence[str] = (".fastq.gz", ".fq.gz", ".fastq", ".fq")
+DEFAULT_MOJO_IMAGE = "epimethyl/methylgrapher:1.70-mojo"
 
 
 @dataclass(frozen=True)
@@ -26,6 +27,8 @@ class ParabricksConfig:
     bwa_threads: int
     extra_docker_args: tuple[str, ...]
     cleanup_tmp: bool
+    engine: str = "parabricks"  # parabricks | mojo
+    align_device: str = "auto"
 
 
 @dataclass(frozen=True)
@@ -114,21 +117,50 @@ def resolve_parabricks_config(
             project = load_project(str(project_file))
             step_cfg = dict(resolve_for_project("parabricks", project))
 
-    image = (
-        parabricks_image
-        or _pick(payload, step_cfg, "parabricksImage", "image")
-        or os.environ.get("METHYL_PARABRICKS_IMAGE", "")
-    ).strip()
-    if not image:
+    engine_raw = _pick(payload, step_cfg, "engine", "engine")
+    if engine_raw is None:
+        engine_raw = os.environ.get("METHYL_PARABRICKS_ENGINE", "parabricks")
+    engine = str(engine_raw).strip().lower() or "parabricks"
+    if engine not in {"parabricks", "mojo"}:
         raise RuntimeError(
-            "Parabricks image is required (task input_json.parabricksImage, "
-            "project step_config.parabricks.image, or METHYL_PARABRICKS_IMAGE)"
+            f"actionConfig.parabricks.engine must be 'parabricks' or 'mojo' (got {engine_raw!r})"
         )
+
+    device_raw = _pick(payload, step_cfg, "alignDevice", "align_device")
+    if device_raw is None:
+        device_raw = os.environ.get("METHYLGRAPHER_ALIGN_DEVICE", "auto")
+    align_device = str(device_raw).strip().lower() or "auto"
+
+    if engine == "mojo":
+        image = (
+            parabricks_image
+            or _pick(payload, step_cfg, "mojoImage", "mojo_image")
+            or _pick(payload, step_cfg, "parabricksImage", "image")
+            or os.environ.get("METHYL_METHYLGRAPHER_MOJO_IMAGE", "")
+            or DEFAULT_MOJO_IMAGE
+        ).strip()
+    else:
+        image = (
+            parabricks_image
+            or _pick(payload, step_cfg, "parabricksImage", "image")
+            or os.environ.get("METHYL_PARABRICKS_IMAGE", "")
+        ).strip()
+        if not image:
+            raise RuntimeError(
+                "Parabricks image is required when engine=parabricks "
+                "(resolvedConfig.image or METHYL_PARABRICKS_IMAGE)"
+            )
 
     gpu_raw = _pick(payload, step_cfg, "gpuFlags", "gpu_flags")
     if gpu_raw is None:
-        gpu_raw = os.environ.get("METHYL_PARABRICKS_GPU_FLAGS", "--gpus all")
-    gpu_flags = tuple(shlex.split(str(gpu_raw).strip())) if str(gpu_raw).strip() else ("--gpus", "all")
+        if engine == "mojo" and align_device in {"amd", "hip", "rocm"}:
+            gpu_raw = os.environ.get(
+                "METHYL_MOJO_GPU_FLAGS",
+                "--device=/dev/kfd --device=/dev/dri --group-add video",
+            )
+        else:
+            gpu_raw = os.environ.get("METHYL_PARABRICKS_GPU_FLAGS", "--gpus all")
+    gpu_flags = tuple(shlex.split(str(gpu_raw).strip())) if str(gpu_raw).strip() else ()
 
     threads = bwa_threads
     if threads is None:
@@ -157,6 +189,8 @@ def resolve_parabricks_config(
         bwa_threads=threads,
         extra_docker_args=extra_docker_args,
         cleanup_tmp=cleanup_tmp,
+        engine=engine,
+        align_device=align_device,
     )
 
 
@@ -289,7 +323,52 @@ def _build_docker_command(
         rel = fastq.relative_to(paths.sample_dir)
         in_fq_args.append(f"/workdir/{rel.as_posix()}")
 
-    cmd: List[str] = [
+    if cfg.engine == "mojo":
+        cmd: List[str] = [
+            _docker_bin(),
+            "run",
+            "--rm",
+            *cfg.gpu_flags,
+            "--user",
+            f"{uid}:{gid}",
+            "-e",
+            f"METHYLGRAPHER_ALIGN_DEVICE={cfg.align_device}",
+            "-e",
+            f"METHYLGRAPHER_GIRAFFE_DEVICE={cfg.align_device}",
+            "-v",
+            f"{paths.sample_dir.resolve()}:/workdir",
+            "-v",
+            f"{paths.sample_dir.resolve()}:/outputdir",
+            "-v",
+            f"{genome_dir.resolve()}:/genomes:ro",
+            "-w",
+            "/workdir",
+            *cfg.extra_docker_args,
+            cfg.image,
+            "methylGrapher",
+            "MojoFq2bamMeth",
+            "-fq1",
+            in_fq_args[0],
+            "-fq2",
+            in_fq_args[1],
+            "-ref",
+            f"/genomes/{ref_basename}",
+            "-out_bam",
+            f"/outputdir/{paths.bam_path.name}",
+            "-out_qc_dir",
+            f"/outputdir/{paths.qc_metrics_dir.name}",
+            "-sample_id",
+            paths.sample_id,
+            "-t",
+            str(cfg.bwa_threads),
+            "-device",
+            cfg.align_device,
+            "-work_dir",
+            f"/outputdir/{paths.tmp_dir.name}",
+        ]
+        return cmd
+
+    cmd = [
         _docker_bin(),
         "run",
         "--rm",
@@ -360,7 +439,7 @@ def run_fq2bam_meth(
     parabricks_image: Optional[str] = None,
     bwa_threads: Optional[int] = None,
 ) -> Dict[str, Optional[str]]:
-    """Align bisulfite FASTQs with Parabricks fq2bam_meth in Docker."""
+    """Align bisulfite FASTQs (Clara fq2bam_meth or MojoFq2bamMeth) in Docker."""
     sample_path = Path(sample_dir).resolve()
     reference_path = Path(reference_fasta).resolve()
     if not sample_path.is_dir():
@@ -382,20 +461,23 @@ def run_fq2bam_meth(
         _clear_alignment_outputs(paths)
 
     if alignment_outputs_complete(paths):
-        logger.info("Skipping Parabricks; outputs already present for %s", sample_id)
+        logger.info("Skipping linear Align; outputs already present for %s", sample_id)
         _package_qc_metrics(paths)
         return _result_payload(paths)
 
     from methyl_worker.capabilities import assert_execute_gpu_prereqs
 
-    assert_execute_gpu_prereqs("parabricks.fq2bam", "sample.parabricks_fq2bam")
+    # Mojo cpu device does not require a GPU; Clara always does.
+    if cfg.engine == "parabricks" or cfg.align_device not in {"cpu"}:
+        assert_execute_gpu_prereqs("parabricks.fq2bam", "sample.parabricks_fq2bam")
 
     fastqs = resolve_paired_fastqs(sample_path, sample_id)
     docker_cmd = _build_docker_command(cfg, paths, fastqs)
     paths.sample_dir.mkdir(parents=True, exist_ok=True)
     paths.tmp_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Running Parabricks fq2bam_meth for %s", sample_id)
+    label = "MojoFq2bamMeth" if cfg.engine == "mojo" else "Parabricks fq2bam_meth"
+    logger.info("Running %s for %s (device=%s)", label, sample_id, cfg.align_device)
     _append_log(paths.log_path, "COMMAND: " + " ".join(shlex.quote(part) for part in docker_cmd))
 
     proc = subprocess.run(
@@ -410,16 +492,16 @@ def run_fq2bam_meth(
         _append_log(paths.log_path, proc.stderr)
     if proc.returncode != 0:
         raise RuntimeError(
-            proc.stderr.strip() or proc.stdout.strip() or "Parabricks fq2bam_meth failed"
+            proc.stderr.strip() or proc.stdout.strip() or f"{label} failed"
         )
 
     if not paths.bam_path.is_file():
-        raise RuntimeError(f"Parabricks did not produce BAM: {paths.bam_path}")
+        raise RuntimeError(f"{label} did not produce BAM: {paths.bam_path}")
 
     tar_path = _package_qc_metrics(paths)
     if tar_path is None and not paths.metrics_json.is_file():
         raise RuntimeError(
-            f"Parabricks did not produce QC metrics for {sample_id}: expected "
+            f"{label} did not produce QC metrics for {sample_id}: expected "
             f"{paths.qc_metrics_dir} or {paths.qc_metrics_tar}"
         )
 

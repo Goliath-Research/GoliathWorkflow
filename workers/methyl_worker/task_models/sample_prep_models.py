@@ -32,6 +32,62 @@ class DownloadFastqTaskInput(BaseModel):
     )
 
 
+class ParabricksStepConfig(BaseModel):
+    """Operator-tunable linear Align knobs (actionConfig.parabricks).
+
+    ``engine=parabricks`` keeps NVIDIA Clara fq2bam_meth. ``engine=mojo`` uses
+    MojoFq2bamMeth in the methylGrapher-mojo image (NVIDIA/AMD/CPU via align_device).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    engine: Optional[Literal["parabricks", "mojo"]] = Field(
+        default=None,
+        description=(
+            "Linear Align implementation: 'parabricks' (Clara fq2bam_meth, NVIDIA) or "
+            "'mojo' (MojoFq2bamMeth, portable). Operator-set per site/profile."
+        ),
+    )
+    align_device: Optional[Literal["auto", "cpu", "nvidia", "amd"]] = Field(
+        default=None,
+        description=(
+            "Mojo portable device when engine=mojo: auto|cpu|nvidia|amd. "
+            "Operator-set per site/profile. Ignored for Clara."
+        ),
+    )
+    image: Optional[str] = Field(
+        default=None,
+        description=(
+            "Docker image for Align. Clara NGC tag when engine=parabricks; "
+            "epimethyl/methylgrapher:1.70-mojo-cuda|rocm when engine=mojo."
+        ),
+    )
+    bwa_threads: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="BWA / MojoFq2bamMeth CPU thread pool. Operator-set per site/profile.",
+    )
+    gpu_flags: Optional[str] = Field(
+        default=None,
+        description="Docker GPU flags for Clara (e.g. '--gpus all'). Operator-set per site.",
+    )
+    alignment_mode: Optional[str] = Field(
+        default=None,
+        description="Must be linear when this section is used for SamplePrep linear arm.",
+    )
+    reference_fasta: Optional[str] = Field(
+        default=None,
+        description="Linear GRCh38 FASTA path. Usually from site reference_genome.fasta.",
+    )
+    mojo_image: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional override image when engine=mojo "
+            "(else image or epimethyl/methylgrapher:1.70-mojo)."
+        ),
+    )
+
+
 class ParabricksFq2bamTaskInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -50,7 +106,7 @@ class ParabricksFq2bamTaskInput(BaseModel):
         default=None,
         description="Baked execution scope id from instance finalize (provenance).",
     )
-    resolvedConfig: Optional[dict] = Field(
+    resolvedConfig: Optional[ParabricksStepConfig] = Field(
         default=None,
         description="Merged actionConfig.parabricks baked at instance configuration.",
     )
@@ -162,7 +218,15 @@ class MethylGrapherWgbsStepConfig(BaseModel):
     giraffe_device: Optional[str] = Field(
         default=None,
         description=(
-            "Mojo Giraffe device selector (e.g. nvidia, auto). Operator-set per site/profile."
+            "Mojo Giraffe device selector: auto|cpu|nvidia|amd. "
+            "Operator-set per site/profile. Alias of align_device."
+        ),
+    )
+    align_device: Optional[str] = Field(
+        default=None,
+        description=(
+            "Portable Align device (dual-Align contract): auto|cpu|nvidia|amd. "
+            "Used when giraffe_device unset. Operator-set per site/profile."
         ),
     )
     mojo_giraffe_ready: Optional[bool] = Field(

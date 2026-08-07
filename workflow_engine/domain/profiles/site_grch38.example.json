@@ -10,6 +10,20 @@
       "multipart_chunksize_mb": 16,
       "multipart_threshold_mb": 32,
       "max_attempts": 10
+    },
+    "methylgrapher_wgbs": {
+      "engine": "mojo",
+      "align_engine": "gpu_giraffe",
+      "align_device": "auto",
+      "giraffe_device": "auto",
+      "gpu_giraffe_fallback": "mojo",
+      "mojo_segments_cache": "/work/cache/mojo_segments",
+      "image": "epimethyl/methylgrapher:1.70-mojo"
+    },
+    "parabricks": {
+      "engine": "parabricks",
+      "align_device": "auto",
+      "bwa_threads": 16
     }
   },
   "reference_selection": {

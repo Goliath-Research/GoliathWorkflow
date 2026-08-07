@@ -195,7 +195,11 @@ def resolve_wgbs_bundle_from_resolved(
         giraffe_device=(
             str(raw["giraffe_device"]).strip()
             if raw.get("giraffe_device") not in (None, "")
-            else None
+            else (
+                str(raw["align_device"]).strip()
+                if raw.get("align_device") not in (None, "")
+                else None
+            )
         ),
         mojo_giraffe_ready=(
             bool(raw["mojo_giraffe_ready"])
@@ -413,7 +417,7 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
     control stays in DB-backed ``resolvedConfig``.
     """
     fallback = (bundle.gpu_giraffe_fallback or "mojo").strip() or "mojo"
-    device = (bundle.giraffe_device or "nvidia").strip() or "nvidia"
+    device = (bundle.giraffe_device or "auto").strip() or "auto"
     if bundle.mojo_giraffe_ready is None:
         ready = "1"
     else:
@@ -426,6 +430,7 @@ def materialize_align_docker_env(bundle: MethylGrapherWgbsBundle) -> List[str]:
         f"METHYLGRAPHER_ALIGN_ENGINE={effective_align_engine(bundle)}",
         f"METHYLGRAPHER_GPU_GIRAFFE_FALLBACK={fallback}",
         f"METHYLGRAPHER_GIRAFFE_DEVICE={device}",
+        f"METHYLGRAPHER_ALIGN_DEVICE={device}",
         f"METHYLGRAPHER_MOJO_GIRAFFE_READY={ready}",
         f"MODULAR_CACHE_DIR={modular}",
         f"METHYLGRAPHER_MOJO_SEGMENTS_CACHE={segments}",

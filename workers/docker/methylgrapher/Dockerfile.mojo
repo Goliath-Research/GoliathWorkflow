@@ -16,9 +16,13 @@ FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl git python3 python3-pip python3-venv \
-        samtools tabix pigz \
+        samtools tabix pigz bwa \
         libcairo2 libatomic1 libgomp1 \
     && rm -rf /var/lib/apt/lists/*
+
+# cuda | rocm — same userspace binary; host runtime + site image tag select the GPU.
+ARG GPU_VARIANT=cuda
+ENV METHYLGRAPHER_GPU_VARIANT=${GPU_VARIANT}
 
 ARG VG_VERSION=1.70.0
 ARG VG_PREBUILT=vg.arm64
@@ -47,11 +51,12 @@ RUN chmod +x /usr/local/bin/methylGrapher /opt/methylgrapher-mojo/mojo-env/bin/m
     && methylGrapher help | head -5
 
 LABEL org.opencontainers.image.title="methylGrapher-mojo WGBS worker" \
-      org.opencontainers.image.description="Native Mojo MethylCall + MojoGiraffe GAF + patched engine + vg for pangenome_wgbs SamplePrep" \
+      org.opencontainers.image.description="Native Mojo MethylCall + MojoGiraffe GAF + MojoFq2bamMeth + patched engine + vg for dual Align" \
       methylpipeline.vg_version="${VG_VERSION}" \
       methylpipeline.methylgrapher_engine="mojo" \
       methylpipeline.methylgrapher_version="0.1.0-mojo" \
-      methylpipeline.giraffe="mojo_giraffe"
+      methylpipeline.giraffe="mojo_giraffe" \
+      methylpipeline.gpu_variant="${GPU_VARIANT}"
 
 ENTRYPOINT []
 CMD ["methylGrapher", "help"]

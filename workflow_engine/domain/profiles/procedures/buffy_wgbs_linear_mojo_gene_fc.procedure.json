@@ -1,13 +1,12 @@
 {
-  "pipelineProcedure": "buffy_wgbs_pangenome_gene_fc",
-  "description": "Buffy-coat WGBS with pangenome alignment, read-level informME patterns, Houseman deconvolution covariates, and gene FeatureCuts stability.",
+  "pipelineProcedure": "buffy_wgbs_linear_mojo_gene_fc",
+  "description": "Buffy-coat WGBS with linear Align via MojoFq2bamMeth (portable NVIDIA/AMD/CPU), read-level informME, Houseman deconvolution, gene FeatureCuts. Clara rollback: buffy_wgbs_linear_gene_fc (engine=parabricks).",
   "pipelineProfile": "samd_research",
   "researchMode": "gene_fc",
   "analyteExpectation": "buffy_coat",
-  "libraryProtocol": "wgbs_pangenome",
-  "alignmentMode": "pangenome_wgbs",
-  "usePangenome": true,
-  "useWgbsPangenome": true,
+  "libraryProtocol": "wgbs_linear",
+  "alignmentMode": "linear",
+  "usePangenome": false,
   "samplePrepProgram": "workflow_engine/domain/fixtures/sample_prep.program.json",
   "lifecycleProgram": "workflow_engine/domain/fixtures/study_validation_lifecycle.program.json",
   "runDmpSelection": false,
@@ -16,43 +15,18 @@
   "stabilityGeneFeaturecutsEnabled": true,
   "actionConfig": {
     "sample_prep": {
-      "library_protocol": "wgbs_pangenome",
-      "alignment_mode": "pangenome_wgbs"
+      "library_protocol": "wgbs_linear"
     },
     "parabricks": {
-      "alignment_mode": "pangenome_wgbs"
-    },
-    "methylgrapher_wgbs": {
-      "alignment_mode": "pangenome_wgbs",
-      "directional": true,
+      "alignment_mode": "linear",
       "engine": "mojo",
-      "align_engine": "gpu_giraffe",
-      "gpu_giraffe_fallback": "mojo",
-      "giraffe_device": "auto",
       "align_device": "auto",
-      "mojo_segments_cache": "/work/cache/mojo_segments",
-      "qc_bam_engine": "mojo",
-      "conversion_rate_enabled": true,
-      "read_level": {
-        "enabled": true,
-        "tile_size": 4
-      }
+      "image": "epimethyl/methylgrapher:1.70-mojo"
     },
     "methyl_extract": {
       "read_level": {
         "enabled": true,
         "tile_size": 4
-      }
-    },
-    "alignment_qc": {
-      "cycle_screening": {
-        "remediate_without_cycles": true,
-        "fallback_trim_front": 5,
-        "fallback_trim_tail": 0
-      },
-      "bisulfite_conversion": {
-        "enabled": true,
-        "source": "sidecar"
       }
     },
     "cell_deconvolution": {
