@@ -39,6 +39,9 @@ flowchart LR
 |--------|----------------------|---------------------|----------------|
 | `sample.download_fastq` | `sampleId`, `sampleDir`, `fastqSource` | — | — |
 | `sample.parabricks_fq2bam` | `sampleId`, `sampleDir`, `projectPath` | `parabricks` | — |
+| `sample.parabricks_giraffe` | `sampleId`, `sampleDir`, `projectPath` | `parabricks` | — |
+| `sample.methylgrapher_wgbs_align` | `sampleId`, `sampleDir`, `projectPath` | `methylgrapher_wgbs` | — |
+| `sample.methylgrapher_wgbs_extract` | `sampleId`, `sampleDir`, `projectPath` | `methylgrapher_wgbs` | — |
 | `sample.trim_fastq` | `sampleId`, `sampleDir`, `trimFront1/2`, `trimTail1/2`, `remediationReason` | — | — |
 | `sample.methyl_qc` | `sampleId`, `sampleDir`, `projectPath` | `alignment_qc` | — |
 | `sample.fragmentomics` | `sampleId`, `sampleDir`, `projectPath` | `fragmentomics` | — |
@@ -54,6 +57,8 @@ flowchart LR
 **Archive skip output** (when `sampleDestination` is absent): `status=skipped`, `sampleArchived=false`, `archiveSkipped=true`, `skipReason=sample_destination_not_configured`, `missingConfiguration=["sampleDestination"]`.
 
 Parabricks image, BWA threads, and reference FASTA resolve from site `reference_genome` + `actionConfig.parabricks` (not wire). Methyl extract `min_mapq`, `min_phred`, `extract_contexts`, etc. resolve from `actionConfig.methyl_extract`.
+
+**methylGrapher WGBS** (`actionConfig.methylgrapher_wgbs` / site `pangenome_wgbs_genome`): C2T/G2A index paths, `index_prefix`, `ref_paths`, `cpg_tsv`, `linear_ref_fasta`, plus operator knobs `image`, `engine`, `align_engine`, `threads`, `directional`. Procedure packs may overlay `alignment_mode` / `directional` only — site image/engine must survive merge (guarded by `methyl-cfg verify-workflow` bake check).
 
 ## Pipeline / modeling actions
 
@@ -98,6 +103,7 @@ Internal validation sub-actions are invoked by `validation.model_mc`; they remai
 | Symptom | Fix |
 |---------|-----|
 | Task validation failed: forbidden field `maxGenes` | Move to profile `actionConfig.gene_selection.max_genes` |
+| `methylGrapher image not configured` | Pin `actionConfig.methylgrapher_wgbs.image` on site; re-bake instance context; run `methyl-cfg verify-workflow` |
 | Task validation failed: forbidden field `referenceFasta` | Set site `reference_genome.fasta` or profile `actionConfig.parabricks` |
 | Task validation failed: `profileActionConfig` | Use `resolvedConfig` only (legacy alias removed) |
 | MC iteration missing detector overrides | Ensure `mc_config.json` snapshot + program `stepOverride`; do not rely on sidecar JSON beside `project.json` |

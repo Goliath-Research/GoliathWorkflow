@@ -50,4 +50,18 @@ else
   echo "== domain schema drift == (skip: methyl-export-domain-schemas not on PATH)"
 fi
 
+echo "== SamplePrep DomainProgram graph / catalog =="
+"$PY" - <<'PY'
+import sys
+from pathlib import Path
+root = Path(".").resolve()
+sys.path.insert(0, str(root / "workflow_engine" / "domain"))
+from verify_workflow import verify_program_file
+report = verify_program_file(root / "workflow_engine/domain/fixtures/sample_prep.program.json")
+if not report.ok:
+    print(report.to_dict())
+    raise SystemExit(1)
+print(f"SamplePrepPipeline ok nodes={report.node_count} actions={len(set(report.action_names))}")
+PY
+
 echo "CI preflight passed."

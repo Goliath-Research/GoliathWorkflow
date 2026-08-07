@@ -8,6 +8,18 @@
 
 **Deploy:** `bash scripts/deploy_workflow_definitions.sh` (direct DB)
 
+**Integrity verify (git + optional Azure):**
+
+```bash
+# Graph / catalog / methylgrapher bake (site + Buffy procedure)
+methyl-cfg verify-workflow \
+  --program workflow_engine/domain/fixtures/sample_prep.program.json
+
+# Also compare compiled ACTION nodes to active wf.workflow_version
+set -a; source /work/epimethyl/env/gateway.env; set +a
+methyl-cfg verify-workflow --check-db
+```
+
 **Legacy SQL seed** [`deprecated/wf_sample_prep_pipeline_seed.sql`](deprecated/wf_sample_prep_pipeline_seed.sql) is **deprecated**; use DomainProgram deploy above.
 
 ## Architecture

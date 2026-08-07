@@ -177,9 +177,37 @@ def _cmd_scaffold_action(args: argparse.Namespace) -> int:
         repo_root=args.repo_root or _repo_root(),
         version=args.version,
         force=args.force,
+        emit_pydantic=not args.no_pydantic,
+        emit_program_snippet=not args.no_program_snippet,
     )
     print(json.dumps(result, indent=2))
     return 0
+
+
+def _cmd_verify_workflow(args: argparse.Namespace) -> int:
+    from cfg.verify_workflow_cmd import run_verify_workflow
+
+    repo = Path(args.repo_root or _repo_root())
+    program = Path(args.program)
+    if not program.is_file():
+        program = repo / args.program
+    site = Path(args.site) if args.site else Path("/work/site/methyl_site.json")
+    procedure = (
+        Path(args.procedure)
+        if args.procedure
+        else repo
+        / "workflow_engine/domain/profiles/procedures/buffy_wgbs_pangenome_gene_fc.procedure.json"
+    )
+    result = run_verify_workflow(
+        program=program,
+        repo_root=repo,
+        site_path=site if site.is_file() else None,
+        procedure_path=procedure if procedure.is_file() else None,
+        check_db=args.check_db,
+        workflow_name=args.workflow_name,
+    )
+    print(json.dumps(result, indent=2))
+    return 0 if result.get("ok") else 1
 
 
 def _cmd_provision(args: argparse.Namespace) -> int:
@@ -405,7 +433,49 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--capability", default=None)
     s.add_argument("--force", action="store_true")
     s.add_argument("--draft", action="store_true")
+    s.add_argument(
+        "--no-pydantic",
+        action="store_true",
+        help="Skip generating task_models Pydantic stub",
+    )
+    s.add_argument(
+        "--no-program-snippet",
+        action="store_true",
+        help="Skip DomainProgram step snippet",
+    )
     s.set_defaults(func=_cmd_scaffold_action)
+
+    s = sub.add_parser(
+        "verify-workflow",
+        help="Verify DomainProgram graph (IF/orphans/catalog) + optional methylgrapher bake/DB",
+    )
+    s.add_argument(
+        "--program",
+        default="workflow_engine/domain/fixtures/sample_prep.program.json",
+        help="DomainProgram JSON path",
+    )
+    s.add_argument("--repo-root", default=None)
+    s.add_argument(
+        "--site",
+        default=None,
+        help="Site manifest for methylgrapher bake check (default: /work/site/methyl_site.json)",
+    )
+    s.add_argument(
+        "--procedure",
+        default=None,
+        help="Procedure JSON whose actionConfig overlays site (Buffy WGBS default)",
+    )
+    s.add_argument(
+        "--check-db",
+        action="store_true",
+        help="Compare compiled ACTION nodes to active Azure SQL wf.workflow_version",
+    )
+    s.add_argument(
+        "--workflow-name",
+        default=None,
+        help="wf.workflow_def.name for --check-db (default: compiled name)",
+    )
+    s.set_defaults(func=_cmd_verify_workflow)
 
     s = sub.add_parser("provision-assets", help="Run reference_asset provision recipes")
     s.add_argument("--name", default=None, help="Asset name (omit to provision all published)")

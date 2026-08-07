@@ -97,10 +97,28 @@ def load_profile_action_config(name_or_path: str | Path | None = None) -> Dict[s
 def site_slice_for_action(site: Mapping[str, Any], action_key: str) -> Dict[str, Any]:
     """Extract action-specific defaults from a site manifest."""
     ac = site.get("actionConfig")
+    # methylgrapher_wgbs: merge genome bundle paths with actionConfig knobs (image/engine).
+    # Early-return of actionConfig alone would drop pangenome_wgbs_genome fill-ins when
+    # operators pin only image/engine under actionConfig (or the reverse).
+    if action_key == "methylgrapher_wgbs":
+        out: Dict[str, Any] = {}
+        wgbs = site.get("pangenome_wgbs_genome") or {}
+        if isinstance(wgbs, dict) and wgbs:
+            out = deep_merge(out, dict(wgbs))
+        site_mg = ac.get("methylgrapher_wgbs") if isinstance(ac, dict) else None
+        if isinstance(site_mg, dict):
+            out = deep_merge(out, dict(site_mg))
+        ref = site.get("reference_genome") or {}
+        pangenome = site.get("pangenome_genome") or {}
+        linear_fasta = pangenome.get("linear_ref_fasta") or ref.get("fasta")
+        if not out.get("linear_ref_fasta") and linear_fasta:
+            out["linear_ref_fasta"] = linear_fasta
+        return out
+
     if isinstance(ac, dict) and action_key in ac and isinstance(ac[action_key], dict):
         return dict(ac[action_key])
 
-    out: Dict[str, Any] = {}
+    out = {}
     ref = site.get("reference_genome") or {}
     ann = site.get("annotation") or {}
     caches = site.get("caches") or {}
@@ -127,24 +145,6 @@ def site_slice_for_action(site: Mapping[str, Any], action_key: str) -> Dict[str,
         out.update(dict(site["parabricks"]))
     if action_key == "methyl_extract" and site.get("methyl_extract"):
         out.update(dict(site["methyl_extract"]))
-    if action_key == "methylgrapher_wgbs":
-        wgbs = site.get("pangenome_wgbs_genome") or {}
-        if isinstance(wgbs, dict) and wgbs:
-            out.update(dict(wgbs))
-        # Prefer linear fasta from BS bundle, else stock pangenome linear, else reference_genome.
-        if not out.get("linear_ref_fasta"):
-            lin = (
-                (isinstance(wgbs, dict) and wgbs.get("linear_ref_fasta"))
-                or pangenome.get("linear_ref_fasta")
-                or linear_fasta
-            )
-            if lin:
-                out["linear_ref_fasta"] = lin
-        site_mg = (site.get("actionConfig") or {}).get("methylgrapher_wgbs")
-        if isinstance(site_mg, dict):
-            # actionConfig already returned above when present; this branch is the
-            # fallback path when actionConfig.methylgrapher_wgbs was absent.
-            pass
     rna_ref = site.get("rna_reference") or {}
     if isinstance(rna_ref, dict) and rna_ref:
         if action_key in ("rna_align", "rna_qc"):
@@ -299,6 +299,8 @@ def resolve_methylgrapher_wgbs_genome(
         "linear_cpg_tsv",
         "wl_gfa",
         "engine",
+        "align_engine",
+        "alignment_mode",
     ):
         if cfg.get(optional) not in (None, ""):
             resolved[optional] = str(cfg[optional])

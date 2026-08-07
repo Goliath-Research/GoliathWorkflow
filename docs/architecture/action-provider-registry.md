@@ -49,8 +49,18 @@ DomainProgram compiler would couple orchestration to process-pack types.
 5. Optional: template rules on `domain_effects` if the compiler must bind scope
    vars beyond `with` / `context_vars`.
 
+**Scaffold shortcut (stubs only):** declare via `methyl-cfg scaffold-action --define
+My.action --capability …` to emit JSON Schema files, handler stub under
+`workers/methyl_worker/scaffolded/`, Pydantic stub, catalog note, and a
+DomainProgram step snippet. Replace stubs with real science logic, then export +
+`methyl-cfg sync-actions --seed-wf`. Multi-language codegen is out of scope —
+schemas remain the interchange; Python worker pack is the first consumer.
+
 Keep the catalog **explicit** (CI drift check). Do not rely on silent setuptools
 entry-point discovery as the sole registration path.
+
+**SamplePrep integrity:** `methyl-cfg verify-workflow` checks IF/orphan graph
+structure, catalog coverage, methylgrapher bake, and optional Azure `wf` parity.
 
 ## Phase 3 — Worker-local DI (in-process handlers only)
 
