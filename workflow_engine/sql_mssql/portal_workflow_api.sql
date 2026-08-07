@@ -179,5 +179,20 @@ BEGIN
 END
 GO
 
+IF OBJECT_ID(N'portal.sp_reclaim_expired_leases', N'P') IS NOT NULL
+    DROP PROCEDURE portal.sp_reclaim_expired_leases;
+GO
+CREATE PROCEDURE portal.sp_reclaim_expired_leases
+    @workflow_instance_id bigint = NULL,
+    @grace_seconds int = 60
+AS
+BEGIN
+    SET NOCOUNT ON;
+    EXEC wf.sp_reclaim_expired_leases
+        @workflow_instance_id = @workflow_instance_id,
+        @grace_seconds = @grace_seconds;
+END
+GO
+
 PRINT N'portal workflow API deployed (Azure SQL).';
 GO

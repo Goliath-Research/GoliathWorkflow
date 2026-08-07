@@ -32,10 +32,12 @@ Individual CLIs may retry internally (e.g. network). The engine does **not** aut
 
 | Aspect | Current behavior |
 |--------|------------------|
-| Lease set on claim | Yes (`lease_owner`, `lease_expires_at`) |
-| Worker heartbeat renew | Depends on worker loop; no separate lease-renew endpoint |
-| **Lease expiry requeue** | **Not implemented** — expired leases may leave nodes stuck until operator intervention |
-| `attempt_no` | Always `1` today — no multi-attempt retry counter |
+| Lease set on claim | Yes (`wf.task_lease.lease_expires_at_utc`) |
+| Worker heartbeat renew | `POST /v1/workers/tasks/{id}/heartbeat` → `wf.sp_worker_heartbeat` |
+| **Lease expiry requeue** | **Operator/SQL:** `wf.sp_reclaim_expired_leases` (portal: `portal.sp_reclaim_expired_leases`) resets expired/`RUNNING`-without-lease nodes to `READY` |
+| `attempt_no` | Incremented on reclaim / manual READY reset |
+
+Healthy long Align jobs stay safe while the worker heartbeats (lease keeps extending). A `systemctl restart` mid-task strands the node until reclaim runs after lease expiry.
 
 ## `forceRerun` and replanning
 
@@ -45,10 +47,21 @@ Operators may create a new instance or use portal/admin paths to reset work. `me
 
 See [Usage ch.11 — Troubleshooting and recovery](../usage/11-troubleshooting-and-recovery.qmd):
 
-1. Identify stuck `lease_owner` / expired lease in `wf.node_execution`
-2. Verify worker health (`register_worker.sh`, systemd)
-3. Safe manual SQL or portal procedure to release lease **only** per runbook (dialect-specific)
-4. Prefer new instance for science reruns when config changed
+1. Find stuck `RUNNING` rows with expired/missing leases (query below or portal task list).
+2. Verify worker health (`systemctl status methyl-worker`, journal).
+3. Reclaim:
+
+```sql
+-- All instances (60s grace after lease_expires)
+EXEC portal.sp_reclaim_expired_leases @grace_seconds = 60;
+
+-- One instance only
+EXEC portal.sp_reclaim_expired_leases
+  @workflow_instance_id = 59,
+  @grace_seconds = 60;
+```
+
+4. Prefer a new instance for science reruns when `actionConfig` changed (do not reclaim to “fix” bad config).
 
 ## Related
 
