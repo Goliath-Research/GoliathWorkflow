@@ -25,10 +25,18 @@ def test_systemd_units_use_placeholders() -> None:
         "deploy/systemd/methyl-gateway.service",
         "deploy/systemd/methyl-worker.service",
         "deploy/systemd/methyl-worker@.service",
+        "deploy/systemd/methyl-reclaim-leases.service",
     ):
         text = (REPO_ROOT / rel).read_text(encoding="utf-8")
         assert "__EPIMETHYL_VENV__" in text
         assert "venv-aarch64" not in text or "__EPIMETHYL_VENV__" in text
+    timer = (REPO_ROOT / "deploy/systemd/methyl-reclaim-leases.timer").read_text(
+        encoding="utf-8"
+    )
+    assert "OnUnitActiveSec=" in timer
+    assert (
+        REPO_ROOT / "scripts" / "install_reclaim_leases_timer.sh"
+    ).is_file()
 
 
 def test_build_release_resolves_workflow_engine_wheel() -> None:

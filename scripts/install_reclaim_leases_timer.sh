@@ -1,16 +1,19 @@
 #!/bin/bash
-# Install methyl-gateway systemd unit on this VM.
+# Install methyl-reclaim-leases oneshot + timer on the gateway host.
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/install_gateway_systemd.sh [options]
+Usage: scripts/install_reclaim_leases_timer.sh [options]
+
+Installs systemd units that run methyl-reclaim-leases every 2 minutes
+(using /work/epimethyl/env/gateway.env for Azure SQL credentials).
 
 Options:
   --root PATH           Epimethyl root (default: /work/epimethyl)
   --arch KEY            aarch64 or amd64 (default: detect)
   --runtime PATH        Path to runtime-bundle (default: <root>/current/runtime-bundle)
-  --no-start            Install/enable only; do not start
+  --no-start            Install/enable only; do not start timer
   -h, --help
 EOF
 }
@@ -46,22 +49,22 @@ RUNTIME="${RUNTIME:-$(readlink -f "$ROOT/current/runtime-bundle" 2>/dev/null || 
 DEPLOY="$RUNTIME/deploy/systemd"
 [[ -d "$DEPLOY" ]] || DEPLOY="$SCRIPT_DIR/../deploy/systemd"
 
-SRC="$DEPLOY/methyl-gateway.service"
-[[ -f "$SRC" ]] || { echo "Missing $SRC" >&2; exit 1; }
+SVC_SRC="$DEPLOY/methyl-reclaim-leases.service"
+TIMER_SRC="$DEPLOY/methyl-reclaim-leases.timer"
+[[ -f "$SVC_SRC" ]] || { echo "Missing $SVC_SRC" >&2; exit 1; }
+[[ -f "$TIMER_SRC" ]] || { echo "Missing $TIMER_SRC" >&2; exit 1; }
+
+if [[ ! -x "$VENV/bin/methyl-reclaim-leases" ]]; then
+  echo "WARN: $VENV/bin/methyl-reclaim-leases not found; install/upgrade methyl-gateway wheel first" >&2
+fi
 
 sed -e "s|__EPIMETHYL_ROOT__|$ROOT|g" \
     -e "s|__EPIMETHYL_VENV__|$VENV|g" \
-    "$SRC" >"/etc/systemd/system/methyl-gateway.service"
+    "$SVC_SRC" >"/etc/systemd/system/methyl-reclaim-leases.service"
+cp -f "$TIMER_SRC" "/etc/systemd/system/methyl-reclaim-leases.timer"
 
 systemctl daemon-reload
-systemctl enable methyl-gateway.service
-[[ "$NO_START" -eq 0 ]] && systemctl restart methyl-gateway.service
-systemctl status methyl-gateway.service --no-pager -l | head -15
-
-# Lease reclaim timer (expired RUNNING → READY); same gateway.env credentials.
-RECLAIM_INSTALL="$SCRIPT_DIR/install_reclaim_leases_timer.sh"
-if [[ -f "$RECLAIM_INSTALL" ]]; then
-  RECLAIM_ARGS=(--root "$ROOT" --arch "$ARCH" --runtime "$RUNTIME")
-  [[ "$NO_START" -eq 1 ]] && RECLAIM_ARGS+=(--no-start)
-  bash "$RECLAIM_INSTALL" "${RECLAIM_ARGS[@]}"
-fi
+systemctl enable methyl-reclaim-leases.timer
+[[ "$NO_START" -eq 0 ]] && systemctl restart methyl-reclaim-leases.timer
+systemctl status methyl-reclaim-leases.timer --no-pager -l | head -20
+echo "Manual run: systemctl start methyl-reclaim-leases.service"

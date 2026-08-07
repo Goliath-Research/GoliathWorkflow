@@ -112,8 +112,23 @@ DECLARE
   v_picked bigint;
   v_worker_capabilities jsonb;
   v_is_omnibus boolean;
+  v_reclaim_cutoff timestamptz := v_now - make_interval(secs => 60);
 BEGIN
   CALL wf.wf_worker_authenticate(p_worker_id, p_worker_token);
+
+  -- Auto-unstick crashed workers: expired/missing leases → READY (quiet: discard rows).
+  IF EXISTS (
+    SELECT 1
+    FROM wf.node_execution AS ne
+    LEFT JOIN wf.task_lease AS l ON l.node_execution_id = ne.id
+    WHERE ne.status = 'RUNNING'
+      AND (
+            l.node_execution_id IS NULL
+         OR l.lease_expires_at_utc <= v_reclaim_cutoff
+      )
+  ) THEN
+    PERFORM * FROM wf.sp_reclaim_expired_leases(NULL::bigint, 60, true);
+  END IF;
 
   SELECT w.capabilities
   INTO v_worker_capabilities

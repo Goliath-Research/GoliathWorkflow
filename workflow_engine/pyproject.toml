@@ -21,6 +21,7 @@ methyl-study-start = "admin.study_start:main"
 methyl-study-init = "admin.study_init:main"
 methyl-study-validate-manifest = "admin.study_validate:main"
 methyl-cfg = "cfg.cli:main"
+methyl-reclaim-leases = "ops.reclaim_expired_leases:main"
 
 [build-system]
 requires = ["setuptools>=61"]

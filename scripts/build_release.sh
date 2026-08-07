@@ -148,7 +148,8 @@ build_runtime_bundle() {
            verify_e2e_node.sh verify_setup.sh verify_parabricks.sh verify_methyl_extractor.sh \
            register_worker.sh build_release.sh package_methyl_extractor.sh \
            download_methyl_extractor_artifacts.sh assemble_release.sh bootstrap_epimethyl.sh \
-           install_gateway_systemd.sh install_worker_systemd.sh; do
+           install_gateway_systemd.sh install_worker_systemd.sh \
+           install_reclaim_leases_timer.sh; do
     [[ -f "$REPO_ROOT/scripts/$s" ]] && cp -f "$REPO_ROOT/scripts/$s" "$RUNTIME_DIR/scripts/"
   done
   chmod +x "$RUNTIME_DIR/scripts/"*.sh 2>/dev/null || true

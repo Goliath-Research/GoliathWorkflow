@@ -190,7 +190,8 @@ BEGIN
     SET NOCOUNT ON;
     EXEC wf.sp_reclaim_expired_leases
         @workflow_instance_id = @workflow_instance_id,
-        @grace_seconds = @grace_seconds;
+        @grace_seconds = @grace_seconds,
+        @quiet = 0;
 END
 GO
 

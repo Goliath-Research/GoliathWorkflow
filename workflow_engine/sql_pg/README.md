@@ -12,7 +12,8 @@ Deploy **in order**:
 | 4 | [`06_scope_writepath_parity.sql`](06_scope_writepath_parity.sql) | Scope open/copy, output bindings, branch vars |
 | 5 | [`07_scope_encoding_parity.sql`](07_scope_encoding_parity.sql) | Canonical JSON scalar encoding |
 | 6 | [`08_foreach_support.sql`](08_foreach_support.sql) | FOREACH control-flow (DomainProgram workflows on PostgreSQL) |
-| 7 | [`01_worker_api.sql`](01_worker_api.sql) | Worker claim/submit/heartbeat |
+| 7 | [`wf_reclaim_expired_leases.sql`](wf_reclaim_expired_leases.sql) | Expired-lease → READY + `portal.sp_reclaim_expired_leases` (MSSQL twin) |
+| 7a | [`01_worker_api.sql`](01_worker_api.sql) | Worker claim/submit/heartbeat (quietly calls reclaim when leases expired) |
 | 8 | [`02_repository_api.sql`](02_repository_api.sql) | Middle-tier repository wrappers |
 | 9 | [`04_admin.sql`](04_admin.sql) | Admin (`sp_delete_workflow_def`) |
 | 10 | [`wf_action_schema.sql`](wf_action_schema.sql) | Action I/O JSON Schema storage + get/upsert schema (not list_actions) |

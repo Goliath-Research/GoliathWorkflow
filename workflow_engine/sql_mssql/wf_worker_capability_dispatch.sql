@@ -60,6 +60,22 @@ BEGIN
     DECLARE @lease_end DATETIME2(7) = DATEADD(SECOND, @max_lease_seconds, @now);
     DECLARE @worker_capabilities NVARCHAR(MAX);
     DECLARE @is_omnibus BIT;
+    DECLARE @reclaim_cutoff DATETIME2(7) = DATEADD(SECOND, -60, @now);
+
+    -- Auto-unstick crashed workers: expired/missing leases → READY (quiet: no result set).
+    IF EXISTS (
+        SELECT 1
+        FROM wf.node_execution AS ne
+        LEFT JOIN wf.task_lease AS l ON l.node_execution_id = ne.id
+        WHERE ne.status = N'RUNNING'
+          AND (
+                l.node_execution_id IS NULL
+             OR l.lease_expires_at_utc <= @reclaim_cutoff
+          )
+    )
+    BEGIN
+        EXEC wf.sp_reclaim_expired_leases @grace_seconds = 60, @quiet = 1;
+    END
 
     SELECT @worker_capabilities = CONVERT(NVARCHAR(MAX), w.capabilities)
     FROM wf.worker AS w

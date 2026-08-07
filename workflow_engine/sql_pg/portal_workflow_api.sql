@@ -176,3 +176,22 @@ AS $$
   WHERE ne.workflow_instance_id = p_workflow_instance_id
   ORDER BY ne.id;
 $$;
+
+-- Lease reclaim (canonical definition in wf_reclaim_expired_leases.sql; re-declare for
+-- portal-only re-applies so EpiPortal keeps the wrapper).
+CREATE OR REPLACE FUNCTION portal.sp_reclaim_expired_leases(
+  p_workflow_instance_id bigint DEFAULT NULL,
+  p_grace_seconds int DEFAULT 60
+)
+RETURNS TABLE (
+  node_execution_id bigint,
+  workflow_instance_id bigint,
+  previous_worker_id bigint,
+  lease_expired_at_utc timestamptz,
+  reclaimed_at_utc timestamptz
+)
+LANGUAGE sql
+AS $$
+  SELECT *
+  FROM wf.sp_reclaim_expired_leases(p_workflow_instance_id, p_grace_seconds, false);
+$$;

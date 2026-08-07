@@ -13,7 +13,7 @@ Operator recovery for **distributed** (gateway + DB + workers) and **local** (`m
 | Symptom | Likely cause | Recovery |
 |---------|--------------|----------|
 | Worker idle, nodes `READY` | Worker not registered or wrong capability | `register_worker.sh`, check `wf.worker`; restart systemd unit |
-| Node `RUNNING`, stale lease | Worker crash/restart; claim only serves `READY` | `EXEC portal.sp_reclaim_expired_leases @workflow_instance_id=…, @grace_seconds=60;` (see [lease doc](../architecture/workflow-idempotency-retry-lease.md)) |
+| Node `RUNNING`, stale lease | Worker crash/restart; claim only serves `READY` | Auto: claim path + `methyl-reclaim-leases.timer`. Manual: Azure SQL `EXEC portal.sp_reclaim_expired_leases …` / PostgreSQL `SELECT * FROM portal.sp_reclaim_expired_leases(…)` / CLI `methyl-reclaim-leases` ([lease doc](../architecture/workflow-idempotency-retry-lease.md)) |
 | `401` on claim/submit | Token mismatch | Re-issue token via `register_worker.sh`; sync `/etc/methyl/worker-token` |
 | Gateway unreachable | systemd down or wrong `WORKER_API_BASE` | `install_gateway_systemd.sh`, curl health |
 | Instance `FAILED` | Negative `result_code` from action | Inspect `node_execution.output_json`; fix science/config; new instance |

@@ -34,10 +34,24 @@ Individual CLIs may retry internally (e.g. network). The engine does **not** aut
 |--------|------------------|
 | Lease set on claim | Yes (`wf.task_lease.lease_expires_at_utc`) |
 | Worker heartbeat renew | `POST /v1/workers/tasks/{id}/heartbeat` → `wf.sp_worker_heartbeat` |
-| **Lease expiry requeue** | **Operator/SQL:** `wf.sp_reclaim_expired_leases` (portal: `portal.sp_reclaim_expired_leases`) resets expired/`RUNNING`-without-lease nodes to `READY` |
+| **Lease expiry requeue** | **Automatic:** claim path + systemd timer call `wf.sp_reclaim_expired_leases`; portal/ops: `portal.sp_reclaim_expired_leases` / `methyl-reclaim-leases` |
 | `attempt_no` | Incremented on reclaim / manual READY reset |
 
-Healthy long Align jobs stay safe while the worker heartbeats (lease keeps extending). A `systemctl restart` mid-task strands the node until reclaim runs after lease expiry.
+Healthy long Align jobs stay safe while the worker heartbeats (lease keeps extending). After a worker crash or `systemctl restart` mid-task, reclaim returns the node to `READY` once the lease expires (60s grace).
+
+### Automatic reclaim
+
+1. **On claim** — `wf.sp_worker_request_task` quietly runs reclaim when any expired/missing lease exists (before picking work).
+2. **Timer** — on the gateway host, `methyl-reclaim-leases.timer` runs every 2 minutes:
+
+```bash
+sudo bash scripts/install_reclaim_leases_timer.sh
+# or via install_gateway_systemd.sh (installs timer too)
+systemctl status methyl-reclaim-leases.timer
+journalctl -u methyl-reclaim-leases.service -n 50
+```
+
+CLI (same DB env as gateway): `methyl-reclaim-leases --grace-seconds 60`
 
 ## `forceRerun` and replanning
 
@@ -52,13 +66,15 @@ See [Usage ch.11 — Troubleshooting and recovery](../usage/11-troubleshooting-a
 3. Reclaim:
 
 ```sql
--- All instances (60s grace after lease_expires)
+-- Azure SQL
 EXEC portal.sp_reclaim_expired_leases @grace_seconds = 60;
-
--- One instance only
 EXEC portal.sp_reclaim_expired_leases
   @workflow_instance_id = 59,
   @grace_seconds = 60;
+
+-- PostgreSQL
+SELECT * FROM portal.sp_reclaim_expired_leases(NULL, 60);
+SELECT * FROM portal.sp_reclaim_expired_leases(59, 60);
 ```
 
 4. Prefer a new instance for science reruns when `actionConfig` changed (do not reclaim to “fix” bad config).

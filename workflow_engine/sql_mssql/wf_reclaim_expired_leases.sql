@@ -10,6 +10,9 @@
   Portal UI / ops: EXEC portal.sp_reclaim_expired_leases
     @workflow_instance_id = 59,   -- optional
     @grace_seconds = 60;
+
+  Scheduled: systemd timer methyl-reclaim-leases.timer → methyl-reclaim-leases
+  Also called quietly from wf.sp_worker_request_task when expired leases exist.
 */
 
 SET ANSI_NULLS ON;
@@ -18,7 +21,8 @@ GO
 
 CREATE OR ALTER PROCEDURE wf.sp_reclaim_expired_leases
     @workflow_instance_id BIGINT = NULL,
-    @grace_seconds INT = 60
+    @grace_seconds INT = 60,
+    @quiet BIT = 0
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -72,13 +76,16 @@ BEGIN
 
     COMMIT TRANSACTION;
 
-    SELECT node_execution_id,
-           workflow_instance_id,
-           previous_worker_id,
-           lease_expired_at_utc,
-           SYSUTCDATETIME() AS reclaimed_at_utc
-    FROM @reclaimed
-    ORDER BY node_execution_id;
+    IF @quiet = 0
+    BEGIN
+        SELECT node_execution_id,
+               workflow_instance_id,
+               previous_worker_id,
+               lease_expired_at_utc,
+               SYSUTCDATETIME() AS reclaimed_at_utc
+        FROM @reclaimed
+        ORDER BY node_execution_id;
+    END
 END;
 GO
 
@@ -90,6 +97,7 @@ BEGIN
     SET NOCOUNT ON;
     EXEC wf.sp_reclaim_expired_leases
         @workflow_instance_id = @workflow_instance_id,
-        @grace_seconds = @grace_seconds;
+        @grace_seconds = @grace_seconds,
+        @quiet = 0;
 END;
 GO

@@ -79,7 +79,9 @@ explicit `--capability` / `--omnibus`.
 | Object | Kind | Purpose |
 |--------|------|---------|
 | `wf.wf_worker_authenticate` | procedure | Validate worker id + token |
-| `wf.sp_worker_request_task` | procedure | Claim one READY action; returns task row or empty |
+| `wf.sp_worker_request_task` | procedure | Claim one READY action; quietly reclaims expired leases first; returns task row or empty |
+| `wf.sp_reclaim_expired_leases` | procedure | Reset expired/`RUNNING`-without-lease nodes to `READY` (`@quiet` for claim path) |
+| `portal.sp_reclaim_expired_leases` | procedure | Portal/ops wrapper for reclaim |
 | `wf.sp_worker_submit_result` | procedure | Complete action; returns ack row |
 | `wf.sp_worker_heartbeat` | procedure | Extend lease; returns `rows_updated` |
 | `wf.sp_worker_fail_task` | procedure | Fail task and instance |
