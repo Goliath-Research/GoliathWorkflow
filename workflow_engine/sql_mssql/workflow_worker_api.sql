@@ -1165,8 +1165,7 @@ BEGIN
 
     DELETE FROM dbo.task_lease WHERE node_execution_id = @node_execution_id;
 
-    UPDATE dbo.workflow_instance
-    SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME()
-    WHERE id = (SELECT workflow_instance_id FROM dbo.node_execution WHERE id = @node_execution_id);
+    -- Do not mark workflow_instance FAILED here: one sample action failure must not
+    -- strand sibling READY tasks in a FOREACH (SamplePrep Align fan-out).
 END;
 GO

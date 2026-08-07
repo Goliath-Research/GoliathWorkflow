@@ -1819,10 +1819,7 @@ BEGIN
 
         DELETE FROM wf.task_lease WHERE node_execution_id = @action_execution_id;
 
-        UPDATE wf.workflow_instance
-        SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME()
-        WHERE id = @inst;
-
+        -- Leave instance RUNNING so sibling FOREACH tasks remain claimable.
         RETURN;
     END
 
@@ -2139,9 +2136,8 @@ BEGIN
 
     DELETE FROM wf.task_lease WHERE node_execution_id = @node_execution_id;
 
-    UPDATE wf.workflow_instance
-    SET status = N'FAILED', completed_at_utc = SYSUTCDATETIME()
-    WHERE id = (SELECT workflow_instance_id FROM wf.node_execution WHERE id = @node_execution_id);
+    -- Do not mark workflow_instance FAILED here: one sample action failure must not
+    -- strand sibling READY tasks in a FOREACH (SamplePrep Align fan-out).
 END;
 GO
 
