@@ -2,7 +2,7 @@
 name: Pure Mojo Giraffe
 overview: Replace the fixture-scale Python extend_exact GBZ path with a real native Mojo Giraffe (.min/.zipcodes/.dist seed→cluster→extend→GAF) so gpu_giraffe stops auto-falling back to vg and can beat the ~6.2h Buffy dual-map baseline—without cutting the live fleet over until parity gates pass.
 
-> **Status: IMPLEMENTED (gates open).** Dense no-translation C2T pack (144 993 543 nodes), Q1Q1 mmap locate, quartet_map seed→cluster→local-extend, READY gate, `:1.70-mojo` rebuilt. Toy GAF parity PASS; known-mapped Buffy C2T reads 13/13 seed+extend. Full Buffy ≤2 h wall + DS20M `graph.methyl` parity remain operator gates — keep `METHYLGRAPHER_MOJO_GIRAFFE_READY` unset until then. G2A pack builds in background.
+> **Status: DEFAULT-ON (fleet cutover in progress).** Dense no-translation C2T+G2A packs (144 993 543 nodes), Q1Q1 mmap locate, quartet_map seed→cluster→local-extend, `:1.70-mojo` rebuilt with `mojo_giraffe_ready` **default on** (opt out `READY=0`). Toy GAF parity PASS; known-mapped Buffy C2T reads 13/13. Full Buffy ≤2 h wall + DS20M `graph.methyl` parity remain measurement gates. Sisters must `load_methylgrapher_1.70_mojo.sh` then `restore_wgbs_capabilities.py`.
 
 azure_devops:
   type: Feature

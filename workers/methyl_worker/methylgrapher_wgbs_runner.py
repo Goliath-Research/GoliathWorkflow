@@ -1102,6 +1102,13 @@ def run_methylgrapher_wgbs_align(
                 "-e",
                 "METHYLGRAPHER_GIRAFFE_DEVICE="
                 + (os.environ.get("METHYLGRAPHER_GIRAFFE_DEVICE", "auto").strip() or "auto"),
+                # Mojo GBZ default-on; set READY=0 on the worker to force vg_autoscale.
+                "-e",
+                "METHYLGRAPHER_MOJO_GIRAFFE_READY="
+                + (
+                    os.environ.get("METHYLGRAPHER_MOJO_GIRAFFE_READY", "1").strip()
+                    or "1"
+                ),
                 # Mojo runtime cache must be writable under --user (image /opt is root-owned).
                 "-e",
                 "MODULAR_CACHE_DIR="
