@@ -1,17 +1,29 @@
 -- Capability-authoritative worker claim + enroll hygiene (NVIDIA GH200 fleet).
--- Empty capabilities [] must NOT be treated as omnibus (that let half-enrolled
--- workers claim Align and fail-fast the study). Enroll requires a non-empty
--- capabilities_json from the worker (methyl-worker enroll probes by default).
+-- Contracts stay native JSON (MSSQL json / PG jsonb), not NVARCHAR string bags.
+-- Empty capabilities [] must NOT be treated as omnibus. Enroll requires a
+-- non-empty capabilities payload from the worker (methyl-worker enroll probes).
 
 SET NOCOUNT ON;
 GO
 
-CREATE OR ALTER FUNCTION wf.wf_worker_is_omnibus(@capabilities NVARCHAR(MAX))
+-- Parameter type change NVARCHAR→json: recreate (CREATE OR ALTER cannot retarget types).
+-- Drop dependents first (request_task references these functions).
+IF OBJECT_ID(N'wf.sp_worker_request_task', N'P') IS NOT NULL
+    DROP PROCEDURE wf.sp_worker_request_task;
+IF OBJECT_ID(N'wf.wf_worker_capability_allowed', N'FN') IS NOT NULL
+    DROP FUNCTION wf.wf_worker_capability_allowed;
+IF OBJECT_ID(N'wf.wf_worker_is_omnibus', N'FN') IS NOT NULL
+    DROP FUNCTION wf.wf_worker_is_omnibus;
+GO
+
+CREATE FUNCTION wf.wf_worker_is_omnibus(@capabilities json)
 RETURNS BIT
 AS
 BEGIN
-    -- Only explicit ["*"] is omnibus. NULL / '' / [] mean "no capabilities".
-    IF @capabilities IS NULL OR LTRIM(RTRIM(@capabilities)) = N'' OR @capabilities = N'[]'
+    -- Only explicit ["*"] is omnibus. NULL / [] mean "no capabilities".
+    IF @capabilities IS NULL
+        RETURN 0;
+    IF NOT EXISTS (SELECT 1 FROM OPENJSON(@capabilities))
         RETURN 0;
     IF EXISTS (
         SELECT 1
@@ -23,8 +35,8 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER FUNCTION wf.wf_worker_capability_allowed(
-    @worker_capabilities NVARCHAR(MAX),
+CREATE FUNCTION wf.wf_worker_capability_allowed(
+    @worker_capabilities json,
     @task_capability NVARCHAR(128)
 )
 RETURNS BIT
@@ -44,7 +56,7 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER PROCEDURE wf.sp_worker_request_task
+CREATE PROCEDURE wf.sp_worker_request_task
     @worker_id BIGINT,
     @worker_token NVARCHAR(4000),
     @capability NVARCHAR(128) NULL,
@@ -58,7 +70,7 @@ BEGIN
 
     DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
     DECLARE @lease_end DATETIME2(7) = DATEADD(SECOND, @max_lease_seconds, @now);
-    DECLARE @worker_capabilities NVARCHAR(MAX);
+    DECLARE @worker_capabilities json;
     DECLARE @is_omnibus BIT;
     DECLARE @reclaim_cutoff DATETIME2(7) = DATEADD(SECOND, -60, @now);
 
@@ -77,7 +89,7 @@ BEGIN
         EXEC wf.sp_reclaim_expired_leases @grace_seconds = 60, @quiet = 1;
     END
 
-    SELECT @worker_capabilities = CONVERT(NVARCHAR(MAX), w.capabilities)
+    SELECT @worker_capabilities = w.capabilities
     FROM wf.worker AS w
     WHERE w.id = @worker_id;
 

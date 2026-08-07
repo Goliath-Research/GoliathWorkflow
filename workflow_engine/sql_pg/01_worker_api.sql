@@ -63,10 +63,12 @@ RETURNS boolean
 LANGUAGE sql
 IMMUTABLE
 AS $$
+  -- Only explicit ["*"] is omnibus. NULL / [] mean "no capabilities"
+  -- (native jsonb; never treat empty as wildcard).
   SELECT
-    p_capabilities IS NULL
-    OR p_capabilities = '[]'::jsonb
-    OR p_capabilities @> '["*"]'::jsonb;
+    p_capabilities IS NOT NULL
+    AND p_capabilities <> '[]'::jsonb
+    AND p_capabilities @> '["*"]'::jsonb;
 $$;
 
 CREATE OR REPLACE FUNCTION wf.wf_worker_capability_allowed(

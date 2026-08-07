@@ -1941,12 +1941,23 @@ GO
 PRINT (N'Create or alter procedure [wf].[sp_worker_request_task]')
 GO
 
-CREATE OR ALTER FUNCTION wf.wf_worker_is_omnibus(@capabilities NVARCHAR(MAX))
+-- Native json parameters (parity with PG jsonb). Recreate if prior NVARCHAR form exists.
+IF OBJECT_ID(N'wf.sp_worker_request_task', N'P') IS NOT NULL
+    DROP PROCEDURE wf.sp_worker_request_task;
+IF OBJECT_ID(N'wf.wf_worker_capability_allowed', N'FN') IS NOT NULL
+    DROP FUNCTION wf.wf_worker_capability_allowed;
+IF OBJECT_ID(N'wf.wf_worker_is_omnibus', N'FN') IS NOT NULL
+    DROP FUNCTION wf.wf_worker_is_omnibus;
+GO
+
+CREATE FUNCTION wf.wf_worker_is_omnibus(@capabilities json)
 RETURNS BIT
 AS
 BEGIN
-    -- Only explicit ["*"] is omnibus. NULL / '' / [] mean "no capabilities".
-    IF @capabilities IS NULL OR LTRIM(RTRIM(@capabilities)) = N'' OR @capabilities = N'[]'
+    -- Only explicit ["*"] is omnibus. NULL / [] mean "no capabilities".
+    IF @capabilities IS NULL
+        RETURN 0;
+    IF NOT EXISTS (SELECT 1 FROM OPENJSON(@capabilities))
         RETURN 0;
     IF EXISTS (
         SELECT 1
@@ -1958,8 +1969,8 @@ BEGIN
 END;
 GO
 
-CREATE OR ALTER FUNCTION wf.wf_worker_capability_allowed(
-    @worker_capabilities NVARCHAR(MAX),
+CREATE FUNCTION wf.wf_worker_capability_allowed(
+    @worker_capabilities json,
     @task_capability NVARCHAR(128)
 )
 RETURNS BIT
@@ -1993,7 +2004,7 @@ BEGIN
 
     DECLARE @now DATETIME2(7) = SYSUTCDATETIME();
     DECLARE @lease_end DATETIME2(7) = DATEADD(SECOND, @max_lease_seconds, @now);
-    DECLARE @worker_capabilities NVARCHAR(MAX);
+    DECLARE @worker_capabilities json;
     DECLARE @is_omnibus BIT;
     DECLARE @reclaim_cutoff DATETIME2(7) = DATEADD(SECOND, -60, @now);
 
