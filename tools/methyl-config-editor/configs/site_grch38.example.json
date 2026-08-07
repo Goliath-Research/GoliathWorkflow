@@ -33,7 +33,11 @@
       "ref_paths": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-v1.1-mc-grch38.d9.paths.sub",
       "cpg_tsv": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.cpg.tsv",
       "node_replacement_json": "/work/genomes/pangenome/GRCh38/d9-bs/1.70/hprc-d9-bs.wl.node.replacement.json",
-      "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+      "linear_ref_fasta": "/work/genomes/linear/GRCh38/ensembl-114/Homo_sapiens.GRCh38.dna.primary_assembly.fa",
+      "engine": "mojo",
+      "image": "epimethyl/methylgrapher:1.70-mojo",
+      "align_engine": "gpu_giraffe",
+      "threads": 64
     }
   },
   "reference_selection": {

@@ -348,6 +348,18 @@ def _run(
         )
 
 
+def _effective_align_engine(bundle: MethylGrapherWgbsBundle) -> str:
+    """Bundle align_engine, overridable by worker ``METHYLGRAPHER_ALIGN_ENGINE``.
+
+    Fleet cutover: site/instance may still say ``cpu_vg`` while the host env
+    pins ``gpu_giraffe`` / ``mojo_giraffe`` after publishing ``:1.70-mojo``.
+    """
+    env = os.environ.get("METHYLGRAPHER_ALIGN_ENGINE", "").strip()
+    if env:
+        return _normalize_align_engine(env)
+    return bundle.align_engine
+
+
 def build_align_command(
     *,
     bundle: MethylGrapherWgbsBundle,
@@ -374,7 +386,7 @@ def build_align_command(
         "-directional",
         "Y" if bundle.directional else "N",
         "-align_engine",
-        bundle.align_engine,
+        _effective_align_engine(bundle),
     ]
     return cmd
 
@@ -1080,7 +1092,7 @@ def run_methylgrapher_wgbs_align(
                 "--user",
                 f"{os.getuid()}:{os.getgid()}",
                 "-e",
-                f"METHYLGRAPHER_ALIGN_ENGINE={bundle.align_engine}",
+                f"METHYLGRAPHER_ALIGN_ENGINE={_effective_align_engine(bundle)}",
                 "-e",
                 "METHYLGRAPHER_GPU_GIRAFFE_FALLBACK="
                 + (

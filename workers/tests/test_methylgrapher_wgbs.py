@@ -92,6 +92,28 @@ def test_normalize_align_engine() -> None:
         _normalize_align_engine("bam_only")
 
 
+def test_effective_align_engine_env_overlay(monkeypatch, tmp_path: Path) -> None:
+    from methyl_worker.methylgrapher_wgbs_runner import (
+        _effective_align_engine,
+        build_align_command,
+        resolve_wgbs_bundle_from_resolved,
+    )
+
+    cfg = _touch_bundle(tmp_path)
+    bundle = resolve_wgbs_bundle_from_resolved(cfg)
+    assert bundle.align_engine == "cpu_vg"
+    monkeypatch.setenv("METHYLGRAPHER_ALIGN_ENGINE", "gpu_giraffe")
+    assert _effective_align_engine(bundle) == "gpu_giraffe"
+    cmd = build_align_command(
+        bundle=bundle,
+        work_dir=tmp_path / "work",
+        fq1=tmp_path / "a_R1.fastq.gz",
+        fq2=tmp_path / "a_R2.fastq.gz",
+        index_prefix=str(tmp_path / "hprc-d9-bs"),
+    )
+    assert cmd[cmd.index("-align_engine") + 1] == "gpu_giraffe"
+
+
 def test_resolve_bundle_requires_c2t_g2a(tmp_path: Path) -> None:
     with pytest.raises(RuntimeError, match="missing"):
         resolve_methylgrapher_wgbs_genome(resolved_config={"ref_paths": str(tmp_path / "x")})
