@@ -146,10 +146,11 @@ class MethylGrapherWgbsStepConfig(BaseModel):
     align_engine: Optional[str] = Field(
         default=None,
         description=(
-            "Align map backend for dual-graph GAF: 'cpu_vg' (stock vg giraffe GAF) or "
-            "'gpu_giraffe' (GH200 intent). Parabricks 4.7 cannot emit GAF; gpu_giraffe "
-            "defaults to vg GAF fallback (METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=vg) until "
-            "a GPU→GAF tool exists. Operator-set per site/profile on GH200 fleets."
+            "Align map backend for dual-graph GAF: 'cpu_vg' (stock vg giraffe GAF), "
+            "'mojo_giraffe' (Mojo GFA→GAF), or 'gpu_giraffe' (GH200 intent — prefers "
+            "Mojo Giraffe when usable GFA present; auto-vg for oversized/GBZ-only "
+            "indexes). METHYLGRAPHER_GPU_GIRAFFE_FALLBACK default is 'mojo' "
+            "(emergency 'vg'). Operator-set per site/profile on GPU fleets."
         ),
     )
     threads: Optional[int] = Field(

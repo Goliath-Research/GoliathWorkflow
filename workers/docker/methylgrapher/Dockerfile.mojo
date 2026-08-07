@@ -34,20 +34,24 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     || pip3 install --no-cache-dir --break-system-packages \
       "git+https://github.com/twlab/methylGrapher.git@v${METHYLGRAPHER_VERSION}"
 
-# Patched engine + native Mojo CLI / MethylCall hot path.
+# Patched engine + native Mojo CLI / MethylCall hot path + Giraffe GPU helper.
 COPY engine /opt/methylgrapher-mojo/engine
 COPY src /opt/methylgrapher-mojo/src
+COPY scripts /opt/methylgrapher-mojo/scripts
 COPY mojo-env /opt/methylgrapher-mojo/mojo-env
 COPY methylGrapher.mojo.sh /usr/local/bin/methylGrapher
+ENV METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo \
+    METHYLGRAPHER_GIRAFFE_DEVICE=auto
 RUN chmod +x /usr/local/bin/methylGrapher /opt/methylgrapher-mojo/mojo-env/bin/mojo \
-    && python3 -c "import sys; sys.path.insert(0,'/opt/methylgrapher-mojo'); from engine import cli; print('engine ok')" \
+    && python3 -c "import sys; sys.path.insert(0,'/opt/methylgrapher-mojo'); from engine import cli; from engine.align_backends import normalize_align_engine; assert normalize_align_engine('mojo_giraffe')=='mojo_giraffe'; print('engine ok')" \
     && methylGrapher help | head -5
 
 LABEL org.opencontainers.image.title="methylGrapher-mojo WGBS worker" \
-      org.opencontainers.image.description="Native Mojo MethylCall + patched engine + vg for pangenome_wgbs SamplePrep" \
+      org.opencontainers.image.description="Native Mojo MethylCall + MojoGiraffe GAF + patched engine + vg for pangenome_wgbs SamplePrep" \
       methylpipeline.vg_version="${VG_VERSION}" \
       methylpipeline.methylgrapher_engine="mojo" \
-      methylpipeline.methylgrapher_version="0.1.0-mojo"
+      methylpipeline.methylgrapher_version="0.1.0-mojo" \
+      methylpipeline.giraffe="mojo_giraffe"
 
 ENTRYPOINT []
 CMD ["methylGrapher", "help"]

@@ -25,6 +25,12 @@ if [[ -x "${MOJO_BIN}" ]]; then
   export MODULAR_HOME="${ROOT}/mojo-env/share/max"
   export LD_LIBRARY_PATH="${ROOT}/mojo-env/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
   export PATH="${ROOT}/mojo-env/bin:${PATH}"
+  # Mojo std.python needs pixi CPython symbols globally (dlopen alone misses
+  # Py_Initialize in the trimmed runtime-bundle layout).
+  if [[ -e "${ROOT}/mojo-env/lib/libpython3.13.so.1.0" ]]; then
+    export LD_PRELOAD="${ROOT}/mojo-env/lib/libpython3.13.so.1.0${LD_PRELOAD:+:$LD_PRELOAD}"
+    export PYTHONHOME="${ROOT}/mojo-env"
+  fi
   cd "${ROOT}"
   exec "${MOJO_BIN}" src/main.mojo "$@"
 fi

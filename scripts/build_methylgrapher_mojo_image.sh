@@ -60,10 +60,26 @@ mkdir -p "${DOCKER_DIR}/src"
 # Skip legacy scaffold stubs in the image.
 cp -a "${MOJO_ROOT}/src/"*.mojo "${DOCKER_DIR}/src/"
 
+log "staging scripts/ (Giraffe GPU minimizer helper)"
+rm -rf "${DOCKER_DIR}/scripts"
+mkdir -p "${DOCKER_DIR}/scripts"
+cp -a "${MOJO_ROOT}/scripts/giraffe_gpu_minimizer.py" "${DOCKER_DIR}/scripts/" 2>/dev/null || true
+cp -a "${MOJO_ROOT}/scripts/giraffe_gaf_parity.py" "${DOCKER_DIR}/scripts/" 2>/dev/null || true
+
 log "staging trimmed Mojo runtime from pixi env"
 rm -rf "${DOCKER_DIR}/mojo-env"
 mkdir -p "${DOCKER_DIR}/mojo-env/bin" "${DOCKER_DIR}/mojo-env/lib/mojo" "${DOCKER_DIR}/mojo-env/share/max"
 cp -a "${PIXI_ENV}/bin/mojo" "${DOCKER_DIR}/mojo-env/bin/"
+# CPython used by Mojo std.python interop (must match libpython major.minor).
+if [[ -x "${PIXI_ENV}/bin/python3" ]]; then
+  cp -a "${PIXI_ENV}/bin/python3" "${DOCKER_DIR}/mojo-env/bin/" || true
+  # python3 may be a symlink into the env — resolve common names.
+  for py in python3.13 python; do
+    if [[ -e "${PIXI_ENV}/bin/${py}" ]]; then
+      cp -a "${PIXI_ENV}/bin/${py}" "${DOCKER_DIR}/mojo-env/bin/" || true
+    fi
+  done
+fi
 cp -a "${PIXI_ENV}/lib/mojo/." "${DOCKER_DIR}/mojo-env/lib/mojo/"
 # Runtime / compiler shared libraries used by `mojo` on aarch64.
 for lib in \
@@ -74,12 +90,20 @@ for lib in \
   libKGENCompilerRTShared.so \
   libMGPRT.so \
   libstdc++.so.6 \
-  libgcc_s.so.1
+  libgcc_s.so.1 \
+  libpython3.so \
+  libpython3.13.so \
+  libpython3.13.so.1.0
 do
   if [[ -e "${PIXI_ENV}/lib/${lib}" ]]; then
     cp -a "${PIXI_ENV}/lib/${lib}" "${DOCKER_DIR}/mojo-env/lib/"
   fi
 done
+# Mojo Python interop (std.python) needs matching pixi CPython stdlib.
+if [[ -d "${PIXI_ENV}/lib/python3.13" ]]; then
+  mkdir -p "${DOCKER_DIR}/mojo-env/lib/python3.13"
+  cp -a "${PIXI_ENV}/lib/python3.13/." "${DOCKER_DIR}/mojo-env/lib/python3.13/"
+fi
 # Rewrite modular.cfg paths to the in-container layout.
 sed \
   -e "s|${PIXI_ENV}|/opt/methylgrapher-mojo/mojo-env|g" \

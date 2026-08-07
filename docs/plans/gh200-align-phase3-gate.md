@@ -12,18 +12,21 @@ Companion to [`gh200-wgbs-dual-graph-align.plan.md`](gh200-wgbs-dual-graph-align
 | Full Buffy Align wall ≤ ~2 h on GH200 | **PENDING** operator measurement (local NVMe work dir) |
 | MethylCall GAF science parity vs CPU ref | **PENDING** on full-sample GAF from new Align |
 | Site flip `align_engine=gpu_giraffe` on GH200 fleets | **BLOCKED** until wall + parity pass; do not imply GPU map |
+| Mojo Giraffe fixture GAF + prefer-mojo backend | **PASS** — see [`mojo-giraffe-cutover-gate.md`](mojo-giraffe-cutover-gate.md) |
 
 ## How to measure the wall gate
 
 ```bash
 # On GH200, prefer local NVMe for work_dir (not NFS) during Align.
-export METHYLGRAPHER_ALIGN_ENGINE=gpu_giraffe   # vg GAF fallback today
-export METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=vg
+export METHYLGRAPHER_ALIGN_ENGINE=gpu_giraffe
+export METHYLGRAPHER_GPU_GIRAFFE_FALLBACK=mojo   # default; auto-vg if GFA too large
+export METHYLGRAPHER_GIRAFFE_DEVICE=nvidia
 # Run sample.methylgrapher_wgbs_align for one full Buffy sample; record wall
 # from methylgrapher_align.log COMMAND → GAF land.
 ```
 
 When Parabricks (or successor) gains GAF output, re-run `scripts/spike_gh200_dual_graph_align.sh` in methylGrapher-mojo and update Phase 0.
+Also see [`mojo-gpu-giraffe-gaf.plan.md`](mojo-gpu-giraffe-gaf.plan.md).
 
 ## Site flip (only after gate)
 

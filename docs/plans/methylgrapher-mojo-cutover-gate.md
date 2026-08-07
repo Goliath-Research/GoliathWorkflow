@@ -16,7 +16,7 @@ Site `/work/site/methyl_site.json` pins:
 }
 ```
 
-`align_engine` stays unset / `cpu_vg` until the GH200 full-sample Align gate (≤~2 h). Parabricks giraffe remains BAM-only (no science GAF).
+`align_engine` stays unset / `cpu_vg` until the GH200 full-sample Align gate (≤~2 h). Parabricks giraffe remains BAM-only (no science GAF). Mojo Giraffe fixture path and prefer-mojo `gpu_giraffe` wiring: [`mojo-giraffe-cutover-gate.md`](mojo-giraffe-cutover-gate.md).
 
 Procedure git packs keep `engine` unset / python-compatible until multi-site science sign-off. Workers load site `actionConfig` at instance finalize.
 

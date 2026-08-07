@@ -115,16 +115,19 @@ def _normalize_engine(value: Any) -> str:
 
 
 def _normalize_align_engine(value: Any) -> str:
-    """Return ``cpu_vg`` or ``gpu_giraffe``; unset → ``cpu_vg`` (safe default)."""
+    """Return ``cpu_vg``, ``gpu_giraffe``, or ``mojo_giraffe``; unset → ``cpu_vg``."""
     if value is None or str(value).strip() == "":
         return "cpu_vg"
     eng = str(value).strip().lower()
     if eng in {"cpu_vg", "cpu", "vg"}:
         return "cpu_vg"
+    if eng in {"mojo_giraffe", "mojo"}:
+        return "mojo_giraffe"
     if eng in {"gpu_giraffe", "gpu", "gh200"}:
         return "gpu_giraffe"
     raise RuntimeError(
-        f"methylgrapher_wgbs.align_engine must be 'cpu_vg' or 'gpu_giraffe' (got {value!r})"
+        "methylgrapher_wgbs.align_engine must be 'cpu_vg', 'gpu_giraffe', or "
+        f"'mojo_giraffe' (got {value!r})"
     )
 
 
@@ -1081,9 +1084,12 @@ def run_methylgrapher_wgbs_align(
                 "-e",
                 "METHYLGRAPHER_GPU_GIRAFFE_FALLBACK="
                 + (
-                    os.environ.get("METHYLGRAPHER_GPU_GIRAFFE_FALLBACK", "vg").strip()
-                    or "vg"
+                    os.environ.get("METHYLGRAPHER_GPU_GIRAFFE_FALLBACK", "mojo").strip()
+                    or "mojo"
                 ),
+                "-e",
+                "METHYLGRAPHER_GIRAFFE_DEVICE="
+                + (os.environ.get("METHYLGRAPHER_GIRAFFE_DEVICE", "auto").strip() or "auto"),
             ]
             for root in sorted(mount_roots, key=str):
                 docker_cmd.extend(["-v", f"{root}:{root}"])

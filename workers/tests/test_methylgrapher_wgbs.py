@@ -87,6 +87,7 @@ def test_normalize_align_engine() -> None:
 
     assert _normalize_align_engine(None) == "cpu_vg"
     assert _normalize_align_engine("gpu_giraffe") == "gpu_giraffe"
+    assert _normalize_align_engine("mojo_giraffe") == "mojo_giraffe"
     with pytest.raises(RuntimeError):
         _normalize_align_engine("bam_only")
 
