@@ -153,7 +153,10 @@ def resolve_parabricks_config(
 
     gpu_raw = _pick(payload, step_cfg, "gpuFlags", "gpu_flags")
     if gpu_raw is None:
-        if engine == "mojo" and align_device in {"amd", "hip", "rocm"}:
+        if engine == "mojo" and align_device == "cpu":
+            # GPU-less hosts: no docker device flags (prereq check also skips).
+            gpu_raw = os.environ.get("METHYL_MOJO_GPU_FLAGS", "")
+        elif engine == "mojo" and align_device in {"amd", "hip", "rocm"}:
             gpu_raw = os.environ.get(
                 "METHYL_MOJO_GPU_FLAGS",
                 "--device=/dev/kfd --device=/dev/dri --group-add video",

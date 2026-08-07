@@ -204,6 +204,36 @@ def test_resolve_mojo_engine_defaults_image(tmp_path: Path) -> None:
     assert cfg.bwa_threads == 4
 
 
+def test_resolve_mojo_cpu_has_no_gpu_flags(tmp_path: Path) -> None:
+    """align_device=cpu must not inject --gpus all (breaks hosts without NVIDIA CTK)."""
+    with patch.dict(
+        "os.environ",
+        {"METHYL_PARABRICKS_GPU_FLAGS": "--gpus all", "METHYL_MOJO_GPU_FLAGS": ""},
+        clear=False,
+    ):
+        # Explicit empty METHYL_MOJO_GPU_FLAGS wins for cpu; Clara env must not apply.
+        cfg = runner.resolve_parabricks_config(
+            input_json={"resolvedConfig": {"engine": "mojo", "align_device": "cpu"}}
+        )
+    assert cfg.engine == "mojo"
+    assert cfg.align_device == "cpu"
+    assert cfg.gpu_flags == ()
+
+    with patch.dict(
+        "os.environ",
+        {"METHYL_PARABRICKS_GPU_FLAGS": "--gpus all"},
+        clear=False,
+    ):
+        # When METHYL_MOJO_GPU_FLAGS unset, cpu default is still empty (not --gpus all).
+        import os
+
+        os.environ.pop("METHYL_MOJO_GPU_FLAGS", None)
+        cfg2 = runner.resolve_parabricks_config(
+            input_json={"resolvedConfig": {"engine": "mojo", "align_device": "cpu"}}
+        )
+    assert cfg2.gpu_flags == ()
+
+
 def test_resolve_parabricks_from_project_action_config(tmp_path: Path) -> None:
     import json
 
