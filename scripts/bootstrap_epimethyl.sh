@@ -295,7 +295,7 @@ PATH=$WORKER_PATH
 EOF
   if [[ -n "$PARABRICKS_IMAGE" ]]; then
     echo "METHYL_PARABRICKS_IMAGE=$PARABRICKS_IMAGE" >>"$ENV_DIR/worker.env"
-    echo "METHYL_PARABRICKS_GPU_FLAGS=--gpus all" >>"$ENV_DIR/worker.env"
+    echo 'METHYL_PARABRICKS_GPU_FLAGS="--gpus all"' >>"$ENV_DIR/worker.env"
   fi
   if [[ -f "$ENV_DIR/parabricks.env" ]]; then
     echo "# Also see parabricks.env" >>"$ENV_DIR/worker.env"
