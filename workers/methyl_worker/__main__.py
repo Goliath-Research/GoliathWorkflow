@@ -88,7 +88,11 @@ def main(argv: list[str] | None = None) -> int:
     enroll.add_argument(
         "--env-file",
         default="",
-        help="Optional env file to append WORKER_ID= / WORKER_TOKEN= (e.g. worker.env)",
+        help=(
+            "Optional *per-VM* env file to append WORKER_ID=/WORKER_TOKEN=. "
+            "Do not use shared /work/epimethyl/env/worker.env — that overrides "
+            "other nodes' credentials when systemd loads it after the token file."
+        ),
     )
 
     plan = sub.add_parser("plan-iterations", help="Monte Carlo planner CLI")

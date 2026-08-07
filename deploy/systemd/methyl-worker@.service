@@ -5,10 +5,11 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/methyl/worker-token
+# Shared non-secret env first; per-VM credentials last.
 EnvironmentFile=-/work/epimethyl/env/worker.env
 EnvironmentFile=-/work/epimethyl/env/parabricks.env
 EnvironmentFile=-/work/epimethyl/env/proteomics.env
+EnvironmentFile=-/etc/methyl/worker-token
 Environment=WORKER_CAPABILITY=%i
 Environment=PATH=__EPIMETHYL_VENV__/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=__EPIMETHYL_VENV__/bin/methyl-worker --api-base ${WORKER_API_BASE}

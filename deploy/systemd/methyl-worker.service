@@ -8,9 +8,11 @@ Wants=azure-arc-agent.service
 
 [Service]
 Type=simple
-EnvironmentFile=-/etc/methyl/worker-token
+# Shared non-secret env first; per-VM /etc/methyl/worker-token LAST so WORKER_ID /
+# WORKER_TOKEN from enroll win (never put credentials in shared worker.env).
 EnvironmentFile=-/work/epimethyl/env/worker.env
 EnvironmentFile=-/work/epimethyl/env/parabricks.env
+EnvironmentFile=-/etc/methyl/worker-token
 # EnvironmentFile does not expand $PATH; set a literal PATH after env files.
 Environment=PATH=__EPIMETHYL_VENV__/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=__EPIMETHYL_VENV__/bin/methyl-worker --api-base ${WORKER_API_BASE}
